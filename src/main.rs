@@ -194,6 +194,7 @@ mod self_build;
 mod semantic_graph;
 mod shared_rust_signing_key;
 mod shell_cmd;
+mod signing_key;
 #[allow(dead_code)]
 mod source_built_fixed_point;
 mod source_built_fixed_point_dev_cache;
@@ -370,6 +371,10 @@ struct Args {
     /// ~/.local/state/crunch. Use --state-dir for an explicit Mantle path.
     #[arg(long, global = true)]
     state_dir: Option<PathBuf>,
+
+    /// Durable store backend (snix or casita).
+    #[arg(long, global = true, default_value = "snix")]
+    store_backend: crunch_store::StoreBackend,
 
     /// Ordered list of read-only base store state directories for overlay
     /// composition. Declared in priority order (base A before base B).
@@ -3275,6 +3280,7 @@ struct RunContext {
     store: PathBuf,
     resolved_state_dir: PathBuf,
     store_prefix: String,
+    store_backend: crunch_store::StoreBackend,
     verbose: bool,
     json: bool,
     base_state_dirs: Vec<PathBuf>,
@@ -3295,6 +3301,48 @@ impl RunContext {
     }
 }
 
+fn preflight_casita_cli_backend(args: &Args) -> Result<(), RunError> {
+    if args.store_backend != crunch_store::StoreBackend::Casita {
+        return Ok(());
+    }
+    if matches!(&args.command, Command::Store {
+        action: StoreAction::RepairFinalNar { .. }
+    }) {
+        return Err(RunError::Build("casita-repair-final-nar-unsupported".to_string()));
+    }
+    if !args.base_stores.is_empty() {
+        return Err(RunError::Build("casita-overlay-unsupported".to_string()));
+    }
+    let unsigned = match &args.command {
+        Command::Build { trust_unsigned, .. }
+        | Command::SelfBuild { trust_unsigned, .. }
+        | Command::Shell { trust_unsigned, .. }
+        | Command::Develop { trust_unsigned, .. }
+        | Command::Run { trust_unsigned, .. } => *trust_unsigned,
+        Command::Store { action } => match action {
+            StoreAction::Verify { trust_unsigned, .. }
+            | StoreAction::Push { trust_unsigned, .. }
+            | StoreAction::Pull { trust_unsigned, .. } => *trust_unsigned,
+            StoreAction::Archive { action } => match action {
+                StoreArchiveAction::Export { trust_unsigned, .. }
+                | StoreArchiveAction::Import { trust_unsigned, .. } => *trust_unsigned,
+                StoreArchiveAction::List { .. } => false,
+            },
+            _ => false,
+        },
+        Command::ForeignImport {
+            action: ForeignImportAction::PrepareSources {
+                nario_trust_unsigned, ..
+            },
+        } => *nario_trust_unsigned,
+        _ => false,
+    };
+    if unsigned {
+        return Err(RunError::Build("casita-trust-unsigned-unsupported".to_string()));
+    }
+    Ok(())
+}
+
 fn run(args: Args) -> Result<(), RunError> {
     run_for_platform(args, current_platform_family())
 }
@@ -3308,6 +3356,7 @@ fn run_for_platform(args: Args, platform: mantle_portable_client_core::PlatformF
         _ => {}
     }
     enforce_portable_command_admission(platform, &args.command)?;
+    preflight_casita_cli_backend(&args)?;
     if let Command::RemoteSecretWorker {
         manifest,
         profile,
@@ -3319,6 +3368,20 @@ fn run_for_platform(args: Args, platform: mantle_portable_client_core::PlatformF
     }
     apply_state_dir_override(&args);
     let ctx = build_run_context(&args);
+    if !ctx.base_state_dirs.is_empty()
+        && matches!(
+            &args.command,
+            Command::Run { .. } | Command::Shell { .. } | Command::Develop { .. } | Command::SelfBuild { .. }
+        )
+    {
+        crunch_store::StoreConfig::preflight_backend_identity_for(
+            ctx.store_backend,
+            &ctx.resolved_state_dir,
+            &ctx.store_prefix,
+            &ctx.base_state_dirs,
+        )
+        .map_err(|error| RunError::Internal(format!("opening store: {error}")))?;
+    }
     let physical_store_dir = ctx.store.display().to_string();
     let state_dir = ctx.resolved_state_dir.display().to_string();
     let fingerprint_request = presentation::runtime_fingerprint::RuntimeFingerprintRequest {
@@ -3467,6 +3530,7 @@ fn build_run_context(args: &Args) -> RunContext {
         store: args.store.clone(),
         resolved_state_dir: state_dir(),
         store_prefix,
+        store_backend: args.store_backend,
         verbose: args.verbose,
         json: args.json,
         base_state_dirs: args.base_stores.clone(),
@@ -4016,13 +4080,14 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
             ),
         ),
         Command::Refactor { action } => run_refactor_command(ctx, action.clone()),
-        Command::Transcript { action } => run_transcript_command(action.clone()),
+        Command::Transcript { action } => run_transcript_command(action.clone(), ctx),
         Command::Stage0Inventory { output } => run_stage0_inventory_command(ctx, output),
         Command::NixFreeDemo { action } => nix_free_demo_cmd::cmd_nix_free_demo(action.clone(), ctx.json),
         Command::ForeignImport { action } => {
             foreign_import_cmd::cmd_foreign_import(action.clone(), foreign_import_cmd::ForeignImportContext {
                 output_dir: &ctx.store,
                 state_dir: &ctx.resolved_state_dir,
+                backend: ctx.store_backend,
                 base_state_dirs: &ctx.base_state_dirs,
                 source_bundle_bytes_max: foreign_import_cmd::DEFAULT_FOREIGN_JSON_ARTIFACT_BYTES_MAX,
                 verbose: ctx.verbose,
@@ -4033,6 +4098,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
             mantlepkgs_cmd::cmd_mantlepkgs(action.clone(), mantlepkgs_cmd::MantlepkgsContext {
                 output_dir: &ctx.store,
                 state_dir: &ctx.resolved_state_dir,
+                backend: ctx.store_backend,
                 base_state_dirs: &ctx.base_state_dirs,
                 verbose: ctx.verbose,
                 json: ctx.json,
@@ -4061,6 +4127,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
             action.clone(),
             &ctx.store,
             &ctx.resolved_state_dir,
+            ctx.store_backend,
             &ctx.store_prefix,
             &ctx.base_state_dirs,
             ctx.json,
@@ -4116,6 +4183,9 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
 }
 
 fn run_rust_cache_command(ctx: &RunContext, action: &RustCacheAction) -> Result<(), RunError> {
+    if ctx.store_backend == crunch_store::StoreBackend::Casita {
+        return Err(RunError::Build("casita-rust-cache-unsupported".to_string()));
+    }
     match action {
         RustCacheAction::Serve {
             policy,
@@ -4123,6 +4193,7 @@ fn run_rust_cache_command(ctx: &RunContext, action: &RustCacheAction) -> Result<
             once,
         } => crunch_rustc_wrapper::run_daemon(crunch_rustc_wrapper::DaemonOptions {
             policy_path: policy.clone(),
+            backend: ctx.store_backend,
             state_dir: ctx.resolved_state_dir.clone(),
             store_output_dir: ctx.store.clone(),
             receipt_dir: receipt_dir.clone(),
@@ -4165,7 +4236,14 @@ fn run_remote_command(ctx: &RunContext, action: RemoteAction) -> Result<(), RunE
             },
             ctx,
         ),
-        other => remote_build::cmd_remote(other, &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json),
+        other => remote_build::cmd_remote(
+            other,
+            &ctx.store,
+            &ctx.resolved_state_dir,
+            &ctx.store_prefix,
+            ctx.store_backend,
+            ctx.json,
+        ),
     }
 }
 
@@ -4544,7 +4622,7 @@ fn report_semantic_graph_query_error(
     Err(RunError::Internal(err.to_string()))
 }
 
-fn run_transcript_command(action: TranscriptAction) -> Result<(), RunError> {
+fn run_transcript_command(action: TranscriptAction, ctx: &RunContext) -> Result<(), RunError> {
     match action {
         TranscriptAction::Run {
             transcript,
@@ -4556,6 +4634,7 @@ fn run_transcript_command(action: TranscriptAction) -> Result<(), RunError> {
             output,
             mantle_bin,
             allow_in_place,
+            backend: ctx.store_backend,
         }),
     }
 }
@@ -4840,6 +4919,13 @@ struct PreparedBuildCommand<'a> {
 fn run_build_command<'a>(ctx: &'a RunContext, input: BuildCommandInput<'a>) -> Result<(), RunError> {
     debug_assert!(ctx.store_prefix.starts_with('/'));
     debug_assert!(!ctx.store.as_os_str().is_empty());
+    crunch_store::StoreConfig::preflight_backend_identity_for(
+        ctx.store_backend,
+        &ctx.resolved_state_dir,
+        &ctx.store_prefix,
+        &ctx.base_state_dirs,
+    )
+    .map_err(|error| RunError::Internal(format!("opening store: {error}")))?;
     let prepared = prepare_build_command(ctx, input)?;
     match &prepared.target {
         project_build::BuildTarget::File(path) => run_file_build_target(&prepared, path),
@@ -4951,6 +5037,7 @@ fn run_file_build_plan(
         import_paths: import_entries,
         output_dir: &prepared.ctx.store,
         state_dir: &prepared.ctx.resolved_state_dir,
+        backend: prepared.ctx.store_backend,
         base_state_dirs: &prepared.ctx.base_state_dirs,
         store_dir: &prepared.ctx.store_prefix,
         substituter_urls: &prepared.substituter_urls,
@@ -4980,6 +5067,7 @@ fn run_local_file_build(
             &prepared.ctx.store,
             &prepared.ctx.resolved_state_dir,
             &prepared.ctx.store_prefix,
+            prepared.ctx.store_backend,
             prepared.ctx.verbose,
             prepared.fix,
             prepared.max_jobs,
@@ -5001,6 +5089,7 @@ fn run_local_file_build(
         &prepared.ctx.store,
         &prepared.ctx.resolved_state_dir,
         &prepared.ctx.store_prefix,
+        prepared.ctx.store_backend,
         prepared.ctx.verbose,
         prepared.fix,
         prepared.max_jobs,
@@ -5319,6 +5408,8 @@ fn remote_stdio_builder_command(
         worker_store_dir.display().to_string(),
         "--store-prefix".to_string(),
         ctx.store_prefix.clone(),
+        "--store-backend".to_string(),
+        ctx.store_backend.as_str().to_string(),
         "remote".to_string(),
         "serve".to_string(),
         "--endpoint-id".to_string(),
@@ -5403,6 +5494,7 @@ fn run_remote_build_command(request: RemoteBuildCommandRequest<'_>) -> Result<()
         &request.ctx.store,
         &request.ctx.resolved_state_dir,
         &request.ctx.store_prefix,
+        request.ctx.store_backend,
     )?;
     classify_remote_build_imports(&build_outcome)?;
     presentation::remote_client::print_remote_client_build_report(
@@ -5489,9 +5581,10 @@ fn run_remote_build_dispatches(
     output_dir: &Path,
     state_dir: &Path,
     store_prefix: &str,
+    backend: crunch_store::StoreBackend,
 ) -> Result<remote_build::RemoteClientBuildReport, RunError> {
     let rt = tokio::runtime::Runtime::new().map_err(|err| RunError::Internal(format!("tokio runtime: {err}")))?;
-    rt.block_on(run_remote_build_dispatches_async(selection, inputs, output_dir, state_dir, store_prefix))
+    rt.block_on(run_remote_build_dispatches_async(selection, inputs, output_dir, state_dir, store_prefix, backend))
 }
 
 #[derive(Debug, Clone)]
@@ -5569,6 +5662,7 @@ fn cmd_remote_failure_debug_replay(
         output_dir: &ctx.store,
         state_dir: &ctx.resolved_state_dir,
         store_prefix: &ctx.store_prefix,
+        backend: ctx.store_backend,
     }))?;
     presentation::reports::emit_remote_failure_replay_result(&result, ctx.output_format())
 }
@@ -5581,6 +5675,7 @@ struct RemoteFailureReplayExecutionInput<'a> {
     output_dir: &'a Path,
     state_dir: &'a Path,
     store_prefix: &'a str,
+    backend: crunch_store::StoreBackend,
 }
 
 struct RemoteFailureReplayRuntime {
@@ -5605,6 +5700,14 @@ async fn run_remote_failure_debug_replay_async(
     if input.request.store_prefix != input.store_prefix {
         return Err(RunError::Internal("remote failure replay store-prefix mismatch".to_string()));
     }
+    crunch_store::StoreConfig::new(
+        input.backend,
+        input.state_dir.to_path_buf(),
+        input.output_dir.to_path_buf(),
+        input.store_prefix.to_string(),
+    )
+    .preflight_backend_identity()
+    .map_err(|error| RunError::Internal(format!("opening replay store: {error}")))?;
     let _coordinator_mutation_guard =
         remote_build::acquire_remote_coordinator_mutation_guard(input.state_dir).map_err(RunError::Internal)?;
     let bundle = input.bundle.clone();
@@ -5619,6 +5722,7 @@ async fn open_remote_failure_replay_store(
     debug_assert!(input.store_prefix.starts_with('/'));
     debug_assert!(!input.state_dir.as_os_str().is_empty());
     crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        backend: input.backend,
         state_dir: input.state_dir.to_path_buf(),
         output_dir: input.output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),
@@ -6208,12 +6312,21 @@ async fn run_remote_build_dispatches_async(
     output_dir: &Path,
     state_dir: &Path,
     store_prefix: &str,
+    backend: crunch_store::StoreBackend,
 ) -> Result<remote_build::RemoteClientBuildReport, RunError> {
     assert!(store_prefix.starts_with('/'));
     assert_eq!(store_prefix, selection.options.store_prefix);
+    crunch_store::StoreConfig::new(
+        backend,
+        state_dir.to_path_buf(),
+        output_dir.to_path_buf(),
+        store_prefix.to_string(),
+    )
+    .preflight_backend_identity()
+    .map_err(|error| RunError::Internal(format!("opening local store for remote build dispatch: {error}")))?;
     let _coordinator_mutation_guard =
         remote_build::acquire_remote_coordinator_mutation_guard(state_dir).map_err(RunError::Internal)?;
-    let mut store = open_remote_dispatch_store(output_dir, state_dir, store_prefix).await?;
+    let mut store = open_remote_dispatch_store(output_dir, state_dir, store_prefix, backend).await?;
     let mut coordinator = remote_build::load_coordinator_state(state_dir)?;
     let priority_plan = plan_remote_dispatch_priority(selection, &inputs)?;
     let competing_goal_count = priority_plan.evidence.competing_goal_count;
@@ -6312,8 +6425,10 @@ async fn open_remote_dispatch_store(
     output_dir: &Path,
     state_dir: &Path,
     store_prefix: &str,
+    backend: crunch_store::StoreBackend,
 ) -> Result<crunch_store::StoreHandle, RunError> {
     crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        backend,
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),
@@ -7036,6 +7151,7 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
                     &ctx.store,
                     &ctx.resolved_state_dir,
                     &ctx.store_prefix,
+                    ctx.store_backend,
                 )?;
                 eprintln!("Adopted admitted provider into local state: {logical_path}");
             }
@@ -7249,6 +7365,8 @@ fn run_bootstrap_command(request: BootstrapCommandRequest<'_>) -> Result<(), Run
         bootstrap_source_root::BootstrapProviderMode::LegacyFetch => cmd_bootstrap_fetch(BootstrapFetchRequest {
             output: request.output,
             store_dir: &request.ctx.store,
+            state_dir: &request.ctx.resolved_state_dir,
+            backend: request.ctx.store_backend,
             verbose: request.ctx.verbose,
             offline_source_preflight: request.offline_source_preflight,
         }),
@@ -7343,6 +7461,7 @@ fn run_attest_command(ctx: &RunContext, action: AttestAction) -> Result<(), RunE
         &current_dir_or_error()?,
         &ctx.store,
         &ctx.resolved_state_dir,
+        ctx.store_backend,
         &ctx.store_prefix,
         &ctx.base_state_dirs,
         ctx.json,
@@ -7466,6 +7585,11 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         patch_source_topology: *execute_patch_source_topology,
     });
     validate_rust_local_cache_mode(*local_rust_cache, execution_mode)?;
+    if ctx.store_backend == crunch_store::StoreBackend::Casita
+        && (*local_rust_cache != RustLocalCacheMode::Off || *shared_rust_cache != RustSharedCacheMode::Off)
+    {
+        return Err(RunError::Build("casita-rust-cache-unsupported".to_string()));
+    }
     let root = root.clone().unwrap_or(current_dir_or_error()?);
     let captured = capture_rust_plan_command(RustPlanCaptureRequest {
         root,
@@ -7594,6 +7718,7 @@ fn prepare_rust_plan_local_cache(
         ..crunch_rust_cache_core::LocalCachePolicy::default()
     };
     let cache = crunch_rust_cache::RustCache::open(crunch_store::StoreConfig {
+        backend: ctx.store_backend,
         state_dir: ctx.resolved_state_dir.clone(),
         output_dir: ctx.store.clone(),
         remote_cache_urls: Vec::new(),
@@ -7749,6 +7874,7 @@ fn run_shell_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             &ctx.store,
             &ctx.resolved_state_dir,
             &ctx.store_prefix,
+            ctx.store_backend,
             ctx.verbose,
         ),
         _ => Err(RunError::Internal("shell helper requires a shell command".to_string())),
@@ -7803,6 +7929,7 @@ fn run_develop_command(request: DevelopCommandRequest<'_>) -> Result<(), RunErro
         &request.ctx.store,
         &request.ctx.resolved_state_dir,
         &request.ctx.store_prefix,
+        request.ctx.store_backend,
         request.ctx.verbose,
     )
 }
@@ -7858,6 +7985,7 @@ fn run_package_command(request: PackageCommandRequest<'_>) -> Result<(), RunErro
         output_dir: &request.ctx.store,
         state_dir: &request.ctx.resolved_state_dir,
         store_prefix: &request.ctx.store_prefix,
+        backend: request.ctx.store_backend,
         verbose: request.ctx.verbose,
     })
 }
@@ -8046,6 +8174,7 @@ fn run_source_built_fixed_point(request: &SelfBuildCommandRequest<'_>) -> Result
             dev_resume: request.dev_resume,
             dev_fast_fail: request.dev_fast_fail,
             verbose: request.ctx.verbose,
+            backend: request.ctx.store_backend,
             json: request.ctx.json,
         },
     )
@@ -8113,6 +8242,7 @@ fn run_legacy_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<(), Ru
         &request.ctx.store,
         &request.ctx.resolved_state_dir,
         &request.ctx.store_prefix,
+        request.ctx.store_backend,
         request.ctx.verbose,
         crunch_pipeline::resolve_max_jobs(request.jobs),
         request.no_substitute,
@@ -8225,6 +8355,7 @@ fn build_from_expr(request: InlineBuildRequest<'_>) -> Result<(), RunError> {
         &request.prepared.ctx.store,
         &request.prepared.ctx.resolved_state_dir,
         &request.prepared.ctx.store_prefix,
+        request.prepared.ctx.store_backend,
         request.prepared.ctx.verbose,
         request.prepared.fix,
         request.prepared.max_jobs,
@@ -8255,6 +8386,7 @@ fn build_plan_from_expr(request: InlineBuildPlanRequest<'_>) -> Result<(), RunEr
         import_paths: request.import_entries,
         output_dir: &request.prepared.ctx.store,
         state_dir: &request.prepared.ctx.resolved_state_dir,
+        backend: request.prepared.ctx.store_backend,
         base_state_dirs: &request.prepared.ctx.base_state_dirs,
         store_dir: &request.prepared.ctx.store_prefix,
         substituter_urls: &request.prepared.substituter_urls,
@@ -8273,6 +8405,7 @@ struct RawInlineBuildRequest<'a> {
     output_dir: &'a Path,
     state_dir: &'a Path,
     store_prefix: &'a str,
+    backend: crunch_store::StoreBackend,
     verbose: bool,
     max_jobs: u32,
     substituter_urls: &'a [String],
@@ -8287,16 +8420,24 @@ struct RawInlineBuildRequest<'a> {
 fn build_from_expr_raw(request: RawInlineBuildRequest<'_>) -> Result<crunch_pipeline::PipelineResult, RunError> {
     debug_assert!(request.max_jobs > 0, "max_jobs must be positive");
     debug_assert!(request.store_prefix.starts_with('/'), "store prefix must be absolute");
+    crunch_store::StoreConfig::preflight_backend_identity_for(
+        request.backend,
+        request.state_dir,
+        request.store_prefix,
+        &[],
+    )
+    .map_err(|error| RunError::Internal(format!("opening store: {error}")))?;
     let root = expression_scratch::InlineRoot::stage(request.expr)?;
-    let keypair = build_cmd::load_or_generate_signing_keypair(request.signing_key_path, request.state_dir, true)?;
+    let keypair = signing_key::load_or_generate_signing_keypair(request.signing_key_path, request.state_dir, true)?;
     let configured_trusted_keys =
-        build_cmd::load_configured_trusted_public_keys(request.trusted_public_keys, request.state_dir)?;
+        signing_key::load_configured_trusted_public_keys(request.trusted_public_keys, request.state_dir)?;
     let trusted_keys = crunch_build::signing::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
     let config = crunch_pipeline::BuildConfig {
         file: root.path().to_path_buf(),
         import_paths: request.import_entries.to_vec(),
         output_dir: request.output_dir.to_path_buf(),
         state_dir: request.state_dir.to_path_buf(),
+        backend: request.backend,
         base_state_dirs: Vec::new(),
         store_dir: request.store_prefix.to_string(),
         verbose: request.verbose,
@@ -8421,6 +8562,7 @@ struct RunBuildSettings<'a> {
     output_dir: &'a Path,
     state_dir: &'a Path,
     store_prefix: &'a str,
+    backend: crunch_store::StoreBackend,
     verbose: bool,
     max_jobs: u32,
     no_substitute: bool,
@@ -8448,6 +8590,7 @@ fn build_project_expr_request(
         import_entries: &nickel_search_dirs,
         output_dir: request.settings.output_dir,
         state_dir: request.settings.state_dir,
+        backend: request.settings.backend,
         store_prefix: request.settings.store_prefix,
         verbose: request.settings.verbose,
         max_jobs: request.settings.max_jobs,
@@ -8474,6 +8617,7 @@ fn build_project_expr(
     output_dir: &Path,
     state_dir: &Path,
     store_prefix: &str,
+    backend: crunch_store::StoreBackend,
     verbose: bool,
     max_jobs: u32,
     no_substitute: bool,
@@ -8487,6 +8631,7 @@ fn build_project_expr(
         output_dir,
         state_dir,
         store_prefix,
+        backend,
         verbose,
         max_jobs,
         no_substitute,
@@ -8510,20 +8655,28 @@ struct FileRawBuildRequest<'a> {
 fn build_file_raw(request: FileRawBuildRequest<'_>) -> Result<crunch_pipeline::PipelineResult, RunError> {
     debug_assert!(request.settings.max_jobs > 0);
     debug_assert!(request.settings.store_prefix.starts_with('/'));
+    crunch_store::StoreConfig::preflight_backend_identity_for(
+        request.settings.backend,
+        request.settings.state_dir,
+        request.settings.store_prefix,
+        &[],
+    )
+    .map_err(|error| RunError::Internal(format!("opening store: {error}")))?;
     let substituter_urls = run_substituter_urls(request.settings.no_substitute);
     let nickel_search_dirs = build_import_paths(request.import_paths)?;
-    let keypair = build_cmd::load_or_generate_signing_keypair(
+    let keypair = signing_key::load_or_generate_signing_keypair(
         request.settings.signing_key_path,
         request.settings.state_dir,
         true,
     )?;
-    let configured_trusted_keys = build_cmd::load_configured_trusted_public_keys(None, request.settings.state_dir)?;
+    let configured_trusted_keys = signing_key::load_configured_trusted_public_keys(None, request.settings.state_dir)?;
     let trusted_keys = crunch_build::signing::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
     let config = crunch_pipeline::BuildConfig {
         file: request.file.to_path_buf(),
         import_paths: nickel_search_dirs,
         output_dir: request.settings.output_dir.to_path_buf(),
         state_dir: request.settings.state_dir.to_path_buf(),
+        backend: request.settings.backend,
         base_state_dirs: Vec::new(),
         store_dir: request.settings.store_prefix.to_string(),
         verbose: request.settings.verbose,
@@ -8563,6 +8716,7 @@ struct RunCommandRequest<'a> {
     output_dir: &'a Path,
     state_dir: &'a Path,
     store_prefix: &'a str,
+    backend: crunch_store::StoreBackend,
     verbose: bool,
 }
 
@@ -8576,6 +8730,7 @@ fn cmd_run(request: RunCommandRequest<'_>) -> Result<(), RunError> {
         output_dir: request.output_dir,
         state_dir: request.state_dir,
         store_prefix: request.store_prefix,
+        backend: request.backend,
         verbose: request.verbose,
         max_jobs: crunch_pipeline::resolve_max_jobs(request.jobs),
         no_substitute: request.no_substitute,
@@ -8612,6 +8767,8 @@ fn cmd_run(request: RunCommandRequest<'_>) -> Result<(), RunError> {
 struct BootstrapFetchRequest<'a> {
     output: &'a Path,
     store_dir: &'a Path,
+    state_dir: &'a Path,
+    backend: crunch_store::StoreBackend,
     verbose: bool,
     offline_source_preflight: bool,
 }
@@ -8627,9 +8784,8 @@ fn cmd_bootstrap_fetch(request: BootstrapFetchRequest<'_>) -> Result<(), RunErro
     }
 
     let source_fetch_plan = if request.offline_source_preflight {
-        let state_dir = build_cmd::state_dir();
         let provider_url = bootstrap::fetch_seed_provider_raw_url()?;
-        let plan = source_bundle::bootstrap_legacy_seed_fetch_override_plan(&state_dir, &provider_url)?;
+        let plan = source_bundle::bootstrap_legacy_seed_fetch_override_plan(request.state_dir, &provider_url)?;
         eprintln!(
             "  offline bootstrap source profile ready: records={} source_state_blake3={}",
             plan.report.record_count, plan.report.source_state_blake3
@@ -8640,9 +8796,14 @@ fn cmd_bootstrap_fetch(request: BootstrapFetchRequest<'_>) -> Result<(), RunErro
     };
     let source_fetch_overrides = source_fetch_plan.as_ref().map(|plan| plan.overrides.clone()).unwrap_or_default();
     let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
-    let result = rt.block_on(async {
-        bootstrap::bootstrap_fetch(request.store_dir, request.output, request.verbose, source_fetch_overrides).await
-    });
+    let result = rt.block_on(bootstrap::bootstrap_fetch(bootstrap::BootstrapSeedFetchRequest {
+        store_dir: request.store_dir,
+        state_dir: request.state_dir,
+        backend: request.backend,
+        output: request.output,
+        is_verbose: request.verbose,
+        source_fetch_overrides,
+    }));
     drop(source_fetch_plan);
     result
 }
@@ -8763,6 +8924,7 @@ mod tests {
             store_prefix: store_prefix.to_string(),
             nix_compat,
             state_dir: None,
+            store_backend: crunch_store::StoreBackend::Snix,
             base_stores: Vec::new(),
             command: Command::Doctor {
                 profile: DoctorProfile::Build,
@@ -8834,6 +8996,20 @@ mod tests {
     fn default_store_prefix_is_mantle() {
         let args = parse_args_with_cli_test_stack(Vec::from(["mantle", "doctor"])).expect("CLI parser test");
         assert_eq!(resolve_store_prefix(&args), "/mantle/store");
+    }
+
+    #[test]
+    fn store_backend_is_explicitly_selectable_and_unknown_names_fail_to_parse() {
+        let default = parse_args_with_cli_test_stack(Vec::from(["mantle", "store", "list"])).unwrap();
+        assert_eq!(default.store_backend, crunch_store::StoreBackend::Snix);
+        let casita =
+            parse_args_with_cli_test_stack(Vec::from(["mantle", "--store-backend", "casita", "store", "list"]))
+                .unwrap();
+        assert_eq!(casita.store_backend, crunch_store::StoreBackend::Casita);
+        let rejected =
+            parse_args_with_cli_test_stack(Vec::from(["mantle", "--store-backend", "tape", "store", "list"]))
+                .unwrap_err();
+        assert!(rejected.contains("store-backend-unknown"));
     }
 
     #[test]

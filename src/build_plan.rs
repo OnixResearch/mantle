@@ -24,12 +24,12 @@ use serde::Serialize;
 use snix_store::path_info::PathInfo;
 
 use crate::build_cmd::BuildOutputMode;
-use crate::build_cmd::load_configured_trusted_public_keys;
 use crate::build_report::BuildJsonCacheAdmission;
 use crate::errors::RunError;
 use crate::operator_diagnostics::DoctorProfile;
 use crate::operator_diagnostics::DoctorRequest;
 use crate::operator_diagnostics::collect_doctor_report;
+use crate::signing_key::load_configured_trusted_public_keys;
 
 const PLAN_REPORT_SCHEMA: &str = "crunch-build-plan-v1";
 const MAX_LABELED_EVAL_ERROR_DEPTH: u32 = 64;
@@ -161,6 +161,7 @@ pub struct BuildPlanConfig<'a> {
     pub import_paths: &'a [OsString],
     pub output_dir: &'a Path,
     pub state_dir: &'a Path,
+    pub backend: crunch_store::StoreBackend,
     pub base_state_dirs: &'a [PathBuf],
     pub store_dir: &'a str,
     pub substituter_urls: &'a [String],
@@ -213,6 +214,7 @@ async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanRepo
     });
     let plan_store = PlanStore::open(
         config.state_dir,
+        config.backend,
         config.output_dir,
         config.store_dir,
         config.base_state_dirs,
@@ -572,6 +574,7 @@ struct PlanStore {
 impl PlanStore {
     async fn open(
         state_dir: &Path,
+        backend: crunch_store::StoreBackend,
         output_dir: &Path,
         store_dir: &str,
         base_state_dirs: &[PathBuf],
@@ -589,6 +592,7 @@ impl PlanStore {
         };
         let planning_state_dir = ephemeral_state.as_ref().map_or(state_dir, tempfile::TempDir::path);
         let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            backend,
             state_dir: planning_state_dir.to_path_buf(),
             output_dir: output_dir.to_path_buf(),
             remote_cache_urls: substituter_urls.to_vec(),

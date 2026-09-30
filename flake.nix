@@ -51,6 +51,10 @@
     # and runs CLI checks with this exact evaluator, never a floating nixpkgs
     # nickel.
     nickelCohort.url = "github:tweag/nickel/1320a983e6c3d1e2fb53dd2464b084b4903b1426";
+    casitaSource = {
+      url = "github:cachix/casita/90404fcb1cfb3d83f2233715448dfefe913f5fd1";
+      flake = false;
+    };
   };
 
   outputs =
@@ -71,6 +75,7 @@
       octet,
       cairn,
       nickelCohort,
+      casitaSource,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -301,6 +306,33 @@
           ) "Mantle nickel-export-core Nix input drifted from ${nickelExportCoreRevision}";
           nickelExportCore;
         firstPartyCargoScope = pkgs.lib.concatStringsSep " " cargoManifest.workspace.metadata.tigerstyle.default_scope;
+        casitaRevision = "90404fcb1cfb3d83f2233715448dfefe913f5fd1";
+        casitaManifest = builtins.fromTOML (builtins.readFile ./crates/crunch-store/Cargo.toml);
+        casitaLocked = builtins.filter (
+          package: package.name == "casita"
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        casitaSourceAdmitted =
+          assert pkgs.lib.assertMsg (
+            casitaManifest.dependencies.casita.git == "https://github.com/cachix/casita"
+            && casitaManifest.dependencies.casita.rev == casitaRevision
+            && casitaManifest.dependencies.casita.default-features == false
+            && casitaManifest.dependencies.casita.features == [ "native" "experimental" ]
+            && casitaSource.rev == casitaRevision
+            && builtins.length casitaLocked == 1
+            && (builtins.head casitaLocked).source
+              == "git+https://github.com/cachix/casita?rev=${casitaRevision}#${casitaRevision}"
+            && (builtins.fromTOML (builtins.readFile (casitaSource + "/crates/casita/Cargo.toml"))).package.license
+              == "Apache-2.0"
+          ) "Mantle Casita source, Cargo lock, Nix pin, or license drifted";
+          true;
+        # Exact-revision upstream compile fix, kept as an auditable tracked patch.
+        casitaPatchedSource =
+          assert casitaSourceAdmitted;
+          pkgs.applyPatches {
+            name = "casita-${casitaRevision}-patched";
+            src = casitaSource;
+            patches = [ ./patches/casita-blake3-finalize.patch ];
+          };
         catalogExampleRelativePaths = builtins.filter (path: path != null) (
           map (
             line:
@@ -417,9 +449,17 @@
               checkout.overrideAttrs (_old: {
                 src = transactionalReconciliationSource;
               })
+            else if
+              casitaSourceAdmitted
+              && builtins.any (package: package.name == "casita") packages
+            then
+              checkout.overrideAttrs (_old: {
+                src = casitaPatchedSource;
+              })
             else
               checkout;
         };
+
 
         # Common build inputs
         nativeBuildInputs =
@@ -1292,6 +1332,8 @@
 
         checks = {
           inherit crunch;
+          # Builds exactly the locked, clean-source Crane dependency closure.
+          casita-vendor-closure = cargoVendorDir;
           bounded-tree-source-admission =
             assert boundedTreeSourceAdmitted;
             pkgs.runCommand "mantle-bounded-tree-source-admission"
@@ -1694,6 +1736,14 @@
             ];
 
           MANTLE_WASM_COMPONENT_TOOLCHAIN = "${wasmComponentToolchain}";
+          # Crane already maps each registry and pinned git source to its own
+          # patched immutable directory; never flatten that map into one vendor root.
+          shellHook = ''
+            export MANTLE_CARGO_HOME_BEFORE_DEV_SHELL="''${MANTLE_CARGO_HOME_BEFORE_DEV_SHELL:-''${CARGO_HOME:-$HOME/.cargo}}"
+            export CARGO_HOME="$(mktemp -d "''${TMPDIR:-/tmp}/mantle-cargo-home.XXXXXXXX")"
+            ln -s "${cargoVendorDir}/config.toml" "$CARGO_HOME/config.toml"
+          '';
+
 
           # Ensure the nightly toolchain is available
           inputsFrom = [ crunch ];

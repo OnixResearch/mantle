@@ -19,7 +19,7 @@ mantle --store-prefix /nix/store store archive import \
   --trusted-public-keys NAME:BASE64
 ```
 
-Use `--trust-unsigned` only when policy permits unauthenticated original-path provenance. The default Mantle-native archive format does not change.
+Use `--trust-unsigned` only when policy permits unauthenticated original-path provenance. Under `--store-backend casita`, `--trust-unsigned` fails with `casita-trust-unsigned-unsupported`. The default Mantle-native archive format does not change.
 
 Nario export is not supported. Mantle rejects `store archive export --format nario-v2` before it writes output bytes.
 
@@ -28,6 +28,8 @@ Nario export is not supported. Mantle rejects `store archive export --format nar
 The reader accepts the pinned Nario v2 magic and WorkerProto v16 metadata with short store paths. It checks named bounds, record order, duplicate paths, SHA-256 NAR identity, NAR size, references, signatures, supported content-address metadata, exact `/nix/store` identity, trailing data, and complete archive termination.
 
 Import stages castore content first. It publishes all new PathInfo records through one backend transaction after the complete archive passes. Existing matching paths drain and verify payloads without reingest.
+
+Under `--store-backend casita`, every import key must appear in the destination `casita-trusted-public-keys` file. Mantle checks the file and keys before it reads the archive. One conditional Casita commit publishes all new paths or none. An archive with more than 1,024 paths that are not already in the store fails with `casita-batch-limit` before Mantle stages anything in Casita, and Mantle does not split it; paths already present are skipped and not counted. See [Store backends](store-backends.md#casita-layout-and-trust).
 
 Direct import does not rewrite paths. A different logical prefix fails before payload admission.
 

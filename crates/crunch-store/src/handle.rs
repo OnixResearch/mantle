@@ -77,6 +77,7 @@ use crate::LocalActionResultStore;
 use crate::Publisher;
 use crate::StoreAuditEvent;
 use crate::StoreAuditKind;
+use crate::StoreBackend;
 use crate::StoreFallbackMode;
 use crate::StoredArtifactAttestation;
 use crate::StoredClosureAttestation;
@@ -107,7 +108,10 @@ const MAX_RECORDED_LAYER_SELECTIONS: usize = 65_536;
 
 /// Configuration for opening a store.
 pub struct StoreConfig {
-    /// State directory for persistent data (pathinfo.redb, blobs/, ca_mappings.json).
+    /// Durable authority selected explicitly by the caller.
+    pub backend: StoreBackend,
+
+    /// State directory for backend identity and persistent blobs and databases.
     pub state_dir: PathBuf,
 
     /// Physical output directory (from CLI `--store`). Where root build
@@ -135,11 +139,35 @@ pub struct StoreConfig {
 }
 
 impl StoreConfig {
-    /// Create a `StoreConfig` with the given directory and prefix. All other
-    /// fields (remote_cache_urls, base_state_dirs, etc.) default to empty.
+    /// Validate a selected writable store and its read-only bases without creating state.
+    pub fn preflight_backend_identity_for(
+        backend: StoreBackend,
+        state_dir: &Path,
+        store_dir: &str,
+        base_state_dirs: &[PathBuf],
+    ) -> Result<(), Error> {
+        if backend == StoreBackend::Casita && !base_state_dirs.is_empty() {
+            return Err(Error::Store("casita-overlay-unsupported: Casita cannot compose Snix base stores".to_string()));
+        }
+        crate::overlay::preflight_store_identity(state_dir, store_dir, backend)?;
+        for base_state_dir in base_state_dirs {
+            crate::overlay::preflight_store_identity(base_state_dir, store_dir, StoreBackend::Snix)?;
+        }
+        Ok(())
+    }
+
+    /// Validate the selected backend and any legacy Snix state before obtaining a mutation lock.
+    pub fn preflight_backend_identity(&self) -> Result<(), Error> {
+        Self::preflight_backend_identity_for(self.backend, &self.state_dir, &self.store_dir, &self.base_state_dirs)
+    }
+
+    /// Create a store config with an explicit durable backend.
+    ///
+    /// Other fields (remote_cache_urls and base_state_dirs) default to empty;
     /// `fallback_mode` defaults to `Practical`.
-    pub fn new(state_dir: PathBuf, output_dir: PathBuf, store_dir: String) -> Self {
+    pub fn new(backend: StoreBackend, state_dir: PathBuf, output_dir: PathBuf, store_dir: String) -> Self {
         Self {
+            backend,
             state_dir,
             output_dir,
             remote_cache_urls: Vec::new(),
@@ -623,6 +651,9 @@ fn configured_action_result_stores(
 pub struct StoreHandle {
     pub(crate) blob_service: Arc<dyn BlobService>,
     pub(crate) directory_service: Arc<dyn DirectoryService>,
+    /// Selected durable authority; Snix services are only session scratch under Casita.
+    backend: StoreBackend,
+    pub(crate) casita_store: Option<Arc<crate::casita::CasitaStore>>,
     pathinfo_service: Arc<dyn PathInfoService>,
     /// Raw writable-overlay services retained for mutation and GC isolation.
     overlay_blob_service: Arc<dyn BlobService>,
@@ -678,6 +709,7 @@ impl StoreHandle {
     /// substitution.
     pub async fn open(config: StoreConfig) -> Result<Self, Error> {
         validate_store_dir(&config.store_dir)?;
+        config.preflight_backend_identity()?;
         if !config.base_state_dirs.is_empty() {
             return Self::open_overlay(config).await;
         }
@@ -686,15 +718,37 @@ impl StoreHandle {
 
     async fn open_single(config: StoreConfig) -> Result<Self, Error> {
         validate_store_dir(&config.store_dir)?;
+        config.preflight_backend_identity()?;
         let state_dir = &config.state_dir;
         std::fs::create_dir_all(state_dir)
             .map_err(|e| Error::Store(format!("creating state dir {}: {e}", state_dir.display())))?;
-        crate::overlay::ensure_store_identity(state_dir, &config.store_dir)?;
+        crate::overlay::ensure_store_identity(state_dir, &config.store_dir, config.backend)?;
+        type OpenedStoreServices = (
+            Option<Arc<crate::casita::CasitaStore>>,
+            Arc<dyn BlobService>,
+            Arc<dyn DirectoryService>,
+            Arc<dyn PathInfoService>,
+            Vec<StoreAuditEvent>,
+        );
 
-        let blob_service = open_blob_service(state_dir)?;
-        let directory_service = open_directory_service(state_dir).await?;
-        let (pathinfo_service, mut startup_audit_events) =
-            open_pathinfo_service(state_dir, config.fallback_mode).await?;
+        let (casita_store, blob_service, directory_service, pathinfo_service, mut startup_audit_events):
+            OpenedStoreServices =
+            match config.backend {
+                StoreBackend::Snix => {
+                    let blob_service = open_blob_service(state_dir)?;
+                    let directory_service = open_directory_service(state_dir).await?;
+                    let (pathinfo_service, audit_events) =
+                        open_pathinfo_service(state_dir, config.fallback_mode).await?;
+                    (None, blob_service, directory_service, pathinfo_service, audit_events)
+                }
+                StoreBackend::Casita => {
+                    let store = crate::casita::CasitaStore::open(state_dir, &config.store_dir).await?;
+                    let blob_service = store.blob_service.clone();
+                    let directory_service = store.directory_service.clone();
+                    let pathinfo_service: Arc<dyn PathInfoService> = store.clone();
+                    (Some(store), blob_service, directory_service, pathinfo_service, Vec::new())
+                }
+            };
 
         let (remote_pathinfo, remote_cache_urls, remote_trusted_public_keys) = match config.remote_cache_urls.first() {
             Some(ref url_str) => match Url::parse(url_str) {
@@ -759,6 +813,8 @@ impl StoreHandle {
         let action_result_stores = configured_action_result_stores(&config.state_dir, &[], &config.remote_cache_urls);
 
         Ok(Self {
+            backend: config.backend,
+            casita_store,
             blob_service: blob_service.clone(),
             directory_service: directory_service.clone(),
             pathinfo_service: pathinfo_service.clone(),
@@ -798,6 +854,7 @@ impl StoreHandle {
     /// When `base_state_dirs` is empty, this is equivalent to `open()`.
     pub async fn open_overlay(config: StoreConfig) -> Result<Self, Error> {
         validate_store_dir(&config.store_dir)?;
+        config.preflight_backend_identity()?;
         if config.base_state_dirs.is_empty() {
             return Self::open_single(config).await;
         }
@@ -808,7 +865,7 @@ impl StoreHandle {
         let state_dir = &config.state_dir;
         std::fs::create_dir_all(state_dir)
             .map_err(|e| Error::Store(format!("creating state dir {}: {e}", state_dir.display())))?;
-        crate::overlay::ensure_store_identity(state_dir, &config.store_dir)?;
+        crate::overlay::ensure_store_identity(state_dir, &config.store_dir, config.backend)?;
 
         let overlay_blob = open_blob_service(state_dir)?;
         let overlay_directory = open_directory_service(state_dir).await?;
@@ -934,6 +991,8 @@ impl StoreHandle {
             configured_action_result_stores(&config.state_dir, &config.base_state_dirs, &config.remote_cache_urls);
 
         Ok(Self {
+            backend: config.backend,
+            casita_store: None,
             blob_service: combined_blob,
             directory_service: combined_directory,
             pathinfo_service: combined_pathinfo,
@@ -976,6 +1035,8 @@ impl StoreHandle {
         let advisory_metadata_cache = AdvisoryMetadataCache::load(&services.state_dir);
         let action_result_stores = configured_action_result_stores(&services.state_dir, &[], &[]);
         Self {
+            backend: StoreBackend::Snix,
+            casita_store: None,
             blob_service: services.blob_service.clone(),
             directory_service: services.directory_service.clone(),
             pathinfo_service: services.pathinfo_service.clone(),
@@ -1035,6 +1096,68 @@ impl StoreHandle {
             observations.push(observation);
         }
         observations
+    }
+
+    /// Selected durable backend and its declared capability profile.
+    pub fn backend(&self) -> StoreBackend {
+        self.backend
+    }
+    /// Read-only check before a guarded Casita GC recovery attempt.
+    pub fn casita_gc_fence_pending(state_dir: &Path) -> Result<bool, Error> {
+        gc::casita_gc_fence_pending(state_dir)
+    }
+
+    /// Finish only previously fenced removals; never acquire a nested lock.
+    pub async fn recover_casita_gc_under_guard(&mut self, guard: &crate::StoreMutationGuard) -> Result<(), Error> {
+        if !guard.protects_state_dir(&self.state_dir) {
+            return Err(Error::MutationLock(
+                "gc-plan-stale: recovery guard does not protect selected state directory".to_string(),
+            ));
+        }
+        if let Some(store) = &self.casita_store {
+            gc::recover_casita_gc(
+                &self.state_dir,
+                gc::CasitaGcPaths {
+                    output_dir_str: &self.output_dir_str,
+                    store_dir: &self.store_dir,
+                },
+                store,
+                &mut self.ca_mappings,
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    /// Publish an otherwise unreferenced castore node as one durable Casita root.
+    pub async fn admit_castore_payload_root(&self, node: &Node) -> Result<(), Error> {
+        if let Some(store) = &self.casita_store {
+            store.admit_castore_payload_root(node).await?;
+        }
+        Ok(())
+    }
+
+    /// Rehydrate a retained castore node before a fresh-process cache probe.
+    pub async fn rehydrate_castore_payload_root(&self, node: &Node) -> Result<(), Error> {
+        if let Some(store) = &self.casita_store {
+            store.rehydrate_castore_payload_root(node).await?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn preflight_casita_archive_trust(&self, import_keys: &[VerifyingKey]) -> Result<(), Error> {
+        match self.backend {
+            StoreBackend::Snix => Ok(()),
+            StoreBackend::Casita => self
+                .casita_store
+                .as_ref()
+                .ok_or_else(|| Error::Store("casita-backend-unavailable: Casita authority is not open".to_string()))?
+                .preflight_archive_trust(import_keys),
+        }
+    }
+
+    pub(crate) fn casita_batch_root_change_limit(&self) -> Option<usize> {
+        self.casita_store.as_ref().map(|store| store.repository.limits().max_root_changes)
     }
 
     pub fn blob_service(&self) -> Arc<dyn BlobService> {
@@ -1350,6 +1473,9 @@ impl StoreHandle {
     }
 
     pub async fn pin_retained_root(&self, logical_path: &str) -> Result<GcRootRecord, Error> {
+        if let Some(store) = &self.casita_store {
+            store.require_recovered_gc()?;
+        }
         self.revalidate_overlay_bases()?;
         let root =
             roots::pin_root(&self.state_dir, &self.store_dir, self.pathinfo_service.as_ref(), logical_path).await?;
@@ -1358,6 +1484,9 @@ impl StoreHandle {
     }
 
     pub fn unpin_retained_root(&self, logical_path: &str) -> Result<Option<GcRootRecord>, Error> {
+        if let Some(store) = &self.casita_store {
+            store.require_recovered_gc()?;
+        }
         roots::unpin_root(&self.state_dir, roots::LogicalStorePathRef {
             logical_path,
             store_dir: &self.store_dir,
@@ -1373,6 +1502,9 @@ impl StoreHandle {
         store_path: &StorePath<String>,
         source: GcRootSource,
     ) -> Result<GcRootRecord, Error> {
+        if let Some(store) = &self.casita_store {
+            store.require_recovered_gc()?;
+        }
         self.revalidate_overlay_bases()?;
         let root = match &self.root_registration {
             Some(registration) => {
@@ -1404,8 +1536,40 @@ impl StoreHandle {
     pub async fn garbage_collect(&mut self, accepted_plan_id: Option<&str>) -> Result<GcReport, Error> {
         self.garbage_collect_with_castore_roots(accepted_plan_id, &[]).await
     }
+    /// Casita GC requires the caller's already-held lock for recovery and execution.
+    pub async fn garbage_collect_under_guard(
+        &mut self,
+        guard: &crate::StoreMutationGuard,
+        accepted_plan_id: Option<&str>,
+    ) -> Result<GcReport, Error> {
+        self.garbage_collect_with_castore_roots_under_guard(guard, accepted_plan_id, &[]).await
+    }
+
+    /// Plan and execute with the same-state mutation guard, never reacquiring it.
+    pub async fn garbage_collect_with_castore_roots_under_guard(
+        &mut self,
+        guard: &crate::StoreMutationGuard,
+        accepted_plan_id: Option<&str>,
+        retained_castore_roots: &[Node],
+    ) -> Result<GcReport, Error> {
+        self.recover_casita_gc_under_guard(guard).await?;
+        self.garbage_collect_inner(accepted_plan_id, retained_castore_roots).await
+    }
 
     pub async fn garbage_collect_with_castore_roots(
+        &mut self,
+        accepted_plan_id: Option<&str>,
+        retained_castore_roots: &[Node],
+    ) -> Result<GcReport, Error> {
+        if self.backend == StoreBackend::Casita {
+            return Err(Error::MutationLock(
+                "casita-gc-guard-required: use garbage_collect_with_castore_roots_under_guard".to_string(),
+            ));
+        }
+        self.garbage_collect_inner(accepted_plan_id, retained_castore_roots).await
+    }
+
+    async fn garbage_collect_inner(
         &mut self,
         accepted_plan_id: Option<&str>,
         retained_castore_roots: &[Node],
@@ -1421,6 +1585,7 @@ impl StoreHandle {
             overlay_blob_service: self.overlay_blob_service.as_ref(),
             overlay_plan_identity: self.overlay_state.as_ref().map(|state| state.plan.plan_identity.into_bytes()),
             retained_castore_roots,
+            casita_store: self.casita_store.clone(),
         };
         let report = gc::run_gc(&ctx, &mut self.ca_mappings, accepted_plan_id).await?;
         self.revalidate_overlay_bases()?;
@@ -5610,6 +5775,7 @@ mod tests {
 
         {
             let mut seeded_remote = StoreHandle::open(StoreConfig {
+                backend: StoreBackend::Snix,
                 state_dir: remote_state_dir.path().to_path_buf(),
                 output_dir: remote_output_dir.path().to_path_buf(),
                 remote_cache_urls: Vec::new(),
@@ -5649,6 +5815,7 @@ mod tests {
         }
 
         let persisted_remote = StoreHandle::open(StoreConfig {
+            backend: StoreBackend::Snix,
             state_dir: remote_state_dir.path().to_path_buf(),
             output_dir: remote_output_dir.path().to_path_buf(),
             remote_cache_urls: Vec::new(),
@@ -5738,6 +5905,7 @@ mod tests {
             url::form_urlencoded::byte_serialize(trusted_verify.to_string().as_bytes()).collect::<String>()
         );
         let mut handle = StoreHandle::open(StoreConfig {
+            backend: StoreBackend::Snix,
             state_dir: receiver_state_dir.path().to_path_buf(),
             output_dir: receiver_output_dir.path().to_path_buf(),
             remote_cache_urls: vec![remote_cache_url],
@@ -6655,7 +6823,7 @@ mod tests {
         // Create required directories and bind the logical prefix before service creation.
         set_test_tree_read_only(base_dir, false);
         std::fs::create_dir_all(base_dir.join("blobs")).unwrap();
-        crate::overlay::ensure_store_identity(base_dir, store_dir).unwrap();
+        crate::overlay::ensure_store_identity(base_dir, store_dir, StoreBackend::Snix).unwrap();
         std::fs::write(base_dir.join("overlay-trusted-public-keys"), format!("{}\n", test_verifying_key())).unwrap();
 
         // Open and close directory service to create the DB file.
@@ -6696,7 +6864,7 @@ mod tests {
         const BASE_FILE_CONTENT: &[u8] = b"base-file-content";
         set_test_tree_read_only(base_dir, false);
         std::fs::create_dir_all(base_dir.join("blobs")).unwrap();
-        crate::overlay::ensure_store_identity(base_dir, store_dir).unwrap();
+        crate::overlay::ensure_store_identity(base_dir, store_dir, StoreBackend::Snix).unwrap();
         std::fs::write(base_dir.join("overlay-trusted-public-keys"), format!("{}\n", test_verifying_key())).unwrap();
         let source = base_dir.join("fixture-source");
         if source_is_directory {
@@ -6780,6 +6948,7 @@ mod tests {
     async fn create_overlay_handle(overlay_dir: &Path, base_dir: &Path, store_dir: &str) -> StoreHandle {
         std::fs::write(overlay_dir.join("overlay-trusted-public-keys"), format!("{}\n", test_verifying_key())).unwrap();
         StoreHandle::open_overlay(StoreConfig {
+            backend: StoreBackend::Snix,
             state_dir: overlay_dir.to_path_buf(),
             output_dir: overlay_dir.to_path_buf(),
             remote_cache_urls: Vec::new(),
@@ -6854,6 +7023,7 @@ mod tests {
         std::fs::write(overlay_dir.path().join("overlay-trusted-public-keys"), format!("{}\n", test_verifying_key()))
             .unwrap();
         let mut handle = StoreHandle::open_overlay(StoreConfig {
+            backend: StoreBackend::Snix,
             state_dir: overlay_dir.path().to_path_buf(),
             output_dir: overlay_dir.path().to_path_buf(),
             remote_cache_urls: Vec::new(),
@@ -7012,6 +7182,7 @@ mod tests {
 
         // Open overlay with /crunch/store prefix — mismatch must fail.
         let result = StoreHandle::open_overlay(StoreConfig {
+            backend: StoreBackend::Snix,
             state_dir: overlay_dir.path().to_path_buf(),
             output_dir: overlay_dir.path().to_path_buf(),
             remote_cache_urls: Vec::new(),
@@ -7043,6 +7214,7 @@ mod tests {
         drop(missing_base); // directory is deleted
 
         let result = StoreHandle::open_overlay(StoreConfig {
+            backend: StoreBackend::Snix,
             state_dir: overlay_dir.path().to_path_buf(),
             output_dir: overlay_dir.path().to_path_buf(),
             remote_cache_urls: Vec::new(),
@@ -7085,6 +7257,7 @@ mod tests {
 
         // Open overlay over [base A, base B].
         let mut handle = StoreHandle::open_overlay(StoreConfig {
+            backend: StoreBackend::Snix,
             state_dir: overlay_dir.path().to_path_buf(),
             output_dir: overlay_dir.path().to_path_buf(),
             remote_cache_urls: Vec::new(),
@@ -7121,6 +7294,7 @@ mod tests {
             create_base_store_with_host_tree(base_directory_dir.path(), store_dir, &directory_path, true).await;
 
         let mut handle = StoreHandle::open_overlay(StoreConfig {
+            backend: StoreBackend::Snix,
             state_dir: overlay_dir.path().to_path_buf(),
             output_dir: overlay_dir.path().to_path_buf(),
             remote_cache_urls: Vec::new(),
@@ -7284,6 +7458,7 @@ mod tests {
         create_base_store(base_dir.path(), store_dir, &test_output("duplicate-base", 41)).await;
 
         let result = StoreHandle::open_overlay(StoreConfig {
+            backend: StoreBackend::Snix,
             state_dir: overlay_dir.path().to_path_buf(),
             output_dir: overlay_dir.path().to_path_buf(),
             remote_cache_urls: Vec::new(),
@@ -7310,6 +7485,7 @@ mod tests {
         set_test_tree_read_only(base_dir.path(), false);
 
         let result = StoreHandle::open_overlay(StoreConfig {
+            backend: StoreBackend::Snix,
             state_dir: overlay_dir.path().to_path_buf(),
             output_dir: overlay_dir.path().to_path_buf(),
             remote_cache_urls: Vec::new(),
@@ -7470,6 +7646,7 @@ mod tests {
         let store_dir = "/nix/store";
         let overlay_path = test_output("reverse-overlay", 47);
         let mut single = StoreHandle::open(StoreConfig::new(
+            StoreBackend::Snix,
             overlay_dir.path().to_path_buf(),
             overlay_dir.path().to_path_buf(),
             store_dir.to_string(),

@@ -13,9 +13,15 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::io::Read;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 
+use casita::experimental::MetadataStore;
+use casita::experimental::ObjectKey;
+use casita::experimental::RootName;
 use crunch_gc_core::GcEntry;
 use crunch_gc_core::GcExecutionMode;
 use crunch_gc_core::GcMutationDisposition;
@@ -34,6 +40,7 @@ use crunch_gc_core::summarize_reclaim_observations;
 use data_encoding::HEXLOWER;
 use futures::StreamExt;
 use nix_compat::store_path::StorePath;
+use serde::Deserialize;
 use serde::Serialize;
 use snix_castore::B3Digest;
 use snix_castore::Directory;
@@ -46,6 +53,7 @@ use snix_store::pathinfoservice::PathInfoService;
 use crate::CaMappings;
 use crate::Error;
 use crate::action_result::local_action_result_gc_candidates;
+use crate::casita::CasitaStore;
 
 /// Services and paths needed for GC operations.
 pub struct GcContext<'a> {
@@ -58,6 +66,7 @@ pub struct GcContext<'a> {
     pub overlay_blob_service: &'a dyn BlobService,
     pub overlay_plan_identity: Option<[u8; blake3::OUT_LEN]>,
     pub retained_castore_roots: &'a [Node],
+    pub(crate) casita_store: Option<Arc<CasitaStore>>,
 }
 use crate::artifact_attestation_file_path;
 use crate::roots;
@@ -84,6 +93,8 @@ pub enum GcOperationKind {
     BlobChunkFiles,
     ActionResults,
     CaMappings,
+    CasitaRootRemoval,
+    CasitaCollection,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -198,6 +209,8 @@ struct GcPlan {
     usage: GcUsageReport,
     live_pathinfos: Vec<PathInfo>,
     dead_pathinfos: Vec<PathInfo>,
+    casita_targets: BTreeMap<String, (RootName, ObjectKey)>,
+    casita_castore_candidates: Vec<String>,
     live_castore: LiveCastoreState,
     orphaned_on_disk: Vec<PathBuf>,
     artifact_attestation_paths: Vec<PathBuf>,
@@ -211,7 +224,53 @@ struct GcPlan {
     reclaim_observations: Vec<GcReclaimObservation>,
 }
 
+const CASITA_GC_FENCE: &str = "casita-gc-fence.json";
+const CASITA_GC_FENCE_JOURNAL: &str = "casita-gc-fence.progress";
+const MAX_CASITA_GC_FENCE_ENTRIES: usize = 65_536;
+const MAX_CASITA_GC_FENCE_BYTES: u64 = 64_u64.saturating_mul(1024).saturating_mul(1024);
+const CASITA_GC_OUTCOME_BYTES: usize = 5;
+const MAX_CASITA_GC_JOURNAL_BYTES: usize =
+    MAX_CASITA_GC_FENCE_ENTRIES.saturating_mul(CASITA_GC_OUTCOME_BYTES).saturating_mul(4);
+
+#[derive(Debug)]
+struct CasitaCastorePlan {
+    core_plan_id: [u8; blake3::OUT_LEN],
+    candidate_roots: Vec<String>,
+    targets: BTreeMap<String, (RootName, ObjectKey)>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+enum CasitaFenceKind {
+    Output,
+    Castore,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct CasitaFenceEntry {
+    kind: CasitaFenceKind,
+    path: String,
+    root_name: String,
+    expected_target: String,
+    removed: bool,
+    cleaned: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct CasitaGcFence {
+    plan_id: String,
+    entries: Vec<CasitaFenceEntry>,
+}
+
+/// Distinguishes physical exports from the logical store prefix during fenced cleanup.
+#[derive(Clone, Copy)]
+pub(crate) struct CasitaGcPaths<'a> {
+    pub(crate) output_dir_str: &'a str,
+    pub(crate) store_dir: &'a str,
+}
+
 // r[impl store_lifecycle.safe_gc_execution]
+// r[impl mantle.casita_store_backend.plan_bound_gc]
 pub async fn run_gc(
     ctx: &GcContext<'_>,
     ca_mappings: &mut CaMappings,
@@ -222,13 +281,21 @@ pub async fn run_gc(
     if ctx.retained_castore_roots.len() > MAX_GC_RETAINED_CASTORE_ROOTS {
         return Err(Error::Gc(format!("retained castore root count exceeds {MAX_GC_RETAINED_CASTORE_ROOTS}")));
     }
+    if ctx.casita_store.is_some() && ctx.retained_castore_roots.len() > crunch_gc_core::MAX_GC_ROOTS {
+        return Err(Error::Gc("Casita GC castore retention exceeds the GC core root limit".to_string()));
+    }
 
     let is_execution_requested = accepted_plan_id.is_some();
     let plan = build_plan(ctx, is_execution_requested).await?;
     if let Some(accepted_plan_id) = accepted_plan_id
         && accepted_plan_id != plan.plan_id
     {
-        return Err(Error::Gc(format!("stale-gc-plan: accepted={accepted_plan_id} observed={}", plan.plan_id)));
+        let blocker = if ctx.casita_store.is_some() {
+            "gc-plan-stale"
+        } else {
+            "stale-gc-plan"
+        };
+        return Err(Error::Gc(format!("{blocker}: accepted={accepted_plan_id} observed={}", plan.plan_id)));
     }
     let core_decision = plan.core_decision;
     let live_paths: BTreeSet<String> = plan
@@ -247,7 +314,7 @@ pub async fn run_gc(
         failed_operations: Vec::new(),
         retained_root_count: saturating_u32(plan.retained_roots.len()),
         retained_castore_root_count: saturating_u32(ctx.retained_castore_roots.len()),
-        candidate_path_count: saturating_u32(plan.dead_pathinfos.len()),
+        candidate_path_count: saturating_u32(plan.candidate_paths.len()),
         reclaimable_bytes_total: plan.reclaimable_bytes_total,
         reclaim_observations: plan.reclaim_observations.clone(),
         candidate_paths: plan.candidate_paths.clone(),
@@ -270,6 +337,10 @@ pub async fn run_gc(
         plan.live_pathinfos.len().saturating_add(plan.base_reachability.len()),
     );
     if core_decision.mutation_disposition == GcMutationDisposition::ReportOnly {
+        return Ok(gc_result);
+    }
+    if let Some(store) = ctx.casita_store.as_ref() {
+        execute_casita_gc(ctx, store, ca_mappings, &plan, &mut gc_result).await?;
         return Ok(gc_result);
     }
 
@@ -334,25 +405,62 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
         .filter(|root| retained_root_ids.contains(root.logical_path.as_str()))
         .cloned()
         .collect::<Vec<_>>();
-    let overlay_snapshot = snapshot_pathinfos(ctx.overlay_pathinfo).await?;
-    let overlay_trusted_keys = if ctx.overlay_plan_identity.is_some() {
-        Some(crate::overlay::load_layer_trust_keys(ctx.state_dir)?)
+    let (overlay_snapshot, casita_targets, composed_snapshot) = if let Some(store) = ctx.casita_store.as_ref() {
+        let records = store.verified_gc_roots(ctx.store_dir).await?;
+        if records.len() > crunch_gc_core::MAX_GC_ENTRIES {
+            return Err(Error::Gc("Casita GC snapshot exceeds the entry limit".to_string()));
+        }
+        let mut targets = BTreeMap::new();
+        let mut pathinfos = Vec::with_capacity(records.len());
+        let mut ownership = BTreeMap::new();
+        for (name, target, pathinfo) in records {
+            let path = pathinfo.store_path.to_absolute_path_with_prefix(ctx.store_dir);
+            if targets.insert(path.clone(), (name, target)).is_some() {
+                return Err(Error::Gc(format!("casita-envelope-invalid: duplicate output {path}")));
+            }
+            ownership.insert(path, GcOwnership::Overlay);
+            pathinfos.push(pathinfo);
+        }
+        for root in &retained_roots {
+            if !targets.contains_key(&root.logical_path) {
+                return Err(Error::Gc(format!("casita-root-missing: {}", root.logical_path)));
+            }
+        }
+        let composed = ComposedGcSnapshot {
+            pathinfos: pathinfos.clone(),
+            ownership,
+        };
+        (pathinfos, targets, composed)
     } else {
-        None
+        let snapshot = snapshot_pathinfos(ctx.overlay_pathinfo).await?;
+        let overlay_trusted_keys = if ctx.overlay_plan_identity.is_some() {
+            Some(crate::overlay::load_layer_trust_keys(ctx.state_dir)?)
+        } else {
+            None
+        };
+        let composed = compose_gc_snapshot(
+            &snapshot,
+            &retained_roots,
+            ctx.composed_pathinfo,
+            ctx.store_dir,
+            overlay_trusted_keys.as_deref(),
+        )
+        .await?;
+        (snapshot, BTreeMap::new(), composed)
     };
-    let composed_snapshot = compose_gc_snapshot(
-        &overlay_snapshot,
-        &retained_roots,
-        ctx.composed_pathinfo,
-        ctx.store_dir,
-        overlay_trusted_keys.as_deref(),
-    )
-    .await?;
     let core_plan =
         plan_gc(core_plan_request(&retained_roots, &composed_snapshot, ctx.store_dir, !is_execution_requested)?)
-            .map_err(|error| shell_gc_plan_error(error, ctx.store_dir))?;
+            .map_err(|error| {
+                if ctx.casita_store.is_some()
+                    && matches!(error, GcPlanError::MissingRoot { .. } | GcPlanError::MissingReference { .. })
+                {
+                    Error::Gc(format!("casita-root-missing: {error:?}"))
+                } else {
+                    shell_gc_plan_error(error, ctx.store_dir)
+                }
+            })?;
     let live_paths = core_plan.retained_path_ids.iter().cloned().collect::<BTreeSet<_>>();
-    let usage = build_usage_report(
+    let mut usage = build_usage_report(
         &composed_snapshot.pathinfos,
         &core_plan.retaining_roots,
         &retention_plan.decisions,
@@ -367,22 +475,32 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
     let retention_plan_id = encode_blake3_identity(&retention_plan_id_bytes);
     let retention_explanations = build_retention_explanations(&retention_plan.decisions, &all_roots)?;
     let (live_pathinfos, dead_pathinfos) = split_pathinfos(overlay_snapshot, &live_paths, ctx.store_dir);
-    let live_castore = collect_live_castore_state(
-        &live_pathinfos,
-        ctx.retained_castore_roots,
-        ctx.overlay_directory_service,
-        ctx.overlay_blob_service,
-    )
-    .await?;
+    let live_castore = if ctx.casita_store.is_some() {
+        LiveCastoreState::default()
+    } else {
+        collect_live_castore_state(
+            &live_pathinfos,
+            ctx.retained_castore_roots,
+            ctx.overlay_directory_service,
+            ctx.overlay_blob_service,
+        )
+        .await?
+    };
     let orphaned_on_disk = collect_existing_exported_outputs(&dead_pathinfos, ctx.output_dir_str)?;
     let artifact_attestation_paths =
         collect_existing_artifact_attestation_paths(ctx.state_dir, ctx.store_dir, &dead_pathinfos)?;
     let closure_attestation_paths = collect_dead_closure_attestations(ctx.state_dir, &retained_roots)?;
-    let blob_index_paths = collect_dead_blob_files(ctx.state_dir, &live_castore.blob_index_digests, true)?;
-    let blob_chunk_paths = collect_dead_blob_files(ctx.state_dir, &live_castore.chunk_digests, false)?;
+    let (blob_index_paths, blob_chunk_paths) = if ctx.casita_store.is_some() {
+        (Vec::new(), Vec::new())
+    } else {
+        (
+            collect_dead_blob_files(ctx.state_dir, &live_castore.blob_index_digests, true)?,
+            collect_dead_blob_files(ctx.state_dir, &live_castore.chunk_digests, false)?,
+        )
+    };
     let action_result_gc = local_action_result_gc_candidates(ctx.state_dir, &live_paths)
         .map_err(|error| Error::Gc(format!("planning action-result metadata collection: {error}")))?;
-    let reclaim_summary = compute_reclaimable_bytes(ReclaimObservationPaths {
+    let mut reclaim_summary = compute_reclaimable_bytes(ReclaimObservationPaths {
         orphaned_on_disk: &orphaned_on_disk,
         artifact_attestations: &artifact_attestation_paths,
         closure_attestations: &closure_attestation_paths,
@@ -391,14 +509,45 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
         action_result_records: &action_result_gc.record_paths,
         action_result_indexes: &action_result_gc.index_marker_paths,
     })?;
-    let candidate_paths = core_plan.candidate_path_ids.clone();
-    let plan_id = execution_plan_id(ExecutionPlanIdentityInput {
+    let mut candidate_paths = core_plan.candidate_path_ids.clone();
+    let (casita_castore_candidates, casita_targets, castore_core_id) = if let Some(store) = ctx.casita_store.as_ref() {
+        let castore = plan_casita_castore_roots(store, ctx.retained_castore_roots, is_execution_requested).await?;
+        candidate_paths.extend(castore.candidate_roots.iter().cloned());
+        usage.unknown_object_count = usage.unknown_object_count.saturating_add(castore.targets.len());
+        let mut targets = casita_targets;
+        for (id, root) in castore.targets {
+            if targets.insert(id.clone(), root).is_some() {
+                return Err(Error::Gc(format!("duplicate Casita GC target identity: {id}")));
+            }
+        }
+        (castore.candidate_roots, targets, Some(castore.core_plan_id))
+    } else {
+        (Vec::new(), casita_targets, None)
+    };
+    if ctx.casita_store.is_some() && candidate_paths.len() > MAX_CASITA_GC_FENCE_ENTRIES {
+        return Err(Error::Gc(format!(
+            "Casita GC candidate count exceeds the bounded fence limit of {MAX_CASITA_GC_FENCE_ENTRIES}",
+        )));
+    }
+    if ctx.casita_store.is_some() {
+        reclaim_summary.observations.extend(candidate_paths.iter().map(|path| GcReclaimObservation {
+            category: "casita-root-graph".to_string(),
+            path: path.clone(),
+            path_kind: None,
+            bytes: None,
+            blocker: Some("casita-physical-size-not-observed".to_string()),
+        }));
+    }
+    let mut plan_id = execution_plan_id(ExecutionPlanIdentityInput {
         core_plan_id: &core_plan_id,
         retention_plan_id: &retention_plan_id_bytes,
         overlay_plan_identity: ctx.overlay_plan_identity.as_ref(),
         candidate_paths: &candidate_paths,
         reclaim_observations: &reclaim_summary.observations,
     });
+    if let Some(castore_core_id) = castore_core_id.as_ref() {
+        plan_id = casita_execution_plan_id(&plan_id, &casita_targets, castore_core_id);
+    }
     let core_decision = report_decision(core_plan);
 
     Ok(GcPlan {
@@ -418,12 +567,518 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
         closure_attestation_paths,
         blob_index_paths,
         blob_chunk_paths,
+        casita_targets,
+        casita_castore_candidates,
         action_result_record_paths: action_result_gc.record_paths,
         action_result_index_paths: action_result_gc.index_marker_paths,
         candidate_paths,
         reclaimable_bytes_total: reclaim_summary.reclaimable_bytes_total,
         reclaim_observations: reclaim_summary.observations,
     })
+}
+
+async fn plan_casita_castore_roots(
+    store: &CasitaStore,
+    retained_nodes: &[Node],
+    is_execution_requested: bool,
+) -> Result<CasitaCastorePlan, Error> {
+    let observed = store.verified_gc_castore_roots().await?;
+    let roots = retained_nodes
+        .iter()
+        .map(|node| CasitaStore::castore_root_name(node).map(|name| casita_castore_path_id(&name)))
+        .collect::<Result<Vec<_>, _>>()?;
+    plan_casita_castore_facts(roots, observed, is_execution_requested)
+}
+
+fn casita_castore_path_id(name: &RootName) -> String {
+    format!("/{name}")
+}
+
+fn plan_casita_castore_facts(
+    roots: Vec<String>,
+    observed: Vec<(RootName, ObjectKey, Node, u64)>,
+    execute: bool,
+) -> Result<CasitaCastorePlan, Error> {
+    if observed.len() > crunch_gc_core::MAX_GC_ENTRIES {
+        return Err(Error::Gc("Casita castore GC snapshot exceeds the entry limit".to_string()));
+    }
+    let mut entries = Vec::with_capacity(observed.len());
+    let mut targets = BTreeMap::new();
+    for (name, target, _, nar_bytes) in observed {
+        let id = casita_castore_path_id(&name);
+        entries.push(GcEntry {
+            path_id: id.clone(),
+            references: Vec::new(),
+            declared_nar_bytes: nar_bytes,
+            ownership: GcOwnership::Overlay,
+        });
+        if targets.insert(id.clone(), (name, target)).is_some() {
+            return Err(Error::Gc(format!("casita-envelope-invalid: duplicate castore root {id}")));
+        }
+    }
+    let core_plan = plan_gc(GcPlanRequest {
+        roots,
+        entries,
+        execution_mode: if execute {
+            GcExecutionMode::Execute
+        } else {
+            GcExecutionMode::DryRun
+        },
+    })
+    .map_err(|error| match error {
+        GcPlanError::MissingRoot { .. } => Error::Gc(format!("casita-root-missing: {error:?}")),
+        _ => Error::Gc(format!("planning Casita castore reachability: {error:?}")),
+    })?;
+    Ok(CasitaCastorePlan {
+        core_plan_id: core_plan.plan_id.into_bytes(),
+        candidate_roots: core_plan.candidate_path_ids,
+        targets,
+    })
+}
+
+fn casita_execution_plan_id(
+    base_id: &str,
+    targets: &BTreeMap<String, (RootName, ObjectKey)>,
+    castore_core_id: &[u8; blake3::OUT_LEN],
+) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"mantle.gc.casita-targets.v2");
+    hasher.update(castore_core_id);
+    hash_plan_string(&mut hasher, base_id);
+    hasher.update(&(targets.len() as u128).to_be_bytes());
+    for (path, (name, target)) in targets {
+        hash_plan_string(&mut hasher, path);
+        hash_plan_string(&mut hasher, name.as_ref());
+        hash_plan_string(&mut hasher, &target.to_string());
+    }
+    encode_blake3_identity(hasher.finalize().as_bytes())
+}
+
+fn casita_fence_path(state_dir: &Path) -> PathBuf {
+    state_dir.join(CASITA_GC_FENCE)
+}
+fn casita_fence_journal_path(state_dir: &Path) -> PathBuf {
+    state_dir.join(CASITA_GC_FENCE_JOURNAL)
+}
+
+pub(crate) fn casita_gc_fence_pending(state_dir: &Path) -> Result<bool, Error> {
+    let manifest = casita_fence_path(state_dir);
+    match std::fs::symlink_metadata(&manifest) {
+        Ok(metadata) if metadata.is_file() => Ok(true),
+        Ok(_) => Err(Error::Gc(format!("Casita GC fence is not a regular file: {}", manifest.display()))),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            match std::fs::symlink_metadata(casita_fence_journal_path(state_dir)) {
+                Ok(_) => Err(Error::Gc("orphan Casita GC outcome journal requires inspection".to_string())),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+                Err(error) => Err(Error::Gc(format!("reading Casita GC outcome journal: {error}"))),
+            }
+        }
+        Err(error) => Err(Error::Gc(format!("reading Casita GC fence: {error}"))),
+    }
+}
+// Append-only outcomes avoid rewriting an O(n) fence for every root removal.
+fn append_casita_fence_outcome(state_dir: &Path, index: usize, cleaned: bool) -> Result<(), Error> {
+    let index = u32::try_from(index).map_err(|_| Error::Gc("Casita GC fence index exceeds u32".to_string()))?;
+    let mut record = [0_u8; CASITA_GC_OUTCOME_BYTES];
+    record[0] = if cleaned { 2 } else { 1 };
+    record[1..].copy_from_slice(&index.to_be_bytes());
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(casita_fence_journal_path(state_dir))
+        .map_err(|error| Error::Gc(format!("opening Casita GC outcome journal: {error}")))?;
+    file.write_all(&record).map_err(|error| Error::Gc(format!("writing Casita GC outcome: {error}")))?;
+    file.sync_all().map_err(|error| Error::Gc(format!("syncing Casita GC outcome: {error}")))?;
+    std::fs::File::open(state_dir)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| Error::Gc(format!("syncing Casita GC outcome directory: {error}")))
+}
+
+fn persist_casita_fence(state_dir: &Path, fence: &CasitaGcFence) -> Result<(), Error> {
+    let path = casita_fence_path(state_dir);
+    let bytes = serde_json::to_vec(fence).map_err(|error| Error::Gc(format!("encoding Casita GC fence: {error}")))?;
+    if bytes.len() as u64 > MAX_CASITA_GC_FENCE_BYTES || fence.entries.len() > MAX_CASITA_GC_FENCE_ENTRIES {
+        return Err(Error::Gc("Casita GC fence exceeds the bounded persistence limit".to_string()));
+    }
+    if casita_fence_journal_path(state_dir).exists() {
+        return Err(Error::Gc("orphan Casita GC outcome journal requires recovery".to_string()));
+    }
+    let mut temp = tempfile::NamedTempFile::new_in(state_dir)
+        .map_err(|error| Error::Gc(format!("creating Casita GC fence: {error}")))?;
+    temp.write_all(&bytes).map_err(|error| Error::Gc(format!("writing Casita GC fence: {error}")))?;
+    temp.as_file().sync_all().map_err(|error| Error::Gc(format!("syncing Casita GC fence: {error}")))?;
+    temp.persist(&path).map_err(|error| Error::Gc(format!("publishing Casita GC fence: {error}")))?;
+    std::fs::File::open(state_dir)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| Error::Gc(format!("syncing Casita GC fence directory: {error}")))?;
+    Ok(())
+}
+
+fn load_casita_fence(state_dir: &Path) -> Result<Option<CasitaGcFence>, Error> {
+    if !casita_gc_fence_pending(state_dir)? {
+        return Ok(None);
+    }
+    let path = casita_fence_path(state_dir);
+    let size = std::fs::metadata(&path)
+        .map_err(|error| Error::Gc(format!("reading Casita GC fence size: {error}")))?
+        .len();
+    if size > MAX_CASITA_GC_FENCE_BYTES {
+        return Err(Error::Gc("Casita GC fence exceeds the bounded persistence limit".to_string()));
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(&path)
+        .and_then(|file| file.take(MAX_CASITA_GC_FENCE_BYTES.saturating_add(1)).read_to_end(&mut bytes))
+        .map_err(|error| Error::Gc(format!("reading Casita GC fence: {error}")))?;
+    if bytes.len() as u64 > MAX_CASITA_GC_FENCE_BYTES {
+        return Err(Error::Gc("Casita GC fence exceeds the bounded persistence limit".to_string()));
+    }
+    let mut fence: CasitaGcFence =
+        serde_json::from_slice(&bytes).map_err(|error| Error::Gc(format!("decoding Casita GC fence: {error}")))?;
+    if fence.entries.len() > MAX_CASITA_GC_FENCE_ENTRIES {
+        return Err(Error::Gc("Casita GC fence exceeds the entry limit".to_string()));
+    }
+    let journal_path = casita_fence_journal_path(state_dir);
+    let journal_metadata = match std::fs::symlink_metadata(&journal_path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Some(fence)),
+        Err(error) => return Err(Error::Gc(format!("reading Casita GC outcome journal: {error}"))),
+    };
+    if !journal_metadata.is_file() {
+        return Err(Error::Gc("Casita GC outcome journal is not a regular file".to_string()));
+    }
+    if journal_metadata.len() > MAX_CASITA_GC_JOURNAL_BYTES as u64 {
+        return Err(Error::Gc("Casita GC outcome journal exceeds the persistence limit".to_string()));
+    }
+    let mut journal = Vec::new();
+    std::fs::File::open(&journal_path)
+        .and_then(|file| file.take((MAX_CASITA_GC_JOURNAL_BYTES as u64).saturating_add(1)).read_to_end(&mut journal))
+        .map_err(|error| Error::Gc(format!("reading Casita GC outcome journal: {error}")))?;
+    if journal.len() > MAX_CASITA_GC_JOURNAL_BYTES {
+        return Err(Error::Gc("Casita GC outcome journal exceeds the persistence limit".to_string()));
+    }
+    for record in journal.chunks_exact(CASITA_GC_OUTCOME_BYTES) {
+        let encoded_index: [u8; 4] =
+            record[1..].try_into().map_err(|_| Error::Gc("invalid Casita GC outcome index width".to_string()))?;
+        let index = usize::try_from(u32::from_be_bytes(encoded_index))
+            .map_err(|_| Error::Gc("Casita GC outcome index exceeds platform size".to_string()))?;
+        let entry = fence
+            .entries
+            .get_mut(index)
+            .ok_or_else(|| Error::Gc(format!("Casita GC outcome index out of bounds: {index}")))?;
+        match record[0] {
+            1 => entry.removed = true,
+            2 => {
+                entry.removed = true;
+                entry.cleaned = true;
+            }
+            _ => return Err(Error::Gc("invalid Casita GC outcome status".to_string())),
+        }
+    }
+    let valid_len = journal.len().saturating_sub(journal.len() % CASITA_GC_OUTCOME_BYTES);
+    if valid_len != journal.len() {
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&journal_path)
+            .map_err(|error| Error::Gc(format!("opening partial Casita GC outcome: {error}")))?;
+        file.set_len(valid_len as u64)
+            .and_then(|()| file.sync_all())
+            .map_err(|error| Error::Gc(format!("truncating partial Casita GC outcome: {error}")))?;
+    }
+    Ok(Some(fence))
+}
+
+fn finish_casita_fence(state_dir: &Path) -> Result<(), Error> {
+    match std::fs::remove_file(casita_fence_journal_path(state_dir)) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(Error::Gc(format!("removing Casita GC outcome journal: {error}"))),
+    }
+    std::fs::remove_file(casita_fence_path(state_dir))
+        .map_err(|error| Error::Gc(format!("removing Casita GC fence: {error}")))?;
+    std::fs::File::open(state_dir)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| Error::Gc(format!("syncing Casita GC fence removal: {error}")))?;
+    Ok(())
+}
+
+fn fence_entry_identity(
+    entry: &CasitaFenceEntry,
+    store_dir: &str,
+) -> Result<(Option<StorePath<String>>, RootName, ObjectKey), Error> {
+    let (path, name) = match entry.kind {
+        CasitaFenceKind::Output => {
+            let path = StorePath::from_absolute_path_with_prefix(entry.path.as_bytes(), store_dir)
+                .map_err(|error| Error::Gc(format!("invalid Casita GC fenced path: {error}")))?;
+            let name = CasitaStore::root_name(&path)?;
+            (Some(path), name)
+        }
+        CasitaFenceKind::Castore => {
+            let Some(digest) = entry.path.strip_prefix("/mantle/castore/") else {
+                return Err(Error::Gc("invalid Casita GC fenced castore root".to_string()));
+            };
+            if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            {
+                return Err(Error::Gc("invalid Casita GC fenced castore digest".to_string()));
+            }
+            let name = RootName::try_from(entry.path.trim_start_matches('/'))
+                .map_err(|error| Error::Gc(format!("invalid Casita GC fenced root: {error}")))?;
+            (None, name)
+        }
+    };
+    if entry.root_name != name.as_ref() {
+        return Err(Error::Gc(format!("Casita GC fence root name differs from {}", entry.path)));
+    }
+    let target = entry
+        .expected_target
+        .parse::<ObjectKey>()
+        .map_err(|error| Error::Gc(format!("invalid Casita GC fenced target: {error}")))?;
+    Ok((path, name, target))
+}
+
+fn fenced_root_was_removed(entry: &CasitaFenceEntry, observed: Option<&ObjectKey>) -> Result<bool, Error> {
+    let expected = entry
+        .expected_target
+        .parse::<ObjectKey>()
+        .map_err(|error| Error::Gc(format!("invalid Casita GC fenced target: {error}")))?;
+    match observed {
+        Some(actual) if actual == &expected => Ok(false),
+        Some(_) => Err(Error::Gc(format!("casita-root-conflict: {}", entry.path))),
+        None => Ok(true),
+    }
+}
+
+fn cleanup_casita_removed(state_dir: &Path, paths: CasitaGcPaths<'_>, entry: &CasitaFenceEntry) -> Result<(), Error> {
+    let (path, _, _) = fence_entry_identity(entry, paths.store_dir)?;
+    if let Some(path) = path {
+        remove_path(&PathBuf::from(path.to_absolute_path_with_prefix(paths.output_dir_str)))?;
+        remove_path(&artifact_attestation_file_path(state_dir, paths.store_dir, &path))?;
+    }
+    Ok(())
+}
+
+fn mark_casita_gc_failure(report: &mut GcReport, message: String) {
+    if report.failed_operation.is_none() {
+        report.failed_operation = Some(message.clone());
+    }
+    report.failed_operations.push(message);
+}
+
+async fn execute_casita_gc(
+    ctx: &GcContext<'_>,
+    store: &CasitaStore,
+    ca_mappings: &mut CaMappings,
+    plan: &GcPlan,
+    report: &mut GcReport,
+) -> Result<(), Error> {
+    if load_casita_fence(ctx.state_dir)?.is_some() {
+        return Err(Error::Gc("Casita GC fence requires recovery before a new execution".to_string()));
+    }
+    let observed = build_plan(ctx, true).await?;
+    if observed.plan_id != plan.plan_id {
+        return Err(Error::Gc(format!("gc-plan-stale: accepted={} observed={}", plan.plan_id, observed.plan_id)));
+    }
+    let entries = plan
+        .candidate_paths
+        .iter()
+        .map(|path| {
+            let (name, target) = plan.casita_targets.get(path).ok_or_else(|| {
+                Error::Gc(format!("casita-root-missing: planned GC candidate has no verified root: {path}"))
+            })?;
+            Ok(CasitaFenceEntry {
+                kind: if plan.casita_castore_candidates.binary_search(path).is_ok() {
+                    CasitaFenceKind::Castore
+                } else {
+                    CasitaFenceKind::Output
+                },
+                path: path.clone(),
+                root_name: name.to_string(),
+                expected_target: target.to_string(),
+                removed: false,
+                cleaned: false,
+            })
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+    let mut fence = CasitaGcFence {
+        plan_id: plan.plan_id.clone(),
+        entries,
+    };
+    persist_casita_fence(ctx.state_dir, &fence)?;
+    for index in 0..fence.entries.len() {
+        let (_, name, target) = fence_entry_identity(&fence.entries[index], ctx.store_dir)?;
+        match store.repository.remove_root_if_matches(&name, &target).await {
+            Ok(Some(_)) => {
+                fence.entries[index].removed = true;
+                append_casita_fence_outcome(ctx.state_dir, index, false)?;
+                report.operations.push(GcOperationKind::CasitaRootRemoval);
+                if let Err(error) = cleanup_casita_removed(
+                    ctx.state_dir,
+                    CasitaGcPaths {
+                        output_dir_str: ctx.output_dir_str,
+                        store_dir: ctx.store_dir,
+                    },
+                    &fence.entries[index],
+                ) {
+                    mark_casita_gc_failure(report, format!("ExportedOutputs/ArtifactAttestations: {error}"));
+                } else {
+                    fence.entries[index].cleaned = true;
+                    append_casita_fence_outcome(ctx.state_dir, index, true)?;
+                    if fence.entries[index].kind == CasitaFenceKind::Output {
+                        report
+                            .operations
+                            .extend([GcOperationKind::ExportedOutputs, GcOperationKind::ArtifactAttestations]);
+                    }
+                }
+            }
+            Ok(None) => {
+                mark_casita_gc_failure(report, format!("casita-root-conflict: {}", fence.entries[index].path));
+                break;
+            }
+            Err(error) => {
+                mark_casita_gc_failure(report, format!("Casita root removal: {error}"));
+                break;
+            }
+        }
+    }
+    if fence.entries.iter().any(|entry| entry.removed && !entry.cleaned) {
+        return Ok(());
+    }
+    let removed = fence
+        .entries
+        .iter()
+        .filter(|entry| entry.removed && entry.kind == CasitaFenceKind::Output)
+        .map(|entry| entry.path.clone())
+        .collect::<BTreeSet<_>>();
+    if let Err(error) = cleanup_casita_indexes(ctx.state_dir, store, ctx.store_dir, ca_mappings, &removed).await {
+        mark_casita_gc_failure(report, format!("ActionResults/CaMappings: {error}"));
+        return Ok(());
+    }
+    report.operations.extend([GcOperationKind::ActionResults, GcOperationKind::CaMappings]);
+    if !report.failed_operations.is_empty() {
+        return Ok(());
+    }
+    if let Err(error) = remove_files(&plan.closure_attestation_paths) {
+        mark_casita_gc_failure(report, format!("ClosureAttestations: {error}"));
+        return Ok(());
+    }
+    report.operations.push(GcOperationKind::ClosureAttestations);
+    match store.repository.try_collect().await {
+        Ok(_) => {
+            finish_casita_fence(ctx.state_dir)?;
+            report.operations.push(GcOperationKind::CasitaCollection);
+            report.execution_complete = true;
+        }
+        Err(error) => mark_casita_gc_failure(report, format!("Casita collection/reclaim-incomplete: {error}")),
+    }
+    Ok(())
+}
+
+async fn cleanup_casita_indexes(
+    state_dir: &Path,
+    store: &CasitaStore,
+    store_dir: &str,
+    ca_mappings: &mut CaMappings,
+    removed: &BTreeSet<String>,
+) -> Result<(), Error> {
+    let published = store
+        .verified_gc_roots(store_dir)
+        .await?
+        .into_iter()
+        .map(|(_, _, info)| info.store_path.to_absolute_path_with_prefix(store_dir))
+        .collect::<BTreeSet<_>>();
+    if !published.is_disjoint(removed) {
+        return Err(Error::Gc("casita-root-conflict: removed root was republished before index cleanup".to_string()));
+    }
+    let action = local_action_result_gc_candidates(state_dir, &published)
+        .map_err(|error| Error::Gc(format!("planning Casita action-result cleanup: {error}")))?;
+    remove_action_result_files(&action.record_paths, &action.index_marker_paths)?;
+    ca_mappings.retain_output_paths(&published);
+    ca_mappings
+        .save_checked(state_dir)
+        .map_err(|error| Error::Gc(format!("saving Casita CA mappings: {error}")))
+}
+
+fn cleanup_casita_closure_attestations(state_dir: &Path) -> Result<(), Error> {
+    let all_roots = roots::list_roots(state_dir)?;
+    let retention_facts = crate::retention::records_to_core(&all_roots)?;
+    let retention_plan =
+        plan_retention(&crate::retention::core_retention_policy(), roots::current_unix_seconds()?, retention_facts)
+            .map_err(|error| Error::Gc(format!("planning Casita recovery retention: {error:?}")))?;
+    let retained = retention_plan
+        .decisions
+        .iter()
+        .filter(|decision| decision.disposition.retains_path())
+        .map(|decision| decision.path_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let retained_roots = all_roots
+        .into_iter()
+        .filter(|root| retained.contains(root.logical_path.as_str()))
+        .collect::<Vec<_>>();
+    let dead = collect_dead_closure_attestations(state_dir, &retained_roots)?;
+    remove_files(&dead)
+}
+
+// Recovery has no root-removal operation. A still-published fenced candidate remains published.
+pub(crate) async fn recover_casita_gc(
+    state_dir: &Path,
+    paths: CasitaGcPaths<'_>,
+    store: &CasitaStore,
+    ca_mappings: &mut CaMappings,
+) -> Result<(), Error> {
+    let Some(mut fence) = load_casita_fence(state_dir)? else {
+        return Ok(());
+    };
+    let snapshot = store
+        .repository
+        .metadata()
+        .snapshot()
+        .await
+        .map_err(|error| Error::Gc(format!("reading Casita GC recovery roots: {error}")))?;
+    let mut removed = BTreeSet::new();
+    let mut root_observations = Vec::with_capacity(fence.entries.len());
+    for index in 0..fence.entries.len() {
+        let (path, name, _) = fence_entry_identity(&fence.entries[index], paths.store_dir)?;
+        let observed =
+            snapshot.root(&name).await.map_err(|error| Error::Gc(format!("reading fenced root: {error}")))?;
+        root_observations.push((name, observed.clone()));
+        if fenced_root_was_removed(&fence.entries[index], observed.as_ref())? {
+            if let Some(path) = path {
+                removed.insert(path.to_absolute_path_with_prefix(paths.store_dir));
+            }
+            if !fence.entries[index].cleaned {
+                cleanup_casita_removed(state_dir, paths, &fence.entries[index])?;
+                fence.entries[index].removed = true;
+                fence.entries[index].cleaned = true;
+                append_casita_fence_outcome(state_dir, index, true)?;
+            }
+        }
+    }
+    if !removed.is_empty() {
+        cleanup_casita_indexes(state_dir, store, paths.store_dir, ca_mappings, &removed).await?;
+        cleanup_casita_closure_attestations(state_dir)?;
+    }
+    let latest = store
+        .repository
+        .metadata()
+        .snapshot()
+        .await
+        .map_err(|error| Error::Gc(format!("rechecking Casita GC recovery roots: {error}")))?;
+    for (name, expected) in &root_observations {
+        let actual = latest
+            .root(name)
+            .await
+            .map_err(|error| Error::Gc(format!("rechecking fenced root {name}: {error}")))?;
+        if &actual != expected {
+            return Err(Error::Gc(format!("casita-root-conflict: fenced root {name} changed during recovery")));
+        }
+    }
+    drop(latest);
+    drop(snapshot);
+    store
+        .repository
+        .try_collect()
+        .await
+        .map_err(|error| Error::Gc(format!("Casita GC reclaim-incomplete: {error}")))?;
+    finish_casita_fence(state_dir)
 }
 
 fn record_gc_operation(report: &mut GcReport, kind: GcOperationKind, result: Result<(), Error>) -> bool {
@@ -1473,6 +2128,7 @@ mod tests {
 
     async fn open_store(state_dir: &Path, output_dir: &Path) -> StoreHandle {
         StoreHandle::open(StoreConfig {
+            backend: crate::StoreBackend::Snix,
             state_dir: state_dir.to_path_buf(),
             output_dir: output_dir.to_path_buf(),
             remote_cache_urls: Vec::new(),
@@ -1527,6 +2183,112 @@ mod tests {
             signatures: vec![test_signature()],
             deriver: None,
             ca: None,
+        }
+    }
+
+    fn casita_gc_trusted_signer(state_dir: &Path) -> nix_compat::narinfo::SigningKey<ed25519_dalek::SigningKey> {
+        use nix_compat::narinfo::SigningKey;
+        use nix_compat::narinfo::VerifyingKey;
+
+        let raw = ed25519_dalek::SigningKey::from_bytes(&[23_u8; 32]);
+        let verifying = VerifyingKey::new("casita-gc-output-fixture".to_string(), raw.verifying_key());
+        std::fs::write(state_dir.join("casita-trusted-public-keys"), format!("{verifying}\n")).unwrap();
+        SigningKey::new("casita-gc-output-fixture".to_string(), raw)
+    }
+
+    async fn casita_gc_signed_symlink_output(
+        store: &StoreHandle,
+        name: &str,
+        target: &str,
+        signer: &nix_compat::narinfo::SigningKey<ed25519_dalek::SigningKey>,
+    ) -> PathInfo {
+        use nix_compat::narinfo::fingerprint_with_store_dir;
+        use nix_compat::nixhash::CAHash;
+        use nix_compat::nixhash::NixHash;
+        use nix_compat::store_path::build_ca_path_with_store_dir;
+        use snix_store::nar::NarCalculationService;
+        use snix_store::nar::SimpleRenderer;
+
+        let node = Node::Symlink {
+            target: SymlinkTarget::try_from(target).unwrap(),
+        };
+        let (nar_size, nar_sha256) = SimpleRenderer::new(store.blob_service(), store.directory_service())
+            .calculate_nar(&node)
+            .await
+            .unwrap();
+        let ca = CAHash::Nar(NixHash::Sha256(nar_sha256));
+        let store_path = build_ca_path_with_store_dir(name, &ca, Vec::<String>::new(), false, "/nix/store").unwrap();
+        let mut info = PathInfo {
+            store_path,
+            node,
+            references: Vec::new(),
+            nar_size,
+            nar_sha256,
+            signatures: Vec::new(),
+            deriver: None,
+            ca: Some(ca),
+        };
+        let fingerprint = fingerprint_with_store_dir(
+            &info.store_path.as_ref(),
+            &nar_sha256,
+            nar_size,
+            std::iter::empty::<&nix_compat::store_path::StorePathRef>(),
+            "/nix/store",
+        );
+        info.signatures.push(signer.sign(fingerprint.as_bytes()).to_owned());
+        info
+    }
+
+    fn casita_gc_action_result(
+        seed: &str,
+        output: &StorePath<String>,
+    ) -> crunch_action_result_core::SignedActionResultRecord {
+        use crunch_action_result_core::ACTION_RECEIPT_REF_PREFIX;
+        use crunch_action_result_core::ACTION_REF_PREFIX;
+        use crunch_action_result_core::ActionResultOutput;
+        use crunch_action_result_core::ActionResultRecordInput;
+        use crunch_action_result_core::DetachedRecordSignature;
+        use crunch_action_result_core::NETWORK_POLICY_REF_PREFIX;
+        use crunch_action_result_core::OBJECT_REF_PREFIX;
+        use crunch_action_result_core::PATH_INFO_REF_PREFIX;
+        use crunch_action_result_core::PRODUCER_POLICY_REF_PREFIX;
+        use crunch_action_result_core::PUBLICATION_POLICY_REF_PREFIX;
+        use crunch_action_result_core::REFERENCE_SCAN_REF_PREFIX;
+        use crunch_action_result_core::SANDBOX_POLICY_REF_PREFIX;
+        use crunch_action_result_core::SIGNATURE_REF_PREFIX;
+        use crunch_action_result_core::SignedActionResultRecord;
+        use crunch_action_result_core::canonical_action_result;
+
+        let typed_ref = |prefix: &str, value: &str| format!("{prefix}{}", blake3::hash(value.as_bytes()).to_hex());
+        let record = canonical_action_result(ActionResultRecordInput {
+            action_ref: typed_ref(ACTION_REF_PREFIX, seed),
+            outputs: vec![ActionResultOutput {
+                name: "out".to_string(),
+                object_ref: typed_ref(OBJECT_REF_PREFIX, seed),
+                store_path: output.to_absolute_path(),
+                path_info_ref: typed_ref(PATH_INFO_REF_PREFIX, seed),
+            }],
+            action_receipt_ref: typed_ref(ACTION_RECEIPT_REF_PREFIX, seed),
+            reference_scan_refs: vec![typed_ref(REFERENCE_SCAN_REF_PREFIX, seed)],
+            sandbox_policy_ref: typed_ref(SANDBOX_POLICY_REF_PREFIX, "sandbox"),
+            network_policy_ref: typed_ref(NETWORK_POLICY_REF_PREFIX, "network"),
+            producer_identity: "builder-key-1".to_string(),
+            producer_policy_ref: typed_ref(PRODUCER_POLICY_REF_PREFIX, "producer"),
+            signature_refs: vec![typed_ref(SIGNATURE_REF_PREFIX, seed)],
+            publication_policy_ref: typed_ref(PUBLICATION_POLICY_REF_PREFIX, "publication"),
+            non_claims: vec![
+                "ca-mapping-presence-is-not-output-trust".to_string(),
+                "executor-correctness".to_string(),
+                "index-presence-is-not-output-trust".to_string(),
+            ],
+        })
+        .unwrap();
+        SignedActionResultRecord {
+            record,
+            record_signatures: vec![DetachedRecordSignature {
+                key_name: "builder-key-1".to_string(),
+                signature: "signature".to_string(),
+            }],
         }
     }
 
@@ -2168,5 +2930,826 @@ mod tests {
             ))
             .await
             .unwrap();
+    }
+    fn casita_test_key(seed: u8) -> ObjectKey {
+        ObjectKey::new("mantle.gc-fixture.v1".try_into().unwrap(), vec![seed]).unwrap()
+    }
+
+    fn casita_fence_entry(path: &StorePath<String>, target: &ObjectKey) -> CasitaFenceEntry {
+        CasitaFenceEntry {
+            kind: CasitaFenceKind::Output,
+            path: path.to_absolute_path_with_prefix("/nix/store"),
+            root_name: CasitaStore::root_name(path).unwrap().to_string(),
+            expected_target: target.to_string(),
+            removed: false,
+            cleaned: false,
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn casita_gc_fence_pending_rejects_dangling_orphan_journal() {
+        let state = tempfile::tempdir().unwrap();
+        assert!(!casita_gc_fence_pending(state.path()).unwrap());
+        std::os::unix::fs::symlink("missing-journal-target", casita_fence_journal_path(state.path())).unwrap();
+        assert!(casita_gc_fence_pending(state.path()).unwrap_err().to_string().contains("orphan"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn casita_fence_rejects_symlink_and_oversized_outcome_journal() {
+        let state = tempfile::tempdir().unwrap();
+        let entry = casita_fence_entry(&store_path("candidate", 33), &casita_test_key(4));
+        persist_casita_fence(state.path(), &CasitaGcFence {
+            plan_id: "planned".to_string(),
+            entries: vec![entry],
+        })
+        .unwrap();
+        let journal = casita_fence_journal_path(state.path());
+        std::os::unix::fs::symlink("missing-journal-target", &journal).unwrap();
+        assert!(load_casita_fence(state.path()).unwrap_err().to_string().contains("not a regular file"));
+        std::fs::remove_file(&journal).unwrap();
+        std::fs::File::create(&journal).unwrap().set_len(MAX_CASITA_GC_JOURNAL_BYTES as u64 + 1).unwrap();
+        assert!(load_casita_fence(state.path()).unwrap_err().to_string().contains("persistence limit"));
+    }
+
+    #[test]
+    fn casita_plan_identity_binds_exact_root_targets() {
+        let path = store_path("candidate", 7);
+        let name = CasitaStore::root_name(&path).unwrap();
+        let mut targets =
+            BTreeMap::from([(path.to_absolute_path_with_prefix("/nix/store"), (name, casita_test_key(1)))]);
+        let node = Node::Symlink {
+            target: SymlinkTarget::try_from("castore").unwrap(),
+        };
+        let castore_name = CasitaStore::castore_root_name(&node).unwrap();
+        let castore_path = casita_castore_path_id(&castore_name);
+        targets.insert(castore_path.clone(), (castore_name, casita_test_key(3)));
+        let castore_id = *blake3::hash(b"retained-castore-plan").as_bytes();
+        let initial = casita_execution_plan_id("unchanged-core-plan", &targets, &castore_id);
+        targets.values_mut().next().unwrap().1 = casita_test_key(2);
+        assert_ne!(initial, casita_execution_plan_id("unchanged-core-plan", &targets, &castore_id));
+        let with_old_output = casita_execution_plan_id("unchanged-core-plan", &targets, &castore_id);
+        targets.get_mut(&castore_path).unwrap().1 = casita_test_key(4);
+        assert_ne!(with_old_output, casita_execution_plan_id("unchanged-core-plan", &targets, &castore_id));
+    }
+
+    #[test]
+    fn casita_recovery_cleans_only_absent_roots_and_keeps_retained_exports() {
+        let state = tempfile::tempdir().unwrap();
+        let exports = tempfile::tempdir().unwrap();
+        let dead = store_path("removed", 8);
+        let retained = store_path("retained", 9);
+        let target = casita_test_key(3);
+        let removed = casita_fence_entry(&dead, &target);
+        let intact = casita_fence_entry(&retained, &target);
+        let dead_export = PathBuf::from(dead.to_absolute_path_with_prefix(exports.path().to_str().unwrap()));
+        let retained_export = PathBuf::from(retained.to_absolute_path_with_prefix(exports.path().to_str().unwrap()));
+        std::fs::write(&dead_export, b"remove me").unwrap();
+        std::fs::write(&retained_export, b"keep me").unwrap();
+        let fence = CasitaGcFence {
+            plan_id: "planned".to_string(),
+            entries: vec![removed.clone(), intact.clone()],
+        };
+        persist_casita_fence(state.path(), &fence).unwrap();
+        assert!(fenced_root_was_removed(&removed, None).unwrap());
+        assert!(!fenced_root_was_removed(&intact, Some(&target)).unwrap());
+        cleanup_casita_removed(
+            state.path(),
+            CasitaGcPaths {
+                output_dir_str: exports.path().to_str().unwrap(),
+                store_dir: "/nix/store",
+            },
+            &removed,
+        )
+        .unwrap();
+        assert!(!dead_export.exists());
+        assert_eq!(std::fs::read(&retained_export).unwrap(), b"keep me");
+        assert_eq!(load_casita_fence(state.path()).unwrap().unwrap().entries.len(), 2);
+    }
+
+    #[test]
+    fn casita_fence_recovers_partial_progress_without_marking_other_roots_removed() {
+        let state = tempfile::tempdir().unwrap();
+        let first = casita_fence_entry(&store_path("first", 21), &casita_test_key(1));
+        let untouched = casita_fence_entry(&store_path("second", 22), &casita_test_key(2));
+        let fence = CasitaGcFence {
+            plan_id: "planned".to_string(),
+            entries: vec![first, untouched],
+        };
+        persist_casita_fence(state.path(), &fence).unwrap();
+        append_casita_fence_outcome(state.path(), 0, false).unwrap();
+        let mut file = std::fs::OpenOptions::new().append(true).open(casita_fence_journal_path(state.path())).unwrap();
+        file.write_all(&[2, 0]).unwrap();
+        file.sync_all().unwrap();
+
+        let observed = load_casita_fence(state.path()).unwrap().unwrap();
+        assert!(observed.entries[0].removed);
+        assert!(!observed.entries[0].cleaned);
+        assert!(!observed.entries[1].removed);
+        assert_eq!(std::fs::metadata(casita_fence_journal_path(state.path())).unwrap().len(), 5);
+        append_casita_fence_outcome(state.path(), 0, true).unwrap();
+        let completed = load_casita_fence(state.path()).unwrap().unwrap();
+        assert!(completed.entries[0].cleaned);
+        assert!(!completed.entries[1].cleaned);
+    }
+
+    #[test]
+    fn casita_recovery_rejects_changed_targets_and_preserves_published_roots() {
+        let path = store_path("candidate", 10);
+        let expected = casita_test_key(4);
+        let changed = casita_test_key(5);
+        let mut entry = casita_fence_entry(&path, &expected);
+        assert!(
+            fenced_root_was_removed(&entry, Some(&changed))
+                .unwrap_err()
+                .to_string()
+                .contains("casita-root-conflict")
+        );
+        entry.removed = true;
+        assert!(!fenced_root_was_removed(&entry, Some(&expected)).unwrap());
+        assert!(fenced_root_was_removed(&entry, None).unwrap());
+    }
+    #[test]
+    fn casita_castore_gc_keeps_retained_nodes_and_rejects_missing_roots() {
+        let keep = Node::Symlink {
+            target: SymlinkTarget::try_from("keep").unwrap(),
+        };
+        let dead = Node::Symlink {
+            target: SymlinkTarget::try_from("dead").unwrap(),
+        };
+        let keep_name = CasitaStore::castore_root_name(&keep).unwrap();
+        let dead_name = CasitaStore::castore_root_name(&dead).unwrap();
+        let observed = vec![
+            (keep_name.clone(), casita_test_key(1), keep.clone(), 23),
+            (dead_name.clone(), casita_test_key(2), dead.clone(), 27),
+        ];
+        let retained =
+            plan_casita_castore_facts(vec![casita_castore_path_id(&keep_name)], observed.clone(), false).unwrap();
+        assert_eq!(retained.candidate_roots, vec![casita_castore_path_id(&dead_name)]);
+        assert!(retained.targets.contains_key(&casita_castore_path_id(&keep_name)));
+        let unretained = plan_casita_castore_facts(Vec::new(), observed, false).unwrap();
+        let mut expected = vec![casita_castore_path_id(&dead_name), casita_castore_path_id(&keep_name)];
+        expected.sort();
+        assert_eq!(unretained.candidate_roots, expected);
+        assert_ne!(retained.core_plan_id, unretained.core_plan_id);
+        let missing = plan_casita_castore_facts(vec![casita_castore_path_id(&keep_name)], vec![], false).unwrap_err();
+        assert!(missing.to_string().contains("casita-root-missing"));
+    }
+
+    #[test]
+    fn casita_castore_fence_never_deletes_a_retained_output_export() {
+        let state = tempfile::tempdir().unwrap();
+        let exports = tempfile::tempdir().unwrap();
+        let retained = store_path("retained", 12);
+        let export = PathBuf::from(retained.to_absolute_path_with_prefix(exports.path().to_str().unwrap()));
+        std::fs::write(&export, b"retained").unwrap();
+        let node = Node::Symlink {
+            target: SymlinkTarget::try_from("target").unwrap(),
+        };
+        let root = CasitaStore::castore_root_name(&node).unwrap();
+        let target = casita_test_key(6);
+        let entry = CasitaFenceEntry {
+            kind: CasitaFenceKind::Castore,
+            path: casita_castore_path_id(&root),
+            root_name: root.to_string(),
+            expected_target: target.to_string(),
+            removed: true,
+            cleaned: false,
+        };
+        cleanup_casita_removed(
+            state.path(),
+            CasitaGcPaths {
+                output_dir_str: exports.path().to_str().unwrap(),
+                store_dir: "/nix/store",
+            },
+            &entry,
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(export).unwrap(), b"retained");
+        assert_eq!(fence_entry_identity(&entry, "/nix/store").unwrap().0, None);
+    }
+    fn casita_gc_test_context<'a>(
+        state_dir: &'a Path,
+        output_dir_str: &'a str,
+        store: &'a Arc<CasitaStore>,
+        pathinfo: &'a dyn PathInfoService,
+        retained: &'a [Node],
+    ) -> GcContext<'a> {
+        GcContext {
+            state_dir,
+            output_dir_str,
+            store_dir: "/nix/store",
+            overlay_pathinfo: pathinfo,
+            composed_pathinfo: pathinfo,
+            overlay_directory_service: store.directory_service.as_ref(),
+            overlay_blob_service: store.blob_service.as_ref(),
+            overlay_plan_identity: None,
+            retained_castore_roots: retained,
+            casita_store: Some(store.clone()),
+        }
+    }
+
+    #[tokio::test]
+    async fn casita_gc_rejects_newly_retained_root_then_collects_only_unretained() {
+        let state = tempfile::tempdir().unwrap();
+        let exports = tempfile::tempdir().unwrap();
+        let _guard = crate::StoreMutationGuard::acquire_wait(state.path()).unwrap();
+        let store = CasitaStore::open(state.path(), "/nix/store").await.unwrap();
+        let keep = Node::Symlink {
+            target: SymlinkTarget::try_from("keep-output").unwrap(),
+        };
+        let dead = Node::Symlink {
+            target: SymlinkTarget::try_from("dead-output").unwrap(),
+        };
+        store.admit_castore_payload_root(&keep).await.unwrap();
+        store.admit_castore_payload_root(&dead).await.unwrap();
+        let dead_name = CasitaStore::castore_root_name(&dead).unwrap();
+        let dead_target = store
+            .verified_gc_castore_roots()
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|(name, _, _, _)| name == &dead_name)
+            .unwrap()
+            .1;
+        assert!(store.repository.open_payload(&dead_target).await.unwrap().is_some());
+        let empty_pathinfo = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
+            "casita-gc-test".to_string(),
+            std::num::NonZeroUsize::new(2).unwrap(),
+        );
+        let output_dir_str = exports.path().to_str().unwrap();
+        let retained = [keep.clone()];
+        let ctx = casita_gc_test_context(state.path(), output_dir_str, &store, &empty_pathinfo, &retained);
+        let mut ca_mappings = CaMappings::load(state.path());
+        let planned = run_gc(&ctx, &mut ca_mappings, None).await.unwrap();
+        assert_eq!(planned.candidate_paths, vec![casita_castore_path_id(
+            &CasitaStore::castore_root_name(&dead).unwrap()
+        )]);
+        assert_eq!(planned.reclaimable_bytes_total, 0);
+        assert!(planned.reclaim_observations.iter().any(|fact| fact.path == planned.candidate_paths[0]
+            && fact.bytes.is_none()
+            && fact.blocker.as_deref() == Some("casita-physical-size-not-observed")));
+
+        let newly_retained = [keep.clone(), dead.clone()];
+        let changed = casita_gc_test_context(state.path(), output_dir_str, &store, &empty_pathinfo, &newly_retained);
+        let error = run_gc(&changed, &mut ca_mappings, Some(&planned.plan_id)).await.unwrap_err();
+        assert!(error.to_string().contains("gc-plan-stale"));
+        assert!(!casita_gc_fence_pending(state.path()).unwrap());
+        store.rehydrate_castore_payload_root(&dead).await.unwrap();
+
+        let executed = run_gc(&ctx, &mut ca_mappings, Some(&planned.plan_id)).await.unwrap();
+        assert!(executed.execution_complete);
+        assert!(executed.operations.contains(&GcOperationKind::CasitaCollection));
+        assert!(!casita_gc_fence_pending(state.path()).unwrap());
+        store.rehydrate_castore_payload_root(&keep).await.unwrap();
+        let missing = store.rehydrate_castore_payload_root(&dead).await.unwrap_err();
+        assert!(missing.to_string().contains("casita-root-missing"));
+        assert!(store.repository.open_payload(&dead_target).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn casita_gc_busy_collector_keeps_reclaim_incomplete_until_recovery() {
+        let state = tempfile::tempdir().unwrap();
+        let exports = tempfile::tempdir().unwrap();
+        let _guard = crate::StoreMutationGuard::acquire_wait(state.path()).unwrap();
+        let store = CasitaStore::open(state.path(), "/nix/store").await.unwrap();
+        let keep = Node::Symlink {
+            target: SymlinkTarget::try_from("keep-busy").unwrap(),
+        };
+        let dead = Node::Symlink {
+            target: SymlinkTarget::try_from("dead-busy").unwrap(),
+        };
+        store.admit_castore_payload_root(&keep).await.unwrap();
+        store.admit_castore_payload_root(&dead).await.unwrap();
+        let empty_pathinfo = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
+            "casita-busy-test".to_string(),
+            std::num::NonZeroUsize::new(2).unwrap(),
+        );
+        let retained = [keep.clone()];
+        let ctx =
+            casita_gc_test_context(state.path(), exports.path().to_str().unwrap(), &store, &empty_pathinfo, &retained);
+        let mut ca_mappings = CaMappings::load(state.path());
+        let plan = run_gc(&ctx, &mut ca_mappings, None).await.unwrap();
+        let lock_file = std::fs::File::options()
+            .read(true)
+            .write(true)
+            .open(state.path().join("casita").join("gc.lock"))
+            .unwrap();
+        lock_file.lock().unwrap();
+        let incomplete = run_gc(&ctx, &mut ca_mappings, Some(&plan.plan_id)).await.unwrap();
+        assert!(!incomplete.execution_complete);
+        assert!(incomplete.failed_operations.iter().any(|failure| failure.contains("reclaim-incomplete")));
+        assert!(casita_gc_fence_pending(state.path()).unwrap());
+        drop(lock_file);
+
+        recover_casita_gc(
+            state.path(),
+            CasitaGcPaths {
+                output_dir_str: exports.path().to_str().unwrap(),
+                store_dir: "/nix/store",
+            },
+            &store,
+            &mut ca_mappings,
+        )
+        .await
+        .unwrap();
+        assert!(!casita_gc_fence_pending(state.path()).unwrap());
+        store.rehydrate_castore_payload_root(&keep).await.unwrap();
+        assert!(
+            store
+                .rehydrate_castore_payload_root(&dead)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("casita-root-missing")
+        );
+    }
+
+    #[tokio::test]
+    async fn casita_recovery_before_first_root_removal_preserves_candidate() {
+        let state = tempfile::tempdir().unwrap();
+        let exports = tempfile::tempdir().unwrap();
+        let _guard = crate::StoreMutationGuard::acquire_wait(state.path()).unwrap();
+        let store = CasitaStore::open(state.path(), "/nix/store").await.unwrap();
+        let node = Node::Symlink {
+            target: SymlinkTarget::try_from("still-published").unwrap(),
+        };
+        store.admit_castore_payload_root(&node).await.unwrap();
+        let plan =
+            plan_casita_castore_facts(Vec::new(), store.verified_gc_castore_roots().await.unwrap(), true).unwrap();
+        assert_eq!(plan.candidate_roots.len(), 1);
+        let (name, target) = plan.targets.get(&plan.candidate_roots[0]).unwrap();
+        let target = target.clone();
+        persist_casita_fence(state.path(), &CasitaGcFence {
+            plan_id: encode_blake3_identity(&plan.core_plan_id),
+            entries: vec![CasitaFenceEntry {
+                kind: CasitaFenceKind::Castore,
+                path: plan.candidate_roots[0].clone(),
+                root_name: name.to_string(),
+                expected_target: target.to_string(),
+                removed: false,
+                cleaned: false,
+            }],
+        })
+        .unwrap();
+        drop(store);
+
+        let reopened = CasitaStore::open(state.path(), "/nix/store").await.unwrap();
+        let mut ca_mappings = CaMappings::load(state.path());
+        recover_casita_gc(
+            state.path(),
+            CasitaGcPaths {
+                output_dir_str: exports.path().to_str().unwrap(),
+                store_dir: "/nix/store",
+            },
+            &reopened,
+            &mut ca_mappings,
+        )
+        .await
+        .unwrap();
+        assert!(!casita_gc_fence_pending(state.path()).unwrap());
+        reopened.rehydrate_castore_payload_root(&node).await.unwrap();
+        assert!(reopened.repository.open_payload(&target).await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn casita_recovery_replays_real_partial_root_removal_without_new_deletions() {
+        let state = tempfile::tempdir().unwrap();
+        let exports = tempfile::tempdir().unwrap();
+        let _guard = crate::StoreMutationGuard::acquire_wait(state.path()).unwrap();
+        let store = CasitaStore::open(state.path(), "/nix/store").await.unwrap();
+        let retained = Node::Symlink {
+            target: SymlinkTarget::try_from("retained").unwrap(),
+        };
+        let first = Node::Symlink {
+            target: SymlinkTarget::try_from("first-candidate").unwrap(),
+        };
+        let second = Node::Symlink {
+            target: SymlinkTarget::try_from("second-candidate").unwrap(),
+        };
+        for node in [&retained, &first, &second] {
+            store.admit_castore_payload_root(node).await.unwrap();
+        }
+        let retained_name = CasitaStore::castore_root_name(&retained).unwrap();
+        let observed = store.verified_gc_castore_roots().await.unwrap();
+        let plan = plan_casita_castore_facts(vec![casita_castore_path_id(&retained_name)], observed, true).unwrap();
+        assert_eq!(plan.candidate_roots.len(), 2);
+        let entries = plan
+            .candidate_roots
+            .iter()
+            .map(|root| {
+                let (name, target) = plan.targets.get(root).unwrap();
+                CasitaFenceEntry {
+                    kind: CasitaFenceKind::Castore,
+                    path: root.clone(),
+                    root_name: name.to_string(),
+                    expected_target: target.to_string(),
+                    removed: false,
+                    cleaned: false,
+                }
+            })
+            .collect();
+        persist_casita_fence(state.path(), &CasitaGcFence {
+            plan_id: encode_blake3_identity(&plan.core_plan_id),
+            entries,
+        })
+        .unwrap();
+        let removed_name = &plan.targets.get(&plan.candidate_roots[0]).unwrap().0;
+        let removed_target = &plan.targets.get(&plan.candidate_roots[0]).unwrap().1;
+        assert!(store.repository.remove_root_if_matches(removed_name, removed_target).await.unwrap().is_some());
+        assert!(!casita_fence_journal_path(state.path()).exists());
+        drop(store);
+
+        let reopened = CasitaStore::open(state.path(), "/nix/store").await.unwrap();
+        let mut ca_mappings = CaMappings::load(state.path());
+        recover_casita_gc(
+            state.path(),
+            CasitaGcPaths {
+                output_dir_str: exports.path().to_str().unwrap(),
+                store_dir: "/nix/store",
+            },
+            &reopened,
+            &mut ca_mappings,
+        )
+        .await
+        .unwrap();
+        assert!(!casita_gc_fence_pending(state.path()).unwrap());
+        let roots = reopened.verified_gc_castore_roots().await.unwrap();
+        let survivors = roots.iter().map(|(name, _, _, _)| name.to_string()).collect::<BTreeSet<_>>();
+        assert!(!survivors.contains(&plan.targets[&plan.candidate_roots[0]].0.to_string()));
+        assert!(survivors.contains(&plan.targets[&plan.candidate_roots[1]].0.to_string()));
+        assert!(survivors.contains(&retained_name.to_string()));
+        reopened.rehydrate_castore_payload_root(&retained).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn casita_gc_matches_snix_candidates_for_identical_published_outputs_and_retention() {
+        use nix_compat::narinfo::SigningKey;
+        use nix_compat::narinfo::VerifyingKey;
+        use nix_compat::narinfo::fingerprint_with_store_dir;
+        use nix_compat::nixhash::CAHash;
+        use nix_compat::nixhash::NixHash;
+        use nix_compat::store_path::build_ca_path_with_store_dir;
+        use snix_store::nar::NarCalculationService;
+        use snix_store::nar::SimpleRenderer;
+
+        let snix_state = tempfile::tempdir().unwrap();
+        let snix_exports = tempfile::tempdir().unwrap();
+        let casita_state = tempfile::tempdir().unwrap();
+        let casita_exports = tempfile::tempdir().unwrap();
+        let raw_signing = ed25519_dalek::SigningKey::from_bytes(&[19_u8; 32]);
+        let verifying = VerifyingKey::new("gc-parity-fixture".to_string(), raw_signing.verifying_key());
+        let signing = SigningKey::new("gc-parity-fixture".to_string(), raw_signing);
+        std::fs::write(casita_state.path().join("casita-trusted-public-keys"), format!("{verifying}\n")).unwrap();
+        let mut snix = open_store(snix_state.path(), snix_exports.path()).await;
+        let guard = crate::StoreMutationGuard::acquire_wait(casita_state.path()).unwrap();
+        let mut casita = StoreHandle::open(StoreConfig::new(
+            crate::StoreBackend::Casita,
+            casita_state.path().to_path_buf(),
+            casita_exports.path().to_path_buf(),
+            "/nix/store".to_string(),
+        ))
+        .await
+        .unwrap();
+        let mut paths = Vec::new();
+        for (name, target) in [
+            ("retained", "keep-link"),
+            ("candidate-a", "drop-a"),
+            ("candidate-b", "drop-b"),
+        ] {
+            let node = Node::Symlink {
+                target: SymlinkTarget::try_from(target).unwrap(),
+            };
+            let (nar_size, nar_sha256) = SimpleRenderer::new(snix.blob_service(), snix.directory_service())
+                .calculate_nar(&node)
+                .await
+                .unwrap();
+            let ca = CAHash::Nar(NixHash::Sha256(nar_sha256));
+            let store_path =
+                build_ca_path_with_store_dir(name, &ca, Vec::<String>::new(), false, "/nix/store").unwrap();
+            let mut info = PathInfo {
+                store_path: store_path.clone(),
+                node,
+                references: Vec::new(),
+                nar_size,
+                nar_sha256,
+                signatures: Vec::new(),
+                deriver: None,
+                ca: Some(ca),
+            };
+            let fingerprint = fingerprint_with_store_dir(
+                &info.store_path.as_ref(),
+                &info.nar_sha256,
+                info.nar_size,
+                std::iter::empty::<&nix_compat::store_path::StorePathRef>(),
+                "/nix/store",
+            );
+            info.signatures.push(signing.sign(fingerprint.as_bytes()).to_owned());
+            snix.pathinfo_service().put(info.clone()).await.unwrap();
+            casita.pathinfo_service().put(info).await.unwrap();
+            paths.push(store_path);
+        }
+        let mut observed = casita
+            .casita_store
+            .as_ref()
+            .unwrap()
+            .verified_gc_roots("/nix/store")
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|(_, _, info)| info.store_path.to_absolute_path())
+            .collect::<Vec<_>>();
+        observed.sort();
+        let mut expected_observed = paths.iter().map(StorePath::to_absolute_path).collect::<Vec<_>>();
+        expected_observed.sort();
+        assert_eq!(observed, expected_observed);
+        snix.register_retained_root(&paths[0], GcRootSource::Build).await.unwrap();
+        casita.register_retained_root(&paths[0], GcRootSource::Build).await.unwrap();
+
+        let snix_plan = snix.garbage_collect(None).await.unwrap();
+        let casita_plan = casita.garbage_collect_under_guard(&guard, None).await.unwrap();
+        let mut expected_candidates = paths[1..].iter().map(StorePath::to_absolute_path).collect::<Vec<_>>();
+        expected_candidates.sort();
+        assert_eq!(snix_plan.candidate_paths, expected_candidates);
+        assert_eq!(casita_plan.candidate_paths, snix_plan.candidate_paths);
+        assert_eq!(snix_plan.retained_root_count, 1);
+        assert_eq!(casita_plan.retained_root_count, snix_plan.retained_root_count);
+
+        snix.register_retained_root(&paths[1], GcRootSource::Build).await.unwrap();
+        casita.register_retained_root(&paths[1], GcRootSource::Build).await.unwrap();
+        let snix_after_pin = snix.garbage_collect(None).await.unwrap();
+        let casita_after_pin = casita.garbage_collect_under_guard(&guard, None).await.unwrap();
+        assert_eq!(snix_after_pin.candidate_paths, vec![paths[2].to_absolute_path()]);
+        assert_eq!(casita_after_pin.candidate_paths, snix_after_pin.candidate_paths);
+        assert!(
+            snix.garbage_collect(Some(&snix_plan.plan_id))
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("stale-gc-plan")
+        );
+        assert!(
+            casita
+                .garbage_collect_under_guard(&guard, Some(&casita_plan.plan_id))
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("gc-plan-stale")
+        );
+        assert!(!casita_gc_fence_pending(casita_state.path()).unwrap());
+        assert_eq!(casita.casita_store.as_ref().unwrap().verified_gc_roots("/nix/store").await.unwrap().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn casita_gc_repointed_verified_output_rejects_old_plan_before_fencing() {
+        let state = tempfile::tempdir().unwrap();
+        let exports = tempfile::tempdir().unwrap();
+        let signing = casita_gc_trusted_signer(state.path());
+        let guard = crate::StoreMutationGuard::acquire_wait(state.path()).unwrap();
+        let mut store = StoreHandle::open(StoreConfig::new(
+            crate::StoreBackend::Casita,
+            state.path().to_path_buf(),
+            exports.path().to_path_buf(),
+            "/nix/store".to_string(),
+        ))
+        .await
+        .unwrap();
+        let info = casita_gc_signed_symlink_output(&store, "repoint-candidate", "unchanged-content", &signing).await;
+        store.pathinfo_service().put(info.clone()).await.unwrap();
+        let initial = store.casita_store.as_ref().unwrap().verified_gc_roots("/nix/store").await.unwrap();
+        assert_eq!(initial.len(), 1);
+        let initial_target = initial[0].1.clone();
+        let plan = store.garbage_collect_under_guard(&guard, None).await.unwrap();
+        assert_eq!(plan.candidate_paths, vec![info.store_path.to_absolute_path()]);
+
+        let mut repointed = info.clone();
+        repointed.deriver = Some(store_path("different-deriver.drv", 41));
+        store.pathinfo_service().put(repointed.clone()).await.unwrap();
+        let observed = store.casita_store.as_ref().unwrap().verified_gc_roots("/nix/store").await.unwrap();
+        assert_eq!(observed.len(), 1);
+        assert_ne!(observed[0].1, initial_target);
+        assert_eq!(observed[0].2, repointed);
+        assert_eq!(store.pathinfo_service().get(*info.store_path.digest()).await.unwrap(), Some(repointed));
+
+        let rejected = store.garbage_collect_under_guard(&guard, Some(&plan.plan_id)).await.unwrap_err();
+        assert!(rejected.to_string().contains("gc-plan-stale"));
+        assert!(!casita_gc_fence_pending(state.path()).unwrap());
+        let still_published = store.casita_store.as_ref().unwrap().verified_gc_roots("/nix/store").await.unwrap();
+        assert_eq!(still_published.len(), 1);
+        assert_eq!(still_published[0].1, observed[0].1);
+    }
+
+    #[tokio::test]
+    async fn casita_gc_executes_signed_output_plan_and_preserves_retained_nar_facts() {
+        use nix_compat::nixhash::CAHash;
+        use nix_compat::nixhash::NixHash;
+        use snix_store::nar::NarCalculationService;
+        use snix_store::nar::SimpleRenderer;
+
+        let state = tempfile::tempdir().unwrap();
+        let exports = tempfile::tempdir().unwrap();
+        let signing = casita_gc_trusted_signer(state.path());
+        let guard = crate::StoreMutationGuard::acquire_wait(state.path()).unwrap();
+        let mut store = StoreHandle::open(StoreConfig::new(
+            crate::StoreBackend::Casita,
+            state.path().to_path_buf(),
+            exports.path().to_path_buf(),
+            "/nix/store".to_string(),
+        ))
+        .await
+        .unwrap();
+        let kept = casita_gc_signed_symlink_output(&store, "kept-signed", "kept-nar-content", &signing).await;
+        let removed = casita_gc_signed_symlink_output(&store, "collected-signed", "dead-nar-content", &signing).await;
+        store.pathinfo_service().put(kept.clone()).await.unwrap();
+        store.pathinfo_service().put(removed.clone()).await.unwrap();
+        store.register_retained_root(&kept.store_path, GcRootSource::Build).await.unwrap();
+        let roots = store.casita_store.as_ref().unwrap().verified_gc_roots("/nix/store").await.unwrap();
+        assert_eq!(roots.len(), 2);
+        let removed_target = roots.iter().find(|(_, _, info)| info.store_path == removed.store_path).unwrap().1.clone();
+
+        let plan = store.garbage_collect_under_guard(&guard, None).await.unwrap();
+        assert!(plan.is_dry_run);
+        assert_eq!(plan.candidate_paths, vec![removed.store_path.to_absolute_path()]);
+        assert_eq!(plan.retained_root_count, 1);
+        let report = store.garbage_collect_under_guard(&guard, Some(&plan.plan_id)).await.unwrap();
+        assert!(!report.is_dry_run);
+        assert!(report.execution_complete, "{:?}", report.failed_operations);
+        assert!(report.operations.contains(&GcOperationKind::CasitaCollection));
+        assert_eq!(report.candidate_paths, plan.candidate_paths);
+        assert!(!casita_gc_fence_pending(state.path()).unwrap());
+
+        let observed = store.pathinfo_service().get(*kept.store_path.digest()).await.unwrap().unwrap();
+        assert_eq!(observed, kept);
+        let (nar_size, nar_sha256) = SimpleRenderer::new(store.blob_service(), store.directory_service())
+            .calculate_nar(&observed.node)
+            .await
+            .unwrap();
+        assert_eq!((nar_size, nar_sha256), (observed.nar_size, observed.nar_sha256));
+        assert_eq!(observed.ca, Some(CAHash::Nar(NixHash::Sha256(nar_sha256))));
+        assert!(store.pathinfo_service().get(*removed.store_path.digest()).await.unwrap().is_none());
+        let surviving_roots = store.casita_store.as_ref().unwrap().verified_gc_roots("/nix/store").await.unwrap();
+        assert_eq!(surviving_roots.len(), 1);
+        assert_eq!(surviving_roots[0].2, kept);
+        assert!(
+            store
+                .casita_store
+                .as_ref()
+                .unwrap()
+                .repository
+                .open_payload(&removed_target)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn casita_output_fence_recovery_preserves_unremoved_and_cleans_only_removed_metadata() {
+        use crate::ActionResultStore;
+
+        let state = tempfile::tempdir().unwrap();
+        let exports = tempfile::tempdir().unwrap();
+        let signing = casita_gc_trusted_signer(state.path());
+        let guard = crate::StoreMutationGuard::acquire_wait(state.path()).unwrap();
+        let config = || {
+            StoreConfig::new(
+                crate::StoreBackend::Casita,
+                state.path().to_path_buf(),
+                exports.path().to_path_buf(),
+                "/nix/store".to_string(),
+            )
+        };
+        let mut store = StoreHandle::open(config()).await.unwrap();
+        let outputs = [
+            casita_gc_signed_symlink_output(&store, "fenced-first", "content-first", &signing).await,
+            casita_gc_signed_symlink_output(&store, "fenced-second", "content-second", &signing).await,
+        ];
+        let action_store = crate::LocalActionResultStore::new(state.path());
+        let records = [
+            casita_gc_action_result("fenced-first", &outputs[0].store_path),
+            casita_gc_action_result("fenced-second", &outputs[1].store_path),
+        ];
+        let logical = outputs.each_ref().map(|info| info.store_path.to_absolute_path());
+        let drv_paths = [
+            store_path("fenced-first.drv", 42).to_absolute_path(),
+            store_path("fenced-second.drv", 43).to_absolute_path(),
+        ];
+        let exported = outputs
+            .each_ref()
+            .map(|info| PathBuf::from(info.store_path.to_absolute_path_with_prefix(exports.path().to_str().unwrap())));
+        for index in 0..outputs.len() {
+            store.pathinfo_service().put(outputs[index].clone()).await.unwrap();
+            action_store.publish(&records[index]).await.unwrap();
+            let target = if index == 0 { "content-first" } else { "content-second" };
+            std::os::unix::fs::symlink(target, &exported[index]).unwrap();
+        }
+        let mut mappings = CaMappings::load(state.path());
+        for index in 0..outputs.len() {
+            mappings.insert(&drv_paths[index], "out", &logical[index]);
+        }
+        mappings.save_checked(state.path()).unwrap();
+        assert_eq!(CaMappings::load(state.path()).get(&drv_paths[0], "out"), Some(logical[0].as_str()));
+        assert_eq!(CaMappings::load(state.path()).get(&drv_paths[1], "out"), Some(logical[1].as_str()));
+
+        let plan = store.garbage_collect_under_guard(&guard, None).await.unwrap();
+        assert_eq!(plan.candidate_path_count, 2);
+        assert_eq!(plan.candidate_exported_output_count, 2);
+        assert_eq!(plan.candidate_action_result_record_count, 2);
+        assert_eq!(plan.candidate_action_result_index_count, 2);
+        let roots = store.casita_store.as_ref().unwrap().verified_gc_roots("/nix/store").await.unwrap();
+        let entries = plan
+            .candidate_paths
+            .iter()
+            .map(|path| {
+                let (_, target, info) =
+                    roots.iter().find(|(_, _, info)| info.store_path.to_absolute_path() == *path).unwrap();
+                casita_fence_entry(&info.store_path, target)
+            })
+            .collect::<Vec<_>>();
+        let fence = CasitaGcFence {
+            plan_id: plan.plan_id.clone(),
+            entries,
+        };
+
+        // A restart before the first conditional removal must leave all output metadata intact.
+        persist_casita_fence(state.path(), &fence).unwrap();
+        drop(store);
+        let mut reopened = StoreHandle::open(config()).await.unwrap();
+        assert!(
+            reopened
+                .pathinfo_service()
+                .get(*outputs[0].store_path.digest())
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("gc-recovery-required")
+        );
+        reopened.recover_casita_gc_under_guard(&guard).await.unwrap();
+        assert!(!casita_gc_fence_pending(state.path()).unwrap());
+        assert_eq!(reopened.casita_store.as_ref().unwrap().verified_gc_roots("/nix/store").await.unwrap().len(), 2);
+        for index in 0..outputs.len() {
+            assert!(reopened.pathinfo_service().get(*outputs[index].store_path.digest()).await.unwrap().is_some());
+            assert!(std::fs::read_link(&exported[index]).is_ok());
+            assert_eq!(action_store.lookup(&records[index].record.action_ref).await.unwrap().records, vec![
+                records[index].clone()
+            ]);
+            assert_eq!(CaMappings::load(state.path()).get(&drv_paths[index], "out"), Some(logical[index].as_str()));
+        }
+
+        // A second restart after root removal but before the outcome record replays only that removal.
+        let replanned = reopened.garbage_collect_under_guard(&guard, None).await.unwrap();
+        assert_eq!(replanned.candidate_paths, plan.candidate_paths);
+        persist_casita_fence(state.path(), &CasitaGcFence {
+            plan_id: replanned.plan_id,
+            entries: fence.entries.clone(),
+        })
+        .unwrap();
+        let removed = logical.iter().position(|path| path == &fence.entries[0].path).unwrap();
+        let survivor = 1 - removed;
+        let removable_metadata =
+            local_action_result_gc_candidates(state.path(), &BTreeSet::from([logical[survivor].clone()])).unwrap();
+        assert_eq!(removable_metadata.record_paths.len(), 1);
+        assert_eq!(removable_metadata.index_marker_paths.len(), 1);
+        let all_metadata = local_action_result_gc_candidates(state.path(), &BTreeSet::new()).unwrap();
+        let kept_record = all_metadata
+            .record_paths
+            .iter()
+            .find(|path| !removable_metadata.record_paths.contains(path))
+            .unwrap()
+            .clone();
+        let kept_marker = all_metadata
+            .index_marker_paths
+            .iter()
+            .find(|path| !removable_metadata.index_marker_paths.contains(path))
+            .unwrap()
+            .clone();
+        let (_, name, target) = fence_entry_identity(&fence.entries[0], "/nix/store").unwrap();
+        let repository = reopened.casita_store.as_ref().unwrap().repository.clone();
+        assert!(repository.remove_root_if_matches(&name, &target).await.unwrap().is_some());
+        assert!(!casita_fence_journal_path(state.path()).exists());
+        drop(repository);
+        drop(reopened);
+
+        let mut recovered = StoreHandle::open(config()).await.unwrap();
+        recovered.recover_casita_gc_under_guard(&guard).await.unwrap();
+        assert!(!casita_gc_fence_pending(state.path()).unwrap());
+        let published = recovered.casita_store.as_ref().unwrap().verified_gc_roots("/nix/store").await.unwrap();
+        assert_eq!(published.len(), 1);
+        assert_eq!(published[0].2.store_path, outputs[survivor].store_path);
+        assert!(std::fs::symlink_metadata(&exported[removed]).is_err());
+        assert!(std::fs::read_link(&exported[survivor]).is_ok());
+        assert!(!removable_metadata.record_paths[0].exists());
+        assert!(!removable_metadata.index_marker_paths[0].exists());
+        assert!(kept_record.is_file());
+        assert!(kept_marker.is_file());
+        assert!(action_store.lookup(&records[removed].record.action_ref).await.unwrap().records.is_empty());
+        assert_eq!(action_store.lookup(&records[survivor].record.action_ref).await.unwrap().records, vec![
+            records[survivor].clone()
+        ]);
+        let saved_mappings = CaMappings::load(state.path());
+        assert_eq!(saved_mappings.get(&drv_paths[removed], "out"), None);
+        assert_eq!(saved_mappings.get(&drv_paths[survivor], "out"), Some(logical[survivor].as_str()));
     }
 }

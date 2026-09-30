@@ -10,6 +10,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
 [dependencies]
 async-compression = { version = "0.4", features = ["tokio", "bzip2", "gzip", "xz", "zstd"] }
 async-trait = "0.1"
+casita = { git = "https://github.com/cachix/casita", rev = "90404fcb1cfb3d83f2233715448dfefe913f5fd1", default-features = false, features = ["native", "experimental"] }
 crunch-action-result-core = { path = "../crunch-action-result-core" }
 crunch-attestation = { path = "../crunch-attestation" }
 crunch-composition-core = { path = "../crunch-composition-core" }

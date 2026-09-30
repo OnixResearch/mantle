@@ -1378,6 +1378,7 @@ mod tests {
         std::fs::create_dir_all(&state_dir).unwrap();
         std::fs::create_dir_all(&output_dir).unwrap();
         StoreHandle::open(StoreConfig {
+            backend: crate::StoreBackend::Snix,
             state_dir,
             output_dir,
             remote_cache_urls: Vec::new(),
@@ -1878,6 +1879,7 @@ mod tests {
         std::fs::create_dir_all(&state_dir).unwrap();
         std::fs::create_dir_all(&output_dir).unwrap();
         let pull_store = StoreHandle::open(StoreConfig {
+            backend: crate::StoreBackend::Snix,
             state_dir,
             output_dir,
             remote_cache_urls: Vec::new(),
@@ -2852,6 +2854,7 @@ mod tests {
         std::fs::create_dir_all(&state_dir).unwrap();
         std::fs::create_dir_all(&output_dir).unwrap();
         let pull_store = StoreHandle::open(StoreConfig {
+            backend: crate::StoreBackend::Snix,
             state_dir,
             output_dir,
             remote_cache_urls: Vec::new(),

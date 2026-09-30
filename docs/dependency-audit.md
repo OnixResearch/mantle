@@ -33,11 +33,12 @@ Current findings are classified into these buckets:
 - **vendored or upstream-blocked** — the finding sits behind vendored code or an upstream crate choice that is not realistically fixable here without carrying a larger fork
 - **dev-only or non-runtime** — the finding appears only in dev-dependencies, optional features not enabled in the shipped path, or other non-runtime exposure
 
-## Current triage snapshot
+## Triage snapshot (2026-07-03)
 
 Historical transcript: `openspec/changes/classify-dependency-audit-findings/evidence/cargo-deny-final.txt`
 
-Latest transcript: Cairn evidence for `resolve-dependency-audit-waivers` on 2026-07-03.
+Transcript: Cairn evidence for `resolve-dependency-audit-waivers` on 2026-07-03.
+The newer [Casita admission run](#casita-admission-run-2026-09-30) reports open findings that this table does not list.
 
 | Finding | Crate(s) | Current classification | Current action |
 |---|---|---|---|
@@ -52,6 +53,50 @@ Latest transcript: Cairn evidence for `resolve-dependency-audit-waivers` on 2026
 | RUSTSEC-2026-0204 | `crossbeam-epoch` | fixed | generated a targeted lock update from `0.9.18` to the compatible fixed `0.9.20`; no waiver added |
 | license policy | `winx 0.36.4` | fixed policy gap | admitted only its declared `Apache-2.0 WITH LLVM-exception` SPDX expression; crate license checks and confidence remain enabled |
 | source policy | `nickel-export-core` | fixed policy gap | admitted only `https://github.com/OnixResearch/nickel-export`; Cargo/Nix/spec checks still enforce revision `257fafc1c746f1faf156207043a4c826bfb16d49` |
+
+## Casita admission run (2026-09-30)
+
+This run belongs to the Cairn change `adopt-casita-store-backend`. Its results come from the vendor rail report; no transcript file is checked in. The run failed, so it is not passing audit evidence.
+
+Admitted sources and lock updates:
+
+- `casita` 0.1.0 from `https://github.com/cachix/casita` at revision `90404fcb1cfb3d83f2233715448dfefe913f5fd1`, with default features disabled and exactly `native` and `experimental`
+- `turso` 0.8.0-pre.7, a `casita` dependency, from `https://github.com/cachix/turso.git` at revision `dca55133caa690f90dcdd58d3c4329fb0703659c`
+- `deny.toml` admits both repositories individually; the `casitaSourceAdmitted` assertion in `flake.nix` checks the Casita revision, features, lock source, and `Apache-2.0` license, and `scripts/vendor-deps.py` checks the Casita manifest pin and the locked `casita`, `turso`, and `astral-tokio-tar` entries
+- `blake3` stays at `1.8.2`; `astral-tokio-tar` moves from `0.6.3` to `0.6.4`
+- `patches/casita-blake3-finalize.patch` changes one hunk in `crates/casita/src/nar.rs` for this revision only: method resolution in Mantle's graph selects `sha2::Digest::finalize` there, so the patch calls the BLAKE3 method explicitly; the Nix vendor closure and `scripts/vendor-deps.py` both apply it
+- [ADR 0082](../adr/0082-select-store-backends-explicitly-and-admit-casita.md) lists the experimental Casita API that Mantle uses; a new Casita revision or feature set needs its own reviewed change that updates ADR 0082 and this record and reruns the checks below
+
+Commands:
+
+```sh
+nix build --no-link --print-out-paths .#checks.x86_64-linux.casita-vendor-closure
+nix develop --offline --no-write-lock-file --command python3 scripts/vendor-deps.py generate
+nix develop --offline --no-write-lock-file --command python3 scripts/vendor-deps.py check
+nix develop --offline --no-write-lock-file --command \
+  /nix/store/xqnwl8qppzhr3dq5nzw2ly6yx4lz9xyr-cargo-deny-0.19.0/bin/cargo-deny check
+```
+
+Results:
+
+- the Nix check built `/nix/store/skq3d11jy1b67by802kq0d5mmkdhzkmi-vendor-cargo-deps` from clean source
+- `generate` wrote `vendor-deps/` without replacing existing data; `check` regenerated the closure, matched every file (53,491 entries), and resolved 766 external package names from locked offline metadata
+- the patched `nar.rs` bytes are identical in the Nix closure and in `vendor-deps/`
+- `cargo-deny` exited 9: advisories and sources failed; bans and licenses passed; the command omitted `--config deny.toml`, and its source errors name exactly the git sources that `deny.toml` does not admit
+
+| Finding | Crate | Relation to Casita | Current action |
+|---|---|---|---|
+| RUSTSEC-2024-0370 (unmaintained) | `proc-macro-error 0.4.12` | new in the lock; reached only from `casita` through `genawaiter 0.99.1` (via `bao-tree` and the `turso` sync crates) | open; no waiver |
+| RUSTSEC-2026-0258 (vulnerability) | `h2 0.4.13` | in the HEAD lock; also reached from `casita` through `object_store 0.14.0` | open; no waiver |
+| RUSTSEC-2026-0285 (vulnerability) | `rustls 0.23.37` | in the HEAD lock; also reached from `casita` through `object_store 0.14.0` | open; no waiver |
+| RUSTSEC-2026-0247 (unmaintained) | `bitmaps 3.2.1` | in the HEAD lock; not reached from `casita` | open; no waiver |
+| RUSTSEC-2026-0292 (vulnerability) | `imbl-sized-chunks 0.1.3` | in the HEAD lock; not reached from `casita` | open; no waiver |
+| RUSTSEC-2023-0071 (vulnerability) | `rsa 0.9.10` | in the HEAD lock; not reached from `casita` | open; no waiver |
+| source policy | four git sources without `allow-git` | in the HEAD lock and absent from the HEAD policy; not from `casita` | open; predates this change |
+
+The four sources are `ssh://git@github.com/OnixResearch/onix-artifact.git`, `https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git` (`bounded-tree`), `https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git` (`durable-file-publication`), and `https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git` (`transactional-reconciliation-core`).
+
+The dependency gate stays open. This change adds no waiver. This record does not claim a clean `cargo-deny` result, Casita correctness, experimental API stability, or release eligibility.
 
 ## Remaining waiver inventory
 

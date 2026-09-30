@@ -12,6 +12,7 @@
 )]
 
 use std::collections::BTreeMap;
+use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -589,6 +590,11 @@ async fn ensure_pathinfo_exists(pathinfo: &dyn PathInfoService, store_path: &Sto
 }
 
 fn save_registry(state_dir: &Path, registry: &BTreeMap<String, GcRootRecord>) -> Result<(), Error> {
+    if selected_backend_requires_casita_fence(state_dir)? && crate::gc::casita_gc_fence_pending(state_dir)? {
+        return Err(Error::Gc(
+            "gc-recovery-required: recover fenced Casita GC before changing retained roots".to_string(),
+        ));
+    }
     validate_registry(registry)?;
     std::fs::create_dir_all(state_dir)
         .map_err(|error| Error::RootRegistry(format!("creating {}: {error}", state_dir.display())))?;
@@ -602,6 +608,46 @@ fn save_registry(state_dir: &Path, registry: &BTreeMap<String, GcRootRecord>) ->
         Error::RootRegistry(format!("renaming {} -> {}: {error}", tmp_path.display(), path.display()))
     })?;
     Ok(())
+}
+
+fn selected_backend_requires_casita_fence(state_dir: &Path) -> Result<bool, Error> {
+    let identity_path = state_dir.join(crate::overlay::STORE_IDENTITY_FILE_NAME);
+    let metadata = match std::fs::symlink_metadata(&identity_path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(true),
+        Err(error) => return Err(Error::Store(format!("observing {}: {error}", identity_path.display()))),
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(Error::Store(format!(
+            "store-backend-mismatch: {} is not a regular identity file",
+            identity_path.display()
+        )));
+    }
+    let max_descriptor_bytes = crate::overlay::store_overlay_runtime_policy()?.limits.max_descriptor_bytes;
+    let read_limit_bytes = max_descriptor_bytes
+        .checked_add(1)
+        .ok_or_else(|| Error::Store("bounded store identity read limit overflow".to_string()))?;
+    let mut bytes = Vec::new();
+    std::fs::File::open(&identity_path)
+        .map_err(|error| Error::Store(format!("opening {}: {error}", identity_path.display())))?
+        .take(read_limit_bytes)
+        .read_to_end(&mut bytes)
+        .map_err(|error| Error::Store(format!("reading {}: {error}", identity_path.display())))?;
+    if u64::try_from(bytes.len()).map_or(true, |size_bytes| size_bytes > max_descriptor_bytes) {
+        return Err(Error::Store(format!(
+            "store-backend-mismatch: {} exceeds bounded identity size",
+            identity_path.display()
+        )));
+    }
+    let identity: crate::overlay::StoreIdentityRecord = serde_json::from_slice(&bytes)
+        .map_err(|error| Error::Store(format!("parsing store identity {}: {error}", identity_path.display())))?;
+    match (identity.schema.as_str(), identity.backend.as_deref()) {
+        (crate::overlay::STORE_STATE_SCHEMA, None) | (crate::overlay::STORE_BACKEND_STATE_SCHEMA, Some("snix")) => {
+            Ok(false)
+        }
+        (crate::overlay::STORE_BACKEND_STATE_SCHEMA, Some("casita")) => Ok(true),
+        _ => Err(Error::Store("store-backend-mismatch: unsupported store identity schema or backend".to_string())),
+    }
 }
 
 fn validate_registry(registry: &BTreeMap<String, GcRootRecord>) -> Result<(), Error> {
@@ -1042,5 +1088,53 @@ mod tests {
 
         assert!(removed.is_some());
         assert!(list_roots(state_dir.path()).expect("list roots").is_empty());
+    }
+    #[tokio::test]
+    async fn snix_pin_and_unpin_ignore_foreign_casita_gc_fence() {
+        let state_dir = tempfile::tempdir().unwrap();
+        crate::overlay::ensure_store_identity(state_dir.path(), "/nix/store", crate::StoreBackend::Snix).unwrap();
+        let pathinfo = pathinfo_service();
+        let path = store_path("snix-foreign-fence", 44);
+        pathinfo.put(unsigned_pathinfo(path.clone())).await.unwrap();
+        let logical_path = path.to_absolute_path();
+        let fence = state_dir.path().join("casita-gc-fence.json");
+        std::fs::write(&fence, b"foreign Casita fence").unwrap();
+
+        let pinned = pin_root(state_dir.path(), "/nix/store", pathinfo.as_ref(), &logical_path).await.unwrap();
+        assert_eq!(pinned.logical_path, logical_path);
+        let removed = unpin_root(state_dir.path(), LogicalStorePathRef {
+            logical_path: &logical_path,
+            store_dir: "/nix/store",
+        })
+        .unwrap();
+        assert_eq!(removed, Some(pinned));
+        assert!(list_roots(state_dir.path()).unwrap().is_empty());
+        assert_eq!(std::fs::read(fence).unwrap(), b"foreign Casita fence");
+    }
+
+    #[tokio::test]
+    async fn casita_fenced_root_mutations_preserve_registry_bytes() {
+        let state_dir = tempfile::tempdir().unwrap();
+        crate::overlay::ensure_store_identity(state_dir.path(), "/nix/store", crate::StoreBackend::Casita).unwrap();
+        let pathinfo = pathinfo_service();
+        let path = store_path("casita-fenced", 45);
+        pathinfo.put(unsigned_pathinfo(path.clone())).await.unwrap();
+        let logical_path = path.to_absolute_path();
+        pin_root(state_dir.path(), "/nix/store", pathinfo.as_ref(), &logical_path).await.unwrap();
+        let registry_before = std::fs::read(roots_path(state_dir.path())).unwrap();
+        let fence = state_dir.path().join("casita-gc-fence.json");
+        std::fs::write(&fence, b"pending Casita fence").unwrap();
+
+        let denied_pin = pin_root(state_dir.path(), "/nix/store", pathinfo.as_ref(), &logical_path).await.unwrap_err();
+        assert!(denied_pin.to_string().contains("gc-recovery-required"));
+        let denied_unpin = unpin_root(state_dir.path(), LogicalStorePathRef {
+            logical_path: &logical_path,
+            store_dir: "/nix/store",
+        })
+        .unwrap_err();
+        assert!(denied_unpin.to_string().contains("gc-recovery-required"));
+        assert!(migrate_legacy_registry(state_dir.path()).unwrap_err().to_string().contains("gc-recovery-required"));
+        assert_eq!(std::fs::read(roots_path(state_dir.path())).unwrap(), registry_before);
+        assert_eq!(std::fs::read(fence).unwrap(), b"pending Casita fence");
     }
 }

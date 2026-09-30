@@ -13,6 +13,7 @@
 use std::fs;
 use std::fs::File;
 use std::io::Read;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -36,8 +37,10 @@ use snix_store::path_info::PathInfo;
 use snix_store::pathinfoservice::PathInfoService;
 
 use crate::Error;
+use crate::StoreBackend;
 
 pub const STORE_STATE_SCHEMA: &str = "mantle-store-state-v1";
+pub const STORE_BACKEND_STATE_SCHEMA: &str = "mantle-store-state-v2";
 pub const STORE_IDENTITY_FILE_NAME: &str = "store-identity.json";
 pub const STORE_OVERLAY_REPORT_SCHEMA: &str = "mantle-store-overlay-report-v2";
 
@@ -46,7 +49,6 @@ const STORE_OVERLAY_POLICY_JSON: &str =
     include_str!("../../../config/store-overlay/generated/store-overlay-policy.json");
 const FILE_HASH_BUFFER_BYTES: usize = 65_536;
 const DIRECTORY_IDENTITY_DOMAIN: &[u8] = b"mantle.overlay.directory.v1";
-const STORE_IDENTITY_TEMP_FILE_NAME: &str = "store-identity.json.tmp";
 pub(crate) const OVERLAY_TRUSTED_PUBLIC_KEYS_FILE_NAME: &str = "overlay-trusted-public-keys";
 pub(crate) const LOCAL_SIGNING_KEY_FILE_NAME: &str = "signing-key";
 const MAX_LAYER_TRUST_KEYS: usize = 64;
@@ -106,6 +108,9 @@ pub struct StoreIdentityRecord {
     pub schema: String,
     pub logical_prefix: String,
     pub trust_policy_id: String,
+    /// Absent only in legacy v1 records, which unambiguously select Snix.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backend: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -153,29 +158,90 @@ pub fn store_overlay_policy_blake3() -> String {
     format_digest(blake3::hash(STORE_OVERLAY_POLICY_JSON.as_bytes()).as_bytes())
 }
 
-pub(crate) fn ensure_store_identity(state_dir: &Path, logical_prefix: &str) -> Result<(), Error> {
+/// Validate backend and logical identity without creating or mutating state.
+pub(crate) fn preflight_store_identity(
+    state_dir: &Path,
+    logical_prefix: &str,
+    backend: StoreBackend,
+) -> Result<(), Error> {
     let policy = store_overlay_runtime_policy()?;
-    let expected = StoreIdentityRecord {
-        schema: STORE_STATE_SCHEMA.to_string(),
-        logical_prefix: logical_prefix.to_string(),
-        trust_policy_id: policy.trust.policy_id,
-    };
     let path = state_dir.join(STORE_IDENTITY_FILE_NAME);
     if path.exists() {
         let actual = read_store_identity(&path, policy.limits.max_descriptor_bytes)?;
-        if actual != expected {
+        let actual_backend = match (actual.schema.as_str(), actual.backend.as_deref()) {
+            (STORE_STATE_SCHEMA, None) => StoreBackend::Snix,
+            (STORE_BACKEND_STATE_SCHEMA, Some("snix")) => StoreBackend::Snix,
+            (STORE_BACKEND_STATE_SCHEMA, Some("casita")) => StoreBackend::Casita,
+            _ => {
+                return Err(Error::Store(
+                    "store-backend-mismatch: unsupported store identity schema or backend".to_string(),
+                ));
+            }
+        };
+        if actual_backend != backend {
             return Err(Error::Store(format!(
-                "store-identity-mismatch: expected schema={} prefix={} trust={}, observed schema={} prefix={} trust={}",
-                expected.schema,
-                expected.logical_prefix,
-                expected.trust_policy_id,
-                actual.schema,
-                actual.logical_prefix,
-                actual.trust_policy_id,
+                "store-backend-mismatch: requested {}, state declares {}",
+                backend.as_str(),
+                actual_backend.as_str(),
+            )));
+        }
+        if actual.logical_prefix != logical_prefix || actual.trust_policy_id != policy.trust.policy_id {
+            return Err(Error::Store(format!(
+                "store-identity-mismatch: requested prefix={logical_prefix} trust={}, observed prefix={} trust={}",
+                policy.trust.policy_id, actual.logical_prefix, actual.trust_policy_id,
             )));
         }
         return Ok(());
     }
+    if state_dir.exists() {
+        for entry in fs::read_dir(state_dir)
+            .map_err(|error| Error::Store(format!("reading state directory {}: {error}", state_dir.display())))?
+        {
+            let entry = entry
+                .map_err(|error| Error::Store(format!("reading state directory {}: {error}", state_dir.display())))?;
+            // A Snix-only release claimed populated state without an identity record.
+            // Preserve that path, but never claim a Casita repository as Snix.
+            let name = entry.file_name();
+            if matches!(
+                name.to_str(),
+                Some(
+                    "store-mutation.lock"
+                        | "signing-key"
+                        | "casita-trusted-public-keys"
+                        | "overlay-trusted-public-keys"
+                )
+            ) {
+                continue;
+            }
+            if backend == StoreBackend::Snix && name != "casita" && name != STORE_IDENTITY_FILE_NAME {
+                continue;
+            }
+            return Err(Error::Store(format!(
+                "store-backend-mismatch: state directory {} has content but no backend identity",
+                state_dir.display(),
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn ensure_store_identity(
+    state_dir: &Path,
+    logical_prefix: &str,
+    backend: StoreBackend,
+) -> Result<(), Error> {
+    preflight_store_identity(state_dir, logical_prefix, backend)?;
+    let path = state_dir.join(STORE_IDENTITY_FILE_NAME);
+    if path.exists() {
+        return Ok(());
+    }
+    let policy = store_overlay_runtime_policy()?;
+    let expected = StoreIdentityRecord {
+        schema: STORE_BACKEND_STATE_SCHEMA.to_string(),
+        logical_prefix: logical_prefix.to_string(),
+        trust_policy_id: policy.trust.policy_id,
+        backend: Some(backend.as_str().to_string()),
+    };
     let bytes = serde_json::to_vec_pretty(&expected)
         .map_err(|error| Error::Store(format!("serializing store identity: {error}")))?;
     let byte_count = u64::try_from(bytes.len())
@@ -183,13 +249,23 @@ pub(crate) fn ensure_store_identity(state_dir: &Path, logical_prefix: &str) -> R
     if byte_count > policy.limits.max_descriptor_bytes {
         return Err(Error::Store(format!("store identity exceeds {} bytes", policy.limits.max_descriptor_bytes)));
     }
-    let temporary = state_dir.join(STORE_IDENTITY_TEMP_FILE_NAME);
-    if temporary.exists() {
-        fs::remove_file(&temporary)
-            .map_err(|error| Error::Store(format!("removing stale {}: {error}", temporary.display())))?;
-    }
-    fs::write(&temporary, bytes).map_err(|error| Error::Store(format!("writing {}: {error}", temporary.display())))?;
-    fs::rename(&temporary, &path).map_err(|error| Error::Store(format!("publishing {}: {error}", path.display())))?;
+    let mut temporary = tempfile::NamedTempFile::new_in(state_dir).map_err(|error| {
+        Error::Store(format!("creating temporary store identity in {}: {error}", state_dir.display()))
+    })?;
+    temporary
+        .write_all(&bytes)
+        .map_err(|error| Error::Store(format!("writing temporary store identity: {error}")))?;
+    temporary
+        .as_file()
+        .sync_all()
+        .map_err(|error| Error::Store(format!("syncing temporary store identity: {error}")))?;
+    match temporary.persist_noclobber(&path) {
+        Ok(_) => Ok(()),
+        Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
+            preflight_store_identity(state_dir, logical_prefix, backend)
+        }
+        Err(error) => Err(Error::Store(format!("publishing {}: {}", path.display(), error.error))),
+    }?;
     Ok(())
 }
 
@@ -294,14 +370,9 @@ pub(crate) fn load_layer_trust_keys(state_dir: &Path) -> Result<Vec<VerifyingKey
     let mut keys = if public_keys_path.exists() {
         parse_public_keys(&public_keys_path, policy.limits.max_descriptor_bytes)?
     } else {
-        let signing_key_path = state_dir.join(LOCAL_SIGNING_KEY_FILE_NAME);
-        let bytes = read_file_bounded(&signing_key_path, policy.limits.max_descriptor_bytes)?;
-        let text = std::str::from_utf8(&bytes)
-            .map_err(|error| Error::Store(format!("parsing {} as UTF-8: {error}", signing_key_path.display())))?;
-        let (_, verifying_key) = parse_keypair(text.trim()).map_err(|error| {
-            Error::Store(format!("parsing layer signing key {}: {error}", signing_key_path.display()))
-        })?;
-        vec![verifying_key]
+        vec![load_local_verifying_key(state_dir)?.ok_or_else(|| {
+            Error::Store("overlay-layer-trust-key-missing: no signing key or public trust policy".to_string())
+        })?]
     };
     keys.sort_by_cached_key(ToString::to_string);
     keys.dedup();
@@ -313,8 +384,8 @@ pub(crate) fn load_layer_trust_keys(state_dir: &Path) -> Result<Vec<VerifyingKey
     }
     Ok(keys)
 }
-
-fn parse_public_keys(path: &Path, maximum_bytes: u64) -> Result<Vec<VerifyingKey>, Error> {
+/// Use the same bounded, comment-aware public-key syntax for backend trust.
+pub(crate) fn parse_public_keys(path: &Path, maximum_bytes: u64) -> Result<Vec<VerifyingKey>, Error> {
     let bytes = read_file_bounded(path, maximum_bytes)?;
     let text = std::str::from_utf8(&bytes)
         .map_err(|error| Error::Store(format!("parsing {} as UTF-8: {error}", path.display())))?;
@@ -338,6 +409,20 @@ fn parse_public_keys(path: &Path, maximum_bytes: u64) -> Result<Vec<VerifyingKey
         }
     }
     Ok(keys)
+}
+
+pub(crate) fn load_local_verifying_key(state_dir: &Path) -> Result<Option<VerifyingKey>, Error> {
+    let signing_key_path = state_dir.join(LOCAL_SIGNING_KEY_FILE_NAME);
+    if !signing_key_path.exists() {
+        return Ok(None);
+    }
+    let policy = store_overlay_runtime_policy()?;
+    let bytes = read_file_bounded(&signing_key_path, policy.limits.max_descriptor_bytes)?;
+    let text = std::str::from_utf8(&bytes)
+        .map_err(|error| Error::Store(format!("parsing {} as UTF-8: {error}", signing_key_path.display())))?;
+    let (_, verifying_key) = parse_keypair(text.trim())
+        .map_err(|error| Error::Store(format!("parsing layer signing key {}: {error}", signing_key_path.display())))?;
+    Ok(Some(verifying_key))
 }
 
 struct TrustedBasePathInfoService {
@@ -659,6 +744,8 @@ fn format_digest(bytes: &[u8; blake3::OUT_LEN]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use snix_store::nar::NarCalculationService;
+
     use super::*;
 
     fn write_test_trust_policy(root: &Path) {
@@ -683,6 +770,28 @@ mod tests {
         std::fs::set_permissions(root, permissions).unwrap();
     }
 
+    fn snapshot_state_tree(root: &Path) -> std::collections::BTreeMap<PathBuf, Option<Vec<u8>>> {
+        let mut entries = std::collections::BTreeMap::new();
+        let mut directories = vec![root.to_path_buf()];
+        while let Some(directory) = directories.pop() {
+            for child in std::fs::read_dir(directory).unwrap() {
+                let child = child.unwrap();
+                let path = child.path();
+                let relative = path.strip_prefix(root).unwrap().to_path_buf();
+                let kind = child.file_type().unwrap();
+                let contents = if kind.is_dir() {
+                    directories.push(path);
+                    None
+                } else {
+                    assert!(kind.is_file(), "unexpected state member {}", relative.display());
+                    Some(std::fs::read(path).unwrap())
+                };
+                assert!(entries.insert(relative, contents).is_none());
+            }
+        }
+        entries
+    }
+
     #[test]
     fn embedded_overlay_policy_is_typed_and_bounded() {
         let policy = store_overlay_runtime_policy().expect("embedded overlay policy must parse");
@@ -697,15 +806,168 @@ mod tests {
     #[test]
     fn identity_record_rejects_prefix_drift() {
         let state = tempfile::tempdir().unwrap();
-        ensure_store_identity(state.path(), "/nix/store").unwrap();
-        let error = ensure_store_identity(state.path(), "/mantle/store").unwrap_err();
+        ensure_store_identity(state.path(), "/nix/store", StoreBackend::Snix).unwrap();
+        let error = ensure_store_identity(state.path(), "/mantle/store", StoreBackend::Snix).unwrap_err();
         assert!(error.to_string().contains("store-identity-mismatch"));
+    }
+
+    #[test]
+    fn legacy_v1_identity_remains_snix_only_without_backend_field() {
+        let state = tempfile::tempdir().unwrap();
+        let policy = store_overlay_runtime_policy().unwrap();
+        let legacy = serde_json::json!({
+            "schema": STORE_STATE_SCHEMA,
+            "logical_prefix": "/nix/store",
+            "trust_policy_id": policy.trust.policy_id,
+        });
+        std::fs::write(state.path().join(STORE_IDENTITY_FILE_NAME), serde_json::to_vec(&legacy).unwrap()).unwrap();
+        preflight_store_identity(state.path(), "/nix/store", StoreBackend::Snix).unwrap();
+        assert!(
+            preflight_store_identity(state.path(), "/nix/store", StoreBackend::Casita)
+                .unwrap_err()
+                .to_string()
+                .contains("store-backend-mismatch")
+        );
+    }
+
+    #[test]
+    fn backend_identity_cannot_be_reopened_under_another_backend() {
+        for (recorded, requested) in [
+            (StoreBackend::Snix, StoreBackend::Casita),
+            (StoreBackend::Casita, StoreBackend::Snix),
+        ] {
+            let state = tempfile::tempdir().unwrap();
+            ensure_store_identity(state.path(), "/nix/store", recorded).unwrap();
+            let identity_path = state.path().join(STORE_IDENTITY_FILE_NAME);
+            let original = std::fs::read(&identity_path).unwrap();
+            let error = preflight_store_identity(state.path(), "/nix/store", requested).unwrap_err();
+            assert!(error.to_string().contains("store-backend-mismatch"));
+            assert!(
+                ensure_store_identity(state.path(), "/nix/store", requested)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("store-backend-mismatch")
+            );
+            assert_eq!(std::fs::read(identity_path).unwrap(), original);
+        }
+    }
+
+    #[tokio::test]
+    async fn legacy_snix_identityless_populated_store_reopens_without_rewriting_existing_content() {
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("state");
+        let output = root.path().join("store");
+        let config =
+            || crate::StoreConfig::new(StoreBackend::Snix, state.clone(), output.clone(), "/nix/store".to_string());
+        let first = crate::StoreHandle::open(config()).await.unwrap();
+        assert_eq!(first.backend(), StoreBackend::Snix);
+        assert!(state.join("pathinfo.redb").is_file());
+        assert!(state.join("directories.redb").is_file());
+        assert!(state.join("blobs").is_dir());
+        let content = b"legacy Snix output remains readable";
+        let mut blob = first.blob_service().open_write().await;
+        tokio::io::AsyncWriteExt::write_all(&mut blob, content).await.unwrap();
+        let digest = blob.close().await.unwrap();
+        let node = snix_castore::Node::File {
+            digest,
+            size: content.len() as u64,
+            executable: false,
+        };
+        let (nar_size, nar_sha256) =
+            snix_store::nar::SimpleRenderer::new(first.blob_service(), first.directory_service())
+                .calculate_nar(&node)
+                .await
+                .unwrap();
+        let path_info = PathInfo {
+            store_path: nix_compat::store_path::StorePath::from_name_and_digest_fixed("legacy-output", [23_u8; 20])
+                .unwrap(),
+            node,
+            references: Vec::new(),
+            nar_size,
+            nar_sha256,
+            signatures: Vec::new(),
+            deriver: None,
+            ca: None,
+        };
+        first.pathinfo_service().put(path_info.clone()).await.unwrap();
+        drop(first);
+        let legacy_file = state.join("legacy-observation.log");
+        let legacy_bytes = b"legacy Snix state must remain byte-identical\n";
+        std::fs::write(&legacy_file, legacy_bytes).unwrap();
+        std::fs::remove_file(state.join(STORE_IDENTITY_FILE_NAME)).unwrap();
+        let before = snapshot_state_tree(&state);
+
+        preflight_store_identity(&state, "/nix/store", StoreBackend::Snix).unwrap();
+        assert_eq!(snapshot_state_tree(&state), before, "preflight modified legacy state");
+        ensure_store_identity(&state, "/nix/store", StoreBackend::Snix).unwrap();
+        let mut claimed = snapshot_state_tree(&state);
+        let identity_bytes = claimed.remove(Path::new(STORE_IDENTITY_FILE_NAME)).unwrap().unwrap();
+        let identity: StoreIdentityRecord = serde_json::from_slice(&identity_bytes).unwrap();
+        assert_eq!(identity.schema, STORE_BACKEND_STATE_SCHEMA);
+        assert_eq!(identity.backend.as_deref(), Some("snix"));
+        assert_eq!(claimed, before, "identity claim rewrote an existing Snix state member");
+        // Exercise the public open path on the original unclaimed state too.
+        std::fs::remove_file(state.join(STORE_IDENTITY_FILE_NAME)).unwrap();
+
+        let reopened = crate::StoreHandle::open(config()).await.unwrap();
+        assert_eq!(reopened.backend(), StoreBackend::Snix);
+        let reopened_identity: StoreIdentityRecord =
+            serde_json::from_slice(&std::fs::read(state.join(STORE_IDENTITY_FILE_NAME)).unwrap()).unwrap();
+        assert_eq!(reopened_identity.schema, STORE_BACKEND_STATE_SCHEMA);
+        assert_eq!(reopened_identity.backend.as_deref(), Some("snix"));
+        assert_eq!(std::fs::read(legacy_file).unwrap(), legacy_bytes);
+        assert_eq!(
+            reopened.pathinfo_service().get(*path_info.store_path.digest()).await.unwrap(),
+            Some(path_info),
+            "Snix must retain the previously admitted PathInfo",
+        );
+    }
+
+    #[tokio::test]
+    async fn identityless_casita_marker_blocks_any_backend_without_mutation() {
+        for mixed_with_snix in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let state = root.path().join("state");
+            std::fs::create_dir_all(state.join("casita")).unwrap();
+            std::fs::write(state.join("casita").join("root"), b"preexisting Casita repository bytes").unwrap();
+            if mixed_with_snix {
+                std::fs::write(state.join("pathinfo.redb"), b"preexisting Snix database bytes").unwrap();
+            }
+            let before = snapshot_state_tree(&state);
+
+            for backend in [StoreBackend::Snix, StoreBackend::Casita] {
+                let output = root.path().join(format!("store-{}", backend.as_str()));
+                let config = crate::StoreConfig::new(backend, state.clone(), output.clone(), "/nix/store".to_string());
+                let error =
+                    crate::StoreHandle::open(config).await.err().expect("unclaimed Casita repository must fail");
+                assert!(error.to_string().contains("store-backend-mismatch"), "{backend:?}: {error}");
+                assert_eq!(snapshot_state_tree(&state), before, "{backend:?} changed existing state");
+                assert!(!output.exists(), "{backend:?} created output state");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn identityless_unknown_content_blocks_casita_without_mutation() {
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("state");
+        std::fs::create_dir(&state).unwrap();
+        std::fs::write(state.join("legacy-observation.log"), b"unclaimed data").unwrap();
+        let before = snapshot_state_tree(&state);
+        let output = root.path().join("store");
+        let config =
+            crate::StoreConfig::new(StoreBackend::Casita, state.clone(), output.clone(), "/nix/store".to_string());
+
+        let error = crate::StoreHandle::open(config).await.err().expect("Casita must reject unclaimed state");
+        assert!(error.to_string().contains("store-backend-mismatch"), "{error}");
+        assert_eq!(snapshot_state_tree(&state), before, "Casita changed unclaimed state");
+        assert!(!output.exists(), "Casita created output state");
     }
 
     #[test]
     fn generation_observation_rejects_symlink_members() {
         let base = tempfile::tempdir().unwrap();
-        ensure_store_identity(base.path(), "/nix/store").unwrap();
+        ensure_store_identity(base.path(), "/nix/store", StoreBackend::Snix).unwrap();
         write_test_trust_policy(base.path());
         #[cfg(unix)]
         {
@@ -720,7 +982,7 @@ mod tests {
     #[test]
     fn writable_base_is_rejected_before_generation_admission() {
         let base = tempfile::tempdir().unwrap();
-        ensure_store_identity(base.path(), "/nix/store").unwrap();
+        ensure_store_identity(base.path(), "/nix/store", StoreBackend::Snix).unwrap();
         write_test_trust_policy(base.path());
         let policy = store_overlay_runtime_policy().unwrap();
 

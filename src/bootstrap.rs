@@ -791,74 +791,46 @@ fn materialize_reduced_seed_provider(
     Ok((logical_path, physical_path.display().to_string(), false))
 }
 
-/// Resolve the crunch state directory (same logic as main.rs).
-fn resolve_state_dir() -> PathBuf {
-    std::env::var("CRUNCH_STATE_DIR").map(PathBuf::from).unwrap_or_else(|_| {
-        let state = std::env::var("XDG_STATE_HOME").map(PathBuf::from).unwrap_or_else(|_| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-            PathBuf::from(home).join(".local/state")
-        });
-        state.join("crunch")
-    })
-}
-
 struct FetchRawSeedRequest<'a> {
     drv_path: &'a nix_compat::store_path::StorePath<String>,
     cache: &'a crunch_glue::ConversionCache,
     store_dir: &'a Path,
+    state_dir: &'a Path,
+    backend: crunch_store::StoreBackend,
     is_verbose: bool,
     display_prefix: &'a str,
     source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
 }
 
 async fn fetch_raw_seed(request: FetchRawSeedRequest<'_>) -> Result<String, RunError> {
-    use snix_castore::directoryservice::RedbDirectoryService;
-    use snix_castore::directoryservice::RedbDirectoryServiceConfig;
+    let store_config = crunch_store::StoreConfig::new(
+        request.backend,
+        request.state_dir.to_path_buf(),
+        request.store_dir.to_path_buf(),
+        LOGICAL_STORE_DIR.to_string(),
+    );
     debug_assert!(request.store_dir.is_absolute());
     debug_assert!(!request.display_prefix.is_empty());
 
-    let state_dir = resolve_state_dir();
-    let _mutation_guard = crunch_store::StoreMutationGuard::acquire_wait(&state_dir)
-        .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))?;
-    std::fs::create_dir_all(&state_dir)
-        .map_err(|e| RunError::Internal(format!("creating state dir {}: {e}", state_dir.display())))?;
-
-    let blob_service = {
-        use snix_castore::blobservice::ObjectStoreBlobService;
-        let blob_dir = state_dir.join("blobs");
-        std::fs::create_dir_all(&blob_dir).map_err(|e| RunError::Internal(format!("creating blob dir: {e}")))?;
-        std::sync::Arc::new(
-            ObjectStoreBlobService::new_local(&blob_dir)
-                .map_err(|e| RunError::Internal(format!("blob service: {e}")))?,
-        )
-    };
-    let directory_service = RedbDirectoryService::new_temporary("bootstrap".to_string(), RedbDirectoryServiceConfig {
-        path: None,
-        read_only: false,
-        cache_size: None,
-    })
-    .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
-
-    let pathinfo_service = open_bootstrap_pathinfo(&state_dir).await?;
+    store_config
+        .preflight_backend_identity()
+        .map_err(|error| RunError::Internal(format!("opening bootstrap store: {error}")))?;
+    let _mutation_guard = crunch_store::StoreMutationGuard::acquire_wait(request.state_dir)
+        .map_err(|error| RunError::Internal(format!("acquiring store mutation lock: {error}")))?;
     let source_policy = if request.source_fetch_overrides.is_empty() {
         crunch_build::FetchSourcePolicy::AllowNetwork
     } else {
         crunch_build::FetchSourcePolicy::RequireOverride
     };
-    let store = crunch_store::StoreHandle::from_services_with_store_dir(
-        crunch_store::StoreHandleServices {
-            blob_service: blob_service as std::sync::Arc<dyn snix_castore::blobservice::BlobService>,
-            directory_service: std::sync::Arc::new(directory_service)
-                as std::sync::Arc<dyn snix_castore::directoryservice::DirectoryService>,
-            pathinfo_service: std::sync::Arc::new(pathinfo_service)
-                as std::sync::Arc<dyn snix_store::pathinfoservice::PathInfoService>,
-            remote_pathinfo: None,
-            state_dir,
-            output_dir_str: request.store_dir.to_string_lossy().into_owned(),
-            publishers: Vec::new(),
-        },
-        LOGICAL_STORE_DIR.to_string(),
-    );
+    let mut store = crunch_store::StoreHandle::open(store_config)
+        .await
+        .map_err(|error| RunError::Internal(format!("opening bootstrap store: {error}")))?;
+    if request.backend == crunch_store::StoreBackend::Casita {
+        store
+            .recover_casita_gc_under_guard(&_mutation_guard)
+            .await
+            .map_err(|error| RunError::Internal(format!("recovering Casita GC before bootstrap build: {error}")))?;
+    }
     let crunch_store::PipelineStoreParts {
         build_store,
         action_results,
@@ -870,7 +842,11 @@ async fn fetch_raw_seed(request: FetchRawSeedRequest<'_>) -> Result<String, RunE
         .with_source_overrides(request.source_fetch_overrides)
         .with_source_policy(source_policy);
 
-    let (bootstrap_keypair, _bootstrap_key_line) = crunch_build::generate_keypair();
+    let bootstrap_keypair = if request.backend == crunch_store::StoreBackend::Casita {
+        crate::signing_key::load_or_generate_signing_keypair(None, request.state_dir, false)?
+    } else {
+        crunch_build::generate_keypair().0
+    };
     let bootstrap_trusted = crunch_build::build_trusted_keys(&bootstrap_keypair, None);
 
     let mut builder = crunch_build::Builder::from_store_parts(
@@ -926,6 +902,15 @@ pub fn fetch_seed_provider_raw_url() -> Result<String, RunError> {
     Ok(provider.provider.raw.url)
 }
 
+pub struct BootstrapSeedFetchRequest<'a> {
+    pub store_dir: &'a Path,
+    pub state_dir: &'a Path,
+    pub backend: crunch_store::StoreBackend,
+    pub output: &'a Path,
+    pub is_verbose: bool,
+    pub source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
+}
+
 /// Download the shared bootstrap seed provider, persist it, and generate seed.ncl.
 ///
 /// This is the explicit legacy-compatibility `mantle bootstrap --fetch`
@@ -934,14 +919,9 @@ pub fn fetch_seed_provider_raw_url() -> Result<String, RunError> {
 /// on the host into the normalized provider shape, and writes a small generated
 /// `seed.ncl` that points at the resulting store path. It never changes the
 /// checked-in full-source selector.
-pub async fn bootstrap_fetch(
-    store_dir: &Path,
-    output: &Path,
-    is_verbose: bool,
-    source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
-) -> Result<(), RunError> {
-    debug_assert!(store_dir.is_absolute());
-    debug_assert!(!output.as_os_str().is_empty());
+pub async fn bootstrap_fetch(request: BootstrapSeedFetchRequest<'_>) -> Result<(), RunError> {
+    debug_assert!(request.store_dir.is_absolute());
+    debug_assert!(!request.output.as_os_str().is_empty());
     let provider = load_fetch_seed_provider()?;
     let raw_fetch = make_raw_fetch_derivation(&provider.provider.raw);
 
@@ -952,7 +932,7 @@ pub async fn bootstrap_fetch(
     let (drv_path, nix_drv) = crunch_glue::convert(&raw_fetch, &mut cache)
         .map_err(|e| RunError::Build(format!("converting {}: {e}", raw_fetch.name)))?;
 
-    let display_prefix = store_dir.to_str().unwrap_or(LOGICAL_STORE_DIR);
+    let display_prefix = request.store_dir.to_str().unwrap_or(LOGICAL_STORE_DIR);
     if let Some(planned_output) = nix_drv.outputs.get("out").and_then(|o| o.path.as_ref()) {
         eprintln!("  raw {} -> {}", raw_fetch.name, planned_output.to_absolute_path_with_prefix(display_prefix));
     }
@@ -961,16 +941,18 @@ pub async fn bootstrap_fetch(
     let raw_display_path = fetch_raw_seed(FetchRawSeedRequest {
         drv_path: &drv_path,
         cache: &cache,
-        store_dir,
-        is_verbose,
+        store_dir: request.store_dir,
+        state_dir: request.state_dir,
+        backend: request.backend,
+        is_verbose: request.is_verbose,
         display_prefix,
-        source_fetch_overrides,
+        source_fetch_overrides: request.source_fetch_overrides,
     })
     .await?;
 
     // 4. Reduce the raw tree on the host into the normalized provider layout.
     let (logical_path, physical_path, reduced_cached) =
-        materialize_reduced_seed_provider(&provider, Path::new(&raw_display_path), store_dir)?;
+        materialize_reduced_seed_provider(&provider, Path::new(&raw_display_path), request.store_dir)?;
     if reduced_cached {
         eprintln!("  {} (reduced provider cached)", physical_path);
     } else {
@@ -980,44 +962,11 @@ pub async fn bootstrap_fetch(
 
     // 5. Generate seed.ncl.
     let ncl = generate_fetch_seed_ncl(&provider, &logical_path);
-    std::fs::write(output, &ncl).map_err(|e| RunError::Internal(format!("writing {}: {e}", output.display())))?;
+    std::fs::write(request.output, &ncl)
+        .map_err(|e| RunError::Internal(format!("writing {}: {e}", request.output.display())))?;
 
-    eprintln!("Wrote {}", output.display());
+    eprintln!("Wrote {}", request.output.display());
     Ok(())
-}
-
-/// Open PathInfo database for bootstrap (reused from main).
-async fn open_bootstrap_pathinfo(
-    state_dir: &Path,
-) -> Result<snix_store::pathinfoservice::RedbPathInfoService, RunError> {
-    use snix_store::pathinfoservice::RedbPathInfoService;
-    use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
-    debug_assert!(!state_dir.as_os_str().is_empty());
-    debug_assert!(state_dir.is_absolute());
-
-    let db_path = state_dir.join("pathinfo.redb");
-    match RedbPathInfoService::new("crunch".to_string(), RedbPathInfoServiceConfig {
-        path: Some(db_path.clone()),
-        read_only: false,
-        cache_size: None,
-    })
-    .await
-    {
-        Ok(svc) => Ok(svc),
-        Err(e) => {
-            tracing::warn!(
-                path = %db_path.display(),
-                err = %e,
-                "failed to open PathInfo database, using in-memory fallback"
-            );
-            RedbPathInfoService::new_temporary("crunch".to_string(), RedbPathInfoServiceConfig {
-                path: None,
-                read_only: false,
-                cache_size: None,
-            })
-            .map_err(|e| RunError::Internal(format!("in-memory PathInfo: {e}")))
-        }
-    }
 }
 
 #[cfg(test)]

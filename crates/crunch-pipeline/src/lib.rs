@@ -83,6 +83,7 @@ pub struct BuildConfig {
     pub output_dir: PathBuf,
     pub state_dir: PathBuf,
     pub store_dir: String,
+    pub backend: crunch_store::StoreBackend,
     pub verbose: bool,
     pub max_jobs: u32,
     /// Explicit typed policy for deterministic ready-goal ordering.
@@ -260,51 +261,48 @@ async fn build_with_stream_sender(
     stream_tx: Option<mpsc::Sender<crunch_evaluation_stream_core::StreamRecordValue>>,
 ) -> Result<PipelineResult, Error> {
     validate_build_config(config)?;
+    let store_config = crunch_store::StoreConfig {
+        backend: config.backend,
+        state_dir: config.state_dir.clone(),
+        output_dir: config.output_dir.clone(),
+        remote_cache_urls: config.substituter_urls.clone(),
+        fallback_mode: store_fallback_mode(config.hermeticity_mode),
+        store_dir: config.store_dir.clone(),
+        base_state_dirs: config.base_state_dirs.clone(),
+    };
+    store_config
+        .preflight_backend_identity()
+        .map_err(|error| Error::Internal(format!("opening store: {error}")))?;
     let _mutation_guard = StoreMutationGuard::acquire_wait(&config.state_dir)
         .map_err(|err| Error::Internal(format!("acquiring store mutation lock: {err}")))?;
 
     let mut session = crunch_eval::session::EvaluationSession::open_file(&config.file, &config.import_paths)
         .map_err(map_eval_error)?;
 
-    let store = if config.base_state_dirs.is_empty() {
-        match crunch_store::StoreHandle::open(crunch_store::StoreConfig {
-            state_dir: config.state_dir.clone(),
-            output_dir: config.output_dir.clone(),
-            remote_cache_urls: config.substituter_urls.clone(),
-            fallback_mode: store_fallback_mode(config.hermeticity_mode),
-            store_dir: config.store_dir.clone(),
-            base_state_dirs: Vec::new(),
-        })
-        .await
-        {
-            Ok(store) => store,
-            Err(err @ crunch_store::Error::PathInfoFallbackRejected { .. }) => {
-                let derivations = session.force_all_roots::<CrunchDerivation>().map_err(map_eval_error)?;
-                debug_assert!(!derivations.is_empty(), "must have at least one derivation");
-                return build_preflight_failure(config, &derivations, err.to_string());
-            }
-            Err(e) => return Err(Error::Internal(format!("opening store: {e}"))),
-        }
+    let has_base_stores = !config.base_state_dirs.is_empty();
+    let opened = if has_base_stores {
+        crunch_store::StoreHandle::open_overlay(store_config).await
     } else {
-        match crunch_store::StoreHandle::open_overlay(crunch_store::StoreConfig {
-            state_dir: config.state_dir.clone(),
-            output_dir: config.output_dir.clone(),
-            remote_cache_urls: config.substituter_urls.clone(),
-            fallback_mode: store_fallback_mode(config.hermeticity_mode),
-            store_dir: config.store_dir.clone(),
-            base_state_dirs: config.base_state_dirs.clone(),
-        })
-        .await
-        {
-            Ok(store) => store,
-            Err(err @ crunch_store::Error::PathInfoFallbackRejected { .. }) => {
-                let derivations = session.force_all_roots::<CrunchDerivation>().map_err(map_eval_error)?;
-                debug_assert!(!derivations.is_empty(), "must have at least one derivation");
-                return build_preflight_failure(config, &derivations, err.to_string());
-            }
-            Err(e) => return Err(Error::Internal(format!("opening overlay store: {e}"))),
+        crunch_store::StoreHandle::open(store_config).await
+    };
+    let mut store = match opened {
+        Ok(store) => store,
+        Err(err @ crunch_store::Error::PathInfoFallbackRejected { .. }) => {
+            let derivations = session.force_all_roots::<CrunchDerivation>().map_err(map_eval_error)?;
+            debug_assert!(!derivations.is_empty(), "must have at least one derivation");
+            return build_preflight_failure(config, &derivations, err.to_string());
+        }
+        Err(error) => {
+            let store_kind = if has_base_stores { "overlay store" } else { "store" };
+            return Err(Error::Internal(format!("opening {store_kind}: {error}")));
         }
     };
+    if config.backend == crunch_store::StoreBackend::Casita {
+        store
+            .recover_casita_gc_under_guard(&_mutation_guard)
+            .await
+            .map_err(|error| Error::Internal(format!("recovering Casita GC before build: {error}")))?;
+    }
     let mut hermeticity_audit_events = mode_audit_events(config.hermeticity_mode);
     hermeticity_audit_events.extend(map_store_audit_events(store.startup_audit_events()));
 
@@ -1199,6 +1197,7 @@ mod tests {
         let state = tempfile::tempdir().expect("managed-generation state directory");
         let output = tempfile::tempdir().expect("managed-generation output directory");
         let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig::new(
+            crunch_store::StoreBackend::Snix,
             state.path().to_path_buf(),
             output.path().to_path_buf(),
             MANAGED_TEST_STORE_PREFIX.to_string(),

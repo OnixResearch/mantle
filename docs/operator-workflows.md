@@ -128,6 +128,12 @@ commands, keep `TMPDIR` and `CARGO_TARGET_DIR` on disk-backed scratch and use
 the PATH / `PKG_CONFIG_PATH` / `SNIX_BUILD_SANDBOX_SHELL` prerequisites called
 out in the self-hosting workflow.
 
+Create or check the checkout-local `vendor-deps/` closure with
+`python3 scripts/vendor-deps.py generate` or `python3 scripts/vendor-deps.py check`
+from `nix develop`. `generate` never replaces an existing `vendor-deps/`. See
+[Store backends](store-backends.md#pinned-casita-dependency) for the pinned Casita
+source and its tracked patch.
+
 ## Plan before building
 
 Start with the no-mutate preflight:
@@ -457,8 +463,8 @@ For a prepared checkout that already has its explicit vendor directory, import,
 pin, and preflight the bundle directly:
 
 ```bash
-mantle --state-dir ./offline-state source bundle import --from bootstrap-source-bundle.json --pin
-mantle --state-dir ./offline-state source bundle bootstrap-profile \
+mantle --state-dir ./bootstrap-state source bundle import --from bootstrap-source-bundle.json --pin
+mantle --state-dir ./bootstrap-state source bundle bootstrap-profile \
   --mode self-build-proof \
   --provider-archive ./provider-archive \
   --provider-manifest ./provider.json \
@@ -474,8 +480,22 @@ Run legacy fetch-mode bootstrap with offline source preflight so the provider
 tarball is materialized from source state instead of fetched live:
 
 ```bash
-mantle --state-dir ./offline-state bootstrap --fetch --offline-source-preflight --output seed.ncl
+mantle --state-dir ./bootstrap-state bootstrap --fetch --offline-source-preflight --output seed.ncl
 ```
+
+`bootstrap --fetch` opens its state directory with the legacy `/crunch/store`
+logical prefix, whatever `--store-prefix` says, and its offline source
+preflight reads the records imported into that same directory. A state
+directory whose `store-identity.json` records another prefix, for example
+after `mantle build` or a `store` command with the default `/mantle/store` as
+in the [offline build runbook](#offline-build-runbook), fails with
+`store-identity-mismatch` before anything is fetched or built. Import the
+bundle into a state directory that only source bundle commands and the legacy
+bootstrap use, and pass `--store-prefix /crunch/store` to later store commands
+on it, such as `store verify`. Under `--store-backend casita`, a state
+directory that holds imported source bundles but no store identity fails with
+`store-backend-mismatch`, and offline source preflight has no passing
+validation; see [Store backends](store-backends.md#state-identity).
 
 Do not report bootstrap source-bundle readiness or fresh-clone hydration as
 provider trust removal, compiler correctness, fixed-point self-build success,
@@ -841,6 +861,9 @@ GC never selects base-owned paths for mutation.
 Remove all `--base-store` options to return to single-store operation.
 This rollback does not copy or delete base content.
 
+Overlay composition requires the default `snix` backend.
+With `--store-backend casita`, any `--base-store` fails with `casita-overlay-unsupported` before Mantle reads or creates state.
+
 ## Inspect GC and final-NAR repair plans
 
 Use dry-run commands before a store mutation:
@@ -864,6 +887,9 @@ started or completed. It also does not prove content correctness, signer
 authority, provenance, reproducibility, release eligibility, or global cache
 availability. A missing root, unresolved reference, duplicate identity,
 invalid repair fact, or exceeded bound makes planning fail closed.
+
+With `--store-backend casita`, GC execution also writes a recovery fence, and the next guarded store command finishes an interrupted execution; see [Store backends](store-backends.md#garbage-collection).
+Final-NAR repair requires the `snix` backend: under `casita`, both the dry run and `--execute` fail with `casita-repair-final-nar-unsupported`.
 
 ## Inspect and verify attestations
 

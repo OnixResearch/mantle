@@ -514,6 +514,7 @@ pub struct RemoteLocalBuildExecutor {
     pub endpoint_id: String,
     pub coordinator_state_dir: PathBuf,
     pub state_dir: PathBuf,
+    pub backend: crunch_store::StoreBackend,
     pub output_dir: PathBuf,
     pub store_prefix: String,
     pub keypair: crunch_build::KeyPair,
@@ -2535,13 +2536,22 @@ async fn execute_remote_local_build_linux(
         input_upload,
         created_unix_s,
     } = input;
+    remote_local_store_config(executor)
+        .preflight_backend_identity()
+        .map_err(|error| format!("remote-local-executor-open-store: {error}"))?;
     let _mutation_guard = crunch_store::StoreMutationGuard::acquire_wait(&executor.state_dir)
         .map_err(|err| format!("remote-local-executor-mutation-lock: {err}"))?;
     let (drv_path, mut known_paths) = local_derivation_registry(request, plan)?;
     let workspace_lease = acquire_remote_execution_workspace(executor, request, &drv_path, &mut known_paths)?;
-    let store = crunch_store::StoreHandle::open(remote_local_store_config(executor))
+    let mut store = crunch_store::StoreHandle::open(remote_local_store_config(executor))
         .await
         .map_err(|err| format!("remote-local-executor-open-store: {err}"))?;
+    if executor.backend == crunch_store::StoreBackend::Casita {
+        store
+            .recover_casita_gc_under_guard(&_mutation_guard)
+            .await
+            .map_err(|err| format!("remote-local-executor-recover-casita-gc: {err}"))?;
+    }
     materialize_remote_input_upload(&store, request, input_upload).await?;
     let workdir = std::env::temp_dir().join(REMOTE_LOCAL_BUILD_WORKDIR_NAME);
     std::fs::create_dir_all(&workdir).map_err(|err| format!("remote-local-executor-workdir: {err}"))?;
@@ -2619,6 +2629,7 @@ fn new_default_remote_value<T: Default>() -> T {
 #[cfg(target_os = "linux")]
 fn remote_local_store_config(executor: &RemoteLocalBuildExecutor) -> crunch_store::StoreConfig {
     let config = crunch_store::StoreConfig {
+        backend: executor.backend,
         state_dir: executor.state_dir.clone(),
         output_dir: executor.output_dir.clone(),
         remote_cache_urls: Vec::new(),
@@ -4001,6 +4012,7 @@ async fn open_remote_local_executor_store(
     executor: &RemoteLocalBuildExecutor,
 ) -> Result<crunch_store::StoreHandle, String> {
     crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        backend: executor.backend,
         state_dir: executor.state_dir.clone(),
         output_dir: executor.output_dir.clone(),
         remote_cache_urls: Vec::new(),
@@ -12161,6 +12173,7 @@ pub fn cmd_remote(
     output_dir: &Path,
     state_dir: &Path,
     store_prefix: &str,
+    backend: crunch_store::StoreBackend,
     json_output: bool,
 ) -> Result<(), RunError> {
     match action {
@@ -12191,6 +12204,7 @@ pub fn cmd_remote(
             output_dir,
             state_dir,
             execution_state_dir: execution_state_dir.as_deref().unwrap_or(state_dir),
+            backend,
             store_prefix,
             json_output,
             secret_request: crate::remote_service_secrets::RemoteServiceSecretRequest {
@@ -12209,6 +12223,7 @@ struct RemoteServeExecutorInput<'a> {
     output_dir: &'a Path,
     coordinator_state_dir: &'a Path,
     state_dir: &'a Path,
+    backend: crunch_store::StoreBackend,
     store_prefix: &'a str,
 }
 
@@ -12229,6 +12244,7 @@ fn remote_serve_executor(
                 endpoint_id: input.endpoint_id.to_string(),
                 coordinator_state_dir: input.coordinator_state_dir.to_path_buf(),
                 state_dir: input.state_dir.to_path_buf(),
+                backend: input.backend,
                 output_dir: input.output_dir.to_path_buf(),
                 store_prefix: input.store_prefix.to_string(),
                 keypair,
@@ -12672,7 +12688,18 @@ fn receive_remote_production_input_transfer(
         direction: crate::remote_transfer::RemoteTransferDirection::Upload,
         report: runtime_transfer_receipt.clone(),
     })?;
-    let store = input.runtime.block_on(open_remote_local_executor_store(context.executor))?;
+    remote_local_store_config(context.executor)
+        .preflight_backend_identity()
+        .map_err(|err| format!("remote-streamed-input-open-store: {err}"))?;
+    let mutation_guard = crunch_store::StoreMutationGuard::acquire_wait(&context.executor.state_dir)
+        .map_err(|err| format!("remote-streamed-input-mutation-lock: {err}"))?;
+    let mut store = input.runtime.block_on(open_remote_local_executor_store(context.executor))?;
+    if context.executor.backend == crunch_store::StoreBackend::Casita {
+        input
+            .runtime
+            .block_on(store.recover_casita_gc_under_guard(&mutation_guard))
+            .map_err(|err| format!("remote-streamed-input-recover-casita-gc: {err}"))?;
+    }
     input
         .runtime
         .block_on(materialize_streamed_remote_inputs(&store, &opening.request, &canonical, &receiver_root))?;
@@ -12790,6 +12817,7 @@ struct RemoteServeCommandInput<'a> {
     output_dir: &'a Path,
     state_dir: &'a Path,
     execution_state_dir: &'a Path,
+    backend: crunch_store::StoreBackend,
     store_prefix: &'a str,
     json_output: bool,
     secret_request: crate::remote_service_secrets::RemoteServiceSecretRequest,
@@ -12801,6 +12829,16 @@ fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> 
             print_json_or_human(&remote_serve_metadata_json((&input.endpoint_id, "metadata-only")), input.json_output)
         }
         crate::RemoteServeBinding::StdioOnce => {
+            if input.executor == crate::RemoteServeExecutor::LocalBuild {
+                crunch_store::StoreConfig::new(
+                    input.backend,
+                    input.execution_state_dir.to_path_buf(),
+                    input.output_dir.to_path_buf(),
+                    input.store_prefix.to_string(),
+                )
+                .preflight_backend_identity()
+                .map_err(|error| RunError::Internal(format!("remote-local-executor-open-store: {error}")))?;
+            }
             let service_keys =
                 crate::remote_service_secrets::resolve_remote_service_keys_bounded(&input.secret_request)?;
             let (builder_signing_key_id, local_executor) = remote_serve_executor(
@@ -12811,6 +12849,7 @@ fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> 
                     output_dir: input.output_dir,
                     coordinator_state_dir: input.state_dir,
                     state_dir: input.execution_state_dir,
+                    backend: input.backend,
                     store_prefix: input.store_prefix,
                 },
                 service_keys.result_signing_key,
@@ -17479,6 +17518,7 @@ mod tests {
 
     async fn remote_import_store(root: &std::path::Path) -> crunch_store::StoreHandle {
         crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            backend: crunch_store::StoreBackend::Snix,
             state_dir: root.join("state"),
             output_dir: root.join("store"),
             remote_cache_urls: Vec::new(),
@@ -17878,6 +17918,7 @@ mod tests {
         RemoteLocalBuildExecutor {
             endpoint_id: "builder-1".to_string(),
             coordinator_state_dir: std::env::temp_dir().join("mantle-remote-build-test-coordinator-state"),
+            backend: crunch_store::StoreBackend::Snix,
             state_dir: std::env::temp_dir().join("mantle-remote-build-test-state"),
             output_dir: std::env::temp_dir().join("mantle-remote-build-test-store"),
             store_prefix: "/mantle/store".to_string(),

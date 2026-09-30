@@ -16,6 +16,11 @@ pub struct StoreMutationGuard {
 }
 
 impl StoreMutationGuard {
+    /// Confirm this guard owns the exact selected state directory's lock.
+    pub(crate) fn protects_state_dir(&self, state_dir: &Path) -> bool {
+        self.path == state_dir.join(LOCK_FILE_NAME)
+    }
+
     pub fn acquire_wait(state_dir: &Path) -> Result<Self, Error> {
         let guard = Self::open(state_dir)?;
         guard

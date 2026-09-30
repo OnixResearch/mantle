@@ -527,6 +527,7 @@ pub(crate) enum MantlepkgsAction {
 pub(crate) struct MantlepkgsContext<'a> {
     pub(crate) output_dir: &'a Path,
     pub(crate) state_dir: &'a Path,
+    pub(crate) backend: crunch_store::StoreBackend,
     pub(crate) base_state_dirs: &'a [PathBuf],
     pub(crate) verbose: bool,
     pub(crate) json: bool,
@@ -2148,6 +2149,7 @@ fn run_build(request: BuildRequest<'_>, context: &MantlepkgsContext<'_>) -> Resu
         ForeignImportContext {
             output_dir: context.output_dir,
             state_dir: context.state_dir,
+            backend: context.backend,
             base_state_dirs: context.base_state_dirs,
             source_bundle_bytes_max: MANTLEPKGS_SOURCE_BUNDLE_BYTES_MAX,
             verbose: context.verbose,

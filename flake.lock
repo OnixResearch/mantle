@@ -191,6 +191,23 @@
         "type": "github"
       }
     },
+    "casitaSource": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790765243,
+        "narHash": "sha256-KJtlLBgj94dYEOeRM9+xCgmVLgCTGQBvBlRMbLmxwWA=",
+        "owner": "cachix",
+        "repo": "casita",
+        "rev": "90404fcb1cfb3d83f2233715448dfefe913f5fd1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "cachix",
+        "repo": "casita",
+        "rev": "90404fcb1cfb3d83f2233715448dfefe913f5fd1",
+        "type": "github"
+      }
+    },
     "crane": {
       "locked": {
         "lastModified": 1773857772,
@@ -990,6 +1007,7 @@
         "artifactAuthSource": "artifactAuthSource",
         "boundedTreeSource": "boundedTreeSource",
         "cairn": "cairn",
+        "casitaSource": "casitaSource",
         "crane": "crane_5",
         "durablePublicationSource": "durablePublicationSource",
         "flake-utils": "flake-utils_5",

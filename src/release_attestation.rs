@@ -36,10 +36,10 @@ use nix_compat::narinfo::SignatureRef;
 use nix_compat::narinfo::VerifyingKey;
 use serde::Serialize;
 
-use crate::build_cmd::load_or_generate_signing_keypair;
 use crate::errors::RunError;
 use crate::release_evidence::ReleaseEvidenceManifest;
 use crate::release_evidence::compute_path_blake3_digest;
+use crate::signing_key::load_or_generate_signing_keypair;
 
 const BLAKE3_ALGORITHM_NAME: &str = "blake3";
 pub(crate) const RELEASE_ATTESTATION_FILE_NAME: &str = "release-attestation.json";

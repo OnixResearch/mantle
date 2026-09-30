@@ -340,7 +340,7 @@ fn load_registry_signing_keys(
     let mut keys = Vec::with_capacity(paths.len());
     for path in paths {
         let resolved = resolve_cli_path(current_dir, path);
-        let (keypair, _source_path) = crate::build_cmd::load_existing_signing_keypair(Some(&resolved), state_dir)?;
+        let (keypair, _source_path) = crate::signing_key::load_existing_signing_keypair(Some(&resolved), state_dir)?;
         keys.push(keypair);
     }
     assert_eq!(keys.len(), paths.len());

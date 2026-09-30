@@ -1775,6 +1775,7 @@ async fn open_benchmark_store(
     store_prefix: &str,
 ) -> Result<crunch_store::StoreHandle, Error> {
     crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        backend: crunch_store::StoreBackend::Snix,
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),

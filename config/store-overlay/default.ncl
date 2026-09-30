@@ -34,7 +34,7 @@ let MaxDescriptorBytes = 65536 in
   },
 
   generation = {
-    allowed_state_schemas = ["mantle-store-state-v1"],
+    allowed_state_schemas = ["mantle-store-state-v1", "mantle-store-state-v2"],
     bind_root_inventory = true,
     bind_pathinfo = true,
     bind_directories = true,

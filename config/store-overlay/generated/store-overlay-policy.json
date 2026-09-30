@@ -19,7 +19,8 @@
   },
   "generation": {
     "allowed_state_schemas": [
-      "mantle-store-state-v1"
+      "mantle-store-state-v1",
+      "mantle-store-state-v2"
     ],
     "bind_blobs": true,
     "bind_directories": true,

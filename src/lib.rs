@@ -15,3 +15,4 @@ pub mod protected_exec;
 pub mod protected_exec_seccomp;
 pub mod remote_credentials;
 pub mod remote_nominal;
+pub mod signing_key;

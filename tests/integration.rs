@@ -202,6 +202,7 @@ async fn open_http_pull_test_store(dir: &Path) -> crunch_store::StoreHandle {
     std::fs::create_dir_all(&state_dir).unwrap();
     std::fs::create_dir_all(&output_dir).unwrap();
     crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        backend: crunch_store::StoreBackend::Snix,
         state_dir,
         output_dir,
         remote_cache_urls: Vec::new(),
@@ -1269,6 +1270,65 @@ fn load_pathinfo_for_test(
         .unwrap();
         service.get(digest).await.unwrap().unwrap()
     })
+}
+
+fn snapshot_repair_cli_tree(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
+    let mut entries = BTreeMap::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            let relative = path.strip_prefix(root).unwrap().to_path_buf();
+            let kind = entry.file_type().unwrap();
+            if kind.is_dir() {
+                entries.insert(relative, None);
+                pending.push(path);
+            } else {
+                assert!(kind.is_file(), "unexpected non-file in repair state: {}", path.display());
+                entries.insert(relative, Some(std::fs::read(path).unwrap()));
+            }
+        }
+    }
+    entries
+}
+
+#[test]
+fn casita_repair_final_nar_rejects_before_creating_or_mutating_state() {
+    let root = tempfile::tempdir().unwrap();
+    let state = root.path().join("state");
+    let output = root.path().join("store");
+    for execute in [false, true] {
+        let mut command = crunch_cmd();
+        command.args(["--store-backend", "casita", "--state-dir"]).arg(&state);
+        command.arg("--store").arg(&output);
+        command.args(["store", "repair-final-nar", "/mantle/store/invalid"]);
+        if execute {
+            command.arg("--execute").arg("--signing-key").arg(root.path().join("missing.key"));
+        }
+        command.assert().failure().stderr(predicate::str::contains("casita-repair-final-nar-unsupported"));
+        assert!(!state.exists());
+        assert!(!output.exists());
+    }
+
+    std::fs::create_dir(&state).unwrap();
+    std::fs::create_dir(&output).unwrap();
+    std::fs::write(state.join("keep.txt"), b"existing state must remain untouched").unwrap();
+    std::fs::write(output.join("keep.txt"), b"existing output must remain untouched").unwrap();
+    for execute in [false, true] {
+        let state_before = snapshot_repair_cli_tree(&state);
+        let output_before = snapshot_repair_cli_tree(&output);
+        let mut command = crunch_cmd();
+        command.args(["--store-backend", "casita", "--state-dir"]).arg(&state);
+        command.arg("--store").arg(&output);
+        command.args(["store", "repair-final-nar", "/mantle/store/invalid"]);
+        if execute {
+            command.arg("--execute").arg("--signing-key").arg(root.path().join("missing.key"));
+        }
+        command.assert().failure().stderr(predicate::str::contains("casita-repair-final-nar-unsupported"));
+        assert_eq!(snapshot_repair_cli_tree(&state), state_before);
+        assert_eq!(snapshot_repair_cli_tree(&output), output_before);
+    }
 }
 
 #[test]

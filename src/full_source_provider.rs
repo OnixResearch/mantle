@@ -271,12 +271,14 @@ pub(crate) fn adopt_admitted_full_source_provider(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
+    backend: crunch_store::StoreBackend,
 ) -> Result<String, RunError> {
     adopt_verified_local_provider_path_with_mode(
         &report.provider_path,
         output_dir,
         state_dir,
         store_dir,
+        backend,
         crunch_store::StoreFallbackMode::Practical,
     )
 }
@@ -286,12 +288,14 @@ pub(crate) fn adopt_verified_local_provider_path_strict(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
+    backend: crunch_store::StoreBackend,
 ) -> Result<String, RunError> {
     adopt_verified_local_provider_path_with_mode(
         provider_path,
         output_dir,
         state_dir,
         store_dir,
+        backend,
         crunch_store::StoreFallbackMode::Strict,
     )
 }
@@ -301,6 +305,7 @@ fn adopt_verified_local_provider_path_with_mode(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
+    backend: crunch_store::StoreBackend,
     fallback_mode: crunch_store::StoreFallbackMode,
 ) -> Result<String, RunError> {
     assert!(!store_dir.is_empty(), "store_dir must not be empty");
@@ -325,22 +330,33 @@ fn adopt_verified_local_provider_path_with_mode(
         .and_then(|name| name.to_str())
         .ok_or_else(|| admission_error("admitted provider basename is not UTF-8".to_string()))?;
     let logical_store_path = format!("{store_dir}/{provider_basename}");
+    let store_config = crunch_store::StoreConfig {
+        backend,
+        state_dir: state_dir.to_path_buf(),
+        output_dir: output_dir.to_path_buf(),
+        remote_cache_urls: Vec::new(),
+        fallback_mode,
+        store_dir: store_dir.to_string(),
+        base_state_dirs: Vec::new(),
+    };
+    store_config
+        .preflight_backend_identity()
+        .map_err(|error| admission_error(format!("opening provider adoption store: {error}")))?;
     let _mutation_guard = crunch_store::StoreMutationGuard::acquire_wait(state_dir)
         .map_err(|error| admission_error(format!("acquiring provider adoption mutation lock: {error}")))?;
-    let keypair = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir, true)?;
+    let keypair = crate::signing_key::load_or_generate_signing_keypair(None, state_dir, true)?;
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|error| admission_error(format!("creating provider adoption runtime: {error}")))?;
     runtime.block_on(async {
-        let mut store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
-            state_dir: state_dir.to_path_buf(),
-            output_dir: output_dir.to_path_buf(),
-            remote_cache_urls: Vec::new(),
-            fallback_mode,
-            store_dir: store_dir.to_string(),
-            base_state_dirs: Vec::new(),
-        })
-        .await
-        .map_err(|error| admission_error(format!("opening provider adoption store: {error}")))?;
+        let mut store = crunch_store::StoreHandle::open(store_config)
+            .await
+            .map_err(|error| admission_error(format!("opening provider adoption store: {error}")))?;
+        if backend == crunch_store::StoreBackend::Casita {
+            store
+                .recover_casita_gc_under_guard(&_mutation_guard)
+                .await
+                .map_err(|error| admission_error(format!("recovering Casita GC before provider adoption: {error}")))?;
+        }
         store
             .adopt_verified_local_output(&logical_store_path, "out", &keypair.signing_key, None)
             .await

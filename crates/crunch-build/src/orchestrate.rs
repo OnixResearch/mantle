@@ -3121,6 +3121,7 @@ mod tests {
         let trusted_token =
             url::form_urlencoded::byte_serialize(trusted_keys[0].to_string().as_bytes()).collect::<String>();
         let mut store_config = crunch_store::StoreConfig::new(
+            crunch_store::StoreBackend::Snix,
             consumer_state.path().to_path_buf(),
             consumer_output.path().to_path_buf(),
             nix_compat::store_path::STORE_DIR.to_string(),

@@ -36,6 +36,7 @@ fn run_async<T>(future: impl std::future::Future<Output = T>) -> T {
 
 async fn open_store(output_dir: &Path, state_dir: &Path) -> StoreHandle {
     StoreHandle::open(StoreConfig {
+        backend: crunch_store::StoreBackend::Snix,
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),
@@ -106,6 +107,11 @@ fn trusted_public_key() -> String {
     verifying_key.to_string()
 }
 
+fn other_trusted_public_key(name: &str) -> String {
+    let signer = ed25519_dalek::SigningKey::from_bytes(&[19_u8; 32]);
+    nix_compat::narinfo::VerifyingKey::new(name.to_string(), signer.verifying_key()).to_string()
+}
+
 fn sign_pathinfo(path_info: &mut PathInfo) {
     let (signing_key, _) = nix_compat::narinfo::parse_keypair(TEST_KEYPAIR).unwrap();
     let store_path_ref: StorePathRef = path_info.store_path.as_ref();
@@ -122,6 +128,499 @@ fn sign_pathinfo(path_info: &mut PathInfo) {
 
 fn temp_path(root: &TempDir, name: &str) -> PathBuf {
     root.path().join(name)
+}
+
+fn state_files(root: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+    let mut files = std::collections::BTreeMap::new();
+    let mut directories = vec![root.to_path_buf()];
+    while let Some(directory) = directories.pop() {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if entry.file_type().unwrap().is_dir() {
+                directories.push(path);
+            } else {
+                files.insert(path.strip_prefix(root).unwrap().to_path_buf(), std::fs::read(path).unwrap());
+            }
+        }
+    }
+    files
+}
+
+fn mantle_state_files(root: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+    state_files(root)
+        .into_iter()
+        .filter(|(path, _)| !path.starts_with("casita") && path != Path::new("store-mutation.lock"))
+        .collect()
+}
+
+#[test]
+fn casita_rejects_unsigned_archive_before_creating_state() {
+    let root = tempfile::tempdir().unwrap();
+    let state = root.path().join("state");
+    let store = root.path().join("store");
+    let source = root.path().join("missing.mnar");
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&state)
+        .arg("--store")
+        .arg(&store)
+        .args(["store", "archive", "import", "--from"])
+        .arg(&source)
+        .arg("--trust-unsigned")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("casita-trust-unsigned-unsupported"));
+    assert!(!state.exists());
+    assert!(!store.exists());
+}
+
+#[test]
+fn casita_rejects_base_store_and_nario_unsigned_before_state_access() {
+    let root = tempfile::tempdir().unwrap();
+    let state = root.path().join("state");
+    let store = root.path().join("store");
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&state)
+        .arg("--store")
+        .arg(&store)
+        .arg("--base-store")
+        .arg(root.path().join("missing-base"))
+        .args(["store", "list"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("casita-overlay-unsupported"));
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&state)
+        .arg("--store")
+        .arg(&store)
+        .args(["foreign-import", "prepare-sources", "--plan"])
+        .arg(root.path().join("missing-plan.json"))
+        .arg("--out")
+        .arg(root.path().join("sources.json"))
+        .arg("--nario-trust-unsigned")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("casita-trust-unsigned-unsupported"));
+    assert!(!state.exists());
+    assert!(!store.exists());
+}
+
+#[test]
+fn casita_archive_import_rejects_unprovisioned_keys_and_unnamed_signer_without_mutation() {
+    let root = tempfile::tempdir().unwrap();
+    let source_state = temp_path(&root, "source-state");
+    let source_store = temp_path(&root, "source-store");
+    let archive = temp_path(&root, "signed.mnar");
+    let path_info = run_async(seed_signed_file(
+        &source_store,
+        &source_state,
+        "policy-root",
+        b"preprovisioned destination trust",
+        true,
+    ));
+    mantle_cmd()
+        .args(["--store-backend", "snix", "--state-dir"])
+        .arg(&source_state)
+        .arg("--store")
+        .arg(&source_store)
+        .args(["store", "archive", "export", "--to"])
+        .arg(&archive)
+        .arg(path_info.store_path.name())
+        .assert()
+        .success();
+    let unsigned_archive = temp_path(&root, "unsigned.mnar");
+    let unsigned_path_info = run_async(seed_signed_file(
+        &source_store,
+        &source_state,
+        "unsigned-policy-root",
+        b"unsigned archive record",
+        false,
+    ));
+    mantle_cmd()
+        .args(["--store-backend", "snix", "--state-dir"])
+        .arg(&source_state)
+        .arg("--store")
+        .arg(&source_store)
+        .args(["store", "archive", "export", "--to"])
+        .arg(&unsigned_archive)
+        .arg("--trust-unsigned")
+        .arg(unsigned_path_info.store_path.name())
+        .assert()
+        .success();
+    let source_files_before = state_files(&source_state);
+    let original_key = trusted_public_key();
+    let other_name_key = other_trusted_public_key("archive-cli-2");
+    let same_name_other_key = other_trusted_public_key("archive-cli-1");
+    for (case, archive_path, provisioned_key, requested_key, error) in [
+        ("missing-policy", &archive, None, &original_key, "casita-trust-policy-missing"),
+        (
+            "key-not-provisioned",
+            &archive,
+            Some(&other_name_key),
+            &original_key,
+            "casita-import-key-unauthorized",
+        ),
+        (
+            "same-name-different-bytes",
+            &archive,
+            Some(&same_name_other_key),
+            &original_key,
+            "casita-import-key-unauthorized",
+        ),
+        ("archive-signer-not-named", &archive, Some(&other_name_key), &other_name_key, "untrusted-signature"),
+        ("unsigned-record", &unsigned_archive, Some(&original_key), &original_key, "casita-signer-untrusted"),
+    ] {
+        let state = temp_path(&root, &format!("target-state-{case}"));
+        let store = temp_path(&root, &format!("target-store-{case}"));
+        std::fs::create_dir_all(&store).unwrap();
+        mantle_cmd()
+            .args(["--store-backend", "casita", "--state-dir"])
+            .arg(&state)
+            .arg("--store")
+            .arg(&store)
+            .args(["store", "list"])
+            .assert()
+            .success();
+        let policy_path = state.join("casita-trusted-public-keys");
+        let expected_policy = provisioned_key.map(|key| format!("{key}\n").into_bytes());
+        if let Some(bytes) = &expected_policy {
+            std::fs::write(&policy_path, bytes).unwrap();
+        }
+        let state_before = mantle_state_files(&state);
+        let store_before = state_files(&store);
+        mantle_cmd()
+            .args(["--store-backend", "casita", "--state-dir"])
+            .arg(&state)
+            .arg("--store")
+            .arg(&store)
+            .args(["store", "archive", "import", "--from"])
+            .arg(archive_path)
+            .args(["--trusted-public-keys", requested_key])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(error));
+        let state_after = mantle_state_files(&state);
+        assert_eq!(state_after.keys().collect::<Vec<_>>(), state_before.keys().collect::<Vec<_>>(), "{case}");
+        for (path, bytes) in &state_before {
+            assert_eq!(
+                blake3::hash(&state_after[path]),
+                blake3::hash(bytes),
+                "{case} mutated Mantle-owned state file {}",
+                path.display()
+            );
+        }
+        assert_eq!(state_files(&store), store_before, "{case} materialized an output");
+        assert_eq!(std::fs::read(&policy_path).ok(), expected_policy, "{case} changed destination policy");
+        assert_eq!(state_files(&source_state), source_files_before, "{case} modified source state");
+        let listed = mantle_cmd()
+            .args(["--store-backend", "casita", "--state-dir"])
+            .arg(&state)
+            .arg("--store")
+            .arg(&store)
+            .args(["--json", "store", "list"])
+            .output()
+            .unwrap();
+        assert!(listed.status.success(), "{case}: {}", String::from_utf8_lossy(&listed.stderr));
+        assert!(serde_json::from_slice::<Value>(&listed.stdout).unwrap()["paths"].as_array().unwrap().is_empty());
+    }
+}
+
+#[test]
+fn snix_to_casita_cli_migration_pins_root_without_modifying_source() {
+    let root = tempfile::tempdir().unwrap();
+    let source_state = temp_path(&root, "source-state");
+    let source_store = temp_path(&root, "source-store");
+    let target_state = temp_path(&root, "target-state");
+    let target_store = temp_path(&root, "target-store");
+    let archive = temp_path(&root, "closure.mnar");
+    let reexport = temp_path(&root, "casita-closure.mnar");
+    let path_info = run_async(seed_signed_file(&source_store, &source_state, "migrated-root", b"durable casita", true));
+    let selector = path_info.store_path.name();
+    mantle_cmd()
+        .args(["--store-backend", "snix", "--state-dir"])
+        .arg(&source_state)
+        .arg("--store")
+        .arg(&source_store)
+        .args(["store", "archive", "export", "--to"])
+        .arg(&archive)
+        .arg(selector)
+        .assert()
+        .success();
+    let source_files = state_files(&source_state);
+    std::fs::create_dir_all(&target_state).unwrap();
+    let trusted_key = trusted_public_key();
+    let destination_policy = target_state.join("casita-trusted-public-keys");
+    let destination_policy_bytes = format!("{trusted_key}\n");
+    std::fs::write(&destination_policy, &destination_policy_bytes).unwrap();
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args(["store", "archive", "import", "--from"])
+        .arg(&archive)
+        .args(["--trusted-public-keys", &trusted_key])
+        .assert()
+        .success();
+    let logical_path = format!("{TEST_STORE_PREFIX}/{}", path_info.store_path);
+    let info_output = mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args(["--json", "store", "info", selector])
+        .output()
+        .unwrap();
+    assert!(info_output.status.success(), "{}", String::from_utf8_lossy(&info_output.stderr));
+    let info: Value = serde_json::from_slice(&info_output.stdout).unwrap();
+    assert_eq!(info["backend"], "casita");
+    assert_eq!(info["backend_capabilities"]["rust_unit_cache"], false);
+    assert_eq!(info["backend_capabilities"]["unsigned_admission"], false);
+    assert_eq!(info["backend_capabilities"]["max_root_changes"], 1024);
+    assert_eq!(
+        info["paths"][0]["signatures"],
+        serde_json::json!(path_info.signatures.iter().map(ToString::to_string).collect::<Vec<_>>())
+    );
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args(["store", "info", selector])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("rust-unit-cache: false"))
+        .stdout(predicate::str::contains("unsigned-admission: false"))
+        .stdout(predicate::str::contains("max-root-changes: 1024"));
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args(["store", "pin", &logical_path])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("PINNED"));
+    let roots = mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args(["store", "roots"])
+        .output()
+        .unwrap();
+    assert!(roots.status.success(), "{}", String::from_utf8_lossy(&roots.stderr));
+    assert!(String::from_utf8_lossy(&roots.stdout).contains(&logical_path));
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args(["store", "verify", "--trusted-public-keys", &trusted_key, selector])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("trusted_signatures=1/1"));
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args([
+            "store",
+            "verify",
+            "--trusted-public-keys",
+            &other_trusted_public_key("archive-cli-2"),
+            selector,
+        ])
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("UNTRUSTED "))
+        .stdout(predicate::str::contains("trusted_signatures=0/1"));
+    assert_eq!(std::fs::read(&destination_policy).unwrap(), destination_policy_bytes.as_bytes());
+    assert!(!target_state.join("signing-key").exists(), "Casita verification must not mint a local signer");
+    let run_gc = || {
+        let usage_output = mantle_cmd()
+            .args(["--store-backend", "casita", "--state-dir"])
+            .arg(&target_state)
+            .arg("--store")
+            .arg(&target_store)
+            .args(["--json", "store", "usage"])
+            .output()
+            .unwrap();
+        assert!(usage_output.status.success(), "{}", String::from_utf8_lossy(&usage_output.stderr));
+        let usage: Value = serde_json::from_slice(&usage_output.stdout).unwrap();
+        let plan_output = mantle_cmd()
+            .args(["--store-backend", "casita", "--state-dir"])
+            .arg(&target_state)
+            .arg("--store")
+            .arg(&target_store)
+            .args(["--json", "store", "gc"])
+            .output()
+            .unwrap();
+        assert!(plan_output.status.success(), "{}", String::from_utf8_lossy(&plan_output.stderr));
+        let plan: Value = serde_json::from_slice(&plan_output.stdout).unwrap();
+        assert_eq!(usage["usage"], plan["usage"]);
+        assert_eq!(usage["reclaim_observations"], plan["reclaim_observations"]);
+        let plan_id = plan["plan_id"].as_str().unwrap();
+        let execution = mantle_cmd()
+            .args(["--store-backend", "casita", "--state-dir"])
+            .arg(&target_state)
+            .arg("--store")
+            .arg(&target_store)
+            .args(["--json", "store", "gc", "--execute", "--plan-id", plan_id])
+            .output()
+            .unwrap();
+        assert!(execution.status.success(), "{}", String::from_utf8_lossy(&execution.stderr));
+        let report: Value = serde_json::from_slice(&execution.stdout).unwrap();
+        assert_eq!(report["execution_complete"], true);
+        plan
+    };
+    let pinned_plan = run_gc();
+    let fence_path = target_state.join("casita-gc-fence.json");
+    std::fs::write(&fence_path, br#"{"plan_id":"interrupted-plan","entries":[]}"#).unwrap();
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args(["--json", "store", "usage"])
+        .assert()
+        .success();
+    assert!(!fence_path.exists(), "guarded usage must recover a pending GC fence");
+    assert_eq!(pinned_plan["candidate_path_count"], 0);
+    let cache_dir = target_state.join(crunch_rust_cache::RUST_CACHE_STATE_DIRECTORY);
+    std::fs::create_dir(&cache_dir).unwrap();
+    let retained = crunch_rust_cache::RustCacheRetention {
+        schema: crunch_rust_cache::RUST_CACHE_RETENTION_SCHEMA.to_string(),
+        retained_results: std::collections::BTreeMap::from([(
+            format!("mantle-rust-result://blake3/{}", blake3::hash(b"retained-result").to_hex()),
+            crunch_rust_cache_core::CastoreNodeIdentity {
+                kind: crunch_rust_cache_core::CastoreNodeKind::File,
+                digest_blake3: blake3::hash(b"durable casita").to_hex().to_string(),
+                size_bytes: b"durable casita".len() as u64,
+            },
+        )]),
+    };
+    std::fs::write(cache_dir.join("retention.json"), serde_json::to_vec(&retained).unwrap()).unwrap();
+    let before_refusal = state_files(&target_state);
+    for action in ["usage", "gc"] {
+        mantle_cmd()
+            .args(["--store-backend", "casita", "--state-dir"])
+            .arg(&target_state)
+            .arg("--store")
+            .arg(&target_store)
+            .args(["store", action])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("casita-rust-cache-unsupported"));
+    }
+    assert_eq!(state_files(&target_state), before_refusal);
+    std::fs::remove_dir_all(cache_dir).unwrap();
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args(["store", "archive", "export", "--to"])
+        .arg(&reexport)
+        .arg(selector)
+        .assert()
+        .success();
+    assert_eq!(std::fs::read(&reexport).unwrap(), std::fs::read(&archive).unwrap());
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args(["store", "unpin", &logical_path])
+        .assert()
+        .success();
+    let stale_plan_output = mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args(["--json", "store", "gc"])
+        .output()
+        .unwrap();
+    assert!(stale_plan_output.status.success(), "{}", String::from_utf8_lossy(&stale_plan_output.stderr));
+    let stale_plan: Value = serde_json::from_slice(&stale_plan_output.stdout).unwrap();
+    assert_eq!(stale_plan["candidate_path_count"], 1);
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args(["store", "pin", &logical_path])
+        .assert()
+        .success();
+    let root_registry_before_stale_execution = std::fs::read(target_state.join("gc-roots.json")).unwrap();
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args([
+            "store",
+            "gc",
+            "--execute",
+            "--plan-id",
+            stale_plan["plan_id"].as_str().unwrap(),
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("gc-plan-stale"));
+    assert_eq!(std::fs::read(target_state.join("gc-roots.json")).unwrap(), root_registry_before_stale_execution);
+    assert!(!fence_path.exists(), "stale GC plan must not start a deletion fence");
+    assert!(
+        !target_state.join("casita-gc-fence.progress").exists(),
+        "stale GC plan must not record deletion progress"
+    );
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args(["store", "info", selector])
+        .assert()
+        .success();
+    let preserved_archive = temp_path(&root, "preserved-after-stale.mnar");
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args(["store", "archive", "export", "--to"])
+        .arg(&preserved_archive)
+        .arg(selector)
+        .assert()
+        .success();
+    assert_eq!(std::fs::read(&preserved_archive).unwrap(), std::fs::read(&archive).unwrap());
+    mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args(["store", "unpin", &logical_path])
+        .assert()
+        .success();
+    let unpinned_plan = run_gc();
+    assert_eq!(unpinned_plan["candidate_path_count"], 1);
+    let listed = mantle_cmd()
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&target_state)
+        .arg("--store")
+        .arg(&target_store)
+        .args(["store", "list"])
+        .output()
+        .unwrap();
+    assert!(listed.status.success(), "{}", String::from_utf8_lossy(&listed.stderr));
+    assert!(!String::from_utf8_lossy(&listed.stdout).contains(&logical_path));
+    assert_eq!(state_files(&source_state), source_files);
+    assert_eq!(std::fs::read(&destination_policy).unwrap(), destination_policy_bytes.as_bytes());
 }
 
 #[test]

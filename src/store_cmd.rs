@@ -16,9 +16,9 @@ const COMPOSITION_REQUEST_BYTES_MAX: u64 = 1_048_576;
 const COMPOSITION_REQUEST_READ_LIMIT: u64 = COMPOSITION_REQUEST_BYTES_MAX + 1;
 const COMPOSITION_REQUEST_INITIAL_CAPACITY: usize = 8_192;
 
-use crate::build_cmd::load_configured_trusted_public_keys;
-use crate::build_cmd::load_or_generate_signing_keypair;
 use crate::errors::RunError;
+use crate::signing_key::load_configured_trusted_public_keys;
+use crate::signing_key::load_or_generate_signing_keypair;
 
 /// Effect identity of the store verification read.
 const STORE_VERIFY_EFFECT: &str = "verify-paths";
@@ -95,6 +95,7 @@ pub fn cmd_store(
     action: crate::StoreAction,
     output_dir: &Path,
     state_dir: &Path,
+    backend: crunch_store::StoreBackend,
     store_dir: &str,
     base_state_dirs: &[PathBuf],
     is_json_output: bool,
@@ -105,6 +106,7 @@ pub fn cmd_store(
         cmd_store_async(action, StoreCommandContext {
             output_dir,
             state_dir,
+            backend,
             store_dir,
             base_state_dirs,
             is_json_output,
@@ -117,6 +119,7 @@ pub fn cmd_store(
 struct StoreCommandContext<'a> {
     output_dir: &'a Path,
     state_dir: &'a Path,
+    backend: crunch_store::StoreBackend,
     store_dir: &'a str,
     base_state_dirs: &'a [PathBuf],
     is_json_output: bool,
@@ -134,16 +137,41 @@ async fn cmd_store_async(action: crate::StoreAction, context: StoreCommandContex
         }
         crate::StoreAction::Roots { migrate } => {
             let _guard = if migrate {
-                Some(store_mutation_guard(context.state_dir)?)
+                Some(store_mutation_guard(context)?)
             } else {
                 None
             };
-            let mut store = open_store(context).await?;
+            let mut store = if let Some(guard) = _guard.as_ref() {
+                open_store_under_guard(context, guard).await?
+            } else {
+                open_store(context).await?
+            };
             cmd_store_roots(&mut store, migrate, context)
         }
         crate::StoreAction::Usage => {
+            preflight_store_backend(context)?;
+            if context.backend == crunch_store::StoreBackend::Casita {
+                ensure_no_unsupported_rust_cache_state(context.state_dir)?;
+            }
+            let _guard = if context.backend == crunch_store::StoreBackend::Casita {
+                Some(
+                    crunch_store::StoreMutationGuard::try_acquire(context.state_dir)
+                        .map_err(|error| RunError::Build(format!("{error}")))?,
+                )
+            } else {
+                None
+            };
+            let rust_retention = if context.backend == crunch_store::StoreBackend::Snix
+                && !rust_cache_state_present(context.state_dir)
+                    .map_err(|error| RunError::Build(format!("inspecting Rust cache state: {error}")))?
+            {
+                None
+            } else {
+                plan_rust_cache_retention(context).await?
+            };
             let mut store = open_store(context).await?;
-            cmd_store_usage(&mut store, context.is_json_output).await
+            recover_pending_casita_gc(&mut store, context, _guard.as_ref()).await?;
+            cmd_store_usage(&mut store, _guard.as_ref(), rust_retention.as_ref(), context.is_json_output).await
         }
         other => cmd_store_mutation_or_transfer(other, context).await,
     }
@@ -155,13 +183,13 @@ async fn cmd_store_mutation_or_transfer(
 ) -> Result<(), RunError> {
     match action {
         crate::StoreAction::Pin { path } => {
-            let _guard = store_mutation_guard(context.state_dir)?;
-            let store = open_store(context).await?;
+            let _guard = store_mutation_guard(context)?;
+            let store = open_store_under_guard(context, &_guard).await?;
             cmd_store_pin(&store, &path).await
         }
         crate::StoreAction::Unpin { path } => {
-            let _guard = store_mutation_guard(context.state_dir)?;
-            let store = open_store(context).await?;
+            let _guard = store_mutation_guard(context)?;
+            let store = open_store_under_guard(context, &_guard).await?;
             cmd_store_unpin(&store, &path)
         }
         crate::StoreAction::Gc {
@@ -187,9 +215,10 @@ async fn cmd_store_mutation_or_transfer(
             .await
         }
         crate::StoreAction::Sign { path, all, signing_key } => {
-            let _guard = store_mutation_guard(context.state_dir)?;
-            let svc = open_pathinfo_service(context.state_dir, false).await?;
-            cmd_store_sign(&svc, path.as_deref(), all, signing_key.as_deref(), context.state_dir, context.store_dir)
+            let _guard = store_mutation_guard(context)?;
+            let store = open_store_under_guard(context, &_guard).await?;
+            let svc = store.pathinfo_service();
+            cmd_store_sign(&*svc, path.as_deref(), all, signing_key.as_deref(), context.state_dir, context.store_dir)
                 .await
         }
         crate::StoreAction::RepairFinalNar {
@@ -197,8 +226,11 @@ async fn cmd_store_mutation_or_transfer(
             execute,
             signing_key,
         } => {
-            let _guard = store_mutation_guard(context.state_dir)?;
-            let store = open_store(context).await?;
+            if context.backend == crunch_store::StoreBackend::Casita {
+                return Err(RunError::Build("casita-repair-final-nar-unsupported".to_string()));
+            }
+            let _guard = store_mutation_guard(context)?;
+            let store = open_store_under_guard(context, &_guard).await?;
             cmd_store_repair_final_nar(
                 &store,
                 &path,
@@ -262,7 +294,11 @@ async fn cmd_store_gc_action(
     if execute != accepted_plan_id.is_some() {
         return Err(RunError::Build("store gc execution requires both --execute and --plan-id".to_string()));
     }
-    let _guard = if execute {
+    preflight_store_backend(context)?;
+    if context.backend == crunch_store::StoreBackend::Casita {
+        ensure_no_unsupported_rust_cache_state(context.state_dir)?;
+    }
+    let _guard = if execute || context.backend == crunch_store::StoreBackend::Casita {
         Some(
             crunch_store::StoreMutationGuard::try_acquire(context.state_dir)
                 .map_err(|error| RunError::Build(format!("{error}")))?,
@@ -270,7 +306,71 @@ async fn cmd_store_gc_action(
     } else {
         None
     };
+    let rust_retention = plan_rust_cache_retention(context).await?;
+    let mut store = open_store(context).await?;
+    recover_pending_casita_gc(&mut store, context, _guard.as_ref()).await?;
+    cmd_store_gc(&mut store, _guard.as_ref(), rust_retention.as_ref(), accepted_plan_id, context.is_json_output).await
+}
+
+fn casita_gc_recovery_pending(context: StoreCommandContext<'_>) -> Result<bool, RunError> {
+    if context.backend != crunch_store::StoreBackend::Casita {
+        return Ok(false);
+    }
+    crunch_store::StoreHandle::casita_gc_fence_pending(context.state_dir)
+        .map_err(|error| RunError::Build(format!("inspecting Casita GC recovery fence: {error}")))
+}
+
+async fn recover_pending_casita_gc(
+    store: &mut crunch_store::StoreHandle,
+    context: StoreCommandContext<'_>,
+    guard: Option<&crunch_store::StoreMutationGuard>,
+) -> Result<(), RunError> {
+    if !casita_gc_recovery_pending(context)? {
+        return Ok(());
+    }
+    let guard = guard.ok_or_else(|| {
+        RunError::Build(
+            "Casita GC recovery fence appeared during an unguarded plan; retry under the mutation guard".to_string(),
+        )
+    })?;
+    store
+        .recover_casita_gc_under_guard(guard)
+        .await
+        .map_err(|error| RunError::Build(format!("recovering Casita GC: {error}")))
+}
+
+fn rust_cache_state_present(state_dir: &Path) -> Result<bool, std::io::Error> {
+    match std::fs::symlink_metadata(state_dir.join(crunch_rust_cache::RUST_CACHE_STATE_DIRECTORY)) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+fn ensure_no_unsupported_rust_cache_state(state_dir: &Path) -> Result<(), RunError> {
+    let cache_path = state_dir.join(crunch_rust_cache::RUST_CACHE_STATE_DIRECTORY);
+    match rust_cache_state_present(state_dir) {
+        Ok(false) => Ok(()),
+        Ok(true) => Err(RunError::Build(format!(
+            "casita-rust-cache-unsupported: refusing GC or usage with Rust cache state at {}",
+            cache_path.display(),
+        ))),
+        Err(error) => Err(RunError::Build(format!(
+            "casita-rust-cache-unsupported: cannot inspect Rust cache state at {}: {error}",
+            cache_path.display(),
+        ))),
+    }
+}
+
+async fn plan_rust_cache_retention(
+    context: StoreCommandContext<'_>,
+) -> Result<Option<crunch_rust_cache::RustCacheRetentionPlan>, RunError> {
+    if context.backend == crunch_store::StoreBackend::Casita {
+        ensure_no_unsupported_rust_cache_state(context.state_dir)?;
+        return Ok(None);
+    }
     let rust_cache = crunch_rust_cache::RustCache::open_async(crunch_store::StoreConfig {
+        backend: context.backend,
         state_dir: context.state_dir.to_path_buf(),
         output_dir: context.output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),
@@ -280,17 +380,43 @@ async fn cmd_store_gc_action(
     })
     .await
     .map_err(|error| RunError::Build(format!("planning Rust cache retention: {error}")))?;
-    let rust_retention = rust_cache
+    let plan = rust_cache
         .plan_retention_gc()
         .map_err(|error| RunError::Build(format!("planning Rust cache retention: {error}")))?;
     drop(rust_cache);
-    let mut store = open_store(context).await?;
-    cmd_store_gc(&mut store, &rust_retention, accepted_plan_id, context.is_json_output).await
+    Ok(Some(plan))
 }
 
-fn store_mutation_guard(state_dir: &Path) -> Result<crunch_store::StoreMutationGuard, RunError> {
-    crunch_store::StoreMutationGuard::acquire_wait(state_dir)
+fn preflight_store_backend(context: StoreCommandContext<'_>) -> Result<(), RunError> {
+    crunch_store::StoreConfig::new(
+        context.backend,
+        context.state_dir.to_path_buf(),
+        context.output_dir.to_path_buf(),
+        context.store_dir.to_string(),
+    )
+    .with_base_state_dirs(context.base_state_dirs.to_vec())
+    .preflight_backend_identity()
+    .map_err(|error| RunError::Internal(format!("opening store: {error}")))
+}
+
+fn store_mutation_guard(context: StoreCommandContext<'_>) -> Result<crunch_store::StoreMutationGuard, RunError> {
+    preflight_store_backend(context)?;
+    crunch_store::StoreMutationGuard::acquire_wait(context.state_dir)
         .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))
+}
+
+async fn open_store_under_guard(
+    context: StoreCommandContext<'_>,
+    guard: &crunch_store::StoreMutationGuard,
+) -> Result<crunch_store::StoreHandle, RunError> {
+    let mut store = open_store(context).await?;
+    if context.backend == crunch_store::StoreBackend::Casita {
+        store
+            .recover_casita_gc_under_guard(guard)
+            .await
+            .map_err(|error| RunError::Build(format!("recovering Casita GC before store mutation: {error}")))?;
+    }
+    Ok(store)
 }
 
 struct StoreVerifyAction {
@@ -318,11 +444,13 @@ struct StorePullAction {
 }
 
 async fn cmd_store_verify_action(context: StoreCommandContext<'_>, action: StoreVerifyAction) -> Result<(), RunError> {
-    let svc = open_pathinfo_service(context.state_dir, true).await?;
-    cmd_store_verify(&svc, StoreVerifyRequest {
+    let store = open_store(context).await?;
+    let svc = store.pathinfo_service();
+    cmd_store_verify(&*svc, StoreVerifyRequest {
         path_filter: action.path_filter.as_deref(),
         signing_key_path: action.signing_key_path.as_deref(),
         explicit_trusted_public_keys: &action.trusted_public_keys,
+        backend: context.backend,
         is_trust_unsigned: action.is_trust_unsigned,
         state_dir: context.state_dir,
         store_dir: context.output_dir,
@@ -332,8 +460,8 @@ async fn cmd_store_verify_action(context: StoreCommandContext<'_>, action: Store
 }
 
 async fn cmd_store_push_action(context: StoreCommandContext<'_>, action: StorePushAction) -> Result<(), RunError> {
-    let _guard = store_mutation_guard(context.state_dir)?;
-    let store = open_store(context).await?;
+    let _guard = store_mutation_guard(context)?;
+    let store = open_store_under_guard(context, &_guard).await?;
     cmd_store_push(&store, StorePushRequest {
         destination_dir: &action.destination_dir,
         is_all: action.is_all,
@@ -349,8 +477,8 @@ async fn cmd_store_pull_action(context: StoreCommandContext<'_>, action: StorePu
         action.foreign_realization_receipt.as_deref(),
         context.store_dir,
     )?;
-    let _guard = store_mutation_guard(context.state_dir)?;
-    let store = open_store(context).await?;
+    let _guard = store_mutation_guard(context)?;
+    let store = open_store_under_guard(context, &_guard).await?;
     cmd_store_pull(&store, StorePullRequest {
         source_url: &action.source_url,
         is_all: action.is_all,
@@ -466,29 +594,6 @@ fn foreign_receipt_selected_paths_are_bound(
         && receipt.selected_root_paths.iter().all(|selected_path| bound_paths.contains(selected_path.as_str()))
 }
 
-async fn open_pathinfo_service(
-    state_dir: &Path,
-    is_read_only: bool,
-) -> Result<snix_store::pathinfoservice::RedbPathInfoService, RunError> {
-    use snix_store::pathinfoservice::RedbPathInfoService;
-    use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
-
-    let db_path = state_dir.join("pathinfo.redb");
-    if !db_path.exists() {
-        return Err(RunError::Internal(format!(
-            "PathInfo database {} does not exist (no builds yet?)",
-            db_path.display()
-        )));
-    }
-    RedbPathInfoService::new("crunch".to_string(), RedbPathInfoServiceConfig {
-        path: Some(db_path.clone()),
-        read_only: is_read_only,
-        cache_size: None,
-    })
-    .await
-    .map_err(|e| RunError::Internal(format!("opening PathInfo database {}: {e}", db_path.display())))
-}
-
 async fn open_store(context: StoreCommandContext<'_>) -> Result<crunch_store::StoreHandle, RunError> {
     if context.store_dir.is_empty() || !Path::new(context.store_dir).is_absolute() {
         return Err(RunError::Internal(format!(
@@ -499,6 +604,7 @@ async fn open_store(context: StoreCommandContext<'_>) -> Result<crunch_store::St
     debug_assert!(!context.store_dir.is_empty());
     debug_assert!(Path::new(context.store_dir).is_absolute());
     crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        backend: context.backend,
         state_dir: context.state_dir.to_path_buf(),
         output_dir: context.output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),
@@ -595,6 +701,8 @@ async fn cmd_store_info(store: &crunch_store::StoreHandle, path: &str, is_json_o
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
                 "schema": "mantle-store-info-v2",
+                "backend": store.backend().as_str(),
+                "backend_capabilities": store.backend().profile(),
                 "overlay": overlay,
                 "paths": paths,
             }))
@@ -603,6 +711,20 @@ async fn cmd_store_info(store: &crunch_store::StoreHandle, path: &str, is_json_o
         return classify_store_effect(STORE_INFO_EFFECT, None);
     }
     print_overlay_summary(overlay.as_ref());
+    let profile = store.backend().profile();
+    println!("backend:    {}", store.backend().as_str());
+    println!("capabilities:");
+    for capability in profile.core {
+        println!("  {capability}");
+    }
+    println!("  overlay-composition: {}", profile.overlay_composition);
+    println!("  atomic-batch-import: {}", profile.atomic_batch_import);
+    println!("  rust-unit-cache: {}", profile.rust_unit_cache);
+    println!("  unsigned-admission: {}", profile.unsigned_admission);
+    match profile.max_root_changes {
+        Some(bound) => println!("  max-root-changes: {bound}"),
+        None => println!("  max-root-changes: unbounded-by-backend"),
+    }
     for detail in &details {
         let path_info = &detail.value;
         println!("store_path: {}", path_info.store_path);
@@ -711,12 +833,14 @@ struct StoreUsageOutput<'a> {
     reclaim_observations: &'a [crunch_store::GcReclaimObservation],
 }
 
-async fn cmd_store_usage(store: &mut crunch_store::StoreHandle, is_json_output: bool) -> Result<(), RunError> {
-    let report = store
-        .store_admin()
-        .garbage_collect(None)
-        .await
-        .map_err(|error| RunError::Build(format!("{error}")))?;
+async fn cmd_store_usage(
+    store: &mut crunch_store::StoreHandle,
+    guard: Option<&crunch_store::StoreMutationGuard>,
+    rust_retention: Option<&crunch_rust_cache::RustCacheRetentionPlan>,
+    is_json_output: bool,
+) -> Result<(), RunError> {
+    let report =
+        run_store_gc_plan(store, guard, None, rust_retention.map_or(&[][..], |plan| plan.live_nodes())).await?;
     if is_json_output {
         println!(
             "{}",
@@ -769,23 +893,37 @@ fn cmd_store_unpin(store: &crunch_store::StoreHandle, path: &str) -> Result<(), 
     classify_store_effect(STORE_UNPIN_EFFECT, None)
 }
 
+async fn run_store_gc_plan(
+    store: &mut crunch_store::StoreHandle,
+    guard: Option<&crunch_store::StoreMutationGuard>,
+    accepted_plan_id: Option<&str>,
+    retained_nodes: &[snix_castore::Node],
+) -> Result<crunch_store::GcReport, RunError> {
+    let report = if store.backend() == crunch_store::StoreBackend::Casita {
+        let guard = guard
+            .ok_or_else(|| RunError::Internal("Casita GC requires a selected store mutation guard".to_string()))?;
+        store.garbage_collect_with_castore_roots_under_guard(guard, accepted_plan_id, retained_nodes).await
+    } else {
+        store.store_admin().garbage_collect_with_castore_roots(accepted_plan_id, retained_nodes).await
+    };
+    report.map_err(|error| RunError::Build(format!("{error}")))
+}
+
 async fn cmd_store_gc(
     store: &mut crunch_store::StoreHandle,
-    rust_retention: &crunch_rust_cache::RustCacheRetentionPlan,
+    guard: Option<&crunch_store::StoreMutationGuard>,
+    rust_retention: Option<&crunch_rust_cache::RustCacheRetentionPlan>,
     accepted_plan_id: Option<&str>,
     is_json_output: bool,
 ) -> Result<(), RunError> {
     debug_assert!(!store.store_dir().is_empty());
     debug_assert!(Path::new(store.store_dir()).is_absolute());
     let is_plan_only = accepted_plan_id.is_none();
-    let mut store_admin = store.store_admin();
-    let gc_evidence = store_admin
-        .garbage_collect_with_castore_roots(accepted_plan_id, rust_retention.live_nodes())
-        .await
-        .map_err(|error| RunError::Build(format!("{error}")))?;
-    if is_plan_only || gc_evidence.execution_complete {
-        rust_retention
-            .apply(is_plan_only)
+    let gc_evidence =
+        run_store_gc_plan(store, guard, accepted_plan_id, rust_retention.map_or(&[][..], |plan| plan.live_nodes()))
+            .await?;
+    if let Some(plan) = rust_retention.filter(|_| is_plan_only || gc_evidence.execution_complete) {
+        plan.apply(is_plan_only)
             .map_err(|error| RunError::Build(format!("applying Rust cache retention: {error}")))?;
     }
     if is_json_output {
@@ -811,7 +949,10 @@ async fn cmd_store_gc(
     classify_store_effect(STORE_GC_EFFECT, incomplete_failure)
 }
 
-fn print_human_gc_report(report: &crunch_store::GcReport, rust_retention: &crunch_rust_cache::RustCacheRetentionPlan) {
+fn print_human_gc_report(
+    report: &crunch_store::GcReport,
+    rust_retention: Option<&crunch_rust_cache::RustCacheRetentionPlan>,
+) {
     println!("plan_id={}  retention_plan_id={}", report.plan_id, report.retention_plan_id);
     if let Some(overlay_plan_blake3) = report.overlay_plan_blake3.as_deref() {
         println!("overlay_plan={}  retained_base_paths={}", overlay_plan_blake3, report.base_reachability.len());
@@ -828,7 +969,7 @@ fn print_human_gc_report(report: &crunch_store::GcReport, rust_retention: &crunc
         "retained_roots={}  retained_rust_results={}  stale_rust_results={}  candidate_paths={}  reclaimable_bytes={}",
         report.retained_root_count,
         report.retained_castore_root_count,
-        rust_retention.stale_result_count(),
+        rust_retention.map_or(0, |plan| plan.stale_result_count()),
         report.candidate_path_count,
         report.reclaimable_bytes_total,
     );
@@ -871,7 +1012,7 @@ fn print_human_gc_report(report: &crunch_store::GcReport, rust_retention: &crunc
         eprintln!(
             "gc: removed {} candidate path(s) and {} stale Rust result record(s)",
             report.candidate_path_count,
-            rust_retention.stale_result_count(),
+            rust_retention.map_or(0, |plan| plan.stale_result_count()),
         );
     } else {
         eprintln!(
@@ -889,6 +1030,7 @@ struct StoreVerifyRequest<'a> {
     path_filter: Option<&'a str>,
     signing_key_path: Option<&'a Path>,
     explicit_trusted_public_keys: &'a [String],
+    backend: crunch_store::StoreBackend,
     is_trust_unsigned: bool,
     state_dir: &'a Path,
     /// Physical directory where build outputs are exported (the CLI `--store`
@@ -900,11 +1042,15 @@ struct StoreVerifyRequest<'a> {
 }
 
 async fn cmd_store_verify(
-    svc: &impl snix_store::pathinfoservice::PathInfoService,
+    svc: &dyn snix_store::pathinfoservice::PathInfoService,
     request: StoreVerifyRequest<'_>,
 ) -> Result<(), RunError> {
-    let trusted_keys =
-        resolve_store_verify_keys(request.signing_key_path, request.explicit_trusted_public_keys, request.state_dir)?;
+    let trusted_keys = resolve_store_verify_keys(
+        request.signing_key_path,
+        request.explicit_trusted_public_keys,
+        request.state_dir,
+        request.backend,
+    )?;
     let hash_results = crunch_store::store_verify(svc, request.path_filter, request.store_dir)
         .await
         .map_err(|e| RunError::Internal(format!("{e}")))?;
@@ -992,10 +1138,14 @@ fn resolve_store_verify_keys(
     signing_key_path: Option<&std::path::Path>,
     explicit_trusted_public_keys: &[String],
     state_dir: &Path,
+    backend: crunch_store::StoreBackend,
 ) -> Result<Vec<nix_compat::narinfo::VerifyingKey>, RunError> {
     let parsed_explicit_keys = parse_trusted_public_keys(explicit_trusted_public_keys)?;
-    let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
     let configured_trusted_keys = load_configured_trusted_public_keys(parsed_explicit_keys.as_deref(), state_dir)?;
+    if backend == crunch_store::StoreBackend::Casita && signing_key_path.is_none() {
+        return Ok(configured_trusted_keys.unwrap_or_default());
+    }
+    let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
     Ok(crunch_build::build_trusted_keys(&keypair, configured_trusted_keys.as_deref()))
 }
 
@@ -1161,7 +1311,7 @@ fn print_final_nar_repair_report(
 }
 
 async fn cmd_store_sign(
-    svc: &impl snix_store::pathinfoservice::PathInfoService,
+    svc: &dyn snix_store::pathinfoservice::PathInfoService,
     path_filter: Option<&str>,
     is_sign_all: bool,
     signing_key_path: Option<&std::path::Path>,
@@ -1174,7 +1324,7 @@ async fn cmd_store_sign(
     debug_assert!(path_filter.is_some() || is_sign_all);
     debug_assert!(state_dir.components().next().is_some());
 
-    let keypair = crate::build_cmd::load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
+    let keypair = crate::signing_key::load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
 
     let results = crunch_store::store_sign(svc, &keypair.signing_key, path_filter, is_sign_all, store_prefix)
         .await
@@ -1310,7 +1460,7 @@ struct StorePullRequest<'a> {
 
 async fn cmd_store_pull(store: &crunch_store::StoreHandle, request: StorePullRequest<'_>) -> Result<(), RunError> {
     let pull_source = validate_pull_request(&request)?;
-    let options = resolve_pull_options(&request)?;
+    let options = resolve_pull_options(&request, store.backend())?;
     let pull_evidence = execute_pull(store, pull_source, &request, &options).await?;
     print_pull_evidence(&pull_evidence);
     classify_pull_evidence(&pull_evidence)
@@ -1368,14 +1518,21 @@ fn validate_pull_request(request: &StorePullRequest<'_>) -> Result<crunch_store:
     Ok(pull_source)
 }
 
-fn resolve_pull_options(request: &StorePullRequest<'_>) -> Result<crunch_store::PullOptions, RunError> {
+fn resolve_pull_options(
+    request: &StorePullRequest<'_>,
+    backend: crunch_store::StoreBackend,
+) -> Result<crunch_store::PullOptions, RunError> {
     let parsed_explicit = parse_trusted_public_keys(request.explicit_trusted_public_keys)?;
-    let keypair = load_or_generate_signing_keypair(None, request.state_dir, true)?;
     let configured_keys = load_configured_trusted_public_keys(parsed_explicit.as_deref(), request.state_dir)?;
-    let trusted_keys = crunch_build::build_trusted_keys(&keypair, configured_keys.as_deref());
+    let trusted_public_keys = if backend == crunch_store::StoreBackend::Casita {
+        configured_keys.unwrap_or_default()
+    } else {
+        let keypair = load_or_generate_signing_keypair(None, request.state_dir, true)?;
+        crunch_build::build_trusted_keys(&keypair, configured_keys.as_deref())
+    };
     Ok(crunch_store::PullOptions {
         trust_unsigned: request.is_trust_unsigned,
-        trusted_public_keys: trusted_keys,
+        trusted_public_keys,
     })
 }
 
@@ -1495,8 +1652,8 @@ async fn cmd_store_composition(
         }
         crate::StoreCompositionAction::Realize { from, receipt_out } => {
             let request = read_composition_request(&from)?;
-            let _guard = store_mutation_guard(context.state_dir)?;
-            let store = open_store(context).await?;
+            let _guard = store_mutation_guard(context)?;
+            let store = open_store_under_guard(context, &_guard).await?;
             let receipt = crunch_store::realize_composition(&store, &request)
                 .await
                 .map_err(|error| RunError::Internal(error.to_string()))?;
@@ -1587,8 +1744,8 @@ async fn cmd_store_archive(
             trusted_public_keys,
             no_materialize,
         } => {
-            let _guard = store_mutation_guard(context.state_dir)?;
-            let store = open_store(context).await?;
+            let _guard = store_mutation_guard(context)?;
+            let store = open_store_under_guard(context, &_guard).await?;
             cmd_store_archive_import(&store, StoreArchiveImportRequest {
                 format,
                 source: &from,
@@ -1677,7 +1834,8 @@ async fn cmd_store_archive_import(
     store: &crunch_store::StoreHandle,
     request: StoreArchiveImportRequest<'_>,
 ) -> Result<(), RunError> {
-    let trusted_public_keys = resolve_store_verify_keys(None, request.explicit_trusted_public_keys, request.state_dir)?;
+    let trusted_public_keys =
+        resolve_store_verify_keys(None, request.explicit_trusted_public_keys, request.state_dir, store.backend())?;
     debug_assert!(u32::try_from(trusted_public_keys.len()).is_ok());
     if request.format == crate::StoreArchiveFormat::NarioV2
         && trusted_public_keys.len() > crunch_store::NARIO_V2_TRUSTED_KEYS_MAX

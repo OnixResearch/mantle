@@ -449,13 +449,18 @@ pub async fn import_nario_v2<R: AsyncRead + Unpin + Send>(
     reader: &mut R,
     options: &NarioV2ImportOptions,
 ) -> Result<NarioV2ImportReport, Error> {
+    if handle.backend() == crate::StoreBackend::Casita && options.trust_unsigned {
+        return Err(nario_error("casita-trust-unsigned-unsupported: Casita import requires signatures"));
+    }
     if handle.store_dir() != NARIO_V2_STORE_PREFIX {
         return Err(nario_error(format!(
             "nario-v2-store-prefix-mismatch: direct import requires {NARIO_V2_STORE_PREFIX}, configured {}",
             handle.store_dir()
         )));
     }
+    handle.preflight_casita_archive_trust(&options.trusted_public_keys)?;
     let limits = NarioV2Limits::default();
+    let casita_root_change_limit = handle.casita_batch_root_change_limit();
     let mut hashing_reader = ArchiveHashReader::new(reader);
     let mut wire = NixReader::builder()
         .set_max_buf_size(limits.metadata_string_bytes_max)
@@ -463,6 +468,7 @@ pub async fn import_nario_v2<R: AsyncRead + Unpin + Send>(
         .build(&mut hashing_reader);
     require_magic(&mut wire).await?;
     let mut staged = Vec::new();
+    let mut new_paths = 0usize;
     let mut seen_paths = BTreeSet::new();
     let mut total_nar_bytes = 0u64;
     for record_index in 0..=limits.records_max {
@@ -478,6 +484,9 @@ pub async fn import_nario_v2<R: AsyncRead + Unpin + Send>(
             .map_err(nario_error)?;
         validate_metadata(&metadata, &limits).map_err(nario_error)?;
         require_metadata_ca_identity(&metadata)?;
+        if handle.backend() == crate::StoreBackend::Casita && metadata.signatures.is_empty() {
+            return Err(nario_error(format!("casita-signer-untrusted: {} is unsigned", metadata.store_path)));
+        }
         require_trusted(&metadata, options)?;
         let path = metadata.store_path.to_string();
         seen_paths.insert(path);
@@ -498,6 +507,16 @@ pub async fn import_nario_v2<R: AsyncRead + Unpin + Send>(
             });
             continue;
         }
+        if let Some(root_change_limit) = casita_root_change_limit
+            && new_paths >= root_change_limit
+        {
+            return Err(nario_error(format!(
+                "casita-batch-limit: {} new roots exceed configured {root_change_limit} at {}",
+                new_paths.saturating_add(1),
+                metadata.store_path
+            )));
+        }
+        new_paths = new_paths.saturating_add(1);
         let expected_ca_content_hash = None;
         let mut limited = (&mut wire).take(metadata.nar_size);
         let (node, actual_hash, actual_size) = ingest_nar_and_hash(
@@ -836,7 +855,144 @@ impl<R: AsyncRead + Unpin> AsyncRead for ArchiveHashReader<R> {
 
 #[cfg(test)]
 mod tests {
+    use nix_compat::narinfo::SigningKey;
+    use sha2::Sha256;
+    use snix_castore::Node;
+    use tokio::io::AsyncWriteExt;
+
     use super::*;
+
+    fn test_keys() -> (SigningKey<ed25519_dalek::SigningKey>, VerifyingKey) {
+        let private = ed25519_dalek::SigningKey::from_bytes(&[29u8; 32]);
+        (
+            SigningKey::new("nario-casita-test-1".to_string(), private.clone()),
+            VerifyingKey::new("nario-casita-test-1".to_string(), private.verifying_key()),
+        )
+    }
+
+    async fn test_handle(dir: &Path, backend: crate::StoreBackend) -> StoreHandle {
+        StoreHandle::open(crate::StoreConfig {
+            backend,
+            state_dir: dir.join("state"),
+            output_dir: dir.join("store"),
+            remote_cache_urls: Vec::new(),
+            base_state_dirs: Vec::new(),
+            fallback_mode: crate::StoreFallbackMode::Strict,
+            store_dir: NARIO_V2_STORE_PREFIX.to_string(),
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn record_fixture(handle: &StoreHandle, name: &str, content: &[u8]) -> (PathInfo, Vec<u8>) {
+        let mut writer = handle.blob_service().open_write().await;
+        writer.write_all(content).await.unwrap();
+        let digest = writer.close().await.unwrap();
+        let node = Node::File {
+            digest,
+            size: content.len() as u64,
+            executable: false,
+        };
+        let (mut nar_reader, nar_writer) = tokio::io::duplex(IO_BUFFER_BYTES);
+        let blob = handle.blob_service();
+        let directory = handle.directory_service();
+        let nar_node = node.clone();
+        let task =
+            tokio::spawn(async move { snix_store::nar::write_nar(nar_writer, &nar_node, blob, directory).await });
+        let mut nar = Vec::new();
+        nar_reader.read_to_end(&mut nar).await.unwrap();
+        task.await.unwrap().unwrap();
+        let mut path_digest = [0u8; STORE_PATH_DIGEST_BYTES];
+        path_digest.copy_from_slice(&Sha256::digest(name.as_bytes())[..STORE_PATH_DIGEST_BYTES]);
+        let mut info = PathInfo {
+            store_path: StorePath::from_name_and_digest_fixed(name, path_digest).unwrap(),
+            node,
+            references: Vec::new(),
+            nar_size: nar.len() as u64,
+            nar_sha256: Sha256::digest(&nar).into(),
+            signatures: Vec::new(),
+            deriver: None,
+            ca: None,
+        };
+        sign_fixture(&mut info, &test_keys().0);
+        (info, nar)
+    }
+
+    fn sign_fixture(info: &mut PathInfo, key: &SigningKey<ed25519_dalek::SigningKey>) {
+        info.signatures.clear();
+        let fp = nix_compat::narinfo::fingerprint_with_store_dir(
+            &info.store_path.as_ref(),
+            &info.nar_sha256,
+            info.nar_size,
+            std::iter::empty::<&nix_compat::store_path::StorePathRef>(),
+            NARIO_V2_STORE_PREFIX,
+        );
+        info.signatures.push(key.sign(fp.as_bytes()).to_owned());
+    }
+
+    fn wire_number(bytes: &mut Vec<u8>, number: u64) {
+        bytes.extend_from_slice(&number.to_le_bytes());
+    }
+
+    fn wire_string(bytes: &mut Vec<u8>, text: &str) {
+        wire_number(bytes, text.len() as u64);
+        bytes.extend_from_slice(text.as_bytes());
+        bytes.resize(bytes.len() + (8 - text.len() % 8) % 8, 0);
+    }
+
+    fn wire_record(bytes: &mut Vec<u8>, info: &PathInfo, nar: &[u8]) {
+        wire_number(bytes, RECORD_MARKER);
+        wire_string(bytes, &info.store_path.to_string());
+        wire_string(bytes, "");
+        wire_string(bytes, &data_encoding::HEXLOWER.encode(&info.nar_sha256));
+        wire_number(bytes, 0);
+        wire_number(bytes, 0);
+        wire_number(bytes, info.nar_size);
+        wire_number(bytes, 0);
+        wire_number(bytes, info.signatures.len() as u64);
+        for signature in &info.signatures {
+            wire_string(bytes, &signature.to_string());
+        }
+        wire_string(bytes, "");
+        bytes.extend_from_slice(nar);
+    }
+
+    fn wire_archive(records: &[(&PathInfo, &[u8])]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        wire_number(&mut bytes, NARIO_V2_MAGIC);
+        for (info, nar) in records {
+            wire_record(&mut bytes, info, nar);
+        }
+        wire_number(&mut bytes, END_MARKER);
+        bytes
+    }
+    fn boundary_archive(template: &PathInfo, nar: &[u8], count: usize) -> (Vec<u8>, Vec<StorePath<String>>) {
+        let mut bytes = Vec::new();
+        let mut paths = Vec::with_capacity(count);
+        let signing_key = test_keys().0;
+        wire_number(&mut bytes, NARIO_V2_MAGIC);
+        for index in 0..count {
+            let name = format!("casita-boundary-{index:04}");
+            let digest: [u8; 32] = Sha256::digest(name.as_bytes()).into();
+            let mut info = template.clone();
+            info.store_path =
+                StorePath::from_name_and_digest_fixed(&name, digest[..STORE_PATH_DIGEST_BYTES].try_into().unwrap())
+                    .unwrap();
+            sign_fixture(&mut info, &signing_key);
+            paths.push(info.store_path.clone());
+            wire_record(&mut bytes, &info, nar);
+        }
+        wire_number(&mut bytes, END_MARKER);
+        (bytes, paths)
+    }
+
+    fn import_options() -> NarioV2ImportOptions {
+        NarioV2ImportOptions {
+            trust_unsigned: false,
+            trusted_public_keys: vec![test_keys().1],
+            materialize: false,
+        }
+    }
 
     const STORE_PATH_DIGEST_BYTES: usize = 20;
     const SHA256_DIGEST_BYTES: usize = 32;
@@ -958,6 +1114,7 @@ mod tests {
         const REFERENCE_PATH: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-reference";
         let temp = tempfile::tempdir().unwrap();
         let handle = StoreHandle::open(crate::StoreConfig {
+            backend: crate::StoreBackend::Snix,
             state_dir: temp.path().join("state"),
             output_dir: temp.path().join("store"),
             remote_cache_urls: Vec::new(),
@@ -986,6 +1143,139 @@ mod tests {
         };
         let error = validate_reference_closure(&handle, &[missing]).await.unwrap_err();
         assert!(error.to_string().contains("missing-reference"));
+    }
+
+    #[tokio::test]
+    async fn nario_casita_rejects_unsigned_override_before_reading_archive() {
+        let destination = tempfile::tempdir().unwrap();
+        let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        let mut input = std::io::Cursor::new(b"not a nario archive");
+        let mut options = import_options();
+        options.trust_unsigned = true;
+        let error = import_nario_v2(&handle, &mut input, &options).await.unwrap_err();
+        assert!(error.to_string().contains("casita-trust-unsigned-unsupported"), "{error}");
+        assert_eq!(input.position(), 0);
+    }
+
+    #[tokio::test]
+    async fn nario_casita_rejects_unsigned_record_under_signed_import() {
+        let source = tempfile::tempdir().unwrap();
+        let source_handle = test_handle(source.path(), crate::StoreBackend::Snix).await;
+        let (mut unsigned, nar) = record_fixture(&source_handle, "casita-unsigned-record", b"unsigned content").await;
+        unsigned.signatures.clear();
+        let archive = wire_archive(&[(&unsigned, &nar)]);
+        let destination = tempfile::tempdir().unwrap();
+        fs::create_dir_all(destination.path().join("state")).unwrap();
+        fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", test_keys().1)).unwrap();
+        let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        let error = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap_err();
+        assert!(error.to_string().contains("casita-signer-untrusted"), "{error}");
+        assert!(handle.pathinfo_service().get(*unsigned.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn nario_casita_batch_publishes_both_verified_paths() {
+        let source = tempfile::tempdir().unwrap();
+        let source_handle = test_handle(source.path(), crate::StoreBackend::Snix).await;
+        let (first, first_nar) = record_fixture(&source_handle, "casita-batch-first", b"first payload").await;
+        let (second, second_nar) = record_fixture(&source_handle, "casita-batch-second", b"second payload").await;
+        let archive = wire_archive(&[(&first, &first_nar), (&second, &second_nar)]);
+        let destination = tempfile::tempdir().unwrap();
+        fs::create_dir_all(destination.path().join("state")).unwrap();
+        fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", test_keys().1)).unwrap();
+        {
+            let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+            let report = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap();
+            assert_eq!(report.imported_count, 2);
+        }
+        let reopened = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        assert_eq!(reopened.pathinfo_service().get(*first.store_path.digest()).await.unwrap(), Some(first));
+        assert_eq!(reopened.pathinfo_service().get(*second.store_path.digest()).await.unwrap(), Some(second));
+    }
+
+    #[tokio::test]
+    async fn nario_casita_batch_rejects_conflicting_root_without_publishing_other_path() {
+        let source = tempfile::tempdir().unwrap();
+        let source_handle = test_handle(source.path(), crate::StoreBackend::Snix).await;
+        let (first, first_nar) = record_fixture(&source_handle, "casita-conflict-first", b"first payload").await;
+        let (second, second_nar) = record_fixture(&source_handle, "casita-conflict-second", b"second payload").await;
+        let archive = wire_archive(&[(&first, &first_nar), (&second, &second_nar)]);
+        let destination = tempfile::tempdir().unwrap();
+        fs::create_dir_all(destination.path().join("state")).unwrap();
+        fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", test_keys().1)).unwrap();
+        let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        let (conflicting, _) = record_fixture(&handle, "casita-conflict-second", b"other existing payload").await;
+        assert_eq!(conflicting.store_path, second.store_path);
+        handle.pathinfo_service().put(conflicting.clone()).await.unwrap();
+        let error = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap_err();
+        assert!(error.to_string().contains(&second.store_path.to_string()), "{error}");
+        assert!(handle.pathinfo_service().get(*first.store_path.digest()).await.unwrap().is_none());
+        assert_eq!(handle.pathinfo_service().get(*second.store_path.digest()).await.unwrap(), Some(conflicting));
+    }
+
+    #[tokio::test]
+    async fn nario_casita_later_bad_nar_leaves_earlier_path_unpublished() {
+        let source = tempfile::tempdir().unwrap();
+        let source_handle = test_handle(source.path(), crate::StoreBackend::Snix).await;
+        let (first, first_nar) = record_fixture(&source_handle, "casita-later-first", b"first payload").await;
+        let (second, mut second_nar) = record_fixture(&source_handle, "casita-later-second", b"second payload").await;
+        let payload_offset =
+            second_nar.windows(b"second payload".len()).position(|bytes| bytes == b"second payload").unwrap();
+        second_nar[payload_offset] ^= 1;
+        let archive = wire_archive(&[(&first, &first_nar), (&second, &second_nar)]);
+        let destination = tempfile::tempdir().unwrap();
+        fs::create_dir_all(destination.path().join("state")).unwrap();
+        fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", test_keys().1)).unwrap();
+        let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        let error = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap_err();
+        assert!(error.to_string().contains(&second.store_path.to_string()), "{error}");
+        assert!(handle.pathinfo_service().get(*first.store_path.digest()).await.unwrap().is_none());
+        assert!(handle.pathinfo_service().get(*second.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn nario_casita_accepts_configured_1024_root_boundary() {
+        const ROOT_COUNT: usize = 1024;
+        let source = tempfile::tempdir().unwrap();
+        let source_handle = test_handle(source.path(), crate::StoreBackend::Snix).await;
+        let (template, nar) = record_fixture(&source_handle, "casita-boundary-template", b"shared NAR payload").await;
+        let (archive, paths) = boundary_archive(&template, &nar, ROOT_COUNT);
+        let destination = tempfile::tempdir().unwrap();
+        fs::create_dir_all(destination.path().join("state")).unwrap();
+        fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", test_keys().1)).unwrap();
+        let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        assert_eq!(handle.casita_batch_root_change_limit(), Some(ROOT_COUNT));
+        let report = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap();
+        assert_eq!(report.imported_count, ROOT_COUNT as u32);
+        drop(handle);
+        let reopened = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        for path in &paths {
+            let loaded = reopened.pathinfo_service().get(*path.digest()).await.unwrap();
+            assert_eq!(loaded.as_ref().map(|info| &info.store_path), Some(path));
+            assert_eq!(loaded.unwrap().nar_sha256, template.nar_sha256);
+        }
+    }
+
+    #[tokio::test]
+    async fn nario_casita_rejects_1025_new_roots_before_any_publication() {
+        const ROOT_COUNT: usize = 1025;
+        let source = tempfile::tempdir().unwrap();
+        let source_handle = test_handle(source.path(), crate::StoreBackend::Snix).await;
+        let (template, nar) = record_fixture(&source_handle, "casita-boundary-template", b"shared NAR payload").await;
+        let (archive, paths) = boundary_archive(&template, &nar, ROOT_COUNT);
+        let destination = tempfile::tempdir().unwrap();
+        fs::create_dir_all(destination.path().join("state")).unwrap();
+        fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", test_keys().1)).unwrap();
+        let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        assert_eq!(handle.casita_batch_root_change_limit(), Some(ROOT_COUNT - 1));
+        let error = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap_err();
+        assert!(error.to_string().contains("casita-batch-limit"), "{error}");
+        assert!(error.to_string().contains(&paths[ROOT_COUNT - 1].to_string()), "{error}");
+        drop(handle);
+        let reopened = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        for path in &paths {
+            assert!(reopened.pathinfo_service().get(*path.digest()).await.unwrap().is_none(), "{path}");
+        }
     }
 
     fn listed_fixture(store_path: &str, references: Vec<String>) -> NarioV2ListedPath {

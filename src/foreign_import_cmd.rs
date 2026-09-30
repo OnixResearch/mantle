@@ -531,6 +531,7 @@ struct JsonReadRequest<'a> {
 pub(crate) struct ForeignImportContext<'a> {
     pub(crate) output_dir: &'a Path,
     pub(crate) state_dir: &'a Path,
+    pub(crate) backend: crunch_store::StoreBackend,
     pub(crate) base_state_dirs: &'a [PathBuf],
     pub(crate) source_bundle_bytes_max: u64,
     pub(crate) verbose: bool,
@@ -611,6 +612,7 @@ pub(crate) fn cmd_foreign_import(
             &nario_trusted_public_keys,
             nario_evidence_out.as_deref(),
             &out,
+            context.backend,
             json,
         ),
         ForeignImportAction::Realize {
@@ -900,6 +902,7 @@ fn run_prepare_sources(
     nario_trusted_public_keys: &[String],
     nario_evidence_out: Option<&Path>,
     output_path: &Path,
+    backend: crunch_store::StoreBackend,
     json: bool,
 ) -> Result<(), RunError> {
     let plan = match read_json::<ForeignExecutablePlan>(JsonReadRequest {
@@ -923,7 +926,7 @@ fn run_prepare_sources(
         let evidence_path = nario_evidence_out
             .ok_or_else(|| RunError::Internal("--nario-evidence-out is required with --nario-v2".to_string()))?;
         let (staging, mut projected, evidence) =
-            prepare_nario_sources(&plan, nario_paths, nario_trust_unsigned, nario_trusted_public_keys)?;
+            prepare_nario_sources(&plan, nario_paths, nario_trust_unsigned, nario_trusted_public_keys, backend)?;
         bindings.append(&mut projected);
         nario_evidence = Some((evidence_path.to_path_buf(), evidence));
         Some(staging)
@@ -1002,6 +1005,7 @@ fn prepare_nario_sources(
     nario_paths: &[PathBuf],
     trust_unsigned: bool,
     trusted_public_keys: &[String],
+    backend: crunch_store::StoreBackend,
 ) -> Result<(tempfile::TempDir, Vec<ForeignSourcePathBinding>, NarioSourcePreparationEvidence), RunError> {
     validate_nario_source_request(plan, nario_paths, trusted_public_keys)?;
     let keys = trusted_public_keys
@@ -1011,7 +1015,7 @@ fn prepare_nario_sources(
                 .map_err(|error| RunError::Internal(format!("invalid Nario trusted public key: {error}")))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let staging = open_nario_source_staging()?;
+    let staging = open_nario_source_staging(backend)?;
     let archives = import_nario_source_archives(&staging, nario_paths, trust_unsigned, &keys)?;
     let (bindings, projections) = project_nario_source_records(plan, &staging.output_dir, &archives)?;
     let trusted_public_key_names = keys.iter().map(|key| key.name().to_string()).collect();
@@ -1054,7 +1058,7 @@ fn validate_nario_source_request(
     Ok(())
 }
 
-fn open_nario_source_staging() -> Result<NarioSourceStaging, RunError> {
+fn open_nario_source_staging(backend: crunch_store::StoreBackend) -> Result<NarioSourceStaging, RunError> {
     let root = tempfile::tempdir().map_err(|error| RunError::Internal(format!("creating Nario staging: {error}")))?;
     let output_dir = root.path().join("store");
     let state_dir = root.path().join("state");
@@ -1062,6 +1066,7 @@ fn open_nario_source_staging() -> Result<NarioSourceStaging, RunError> {
         .map_err(|error| RunError::Internal(format!("creating Nario source runtime: {error}")))?;
     let store = runtime
         .block_on(crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            backend,
             state_dir,
             output_dir: output_dir.clone(),
             remote_cache_urls: Vec::new(),
@@ -1176,7 +1181,7 @@ fn run_audit(request: ForeignAuditCommandRequest<'_>, context: &ForeignImportCon
         context.json,
     )?;
     let (keypair, _key_path) =
-        crate::build_cmd::load_existing_signing_keypair(request.signing_key_path, context.state_dir)?;
+        crate::signing_key::load_existing_signing_keypair(request.signing_key_path, context.state_dir)?;
     let cache_keys = trusted_cache_keys_from_plan(&plan)?;
     let trusted_keys = crunch_build::build_trusted_keys(&keypair, Some(&cache_keys));
     let runtime = tokio::runtime::Runtime::new()
@@ -1189,6 +1194,7 @@ fn run_audit(request: ForeignAuditCommandRequest<'_>, context: &ForeignImportCon
             selected_root_node_ids: request.selected_roots,
             output_dir: context.output_dir,
             state_dir: context.state_dir,
+            backend: context.backend,
             base_state_dirs: context.base_state_dirs,
             trusted_keys: &trusted_keys,
         }))?;
@@ -1299,8 +1305,18 @@ fn run_realize(request: ForeignRealizeCommandRequest<'_>, context: &ForeignImpor
         })
         .map_err(|error| RunError::Internal(error.to_string()))?;
     }
-    let keypair =
-        crate::build_cmd::load_or_generate_signing_keypair(request.signing_key_path, context.state_dir, !context.json)?;
+    crunch_store::StoreConfig::preflight_backend_identity_for(
+        context.backend,
+        context.state_dir,
+        &plan.target_store_prefix,
+        context.base_state_dirs,
+    )
+    .map_err(|error| RunError::Internal(format!("opening store: {error}")))?;
+    let keypair = crate::signing_key::load_or_generate_signing_keypair(
+        request.signing_key_path,
+        context.state_dir,
+        !context.json,
+    )?;
     let cache_keys = trusted_cache_keys_from_plan(&plan)?;
     let trusted_keys = crunch_build::build_trusted_keys(&keypair, Some(&cache_keys));
     let runtime = tokio::runtime::Runtime::new()
@@ -1315,6 +1331,7 @@ fn run_realize(request: ForeignRealizeCommandRequest<'_>, context: &ForeignImpor
         cache_closure_policy: cache_closure_policy.as_ref(),
         output_dir: context.output_dir,
         state_dir: context.state_dir,
+        backend: context.backend,
         base_state_dirs: context.base_state_dirs,
         keypair: &keypair,
         trusted_keys: &trusted_keys,

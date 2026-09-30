@@ -1,0 +1,24 @@
+From 90404fcb1cfb3d83f2233715448dfefe913f5fd1 Mon Sep 17 00:00:00 2001
+Subject: [PATCH] Disambiguate BLAKE3 finalization in NAR reference key
+
+Applies only to Casita revision 90404fcb1cfb3d83f2233715448dfefe913f5fd1.
+With the pinned SHA2 Digest trait in scope, method resolution selects its
+finalize result rather than the inherent BLAKE3 Hash; call the inherent method
+explicitly without changing the NAR reference key bytes.
+
+---
+ crates/casita/src/nar.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/crates/casita/src/nar.rs b/crates/casita/src/nar.rs
+--- a/crates/casita/src/nar.rs
++++ b/crates/casita/src/nar.rs
+@@ -85,7 +85,7 @@
+                 hash.update(needle);
+             }
+             let mut key = vec![4];
+-            key.extend_from_slice(hash.finalize().as_bytes());
++            key.extend_from_slice(blake3::Hasher::finalize(&hash).as_bytes());
+             keys.insert(key);
+         }
+         keys.into_iter().collect()

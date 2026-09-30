@@ -62,6 +62,7 @@ pub(crate) fn cmd_shell(
     output_dir: &Path,
     state_dir: &Path,
     store_prefix: &str,
+    backend: crunch_store::StoreBackend,
     verbose: bool,
 ) -> Result<(), RunError> {
     debug_assert!(!SIDECAR_FILENAME.is_empty());
@@ -79,6 +80,7 @@ pub(crate) fn cmd_shell(
         output_dir,
         state_dir,
         store_prefix,
+        backend,
         verbose,
     })?;
 
@@ -148,6 +150,7 @@ struct BuildShellTargetRequest<'a> {
     output_dir: &'a Path,
     state_dir: &'a Path,
     store_prefix: &'a str,
+    backend: crunch_store::StoreBackend,
     verbose: bool,
 }
 
@@ -173,6 +176,7 @@ fn build_shell_target(request: BuildShellTargetRequest<'_>) -> Result<PathBuf, R
         request.output_dir,
         request.state_dir,
         request.store_prefix,
+        request.backend,
         request.verbose,
         max_jobs,
         request.no_substitute,

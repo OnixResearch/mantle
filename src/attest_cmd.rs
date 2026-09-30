@@ -25,8 +25,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::build_cmd::load_configured_trusted_public_keys;
-use crate::build_cmd::load_existing_signing_keypair;
 use crate::errors::RunError;
 use crate::release_attestation::CreatedPolicyFiles;
 use crate::release_attestation::CreatedWitnessAttestation;
@@ -38,6 +36,8 @@ use crate::release_attestation::create_policy_files;
 use crate::release_attestation::create_witness_attestation;
 use crate::release_attestation::load_release_attestation_document;
 use crate::release_attestation::load_witness_documents;
+use crate::signing_key::load_configured_trusted_public_keys;
+use crate::signing_key::load_existing_signing_keypair;
 
 const MIN_ATTESTATION_BASE_LAYER_INDEX: usize = 1;
 const MAX_ATTESTATION_BASE_LAYERS: usize = 8;
@@ -54,6 +54,7 @@ struct AttestCommandContext<'a> {
     current_dir: &'a Path,
     output_dir: &'a Path,
     state_dir: &'a Path,
+    backend: crunch_store::StoreBackend,
     store_dir: &'a str,
     base_state_dirs: &'a [PathBuf],
     is_json: bool,
@@ -62,6 +63,7 @@ struct AttestCommandContext<'a> {
 struct ShowRequest<'a> {
     output_dir: &'a Path,
     state_dir: &'a Path,
+    backend: crunch_store::StoreBackend,
     store_dir: &'a str,
     base_state_dirs: &'a [PathBuf],
     selector: &'a str,
@@ -70,6 +72,7 @@ struct ShowRequest<'a> {
 struct DiffRequest<'a> {
     output_dir: &'a Path,
     state_dir: &'a Path,
+    backend: crunch_store::StoreBackend,
     store_dir: &'a str,
     base_state_dirs: &'a [PathBuf],
     left: &'a str,
@@ -164,6 +167,7 @@ pub fn cmd_attest(
     current_dir: &Path,
     output_dir: &Path,
     state_dir: &Path,
+    backend: crunch_store::StoreBackend,
     store_dir: &str,
     base_state_dirs: &[PathBuf],
     is_json: bool,
@@ -173,6 +177,7 @@ pub fn cmd_attest(
         current_dir,
         output_dir,
         state_dir,
+        backend,
         store_dir,
         base_state_dirs,
         is_json,
@@ -190,6 +195,7 @@ async fn cmd_attest_async(action: crate::AttestAction, context: AttestCommandCon
         current_dir,
         output_dir,
         state_dir,
+        backend,
         store_dir,
         base_state_dirs,
         is_json,
@@ -201,6 +207,7 @@ async fn cmd_attest_async(action: crate::AttestAction, context: AttestCommandCon
             cmd_show(ShowRequest {
                 output_dir,
                 state_dir,
+                backend,
                 store_dir,
                 base_state_dirs,
                 selector: &path,
@@ -208,15 +215,16 @@ async fn cmd_attest_async(action: crate::AttestAction, context: AttestCommandCon
             .await
         }
         crate::AttestAction::Closure { roots } => {
-            cmd_closure(output_dir, state_dir, store_dir, base_state_dirs, &roots).await
+            cmd_closure(output_dir, state_dir, store_dir, backend, base_state_dirs, &roots).await
         }
         crate::AttestAction::Verify { target } => {
-            cmd_verify(target, current_dir, output_dir, state_dir, store_dir, base_state_dirs).await
+            cmd_verify(target, current_dir, output_dir, state_dir, store_dir, backend, base_state_dirs).await
         }
         crate::AttestAction::Diff { left, right } => {
             cmd_diff(DiffRequest {
                 output_dir,
                 state_dir,
+                backend,
                 store_dir,
                 base_state_dirs,
                 left: &left,
@@ -225,7 +233,7 @@ async fn cmd_attest_async(action: crate::AttestAction, context: AttestCommandCon
             .await
         }
         crate::AttestAction::Project { roots } => {
-            cmd_project(current_dir, output_dir, state_dir, store_dir, base_state_dirs, &roots).await
+            cmd_project(current_dir, output_dir, state_dir, store_dir, backend, base_state_dirs, &roots).await
         }
         crate::AttestAction::ReleaseShow { verification_dir } => {
             let (attestation, stored_path) = load_release_attestation_document(&verification_dir)?;
@@ -289,7 +297,9 @@ async fn cmd_attest_async(action: crate::AttestAction, context: AttestCommandCon
 }
 
 async fn cmd_show(request: ShowRequest<'_>) -> Result<(), RunError> {
-    let store = open_store(request.output_dir, request.state_dir, request.store_dir, request.base_state_dirs).await?;
+    let store =
+        open_store(request.output_dir, request.state_dir, request.store_dir, request.backend, request.base_state_dirs)
+            .await?;
     let (document, stored_path, selected_layer) = load_artifact_document(&store, request.selector).await?;
     print_document_with_layers(&document, Some(stored_path), Some(selected_layer), None)
 }
@@ -298,10 +308,11 @@ async fn cmd_closure(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
+    backend: crunch_store::StoreBackend,
     base_state_dirs: &[PathBuf],
     roots: &[String],
 ) -> Result<(), RunError> {
-    let store = open_store(output_dir, state_dir, store_dir, base_state_dirs).await?;
+    let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs).await?;
     let root_paths = resolve_roots(roots, store_dir, output_dir)?;
     let stored = store
         .runtime_closure_attestation(&root_paths)
@@ -318,7 +329,9 @@ async fn cmd_closure(
 }
 
 async fn cmd_diff(request: DiffRequest<'_>) -> Result<(), RunError> {
-    let store = open_store(request.output_dir, request.state_dir, request.store_dir, request.base_state_dirs).await?;
+    let store =
+        open_store(request.output_dir, request.state_dir, request.store_dir, request.backend, request.base_state_dirs)
+            .await?;
     let left_document = load_document_input(Some(&store), request.left).await?;
     let right_document = load_document_input(Some(&store), request.right).await?;
     print_diff(request.left, &left_document, request.right, &right_document)
@@ -329,10 +342,11 @@ async fn cmd_project(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
+    backend: crunch_store::StoreBackend,
     base_state_dirs: &[PathBuf],
     roots: &[String],
 ) -> Result<(), RunError> {
-    let store = open_store(output_dir, state_dir, store_dir, base_state_dirs).await?;
+    let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs).await?;
     let document = load_project_document(current_dir, &store, roots).await?;
     print_document(&document, None)
 }
@@ -343,16 +357,17 @@ async fn cmd_verify(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
+    backend: crunch_store::StoreBackend,
     base_state_dirs: &[PathBuf],
 ) -> Result<(), RunError> {
     match target {
         crate::AttestVerifyAction::Artifact { path } => {
-            let store = open_store(output_dir, state_dir, store_dir, base_state_dirs).await?;
+            let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs).await?;
             let (document, stored_path, _selected_layer) = load_artifact_document(&store, &path).await?;
             verify_persisted_document(&document, &stored_path)
         }
         crate::AttestVerifyAction::Closure { roots } => {
-            let store = open_store(output_dir, state_dir, store_dir, base_state_dirs).await?;
+            let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs).await?;
             let root_paths = resolve_roots(&roots, store_dir, output_dir)?;
             let stored = store
                 .runtime_closure_attestation(&root_paths)
@@ -367,7 +382,7 @@ async fn cmd_verify(
             verify_persisted_document(&AttestationDocument::Closure(stored.attestation), &path)
         }
         crate::AttestVerifyAction::Project { file, digest, roots } => {
-            let store = open_store(output_dir, state_dir, store_dir, base_state_dirs).await?;
+            let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs).await?;
             let document = load_project_document(current_dir, &store, &roots).await?;
             verify_project_document(&document, file.as_deref(), digest.as_deref())
         }
@@ -670,9 +685,11 @@ async fn open_store(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
+    backend: crunch_store::StoreBackend,
     base_state_dirs: &[PathBuf],
 ) -> Result<StoreHandle, RunError> {
     let config = StoreConfig {
+        backend,
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),

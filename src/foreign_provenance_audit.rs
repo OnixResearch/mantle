@@ -95,6 +95,7 @@ pub(crate) struct ForeignProvenanceAuditRequest<'a> {
     pub(crate) selected_root_node_ids: &'a [String],
     pub(crate) output_dir: &'a Path,
     pub(crate) state_dir: &'a Path,
+    pub(crate) backend: crunch_store::StoreBackend,
     pub(crate) base_state_dirs: &'a [PathBuf],
     pub(crate) trusted_keys: &'a [VerifyingKey],
 }
@@ -116,6 +117,7 @@ pub(crate) async fn audit_foreign_realization(
     let admitted =
         admit_foreign_audit(request.plan, request.realization_receipt, request.policy, request.selected_root_node_ids)?;
     let store = StoreHandle::open(StoreConfig {
+        backend: request.backend,
         state_dir: request.state_dir.to_path_buf(),
         output_dir: request.output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),

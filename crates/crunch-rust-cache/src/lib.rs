@@ -63,7 +63,7 @@ pub const MAX_SCAN_ENTRIES: u32 = crunch_rust_cache_core::MAX_TREE_ENTRIES;
 pub const MAX_SCAN_DEPTH: u32 = crunch_rust_cache_core::MAX_TREE_DEPTH;
 pub const MAX_SCAN_BYTES: u64 = crunch_rust_cache_core::MAX_TREE_BYTES;
 
-const CACHE_DIRECTORY: &str = "rust-unit-cache";
+pub const RUST_CACHE_STATE_DIRECTORY: &str = "rust-unit-cache";
 const INDEX_DIRECTORY: &str = "indexes";
 const RESULT_DIRECTORY: &str = "results";
 const STAGING_DIRECTORY: &str = "staging";
@@ -250,6 +250,9 @@ impl RustCache {
     }
 
     pub async fn open_async(config: crunch_store::StoreConfig) -> Result<Self, Error> {
+        if config.backend == crunch_store::StoreBackend::Casita {
+            return Err(Error::State("casita-rust-cache-unsupported".to_string()));
+        }
         let handle = crunch_store::StoreHandle::open(config)
             .await
             .map_err(|error| Error::Castore(format!("open-store:{error}")))?;
@@ -267,7 +270,7 @@ impl RustCache {
         if state_dir.as_os_str().is_empty() {
             return Err(Error::State("state-directory-empty".to_string()));
         }
-        let cache_dir = state_dir.join(CACHE_DIRECTORY);
+        let cache_dir = state_dir.join(RUST_CACHE_STATE_DIRECTORY);
         let indexes_dir = cache_dir.join(INDEX_DIRECTORY);
         let results_dir = cache_dir.join(RESULT_DIRECTORY);
         let staging_dir = cache_dir.join(STAGING_DIRECTORY);
@@ -1450,6 +1453,24 @@ mod tests {
     const TEST_CONFLICT_CANDIDATES: u32 = 2;
     const TEST_DEVICE_A: u64 = 10;
     const TEST_DEVICE_B: u64 = 11;
+
+    #[tokio::test]
+    async fn casita_cache_refuses_before_creating_state() {
+        let root = tempfile::tempdir().unwrap();
+        let state_dir = root.path().join("state");
+        let output_dir = root.path().join("store");
+        let error = RustCache::open_async(crunch_store::StoreConfig::new(
+            crunch_store::StoreBackend::Casita,
+            state_dir.clone(),
+            output_dir.clone(),
+            "/mantle/store".to_string(),
+        ))
+        .await
+        .unwrap_err();
+        assert_eq!(error.to_string(), "rust-cache-state:casita-rust-cache-unsupported");
+        assert!(!state_dir.exists());
+        assert!(!output_dir.exists());
+    }
 
     async fn test_cache(state_dir: &Path) -> RustCache {
         let directories = RedbDirectoryService::new("rust-cache-test".to_string(), RedbDirectoryServiceConfig {

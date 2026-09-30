@@ -187,6 +187,7 @@ pub(crate) struct SourceBuiltFixedPointOptions<'a> {
     pub(crate) dev_resume: bool,
     pub(crate) dev_fast_fail: bool,
     pub(crate) verbose: bool,
+    pub(crate) backend: crunch_store::StoreBackend,
     pub(crate) json: bool,
 }
 
@@ -934,6 +935,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
             &prepared.native_store_dir,
             &prepared.native_state_dir,
             LOGICAL_STORE_PREFIX,
+            options.backend,
         )?;
         if transition_logical_path != STAGEX_TRANSITION_LOGICAL_PATH {
             return Err(proof_error(format!(
@@ -984,6 +986,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
             &prepared.native_store_dir,
             &prepared.native_state_dir,
             LOGICAL_STORE_PREFIX,
+            options.backend,
         )?;
         if stagex_logical_path != STAGEX_PROVIDER_LOGICAL_PATH {
             return Err(proof_error(format!(
@@ -1186,13 +1189,13 @@ fn seed_dev_store_snapshot(
         crate::stagex_mes_lib::copy_tree_bounded(&entry_root.join(&entry.stagex_provider.store_basename), &stagex_dst)
             .map_err(|error| proof_error(format!("seeding cached StageX provider: {error}")))?;
     }
-    register_adopted_provider(&stagex_dst, store_dir, state_dir)?;
+    register_adopted_provider(&stagex_dst, store_dir, state_dir, options.backend)?;
     let native_dst = store_dir.join(&entry.native_provider.store_basename);
     if !native_dst.exists() {
         crate::stagex_mes_lib::copy_tree_bounded(&entry_root.join(&entry.native_provider.store_basename), &native_dst)
             .map_err(|error| proof_error(format!("seeding cached native provider: {error}")))?;
     }
-    register_adopted_provider(&native_dst, store_dir, state_dir)?;
+    register_adopted_provider(&native_dst, store_dir, state_dir, options.backend)?;
     debug_assert!(stagex_dst.is_dir());
     debug_assert!(native_dst.is_dir());
     Ok(true)
@@ -1494,12 +1497,14 @@ fn register_adopted_provider(
     physical_path: &Path,
     native_store_dir: &Path,
     native_state_dir: &Path,
+    backend: crunch_store::StoreBackend,
 ) -> Result<String, RunError> {
     let logical = crate::full_source_provider::adopt_verified_local_provider_path_strict(
         physical_path,
         native_store_dir,
         native_state_dir,
         LOGICAL_STORE_PREFIX,
+        backend,
     )?;
     crate::source_bundle::import_constructed_store_path_source(
         &logical,
@@ -1904,6 +1909,8 @@ fn native_build_command(
         .arg(LOGICAL_STORE_PREFIX)
         .arg("--state-dir")
         .arg(&prepared.native_state_dir)
+        .arg("--store-backend")
+        .arg(options.backend.as_str())
         .arg("build")
         .arg(ncl_path)
         .arg("--import-path")
@@ -2537,6 +2544,7 @@ mod tests {
             dev_resume: false,
             dev_fast_fail: false,
             verbose: false,
+            backend: crunch_store::StoreBackend::Snix,
             json: false,
         };
         let existing = validate_options(&options).unwrap_err();
@@ -2576,6 +2584,7 @@ mod tests {
             dev_resume: false,
             dev_fast_fail: false,
             verbose: false,
+            backend: crunch_store::StoreBackend::Snix,
             json: false,
         };
         let prepared = PreparedAttempt {
@@ -3012,7 +3021,8 @@ mod tests {
         fs::create_dir_all(&provider).unwrap();
         fs::write(provider.join("provider.txt"), b"verified-provider").unwrap();
 
-        let logical = register_adopted_provider(&provider, &store_dir, &state_dir).unwrap();
+        let logical =
+            register_adopted_provider(&provider, &store_dir, &state_dir, crunch_store::StoreBackend::Snix).unwrap();
 
         assert_eq!(logical, format!("/mantle/store/{basename}"));
         assert!(state_dir.join("pathinfo.redb").is_file());
@@ -3198,6 +3208,7 @@ mod tests {
             dev_resume: resume,
             dev_fast_fail: fast_fail,
             verbose: false,
+            backend: crunch_store::StoreBackend::Snix,
             json: false,
         }
     }

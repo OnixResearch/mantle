@@ -143,6 +143,7 @@ pub struct PublishedManifest {
 pub struct DaemonOptions {
     pub policy_path: PathBuf,
     pub state_dir: PathBuf,
+    pub backend: crunch_store::StoreBackend,
     pub store_output_dir: PathBuf,
     pub receipt_dir: PathBuf,
     pub run_once: bool,
@@ -296,19 +297,26 @@ pub fn run_daemon(options: DaemonOptions) -> Result<(), Error> {
 }
 
 fn open_daemon_context(options: &DaemonOptions) -> Result<DaemonContext, Error> {
+    if options.backend == crunch_store::StoreBackend::Casita {
+        return Err(Error::Process("casita-rust-cache-unsupported".to_string()));
+    }
     let policy = load_json_file::<WrapperDaemonPolicy>(&options.policy_path, MAX_POLICY_BYTES, "daemon-policy")?;
     validate_wrapper_policy(&policy).map_err(|error| Error::Policy(String::from(error.code())))?;
     assert!(!policy.policy_id.is_empty());
     assert!(policy.max_concurrency > 0);
-    create_private_directory(&options.state_dir)?;
-    create_private_directory(&options.store_output_dir)?;
-    create_private_directory(&options.receipt_dir)?;
-    let cache = RustCache::open(StoreConfig::new(
+    let store_config = StoreConfig::new(
+        options.backend,
         options.state_dir.clone(),
         options.store_output_dir.clone(),
         STORE_PREFIX.to_string(),
-    ))
-    .map_err(|error| Error::Process(format!("open-rust-cache:{error}")))?;
+    );
+    store_config
+        .preflight_backend_identity()
+        .map_err(|error| Error::Process(format!("open-rust-cache:{error}")))?;
+    create_private_directory(&options.state_dir)?;
+    create_private_directory(&options.store_output_dir)?;
+    create_private_directory(&options.receipt_dir)?;
+    let cache = RustCache::open(store_config).map_err(|error| Error::Process(format!("open-rust-cache:{error}")))?;
     let local_policy = LocalCachePolicy {
         schema: crunch_rust_cache_core::LOCAL_CACHE_POLICY_SCHEMA.to_string(),
         policy_id: format!("{}-local", policy.policy_id),
@@ -3021,6 +3029,7 @@ mod tests {
         let options = DaemonOptions {
             policy_path: write_policy_fixture(root.path(), &policy),
             state_dir: root.path().join("state"),
+            backend: crunch_store::StoreBackend::Snix,
             store_output_dir: root.path().join("store"),
             receipt_dir: root.path().join("receipts"),
             run_once: true,
@@ -3195,6 +3204,7 @@ mod tests {
         let options = DaemonOptions {
             policy_path: write_policy_fixture(root.path(), &policy),
             state_dir: root.path().join("state"),
+            backend: crunch_store::StoreBackend::Snix,
             store_output_dir: root.path().join("store"),
             receipt_dir: root.path().join("receipts"),
             run_once: true,
@@ -3321,6 +3331,7 @@ mod tests {
             let remote_options = DaemonOptions {
                 policy_path: remote_policy_path.clone(),
                 state_dir: root.path().join(format!("remote-state-{sample_index}")),
+                backend: crunch_store::StoreBackend::Snix,
                 store_output_dir: root.path().join(format!("remote-store-{sample_index}")),
                 receipt_dir: root.path().join(format!("remote-receipts-{sample_index}")),
                 run_once: true,

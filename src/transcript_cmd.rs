@@ -22,6 +22,7 @@ pub struct TranscriptRunOptions {
     pub transcript: PathBuf,
     pub output: Option<PathBuf>,
     pub mantle_bin: Option<PathBuf>,
+    pub backend: crunch_store::StoreBackend,
     pub allow_in_place: bool,
 }
 
@@ -136,7 +137,7 @@ fn run_transcript(options: TranscriptRunOptions) -> Result<TranscriptRunSummary,
     let output_path = options.output.unwrap_or_else(|| default_output_path(&options.transcript));
     let work_dir = transcript_work_dir(&options.transcript);
     let mantle_bin = options.mantle_bin.unwrap_or_else(default_mantle_bin);
-    let scratch = TranscriptScratch::new(transcript.options.in_place)?;
+    let scratch = TranscriptScratch::new(transcript.options.in_place, options.backend)?;
     let execution = execute_transcript(&transcript, &mantle_bin, &scratch, &work_dir);
     debug_assert!(execution.result.is_err() || !execution.visible_runs.is_empty());
     debug_assert!(execution.visible_runs.len() <= transcript.blocks.len());
@@ -404,10 +405,11 @@ struct TranscriptScratch {
     tmp: TempDir,
     store: PathBuf,
     state_dir: PathBuf,
+    backend: crunch_store::StoreBackend,
 }
 
 impl TranscriptScratch {
-    fn new(in_place: bool) -> Result<Self, RunError> {
+    fn new(in_place: bool, backend: crunch_store::StoreBackend) -> Result<Self, RunError> {
         let tmp = tempfile::Builder::new()
             .prefix("mantle-transcript-")
             .tempdir()
@@ -425,7 +427,12 @@ impl TranscriptScratch {
         fs::create_dir_all(&store).map_err(|err| RunError::Internal(format!("creating transcript store: {err}")))?;
         fs::create_dir_all(&state_dir)
             .map_err(|err| RunError::Internal(format!("creating transcript state-dir: {err}")))?;
-        Ok(Self { tmp, store, state_dir })
+        Ok(Self {
+            tmp,
+            store,
+            state_dir,
+            backend,
+        })
     }
 
     fn tmp_path(&self) -> &Path {
@@ -495,6 +502,9 @@ fn run_visible_mantle(request: VisibleRunRequest<'_>) -> Result<CommandRun, RunE
         if !tokens.iter().any(|token| token == "--state-dir" || token.starts_with("--state-dir=")) {
             cmd.arg("--state-dir").arg(&request.scratch.state_dir);
         }
+    }
+    if !tokens.iter().any(|token| token == "--store-backend" || token.starts_with("--store-backend=")) {
+        cmd.arg("--store-backend").arg(request.scratch.backend.as_str());
     }
     for token in tokens.iter().skip(1) {
         cmd.arg(expand_temp(token, request.scratch));
@@ -819,7 +829,7 @@ missing.ncl
 
     #[test]
     fn output_normalization_replaces_isolated_paths() {
-        let scratch = TranscriptScratch::new(false).unwrap();
+        let scratch = TranscriptScratch::new(false, crunch_store::StoreBackend::Snix).unwrap();
         let raw = format!(
             "{}\r\n{}\n{}\n\n\n",
             scratch.tmp_path().display(),

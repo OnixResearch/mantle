@@ -139,6 +139,9 @@ pub async fn inspect_final_nar_repair(
     handle: &StoreHandle,
     logical_store_path: &str,
 ) -> Result<FinalNarRepairInspection, Error> {
+    if handle.backend() == crate::StoreBackend::Casita {
+        return Err(Error::Store("casita-repair-final-nar-unsupported".to_string()));
+    }
     assert!(handle.store_dir().starts_with('/'), "logical store prefix must be absolute");
     assert!(!handle.state_dir().as_os_str().is_empty(), "state directory must not be empty");
     handle.revalidate_overlay_bases()?;
@@ -194,6 +197,9 @@ pub async fn execute_final_nar_repair(
     inspection: FinalNarRepairInspection,
     signing_key: &SigningKey<ed25519_dalek::SigningKey>,
 ) -> Result<FinalNarRepairReport, Error> {
+    if handle.backend() == crate::StoreBackend::Casita {
+        return Err(Error::Store("casita-repair-final-nar-unsupported".to_string()));
+    }
     assert!(!signing_key.name().is_empty(), "signing key name must not be empty");
     assert!(!inspection.original_path_info.store_path.name().is_empty());
     handle.revalidate_overlay_bases()?;
@@ -700,6 +706,7 @@ mod tests {
 
     async fn open_test_store(dir: &std::path::Path) -> StoreHandle {
         StoreHandle::open(StoreConfig {
+            backend: crate::StoreBackend::Snix,
             state_dir: dir.join("state"),
             output_dir: dir.join("store"),
             remote_cache_urls: Vec::new(),
@@ -991,5 +998,64 @@ mod tests {
 
         assert!(error.to_string().contains("missing or incomplete"));
         assert_eq!(persisted, path_info);
+    }
+
+    fn snapshot_repair_tree(root: &Path) -> std::collections::BTreeMap<PathBuf, Option<Vec<u8>>> {
+        let mut entries = std::collections::BTreeMap::new();
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(directory) = pending.pop() {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                let relative = path.strip_prefix(root).unwrap().to_path_buf();
+                let kind = entry.file_type().unwrap();
+                if kind.is_dir() {
+                    entries.insert(relative, None);
+                    pending.push(path);
+                } else {
+                    assert!(kind.is_file(), "unexpected non-file in repair state: {}", path.display());
+                    entries.insert(relative, Some(std::fs::read(path).unwrap()));
+                }
+            }
+        }
+        entries
+    }
+
+    #[tokio::test]
+    async fn casita_repair_library_entrypoints_reject_without_publishing() {
+        let dir = tempfile::tempdir().unwrap();
+        let snix = open_test_store(dir.path()).await;
+        let path_info = stale_signed_pathinfo(&snix, "casita-rejected").await;
+        snix.pathinfo_service().put(path_info.clone()).await.unwrap();
+        let logical_path = path_info.store_path.to_absolute_path_with_prefix(STORE_DIR);
+        let inspection = inspect_final_nar_repair(&snix, &logical_path).await.unwrap();
+        let casita_state = dir.path().join("casita-state");
+        let casita_output = dir.path().join("casita-store");
+        std::fs::create_dir_all(&casita_output).unwrap();
+        let casita = StoreHandle::open(StoreConfig::new(
+            crate::StoreBackend::Casita,
+            casita_state.clone(),
+            casita_output.clone(),
+            STORE_DIR.to_string(),
+        ))
+        .await
+        .unwrap();
+        std::fs::write(casita_state.join("keep.txt"), b"preserve Casita state").unwrap();
+        std::fs::write(casita_output.join("keep.txt"), b"preserve output state").unwrap();
+        assert!(casita.pathinfo_service().get(*path_info.store_path.digest()).await.unwrap().is_none());
+
+        let state_before = snapshot_repair_tree(&casita_state);
+        let output_before = snapshot_repair_tree(&casita_output);
+        let inspect_error = inspect_final_nar_repair(&casita, &logical_path).await.unwrap_err();
+        assert_eq!(snapshot_repair_tree(&casita_state), state_before);
+        assert_eq!(snapshot_repair_tree(&casita_output), output_before);
+        let execute_error = execute_final_nar_repair(&casita, inspection, &signing_key()).await.unwrap_err();
+        assert_eq!(snapshot_repair_tree(&casita_state), state_before);
+        assert_eq!(snapshot_repair_tree(&casita_output), output_before);
+
+        assert!(inspect_error.to_string().contains("casita-repair-final-nar-unsupported"));
+        assert!(execute_error.to_string().contains("casita-repair-final-nar-unsupported"));
+        assert!(casita.pathinfo_service().get(*path_info.store_path.digest()).await.unwrap().is_none());
+        assert_eq!(snix.pathinfo_service().get(*path_info.store_path.digest()).await.unwrap(), Some(path_info));
     }
 }

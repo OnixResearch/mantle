@@ -422,6 +422,7 @@ mod tests {
     async fn test_store() -> (tempfile::TempDir, StoreHandle) {
         let root = tempfile::tempdir().unwrap();
         let store = StoreHandle::open(crate::StoreConfig {
+            backend: crate::StoreBackend::Snix,
             state_dir: root.path().join("state"),
             output_dir: root.path().join("store"),
             remote_cache_urls: Vec::new(),

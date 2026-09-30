@@ -255,6 +255,7 @@ fn seed_store() -> SeededStore {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
         let mut store = StoreHandle::open(StoreConfig {
+            backend: crunch_store::StoreBackend::Snix,
             state_dir: state_dir.path().to_path_buf(),
             output_dir: output_dir.path().to_path_buf(),
             remote_cache_urls: Vec::new(),

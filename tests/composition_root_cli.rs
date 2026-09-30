@@ -37,6 +37,7 @@ fn run_async<T>(future: impl std::future::Future<Output = T>) -> T {
 
 async fn open_store(output_dir: &Path, state_dir: &Path) -> StoreHandle {
     StoreHandle::open(StoreConfig {
+        backend: crunch_store::StoreBackend::Snix,
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),

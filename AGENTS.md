@@ -5,8 +5,10 @@
 Mantle is a Nickel-authored, Rust-implemented build system on the Nix store
 protocol: it evaluates typed derivations (Nickel contracts reject malformed
 inputs before execution), schedules builds lazily, executes them in bounded
-bwrap sandboxes, persists content in its own castore + signed PathInfo state
-(Ed25519 signatures, BLAKE3 identity), and emits structured, bounded evidence.
+bwrap sandboxes, persists output content and PathInfo state (Ed25519
+signatures, BLAKE3 identity) in one store backend per state directory (default
+Snix castore and PathInfo files, or Casita under `<state-dir>/casita`), and
+emits structured, bounded evidence.
 It is a build tool only — frontends like Onix own module evaluation and system
 configuration (ADR 0010). Active research software: every proof/receipt is
 bounded to its declared inputs; do not promote observations into correctness
@@ -56,9 +58,14 @@ Layering facts an assistant must not get wrong:
 - **Logical vs physical store**: derivation hashes and ATerm serialization use
   `--store-prefix` (default `/mantle/store`; `--nix-compat` forces `/nix/store`;
   legacy `/crunch/store` survives in older tests/bootstrap). `--store` is only
-  the physical export directory (default `/nix/store`). State (pathinfo.redb,
-  blobs, logs, attestations, roots) lives under `--state-dir`. Different
-  prefixes produce different derivation hashes.
+  the physical export directory (default `/nix/store`). `--state-dir` holds
+  `store-identity.json` (the recorded backend and prefix; a mismatched
+  `--store-backend` or `--store-prefix` fails), logs, attestations, roots, and
+  backend data: `pathinfo.redb`, `directories.redb`, and `blobs/` under the
+  default `snix`, or the Casita repository in `<state-dir>/casita` under
+  `casita`, which keeps the Snix castore only as in-memory scratch (see
+  `docs/store-backends.md`). Different prefixes produce different derivation
+  hashes.
 - Store authority is split into narrow capabilities (ADR 0058): `BuildStore`,
   `OutputLookup`, `RootRegistry`, `ActionResultPort`, `SourceAdmission`,
   `StoreAdmin` via `into_pipeline_store_parts()` / `into_builder_store_parts()`.
@@ -82,7 +89,7 @@ Layering facts an assistant must not get wrong:
 | `tests/` | 55 integration suites + `support/` helpers + `fixtures/` tree. |
 | `scripts/` | Proof drivers (bash), single-file `cargo -Zscript` guard rails, quality wrappers. |
 | `docs/` | ~57 guides + `generated/` (checked-in, drift-gated) + release-notes. Root `README.md` is the documentation index. |
-| `adr/` | Numbered decision records 0001–0080; index in `adr/README.md`. |
+| `adr/` | Numbered decision records 0001–0082; ADR 0082 (explicit store backends, Casita) is Proposed; index in `adr/README.md`. |
 | `.cairn/` | Active Cairn lifecycle tree (prose writes `cairn/`): `changes/`, dated `archive/`, `specs/`. |
 | `openspec/` | Legacy spec system; still hosts functional-core validation assets consumed by the no-std rail. |
 | `tools/` | Generator bins (`generate-operator-command-contract`) + `tracey_refs.rs` coverage bridges. |

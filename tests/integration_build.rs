@@ -16,6 +16,9 @@ use crunch_glue::CrunchDerivation;
 use crunch_glue::Input;
 
 const FETCH_TEST_PATH_INFO_CAPACITY: usize = 128;
+const CLI_TEST_KEYPAIR: &str =
+    "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
+const CLI_FETCH_PAYLOAD: &[u8] = b"durable CLI fresh-process cache fixture\n";
 
 #[test]
 fn typed_nickel_workspace_policy_matches_rust_and_rejects_invalid_bounds() {
@@ -123,10 +126,7 @@ fn workspace_action_identity_uses_snapshot_ref_but_clean_derivation_drops_mutabl
 }
 
 fn test_keypair() -> crunch_build::KeyPair {
-    crunch_build::load_keypair(
-        "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==",
-    )
-    .unwrap()
+    crunch_build::load_keypair(CLI_TEST_KEYPAIR).unwrap()
 }
 
 fn test_trusted_keys() -> Vec<nix_compat::narinfo::VerifyingKey> {
@@ -473,6 +473,7 @@ fn end_to_end_overlay_build_reads_base_only_input_without_backfill() {
             .unwrap();
         let logical_source_path = source_store_path.to_absolute_path_with_prefix(store_dir);
         let mut base_store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            backend: crunch_store::StoreBackend::Snix,
             state_dir: base_state.path().to_path_buf(),
             output_dir: base_output.path().to_path_buf(),
             remote_cache_urls: Vec::new(),
@@ -502,6 +503,7 @@ fn end_to_end_overlay_build_reads_base_only_input_without_backfill() {
         )
         .unwrap();
         let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            backend: crunch_store::StoreBackend::Snix,
             state_dir: overlay_state.path().to_path_buf(),
             output_dir: overlay_output.path().to_path_buf(),
             remote_cache_urls: Vec::new(),
@@ -931,6 +933,373 @@ fn fetchurl_downloads_and_verifies_hash() {
             panic!("fetchurl build failed: {e}");
         }
     }
+}
+
+fn write_cli_fetch_fixture(root: &Path) -> PathBuf {
+    use sha2::Digest;
+
+    let source = root.join("source.txt");
+    std::fs::write(&source, CLI_FETCH_PAYLOAD).unwrap();
+    let hash = format!("sha256-{}", data_encoding::BASE64.encode(&sha2::Sha256::digest(CLI_FETCH_PAYLOAD)));
+    let fixture = root.join("fetch.ncl");
+    let library = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib/lib.ncl");
+    std::fs::write(
+        &fixture,
+        format!(
+            "let mantle = import \"{}\" in\nmantle.fetchurl {{ url = \"file://{}\", hash = \"{hash}\", name = \"backend-cache-fixture\" }}\n",
+            library.display(),
+            source.display()
+        ),
+    )
+    .unwrap();
+    fixture
+}
+
+#[test]
+fn signed_fixed_output_cli_cache_restores_missing_export_in_fresh_processes() {
+    let root = tempfile::tempdir().unwrap();
+    let fixture = write_cli_fetch_fixture(root.path());
+    let payload = CLI_FETCH_PAYLOAD;
+
+    let public_key = test_keypair().verifying_key.to_string();
+    let policy_bytes = format!("{public_key}\n").into_bytes();
+    let mut previous_pathinfo = None;
+    for backend in ["casita", "snix"] {
+        let state = root.path().join(format!("{backend}-state"));
+        let store = root.path().join(format!("{backend}-store"));
+        std::fs::create_dir(&state).unwrap();
+        std::fs::create_dir(&store).unwrap();
+        let signer = state.join("signing-key");
+        std::fs::write(&signer, format!("{CLI_TEST_KEYPAIR}\n")).unwrap();
+        let policy = state.join("casita-trusted-public-keys");
+        if backend == "casita" {
+            std::fs::write(&policy, &policy_bytes).unwrap();
+        }
+
+        let run = |args: &[&str]| {
+            let mut command = assert_cmd::Command::cargo_bin("mantle").unwrap();
+            let output = command
+                .current_dir(env!("CARGO_MANIFEST_DIR"))
+                .arg("--store-backend")
+                .arg(backend)
+                .arg("--state-dir")
+                .arg(&state)
+                .arg("--store")
+                .arg(&store)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{backend} {:?}: stdout={} stderr={}",
+                args,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            output
+        };
+        let build_args = [
+            "--json",
+            "build",
+            "--no-substitute",
+            "--signing-key",
+            signer.to_str().unwrap(),
+            "--trusted-public-keys",
+            &public_key,
+            fixture.to_str().unwrap(),
+        ];
+        let first: serde_json::Value = serde_json::from_slice(&run(&build_args).stdout).unwrap();
+        assert_eq!(first["counts"]["built_total"], 1, "{backend}");
+        assert_eq!(first["counts"]["cached_total"], 0, "{backend}");
+        assert_eq!(first["outcomes"][0]["cached"], false, "{backend}");
+        let output_path = PathBuf::from(first["outcomes"][0]["outputs"][0]["path"].as_str().unwrap());
+        assert_eq!(output_path.parent(), Some(store.as_path()), "{backend}");
+        let original_bytes = std::fs::read(&output_path).unwrap();
+        assert_eq!(original_bytes.as_slice(), payload, "{backend}");
+        let original_blake3 = blake3::hash(&original_bytes);
+        let selector = output_path.file_name().unwrap().to_str().unwrap();
+        let original_info: serde_json::Value =
+            serde_json::from_slice(&run(&["--json", "store", "info", selector]).stdout).unwrap();
+        let original_info = &original_info["paths"][0];
+        let signatures = original_info["signatures"].as_array().unwrap();
+        assert_eq!(signatures.len(), 1, "{backend}");
+        assert!(signatures[0].as_str().unwrap().starts_with("cache.example.com-1:"), "{backend}");
+
+        std::fs::remove_file(&output_path).unwrap();
+        assert!(!output_path.exists(), "{backend}");
+        let second: serde_json::Value = serde_json::from_slice(&run(&build_args).stdout).unwrap();
+        assert_eq!(second["counts"]["built_total"], 0, "{backend}");
+        assert_eq!(second["counts"]["cached_total"], 1, "{backend}");
+        assert_eq!(second["outcomes"][0]["cached"], true, "{backend}");
+        let restored_path = PathBuf::from(second["outcomes"][0]["outputs"][0]["path"].as_str().unwrap());
+        assert_eq!(restored_path, output_path, "{backend}");
+        let restored_bytes = std::fs::read(&restored_path).unwrap();
+        assert_eq!(restored_bytes, original_bytes, "{backend}");
+        assert_eq!(blake3::hash(&restored_bytes), original_blake3, "{backend}");
+        let restored_info: serde_json::Value =
+            serde_json::from_slice(&run(&["--json", "store", "info", selector]).stdout).unwrap();
+        let restored_info = &restored_info["paths"][0];
+        for field in ["store_path", "nar_sha256", "nar_size", "signatures"] {
+            assert_eq!(restored_info[field], original_info[field], "{backend} {field}");
+        }
+        let verification = run(&["store", "verify", "--trusted-public-keys", &public_key, selector]);
+        assert!(
+            String::from_utf8_lossy(&verification.stdout).contains("trusted_signatures=1/1"),
+            "{backend}: {}",
+            String::from_utf8_lossy(&verification.stdout)
+        );
+        if backend == "casita" {
+            assert_eq!(std::fs::read(&policy).unwrap(), policy_bytes);
+            for snix_path in ["pathinfo.redb", "directories.redb", "blobs"] {
+                assert!(!state.join(snix_path).exists(), "Casita created Snix state {snix_path}");
+            }
+        }
+        let pathinfo_identity = serde_json::json!({
+            "store_path": original_info["store_path"],
+            "nar_sha256": original_info["nar_sha256"],
+            "nar_size": original_info["nar_size"],
+            "signatures": original_info["signatures"],
+        });
+        if let Some(previous) = &previous_pathinfo {
+            assert_eq!(&pathinfo_identity, previous, "{backend} differs from Snix/Casita parity");
+        }
+        previous_pathinfo = Some(pathinfo_identity.clone());
+        println!(
+            "{}",
+            serde_json::json!({
+                "backend": backend,
+                "first_counts": first["counts"],
+                "second_counts": second["counts"],
+                "pathinfo": pathinfo_identity,
+                "trusted_public_key": public_key,
+                "export_blake3_before": original_blake3.to_hex().to_string(),
+                "export_blake3_restored": blake3::hash(&restored_bytes).to_hex().to_string(),
+                "casita_policy_blake3": (backend == "casita").then(|| blake3::hash(&policy_bytes).to_hex().to_string()),
+            })
+        );
+    }
+}
+
+#[test]
+fn casita_legacy_bootstrap_fetch_uses_durable_local_signer_and_exclusive_policy() {
+    let root = tempfile::tempdir().unwrap();
+    let raw = root.path().join("raw");
+    let bin = raw.join("bin");
+    let target = raw.join("x86_64-linux-musl");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::create_dir_all(raw.join("include")).unwrap();
+    std::fs::create_dir_all(target.join("lib")).unwrap();
+    std::fs::create_dir_all(raw.join("share/locale")).unwrap();
+    std::fs::write(raw.join("include/stdio.h"), b"/* offline bootstrap fixture */\n").unwrap();
+    std::fs::write(target.join("lib/libgcc_s.so.1"), b"fixture libgcc\n").unwrap();
+    std::fs::write(raw.join("share/locale/dropped-junk"), [b'X'; 8192]).unwrap();
+    for tool in ["x86_64-linux-musl-gcc", "x86_64-linux-musl-g++", "ar", "ld"] {
+        let path = bin.join(tool);
+        std::fs::write(&path, b"#!/bin/sh\nexit 0\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+    let nar_hash = compute_recursive_sha256_sri(&raw);
+    let archive_path = root.path().join("offline-raw.tgz");
+    let encoder =
+        flate2::write::GzEncoder::new(std::fs::File::create(&archive_path).unwrap(), flate2::Compression::fast());
+    let mut archive = tar::Builder::new(encoder);
+    archive.append_dir_all("offline-raw-v1", &raw).unwrap();
+    archive.into_inner().unwrap().finish().unwrap();
+
+    let original_provider =
+        std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bootstrap/seed-legacy.ncl")).unwrap();
+    let pinned_url = "https://musl.cc/x86_64-linux-musl-native.tgz";
+    let pinned_hash = "sha256-ZtQZncMvugqmS7OMvMtdhY5MMtem4KXBhamxWbHUDkY=";
+    assert_eq!(original_provider.matches(pinned_url).count(), 1);
+    assert_eq!(original_provider.matches(pinned_hash).count(), 1);
+    let local_url = format!("file://{}", archive_path.display());
+    let local_provider = original_provider.replace(pinned_url, &local_url).replace(pinned_hash, &nar_hash);
+    let bootstrap_dir = root.path().join("bootstrap");
+    std::fs::create_dir(&bootstrap_dir).unwrap();
+    std::fs::write(bootstrap_dir.join("seed-legacy.ncl"), local_provider).unwrap();
+
+    let run = |state: &Path, store: &Path, args: &[&str]| {
+        let mut command = assert_cmd::Command::cargo_bin("mantle").unwrap();
+        command
+            .current_dir(root.path())
+            .env_remove("CRUNCH_CONFIG_DIR")
+            .arg("--state-dir")
+            .arg(state)
+            .arg("--store")
+            .arg(store)
+            .args(["--store-prefix", "/crunch/store", "--store-backend", "casita"])
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let state = root.path().join("state");
+    let store = root.path().join("store");
+    std::fs::create_dir(&state).unwrap();
+    std::fs::create_dir(&store).unwrap();
+    let seed = root.path().join("seed.ncl");
+    let seed_arg = seed.to_str().unwrap();
+    let first = run(&state, &store, &["bootstrap", "--fetch", "--output", seed_arg]);
+    assert!(first.status.success(), "{}", String::from_utf8_lossy(&first.stderr));
+    assert!(String::from_utf8_lossy(&first.stderr).contains("(reduced provider built)"));
+    let seed_bytes = std::fs::read(&seed).unwrap();
+    assert!(String::from_utf8_lossy(&seed_bytes).contains("/crunch/store/"));
+    let signing_key = state.join("signing-key");
+    let key_bytes = std::fs::read(&signing_key).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(std::fs::metadata(&signing_key).unwrap().permissions().mode() & 0o777, 0o600);
+    }
+    let public_key = crunch_build::load_keypair(std::str::from_utf8(&key_bytes).unwrap())
+        .unwrap()
+        .verifying_key
+        .to_string();
+    let listed = run(&state, &store, &["--json", "store", "list"]);
+    assert!(listed.status.success(), "{}", String::from_utf8_lossy(&listed.stderr));
+    let paths: serde_json::Value = serde_json::from_slice(&listed.stdout).unwrap();
+    let raw_selector = paths["paths"][0]["store_path"].as_str().unwrap();
+    assert_eq!(paths["paths"].as_array().unwrap().len(), 1);
+    let verify = run(&state, &store, &["store", "verify", "--trusted-public-keys", &public_key, raw_selector]);
+    assert!(verify.status.success(), "{}", String::from_utf8_lossy(&verify.stderr));
+    assert!(String::from_utf8_lossy(&verify.stdout).contains("trusted_signatures=1/1"));
+
+    let second = run(&state, &store, &["bootstrap", "--fetch", "--output", seed_arg]);
+    assert!(second.status.success(), "{}", String::from_utf8_lossy(&second.stderr));
+    let second_log = String::from_utf8_lossy(&second.stderr);
+    assert!(second_log.contains("(cached)") && second_log.contains("(reduced provider cached)"));
+    assert_eq!(std::fs::read(&signing_key).unwrap(), key_bytes);
+    assert_eq!(std::fs::read(&seed).unwrap(), seed_bytes);
+
+    let foreign_state = root.path().join("foreign-state");
+    let foreign_store = root.path().join("foreign-store");
+    std::fs::create_dir(&foreign_state).unwrap();
+    std::fs::create_dir(&foreign_store).unwrap();
+    let foreign_public_key = test_keypair().verifying_key.to_string();
+    assert_ne!(foreign_public_key, public_key);
+    let policy_bytes = format!("{foreign_public_key}\n");
+    let policy = foreign_state.join("casita-trusted-public-keys");
+    std::fs::write(&policy, &policy_bytes).unwrap();
+    let before_refusal = run(&foreign_state, &foreign_store, &["--json", "store", "list"]);
+    assert!(before_refusal.status.success(), "{}", String::from_utf8_lossy(&before_refusal.stderr));
+    let before_paths: serde_json::Value = serde_json::from_slice(&before_refusal.stdout).unwrap();
+    assert!(before_paths["paths"].as_array().unwrap().is_empty());
+    let refused_seed = root.path().join("foreign-seed.ncl");
+    let refused = run(&foreign_state, &foreign_store, &[
+        "bootstrap",
+        "--fetch",
+        "--output",
+        refused_seed.to_str().unwrap(),
+    ]);
+    assert!(!refused.status.success());
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("casita-signer-untrusted"),
+        "{}",
+        String::from_utf8_lossy(&refused.stderr)
+    );
+    assert!(!refused_seed.exists());
+    assert_eq!(std::fs::read(&policy).unwrap(), policy_bytes.as_bytes());
+    let foreign_list = run(&foreign_state, &foreign_store, &["--json", "store", "list"]);
+    assert!(foreign_list.status.success(), "{}", String::from_utf8_lossy(&foreign_list.stderr));
+    let foreign_paths: serde_json::Value = serde_json::from_slice(&foreign_list.stdout).unwrap();
+    assert!(foreign_paths["paths"].as_array().unwrap().is_empty());
+    assert!(
+        !foreign_store
+            .read_dir()
+            .unwrap()
+            .any(|entry| { entry.unwrap().file_name().to_string_lossy().ends_with("-musl-gcc-raw") })
+    );
+}
+
+#[test]
+fn casita_explicit_trust_policy_revokes_local_signer_across_fresh_processes() {
+    let root = tempfile::tempdir().unwrap();
+    let fixture = write_cli_fetch_fixture(root.path());
+    let state = root.path().join("state");
+    let store = root.path().join("store");
+    std::fs::create_dir(&state).unwrap();
+    std::fs::create_dir(&store).unwrap();
+    let signer = state.join("signing-key");
+    std::fs::write(&signer, format!("{CLI_TEST_KEYPAIR}\n")).unwrap();
+    let local_key = test_keypair().verifying_key.to_string();
+    let different_signer = ed25519_dalek::SigningKey::from_bytes(&[19_u8; 32]);
+    let other_key =
+        nix_compat::narinfo::VerifyingKey::new("other-1".to_string(), different_signer.verifying_key()).to_string();
+    let policy = state.join("casita-trusted-public-keys");
+    let excluded_policy = format!("{other_key}\n");
+    let included_policy = format!("{local_key}\n");
+    let run = |args: &[&str]| {
+        let mut command = assert_cmd::Command::cargo_bin("mantle").unwrap();
+        command
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .arg("--store-backend")
+            .arg("casita")
+            .arg("--state-dir")
+            .arg(&state)
+            .arg("--store")
+            .arg(&store)
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let build_args = [
+        "--json",
+        "build",
+        "--no-substitute",
+        "--signing-key",
+        signer.to_str().unwrap(),
+        "--trusted-public-keys",
+        &local_key,
+        fixture.to_str().unwrap(),
+    ];
+    std::fs::write(&policy, &excluded_policy).unwrap();
+    let excluded = run(&build_args);
+    assert!(!excluded.status.success(), "unlisted local signer built an output");
+    let excluded_report: serde_json::Value = serde_json::from_slice(&excluded.stdout).unwrap();
+    assert!(
+        excluded_report["failed"][0]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("casita-signer-untrusted"),
+        "{excluded_report}"
+    );
+    assert_eq!(std::fs::read(&policy).unwrap(), excluded_policy.as_bytes());
+
+    std::fs::write(&policy, &included_policy).unwrap();
+    let included = run(&build_args);
+    assert!(included.status.success(), "{}", String::from_utf8_lossy(&included.stderr));
+    let built: serde_json::Value = serde_json::from_slice(&included.stdout).unwrap();
+    assert_eq!(built["counts"]["built_total"], 1);
+    let output = PathBuf::from(built["outcomes"][0]["outputs"][0]["path"].as_str().unwrap());
+    assert_eq!(std::fs::read(&output).unwrap(), CLI_FETCH_PAYLOAD);
+    let selector = output.file_name().unwrap().to_str().unwrap();
+    let signed_info = run(&["--json", "store", "info", selector]);
+    assert!(signed_info.status.success(), "{}", String::from_utf8_lossy(&signed_info.stderr));
+    let signed_info: serde_json::Value = serde_json::from_slice(&signed_info.stdout).unwrap();
+    let signatures = signed_info["paths"][0]["signatures"].clone();
+    assert_eq!(signatures.as_array().unwrap().len(), 1);
+    assert_eq!(std::fs::read(&policy).unwrap(), included_policy.as_bytes());
+
+    std::fs::write(&policy, &excluded_policy).unwrap();
+    let revoked = run(&["--json", "store", "info", selector]);
+    assert!(!revoked.status.success(), "revoked local signer was still trusted");
+    assert!(
+        String::from_utf8_lossy(&revoked.stderr).contains("casita-signer-untrusted"),
+        "{}",
+        String::from_utf8_lossy(&revoked.stderr)
+    );
+    assert_eq!(std::fs::read(&policy).unwrap(), excluded_policy.as_bytes());
+    assert_eq!(std::fs::read(&output).unwrap(), CLI_FETCH_PAYLOAD);
+
+    std::fs::write(&policy, &included_policy).unwrap();
+    let restored = run(&["--json", "store", "info", selector]);
+    assert!(restored.status.success(), "{}", String::from_utf8_lossy(&restored.stderr));
+    let restored: serde_json::Value = serde_json::from_slice(&restored.stdout).unwrap();
+    assert_eq!(restored["paths"][0]["signatures"], signatures);
+    assert_eq!(std::fs::read(&policy).unwrap(), included_policy.as_bytes());
 }
 
 #[test]

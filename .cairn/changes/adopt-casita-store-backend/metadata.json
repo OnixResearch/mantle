@@ -1,0 +1,10 @@
+{
+  "depends_on": [
+    "add-store-backend-selection"
+  ],
+  "workflow_profile": {
+    "id": "spec-driven",
+    "source": "change_create",
+    "version": 1
+  }
+}

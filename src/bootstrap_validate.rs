@@ -269,6 +269,8 @@ fn run_build_child(request: BuildChildRequest<'_>) -> Result<ExitStatus, RunErro
         .arg(&request.ctx.store_prefix)
         .arg("--state-dir")
         .arg(&request.ctx.resolved_state_dir)
+        .arg("--store-backend")
+        .arg(request.ctx.store_backend.as_str())
         .arg("build")
         .arg(request.target)
         .arg("--no-substitute");

@@ -61,4 +61,6 @@ allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
   "https://github.com/OnixResearch/nickel-export",
   "https://github.com/tvlfyi/wu-manber.git",
+  "https://github.com/cachix/casita",
+  "https://github.com/cachix/turso.git",
 ]

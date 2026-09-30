@@ -370,7 +370,6 @@ fn validate_links(
     entries_by_id: &BTreeMap<&str, &GcEntry>,
 ) -> Result<(), GcPlanError> {
     debug_assert!(entries_by_id.len() >= entries.len());
-    debug_assert!(roots.len() <= entries_by_id.len());
     for root in roots {
         if !entries_by_id.contains_key(root.as_str()) {
             return Err(GcPlanError::MissingRoot { path_id: root.clone() });
@@ -424,7 +423,6 @@ fn compute_retaining_roots(
     roots: &[String],
     entries_by_id: &BTreeMap<&str, &GcEntry>,
 ) -> Result<Vec<GcRetainingRoots>, GcPlanError> {
-    debug_assert!(!roots.is_empty() || entries_by_id.is_empty());
     let mut roots_by_path = BTreeMap::<String, BTreeSet<String>>::new();
     for root in roots {
         let mut visited = BTreeSet::new();
@@ -628,6 +626,30 @@ mod tests {
     }
 
     #[test]
+    fn unrooted_observed_entries_are_candidates_until_a_root_retains_their_closure() {
+        let mut unrooted = request(GcExecutionMode::Execute);
+        unrooted.roots.clear();
+        let unrooted_plan = plan_gc(unrooted).expect("unrooted entries remain collectible");
+        assert!(unrooted_plan.retained_path_ids.is_empty());
+        assert!(unrooted_plan.retaining_roots.is_empty());
+        assert_eq!(unrooted_plan.candidate_path_ids, vec![ROOT.to_string(), CHILD.to_string(), DEAD.to_string()],);
+        assert_eq!(unrooted_plan.reclaim_summary.declared_nar_bytes, ROOT_BYTES + CHILD_BYTES + DEAD_BYTES);
+
+        let rooted_plan = plan_gc(request(GcExecutionMode::Execute)).expect("retained closure must plan");
+        assert_eq!(rooted_plan.candidate_path_ids, vec![DEAD.to_string()]);
+        assert_eq!(rooted_plan.retaining_roots, vec![
+            GcRetainingRoots {
+                path_id: ROOT.to_string(),
+                root_ids: vec![ROOT.to_string()]
+            },
+            GcRetainingRoots {
+                path_id: CHILD.to_string(),
+                root_ids: vec![ROOT.to_string()]
+            },
+        ],);
+    }
+
+    #[test]
     fn dry_run_preserves_candidates_without_execution_authority() {
         let dry_run = plan_gc(request(GcExecutionMode::DryRun)).expect("dry run must plan");
         let execute = plan_gc(request(GcExecutionMode::Execute)).expect("execution must plan");
@@ -682,6 +704,23 @@ mod tests {
             Err(GcPlanError::MissingRoot {
                 path_id: MISSING.to_string(),
             })
+        );
+    }
+
+    #[test]
+    fn more_requested_roots_than_entries_reports_missing_root() {
+        let mut invalid = request(GcExecutionMode::DryRun);
+        invalid.roots = vec![
+            MISSING.to_string(),
+            ROOT.to_string(),
+            CHILD.to_string(),
+            DEAD.to_string(),
+        ];
+        assert_eq!(
+            plan_gc(invalid),
+            Err(GcPlanError::MissingRoot {
+                path_id: MISSING.to_string()
+            }),
         );
     }
 

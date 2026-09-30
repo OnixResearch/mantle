@@ -19128,6 +19128,7 @@ mod tests {
 
     fn test_local_cache_selection(root: &Path, rustc: &Path) -> RustUnitLocalCacheSelection {
         let cache = RustCache::open(crunch_store::StoreConfig {
+            backend: crunch_store::StoreBackend::Snix,
             state_dir: root.join("state"),
             output_dir: root.join("store"),
             remote_cache_urls: Vec::new(),

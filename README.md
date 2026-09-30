@@ -2,8 +2,8 @@
 
 Mantle is a Nickel-authored, Rust-implemented build system on the Nix store
 protocol. It evaluates typed derivations, schedules builds lazily, executes them
-in bounded Linux sandboxes, stores content in its own castore and PathInfo state,
-and emits structured evidence for later inspection.
+in bounded Linux sandboxes, persists output content and PathInfo metadata in the
+selected store backend, and emits structured evidence for later inspection.
 
 Mantle is a build tool, not an operating-system module layer. Frontends such as
 Onix own inventory, policy, and system configuration, then lower concrete
@@ -114,7 +114,8 @@ Mantle separates logical identity from physical placement:
 |---|---|---|
 | `--store-prefix` | `/mantle/store` | Logical paths used in derivation identity and ATerm serialization |
 | `--store` | `/nix/store` | Physical directory where final outputs are exported |
-| `--state-dir` | `$CRUNCH_STATE_DIR`, `$XDG_STATE_HOME/crunch`, or `~/.local/state/crunch` | PathInfo, castore blobs, logs, roots, and evidence |
+| `--state-dir` | `$CRUNCH_STATE_DIR`, `$XDG_STATE_HOME/crunch`, or `~/.local/state/crunch` | Backend state (Snix PathInfo and castore files, or the Casita repository in `casita/`), plus logs, roots, and evidence |
+| `--store-backend` | `snix` | Durable backend for the state directory: `snix` or `casita` |
 | `--base-store` | None | Repeatable, ordered read-only base state directory below the writable store |
 
 Use `--store /tmp/mantle-store` for an unprivileged physical output directory.
@@ -127,11 +128,17 @@ hash algorithms remain available where compatibility requires them. Mantle signs
 PathInfo records with Ed25519 keys and rechecks signatures, content hashes, and
 castore completeness before admitting cached outputs.
 
+Each state directory records its store backend.
+Mantle rejects a different `--store-backend` before it changes any file.
+`casita` is a pinned, pre-release backend with a smaller capability profile and a destination-owned signer policy.
+See [Store backends](docs/store-backends.md) for profiles, validation, and the Snix-to-Casita migration.
+
 ### Read-only overlay composition
 
 Use `--base-store <state-dir>` to add an ordered read-only base.
 The current `--state-dir` remains the only writable overlay.
 All layers must use the same logical store prefix.
+Overlay composition requires the `snix` backend.
 
 Prepare a base only after all base writes finish:
 
@@ -177,6 +184,9 @@ The first command is a non-signing dry run. Execution requires complete local
 castore content, preserves CA/path/node/reference identity, discards signatures
 bound to stale facts, and emits a replacement local signature. This does not
 recover historical signer authority or prove output correctness.
+
+Final-NAR repair requires the default `snix` backend.
+Under `--store-backend casita`, both commands fail with `casita-repair-final-nar-unsupported`.
 
 GC and final-NAR repair use separate pure decision cores. The cores receive
 bounded, normalized facts and return ordered plans with BLAKE3 identities.
@@ -308,7 +318,7 @@ crunch-pipeline   connect evaluation, conversion, and realization
 crunch-build      schedule goals, substitute, fetch, or sandbox builds
     │
     ▼
-crunch-store      persist PathInfo, castore data, roots, and attestations
+crunch-store      persist PathInfo, output content, roots, and attestations
 ```
 
 The `crunch-*` crate names are retained compatibility identifiers. New
@@ -551,6 +561,7 @@ Useful documentation:
 - [Durable file publication adoption](docs/durable-file-publication-adoption.md)
 - [Immutable release objects and the current pointer](docs/immutable-release-current-pointer.md)
 - [Filesystem and castore NAR boundary](docs/nix-archive-nar-boundary.md)
+- [Store backends](docs/store-backends.md)
 
 ## Requirements
 

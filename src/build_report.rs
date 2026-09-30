@@ -1133,12 +1133,13 @@ mod tests {
         let state_dir = tempfile::tempdir().unwrap();
         let output_dir = tempfile::tempdir().unwrap();
         let logs_dir = tempfile::tempdir().unwrap();
-        let signing_key = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
+        let signing_key = crate::signing_key::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
         let config = BuildConfig {
             file: output_dir.path().join("demo.ncl"),
             import_paths: Vec::new(),
             output_dir: output_dir.path().to_path_buf(),
             state_dir: state_dir.path().to_path_buf(),
+            backend: crunch_store::StoreBackend::Snix,
             base_state_dirs: Vec::new(),
             store_dir: "/crunch/store".to_string(),
             verbose: false,
@@ -1209,12 +1210,13 @@ mod tests {
         let state_dir = tempfile::tempdir().unwrap();
         let output_dir = tempfile::tempdir().unwrap();
         let logs_dir = tempfile::tempdir().unwrap();
-        let signing_key = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
+        let signing_key = crate::signing_key::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
         let config = BuildConfig {
             file: output_dir.path().join("demo.ncl"),
             import_paths: Vec::new(),
             output_dir: output_dir.path().to_path_buf(),
             state_dir: state_dir.path().to_path_buf(),
+            backend: crunch_store::StoreBackend::Snix,
             base_state_dirs: Vec::new(),
             store_dir: "/crunch/store".to_string(),
             verbose: false,
@@ -1270,12 +1272,13 @@ mod tests {
         let state_dir = tempfile::tempdir().unwrap();
         let output_dir = tempfile::tempdir().unwrap();
         let logs_dir = tempfile::tempdir().unwrap();
-        let signing_key = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
+        let signing_key = crate::signing_key::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
         let config = BuildConfig {
             file: output_dir.path().join("demo.ncl"),
             import_paths: Vec::new(),
             output_dir: output_dir.path().to_path_buf(),
             state_dir: state_dir.path().to_path_buf(),
+            backend: crunch_store::StoreBackend::Snix,
             base_state_dirs: Vec::new(),
             store_dir: "/crunch/store".to_string(),
             verbose: false,
@@ -1526,12 +1529,13 @@ mod tests {
         let state_dir = tempfile::tempdir().unwrap();
         let output_dir = tempfile::tempdir().unwrap();
         let logs_dir = tempfile::tempdir().unwrap();
-        let signing_key = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
+        let signing_key = crate::signing_key::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
         let config = BuildConfig {
             file: output_dir.path().join("demo.ncl"),
             import_paths: Vec::new(),
             output_dir: output_dir.path().to_path_buf(),
             state_dir: state_dir.path().to_path_buf(),
+            backend: crunch_store::StoreBackend::Snix,
             base_state_dirs: Vec::new(),
             store_dir: "/crunch/store".to_string(),
             verbose: false,
@@ -1984,12 +1988,13 @@ mod tests {
         let state_dir = tempfile::tempdir().unwrap();
         let output_dir = tempfile::tempdir().unwrap();
         let logs_dir = tempfile::tempdir().unwrap();
-        let signing_key = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
+        let signing_key = crate::signing_key::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
         let config = BuildConfig {
             file: output_dir.path().join("demo.ncl"),
             import_paths: Vec::new(),
             output_dir: output_dir.path().to_path_buf(),
             state_dir: state_dir.path().to_path_buf(),
+            backend: crunch_store::StoreBackend::Snix,
             base_state_dirs: Vec::new(),
             store_dir: "/crunch/store".to_string(),
             verbose: false,
@@ -2090,12 +2095,13 @@ mod tests {
         let state_dir = tempfile::tempdir().unwrap();
         let output_dir = tempfile::tempdir().unwrap();
         let logs_dir = tempfile::tempdir().unwrap();
-        let signing_key = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
+        let signing_key = crate::signing_key::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
         let config = BuildConfig {
             file: output_dir.path().join("demo.ncl"),
             import_paths: Vec::new(),
             output_dir: output_dir.path().to_path_buf(),
             state_dir: state_dir.path().to_path_buf(),
+            backend: crunch_store::StoreBackend::Snix,
             base_state_dirs: Vec::new(),
             store_dir: "/crunch/store".to_string(),
             verbose: false,

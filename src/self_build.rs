@@ -26,8 +26,6 @@ use serde::Deserialize;
 use sha2::Sha256;
 
 use crate::build_cmd::build_import_paths;
-use crate::build_cmd::load_configured_trusted_public_keys;
-use crate::build_cmd::load_or_generate_signing_keypair;
 use crate::build_cmd::report_build_result;
 use crate::build_cmd::run_build;
 use crate::errors::RunError;
@@ -38,6 +36,8 @@ use crate::protected_exec::blake3_file_hex;
 use crate::protected_exec::select_declared_sandbox_seed;
 use crate::protected_exec_seccomp::ProtectedSeccompSupervisor;
 use crate::protected_exec_seccomp::install_current_thread_exec_supervisor;
+use crate::signing_key::load_configured_trusted_public_keys;
+use crate::signing_key::load_or_generate_signing_keypair;
 
 /// One mebibyte in bytes.
 const MEBIBYTE_BYTES: u64 = 1_u64 << 20;
@@ -2400,6 +2400,7 @@ struct SelfBuildPipelineContext<'a> {
     output_dir: &'a Path,
     state_dir: &'a Path,
     store_dir: &'a str,
+    backend: crunch_store::StoreBackend,
     verbose: bool,
     max_jobs: u32,
     no_substitute: bool,
@@ -2652,6 +2653,7 @@ fn self_build_pipeline_config(
         import_paths,
         output_dir: pipeline.output_dir.to_path_buf(),
         state_dir: pipeline.state_dir.to_path_buf(),
+        backend: pipeline.backend,
         base_state_dirs: Vec::new(),
         store_dir: pipeline.store_dir.to_string(),
         verbose: pipeline.verbose,
@@ -3217,6 +3219,7 @@ pub struct SelfBuildCommandOptions<'a> {
     pub output_dir: &'a Path,
     pub state_dir: &'a Path,
     pub store_dir: &'a str,
+    pub backend: crunch_store::StoreBackend,
     pub verbose: bool,
     pub max_jobs: u32,
     pub no_substitute: bool,
@@ -3238,6 +3241,13 @@ pub struct SelfBuildCommandOptions<'a> {
 fn execute_self_build(options: SelfBuildCommandOptions<'_>) -> Result<SelfBuildReport, RunError> {
     assert!(options.max_jobs > 0, "self-build max jobs must be nonzero");
     assert!(options.store_dir.starts_with('/'), "self-build store prefix must be absolute");
+    crunch_store::StoreConfig::preflight_backend_identity_for(
+        options.backend,
+        options.state_dir,
+        options.store_dir,
+        &[],
+    )
+    .map_err(|error| RunError::Internal(format!("opening store: {error}")))?;
     let setup = initialize_self_build(InitializeSelfBuildRequest {
         output_dir: options.output_dir,
         source_store_path: options.source_store_path,
@@ -3290,6 +3300,7 @@ fn run_self_build_roots(
         output_dir: &setup.output_dir,
         state_dir: options.state_dir,
         store_dir: options.store_dir,
+        backend: options.backend,
         verbose: options.verbose,
         max_jobs: options.max_jobs,
         no_substitute: options.no_substitute,
@@ -3325,6 +3336,7 @@ pub type CmdSelfBuildFn = for<'a> fn(
     &'a Path,
     &'a Path,
     &'a str,
+    crunch_store::StoreBackend,
     bool,
     u32,
     bool,
@@ -3346,6 +3358,7 @@ pub type CmdSelfBuildFn = for<'a> fn(
 pub const CMD_SELF_BUILD: CmdSelfBuildFn = |output_dir,
                                             state_dir,
                                             store_dir,
+                                            backend,
                                             verbose,
                                             max_jobs,
                                             no_substitute,
@@ -3366,6 +3379,7 @@ pub const CMD_SELF_BUILD: CmdSelfBuildFn = |output_dir,
         output_dir,
         state_dir,
         store_dir,
+        backend,
         verbose,
         max_jobs,
         no_substitute,

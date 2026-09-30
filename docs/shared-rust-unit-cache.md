@@ -153,6 +153,16 @@ A source identity is a BLAKE3-based public identifier. Receipts do not contain
 source URLs, directory paths, URL queries, bearer tokens, private keys, or raw
 configuration.
 
+## Store backend
+
+The local and shared Rust unit caches require the default `snix` store backend.
+Under `--store-backend casita`, `rust-plan` with a local or shared cache mode,
+`rust-cache serve`, and `mantle-rust-cache-daemon` fail with
+`casita-rust-cache-unsupported` before they read policy or create state.
+`store usage` and `store gc` fail with the same blocker when
+`<state-dir>/rust-unit-cache` exists. `casita` has no Rust unit cache parity
+with `snix`. See [Store backends](store-backends.md#capability-profiles).
+
 ## Non-claims
 
 A shared hit proves only admitted reuse for the recorded action, policy,

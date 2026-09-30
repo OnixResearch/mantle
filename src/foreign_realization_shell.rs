@@ -67,6 +67,7 @@ pub(crate) struct ForeignRealizationRequest<'a> {
     pub(crate) cache_closure_policy: Option<&'a ForeignCacheClosurePolicy>,
     pub(crate) output_dir: &'a Path,
     pub(crate) state_dir: &'a Path,
+    pub(crate) backend: crunch_store::StoreBackend,
     pub(crate) base_state_dirs: &'a [std::path::PathBuf],
     pub(crate) keypair: &'a KeyPair,
     pub(crate) trusted_keys: &'a [nix_compat::narinfo::VerifyingKey],
@@ -163,6 +164,7 @@ pub(crate) async fn realize_foreign_plan(
     };
     let retained_outputs = selected_root_output_paths(request.plan, request.selected_root_node_ids)?;
     let mut store = StoreHandle::open(crunch_store::StoreConfig {
+        backend: request.backend,
         state_dir: request.state_dir.to_path_buf(),
         output_dir: request.output_dir.to_path_buf(),
         remote_cache_urls: cache_urls.clone(),
@@ -202,6 +204,7 @@ pub(crate) async fn realize_foreign_plan(
         .await?;
         drop(store);
         store = StoreHandle::open(crunch_store::StoreConfig {
+            backend: request.backend,
             state_dir: request.state_dir.to_path_buf(),
             output_dir: request.output_dir.to_path_buf(),
             remote_cache_urls: Vec::new(),
@@ -267,6 +270,7 @@ pub(crate) async fn realize_foreign_plan(
         import_paths: Vec::new(),
         output_dir: request.output_dir.to_path_buf(),
         state_dir: request.state_dir.to_path_buf(),
+        backend: request.backend,
         store_dir: request.plan.target_store_prefix.clone(),
         verbose: request.verbose,
         max_jobs: request.max_jobs,

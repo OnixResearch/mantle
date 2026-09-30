@@ -1,0 +1,6 @@
+# Lifecycle gates for adopt-casita-store-backend. Run from the mantle repository root.
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate proposal adopt-casita-store-backend --root .
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design adopt-casita-store-backend --root .
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks adopt-casita-store-backend --root .
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- change depend list adopt-casita-store-backend --root .

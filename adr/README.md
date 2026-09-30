@@ -87,3 +87,4 @@ compatibility surface, crate name, or historical decision.
 | [0078](0078-explore-distributed-evaluation.md) | Explore distributed evaluation feasibility | Accepted |
 | [0079](0079-spacewasm-stable-evidence-libtest-json.md) | Stable SpaceWasm evidence uses the libtest JSON harness grammar | Accepted |
 | [0080](0080-separate-coordination-from-batch-building.md) | Separate build coordination from batch building | Accepted |
+| [0082](0082-select-store-backends-explicitly-and-admit-casita.md) | Select store backends explicitly and admit Casita as a pinned backend | Proposed |

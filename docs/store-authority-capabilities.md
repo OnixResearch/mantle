@@ -45,6 +45,12 @@ Source-policy tests reject raw service escape, broad builder ownership, administ
 
 Compile-fail examples also reject garbage collection, repair, source import, root mutation, and raw blob access from `BuildStore`.
 
+## Store backend selection
+
+The capability views do not change with the store backend.
+
+Only the CLI composition root chooses `--store-backend`. `StoreConfig` requires the backend, and no library constructor supplies a default. See [Store backends](store-backends.md).
+
 ## Compatibility and claim boundary
 
 This split does not change store formats, report schemas, signatures, output identities, or supported build behavior.

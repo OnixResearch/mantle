@@ -327,7 +327,11 @@ pub async fn import_store_archive<R: AsyncRead + Unpin + Send>(
 ) -> Result<ArchiveImportReport, Error> {
     assert!(!handle.store_dir().is_empty());
     assert!(handle.store_dir().starts_with('/'));
+    if handle.backend() == crate::StoreBackend::Casita && options.trust_unsigned {
+        return Err(Error::Store("casita-trust-unsigned-unsupported: Casita import requires signatures".to_string()));
+    }
     handle.revalidate_overlay_bases()?;
+    handle.preflight_casita_archive_trust(&options.trusted_public_keys)?;
     read_magic(reader).await?;
     let header = read_header(reader).await?;
     validate_header_store_prefix(&header, handle.store_dir())?;
@@ -385,6 +389,14 @@ async fn plan_export_closure(
     let mut selected = BTreeMap::<String, PathInfo>::new();
     let mut queue = VecDeque::<StorePath<String>>::new();
     for root in roots {
+        // A supplied Casita selector is not store authority. Resolving it
+        // verifies the envelope and rehydrates content in a fresh session.
+        if handle.backend() == crate::StoreBackend::Casita {
+            let current = load_pathinfo(handle.pathinfo_service().as_ref(), &root.store_path).await?;
+            if current != *root {
+                return Err(Error::Export(format!("archive export root changed: {}", root.store_path)));
+            }
+        }
         validate_export_candidate(root, options, handle).await?;
         insert_export_candidate(&mut selected, &mut queue, root.clone())?;
     }
@@ -561,6 +573,9 @@ async fn import_or_skip_path<R: AsyncRead + Unpin + Send>(
     assert!(!record.listed.store_path.is_empty());
     assert!(!context.handle.store_dir().is_empty());
     require_ca_path_identity(&record.path_frame.path_info, context.handle.store_dir()).map_err(Error::Store)?;
+    if context.handle.backend() == crate::StoreBackend::Casita && record.path_frame.path_info.signatures.is_empty() {
+        return Err(Error::Store(format!("casita-signer-untrusted: {} is unsigned", record.listed.store_path)));
+    }
     let local_state = local_archive_path_state(context.handle, &record.path_frame.path_info).await?;
     if local_state == LocalArchivePathState::ConflictingMetadata {
         return Err(Error::Store(format!(
@@ -1073,11 +1088,26 @@ mod tests {
 
     async fn open_test_store(dir: &std::path::Path, store_dir: &str) -> StoreHandle {
         StoreHandle::open(StoreConfig {
+            backend: crate::StoreBackend::Snix,
             state_dir: dir.join("state"),
             output_dir: dir.join("store"),
             remote_cache_urls: Vec::new(),
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: store_dir.to_string(),
+            base_state_dirs: Vec::new(),
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn open_casita_test_store(dir: &std::path::Path) -> StoreHandle {
+        StoreHandle::open(StoreConfig {
+            backend: crate::StoreBackend::Casita,
+            state_dir: dir.join("state"),
+            output_dir: dir.join("store"),
+            remote_cache_urls: Vec::new(),
+            fallback_mode: StoreFallbackMode::Practical,
+            store_dir: "/mantle/store".to_string(),
             base_state_dirs: Vec::new(),
         })
         .await
@@ -1416,6 +1446,100 @@ mod tests {
         .unwrap();
         assert_eq!(second.imported_count, 0);
         assert_eq!(second.skipped_already_present_count, 1);
+    }
+
+    #[tokio::test]
+    async fn signed_snix_archive_requires_casita_destination_trust_and_round_trips_unchanged() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let source = open_test_store(source_dir.path(), "/mantle/store").await;
+        let signed = signed_pathinfo(&source, "casita-migrated", b"archive migrated bytes").await;
+        source.pathinfo_service().put(signed.clone()).await.unwrap();
+        let mut archive = Vec::new();
+        export_store_archive(&source, std::slice::from_ref(&signed), &mut archive, &ArchiveExportOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let destination_dir = tempfile::tempdir().unwrap();
+        let destination = open_casita_test_store(destination_dir.path()).await;
+        let keys_path = destination.state_dir().join("casita-trusted-public-keys");
+        let options = ArchiveImportOptions {
+            trust_unsigned: false,
+            trusted_public_keys: vec![test_keypair().1],
+            materialize: false,
+        };
+        let missing =
+            import_store_archive(&destination, &mut std::io::Cursor::new(&archive), &options).await.unwrap_err();
+        assert!(missing.to_string().contains("casita-trust-policy-missing"), "{missing}");
+        std::fs::write(&keys_path, format!("{}\n", wrong_verifying_key())).unwrap();
+        let unauthorized =
+            import_store_archive(&destination, &mut std::io::Cursor::new(&archive), &options).await.unwrap_err();
+        assert!(unauthorized.to_string().contains("casita-import-key-unauthorized"), "{unauthorized}");
+        assert!(destination.pathinfo_service().get(*signed.store_path.digest()).await.unwrap().is_none());
+        std::fs::write(&keys_path, format!("{}\n", test_keypair().1)).unwrap();
+        let report = import_store_archive(&destination, &mut std::io::Cursor::new(&archive), &options).await.unwrap();
+        assert_eq!(report.imported_count, 1);
+        drop(destination);
+
+        let reopened = open_casita_test_store(destination_dir.path()).await;
+        let imported = reopened.pathinfo_service().get(*signed.store_path.digest()).await.unwrap().unwrap();
+        assert_eq!(imported, signed);
+        assert_eq!(imported.signatures, signed.signatures);
+        let mut exported_again = Vec::new();
+        export_store_archive(&reopened, std::slice::from_ref(&imported), &mut exported_again, &ArchiveExportOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        assert_eq!(exported_again, archive);
+    }
+
+    #[tokio::test]
+    async fn casita_archive_rejects_unsigned_override_before_reading_or_admitting() {
+        let destination_dir = tempfile::tempdir().unwrap();
+        let destination = open_casita_test_store(destination_dir.path()).await;
+        let mut input = std::io::Cursor::new(b"not an archive");
+        let error = import_store_archive(&destination, &mut input, &ArchiveImportOptions {
+            trust_unsigned: true,
+            trusted_public_keys: vec![test_keypair().1],
+            materialize: false,
+        })
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("casita-trust-unsigned-unsupported"), "{error}");
+        assert_eq!(input.position(), 0);
+    }
+
+    #[tokio::test]
+    async fn casita_archive_rejects_unsigned_record_under_signed_import() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let source = open_test_store(source_dir.path(), "/mantle/store").await;
+        let mut unsigned = signed_pathinfo(&source, "unsigned-casita-archive", b"unsigned NAR bytes").await;
+        unsigned.signatures.clear();
+        source.pathinfo_service().put(unsigned.clone()).await.unwrap();
+        let mut archive = Vec::new();
+        export_store_archive(&source, std::slice::from_ref(&unsigned), &mut archive, &ArchiveExportOptions {
+            trust_unsigned: true,
+        })
+        .await
+        .unwrap();
+        let destination_dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(destination_dir.path().join("state")).unwrap();
+        std::fs::write(
+            destination_dir.path().join("state/casita-trusted-public-keys"),
+            format!("{}\n", test_keypair().1),
+        )
+        .unwrap();
+        let destination = open_casita_test_store(destination_dir.path()).await;
+        let error = import_store_archive(&destination, &mut std::io::Cursor::new(archive), &ArchiveImportOptions {
+            trust_unsigned: false,
+            trusted_public_keys: vec![test_keypair().1],
+            materialize: false,
+        })
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("casita-signer-untrusted"), "{error}");
+        assert!(destination.pathinfo_service().get(*unsigned.store_path.digest()).await.unwrap().is_none());
     }
 
     #[test]
