@@ -31,7 +31,8 @@ const PROVENANCE_OPERATOR_BOOTSTRAP_SEED: &str = "operator-supplied-bootstrap-se
 const PROVENANCE_TEST_FIXTURE: &str = "test-fixture";
 const PROVENANCE_HOST_PATH_DISCOVERY: &str = "host-path-discovery";
 const PROVENANCE_NIX_STORE_DISCOVERY: &str = "nix-store-discovery";
-pub(crate) const PHASE_PROTECTED: &str = "protected";
+/// Label for protected-phase audit events; this token alone grants no execution authority.
+pub const PHASE_PROTECTED: &str = "protected";
 const PATH_SEPARATOR: char = '/';
 const HASH_BUFFER_KIB: usize = 64;
 const KIB_BYTES_USIZE: usize = 1024;
@@ -1522,7 +1523,9 @@ fn read_seed_risk_prefix(path: &Path) -> io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-pub(crate) fn classify_seed_closure_risk_bytes(bytes: &[u8]) -> SeedClosureRisk {
+/// Classify supplied seed bytes by file signature and linker markers.
+/// Input bounds belong to the caller; `StaticElfCandidate` does not prove static linkage.
+pub fn classify_seed_closure_risk_bytes(bytes: &[u8]) -> SeedClosureRisk {
     if bytes.starts_with(SHEBANG_MAGIC) {
         return SeedClosureRisk::ScriptInterpreter;
     }
@@ -1823,7 +1826,9 @@ fn is_executable_metadata(_metadata: &fs::Metadata) -> bool {
     false
 }
 
-pub(crate) fn blake3_file_hex(path: &Path) -> Result<String, Stage0InventoryGenerationError> {
+/// Hash the bytes observed through one open file, rejecting a size change during
+/// the read. The digest is not signature, provenance, or stable-path authority.
+pub fn blake3_file_hex(path: &Path) -> Result<String, Stage0InventoryGenerationError> {
     let mut file = fs::File::open(path).map_err(|err| io_error(path, err))?;
     let expected_bytes = file.metadata().map_err(|err| io_error(path, err))?.len();
     let mut hasher = blake3::Hasher::new();

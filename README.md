@@ -155,6 +155,8 @@ Mantle also accepts a local `signing-key` when the public-key file is absent.
 Do not distribute a private signing key only to enable base reads.
 
 Mantle rejects writable members, symlinks, special files, prefix mismatches, duplicate bases, and invalid signatures.
+Prefix mismatch admission fails before writable overlay state is created and
+does not write to the rejected base.
 Reads do not copy PathInfo, directories, or blobs into the overlay.
 An invalid higher layer blocks fallback to lower layers.
 

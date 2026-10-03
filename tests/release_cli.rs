@@ -3560,7 +3560,6 @@ fn release_reproduce_rejects_matched_rebuild_with_oversized_output() {
     }
 }
 
-
 // r[verify mantle.build_correctness.release_determinism.fixtures.negative.target_copy]
 #[cfg(unix)]
 #[test]

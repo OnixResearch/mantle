@@ -129,7 +129,7 @@ mod project_cmd;
 mod project_resolve;
 mod project_retention_fact;
 mod proof_clock_seccomp;
-mod protected_exec;
+use mantle::protected_exec;
 #[allow(dead_code)]
 mod protected_exec_seccomp;
 mod provider_output_publication;
@@ -155,7 +155,7 @@ mod release_tree_copy;
 mod remote_attempt_log_store;
 mod remote_credential_state;
 mod remote_credentials;
-mod remote_nominal;
+use mantle::remote_nominal;
 mod remote_service_secrets;
 mod remote_test_interruption;
 mod run_binary_selection;
@@ -4143,10 +4143,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
             ctx.json,
             unix_time_now_s()?,
         ),
-        Command::Remote { action } => {
-            command_input::admit_remote_action(action);
-            run_remote_command(ctx, action.clone())
-        }
+        Command::Remote { action } => run_remote_command(ctx, action.clone()),
         Command::RemoteSecretWorker {
             manifest,
             profile,
@@ -8901,10 +8898,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
-    const TEST_EXEC_MODE: u32 = 0o755;
-    #[cfg(unix)]
-    const TEST_READ_MODE: u32 = 0o644;
     const TEST_REMOTE_TRANSFERRED_BYTES: u64 = 11;
     const TEST_REMOTE_REUSED_BYTES: u64 = 0;
     const TEST_REMOTE_STATUS_CONCURRENCY: u32 = 2;
@@ -11093,14 +11086,6 @@ let Plan = {
             err.to_string(),
             "error: build failed\n--cargo-free self-build cannot be combined with legacy stage0/store self-build options"
         );
-    }
-
-    #[cfg(unix)]
-    fn write_file_with_mode(path: &Path, contents: &str, mode: u32) {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::write(path, contents).unwrap();
-        let permissions = std::fs::Permissions::from_mode(mode);
-        std::fs::set_permissions(path, permissions).unwrap();
     }
 
     #[test]

@@ -7346,7 +7346,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn overlay_prefix_mismatch_fails_closed() {
+    async fn overlay_prefix_mismatch_preserves_both_layers() {
         // r[verify store_transports.overlay_composition.scenario.prefix-mismatch]
         // GIVEN an overlay configured with a base whose store_dir differs
         // WHEN opening the composed handle
@@ -7358,6 +7358,10 @@ mod tests {
         // Create base with /nix/store prefix.
         let _base_path_info =
             create_base_store(base_dir.path(), "/nix/store", &test_output("prefix-mismatch", 9)).await;
+        let base_identity_path = base_dir.path().join("store-identity.json");
+        let base_identity_before = std::fs::read(&base_identity_path).unwrap();
+        let base_pathinfo_path = base_dir.path().join("pathinfo.redb");
+        let base_pathinfo_before = std::fs::read(&base_pathinfo_path).unwrap();
 
         // Open overlay with /crunch/store prefix — mismatch must fail.
         let result = StoreHandle::open_overlay(StoreConfig {
@@ -7375,8 +7379,13 @@ mod tests {
             Ok(_) => panic!("prefix mismatch must fail before overlay services open"),
             Err(error) => error,
         };
-        assert!(error.to_string().contains("PrefixMismatch"));
-        assert!(!overlay_dir.path().join("pathinfo.redb").exists());
+        let Error::Store(message) = error else {
+            panic!("prefix mismatch must be rejected by store identity admission");
+        };
+        assert!(message.contains("/nix/store") && message.contains("/crunch/store"), "{message}");
+        assert_eq!(std::fs::read(&base_identity_path).unwrap(), base_identity_before);
+        assert_eq!(std::fs::read(&base_pathinfo_path).unwrap(), base_pathinfo_before);
+        assert_eq!(std::fs::read_dir(overlay_dir.path()).unwrap().count(), 0);
     }
 
     #[tokio::test]

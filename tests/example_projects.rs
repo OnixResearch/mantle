@@ -720,10 +720,8 @@ fn reviewed_file_generation_rejects_unsupported_schema_before_applying() {
     plan["schema"] = serde_json::Value::String("mantle-project-filegen-plan-v999".to_string());
     let unsupported = fixture.path().join("unsupported-plan.json");
     std::fs::write(&unsupported, serde_json::to_vec_pretty(&plan).unwrap()).unwrap();
-    let failed = run_project_command(
-        fixture.path(),
-        &["--json", "filegen", "apply", "--plan", unsupported.to_str().unwrap()],
-    );
+    let failed =
+        run_project_command(fixture.path(), &["--json", "filegen", "apply", "--plan", unsupported.to_str().unwrap()]);
     assert_eq!(failed.status.code(), Some(3));
     assert!(failed.stderr.is_empty(), "rejected reviewed plan must return a blocker, not panic");
     let blockers: serde_json::Value = serde_json::from_slice(&failed.stdout).unwrap();

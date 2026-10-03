@@ -1604,12 +1604,6 @@ pub fn import_source_bundle(
                     .checked_add(1)
                     .ok_or_else(|| RunError::Internal("imported source record count overflow".to_string()))?;
             }
-            crate::source_observation::RecordIngestOutcome::RejectIdentityConflict => {
-                return Err(RunError::Internal(format!(
-                    "source record identity conflict for {}: refusing to overwrite durable state",
-                    record.content_blake3
-                )));
-            }
         }
         summaries.push(summary);
     }
@@ -4692,7 +4686,7 @@ fn cmd_bootstrap_profile(
         let preflight_receipt = offline_preflight_for_manifest(&manifest, context.state_dir)?;
         print_offline_preflight_report(&preflight_receipt, context.is_json_output)?;
         let failure = (!source_offline_preflight_is_ready(&preflight_receipt))
-            .then(|| (SOURCE_PREFLIGHT_NOT_READY_CODE, RunError::Reported(1)));
+            .then_some((SOURCE_PREFLIGHT_NOT_READY_CODE, RunError::Reported(1)));
         return classify_source_effect(SOURCE_PREFLIGHT_EFFECT, failure);
     }
     let profile_receipt = bootstrap_source_bundle_profile_report(&manifest, mode)?;

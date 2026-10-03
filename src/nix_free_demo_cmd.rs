@@ -39,6 +39,8 @@ const GUARD_PART_COUNT: usize = 3;
 
 const _: () = assert!(DIGEST_PART_COUNT > 0);
 
+// Clap carries each complete argument set inline; boxing would change this CLI's parser shape.
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand, Debug, Clone)]
 pub(crate) enum NixFreeDemoAction {
     /// Validate a Nix-free demo bundle machine summary JSON file

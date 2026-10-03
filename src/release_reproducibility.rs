@@ -524,9 +524,7 @@ fn run_rebuild_command(invocation: RebuildCommandInvocation<'_>) -> Result<(), R
         }
     };
     #[cfg(not(target_os = "linux"))]
-    return Err(RunError::Internal(
-        "bounded release reproducibility process supervision requires Linux".to_string(),
-    ));
+    return Err(RunError::Internal("bounded release reproducibility process supervision requires Linux".to_string()));
     #[cfg(target_os = "linux")]
     {
         let (status, stdout, stderr) = run_bounded_rebuild_child(

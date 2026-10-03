@@ -1,4 +1,4 @@
-//! Clap DTO mapping for the store and release families.
+//! Clap DTO mapping for admitted store, project, source, and execution commands.
 //!
 //! The CLI DTOs are mapped here, once, into typed contract commands or into an
 //! explicit statement that the contract does not administer the action.
@@ -14,8 +14,6 @@ use mantle_application_contract::EvaluationOperation;
 use mantle_application_contract::ProjectCommand;
 use mantle_application_contract::ProjectOperation;
 use mantle_application_contract::RealizeCommand;
-use mantle_application_contract::ReleaseCommand;
-use mantle_application_contract::ReleaseOperation;
 use mantle_application_contract::RemoteExecutionCommand;
 use mantle_application_contract::RemoteExecutionOperation;
 use mantle_application_contract::SourceProvenanceCommand;
@@ -26,14 +24,11 @@ use mantle_application_contract::validate_component_flow;
 use mantle_application_contract::validate_evaluation;
 use mantle_application_contract::validate_project_lifecycle;
 use mantle_application_contract::validate_realize_command;
-use mantle_application_contract::validate_release_command;
 use mantle_application_contract::validate_remote_execution;
 use mantle_application_contract::validate_source_provenance;
 use mantle_application_contract::validate_store_command;
 
 use crate::FilegenCommandAction;
-use crate::ReleaseAction;
-use crate::RemoteAction;
 use crate::RunError;
 use crate::SemanticGraphQueryKind;
 use crate::SourceAction;
@@ -43,8 +38,6 @@ use crate::WasmComponentAction;
 
 /// Command root the store DTO maps onto.
 const STORE_COMMAND_ROOT: &str = "store";
-/// Command root the release DTO maps onto.
-const RELEASE_COMMAND_ROOT: &str = "release";
 /// Command root the project-lifecycle DTO maps onto.
 const PROJECT_COMMAND_ROOT: &str = "project";
 /// Manifest file the project-lifecycle commands work from.
@@ -116,13 +109,12 @@ fn store_command(operation: StoreOperation, selectors: Vec<String>, dry_run: boo
     debug_assert!(
         operation == StoreOperation::Gc || operation == StoreOperation::Verify || operation == StoreOperation::Sign
     );
-    let command = StoreAdministrationCommand {
+    StoreAdministrationCommand {
         root: String::from(STORE_COMMAND_ROOT),
         operation,
         selectors,
         dry_run,
-    };
-    command
+    }
 }
 
 /// Reject one store DTO that names selectors the contract forbids.
@@ -255,7 +247,6 @@ mod tests {
         };
         let error = admit_store_action_or_block(&action).expect_err("blank selector must fail closed");
         assert!(error.to_string().contains("verify"), "{error}");
-        assert!(!admit_store_action_or_block(&StoreAction::List).is_err());
     }
 
     #[test]
@@ -287,198 +278,6 @@ mod tests {
     }
 }
 
-/// What one release DTO admits.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum ReleaseCommandAdmission {
-    /// The DTO maps onto an operation the release contract administers.
-    Modeled(ReleaseCommand),
-    /// The contract does not administer this action.
-    NotModeled,
-}
-
-/// Map one release DTO onto its admission.
-///
-/// The directory a modeled operation consumes is the bundle directory, except
-/// for the witness rebuild, which consumes its exported request directory.
-pub(crate) fn admit_release_action(action: &ReleaseAction) -> ReleaseCommandAdmission {
-    match action {
-        ReleaseAction::Create { bundle_dir, .. } => ReleaseCommandAdmission::Modeled(release_command(
-            ReleaseOperation::Create,
-            path_text(bundle_dir.as_deref()),
-        )),
-        ReleaseAction::Verify { bundle_dir, .. } => {
-            ReleaseCommandAdmission::Modeled(release_command(ReleaseOperation::Verify, path_text(Some(bundle_dir))))
-        }
-        ReleaseAction::Attest { bundle_dir, .. } => {
-            ReleaseCommandAdmission::Modeled(release_command(ReleaseOperation::Attest, path_text(Some(bundle_dir))))
-        }
-        ReleaseAction::WitnessExport { bundle_dir, .. } => ReleaseCommandAdmission::Modeled(release_command(
-            ReleaseOperation::WitnessExport,
-            path_text(Some(bundle_dir)),
-        )),
-        ReleaseAction::WitnessRebuild { request_dir, .. } => ReleaseCommandAdmission::Modeled(release_command(
-            ReleaseOperation::WitnessRebuild,
-            path_text(Some(request_dir)),
-        )),
-        ReleaseAction::Transport { .. }
-        | ReleaseAction::FunctionAddressBind { .. }
-        | ReleaseAction::Reproduce { .. }
-        | ReleaseAction::GlobalReproducibility { .. }
-        | ReleaseAction::GlobalReproducibilityEvidence { .. }
-        | ReleaseAction::Gauntlet { .. }
-        | ReleaseAction::NixWitness { .. } => ReleaseCommandAdmission::NotModeled,
-    }
-}
-
-/// Reject one release DTO the contract forbids before any effect runs.
-pub(crate) fn admit_release_action_or_block(action: &ReleaseAction) -> Result<ReleaseCommandAdmission, RunError> {
-    let admission = admit_release_action(action);
-    let ReleaseCommandAdmission::Modeled(command) = &admission else {
-        return Ok(admission);
-    };
-    let blockers = validate_release_command(command);
-    let Some(blocker) = blockers.first() else {
-        return Ok(admission);
-    };
-    debug_assert!(!blockers.is_empty());
-    Err(RunError::Internal(format!("release {} request rejected: {blocker:?}", command.operation.as_str())))
-}
-
-/// Build one typed release command.
-fn release_command(operation: ReleaseOperation, bundle_dir: String) -> ReleaseCommand {
-    let command = ReleaseCommand {
-        root: String::from(RELEASE_COMMAND_ROOT),
-        operation,
-        bundle_dir,
-        required_proofs: Vec::new(),
-        dry_run: false,
-    };
-    command
-}
-
-/// Render an optional path as text, treating an absent path as an empty string.
-fn path_text(path: Option<&std::path::Path>) -> String {
-    path.map(|path| path.display().to_string()).unwrap_or_default()
-}
-
-#[cfg(test)]
-mod release_tests {
-    use super::*;
-
-    /// Parse one real `release` command line into its CLI DTO.
-    fn release_action(parts: &[&'static str]) -> ReleaseAction {
-        let mut argv: Vec<&'static str> = vec!["mantle", "release"];
-        argv.extend_from_slice(parts);
-        let args = test_support::parse_args_on_cli_test_stack(argv).expect("release command line must parse");
-        let crate::Command::Release { action } = args.command else {
-            panic!("expected a release command");
-        };
-        action
-    }
-
-    #[test]
-    fn the_five_modeled_actions_map_to_their_operations_and_directories() {
-        let create = release_action(&[
-            "create",
-            "--release-id",
-            "v1",
-            "--bundle-dir",
-            "/tmp/release-evidence/v1",
-            "--binary",
-            "/tmp/aaaa-crunch/bin/crunch",
-            "--proof-bundle",
-            "/tmp/proof",
-        ]);
-        let ReleaseCommandAdmission::Modeled(command) = admit_release_action(&create) else {
-            panic!("create must be modeled");
-        };
-        assert_eq!(command.operation, ReleaseOperation::Create);
-        assert_eq!(command.bundle_dir, "/tmp/release-evidence/v1");
-        assert_eq!(command.root, RELEASE_COMMAND_ROOT);
-        assert!(!command.operation.requires_bundle());
-
-        let verify = release_action(&["verify", "/tmp/release-evidence/v1"]);
-        let ReleaseCommandAdmission::Modeled(command) = admit_release_action(&verify) else {
-            panic!("verify must be modeled");
-        };
-        assert_eq!(command.operation, ReleaseOperation::Verify);
-        assert_eq!(command.bundle_dir, "/tmp/release-evidence/v1");
-        assert!(command.operation.requires_bundle());
-
-        let attest = release_action(&["attest", "/tmp/release-evidence/v1"]);
-        let ReleaseCommandAdmission::Modeled(command) = admit_release_action(&attest) else {
-            panic!("attest must be modeled");
-        };
-        assert_eq!(command.operation, ReleaseOperation::Attest);
-
-        let export = release_action(&["witness-export", "/tmp/release-evidence/v1"]);
-        let ReleaseCommandAdmission::Modeled(command) = admit_release_action(&export) else {
-            panic!("witness export must be modeled");
-        };
-        assert_eq!(command.operation, ReleaseOperation::WitnessExport);
-
-        let rebuild = release_action(&["witness-rebuild", "/tmp/witness-request"]);
-        let ReleaseCommandAdmission::Modeled(command) = admit_release_action(&rebuild) else {
-            panic!("witness rebuild must be modeled");
-        };
-        assert_eq!(command.operation, ReleaseOperation::WitnessRebuild);
-        assert_eq!(command.bundle_dir, "/tmp/witness-request");
-        assert!(command.operation.requires_bundle());
-    }
-
-    #[test]
-    fn a_create_without_an_explicit_bundle_directory_is_admissible() {
-        let create = release_action(&[
-            "create",
-            "--release-id",
-            "v1",
-            "--binary",
-            "/tmp/aaaa-crunch/bin/crunch",
-            "--proof-bundle",
-            "/tmp/proof",
-        ]);
-        let ReleaseCommandAdmission::Modeled(command) = admit_release_action_or_block(&create).expect("admissible")
-        else {
-            panic!("create must be modeled");
-        };
-        assert!(command.bundle_dir.is_empty());
-        assert!(!command.operation.requires_bundle());
-    }
-
-    #[test]
-    fn a_modeled_action_without_its_directory_fails_closed() {
-        let mut verify = release_action(&["verify", "/tmp/release-evidence/v1"]);
-        let crate::ReleaseAction::Verify { bundle_dir, .. } = &mut verify else {
-            panic!("expected a verify action");
-        };
-        *bundle_dir = std::path::PathBuf::new();
-        let error = admit_release_action_or_block(&verify).expect_err("a missing bundle must fail closed");
-        assert!(error.to_string().contains("verify"), "{error}");
-        assert!(error.to_string().contains("MissingBundle"), "{error}");
-    }
-
-    #[test]
-    fn unmodeled_actions_stay_outside_the_contract() {
-        let global = release_action(&[
-            "global-reproducibility-evidence",
-            "--universe",
-            "universe.json",
-            "--policy",
-            "policy.json",
-            "--bundle-dir",
-            "/tmp/bundle",
-            "--verification-dir",
-            "/tmp/verification",
-            "--release-verify-json",
-            "/tmp/verify.json",
-            "--evidence-path",
-            "/tmp/evidence.json",
-        ]);
-        assert_eq!(admit_release_action(&global), ReleaseCommandAdmission::NotModeled);
-        assert!(matches!(admit_release_action_or_block(&global), Ok(ReleaseCommandAdmission::NotModeled)));
-    }
-}
-
 /// Build the typed project-lifecycle command for one CLI operation.
 ///
 /// The CLI carries no subject for `init`, `show`, or `upgrade`; the subject is
@@ -491,15 +290,14 @@ pub(crate) fn project_lifecycle_command(
 ) -> ProjectCommand {
     debug_assert!(ProjectOperation::all().contains(&operation));
     debug_assert!(!PROJECT_MANIFEST_FILE.is_empty());
-    let command = ProjectCommand {
+    ProjectCommand {
         root: String::from(PROJECT_COMMAND_ROOT),
         operation,
         subject: project_dir.display().to_string(),
         declared_entries: selected.to_vec(),
         manifest_path: project_dir.join(PROJECT_MANIFEST_FILE).display().to_string(),
         has_lock_write: writes_project_lock(operation),
-    };
-    command
+    }
 }
 
 /// Whether one project operation rewrites the lockfile.
@@ -658,15 +456,14 @@ mod graph_tests {
 /// command carries as an empty declared-entry list.
 pub(crate) fn evaluation_command(source: &Path, selected_roots: &[String]) -> EvaluationCommand {
     debug_assert!(!EVALUATION_COMMAND_ROOT.is_empty());
-    let command = EvaluationCommand {
+    EvaluationCommand {
         root: String::from(EVALUATION_COMMAND_ROOT),
         operation: EvaluationOperation::Evaluate,
         subject: source.display().to_string(),
         declared_entries: selected_roots.to_vec(),
         source_path: source.display().to_string(),
         worker_count: None,
-    };
-    command
+    }
 }
 
 /// Reject one evaluation command the contract refuses.
@@ -781,14 +578,13 @@ fn source_command(
 ) -> SourceProvenanceCommand {
     debug_assert!(!SOURCE_COMMAND_ROOT.is_empty());
     debug_assert!(!operation.as_str().is_empty());
-    let command = SourceProvenanceCommand {
+    SourceProvenanceCommand {
         root: String::from(SOURCE_COMMAND_ROOT),
         operation,
         subject: String::from(subject),
         declared_entries,
         expected_digest,
-    };
-    command
+    }
 }
 
 #[cfg(test)]
@@ -1005,14 +801,13 @@ pub(crate) fn admit_filegen_action(action: &FilegenCommandAction) -> Result<Real
 /// Build one realization command for a filegen action.
 fn realize_command(manifest: &Path, dry_run: bool) -> RealizeCommand {
     debug_assert!(!FILEGEN_COMMAND_ROOT.is_empty());
-    let command = RealizeCommand {
+    RealizeCommand {
         root: String::from(FILEGEN_COMMAND_ROOT),
         roots: vec![manifest.display().to_string()],
         profile: None,
         requested_jobs: None,
         dry_run,
-    };
-    command
+    }
 }
 
 #[cfg(test)]
@@ -1173,31 +968,6 @@ mod named_realization_tests {
     }
 }
 
-/// What one remote DTO admits.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum RemoteCommandAdmission {
-    /// The DTO maps onto a remote-execution operation the contract administers.
-    Modeled(RemoteExecutionCommand),
-    /// The contract does not administer this action.
-    NotAdministered,
-}
-
-/// Map one remote action onto its admission.
-///
-/// The contract's build and fetch operations require declared entries, and the
-/// visible remote actions carry none: serving names the input refs it already
-/// holds as an optional repeatable flag, and ticket, status, and debug name no
-/// build inputs at all. Rather than declare entries the operator never wrote,
-/// these actions stay outside the contract.
-pub(crate) fn admit_remote_action(action: &RemoteAction) -> RemoteCommandAdmission {
-    match action {
-        RemoteAction::Ticket { .. }
-        | RemoteAction::Status { .. }
-        | RemoteAction::Debug { .. }
-        | RemoteAction::Serve { .. } => RemoteCommandAdmission::NotAdministered,
-    }
-}
-
 /// Admit the remote secret worker and return its typed command.
 ///
 /// The worker names the manifest it resolves, the SecretSpec profile to use, and
@@ -1220,58 +990,4 @@ pub(crate) fn admit_remote_secret_worker(manifest: &Path, profile: &str) -> Resu
     };
     debug_assert!(!blockers.is_empty());
     Err(RunError::Internal(format!("remote-secret-worker request rejected: {blocker:?}")))
-}
-
-#[cfg(test)]
-mod remote_tests {
-    use std::path::PathBuf;
-
-    use super::*;
-
-    #[test]
-    fn the_secret_worker_maps_its_manifest_and_profile() {
-        let command =
-            admit_remote_secret_worker(Path::new("/tmp/secretspec.toml"), "production").expect("the worker must admit");
-        assert_eq!(command.operation, RemoteExecutionOperation::SecretProfile);
-        assert_eq!(command.root, REMOTE_SECRET_WORKER_COMMAND_ROOT);
-        assert_eq!(command.subject, "/tmp/secretspec.toml");
-        assert_eq!(command.secret_profile, Some(String::from("production")));
-        assert!(command.declared_entries.is_empty());
-        assert!(!command.has_ticket);
-    }
-
-    #[test]
-    fn an_empty_manifest_or_profile_fails_closed() {
-        let error = admit_remote_secret_worker(Path::new(""), "production").expect_err("an empty subject must fail");
-        assert!(error.to_string().contains("MissingSubject"), "{error}");
-
-        let no_profile = RemoteExecutionCommand {
-            root: String::from(REMOTE_SECRET_WORKER_COMMAND_ROOT),
-            operation: RemoteExecutionOperation::SecretProfile,
-            subject: String::from("/tmp/secretspec.toml"),
-            declared_entries: Vec::new(),
-            builder_uri: String::new(),
-            secret_profile: None,
-            has_ticket: false,
-        };
-        let blockers = validate_remote_execution(&no_profile);
-        assert!(blockers.iter().any(|blocker| format!("{blocker:?}").contains("CredentialRequired")));
-        assert!(RemoteExecutionOperation::Build.requires_declared_entries());
-    }
-
-    #[test]
-    fn the_visible_remote_actions_stay_outside_the_contract() {
-        let serve = RemoteAction::Serve {
-            endpoint_id: String::from("local-builder"),
-            binding: crate::RemoteServeBinding::Metadata,
-            signing_key_id: String::from("builder-key"),
-            executor: crate::RemoteServeExecutor::Fixture,
-            present_input_refs: Vec::new(),
-            execution_state_dir: None,
-            secret_manifest: PathBuf::from("secretspec.toml"),
-            secret_profile: String::from("production"),
-            secret_provider: String::from("systemd"),
-        };
-        assert_eq!(admit_remote_action(&serve), RemoteCommandAdmission::NotAdministered);
-    }
 }

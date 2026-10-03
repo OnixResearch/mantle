@@ -2469,6 +2469,19 @@ mod tests {
     }
 
     #[test]
+    fn fixed_point_sandbox_shell_rejects_dynamic_linker_markers() {
+        let temp = tempfile::tempdir().unwrap();
+        let shell = temp.path().join("sandbox-shell");
+        fs::write(&shell, b"\x7fELF-static-candidate").unwrap();
+        validate_static_executable("sandbox shell", &shell).unwrap();
+
+        fs::write(&shell, b"\x7fELF-dynamic-/lib/ld-linux-x86-64.so.2").unwrap();
+        let error = validate_static_executable("sandbox shell", &shell).unwrap_err();
+        assert!(matches!(error, RunError::Build(_)));
+        assert_eq!(fs::read(&shell).unwrap(), b"\x7fELF-dynamic-/lib/ld-linux-x86-64.so.2");
+    }
+
+    #[test]
     fn open_file_descriptor_limit_planning_is_bounded_and_fail_closed() {
         let lower = plan_open_file_descriptor_limit(128, 8_192, OPEN_FILE_LIMIT_TEST_MAX).unwrap();
         let exact = plan_open_file_descriptor_limit(OPEN_FILE_LIMIT_TEST_MAX, 8_192, OPEN_FILE_LIMIT_TEST_MAX).unwrap();

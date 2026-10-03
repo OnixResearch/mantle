@@ -30,6 +30,9 @@ pub(crate) struct LoadedAstGrepEvidence {
     pub sidecar_canonical_digest_blake3: String,
 }
 
+// Keep the complete parsed evidence inline: readers consume it once without
+// allocating an extra box just to represent missing or invalid sidecars.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AstGrepEvidenceRead {
     Missing,
@@ -102,6 +105,9 @@ pub(crate) fn validate_ast_grep_release_attachment_file(
         .map_err(|error| format!("ast-grep release attachment rejected: {error}"))
 }
 
+// The error is the same inline read outcome; this runs only on one bounded
+// sidecar and avoids allocating solely for error indirection.
+#[allow(clippy::result_large_err)]
 fn read_bounded_sidecar_bytes(path: &Path) -> Result<Option<Vec<u8>>, AstGrepEvidenceRead> {
     debug_assert_ne!(BLOCKER_READ, BLOCKER_TOO_LARGE);
     let parent = path.parent().unwrap_or_else(|| Path::new("."));

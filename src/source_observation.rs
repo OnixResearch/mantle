@@ -1,27 +1,19 @@
-//! Source-observation adapters and monotonic ingest for source-bundle records.
+//! Monotonic ingest for source-bundle records.
 //!
-//! Adapter inputs (fixed URL, Git, local logical, package mirror, opaque) map
-//! onto admitted observations from `crunch-source-core`. Ingest planning is
-//! monotonic: only `Add` writes, identical reuse is write-free, and a
-//! conflicting record is rejected before any durable state changes.
+//! Only `Add` writes; identical reuse is write-free, and a conflicting record
+//! is rejected before durable state changes.
 
 use std::path::Path;
 
 use crunch_source_core::ExistingObservation;
-use crunch_source_core::GitObjectFormat;
-use crunch_source_core::IngestOutcome;
-use crunch_source_core::LocatorBoundaryPolicy;
 use crunch_source_core::LocatorClass;
 use crunch_source_core::ProjectionPath;
 use crunch_source_core::SnapshotProfile;
 use crunch_source_core::SourceKind;
 use crunch_source_core::SourceObservation;
-use crunch_source_core::SourceObservationRequest;
-use crunch_source_core::admit_source_observation;
 
 use crate::RunError;
 use crate::source_bundle::SourceRecord;
-use crate::source_bundle::SourceRecordKind;
 
 /// Snapshot profile recorded for source-bundle observations.
 pub const SOURCE_BUNDLE_SNAPSHOT_PROFILE: &str = "mantle-source-snapshot";
@@ -29,107 +21,8 @@ pub const SOURCE_BUNDLE_SNAPSHOT_PROFILE: &str = "mantle-source-snapshot";
 /// Snapshot profile version recorded for source-bundle observations.
 pub const SOURCE_BUNDLE_SNAPSHOT_PROFILE_VERSION: u32 = 1;
 
-/// Default projection when a record does not name one.
+/// Stable projection for canonical stored-record comparisons.
 const DEFAULT_PROJECTION: &str = "source";
-
-/// Map one source record onto an admitted observation when its adapter facts
-/// are sufficient. Insufficient or unrecognized facts yield `None`, which the
-/// caller reports as `provenance-unavailable` rather than backfilling.
-pub fn source_observation_for_record(record: &SourceRecord) -> Result<Option<SourceObservation>, RunError> {
-    let Some(request) = observation_request_for_record(record) else {
-        return Ok(None);
-    };
-    let policy = LocatorBoundaryPolicy {
-        allowed_query_fields: Vec::new(),
-    };
-    let admission = admit_source_observation(&request, &policy);
-    if let Some(observation) = admission.observation {
-        debug_assert_eq!(observation.schema, crunch_source_core::SOURCE_OBSERVATION_SCHEMA);
-        return Ok(Some(observation));
-    }
-    // The record stays valid; only its provenance projection is unavailable.
-    debug_assert!(!admission.diagnostics.is_empty());
-    Ok(None)
-}
-
-fn observation_request_for_record(record: &SourceRecord) -> Option<SourceObservationRequest> {
-    let projection = ProjectionPath::parse(&projection_of(record)).ok()?;
-    let snapshot_profile = SnapshotProfile {
-        name: String::from(SOURCE_BUNDLE_SNAPSHOT_PROFILE),
-        version: SOURCE_BUNDLE_SNAPSHOT_PROFILE_VERSION,
-    };
-    let payload_blake3 = parse_content_digest(&record.content_blake3)?;
-    let (kind, locator, git_object_format, git_revision) = match record.kind {
-        SourceRecordKind::VcsSnapshot => {
-            let remote = record.identity.strip_prefix("git+")?.to_string();
-            let revision = metadata_value(record, "commit")?;
-            let git_object_format = match revision.len() {
-                40 => GitObjectFormat::Sha1,
-                64 => GitObjectFormat::Sha256,
-                _ => return None,
-            };
-            (SourceKind::Git, LocatorClass::GitRemote { remote }, Some(git_object_format), Some(revision))
-        }
-        SourceRecordKind::FixedUrl | SourceRecordKind::BootstrapArchive => (
-            SourceKind::FixedUrl,
-            LocatorClass::FixedUrl {
-                url: record.identity.clone(),
-            },
-            None,
-            None,
-        ),
-        SourceRecordKind::LocalPath => (
-            SourceKind::LocalLogical,
-            LocatorClass::LocalLogical {
-                path: record.identity.clone(),
-            },
-            None,
-            None,
-        ),
-        SourceRecordKind::PackageMirror => (
-            SourceKind::PackageMirror,
-            LocatorClass::PackageMirror {
-                mirror: record.identity.clone(),
-            },
-            None,
-            None,
-        ),
-        SourceRecordKind::ProviderManifest | SourceRecordKind::ToolchainSourceRoot | SourceRecordKind::ProofInput => (
-            SourceKind::Opaque,
-            LocatorClass::Opaque {
-                label: record.identity.clone(),
-            },
-            None,
-            None,
-        ),
-    };
-    Some(SourceObservationRequest {
-        kind,
-        locator,
-        mutable_ref_hint: metadata_value(record, "reference"),
-        git_object_format,
-        git_revision,
-        projection,
-        snapshot_profile,
-        payload_blake3,
-    })
-}
-
-fn projection_of(record: &SourceRecord) -> String {
-    metadata_value(record, "projection").unwrap_or_else(|| String::from(DEFAULT_PROJECTION))
-}
-
-fn metadata_value(record: &SourceRecord, key: &str) -> Option<String> {
-    record
-        .metadata
-        .get(key)
-        .cloned()
-        .or_else(|| record.adapter.as_ref().and_then(|adapter| adapter.extra.get(key).cloned()))
-}
-
-fn parse_content_digest(value: &str) -> Option<crunch_source_core::Blake3Digest> {
-    crunch_source_core::Blake3Digest::parse(value.to_string()).ok()
-}
 
 /// Outcome of planning one record against the durable state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,8 +31,6 @@ pub enum RecordIngestOutcome {
     Add,
     /// Canonical bytes already exist; no write occurs.
     ReuseIdentical,
-    /// The identity exists with different canonical bytes.
-    RejectIdentityConflict,
 }
 
 /// Read the canonical record already stored under one content identity.
@@ -209,16 +100,6 @@ pub fn plan_record_ingest(target: &Path, record: &SourceRecord) -> Result<Record
     }
 }
 
-/// Map the pure planner outcome onto the ingest decision.
-pub fn record_outcome_for_plan(outcome: IngestOutcome) -> RecordIngestOutcome {
-    match outcome {
-        IngestOutcome::Add => RecordIngestOutcome::Add,
-        IngestOutcome::ReuseIdentical => RecordIngestOutcome::ReuseIdentical,
-        IngestOutcome::RejectIdentityConflict => RecordIngestOutcome::RejectIdentityConflict,
-        IngestOutcome::RejectInvalid => RecordIngestOutcome::RejectIdentityConflict,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -226,6 +107,7 @@ mod tests {
 
     use super::*;
     use crate::source_bundle::SourceFileType;
+    use crate::source_bundle::SourceRecordKind;
 
     fn record(kind: SourceRecordKind, identity: &str, metadata: Vec<(&str, &str)>) -> SourceRecord {
         SourceRecord {
@@ -258,33 +140,6 @@ mod tests {
         path.push(format!("mantle-source-record-{label}-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         path
-    }
-
-    #[test]
-    fn git_records_project_to_git_observations() {
-        let git_record = record(SourceRecordKind::VcsSnapshot, "git+https://example.invalid/source.git", vec![(
-            "commit",
-            "1320a983e6c3d1e2fb53dd2464b084b4903b1426",
-        )]);
-        // 40-character revision keeps the Git SHA-1 interoperability class.
-        let observation = source_observation_for_record(&git_record)
-            .expect("adapter mapping runs")
-            .expect("git facts are sufficient");
-        assert_eq!(observation.kind, SourceKind::Git);
-        assert_eq!(observation.git_object_format, Some(GitObjectFormat::Sha1));
-        assert_eq!(observation.git_revision.as_deref().map(str::len), Some(40));
-    }
-
-    #[test]
-    fn url_and_opaque_records_project_or_report_unavailable() {
-        let url_record = record(SourceRecordKind::FixedUrl, "https://example.invalid/a.tar", vec![]);
-        assert!(source_observation_for_record(&url_record).expect("mapping runs").is_some());
-
-        let opaque_record = record(SourceRecordKind::ProofInput, "proof-input-1", vec![]);
-        assert!(source_observation_for_record(&opaque_record).expect("mapping runs").is_some());
-
-        let insufficient = record(SourceRecordKind::VcsSnapshot, "git+https://example.invalid/x.git", vec![]);
-        assert!(source_observation_for_record(&insufficient).expect("mapping runs").is_none());
     }
 
     #[test]

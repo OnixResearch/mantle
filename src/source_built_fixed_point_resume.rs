@@ -84,18 +84,6 @@ pub(crate) struct ResumePlan {
     pub(crate) blockers: Vec<ResumeBlocker>,
 }
 
-impl ResumePlan {
-    /// Whether any stage is restored.
-    pub(crate) fn has_restored_stages(&self) -> bool {
-        !self.restored_stages.is_empty()
-    }
-
-    /// Whether any stage must execute.
-    pub(crate) fn has_executed_stages(&self) -> bool {
-        !self.executed_stages.is_empty()
-    }
-}
-
 /// Validate one bundle against the current plan and add any blocker.
 fn validate_bundle(
     reference: &StageBundleReference,
@@ -320,8 +308,6 @@ mod tests {
         assert!(plan.blockers.is_empty());
         assert_eq!(plan.restored_stages.len(), stage_ids().len());
         assert!(plan.executed_stages.is_empty());
-        assert!(plan.has_restored_stages());
-        assert!(!plan.has_executed_stages());
     }
 
     #[test]
