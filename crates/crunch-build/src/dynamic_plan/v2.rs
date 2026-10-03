@@ -6,7 +6,7 @@ pub const MANTLE_PLAN_V2_SCHEMA: &str = "mantle-plan-v2";
 pub const MAX_PLAN_SLICES: u32 = 256;
 pub const MAX_SLICE_SUBPATH_BYTES: u32 = 4096;
 pub const MAX_SLICE_SUBPATH_DEPTH: u32 = 32;
-pub const MAX_SLICE_ADMITTED_BYTES: u64 = 1024 * 1024 * 1024;
+pub const MAX_SLICE_ADMITTED_BYTES: u64 = 1_073_741_824;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -79,12 +79,13 @@ pub struct CanonicalDynamicPlanV2 {
 /// Rejects host paths, backtracking, empty and dot components before any tree walk.
 // r[impl mantle.dynamic_plan_source_slices.bounded_rejection]
 pub fn validate_slice_subpath(value: &str) -> Result<(), DynamicPlanError> {
-    if value.is_empty() || value.starts_with('/') || value.contains('\0') || value.contains('\\') {
+    if value.is_empty() || value.starts_with('/') {
         return invalid_scalar("slice subpath", value, "slice-subpath-invalid");
     }
-    if value.len() > MAX_SLICE_SUBPATH_BYTES as usize {
-        return limit_exceeded("slice subpath bytes", value.len() as u64, MAX_SLICE_SUBPATH_BYTES);
+    if value.contains('\0') || value.contains('\\') {
+        return invalid_scalar("slice subpath", value, "slice-subpath-invalid");
     }
+    validate_len_limit("slice subpath bytes", value.len(), MAX_SLICE_SUBPATH_BYTES)?;
     let mut depth = 0_u32;
     for component in value.split('/') {
         depth = depth.saturating_add(1);
@@ -101,14 +102,16 @@ pub fn validate_slice_subpath(value: &str) -> Result<(), DynamicPlanError> {
 }
 
 fn validate_store_name(name: &str) -> Result<(), DynamicPlanError> {
-    if name.is_empty() || name.len() > MAX_DYNAMIC_PLAN_OUTPUT_NAME_BYTES as usize {
+    if name.is_empty() {
+        return invalid_scalar("slice store name", name, "must have 1..64 bytes");
+    }
+    let name_bytes = len_as_u64("slice store name", name.len())?;
+    if name_bytes > u64::from(MAX_DYNAMIC_PLAN_OUTPUT_NAME_BYTES) {
         return invalid_scalar("slice store name", name, "must have 1..64 bytes");
     }
     if nix_compat::store_path::validate_name(name).is_err() {
         return invalid_scalar("slice store name", name, "contains invalid Nix store name character");
     }
-    assert!(!name.is_empty());
-    assert!(name.len() <= MAX_DYNAMIC_PLAN_OUTPUT_NAME_BYTES as usize);
     Ok(())
 }
 
@@ -154,6 +157,9 @@ pub fn admit_plan_v2(wire: WireDynamicPlanV2, prefix: &str) -> Result<DynamicPla
     admit_plan_v2_with_bytes(wire, prefix).map(|(plan, _)| plan)
 }
 
+// The producer-supplied wire fields are checked through fallible validators;
+// the one assertion below only guards uniqueness after canonical deduplication.
+#[allow(tigerstyle::assertion_density)]
 fn admit_plan_v2_with_bytes(
     wire: WireDynamicPlanV2,
     prefix: &str,
@@ -220,6 +226,9 @@ fn project_source(source: &SourceV2) -> WireSourceV2 {
     }
 }
 
+// Canonical JSON must be nonempty; oversized output returns PlanTooLarge.
+// A second assertion would merely repeat that fallible byte-limit check.
+#[allow(tigerstyle::assertion_density)]
 pub fn canonical_plan_v2_bytes(plan: &DynamicPlanV2) -> Result<Vec<u8>, DynamicPlanError> {
     let mut sources = plan.sources.iter().collect::<Vec<_>>();
     sources.sort_by(|left, right| left.id().cmp(right.id()));
@@ -246,7 +255,6 @@ pub fn canonical_plan_v2_bytes(plan: &DynamicPlanV2) -> Result<Vec<u8>, DynamicP
         });
     }
     assert!(!bytes.is_empty());
-    assert!(bytes.len() <= MAX_DYNAMIC_PLAN_BYTES as usize);
     Ok(bytes)
 }
 

@@ -82,23 +82,12 @@ pub fn plan_slices<S: Borrow<SliceSource>>(
     declared_outputs: &BTreeSet<OutputName>,
     facts: &[SliceTreeFact],
 ) -> Result<Vec<PlannedSlice>, SliceRejection> {
-    let first = slices.first().map(Borrow::borrow);
-    if slices.len() > MAX_PLAN_SLICES as usize {
-        return Err(SliceRejection {
-            source_id: first.expect("over-limit slices are non-empty").id.clone(),
-            kind: SliceRejectionKind::Limit,
-            detail: "slice count",
-        });
-    }
-    if facts.len() > MAX_PLAN_SLICES as usize {
-        return Err(reject(facts[0].source_id.clone(), SliceRejectionKind::Limit, "tree fact count"));
-    }
-    if facts.len() > slices.len() {
-        return Err(reject(facts[0].source_id.clone(), SliceRejectionKind::Conflict, "unexpected tree fact"));
-    }
+    validate_slice_fact_counts(slices, facts)?;
     let facts_by_id = facts.iter().map(|fact| (&fact.source_id, fact)).collect::<BTreeMap<_, _>>();
-    if facts_by_id.len() != facts.len() {
-        return Err(reject(facts[0].source_id.clone(), SliceRejectionKind::Conflict, "duplicate tree fact"));
+    if let Some(first) = facts.first()
+        && facts_by_id.len() != facts.len()
+    {
+        return Err(reject(first.source_id.clone(), SliceRejectionKind::Conflict, "duplicate tree fact"));
     }
     let mut ordered = slices.iter().map(Borrow::borrow).collect::<Vec<&SliceSource>>();
     ordered.sort_by(|left, right| left.id.cmp(&right.id));
@@ -132,7 +121,10 @@ pub fn plan_slices<S: Borrow<SliceSource>>(
         if fact.kind == SliceNodeKind::Absent {
             return Err(reject(slice.id.clone(), SliceRejectionKind::Absent, "subtree is absent"));
         }
-        if fact.observed_nar_blake3.as_ref() != Some(&slice.nar_blake3) {
+        let Some(observed_digest) = fact.observed_nar_blake3.as_ref() else {
+            return Err(reject(slice.id.clone(), SliceRejectionKind::DigestMismatch, "observed NAR BLAKE3 differs"));
+        };
+        if observed_digest != &slice.nar_blake3 {
             return Err(reject(slice.id.clone(), SliceRejectionKind::DigestMismatch, "observed NAR BLAKE3 differs"));
         }
         total_bytes = total_bytes
@@ -150,13 +142,33 @@ pub fn plan_slices<S: Borrow<SliceSource>>(
             subpath: slice.subpath.clone(),
             store_name: slice.store_name.clone(),
             declared_nar_blake3: slice.nar_blake3.clone(),
-            observed_nar_blake3: fact.observed_nar_blake3.as_ref().expect("matched digest").clone(),
+            observed_nar_blake3: observed_digest.clone(),
             nar_bytes: fact.nar_bytes,
         });
     }
     assert_eq!(planned.len(), slices.len());
     assert!(total_bytes <= MAX_SLICE_ADMITTED_BYTES);
     Ok(planned)
+}
+
+fn validate_slice_fact_counts<S: Borrow<SliceSource>>(
+    slices: &[S],
+    facts: &[SliceTreeFact],
+) -> Result<(), SliceRejection> {
+    if let Some(first) = slices.first().map(Borrow::borrow)
+        && !matches!(u32::try_from(slices.len()), Ok(count) if count <= MAX_PLAN_SLICES)
+    {
+        return Err(reject(first.id.clone(), SliceRejectionKind::Limit, "slice count"));
+    }
+    if let Some(first) = facts.first() {
+        if !matches!(u32::try_from(facts.len()), Ok(count) if count <= MAX_PLAN_SLICES) {
+            return Err(reject(first.source_id.clone(), SliceRejectionKind::Limit, "tree fact count"));
+        }
+        if facts.len() > slices.len() {
+            return Err(reject(first.source_id.clone(), SliceRejectionKind::Conflict, "unexpected tree fact"));
+        }
+    }
+    Ok(())
 }
 
 fn reject(source_id: SourceId, kind: SliceRejectionKind, detail: &'static str) -> SliceRejection {

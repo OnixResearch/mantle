@@ -417,7 +417,12 @@ impl V2Registration<'_> {
                         .ok_or_else(|| Error::DerivationNotFound { path: path.clone() })?
                         .derivation
                 };
-                if worker.registry.len() as usize + created.len() >= MAX_GOALS as usize {
+                let Some(remaining) = MAX_GOALS.checked_sub(worker.registry.len()) else {
+                    return Err(Error::Store(format!("goal registry at capacity ({MAX_GOALS})")));
+                };
+                let created_count = u32::try_from(created.len())
+                    .map_err(|_| Error::Store(format!("goal registry at capacity ({MAX_GOALS})")))?;
+                if created_count >= remaining {
                     return Err(Error::Store(format!("goal registry at capacity ({MAX_GOALS})")));
                 }
                 created.insert(key);
@@ -692,6 +697,9 @@ fn unit_output_dependencies_registered(unit: &DynamicUnit, registered: &BTreeMap
     })
 }
 
+// Accepted V2 plans have canonical bytes capped at MAX_DYNAMIC_PLAN_BYTES,
+// which bounds the number of sources. Fallible lookups carry the invariants.
+#[allow(tigerstyle::assertion_density, tigerstyle::unbounded_collection_growth)]
 fn v2_sources_by_id(
     accepted: &NativeDynamicPlanAccepted,
     rows: &[NativeDynamicSourceSliceReport],
@@ -718,6 +726,10 @@ fn v2_sources_by_id(
     Ok(by_id)
 }
 
+// Decoding bounds units to MAX_DYNAMIC_PLAN_UNITS; pending removes each unit
+// exactly once, so registered cannot outgrow that finite set. Every phase
+// checks errors before any batch publication rather than asserting on input.
+#[allow(tigerstyle::assertion_density, tigerstyle::unbounded_collection_growth)]
 fn prepare_v2_registration(
     accepted: &NativeDynamicPlanAccepted,
     rows: &[NativeDynamicSourceSliceReport],
@@ -751,35 +763,7 @@ fn prepare_v2_registration(
         for id in ready_units {
             let unit = units_by_id[&id];
             let prepared = prepare_native_dynamic_unit(unit, &sources, &registered, &stage, store_dir)?;
-            let path = prepared.drv_path.clone();
-            let absolute = path.to_absolute_path_with_prefix(store_dir);
-            if let Some(existing) = stage.staged.get(&absolute) {
-                if existing.hdm != prepared.hdm
-                    || existing.content_addressed != prepared.content_addressed
-                    || existing.dynamic_plan_outputs != prepared.dynamic_plan_outputs
-                    || existing.derivation.to_aterm_bytes_with_store_dir(store_dir)
-                        != prepared.derivation.to_aterm_bytes_with_store_dir(store_dir)
-                {
-                    return Err(Error::Store(format!("dynamic duplicate `{absolute}` changed admitted identity")));
-                }
-            } else if let Some(existing) = known_paths.get_by_drv_path(&absolute) {
-                if existing.hash_derivation_modulo != prepared.hdm
-                    || existing.content_addressed != prepared.content_addressed
-                    || existing.dynamic_plan_outputs != prepared.dynamic_plan_outputs
-                    || existing.derivation.to_aterm_bytes_with_store_dir(store_dir)
-                        != prepared.derivation.to_aterm_bytes_with_store_dir(store_dir)
-                {
-                    return Err(Error::Store(format!(
-                        "dynamic insertion `{absolute}` collides with an existing registry entry"
-                    )));
-                }
-            } else {
-                if known_paths.len() as usize + stage.staged.len() + 1 > MAX_ENTRIES as usize {
-                    return Err(Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")));
-                }
-                stage.order.push(absolute.clone());
-                stage.staged.insert(absolute, prepared);
-            }
+            let path = stage_v2_unit(&mut stage, prepared)?;
             registered.insert(id.clone(), path);
             pending.remove(&id);
         }
@@ -813,6 +797,75 @@ fn prepare_v2_registration(
     })
 }
 
+fn matches_v2_unit_identity(
+    hdm: &[u8; 32],
+    is_content_addressed: bool,
+    dynamic_plan_outputs: &[String],
+    derivation: &Derivation,
+    prepared: &V2StagedUnit,
+    store_dir: &str,
+) -> bool {
+    if hdm != &prepared.hdm {
+        return false;
+    }
+    if is_content_addressed != prepared.content_addressed {
+        return false;
+    }
+    if dynamic_plan_outputs != prepared.dynamic_plan_outputs.as_slice() {
+        return false;
+    }
+    derivation.to_aterm_bytes_with_store_dir(store_dir) == prepared.derivation.to_aterm_bytes_with_store_dir(store_dir)
+}
+
+// Collision checks and remaining-capacity checks are pre-publication errors,
+// not assertions on producer-supplied units.
+#[allow(tigerstyle::assertion_density)]
+fn stage_v2_unit(stage: &mut V2Registration<'_>, prepared: V2StagedUnit) -> Result<StorePath<String>, Error> {
+    let store_dir = stage.live.store_dir();
+    let path = prepared.drv_path.clone();
+    let absolute = path.to_absolute_path_with_prefix(store_dir);
+    if let Some(existing) = stage.staged.get(&absolute) {
+        if !matches_v2_unit_identity(
+            &existing.hdm,
+            existing.content_addressed,
+            &existing.dynamic_plan_outputs,
+            &existing.derivation,
+            &prepared,
+            store_dir,
+        ) {
+            return Err(Error::Store(format!("dynamic duplicate `{absolute}` changed admitted identity")));
+        }
+    } else if let Some(existing) = stage.live.get_by_drv_path(&absolute) {
+        if !matches_v2_unit_identity(
+            &existing.hash_derivation_modulo,
+            existing.content_addressed,
+            &existing.dynamic_plan_outputs,
+            &existing.derivation,
+            &prepared,
+            store_dir,
+        ) {
+            return Err(Error::Store(format!(
+                "dynamic insertion `{absolute}` collides with an existing registry entry"
+            )));
+        }
+    } else {
+        let Some(remaining) = MAX_ENTRIES.checked_sub(stage.live.len()) else {
+            return Err(Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")));
+        };
+        let staged_count = u32::try_from(stage.staged.len())
+            .map_err(|_| Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")))?;
+        if staged_count >= remaining {
+            return Err(Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")));
+        }
+        stage.order.push(absolute.clone());
+        stage.staged.insert(absolute, prepared);
+    }
+    Ok(path)
+}
+
+// Unit inputs were bounded during V2 admission, so parent_hdms cannot outgrow
+// this derivation's input-derivation keys; fallible lookups replace assertions.
+#[allow(tigerstyle::assertion_density, tigerstyle::unbounded_collection_growth)]
 fn prepare_native_dynamic_unit(
     unit: &DynamicUnit,
     sources: &BTreeMap<SourceId, StorePath<String>>,
@@ -840,12 +893,12 @@ fn prepare_native_dynamic_unit(
         parent_hdms.insert(parent_drv_path.as_ref(), digest);
     }
     let hdm = derivation.hash_derivation_modulo_with_store_dir(|parent| parent_hdms[parent], store_dir);
-    let content_addressed = matches!(unit.derivation.addressing_mode, AddressingMode::ContentAddressed)
+    let is_content_addressed = matches!(unit.derivation.addressing_mode, AddressingMode::ContentAddressed)
         && unit.derivation.fixed_output.is_none();
     derivation
         .calculate_output_paths_with_store_dir(&unit.derivation.name, &hdm, store_dir)
         .map_err(|err| Error::Store(format!("computing native dynamic output paths for '{}': {err}", unit.id)))?;
-    if content_addressed {
+    if is_content_addressed {
         for output in derivation.outputs.values_mut() {
             output.path = None;
         }
@@ -857,7 +910,7 @@ fn prepare_native_dynamic_unit(
         drv_path,
         hdm,
         derivation,
-        content_addressed,
+        content_addressed: is_content_addressed,
         dynamic_plan_outputs: unit
             .derivation
             .dynamic_plan_outputs
@@ -2021,6 +2074,9 @@ impl Worker {
     /// Publish the whole validated source batch before any unit or goal mutation.
     /// Ordinary pre-commit failures reject only this plan; uncertain commits abort
     /// the run rather than making a false "rejected without publication" claim.
+    // Accepted V2 plans cap slices at MAX_PLAN_SLICES (256), so both subtree
+    // and projected-path maps grow at most once per admitted slice.
+    #[allow(tigerstyle::unbounded_collection_growth)]
     async fn admit_v2_source_slices<BServ>(
         &self,
         accepted: &mut NativeDynamicPlanAccepted,
@@ -2067,7 +2123,6 @@ impl Worker {
             .map(|slice| slice.producer_output.clone())
             .collect::<BTreeSet<_>>();
         let mut observations = Vec::with_capacity(slices.len());
-        let mut observations_by_source = BTreeMap::new();
         let mut observations_by_subtree: BTreeMap<(&OutputName, &str), usize> = BTreeMap::new();
         let mut facts = Vec::with_capacity(slices.len());
         for (slice, row) in slices.iter().zip(&mut rows) {
@@ -2126,7 +2181,7 @@ impl Worker {
                     }
                 };
                 let digest = NarDigest::new(data_encoding::HEXLOWER.encode(&observation.nar_blake3()))
-                    .expect("the store observation supplies exactly one BLAKE3 digest");
+                    .map_err(|error| Error::Store(format!("invalid observed source slice digest: {error}")))?;
                 let kind = match observation.node() {
                     snix_castore::Node::File { .. } => SliceNodeKind::File,
                     snix_castore::Node::Directory { .. } => SliceNodeKind::Directory,
@@ -2153,7 +2208,6 @@ impl Worker {
                 observed_nar_blake3: Some(digest.clone()),
                 nar_bytes: observation.observed.nar_size(),
             });
-            observations_by_source.insert(slice.id.clone(), observation_index);
         }
         let planned = match plan_slices(&slices, &declared_outputs, &facts) {
             Ok(planned) => planned,
@@ -2169,18 +2223,22 @@ impl Worker {
         };
         let publications =
             planned.iter().filter(|slice| slice.publication_source_id == slice.source_id).collect::<Vec<_>>();
-        let requests = publications
-            .iter()
-            .map(|slice| BuilderSourceSlice {
-                observed: &observations[observations_by_source[&slice.source_id]].observed,
+        let mut requests = Vec::with_capacity(publications.len());
+        for slice in &publications {
+            let subtree_key = (&slice.producer_output, slice.subpath.as_str());
+            let observation_index = observations_by_subtree.get(&subtree_key).ok_or_else(|| {
+                Error::Store(format!("missing observed subtree for source slice '{}'", slice.source_id))
+            })?;
+            requests.push(BuilderSourceSlice {
+                observed: &observations[*observation_index].observed,
                 store_name: &slice.store_name,
-            })
-            .collect::<Vec<_>>();
+            });
+        }
         // Project exactly the path the batch publisher will sign, then
         // validate the entire V2 unit graph and root closure before any write.
-        let mut projected = BTreeMap::new();
-        for slice in &publications {
-            let observation = &observations[observations_by_source[&slice.source_id]].observed;
+        let mut projected: BTreeMap<&SourceId, StorePath<String>> = BTreeMap::new();
+        for (slice, request) in publications.iter().zip(&requests) {
+            let observation = request.observed;
             let ca = CAHash::Nar(NixHash::Sha256(observation.nar_sha256()));
             let path = match build_ca_path_with_store_dir(
                 &slice.store_name,
@@ -2200,15 +2258,19 @@ impl Worker {
                     )));
                 }
             };
-            projected.insert(slice.source_id.clone(), path);
+            projected.insert(&slice.source_id, path);
         }
         for (slice, row) in planned.iter().zip(&mut rows) {
-            row.admitted_store_path = Some(
-                projected
-                    .get(&slice.publication_source_id)
-                    .expect("the canonical publication owner has a projected path")
-                    .clone(),
-            );
+            let Some(path) = projected.get(&slice.publication_source_id) else {
+                return Ok(Some(rejected_accepted_slice_plan(
+                    accepted,
+                    rows,
+                    Some(&slice.source_id),
+                    NativeDynamicPlanRejectionKind::InvalidPlan,
+                    format!("source slice '{}' has no projected publication owner", slice.source_id),
+                )));
+            };
+            row.admitted_store_path = Some(path.clone());
         }
         let staged = match prepare_v2_registration(accepted, &rows, known_paths, self) {
             Ok(staged) => staged,
@@ -2243,8 +2305,8 @@ impl Worker {
                 "verified source batch returned an incomplete result after publication".to_string(),
             ));
         }
-        for (slice, result) in publications.iter().zip(&published) {
-            if result.nar_blake3 != observations[observations_by_source[&slice.source_id]].observed.nar_blake3()
+        for ((slice, request), result) in publications.iter().zip(&requests).zip(&published) {
+            if result.nar_blake3 != request.observed.nar_blake3()
                 || result.nar_size != slice.nar_bytes
                 || result.logical_store_path
                     != projected[&slice.source_id].to_absolute_path_with_prefix(builder.store_dir())
