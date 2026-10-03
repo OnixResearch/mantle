@@ -28,8 +28,8 @@ use nix_compat::derivation::Output;
 use nix_compat::nixhash::CAHash;
 use nix_compat::nixhash::HashAlgo;
 use nix_compat::nixhash::NixHash;
-use nix_compat::store_path::build_ca_path_with_store_dir;
 use nix_compat::store_path::StorePath;
+use nix_compat::store_path::build_ca_path_with_store_dir;
 use snix_build::buildservice::BuildService;
 use tokio::sync::Semaphore;
 use tokio::sync::mpsc;
@@ -876,7 +876,10 @@ fn register_native_dynamic_plan_units(
     };
     let store_dir = known_paths.store_dir().to_string();
     let sources = dynamic_sources_by_id(&plan.plan.sources, &store_dir)?;
-    let units_by_id = plan.plan.units.iter()
+    let units_by_id = plan
+        .plan
+        .units
+        .iter()
         .map(|unit| (unit.id.clone(), unit))
         .collect::<BTreeMap<UnitId, &DynamicUnit>>();
     let mut pending = units_by_id.keys().cloned().collect::<BTreeSet<UnitId>>();
@@ -4415,10 +4418,12 @@ mod tests {
             .await
             .unwrap();
         assert!(rejection.is_none(), "{rejection:?}");
-        assert!(accepted
-            .source_slices
-            .iter()
-            .all(|slice| slice.disposition == "admitted" && slice.admitted_store_path.is_some()));
+        assert!(
+            accepted
+                .source_slices
+                .iter()
+                .all(|slice| slice.disposition == "admitted" && slice.admitted_store_path.is_some())
+        );
         assert!(prepared.is_some());
     }
 
@@ -4836,11 +4841,8 @@ mod tests {
         let second_leaf = put_test_blob(&bs, b"second distinct slice").await;
         let first = stored_test_directory(&ds, [("file.txt".try_into().unwrap(), first_leaf)]).await;
         let second = stored_test_directory(&ds, [("file.txt".try_into().unwrap(), second_leaf)]).await;
-        let packages = stored_test_directory(&ds, [
-            ("a".try_into().unwrap(), first),
-            ("b".try_into().unwrap(), second),
-        ])
-        .await;
+        let packages =
+            stored_test_directory(&ds, [("a".try_into().unwrap(), first), ("b".try_into().unwrap(), second)]).await;
         let source_root = stored_test_directory(&ds, [("packages".try_into().unwrap(), packages)]).await;
         let observed_first = builder.observe_source_slice(&source_root, "packages/a").await.unwrap();
         let observed_second = builder.observe_source_slice(&source_root, "packages/b").await.unwrap();

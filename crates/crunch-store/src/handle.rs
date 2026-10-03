@@ -108,7 +108,7 @@ const MAX_REMOTE_TRUSTED_PUBLIC_KEYS: usize = 16;
 const OVERLAY_DIRECTORY_READ_LIMIT: usize = 1_000_000;
 const MAX_LAYERED_CLOSURE_PATHS: usize = 1_000_000;
 const MAX_RECORDED_LAYER_SELECTIONS: usize = 65_536;
-const SOURCE_SLICE_NAR_MAX_BYTES: u64 = 1024 * 1024 * 1024;
+const SOURCE_SLICE_NAR_MAX_BYTES: u64 = 1_073_741_824;
 
 /// Configuration for opening a store.
 pub struct StoreConfig {

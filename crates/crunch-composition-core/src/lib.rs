@@ -567,7 +567,7 @@ fn index_snapshots(
     debug_assert!(!prepared.bindings.is_empty());
     let expected = prepared.bindings.iter().map(|binding| binding.root.clone()).collect::<BTreeSet<_>>();
     let mut indexed = BTreeMap::new();
-    debug_assert!(snapshots.len() >= expected.len());
+    let expected_count = expected.len();
     for snapshot in snapshots {
         validate_root_ref(&snapshot.root)?;
         if !expected.contains(&snapshot.root) {
@@ -583,6 +583,7 @@ fn index_snapshots(
             return Err(CompositionError::MissingSnapshot(root.digest_blake3));
         }
     }
+    debug_assert_eq!(indexed.len(), expected_count);
     Ok(indexed)
 }
 

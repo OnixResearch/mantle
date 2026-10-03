@@ -46,7 +46,7 @@ use crate::handle::path_info_content_and_signature_matches;
 use crate::handle::signed_path_info_for_node;
 use crate::roots;
 const MAX_VERIFIED_SOURCE_SLICES: usize = 256;
-const MAX_VERIFIED_SOURCE_SLICE_NAR_BYTES: u64 = 1024 * 1024 * 1024;
+const MAX_VERIFIED_SOURCE_SLICE_NAR_BYTES: u64 = 1_073_741_824;
 
 /// Build-realization authority with private store services and session state.
 ///
