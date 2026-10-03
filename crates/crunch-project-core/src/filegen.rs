@@ -167,8 +167,14 @@ pub fn plan_file_generation(request: FilegenPlanRequest) -> FilegenPlan {
 }
 
 pub fn verify_filegen_apply_plan(reviewed: &FilegenPlan, current: &FilegenPlan) -> Result<(), Vec<FilegenBlocker>> {
-    assert_eq!(reviewed.schema, FILEGEN_PLAN_SCHEMA, "reviewed plan schema must be current");
     assert_eq!(current.schema, FILEGEN_PLAN_SCHEMA, "current plan schema must be current");
+    if reviewed.schema != FILEGEN_PLAN_SCHEMA {
+        return Err(vec![blocker(
+            "unsupported-reviewed-plan-schema",
+            "<plan>",
+            format!("reviewed plan schema `{}` is unsupported; expected `{FILEGEN_PLAN_SCHEMA}`", reviewed.schema),
+        )]);
+    }
 
     if !current.blockers.is_empty() {
         return Err(current.blockers.clone());

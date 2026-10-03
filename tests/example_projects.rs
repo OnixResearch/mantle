@@ -705,6 +705,40 @@ fn reviewed_file_generation_applies_current_plan_and_tracks_state() {
 }
 
 #[test]
+fn reviewed_file_generation_rejects_unsupported_schema_before_applying() {
+    let fixture = tempfile::tempdir().unwrap();
+    copy_reviewed_filegen_project(fixture.path());
+    let reviewed = fixture.path().join("reviewed-plan.json");
+    let mut plan = parse_successful_json(
+        run_project_command(fixture.path(), &["--json", "filegen", "plan", "--plan-out", reviewed.to_str().unwrap()]),
+        "filegen plan",
+    );
+    assert_eq!(plan["schema"], "mantle-project-filegen-plan-v1");
+    assert!(!fixture.path().join("generated").exists());
+    assert!(!fixture.path().join(".mantle/filegen-state.json").exists());
+
+    plan["schema"] = serde_json::Value::String("mantle-project-filegen-plan-v999".to_string());
+    let unsupported = fixture.path().join("unsupported-plan.json");
+    std::fs::write(&unsupported, serde_json::to_vec_pretty(&plan).unwrap()).unwrap();
+    let failed = run_project_command(
+        fixture.path(),
+        &["--json", "filegen", "apply", "--plan", unsupported.to_str().unwrap()],
+    );
+    assert_eq!(failed.status.code(), Some(3));
+    assert!(failed.stderr.is_empty(), "rejected reviewed plan must return a blocker, not panic");
+    let blockers: serde_json::Value = serde_json::from_slice(&failed.stdout).unwrap();
+    let blockers = blockers.as_array().unwrap();
+    assert_eq!(blockers.len(), 1);
+    assert_eq!(blockers[0]["code"], "unsupported-reviewed-plan-schema");
+    assert_eq!(blockers[0]["target"], "<plan>");
+    let message = blockers[0]["message"].as_str().unwrap();
+    assert!(message.contains("mantle-project-filegen-plan-v999"), "{message}");
+    assert!(message.contains("mantle-project-filegen-plan-v1"), "{message}");
+    assert!(!fixture.path().join("generated").exists());
+    assert!(!fixture.path().join(".mantle/filegen-state.json").exists());
+}
+
+#[test]
 fn reviewed_file_generation_rejects_drift_conflict_and_escape() {
     let drift_fixture = tempfile::tempdir().unwrap();
     copy_reviewed_filegen_project(drift_fixture.path());

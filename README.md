@@ -236,6 +236,9 @@ Mantle's project layer handles declared source inputs, lock state, generated
 Nickel bindings, package selectors, shell profiles, and reviewed file generation.
 It does not own Onix-style module evaluation or system configuration.
 
+An unsupported reviewed-plan schema returns a typed blocker before generated-file
+or filegen-state writes; valid reviewed plans retain drift-checked apply behavior.
+
 ## Offline source workflow
 
 Prepare a source bundle on a connected host, then import and pin it before an
