@@ -204,8 +204,21 @@ pub struct BuildJsonNativeDynamicPlan {
     pub raw_artifact_digest: Option<String>,
     pub canonical_plan_digest: Option<String>,
     pub accepted_unit_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub source_slices: Vec<BuildJsonNativeSourceSlice>,
     pub rejection_reason: Option<String>,
     pub scheduler_action: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonNativeSourceSlice {
+    pub source_id: String,
+    pub producer_output: String,
+    pub subpath: String,
+    pub declared_nar_blake3: String,
+    pub observed_nar_blake3: Option<String>,
+    pub admitted_store_path: Option<String>,
+    pub disposition: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -596,6 +609,22 @@ fn build_native_dynamic_plan_reports(result: &PipelineResult, store_dir: &str) -
             raw_artifact_digest: row.raw_artifact_digest.clone(),
             canonical_plan_digest: row.canonical_plan_digest.clone(),
             accepted_unit_ids: row.accepted_unit_ids.clone(),
+            source_slices: row
+                .source_slices
+                .iter()
+                .map(|slice| BuildJsonNativeSourceSlice {
+                    source_id: slice.source_id.clone(),
+                    producer_output: slice.producer_output.clone(),
+                    subpath: slice.subpath.clone(),
+                    declared_nar_blake3: slice.declared_nar_blake3.clone(),
+                    observed_nar_blake3: slice.observed_nar_blake3.clone(),
+                    admitted_store_path: slice
+                        .admitted_store_path
+                        .as_ref()
+                        .map(|path| path.to_absolute_path_with_prefix(store_dir)),
+                    disposition: slice.disposition.clone(),
+                })
+                .collect(),
             rejection_reason: row.rejection_reason.clone(),
             scheduler_action: row.scheduler_action.clone(),
         })
@@ -1416,8 +1445,48 @@ mod tests {
                 raw_artifact_digest: Some("raw-digest".to_string()),
                 canonical_plan_digest: Some("canonical-digest".to_string()),
                 accepted_unit_ids: vec!["unit.build".to_string()],
+                source_slices: vec![
+                    crunch_build::NativeDynamicSourceSliceReport {
+                        source_id: "src.a".to_string(),
+                        producer_output: "sources".to_string(),
+                        subpath: "packages/a".to_string(),
+                        declared_nar_blake3: "a".repeat(64),
+                        observed_nar_blake3: Some("a".repeat(64)),
+                        admitted_store_path: Some(output_path.clone()),
+                        disposition: "admitted".to_string(),
+                    },
+                    crunch_build::NativeDynamicSourceSliceReport {
+                        source_id: "src.b".to_string(),
+                        producer_output: "sources".to_string(),
+                        subpath: "packages/b".to_string(),
+                        declared_nar_blake3: "a".repeat(64),
+                        observed_nar_blake3: Some("a".repeat(64)),
+                        admitted_store_path: Some(output_path.clone()),
+                        disposition: "admitted".to_string(),
+                    },
+                ],
                 rejection_reason: None,
                 scheduler_action: "registered-roots".to_string(),
+            },
+            crunch_build::NativeDynamicPlanReport {
+                mode: "native".to_string(),
+                producer_key: drv_key_for(&config.store_dir, &drv_path),
+                output_name: "rejected-plan".to_string(),
+                plan_artifact_path: Some(output_path.clone()),
+                raw_artifact_digest: Some("rejected-raw-digest".to_string()),
+                canonical_plan_digest: None,
+                accepted_unit_ids: Vec::new(),
+                source_slices: vec![crunch_build::NativeDynamicSourceSliceReport {
+                    source_id: "src.missing".to_string(),
+                    producer_output: "sources".to_string(),
+                    subpath: "packages/missing".to_string(),
+                    declared_nar_blake3: "a".repeat(64),
+                    observed_nar_blake3: None,
+                    admitted_store_path: None,
+                    disposition: "slice-absent".to_string(),
+                }],
+                rejection_reason: Some("slice-absent: source src.missing is absent".to_string()),
+                scheduler_action: "rejected".to_string(),
             }],
             priority_decisions: vec![sample_priority_decision()],
             overlay_report: Some(crunch_store::StoreOverlayReport {
@@ -1489,11 +1558,28 @@ mod tests {
                 .non_claims
                 .contains(&"index-presence-is-not-output-trust".to_string())
         );
-        assert_eq!(report.native_dynamic_plans.len(), 1);
+        assert_eq!(report.native_dynamic_plans.len(), 2);
         assert_eq!(report.native_dynamic_plans[0].mode, "native");
         assert_eq!(report.native_dynamic_plans[0].output_name, "plan");
         assert_eq!(report.native_dynamic_plans[0].scheduler_action, "registered-roots");
         assert_eq!(report.native_dynamic_plans[0].accepted_unit_ids, vec!["unit.build".to_string()]);
+        let report_json = serde_json::to_value(&report).unwrap();
+        let source_slices = &report_json["native_dynamic_plans"][0]["source_slices"];
+        assert_eq!(source_slices[0]["source_id"], "src.a");
+        assert_eq!(source_slices[1]["source_id"], "src.b");
+        assert_eq!(source_slices[0]["subpath"], "packages/a");
+        assert_eq!(source_slices[0]["disposition"], "admitted");
+        assert_eq!(
+            source_slices[0]["admitted_store_path"],
+            output_path.to_absolute_path_with_prefix(&config.store_dir)
+        );
+        let rejected = &report_json["native_dynamic_plans"][1];
+        assert_eq!(rejected["scheduler_action"], "rejected");
+        assert_eq!(rejected["rejection_reason"], "slice-absent: source src.missing is absent");
+        assert_eq!(rejected["accepted_unit_ids"], serde_json::json!([]));
+        assert_eq!(rejected["source_slices"][0]["disposition"], "slice-absent");
+        assert_eq!(rejected["source_slices"][0]["subpath"], "packages/missing");
+        assert!(rejected["source_slices"][0]["admitted_store_path"].is_null());
         assert_eq!(report.scheduler_priority_decisions.len(), 1);
         assert_eq!(report.overlay_plan_blake3, Some("b".repeat(TEST_WORKSPACE_DIGEST_HEX_LENGTH)));
         assert_eq!(report.overlay_base_generations[0].layer_index, 1);

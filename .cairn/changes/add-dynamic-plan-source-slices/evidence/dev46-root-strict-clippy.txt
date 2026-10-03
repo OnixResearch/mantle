@@ -1,0 +1,302 @@
+error: constant `RELEASE_COMMAND_ROOT` is never used
+  --> src/command_input.rs:47:7
+   |
+47 | const RELEASE_COMMAND_ROOT: &str = "release";
+   |       ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `-D dead-code` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[expect(dead_code)]` or `#[allow(dead_code)]`
+
+error: enum `ReleaseCommandAdmission` is never used
+   --> src/command_input.rs:292:17
+    |
+292 | pub(crate) enum ReleaseCommandAdmission {
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `admit_release_action` is never used
+   --> src/command_input.rs:303:15
+    |
+303 | pub(crate) fn admit_release_action(action: &ReleaseAction) -> ReleaseCommandAdmission {
+    |               ^^^^^^^^^^^^^^^^^^^^
+
+error: function `admit_release_action_or_block` is never used
+   --> src/command_input.rs:334:15
+    |
+334 | pub(crate) fn admit_release_action_or_block(action: &ReleaseAction) -> Result<ReleaseCommandAdmission, RunError> {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `release_command` is never used
+   --> src/command_input.rs:348:4
+    |
+348 | fn release_command(operation: ReleaseOperation, bundle_dir: String) -> ReleaseCommand {
+    |    ^^^^^^^^^^^^^^^
+
+error: function `path_text` is never used
+   --> src/command_input.rs:360:4
+    |
+360 | fn path_text(path: Option<&std::path::Path>) -> String {
+    |    ^^^^^^^^^
+
+error: variant `Modeled` is never constructed
+    --> src/command_input.rs:1180:5
+     |
+1178 | pub(crate) enum RemoteCommandAdmission {
+     |                 ---------------------- variant in this enum
+1179 |     /// The DTO maps onto a remote-execution operation the contract administers.
+1180 |     Modeled(RemoteExecutionCommand),
+     |     ^^^^^^^
+     |
+     = note: `RemoteCommandAdmission` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+error: struct `ProtectedSourceFetchPlan` is never constructed
+   --> src/protected_exec.rs:135:12
+    |
+135 | pub struct ProtectedSourceFetchPlan {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: variants `UndeclaredSourceUrl` and `SourceDigestMismatch` are never constructed
+   --> src/protected_exec.rs:251:5
+    |
+190 | pub enum ProtectedExecError {
+    |          ------------------ variants in this enum
+...
+251 |     UndeclaredSourceUrl {
+    |     ^^^^^^^^^^^^^^^^^^^
+...
+254 |     SourceDigestMismatch {
+    |     ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `ProtectedExecError` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+error: associated items `from_stagex_seed`, `source_fetch_plan`, `verify_source_digest`, and `ensure_source_url_allowed` are never used
+   --> src/protected_exec.rs:360:12
+    |
+355 | impl ProtectedExecPolicy {
+    | ------------------------ associated items in this implementation
+...
+360 |     pub fn from_stagex_seed(
+    |            ^^^^^^^^^^^^^^^^
+...
+517 |     pub fn source_fetch_plan(&self, url: &str) -> Result<ProtectedSourceFetchPlan, ProtectedExecError> {
+    |            ^^^^^^^^^^^^^^^^^
+...
+532 |     pub fn verify_source_digest(&self, url: &str, actual_digest_hex: &str) -> Result<(), ProtectedExecError> {
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+545 |     pub fn ensure_source_url_allowed(&self, url: &str) -> Result<(), ProtectedExecError> {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: struct `ProtectedProcessLauncher` is never constructed
+    --> src/protected_exec.rs:1261:12
+     |
+1261 | pub struct ProtectedProcessLauncher<'policy> {
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: associated items `new`, `prepare_command`, `audit_events`, and `take_audit_events` are never used
+    --> src/protected_exec.rs:1267:12
+     |
+1266 | impl<'policy> ProtectedProcessLauncher<'policy> {
+     | ----------------------------------------------- associated items in this implementation
+1267 |     pub fn new(policy: &'policy ProtectedExecPolicy) -> Self {
+     |            ^^^
+...
+1274 |     pub fn prepare_command(
+     |            ^^^^^^^^^^^^^^^
+...
+1283 |     pub fn audit_events(&self) -> &[ProtectedLaunchAuditEvent] {
+     |            ^^^^^^^^^^^^
+...
+1287 |     pub fn take_audit_events(&mut self) -> Vec<ProtectedLaunchAuditEvent> {
+     |            ^^^^^^^^^^^^^^^^^
+
+error: method `as_str` is never used
+  --> src/remote_nominal.rs:55:20
+   |
+50 |         impl $name {
+   |         ---------- method in this implementation
+...
+55 |             pub fn as_str(&self) -> &str {
+   |                    ^^^^^^
+...
+62 | remote_id!(RemoteRequestId);
+   | --------------------------- in this macro invocation
+   |
+   = note: this error originates in the macro `remote_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: method `as_str` is never used
+  --> src/remote_nominal.rs:55:20
+   |
+50 |         impl $name {
+   |         ---------- method in this implementation
+...
+55 |             pub fn as_str(&self) -> &str {
+   |                    ^^^^^^
+...
+63 | remote_id!(RemoteProtocolSessionId);
+   | ----------------------------------- in this macro invocation
+   |
+   = note: this error originates in the macro `remote_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: methods `has_restored_stages` and `has_executed_stages` are never used
+  --> src/source_built_fixed_point_resume.rs:89:19
+   |
+87 | impl ResumePlan {
+   | --------------- methods in this implementation
+88 |     /// Whether any stage is restored.
+89 |     pub(crate) fn has_restored_stages(&self) -> bool {
+   |                   ^^^^^^^^^^^^^^^^^^^
+...
+94 |     pub(crate) fn has_executed_stages(&self) -> bool {
+   |                   ^^^^^^^^^^^^^^^^^^^
+
+error: function `source_observation_for_record` is never used
+  --> src/source_observation.rs:38:8
+   |
+38 | pub fn source_observation_for_record(record: &SourceRecord) -> Result<Option<SourceObservation>, RunError> {
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `observation_request_for_record` is never used
+  --> src/source_observation.rs:55:4
+   |
+55 | fn observation_request_for_record(record: &SourceRecord) -> Option<SourceObservationRequest> {
+   |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `projection_of` is never used
+   --> src/source_observation.rs:118:4
+    |
+118 | fn projection_of(record: &SourceRecord) -> String {
+    |    ^^^^^^^^^^^^^
+
+error: function `metadata_value` is never used
+   --> src/source_observation.rs:122:4
+    |
+122 | fn metadata_value(record: &SourceRecord, key: &str) -> Option<String> {
+    |    ^^^^^^^^^^^^^^
+
+error: function `parse_content_digest` is never used
+   --> src/source_observation.rs:130:4
+    |
+130 | fn parse_content_digest(value: &str) -> Option<crunch_source_core::Blake3Digest> {
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+error: variant `RejectIdentityConflict` is never constructed
+   --> src/source_observation.rs:142:5
+    |
+136 | pub enum RecordIngestOutcome {
+    |          ------------------- variant in this enum
+...
+142 |     RejectIdentityConflict,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `RecordIngestOutcome` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+error: function `record_outcome_for_plan` is never used
+   --> src/source_observation.rs:213:8
+    |
+213 | pub fn record_outcome_for_plan(outcome: IngestOutcome) -> RecordIngestOutcome {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+
+error: derefed type is same as origin
+  --> src/ambient_env.rs:68:36
+   |
+68 |     debug_assert!(!is_requested || observed.as_deref().is_some());
+   |                                    ^^^^^^^^^^^^^^^^^^^ help: try: `observed`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_option_as_deref
+   = note: `-D clippy::needless-option-as-deref` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::needless_option_as_deref)]`
+
+error: large size difference between variants
+  --> src/ast_grep_evidence.rs:34:1
+   |
+34 | /  pub(crate) enum AstGrepEvidenceRead {
+35 | |      Missing,
+36 | |      Valid(LoadedAstGrepEvidence),
+   | |      ---------------------------- the largest variant contains at least 488 bytes
+37 | |/     Invalid {
+38 | ||         blocker_class: &'static str,
+39 | ||         message: String,
+40 | ||     },
+   | ||_____- the second-largest variant contains at least 40 bytes
+41 | |  }
+   | |__^ the entire enum is at least 488 bytes
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#large_enum_variant
+   = note: `-D clippy::large-enum-variant` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::large_enum_variant)]`
+help: consider boxing the large fields or introducing indirection in some other way to reduce the total size of the enum
+   |
+36 -     Valid(LoadedAstGrepEvidence),
+36 +     Valid(Box<LoadedAstGrepEvidence>),
+   |
+
+error: the `Err`-variant returned from this function is very large
+   --> src/ast_grep_evidence.rs:105:47
+    |
+ 36 |     Valid(LoadedAstGrepEvidence),
+    |     ---------------------------- the largest variant contains at least 488 bytes
+...
+105 | fn read_bounded_sidecar_bytes(path: &Path) -> Result<Option<Vec<u8>>, AstGrepEvidenceRead> {
+    |                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: try reducing the size of `ast_grep_evidence::AstGrepEvidenceRead`, for example by boxing large elements or replacing it with `Box<ast_grep_evidence::AstGrepEvidenceRead>`
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#result_large_err
+    = note: `-D clippy::result-large-err` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::result_large_err)]`
+
+error: manual `RangeInclusive::contains` implementation
+  --> src/child_exec.rs:40:19
+   |
+40 |     debug_assert!(code >= 0 && code <= CHILD_EXIT_CODE_MAX);
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `(0..=CHILD_EXIT_CODE_MAX).contains(&code)`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+   = note: `-D clippy::manual-range-contains` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::manual_range_contains)]`
+
+error: large size difference between variants
+   --> src/nix_free_demo_cmd.rs:43:1
+    |
+ 43 | /   pub(crate) enum NixFreeDemoAction {
+ 44 | |       /// Validate a Nix-free demo bundle machine summary JSON file
+ 45 | | /     Validate {
+ 46 | | |         /// Path to `mantle-nix-free-demo-summary-v1` JSON
+ 47 | | |         summary: PathBuf,
+ 48 | | |     },
+    | | |_____- the second-largest variant contains at least 24 bytes
+...   |
+ 57 | | /     Generate {
+ 58 | | |         /// Output directory to create or reuse if empty
+ 59 | | |         #[arg(long)]
+ 60 | | |         out: PathBuf,
+...   | |
+108 | | |         synthetic: bool,
+109 | | |     },
+    | | |_____- the largest variant contains at least 289 bytes
+110 | |   }
+    | |___^ the entire enum is at least 296 bytes
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#large_enum_variant
+help: consider boxing the large fields or introducing indirection in some other way to reduce the total size of the enum
+    |
+ 96 ~         artifact_digests: Box<Vec<String>>,
+ 97 |
+ 98 |         /// Replay hint to include in the summary; repeat for each hint
+ 99 |         #[arg(long = "replay-hint")]
+100 ~         replay_hints: Box<Vec<String>>,
+101 |
+102 |         /// Explicit non-claim text; repeat for each non-claim
+103 |         #[arg(long = "non-claim")]
+104 ~         non_claims: Box<Vec<String>>,
+    |
+
+error: returning the result of a `let` binding from a block
+   --> src/command_input.rs:125:5
+    |
+119 | /     let command = StoreAdministrationCommand {
+120 | |         root: String::from(STORE_COMMAND_ROOT),
+121 | |         operation,
+122 | |         selectors,
+123 | |         dry_run,
+
+[Showing lines 1-300 of 475. Use :301 to continue]

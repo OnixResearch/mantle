@@ -834,6 +834,7 @@ async fn fetch_raw_seed(request: FetchRawSeedRequest<'_>) -> Result<String, RunE
     let crunch_store::PipelineStoreParts {
         build_store,
         action_results,
+        slice_admission,
         build_service_store,
         output_lookup: _output_lookup,
         root_registry: _root_registry,
@@ -853,6 +854,7 @@ async fn fetch_raw_seed(request: FetchRawSeedRequest<'_>) -> Result<String, RunE
         crunch_store::BuilderStoreParts {
             build_store,
             action_results,
+            slice_admission,
         },
         fetch_service,
         bootstrap_keypair,

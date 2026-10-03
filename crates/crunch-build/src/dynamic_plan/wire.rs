@@ -80,7 +80,10 @@ fn admit_source(wire: WireDeclaredSourceInput, store_prefix: &str) -> Result<Dec
     })
 }
 
-fn admit_unit(wire: WireDynamicUnit, store_prefix: &str) -> Result<DynamicUnit, DynamicPlanError> {
+pub(in crate::dynamic_plan) fn admit_unit(
+    wire: WireDynamicUnit,
+    store_prefix: &str,
+) -> Result<DynamicUnit, DynamicPlanError> {
     Ok(DynamicUnit {
         id: UnitId::new(wire.id)?,
         derivation: admit_derivation(wire.derivation, store_prefix)?,

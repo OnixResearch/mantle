@@ -27,7 +27,7 @@ use crate::validate_execution_profile;
 use crate::verify_execution_profile_binding;
 
 /// Maximum registry entries. Matches `goal::MAX_GOALS`.
-const MAX_ENTRIES: u32 = 16_384;
+pub(crate) const MAX_ENTRIES: u32 = 16_384;
 
 /// A derivation registered for building.
 pub struct RegistryEntry {

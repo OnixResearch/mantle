@@ -1,0 +1,11 @@
+{
+  "producer_changed": true,
+  "whole_output_changed": true,
+  "source_slice_path_stable": true,
+  "source_slice_path": "/mantle/store/pgr4dlvr8na9ilwi252zhz76pycg82r7-v2-cli-package",
+  "unit_drv_stable": true,
+  "unit_drv_path": "/mantle/store/7kkfk95lgzwmqrsajd3vqa5r1nj9dffc-v2-cli-unit.drv",
+  "second_unit_cached": true,
+  "both_plans_accepted": true,
+  "observed_digest_matched": true
+}

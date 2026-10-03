@@ -2564,6 +2564,7 @@ async fn execute_remote_local_build_linux(
     let crunch_store::PipelineStoreParts {
         build_store,
         action_results,
+        slice_admission,
         build_service_store,
         output_lookup: _output_lookup,
         root_registry: _root_registry,
@@ -2578,6 +2579,7 @@ async fn execute_remote_local_build_linux(
         crunch_store::BuilderStoreParts {
             build_store,
             action_results,
+            slice_admission,
         },
         build_service,
         executor.keypair.clone(),

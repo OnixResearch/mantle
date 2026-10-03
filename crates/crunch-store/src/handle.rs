@@ -33,11 +33,14 @@ use nix_compat::derivation::Derivation;
 use nix_compat::narinfo::SigningKey;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::narinfo::fingerprint_with_store_dir;
+use nix_compat::nixhash::CAHash;
 use nix_compat::store_path::DIGEST_SIZE;
 use nix_compat::store_path::StorePath;
 use nix_compat::store_path::StorePathRef;
 use reqwest::StatusCode;
 use reqwest::redirect::Policy;
+use sha2::Digest as _;
+use sha2::Sha256;
 use snix_castore::Node;
 use snix_castore::blobservice::BlobService;
 use snix_castore::blobservice::CombinedBlobService;
@@ -105,6 +108,7 @@ const MAX_REMOTE_TRUSTED_PUBLIC_KEYS: usize = 16;
 const OVERLAY_DIRECTORY_READ_LIMIT: usize = 1_000_000;
 const MAX_LAYERED_CLOSURE_PATHS: usize = 1_000_000;
 const MAX_RECORDED_LAYER_SELECTIONS: usize = 65_536;
+const SOURCE_SLICE_NAR_MAX_BYTES: u64 = 1024 * 1024 * 1024;
 
 /// Configuration for opening a store.
 pub struct StoreConfig {
@@ -487,6 +491,115 @@ pub struct VerifiedSourceIngestRequest<'a> {
     pub signing_key: &'a SigningKey<ed25519_dalek::SigningKey>,
 }
 
+/// Immutable NAR observation of a castore source subtree.
+///
+/// Private fields prevent callers from inventing NAR facts without reading
+/// the selected store's content. An absent or changed subtree cannot be
+/// published through `admit_verified_source_batch`.
+#[derive(Clone, Debug)]
+pub struct ObservedSourceSlice {
+    node: Node,
+    nar_size: u64,
+    nar_sha256: [u8; NAR_SHA256_BYTES],
+    nar_blake3: [u8; 32],
+}
+
+impl ObservedSourceSlice {
+    #[must_use]
+    pub fn node(&self) -> &Node {
+        &self.node
+    }
+
+    #[must_use]
+    pub fn nar_size(&self) -> u64 {
+        self.nar_size
+    }
+
+    #[must_use]
+    pub fn nar_sha256(&self) -> [u8; NAR_SHA256_BYTES] {
+        self.nar_sha256
+    }
+
+    #[must_use]
+    pub fn nar_blake3(&self) -> [u8; 32] {
+        self.nar_blake3
+    }
+}
+
+/// One previously observed source subtree for atomic PathInfo admission.
+pub struct VerifiedSourceBatchEntry<'a> {
+    pub observed: &'a ObservedSourceSlice,
+    pub source_name: &'a str,
+    pub signing_key: &'a SigningKey<ed25519_dalek::SigningKey>,
+}
+
+/// A logical source path returned only after batch publication succeeds.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifiedSourceBatchResult {
+    pub logical_store_path: String,
+    pub nar_size: u64,
+    pub nar_sha256: [u8; NAR_SHA256_BYTES],
+    pub nar_blake3: [u8; 32],
+}
+
+struct SourceNarObserver {
+    sha256: Sha256,
+    blake3: blake3::Hasher,
+    size: u64,
+    limit_exceeded: bool,
+}
+
+impl SourceNarObserver {
+    fn new() -> Self {
+        Self {
+            sha256: Sha256::new(),
+            blake3: blake3::Hasher::new(),
+            size: 0,
+            limit_exceeded: false,
+        }
+    }
+
+    fn finish(self) -> (u64, [u8; NAR_SHA256_BYTES], [u8; 32]) {
+        (self.size, self.sha256.finalize().into(), *blake3::Hasher::finalize(&self.blake3).as_bytes())
+    }
+}
+
+impl tokio::io::AsyncWrite for SourceNarObserver {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+        bytes: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        let next = u64::try_from(bytes.len()).ok().and_then(|added| self.size.checked_add(added));
+        match next {
+            Some(next) if next <= SOURCE_SLICE_NAR_MAX_BYTES => {
+                self.sha256.update(bytes);
+                self.blake3.update(bytes);
+                self.size = next;
+                std::task::Poll::Ready(Ok(bytes.len()))
+            }
+            _ => {
+                self.limit_exceeded = true;
+                std::task::Poll::Ready(Err(std::io::Error::other("verified-source-slice-limit")))
+            }
+        }
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 struct RemoteSubstitutionRequest<'a> {
     digest: [u8; DIGEST_SIZE],
@@ -496,7 +609,7 @@ struct RemoteSubstitutionRequest<'a> {
     root_source: Option<GcRootSource>,
 }
 
-fn path_info_content_and_signature_matches(existing: &PathInfo, candidate: &PathInfo) -> bool {
+pub(crate) fn path_info_content_and_signature_matches(existing: &PathInfo, candidate: &PathInfo) -> bool {
     existing.store_path == candidate.store_path
         && existing.node == candidate.node
         && existing.references == candidate.references
@@ -538,7 +651,15 @@ async fn verified_source_candidate(
         .calculate_nar(&node)
         .await
         .map_err(|error| Error::Store(format!("verified source NAR calculation: {error}")))?;
-    Ok(signed_adoption_path_info(store_path, node, nar_size, nar_sha256, request.signing_key, store_dir))
+    Ok(signed_path_info_for_node(
+        store_path,
+        node,
+        nar_size,
+        nar_sha256,
+        request.signing_key,
+        store_dir,
+        None,
+    ))
 }
 
 fn remove_existing_export_path(path: &Path) -> std::io::Result<()> {
@@ -1644,6 +1765,62 @@ impl StoreHandle {
             .map_err(|e| Error::Export(format!("rendering NAR: {e}")))?;
 
         Ok(())
+    }
+
+    /// Observe one already-stored source subtree without granting publication authority.
+    pub async fn observe_source_slice(&self, root: &Node, subpath: &str) -> Result<ObservedSourceSlice, Error> {
+        if subpath.starts_with('/') {
+            return Err(Error::Store(format!("verified-source-slice-invalid-subpath: {subpath}")));
+        }
+        let mut node = root.clone();
+        if !subpath.is_empty() {
+            for part in subpath.split('/') {
+                let component = snix_castore::PathComponent::try_from(part)
+                    .map_err(|error| Error::Store(format!("verified-source-slice-invalid-subpath: {error}")))?;
+                let digest = match &node {
+                    Node::Directory { digest, .. } => *digest,
+                    Node::Symlink { .. } => {
+                        return Err(Error::Store(format!("verified-source-slice-symlink-traversal: {subpath}")));
+                    }
+                    Node::File { .. } => {
+                        return Err(Error::Store(format!("verified-source-slice-absent: {subpath}")));
+                    }
+                };
+                let directory = self
+                    .directory_service
+                    .get(&digest)
+                    .await
+                    .map_err(|error| Error::Store(format!("verified-source-slice-absent: {subpath}: {error}")))?
+                    .ok_or_else(|| Error::Store(format!("verified-source-slice-absent: {subpath}")))?;
+                node = directory
+                    .nodes()
+                    .find(|(name, _)| name.as_ref() == component.as_ref())
+                    .map(|(_, child)| child.clone())
+                    .ok_or_else(|| Error::Store(format!("verified-source-slice-absent: {subpath}")))?;
+            }
+        }
+        if matches!(node, Node::Symlink { .. }) {
+            return Err(Error::Store(format!("verified-source-slice-symlink-traversal: {subpath}")));
+        }
+        if !self.castore_has_complete_content(&node).await? {
+            return Err(Error::Store(format!("verified-source-slice-absent: incomplete castore at {subpath}")));
+        }
+        let mut observer = SourceNarObserver::new();
+        if let Err(error) = self.render_nar(&node, &mut observer).await {
+            if observer.limit_exceeded {
+                return Err(Error::Store(format!(
+                    "verified-source-slice-limit: NAR exceeds {SOURCE_SLICE_NAR_MAX_BYTES} bytes"
+                )));
+            }
+            return Err(error);
+        }
+        let (nar_size, nar_sha256, nar_blake3) = observer.finish();
+        Ok(ObservedSourceSlice {
+            node,
+            nar_size,
+            nar_sha256,
+            nar_blake3,
+        })
     }
 
     /// Check whether the castore has the content referenced by a Node.
@@ -3219,13 +3396,14 @@ impl StoreHandle {
             validate_existing_adoption(&existing, &store_path, &node, nar_size, &nar_sha256)?;
             return Ok(existing);
         }
-        let path_info = signed_adoption_path_info(
+        let path_info = signed_path_info_for_node(
             store_path.clone(),
             node.clone(),
             nar_size,
             nar_sha256,
             signing_key,
             &self.store_dir,
+            None,
         );
         self.persist_and_export_signed_output(PersistOutputRequest {
             output_name,
@@ -3655,13 +3833,14 @@ fn validate_existing_adoption(
     Ok(())
 }
 
-fn signed_adoption_path_info(
+pub(crate) fn signed_path_info_for_node(
     store_path: StorePath<String>,
     node: Node,
     nar_size: u64,
     nar_sha256: [u8; NAR_SHA256_BYTES],
     signing_key: &SigningKey<ed25519_dalek::SigningKey>,
     store_dir: &str,
+    ca: Option<CAHash>,
 ) -> PathInfo {
     let mut path_info = PathInfo {
         store_path,
@@ -3671,7 +3850,7 @@ fn signed_adoption_path_info(
         nar_sha256,
         signatures: Vec::new(),
         deriver: None,
-        ca: None,
+        ca,
     };
     let path_info_fingerprint = compute_pathinfo_fingerprint(&path_info, store_dir);
     path_info.signatures.push(signing_key.sign(path_info_fingerprint.as_bytes()).to_owned());

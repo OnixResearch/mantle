@@ -1,0 +1,41 @@
+
+running 686 tests
+....................................................................................... 87/686
+....................................................................................... 174/686
+....................................................................................... 261/686
+....................................................................................... 348/686
+....................................................................................... 435/686
+....................................................................................... 522/686
+....................................................................................... 609/686
+.............................................................................
+test result: ok. 686 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.31s
+
+
+running 45 tests
+.............................................
+test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.21s
+
+
+running 397 tests
+....................................................................................... 87/397
+................................................................................ 167/397
+handle::tests::overlay_prefix_mismatch_fails_closed --- FAILED
+.............................................................................test casita::tests::gc_inventory_reads_more_roots_than_one_atomic_mutation has been running for over 60 seconds
+test nario::tests::nario_casita_accepts_configured_1024_root_boundary has been running for over 60 seconds
+.......... 255/397
+....................................................................................... 342/397
+.......................................................
+failures:
+
+---- handle::tests::overlay_prefix_mismatch_fails_closed stdout ----
+
+thread 'handle::tests::overlay_prefix_mismatch_fails_closed' (1533221) panicked at crates/crunch-store/src/handle.rs:7378:9:
+assertion failed: error.to_string().contains("PrefixMismatch")
+
+
+failures:
+    handle::tests::overlay_prefix_mismatch_fails_closed
+
+test result: FAILED. 396 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 111.94s
+
+error: test failed, to rerun pass `-p crunch-store --lib`

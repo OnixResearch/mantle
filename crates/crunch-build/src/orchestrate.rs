@@ -67,6 +67,13 @@ async fn apply_input_rewrites(
         .map_err(|error| Error::Store(format!("rewriting build input paths: {error}")))
 }
 
+/// A subtree already observed without following links; the store still verifies
+/// its content when it atomically publishes the signed source batch.
+pub(crate) struct BuilderSourceSlice<'a> {
+    pub observed: &'a crunch_store::ObservedSourceSlice,
+    pub store_name: &'a str,
+}
+
 const DERIVATION_SUFFIX: &str = ".drv";
 
 fn path_info_deriver(drv_path: &StorePath<String>) -> Result<StorePath<String>, Error> {
@@ -265,6 +272,7 @@ pub(crate) enum PrepareResult {
 pub struct Builder<BServ> {
     pub(crate) store: crunch_store::BuildStore,
     action_results: crunch_store::ActionResultPort,
+    slice_admission: crunch_store::SliceAdmission,
     build_service: Arc<BServ>,
     /// Signing keypair — every PathInfo gets signed before persistence.
     keypair: KeyPair,
@@ -383,6 +391,7 @@ where BServ: BuildService + 'static
         Self {
             store: store_parts.build_store,
             action_results: store_parts.action_results,
+            slice_admission: store_parts.slice_admission,
             build_service: Arc::new(build_service),
             keypair,
             trusted_keys,
@@ -405,6 +414,35 @@ where BServ: BuildService + 'static
     /// Get a cloned Arc to the build service (for spawning tasks).
     pub(crate) fn build_service(&self) -> Arc<BServ> {
         self.build_service.clone()
+    }
+
+    pub(crate) async fn observe_source_slice(
+        &self,
+        root: &Node,
+        subpath: &str,
+    ) -> Result<crunch_store::ObservedSourceSlice, Error> {
+        self.store
+            .observe_source_slice(root, subpath)
+            .await
+            .map_err(|error| Error::Store(format!("observing source slice {subpath}: {error}")))
+    }
+
+    pub(crate) async fn admit_source_slice_batch(
+        &mut self,
+        slices: &[BuilderSourceSlice<'_>],
+    ) -> Result<Vec<crunch_store::VerifiedSourceBatchResult>, Error> {
+        let entries = slices
+            .iter()
+            .map(|slice| crunch_store::VerifiedSourceBatchEntry {
+                observed: slice.observed,
+                source_name: slice.store_name,
+                signing_key: &self.keypair.signing_key,
+            })
+            .collect::<Vec<_>>();
+        self.slice_admission
+            .admit_verified_source_batch(&entries)
+            .await
+            .map_err(|error| Error::Store(format!("publishing verified source slices: {error}")))
     }
 
     /// The logical store directory prefix.
@@ -4708,6 +4746,7 @@ mod tests {
         let crunch_store::PipelineStoreParts {
             build_store,
             action_results,
+            slice_admission,
             build_service_store,
             output_lookup,
             root_registry,
@@ -4718,6 +4757,7 @@ mod tests {
             crunch_store::BuilderStoreParts {
                 build_store,
                 action_results,
+                slice_admission,
             },
             dispatch,
             test_keypair(),

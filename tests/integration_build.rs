@@ -776,6 +776,7 @@ fn make_fetch_builder(
     let crunch_store::PipelineStoreParts {
         build_store,
         action_results,
+        slice_admission,
         build_service_store,
         output_lookup: _output_lookup,
         root_registry: _root_registry,
@@ -787,6 +788,7 @@ fn make_fetch_builder(
         crunch_store::BuilderStoreParts {
             build_store,
             action_results,
+            slice_admission,
         },
         dispatch,
         test_keypair(),

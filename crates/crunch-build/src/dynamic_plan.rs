@@ -235,6 +235,33 @@ pub type NarDigest = Blake3Hex<NarDigestRole>;
 #[path = "dynamic_plan/wire.rs"]
 mod wire;
 pub use wire::admit_plan_v1;
+#[path = "dynamic_plan/slices.rs"]
+mod slices;
+pub use slices::PlannedSlice;
+pub use slices::SliceNodeKind;
+pub use slices::SliceRejection;
+pub use slices::SliceRejectionKind;
+pub use slices::SliceTreeFact;
+pub use slices::plan_slices;
+#[path = "dynamic_plan/v2.rs"]
+mod v2;
+pub use v2::CanonicalDynamicPlanV2;
+pub use v2::DynamicPlanV2;
+pub use v2::MANTLE_PLAN_V2_SCHEMA;
+pub use v2::MAX_PLAN_SLICES;
+pub use v2::MAX_SLICE_ADMITTED_BYTES;
+pub use v2::MAX_SLICE_SUBPATH_BYTES;
+pub use v2::MAX_SLICE_SUBPATH_DEPTH;
+pub use v2::SliceSource;
+pub use v2::SourceV2;
+pub use v2::WireDynamicPlanV2;
+pub use v2::WireSliceSource;
+pub use v2::WireSourceV2;
+pub use v2::admit_plan_v2;
+pub use v2::canonical_plan_v2_bytes;
+pub use v2::decode_plan_v2;
+pub use v2::decode_validated_plan_v2;
+pub use v2::validate_slice_subpath;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DynamicPlaceholder {
@@ -2126,5 +2153,175 @@ mod tests {
         let missing_bindings =
             resolve_dynamic_placeholders("{{mantle-source:src.main}}", &BTreeMap::new(), &BTreeMap::new()).unwrap_err();
         expect_invalid_scalar(missing_bindings, "dynamic placeholder");
+    }
+
+    fn slice_wire_plan() -> v2::WireDynamicPlanV2 {
+        let mut value: Value = serde_json::from_str(&valid_plan_json()).unwrap();
+        value["schema"] = Value::String(v2::MANTLE_PLAN_V2_SCHEMA.to_owned());
+        value["sources"] = serde_json::json!([
+            {"id":"src.z","producer_output":"sources","subpath":"crate/z","store_name":"crate-same","nar_blake3":TEST_BLAKE3_HEX},
+            {"id":"src.main","producer_output":"sources","subpath":"crate/a","store_name":"crate-same","nar_blake3":TEST_BLAKE3_HEX}
+        ]);
+        serde_json::from_value(value).unwrap()
+    }
+
+    #[test]
+    fn v2_slice_canonical_order_and_digest_bind_expected_content() {
+        let wire = slice_wire_plan();
+        let raw = serde_json::to_vec(&wire).unwrap();
+        let accepted = v2::decode_validated_plan_v2(&raw, TEST_STORE_PREFIX).unwrap();
+        let ids = accepted.plan.sources.iter().map(|source| source.id().as_str()).collect::<Vec<_>>();
+        assert_eq!(ids, vec!["src.main", "src.z"]);
+        let canonical: Value = serde_json::from_slice(&accepted.bytes).unwrap();
+        assert_eq!(canonical["sources"][0]["id"], "src.main");
+        let mut reordered = wire.clone();
+        reordered.sources.reverse();
+        let reordered =
+            v2::decode_validated_plan_v2(&serde_json::to_vec(&reordered).unwrap(), TEST_STORE_PREFIX).unwrap();
+        assert_eq!(accepted.bytes, reordered.bytes);
+        assert_eq!(accepted.digest, reordered.digest);
+        let mut changed = wire;
+        let v2::WireSourceV2::Slice(slice) = &mut changed.sources[0] else {
+            panic!("slice fixture")
+        };
+        slice.nar_blake3 = "f".repeat(BLAKE3_HEX_BYTES);
+        let changed = v2::decode_validated_plan_v2(&serde_json::to_vec(&changed).unwrap(), TEST_STORE_PREFIX).unwrap();
+        assert_ne!(accepted.digest, changed.digest);
+    }
+
+    #[test]
+    fn v2_rejects_bad_subpaths_undeclared_output_and_source_conflict() {
+        for path in ["/absolute", "../up", "a//b", "a/./b", "a/../b"] {
+            assert!(v2::validate_slice_subpath(path).is_err(), "{path}");
+        }
+        assert!(v2::validate_slice_subpath(&"a/".repeat(33)).is_err());
+        assert!(v2::validate_slice_subpath(&"a".repeat(v2::MAX_SLICE_SUBPATH_BYTES as usize + 1)).is_err());
+        let mut wire = slice_wire_plan();
+        wire.sources.push(wire.sources[0].clone());
+        assert_eq!(v2::admit_plan_v2(wire.clone(), TEST_STORE_PREFIX).unwrap().sources.len(), 2);
+        let v2::WireSourceV2::Slice(slice) = &mut wire.sources[2] else {
+            panic!("slice fixture")
+        };
+        slice.nar_blake3 = "f".repeat(BLAKE3_HEX_BYTES);
+        let err = v2::admit_plan_v2(wire, TEST_STORE_PREFIX).unwrap_err();
+        assert!(matches!(err, DynamicPlanError::InvalidScalar {
+            reason: "slice-conflict",
+            ..
+        }));
+        let mut v1: Value = serde_json::from_str(&valid_plan_json()).unwrap();
+        v1["sources"][0] = serde_json::to_value(slice_wire_plan().sources[0].clone()).unwrap();
+        assert!(decode_validated_plan_v1(&serde_json::to_vec(&v1).unwrap(), TEST_STORE_PREFIX).is_err());
+        let mut invalid_name = slice_wire_plan();
+        let v2::WireSourceV2::Slice(slice) = &mut invalid_name.sources[0] else {
+            panic!("slice fixture")
+        };
+        slice.store_name = "bad/name".to_owned();
+        assert!(matches!(
+            v2::admit_plan_v2(invalid_name, TEST_STORE_PREFIX),
+            Err(DynamicPlanError::InvalidScalar {
+                field: "slice store name",
+                ..
+            })
+        ));
+        assert!(v2::decode_validated_plan_v2(valid_plan_json().as_bytes(), TEST_STORE_PREFIX).is_err());
+    }
+
+    #[test]
+    fn v2_enforces_slice_count_depth_and_canonical_byte_ceiling() {
+        assert!(v2::validate_slice_subpath(&vec!["a"; v2::MAX_SLICE_SUBPATH_DEPTH as usize].join("/")).is_ok());
+        let deep = vec!["a"; v2::MAX_SLICE_SUBPATH_DEPTH as usize + 1].join("/");
+        assert!(matches!(
+            v2::validate_slice_subpath(&deep),
+            Err(DynamicPlanError::LimitExceeded {
+                field: "slice subpath depth",
+                ..
+            })
+        ));
+        let mut wire = slice_wire_plan();
+        let original = wire.sources[0].clone();
+        wire.sources.clear();
+        for index in 0..=v2::MAX_PLAN_SLICES {
+            let v2::WireSourceV2::Slice(mut slice) = original.clone() else {
+                panic!("slice fixture")
+            };
+            slice.id = format!("slice.{index}");
+            wire.sources.push(v2::WireSourceV2::Slice(slice));
+        }
+        assert!(matches!(
+            v2::admit_plan_v2(wire, TEST_STORE_PREFIX),
+            Err(DynamicPlanError::LimitExceeded {
+                field: "slice count",
+                ..
+            })
+        ));
+        let mut admitted = v2::admit_plan_v2(slice_wire_plan(), TEST_STORE_PREFIX).unwrap();
+        admitted.provenance.insert("oversize".to_owned(), "x".repeat(MAX_DYNAMIC_PLAN_BYTES as usize));
+        assert!(matches!(v2::canonical_plan_v2_bytes(&admitted), Err(DynamicPlanError::PlanTooLarge { .. })));
+    }
+
+    #[test]
+    fn slice_planner_accepts_two_and_rejects_without_partial_plan() {
+        use slices::SliceNodeKind;
+        use slices::SliceRejectionKind;
+        use slices::SliceTreeFact;
+        use slices::plan_slices;
+        let accepted = v2::admit_plan_v2(slice_wire_plan(), TEST_STORE_PREFIX).unwrap();
+        let slices = accepted
+            .sources
+            .iter()
+            .filter_map(|source| match source {
+                v2::SourceV2::Slice(slice) => Some(slice.clone()),
+                v2::SourceV2::StorePath(_) => None,
+            })
+            .collect::<Vec<_>>();
+        let facts = slices
+            .iter()
+            .map(|slice| SliceTreeFact {
+                source_id: slice.id.clone(),
+                producer_output: slice.producer_output.clone(),
+                subpath: slice.subpath.clone(),
+                kind: SliceNodeKind::Directory,
+                traversed_symlink: false,
+                observed_nar_blake3: Some(slice.nar_blake3.clone()),
+                nar_bytes: 40,
+            })
+            .collect::<Vec<_>>();
+        let outputs = BTreeSet::from([output_name("sources")]);
+        let planned = plan_slices(&slices, &outputs, &facts).unwrap();
+        assert_eq!(planned.iter().map(|slice| slice.source_id.as_str()).collect::<Vec<_>>(), vec!["src.main", "src.z"]);
+        assert_eq!(planned[0].declared_nar_blake3, planned[1].declared_nar_blake3);
+        assert_eq!(planned[0].store_name, planned[1].store_name);
+        assert_ne!(planned[0].subpath, planned[1].subpath);
+        assert_eq!(planned[0].publication_source_id, planned[0].source_id);
+        assert_eq!(planned[1].publication_source_id, planned[0].source_id);
+        let distinct = slices.iter().map(|slice| slice.id.clone()).collect::<BTreeSet<_>>();
+        assert_eq!(distinct.len(), 2);
+        assert_eq!(planned.iter().map(|slice| &slice.publication_source_id).collect::<BTreeSet<_>>().len(), 1);
+        let mut renamed = slices.clone();
+        renamed[0].store_name = "another-name".to_owned();
+        let distinct_names = plan_slices(&renamed, &outputs, &facts).unwrap();
+        assert_eq!(distinct_names[0].publication_source_id, distinct_names[0].source_id);
+        assert_eq!(distinct_names[1].publication_source_id, distinct_names[1].source_id);
+        let mut wrong_root = facts.clone();
+        wrong_root[0].subpath = "another/root".to_owned();
+        assert_eq!(plan_slices(&slices, &outputs, &wrong_root).unwrap_err().kind, SliceRejectionKind::Conflict);
+        let mut missing = facts.clone();
+        missing[0].kind = SliceNodeKind::Absent;
+        assert_eq!(plan_slices(&slices, &outputs, &missing).unwrap_err().kind, SliceRejectionKind::Absent);
+        let mut symlink = facts.clone();
+        symlink[0].traversed_symlink = true;
+        assert_eq!(plan_slices(&slices, &outputs, &symlink).unwrap_err().kind, SliceRejectionKind::SymlinkTraversal);
+        let mut mismatch = facts.clone();
+        mismatch[0].observed_nar_blake3 = Some(NarDigest::new("f".repeat(BLAKE3_HEX_BYTES)).unwrap());
+        assert_eq!(plan_slices(&slices, &outputs, &mismatch).unwrap_err().kind, SliceRejectionKind::DigestMismatch);
+        let mut excess = facts;
+        excess[0].nar_bytes = v2::MAX_SLICE_ADMITTED_BYTES;
+        assert_eq!(plan_slices(&slices, &outputs, &excess).unwrap_err().kind, SliceRejectionKind::Limit);
+        assert_eq!(
+            plan_slices(&slices, &BTreeSet::new(), &excess).unwrap_err().kind,
+            SliceRejectionKind::OutputUndeclared
+        );
+        let too_many_facts = vec![excess[0].clone(); v2::MAX_PLAN_SLICES as usize + 1];
+        assert_eq!(plan_slices(&slices, &outputs, &too_many_facts).unwrap_err().detail, "tree fact count");
     }
 }

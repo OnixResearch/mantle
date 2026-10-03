@@ -28,6 +28,7 @@ use nix_compat::derivation::Output;
 use nix_compat::nixhash::CAHash;
 use nix_compat::nixhash::HashAlgo;
 use nix_compat::nixhash::NixHash;
+use nix_compat::store_path::build_ca_path_with_store_dir;
 use nix_compat::store_path::StorePath;
 use snix_build::buildservice::BuildService;
 use tokio::sync::Semaphore;
@@ -51,6 +52,7 @@ use crate::dynamic::validate_dynamic_candidate;
 use crate::dynamic::validate_registry_ready_batch;
 use crate::dynamic_plan::AddressingMode;
 use crate::dynamic_plan::CanonicalDynamicPlanV1;
+use crate::dynamic_plan::CanonicalDynamicPlanV2;
 use crate::dynamic_plan::DeclaredSourceInput;
 use crate::dynamic_plan::DynamicInput;
 use crate::dynamic_plan::DynamicPlaceholder;
@@ -59,12 +61,19 @@ use crate::dynamic_plan::FixedOutputHashAlgo;
 use crate::dynamic_plan::FixedOutputMode;
 use crate::dynamic_plan::FixedOutputSpec;
 use crate::dynamic_plan::MAX_DYNAMIC_PLAN_BYTES;
+use crate::dynamic_plan::NarDigest;
 use crate::dynamic_plan::OutputName;
+use crate::dynamic_plan::SliceNodeKind;
+use crate::dynamic_plan::SliceSource;
+use crate::dynamic_plan::SliceTreeFact;
 use crate::dynamic_plan::SourceId;
+use crate::dynamic_plan::SourceV2;
 use crate::dynamic_plan::StorePathString;
 use crate::dynamic_plan::UnitId;
 use crate::dynamic_plan::decode_validated_plan_v1;
+use crate::dynamic_plan::decode_validated_plan_v2;
 use crate::dynamic_plan::parse_dynamic_placeholders;
+use crate::dynamic_plan::plan_slices;
 use crate::dynamic_plan::resolve_dynamic_placeholders;
 use crate::goal::Goal;
 use crate::goal::GoalRegistry;
@@ -72,9 +81,11 @@ use crate::goal::GoalState;
 use crate::goal::MAX_GOALS;
 use crate::orchestrate::BuildOutcome;
 use crate::orchestrate::Builder;
+use crate::orchestrate::BuilderSourceSlice;
 use crate::orchestrate::PrepareResult;
 use crate::orchestrate::PreparedBuild;
 use crate::registry::DerivationRegistry;
+use crate::registry::MAX_ENTRIES;
 use crate::scheduling::EligiblePreferenceFacts;
 use crate::scheduling::HistoryBasis;
 use crate::scheduling::HistoryInput;
@@ -141,7 +152,62 @@ struct AcceptedNativePlanInput<'a> {
     identity: NativePlanIdentity<'a>,
     plan_artifact_path: StorePath<String>,
     raw_artifact_digest: String,
-    plan: CanonicalDynamicPlanV1,
+    plan: CanonicalNativePlan,
+}
+
+/// Probe only the version discriminator; serde ignores other fields without
+/// allocating a full JSON value. The selected decoder then validates the whole
+/// bounded plan, including unknown fields and malformed nested content.
+#[derive(serde::Deserialize)]
+struct NativePlanSchemaProbe<'a> {
+    #[serde(borrow)]
+    schema: &'a str,
+}
+
+struct ObservedPlanSubtree {
+    observed: crunch_store::ObservedSourceSlice,
+    digest: NarDigest,
+    kind: SliceNodeKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CanonicalNativePlan {
+    V1(CanonicalDynamicPlanV1),
+    V2(CanonicalDynamicPlanV2),
+}
+
+impl CanonicalNativePlan {
+    fn units(&self) -> &[DynamicUnit] {
+        match self {
+            Self::V1(plan) => &plan.plan.units,
+            Self::V2(plan) => &plan.plan.units,
+        }
+    }
+
+    fn roots(&self) -> &[UnitId] {
+        match self {
+            Self::V1(plan) => &plan.plan.roots,
+            Self::V2(plan) => &plan.plan.roots,
+        }
+    }
+
+    fn digest(&self) -> &str {
+        match self {
+            Self::V1(plan) => plan.digest.as_str(),
+            Self::V2(plan) => plan.digest.as_str(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeDynamicSourceSliceReport {
+    pub source_id: String,
+    pub producer_output: String,
+    pub subpath: String,
+    pub declared_nar_blake3: String,
+    pub observed_nar_blake3: Option<String>,
+    pub admitted_store_path: Option<StorePath<String>>,
+    pub disposition: String,
 }
 
 struct NativePlanRejectionInput<'a> {
@@ -224,6 +290,7 @@ pub struct NativeDynamicPlanReport {
     pub raw_artifact_digest: Option<String>,
     pub canonical_plan_digest: Option<String>,
     pub accepted_unit_ids: Vec<String>,
+    pub source_slices: Vec<NativeDynamicSourceSliceReport>,
     pub rejection_reason: Option<String>,
     pub scheduler_action: String,
 }
@@ -237,7 +304,8 @@ pub struct NativeDynamicPlanAccepted {
     pub raw_artifact_digest: String,
     pub canonical_plan_digest: String,
     pub accepted_unit_ids: Vec<String>,
-    pub plan: CanonicalDynamicPlanV1,
+    pub plan: CanonicalNativePlan,
+    pub source_slices: Vec<NativeDynamicSourceSliceReport>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -246,6 +314,13 @@ pub enum NativeDynamicPlanRejectionKind {
     NonRegularOutput,
     PlanTooLarge,
     InvalidPlan,
+    SliceOutputUndeclared,
+    SliceAbsent,
+    SliceSymlinkTraversal,
+    SliceDigestMismatch,
+    SliceLimit,
+    SliceConflict,
+    SlicePublication,
     ReadFailed,
 }
 
@@ -257,6 +332,13 @@ impl NativeDynamicPlanRejectionKind {
             Self::PlanTooLarge => "plan-too-large",
             Self::InvalidPlan => "invalid-plan",
             Self::ReadFailed => "read-failed",
+            Self::SliceOutputUndeclared => "slice-output-undeclared",
+            Self::SliceAbsent => "slice-absent",
+            Self::SliceSymlinkTraversal => "slice-symlink-traversal",
+            Self::SliceDigestMismatch => "slice-digest-mismatch",
+            Self::SliceLimit => "slice-limit",
+            Self::SliceConflict => "slice-conflict",
+            Self::SlicePublication => "slice-publication-failed",
         }
     }
 }
@@ -269,6 +351,7 @@ pub struct NativeDynamicPlanRejection {
     pub plan_artifact_path: Option<StorePath<String>>,
     pub raw_artifact_digest: Option<String>,
     pub kind: NativeDynamicPlanRejectionKind,
+    pub source_slices: Vec<NativeDynamicSourceSliceReport>,
     pub detail: String,
 }
 
@@ -286,6 +369,95 @@ enum NativeDynamicPlanOutputScan {
 struct RegisteredNativeDynamicPlan {
     root_drv_paths: Vec<StorePath<String>>,
     unit_drv_paths: BTreeMap<UnitId, StorePath<String>>,
+}
+
+/// Only prospective V2 units are staged; the existing registry stays borrowed.
+struct V2StagedUnit {
+    drv_path: StorePath<String>,
+    hdm: [u8; 32],
+    derivation: Derivation,
+    content_addressed: bool,
+    dynamic_plan_outputs: Vec<String>,
+}
+
+struct V2Registration<'a> {
+    live: &'a DerivationRegistry,
+    staged: BTreeMap<String, V2StagedUnit>,
+    order: Vec<String>,
+}
+
+struct PreparedV2Registration {
+    staged: BTreeMap<String, V2StagedUnit>,
+    order: Vec<String>,
+    registered: RegisteredNativeDynamicPlan,
+}
+
+impl V2Registration<'_> {
+    fn preflight_goals(&self, worker: &Worker, roots: &[StorePath<String>]) -> Result<(), Error> {
+        let mut created = BTreeSet::new();
+        for root in roots {
+            let mut queue = VecDeque::from([root.clone()]);
+            let mut iterations = 0_u32;
+            while let Some(path) = queue.pop_front() {
+                iterations = iterations.saturating_add(1);
+                if iterations > MAX_GOALS {
+                    return Err(Error::Store(format!("want() BFS exceeded iteration limit ({MAX_GOALS})")));
+                }
+                let key = path.to_absolute_path();
+                if worker.registry.contains(&key) || created.contains(&key) {
+                    continue;
+                }
+                let absolute = path.to_absolute_path_with_prefix(self.live.store_dir());
+                let derivation = if let Some(unit) = self.staged.get(&absolute) {
+                    &unit.derivation
+                } else {
+                    &self
+                        .live
+                        .get_by_drv_path(&absolute)
+                        .ok_or_else(|| Error::DerivationNotFound { path: path.clone() })?
+                        .derivation
+                };
+                if worker.registry.len() as usize + created.len() >= MAX_GOALS as usize {
+                    return Err(Error::Store(format!("goal registry at capacity ({MAX_GOALS})")));
+                }
+                created.insert(key);
+                for dependency in derivation.input_derivations.keys() {
+                    if !worker.registry.contains(&dependency.to_absolute_path()) {
+                        queue.push_back(dependency.clone());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+trait NativeUnitLookup {
+    fn native_hdm(&self, path: &str) -> Option<[u8; 32]>;
+    fn native_output(&self, path: &str, output: &str) -> Option<StorePath<String>>;
+}
+
+impl NativeUnitLookup for DerivationRegistry {
+    fn native_hdm(&self, path: &str) -> Option<[u8; 32]> {
+        self.get_hdm_by_drv_path(path)
+    }
+
+    fn native_output(&self, path: &str, output: &str) -> Option<StorePath<String>> {
+        self.get_output_path(path, output)
+    }
+}
+
+impl NativeUnitLookup for V2Registration<'_> {
+    fn native_hdm(&self, path: &str) -> Option<[u8; 32]> {
+        self.staged.get(path).map(|unit| unit.hdm).or_else(|| self.live.native_hdm(path))
+    }
+
+    fn native_output(&self, path: &str, output: &str) -> Option<StorePath<String>> {
+        self.staged.get(path).map_or_else(
+            || self.live.native_output(path, output),
+            |unit| unit.derivation.outputs.get(output).and_then(|value| value.path.clone()),
+        )
+    }
 }
 
 impl NativeDynamicPlanScan {
@@ -306,15 +478,54 @@ fn blake3_hex(bytes: &[u8]) -> String {
 }
 
 fn accepted_native_plan(input: AcceptedNativePlanInput<'_>) -> NativeDynamicPlanAccepted {
-    let accepted_unit_ids = input.plan.plan.units.iter().map(|unit| unit.id.as_str().to_owned()).collect();
+    let accepted_unit_ids = input.plan.units().iter().map(|unit| unit.id.as_str().to_owned()).collect();
     NativeDynamicPlanAccepted {
         producer_key: input.identity.producer_key.to_string(),
         output_name: input.identity.output_name.to_string(),
         plan_artifact_path: input.plan_artifact_path,
         raw_artifact_digest: input.raw_artifact_digest,
-        canonical_plan_digest: input.plan.digest.as_str().to_owned(),
+        canonical_plan_digest: input.plan.digest().to_owned(),
         accepted_unit_ids,
+        source_slices: Vec::new(),
         plan: input.plan,
+    }
+}
+
+fn rejected_accepted_slice_plan(
+    accepted: &NativeDynamicPlanAccepted,
+    mut rows: Vec<NativeDynamicSourceSliceReport>,
+    source_id: Option<&SourceId>,
+    kind: NativeDynamicPlanRejectionKind,
+    detail: String,
+) -> NativeDynamicPlanRejection {
+    for row in &mut rows {
+        row.admitted_store_path = None;
+        row.disposition = if source_id.is_some_and(|id| row.source_id == id.as_str()) {
+            kind.as_str().to_string()
+        } else {
+            "not-admitted".to_string()
+        };
+    }
+    NativeDynamicPlanRejection {
+        producer_key: accepted.producer_key.clone(),
+        output_name: accepted.output_name.clone(),
+        plan_artifact_path: Some(accepted.plan_artifact_path.clone()),
+        raw_artifact_digest: Some(accepted.raw_artifact_digest.clone()),
+        kind,
+        detail,
+        source_slices: rows,
+    }
+}
+
+fn slice_rejection_kind(kind: crate::dynamic_plan::SliceRejectionKind) -> NativeDynamicPlanRejectionKind {
+    use crate::dynamic_plan::SliceRejectionKind;
+    match kind {
+        SliceRejectionKind::OutputUndeclared => NativeDynamicPlanRejectionKind::SliceOutputUndeclared,
+        SliceRejectionKind::Absent => NativeDynamicPlanRejectionKind::SliceAbsent,
+        SliceRejectionKind::SymlinkTraversal => NativeDynamicPlanRejectionKind::SliceSymlinkTraversal,
+        SliceRejectionKind::DigestMismatch => NativeDynamicPlanRejectionKind::SliceDigestMismatch,
+        SliceRejectionKind::Limit => NativeDynamicPlanRejectionKind::SliceLimit,
+        SliceRejectionKind::Conflict => NativeDynamicPlanRejectionKind::SliceConflict,
     }
 }
 
@@ -327,6 +538,7 @@ fn native_plan_report_from_accepted(accepted: &NativeDynamicPlanAccepted) -> Nat
         raw_artifact_digest: Some(accepted.raw_artifact_digest.clone()),
         canonical_plan_digest: Some(accepted.canonical_plan_digest.clone()),
         accepted_unit_ids: accepted.accepted_unit_ids.clone(),
+        source_slices: accepted.source_slices.clone(),
         rejection_reason: None,
         scheduler_action: "registered-roots".to_string(),
     }
@@ -341,6 +553,7 @@ fn native_plan_report_from_rejection(rejected: &NativeDynamicPlanRejection) -> N
         raw_artifact_digest: rejected.raw_artifact_digest.clone(),
         canonical_plan_digest: None,
         accepted_unit_ids: Vec::new(),
+        source_slices: rejected.source_slices.clone(),
         rejection_reason: Some(format!("{}: {}", rejected.kind.as_str(), rejected.detail)),
         scheduler_action: "rejected".to_string(),
     }
@@ -399,6 +612,7 @@ fn native_plan_rejection(input: NativePlanRejectionInput<'_>) -> NativeDynamicPl
         plan_artifact_path: input.plan_artifact_path,
         raw_artifact_digest: input.raw_artifact_digest,
         kind: input.kind,
+        source_slices: Vec::new(),
         detail: input.detail,
     }
 }
@@ -478,22 +692,196 @@ fn unit_output_dependencies_registered(unit: &DynamicUnit, registered: &BTreeMap
     })
 }
 
+fn v2_sources_by_id(
+    accepted: &NativeDynamicPlanAccepted,
+    rows: &[NativeDynamicSourceSliceReport],
+    store_dir: &str,
+) -> Result<BTreeMap<SourceId, StorePath<String>>, Error> {
+    let CanonicalNativePlan::V2(plan) = &accepted.plan else {
+        return Err(Error::Store("expected V2 native dynamic plan".to_owned()));
+    };
+    let mut by_id = BTreeMap::new();
+    for source in &plan.plan.sources {
+        let path = match source {
+            SourceV2::StorePath(source) => parse_dynamic_store_path(DynamicStorePathInput {
+                path: source.path.as_str(),
+                store_dir,
+            })?,
+            SourceV2::Slice(slice) => rows
+                .iter()
+                .find(|row| row.source_id == slice.id.as_str())
+                .and_then(|row| row.admitted_store_path.clone())
+                .ok_or_else(|| Error::Store(format!("source slice '{}' was not admitted", slice.id)))?,
+        };
+        by_id.insert(source.id().clone(), path);
+    }
+    Ok(by_id)
+}
+
+fn prepare_v2_registration(
+    accepted: &NativeDynamicPlanAccepted,
+    rows: &[NativeDynamicSourceSliceReport],
+    known_paths: &DerivationRegistry,
+    worker: &Worker,
+) -> Result<PreparedV2Registration, Error> {
+    let store_dir = known_paths.store_dir();
+    let sources = v2_sources_by_id(accepted, rows, store_dir)?;
+    let units_by_id = accepted.plan.units().iter().map(|unit| (unit.id.clone(), unit)).collect::<BTreeMap<_, _>>();
+    let mut pending = units_by_id.keys().cloned().collect::<BTreeSet<_>>();
+    let mut registered = BTreeMap::new();
+    let mut stage = V2Registration {
+        live: known_paths,
+        staged: BTreeMap::new(),
+        order: Vec::new(),
+    };
+    for _ in 0..units_by_id.len() {
+        if pending.is_empty() {
+            break;
+        }
+        let ready_units = pending
+            .iter()
+            .filter(|id| {
+                units_by_id.get(*id).is_some_and(|unit| unit_output_dependencies_registered(unit, &registered))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        if ready_units.is_empty() {
+            break;
+        }
+        for id in ready_units {
+            let unit = units_by_id[&id];
+            let prepared = prepare_native_dynamic_unit(unit, &sources, &registered, &stage, store_dir)?;
+            let path = prepared.drv_path.clone();
+            let absolute = path.to_absolute_path_with_prefix(store_dir);
+            if let Some(existing) = stage.staged.get(&absolute) {
+                if existing.hdm != prepared.hdm
+                    || existing.content_addressed != prepared.content_addressed
+                    || existing.dynamic_plan_outputs != prepared.dynamic_plan_outputs
+                    || existing.derivation.to_aterm_bytes_with_store_dir(store_dir)
+                        != prepared.derivation.to_aterm_bytes_with_store_dir(store_dir)
+                {
+                    return Err(Error::Store(format!("dynamic duplicate `{absolute}` changed admitted identity")));
+                }
+            } else if let Some(existing) = known_paths.get_by_drv_path(&absolute) {
+                if existing.hash_derivation_modulo != prepared.hdm
+                    || existing.content_addressed != prepared.content_addressed
+                    || existing.dynamic_plan_outputs != prepared.dynamic_plan_outputs
+                    || existing.derivation.to_aterm_bytes_with_store_dir(store_dir)
+                        != prepared.derivation.to_aterm_bytes_with_store_dir(store_dir)
+                {
+                    return Err(Error::Store(format!(
+                        "dynamic insertion `{absolute}` collides with an existing registry entry"
+                    )));
+                }
+            } else {
+                if known_paths.len() as usize + stage.staged.len() + 1 > MAX_ENTRIES as usize {
+                    return Err(Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")));
+                }
+                stage.order.push(absolute.clone());
+                stage.staged.insert(absolute, prepared);
+            }
+            registered.insert(id.clone(), path);
+            pending.remove(&id);
+        }
+    }
+    if !pending.is_empty() {
+        return Err(Error::Store(format!(
+            "native dynamic plan '{}' has unresolved unit dependencies: {}",
+            accepted.canonical_plan_digest,
+            pending.into_iter().map(|unit| unit.to_string()).collect::<Vec<_>>().join(", ")
+        )));
+    }
+    let root_drv_paths = accepted
+        .plan
+        .roots()
+        .iter()
+        .map(|root| {
+            registered
+                .get(root)
+                .cloned()
+                .ok_or_else(|| Error::Store(format!("native dynamic plan root was not registered: {root}")))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    stage.preflight_goals(worker, &root_drv_paths)?;
+    Ok(PreparedV2Registration {
+        staged: stage.staged,
+        order: stage.order,
+        registered: RegisteredNativeDynamicPlan {
+            root_drv_paths,
+            unit_drv_paths: registered,
+        },
+    })
+}
+
+fn prepare_native_dynamic_unit(
+    unit: &DynamicUnit,
+    sources: &BTreeMap<SourceId, StorePath<String>>,
+    registered_units: &BTreeMap<UnitId, StorePath<String>>,
+    known_paths: &impl NativeUnitLookup,
+    store_dir: &str,
+) -> Result<V2StagedUnit, Error> {
+    if !dynamic_plan_outputs_are_declared(unit) {
+        return Err(Error::Store(format!(
+            "native dynamic unit '{}' declares dynamic_plan_outputs outside outputs",
+            unit.id
+        )));
+    }
+
+    let mut derivation = build_native_dynamic_derivation(unit, sources, registered_units, known_paths, store_dir)?;
+    let mut parent_hdms = BTreeMap::new();
+    for parent_drv_path in derivation.input_derivations.keys() {
+        let parent_abs = parent_drv_path.to_absolute_path_with_prefix(store_dir);
+        let digest = known_paths.native_hdm(&parent_abs).ok_or_else(|| {
+            Error::Store(format!(
+                "native dynamic unit '{}' references unregistered parent derivation {parent_abs}",
+                unit.id
+            ))
+        })?;
+        parent_hdms.insert(parent_drv_path.as_ref(), digest);
+    }
+    let hdm = derivation.hash_derivation_modulo_with_store_dir(|parent| parent_hdms[parent], store_dir);
+    let content_addressed = matches!(unit.derivation.addressing_mode, AddressingMode::ContentAddressed)
+        && unit.derivation.fixed_output.is_none();
+    derivation
+        .calculate_output_paths_with_store_dir(&unit.derivation.name, &hdm, store_dir)
+        .map_err(|err| Error::Store(format!("computing native dynamic output paths for '{}': {err}", unit.id)))?;
+    if content_addressed {
+        for output in derivation.outputs.values_mut() {
+            output.path = None;
+        }
+    }
+    let drv_path = derivation
+        .calculate_derivation_path_with_store_dir(&unit.derivation.name, store_dir)
+        .map_err(|err| Error::Store(format!("computing native dynamic derivation path for '{}': {err}", unit.id)))?;
+    Ok(V2StagedUnit {
+        drv_path,
+        hdm,
+        derivation,
+        content_addressed,
+        dynamic_plan_outputs: unit
+            .derivation
+            .dynamic_plan_outputs
+            .iter()
+            .map(|output| output.as_str().to_owned())
+            .collect(),
+    })
+}
+
 fn register_native_dynamic_plan_units(
     accepted: &NativeDynamicPlanAccepted,
     known_paths: &mut DerivationRegistry,
 ) -> Result<RegisteredNativeDynamicPlan, Error> {
+    let CanonicalNativePlan::V1(plan) = &accepted.plan else {
+        return Err(Error::Store("expected V1 native dynamic plan".to_owned()));
+    };
     let store_dir = known_paths.store_dir().to_string();
-    let sources = dynamic_sources_by_id(&accepted.plan.plan.sources, &store_dir)?;
-    let units_by_id = accepted
-        .plan
-        .plan
-        .units
-        .iter()
+    let sources = dynamic_sources_by_id(&plan.plan.sources, &store_dir)?;
+    let units_by_id = plan.plan.units.iter()
         .map(|unit| (unit.id.clone(), unit))
         .collect::<BTreeMap<UnitId, &DynamicUnit>>();
     let mut pending = units_by_id.keys().cloned().collect::<BTreeSet<UnitId>>();
     let registered_unit_count_max = units_by_id.len();
-    let unit_iteration_count_max = accepted.plan.plan.units.len();
+    let unit_iteration_count_max = plan.plan.units.len();
     let mut registered = BTreeMap::new();
     debug_assert_eq!(pending.len(), registered_unit_count_max);
 
@@ -533,9 +921,9 @@ fn register_native_dynamic_plan_units(
     }
 
     debug_assert_eq!(registered.len(), registered_unit_count_max);
-    debug_assert!(accepted.plan.plan.roots.len() <= registered.len());
-    let mut root_drv_paths = Vec::with_capacity(accepted.plan.plan.roots.len());
-    for root in &accepted.plan.plan.roots {
+    debug_assert!(plan.plan.roots.len() <= registered.len());
+    let mut root_drv_paths = Vec::with_capacity(plan.plan.roots.len());
+    for root in &plan.plan.roots {
         let drv_path = registered
             .get(root)
             .ok_or_else(|| Error::Store(format!("native dynamic plan root was not registered: {root}")))?;
@@ -611,7 +999,7 @@ fn build_native_dynamic_derivation(
     unit: &DynamicUnit,
     sources: &BTreeMap<SourceId, StorePath<String>>,
     registered_units: &BTreeMap<UnitId, StorePath<String>>,
-    known_paths: &DerivationRegistry,
+    known_paths: &impl NativeUnitLookup,
     store_dir: &str,
 ) -> Result<Derivation, Error> {
     let ca_hash = unit.derivation.fixed_output.as_ref().map(parse_dynamic_fixed_output).transpose()?;
@@ -675,7 +1063,7 @@ fn dynamic_placeholder_bindings(
     unit: &DynamicUnit,
     sources: &BTreeMap<SourceId, StorePath<String>>,
     registered_units: &BTreeMap<UnitId, StorePath<String>>,
-    known_paths: &DerivationRegistry,
+    known_paths: &impl NativeUnitLookup,
     store_dir: &str,
 ) -> Result<DynamicPlaceholderBindings, Error> {
     let required_outputs = unit
@@ -720,7 +1108,7 @@ fn dynamic_placeholder_bindings(
                 })?;
                 let drv_abs = drv_path.to_absolute_path_with_prefix(store_dir);
                 let binding_key = (dependency.clone(), output.clone());
-                if let Some(path) = known_paths.get_output_path(&drv_abs, output.as_str()) {
+                if let Some(path) = known_paths.native_output(&drv_abs, output.as_str()) {
                     if output_bindings.len() >= binding_count_max {
                         return Err(Error::Store("native dynamic output bindings exceeded input bound".to_string()));
                     }
@@ -1463,7 +1851,7 @@ impl Worker {
         &mut self,
         drv_key: &str,
         outcome: BuildOutcome,
-        builder: &Builder<BServ>,
+        builder: &mut Builder<BServ>,
         known_paths: &mut DerivationRegistry,
         state: &mut WorkerLoopState<'_>,
     ) -> Result<(), Error>
@@ -1471,11 +1859,20 @@ impl Worker {
         BServ: BuildService + 'static,
     {
         let declared_native_outputs = self.declared_native_dynamic_outputs(&outcome, known_paths);
-        let native_scan = self
+        let mut native_scan = self
             .scan_native_dynamic_plans(drv_key, &outcome, builder, known_paths.store_dir(), &declared_native_outputs)
             .await?;
+        for mut accepted in native_scan.accepted.drain(..) {
+            let mut staged = None;
+            match self.admit_v2_source_slices(&mut accepted, &outcome, known_paths, builder, &mut staged).await? {
+                Some(rejection) => native_scan.rejected.push(rejection),
+                None => {
+                    state.native_dynamic_plans.push(native_plan_report_from_accepted(&accepted));
+                    self.register_accepted_native_dynamic_plan(accepted, staged, known_paths)?;
+                }
+            }
+        }
         self.log_native_dynamic_plan_scan(&native_scan);
-        self.register_accepted_native_dynamic_plans(&native_scan, known_paths)?;
         state.native_dynamic_plans.extend(native_plan_reports_from_scan(&native_scan));
 
         self.detect_dynamic_derivations(drv_key, &outcome, builder, known_paths, &declared_native_outputs)
@@ -1586,7 +1983,14 @@ impl Worker {
             }
         };
         let raw_digest = blake3_hex(&content);
-        match decode_validated_plan_v1(&content, store_prefix) {
+        let is_v2 = serde_json::from_slice::<NativePlanSchemaProbe<'_>>(&content)
+            .is_ok_and(|probe| probe.schema == crate::dynamic_plan::MANTLE_PLAN_V2_SCHEMA);
+        let decoded = if is_v2 {
+            decode_validated_plan_v2(&content, store_prefix).map(CanonicalNativePlan::V2)
+        } else {
+            decode_validated_plan_v1(&content, store_prefix).map(CanonicalNativePlan::V1)
+        };
+        match decoded {
             Ok(plan) => {
                 Ok(NativeDynamicPlanOutputScan::Accepted(Box::new(accepted_native_plan(AcceptedNativePlanInput {
                     identity: NativePlanIdentity {
@@ -1609,6 +2013,250 @@ impl Worker {
                 detail: err.to_string(),
             }))),
         }
+    }
+
+    /// Publish the whole validated source batch before any unit or goal mutation.
+    /// Ordinary pre-commit failures reject only this plan; uncertain commits abort
+    /// the run rather than making a false "rejected without publication" claim.
+    async fn admit_v2_source_slices<BServ>(
+        &self,
+        accepted: &mut NativeDynamicPlanAccepted,
+        outcome: &BuildOutcome,
+        known_paths: &DerivationRegistry,
+        builder: &mut Builder<BServ>,
+        prepared: &mut Option<PreparedV2Registration>,
+    ) -> Result<Option<NativeDynamicPlanRejection>, Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        let CanonicalNativePlan::V2(plan) = &accepted.plan else {
+            return Ok(None);
+        };
+        let slices = plan
+            .plan
+            .sources
+            .iter()
+            .filter_map(|source| match source {
+                SourceV2::Slice(slice) => Some(slice),
+                SourceV2::StorePath(_) => None,
+            })
+            .collect::<Vec<&SliceSource>>();
+        let mut rows = slices
+            .iter()
+            .map(|slice| NativeDynamicSourceSliceReport {
+                source_id: slice.id.as_str().to_owned(),
+                producer_output: slice.producer_output.as_str().to_owned(),
+                subpath: slice.subpath.clone(),
+                declared_nar_blake3: slice.nar_blake3.as_str().to_owned(),
+                observed_nar_blake3: None,
+                admitted_store_path: None,
+                disposition: "not-admitted".to_string(),
+            })
+            .collect::<Vec<_>>();
+        let producer_path = outcome.drv_path.to_absolute_path_with_prefix(known_paths.store_dir());
+        let declared_by_producer = known_paths.get_by_drv_path(&producer_path).map(|entry| &entry.derivation.outputs);
+        let declared_outputs = slices
+            .iter()
+            .filter(|slice| {
+                slice.producer_output.as_str() != accepted.output_name
+                    && declared_by_producer.is_some_and(|outputs| outputs.contains_key(slice.producer_output.as_str()))
+            })
+            .map(|slice| slice.producer_output.clone())
+            .collect::<BTreeSet<_>>();
+        let mut observations = Vec::with_capacity(slices.len());
+        let mut observations_by_source = BTreeMap::new();
+        let mut observations_by_subtree: BTreeMap<(&OutputName, &str), usize> = BTreeMap::new();
+        let mut facts = Vec::with_capacity(slices.len());
+        for (slice, row) in slices.iter().zip(&mut rows) {
+            let Some(output) = outcome
+                .outputs
+                .get(slice.producer_output.as_str())
+                .filter(|_| declared_outputs.contains(&slice.producer_output))
+            else {
+                facts.push(SliceTreeFact {
+                    source_id: slice.id.clone(),
+                    producer_output: slice.producer_output.clone(),
+                    subpath: slice.subpath.clone(),
+                    kind: SliceNodeKind::Absent,
+                    traversed_symlink: false,
+                    observed_nar_blake3: None,
+                    nar_bytes: 0,
+                });
+                continue;
+            };
+            let subtree_key = (&slice.producer_output, slice.subpath.as_str());
+            let observation_index = if let Some(index) = observations_by_subtree.get(&subtree_key) {
+                *index
+            } else {
+                let observation = match builder.observe_source_slice(&output.node, &slice.subpath).await {
+                    Ok(observation) => observation,
+                    Err(error) => {
+                        let message = error.to_string();
+                        let kind = if message.contains("verified-source-slice-absent") {
+                            SliceNodeKind::Absent
+                        } else if message.contains("verified-source-slice-symlink-traversal") {
+                            SliceNodeKind::Symlink
+                        } else {
+                            let rejection_kind = if message.contains("verified-source-slice-limit") {
+                                NativeDynamicPlanRejectionKind::SliceLimit
+                            } else {
+                                NativeDynamicPlanRejectionKind::ReadFailed
+                            };
+                            return Ok(Some(rejected_accepted_slice_plan(
+                                accepted,
+                                rows,
+                                Some(&slice.id),
+                                rejection_kind,
+                                format!("source {} subpath {}: {message}", slice.id, slice.subpath),
+                            )));
+                        };
+                        facts.push(SliceTreeFact {
+                            source_id: slice.id.clone(),
+                            producer_output: slice.producer_output.clone(),
+                            subpath: slice.subpath.clone(),
+                            kind,
+                            traversed_symlink: kind == SliceNodeKind::Symlink,
+                            observed_nar_blake3: None,
+                            nar_bytes: 0,
+                        });
+                        continue;
+                    }
+                };
+                let digest = NarDigest::new(data_encoding::HEXLOWER.encode(&observation.nar_blake3()))
+                    .expect("the store observation supplies exactly one BLAKE3 digest");
+                let kind = match observation.node() {
+                    snix_castore::Node::File { .. } => SliceNodeKind::File,
+                    snix_castore::Node::Directory { .. } => SliceNodeKind::Directory,
+                    snix_castore::Node::Symlink { .. } => SliceNodeKind::Symlink,
+                };
+                let index = observations.len();
+                observations.push(ObservedPlanSubtree {
+                    observed: observation,
+                    digest,
+                    kind,
+                });
+                observations_by_subtree.insert(subtree_key, index);
+                index
+            };
+            let observation = &observations[observation_index];
+            let digest = &observation.digest;
+            row.observed_nar_blake3 = Some(digest.as_str().to_owned());
+            facts.push(SliceTreeFact {
+                source_id: slice.id.clone(),
+                producer_output: slice.producer_output.clone(),
+                subpath: slice.subpath.clone(),
+                kind: observation.kind,
+                traversed_symlink: false,
+                observed_nar_blake3: Some(digest.clone()),
+                nar_bytes: observation.observed.nar_size(),
+            });
+            observations_by_source.insert(slice.id.clone(), observation_index);
+        }
+        let planned = match plan_slices(&slices, &declared_outputs, &facts) {
+            Ok(planned) => planned,
+            Err(rejection) => {
+                return Ok(Some(rejected_accepted_slice_plan(
+                    accepted,
+                    rows,
+                    Some(&rejection.source_id),
+                    slice_rejection_kind(rejection.kind),
+                    format!("source {}: {}", rejection.source_id, rejection.detail),
+                )));
+            }
+        };
+        let publications =
+            planned.iter().filter(|slice| slice.publication_source_id == slice.source_id).collect::<Vec<_>>();
+        let requests = publications
+            .iter()
+            .map(|slice| BuilderSourceSlice {
+                observed: &observations[observations_by_source[&slice.source_id]].observed,
+                store_name: &slice.store_name,
+            })
+            .collect::<Vec<_>>();
+        // Project exactly the path the batch publisher will sign, then
+        // validate the entire V2 unit graph and root closure before any write.
+        let mut projected = BTreeMap::new();
+        for slice in &publications {
+            let observation = &observations[observations_by_source[&slice.source_id]].observed;
+            let ca = CAHash::Nar(NixHash::Sha256(observation.nar_sha256()));
+            let path = match build_ca_path_with_store_dir(
+                &slice.store_name,
+                &ca,
+                Vec::<&str>::new(),
+                false,
+                builder.store_dir(),
+            ) {
+                Ok(path) => path,
+                Err(error) => {
+                    return Ok(Some(rejected_accepted_slice_plan(
+                        accepted,
+                        rows,
+                        Some(&slice.source_id),
+                        NativeDynamicPlanRejectionKind::SlicePublication,
+                        error.to_string(),
+                    )));
+                }
+            };
+            projected.insert(slice.source_id.clone(), path);
+        }
+        for (slice, row) in planned.iter().zip(&mut rows) {
+            row.admitted_store_path = Some(
+                projected
+                    .get(&slice.publication_source_id)
+                    .expect("the canonical publication owner has a projected path")
+                    .clone(),
+            );
+        }
+        let staged = match prepare_v2_registration(accepted, &rows, known_paths, self) {
+            Ok(staged) => staged,
+            Err(error) => {
+                return Ok(Some(rejected_accepted_slice_plan(
+                    accepted,
+                    rows,
+                    None,
+                    NativeDynamicPlanRejectionKind::InvalidPlan,
+                    error.to_string(),
+                )));
+            }
+        };
+        let published = match builder.admit_source_slice_batch(&requests).await {
+            Ok(published) => published,
+            Err(error) => {
+                if matches!(&error, Error::Store(detail) if detail.contains("verified-source-batch-publication-uncertain"))
+                {
+                    return Err(error);
+                }
+                return Ok(Some(rejected_accepted_slice_plan(
+                    accepted,
+                    rows,
+                    None,
+                    NativeDynamicPlanRejectionKind::SlicePublication,
+                    error.to_string(),
+                )));
+            }
+        };
+        if published.len() != publications.len() {
+            return Err(Error::Store(
+                "verified source batch returned an incomplete result after publication".to_string(),
+            ));
+        }
+        for (slice, result) in publications.iter().zip(&published) {
+            if result.nar_blake3 != observations[observations_by_source[&slice.source_id]].observed.nar_blake3()
+                || result.nar_size != slice.nar_bytes
+                || result.logical_store_path
+                    != projected[&slice.source_id].to_absolute_path_with_prefix(builder.store_dir())
+            {
+                return Err(Error::Store(
+                    "verified source batch returned a mismatched result after publication".to_string(),
+                ));
+            }
+        }
+        for row in &mut rows {
+            row.disposition = "admitted".to_string();
+        }
+        accepted.source_slices = rows;
+        *prepared = Some(staged);
+        Ok(None)
     }
 
     fn log_native_dynamic_plan_scan(&self, scan: &NativeDynamicPlanScan) {
@@ -1635,21 +2283,34 @@ impl Worker {
         }
     }
 
-    fn register_accepted_native_dynamic_plans(
+    fn register_accepted_native_dynamic_plan(
         &mut self,
-        scan: &NativeDynamicPlanScan,
+        accepted: NativeDynamicPlanAccepted,
+        staged: Option<PreparedV2Registration>,
         known_paths: &mut DerivationRegistry,
     ) -> Result<(), Error> {
-        for accepted in &scan.accepted {
-            let registered = register_native_dynamic_plan_units(accepted, known_paths)?;
-            for root_drv_path in registered.root_drv_paths {
-                self.want(&root_drv_path, known_paths, true)?;
+        let registered = if let Some(mut staged) = staged {
+            for path in staged.order {
+                let unit = staged.staged.remove(&path).ok_or_else(|| {
+                    Error::Store(format!("staged native dynamic unit disappeared after publication: {path}"))
+                })?;
+                known_paths.insert_with_dynamic_plan_outputs(
+                    unit.drv_path,
+                    unit.hdm,
+                    unit.derivation,
+                    unit.content_addressed,
+                    unit.dynamic_plan_outputs,
+                    None,
+                );
             }
-            debug_assert!(
-                registered.unit_drv_paths.len() >= accepted.plan.plan.roots.len(),
-                "registered native dynamic units must cover all roots"
-            );
+            staged.registered
+        } else {
+            register_native_dynamic_plan_units(&accepted, known_paths)?
+        };
+        for root_drv_path in &registered.root_drv_paths {
+            self.want(root_drv_path, known_paths, true)?;
         }
+        debug_assert!(registered.unit_drv_paths.len() >= accepted.plan.roots().len());
         Ok(())
     }
 
@@ -1855,7 +2516,7 @@ impl Worker {
         &mut self,
         drv_key: &str,
         prepare_result: Result<PrepareResult, Error>,
-        builder: &Builder<BServ>,
+        builder: &mut Builder<BServ>,
         known_paths: &mut DerivationRegistry,
         state: &mut WorkerLoopState<'_>,
     ) -> Result<bool, Error>
@@ -2075,6 +2736,8 @@ impl Worker {
 mod tests {
     use std::collections::BTreeMap;
     use std::collections::BTreeSet;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
 
     use nix_compat::derivation::Derivation;
     use nix_compat::derivation::Output;
@@ -2545,10 +3208,16 @@ mod tests {
     use std::path::PathBuf;
 
     use snix_castore::B3Digest;
+    use snix_castore::Directory;
     use snix_castore::Node;
+    use snix_castore::PathComponent;
     use snix_castore::blobservice::BlobService;
     use snix_castore::blobservice::MemoryBlobService;
+    use snix_castore::directoryservice::DirectoryService;
     use snix_store::path_info::PathInfo;
+    use snix_store::pathinfoservice::PathInfoService;
+    use snix_store::pathinfoservice::RedbPathInfoService;
+    use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
     use tokio::io::AsyncWriteExt;
 
     use crate::dynamic_plan::MAX_DYNAMIC_PLAN_BYTES;
@@ -2598,6 +3267,150 @@ mod tests {
             size: content.len() as u64,
             executable: false,
         }
+    }
+
+    type SourceSliceTestBuilder = (
+        Builder<MockBuildService>,
+        Arc<dyn DirectoryService>,
+        Arc<dyn PathInfoService>,
+        Arc<std::sync::Mutex<Vec<Vec<String>>>>,
+    );
+
+    fn source_slice_test_builder(bs: &MemoryBlobService) -> SourceSliceTestBuilder {
+        source_slice_test_builder_with_store_dir(bs, nix_compat::store_path::STORE_DIR)
+    }
+
+    fn source_slice_test_builder_with_store_dir(bs: &MemoryBlobService, store_dir: &str) -> SourceSliceTestBuilder {
+        let ds: Arc<dyn DirectoryService> = Arc::new(tmp_ds());
+        let pis: Arc<dyn PathInfoService> = Arc::new(
+            RedbPathInfoService::new_temporary(
+                "dynamic-source-slices".to_string(),
+                RedbPathInfoServiceConfig::default(),
+            )
+            .unwrap(),
+        );
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let builder = Builder::with_state_dir(
+            Arc::new(bs.clone()),
+            ds.clone(),
+            mock,
+            pis.clone(),
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            store_dir,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        (builder, ds, pis, calls)
+    }
+
+    struct RejectingSourceBatchPathInfo {
+        inner: Arc<dyn PathInfoService>,
+        attempted_batches: Arc<AtomicUsize>,
+        observed_batches: mpsc::UnboundedSender<Vec<[u8; 20]>>,
+    }
+
+    #[async_trait::async_trait]
+    impl PathInfoService for RejectingSourceBatchPathInfo {
+        async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, snix_store::pathinfoservice::Error> {
+            self.inner.get(digest).await
+        }
+
+        async fn put(&self, path_info: PathInfo) -> Result<PathInfo, snix_store::pathinfoservice::Error> {
+            self.inner.put(path_info).await
+        }
+
+        async fn put_batch_atomic(
+            &self,
+            path_infos: Vec<PathInfo>,
+        ) -> Result<Vec<PathInfo>, snix_store::pathinfoservice::Error> {
+            self.attempted_batches.fetch_add(1, Ordering::SeqCst);
+            self.observed_batches
+                .send(path_infos.iter().map(|info| *info.store_path.digest()).collect())
+                .expect("batch observer must remain available");
+            Err(std::io::Error::other("injected atomic PathInfo batch rejection").into())
+        }
+
+        fn list(&self) -> futures::stream::BoxStream<'static, Result<PathInfo, snix_store::pathinfoservice::Error>> {
+            self.inner.list()
+        }
+    }
+
+    async fn stored_test_directory(
+        ds: &Arc<dyn DirectoryService>,
+        children: impl IntoIterator<Item = (PathComponent, Node)>,
+    ) -> Node {
+        let directory = Directory::try_from_iter(children).unwrap();
+        let size = directory.size();
+        let digest = ds.put(directory).await.unwrap();
+        Node::Directory { digest, size }
+    }
+
+    async fn source_slice_tree(bs: &MemoryBlobService, ds: &Arc<dyn DirectoryService>, outside: &[u8]) -> Node {
+        let leaf = put_test_blob(bs, b"slice content stays the same").await;
+        let package = stored_test_directory(ds, [("file.txt".try_into().unwrap(), leaf)]).await;
+        let packages = stored_test_directory(ds, [
+            ("a".try_into().unwrap(), package.clone()),
+            ("b".try_into().unwrap(), package),
+            ("link".try_into().unwrap(), Node::Symlink {
+                target: snix_castore::SymlinkTarget::try_from("a").unwrap(),
+            }),
+        ])
+        .await;
+        let changed = put_test_blob(bs, outside).await;
+        stored_test_directory(ds, [
+            ("packages".try_into().unwrap(), packages),
+            ("outside.txt".try_into().unwrap(), changed),
+        ])
+        .await
+    }
+
+    fn v2_plan_for_source_slices(expected_digest: &str, second_subpath: &str, second_digest: &str) -> Vec<u8> {
+        let mut plan: serde_json::Value = serde_json::from_slice(&native_plan_with_placeholders_bytes()).unwrap();
+        plan["schema"] = serde_json::json!("mantle-plan-v2");
+        plan["sources"] = serde_json::json!([
+            {
+                "id": "src.main",
+                "producer_output": "sources",
+                "subpath": "packages/a",
+                "store_name": "unchanged-package",
+                "nar_blake3": expected_digest,
+            },
+            {
+                "id": "src.other",
+                "producer_output": "sources",
+                "subpath": second_subpath,
+                "store_name": "unchanged-package",
+                "nar_blake3": second_digest,
+            },
+        ]);
+        serde_json::to_vec(&plan).unwrap()
+    }
+
+    async fn source_slice_plan_outcome(
+        bs: &MemoryBlobService,
+        plan_bytes: &[u8],
+        source_root: Node,
+        producer_name: &str,
+        known_paths: &mut DerivationRegistry,
+    ) -> (StorePath<String>, BuildOutcome) {
+        let (producer, _) = build_and_register_multi(producer_name, &["out", "plan", "sources"], &[], known_paths);
+        declare_native_plan_output(known_paths, &producer, "plan");
+        let plan_node = put_test_blob(bs, plan_bytes).await;
+        let outcome = BuildOutcome {
+            drv_path: producer.clone(),
+            outputs: BTreeMap::from([
+                ("plan".to_string(), test_path_info("source-slice-plan", plan_node)),
+                ("sources".to_string(), test_path_info("source-slice-root", source_root)),
+            ]),
+            substitutions: BTreeMap::new(),
+            cached: false,
+            log: None,
+        };
+        (producer, outcome)
     }
 
     fn test_path_info(name: &str, node: Node) -> PathInfo {
@@ -2770,7 +3583,7 @@ mod tests {
     }
 
     fn declare_native_plan_output(kp: &mut DerivationRegistry, sp: &StorePath<String>, output_name: &str) {
-        let abs = sp.to_absolute_path();
+        let abs = sp.to_absolute_path_with_prefix(kp.store_dir());
         let entry = kp.get_by_drv_path_mut(&abs).unwrap();
         entry.dynamic_plan_outputs = vec![output_name.to_string()];
     }
@@ -3571,6 +4384,708 @@ mod tests {
     // ── Native dynamic plan scanning tests ─────────────────
 
     #[tokio::test]
+    async fn native_v2_custom_store_prefix_admits_declared_producer_output() {
+        let store_dir = "/mantle/store";
+        let bs = MemoryBlobService::default();
+        let (mut builder, ds, _, _) = source_slice_test_builder_with_store_dir(&bs, store_dir);
+        let source_root = source_slice_tree(&bs, &ds, b"outside").await;
+        let observed = builder.observe_source_slice(&source_root, "packages/a").await.unwrap();
+        let digest = data_encoding::HEXLOWER.encode(&observed.nar_blake3());
+        let plan = String::from_utf8(v2_plan_for_source_slices(&digest, "packages/b", &digest))
+            .unwrap()
+            .replace("/nix/store/", "/mantle/store/");
+        let mut known_paths = DerivationRegistry::new(store_dir);
+        let (producer, outcome) =
+            source_slice_plan_outcome(&bs, plan.as_bytes(), source_root, "prefixed-producer", &mut known_paths).await;
+        let worker = Worker::new(1);
+        let scan = worker
+            .scan_native_dynamic_plans(
+                &producer.to_absolute_path(),
+                &outcome,
+                &builder,
+                store_dir,
+                &BTreeSet::from(["plan".to_string()]),
+            )
+            .await
+            .unwrap();
+        let mut accepted = scan.accepted.into_iter().next().expect("valid v2 plan");
+        let mut prepared = None;
+        let rejection = worker
+            .admit_v2_source_slices(&mut accepted, &outcome, &known_paths, &mut builder, &mut prepared)
+            .await
+            .unwrap();
+        assert!(rejection.is_none(), "{rejection:?}");
+        assert!(accepted
+            .source_slices
+            .iter()
+            .all(|slice| slice.disposition == "admitted" && slice.admitted_store_path.is_some()));
+        assert!(prepared.is_some());
+    }
+
+    #[tokio::test]
+    async fn native_v2_slice_publication_survives_two_producer_reruns() {
+        let bs = MemoryBlobService::default();
+        let (mut builder, ds, pis, _) = source_slice_test_builder(&bs);
+        let mut previous: Option<(Node, StorePath<String>, StorePath<String>)> = None;
+        for (run, outside) in [b"first outside".as_slice(), b"second outside".as_slice()].into_iter().enumerate() {
+            let source_root = source_slice_tree(&bs, &ds, outside).await;
+            let observed = builder.observe_source_slice(&source_root, "packages/a").await.unwrap();
+            let nar_blake3 = data_encoding::HEXLOWER.encode(&observed.nar_blake3());
+            let plan = v2_plan_for_source_slices(&nar_blake3, "packages/b", &nar_blake3);
+            let mut known_paths = DerivationRegistry::default();
+            let (producer, outcome) = source_slice_plan_outcome(
+                &bs,
+                &plan,
+                source_root.clone(),
+                &format!("source-producer-{run}"),
+                &mut known_paths,
+            )
+            .await;
+            let mut worker = Worker::new(1);
+            let scan = worker
+                .scan_native_dynamic_plans(
+                    &producer.to_absolute_path(),
+                    &outcome,
+                    &builder,
+                    known_paths.store_dir(),
+                    &BTreeSet::from(["plan".to_string()]),
+                )
+                .await
+                .unwrap();
+            let mut accepted = scan.accepted.into_iter().next().expect("valid v2 plan");
+            let mut staged = None;
+            assert!(
+                worker
+                    .admit_v2_source_slices(&mut accepted, &outcome, &known_paths, &mut builder, &mut staged)
+                    .await
+                    .unwrap()
+                    .is_none()
+            );
+            let rows = &accepted.source_slices;
+            assert_eq!(rows.iter().map(|row| row.source_id.as_str()).collect::<Vec<_>>(), ["src.main", "src.other"]);
+            assert!(
+                rows.iter().all(|row| row.disposition == "admitted"
+                    && row.observed_nar_blake3.as_deref() == Some(nar_blake3.as_str()))
+            );
+            let source_path = rows[0].admitted_store_path.clone().unwrap();
+            assert_eq!(rows[1].admitted_store_path.as_ref(), Some(&source_path));
+            let signed = pis.get(*source_path.digest()).await.unwrap().expect("signed source PathInfo committed");
+            assert_eq!(signed.store_path, source_path);
+            assert_eq!(signed.ca, Some(CAHash::Nar(NixHash::Sha256(observed.nar_sha256()))));
+            assert!(
+                crate::signing::verify_pathinfo_signatures_with_store_dir(&signed, &test_trusted_keys(), "/nix/store",)
+                    .is_trusted()
+            );
+            let dependency = staged.as_ref().expect("V2 registration was staged").registered.unit_drv_paths
+                [&UnitId::new("unit.dep".to_string()).unwrap()]
+                .clone();
+            worker.register_accepted_native_dynamic_plan(accepted, staged, &mut known_paths).unwrap();
+            let dependency_entry = known_paths.get_by_drv_path(&dependency.to_absolute_path()).unwrap();
+            assert!(dependency_entry.derivation.input_sources.contains(&source_path));
+            let source_absolute = source_path.to_absolute_path();
+            assert!(dependency_entry.derivation.arguments.iter().any(|arg| arg.contains(&source_absolute)));
+            if let Some((prior_root, prior_source, prior_unit)) = &previous {
+                assert_ne!(source_root, *prior_root, "outside bytes must change producer output");
+                assert_eq!(&source_path, prior_source, "slice path must not depend on producer output");
+                assert_eq!(&dependency, prior_unit, "unit identity must depend only on its slice and unchanged inputs");
+            }
+            previous = Some((source_root, source_path, dependency));
+            let result = worker.run(&mut builder, &mut known_paths).await.unwrap();
+            assert!(result.failed.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn native_v2_late_unit_failure_keeps_slices_unpublished() {
+        let bs = MemoryBlobService::default();
+        let (mut builder, ds, pis, _) = source_slice_test_builder(&bs);
+        let source_root = source_slice_tree(&bs, &ds, b"outside").await;
+        let observed = builder.observe_source_slice(&source_root, "packages/a").await.unwrap();
+        let nar_blake3 = data_encoding::HEXLOWER.encode(&observed.nar_blake3());
+        let ca = CAHash::Nar(NixHash::Sha256(observed.nar_sha256()));
+        let expected_path: StorePath<String> = nix_compat::store_path::build_ca_path_with_store_dir(
+            "unchanged-package",
+            &ca,
+            Vec::<&str>::new(),
+            false,
+            "/nix/store",
+        )
+        .unwrap();
+        let mut plan: serde_json::Value =
+            serde_json::from_slice(&v2_plan_for_source_slices(&nar_blake3, "packages/b", &nar_blake3)).unwrap();
+        plan["units"][1]["derivation"]["name"] = serde_json::json!("x".repeat(220));
+        let plan = serde_json::to_vec(&plan).unwrap();
+        let mut known_paths = DerivationRegistry::default();
+        let (producer, outcome) =
+            source_slice_plan_outcome(&bs, &plan, source_root, "late-unit-producer", &mut known_paths).await;
+        let mut worker = Worker::new(1);
+        worker.want(&producer, &known_paths, true).unwrap();
+        let registry_before = known_paths.len();
+        let goals_before = worker.registry.len();
+        let ready_before = worker.ready_goals.clone();
+        let epoch_before = worker.scheduling_epoch;
+
+        let mut scan = worker
+            .scan_native_dynamic_plans(
+                &producer.to_absolute_path(),
+                &outcome,
+                &builder,
+                known_paths.store_dir(),
+                &BTreeSet::from(["plan".to_string()]),
+            )
+            .await
+            .unwrap();
+        let accepted = std::mem::take(&mut scan.accepted);
+        for mut plan in accepted {
+            let mut staged = None;
+            if let Some(rejection) = worker
+                .admit_v2_source_slices(&mut plan, &outcome, &known_paths, &mut builder, &mut staged)
+                .await
+                .unwrap()
+            {
+                scan.rejected.push(rejection);
+            } else {
+                scan.accepted.push(plan);
+            }
+        }
+        let reports = native_plan_reports_from_scan(&scan);
+        assert!(scan.accepted.is_empty(), "late unit must reject before registration");
+        assert!(
+            pis.get(*expected_path.digest()).await.unwrap().is_none(),
+            "late unit published signed slice PathInfo"
+        );
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].scheduler_action, "rejected");
+        assert!(reports[0].rejection_reason.as_deref().unwrap_or("").starts_with("invalid-plan:"));
+        assert_eq!(reports[0].source_slices.len(), 2);
+        assert!(reports[0].source_slices.iter().all(|row| row.admitted_store_path.is_none()));
+        assert_eq!(known_paths.len(), registry_before, "no earlier dependency may be registered");
+        assert_eq!(worker.registry.len(), goals_before);
+        assert_eq!(worker.ready_goals, ready_before);
+        assert_eq!(worker.scheduling_epoch, epoch_before);
+        assert!(worker.priority_decisions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn native_v2_goal_capacity_rejects_before_slice_publication() {
+        let bs = MemoryBlobService::default();
+        let (mut builder, ds, pis, _) = source_slice_test_builder(&bs);
+        let source_root = source_slice_tree(&bs, &ds, b"outside").await;
+        let observed = builder.observe_source_slice(&source_root, "packages/a").await.unwrap();
+        let digest = data_encoding::HEXLOWER.encode(&observed.nar_blake3());
+        let expected_path: StorePath<String> = build_ca_path_with_store_dir(
+            "unchanged-package",
+            &CAHash::Nar(NixHash::Sha256(observed.nar_sha256())),
+            Vec::<&str>::new(),
+            false,
+            "/nix/store",
+        )
+        .unwrap();
+        let mut known_paths = DerivationRegistry::default();
+        let (producer, outcome) = source_slice_plan_outcome(
+            &bs,
+            &v2_plan_for_source_slices(&digest, "packages/b", &digest),
+            source_root,
+            "v2-goal-capacity-producer",
+            &mut known_paths,
+        )
+        .await;
+        let mut worker = Worker::new(1);
+        worker.want(&producer, &known_paths, true).unwrap();
+        let existing_derivation = known_paths.get_by_drv_path(&producer.to_absolute_path()).unwrap().derivation.clone();
+        for index in 0..(MAX_GOALS - worker.registry.len()) {
+            let path = fake_sp(&format!("capacity-{index:05}.drv"));
+            worker
+                .registry
+                .insert(path.to_absolute_path(), Goal::new(path, existing_derivation.clone()))
+                .unwrap();
+        }
+        assert_eq!(worker.registry.len(), MAX_GOALS);
+        let registry_before = known_paths.len();
+        let ready_before = worker.ready_goals.clone();
+        let epoch_before = worker.scheduling_epoch;
+        let scan = worker
+            .scan_native_dynamic_plans(
+                &producer.to_absolute_path(),
+                &outcome,
+                &builder,
+                known_paths.store_dir(),
+                &BTreeSet::from(["plan".to_string()]),
+            )
+            .await
+            .unwrap();
+        let mut accepted = scan.accepted.into_iter().next().expect("valid V2 plan before goal admission");
+        let rejection = worker
+            .admit_v2_source_slices(&mut accepted, &outcome, &known_paths, &mut builder, &mut None)
+            .await
+            .unwrap()
+            .expect("new V2 root must reject when goal registry is full");
+        let report = native_plan_report_from_rejection(&rejection);
+        assert_eq!(rejection.kind, NativeDynamicPlanRejectionKind::InvalidPlan);
+        assert!(rejection.detail.contains("goal registry at capacity"));
+        assert!(
+            pis.get(*expected_path.digest()).await.unwrap().is_none(),
+            "full goal registry published signed slice PathInfo"
+        );
+        assert_eq!(report.scheduler_action, "rejected");
+        assert!(report.rejection_reason.as_deref().unwrap().starts_with("invalid-plan:"));
+        assert_eq!(report.source_slices.len(), 2);
+        assert!(report.source_slices.iter().all(|row| row.admitted_store_path.is_none()));
+        assert_eq!(known_paths.len(), registry_before, "V2 units must not register before goal admission");
+        assert_eq!(worker.registry.len(), MAX_GOALS);
+        assert_eq!(worker.registry.get(&producer.to_absolute_path()).unwrap().state, GoalState::Ready);
+        assert_eq!(worker.ready_goals, ready_before);
+        assert_eq!(worker.scheduling_epoch, epoch_before);
+        assert!(worker.priority_decisions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn native_v2_registry_collision_rejects_before_slice_publication() {
+        let bs = MemoryBlobService::default();
+        let (mut builder, ds, pis, _) = source_slice_test_builder(&bs);
+        let source_root = source_slice_tree(&bs, &ds, b"outside").await;
+        let observed = builder.observe_source_slice(&source_root, "packages/a").await.unwrap();
+        let digest = data_encoding::HEXLOWER.encode(&observed.nar_blake3());
+        let expected_path = build_ca_path_with_store_dir(
+            "unchanged-package",
+            &CAHash::Nar(NixHash::Sha256(observed.nar_sha256())),
+            Vec::<&str>::new(),
+            false,
+            "/nix/store",
+        )
+        .unwrap();
+        let mut known_paths = DerivationRegistry::default();
+        let (producer, outcome) = source_slice_plan_outcome(
+            &bs,
+            &v2_plan_for_source_slices(&digest, "packages/b", &digest),
+            source_root,
+            "v2-registry-collision-producer",
+            &mut known_paths,
+        )
+        .await;
+        let mut worker = Worker::new(1);
+        worker.want(&producer, &known_paths, true).unwrap();
+        let scan = worker
+            .scan_native_dynamic_plans(
+                &producer.to_absolute_path(),
+                &outcome,
+                &builder,
+                known_paths.store_dir(),
+                &BTreeSet::from(["plan".to_string()]),
+            )
+            .await
+            .unwrap();
+        let mut accepted = scan.accepted.into_iter().next().expect("valid V2 plan before registry preflight");
+        let projected = [("src.main", "packages/a"), ("src.other", "packages/b")]
+            .into_iter()
+            .map(|(id, subpath)| NativeDynamicSourceSliceReport {
+                source_id: id.to_string(),
+                producer_output: "sources".to_string(),
+                subpath: subpath.to_string(),
+                declared_nar_blake3: digest.clone(),
+                observed_nar_blake3: Some(digest.clone()),
+                admitted_store_path: Some(expected_path.clone()),
+                disposition: "not-admitted".to_string(),
+            })
+            .collect::<Vec<_>>();
+        let staged = prepare_v2_registration(&accepted, &projected, &known_paths, &worker).unwrap();
+        let colliding_unit = staged.staged.values().next().expect("at least one prospective unit");
+        let colliding_path = colliding_unit.drv_path.to_absolute_path();
+        let colliding_hdm = [0x5a; 32];
+        assert_ne!(colliding_unit.hdm, colliding_hdm);
+        known_paths.insert_with_dynamic_plan_outputs(
+            colliding_unit.drv_path.clone(),
+            colliding_hdm,
+            colliding_unit.derivation.clone(),
+            colliding_unit.content_addressed,
+            colliding_unit.dynamic_plan_outputs.clone(),
+            None,
+        );
+        let registry_before = known_paths.len();
+        let goals_before = worker.registry.len();
+        let ready_before = worker.ready_goals.clone();
+        let epoch_before = worker.scheduling_epoch;
+
+        let rejection = worker
+            .admit_v2_source_slices(&mut accepted, &outcome, &known_paths, &mut builder, &mut None)
+            .await
+            .unwrap()
+            .expect("conflicting V2 derivation must reject before publication");
+        let report = native_plan_report_from_rejection(&rejection);
+        assert_eq!(rejection.kind, NativeDynamicPlanRejectionKind::InvalidPlan);
+        assert!(rejection.detail.contains("collides with an existing registry entry"));
+        assert!(pis.get(*expected_path.digest()).await.unwrap().is_none());
+        assert_eq!(known_paths.len(), registry_before);
+        assert_eq!(known_paths.get_hdm_by_drv_path(&colliding_path), Some(colliding_hdm));
+        assert_eq!(worker.registry.len(), goals_before);
+        assert_eq!(worker.ready_goals, ready_before);
+        assert_eq!(worker.scheduling_epoch, epoch_before);
+        assert!(worker.priority_decisions.is_empty());
+        assert_eq!(report.scheduler_action, "rejected");
+        assert_eq!(report.source_slices.len(), 2);
+        assert!(report.source_slices.iter().all(|row| row.admitted_store_path.is_none()));
+    }
+
+    #[tokio::test]
+    async fn native_v2_registry_capacity_rejects_before_slice_publication() {
+        let bs = MemoryBlobService::default();
+        let (mut builder, ds, pis, _) = source_slice_test_builder(&bs);
+        let source_root = source_slice_tree(&bs, &ds, b"outside").await;
+        let observed = builder.observe_source_slice(&source_root, "packages/a").await.unwrap();
+        let digest = data_encoding::HEXLOWER.encode(&observed.nar_blake3());
+        let expected_path: StorePath<String> = build_ca_path_with_store_dir(
+            "unchanged-package",
+            &CAHash::Nar(NixHash::Sha256(observed.nar_sha256())),
+            Vec::<&str>::new(),
+            false,
+            "/nix/store",
+        )
+        .unwrap();
+        let mut known_paths = DerivationRegistry::default();
+        let (producer, outcome) = source_slice_plan_outcome(
+            &bs,
+            &v2_plan_for_source_slices(&digest, "packages/b", &digest),
+            source_root,
+            "v2-registry-capacity-producer",
+            &mut known_paths,
+        )
+        .await;
+        let mut worker = Worker::new(1);
+        worker.want(&producer, &known_paths, true).unwrap();
+        let template = known_paths.get_by_drv_path(&producer.to_absolute_path()).unwrap().derivation.clone();
+        for index in 0..(MAX_ENTRIES as usize - 1 - known_paths.len() as usize) {
+            known_paths.insert_with_dynamic_plan_outputs(
+                fake_sp(&format!("registry-capacity-{index:05}.drv")),
+                [index as u8; 32],
+                template.clone(),
+                false,
+                Vec::new(),
+                None,
+            );
+        }
+        assert_eq!(known_paths.len(), MAX_ENTRIES - 1);
+        let registry_before = known_paths.len();
+        let goals_before = worker.registry.len();
+        let ready_before = worker.ready_goals.clone();
+        let epoch_before = worker.scheduling_epoch;
+        let scan = worker
+            .scan_native_dynamic_plans(
+                &producer.to_absolute_path(),
+                &outcome,
+                &builder,
+                known_paths.store_dir(),
+                &BTreeSet::from(["plan".to_string()]),
+            )
+            .await
+            .unwrap();
+        let mut accepted = scan.accepted.into_iter().next().expect("valid V2 plan before registry capacity");
+        let rejection = worker
+            .admit_v2_source_slices(&mut accepted, &outcome, &known_paths, &mut builder, &mut None)
+            .await
+            .unwrap()
+            .expect("two new V2 units cannot fit one remaining registry slot");
+        let report = native_plan_report_from_rejection(&rejection);
+        assert_eq!(rejection.kind, NativeDynamicPlanRejectionKind::InvalidPlan);
+        assert!(rejection.detail.contains("dynamic registry exceeds MAX_ENTRIES"));
+        assert!(pis.get(*expected_path.digest()).await.unwrap().is_none());
+        assert_eq!(known_paths.len(), registry_before);
+        assert_eq!(worker.registry.len(), goals_before);
+        assert_eq!(worker.registry.get(&producer.to_absolute_path()).unwrap().state, GoalState::Ready);
+        assert_eq!(worker.ready_goals, ready_before);
+        assert_eq!(worker.scheduling_epoch, epoch_before);
+        assert!(worker.priority_decisions.is_empty());
+        assert_eq!(report.scheduler_action, "rejected");
+        assert_eq!(report.source_slices.len(), 2);
+        assert!(report.source_slices.iter().all(|row| row.admitted_store_path.is_none()));
+    }
+
+    #[tokio::test]
+    async fn native_v2_atomic_pathinfo_batch_rejection_keeps_both_slices_unpublished() {
+        let bs = MemoryBlobService::default();
+        let ds: Arc<dyn DirectoryService> = Arc::new(tmp_ds());
+        let persisted: Arc<dyn PathInfoService> = Arc::new(
+            RedbPathInfoService::new_temporary(
+                "dynamic-source-slices-injected-batch-failure".to_string(),
+                RedbPathInfoServiceConfig::default(),
+            )
+            .unwrap(),
+        );
+        let attempted_batches = Arc::new(AtomicUsize::new(0));
+        let (observed_batches_tx, mut observed_batches_rx) = mpsc::unbounded_channel();
+        let injecting: Arc<dyn PathInfoService> = Arc::new(RejectingSourceBatchPathInfo {
+            inner: persisted.clone(),
+            attempted_batches: attempted_batches.clone(),
+            observed_batches: observed_batches_tx,
+        });
+        let (mock, _) = MockBuildService::new(bs.clone());
+        let mut builder = Builder::with_state_dir(
+            Arc::new(bs.clone()),
+            ds.clone(),
+            mock,
+            injecting,
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let first_leaf = put_test_blob(&bs, b"first distinct slice").await;
+        let second_leaf = put_test_blob(&bs, b"second distinct slice").await;
+        let first = stored_test_directory(&ds, [("file.txt".try_into().unwrap(), first_leaf)]).await;
+        let second = stored_test_directory(&ds, [("file.txt".try_into().unwrap(), second_leaf)]).await;
+        let packages = stored_test_directory(&ds, [
+            ("a".try_into().unwrap(), first),
+            ("b".try_into().unwrap(), second),
+        ])
+        .await;
+        let source_root = stored_test_directory(&ds, [("packages".try_into().unwrap(), packages)]).await;
+        let observed_first = builder.observe_source_slice(&source_root, "packages/a").await.unwrap();
+        let observed_second = builder.observe_source_slice(&source_root, "packages/b").await.unwrap();
+        let first_digest = data_encoding::HEXLOWER.encode(&observed_first.nar_blake3());
+        let second_digest = data_encoding::HEXLOWER.encode(&observed_second.nar_blake3());
+        assert_ne!(first_digest, second_digest);
+        let expected_paths: [StorePath<String>; 2] = [
+            ("unchanged-package", observed_first.nar_sha256()),
+            ("other-package", observed_second.nar_sha256()),
+        ]
+        .map(|(name, nar_sha256)| {
+            build_ca_path_with_store_dir(
+                name,
+                &CAHash::Nar(NixHash::Sha256(nar_sha256)),
+                Vec::<&str>::new(),
+                false,
+                "/nix/store",
+            )
+            .unwrap()
+        });
+        assert_ne!(expected_paths[0], expected_paths[1]);
+        let mut plan: serde_json::Value =
+            serde_json::from_slice(&v2_plan_for_source_slices(&first_digest, "packages/b", &second_digest)).unwrap();
+        plan["sources"][1]["store_name"] = serde_json::json!("other-package");
+        let mut known_paths = DerivationRegistry::default();
+        let (producer, outcome) = source_slice_plan_outcome(
+            &bs,
+            &serde_json::to_vec(&plan).unwrap(),
+            source_root,
+            "v2-batch-failure-producer",
+            &mut known_paths,
+        )
+        .await;
+        let mut worker = Worker::new(1);
+        worker.want(&producer, &known_paths, true).unwrap();
+        let registry_before = known_paths.len();
+        let goals_before = worker.registry.len();
+        let ready_before = worker.ready_goals.clone();
+        let epoch_before = worker.scheduling_epoch;
+        let scan = worker
+            .scan_native_dynamic_plans(
+                &producer.to_absolute_path(),
+                &outcome,
+                &builder,
+                known_paths.store_dir(),
+                &BTreeSet::from(["plan".to_string()]),
+            )
+            .await
+            .unwrap();
+        let mut accepted = scan.accepted.into_iter().next().expect("valid V2 plan before batch publication");
+        let rejection = worker
+            .admit_v2_source_slices(&mut accepted, &outcome, &known_paths, &mut builder, &mut None)
+            .await
+            .unwrap()
+            .expect("injected atomic PathInfo batch failure must reject the whole plan");
+        let report = native_plan_report_from_rejection(&rejection);
+        assert_eq!(attempted_batches.load(Ordering::SeqCst), 1, "failure must reach the batch boundary");
+        assert_eq!(
+            observed_batches_rx.try_recv().unwrap(),
+            expected_paths.iter().map(|path| *path.digest()).collect::<Vec<_>>()
+        );
+        assert!(observed_batches_rx.try_recv().is_err(), "only one atomic batch may be attempted");
+        assert_eq!(rejection.kind, NativeDynamicPlanRejectionKind::SlicePublication);
+        assert!(rejection.detail.contains("verified-source-batch-publication-rejected"));
+        for path in &expected_paths {
+            assert!(persisted.get(*path.digest()).await.unwrap().is_none(), "{path} was partially published");
+        }
+        assert_eq!(known_paths.len(), registry_before);
+        assert_eq!(worker.registry.len(), goals_before);
+        assert_eq!(worker.registry.get(&producer.to_absolute_path()).unwrap().state, GoalState::Ready);
+        assert_eq!(worker.ready_goals, ready_before);
+        assert_eq!(worker.scheduling_epoch, epoch_before);
+        assert!(worker.priority_decisions.is_empty());
+        assert_eq!(report.scheduler_action, "rejected");
+        assert_eq!(report.source_slices.len(), 2);
+        assert!(report.source_slices.iter().all(|row| row.admitted_store_path.is_none()));
+    }
+
+    #[tokio::test]
+    async fn native_v2_slice_failure_leaves_store_registry_goals_scheduler_and_report_unadmitted() {
+        let bs = MemoryBlobService::default();
+        let (mut builder, ds, pis, _) = source_slice_test_builder(&bs);
+        let source_root = source_slice_tree(&bs, &ds, b"outside").await;
+        let observed = builder.observe_source_slice(&source_root, "packages/a").await.unwrap();
+        let actual_digest = data_encoding::HEXLOWER.encode(&observed.nar_blake3());
+        let ca = CAHash::Nar(NixHash::Sha256(observed.nar_sha256()));
+        let expected_path: StorePath<String> = nix_compat::store_path::build_ca_path_with_store_dir(
+            "unchanged-package",
+            &ca,
+            Vec::<&str>::new(),
+            false,
+            "/nix/store",
+        )
+        .unwrap();
+        for (second_subpath, second_digest, reason, producer_output) in [
+            ("packages/b", "0".repeat(64), "slice-digest-mismatch", "sources"),
+            ("packages/missing", actual_digest.clone(), "slice-absent", "sources"),
+            ("packages/link", actual_digest.clone(), "slice-symlink-traversal", "sources"),
+            ("packages/link/file.txt", actual_digest.clone(), "slice-symlink-traversal", "sources"),
+            ("packages/a", actual_digest.clone(), "slice-output-undeclared", "plan"),
+            ("packages/a", actual_digest.clone(), "slice-output-undeclared", "rogue"),
+        ] {
+            let mut plan: serde_json::Value =
+                serde_json::from_slice(&v2_plan_for_source_slices(&actual_digest, second_subpath, &second_digest))
+                    .unwrap();
+            plan["sources"][1]["producer_output"] = serde_json::json!(producer_output);
+            let plan = serde_json::to_vec(&plan).unwrap();
+            let mut known_paths = DerivationRegistry::default();
+            let (producer, mut outcome) = source_slice_plan_outcome(
+                &bs,
+                &plan,
+                source_root.clone(),
+                "source-rejection-producer",
+                &mut known_paths,
+            )
+            .await;
+            if producer_output == "rogue" {
+                outcome
+                    .outputs
+                    .insert("rogue".to_string(), test_path_info("undeclared-rogue-sources", source_root.clone()));
+            }
+            let mut worker = Worker::new(1);
+            worker.want(&producer, &known_paths, true).unwrap();
+            let registry_before = known_paths.len();
+            let goal_before = worker.registry.len();
+            let ready_before = worker.ready_goals.clone();
+            let epoch_before = worker.scheduling_epoch;
+            let scan = worker
+                .scan_native_dynamic_plans(
+                    &producer.to_absolute_path(),
+                    &outcome,
+                    &builder,
+                    known_paths.store_dir(),
+                    &BTreeSet::from(["plan".to_string()]),
+                )
+                .await
+                .unwrap();
+            let mut accepted = scan.accepted.into_iter().next().expect("valid v2 plan before content admission");
+            let rejected = worker
+                .admit_v2_source_slices(&mut accepted, &outcome, &known_paths, &mut builder, &mut None)
+                .await
+                .unwrap()
+                .expect("source mismatch must reject the whole plan");
+            let rows = native_plan_reports_from_scan(&NativeDynamicPlanScan {
+                accepted: Vec::new(),
+                rejected: vec![rejected],
+            });
+            assert_eq!(rows[0].scheduler_action, "rejected");
+            assert!(rows[0].rejection_reason.as_deref().unwrap().starts_with(reason));
+            assert_eq!(rows[0].source_slices.iter().map(|row| row.source_id.as_str()).collect::<Vec<_>>(), [
+                "src.main",
+                "src.other"
+            ]);
+            assert!(rows[0].source_slices.iter().all(|row| row.admitted_store_path.is_none()));
+            assert_eq!(rows[0].source_slices[1].subpath, second_subpath);
+            assert_eq!(rows[0].source_slices[1].disposition, reason);
+            assert_eq!(rows[0].source_slices[1].producer_output, producer_output);
+            assert!(
+                pis.get(*expected_path.digest()).await.unwrap().is_none(),
+                "failed batch must publish no first slice"
+            );
+            assert_eq!(known_paths.len(), registry_before);
+            assert_eq!(worker.registry.len(), goal_before);
+            assert_eq!(worker.ready_goals, ready_before);
+            assert_eq!(worker.scheduling_epoch, epoch_before);
+            assert!(worker.priority_decisions.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn native_v2_slice_aggregate_byte_limit_preserves_scheduler_and_publication() {
+        let bs = MemoryBlobService::default();
+        let (mut builder, ds, pis, _) = source_slice_test_builder(&bs);
+        let payload = vec![b'x'; 4 * 1024 * 1024];
+        let large_file = put_test_blob(&bs, &payload).await;
+        let source_root = stored_test_directory(&ds, [("large".try_into().unwrap(), large_file)]).await;
+        let observation = builder.observe_source_slice(&source_root, "large").await.unwrap();
+        assert!(observation.nar_size() > payload.len() as u64, "NAR headers push 256 slices over 1 GiB");
+        let digest = data_encoding::HEXLOWER.encode(&observation.nar_blake3());
+        let mut plan: serde_json::Value = serde_json::from_slice(&valid_native_plan_bytes()).unwrap();
+        plan["schema"] = serde_json::json!("mantle-plan-v2");
+        plan["sources"] = (0..crate::dynamic_plan::MAX_PLAN_SLICES)
+            .map(|index| {
+                serde_json::json!({
+                    "id": format!("src.{index:03}"),
+                    "producer_output": "sources",
+                    "subpath": "large",
+                    "store_name": "large-package",
+                    "nar_blake3": digest,
+                })
+            })
+            .collect::<Vec<_>>()
+            .into();
+        let mut known_paths = DerivationRegistry::default();
+        let (producer, outcome) = source_slice_plan_outcome(
+            &bs,
+            &serde_json::to_vec(&plan).unwrap(),
+            source_root,
+            "source-limit-producer",
+            &mut known_paths,
+        )
+        .await;
+        let mut worker = Worker::new(1);
+        worker.want(&producer, &known_paths, true).unwrap();
+        let registry_before = known_paths.len();
+        let ready_before = worker.ready_goals.clone();
+        let scan = worker
+            .scan_native_dynamic_plans(
+                &producer.to_absolute_path(),
+                &outcome,
+                &builder,
+                known_paths.store_dir(),
+                &BTreeSet::from(["plan".to_string()]),
+            )
+            .await
+            .unwrap();
+        let mut accepted = scan.accepted.into_iter().next().expect("bounded v2 plan");
+        let rejected = worker
+            .admit_v2_source_slices(&mut accepted, &outcome, &known_paths, &mut builder, &mut None)
+            .await
+            .unwrap()
+            .expect("aggregate NAR byte limit must reject");
+        assert_eq!(rejected.kind, NativeDynamicPlanRejectionKind::SliceLimit);
+        let report = native_plan_report_from_rejection(&rejected);
+        assert_eq!(report.source_slices.len(), crate::dynamic_plan::MAX_PLAN_SLICES as usize);
+        assert!(report.source_slices.iter().all(|row| row.admitted_store_path.is_none()));
+        assert_eq!(report.source_slices.last().unwrap().disposition, "slice-limit");
+        let ca = CAHash::Nar(NixHash::Sha256(observation.nar_sha256()));
+        let expected_path: StorePath<String> = nix_compat::store_path::build_ca_path_with_store_dir(
+            "large-package",
+            &ca,
+            Vec::<&str>::new(),
+            false,
+            "/nix/store",
+        )
+        .unwrap();
+        assert!(pis.get(*expected_path.digest()).await.unwrap().is_none());
+        assert_eq!(known_paths.len(), registry_before);
+        assert_eq!(worker.registry.len(), 1);
+        assert_eq!(worker.ready_goals, ready_before);
+        assert_eq!(worker.scheduling_epoch, 0);
+        assert!(worker.priority_decisions.is_empty());
+    }
+
+    #[tokio::test]
     async fn native_dynamic_plan_declared_output_is_accepted() {
         let bs = MemoryBlobService::default();
         let builder = make_test_builder(bs.clone());
@@ -3702,6 +5217,7 @@ mod tests {
             raw_artifact_digest: None,
             canonical_plan_digest: None,
             accepted_unit_ids: Vec::new(),
+            source_slices: Vec::new(),
             rejection_reason: None,
             scheduler_action: "registered-roots".to_string(),
         }

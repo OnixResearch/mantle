@@ -579,6 +579,7 @@ fn create_cache_only_observer(
     let crunch_store::PipelineStoreParts {
         build_store,
         action_results,
+        slice_admission,
         build_service_store,
         output_lookup,
         root_registry,
@@ -589,6 +590,7 @@ fn create_cache_only_observer(
         crunch_store::BuilderStoreParts {
             build_store,
             action_results,
+            slice_admission,
         },
         service,
         config.keypair.clone(),
@@ -630,6 +632,7 @@ fn create_pipeline_builder_with_source_policy(
     let crunch_store::PipelineStoreParts {
         build_store,
         action_results,
+        slice_admission,
         build_service_store,
         output_lookup,
         root_registry,
@@ -664,6 +667,7 @@ fn create_pipeline_builder_with_source_policy(
         crunch_store::BuilderStoreParts {
             build_store,
             action_results,
+            slice_admission,
         },
         build_service,
         config.keypair.clone(),

@@ -174,6 +174,7 @@ pub use trust_boundary_nominal::*;
 pub use worker::EvalMessage;
 pub use worker::FailedGoal;
 pub use worker::NativeDynamicPlanReport;
+pub use worker::NativeDynamicSourceSliceReport;
 pub use worker::Worker;
 pub use worker::WorkerResult;
 pub use workspace::*;
