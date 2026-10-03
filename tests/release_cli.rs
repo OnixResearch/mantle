@@ -3510,6 +3510,56 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
     assert!(transcript.contains(&proof_dir.join("run-001/output").display().to_string()));
     assert!(transcript.contains(&proof_dir.join("run-001/store").display().to_string()));
 }
+#[cfg(unix)]
+#[test]
+fn release_reproduce_rejects_matched_rebuild_with_oversized_output() {
+    const REBUILD_STREAM_LIMIT_BYTES: u64 = 16_777_216;
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let head = release_fixture_tool("head");
+
+    for stream in ["stdout", "stderr"] {
+        let rebuild_script = temp.path().join(format!("oversized-{stream}-rebuild.sh"));
+        let rebuild_output_dir = temp.path().join(format!("oversized-{stream}-output"));
+        let report_path = temp.path().join(format!("oversized-{stream}-report.json"));
+        let redirect = if stream == "stderr" { ">&2" } else { "" };
+        write_rebuild_copy_script(&rebuild_script, &manifest.binaries[0].relative_path);
+        let mut script = std::fs::OpenOptions::new().append(true).open(&rebuild_script).unwrap();
+        std::io::Write::write_all(
+            &mut script,
+            format!("\"{}\" -c {} /dev/zero {redirect}\n", head.display(), REBUILD_STREAM_LIMIT_BYTES + 1).as_bytes(),
+        )
+        .unwrap();
+        drop(script);
+
+        let output = crunch()
+            .current_dir(temp.path())
+            .arg("--json")
+            .arg("release")
+            .arg("reproduce")
+            .arg(&bundle_dir)
+            .arg("--rebuild-output-dir")
+            .arg(&rebuild_output_dir)
+            .arg("--rebuild-command")
+            .arg(&rebuild_script)
+            .arg("--report-path")
+            .arg(&report_path)
+            .output()
+            .unwrap();
+
+        assert!(
+            !output.status.success(),
+            "oversized {stream} rebuild returned success: cli={} report={}",
+            String::from_utf8_lossy(&output.stdout),
+            std::fs::read_to_string(&report_path).unwrap_or_else(|_| "<absent>".to_string()),
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(stream) && stderr.contains("limit"), "unexpected {stream} diagnostic: {stderr}");
+        assert!(output.stderr.len() <= 2_048, "oversized {stream} diagnostic was unbounded");
+        assert!(output.stdout.is_empty(), "oversized {stream} rebuild claimed a result on stdout");
+        assert!(!report_path.exists(), "oversized {stream} rebuild published a matched report");
+    }
+}
+
 
 // r[verify mantle.build_correctness.release_determinism.fixtures.negative.target_copy]
 #[cfg(unix)]

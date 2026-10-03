@@ -983,6 +983,15 @@ mantle release verify target/release-evidence/<release-id> --require-reproducibl
 mantle release verify target/release-evidence/<release-id> --release-profile onix-stack
 ```
 
+On Linux, `release reproduce` bounds each rebuild's stdout and stderr
+separately to 16 MiB, with a 24-hour child deadline, a five-second pipe-EOF
+grace after leader exit, and up to five seconds to observe teardown.
+Ordinary rebuild capture/supervision failures occur before the ordinary report
+is written; failed-command diagnostics retain at most the first 512 bytes of
+each stream. Mantle signals its owned rebuild process group with SIGKILL
+before reaping only the leader, even after apparent success. This does not
+guarantee cleanup of detached descendants or separately sessioned bwrap workers.
+
 Repeat `--binary` when one release bundle should carry multiple executables.
 The checked-in proof bundle keeps durable copies of stage1 and stage2 under
 `binaries/`, so the packaged release binary can be the proven stage2 output
