@@ -1,6 +1,8 @@
 # Tasks: Add dynamic-plan source slices
 
-This isolated candidate is reconstructed on pinned `75ec931c8c5ae6e831d76ea12a93031f17e347f2`.
+The source-slice implementation was reconstructed on pinned
+`75ec931c8c5ae6e831d76ea12a93031f17e347f2`; this Cairn task-shape
+candidate starts at published `0feb347b8a0c6e4099be70635fe11baa5ea0385a`.
 Receipts from the shared prepublication tree are historical and are not current-candidate
 validation. Full candidate gates and archive acceptance remain unchecked until
 clean-candidate gates actually pass. The CA unit-output placeholder fixture is owned
@@ -32,4 +34,11 @@ by `resolve-content-addressed-inputs-before-dispatch`, not this V2 change.
 - [x] [serial] T4.2 Prove accepted `mantle-plan-v1` golden fixtures keep their canonical bytes and plan digests. r[mantle.dynamic_plan_source_slices.versioned_schema]
 - [x] [serial] T4.3 Document `mantle-plan-v2` and slices in `docs/nominal-dynamic-plan-types.md`, including limits, rejection kinds, and non-claims. r[mantle.dynamic_plan_source_slices.provenance]
 - [ ] [serial] T4.4 Run focused `crunch-build` lib and test suites before and after the change, strict Clippy for touched first-party packages, Cairn validation, and the proposal, design, and tasks gates. Preserve exact output in `evidence/`. r[mantle.dynamic_plan_source_slices.content_admission]
-- [ ] [serial] T4.5 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.dynamic_plan_source_slices.provenance]
+- [ ] [serial] T4.5 After T4.4 and integrated quality gates pass, sync accepted specs in the isolated branch and retain the sync evidence. r[mantle.dynamic_plan_source_slices.provenance]
+
+Archive is a post-checklist lifecycle action, not part of T4.5: after the
+accepted-spec sync is verified, mark T4.5 complete only with its evidence,
+confirm all change tasks are checked and the integrated gates still pass,
+then run Cairn archive and retain its receipt. Cairn refuses archive while
+any task remains unchecked. Neither spec sync nor archive is authorized by
+this task-shape correction.
