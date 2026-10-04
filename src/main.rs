@@ -9017,8 +9017,11 @@ mod tests {
         assert!(rejected.contains("store-backend-unknown"));
     }
 
-    #[test]
-    fn test_only_profile_without_rust_cache_blocks_real_command_before_effects() {
+    #[tokio::test]
+    async fn test_only_profile_without_rust_cache_blocks_cache_and_reuses_pathinfo_action_result() {
+        use snix_store::nar::NarCalculationService;
+        use tokio::io::AsyncWriteExt;
+
         let root = tempfile::tempdir().unwrap();
         let state = root.path().join("unopened-state");
         let store = root.path().join("unopened-store");
@@ -9027,6 +9030,7 @@ mod tests {
             rust_unit_cache: false,
             ..crunch_store::StoreBackend::Snix.profile()
         };
+        assert!(profile.core.contains(&"action-result-pathinfo-output-reuse"));
         let context = RunContext {
             store: store.clone(),
             resolved_state_dir: state.clone(),
@@ -9037,16 +9041,154 @@ mod tests {
             json: false,
             base_state_dirs: Vec::new(),
         };
-        let error = run_rust_cache_command(&context, &RustCacheAction::Serve {
+        let cache_command = RustCacheAction::Serve {
             policy: root.path().join("missing-policy.json"),
             receipt_dir: receipts.clone(),
             once: true,
-        })
-        .unwrap_err();
+        };
+        let error = run_rust_cache_command(&context, &cache_command).unwrap_err();
         assert!(error.to_string().contains("snix-rust-cache-unsupported"), "{error}");
         assert!(!state.exists(), "cache rejection created state");
         assert!(!store.exists(), "cache rejection created output store");
         assert!(!receipts.exists(), "cache rejection opened receipt directory");
+
+        let config = || {
+            crunch_store::StoreConfig::new(
+                context.store_backend,
+                context.resolved_state_dir.clone(),
+                context.store.clone(),
+                context.store_prefix.clone(),
+            )
+        };
+        let selected_store = crunch_store::StoreHandle::open(config()).await.unwrap();
+        let content = b"PathInfo output survives a disabled Rust unit cache";
+        let mut writer = selected_store.blob_service().open_write().await;
+        writer.write_all(content).await.unwrap();
+        let digest = writer.close().await.unwrap();
+        let node = snix_castore::Node::File {
+            digest,
+            size: content.len() as u64,
+            executable: false,
+        };
+        let (nar_size, nar_sha256) =
+            snix_store::nar::SimpleRenderer::new(selected_store.blob_service(), selected_store.directory_service())
+                .calculate_nar(&node)
+                .await
+                .unwrap();
+        let store_path =
+            nix_compat::store_path::StorePath::from_name_and_digest_fixed("no-rust-cache-output", [41_u8; 20]).unwrap();
+        let raw_key = ed25519_dalek::SigningKey::from_bytes(&[43_u8; 32]);
+        let verifying_key =
+            nix_compat::narinfo::VerifyingKey::new("no-rust-cache-output".to_string(), raw_key.verifying_key());
+        let signing_key = nix_compat::narinfo::SigningKey::new("no-rust-cache-output".to_string(), raw_key);
+        let mut path_info = snix_store::pathinfoservice::PathInfo {
+            store_path: store_path.clone(),
+            node,
+            references: vec![],
+            nar_size,
+            nar_sha256,
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+        let path_ref = path_info.store_path.as_ref();
+        let refs: Vec<nix_compat::store_path::StorePathRef> =
+            path_info.references.iter().map(|reference| reference.as_ref()).collect();
+        let fingerprint = nix_compat::narinfo::fingerprint_with_store_dir(
+            &path_ref,
+            &path_info.nar_sha256,
+            path_info.nar_size,
+            refs.iter(),
+            &context.store_prefix,
+        );
+        path_info.signatures.push(signing_key.sign(fingerprint.as_bytes()).to_owned());
+        selected_store.pathinfo_service().put(path_info.clone()).await.unwrap();
+
+        let to_ref = |prefix: &str, bytes: &[u8]| format!("{prefix}{}", blake3::hash(bytes).to_hex());
+        let object_ref =
+            to_ref(crunch_action_result_core::OBJECT_REF_PREFIX, &serde_json::to_vec(&path_info.node).unwrap());
+        let reference_scan_ref = to_ref(
+            crunch_action_result_core::REFERENCE_SCAN_REF_PREFIX,
+            &serde_json::to_vec(&serde_json::json!({
+                "schema": "mantle-action-result-reference-scan-v1",
+                "output_name": "out",
+                "object_ref": object_ref,
+                "references": path_info.references,
+                "status": "accepted",
+            }))
+            .unwrap(),
+        );
+        let record =
+            crunch_action_result_core::canonical_action_result(crunch_action_result_core::ActionResultRecordInput {
+                action_ref: to_ref(crunch_action_result_core::ACTION_REF_PREFIX, content),
+                outputs: vec![crunch_action_result_core::ActionResultOutput {
+                    name: "out".to_string(),
+                    object_ref,
+                    store_path: store_path.to_absolute_path_with_prefix(&context.store_prefix),
+                    path_info_ref: to_ref(
+                        crunch_action_result_core::PATH_INFO_REF_PREFIX,
+                        &serde_json::to_vec(&path_info).unwrap(),
+                    ),
+                }],
+                action_receipt_ref: to_ref(crunch_action_result_core::ACTION_RECEIPT_REF_PREFIX, content),
+                reference_scan_refs: vec![reference_scan_ref],
+                sandbox_policy_ref: to_ref(crunch_action_result_core::SANDBOX_POLICY_REF_PREFIX, b"offline"),
+                network_policy_ref: to_ref(crunch_action_result_core::NETWORK_POLICY_REF_PREFIX, b"none"),
+                producer_identity: "no-rust-cache-output".to_string(),
+                producer_policy_ref: to_ref(crunch_action_result_core::PRODUCER_POLICY_REF_PREFIX, b"local"),
+                signature_refs: vec![to_ref(
+                    crunch_action_result_core::SIGNATURE_REF_PREFIX,
+                    path_info.signatures[0].to_string().as_bytes(),
+                )],
+                publication_policy_ref: to_ref(crunch_action_result_core::PUBLICATION_POLICY_REF_PREFIX, b"local"),
+                non_claims: vec![
+                    "ca-mapping-presence-is-not-output-trust".to_string(),
+                    "executor-correctness".to_string(),
+                    "index-presence-is-not-output-trust".to_string(),
+                ],
+            })
+            .unwrap();
+        let record_signature = signing_key.sign(record.result_ref.as_bytes()).to_string();
+        let signed = crunch_action_result_core::SignedActionResultRecord {
+            record,
+            record_signatures: vec![crunch_action_result_core::DetachedRecordSignature {
+                key_name: "no-rust-cache-output".to_string(),
+                signature: record_signature,
+            }],
+        };
+        let action_results = selected_store.into_builder_store_parts().action_results;
+        let publication = action_results.publish_local(&signed).await.unwrap();
+        assert_eq!(publication[0].record_status, crunch_store::ActionResultPublicationStatus::Published);
+        assert_eq!(publication[0].index_status, crunch_store::ActionResultPublicationStatus::Published);
+        drop(action_results);
+
+        assert!(!context.backend_profile().rust_unit_cache);
+        let reopened = crunch_store::StoreHandle::open(config()).await.unwrap();
+        let action_results = reopened.into_builder_store_parts().action_results;
+        let discovery = action_results.discover(&signed.record.action_ref).await;
+        assert!(discovery.diagnostics.is_empty(), "{:?}", discovery.diagnostics);
+        let discovered = discovery
+            .lookups
+            .iter()
+            .flat_map(|lookup| &lookup.records)
+            .find(|candidate| candidate.record.result_ref == signed.record.result_ref)
+            .expect("published action record must remain discoverable after reopening the selected store");
+        let detached = &discovered.record_signatures[0];
+        let signature = nix_compat::narinfo::Signature::<String>::parse(&detached.signature).unwrap();
+        assert_eq!(detached.key_name, "no-rust-cache-output");
+        assert!(verifying_key.verify(&discovered.record.result_ref, &signature.as_ref()));
+        let probe = action_results.probe_outputs(&discovered.record).await.unwrap();
+        assert_eq!(probe.outputs.get("out"), Some(&path_info));
+        assert_eq!(probe.reused_nar_bytes, nar_size);
+        assert_eq!(probe.transferred_nar_bytes, 0);
+        drop(action_results);
+
+        let mut reopened = crunch_store::StoreHandle::open(config()).await.unwrap();
+        assert_eq!(reopened.export_cached_path_info(&store_path).await.unwrap(), Some(path_info));
+        let error = run_rust_cache_command(&context, &cache_command).unwrap_err();
+        assert!(error.to_string().contains("snix-rust-cache-unsupported"), "{error}");
+        assert_eq!(fs::read(store.join(store_path.to_string())).unwrap(), content);
+        assert!(!receipts.exists(), "PathInfo-backed action reuse created Rust cache receipts");
     }
 
     #[test]
