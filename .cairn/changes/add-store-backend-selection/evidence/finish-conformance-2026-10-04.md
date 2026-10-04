@@ -1,15 +1,16 @@
 # Backend-selection conformance rail: scoped results (2026-10-04)
 
 This note records **executed targeted tests only**, not a T4.3 workspace gate
-or unconditional acceptance of T3.1. Code and historical fixture are from
-published base `c5740ee6e220c41c16eaa2de988eaf6c489aea1b` plus the root
-fixture additions in the isolated evidence branch. Historical goldens are
-from *pre-selection* `7ec5177718a6950297e04eb4eb957a10b02e23ce` (see
+or unconditional acceptance of T3.1. Source commits `91cf5e5d` and
+`eb4b6874` on published base `c5740ee6e220c41c16eaa2de988eaf6c489aea1b`
+were combined with authored evidence commits `01105c15` and `33709d4c`.
+Historical goldens are from *pre-selection* `7ec5177718a6950297e04eb4eb957a10b02e23ce` (see
 `prechange-snix-golden-2026-10-04.{md,json}` and `finish-inventory-2026-10-04.md`).
 The signer is the repository's explicit **TEST-ONLY/non-production**
 `tests/store_archive_cli.rs:22-23` fixture; the alternate signer uses fixed
-`[19_u8;32]` test bytes. Commands ran in `nix develop` with private target
-and `TMPDIR` under `/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/`,
+`[19_u8;32]` test bytes. Commands ran in `nix develop` with private targets
+under `/home/brittonr/.cargo-target/` and `TMPDIR` under
+`/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp`,
 `LANG=C LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1600000000`, and
 `CRUNCH_CONFIG_DIR`/`MANTLE_STORE_BACKEND` unset. No pueue, push, original
 checkout mutation, or source bootstrap was used.
@@ -50,7 +51,62 @@ BACKEND_CORE_RAIL casita {"nar_sha256":"42a7f16a040111ab52d03cf78d7178101b4746c9
 
 - `tests/store_archive_cli.rs::independent_snix_stores_agree_on_signed_bytes_only_with_the_same_fixture_key`: **1 passed**. Two independent default/explicit Snix states with the same explicitly provisioned key have byte-identical signed PathInfo; a third with another explicitly provisioned key has identical unsigned PathInfo and NAR, different signed bytes, and each state verifies its own signer with `trusted_signatures=1/1`.
 - `tests/transcript_cli.rs::transcript_real_child_reopens_selected_casita_and_rejects_dropped_selection_without_mutation`: **1 passed** after the direct-child amendment. The actual Mantle child opened Casita with an outer transcript selection. A direct real child `mantle --state-dir <Casita> --store <...> store list` with **no** `--store-backend`, as well as one with an explicit conflicting child selector, failed `store-backend-mismatch` and preserved every recorded state-file byte. This does not depend on a fake binary or argv echo.
-- `tests/store_archive_cli.rs::default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts`: **failed before the explicit iteration** at the strict historical GC comparison. Same-key signed PathInfo, paths, NAR, `store info`, and roots matched first; first default-Snix GC observations had the same content but two blob-index observations arrived in the opposite order, producing a distinct plan identity. Both exact payloads and the plan-ID distinction are recorded in `prechange-snix-golden-2026-10-04.md`, the historical golden JSON, and `selected-snix-gc-observed-2026-10-04.json`. Controlled same-root reruns confirmed that both historical and selected sources can emit either observation order. The test remains strict; neither plan ID nor order was normalized away to claim success. The deterministic-source fix and combined-tree parity run are separate and not yet claimed here.
+- The first `tests/store_archive_cli.rs::default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts`
+  run **failed before its explicit-Snix iteration**: signed bytes, NAR hashes,
+  store paths, info, and roots matched, but the two blob-index GC observations
+  appeared in the opposite order. The historical golden JSON and original
+  failed selected-stdout artifact remain unchanged. Controlled same-root
+  historical and selected reruns proved the ordering nondeterministic within
+  either revision, not a changed candidate or backend-selection difference.
+
+### Combined exact-root CLI, child, and GC results
+
+At combined HEAD `33709d4c`, with the canonicalization in `eb4b6874`, the
+actual Mantle child was exercised by the scoped archive CLI test binary at
+the **same absolute fixture root and test signer** as the historical golden:
+
+```sh
+test ! -e /home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-state-compare &&
+env -u CRUNCH_CONFIG_DIR -u MANTLE_STORE_BACKEND LANG=C LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1600000000 \
+  CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/gc-ordered-target \
+  TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  MANTLE_BASELINE_FIXTURE_ROOT=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-state-compare \
+  nix develop --offline --no-write-lock-file --command cargo test --test store_archive_cli -- --nocapture
+```
+
+Observed: **13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out**.
+The strict default- and explicit-Snix comparison both passed the historical
+signed PathInfo, NAR, info, roots, complete GC observation/report, and exact
+plan-ID checks. Under this same root, both selected plan IDs equal the
+prechange `a8cf..., cf82...` golden
+`b3:787fc14bbf1d8438cbd52cc1be068d68f62967b5634b5a495c938e24565d586c`.
+The same run exercised the real Snix and Casita core rails; the two
+`BACKEND_CORE_RAIL` stdout records above were reproduced, including verified
+second signatures and fresh accepted plan-bound GC execution after stale
+rejection. Neither the golden nor the comparator was relaxed.
+
+The combined `transcript_real_child_reopens_selected_casita_and_rejects_dropped_selection_without_mutation`
+test also passed (**1 passed; 0 failed; 11 filtered out**) with the same
+isolated target and fixed environment, but without the golden fixture-root
+variable. A direct Mantle child missing `--store-backend` failed without
+mutating the recorded Casita state, as did an explicitly wrong child.
+
+The final combined `crunch-store` regression
+`gc::tests::reversed_blob_enumeration_has_the_same_reclaim_observations_and_plan_id`
+passed (**1 passed; 0 failed; 401 filtered out**): explicitly reversed
+same-file path sequences use the production canonicalizer and yield identical
+reclaim observations and plan IDs without relying on filesystem enumeration.
+`gc::tests::blob_creation_order_does_not_change_plan_but_changed_blob_facts_stale_it`
+also passed (**1 passed; 0 failed; 401 filtered out**): real dry-runs over
+oppositely created files agree, while a changed file size changes the plan ID
+and rejects the old accepted ID before deleting anything.
+
+The combined `crunch-store`
+`capability::tests::source_slice_batch_publishes_both_backends_without_partial_conflicts`
+passed (**1 passed; 0 failed; 401 filtered out**); a test-only N=2 profile
+accepted two published, verifiable signed entries under both Snix and Casita,
+then rejected N+1 with byte-identical backend state. This does not claim all
+remaining T3.3 profile fixtures were executed.
 
 ## Complementary fixtures and work still to prove
 
@@ -63,9 +119,9 @@ Snix repair success and Casita repair dry-run/execute rejection before state
 access (`tests/integration.rs:1296-1335`), as well as Casita rust-cache CLI
 rejection (`tests/store_gc_cli.rs:700-742`). Source-peer additions cover a
 synthetic no-Rust-unit-cache profile through a real command and both local
-no-fallback directions. Those separate fixtures must be run in the **combined
-source + evidence tree** before counting the optional/bound branches toward
-T3.1/T3.3; source locations alone are not passing evidence. The fixed-path
-prechange-vs-selected GC plan parity and all T4.3 gates also remain open as
-recorded above. No general correctness, durability, GC safety, sandboxing,
+no-fallback directions. The other source fixtures must still run in the
+**combined source + evidence tree** before their optional/bound branches count
+toward T3.1/T3.3; source locations alone are not passing evidence. The
+fixed-path prechange-vs-selected GC plan parity now passes, but all T4.3
+workspace gates remain open. No general correctness, durability, GC safety,
 or release eligibility claim follows from this rail.

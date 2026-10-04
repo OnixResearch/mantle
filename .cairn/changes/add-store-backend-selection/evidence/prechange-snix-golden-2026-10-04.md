@@ -98,8 +98,15 @@ to make the test pass. A controlled source-branch rerun of the **prechange
 `b3:e948819705335e9e9d9392b4db933266fcd98108f2bb0d3f1ef2ac8ea002403d`
 identity with `cf82...` before `a8cf...`; repeated selected runs also varied.
 This is genuine pre-existing filesystem enumeration nondeterminism, not proof
-that backend selection changed GC candidates. The source branch is adding
-per-category deterministic ordering *before* hashing, with a scoped
-invariant; a previously issued plan may then reject and require a new dry-run.
-The original historical golden and the strict selected parity test stay
-unchanged until a combined-tree run actually passes.
+that backend selection changed GC candidates. The combined source commit
+`eb4b6874` canonicalizes each dead-blob category before observation hashing;
+its focused explicit-order and changed-fact stale-plan regressions both passed.
+The unchanged strict test then passed for **default and explicit Snix** in the
+combined source/evidence tree (`13 passed; 0 failed` in `store_archive_cli`),
+under the same fixture root, signing key, and environment. Both selected
+dry-run plan identities equal the original `a8cf..., cf82...` historical golden
+`b3:787fc14bbf1d8438cbd52cc1be068d68f62967b5634b5a495c938e24565d586c`;
+the original golden JSON and the failing selected-observation artifact remain
+unchanged. An old in-flight accepted plan ID based on the alternative unsorted
+observation order can safely reject as stale; operators must re-run dry-run
+and accept its current plan ID.
