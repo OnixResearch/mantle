@@ -884,6 +884,18 @@ fn nario_v2_cli_lists_imports_and_skips_pinned_producer_fixture() {
         .success()
         .stdout(predicate::str::contains("\"imported_count\": 1"))
         .stdout(predicate::str::contains("non-v16-worker-metadata"));
+    let admitted = mantle_cmd()
+        .args(["--json", "--store-prefix", "/nix/store"])
+        .arg("--store")
+        .arg(&output_dir)
+        .arg("--state-dir")
+        .arg(&state_dir)
+        .args(["store", "info", expected_path.strip_prefix("/nix/store/").unwrap()])
+        .output()
+        .unwrap();
+    assert!(admitted.status.success(), "{}", String::from_utf8_lossy(&admitted.stderr));
+    let admitted: Value = serde_json::from_slice(&admitted.stdout).unwrap();
+    assert_eq!(admitted["paths"][0]["signatures"], serde_json::json!([]));
     import().assert().success().stdout(predicate::str::contains("\"skipped_already_present_count\": 1"));
     let materialized = output_dir.join(expected_path.strip_prefix("/nix/store/").unwrap());
     assert_eq!(std::fs::read_to_string(materialized).unwrap(), "Mantle pinned Nario v2 fixture\n");
@@ -1069,6 +1081,62 @@ fn independent_snix_stores_agree_on_signed_bytes_only_with_the_same_fixture_key(
             .assert()
             .success()
             .stdout(predicate::str::contains("trusted_signatures=1/1"));
+    }
+}
+
+#[test]
+fn legacy_and_populated_identityless_snix_reopen_preserve_signed_output_and_unrelated_state() {
+    let golden: Value = serde_json::from_str(include_str!(
+        "../.cairn/changes/add-store-backend-selection/evidence/prechange-snix-golden-2026-10-04.json"
+    ))
+    .unwrap();
+    let legacy_identity = data_encoding::HEXLOWER
+        .decode(golden["fresh_store_identity_json_hex"].as_str().unwrap().as_bytes())
+        .unwrap();
+    let root = tempfile::tempdir().unwrap();
+    for (case, legacy) in [("legacy-v1", true), ("identityless-populated", false)] {
+        let state = root.path().join(format!("{case}-state"));
+        let output = root.path().join(format!("{case}-store"));
+        std::fs::create_dir_all(&state).unwrap();
+        std::fs::write(state.join("signing-key"), TEST_KEYPAIR).unwrap();
+        let original = run_async(seed_signed_file(&output, &state, case, b"preserved signed output\n", true));
+        let identity_path = state.join("store-identity.json");
+        if legacy {
+            std::fs::write(&identity_path, &legacy_identity).unwrap();
+        } else {
+            std::fs::remove_file(&identity_path).unwrap();
+        }
+        std::fs::write(state.join("operator-owned-data"), b"must survive selected Snix open\n").unwrap();
+        let before = state_files(&state);
+        let config = StoreConfig::new(
+            crunch_store::StoreBackend::Snix,
+            state.clone(),
+            output.clone(),
+            TEST_STORE_PREFIX.to_string(),
+        );
+        config.preflight_backend_identity().unwrap();
+        assert_eq!(state_files(&state), before, "{case} preflight mutated state before opening services");
+        let reopened = run_async(async {
+            let store = StoreHandle::open(config).await.unwrap();
+            store.pathinfo_service().get(*original.store_path.digest()).await.unwrap().unwrap()
+        });
+        assert_eq!(reopened, original, "{case} lost or rewrote the signed PathInfo");
+        let after = state_files(&state);
+        for (path, content) in &before {
+            if path == Path::new("pathinfo.redb") || path == Path::new("directories.redb") {
+                continue;
+            }
+            assert_eq!(after.get(path), Some(content), "{case} rewrote a non-database file: {}", path.display());
+        }
+        if legacy {
+            assert_eq!(std::fs::read(identity_path).unwrap(), legacy_identity, "legacy v1 must remain byte-identical");
+        } else {
+            assert!(!before.contains_key(Path::new("store-identity.json")));
+            let added_identity: Value = serde_json::from_slice(&std::fs::read(identity_path).unwrap()).unwrap();
+            assert_eq!(added_identity["schema"], "mantle-store-state-v2");
+            assert_eq!(added_identity["backend"], "snix");
+            assert_eq!(added_identity["logical_prefix"], TEST_STORE_PREFIX);
+        }
     }
 }
 
