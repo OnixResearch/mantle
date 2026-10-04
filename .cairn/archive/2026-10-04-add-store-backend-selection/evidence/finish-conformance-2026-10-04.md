@@ -1170,3 +1170,59 @@ was unchanged. The policy locator remained the explicit pinned
 `/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json`;
 this structural validation complements but does not replace the
 three real postarchive test executions.
+
+### Complete post-archive `store_archive_cli` target
+
+After the archived golden `include_str!` cutover, the **entire** CLI
+integration target ran from the isolated published checkout at
+`09ae21811d315841931bbadaa71137dc15a90dd1`, not merely the
+three focused tests above. Both original absolute comparison roots
+were verified absent before execution:
+
+```sh
+test -d /home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp &&
+test ! -e /home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-rail-compare &&
+test ! -e /home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-state-compare &&
+env -u CRUNCH_CONFIG_DIR -u MANTLE_STORE_BACKEND LANG=C LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1600000000 \
+  CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/selection-target \
+  TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  MANTLE_RAIL_FIXTURE_ROOT=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-rail-compare \
+  MANTLE_BASELINE_FIXTURE_ROOT=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-state-compare \
+  nix develop --offline --no-write-lock-file -c cargo test --test store_archive_cli -- --nocapture
+```
+
+Exit **0**: `running 14 tests`; **14 passed; 0 failed; 0
+ignored; 0 measured; 0 filtered out** (112.64s for test execution).
+All 14 named test cases reported `... ok`, including the same-root
+default/explicit Snix two-path historical comparator, first 7ec
+three-path Snix/Casita rail, signed native/Nario archive operations,
+negative admissions, identity-less Snix reopen and Snix-to-Casita
+migration. No test was filtered or ignored; the rail's
+backend-specific early returns follow asserted Casita unsupported
+feature negatives, not missing-prerequisite skips. Both
+`BACKEND_CORE_RAIL` records reported the shared NAR SHA-256
+`42a7f16a040111ab52d03cf78d7178101b4746c983a12551f07b305181f7024e`
+and verified second signature; Snix reported unbounded root changes
+and `stale-gc-plan`, Casita 1,024 and `gc-plan-stale`.
+The first 7ec rail still printed **non-equal** raw old
+`b3:36eb6141fa768f053c08258dc684365f28e908643a2e51bffcb63a0b7cf31491`
+and selected canonical
+`b3:c73dcda6e8949135b7d49298cd219c3845e8eb6e18653d60b8cd5bb9c8b90e95`
+plan IDs in both planned and fresh reports; this is the expressly
+bounded canonical-facts comparison above, not a new equality claim.
+`sha256sum` confirmed the immutable first 7ec JSON
+`e0810f74d24b727ef6e3128bfc574607a18f57c50c5f387225966eb5d5ba768c`
+and original two-path JSON
+`81d74a733f93f2521330907f2b3c06f968bb603a8e39436435899bfda963a46d`.
+This is the complete post-archive **single-target** receipt, not a
+full-workspace gate, source bootstrap, Casita adoption, or release
+eligibility claim.
+
+After this test receipt was appended, `git diff --check` exited **0**.
+The exact pinned-policy command
+`env TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp nix run --offline --no-write-lock-file path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json`
+exited **0** on the archived tree and returned `"valid":true`,
+`"issues":[]`, `"change_issues":[]`, `"spec_issues":[]`,
+`"changes":34`, `"specs_validated":96`, with receipt hash
+`b33e044671771c7109deff00013734cb429989053a31a3f8eb9e538a917a9867`.
+This structural policy check does not certify the test evidence's truth.
