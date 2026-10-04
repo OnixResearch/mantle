@@ -81,6 +81,7 @@ use crate::Publisher;
 use crate::StoreAuditEvent;
 use crate::StoreAuditKind;
 use crate::StoreBackend;
+use crate::StoreBackendCapabilityProfile;
 use crate::StoreFallbackMode;
 use crate::StoredArtifactAttestation;
 use crate::StoredClosureAttestation;
@@ -150,12 +151,22 @@ impl StoreConfig {
         store_dir: &str,
         base_state_dirs: &[PathBuf],
     ) -> Result<(), Error> {
-        if backend == StoreBackend::Casita && !base_state_dirs.is_empty() {
-            return Err(Error::Store("casita-overlay-unsupported: Casita cannot compose Snix base stores".to_string()));
+        Self::preflight_backend_identity_for_profile(backend, backend.profile(), state_dir, store_dir, base_state_dirs)
+    }
+
+    fn preflight_backend_identity_for_profile(
+        backend: StoreBackend,
+        profile: StoreBackendCapabilityProfile,
+        state_dir: &Path,
+        store_dir: &str,
+        base_state_dirs: &[PathBuf],
+    ) -> Result<(), Error> {
+        if !base_state_dirs.is_empty() {
+            backend.require_overlay_composition(profile)?;
         }
         crate::overlay::preflight_store_identity(state_dir, store_dir, backend)?;
         for base_state_dir in base_state_dirs {
-            crate::overlay::preflight_store_identity(base_state_dir, store_dir, StoreBackend::Snix)?;
+            crate::overlay::preflight_store_identity(base_state_dir, store_dir, backend)?;
         }
         Ok(())
     }
@@ -1223,6 +1234,7 @@ impl StoreHandle {
     pub fn backend(&self) -> StoreBackend {
         self.backend
     }
+
     /// Read-only check before a guarded Casita GC recovery attempt.
     pub fn casita_gc_fence_pending(state_dir: &Path) -> Result<bool, Error> {
         gc::casita_gc_fence_pending(state_dir)
@@ -4231,6 +4243,25 @@ mod tests {
 
     fn test_output(name: &str, digest_byte: u8) -> StorePath<String> {
         StorePath::from_name_and_digest_fixed(name, [digest_byte; 20]).unwrap()
+    }
+    fn snapshot_test_repository(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
+        let mut files = BTreeMap::new();
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(directory) = pending.pop() {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let path = entry.unwrap().path();
+                let relative = path.strip_prefix(root).unwrap().to_path_buf();
+                let metadata = std::fs::symlink_metadata(&path).unwrap();
+                if metadata.is_dir() {
+                    files.insert(relative, None);
+                    pending.push(path);
+                } else {
+                    assert!(metadata.is_file(), "unexpected Casita repository member: {}", path.display());
+                    files.insert(relative, Some(std::fs::read(path).unwrap()));
+                }
+            }
+        }
+        files
     }
 
     fn test_signing_key() -> SigningKey<ed25519_dalek::SigningKey> {
@@ -7386,6 +7417,136 @@ mod tests {
         assert_eq!(std::fs::read(&base_identity_path).unwrap(), base_identity_before);
         assert_eq!(std::fs::read(&base_pathinfo_path).unwrap(), base_pathinfo_before);
         assert_eq!(std::fs::read_dir(overlay_dir.path()).unwrap().count(), 0);
+    }
+
+    #[tokio::test]
+    async fn overlay_rejects_foreign_base_before_opening_services_or_creating_writable_state() {
+        let root = tempfile::tempdir().unwrap();
+        let writable = root.path().join("writable");
+        let base = root.path().join("foreign-base");
+        std::fs::create_dir(&base).unwrap();
+        crate::overlay::ensure_store_identity(&base, "/nix/store", StoreBackend::Casita).unwrap();
+        let base_identity = std::fs::read(base.join("store-identity.json")).unwrap();
+        std::fs::write(base.join("blobs"), b"not a Snix blob service").unwrap();
+
+        let config = StoreConfig::new(StoreBackend::Snix, writable.clone(), root.path().join("store"), "/nix/store".to_string())
+            .with_base_state_dirs(vec![base.clone()]);
+        let error = StoreHandle::open(config).await.err().expect("foreign base must be rejected");
+        assert!(
+            error.to_string().contains("store-backend-mismatch: requested snix, state declares casita"),
+            "{error}"
+        );
+        assert!(!writable.exists(), "mismatched base created writable state");
+        assert_eq!(std::fs::read(base.join("store-identity.json")).unwrap(), base_identity);
+        assert_eq!(std::fs::read(base.join("blobs")).unwrap(), b"not a Snix blob service");
+
+        let no_overlay_profile = StoreBackendCapabilityProfile {
+            overlay_composition: false,
+            ..StoreBackend::Snix.profile()
+        };
+        let error = StoreConfig::preflight_backend_identity_for_profile(
+            StoreBackend::Snix,
+            no_overlay_profile,
+            &writable,
+            "/nix/store",
+            &[base.clone()],
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("snix-overlay-unsupported"), "{error}");
+        assert!(!writable.exists(), "disabled profile created writable state");
+        assert_eq!(std::fs::read(base.join("store-identity.json")).unwrap(), base_identity);
+    }
+
+    #[tokio::test]
+    async fn casita_lookup_does_not_fall_back_to_leftover_snix_pathinfo() {
+        let root = tempfile::tempdir().unwrap();
+        let snix_state = tempfile::tempdir().unwrap();
+        let casita_state = root.path().join("casita-state");
+        let output_dir = root.path().join("store");
+        let output_path = test_output("leftover-snix", 91);
+        let legacy_record = create_base_store(snix_state.path(), "/nix/store", &output_path).await;
+
+        let selected = || {
+            StoreConfig::new(
+                StoreBackend::Casita,
+                casita_state.clone(),
+                output_dir.clone(),
+                "/nix/store".to_string(),
+            )
+        };
+        drop(StoreHandle::open(selected()).await.unwrap());
+        let leftover_path = casita_state.join("pathinfo.redb");
+        std::fs::copy(snix_state.path().join("pathinfo.redb"), &leftover_path).unwrap();
+        let leftover_bytes = std::fs::read(&leftover_path).unwrap();
+        let legacy_reader = RedbPathInfoService::new(
+            "legacy-snix-evidence".to_string(),
+            RedbPathInfoServiceConfig {
+                path: Some(leftover_path.clone()),
+                read_only: true,
+                cache_size: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(legacy_reader.get(*output_path.digest()).await.unwrap(), Some(legacy_record));
+
+        let reopened = StoreHandle::open(selected()).await.unwrap();
+        assert_eq!(reopened.backend(), StoreBackend::Casita);
+        assert!(
+            reopened.pathinfo_service().get(*output_path.digest()).await.unwrap().is_none(),
+            "Casita lookup must not treat the leftover Snix record as selected store content"
+        );
+        assert_eq!(std::fs::read(&leftover_path).unwrap(), leftover_bytes);
+    }
+
+    #[tokio::test]
+    async fn snix_lookup_ignores_readable_casita_repository_left_in_recorded_state() {
+        let root = tempfile::tempdir().unwrap();
+        let snix_state = root.path().join("snix-state");
+        let casita_state = root.path().join("foreign-casita-state");
+        let output_dir = root.path().join("store");
+        std::fs::create_dir(&casita_state).unwrap();
+        std::fs::write(casita_state.join("casita-trusted-public-keys"), format!("{}\n", test_verifying_key()))
+            .unwrap();
+        let foreign = StoreHandle::open(StoreConfig::new(
+            StoreBackend::Casita,
+            casita_state.clone(),
+            output_dir.clone(),
+            "/nix/store".to_string(),
+        ))
+        .await
+        .unwrap();
+        let path = test_output("foreign-casita-output", 92);
+        let node = Node::Symlink {
+            target: SymlinkTarget::try_from("foreign-target").unwrap(),
+        };
+        let (nar_size, nar_sha256) =
+            SimpleRenderer::new(foreign.blob_service(), foreign.directory_service()).calculate_nar(&node).await.unwrap();
+        let record = signed_pathinfo_with_signing_key(path.clone(), node, nar_size, nar_sha256, &test_signing_key());
+        foreign.pathinfo_service().put(record.clone()).await.unwrap();
+        assert_eq!(foreign.path_info_with_layer(&path).await.unwrap().map(|found| found.value), Some(record));
+        drop(foreign);
+
+        let snix_config = || {
+            StoreConfig::new(
+                StoreBackend::Snix,
+                snix_state.clone(),
+                output_dir.clone(),
+                "/nix/store".to_string(),
+            )
+        };
+        drop(StoreHandle::open(snix_config()).await.unwrap());
+        let identity_path = snix_state.join("store-identity.json");
+        let identity_before = std::fs::read(&identity_path).unwrap();
+        let leftover = snix_state.join("casita");
+        std::fs::rename(casita_state.join("casita"), &leftover).unwrap();
+        let leftovers_before = snapshot_test_repository(&leftover);
+
+        let selected = StoreHandle::open(snix_config()).await.unwrap();
+        assert_eq!(selected.backend(), StoreBackend::Snix);
+        assert!(selected.path_info_with_layer(&path).await.unwrap().is_none(), "Snix read a leftover Casita root");
+        assert_eq!(snapshot_test_repository(&leftover), leftovers_before, "Snix changed leftover Casita state");
+        assert_eq!(std::fs::read(identity_path).unwrap(), identity_before);
     }
 
     #[tokio::test]

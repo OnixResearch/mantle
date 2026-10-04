@@ -3281,12 +3281,22 @@ struct RunContext {
     resolved_state_dir: PathBuf,
     store_prefix: String,
     store_backend: crunch_store::StoreBackend,
+    #[cfg(test)]
+    test_profile: Option<crunch_store::StoreBackendCapabilityProfile>,
     verbose: bool,
     json: bool,
     base_state_dirs: Vec<PathBuf>,
 }
 
 impl RunContext {
+    fn backend_profile(&self) -> crunch_store::StoreBackendCapabilityProfile {
+        #[cfg(test)]
+        if let Some(profile) = self.test_profile {
+            return profile;
+        }
+        self.store_backend.profile()
+    }
+
     /// Typed output format for the presentation boundary.
     fn output_format(&self) -> mantle_application_contract::OutputFormat {
         mantle_application_contract::output_format(self.json)
@@ -3531,6 +3541,8 @@ fn build_run_context(args: &Args) -> RunContext {
         resolved_state_dir: state_dir(),
         store_prefix,
         store_backend: args.store_backend,
+        #[cfg(test)]
+        test_profile: None,
         verbose: args.verbose,
         json: args.json,
         base_state_dirs: args.base_stores.clone(),
@@ -4180,8 +4192,8 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
 }
 
 fn run_rust_cache_command(ctx: &RunContext, action: &RustCacheAction) -> Result<(), RunError> {
-    if ctx.store_backend == crunch_store::StoreBackend::Casita {
-        return Err(RunError::Build("casita-rust-cache-unsupported".to_string()));
+    if !ctx.backend_profile().rust_unit_cache {
+        return Err(RunError::Build(format!("{}-rust-cache-unsupported", ctx.store_backend.as_str())));
     }
     match action {
         RustCacheAction::Serve {
@@ -7582,10 +7594,10 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         patch_source_topology: *execute_patch_source_topology,
     });
     validate_rust_local_cache_mode(*local_rust_cache, execution_mode)?;
-    if ctx.store_backend == crunch_store::StoreBackend::Casita
+    if !ctx.backend_profile().rust_unit_cache
         && (*local_rust_cache != RustLocalCacheMode::Off || *shared_rust_cache != RustSharedCacheMode::Off)
     {
-        return Err(RunError::Build("casita-rust-cache-unsupported".to_string()));
+        return Err(RunError::Build(format!("{}-rust-cache-unsupported", ctx.store_backend.as_str())));
     }
     let root = root.clone().unwrap_or(current_dir_or_error()?);
     let captured = capture_rust_plan_command(RustPlanCaptureRequest {
@@ -9003,6 +9015,41 @@ mod tests {
             parse_args_with_cli_test_stack(Vec::from(["mantle", "--store-backend", "tape", "store", "list"]))
                 .unwrap_err();
         assert!(rejected.contains("store-backend-unknown"));
+    }
+
+    #[test]
+    fn test_only_profile_without_rust_cache_blocks_real_command_before_effects() {
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("unopened-state");
+        let store = root.path().join("unopened-store");
+        let receipts = root.path().join("unopened-receipts");
+        let profile = crunch_store::StoreBackendCapabilityProfile {
+            rust_unit_cache: false,
+            ..crunch_store::StoreBackend::Snix.profile()
+        };
+        let context = RunContext {
+            store: store.clone(),
+            resolved_state_dir: state.clone(),
+            store_prefix: "/nix/store".to_string(),
+            store_backend: crunch_store::StoreBackend::Snix,
+            test_profile: Some(profile),
+            verbose: false,
+            json: false,
+            base_state_dirs: Vec::new(),
+        };
+        let error = run_rust_cache_command(
+            &context,
+            &RustCacheAction::Serve {
+                policy: root.path().join("missing-policy.json"),
+                receipt_dir: receipts.clone(),
+                once: true,
+            },
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("snix-rust-cache-unsupported"), "{error}");
+        assert!(!state.exists(), "cache rejection created state");
+        assert!(!store.exists(), "cache rejection created output store");
+        assert!(!receipts.exists(), "cache rejection opened receipt directory");
     }
 
     #[test]

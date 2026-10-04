@@ -35,6 +35,7 @@ use crate::PersistOutputRequest;
 use crate::RootRegistration;
 use crate::StoreAuditEvent;
 use crate::StoreBackend;
+use crate::StoreBackendCapabilityProfile;
 use crate::StoreFallbackMode;
 use crate::StoreHandle;
 use crate::VerifiedSourceBatchEntry;
@@ -98,6 +99,7 @@ pub struct BuildStore {
 /// roots pass it explicitly beside build authority.
 pub struct SliceAdmission {
     backend: StoreBackend,
+    profile: StoreBackendCapabilityProfile,
     store_dir: String,
     blob_service: Arc<dyn BlobService>,
     directory_service: Arc<dyn DirectoryService>,
@@ -340,6 +342,7 @@ impl StoreHandle {
     fn slice_admission_view(&self) -> SliceAdmission {
         SliceAdmission {
             backend: self.backend(),
+            profile: self.backend().profile(),
             store_dir: self.store_dir().to_owned(),
             blob_service: self.blob_service(),
             directory_service: self.directory_service(),
@@ -936,21 +939,7 @@ impl SliceAdmission {
                 entries.len()
             )));
         }
-        let profile = self.backend.profile();
-        if !profile.atomic_batch_import {
-            return Err(Error::Store(format!(
-                "verified-source-batch-unsupported: backend {} has no atomic batch admission",
-                self.backend.as_str()
-            )));
-        }
-        if let Some(max) = profile.max_root_changes
-            && entries.len() > max
-        {
-            return Err(Error::Store(format!(
-                "verified-source-batch-limit: {} roots exceed backend limit {max}",
-                entries.len()
-            )));
-        }
+        self.backend.require_verified_source_batch(self.profile, entries.len())?;
         let total_nar_bytes = entries
             .iter()
             .try_fold(0u64, |total, entry| total.checked_add(entry.observed.nar_size()))
@@ -1151,6 +1140,26 @@ mod tests {
     const TEST_NAR_DIGEST_BYTE: u8 = 11;
     const TEST_NAR_DIGEST_BYTES: usize = 32;
 
+    fn snapshot_backend_state(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
+        let mut snapshot = BTreeMap::new();
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(directory) = pending.pop() {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let path = entry.unwrap().path();
+                let relative = path.strip_prefix(root).unwrap().to_path_buf();
+                let metadata = std::fs::symlink_metadata(&path).unwrap();
+                if metadata.is_dir() {
+                    snapshot.insert(relative, None);
+                    pending.push(path);
+                } else {
+                    assert!(metadata.is_file(), "unexpected store state member: {}", path.display());
+                    snapshot.insert(relative, Some(std::fs::read(path).unwrap()));
+                }
+            }
+        }
+        snapshot
+    }
+
     fn path_info(store_path: StorePath<String>) -> PathInfo {
         PathInfo {
             store_path,
@@ -1251,7 +1260,7 @@ mod tests {
             let other_raw_key = ed25519_dalek::SigningKey::from_bytes(&[OTHER_KEY_BYTE; 32]);
             let other_verifier = VerifyingKey::new("other-slice-fixture".to_string(), other_raw_key.verifying_key());
             let other_signer = SigningKey::new("other-slice-fixture".to_string(), other_raw_key);
-            let handle = StoreHandle::open(crate::StoreConfig::new(backend, state, output, STORE_PREFIX.to_string()))
+            let handle = StoreHandle::open(crate::StoreConfig::new(backend, state.clone(), output, STORE_PREFIX.to_string()))
                 .await
                 .unwrap();
             let source_one = root.path().join("first.txt");
@@ -1330,6 +1339,9 @@ mod tests {
                     signing_key: &signer,
                 },
             ];
+            // A test-only profile exercises the production batch guard before
+            // any backend read or write, without changing admitted profiles.
+            parts.slice_admission.profile.max_root_changes = Some(2);
             let results = parts.slice_admission.admit_verified_source_batch(&entries).await.unwrap();
             assert_eq!(results.len(), 2, "{backend:?}");
             let mut original_records = Vec::with_capacity(results.len());
@@ -1369,6 +1381,33 @@ mod tests {
             }
             let reused = parts.slice_admission.admit_verified_source_batch(&entries).await.unwrap();
             assert_eq!(reused, results);
+            let before_bound_rejection = snapshot_backend_state(&state);
+            let beyond_backend_bound = [
+                VerifiedSourceBatchEntry {
+                    observed: &first,
+                    source_name: "first-source",
+                    signing_key: &signer,
+                },
+                VerifiedSourceBatchEntry {
+                    observed: &second,
+                    source_name: "second-source",
+                    signing_key: &signer,
+                },
+                VerifiedSourceBatchEntry {
+                    observed: &first,
+                    source_name: "third-source",
+                    signing_key: &signer,
+                },
+            ];
+            let error = parts.slice_admission.admit_verified_source_batch(&beyond_backend_bound).await.unwrap_err();
+            assert!(error.to_string().contains("verified-source-batch-limit"), "{backend:?}: {error}");
+            assert_eq!(snapshot_backend_state(&state), before_bound_rejection, "{backend:?} mutated on batch denial");
+
+            parts.slice_admission.profile.atomic_batch_import = false;
+            let error = parts.slice_admission.admit_verified_source_batch(&entries).await.unwrap_err();
+            assert!(error.to_string().contains("verified-source-batch-unsupported"), "{backend:?}: {error}");
+            assert_eq!(snapshot_backend_state(&state), before_bound_rejection, "{backend:?} mutated on profile denial");
+            parts.slice_admission.profile = backend.profile();
 
             let conflicting = [
                 VerifiedSourceBatchEntry {
