@@ -66,13 +66,15 @@ published source `61bd4465`, the 558-file zero-escape checker, diff
 check and pinned-policy Cairn gates. The broad Mantle bin run's two
 unrelated Slurm/seccomp failures, vendored-path lint failures, and
 sandbox-body skips remain nonclaims, not a green repository-wide suite.
-T4.4 is a **pre-archive** milestone and remains unchecked until the
-implementation and revised change are committed, accepted specs are
-synced under the pinned policy, and the readiness/receipt is recorded.
-Actual isolated-branch Cairn archive and post-archive validation are
-mandatory *subsequent* lifecycle steps outside this pre-archive
-checklist, not inferred from its structural gates or completion.
-ADR 0082 remains Proposed while the separate Casita adoption is open.
+T4.4's **pre-archive** milestone is checked only after the revised
+implementation/change commit `c74edfec`, the pinned-policy preview
+and actual accepted-spec sync into `.cairn/specs/store-backends/`,
+post-sync validation/tasks gates, and the archive preview showing
+only T4.4 itself as the remaining prerequisite. Actual named
+isolated-branch Cairn archive and captured post-archive validation
+remain mandatory *subsequent* lifecycle steps outside this completed
+pre-archive checklist. ADR 0082 remains Proposed while the separate
+Casita adoption has 28 open tasks.
 
 ## Phase 1: Baseline and contract
 
@@ -103,4 +105,4 @@ ADR 0082 remains Proposed while the separate Casita adoption is open.
 - [x] [serial] T4.1 Regenerate the operator command contract artifacts with the repository generators and run `scripts/check-operator-command-contract.sh`. Do not hand-edit generated JSON. r[mantle.store_backends.explicit_selection]
 - [x] [serial] T4.2 Document selection, the identity record, the asymmetric rule for directories without an identity record and its provenance risk, capability profiles and bounds, mismatch remediation, the local no-fallback rule, the signing-key rule for signed comparisons, and non-claims in the store documentation and the README index. r[mantle.store_backends.claim_boundary]
 - [x] [serial] T4.3 Run the focused `crunch-store` and `mantle` store suites, `tools/check_store_capability_boundary.rs`, strict Clippy and rustfmt for touched first-party packages, `git diff --check`, Cairn validation, and the proposal, design, and tasks gates. Preserve exact output in `evidence/`. r[mantle.store_backends.conformance_rail]
-- [ ] [serial] T4.4 Complete pre-archive readiness only after T3.1 and every preceding task: commit the implementation and revised change, preview and sync accepted specs under the explicitly pinned Cairn policy, retain the sync mutation receipt and validation/gate results, and confirm that all implementation tasks and dependencies are ready for the actual archive. This checkbox never claims archive execution; actual isolated-branch `cairn archive` and post-archive validation/receipt remain mandatory separate lifecycle steps under the proposal and design. r[mantle.store_backends.claim_boundary]
+- [x] [serial] T4.4 Complete pre-archive readiness only after T3.1 and every preceding task: commit the implementation and revised change, preview and sync accepted specs under the explicitly pinned Cairn policy, retain the sync mutation receipt and validation/gate results, and confirm that all implementation tasks and dependencies are ready for the actual archive. This checkbox never claims archive execution; actual isolated-branch `cairn archive` and post-archive validation/receipt remain mandatory separate lifecycle steps under the proposal and design. r[mantle.store_backends.claim_boundary]

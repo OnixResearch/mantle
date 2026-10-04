@@ -826,9 +826,11 @@ but not any earlier observed command, output, failure, receipt hash,
 or raw historical artifact. It neither changes signer parity,
 optional capability/bound or negative-blocker requirements nor makes
 correctness, durability, crash-safety, GC-safety, workspace, or
-release claims. T3.1 remains unchecked until the revised scenario is
-exercised on this published source checkout; T4.4 remains an actual
-sync/archive task, not a pre-ticked archive precondition.
+release claims. At this intermediate point T3.1 remained unchecked
+until the revised scenario ran on the published checkout; T4.4 also
+remained unchecked, and actual archive execution was not yet claimed.
+The later sections distinguish the bounded rail proof and required
+archive from pre-archive readiness.
 
 Before any sync, `sha256sum` confirmed the unchanged first
 three-path capture
@@ -939,3 +941,96 @@ The tasks gate counted **18 done/1 open** of 19, with T4.4
 intentionally open pending actual accepted-spec sync. These are
 structural policy receipts, not sync/archive actions or evidence
 truth certification.
+
+### Executed accepted-spec sync while T4.4 was still open
+
+After implementation and the revised change were committed as
+`c74edfec`, preview then execute used the same named change and
+explicit pinned policy:
+
+```sh
+env TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  nix run --offline --no-write-lock-file path:/home/brittonr/git/OnixResearch/cairn#cairn \
+  -- sync add-store-backend-selection --root . \
+  --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json
+env TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  nix run --offline --no-write-lock-file path:/home/brittonr/git/OnixResearch/cairn#cairn \
+  -- sync add-store-backend-selection --root . \
+  --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json --execute
+```
+
+Preview: exit **0**, `"blocked":false`, `"reasons":[]`,
+`"dry_run":true`, `"mutated":false`, receipt
+`d2b840551ebe4576a157f53c3293c5c444f3d9ad9161c4c708ec4644ba8f2481`;
+`merge_preflight` found **eight added requirements**, no diagnostics,
+destination `.cairn/specs/store-backends/spec.md` absent before and
+expected content hash
+`503e1efb3aff5c1ed39c3e3e53cdaf57631739df4a284ad31c1cae22d3d12302`.
+Execution: exit **0**, same `"input_hash"` of
+`7821364b9da72bd53b1d67dce0f4ceebdc96ea64c93d3e0eabe99a8de4448216`,
+`"blocked":false`, `"dry_run":false`, `"mutated":true`, receipt
+`f358ebd659c2b35159051c8540ce3fd9e92f376773fdd5d2f1611abf4d75aaed`.
+The `sync` mutation manifest hash was
+`f85edd0ad4870f3aea0000c2ed7f423af430c2754e80f1a4ce6ca77d95dbaf9a`,
+with accepted destination after-content hash matching the preview's
+`503e1ef...`; the accepted spec was read and contains the exact
+original two-path numeric-ID clause and first preserved
+supplemental three-path canonical-facts/non-equal-raw-ID clause.
+Preview and execute plan hashes differ because their `dry_run` and
+`mutated` fields differ; no false plan-hash equality is claimed.
+
+An **archive preview before checking the redesigned T4.4** used
+`CAIRN_ARCHIVE_DATE=2026-10-04` and the same pinned policy:
+
+```sh
+env CAIRN_ARCHIVE_DATE=2026-10-04 \
+  TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  nix run --offline --no-write-lock-file path:/home/brittonr/git/OnixResearch/cairn#cairn \
+  -- archive add-store-backend-selection --root . \
+  --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json
+```
+
+It returned exit **0** but **`"blocked":true`**,
+`"dry_run":true`, `"mutated":false`, `"actions":[]`,
+`"reasons":["add-store-backend-selection: tasks not archive-ready (todo: 1, in_progress: 0, unmarked: 0)"]`,
+receipt
+`dd9cd7d54836954ff619aa9804f996acab14a374c72fdf70a01b0b5eee8e8feb`;
+cross-repo dependency count was zero. The **only** preview blocker
+was the *now genuinely pending* T4.4 accepted-spec sync/readiness
+milestone, not an executed archive or a fabricated checked
+archive task. The post-sync pinned-policy validation returned
+`"valid":true`, `"issues":[]`, `"change_issues":[]`, receipt
+`0708844e7ee28c83b616a8dbdf69e04b61fd6928bad3257b8fd689c4408cb659`;
+the post-sync tasks gate returned PASS **18 done/1 open**, receipt
+`70898c6e4705bcdff5e7d367076becd17eff4bcfb75a16e96f86fc2c03441bf9`.
+
+### Final pre-archive checklist gates (actual archive still pending)
+
+Only after the actual sync and readiness evidence above, the
+reworded **pre-archive** T4.4 milestone was checked. With all 19
+selection checkboxes done, the exact four pinned-policy commands in
+the [pre-sync gate section](#explicit-policy-pre-sync-cairn-gates)
+were executed again on the updated accepted spec, revised design,
+tasks and ADR:
+
+- `validate --root .`: exit **0**, `"valid":true`,
+  `"issues":[]`, `"change_issues":[]`, receipt
+  `437e4a46d922b276039cd6e9c22f06b5dcec89909ade1fb8b1194de858e4d85e`
+  (`artifact://28851`; 97 specs validated, including the newly
+  synced `store-backends` accepted spec).
+- `gate proposal add-store-backend-selection`: exit **0**,
+  `"valid":true`, `"verdict":"PASS"`, `"issues":[]`, receipt
+  `71fb911821230a46ab0a30cb87b25dcc4181466109b6fad056b0438ac5c6c889`.
+- `gate design add-store-backend-selection`: exit **0**,
+  `"valid":true`, `"verdict":"PASS"`, `"issues":[]`, receipt
+  `0d3f5bec19af438466d03a1382ccad127fa36b9ab56560883485bf2bebc0a468`.
+- `gate tasks add-store-backend-selection`: exit **0**,
+  `"valid":true`, `"verdict":"PASS"`, `"issues":[]`, receipt
+  `6d888bd5ce7119c1d403159bab54374a1227d8277669c14055d9decadd1ee7cf`;
+  `"task_done":19`, `"task_todo":0`.
+
+All four use explicit policy SHA-256
+`1501c8c5a387098987d9feef3869e155b47748ae973785ae8f7aee3cfd92bbe9`
+and quota-safe target `TMPDIR`. Neither zero remaining **pre-archive**
+tasks nor a successful sync is proof that the separately required
+Cairn archive has happened.

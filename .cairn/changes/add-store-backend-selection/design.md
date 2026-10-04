@@ -4,8 +4,11 @@
 
 Every store open names its backend, the state directory records that backend,
 and a mismatch fails before any effect. Each backend declares which optional
-capabilities it supports. The change admits one backend, `snix`, and keeps its
-behavior byte-compatible. `adopt-casita-store-backend` admits `casita` through
+capabilities it supports. The change admits one backend, `snix`, preserving
+signed PathInfo, paths, NARs, and canonical GC consumer facts; exact
+pre-change numerical GC plan-ID parity is claimed for the original
+two-path fixed-root golden, not the unequal first-7ec supplemental
+three-path raw ID. `adopt-casita-store-backend` admits `casita` through
 the same seam.
 
 ## Current behavior

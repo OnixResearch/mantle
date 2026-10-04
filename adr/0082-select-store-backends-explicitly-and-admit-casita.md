@@ -8,14 +8,14 @@ Implementation is partial, and this record is not Accepted. In
 `adopt-casita-store-backend`, T2.5, T2.10, T2.13, T2.15, T3.3, T3.4, T3.5,
 and T3.6 are checked from recorded runs; 28 tasks remain open. In
 `add-store-backend-selection`, T1.1–T1.4, T2.1–T2.7, T3.1–T3.4,
-and T4.1–T4.3 are checked from preserved pre-selection goldens,
+and T4.1–T4.4 are checked from preserved pre-selection goldens,
 the scoped canonical consumer-fact rail with its unchanged unequal
 three-path raw IDs, combined selection/identity/negative fixtures,
-the specified focused store and first-party quality gates, and
-operator documentation. Only the **pre-archive** sync/readiness
-milestone T4.4 remains unchecked. Actual isolated-branch archive
-and post-archive validation remain separately required even after
-that task is checked. This record claims only tested behavior
+the specified focused store and first-party quality gates, operator
+documentation, and actual pinned accepted-spec sync. All 19 selected
+implementation/**pre-archive** tasks are checked. The separate actual
+isolated-branch archive and post-archive validation remain mandatory
+and are not yet claimed. This record claims only tested behavior
 within [Evidence scope](#evidence-scope). The final repository quality gates
 for both changes have not all passed: the 2026-09-30 runs recorded strict
 Clippy, the first-party workspace suite, and `cargo deny` failures. Targeted
@@ -794,10 +794,9 @@ Evidence added on 2026-10-04 in `add-store-backend-selection`:
   These selected fixtures and checks do not establish repository-wide
   gates or release eligibility.
 
-Evidence that does not exist yet: accepted-spec sync/pre-archive
-readiness for T4.4 and the separately mandatory actual archive with
-post-archive validation; root-race, remaining batch, and trust-policy
-fixtures for the separate Casita change;
+Evidence that does not exist yet: the separately mandatory actual
+archive and post-archive validation; root-race, remaining batch,
+and trust-policy fixtures for the separate Casita change;
 castore payload-root fixtures; for T1.2, a vendor build
 from a clean checkout and the confirmation that every toolchain, including
 self-build source-bundle profiles, meets Casita's `rust-version`; for T4.6,
