@@ -7,10 +7,11 @@ Proposed (2026-09-30)
 Implementation is partial, and this record is not Accepted. In
 `adopt-casita-store-backend`, T2.5, T2.10, T2.13, T2.15, T3.3, T3.4, T3.5,
 and T3.6 are checked from recorded runs; 28 tasks remain open. In
-`add-store-backend-selection`, T1.1–T1.4 and T4.1–T4.2 are checked from the
-pre-selection goldens, the selection/profile contracts, and operator-facing
-documentation. Its remaining tasks stay open until their combined-tree proof
-is recorded in that change's `tasks.md`. The record claims only tested behavior
+`add-store-backend-selection`, T1.1–T1.4, T2.1–T2.2, T2.4–T2.7, T3.4,
+and T4.1–T4.2 are checked from the preserved pre-selection goldens,
+combined selection/identity/negative fixtures, and operator documentation;
+six tasks, including the full post-change quality and archive gates, remain
+open in that change's `tasks.md`. The record claims only tested behavior
 within [Evidence scope](#evidence-scope). The final repository quality gates
 for both changes have not all passed: the 2026-09-30 runs recorded strict
 Clippy, the first-party workspace suite, and `cargo deny` failures. Targeted
