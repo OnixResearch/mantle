@@ -69,11 +69,23 @@ that does not receive the backend could reopen the state under another engine.
   r[mantle.store_backends.capability_profile]
 - Add a backend-parameterized conformance rail with positive and negative
   fixtures, driven by each backend's profile and run with an explicitly
-  provisioned fixture signing key. Run it on `snix` against pre-change goldens.
+  provisioned fixture signing key. Under `snix`, preserve exact
+  signed/NAR/path facts and the original T1.1 two-path same-root GC
+  plan-ID golden; compare the first preserved supplemental 7ec
+  three-path GC consumer facts in canonical category order while
+  retaining its unequal raw plan ID as non-equal evidence.
   r[mantle.store_backends.conformance_rail]
 - Regenerate the operator command contract for the new global option and
   document selection, identity, profiles, mismatch remediation, and
   non-claims. r[mantle.store_backends.claim_boundary]
+- After committed implementation and completion of T1.1–T4.3,
+  sync accepted specs under an explicitly pinned Cairn policy. T4.4 records
+  **pre-archive** sync/readiness only. As a separate mandatory lifecycle
+  step on the isolated branch, preview and execute the real named
+  Cairn archive, validate under the same policy afterward, and retain
+  the archive and post-archive receipts before claiming that the
+  change was archived. A checked T4.4 alone is not archive evidence.
+  r[mantle.store_backends.claim_boundary]
 
 ## Impact
 
@@ -92,12 +104,17 @@ that does not receive the backend could reopen the state under another engine.
 - **Repeatability evidence**: unknown-identifier, recorded-mismatch,
   foreign-state, mixed-overlay, undeclared-capability, child-forwarding, and
   legacy-identity fixtures; pre- and post-change goldens for store paths, NAR
-  SHA-256, signed PathInfo, and GC plan identities on `snix`, recorded with an
-  explicitly provisioned fixture signing key and environment.
-- **Compatibility**: the `snix` default keeps on-disk formats, derivation
-  hashes, output paths, signatures, action refs, GC plan identities, report
-  schemas, overlay composition, atomic batch import, unsigned admission, and
-  the Rust unit cache. The operator command
+  SHA-256, and signed PathInfo under an explicitly provisioned fixture signing
+  key and environment; exact numeric GC plan-ID equality for the original
+  T1.1 two-path fixed-root golden, and canonical GC consumer facts with
+  retained non-equal first-7ec raw IDs for the supplemental three-path rail.
+- **Compatibility**: the `snix` default keeps on-disk formats,
+  derivation hashes, output paths, signatures, action refs, GC consumer
+  decisions, report schemas, overlay composition, atomic batch import,
+  unsigned admission, and the Rust unit cache. Numerical prechange GC
+  plan-ID parity is required for the original two-path fixed-root
+  golden, not the first 7ec supplemental three-path raw ID, whose
+  canonicalized consumer facts remain equal. The operator command
   contract artifacts regenerate for the new global option.
 
 ## Scope
@@ -124,10 +141,13 @@ surfaces, documentation, and an ADR.
 
 ## Success Criteria
 
-- With the fixture signing key and environment recorded with the pre-change
-  goldens, commands without `--store-backend` and with `--store-backend snix`
-  reproduce the recorded store paths, NAR SHA-256 values, signed PathInfo, and
-  GC plan identities.
+- With the recorded fixture signing key, environment, and original
+  two-path T1.1 physical root, commands without `--store-backend` and
+  with `--store-backend snix` reproduce the recorded store paths,
+  NAR SHA-256 values, signed PathInfo, and exact numerical GC plan ID.
+  The separately preserved first 7ec three-path fixture reproduces
+  the signed/NAR/path facts and canonical GC consumer facts, retaining
+  its raw numerical plan-ID mismatch without a favorable recapture.
 - State directories with different signing keys agree on every unsigned field,
   and each signature verifies under its own key.
 - A state directory recorded for another backend fails with

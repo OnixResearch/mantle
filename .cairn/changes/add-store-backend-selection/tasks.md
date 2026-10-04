@@ -18,21 +18,23 @@ only historical blob-index/blob-chunk observation paths within each
 category, as the selected source does; it passes at the historical fixed
 root and portable roots. All historical reruns and differing old
 `read_dir` orders are retained as evidence, not alternate golden inputs.
-Exact numerical prechange GC plan-ID parity is demonstrated for the
-**original two-path** fixed-root baseline-keep/candidate T1.1 golden, not
-the supplemental three-path rail. Spec lines 193–197 require **every
-positive fixture** to reproduce its pre-change golden, not just the
-original two-path fixture. The first preserved supplementary 7ec
-three-path `fresh` plan ID is `b3:36eb6141fa768f053c08258dc684365f28e908643a2e51bffcb63a0b7cf31491`;
-the selected canonical ID is
+Exact numerical prechange GC plan-ID parity is required and demonstrated
+for the **original two-path** fixed-root baseline-keep/candidate T1.1
+golden, not the supplemental three-path rail. The explicitly approved
+spec amendment compares only the first preserved 7ec three-path
+capture's canonical GC consumer facts, after sorting historical
+blob-index/blob-chunk paths within each category, while all signed
+PathInfo, NAR, store paths, candidates, retention, output behavior,
+and negative blocker checks remain exact. Its first `fresh` raw plan
+ID `b3:36eb6141fa768f053c08258dc684365f28e908643a2e51bffcb63a0b7cf31491`
+is **not equal** to selected canonical
 `b3:c73dcda6e8949135b7d49298cd219c3845e8eb6e18653d60b8cd5bb9c8b90e95`.
-No 7ec recapture may replace that mismatch. While the separately
-captured three-path fixture was not the original T1.1 golden and its
-canonical GC consumer facts match, treating this three-path fixture as
-one of spec 193–197's positive goldens would require numeric equality
-that is **not** established. T3.1 therefore remains unchecked pending
-explicit interpretation of that literal acceptance gate, even if the
-actual optional and bounded profile branches pass.
+All 7ec recaptures remain historical counterexamples, never alternate
+golden inputs. T3.1 is checked from the published-source real
+signed/optional/bounded Snix/Casita rail at the first historical
+physical root (**1/1**) and default/explicit Snix at the original
+two-path fixed root (**1/1**), with exact non-equal first-7ec
+supplemental raw IDs retained in the receipt.
 
 T2.1/T2.2 and T2.4–T2.7 have combined source, CLI, and library proof, including a
 production-default constructor without the synthetic injected-service seam;
@@ -64,9 +66,13 @@ published source `61bd4465`, the 558-file zero-escape checker, diff
 check and pinned-policy Cairn gates. The broad Mantle bin run's two
 unrelated Slurm/seccomp failures, vendored-path lint failures, and
 sandbox-body skips remain nonclaims, not a green repository-wide suite.
-T4.4 archive/sync waits for every prerequisite, and ADR
-0082 remains Proposed. A passing structural Cairn gate is not archive
-or implementation acceptance.
+T4.4 is a **pre-archive** milestone and remains unchecked until the
+implementation and revised change are committed, accepted specs are
+synced under the pinned policy, and the readiness/receipt is recorded.
+Actual isolated-branch Cairn archive and post-archive validation are
+mandatory *subsequent* lifecycle steps outside this pre-archive
+checklist, not inferred from its structural gates or completion.
+ADR 0082 remains Proposed while the separate Casita adoption is open.
 
 ## Phase 1: Baseline and contract
 
@@ -87,7 +93,7 @@ or implementation acceptance.
 
 ## Phase 3: Conformance and negative controls
 
-- [ ] [serial] T3.1 Build the backend-parameterized conformance rail for the core capabilities, stale-plan rejection, identity checks, and profile-driven optional capability and bound fixtures. Run it with `snix` using the T1.1 fixture signing key and environment, and compare every result with the T1.1 goldens, including signed PathInfo. Add the cross-directory comparison: two `snix` state directories with one provisioned signing key produce equal signatures, and with different keys produce equal unsigned fields and signatures that verify under their own keys. r[mantle.store_backends.conformance_rail] r[mantle.store_backends.admission_invariants]
+- [x] [serial] T3.1 Build the backend-parameterized conformance rail for the core capabilities, stale-plan rejection, identity checks, and profile-driven optional capability and bound fixtures. Run it with `snix` using the recorded fixture signing key and environment; require exact signed PathInfo, NAR and deterministic facts, including the original T1.1 two-path same-root numerical GC plan-ID golden. Compare only the first preserved 7ec supplemental three-path capture's canonical GC consumer facts; preserve unequal raw plan IDs and never substitute a favorable recapture. Add the cross-directory comparison: two `snix` state directories with one provisioned signing key produce equal signatures, and with different keys produce equal unsigned fields and signatures that verify under their own keys. r[mantle.store_backends.conformance_rail] r[mantle.store_backends.admission_invariants]
 - [x] [parallel] T3.2 Add negative fixtures: unknown identifier, recorded-backend mismatch, an identity-less `casita` marker under `snix` and under `casita` (alone and beside Snix files), identity-less content outside the allowlist under `casita`, mixed overlay layers, a launcher that drops the identifier, an environment variable that tries to select a backend, and a compile-fail `StoreConfig` literal without `backend`. Runtime negatives assert their stable blocker and byte-identical state; the omitted-field fixture asserts Rust `E0063` (`missing field backend`) and byte-identical real seeded state, not a fabricated runtime blocker. r[mantle.store_backends.mixed_open_rejection] r[mantle.store_backends.explicit_selection]
 - [x] [parallel] T3.3 Add profile fixtures: `snix` overlay composition, atomic batch import, unsigned admission, and the Rust unit cache pass; a test-only profile without overlay composition fails closed before any layer is opened; a test-only profile with batch bound N accepts N paths and rejects N + 1 paths before any state mutation; a test-only profile without `rust-unit-cache` rejects Rust unit cache use before any effect while PathInfo-backed action-result outputs still reuse; and a profile without `store-repair-final-nar` rejects `store repair-final-nar`, as a dry run and with `--execute`, before any state access and the library repair calls before any effect, while `snix` repair is unchanged (the `casita` profile is such a profile; its fixture is T2.10 of `adopt-casita-store-backend`). r[mantle.store_backends.capability_profile]
 - [x] [parallel] T3.4 Add positive fixtures: default and explicit `snix` equal the baseline under the T1.1 fixture signing key, a new state directory records `snix`, a legacy identity opens unchanged, a populated identity-less Snix directory without a `casita` marker gains only a `snix` identity with every existing file unchanged before the Snix services open, and after the open its files other than the Snix databases stay byte-identical and its PathInfo still resolves, and all-`snix` overlay layers compose. r[mantle.store_backends.state_identity]
@@ -97,4 +103,4 @@ or implementation acceptance.
 - [x] [serial] T4.1 Regenerate the operator command contract artifacts with the repository generators and run `scripts/check-operator-command-contract.sh`. Do not hand-edit generated JSON. r[mantle.store_backends.explicit_selection]
 - [x] [serial] T4.2 Document selection, the identity record, the asymmetric rule for directories without an identity record and its provenance risk, capability profiles and bounds, mismatch remediation, the local no-fallback rule, the signing-key rule for signed comparisons, and non-claims in the store documentation and the README index. r[mantle.store_backends.claim_boundary]
 - [x] [serial] T4.3 Run the focused `crunch-store` and `mantle` store suites, `tools/check_store_capability_boundary.rs`, strict Clippy and rustfmt for touched first-party packages, `git diff --check`, Cairn validation, and the proposal, design, and tasks gates. Preserve exact output in `evidence/`. r[mantle.store_backends.conformance_rail]
-- [ ] [serial] T4.4 Sync accepted specs and archive through the isolated branch workflow only after every task above is complete, with retained completion evidence. r[mantle.store_backends.claim_boundary]
+- [ ] [serial] T4.4 Complete pre-archive readiness only after T3.1 and every preceding task: commit the implementation and revised change, preview and sync accepted specs under the explicitly pinned Cairn policy, retain the sync mutation receipt and validation/gate results, and confirm that all implementation tasks and dependencies are ready for the actual archive. This checkbox never claims archive execution; actual isolated-branch `cairn archive` and post-archive validation/receipt remain mandatory separate lifecycle steps under the proposal and design. r[mantle.store_backends.claim_boundary]

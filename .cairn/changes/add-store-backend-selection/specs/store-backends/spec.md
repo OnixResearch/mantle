@@ -11,7 +11,7 @@ r[mantle.store_backends.explicit_selection] Every Mantle store open MUST carry a
 - GIVEN an operator runs a store-opening command without `--store-backend`, with the fixture signing key and environment recorded with the pre-change goldens
 - WHEN the composition root constructs the store
 - THEN Mantle MUST open the store with the `snix` backend
-- AND store paths, NAR SHA-256 values, signed PathInfo, and GC plan identities MUST equal the goldens recorded before this change
+- AND store paths, NAR SHA-256 values, and signed PathInfo MUST equal the recorded pre-change goldens; the original two-path T1.1 fixture at its fixed physical root MUST reproduce its exact numerical GC plan ID, while the first preserved supplemental 7ec three-path fixture MUST reproduce canonical GC consumer facts and retain its non-equal raw plan IDs as specified by the conformance rail
 
 #### Scenario: Child process receives the selection
 
@@ -188,13 +188,16 @@ r[mantle.store_backends.capability_profile] Every admitted backend MUST implemen
 
 ### Requirement: Every admitted backend passes one conformance rail
 
-r[mantle.store_backends.conformance_rail] Mantle MUST maintain one backend-parameterized conformance rail that every admitted backend passes before its admission. The rail MUST cover the core capabilities, stale-plan rejection, and the identity and mismatch checks for every backend. It MUST run each optional capability's fixtures, including its bound, for backends that declare it and the fail-closed fixture for backends that do not. Every run MUST use an explicitly provisioned fixture signing key and a recorded environment. The `snix` run MUST equal the goldens recorded before this change when it uses the fixture signing key and environment recorded with those goldens. The rail MUST compare signed fields only between runs that share one signing key.
+r[mantle.store_backends.conformance_rail] Mantle MUST maintain one backend-parameterized conformance rail that every admitted backend passes before its admission. The rail MUST cover the core capabilities, stale-plan rejection, and the identity and mismatch checks for every backend. It MUST run each optional capability's fixtures, including its bound, for backends that declare it and the fail-closed fixture for backends that do not. Every run MUST use an explicitly provisioned fixture signing key and a recorded environment. The `snix` run MUST equal the pre-change goldens under their recorded signing key and environment, with only the supplemental three-path GC consumer-fact comparison specified below replacing raw execution plan-ID equality; the original two-path fixed-root numerical GC golden remains exact. The rail MUST compare signed fields only between runs that share one signing key.
 
 #### Scenario: Snix parity with the baseline
 
-- GIVEN goldens recorded on the pre-change revision with a recorded fixture signing key and environment
-- WHEN the conformance rail runs with backend `snix`, the same fixture signing key, and the same environment
-- THEN every positive fixture MUST reproduce its golden, including signed PathInfo
+- GIVEN the original two-path T1.1 golden and the first preserved pre-change 7ec supplemental three-path rail capture, each with its recorded fixture signing key, environment, and physical root
+- WHEN the conformance rail runs with backend `snix`, the matching fixture signing key and environment
+- THEN every positive fixture MUST reproduce its signed PathInfo, store paths, NARs, and all other deterministic golden facts
+- AND the original two-path T1.1 fixture at its recorded fixed physical root MUST reproduce the exact numerical pre-change GC plan ID
+- AND the supplemental three-path GC reports MUST compare canonical consumer facts: only the historical `blob-index` and `blob-chunk` observation paths MAY be sorted within each category to match the selected canonical order; candidates, roots, reclaim observations and bytes, retention identity, after-pin candidates, accepted execution candidates and completion, and output and retained-content behavior MUST match
+- AND the first preserved 7ec three-path raw plan ID and the selected canonical plan ID MUST remain recorded as non-equal evidence, not an equality assertion or a golden replaced by a favorable recapture
 - AND every negative fixture MUST fail with its declared stable blocker
 
 #### Scenario: Unrelated failure is not rejection evidence

@@ -800,3 +800,142 @@ The same explicit-policy `validate --root . --policy <absolute>`
 after the checkbox and ADR edits returned exit **0**, `"valid":true`,
 `"issues":[]`, `"change_issues":[]` (receipt hash
 `6f27893b2b17e1e64f76cb3d89f179b5ab444aefcc4afcc2bc59d49d322ea9fe`).
+
+## Explicitly authorized three-path conformance criterion
+
+The user explicitly resolved the *requirement interpretation*, not the
+historical observations: the original two-path T1.1 fixture at its
+recorded physical root still requires exact numerical prechange GC
+plan-ID parity, including
+`b3:787fc14bbf1d8438cbd52cc1be068d68f62967b5634b5a495c938e24565d586c`.
+The first preserved 7ec supplemental three-path capture must match
+exact signed PathInfo, paths, NARs, and GC **consumer facts** (including
+candidates, roots, reclaim observations/bytes, retention, accepted
+execution and output behavior), with only the historical
+`blob-index`/`blob-chunk` observation paths sorted *within their
+categories*. The first raw
+`b3:36eb6141fa768f053c08258dc684365f28e908643a2e51bffcb63a0b7cf31491`
+and selected canonical
+`b3:c73dcda6e8949135b7d49298cd219c3845e8eb6e18653d60b8cd5bb9c8b90e95`
+remain **non-equal evidence**. No favorable 7ec recapture may replace
+the first raw JSON or the original T1.1 golden.
+
+This narrow amendment to the normative conformance scenario
+supersedes the *earlier pending-interpretation status* recorded above
+but not any earlier observed command, output, failure, receipt hash,
+or raw historical artifact. It neither changes signer parity,
+optional capability/bound or negative-blocker requirements nor makes
+correctness, durability, crash-safety, GC-safety, workspace, or
+release claims. T3.1 remains unchecked until the revised scenario is
+exercised on this published source checkout; T4.4 remains an actual
+sync/archive task, not a pre-ticked archive precondition.
+
+Before any sync, `sha256sum` confirmed the unchanged first
+three-path capture
+`e0810f74d24b727ef6e3128bfc574607a18f57c50c5f387225966eb5d5ba768c`,
+original two-path T1.1 golden
+`81d74a733f93f2521330907f2b3c06f968bb603a8e39436435899bfda963a46d`,
+and later **non-golden** three-path rerun
+`4b65f9f0cc4856236a9c0775e866011a0cd46487ff8bf10ec6de1c2849d5eab6`.
+
+## Published-source proof of the revised T3.1 criterion
+
+On published source branch `work/finish-store-backend-selection-20261004`
+at implementation HEAD `5e1ba964`, with only the selected change's
+normative/proposal/design/task/evidence text under revision and **no
+product code or fixture rewrites**, both recorded historical absolute
+roots were verified absent before this bounded command:
+
+```sh
+test ! -e /home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-rail-compare &&
+test ! -e /home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-state-compare &&
+env CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/selection-target \
+  TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  MANTLE_RAIL_FIXTURE_ROOT=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-rail-compare \
+  MANTLE_BASELINE_FIXTURE_ROOT=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-state-compare \
+  nix develop --offline --no-write-lock-file -c sh -c \
+  'env -u CRUNCH_CONFIG_DIR -u MANTLE_STORE_BACKEND LANG=C LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1600000000 cargo test --test store_archive_cli admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail -- --exact --nocapture &&
+   env -u CRUNCH_CONFIG_DIR -u MANTLE_STORE_BACKEND LANG=C LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1600000000 cargo test --test store_archive_cli default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts -- --exact --nocapture'
+```
+
+Actual first test stdout retained the **NON-EQUAL** raw IDs without
+recapturing 7ec, followed by both admitted backends:
+
+```text
+PRECHANGE_SNIX_RAIL_GC_PLAN planned old_first="b3:36eb6141fa768f053c08258dc684365f28e908643a2e51bffcb63a0b7cf31491" selected_canonical="b3:c73dcda6e8949135b7d49298cd219c3845e8eb6e18653d60b8cd5bb9c8b90e95"
+PRECHANGE_SNIX_RAIL_GC_PLAN fresh old_first="b3:36eb6141fa768f053c08258dc684365f28e908643a2e51bffcb63a0b7cf31491" selected_canonical="b3:c73dcda6e8949135b7d49298cd219c3845e8eb6e18653d60b8cd5bb9c8b90e95"
+BACKEND_CORE_RAIL snix {"nar_sha256":"42a7f16a040111ab52d03cf78d7178101b4746c983a12551f07b305181f7024e","profile_max_root_changes":null,"retained_store_path":"0000000000068rbfd5hp8rbj5mn6jqbj-rail-retained","signed_count_after_store_sign":2,"stale_plan_blocker":"stale-gc-plan"}
+BACKEND_CORE_RAIL casita {"nar_sha256":"42a7f16a040111ab52d03cf78d7178101b4746c983a12551f07b305181f7024e","profile_max_root_changes":1024,"retained_store_path":"0000000000068rbfd5hp8rbj5mn6jqbj-rail-retained","signed_count_after_store_sign":2,"stale_plan_blocker":"gc-plan-stale"}
+test admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 99.97s
+test default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.40s
+```
+
+The first comparator consumes the unchanged *first* 7ec JSON, asserts
+all three same-key signed PathInfo bytes/NARs/paths, full canonical
+planned/fresh GC consumer reports with only historical category-path
+ordering normalized, accepted/stale executions and retained/output
+behavior; it then exercises Snix and Casita actual optional
+capabilities, fail-closed paths and declared batch bounds. The second
+asserts the original two-path exact numerical
+`b3:787fc14bbf1d8438cbd52cc1be068d68f62967b5634b5a495c938e24565d586c`
+under both default and explicit Snix at its *original* physical root.
+Under precisely the revised conformance criterion, T3.1 is checked.
+No raw golden changed; this does not establish GC safety or the
+separate Casita adoption change's remaining fixtures.
+
+## Pre-archive readiness versus mandatory actual archive
+
+The approved lifecycle split makes T4.4 only the **pre-archive**
+committed-implementation, accepted-spec sync and readiness milestone.
+Even after T4.4 is checked, the isolated-branch *real* named Cairn
+archive and the captured post-archive pinned-policy validation and
+receipt are separate mandatory completion evidence, not inferred
+from a checkbox or a structural task gate. Until then, report the
+change as active and ADR 0082 as Proposed (Casita adoption still has
+28 open tasks). The exact sync/preview/execute and archive receipts
+are appended below only after each operation occurs.
+
+### Explicit-policy pre-sync Cairn gates
+
+The sibling Cairn policy
+`/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json`
+had SHA-256
+`1501c8c5a387098987d9feef3869e155b47748ae973785ae8f7aee3cfd92bbe9`.
+On the revised spec, proposal, design, and task list with T3.1
+checked but pre-archive T4.4 still unchecked, the exact command
+family below ran with `TMPDIR` on the quota-safe target filesystem:
+
+```sh
+env TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  nix run --offline --no-write-lock-file path:/home/brittonr/git/OnixResearch/cairn#cairn \
+  -- validate --root . \
+  --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json
+env TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  nix run --offline --no-write-lock-file path:/home/brittonr/git/OnixResearch/cairn#cairn \
+  -- gate proposal add-store-backend-selection --root . \
+  --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json
+env TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  nix run --offline --no-write-lock-file path:/home/brittonr/git/OnixResearch/cairn#cairn \
+  -- gate design add-store-backend-selection --root . \
+  --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json
+env TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  nix run --offline --no-write-lock-file path:/home/brittonr/git/OnixResearch/cairn#cairn \
+  -- gate tasks add-store-backend-selection --root . \
+  --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json
+```
+
+Each returned exit **0**. Validation reported `"valid":true`,
+`"issues":[]`, `"change_issues":[]`, receipt
+`822f9f76af0dedee05393768a0ba64866b10aa42dcc9d73e585bba5306e03037`
+(`artifact://28838`). Proposal, design, tasks each reported
+`"valid":true`, `"verdict":"PASS"`, `"issues":[]`, with respective
+receipt hashes
+`abc3b038d57a28a83615bd62ee971cf64f4bf0653674cb818685bf21f476982f`,
+`af9bf4be475416593d6f6e6ff3dd0eaf97f1281ddf0d57ae5391ca87afe6a9b7`,
+and `70898c6e4705bcdff5e7d367076becd17eff4bcfb75a16e96f86fc2c03441bf9`.
+The tasks gate counted **18 done/1 open** of 19, with T4.4
+intentionally open pending actual accepted-spec sync. These are
+structural policy receipts, not sync/archive actions or evidence
+truth certification.

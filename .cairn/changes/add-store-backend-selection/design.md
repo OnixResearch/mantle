@@ -183,10 +183,16 @@ backend.
 stale-plan rejection, and identity checks for every backend. It runs each
 optional capability's fixtures where declared and the fail-closed fixture
 where not. Every run uses an explicitly provisioned fixture signing key and a
-recorded environment. The `snix` run must equal goldens recorded before the
-change with the same key and environment. Signed fields are compared only
-between runs that share one signing key; runs with different keys compare
-unsigned fields and verify each signature under its own key.
+recorded environment. Under `snix`, signed PathInfo, store paths, NARs, and
+other deterministic facts match their first preserved historical captures.
+The original T1.1 two-path fixture at the identical physical root reproduces
+its exact numerical prechange GC plan ID. The supplemental first-7ec
+three-path fixture compares full canonical GC consumer facts by sorting only
+historical blob-index/blob-chunk observations within their categories;
+the first raw and selected canonical plan IDs remain unequal evidence, never
+an equality assertion or a favorable replacement capture. Signed fields are
+compared only between runs that share one signing key; runs with different
+keys compare unsigned fields and verify each signature under its own key.
 
 **Rationale:** Ed25519 signatures depend on the signing key, so a signed
 golden is reproducible only under the key that produced it. The dependent
@@ -226,13 +232,15 @@ Stable blockers:
 
 ## Tests
 
-- Positive: the default and explicit `snix` equal the T1.1 goldens under the
-  recorded fixture signing key and environment; a new state directory records
-  `snix`; a legacy identity opens and stays byte-identical; all-`snix` overlay
-  layers compose; `snix` profile fixtures for overlay composition, atomic
-  batch import, unsigned admission, and the Rust unit cache pass;
-  each child launcher forwards the identifier
-  (argument-capture fixture).
+- Positive: default and explicit `snix` match the original two-path
+  fixed-root exact numerical GC golden and signed PathInfo under the
+  recorded fixture signing key and environment. The first preserved
+  three-path 7ec capture matches exact signed/NAR/path facts and
+  canonical GC consumer facts while retaining unequal raw plan IDs;
+  new state records `snix`, legacy identity opens unchanged, all-`snix`
+  overlay layers compose, and `snix` overlay, atomic batch, unsigned
+  admission and Rust-cache profile fixtures pass. Each child launcher
+  forwards the identifier (argument-capture fixture).
 - Signing-key comparisons: two `snix` state directories with one provisioned
   signing key produce equal signatures; with different keys they produce equal
   unsigned fields and signatures that verify under their own keys. The
@@ -247,6 +255,25 @@ Stable blockers:
   the selection.
 - Architecture: the store capability boundary checker still passes, and the
   identifier and profile types contain no vendor type.
+
+## Lifecycle and archive
+
+**Choice:** T4.4 is a pre-archive readiness milestone only. Once T3.1
+and every prior implementation task is complete and the implementation
+and revised change are committed, preview and sync accepted specs with
+the explicit pinned Cairn policy; capture the sync mutation and gate
+receipts before checking T4.4. Then, as a separate **required**
+isolated-branch lifecycle step outside the pre-archive checklist,
+preview and execute the named `cairn archive`, validate under the same
+policy afterward, and append both the archive and post-archive receipts
+to retained evidence. Until the actual archive and post-archive
+validation succeed, do not report the change as archived.
+
+**Rationale:** Cairn refuses to archive a change with any unchecked
+task. Defining a task as its own archive operation creates an
+impossible prerequisite; treating its *pre-archive* sync/readiness as
+the task instead resolves that circular gate without weakening the
+separately required actual archive, validation, or evidence.
 
 ## Risks / Trade-offs
 
