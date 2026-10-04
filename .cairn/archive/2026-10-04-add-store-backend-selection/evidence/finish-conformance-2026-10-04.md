@@ -1110,3 +1110,63 @@ evidence (and before any archival-status wording updates). It is not
 a hash of the final annotated evidence bytes. The separate
 `adopt-casita-store-backend` change still has 28 open tasks; this
 selection archive does not imply its acceptance or release eligibility.
+
+### Post-archive compile-time golden consumer cutover and scoped proof
+
+The actual archive removed the **active** evidence directory; review
+identified three `include_str!` consumers in
+`tests/store_archive_cli.rs` whose old paths would otherwise prevent
+the test target from compiling. Source-only commit
+`d9ca5eecc135388ada577673811a678d73283977` redirects the two
+original T1.1 golden consumers and the first 7ec rail golden
+consumer to their **same, now archived** JSONs. No active-tree copy,
+shim, recapture, assertion relaxation, or new golden was made.
+Post-move `sha256sum` verified the unchanged first 7ec three-path
+JSON SHA-256
+`e0810f74d24b727ef6e3128bfc574607a18f57c50c5f387225966eb5d5ba768c`
+and unchanged original two-path JSON SHA-256
+`81d74a733f93f2521330907f2b3c06f968bb603a8e39436435899bfda963a46d`.
+The archived fixture files exist and the old active change directory
+is absent.
+
+The same original absolute physical rail and baseline roots were
+verified absent. From the source-only path cutover, the focused
+compile-and-exercise command was:
+
+```sh
+env CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/selection-target \
+  TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  MANTLE_RAIL_FIXTURE_ROOT=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-rail-compare \
+  MANTLE_BASELINE_FIXTURE_ROOT=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-state-compare \
+  nix develop --offline --no-write-lock-file -c sh -c \
+  'env -u CRUNCH_CONFIG_DIR -u MANTLE_STORE_BACKEND LANG=C LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1600000000 cargo test --test store_archive_cli admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail -- --exact --nocapture &&
+   env -u CRUNCH_CONFIG_DIR -u MANTLE_STORE_BACKEND LANG=C LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1600000000 cargo test --test store_archive_cli default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts -- --exact --nocapture &&
+   env -u CRUNCH_CONFIG_DIR -u MANTLE_STORE_BACKEND LANG=C LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1600000000 cargo test --test store_archive_cli legacy_and_populated_identityless_snix_reopen_preserve_signed_output_and_unrelated_state -- --exact --nocapture'
+```
+
+Actual exit **0**, with **1/1** passing for each of the three
+tests (13 filtered per run). First 7ec rail still prints
+`old_first="b3:36eb6141fa768f053c08258dc684365f28e908643a2e51bffcb63a0b7cf31491"`
+**not equal** to
+`selected_canonical="b3:c73dcda6e8949135b7d49298cd219c3845e8eb6e18653d60b8cd5bb9c8b90e95"`
+for both planned and fresh reports; Snix and Casita signed
+core-profile rail results passed (Casita's bound remains 1,024).
+The default/explicit Snix regression separately asserts the exact
+original T1.1 two-path same-root GC plan ID along with signed/NAR
+and path facts; the legacy/populated identity-less regression
+consumes the same immutable two-path file and passes after the
+archive. This focused post-archive repair proof does not upgrade
+Casita adoption, the earlier archive mutation's at-move hashes,
+or broad repository checks.
+
+**Post-repair post-archive policy check:** with the three-line source
+cutover, scoped test run, and test evidence above in place, the exact
+explicit-policy `validate --root .` command above again exited
+**0** with `"valid":true`, `"issues":[]`,
+`"change_issues":[]`, `"spec_issues":[]`, 34 active changes and
+96 validated specs; receipt
+`b33e044671771c7109deff00013734cb429989053a31a3f8eb9e538a917a9867`
+was unchanged. The policy locator remained the explicit pinned
+`/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json`;
+this structural validation complements but does not replace the
+three real postarchive test executions.
