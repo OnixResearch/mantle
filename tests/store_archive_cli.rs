@@ -1087,7 +1087,7 @@ fn independent_snix_stores_agree_on_signed_bytes_only_with_the_same_fixture_key(
 #[test]
 fn legacy_and_populated_identityless_snix_reopen_preserve_signed_output_and_unrelated_state() {
     let golden: Value = serde_json::from_str(include_str!(
-        "../.cairn/changes/add-store-backend-selection/evidence/prechange-snix-golden-2026-10-04.json"
+        "../.cairn/archive/2026-10-04-add-store-backend-selection/evidence/prechange-snix-golden-2026-10-04.json"
     ))
     .unwrap();
     let legacy_identity = data_encoding::HEXLOWER
@@ -1143,7 +1143,7 @@ fn legacy_and_populated_identityless_snix_reopen_preserve_signed_output_and_unre
 #[test]
 fn default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts() {
     let golden: Value = serde_json::from_str(include_str!(
-        "../.cairn/changes/add-store-backend-selection/evidence/prechange-snix-golden-2026-10-04.json"
+        "../.cairn/archive/2026-10-04-add-store-backend-selection/evidence/prechange-snix-golden-2026-10-04.json"
     ))
     .unwrap();
     assert_eq!(golden["signer_public_key"], trusted_public_key());
@@ -2007,7 +2007,7 @@ fn rail_assert_snix_prechange(
 #[test]
 fn admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail() {
     let golden: Value = serde_json::from_str(include_str!(
-        "../.cairn/changes/add-store-backend-selection/evidence/prechange-snix-rail-unsorted-observed-2026-10-04.json"
+        "../.cairn/archive/2026-10-04-add-store-backend-selection/evidence/prechange-snix-rail-unsorted-observed-2026-10-04.json"
     ))
     .unwrap();
     let mut snix_signed_pathinfo = None;
