@@ -1260,9 +1260,10 @@ mod tests {
             let other_raw_key = ed25519_dalek::SigningKey::from_bytes(&[OTHER_KEY_BYTE; 32]);
             let other_verifier = VerifyingKey::new("other-slice-fixture".to_string(), other_raw_key.verifying_key());
             let other_signer = SigningKey::new("other-slice-fixture".to_string(), other_raw_key);
-            let handle = StoreHandle::open(crate::StoreConfig::new(backend, state.clone(), output, STORE_PREFIX.to_string()))
-                .await
-                .unwrap();
+            let handle =
+                StoreHandle::open(crate::StoreConfig::new(backend, state.clone(), output, STORE_PREFIX.to_string()))
+                    .await
+                    .unwrap();
             let source_one = root.path().join("first.txt");
             let source_two = root.path().join("second.txt");
             std::fs::write(&source_one, b"first verified subtree").unwrap();

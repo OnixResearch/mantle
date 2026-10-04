@@ -80,13 +80,14 @@ impl StoreBackend {
         if profile.overlay_composition {
             return Ok(());
         }
-        Err(Error::Store(format!(
-            "{}-overlay-unsupported: backend cannot compose base stores",
-            self.as_str()
-        )))
+        Err(Error::Store(format!("{}-overlay-unsupported: backend cannot compose base stores", self.as_str())))
     }
 
-    pub(crate) fn require_verified_source_batch(self, profile: StoreBackendCapabilityProfile, count: usize) -> Result<(), Error> {
+    pub(crate) fn require_verified_source_batch(
+        self,
+        profile: StoreBackendCapabilityProfile,
+        count: usize,
+    ) -> Result<(), Error> {
         if !profile.atomic_batch_import {
             return Err(Error::Store(format!(
                 "verified-source-batch-unsupported: backend {} has no atomic batch admission",
@@ -96,9 +97,7 @@ impl StoreBackend {
         if let Some(max) = profile.max_root_changes
             && count > max
         {
-            return Err(Error::Store(format!(
-                "verified-source-batch-limit: {count} roots exceed backend limit {max}"
-            )));
+            return Err(Error::Store(format!("verified-source-batch-limit: {count} roots exceed backend limit {max}")));
         }
         Ok(())
     }

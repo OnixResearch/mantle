@@ -2425,7 +2425,12 @@ mod tests {
         }
         let first = store.garbage_collect(None).await.unwrap();
         assert_eq!(first.reclaim_observations.len(), blob_paths.len());
-        assert!(first.reclaim_observations.iter().all(|observation| observation.category == RECLAIM_CATEGORY_BLOB_INDEX));
+        assert!(
+            first
+                .reclaim_observations
+                .iter()
+                .all(|observation| observation.category == RECLAIM_CATEGORY_BLOB_INDEX)
+        );
 
         for path in &blob_paths {
             std::fs::remove_file(path).unwrap();
@@ -2442,7 +2447,10 @@ mod tests {
         std::fs::write(&blob_paths[0], b"orphaned-index-with-changed-size").unwrap();
         let changed = store.garbage_collect(None).await.unwrap();
         assert_ne!(first.plan_id, changed.plan_id);
-        let error = store.garbage_collect(Some(&first.plan_id)).await.expect_err("changed blob size must stale the plan");
+        let error = store
+            .garbage_collect(Some(&first.plan_id))
+            .await
+            .expect_err("changed blob size must stale the plan");
         assert!(matches!(error, Error::Gc(message) if message.contains("stale-gc-plan")));
         assert!(blob_paths.iter().all(|path| path.exists()));
     }

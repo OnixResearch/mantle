@@ -9037,14 +9037,11 @@ mod tests {
             json: false,
             base_state_dirs: Vec::new(),
         };
-        let error = run_rust_cache_command(
-            &context,
-            &RustCacheAction::Serve {
-                policy: root.path().join("missing-policy.json"),
-                receipt_dir: receipts.clone(),
-                once: true,
-            },
-        )
+        let error = run_rust_cache_command(&context, &RustCacheAction::Serve {
+            policy: root.path().join("missing-policy.json"),
+            receipt_dir: receipts.clone(),
+            once: true,
+        })
         .unwrap_err();
         assert!(error.to_string().contains("snix-rust-cache-unsupported"), "{error}");
         assert!(!state.exists(), "cache rejection created state");

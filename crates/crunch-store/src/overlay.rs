@@ -38,6 +38,7 @@ use snix_store::pathinfoservice::PathInfoService;
 
 use crate::Error;
 use crate::StoreBackend;
+use crate::StoreBackendCapabilityProfile;
 
 pub const STORE_STATE_SCHEMA: &str = "mantle-store-state-v1";
 pub const STORE_BACKEND_STATE_SCHEMA: &str = "mantle-store-state-v2";
@@ -158,51 +159,54 @@ pub fn store_overlay_policy_blake3() -> String {
     format_digest(blake3::hash(STORE_OVERLAY_POLICY_JSON.as_bytes()).as_bytes())
 }
 
-/// Validate backend and logical identity without creating or mutating state.
-pub(crate) fn preflight_store_identity(
-    state_dir: &Path,
-    logical_prefix: &str,
-    backend: StoreBackend,
-) -> Result<(), Error> {
-    let policy = store_overlay_runtime_policy()?;
+#[derive(Clone, Debug)]
+enum ObservedStoreIdentity {
+    Recorded(StoreIdentityRecord),
+    Identityless {
+        casita_marker: bool,
+        identity_filename: bool,
+        other_content: bool,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StoreOpenDecision {
+    BindNew,
+    Reuse,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StoreOpenRejection<'a> {
+    UnsupportedIdentity,
+    BackendMismatch(StoreBackend),
+    IdentityMismatch {
+        observed_prefix: &'a str,
+        observed_trust: &'a str,
+    },
+    IdentitylessContent,
+    OverlayUnsupported,
+}
+
+fn observe_store_identity(state_dir: &Path, maximum_identity_bytes: u64) -> Result<ObservedStoreIdentity, Error> {
     let path = state_dir.join(STORE_IDENTITY_FILE_NAME);
     if path.exists() {
-        let actual = read_store_identity(&path, policy.limits.max_descriptor_bytes)?;
-        let actual_backend = match (actual.schema.as_str(), actual.backend.as_deref()) {
-            (STORE_STATE_SCHEMA, None) => StoreBackend::Snix,
-            (STORE_BACKEND_STATE_SCHEMA, Some("snix")) => StoreBackend::Snix,
-            (STORE_BACKEND_STATE_SCHEMA, Some("casita")) => StoreBackend::Casita,
-            _ => {
-                return Err(Error::Store(
-                    "store-backend-mismatch: unsupported store identity schema or backend".to_string(),
-                ));
-            }
-        };
-        if actual_backend != backend {
-            return Err(Error::Store(format!(
-                "store-backend-mismatch: requested {}, state declares {}",
-                backend.as_str(),
-                actual_backend.as_str(),
-            )));
-        }
-        if actual.logical_prefix != logical_prefix || actual.trust_policy_id != policy.trust.policy_id {
-            return Err(Error::Store(format!(
-                "store-identity-mismatch: requested prefix={logical_prefix} trust={}, observed prefix={} trust={}",
-                policy.trust.policy_id, actual.logical_prefix, actual.trust_policy_id,
-            )));
-        }
-        return Ok(());
+        return read_store_identity(&path, maximum_identity_bytes).map(ObservedStoreIdentity::Recorded);
     }
+    let mut casita_marker = false;
+    let mut identity_filename = false;
+    let mut other_content = false;
     if state_dir.exists() {
         for entry in fs::read_dir(state_dir)
             .map_err(|error| Error::Store(format!("reading state directory {}: {error}", state_dir.display())))?
         {
             let entry = entry
                 .map_err(|error| Error::Store(format!("reading state directory {}: {error}", state_dir.display())))?;
-            // A Snix-only release claimed populated state without an identity record.
-            // Preserve that path, but never claim a Casita repository as Snix.
             let name = entry.file_name();
-            if matches!(
+            if name == "casita" {
+                casita_marker = true;
+            } else if name == STORE_IDENTITY_FILE_NAME {
+                identity_filename = true;
+            } else if !matches!(
                 name.to_str(),
                 Some(
                     "store-mutation.lock"
@@ -211,18 +215,118 @@ pub(crate) fn preflight_store_identity(
                         | "overlay-trusted-public-keys"
                 )
             ) {
-                continue;
+                other_content = true;
             }
-            if backend == StoreBackend::Snix && name != "casita" && name != STORE_IDENTITY_FILE_NAME {
-                continue;
-            }
-            return Err(Error::Store(format!(
-                "store-backend-mismatch: state directory {} has content but no backend identity",
-                state_dir.display(),
-            )));
         }
     }
-    Ok(())
+    Ok(ObservedStoreIdentity::Identityless {
+        casita_marker,
+        identity_filename,
+        other_content,
+    })
+}
+
+fn decide_store_open<'a>(
+    observed: &'a ObservedStoreIdentity,
+    backend: StoreBackend,
+    profile: StoreBackendCapabilityProfile,
+    needs_overlay: bool,
+    logical_prefix: &str,
+    trust_policy_id: &str,
+) -> Result<StoreOpenDecision, StoreOpenRejection<'a>> {
+    if needs_overlay && !profile.overlay_composition {
+        return Err(StoreOpenRejection::OverlayUnsupported);
+    }
+    match observed {
+        ObservedStoreIdentity::Recorded(actual) => {
+            let actual_backend = match (actual.schema.as_str(), actual.backend.as_deref()) {
+                (STORE_STATE_SCHEMA, None) => StoreBackend::Snix,
+                (STORE_BACKEND_STATE_SCHEMA, Some("snix")) => StoreBackend::Snix,
+                (STORE_BACKEND_STATE_SCHEMA, Some("casita")) => StoreBackend::Casita,
+                _ => return Err(StoreOpenRejection::UnsupportedIdentity),
+            };
+            if actual_backend != backend {
+                return Err(StoreOpenRejection::BackendMismatch(actual_backend));
+            }
+            if actual.logical_prefix != logical_prefix || actual.trust_policy_id != trust_policy_id {
+                return Err(StoreOpenRejection::IdentityMismatch {
+                    observed_prefix: &actual.logical_prefix,
+                    observed_trust: &actual.trust_policy_id,
+                });
+            }
+            Ok(StoreOpenDecision::Reuse)
+        }
+        ObservedStoreIdentity::Identityless {
+            casita_marker,
+            identity_filename,
+            other_content,
+        } => {
+            if *casita_marker || *identity_filename || (backend == StoreBackend::Casita && *other_content) {
+                return Err(StoreOpenRejection::IdentitylessContent);
+            }
+            Ok(StoreOpenDecision::BindNew)
+        }
+    }
+}
+
+fn store_open_rejection_error(
+    rejection: StoreOpenRejection<'_>,
+    state_dir: &Path,
+    logical_prefix: &str,
+    trust_policy_id: &str,
+    backend: StoreBackend,
+) -> Error {
+    match rejection {
+        StoreOpenRejection::UnsupportedIdentity => {
+            Error::Store("store-backend-mismatch: unsupported store identity schema or backend".to_string())
+        }
+        StoreOpenRejection::BackendMismatch(actual) => Error::Store(format!(
+            "store-backend-mismatch: requested {}, state declares {}",
+            backend.as_str(),
+            actual.as_str(),
+        )),
+        StoreOpenRejection::IdentityMismatch {
+            observed_prefix,
+            observed_trust,
+        } => Error::Store(format!(
+            "store-identity-mismatch: requested prefix={logical_prefix} trust={trust_policy_id}, observed prefix={observed_prefix} trust={observed_trust}",
+        )),
+        StoreOpenRejection::IdentitylessContent => Error::Store(format!(
+            "store-backend-mismatch: state directory {} has content but no backend identity",
+            state_dir.display(),
+        )),
+        StoreOpenRejection::OverlayUnsupported => {
+            Error::Store(format!("{}-overlay-unsupported: backend cannot compose base stores", backend.as_str(),))
+        }
+    }
+}
+
+fn inspect_store_open(
+    state_dir: &Path,
+    logical_prefix: &str,
+    backend: StoreBackend,
+    profile: StoreBackendCapabilityProfile,
+    needs_overlay: bool,
+) -> Result<(StoreOpenDecision, StoreOverlayRuntimePolicy), Error> {
+    let policy = store_overlay_runtime_policy()?;
+    let observed = observe_store_identity(state_dir, policy.limits.max_descriptor_bytes)?;
+    let decision =
+        decide_store_open(&observed, backend, profile, needs_overlay, logical_prefix, &policy.trust.policy_id)
+            .map_err(|rejection| {
+                store_open_rejection_error(rejection, state_dir, logical_prefix, &policy.trust.policy_id, backend)
+            })?;
+    Ok((decision, policy))
+}
+
+/// Validate backend and logical identity without creating or mutating state.
+pub(crate) fn preflight_store_identity(
+    state_dir: &Path,
+    logical_prefix: &str,
+    backend: StoreBackend,
+    profile: StoreBackendCapabilityProfile,
+    needs_overlay: bool,
+) -> Result<(), Error> {
+    inspect_store_open(state_dir, logical_prefix, backend, profile, needs_overlay).map(|_| ())
 }
 
 pub(crate) fn ensure_store_identity(
@@ -230,12 +334,11 @@ pub(crate) fn ensure_store_identity(
     logical_prefix: &str,
     backend: StoreBackend,
 ) -> Result<(), Error> {
-    preflight_store_identity(state_dir, logical_prefix, backend)?;
-    let path = state_dir.join(STORE_IDENTITY_FILE_NAME);
-    if path.exists() {
+    let (decision, policy) = inspect_store_open(state_dir, logical_prefix, backend, backend.profile(), false)?;
+    if decision == StoreOpenDecision::Reuse {
         return Ok(());
     }
-    let policy = store_overlay_runtime_policy()?;
+    let path = state_dir.join(STORE_IDENTITY_FILE_NAME);
     let expected = StoreIdentityRecord {
         schema: STORE_BACKEND_STATE_SCHEMA.to_string(),
         logical_prefix: logical_prefix.to_string(),
@@ -262,7 +365,7 @@ pub(crate) fn ensure_store_identity(
     match temporary.persist_noclobber(&path) {
         Ok(_) => Ok(()),
         Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
-            preflight_store_identity(state_dir, logical_prefix, backend)
+            preflight_store_identity(state_dir, logical_prefix, backend, backend.profile(), false)
         }
         Err(error) => Err(Error::Store(format!("publishing {}: {}", path.display(), error.error))),
     }?;
@@ -804,6 +907,192 @@ mod tests {
     }
 
     #[test]
+    fn pure_open_decision_covers_recorded_identity_and_identityless_markers() {
+        const PREFIX: &str = "/nix/store";
+        const TRUST: &str = "test-policy";
+        let identityless = |casita_marker, identity_filename, other_content| ObservedStoreIdentity::Identityless {
+            casita_marker,
+            identity_filename,
+            other_content,
+        };
+        let recorded = |schema: &str, backend: Option<&str>, prefix: &str, trust: &str| {
+            ObservedStoreIdentity::Recorded(StoreIdentityRecord {
+                schema: schema.to_string(),
+                logical_prefix: prefix.to_string(),
+                trust_policy_id: trust.to_string(),
+                backend: backend.map(str::to_string),
+            })
+        };
+        let no_overlay = StoreBackendCapabilityProfile {
+            overlay_composition: false,
+            ..StoreBackend::Snix.profile()
+        };
+        let cases = [
+            (
+                "empty snix",
+                identityless(false, false, false),
+                StoreBackend::Snix,
+                false,
+                None,
+                Ok(StoreOpenDecision::BindNew),
+            ),
+            (
+                "empty casita",
+                identityless(false, false, false),
+                StoreBackend::Casita,
+                false,
+                None,
+                Ok(StoreOpenDecision::BindNew),
+            ),
+            (
+                "unclaimed snix bytes",
+                identityless(false, false, true),
+                StoreBackend::Snix,
+                false,
+                None,
+                Ok(StoreOpenDecision::BindNew),
+            ),
+            (
+                "unclaimed casita bytes",
+                identityless(false, false, true),
+                StoreBackend::Casita,
+                false,
+                None,
+                Err(StoreOpenRejection::IdentitylessContent),
+            ),
+            (
+                "casita marker under snix",
+                identityless(true, false, true),
+                StoreBackend::Snix,
+                false,
+                None,
+                Err(StoreOpenRejection::IdentitylessContent),
+            ),
+            (
+                "casita marker under casita",
+                identityless(true, false, true),
+                StoreBackend::Casita,
+                false,
+                None,
+                Err(StoreOpenRejection::IdentitylessContent),
+            ),
+            (
+                "identity name without readable record",
+                identityless(false, true, false),
+                StoreBackend::Snix,
+                false,
+                None,
+                Err(StoreOpenRejection::IdentitylessContent),
+            ),
+            (
+                "legacy snix",
+                recorded(STORE_STATE_SCHEMA, None, PREFIX, TRUST),
+                StoreBackend::Snix,
+                false,
+                None,
+                Ok(StoreOpenDecision::Reuse),
+            ),
+            (
+                "legacy is not casita",
+                recorded(STORE_STATE_SCHEMA, None, PREFIX, TRUST),
+                StoreBackend::Casita,
+                false,
+                None,
+                Err(StoreOpenRejection::BackendMismatch(StoreBackend::Snix)),
+            ),
+            (
+                "recorded snix",
+                recorded(STORE_BACKEND_STATE_SCHEMA, Some("snix"), PREFIX, TRUST),
+                StoreBackend::Snix,
+                false,
+                None,
+                Ok(StoreOpenDecision::Reuse),
+            ),
+            (
+                "recorded casita",
+                recorded(STORE_BACKEND_STATE_SCHEMA, Some("casita"), PREFIX, TRUST),
+                StoreBackend::Casita,
+                false,
+                None,
+                Ok(StoreOpenDecision::Reuse),
+            ),
+            (
+                "wrong backend",
+                recorded(STORE_BACKEND_STATE_SCHEMA, Some("casita"), PREFIX, TRUST),
+                StoreBackend::Snix,
+                false,
+                None,
+                Err(StoreOpenRejection::BackendMismatch(StoreBackend::Casita)),
+            ),
+            (
+                "missing v2 backend",
+                recorded(STORE_BACKEND_STATE_SCHEMA, None, PREFIX, TRUST),
+                StoreBackend::Snix,
+                false,
+                None,
+                Err(StoreOpenRejection::UnsupportedIdentity),
+            ),
+            (
+                "legacy with backend",
+                recorded(STORE_STATE_SCHEMA, Some("snix"), PREFIX, TRUST),
+                StoreBackend::Snix,
+                false,
+                None,
+                Err(StoreOpenRejection::UnsupportedIdentity),
+            ),
+            (
+                "prefix drift",
+                recorded(STORE_BACKEND_STATE_SCHEMA, Some("snix"), "/other/store", TRUST),
+                StoreBackend::Snix,
+                false,
+                None,
+                Err(StoreOpenRejection::IdentityMismatch {
+                    observed_prefix: "/other/store",
+                    observed_trust: TRUST,
+                }),
+            ),
+            (
+                "trust drift",
+                recorded(STORE_BACKEND_STATE_SCHEMA, Some("snix"), PREFIX, "other-policy"),
+                StoreBackend::Snix,
+                false,
+                None,
+                Err(StoreOpenRejection::IdentityMismatch {
+                    observed_prefix: PREFIX,
+                    observed_trust: "other-policy",
+                }),
+            ),
+            (
+                "overlay disallowed",
+                recorded(STORE_BACKEND_STATE_SCHEMA, Some("snix"), PREFIX, TRUST),
+                StoreBackend::Snix,
+                true,
+                Some(no_overlay),
+                Err(StoreOpenRejection::OverlayUnsupported),
+            ),
+            (
+                "overlay allowed",
+                recorded(STORE_BACKEND_STATE_SCHEMA, Some("snix"), PREFIX, TRUST),
+                StoreBackend::Snix,
+                true,
+                None,
+                Ok(StoreOpenDecision::Reuse),
+            ),
+        ];
+        for (name, observation, backend, needs_overlay, profile, expected) in cases {
+            let actual = decide_store_open(
+                &observation,
+                backend,
+                profile.unwrap_or_else(|| backend.profile()),
+                needs_overlay,
+                PREFIX,
+                TRUST,
+            );
+            assert_eq!(actual, expected, "{name}");
+        }
+    }
+
+    #[test]
     fn identity_record_rejects_prefix_drift() {
         let state = tempfile::tempdir().unwrap();
         ensure_store_identity(state.path(), "/nix/store", StoreBackend::Snix).unwrap();
@@ -821,12 +1110,19 @@ mod tests {
             "trust_policy_id": policy.trust.policy_id,
         });
         std::fs::write(state.path().join(STORE_IDENTITY_FILE_NAME), serde_json::to_vec(&legacy).unwrap()).unwrap();
-        preflight_store_identity(state.path(), "/nix/store", StoreBackend::Snix).unwrap();
+        preflight_store_identity(state.path(), "/nix/store", StoreBackend::Snix, StoreBackend::Snix.profile(), false)
+            .unwrap();
         assert!(
-            preflight_store_identity(state.path(), "/nix/store", StoreBackend::Casita)
-                .unwrap_err()
-                .to_string()
-                .contains("store-backend-mismatch")
+            preflight_store_identity(
+                state.path(),
+                "/nix/store",
+                StoreBackend::Casita,
+                StoreBackend::Casita.profile(),
+                false
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("store-backend-mismatch")
         );
     }
 
@@ -840,7 +1136,8 @@ mod tests {
             ensure_store_identity(state.path(), "/nix/store", recorded).unwrap();
             let identity_path = state.path().join(STORE_IDENTITY_FILE_NAME);
             let original = std::fs::read(&identity_path).unwrap();
-            let error = preflight_store_identity(state.path(), "/nix/store", requested).unwrap_err();
+            let error = preflight_store_identity(state.path(), "/nix/store", requested, requested.profile(), false)
+                .unwrap_err();
             assert!(error.to_string().contains("store-backend-mismatch"));
             assert!(
                 ensure_store_identity(state.path(), "/nix/store", requested)
@@ -897,7 +1194,8 @@ mod tests {
         std::fs::remove_file(state.join(STORE_IDENTITY_FILE_NAME)).unwrap();
         let before = snapshot_state_tree(&state);
 
-        preflight_store_identity(&state, "/nix/store", StoreBackend::Snix).unwrap();
+        preflight_store_identity(&state, "/nix/store", StoreBackend::Snix, StoreBackend::Snix.profile(), false)
+            .unwrap();
         assert_eq!(snapshot_state_tree(&state), before, "preflight modified legacy state");
         ensure_store_identity(&state, "/nix/store", StoreBackend::Snix).unwrap();
         let mut claimed = snapshot_state_tree(&state);

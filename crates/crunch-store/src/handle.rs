@@ -164,9 +164,9 @@ impl StoreConfig {
         if !base_state_dirs.is_empty() {
             backend.require_overlay_composition(profile)?;
         }
-        crate::overlay::preflight_store_identity(state_dir, store_dir, backend)?;
+        crate::overlay::preflight_store_identity(state_dir, store_dir, backend, profile, !base_state_dirs.is_empty())?;
         for base_state_dir in base_state_dirs {
-            crate::overlay::preflight_store_identity(base_state_dir, store_dir, backend)?;
+            crate::overlay::preflight_store_identity(base_state_dir, store_dir, backend, profile, true)?;
         }
         Ok(())
     }
@@ -7429,8 +7429,9 @@ mod tests {
         let base_identity = std::fs::read(base.join("store-identity.json")).unwrap();
         std::fs::write(base.join("blobs"), b"not a Snix blob service").unwrap();
 
-        let config = StoreConfig::new(StoreBackend::Snix, writable.clone(), root.path().join("store"), "/nix/store".to_string())
-            .with_base_state_dirs(vec![base.clone()]);
+        let config =
+            StoreConfig::new(StoreBackend::Snix, writable.clone(), root.path().join("store"), "/nix/store".to_string())
+                .with_base_state_dirs(vec![base.clone()]);
         let error = StoreHandle::open(config).await.err().expect("foreign base must be rejected");
         assert!(
             error.to_string().contains("store-backend-mismatch: requested snix, state declares casita"),
@@ -7449,7 +7450,7 @@ mod tests {
             no_overlay_profile,
             &writable,
             "/nix/store",
-            &[base.clone()],
+            std::slice::from_ref(&base),
         )
         .unwrap_err();
         assert!(error.to_string().contains("snix-overlay-unsupported"), "{error}");
@@ -7467,25 +7468,17 @@ mod tests {
         let legacy_record = create_base_store(snix_state.path(), "/nix/store", &output_path).await;
 
         let selected = || {
-            StoreConfig::new(
-                StoreBackend::Casita,
-                casita_state.clone(),
-                output_dir.clone(),
-                "/nix/store".to_string(),
-            )
+            StoreConfig::new(StoreBackend::Casita, casita_state.clone(), output_dir.clone(), "/nix/store".to_string())
         };
         drop(StoreHandle::open(selected()).await.unwrap());
         let leftover_path = casita_state.join("pathinfo.redb");
         std::fs::copy(snix_state.path().join("pathinfo.redb"), &leftover_path).unwrap();
         let leftover_bytes = std::fs::read(&leftover_path).unwrap();
-        let legacy_reader = RedbPathInfoService::new(
-            "legacy-snix-evidence".to_string(),
-            RedbPathInfoServiceConfig {
-                path: Some(leftover_path.clone()),
-                read_only: true,
-                cache_size: None,
-            },
-        )
+        let legacy_reader = RedbPathInfoService::new("legacy-snix-evidence".to_string(), RedbPathInfoServiceConfig {
+            path: Some(leftover_path.clone()),
+            read_only: true,
+            cache_size: None,
+        })
         .await
         .unwrap();
         assert_eq!(legacy_reader.get(*output_path.digest()).await.unwrap(), Some(legacy_record));
@@ -7506,8 +7499,7 @@ mod tests {
         let casita_state = root.path().join("foreign-casita-state");
         let output_dir = root.path().join("store");
         std::fs::create_dir(&casita_state).unwrap();
-        std::fs::write(casita_state.join("casita-trusted-public-keys"), format!("{}\n", test_verifying_key()))
-            .unwrap();
+        std::fs::write(casita_state.join("casita-trusted-public-keys"), format!("{}\n", test_verifying_key())).unwrap();
         let foreign = StoreHandle::open(StoreConfig::new(
             StoreBackend::Casita,
             casita_state.clone(),
@@ -7520,21 +7512,17 @@ mod tests {
         let node = Node::Symlink {
             target: SymlinkTarget::try_from("foreign-target").unwrap(),
         };
-        let (nar_size, nar_sha256) =
-            SimpleRenderer::new(foreign.blob_service(), foreign.directory_service()).calculate_nar(&node).await.unwrap();
+        let (nar_size, nar_sha256) = SimpleRenderer::new(foreign.blob_service(), foreign.directory_service())
+            .calculate_nar(&node)
+            .await
+            .unwrap();
         let record = signed_pathinfo_with_signing_key(path.clone(), node, nar_size, nar_sha256, &test_signing_key());
         foreign.pathinfo_service().put(record.clone()).await.unwrap();
         assert_eq!(foreign.path_info_with_layer(&path).await.unwrap().map(|found| found.value), Some(record));
         drop(foreign);
 
-        let snix_config = || {
-            StoreConfig::new(
-                StoreBackend::Snix,
-                snix_state.clone(),
-                output_dir.clone(),
-                "/nix/store".to_string(),
-            )
-        };
+        let snix_config =
+            || StoreConfig::new(StoreBackend::Snix, snix_state.clone(), output_dir.clone(), "/nix/store".to_string());
         drop(StoreHandle::open(snix_config()).await.unwrap());
         let identity_path = snix_state.join("store-identity.json");
         let identity_before = std::fs::read(&identity_path).unwrap();
