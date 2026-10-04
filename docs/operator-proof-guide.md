@@ -149,6 +149,11 @@ The self-build proof does not prove compiler correctness, does not prove full
 Cargo compatibility, does not prove release reproducibility, does not prove
 deploy success, and does not prove general Nix replacement completeness.
 
+The Rust source-provider materializer checks each generated stage script against
+the digest of its producer-rendered bytes before launching it. This local
+integrity check does not inventory script-spawned child processes, confer root
+action trust, or admit a source-built fixed-point/v2 proof.
+
 ## Genuine release rebuild proof
 
 Use the reviewed production recipe with an explicit content-bound toolchain

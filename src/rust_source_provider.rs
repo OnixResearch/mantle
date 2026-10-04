@@ -1014,10 +1014,10 @@ fn materialize_rust_source_provider_internal(
     plan.full_source_context = full_source_context;
     let route = load_rust_source_provider_route(&plan.route_plan_path)?;
     let boundary = prepare_first_stage_boundary(&plan, &route)?;
-    write_first_stage_boundary(&boundary)?;
+    let first_stage_script_digest = write_first_stage_boundary(&boundary)?;
     let first_stage_sources = acquire_first_stage_sources(&boundary, verbose)?;
     write_first_stage_sources_manifest(&boundary, &first_stage_sources)?;
-    let first_stage_build = run_first_stage_build(&boundary, verbose)?;
+    let first_stage_build = run_first_stage_build(&boundary, &first_stage_script_digest, verbose)?;
     write_first_stage_build_manifest(&boundary, &first_stage_build)?;
     let first_stage_candidate =
         assemble_first_stage_provider_candidate(&boundary, &route, &first_stage_sources, &first_stage_build)?;
@@ -1895,10 +1895,10 @@ fn run_rustc_stage1_provider_candidate(
     verbose: bool,
 ) -> Result<RustSourceProviderRustcStage1ProviderCandidateRun, RustSourceProviderError> {
     let boundary = prepare_rustc_stage1_boundary(materialization, route, bootstrap_candidate, scratch_layout)?;
-    write_rustc_stage1_boundary(&boundary)?;
+    let script_digest = write_rustc_stage1_boundary(&boundary)?;
     let sources = acquire_rustc_stage1_sources(&boundary, verbose)?;
     write_rustc_stage1_sources_manifest(&boundary, &sources)?;
-    let build = run_rustc_stage1_build(&boundary, verbose)?;
+    let build = run_rustc_stage1_build(&boundary, &script_digest, verbose)?;
     write_rustc_stage1_build_manifest(&boundary, &build)?;
     let candidate = assemble_rustc_stage1_provider_candidate(&boundary, route, &sources, &build)?;
     let smoke = smoke_rustc_stage1_provider_candidate(&boundary, &candidate)?;
@@ -1988,10 +1988,10 @@ fn run_rustc_final_provider_candidate(
     verbose: bool,
 ) -> Result<RustSourceProviderRustcFinalProviderCandidateRun, RustSourceProviderError> {
     let boundary = prepare_rustc_final_boundary(materialization, route, bootstrap_candidate)?;
-    write_rustc_final_boundary(&boundary)?;
+    let script_digest = write_rustc_final_boundary(&boundary)?;
     let sources = acquire_rustc_final_sources(&boundary, verbose)?;
     write_rustc_final_sources_manifest(&boundary, &sources)?;
-    let build = run_rustc_final_build(&boundary, verbose)?;
+    let build = run_rustc_final_build(&boundary, &script_digest, verbose)?;
     write_rustc_final_build_manifest(&boundary, &build)?;
     let candidate = assemble_rustc_final_provider_candidate(&boundary, route, &sources, &build)?;
     let smoke = smoke_rustc_final_provider_candidate(&boundary, &candidate)?;
@@ -2064,7 +2064,9 @@ fn expected_outputs_for_stage(
     Ok(outputs)
 }
 
-fn write_first_stage_boundary(boundary: &RustSourceProviderFirstStageBoundary) -> Result<(), RustSourceProviderError> {
+fn write_first_stage_boundary(
+    boundary: &RustSourceProviderFirstStageBoundary,
+) -> Result<blake3::Hash, RustSourceProviderError> {
     fs::create_dir_all(&boundary.archive_dir)
         .map_err(|err| RustSourceProviderError::Read(format!("create {}: {err}", boundary.archive_dir.display())))?;
     fs::create_dir_all(&boundary.source_dir)
@@ -2076,15 +2078,17 @@ fn write_first_stage_boundary(boundary: &RustSourceProviderFirstStageBoundary) -
         RustSourceProviderError::Read(format!("write first stage plan {}: {err}", boundary.plan_path.display()))
     })?;
     let script = first_stage_boundary_script(boundary)?;
+    let script_digest = blake3::hash(script.as_bytes());
     fs::write(&boundary.script_path, script).map_err(|err| {
         RustSourceProviderError::Read(format!("write first stage script {}: {err}", boundary.script_path.display()))
     })?;
-    make_executable(&boundary.script_path)
+    make_executable(&boundary.script_path)?;
+    Ok(script_digest)
 }
 
 fn write_rustc_stage1_boundary(
     boundary: &RustSourceProviderRustcStage1Boundary,
-) -> Result<(), RustSourceProviderError> {
+) -> Result<blake3::Hash, RustSourceProviderError> {
     fs::create_dir_all(&boundary.archive_dir)
         .map_err(|err| RustSourceProviderError::Read(format!("create {}: {err}", boundary.archive_dir.display())))?;
     fs::create_dir_all(&boundary.source_dir)
@@ -2095,10 +2099,12 @@ fn write_rustc_stage1_boundary(
     let manifest = rustc_stage1_boundary_manifest(boundary, &patch_plan);
     write_json_pretty(&boundary.plan_path, &manifest, "rustc stage1 plan")?;
     let script = rustc_stage1_boundary_script(boundary)?;
+    let script_digest = blake3::hash(script.as_bytes());
     fs::write(&boundary.script_path, script).map_err(|err| {
         RustSourceProviderError::Read(format!("write rustc stage1 script {}: {err}", boundary.script_path.display()))
     })?;
-    make_executable(&boundary.script_path)
+    make_executable(&boundary.script_path)?;
+    Ok(script_digest)
 }
 
 fn rustc_stage1_boundary_manifest(
@@ -2162,7 +2168,9 @@ fn rustc_stage1_boundary_script(
     Ok(script)
 }
 
-fn write_rustc_final_boundary(boundary: &RustSourceProviderRustcFinalBoundary) -> Result<(), RustSourceProviderError> {
+fn write_rustc_final_boundary(
+    boundary: &RustSourceProviderRustcFinalBoundary,
+) -> Result<blake3::Hash, RustSourceProviderError> {
     fs::create_dir_all(&boundary.archive_dir)
         .map_err(|err| RustSourceProviderError::Read(format!("create {}: {err}", boundary.archive_dir.display())))?;
     fs::create_dir_all(&boundary.source_dir)
@@ -2173,10 +2181,12 @@ fn write_rustc_final_boundary(boundary: &RustSourceProviderRustcFinalBoundary) -
     let manifest = rustc_final_boundary_manifest(boundary, &patch_plan);
     write_json_pretty(&boundary.plan_path, &manifest, "rustc final plan")?;
     let script = rustc_final_boundary_script(boundary)?;
+    let script_digest = blake3::hash(script.as_bytes());
     fs::write(&boundary.script_path, script).map_err(|err| {
         RustSourceProviderError::Read(format!("write rustc final script {}: {err}", boundary.script_path.display()))
     })?;
-    make_executable(&boundary.script_path)
+    make_executable(&boundary.script_path)?;
+    Ok(script_digest)
 }
 
 fn rustc_final_boundary_manifest(
@@ -3854,11 +3864,19 @@ fn run_generated_script_with_log(
     script_path: &Path,
     log_path: &Path,
     full_source_context: Option<&FullSourceRustExecutionContext>,
+    expected_script_digest_blake3: &blake3::Hash,
 ) -> Result<ExitStatus, RustSourceProviderError> {
     if script_path == log_path {
         return Err(RustSourceProviderError::Build("generated script path and build log path must differ".to_string()));
     }
     debug_assert_ne!(script_path, log_path);
+    let observed_script_digest_blake3 = file_blake3_hash(script_path)?;
+    if observed_script_digest_blake3 != *expected_script_digest_blake3 {
+        return Err(RustSourceProviderError::Build(format!(
+            "generated Rust stage script differs from producer-rendered bytes: {}",
+            script_path.display()
+        )));
+    }
     let interpreter = full_source_context.map(|context| full_source_busybox_applet_path(context, "sh")).transpose()?;
     let log = File::create(log_path)
         .map_err(|err| RustSourceProviderError::Build(format!("create {}: {err}", log_path.display())))?;
@@ -3891,6 +3909,7 @@ fn run_generated_script_with_log(
 
 fn run_rustc_stage1_build(
     boundary: &RustSourceProviderRustcStage1Boundary,
+    expected_script_digest_blake3: &blake3::Hash,
     verbose: bool,
 ) -> Result<RustSourceProviderRustcStage1Build, RustSourceProviderError> {
     validate_rustc_stage1_build_inputs(boundary)?;
@@ -3903,6 +3922,7 @@ fn run_rustc_stage1_build(
         &boundary.script_path,
         &boundary.build_log_path,
         boundary.full_source_context.as_ref(),
+        expected_script_digest_blake3,
     )?;
     if !status.success() {
         let log_tail = fs::read(&boundary.build_log_path)
@@ -3944,6 +3964,7 @@ fn validate_rustc_stage1_build_inputs(
 
 fn run_rustc_final_build(
     boundary: &RustSourceProviderRustcFinalBoundary,
+    expected_script_digest_blake3: &blake3::Hash,
     verbose: bool,
 ) -> Result<RustSourceProviderRustcFinalBuild, RustSourceProviderError> {
     validate_rustc_final_build_inputs(boundary)?;
@@ -3956,6 +3977,7 @@ fn run_rustc_final_build(
         &boundary.script_path,
         &boundary.build_log_path,
         boundary.full_source_context.as_ref(),
+        expected_script_digest_blake3,
     )?;
     if !status.success() {
         let log_tail = fs::read(&boundary.build_log_path)
@@ -5002,6 +5024,7 @@ fn write_rustc_final_provider_candidate_manifest(
 
 fn run_first_stage_build(
     boundary: &RustSourceProviderFirstStageBoundary,
+    expected_script_digest_blake3: &blake3::Hash,
     verbose: bool,
 ) -> Result<RustSourceProviderFirstStageBuild, RustSourceProviderError> {
     let build_sources = first_stage_build_sources(boundary)?;
@@ -5014,6 +5037,7 @@ fn run_first_stage_build(
         &boundary.script_path,
         &boundary.build_log_path,
         boundary.full_source_context.as_ref(),
+        expected_script_digest_blake3,
     )?;
     if !status.success() {
         let log_tail = fs::read(&boundary.build_log_path)
@@ -8491,9 +8515,17 @@ fn content_digest_blake3(path: &Path) -> Result<String, RustSourceProviderError>
 }
 
 fn file_digest_blake3(path: &Path) -> Result<String, RustSourceProviderError> {
-    let bytes =
-        fs::read(path).map_err(|err| RustSourceProviderError::Digest(format!("read {}: {err}", path.display())))?;
-    Ok(blake3::hash(&bytes).to_hex().to_string())
+    Ok(file_blake3_hash(path)?.to_hex().to_string())
+}
+
+fn file_blake3_hash(path: &Path) -> Result<blake3::Hash, RustSourceProviderError> {
+    File::open(path)
+        .and_then(|file| {
+            let mut hasher = blake3::Hasher::new();
+            hasher.update_reader(file)?;
+            Ok(hasher.finalize())
+        })
+        .map_err(|err| RustSourceProviderError::Digest(format!("read {}: {err}", path.display())))
 }
 
 fn directory_digest_blake3(dir: &Path) -> Result<String, RustSourceProviderError> {
@@ -8614,6 +8646,44 @@ mod tests {
     const RUST_BOOTSTRAP_PATCH_PLAN_MIN_OPERATIONS: usize = 6;
     #[cfg(unix)]
     const EXECUTABLE_MODE: u32 = 0o755;
+
+    #[cfg(unix)]
+    #[test]
+    fn generated_stage_rejects_script_changed_after_producer_render_before_launch() {
+        let temp = tempfile::tempdir().unwrap();
+        let script = temp.path().join("stage.sh");
+        let log = temp.path().join("stage.log");
+        let marker = temp.path().join("unexpected-execution");
+        let producer_bytes = b"#!/bin/sh\nexit 0\n";
+        fs::write(&script, producer_bytes).unwrap();
+        fs::write(&script, format!("#!/bin/sh\nprintf launched > {}\n", shell_quote(&marker.display().to_string())))
+            .unwrap();
+        super::make_executable(&script).unwrap();
+
+        let expected_digest = blake3::hash(producer_bytes);
+        let error = run_generated_script_with_log(&script, &log, None, &expected_digest).unwrap_err();
+        assert!(error.to_string().contains("differs from producer-rendered bytes"));
+        assert!(!log.exists());
+        assert!(!marker.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn generated_stage_launches_unchanged_producer_rendered_script() {
+        let temp = tempfile::tempdir().unwrap();
+        let script = temp.path().join("stage.sh");
+        let log = temp.path().join("stage.log");
+        let marker = temp.path().join("expected-execution");
+        let producer_bytes = format!("#!/bin/sh\nprintf launched > {}\n", shell_quote(&marker.display().to_string()));
+        let expected_digest = blake3::hash(producer_bytes.as_bytes());
+        fs::write(&script, producer_bytes).unwrap();
+        super::make_executable(&script).unwrap();
+
+        let status = run_generated_script_with_log(&script, &log, None, &expected_digest).unwrap();
+        assert!(status.success());
+        assert_eq!(fs::read(marker).unwrap(), b"launched");
+        assert!(log.is_file());
+    }
 
     #[test]
     fn generated_script_command_uses_selected_interpreter_without_ambient_fallback() {
