@@ -726,6 +726,7 @@ mod tests {
         ) as Arc<dyn DirectoryService>;
         let pathinfo_service = Arc::new(RejectingPutPathInfoService::new());
         let handle = StoreHandle::from_services_with_store_dir(
+            crate::StoreBackend::Snix,
             StoreHandleServices {
                 blob_service,
                 directory_service,
@@ -736,7 +737,8 @@ mod tests {
                 publishers: Vec::new(),
             },
             STORE_DIR.to_string(),
-        );
+        )
+        .unwrap();
         (handle, pathinfo_service)
     }
 

@@ -147,6 +147,7 @@ where
 {
     let (blob_service, directory_service, pathinfo_service) = services;
     let store = crunch_store::StoreHandle::from_services_with_store_dir(
+        crunch_store::StoreBackend::Snix,
         crunch_store::StoreHandleServices {
             blob_service: std::sync::Arc::new(blob_service),
             directory_service: std::sync::Arc::new(directory_service),
@@ -157,7 +158,8 @@ where
             publishers: Vec::new(),
         },
         nix_compat::store_path::STORE_DIR.to_string(),
-    );
+    )
+    .unwrap();
     crunch_build::Builder::from_store_parts(
         store.into_builder_store_parts(),
         build_service,
@@ -772,6 +774,7 @@ fn make_fetch_builder(
         NonZeroUsize::new(FETCH_TEST_PATH_INFO_CAPACITY).unwrap(),
     );
     let store = crunch_store::StoreHandle::from_services_with_store_dir(
+        crunch_store::StoreBackend::Snix,
         crunch_store::StoreHandleServices {
             blob_service: std::sync::Arc::new(blob_service),
             directory_service: std::sync::Arc::new(directory_service),
@@ -782,7 +785,8 @@ fn make_fetch_builder(
             publishers: Vec::new(),
         },
         nix_compat::store_path::STORE_DIR.to_string(),
-    );
+    )
+    .unwrap();
     let crunch_store::PipelineStoreParts {
         build_store,
         action_results,

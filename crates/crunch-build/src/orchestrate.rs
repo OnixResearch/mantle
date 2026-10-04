@@ -316,6 +316,7 @@ where BServ: BuildService + 'static
     {
         let output_dir_str = output_dir.to_str().unwrap_or(store_dir).to_string();
         let store = crunch_store::StoreHandle::from_services_with_store_dir(
+            crunch_store::StoreBackend::Snix,
             crunch_store::StoreHandleServices {
                 blob_service: Arc::new(blob_service) as Arc<dyn BlobService>,
                 directory_service: Arc::new(directory_service) as Arc<dyn DirectoryService>,
@@ -326,7 +327,8 @@ where BServ: BuildService + 'static
                 publishers: Vec::new(),
             },
             store_dir.to_string(),
-        );
+        )
+        .unwrap();
         Self::from_store_parts(
             store.into_builder_store_parts(),
             build_service,
@@ -358,6 +360,7 @@ where BServ: BuildService + 'static
         let output_dir_str = output_dir.to_str().unwrap_or(store_dir).to_string();
         let state_dir = state_dir.unwrap_or_else(|| PathBuf::from("/tmp/crunch-no-state"));
         let store = crunch_store::StoreHandle::from_services_with_store_dir(
+            crunch_store::StoreBackend::Snix,
             crunch_store::StoreHandleServices {
                 blob_service,
                 directory_service,
@@ -368,7 +371,8 @@ where BServ: BuildService + 'static
                 publishers: Vec::new(),
             },
             store_dir.to_string(),
-        );
+        )
+        .unwrap();
         Self::from_store_parts(
             store.into_builder_store_parts(),
             build_service,
@@ -1825,6 +1829,7 @@ mod tests {
         .unwrap();
         let destination_root = tempfile::tempdir().unwrap();
         let destination = crunch_store::StoreHandle::from_services_with_store_dir(
+            crunch_store::StoreBackend::Snix,
             crunch_store::StoreHandleServices {
                 blob_service: Arc::new(MemoryBlobService::default()),
                 directory_service: Arc::new(tmp_ds()),
@@ -1835,7 +1840,8 @@ mod tests {
                 publishers: Vec::new(),
             },
             nix_compat::store_path::STORE_DIR.to_string(),
-        );
+        )
+        .unwrap();
         let mut reader = std::io::Cursor::new(archive);
         let import_report =
             crunch_store::import_store_archive(&destination, &mut reader, &crunch_store::ArchiveImportOptions {
@@ -4732,6 +4738,7 @@ mod tests {
         crunch_store::RootRegistry,
     ) {
         let store = crunch_store::StoreHandle::from_services_with_store_dir(
+            crunch_store::StoreBackend::Snix,
             crunch_store::StoreHandleServices {
                 blob_service: Arc::new(blob_service),
                 directory_service: Arc::new(directory_service),
@@ -4742,7 +4749,8 @@ mod tests {
                 publishers: Vec::new(),
             },
             nix_compat::store_path::STORE_DIR.to_string(),
-        );
+        )
+        .unwrap();
         let crunch_store::PipelineStoreParts {
             build_store,
             action_results,

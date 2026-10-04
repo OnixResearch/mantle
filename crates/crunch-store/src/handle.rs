@@ -1156,18 +1156,23 @@ impl StoreHandle {
         })
     }
 
-    /// Construct a StoreHandle from pre-built services (for tests).
-    pub fn from_services(services: StoreHandleServices) -> Self {
-        Self::from_services_with_store_dir(services, nix_compat::store_path::STORE_DIR.to_string())
-    }
-
-    /// Like [StoreHandle::from_services] but with a custom store directory prefix.
-    pub fn from_services_with_store_dir(services: StoreHandleServices, store_dir: String) -> Self {
+    /// Construct a Snix handle from pre-built services for focused compatibility tests.
+    /// Casita requires its durable repository; use `open` with an explicit `StoreConfig`.
+    pub fn from_services_with_store_dir(
+        backend: StoreBackend,
+        services: StoreHandleServices,
+        store_dir: String,
+    ) -> Result<Self, Error> {
+        if backend != StoreBackend::Snix {
+            return Err(Error::Store(
+                "casita-store-services-unsupported: open the durable Casita repository".to_string(),
+            ));
+        }
         let ca_mappings = CaMappings::load(&services.state_dir);
         let advisory_metadata_cache = AdvisoryMetadataCache::load(&services.state_dir);
         let action_result_stores = configured_action_result_stores(&services.state_dir, &[], &[]);
-        Self {
-            backend: StoreBackend::Snix,
+        Ok(Self {
+            backend,
             casita_store: None,
             blob_service: services.blob_service.clone(),
             directory_service: services.directory_service.clone(),
@@ -1197,7 +1202,7 @@ impl StoreHandle {
             root_registration: None,
             publishers: services.publishers,
             pending_publication_steps: Vec::new(),
-        }
+        })
     }
 
     /// Arc-cloned blob service.
@@ -4197,6 +4202,7 @@ mod tests {
                 as Arc<dyn PathInfoService>;
 
         StoreHandle::from_services_with_store_dir(
+            StoreBackend::Snix,
             StoreHandleServices {
                 blob_service,
                 directory_service,
@@ -4208,6 +4214,7 @@ mod tests {
             },
             store_dir.to_string(),
         )
+        .unwrap()
     }
 
     fn test_handle_with_remote(state_dir: &Path) -> (StoreHandle, Arc<dyn PathInfoService>) {
@@ -4227,6 +4234,7 @@ mod tests {
                 as Arc<dyn PathInfoService>;
 
         let handle = StoreHandle::from_services_with_store_dir(
+            StoreBackend::Snix,
             StoreHandleServices {
                 blob_service,
                 directory_service,
@@ -4237,8 +4245,40 @@ mod tests {
                 publishers: Vec::new(),
             },
             "/nix/store".to_string(),
-        );
+        )
+        .unwrap();
         (handle, remote)
+    }
+
+    #[test]
+    fn synthetic_services_reject_casita_before_opening_state() {
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("state");
+        let output = root.path().join("store");
+        let services = StoreHandleServices {
+            blob_service: Arc::new(MemoryBlobService::default()),
+            directory_service: Arc::new(
+                RedbDirectoryService::new_temporary(
+                    "synthetic-casita-test".to_string(),
+                    RedbDirectoryServiceConfig::default(),
+                )
+                .unwrap(),
+            ),
+            pathinfo_service: Arc::new(LruPathInfoService::with_capacity(
+                "synthetic-casita-test".to_string(),
+                NonZeroUsize::new(32).unwrap(),
+            )),
+            remote_pathinfo: None,
+            state_dir: state.clone(),
+            output_dir_str: output.display().to_string(),
+            publishers: Vec::new(),
+        };
+        let error = StoreHandle::from_services_with_store_dir(StoreBackend::Casita, services, "/nix/store".to_string())
+            .err()
+            .expect("Casita requires its repository, not arbitrary Snix services");
+        assert!(error.to_string().contains("casita-store-services-unsupported"), "{error}");
+        assert!(!state.exists());
+        assert!(!output.exists());
     }
 
     fn test_output(name: &str, digest_byte: u8) -> StorePath<String> {
@@ -6834,6 +6874,7 @@ mod tests {
             .unwrap(),
         ) as Arc<dyn DirectoryService>;
         let mut handle = StoreHandle::from_services_with_store_dir(
+            StoreBackend::Snix,
             StoreHandleServices {
                 blob_service,
                 directory_service,
@@ -6844,7 +6885,8 @@ mod tests {
                 publishers: Vec::new(),
             },
             "/nix/store".to_string(),
-        );
+        )
+        .unwrap();
         let expected_request_error =
             format!("cache: remote-substitution-request-digest-mismatch: output {requested_path}");
         let expected_error = format!(

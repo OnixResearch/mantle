@@ -1415,6 +1415,7 @@ mod tests {
             .unwrap(),
         ) as Arc<dyn DirectoryService>;
         StoreHandle::from_services_with_store_dir(
+            crate::StoreBackend::Snix,
             StoreHandleServices {
                 blob_service,
                 directory_service,
@@ -1426,6 +1427,7 @@ mod tests {
             },
             store_dir.to_string(),
         )
+        .unwrap()
     }
 
     struct PutFailingPathInfoService {

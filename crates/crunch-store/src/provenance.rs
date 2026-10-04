@@ -1720,6 +1720,7 @@ mod tests {
         )) as Arc<dyn PathInfoService>;
         let (signing_key, verifying_key) = parse_keypair(TEST_SIGNING_KEY).unwrap();
         let handle = StoreHandle::from_services_with_store_dir(
+            crate::StoreBackend::Snix,
             StoreHandleServices {
                 blob_service: blob.clone(),
                 directory_service: directory.clone(),
@@ -1730,7 +1731,8 @@ mod tests {
                 publishers: Vec::new(),
             },
             TEST_STORE_PREFIX.to_string(),
-        );
+        )
+        .unwrap();
         ScanFixture {
             _temp: temp,
             handle,
