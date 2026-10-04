@@ -7,11 +7,12 @@ Proposed (2026-09-30)
 Implementation is partial, and this record is not Accepted. In
 `adopt-casita-store-backend`, T2.5, T2.10, T2.13, T2.15, T3.3, T3.4, T3.5,
 and T3.6 are checked from recorded runs; 28 tasks remain open. In
-`add-store-backend-selection`, T1.1–T1.4, T2.1–T2.2, T2.4–T2.7, T3.4,
-and T4.1–T4.2 are checked from the preserved pre-selection goldens,
-combined selection/identity/negative fixtures, and operator documentation;
-six tasks, including the full post-change quality and archive gates, remain
-open in that change's `tasks.md`. The record claims only tested behavior
+`add-store-backend-selection`, T1.1–T1.4, T2.1–T2.7, T3.2–T3.4,
+and T4.1–T4.3 are checked from preserved pre-selection goldens,
+combined selection/identity/negative fixtures, the specified focused
+store and first-party quality gates, and operator documentation.
+Only T3.1 and T4.4 remain open in that change's `tasks.md`. The
+record claims only tested behavior
 within [Evidence scope](#evidence-scope). The final repository quality gates
 for both changes have not all passed: the 2026-09-30 runs recorded strict
 Clippy, the first-party workspace suite, and `cargo deny` failures. Targeted
@@ -486,8 +487,9 @@ releases only roots marked evictable, and Mantle never marks one.
   the public open mints a v2 `snix` identity on identity-less populated state
   and still resolves its PathInfo, and a `casita` marker (alone or beside Snix
   files, under either backend) or unknown content under `casita` fails with
-  `store-backend-mismatch` and changes nothing. Selection tasks T2.4, T3.2, and
-  T3.4 stay open for their other fixtures.
+  `store-backend-mismatch` and changes nothing. At this intermediate run,
+  selection tasks T2.4, T3.2, and T3.4 still needed other fixtures; the later
+  combined runs described below checked them.
 - Decision 4 applies to the whole command, not only to the store open.
   Selection Run 12 shows `mantle build` under `casita`, against a state
   directory recorded as `snix`, writing `<state-dir>/signing-key` before the
@@ -499,7 +501,9 @@ releases only roots marked evictable, and Mantle never marks one.
   fail with `store-backend-mismatch`, the state tree keeps every path and byte,
   and no signing key appears. A `casita` base under a `snix` writable state
   fails the same way, with both trees unchanged. The runs cover those three
-  cases only. Selection tasks T2.4, T2.5, and T3.2 stay open.
+  cases only. At that intermediate run, selection tasks T2.4, T2.5, and
+  T3.2 still needed their remaining fixtures; later combined runs checked
+  them.
 - Casita links into every Mantle binary, including Snix-only use. The graph
   gains, among others, `fastcdc` 5 beside 3.2.1, `nix-archive` 0.6.0 beside
   the 0.1.0 adopted in
@@ -749,31 +753,46 @@ Evidence added on 2026-10-04 in `add-store-backend-selection`:
   `evidence/finish-inventory-2026-10-04.md` inventories store constructors
   and launchers; `docs/store-backends.md` documents the explicit selector,
   identity migration, capability bounds and blocker catalog.
-- `evidence/finish-conformance-2026-10-04.md` records a combined source and
-  evidence run of all 13 `store_archive_cli` tests: both default and explicit
-  Snix match that historical golden with the same root and signer. A
-  parameterized Snix/Casita core rail exercises real signed admission,
-  strict closure, ActionResult reuse, archive transfer, independently verified
-  second signer, no mixed backend, and stale/accepted plan-bound GC. The
-  preserved **first** 7ec rail capture is the input for same-key signed
-  paths, NARs, reuse, archive and selected canonical GC consumer-fact
-  comparisons at its identical absolute root and at portable roots;
-  later captures and every observed old `read_dir` order remain recorded
-  as counterexamples to a universal numeric execution-ID claim. Exact
-  old-vs-selected GC plan-ID parity is claimed **only** for the original
-  two-path `baseline-keep`/`baseline-candidate` fixed-root fixture. T3.1
-  still needs remaining optional/bound fixtures. The source-only capability
-  checker initially exited 1 with three authority escapes; after named
-  `StoreAdmin` sign/verify operations and the exact, justified bootstrap
-  composition-root declaration, the owner reported a passing checker
-  over 558 files with zero raw-service, writable-authority and
-  handle-construction escapes. This does not complete every T4.3 command
-  or the Casita change, and neither targeted suite is a passing
-  repository-wide quality gate.
+- `evidence/finish-conformance-2026-10-04.md` records a full **14/14**
+  `store_archive_cli` run on the combined source, with an explicitly
+  provisioned signer and the original fixed physical rail root. The
+  backend-parameterized Snix/Casita rail exercises signed admission,
+  closure, ActionResult reuse, archive transfer, an independently verified
+  second signer, mismatch and plan-bound GC, actual Snix overlay, batch,
+  unsigned Nario and Rust-cache operations, and Casita's real 1,024/1,025
+  root-commit bound and fail-closed optional branches. Separately, the
+  same-profile test-only disabled Rust cache rejects cache use while
+  signed PathInfo-backed ActionResult output still reuses after reopen.
+  Signed Casita Nario 1,024/1,025 import regressions prove the over-bound
+  error leaves durable directory/file bytes unchanged; they make no claim
+  about transient in-memory staging or aggregate resource safety.
+  The preserved **first** 7ec three-path rail capture supplies same-key
+  signed PathInfo/NAR and canonicalized GC consumer-fact comparisons, not
+  raw numerical plan-ID equality: its first observed plan ID differs from
+  the selected canonical one. Exact old-vs-selected GC plan-ID parity is
+  claimed only for the original two-path fixed-root fixture. T3.1 remains
+  unchecked pending an explicit reading of the requirement that **every**
+  positive fixture reproduce its golden; no historical capture was
+  rewritten. T2.3's five launcher source contracts and bounded child
+  executions do not claim a full local remote-worker or fixed-point build.
+  T3.2's runtime negatives preserve state bytes, while a separate Rust
+  `StoreConfig`-without-`backend` caller fails compilation with `E0063`
+  against a byte-identical seeded state, not a fabricated runtime blocker.
+  Final post-cherry store-core **405/405**, archive CLI **14/14**,
+  and focused Mantle bin store/backend, store-command and Rust-cache
+  selectors **1/1**, **6/6** and **4/4** passed. The final published
+  source branch's strict touched-first-party `--no-deps` Clippy and
+  rustfmt gates passed; the capability boundary checker scanned 558
+  files with zero authority escapes, and diff plus pinned-policy Cairn
+  validation and proposal/design/tasks gates passed. Vendor-inclusive
+  Clippy and broad Mantle bin failures remain separate nonclaims.
+  These selected fixtures and checks do not establish repository-wide
+  gates or release eligibility.
 
-Evidence that does not exist yet: the remaining selection negatives,
-forwarding, and profile fixtures in one passing combined tree; root-race
-fixtures, remaining batch fixtures, and trust-policy fixtures for Casita;
+Evidence that does not exist yet: an agreed interpretation or resolution
+of the supplemental three-path raw GC golden clause needed for T3.1 and
+selection archive eligibility; root-race, remaining batch, and trust-policy
+fixtures for the separate Casita change;
 castore payload-root fixtures; for T1.2, a vendor build
 from a clean checkout and the confirmation that every toolchain, including
 self-build source-bundle profiles, meets Casita's `rust-version`; for T4.6,

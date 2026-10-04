@@ -55,11 +55,15 @@ locale/time, and a quota-safe pinned `TMPDIR`: real Snix overlay,
 atomic batch, unsigned import and Rust-cache operations and actual
 Casita 1,024-accept/1,025-before-mutation bounds and fail-closed
 checks. The earlier unpinned `/tmp` quota failure is retained as an
-environment-only red run, not a source defect. T3.3 is checked. T4.3 stays
-open until its **specified focused** store/CLI suites, strict Clippy,
-rustfmt, checker, diff and Cairn gates finish; a broader Mantle bin
-suite produced two unrelated Slurm/seccomp failures and is reported
-separately rather than misrepresented as a green full suite.
+environment-only red run, not a source defect. T3.3 is checked. T4.3 is
+checked from the post-cherry store-core 405/405, archive CLI 14/14, GC
+CLI 17/17, integration 77/77, focused Mantle bin selectors
+`store_backend` 1/1, `store_cmd` 6/6, and `rust_cache` 4/4, original
+two-path fixed-root golden, first-party strict Clippy and rustfmt on
+published source `61bd4465`, the 558-file zero-escape checker, diff
+check and pinned-policy Cairn gates. The broad Mantle bin run's two
+unrelated Slurm/seccomp failures, vendored-path lint failures, and
+sandbox-body skips remain nonclaims, not a green repository-wide suite.
 T4.4 archive/sync waits for every prerequisite, and ADR
 0082 remains Proposed. A passing structural Cairn gate is not archive
 or implementation acceptance.
@@ -92,5 +96,5 @@ or implementation acceptance.
 
 - [x] [serial] T4.1 Regenerate the operator command contract artifacts with the repository generators and run `scripts/check-operator-command-contract.sh`. Do not hand-edit generated JSON. r[mantle.store_backends.explicit_selection]
 - [x] [serial] T4.2 Document selection, the identity record, the asymmetric rule for directories without an identity record and its provenance risk, capability profiles and bounds, mismatch remediation, the local no-fallback rule, the signing-key rule for signed comparisons, and non-claims in the store documentation and the README index. r[mantle.store_backends.claim_boundary]
-- [ ] [serial] T4.3 Run the focused `crunch-store` and `mantle` store suites, `tools/check_store_capability_boundary.rs`, strict Clippy and rustfmt for touched first-party packages, `git diff --check`, Cairn validation, and the proposal, design, and tasks gates. Preserve exact output in `evidence/`. r[mantle.store_backends.conformance_rail]
+- [x] [serial] T4.3 Run the focused `crunch-store` and `mantle` store suites, `tools/check_store_capability_boundary.rs`, strict Clippy and rustfmt for touched first-party packages, `git diff --check`, Cairn validation, and the proposal, design, and tasks gates. Preserve exact output in `evidence/`. r[mantle.store_backends.conformance_rail]
 - [ ] [serial] T4.4 Sync accepted specs and archive through the isolated branch workflow only after every task above is complete, with retained completion evidence. r[mantle.store_backends.claim_boundary]

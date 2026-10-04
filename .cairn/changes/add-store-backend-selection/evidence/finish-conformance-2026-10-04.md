@@ -639,3 +639,164 @@ Snix/Casita optional-profile/bound one-rail fixture. Its
 `PRECHANGE_SNIX_RAIL_GC_PLAN` lines still display the preserved raw
 three-path numerical mismatch; 14/14 is not a claim that spec
 193–197's literal every-positive-golden clause was resolved.
+
+## Final post-cherry store-core and first-party non-Clippy gate receipts
+
+With both test-only source cherries present, the exact scoped command
+
+```sh
+env CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/selection-target \
+  TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  nix develop -c cargo test -p crunch-store --lib -- --nocapture
+```
+
+passed **405/405** (`artifact://28785`). The output expressly
+includes both signed Nario
+`nario_casita_rejects_1025_new_roots_before_any_publication` and
+`nario_casita_accepts_configured_1024_root_boundary` as passing,
+Casita direct repair-library rejections, and GC over more roots than
+one atomic mutation. This final pass supersedes the earlier
+pre-test-only-cherry 405/405 receipt for the store package.
+
+The first package-scoped `cargo fmt --check --package crunch-store
+--package crunch-build --package crunch-rustc-wrapper --package mantle`
+returned **1** solely for five layout/import-order differences in the
+new `tests/store_archive_cli.rs` optional fixture. The exact
+rustfmt-only changes were committed as `ca34d1c0` on top of the
+behavior-tested fixture commit `2c6c13ab`; no assertion or source
+logic changed. The same package-scoped check on `ca34d1c0`, with
+`CARGO_INCREMENTAL=0`, pinned `TMPDIR`, and
+`nix develop --offline --no-write-lock-file`, then returned **0**.
+The first-party capability boundary checker returned **0** over
+**558 files** with raw-service, writable-authority, and
+handle-construction escape counts all **0**; `git diff --check`
+returned **0**. Those receipts are not substituted for the
+still-running strict first-party Clippy check.
+
+On `2c6c13ab` under the explicitly pinned sibling Cairn policy
+`/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json`
+(SHA-256
+`1501c8c5a387098987d9feef3869e155b47748ae973785ae8f7aee3cfd92bbe9`),
+`nix run --offline --no-write-lock-file
+path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .
+--policy <absolute>` returned **0**, `"issues":[]` and
+`"change_issues":[]`. Proposal, design, and tasks gates for
+`add-store-backend-selection` under the same policy each returned
+**0**, `"valid":true`, `"verdict":"PASS"`, `"issues":[]`; tasks
+reported **16 done/3 open** (T3.1, T4.3, T4.4), not archive
+readiness. A nonfatal upstream `git.onix.computer` HTTP 530 warning
+in some invocations does not replace these observed explicit-policy
+gate results. The layout-only follow-up did not modify Cairn
+change files. At this stage, T4.3 still awaited focused runtime and
+strict first-party lint receipts, recorded below.
+
+## Strict touched-first-party Clippy after vendored-path red
+
+The source quality owner executed the exact scoped command:
+
+```sh
+env -u CRUNCH_CONFIG_DIR -u MANTLE_STORE_BACKEND \
+  LANG=C LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1600000000 \
+  CARGO_INCREMENTAL=0 \
+  CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/t43-first-party-target \
+  TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  nix develop --offline --no-write-lock-file --command \
+  cargo clippy --no-deps -p crunch-store -p crunch-build \
+  -p crunch-rustc-wrapper -p mantle --lib --bins --tests -- -D warnings
+```
+
+Observed **exit 0**, finished after 4m12s, no touched-first-party
+warnings (`artifact://28787`). It began at committed `2c6c13ab`,
+and formatting-only `ca34d1c0` landed while dependencies compiled;
+the precise source text rustc read was not independently captured,
+but that follow-up changed only five rustfmt layouts/import grouping
+in the tested archive fixture, not behavior. The scoped package
+rustfmt check passed on final `ca34d1c0`. The earlier **36 vendored
+`fuse-backend-rs` `clippy::io_other_error` errors** under the broader
+command without `--no-deps` remain an explicit red nonclaim; the
+broader Mantle bin's two Slurm/seccomp failures are likewise not
+concealed or rerun. T4.3 is not checked until every remaining
+focused runtime result is observed.
+
+The source owner then cherry-picked the tested fixture and layout
+commits onto the published source branch as `9c444755` and
+`61bd4465` respectively. The **same exact strict first-party command**
+above ran again on final published source HEAD `61bd4465` and exited
+**0**, `Finished dev ... in 2m 32s`, with no first-party warnings.
+This final-source run eliminates the prior detached run's uncertain
+layout-only rustc-source timing. On the same published HEAD, the
+four-package rustfmt, 558-file zero-escape checker,
+`git diff --check`, pinned-policy Cairn validate and
+proposal/design/tasks gates all passed, the latter still reporting
+**16 done/3 open** *before* the final evidence-only T4.3 task decision.
+
+## Final original two-path exact historical root recheck
+
+After both source/test-only cherries and the layout-only fixture
+commit, this targeted original T1.1 comparison passed **1/1; 13
+filtered**:
+
+```sh
+env CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/selection-target \
+  TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  MANTLE_BASELINE_FIXTURE_ROOT=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-state-compare \
+  nix develop -c sh -c 'env -u CRUNCH_CONFIG_DIR -u MANTLE_STORE_BACKEND LANG=C LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1600000000 cargo test --test store_archive_cli default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts -- --exact --nocapture'
+```
+
+Both default and explicit `snix` iterations compare signed
+PathInfo, NAR and store info/roots facts to the unchanged pre-change
+golden. Because the physical root equals that recorded in the
+original two-path T1.1 golden, the fixture additionally asserts
+**exact numeric plan-ID parity**:
+`b3:787fc14bbf1d8438cbd52cc1be068d68f62967b5634b5a495c938e24565d586c`.
+It does not change the separate supplemental three-path first-7ec
+raw-ID mismatch or authorize T3.1/T4.4 closure.
+
+## Completed focused Mantle bin selector and T4.3 decision
+
+The previously unexecuted third focused selector completed on
+combined source:
+
+```sh
+env CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/selection-target \
+  TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  nix develop -c cargo test -p mantle --bin mantle rust_cache -- --nocapture
+```
+
+**4/4 passed; 2,548 filtered**, including the test-only profile
+without Rust cache with signed PathInfo-backed ActionResult reuse, the
+Rust-cache daemon's global backend/state binding and policy/receipt
+CLI gates, and shared-cache trust requirement. The earlier focused
+Mantle bin `store_backend` **1/1** and `store_cmd` **6/6** remained
+passed; the initial compilation timeout had no third test execution.
+Together with final post-cherry store-core **405/405**, archive CLI
+**14/14**, GC CLI **17/17**, store integration **77/77** (the printed
+sandbox-body skips are nonclaims), the exact original fixed-root
+two-path result above and the strict touched-first-party quality gates
+on published source `61bd4465`, the specified **focused T4.3 gate is
+checked**. This is neither a blanket Mantle bin pass (two unrelated
+Slurm/seccomp failures on the earlier broad run) nor a broad
+vendor-inclusive Clippy pass (36 existing dependency errors), and
+does not establish T3.1 or T4.4.
+
+After checking only T4.3 and updating ADR 0082 while retaining its
+`Proposed` status, the final pinned-policy task gate:
+
+```sh
+env TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  nix run --offline --no-write-lock-file path:/home/brittonr/git/OnixResearch/cairn#cairn \
+  -- gate tasks add-store-backend-selection --root . \
+  --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json
+```
+
+returned exit **0**, `"valid":true`, `"verdict":"PASS"`,
+`"issues":[]`, `"task_done":17`, `"task_todo":2`, for 19 task
+checkboxes (receipt hash
+`adc446e071cdbe5d8fc261cacfd5ace59bdadd6052eee752c0f4ec4682b76aa0`).
+Only T3.1 and T4.4 remain unchecked; the Cairn gate explicitly
+does not establish acceptance, archive, evidence truth, or release.
+
+The same explicit-policy `validate --root . --policy <absolute>`
+after the checkbox and ADR edits returned exit **0**, `"valid":true`,
+`"issues":[]`, `"change_issues":[]` (receipt hash
+`6f27893b2b17e1e64f76cb3d89f179b5ab444aefcc4afcc2bc59d49d322ea9fe`).
