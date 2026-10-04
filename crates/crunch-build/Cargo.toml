@@ -50,6 +50,7 @@ gix = { version = "0.81.0", features = ["blocking-http-transport-reqwest-rust-tl
 [dev-dependencies]
 crunch-attestation = { path = "../crunch-attestation" }
 crunch-glue = { path = "../crunch-glue" }
+crunch-store = { path = "../crunch-store", features = ["test-support"] }
 pretty_assertions = "1.0"
 proptest = "1.11"
 tempfile = "3"

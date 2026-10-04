@@ -117,6 +117,7 @@ pub use handle::OutputSubstitutionReport;
 pub use handle::PersistOutputRequest;
 pub use handle::StoreConfig;
 pub use handle::StoreHandle;
+#[cfg(any(test, feature = "test-support"))]
 pub use handle::StoreHandleServices;
 pub use handle::VerifiedSourceBatchEntry;
 pub use handle::VerifiedSourceBatchResult;

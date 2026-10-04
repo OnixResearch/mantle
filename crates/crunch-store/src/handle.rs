@@ -426,10 +426,9 @@ enum DeltaAttemptResult {
     },
 }
 
-/// Bundles all store services behind `Arc<dyn ...>`. The single point of
-/// contact between crunch-build (or any consumer) and the storage layer.
-///
-/// Pre-built services for constructing a StoreHandle in tests.
+/// Pre-built services for the test-only injected Snix handle.
+/// Durable callers open a selected backend with `StoreConfig`.
+#[cfg(any(test, feature = "test-support"))]
 pub struct StoreHandleServices {
     pub blob_service: Arc<dyn BlobService>,
     pub directory_service: Arc<dyn DirectoryService>,
@@ -1157,7 +1156,11 @@ impl StoreHandle {
     }
 
     /// Construct a Snix handle from pre-built services for focused compatibility tests.
-    /// Casita requires its durable repository; use `open` with an explicit `StoreConfig`.
+    /// Injected services are caller-owned; this preflights identity before reading
+    /// shell metadata but does not bind identity or open services. Durable callers
+    /// must use `open`, which also constructs the selected backend's services.
+    /// Casita cannot be injected without its durable repository.
+    #[cfg(any(test, feature = "test-support"))]
     pub fn from_services_with_store_dir(
         backend: StoreBackend,
         services: StoreHandleServices,
@@ -1168,6 +1171,7 @@ impl StoreHandle {
                 "casita-store-services-unsupported: open the durable Casita repository".to_string(),
             ));
         }
+        StoreConfig::preflight_backend_identity_for(backend, &services.state_dir, &store_dir, &[])?;
         let ca_mappings = CaMappings::load(&services.state_dir);
         let advisory_metadata_cache = AdvisoryMetadataCache::load(&services.state_dir);
         let action_result_stores = configured_action_result_stores(&services.state_dir, &[], &[]);
@@ -4279,6 +4283,56 @@ mod tests {
         assert!(error.to_string().contains("casita-store-services-unsupported"), "{error}");
         assert!(!state.exists());
         assert!(!output.exists());
+    }
+
+    #[tokio::test]
+    async fn synthetic_snix_services_reject_recorded_casita_before_loading_foreign_state() {
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("casita-state");
+        let casita_output = root.path().join("casita-output");
+        let synthetic_output = root.path().join("synthetic-output");
+        let casita = StoreHandle::open(StoreConfig::new(
+            StoreBackend::Casita,
+            state.clone(),
+            casita_output,
+            "/nix/store".to_string(),
+        ))
+        .await
+        .unwrap();
+        drop(casita);
+        let mut foreign_mappings = CaMappings::default();
+        foreign_mappings.insert("/nix/store/foreign.drv", "out", "/nix/store/foreign-output");
+        foreign_mappings.save_checked(&state).unwrap();
+        std::fs::write(state.join("advisory-meta-cache.json"), b"[]").unwrap();
+        let before = snapshot_test_repository(&state);
+
+        let services = StoreHandleServices {
+            blob_service: Arc::new(MemoryBlobService::default()),
+            directory_service: Arc::new(
+                RedbDirectoryService::new_temporary(
+                    "synthetic-foreign-state-test".to_string(),
+                    RedbDirectoryServiceConfig::default(),
+                )
+                .unwrap(),
+            ),
+            pathinfo_service: Arc::new(LruPathInfoService::with_capacity(
+                "synthetic-foreign-state-test".to_string(),
+                NonZeroUsize::new(32).unwrap(),
+            )),
+            remote_pathinfo: None,
+            state_dir: state.clone(),
+            output_dir_str: synthetic_output.display().to_string(),
+            publishers: Vec::new(),
+        };
+        let error = StoreHandle::from_services_with_store_dir(StoreBackend::Snix, services, "/nix/store".to_string())
+            .err()
+            .expect("synthetic Snix services must reject recorded Casita state");
+        assert!(
+            error.to_string().contains("store-backend-mismatch: requested snix, state declares casita"),
+            "{error}"
+        );
+        assert_eq!(snapshot_test_repository(&state), before, "wrong-backend synthetic open changed Casita state");
+        assert!(!synthetic_output.exists(), "wrong-backend synthetic open created output");
     }
 
     fn test_output(name: &str, digest_byte: u8) -> StorePath<String> {
