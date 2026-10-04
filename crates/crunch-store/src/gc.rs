@@ -1702,7 +1702,13 @@ fn collect_dead_blob_files(
     }
     let mut scanned_entries: u32 = 0;
     scan_blob_dir(&root, &mut scanned_entries, live_digests, &mut dead_paths)?;
+    // Reclaim observations enter the plan hash in this order, not as a set.
+    canonicalize_dead_blob_paths(&mut dead_paths);
     Ok(dead_paths)
+}
+
+fn canonicalize_dead_blob_paths(dead_paths: &mut [PathBuf]) {
+    dead_paths.sort_unstable();
 }
 
 fn scan_blob_dir(
@@ -2359,6 +2365,86 @@ mod tests {
         let listed = crate::store_list(reopened.pathinfo_service().as_ref()).await.unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].0, keep_path.to_string());
+    }
+
+    #[test]
+    fn reversed_blob_enumeration_has_the_same_reclaim_observations_and_plan_id() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let blob_dir = state_dir.path().join("blobs").join("blobs").join("b3").join("aa");
+        let blob_paths = ["11", "22", "33"].map(|suffix| blob_dir.join(format!("aa{}", suffix.repeat(31))));
+        std::fs::create_dir_all(&blob_dir).unwrap();
+        for path in &blob_paths {
+            std::fs::write(path, b"orphaned-index").unwrap();
+        }
+
+        let mut forward = blob_paths.to_vec();
+        let mut reversed = blob_paths.iter().rev().cloned().collect::<Vec<_>>();
+        canonicalize_dead_blob_paths(&mut forward);
+        canonicalize_dead_blob_paths(&mut reversed);
+        let empty_paths: [PathBuf; 0] = [];
+        let candidates: [String; 0] = [];
+        let core_plan_id = [0_u8; blake3::OUT_LEN];
+        let retention_plan_id = [1_u8; blake3::OUT_LEN];
+        let report_for_paths = |blob_indexes: &[PathBuf]| {
+            let reclaim = compute_reclaimable_bytes(ReclaimObservationPaths {
+                orphaned_on_disk: &empty_paths,
+                artifact_attestations: &empty_paths,
+                closure_attestations: &empty_paths,
+                blob_indexes,
+                blob_chunks: &empty_paths,
+                action_result_records: &empty_paths,
+                action_result_indexes: &empty_paths,
+            })
+            .unwrap();
+            let plan_id = execution_plan_id(ExecutionPlanIdentityInput {
+                core_plan_id: &core_plan_id,
+                retention_plan_id: &retention_plan_id,
+                overlay_plan_identity: None,
+                candidate_paths: &candidates,
+                reclaim_observations: &reclaim.observations,
+            });
+            (reclaim.observations, plan_id)
+        };
+        let forward_plan = report_for_paths(&forward);
+        let reversed_plan = report_for_paths(&reversed);
+        assert_eq!(forward_plan.0.len(), blob_paths.len());
+        assert!(forward_plan.0.iter().all(|observation| observation.category == RECLAIM_CATEGORY_BLOB_INDEX));
+        assert_eq!(forward_plan, reversed_plan);
+    }
+
+    #[tokio::test]
+    async fn blob_creation_order_does_not_change_plan_but_changed_blob_facts_stale_it() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let mut store = open_store(state_dir.path(), output_dir.path()).await;
+        let blob_dir = state_dir.path().join("blobs").join("blobs").join("b3").join("aa");
+        let blob_paths = ["11", "22", "33"].map(|suffix| blob_dir.join(format!("aa{}", suffix.repeat(31))));
+        std::fs::create_dir_all(&blob_dir).unwrap();
+        for path in &blob_paths {
+            std::fs::write(path, b"orphaned-index").unwrap();
+        }
+        let first = store.garbage_collect(None).await.unwrap();
+        assert_eq!(first.reclaim_observations.len(), blob_paths.len());
+        assert!(first.reclaim_observations.iter().all(|observation| observation.category == RECLAIM_CATEGORY_BLOB_INDEX));
+
+        for path in &blob_paths {
+            std::fs::remove_file(path).unwrap();
+        }
+        std::fs::remove_dir(&blob_dir).unwrap();
+        std::fs::create_dir(&blob_dir).unwrap();
+        for path in blob_paths.iter().rev() {
+            std::fs::write(path, b"orphaned-index").unwrap();
+        }
+        let reordered = store.garbage_collect(None).await.unwrap();
+        assert_eq!(first.reclaim_observations, reordered.reclaim_observations);
+        assert_eq!(first.plan_id, reordered.plan_id);
+
+        std::fs::write(&blob_paths[0], b"orphaned-index-with-changed-size").unwrap();
+        let changed = store.garbage_collect(None).await.unwrap();
+        assert_ne!(first.plan_id, changed.plan_id);
+        let error = store.garbage_collect(Some(&first.plan_id)).await.expect_err("changed blob size must stale the plan");
+        assert!(matches!(error, Error::Gc(message) if message.contains("stale-gc-plan")));
+        assert!(blob_paths.iter().all(|path| path.exists()));
     }
 
     #[tokio::test]
