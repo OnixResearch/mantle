@@ -1,0 +1,4 @@
+cwd=/home/brittonr/.cargo-target/mantle-v2-cairn-dev46/source
+HEAD=a72c645861a0248e53d32848cb8fa51f22cb106c
+archive_date_utc=2026-10-04
+command=env HOME=/home/brittonr/.cargo-target/mantle-v2-cairn-dev46/home TMPDIR=/home/brittonr/.cargo-target/mantle-v2-cairn-dev46/tmp XDG_CACHE_HOME=/home/brittonr/.cargo-target/mantle-v2-cairn-dev46/cache CAIRN_ARCHIVE_DATE=2026-10-04 /home/brittonr/git/OnixResearch/cairn/result-cairn/bin/cairn archive add-dynamic-plan-source-slices --root . --execute

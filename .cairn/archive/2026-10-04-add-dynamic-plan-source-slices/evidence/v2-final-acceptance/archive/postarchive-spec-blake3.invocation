@@ -1,0 +1,3 @@
+cwd=/home/brittonr/.cargo-target/mantle-v2-cairn-dev46/source
+HEAD=a72c645861a0248e53d32848cb8fa51f22cb106c
+command=b3sum .cairn/specs/dynamic-plan-source-slices/spec.md
