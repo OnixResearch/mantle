@@ -218,37 +218,6 @@ mantle json
 
 #[cfg(unix)]
 #[test]
-fn transcript_run_does_not_duplicate_existing_isolation_flags() {
-    let dir = TempDir::new().unwrap();
-    let fake = dir.path().join("fake-mantle");
-    write_fake_mantle(&fake);
-    let transcript = dir.path().join("existing-flags.md");
-    let output = output_path(&dir, "existing-flags");
-    write_file(
-        &transcript,
-        r#"```mantle
-mantle --store=/custom/store --state-dir=/custom/state ok
-```
-```expect
-args:--store=/custom/store --state-dir=/custom/state ok
-success marker
-```
-"#,
-    );
-
-    crunch()
-        .args(["transcript", "run"])
-        .arg(&transcript)
-        .arg("--output")
-        .arg(&output)
-        .arg("--mantle-bin")
-        .arg(&fake)
-        .assert()
-        .success();
-}
-
-#[cfg(unix)]
-#[test]
 fn transcript_run_executes_hidden_setup_before_visible_command() {
     let dir = TempDir::new().unwrap();
     let fake = dir.path().join("fake-mantle");

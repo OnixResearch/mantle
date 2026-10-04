@@ -447,7 +447,7 @@ fn end_to_end_overlay_build_reads_base_only_input_without_backfill() {
     }
 
     let runtime = tokio::runtime::Runtime::new().unwrap();
-    let result = runtime.block_on(async {
+    let outcome = runtime.block_on(async {
         use snix_build::buildservice::BubblewrapBuildService;
         use snix_store::pathinfoservice::PathInfoService;
         use snix_store::pathinfoservice::RedbPathInfoService;
@@ -530,7 +530,7 @@ fn end_to_end_overlay_build_reads_base_only_input_without_backfill() {
             system: "x86_64-linux".to_string(),
             args: vec![
                 "-c".to_string(),
-                format!("mkdir -p $out && cat {logical_source_path}/input.txt > $out/result.txt"),
+                format!("IFS= read -r line < '{logical_source_path}/input.txt' && printf '%s\\n' \"$line\" > \"$out\""),
             ],
             outputs: vec!["out".to_string()],
             dynamic_plan_outputs: Vec::new(),
@@ -544,15 +544,23 @@ fn end_to_end_overlay_build_reads_base_only_input_without_backfill() {
         let (drv_path, _) = crunch_glue::convert(&derivation, &mut conversion_cache).unwrap();
         let mut registry = DerivationRegistry::default();
         populate_registry(&mut registry, conversion_cache.iter_entries());
-        let outcome = builder.build(&drv_path, &mut registry).await;
+        let report = builder
+            .build_all_report(std::slice::from_ref(&drv_path), &mut registry, 1)
+            .await
+            .expect("base-only overlay build report");
+        assert!(report.failed.is_empty(), "base-only overlay build failures: {:?}", report.failed);
+        assert_eq!(report.outcomes.len(), 1, "base-only overlay must have one root outcome");
+        let outcome = report.outcomes.into_iter().next().expect("one root outcome");
         let selections = builder.take_store_layer_selections();
+        let selected_source_key = source_store_path.to_string();
         let selected_source = selections
             .iter()
-            .find(|selection| selection.store_path == logical_source_path)
+            .find(|selection| selection.store_path == selected_source_key)
             .expect("base-only source layer selection");
         assert_eq!(selected_source.selected_layer, crunch_store::layer::StoreLayer::Base {
             index: BASE_LAYER_INDEX,
         });
+        drop(builder);
 
         let overlay_pathinfo =
             RedbPathInfoService::new("overlay-no-backfill-check".to_string(), RedbPathInfoServiceConfig {
@@ -563,16 +571,18 @@ fn end_to_end_overlay_build_reads_base_only_input_without_backfill() {
             .await
             .unwrap();
         assert!(overlay_pathinfo.get(*source_store_path.digest()).await.unwrap().is_none());
+        let exported_output = outcome
+            .outputs
+            .get("out")
+            .expect("one root output")
+            .store_path
+            .to_absolute_path_with_prefix(overlay_output.path().to_str().unwrap());
+        assert_eq!(std::fs::read(exported_output).unwrap(), b"base-only-input\n");
         outcome
     });
 
-    match result {
-        Ok(outcome) => {
-            assert!(!outcome.cached);
-            assert!(outcome.outputs.contains_key("out"));
-        }
-        Err(error) => eprintln!("SKIP end-to-end overlay build (bwrap failed): {error}"),
-    }
+    assert!(!outcome.cached);
+    assert!(outcome.outputs.contains_key("out"));
 }
 
 // -- CA end-to-end test with bwrap --
