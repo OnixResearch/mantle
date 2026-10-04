@@ -138,23 +138,25 @@ env CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-backend-selection-evide
 ```
 
 Observed `capture_prechange_snix_rail_golden ... ok` (**1 passed, 0 failed,
-7 filtered**). The new, separately keyed
-`prechange-snix-rail-golden-2026-10-04.json` captures the exact serialized
-signed PathInfo bytes for all three rail paths, their NAR SHA-256 and size,
-physical exported bytes, reopen/closure/reuse, archive-import PathInfo facts,
-the two-signer result, the complete dry-run and fresh GC reports, the
-candidate pin/unpin transition, and accepted execution facts. The **first**
-executed supplemental capture is retained byte-for-byte as
-`prechange-snix-rail-unsorted-observed-2026-10-04.json` (SHA-256
+7 filtered**). The **first** separately keyed 7ec rail capture, consumed by
+the selected comparator, is
+`prechange-snix-rail-unsorted-observed-2026-10-04.json`. It records exact
+serialized signed PathInfo bytes for all three rail paths, NAR SHA-256 and
+size, physical exported bytes, reopen/closure/reuse, archive-import PathInfo
+facts, two-signer verification, complete dry-run and fresh GC reports,
+candidate pin/unpin and accepted execution. Its original bytes are retained
+without rewriting (SHA-256
 `e0810f74d24b727ef6e3128bfc574607a18f57c50c5f387225966eb5d5ba768c`);
 it reported index order `4df6, e6a6, d1f4` and plan ID
 `b3:36eb6141fa768f053c08258dc684365f28e908643a2e51bffcb63a0b7cf31491`.
-The supplemental `prechange-snix-rail-golden-2026-10-04.json` is another
-**actual** old-source capture, not a rewritten report; its SHA-256 is
+The other keyed `prechange-snix-rail-golden-2026-10-04.json` is a later
+**actual** old-source capture and a counterexample to deterministic
+prechange GC ordering, **not** the source of the signed/NAR comparator facts.
+It is not a rewritten report; its SHA-256 is
 `4b65f9f0cc4856236a9c0775e866011a0cd46487ff8bf10ec6de1c2849d5eab6`,
 its index order is `e6a6, 4df6, d1f4`, and its old execution ID is
 `b3:f8c01c8b584203afe4f05b68b5ac1b0c4ac3d09a03292d1f52990b16022ed4c9`.
-Neither this rail artifact nor the original T1.1 golden is silently replaced.
+Neither this later rail artifact nor the original T1.1 golden is silently replaced.
 `selected-snix-gc-observed-2026-10-04.json` still retains the original red
 selected-Snix observation from the separate two-path baseline.
 
@@ -206,15 +208,20 @@ Some fixture seeding and admission orders were varied symmetrically in the
 historical harness and selected rail while investigating the old
 `read_dir` traversal. The final fixture restores the **first capture's**
 `child, candidate, retained` constructor/admission order. No retries remain
-in the comparator: a permanent test consumes the retained original
-supplemental golden. Prechange 7ec plan IDs are **nondeterministic** because
-blob directory traversal order entered the hash. The selected source fix
-`eb4b6874` sorts dead `blob-index` and `blob-chunk` paths separately before
-hashing; the historical comparison therefore canonicalizes **only those
-two old-source category runs**, preserving all paths, category boundaries,
-bytes, blockers, candidate and retention facts. It demands selected output
-already be in canonical order. At an identical physical root it also checks
-an exact numeric plan ID if that old capture's order was already canonical;
-otherwise it records both real IDs as distinct, rather than claiming all
-prechange runs had the selected canonical ID. A different physical root
-never licenses a numeric execution-ID comparison.
+in the comparator: the permanent test consumes the **first** retained
+`prechange-snix-rail-unsorted-observed-2026-10-04.json`. Prechange 7ec plan
+IDs are **nondeterministic** because blob directory traversal order entered
+the hash. The selected source fix `eb4b6874` sorts dead `blob-index` and
+`blob-chunk` paths separately before hashing; the historical comparison
+therefore canonicalizes **only those two old-source category runs**,
+preserving all paths, category boundaries, bytes, blockers, candidate and
+retention facts. It demands selected output already be in canonical order.
+At an identical physical root the two real numeric plan IDs are displayed
+as **different observations**, not asserted equal; at a different root no
+numeric ID comparison is made. **Exact** prechange-vs-selected GC plan-ID
+parity is claimed **only** for the original two-path
+`baseline-keep`/`baseline-candidate` T1.1 fixture at the same absolute root,
+where the existing strict default- and explicit-Snix test passed
+`b3:787fc14bbf1d8438cbd52cc1be068d68f62967b5634b5a495c938e24565d586c`.
+For this three-path rail, all-old-run numerical identity equality is
+explicitly **not** a claim.

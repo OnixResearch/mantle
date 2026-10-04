@@ -123,7 +123,22 @@ carry this decision.
 7. One backend-parameterized conformance rail covers the core capabilities,
    stale-plan rejection, identity checks, and, per profile, each optional
    capability's fixtures or its fail-closed fixture. The `snix` run must
-   equal goldens recorded before the change.
+   equal the pre-selection signed/NAR and consumer-fact goldens. Numeric GC
+   execution-ID parity is claimed only for the original two-path
+   `baseline-keep`/`baseline-candidate` fixture at the identical physical
+   root. In the supplemental three-path rail, 7ec filesystem `read_dir`
+   order was nondeterministic and entered the plan hash, so only blob-index
+   and blob-chunk observations are canonically ordered for fact comparison
+   under the selected deterministic GC fix; **not** all prechange numeric
+   plan IDs are claimed equal.
+8. `src/bootstrap.rs::fetch_raw_seed` is the **owned bootstrap CLI
+   selection composition root** under [ADR 0058](0058-limit-store-access-with-concrete-capability-views.md).
+   It receives the already selected backend, preflights the identity before
+   the mutation guard, opens that backend once for the scoped raw-seed
+   command, performs guarded Casita recovery when needed, and immediately
+   splits the handle into `PipelineStoreParts`. Its exact
+   handle-construction checker owner declaration does not allow raw
+   PathInfo access from CLI code or bypass the selection invariant.
 
 | Backend | `overlay-composition` | `atomic-batch-import` | `unsigned-admission` | `rust-unit-cache` |
 | --- | --- | --- | --- | --- |
@@ -739,17 +754,21 @@ Evidence added on 2026-10-04 in `add-store-backend-selection`:
   parameterized Snix/Casita core rail exercises real signed admission,
   strict closure, ActionResult reuse, archive transfer, independently verified
   second signer, no mixed backend, and stale/accepted plan-bound GC. The
-  supplemental 7ec rail golden preserves its **first unsorted** execution,
-  every recorded rerun/order, and the original red selected observation.
-  A selected Snix rail test passes against same-key signed paths, NARs,
-  reuse, archive and canonicalized GC consumer facts at the golden's
-  identical absolute root and at portable roots. The old 7ec numerical
-  execution IDs were nondeterministic; the selected canonical ID differed
-  from the retained old unsorted ID, and no assertion says all prechange
-  runs emitted the selected ID. T3.1 still needs remaining optional/bound
-  fixtures. The source-only capability-boundary checker exited 1 with
-  three existing authority escapes, so T4.3 remains open; neither targeted
-  suite is a passing repository-wide quality gate.
+  preserved **first** 7ec rail capture is the input for same-key signed
+  paths, NARs, reuse, archive and selected canonical GC consumer-fact
+  comparisons at its identical absolute root and at portable roots;
+  later captures and every observed old `read_dir` order remain recorded
+  as counterexamples to a universal numeric execution-ID claim. Exact
+  old-vs-selected GC plan-ID parity is claimed **only** for the original
+  two-path `baseline-keep`/`baseline-candidate` fixed-root fixture. T3.1
+  still needs remaining optional/bound fixtures. The source-only capability
+  checker initially exited 1 with three authority escapes; after named
+  `StoreAdmin` sign/verify operations and the exact, justified bootstrap
+  composition-root declaration, the owner reported a passing checker
+  over 558 files with zero raw-service, writable-authority and
+  handle-construction escapes. This does not complete every T4.3 command
+  or the Casita change, and neither targeted suite is a passing
+  repository-wide quality gate.
 
 Evidence that does not exist yet: the remaining selection negatives,
 forwarding, and profile fixtures in one passing combined tree; root-race

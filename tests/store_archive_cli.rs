@@ -1335,21 +1335,14 @@ fn rail_compare_prechange_gc(golden: &Value, root: &Path, observed: &Value) {
     let fixed_root = Path::new(golden["physical_fixture_root"].as_str().unwrap());
     for field in ["planned", "fresh"] {
         let selected = rail_normalize_gc_paths(observed[field].clone(), root);
-        let historical_actual = rail_normalize_gc_paths(historical[field].clone(), fixed_root);
-        let historical_canonical = rail_canonicalize_historical_gc(historical_actual.clone());
+        let historical_canonical =
+            rail_canonicalize_historical_gc(rail_normalize_gc_paths(historical[field].clone(), fixed_root));
         assert_eq!(selected, historical_canonical, "same-key Snix {field} canonical GC facts changed");
         if root == fixed_root {
-            if historical_actual == historical_canonical {
-                assert_eq!(
-                    observed[field]["plan_id"], historical[field]["plan_id"],
-                    "fixed-root GC identities must match for an originally canonical old-source order"
-                );
-            } else {
-                println!(
-                    "PRECHANGE_SNIX_RAIL_GC_PLAN {field} old_unsorted={} selected_canonical={}",
-                    historical[field]["plan_id"], observed[field]["plan_id"]
-                );
-            }
+            println!(
+                "PRECHANGE_SNIX_RAIL_GC_PLAN {field} old_first={} selected_canonical={}",
+                historical[field]["plan_id"], observed[field]["plan_id"]
+            );
         }
     }
     assert_eq!(observed["after_pin_candidate_paths"], historical["after_pin_candidate_paths"]);
@@ -1694,7 +1687,7 @@ fn rail_assert_snix_prechange(
 #[test]
 fn admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail() {
     let golden: Value = serde_json::from_str(include_str!(
-        "../.cairn/changes/add-store-backend-selection/evidence/prechange-snix-rail-golden-2026-10-04.json"
+        "../.cairn/changes/add-store-backend-selection/evidence/prechange-snix-rail-unsorted-observed-2026-10-04.json"
     ))
     .unwrap();
     let mut snix_signed_pathinfo = None;

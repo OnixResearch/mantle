@@ -10,19 +10,26 @@ decision in `crates/crunch-store/src/backend.rs` and `overlay.rs`, the declared
 blockers and profile in `docs/store-backends.md`, and the still-Proposed ADR
 0082 with its `adr/README.md` index row. T4.1 remains checked from Run 5 in
 `evidence/test-runs-2026-09-30.md`; T4.2 is checked from the operator
-documentation and `README.md` index. A supplemental same-key 7ec golden
-now covers every signed core rail path, NAR, reopen/closure/reuse, archive
-and two-signer consumer fact; the parameterized Snix/Casita core rail passes
-against its *canonicalized* 7ec GC observations under both fixed and portable
-fixture roots. The first old capture and all subsequent GC orders are
-recorded; the old numeric plan IDs differ with unsorted `read_dir` order.
-T3.1 remains open for the rest of its profile-driven optional and bound
-fixtures; a passing core comparator alone is not full T3.1 acceptance.
-T3.2/T3.3/T3.4 and T2.1–T2.7 need their remaining combined-tree criteria,
-not just source locations or targeted subcases. T4.3 is open: the source-only
-capability boundary checker reported three existing authority escapes even
-though scoped tests and lint passes were recorded. T4.4 archive/sync must
-wait for every prerequisite, and ADR 0082 remains Proposed.
+documentation and `README.md` index. The **first preserved** supplemental
+same-key 7ec three-path rail capture supplies signed core paths, NARs,
+reopen/closure/reuse, archive and two-signer facts. The parameterized
+Snix/Casita core rail compares historical GC consumer facts after sorting
+only historical blob-index/blob-chunk observation paths within each
+category, as the selected source does; it passes at the historical fixed
+root and portable roots. All historical reruns and differing old
+`read_dir` orders are retained as evidence, not alternate golden inputs.
+Exact numerical prechange GC plan-ID parity is claimed only for the
+**original two-path** fixed-root baseline-keep/candidate fixture, not the
+three-path rail. This bounded old-source nondeterminism is a T3.1
+exception/non-claim, not a favorable retry. T3.1 remains open for the
+rest of its profile-driven optional and bound fixtures; a passing core
+comparator alone is not full T3.1 acceptance. T3.2/T3.3/T3.4 and
+T2.1–T2.7 need their remaining combined-tree criteria, not just source
+locations or targeted subcases. T4.3 remains open: its source-only checker
+first reported three authority escapes and later passed after named
+capability operations and the exact bootstrap composition-root declaration;
+scoped tests and lints do not complete all quality gates. T4.4 archive/sync
+must wait for every prerequisite, and ADR 0082 remains Proposed.
 
 ## Phase 1: Baseline and contract
 

@@ -110,9 +110,11 @@ remaining T3.3 profile fixtures were executed.
 
 ### Historical 7ec same-rail Snix comparator: canonical facts, not every old ID
 
-After preserving the first 7ec supplemental result and documenting **every
-rerun/order** in `prechange-snix-golden-2026-10-04.md`, the selected rail was
-run at the supplemental golden's **identical absolute physical root**:
+The comparator consumes **only the preserved first** 7ec three-path rail
+capture for signed/NAR and other shared core facts. All executed historical
+reruns and their GC orders are documented in
+`prechange-snix-golden-2026-10-04.md`; none replaced that first input.
+The selected rail was run at the **same absolute physical root**:
 
 ```sh
 test ! -e /home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-rail-compare &&
@@ -138,29 +140,35 @@ only the prechange unsorted `blob-index` and `blob-chunk` observation paths are
 ordered as the selected production `crates/crunch-store/src/gc.rs`
 `canonicalize_dead_blob_paths` does **before hashing**. The selected report
 must already be in this canonical order; path, bytes, blockers, candidate,
-retention and all other report fields remain compared. Exact numeric plan
-IDs are compared only at the historical physical root and only asserted
-equal when that *particular old run* was already canonical. This captured
-old run was **not**. Exact output:
+retention and all other report fields remain compared. For this three-path
+rail, numeric plan IDs are displayed **only at the historical physical root**
+as two observed results; no exact 7ec numerical identity parity is claimed.
+Exact old-vs-selected plan-ID equality is claimed **only** by the existing
+two-path `baseline-keep`/`baseline-candidate` strict test at its identical
+physical root: both default and explicit Snix passed the original golden
+`b3:787fc14bbf1d8438cbd52cc1be068d68f62967b5634b5a495c938e24565d586c`.
+Actual first-three-path capture comparison stdout:
 
 ```text
-PRECHANGE_SNIX_RAIL_GC_PLAN planned old_unsorted="b3:f8c01c8b584203afe4f05b68b5ac1b0c4ac3d09a03292d1f52990b16022ed4c9" selected_canonical="b3:c73dcda6e8949135b7d49298cd219c3845e8eb6e18653d60b8cd5bb9c8b90e95"
-PRECHANGE_SNIX_RAIL_GC_PLAN fresh old_unsorted="b3:f8c01c8b584203afe4f05b68b5ac1b0c4ac3d09a03292d1f52990b16022ed4c9" selected_canonical="b3:c73dcda6e8949135b7d49298cd219c3845e8eb6e18653d60b8cd5bb9c8b90e95"
+PRECHANGE_SNIX_RAIL_GC_PLAN planned old_first="b3:36eb6141fa768f053c08258dc684365f28e908643a2e51bffcb63a0b7cf31491" selected_canonical="b3:c73dcda6e8949135b7d49298cd219c3845e8eb6e18653d60b8cd5bb9c8b90e95"
+PRECHANGE_SNIX_RAIL_GC_PLAN fresh old_first="b3:36eb6141fa768f053c08258dc684365f28e908643a2e51bffcb63a0b7cf31491" selected_canonical="b3:c73dcda6e8949135b7d49298cd219c3845e8eb6e18653d60b8cd5bb9c8b90e95"
 BACKEND_CORE_RAIL snix {"nar_sha256":"42a7f16a040111ab52d03cf78d7178101b4746c983a12551f07b305181f7024e","profile_max_root_changes":null,"retained_store_path":"0000000000068rbfd5hp8rbj5mn6jqbj-rail-retained","signed_count_after_store_sign":2,"stale_plan_blocker":"stale-gc-plan"}
 BACKEND_CORE_RAIL casita {"nar_sha256":"42a7f16a040111ab52d03cf78d7178101b4746c983a12551f07b305181f7024e","profile_max_root_changes":1024,"retained_store_path":"0000000000068rbfd5hp8rbj5mn6jqbj-rail-retained","signed_count_after_store_sign":2,"stale_plan_blocker":"gc-plan-stale"}
 ```
 
-Prechange plan IDs genuinely vary with `read_dir` order; **none of the
-retained 7ec three-path executions claimed above had the selected ID**.
-The selected order `4df6, d1f4, e6a6` is a valid old-source directory
-enumeration order, whereas the archived first capture had
-`4df6, e6a6, d1f4`. `[INFERENCE]` The selected numeric ID is the identity
-that 7ec's unchanged order-sensitive execution hash would give the
-canonical enumeration, not a claim that all or any recorded old runs
-actually emitted it. The old first supplemental artifact, original
-T1.1 golden, and original red selected observation remain unchanged.
-T3.1's still-unrun optional profile/bound branches and T4.3's failed
-capability-boundary check keep those tasks open despite this core comparator.
+Prechange 7ec plan IDs genuinely vary with `read_dir` order; the archived
+first three-path capture had `blob-index` order `4df6, e6a6, d1f4`
+whereas selected Snix deterministically reports `4df6, d1f4, e6a6`.
+The selected canonicalized output matches this **valid old-source
+observation order** as a candidate-and-reclaim *fact* comparison, not as
+observed numerical equality; `[INFERENCE]` the old unsorted enumeration
+could also have yielded this ordered sequence, but none of our recorded
+7ec three-path runs established that plan ID. The original first rail
+artifact, T1.1 golden and red selected-observation artifact are unchanged.
+This bounded pre-existing non-repeatability is an explicit T3.1 exception/
+non-claim, not a favorable-retry golden. T3.1's still-unrun optional
+profile/bound branches keep it open; despite the later corrected source-only
+capability checker pass below, remaining T4.3 quality gates are also open.
 
 The same focused test was rerun without
 `MANTLE_RAIL_FIXTURE_ROOT` (`env -u MANTLE_RAIL_FIXTURE_ROOT` in the command
@@ -184,9 +192,11 @@ synthetic no-Rust-unit-cache profile through a real command and both local
 no-fallback directions. The other source fixtures must still run in the
 **combined source + evidence tree** before their optional/bound branches count
 toward T3.1/T3.3; source locations alone are not passing evidence. The
-fixed-path prechange-vs-selected GC plan parity now passes, but all T4.3
-workspace gates remain open. No general correctness, durability, GC safety,
-or release eligibility claim follows from this rail.
+original two-path fixed-root prechange-vs-selected GC plan ID comparison
+passes; the supplemental three-path rail makes no exact numeric plan-ID
+parity claim. Other T4.3 workspace gates remain open. No general
+correctness, durability, GC safety, or release eligibility claim follows
+from this rail.
 
 ## Source-only quality observation (not a completed selection gate)
 
@@ -197,8 +207,23 @@ The same owner's pinned-Nix isolated-target run of
 **1** with `files_scanned=558`, three reported findings:
 `src/bootstrap.rs:825` (`handle-construction`),
 `src/store_cmd.rs:220` and `:448` (two `raw-service-escape`
-`.pathinfo_service()` usages). The owner examined these callsites as existing
-bootstrap construction and direct sign/verify access predating the pure
-decision split; no code or allowlist was altered to conceal the failure.
-The source-only run is not an all-package build or conformance pass. T4.3
-remains open, as do archive/sync T4.4 and the ADR acceptance gate.
+`.pathinfo_service()` usages). The first source-only result is preserved
+as the genuinely red observation, not rewritten as a successful gate.
+The source owner subsequently moved sign/verify into named `StoreAdmin`
+operations, made obsolete raw query functions crate-private, and removed
+their public re-exports. The only exact checker owner added is
+`src/bootstrap.rs`, an actual CLI raw-seed fetch composition root:
+preflight backend identity, acquire mutation guard,
+open the selected `StoreHandle`, and immediately split it into
+`PipelineStoreParts`; this owner entry does **not** waive either raw-service
+or writable-authority checks. With those source changes, the owner ran
+`cargo -q -Zscript tools/check_store_capability_boundary.rs --root .`
+again and reported **exit 0**:
+
+```text
+files_scanned=558 raw_service_escape_count=0 writable_authority_escape_count=0 handle_construction_escape_count=0
+```
+
+The later pass corrects the first failure but is only the source-owner
+capability checker observation, not the completed combined-tree T4.3
+quality suite, T4.4 archive/sync gate, or Casita release acceptance.
