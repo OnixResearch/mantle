@@ -465,6 +465,21 @@ fn transcript_real_child_reopens_selected_casita_and_rejects_dropped_selection_w
         serde_json::from_slice(&std::fs::read(state.join("store-identity.json")).unwrap()).unwrap();
     assert_eq!(identity["backend"], "casita", "real child must receive the selected backend");
     let before = state_snapshot(&state);
+    let dropped = ProcessCommand::new(child)
+        .arg("--state-dir")
+        .arg(&state)
+        .arg("--store")
+        .arg(&store)
+        .args(["store", "list"])
+        .output()
+        .unwrap();
+    assert!(!dropped.status.success(), "a real child that drops Casita selection must reject its recorded state");
+    assert!(
+        String::from_utf8_lossy(&dropped.stderr).contains("store-backend-mismatch"),
+        "{}",
+        String::from_utf8_lossy(&dropped.stderr)
+    );
+    assert_eq!(state_snapshot(&state), before, "dropped child selection must not change state");
 
     write_file(
         &mismatch_transcript,

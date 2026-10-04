@@ -129,6 +129,13 @@ It never adds or creates the local signing key on its own, so name the signer's 
 
 ## Garbage collection
 
+Under `snix`, the execution plan ID binds the ordered reclaim observations,
+including physical paths. An older plan issued before dead-blob observation
+ordering is made deterministic may be rejected as stale even when its
+candidates are unchanged. This rejection is safe: inspect a new
+`store gc --dry-run` report and execute its newly issued plan ID rather than
+retrying or overriding the old one.
+
 Casita GC keeps the two-step flow: `store gc` writes a plan, and `store gc --execute --plan-id <blake3-plan-id>` runs it.
 Under `casita`, `store usage` and `store gc` take the store mutation lock even when they only plan.
 Execution replans under the lock, and any drift fails with `gc-plan-stale` before Mantle writes a fence or changes a root.
