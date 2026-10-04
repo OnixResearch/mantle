@@ -417,3 +417,70 @@ fn checked_fast_fixtures_parse_through_transcript_runner() {
         .unwrap();
     assert!(status.success(), "doctor-success fixture must execute through the runner");
 }
+
+#[test]
+fn transcript_real_child_reopens_selected_casita_and_rejects_dropped_selection_without_mutation() {
+    fn state_snapshot(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Option<Vec<u8>>> {
+        let mut snapshot = std::collections::BTreeMap::new();
+        let mut directories = vec![root.to_path_buf()];
+        while let Some(directory) = directories.pop() {
+            for member in std::fs::read_dir(directory).unwrap() {
+                let member = member.unwrap();
+                let path = member.path();
+                let relative = path.strip_prefix(root).unwrap().to_path_buf();
+                if member.file_type().unwrap().is_dir() {
+                    directories.push(path);
+                    snapshot.insert(relative, None);
+                } else {
+                    snapshot.insert(relative, Some(std::fs::read(path).unwrap()));
+                }
+            }
+        }
+        snapshot
+    }
+
+    let temp = TempDir::new().unwrap();
+    let state = temp.path().join("state");
+    let store = temp.path().join("store");
+    let first_transcript = temp.path().join("selected.md");
+    let mismatch_transcript = temp.path().join("mismatch.md");
+    let child = env!("CARGO_BIN_EXE_mantle");
+    write_file(
+        &first_transcript,
+        &format!(
+            "```mantle\nmantle --state-dir {} --store {} --json store list\n```\n```expect\npaths\n```\n",
+            state.display(),
+            store.display()
+        ),
+    );
+    crunch()
+        .args(["--store-backend", "casita", "transcript", "run"])
+        .arg(&first_transcript)
+        .arg("--mantle-bin")
+        .arg(child)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("transcript ok: 1 visible step(s)"));
+    let identity: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(state.join("store-identity.json")).unwrap()).unwrap();
+    assert_eq!(identity["backend"], "casita", "real child must receive the selected backend");
+    let before = state_snapshot(&state);
+
+    write_file(
+        &mismatch_transcript,
+        &format!(
+            "```mantle:error\nmantle --state-dir {} --store {} --store-backend snix store list\n```\n```expect\nstore-backend-mismatch\n```\n",
+            state.display(),
+            store.display()
+        ),
+    );
+    crunch()
+        .args(["--store-backend", "casita", "transcript", "run"])
+        .arg(&mismatch_transcript)
+        .arg("--mantle-bin")
+        .arg(child)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("transcript ok: 1 visible step(s)"));
+    assert_eq!(state_snapshot(&state), before, "rejected child selection must not change state");
+}

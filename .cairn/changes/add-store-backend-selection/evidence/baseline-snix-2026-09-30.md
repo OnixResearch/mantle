@@ -27,3 +27,10 @@ Comparison rule for the post-change run: compare only consumer-visible
 identity and GC facts, meaning identity-record acceptance or rejection,
 retained outputs after reopen, and GC candidates. Do not compare incidental
 wording.
+
+Later work on 2026-10-04 recorded an actual signed historical fixture and
+its exact prechange CLI stdout, PathInfo bytes, NAR hashes, GC identities,
+fresh identity bytes, caller inventory, and launchers under
+`prechange-snix-golden-2026-10-04.{md,json}`, `prechange-snix-capture.rs`,
+and `finish-inventory-2026-10-04.md`. This note remains the scope statement
+for the original *partial* 2026-09-30 probes; it is not the golden artifact.

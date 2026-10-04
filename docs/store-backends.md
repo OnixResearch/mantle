@@ -42,6 +42,14 @@ Mantle reads only the selected backend and never falls back to another backend's
 Mantle does not check where unrecorded content came from.
 Any command that selects `snix`, including one that omits `--store-backend`, claims such a directory for `snix`, so run Mantle against an unrecorded directory only when you know that Mantle's Snix backend wrote it.
 
+When comparing signed results across backend selections or state directories, provision
+the same signing key explicitly in every run and compare the NAR and PathInfo
+with the same logical store prefix. Store paths and unsigned PathInfo fields may
+match with different keys, but signatures cannot: verify each signature under
+the corresponding public key instead of treating a different signature as a
+backend regression. A generated per-state key is not a reproducible signing
+fixture.
+
 ## Capability profiles
 
 `mantle store info <path>` prints the selected backend and its profile; with `--json`, see `backend` and `backend_capabilities`.
