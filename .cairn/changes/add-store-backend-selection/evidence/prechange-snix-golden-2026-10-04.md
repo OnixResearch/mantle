@@ -138,14 +138,16 @@ env CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-backend-selection-evide
 ```
 
 Observed `capture_prechange_snix_rail_golden ... ok` (**1 passed, 0 failed,
-7 filtered**). The **first** separately keyed 7ec rail capture, consumed by
-the selected comparator, is
-`prechange-snix-rail-unsorted-observed-2026-10-04.json`. It records exact
-serialized signed PathInfo bytes for all three rail paths, NAR SHA-256 and
-size, physical exported bytes, reopen/closure/reuse, archive-import PathInfo
-facts, two-signer verification, complete dry-run and fresh GC reports,
-candidate pin/unpin and accepted execution. Its original bytes are retained
-without rewriting (SHA-256
+7 filtered**). The **first** separately keyed 7ec rail capture was emitted
+at the command's `MANTLE_RAIL_GOLDEN_OUTPUT` pathname and archived
+byte-for-byte as `prechange-snix-rail-unsorted-observed-2026-10-04.json`
+before later captures reused the command's output pathname. The selected
+comparator consumes this archived first capture.
+It records exact serialized signed PathInfo bytes for all three rail paths,
+their NAR SHA-256 and sizes, physical exported bytes, reopen/closure/reuse,
+archive-import PathInfo facts, two-signer verification, complete dry-run
+and fresh GC reports, candidate pin/unpin and accepted execution. Its original
+bytes are retained without rewriting (SHA-256
 `e0810f74d24b727ef6e3128bfc574607a18f57c50c5f387225966eb5d5ba768c`);
 it reported index order `4df6, e6a6, d1f4` and plan ID
 `b3:36eb6141fa768f053c08258dc684365f28e908643a2e51bffcb63a0b7cf31491`.
