@@ -1,0 +1,21 @@
+{
+  "accepted_blake3": "ee259a5437a1346b1dc342194db5c30ce7f969f9686d0e51b692a22360019a22",
+  "accepted_bytes": 5592,
+  "accepted_spec_path": ".cairn/specs/dynamic-plan-source-slices/spec.md",
+  "expected_after_hash": "ee259a5437a1346b1dc342194db5c30ce7f969f9686d0e51b692a22360019a22",
+  "requirement_blocks": 5,
+  "requirement_ids": [
+    "mantle.dynamic_plan_source_slices.bounded_rejection",
+    "mantle.dynamic_plan_source_slices.content_admission",
+    "mantle.dynamic_plan_source_slices.content_identity",
+    "mantle.dynamic_plan_source_slices.provenance",
+    "mantle.dynamic_plan_source_slices.versioned_schema"
+  ],
+  "scenario_blocks": 12,
+  "schema": "mantle-v2-source-slices-sync-verification-v1",
+  "wrapper_headings": [
+    "# Dynamic Plan Source Slices Specification",
+    "## Purpose",
+    "## Requirements"
+  ]
+}

@@ -33,8 +33,8 @@ by `resolve-content-addressed-inputs-before-dispatch`, not this V2 change.
 - [x] [serial] T4.1 Run a two-run fixture where the producer changes bytes outside one slice and prove unchanged slice store paths and unit derivation paths. r[mantle.dynamic_plan_source_slices.content_identity]
 - [x] [serial] T4.2 Prove accepted `mantle-plan-v1` golden fixtures keep their canonical bytes and plan digests. r[mantle.dynamic_plan_source_slices.versioned_schema]
 - [x] [serial] T4.3 Document `mantle-plan-v2` and slices in `docs/nominal-dynamic-plan-types.md`, including limits, rejection kinds, and non-claims. r[mantle.dynamic_plan_source_slices.provenance]
-- [ ] [serial] T4.4 Run focused `crunch-build` lib and test suites before and after the change, strict Clippy for touched first-party packages, Cairn validation, and the proposal, design, and tasks gates. Preserve exact output in `evidence/`. r[mantle.dynamic_plan_source_slices.content_admission]
-- [ ] [serial] T4.5 After T4.4 and integrated quality gates pass, sync accepted specs in the isolated branch and retain the sync evidence. r[mantle.dynamic_plan_source_slices.provenance]
+- [x] [serial] T4.4 Run focused `crunch-build` lib and test suites before and after the change, strict Clippy for touched first-party packages, Cairn validation, and the proposal, design, and tasks gates. Preserve exact output in `evidence/`. r[mantle.dynamic_plan_source_slices.content_admission]
+- [x] [serial] T4.5 After T4.4 and integrated quality gates pass, sync accepted specs in the isolated branch and retain the sync evidence. r[mantle.dynamic_plan_source_slices.provenance]
 
 Archive is a post-checklist lifecycle action, not part of T4.5: after the
 accepted-spec sync is verified, mark T4.5 complete only with its evidence,

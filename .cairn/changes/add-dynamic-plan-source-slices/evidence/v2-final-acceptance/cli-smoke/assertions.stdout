@@ -1,0 +1,11 @@
+PASS: outside-slice producer variation keeps admitted slice and unit derivation/output stable; second unit cached
+PASS: absent-slice plan rejected without admitted path or derived unit
+PASS: fresh-process store info has signed PathInfo with matching NAR SHA-256
+tool logical path: /mantle/store/pzjzvwsvmia0bpfyhgr3zqcarapc7wcn-v2-cli-tool
+producer derivations: /mantle/store/7dmbxknbi3rzr5l1rbcc370sf4439rny-v2-cli-producer-one.drv /mantle/store/i2f1ndhaaasqah389rz5k5yg4igrg55p-v2-cli-producer-two.drv
+producer whole output paths: /mantle/store/0i51ps3hyrhjw82ynj1hdlc5whczm199-v2-cli-producer-one /mantle/store/f43isaxw42brr906yifqccy0fsnc7hyi-v2-cli-producer-two
+admitted slice: /mantle/store/pgr4dlvr8na9ilwi252zhz76pycg82r7-v2-cli-package
+unit derivation: /mantle/store/7kkfk95lgzwmqrsajd3vqa5r1nj9dffc-v2-cli-unit.drv
+unit output: /mantle/store/3zra9almjivspp1hnh2b1nyhggb7aaz0-v2-cli-unit
+first/second unit cached: False True
+signed PathInfo signature count: 1

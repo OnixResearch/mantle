@@ -1,0 +1,3 @@
+cwd=/home/brittonr/.cargo-target/mantle-v2-cairn-dev46/source
+HEAD=3dcdfaad7b5c77c0499ff1b4c1b3380c73f29e19
+command=test ! -e .cairn/archive/2026-10-04-add-dynamic-plan-source-slices && test -d .cairn/changes/add-dynamic-plan-source-slices && printf "date_utc=2026-10-04\ndestination=.cairn/archive/2026-10-04-add-dynamic-plan-source-slices\navailable=true\nactive_source_exists=true\n"

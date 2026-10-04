@@ -1,0 +1,337 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "/home/brittonr/.cargo-target/mantle-v2-integrated-cli-PT7twP1R/fixtures/producer-two.ncl",
+  "output_dir": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/store",
+  "state_dir": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/state",
+  "store_dir": "/mantle/store",
+  "scheduler_policy": {
+    "schema": "mantle-scheduling-policy-v1",
+    "policy_id": "mantle-lazy-priority-v1",
+    "preference_order": [
+      "known-graph",
+      "resource-fit",
+      "locality-transfer"
+    ],
+    "aged_after_epochs": 4,
+    "protected_after_epochs": 8
+  },
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "build_environment_reports": [
+    {
+      "action_name": "v2-cli-producer-two",
+      "digest_algorithm": "blake3",
+      "digest_blake3": "57ed472b13371b91d3fb02cad3fe4f4d079bded631e82ba044137cd06b1e257d",
+      "variable_count": 26,
+      "rejections": []
+    }
+  ],
+  "network_policy_reports": [
+    {
+      "action_name": "v2-cli-producer-two",
+      "mode": "offline",
+      "result": "denied",
+      "capability": null,
+      "policy_basis": "ordinary derivation network access is denied by default",
+      "audit_class": null,
+      "fixed_output": null,
+      "diagnostic": null
+    }
+  ],
+  "workspace_reports": [],
+  "action_result_reports": [
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/3da18e5651c16387025f9381de074e67d45450df569f4b17ed4ee3b82031d051",
+      "disposition": "miss",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "publication",
+      "action_ref": "mantle-action://blake3/3da18e5651c16387025f9381de074e67d45450df569f4b17ed4ee3b82031d051",
+      "disposition": "published",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [
+        "mantle-action-result://blake3/9e5b2388661877b9ec58b2b7100ebb3e2ee71eaadb9ba00653175113b2d9dc58"
+      ],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/6148758ac87df36bfb464c13c39d3793817131f704d8306084d8047c4a48b46b",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/56583c9ef81307e05e6467afcdd8e3c9d5bab4f2999cd852f86cf5dcff69f98e",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-britton-desktop-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/56583c9ef81307e05e6467afcdd8e3c9d5bab4f2999cd852f86cf5dcff69f98e",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-britton-desktop-1"
+          ],
+          "output_set_digest_blake3": "2b0033ea75fd9c558d2b0441f6b72f38369a25cb906fd6460d20f490d3ba3773"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 176
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    }
+  ],
+  "native_dynamic_plans": [
+    {
+      "mode": "native",
+      "producer_key": "/nix/store/i2f1ndhaaasqah389rz5k5yg4igrg55p-v2-cli-producer-two.drv",
+      "output_name": "plan",
+      "plan_artifact_path": "/mantle/store/wgi1a2sxws3nx109qzbd48mfz1xwqqlq-v2-cli-producer-two-plan",
+      "raw_artifact_digest": "d4a118a868c787dadeb16de95d073d84d362a1e3ed720c70aebb8f04cd196f39",
+      "canonical_plan_digest": "d85db681cc36cb16a851cad3a5cfb6bb219f675e1d5baf46687986768e619fbd",
+      "accepted_unit_ids": [
+        "unit.main"
+      ],
+      "source_slices": [
+        {
+          "source_id": "src.main",
+          "producer_output": "sources",
+          "subpath": "package",
+          "declared_nar_blake3": "85b54411643cbcae7a4474c95e91fc66f29b72ccd9411906dac32b04637c6a35",
+          "observed_nar_blake3": "85b54411643cbcae7a4474c95e91fc66f29b72ccd9411906dac32b04637c6a35",
+          "admitted_store_path": "/mantle/store/pgr4dlvr8na9ilwi252zhz76pycg82r7-v2-cli-package",
+          "disposition": "admitted"
+        }
+      ],
+      "rejection_reason": null,
+      "scheduler_action": "registered-roots"
+    }
+  ],
+  "scheduler_priority_decisions": [
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 1,
+      "selected_goal_key_blake3": "c84e89704aafbac0e1d438fa0789d8c64506446b3986d7224294d7369496498f",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "f64f75dce2b90b19413344c6a69c6aa9119fd494e7120309cd21089ec56bb9f8",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 1,
+      "known_critical_path_work_units": 1,
+      "blocked_root_count": 1,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 2,
+      "selected_goal_key_blake3": "344a36ee3ecf785bd650f2c2a4595687a5f0adaa7d008810c930e9b01c8a2219",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "6d411ea6abf25139dc5c1e308f59df4ec524df3103b3acc124f0a67302f7f329",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 1,
+      "known_critical_path_work_units": 1,
+      "blocked_root_count": 1,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    }
+  ],
+  "overlay_base_generations": [],
+  "store_layer_selections": [],
+  "remote_telemetry_events": [
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    }
+  ],
+  "frontend_artifact_attestations": [],
+  "ast_grep_structural_evidence": [],
+  "ast_grep_structural_evidence_diagnostics": [
+    {
+      "label": "v2-cli-producer-two",
+      "output_name": "out",
+      "evidence_path": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/store/f43isaxw42brr906yifqccy0fsnc7hyi-v2-cli-producer-two/share/mantle/ast-grep-structural-evidence.json",
+      "blocker_class": "ast-grep-evidence-read-error",
+      "message": "opening parent capability for ast-grep structural evidence at /home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/store/f43isaxw42brr906yifqccy0fsnc7hyi-v2-cli-producer-two/share/mantle/ast-grep-structural-evidence.json: capability root path component is not a directory: f43isaxw42brr906yifqccy0fsnc7hyi-v2-cli-producer-two",
+      "next_action": "regenerate share/mantle/ast-grep-structural-evidence.json with the pinned ast-grep toolchain and current BLAKE3 identities"
+    },
+    {
+      "label": "v2-cli-producer-two",
+      "output_name": "plan",
+      "evidence_path": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/store/wgi1a2sxws3nx109qzbd48mfz1xwqqlq-v2-cli-producer-two-plan/share/mantle/ast-grep-structural-evidence.json",
+      "blocker_class": "ast-grep-evidence-read-error",
+      "message": "opening parent capability for ast-grep structural evidence at /home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/store/wgi1a2sxws3nx109qzbd48mfz1xwqqlq-v2-cli-producer-two-plan/share/mantle/ast-grep-structural-evidence.json: capability root path component is not a directory: wgi1a2sxws3nx109qzbd48mfz1xwqqlq-v2-cli-producer-two-plan",
+      "next_action": "regenerate share/mantle/ast-grep-structural-evidence.json with the pinned ast-grep toolchain and current BLAKE3 identities"
+    },
+    {
+      "label": "v2-cli-unit.drv",
+      "output_name": "out",
+      "evidence_path": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/store/3zra9almjivspp1hnh2b1nyhggb7aaz0-v2-cli-unit/share/mantle/ast-grep-structural-evidence.json",
+      "blocker_class": "ast-grep-evidence-read-error",
+      "message": "opening parent capability for ast-grep structural evidence at /home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/store/3zra9almjivspp1hnh2b1nyhggb7aaz0-v2-cli-unit/share/mantle/ast-grep-structural-evidence.json: capability root path component is not a directory: 3zra9almjivspp1hnh2b1nyhggb7aaz0-v2-cli-unit",
+      "next_action": "regenerate share/mantle/ast-grep-structural-evidence.json with the pinned ast-grep toolchain and current BLAKE3 identities"
+    }
+  ],
+  "cargo_build_evidence": [],
+  "cargo_build_evidence_diagnostics": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 2,
+    "built_total": 1,
+    "cached_total": 1,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/mantle/store/i2f1ndhaaasqah389rz5k5yg4igrg55p-v2-cli-producer-two.drv",
+      "label": "v2-cli-producer-two",
+      "cached": false,
+      "log_file": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/state/logs/i2f1ndhaaasqah389rz5k5yg4igrg55p-v2-cli-producer-two.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/store/f43isaxw42brr906yifqccy0fsnc7hyi-v2-cli-producer-two",
+          "artifact_attestation": {
+            "logical_path": "/mantle/store/f43isaxw42brr906yifqccy0fsnc7hyi-v2-cli-producer-two",
+            "path": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/state/attestations/artifacts/8ed5c129cd74e2226593591cc137131c933f181c76b58db05bbd30051cb076ed.json"
+          }
+        },
+        {
+          "name": "plan",
+          "path": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/store/wgi1a2sxws3nx109qzbd48mfz1xwqqlq-v2-cli-producer-two-plan",
+          "artifact_attestation": {
+            "logical_path": "/mantle/store/wgi1a2sxws3nx109qzbd48mfz1xwqqlq-v2-cli-producer-two-plan",
+            "path": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/state/attestations/artifacts/5c4a2523b85444bf504b72500a70b8a3e71aa33d98fa69db9f23df478d02b79b.json"
+          }
+        },
+        {
+          "name": "sources",
+          "path": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/store/wbsys2r3sksaxd5nwkazs6qmsq1ss7hs-v2-cli-producer-two-sources",
+          "artifact_attestation": {
+            "logical_path": "/mantle/store/wbsys2r3sksaxd5nwkazs6qmsq1ss7hs-v2-cli-producer-two-sources",
+            "path": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/state/attestations/artifacts/8c7c59ef3629a977f14992e080d8738676abd02314361fbd0f080257764e9144.json"
+          }
+        }
+      ]
+    },
+    {
+      "drv_key": "/mantle/store/7kkfk95lgzwmqrsajd3vqa5r1nj9dffc-v2-cli-unit.drv",
+      "label": "v2-cli-unit.drv",
+      "cached": true,
+      "log_file": null,
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/store/3zra9almjivspp1hnh2b1nyhggb7aaz0-v2-cli-unit",
+          "artifact_attestation": {
+            "logical_path": "/mantle/store/3zra9almjivspp1hnh2b1nyhggb7aaz0-v2-cli-unit",
+            "path": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/state/attestations/artifacts/67dade6d68c89f8231303c3fd7a4f5c8f98ebae833f384a0e1e5a8f690ade93f.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}

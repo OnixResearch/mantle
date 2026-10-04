@@ -1,0 +1,50 @@
+evaluating flake...
+checking flake output 'packages'...
+checking derivation packages.x86_64-linux.default...
+derivation evaluated to /nix/store/9v1938226xnylsrnkmbmncj7g7vg1dgj-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.crunch...
+derivation evaluated to /nix/store/9v1938226xnylsrnkmbmncj7g7vg1dgj-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.ast-grep-toolchain...
+derivation evaluated to /nix/store/hwz43xm09gs5v38a4pfyc2dhs5n9h1pj-mantle-ast-grep-toolchain-0.42.1.drv
+checking derivation packages.x86_64-linux.ast-grep-package-identity...
+derivation evaluated to /nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain...
+derivation evaluated to /nix/store/wpg4biwmrhqrhjir1vxba3k8gp0hw955-mantle-wasm-component-toolchain-v1.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-identity...
+derivation evaluated to /nix/store/0yazcl359ikcspbdyd5df1kirwwzf8k2-mantle-wasm-component-toolchain-identity.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-compatibility...
+derivation evaluated to /nix/store/516fyzsmrjfr14yq6lf2d0sw30bb8l36-mantle-wasm-component-toolchain-compatibility.drv
+checking derivation packages.x86_64-linux.mantle-transcript-quality...
+fatal: unable to access 'https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git/': The requested URL returned error: 530
+warning: could not read HEAD ref from repo at 'https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git', using 'master'
+fatal: unable to access 'https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git/': The requested URL returned error: 530
+error:
+       … while checking flake output 'packages'
+         at «github:numtide/flake-utils/11707dc2f618dd54ca8739b309ec4fc024de578b?narHash=sha256-l0KFg5HjrsfsO/JpG%2Br7fRrqm12kzFHyUHqHCVpMMbI%3D»/lib.nix:43:9:
+           42|       // {
+           43|         ${key} = (attrs.${key} or { }) // {
+             |         ^
+           44|           ${system} = ret.${key};
+
+       … while checking the derivation 'packages.x86_64-linux.mantle-transcript-quality'
+         at /home/brittonr/.cargo-target/mantle-v2-cairn-dev46/source/flake.nix:1306:11:
+         1305|           wasm-component-toolchain-compatibility = wasmComponentToolchainCompatibility;
+         1306|           mantle-transcript-quality = mantleTranscriptQuality;
+             |           ^
+         1307|           release-nix-witness-quality = releaseNixWitnessQuality;
+
+       … while evaluating derivation 'mantle-transcript-quality-nextest-0.1.0'
+         whose name attribute is located at «github:NixOS/nixpkgs/dfd9566f82a6e1d55c30f861879186440614696e?narHash=sha256-/m3yyS/EnXqoPGBJYVy4jTOsirdgsEZ3JdN2gGkBr14%3D»/pkgs/stdenv/generic/make-derivation.nix:541:11
+
+       … while evaluating derivation 'vendor-cargo-deps'
+         whose name attribute is located at «github:NixOS/nixpkgs/dfd9566f82a6e1d55c30f861879186440614696e?narHash=sha256-/m3yyS/EnXqoPGBJYVy4jTOsirdgsEZ3JdN2gGkBr14%3D»/pkgs/stdenv/generic/make-derivation.nix:541:11
+
+       … while evaluating derivation 'linkLockedDeps'
+         whose name attribute is located at «github:NixOS/nixpkgs/dfd9566f82a6e1d55c30f861879186440614696e?narHash=sha256-/m3yyS/EnXqoPGBJYVy4jTOsirdgsEZ3JdN2gGkBr14%3D»/pkgs/stdenv/generic/make-derivation.nix:541:11
+
+       … while evaluating derivation 'cargo-git-https-git.onix.computer-z3tAR4For7qw8ZirkJzoDw1VNDDLM.git-951c27f59003cea9bfdb40ed4d89653d50fada1f'
+         whose name attribute is located at «github:NixOS/nixpkgs/dfd9566f82a6e1d55c30f861879186440614696e?narHash=sha256-/m3yyS/EnXqoPGBJYVy4jTOsirdgsEZ3JdN2gGkBr14%3D»/pkgs/stdenv/generic/make-derivation.nix:541:11
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: Failed to fetch git repository 'https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git'
