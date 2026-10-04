@@ -38,7 +38,7 @@ inventory. Its consumer-visible operations per backend are:
 | Store archive export/import, second signer | Exports the retained root and its referenced child, imports into a fresh state of the same selected backend with an explicit signer policy, observes unchanged PathInfo facts; real `store sign` with a separately provisioned test key appends a second signature, and a **new `store verify` child process** with both public keys cryptographically checks `trusted_signatures=2/2`. |
 | Identity and mixed-backend negative | Fresh `mantle-store-state-v2` records the selected backend. A real CLI read with the other backend fails `store-backend-mismatch` and every recorded state-file byte remains identical. |
 | Profile-dependent behavior | Snix reports unbounded `max_root_changes` and supports `rust-unit-cache` and overlays; Casita reports 1,024 and no Rust unit cache or overlays. Casita `--base-store` fails with `casita-overlay-unsupported`, with all recorded state-file bytes unchanged. This checks the declared bound, **not** the 1,024/1,025 admission behavior. |
-| GC candidates, root transition, stale rejection and accepted execution | Pinning the retained root keeps its referenced child while leaving exactly one unretained candidate. Pinning that candidate after the first plan makes `--execute --plan-id` fail with the declared `stale-gc-plan` under Snix or `gc-plan-stale` under Casita; exported content remains. Replanning reports zero candidates. Unpinning the candidate and dry-running again produces an accepted plan whose execution completes without failed operations, removes the candidate export and PathInfo, and retains the pinned root and referenced child for fresh `store info` and trusted `store verify`. |
+| GC candidates, root transition, stale rejection and accepted execution | A deterministic legacy retained root (`created_unix_s: 100`) keeps its referenced child while leaving exactly one unretained candidate. Pinning that candidate after the first plan makes `--execute --plan-id` fail with the declared `stale-gc-plan` under Snix or `gc-plan-stale` under Casita; exported content remains. Replanning reports zero candidates. Unpinning the candidate and dry-running again produces an accepted plan whose execution completes without failed operations, removes the candidate export and PathInfo, and retains the rooted output and referenced child for fresh `store info` and trusted `store verify`. |
 
 Exact successful test stdout:
 
@@ -108,6 +108,68 @@ accepted two published, verifiable signed entries under both Snix and Casita,
 then rejected N+1 with byte-identical backend state. This does not claim all
 remaining T3.3 profile fixtures were executed.
 
+### Historical 7ec same-rail Snix comparator: canonical facts, not every old ID
+
+After preserving the first 7ec supplemental result and documenting **every
+rerun/order** in `prechange-snix-golden-2026-10-04.md`, the selected rail was
+run at the supplemental golden's **identical absolute physical root**:
+
+```sh
+test ! -e /home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-rail-compare &&
+env CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/selected-golden-target \
+  TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  MANTLE_RAIL_FIXTURE_ROOT=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-rail-compare \
+  nix develop -c sh -c 'env -u CRUNCH_CONFIG_DIR -u MANTLE_STORE_BACKEND LANG=C LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1600000000 cargo test --test store_archive_cli admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail -- --exact --nocapture'
+```
+
+Observed: **1 passed; 0 failed; 12 filtered out**. The three Snix
+`rail-*` paths matched 7ec's exact store paths, NAR SHA-256 and sizes,
+test-key serialized **signed** PathInfo bytes and physical exported bytes.
+Fresh-handle signed reopen, strict retained/child closure, PathInfo-backed
+action reuse, archive-list paths and imported signed facts, the independent
+second signature verified 2/2, GC retained/candidate and stale-plan
+transition, and accepted execution all matched the corresponding 7ec
+fixture's **consumer facts**. The same test then ran the Casita core and
+declared profile checks; it did not compare Casita-specific profile facts to
+the historical Snix-only build.
+
+The full Snix GC report matched after one justified comparison transform:
+only the prechange unsorted `blob-index` and `blob-chunk` observation paths are
+ordered as the selected production `crates/crunch-store/src/gc.rs`
+`canonicalize_dead_blob_paths` does **before hashing**. The selected report
+must already be in this canonical order; path, bytes, blockers, candidate,
+retention and all other report fields remain compared. Exact numeric plan
+IDs are compared only at the historical physical root and only asserted
+equal when that *particular old run* was already canonical. This captured
+old run was **not**. Exact output:
+
+```text
+PRECHANGE_SNIX_RAIL_GC_PLAN planned old_unsorted="b3:f8c01c8b584203afe4f05b68b5ac1b0c4ac3d09a03292d1f52990b16022ed4c9" selected_canonical="b3:c73dcda6e8949135b7d49298cd219c3845e8eb6e18653d60b8cd5bb9c8b90e95"
+PRECHANGE_SNIX_RAIL_GC_PLAN fresh old_unsorted="b3:f8c01c8b584203afe4f05b68b5ac1b0c4ac3d09a03292d1f52990b16022ed4c9" selected_canonical="b3:c73dcda6e8949135b7d49298cd219c3845e8eb6e18653d60b8cd5bb9c8b90e95"
+BACKEND_CORE_RAIL snix {"nar_sha256":"42a7f16a040111ab52d03cf78d7178101b4746c983a12551f07b305181f7024e","profile_max_root_changes":null,"retained_store_path":"0000000000068rbfd5hp8rbj5mn6jqbj-rail-retained","signed_count_after_store_sign":2,"stale_plan_blocker":"stale-gc-plan"}
+BACKEND_CORE_RAIL casita {"nar_sha256":"42a7f16a040111ab52d03cf78d7178101b4746c983a12551f07b305181f7024e","profile_max_root_changes":1024,"retained_store_path":"0000000000068rbfd5hp8rbj5mn6jqbj-rail-retained","signed_count_after_store_sign":2,"stale_plan_blocker":"gc-plan-stale"}
+```
+
+Prechange plan IDs genuinely vary with `read_dir` order; **none of the
+retained 7ec three-path executions claimed above had the selected ID**.
+The selected order `4df6, d1f4, e6a6` is a valid old-source directory
+enumeration order, whereas the archived first capture had
+`4df6, e6a6, d1f4`. `[INFERENCE]` The selected numeric ID is the identity
+that 7ec's unchanged order-sensitive execution hash would give the
+canonical enumeration, not a claim that all or any recorded old runs
+actually emitted it. The old first supplemental artifact, original
+T1.1 golden, and original red selected observation remain unchanged.
+T3.1's still-unrun optional profile/bound branches and T4.3's failed
+capability-boundary check keep those tasks open despite this core comparator.
+
+The same focused test was rerun without
+`MANTLE_RAIL_FIXTURE_ROOT` (`env -u MANTLE_RAIL_FIXTURE_ROOT` in the command
+above, retaining the same `nix develop`, isolated target, signer and fixed
+environment): **1 passed; 0 failed; 12 filtered out**. It compared all
+portable canonical GC facts with paths relative to the fixture roots but did
+**not** claim a numeric execution-ID comparison across different absolute
+paths; both backends again printed the signed two-signer core records above.
+
 ## Complementary fixtures and work still to prove
 
 The single rail above deliberately does **not** repeat same-path optional
@@ -125,3 +187,18 @@ toward T3.1/T3.3; source locations alone are not passing evidence. The
 fixed-path prechange-vs-selected GC plan parity now passes, but all T4.3
 workspace gates remain open. No general correctness, durability, GC safety,
 or release eligibility claim follows from this rail.
+
+## Source-only quality observation (not a completed selection gate)
+
+The source integration owner reported `cargo test -p crunch-store --lib` after
+the pure open-decision split at source-only commit `32c59def`: **403 passed**.
+The same owner's pinned-Nix isolated-target run of
+`cargo -q -Zscript tools/check_store_capability_boundary.rs --root .` exited
+**1** with `files_scanned=558`, three reported findings:
+`src/bootstrap.rs:825` (`handle-construction`),
+`src/store_cmd.rs:220` and `:448` (two `raw-service-escape`
+`.pathinfo_service()` usages). The owner examined these callsites as existing
+bootstrap construction and direct sign/verify access predating the pure
+decision split; no code or allowlist was altered to conceal the failure.
+The source-only run is not an all-package build or conformance pass. T4.3
+remains open, as do archive/sync T4.4 and the ADR acceptance gate.

@@ -110,3 +110,111 @@ the original golden JSON and the failing selected-observation artifact remain
 unchanged. An old in-flight accepted plan ID based on the alternative unsorted
 observation order can safely reject as stale; operators must re-run dry-run
 and accept its current plan ID.
+
+## Supplemental historical rail fixture
+
+The original `prechange-snix-golden-2026-10-04.json` above is **unchanged**.
+The added `capture_prechange_snix_rail_golden` in the same historical harness
+records *the same `rail-*` fixture as the selected-backend conformance rail*:
+three file NARs, a retained output referencing a child, a separate unretained
+candidate, the same explicitly provisioned test-only signer, archive export
+and fresh-state import, second independent signer with real verification,
+fresh builder-store closure and `ActionResultPort` reuse, and a plan-bound GC
+transition. It seeds a legacy logical retained root with
+`created_unix_s: 100`, so root timestamps do not perturb retention identity;
+candidate pin/unpin and stale-plan rejection remain actual CLI operations.
+The historical checkout uses a temporary `tests/backend_baseline.rs` that
+includes this harness; it is **not** a production source change.
+
+Executed historical capture at revision `7ec51777` with a fresh exact root:
+
+```sh
+test ! -e /home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-rail-compare &&
+env CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/baseline-target \
+  TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  MANTLE_RAIL_FIXTURE_ROOT=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-rail-compare \
+  MANTLE_RAIL_GOLDEN_OUTPUT=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/source/.cairn/changes/add-store-backend-selection/evidence/prechange-snix-rail-golden-2026-10-04.json \
+  nix develop -c sh -c 'env -u CRUNCH_CONFIG_DIR -u MANTLE_STORE_BACKEND LANG=C LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1600000000 cargo test --test backend_baseline capture_prechange_snix_rail_golden -- --exact --nocapture'
+```
+
+Observed `capture_prechange_snix_rail_golden ... ok` (**1 passed, 0 failed,
+7 filtered**). The new, separately keyed
+`prechange-snix-rail-golden-2026-10-04.json` captures the exact serialized
+signed PathInfo bytes for all three rail paths, their NAR SHA-256 and size,
+physical exported bytes, reopen/closure/reuse, archive-import PathInfo facts,
+the two-signer result, the complete dry-run and fresh GC reports, the
+candidate pin/unpin transition, and accepted execution facts. The **first**
+executed supplemental capture is retained byte-for-byte as
+`prechange-snix-rail-unsorted-observed-2026-10-04.json` (SHA-256
+`e0810f74d24b727ef6e3128bfc574607a18f57c50c5f387225966eb5d5ba768c`);
+it reported index order `4df6, e6a6, d1f4` and plan ID
+`b3:36eb6141fa768f053c08258dc684365f28e908643a2e51bffcb63a0b7cf31491`.
+The supplemental `prechange-snix-rail-golden-2026-10-04.json` is another
+**actual** old-source capture, not a rewritten report; its SHA-256 is
+`4b65f9f0cc4856236a9c0775e866011a0cd46487ff8bf10ec6de1c2849d5eab6`,
+its index order is `e6a6, 4df6, d1f4`, and its old execution ID is
+`b3:f8c01c8b584203afe4f05b68b5ac1b0c4ac3d09a03292d1f52990b16022ed4c9`.
+Neither this rail artifact nor the original T1.1 golden is silently replaced.
+`selected-snix-gc-observed-2026-10-04.json` still retains the original red
+selected-Snix observation from the separate two-path baseline.
+
+The initial capture and **every executed rerun** are listed below. Each
+historical `capture_prechange_snix_rail_golden` invocation passed; its complete
+JSON was inspected before disposable trial outputs were removed. `R` is the
+fixed `/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-rail-compare`
+root; `A` is that path with `-alt` appended. The order codes are the **actual
+ordered `blob-index` reclaim observations**, abbreviated by digest prefix:
+`I=4df6,e6a6,d1f4`; `II=e6a6,4df6,d1f4`;
+`III=d1f4,4df6,e6a6`; `IV=d1f4,e6a6,4df6`.
+The old `plan_id` codes for root `R` are
+`P1=b3:36eb6141fa768f053c08258dc684365f28e908643a2e51bffcb63a0b7cf31491`,
+`P2=b3:f8c01c8b584203afe4f05b68b5ac1b0c4ac3d09a03292d1f52990b16022ed4c9`,
+`P3=b3:ddf49d71ea9630171bf3ee39b56beddd78aaa0fc72f0bceca2647859eb63c966`,
+and `P4=b3:aa1ed5bc08fddb7d82e9e27df64bb12fab92dda2d3f2aea84d67e6df1b8c7001`.
+For root `A`, `Q1=b3:e8dd885ae93dabf39209fa20d360bbbe68294bb51b6eac3513ebcff53e1cc516`,
+`Q2=b3:2de0e57585a23ce71d2d710d2c8b126db3319129c48dd429f079a7e2b5a9f8b5`,
+and `Q3=b3:d1b900a19c06f6da243793036a021e5550577c00068ec4896ceba2b740cbd0ef`.
+
+| Historical capture in execution order | Root | Index order | Dry-run `plan_id` |
+|---|---|---|---|
+| First, retained `unsorted-observed` artifact | R | I | P1 |
+| Rerun before admission-order adjustment | R | I | P1 |
+| Rerun retained as supplemental golden | R | II | P2 |
+| Trial 1 | R | III | P3 |
+| Trial 2 | R | III | P3 |
+| Trial 3 | R | I | P1 |
+| Trial 4 | R | I | P1 |
+| Trial 5 | R | IV | P4 |
+| Trial 6 | R | III | P3 |
+| Trial 7 | R | II | P2 |
+| Trial 8 | R | I | P1 |
+| Trial 9 | R | II | P2 |
+| Trial 10 | R | IV | P4 |
+| Trial 11 | R | III | P3 |
+| Trial 12 | R | IV | P4 |
+| Trial 13 | R | IV | P4 |
+| Trial 14 | R | I | P1 |
+| Trial 15 | R | I | P1 |
+| Trial 16 | R | II | P2 |
+| Trial 17 | R | I | P1 |
+| Trial 18 | A | I | Q1 |
+| Trial 19 | A | IV | Q2 |
+| Trial 20 | A | III | Q3 |
+| Trial 21, already running when recaptures were halted | R | II | P2 |
+
+Some fixture seeding and admission orders were varied symmetrically in the
+historical harness and selected rail while investigating the old
+`read_dir` traversal. The final fixture restores the **first capture's**
+`child, candidate, retained` constructor/admission order. No retries remain
+in the comparator: a permanent test consumes the retained original
+supplemental golden. Prechange 7ec plan IDs are **nondeterministic** because
+blob directory traversal order entered the hash. The selected source fix
+`eb4b6874` sorts dead `blob-index` and `blob-chunk` paths separately before
+hashing; the historical comparison therefore canonicalizes **only those
+two old-source category runs**, preserving all paths, category boundaries,
+bytes, blockers, candidate and retention facts. It demands selected output
+already be in canonical order. At an identical physical root it also checks
+an exact numeric plan ID if that old capture's order was already canonical;
+otherwise it records both real IDs as distinct, rather than claiming all
+prechange runs had the selected canonical ID. A different physical root
+never licenses a numeric execution-ID comparison.

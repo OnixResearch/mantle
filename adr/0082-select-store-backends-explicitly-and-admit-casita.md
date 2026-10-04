@@ -5,15 +5,17 @@
 Proposed (2026-09-30)
 
 Implementation is partial, and this record is not Accepted. In
-`adopt-casita-store-backend`, T2.5, T2.10, T2.13, T2.15, T3.3, T3.4, T3.5, and
-T3.6 are checked from recorded runs, and 28 tasks are open. In
-`add-store-backend-selection`, T4.1 is checked, and 18 tasks are open. The
-record claims only the behavior those runs verified, within the bounds under
-[Evidence scope](#evidence-scope). The final repository quality gates, recorded
-in `evidence/test-runs-2026-09-30.md` of both changes, do not all pass: strict
-Clippy and the first-party workspace suite fail on code without working-tree
-changes, and the last `cargo deny` run failed. The record makes no release
-claim. It can become Accepted only after both changes complete with the
+`adopt-casita-store-backend`, T2.5, T2.10, T2.13, T2.15, T3.3, T3.4, T3.5,
+and T3.6 are checked from recorded runs; 28 tasks remain open. In
+`add-store-backend-selection`, T1.1–T1.4 and T4.1–T4.2 are checked from the
+pre-selection goldens, the selection/profile contracts, and operator-facing
+documentation. Its remaining tasks stay open until their combined-tree proof
+is recorded in that change's `tasks.md`. The record claims only tested behavior
+within [Evidence scope](#evidence-scope). The final repository quality gates
+for both changes have not all passed: the 2026-09-30 runs recorded strict
+Clippy, the first-party workspace suite, and `cargo deny` failures. Targeted
+2026-10-04 results do not imply workspace gates or release eligibility.
+This record can become Accepted only after both changes complete with the
 evidence named under [Evidence scope](#evidence-scope).
 
 ## Context
@@ -722,10 +724,37 @@ Evidence that exists on 2026-09-30:
   working tree (the untracked patch became visible to it only after
   `git add -N`), so it is not the clean-checkout proof that T1.2 asks for.
 
-Evidence that does not exist yet: Snix goldens and the conformance rail on
-either backend; the remaining selection negatives, forwarding, and profile
-fixtures; root-race fixtures; the rest of the batch fixtures; the remaining
-trust-policy fixtures; castore payload-root fixtures; for T1.2, a vendor build
+Evidence added on 2026-10-04 in `add-store-backend-selection`:
+
+- `evidence/prechange-snix-golden-2026-10-04.{md,json}` records an executed
+  isolated pre-selection Snix baseline at `7ec51777`, including the exact
+  same-key signed PathInfo bytes, NAR hashes, fresh identity bytes, and a
+  fixed-physical-root GC report. The original JSON is preserved unchanged.
+  `evidence/finish-inventory-2026-10-04.md` inventories store constructors
+  and launchers; `docs/store-backends.md` documents the explicit selector,
+  identity migration, capability bounds and blocker catalog.
+- `evidence/finish-conformance-2026-10-04.md` records a combined source and
+  evidence run of all 13 `store_archive_cli` tests: both default and explicit
+  Snix match that historical golden with the same root and signer. A
+  parameterized Snix/Casita core rail exercises real signed admission,
+  strict closure, ActionResult reuse, archive transfer, independently verified
+  second signer, no mixed backend, and stale/accepted plan-bound GC. The
+  supplemental 7ec rail golden preserves its **first unsorted** execution,
+  every recorded rerun/order, and the original red selected observation.
+  A selected Snix rail test passes against same-key signed paths, NARs,
+  reuse, archive and canonicalized GC consumer facts at the golden's
+  identical absolute root and at portable roots. The old 7ec numerical
+  execution IDs were nondeterministic; the selected canonical ID differed
+  from the retained old unsorted ID, and no assertion says all prechange
+  runs emitted the selected ID. T3.1 still needs remaining optional/bound
+  fixtures. The source-only capability-boundary checker exited 1 with
+  three existing authority escapes, so T4.3 remains open; neither targeted
+  suite is a passing repository-wide quality gate.
+
+Evidence that does not exist yet: the remaining selection negatives,
+forwarding, and profile fixtures in one passing combined tree; root-race
+fixtures, remaining batch fixtures, and trust-policy fixtures for Casita;
+castore payload-root fixtures; for T1.2, a vendor build
 from a clean checkout and the confirmation that every toolchain, including
 self-build source-bundle profiles, meets Casita's `rust-version`; for T4.6,
 `cargo check` with the tracked Casita patch in the Nix build and with the

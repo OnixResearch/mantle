@@ -1029,17 +1029,17 @@ fn independent_snix_stores_agree_on_signed_bytes_only_with_the_same_fixture_key(
         store.pathinfo_service().put(info.clone()).await.unwrap();
         info
     });
-    for (output_dir, info) in [
-        (&first_store, &first),
-        (&second_store, &second),
-        (&third_store, &third),
-    ] {
+    for (output_dir, info) in [(&first_store, &first), (&second_store, &second), (&third_store, &third)] {
         std::fs::create_dir_all(output_dir).unwrap();
         std::fs::write(output_dir.join(info.store_path.to_string()), fixture).unwrap();
     }
     let signed_bytes = serde_json::to_vec(&first).unwrap();
     assert_eq!(signed_bytes, serde_json::to_vec(&second).unwrap(), "the same fixture key must sign identically");
-    assert_ne!(signed_bytes, serde_json::to_vec(&third).unwrap(), "different keys cannot produce the same signed PathInfo");
+    assert_ne!(
+        signed_bytes,
+        serde_json::to_vec(&third).unwrap(),
+        "different keys cannot produce the same signed PathInfo"
+    );
     let mut first_unsigned = first.clone();
     let mut third_unsigned = third.clone();
     first_unsigned.signatures.clear();
@@ -1065,7 +1065,7 @@ fn independent_snix_stores_agree_on_signed_bytes_only_with_the_same_fixture_key(
             command.args(["--store-backend", "snix"]);
         }
         command
-            .args(["store", "verify", "--trusted-public-keys", key, &selector])
+            .args(["store", "verify", "--trusted-public-keys", key, selector])
             .assert()
             .success()
             .stdout(predicate::str::contains("trusted_signatures=1/1"));
@@ -1088,9 +1088,7 @@ fn default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts() {
     for explicit_backend in [false, true] {
         let fixed_root = std::env::var_os("MANTLE_BASELINE_FIXTURE_ROOT").map(PathBuf::from);
         let temporary_root = fixed_root.is_none().then(|| tempfile::tempdir().unwrap());
-        let root = fixed_root
-            .clone()
-            .unwrap_or_else(|| temporary_root.as_ref().unwrap().path().to_path_buf());
+        let root = fixed_root.clone().unwrap_or_else(|| temporary_root.as_ref().unwrap().path().to_path_buf());
         if fixed_root.is_some() {
             assert!(root.is_absolute() && !root.exists(), "fixed fixture root must be new and absolute");
             std::fs::create_dir(&root).unwrap();
@@ -1104,7 +1102,10 @@ fn default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts() {
         assert_eq!(kept.store_path.to_string(), golden["kept_store_path"].as_str().unwrap());
         assert_eq!(candidate.store_path.to_string(), golden["candidate_store_path"].as_str().unwrap());
         assert_eq!(data_encoding::HEXLOWER.encode(&kept.nar_sha256), golden["kept_nar_sha256"].as_str().unwrap());
-        assert_eq!(data_encoding::HEXLOWER.encode(&candidate.nar_sha256), golden["candidate_nar_sha256"].as_str().unwrap());
+        assert_eq!(
+            data_encoding::HEXLOWER.encode(&candidate.nar_sha256),
+            golden["candidate_nar_sha256"].as_str().unwrap()
+        );
         assert_eq!(
             data_encoding::HEXLOWER.encode(&serde_json::to_vec(&kept).unwrap()),
             golden["kept_signed_pathinfo_json_hex"].as_str().unwrap(),
@@ -1147,7 +1148,10 @@ fn default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts() {
         std::fs::create_dir_all(&fresh_state).unwrap();
         std::fs::write(fresh_state.join("signing-key"), TEST_KEYPAIR).unwrap();
         let listing = cli_json(&fresh_state, &fresh_store, &["store", "list"]);
-        assert_eq!(listing, serde_json::from_str::<Value>(golden["fresh_store_list_stdout"].as_str().unwrap()).unwrap());
+        assert_eq!(
+            listing,
+            serde_json::from_str::<Value>(golden["fresh_store_list_stdout"].as_str().unwrap()).unwrap()
+        );
         let selected_identity: Value =
             serde_json::from_slice(&std::fs::read(fresh_state.join("store-identity.json")).unwrap()).unwrap();
         assert_eq!(selected_identity["schema"], "mantle-store-state-v2");
@@ -1179,10 +1183,7 @@ fn default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts() {
         };
         assert_eq!(
             relative_observations(selected_gc.clone(), &root),
-            relative_observations(
-                historical_gc.clone(),
-                Path::new(golden["physical_fixture_root"].as_str().unwrap())
-            ),
+            relative_observations(historical_gc.clone(), Path::new(golden["physical_fixture_root"].as_str().unwrap())),
             "GC candidates, roots, reclaim, and retention identity must match the prechange golden"
         );
         if root == Path::new(golden["physical_fixture_root"].as_str().unwrap()) {
@@ -1219,7 +1220,8 @@ fn rail_seed(
     let alternate_raw = ed25519_dalek::SigningKey::from_bytes(&[19_u8; 32]);
     let mut alternate_keypair = Vec::from(alternate_raw.to_bytes());
     alternate_keypair.extend_from_slice(alternate_raw.verifying_key().as_bytes());
-    std::fs::write(second_signer, format!("archive-cli-2:{}", data_encoding::BASE64.encode(&alternate_keypair))).unwrap();
+    std::fs::write(second_signer, format!("archive-cli-2:{}", data_encoding::BASE64.encode(&alternate_keypair)))
+        .unwrap();
     if backend == crunch_store::StoreBackend::Casita {
         std::fs::write(state.join("casita-trusted-public-keys"), format!("{fixture_key}\n")).unwrap();
     }
@@ -1254,13 +1256,114 @@ fn rail_seed(
     result
 }
 
+fn rail_compare_prechange_seed(golden: &Value, output: &Path, infos: [&PathInfo; 3]) {
+    assert_eq!(golden["signer_public_key"], trusted_public_key());
+    assert_eq!(golden["store_prefix"], TEST_STORE_PREFIX);
+    let expected = golden["paths"].as_array().unwrap();
+    assert_eq!(expected.len(), infos.len());
+    for (info, historical) in infos.into_iter().zip(expected) {
+        assert_eq!(info.store_path.to_string(), historical["store_path"]);
+        assert_eq!(data_encoding::HEXLOWER.encode(&info.nar_sha256), historical["nar_sha256"]);
+        assert_eq!(info.nar_size, historical["nar_size"]);
+        assert_eq!(
+            data_encoding::HEXLOWER.encode(&serde_json::to_vec(info).unwrap()),
+            historical["signed_pathinfo_json_hex"],
+            "same-key signed PathInfo must match pre-selection Snix bytes"
+        );
+        assert_eq!(
+            data_encoding::HEXLOWER.encode(&std::fs::read(output.join(info.store_path.to_string())).unwrap()),
+            historical["exported_content_hex"],
+        );
+    }
+}
+
+fn rail_archive_path_facts(info: &Value) -> Value {
+    serde_json::json!({
+        "store_path": info["store_path"],
+        "nar_sha256": info["nar_sha256"],
+        "nar_size": info["nar_size"],
+        "signatures": info["signatures"],
+        "references": info["references"],
+        "ca": info["ca"],
+        "deriver": info["deriver"],
+    })
+}
+
+fn rail_compare_prechange_archive(golden: &Value, observed: &Value, resigned: &Value) {
+    assert_eq!(observed["listed_paths"], golden["archive"]["listed_paths"]);
+    for field in ["imported_retained", "imported_child"] {
+        assert_eq!(
+            rail_archive_path_facts(&observed[field]),
+            rail_archive_path_facts(&golden["archive"][field]),
+            "{field} changed same-key archive import facts"
+        );
+    }
+    assert_eq!(
+        rail_archive_path_facts(resigned),
+        rail_archive_path_facts(&golden["archive"]["resigned_retained"]),
+        "same-key second signer must produce the same verified signed PathInfo"
+    );
+    assert_eq!(golden["archive"]["verified_signatures_after_sign"], 2);
+}
+
+fn rail_normalize_gc_paths(mut report: Value, root: &Path) -> Value {
+    report.as_object_mut().unwrap().remove("plan_id");
+    for observation in report["reclaim_observations"].as_array_mut().unwrap() {
+        let relative = Path::new(observation["path"].as_str().unwrap()).strip_prefix(root).unwrap();
+        observation["path"] = relative.to_string_lossy().to_string().into();
+    }
+    report
+}
+
+fn rail_canonicalize_historical_gc(mut report: Value) -> Value {
+    let observations = report["reclaim_observations"].as_array_mut().unwrap();
+    // The selected Snix GC sorts dead paths within each blob category before
+    // hashing; pre-selection read_dir order was an execution-ID input.
+    for category in ["blob-index", "blob-chunk"] {
+        if let Some(start) = observations.iter().position(|observation| observation["category"] == category) {
+            let end = start
+                + observations[start..].iter().take_while(|observation| observation["category"] == category).count();
+            observations[start..end]
+                .sort_unstable_by(|left, right| left["path"].as_str().unwrap().cmp(right["path"].as_str().unwrap()));
+        }
+    }
+    report
+}
+
+fn rail_compare_prechange_gc(golden: &Value, root: &Path, observed: &Value) {
+    let historical = &golden["gc"];
+    let fixed_root = Path::new(golden["physical_fixture_root"].as_str().unwrap());
+    for field in ["planned", "fresh"] {
+        let selected = rail_normalize_gc_paths(observed[field].clone(), root);
+        let historical_actual = rail_normalize_gc_paths(historical[field].clone(), fixed_root);
+        let historical_canonical = rail_canonicalize_historical_gc(historical_actual.clone());
+        assert_eq!(selected, historical_canonical, "same-key Snix {field} canonical GC facts changed");
+        if root == fixed_root {
+            if historical_actual == historical_canonical {
+                assert_eq!(
+                    observed[field]["plan_id"], historical[field]["plan_id"],
+                    "fixed-root GC identities must match for an originally canonical old-source order"
+                );
+            } else {
+                println!(
+                    "PRECHANGE_SNIX_RAIL_GC_PLAN {field} old_unsorted={} selected_canonical={}",
+                    historical[field]["plan_id"], observed[field]["plan_id"]
+                );
+            }
+        }
+    }
+    assert_eq!(observed["after_pin_candidate_paths"], historical["after_pin_candidate_paths"]);
+    assert_eq!(observed["execution_candidate_paths"], historical["execution_candidate_paths"]);
+    assert_eq!(observed["execution_complete"], historical["execution_complete"]);
+}
+
 fn rail_reopen_and_reuse(
     backend: crunch_store::StoreBackend,
     state: &Path,
     output: &Path,
     retained: &PathInfo,
     child: &PathInfo,
-) {
+) -> Value {
     run_async(async {
         let reopened = StoreHandle::open(StoreConfig::new(
             backend,
@@ -1270,7 +1373,8 @@ fn rail_reopen_and_reuse(
         ))
         .await
         .unwrap();
-        assert_eq!(reopened.pathinfo_service().get(*retained.store_path.digest()).await.unwrap(), Some(retained.clone()));
+        let observed = reopened.pathinfo_service().get(*retained.store_path.digest()).await.unwrap().unwrap();
+        assert_eq!(observed, *retained);
         let ports = reopened.into_builder_store_parts();
         let closure = ports.build_store.resolve_closure(&retained.store_path, StoreFallbackMode::Strict).await.unwrap();
         assert!(closure.audit_events.is_empty());
@@ -1298,7 +1402,13 @@ fn rail_reopen_and_reuse(
         let reused = ports.action_results.probe_outputs(&action).await.unwrap();
         assert_eq!(reused.outputs.get("out"), Some(retained));
         assert_eq!(reused.reused_nar_bytes, retained.nar_size);
-    });
+        serde_json::json!({
+            "reopened_signed_pathinfo_hex": data_encoding::HEXLOWER.encode(&serde_json::to_vec(&observed).unwrap()),
+            "closure_paths": closure.paths.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            "reused_nar_bytes": reused.reused_nar_bytes,
+            "reused_output_signed_pathinfo_hex": data_encoding::HEXLOWER.encode(&serde_json::to_vec(reused.outputs.get("out").unwrap()).unwrap()),
+        })
+    })
 }
 
 fn rail_archive_roundtrip(
@@ -1308,7 +1418,7 @@ fn rail_archive_roundtrip(
     admitted: [&PathInfo; 3],
     fixture_key: &str,
     alternate_key: &str,
-) -> Value {
+) -> (Value, Value) {
     let state = root.join("state");
     let output = root.join("output");
     let imported_state = root.join("imported-state");
@@ -1316,7 +1426,13 @@ fn rail_archive_roundtrip(
     let archive = root.join("closure.mnar");
     for info in admitted {
         rail_cmd(backend, &state, &output)
-            .args(["store", "verify", "--trusted-public-keys", fixture_key, info.store_path.name()])
+            .args([
+                "store",
+                "verify",
+                "--trusted-public-keys",
+                fixture_key,
+                info.store_path.name(),
+            ])
             .assert()
             .success()
             .stdout(predicate::str::contains("trusted_signatures=1/1"));
@@ -1327,6 +1443,13 @@ fn rail_archive_roundtrip(
         .arg(retained.store_path.name())
         .assert()
         .success();
+    let listed = rail_cmd(backend, &state, &output)
+        .args(["--json", "store", "archive", "list", "--from"])
+        .arg(&archive)
+        .output()
+        .unwrap();
+    assert!(listed.status.success(), "{}", String::from_utf8_lossy(&listed.stderr));
+    let listed: Value = serde_json::from_slice(&listed.stdout).unwrap();
     std::fs::create_dir_all(&imported_state).unwrap();
     std::fs::write(imported_state.join("signing-key"), TEST_KEYPAIR).unwrap();
     if backend == crunch_store::StoreBackend::Casita {
@@ -1348,14 +1471,22 @@ fn rail_archive_roundtrip(
     assert_eq!(imported["backend"], backend.as_str());
     assert_eq!(imported["paths"][0]["nar_sha256"], data_encoding::HEXLOWER.encode(&retained.nar_sha256));
     assert_eq!(imported["paths"][0]["signatures"][0], retained.signatures[0].to_string());
-    imported["backend_capabilities"].clone()
+    let imported_child = rail_cmd(backend, &imported_state, &imported_output)
+        .args(["--json", "store", "info", admitted[1].store_path.name()])
+        .output()
+        .unwrap();
+    assert!(imported_child.status.success(), "{}", String::from_utf8_lossy(&imported_child.stderr));
+    let imported_child: Value = serde_json::from_slice(&imported_child.stdout).unwrap();
+    let archive_facts = serde_json::json!({
+        "listed_paths": listed["paths"].as_array().unwrap().iter()
+            .map(|path| path["store_path"].as_str().unwrap()).collect::<Vec<_>>(),
+        "imported_retained": imported["paths"][0],
+        "imported_child": imported_child["paths"][0],
+    });
+    (imported["backend_capabilities"].clone(), archive_facts)
 }
 
-fn rail_check_profile(
-    backend: crunch_store::StoreBackend,
-    root: &Path,
-    capabilities: &Value,
-) {
+fn rail_check_profile(backend: crunch_store::StoreBackend, root: &Path, capabilities: &Value) {
     assert_eq!(capabilities["rust_unit_cache"], backend == crunch_store::StoreBackend::Snix);
     assert_eq!(capabilities["overlay_composition"], backend == crunch_store::StoreBackend::Snix);
     if backend == crunch_store::StoreBackend::Casita {
@@ -1382,7 +1513,7 @@ fn rail_sign_and_check_mixed_backend(
     retained: &PathInfo,
     fixture_key: &str,
     alternate_key: &str,
-) -> usize {
+) -> (usize, Value) {
     let state = root.join("imported-state");
     let output = root.join("imported-output");
     rail_cmd(backend, &state, &output)
@@ -1401,12 +1532,24 @@ fn rail_sign_and_check_mixed_backend(
     assert_eq!(signatures.len(), 2, "store sign must append the independently provisioned second signature");
     assert!(signatures.iter().any(|sig| sig.as_str().unwrap().starts_with("archive-cli-2:")));
     rail_cmd(backend, &state, &output)
-        .args(["store", "verify", "--trusted-public-keys", fixture_key, "--trusted-public-keys", alternate_key, retained.store_path.name()])
+        .args([
+            "store",
+            "verify",
+            "--trusted-public-keys",
+            fixture_key,
+            "--trusted-public-keys",
+            alternate_key,
+            retained.store_path.name(),
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("trusted_signatures=2/2"));
     let identity_before = state_files(&state);
-    let wrong_backend = if backend == crunch_store::StoreBackend::Snix { "casita" } else { "snix" };
+    let wrong_backend = if backend == crunch_store::StoreBackend::Snix {
+        "casita"
+    } else {
+        "snix"
+    };
     mantle_cmd()
         .args(["--store-backend", wrong_backend, "--store-prefix", TEST_STORE_PREFIX])
         .arg("--state-dir")
@@ -1418,7 +1561,7 @@ fn rail_sign_and_check_mixed_backend(
         .failure()
         .stderr(predicate::str::contains("store-backend-mismatch"));
     assert_eq!(state_files(&state), identity_before);
-    signatures.len()
+    (signatures.len(), resigned["paths"][0].clone())
 }
 
 fn rail_gc_retains_closure(
@@ -1439,7 +1582,13 @@ fn rail_gc_retains_closure(
         assert_eq!(observed["paths"][0]["nar_sha256"], data_encoding::HEXLOWER.encode(&info.nar_sha256));
         assert!(output.join(info.store_path.to_string()).exists(), "plan-bound GC must retain the pinned closure");
         rail_cmd(backend, state, output)
-            .args(["store", "verify", "--trusted-public-keys", fixture_key, info.store_path.name()])
+            .args([
+                "store",
+                "verify",
+                "--trusted-public-keys",
+                fixture_key,
+                info.store_path.name(),
+            ])
             .assert()
             .success()
             .stdout(predicate::str::contains("trusted_signatures=1/1"));
@@ -1454,17 +1603,28 @@ fn rail_gc(
     child: &PathInfo,
     candidate: &PathInfo,
     fixture_key: &str,
-) -> &'static str {
+) -> (&'static str, Value) {
     let retained_logical = retained.store_path.to_absolute_path_with_prefix(TEST_STORE_PREFIX);
     let candidate_logical = candidate.store_path.to_absolute_path_with_prefix(TEST_STORE_PREFIX);
-    rail_cmd(backend, state, output).args(["store", "pin", &retained_logical]).assert().success();
+    let legacy_root = serde_json::json!({
+        retained_logical.clone(): {
+            "logical_path": retained_logical,
+            "source": "build",
+            "created_unix_s": 100,
+        }
+    });
+    std::fs::write(state.join("gc-roots.json"), serde_json::to_vec(&legacy_root).unwrap()).unwrap();
     let plan = rail_cmd(backend, state, output).args(["--json", "store", "gc", "--dry-run"]).output().unwrap();
     assert!(plan.status.success(), "{}", String::from_utf8_lossy(&plan.stderr));
     let plan: Value = serde_json::from_slice(&plan.stdout).unwrap();
     assert_eq!(plan["candidate_paths"], serde_json::json!([candidate_logical.clone()]));
     let accepted_id = plan["plan_id"].as_str().unwrap();
     rail_cmd(backend, state, output).args(["store", "pin", &candidate_logical]).assert().success();
-    let blocker = if backend == crunch_store::StoreBackend::Snix { "stale-gc-plan" } else { "gc-plan-stale" };
+    let blocker = if backend == crunch_store::StoreBackend::Snix {
+        "stale-gc-plan"
+    } else {
+        "gc-plan-stale"
+    };
     rail_cmd(backend, state, output)
         .args(["store", "gc", "--execute", "--plan-id", accepted_id])
         .assert()
@@ -1481,7 +1641,14 @@ fn rail_gc(
     let fresh: Value = serde_json::from_slice(&fresh.stdout).unwrap();
     assert_eq!(fresh["candidate_paths"], serde_json::json!([candidate_logical]));
     let execution = rail_cmd(backend, state, output)
-        .args(["--json", "store", "gc", "--execute", "--plan-id", fresh["plan_id"].as_str().unwrap()])
+        .args([
+            "--json",
+            "store",
+            "gc",
+            "--execute",
+            "--plan-id",
+            fresh["plan_id"].as_str().unwrap(),
+        ])
         .output()
         .unwrap();
     assert!(execution.status.success(), "{}", String::from_utf8_lossy(&execution.stderr));
@@ -1501,38 +1668,78 @@ fn rail_gc(
         .failure()
         .stderr(predicate::str::contains("no PathInfo matching"));
     rail_gc_retains_closure(backend, state, output, retained, child, fixture_key);
-    blocker
+    let gc_facts = serde_json::json!({
+        "planned": plan,
+        "after_pin_candidate_paths": after["candidate_paths"],
+        "fresh": fresh,
+        "execution_complete": execution["execution_complete"],
+        "execution_candidate_paths": execution["candidate_paths"],
+    });
+    (blocker, gc_facts)
+}
+
+fn rail_assert_snix_prechange(
+    golden: &Value,
+    root: &Path,
+    reopen: &Value,
+    archive: &Value,
+    resigned: &Value,
+    gc: &Value,
+) {
+    assert_eq!(reopen, &golden["reopen"], "same-key reopened PathInfo, closure, and reuse changed");
+    rail_compare_prechange_archive(golden, archive, resigned);
+    rail_compare_prechange_gc(golden, root, gc);
 }
 
 #[test]
 fn admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail() {
+    let golden: Value = serde_json::from_str(include_str!(
+        "../.cairn/changes/add-store-backend-selection/evidence/prechange-snix-rail-golden-2026-10-04.json"
+    ))
+    .unwrap();
     let mut snix_signed_pathinfo = None;
     let fixture_key = trusted_public_key();
     let alternate_key = other_trusted_public_key("archive-cli-2");
     for backend in [crunch_store::StoreBackend::Snix, crunch_store::StoreBackend::Casita] {
-        let root = tempfile::tempdir().unwrap();
-        let state = root.path().join("state");
-        let output = root.path().join("output");
+        let fixed_root = (backend == crunch_store::StoreBackend::Snix)
+            .then(|| std::env::var_os("MANTLE_RAIL_FIXTURE_ROOT"))
+            .flatten()
+            .map(std::path::PathBuf::from);
+        let temp_root = fixed_root.is_none().then(|| tempfile::tempdir().unwrap());
+        let root = fixed_root.as_deref().unwrap_or_else(|| temp_root.as_ref().unwrap().path());
+        if fixed_root.is_some() {
+            assert!(root.is_absolute() && !root.exists(), "fixed rail root must be fresh and absolute");
+            std::fs::create_dir(root).unwrap();
+        }
+        let state = root.join("state");
+        let output = root.join("output");
         let (retained, child, candidate) =
-            rail_seed(backend, &state, &output, &root.path().join("second-test-only-signing-key"), &fixture_key);
+            rail_seed(backend, &state, &output, &root.join("second-test-only-signing-key"), &fixture_key);
+        if backend == crunch_store::StoreBackend::Snix {
+            rail_compare_prechange_seed(&golden, &output, [&retained, &child, &candidate]);
+        }
         let signed_bytes = serde_json::to_vec(&retained).unwrap();
         if let Some(snix_bytes) = &snix_signed_pathinfo {
             assert_eq!(&signed_bytes, snix_bytes, "equal signing keys and NARs must agree across backends");
         } else {
             snix_signed_pathinfo = Some(signed_bytes);
         }
-        rail_reopen_and_reuse(backend, &state, &output, &retained, &child);
-        let capabilities = rail_archive_roundtrip(
+        let reopen = rail_reopen_and_reuse(backend, &state, &output, &retained, &child);
+        let (capabilities, archive) = rail_archive_roundtrip(
             backend,
-            root.path(),
+            root,
             &retained,
             [&retained, &child, &candidate],
             &fixture_key,
             &alternate_key,
         );
-        rail_check_profile(backend, root.path(), &capabilities);
-        let signatures = rail_sign_and_check_mixed_backend(backend, root.path(), &retained, &fixture_key, &alternate_key);
-        let blocker = rail_gc(backend, &state, &output, &retained, &child, &candidate, &fixture_key);
+        rail_check_profile(backend, root, &capabilities);
+        let (signatures, resigned) =
+            rail_sign_and_check_mixed_backend(backend, root, &retained, &fixture_key, &alternate_key);
+        let (blocker, gc) = rail_gc(backend, &state, &output, &retained, &child, &candidate, &fixture_key);
+        if backend == crunch_store::StoreBackend::Snix {
+            rail_assert_snix_prechange(&golden, root, &reopen, &archive, &resigned, &gc);
+        }
         println!(
             "BACKEND_CORE_RAIL {} {}",
             backend.as_str(),
@@ -1544,5 +1751,8 @@ fn admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail(
                 "profile_max_root_changes": capabilities["max_root_changes"],
             })
         );
+        if fixed_root.is_some() {
+            std::fs::remove_dir_all(root).unwrap();
+        }
     }
 }

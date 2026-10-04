@@ -1,14 +1,35 @@
 # Tasks: Select the store backend explicitly
 
-T4.1 is checked from Run 5 in `evidence/test-runs-2026-09-30.md`. Every other
-task remains open. Creating this proposal is not implementation evidence.
+T1.1 is checked from the isolated pre-selection `7ec51777` capture and the
+combined same-root strict Snix comparison in
+`evidence/prechange-snix-golden-2026-10-04.md` and
+`evidence/finish-conformance-2026-10-04.md`; the baseline construction and
+launcher inventory is in `evidence/finish-inventory-2026-10-04.md`.
+T1.2–T1.4 are checked from the backend grammar/profile and pure identity
+decision in `crates/crunch-store/src/backend.rs` and `overlay.rs`, the declared
+blockers and profile in `docs/store-backends.md`, and the still-Proposed ADR
+0082 with its `adr/README.md` index row. T4.1 remains checked from Run 5 in
+`evidence/test-runs-2026-09-30.md`; T4.2 is checked from the operator
+documentation and `README.md` index. A supplemental same-key 7ec golden
+now covers every signed core rail path, NAR, reopen/closure/reuse, archive
+and two-signer consumer fact; the parameterized Snix/Casita core rail passes
+against its *canonicalized* 7ec GC observations under both fixed and portable
+fixture roots. The first old capture and all subsequent GC orders are
+recorded; the old numeric plan IDs differ with unsorted `read_dir` order.
+T3.1 remains open for the rest of its profile-driven optional and bound
+fixtures; a passing core comparator alone is not full T3.1 acceptance.
+T3.2/T3.3/T3.4 and T2.1–T2.7 need their remaining combined-tree criteria,
+not just source locations or targeted subcases. T4.3 is open: the source-only
+capability boundary checker reported three existing authority escapes even
+though scoped tests and lint passes were recorded. T4.4 archive/sync must
+wait for every prerequisite, and ADR 0082 remains Proposed.
 
 ## Phase 1: Baseline and contract
 
-- [ ] [serial] T1.1 Record the baseline in an isolated worktree from current `origin/main` with an explicitly provisioned fixture signing key and a fixed environment, both recorded in `evidence/`: store paths, NAR SHA-256, signed PathInfo bytes, GC plan identities, and `store info`, `store roots`, and `store gc --dry-run` JSON for the Snix fixtures; the `store-identity.json` bytes of a fresh state directory; every `StoreConfig` and `StoreHandle::open` construction site; and every launcher that forwards `--state-dir` or `--store-prefix`. Preserve exact output in `evidence/`. r[mantle.store_backends.admission_invariants]
-- [ ] [serial] T1.2 Define the backend identifier grammar, the versioned identity record, the per-backend persistent-state markers, the pure open decision, and the blocker catalog `store-backend-unknown` and `store-backend-mismatch`. r[mantle.store_backends.state_identity] r[mantle.store_backends.mixed_open_rejection]
-- [ ] [serial] T1.3 Define the capability profile: the core capability list (including `store sign` and PathInfo-backed `ActionResultPort` output storage and reuse), the per-backend `store-repair-final-nar` entry and its fail-closed rule, the optional capabilities `overlay-composition`, `atomic-batch-import` with a declared maximum batch size, `unsigned-admission`, and `rust-unit-cache`, and the rule for backend-specific blockers. r[mantle.store_backends.capability_profile]
-- [ ] [serial] T1.4 Record the explicit-selection, recorded-identity, capability-profile, and no-local-fallback decisions in ADR 0082 with an index row in `adr/README.md`. r[mantle.store_backends.no_silent_fallback]
+- [x] [serial] T1.1 Record the baseline in an isolated worktree from current `origin/main` with an explicitly provisioned fixture signing key and a fixed environment, both recorded in `evidence/`: store paths, NAR SHA-256, signed PathInfo bytes, GC plan identities, and `store info`, `store roots`, and `store gc --dry-run` JSON for the Snix fixtures; the `store-identity.json` bytes of a fresh state directory; every `StoreConfig` and `StoreHandle::open` construction site; and every launcher that forwards `--state-dir` or `--store-prefix`. Preserve exact output in `evidence/`. r[mantle.store_backends.admission_invariants]
+- [x] [serial] T1.2 Define the backend identifier grammar, the versioned identity record, the per-backend persistent-state markers, the pure open decision, and the blocker catalog `store-backend-unknown` and `store-backend-mismatch`. r[mantle.store_backends.state_identity] r[mantle.store_backends.mixed_open_rejection]
+- [x] [serial] T1.3 Define the capability profile: the core capability list (including `store sign` and PathInfo-backed `ActionResultPort` output storage and reuse), the per-backend `store-repair-final-nar` entry and its fail-closed rule, the optional capabilities `overlay-composition`, `atomic-batch-import` with a declared maximum batch size, `unsigned-admission`, and `rust-unit-cache`, and the rule for backend-specific blockers. r[mantle.store_backends.capability_profile]
+- [x] [serial] T1.4 Record the explicit-selection, recorded-identity, capability-profile, and no-local-fallback decisions in ADR 0082 with an index row in `adr/README.md`. r[mantle.store_backends.no_silent_fallback]
 
 ## Phase 2: Selection, identity, and profiles
 
@@ -30,6 +51,6 @@ task remains open. Creating this proposal is not implementation evidence.
 ## Phase 4: Surfaces, documentation, and verification
 
 - [x] [serial] T4.1 Regenerate the operator command contract artifacts with the repository generators and run `scripts/check-operator-command-contract.sh`. Do not hand-edit generated JSON. r[mantle.store_backends.explicit_selection]
-- [ ] [serial] T4.2 Document selection, the identity record, the asymmetric rule for directories without an identity record and its provenance risk, capability profiles and bounds, mismatch remediation, the local no-fallback rule, the signing-key rule for signed comparisons, and non-claims in the store documentation and the README index. r[mantle.store_backends.claim_boundary]
+- [x] [serial] T4.2 Document selection, the identity record, the asymmetric rule for directories without an identity record and its provenance risk, capability profiles and bounds, mismatch remediation, the local no-fallback rule, the signing-key rule for signed comparisons, and non-claims in the store documentation and the README index. r[mantle.store_backends.claim_boundary]
 - [ ] [serial] T4.3 Run the focused `crunch-store` and `mantle` store suites, `tools/check_store_capability_boundary.rs`, strict Clippy and rustfmt for touched first-party packages, `git diff --check`, Cairn validation, and the proposal, design, and tasks gates. Preserve exact output in `evidence/`. r[mantle.store_backends.conformance_rail]
 - [ ] [serial] T4.4 Sync accepted specs and archive through the isolated branch workflow only after every task above is complete, with retained completion evidence. r[mantle.store_backends.claim_boundary]
