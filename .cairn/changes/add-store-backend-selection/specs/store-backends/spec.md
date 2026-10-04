@@ -27,6 +27,14 @@ r[mantle.store_backends.explicit_selection] Every Mantle store open MUST carry a
 - THEN it MUST fail with `store-backend-unknown`
 - AND it MUST NOT create, open, or modify the state directory
 
+#### Scenario: Library constructor cannot omit the backend
+
+- GIVEN a Rust caller constructs `StoreConfig` without its `backend` field while an existing selected store state has been seeded
+- WHEN the caller is compiled against `crunch-store`
+- THEN compilation MUST fail with `E0063`, missing field `backend`
+- AND the seeded state MUST remain byte-identical because the invalid caller cannot execute
+- AND this compile-time rejection MUST NOT be represented as a runtime backend blocker
+
 ### Requirement: The state directory records its backend
 
 r[mantle.store_backends.state_identity] Mantle MUST record the backend identifier in a versioned state identity record when it creates a state directory. A legacy identity record without a backend field MUST be interpreted as `snix` and MUST NOT be rewritten by ordinary commands. A backend other than `snix` MUST NOT write the legacy record schema.

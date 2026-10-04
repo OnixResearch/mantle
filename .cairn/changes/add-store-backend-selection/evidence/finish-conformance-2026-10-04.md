@@ -170,17 +170,19 @@ could also have yielded this ordered sequence, but none of our recorded
 7ec three-path runs established that plan ID. The original first rail
 artifact, T1.1 golden and red selected-observation artifact are unchanged.
 This bounded pre-existing non-repeatability is an explicit supplemental
-three-path non-claim, not a favorable-retry golden. The conformance
-specification at `specs/store-backends/spec.md:181-189` requires parity
-with goldens recorded **before** selection: the original T1.1 two-path
-fixed-root capture has exact old-vs-selected plan-ID equality, whereas
-the separately captured additional three-path rail has matching signed
-and canonicalized consumer facts but **different** old and selected raw
-plan IDs. Its numerical disagreement alone does not prevent T3.1
-acceptance, and no later 7ec traversal may replace the first capture
-to obtain a favorable numerical match. T3.1 remains open because the
-parameterized rail has not yet run every declared optional capability
-and bound fixture and each undeclared capability's fail-closed fixture.
+three-path non-claim, not a favorable-retry golden. The original T1.1
+two-path fixed-root capture has exact old-vs-selected numerical plan-ID
+equality; the first preserved three-path capture has matching signed
+bytes and canonicalized consumer facts but **different** old and selected
+raw IDs. Spec `specs/store-backends/spec.md:193-197` also says **every
+positive fixture MUST reproduce its golden**. The supplemental
+three-path fixture was separately captured, not the original T1.1
+golden; if that literal clause includes this independently captured
+positive fixture's numeric plan ID, T3.1 cannot currently pass. No
+later 7ec traversal may replace the first preserved capture to
+manufacture a match. T3.1 remains unchecked pending explicit scope
+interpretation even after optional fixtures are exercised.
+
 The corrected source-only capability checker pass below likewise does
 not finish the remaining T4.3 quality gates.
 
@@ -194,7 +196,7 @@ paths; both backends again printed the signed two-signer core records above.
 
 ## Complementary fixtures and work still to prove
 
-The one backend-parameterized rail above exercises core operations and
+At this first integrated run, the backend-parameterized rail exercised core operations and
 some declared-profile rejections. It does **not** yet invoke all
 Snix-declared overlay/atomic-batch/unsigned/Rust-cache positives,
 Casita's real 1,024/1,025 batch bound, or every unsupported-feature
@@ -208,8 +210,9 @@ Nario v2, Snix Rust cache reuse, Casita's production 1,024/1,025
 boundary, disabled-overlay preflight, Casita repair CLI/library
 rejections and Snix repair success, a test-only disabled-Rust-cache
 real command, and PathInfo ActionResult reuse under the real
-no-Rust-cache Casita profile. Their exact executions and remaining
-synthetic-profile gap are recorded below rather than inferred here.
+no-Rust-cache Casita profile. Their exact executions and the
+then-remaining synthetic-profile gap are recorded below.
+
 The original two-path fixed-root historical GC plan-ID comparison
 passes; the supplemental three-path comparison makes no exact raw
 numeric ID claim. Other T4.3 workspace gates remain open. No
@@ -355,3 +358,284 @@ returned `"valid": true`, `"verdict": "PASS"`, `"task_done": 13`,
 There is **no global Cairn validation blocker** in this run. Structural
 PASS with open tasks is not T4.4 sync/archive eligibility. T4.3 remains
 open until post-final-source full scoped suites and strict Clippy complete.
+
+## Omitted Rust backend: compile-time negative, not a runtime blocker
+
+A separate scratch Rust caller uses `StoreConfig { state_dir, output_dir,
+remote_cache_urls: Vec::new(), base_state_dirs: Vec::new(),
+fallback_mode: StoreFallbackMode::Practical, store_dir: "/nix/store".to_owned()
+}` and omits only `backend`. With the existing selected `snix` Mantle CLI,
+`store list` first seeded a real state (`directories.redb`, `pathinfo.redb`,
+`store-identity.json`), all captured as full file bytes. Against the
+compiler-compatible `libcrunch_store-60859064e630e08d.rlib`, the pinned
+toolchain's `nix develop -c rustc --edition=2024 --crate-name
+store_config_missing_backend <scratch>.rs --extern
+crunch_store=<rlib> -L dependency=<selection-target>/debug/deps
+--emit=metadata -o <outside-state>.rmeta` exited **1** with exactly:
+
+```text
+error[E0063]: missing field `backend` in initializer of `StoreConfig`
+ --> .../store-config-missing-backend.rs:5:5
+  |
+5 |     StoreConfig {
+  |     ^^^^^^^^^^^ missing `backend`
+```
+
+No metadata output was created, and the entire seeded file-byte snapshot
+before and after compilation was **equal**. The initially selected older
+rlib fingerprint produced only unrelated `E0463` and was discarded; it is
+not this fixture's outcome. The stable missing-field class is **Rust
+`E0063`**; there is no impossible runtime `StoreConfig`-without-backend
+blocker to fabricate. The other T3.2 runtime negatives retain their own
+stable blockers and byte-equivalence checks.
+
+## Five launcher forwarding contracts and bounded observed subset
+
+The local remote-worker launcher in `src/main.rs:5388-5440` constructs
+the default `remote serve --binding stdio-once` child with the selected
+`--store-backend` argument. `src/bootstrap_validate.rs:258-294` forwards
+`request.ctx.store_backend` to its real build child.
+`src/source_built_fixed_point_shell.rs:1875-1925` adds the selected
+backend to the actual native build-child `Command` after it has constructed
+a proof staging directory. `src/transcript_cmd.rs:497-513` adds the scratch
+backend to child arguments unless the transcript explicitly provided it.
+The CLI Rust cache route `src/main.rs:4194-4211` passes the selected
+backend into the wrapper daemon; the wrapper's `DaemonOptions.backend`
+requires it. Bounded real bootstrap/transcript/daemon child fixtures
+were exercised in their focused suites; **neither a local remote-worker
+build nor a source-built fixed-point proof was launched**. T2.3's checked
+claim covers selected-identifier forwarding in all five source
+contracts, not a fabricated runtime proof of those two unbounded builds.
+
+## Broader Mantle bin nonclaim outside the specified focused T4.3 suite
+
+One broad `cargo test -p mantle --bin mantle -- --nocapture` execution
+finished with **2482 passed; 2 failed; 68 ignored** (2552 tests;
+`artifact://28708`). The failing names were
+`external_batch_dispatch::tests::slurm_adapter_submits_observes_reconciles_and_cancels_fake_cli`
+and
+`protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path`;
+the latter nested test reported
+`Supervisor("adopted StageX descendants did not exit within 30000 ms")`.
+The unchanged broad suite was **not rerun**. Its output independently
+lists successful `store_cmd` tests, backend-selection parser and test-only
+no-Rust-cache negative, and Rust cache CLI parser tests. This is **not**
+a claim that the broad binary suite passed; T4.3 names focused Mantle
+store suites, so its status also depends on those distinct focused
+results, not on disguising the two broad-suite failures.
+
+## Post-constructor focused backend negatives and store-core suite
+
+The post-constructor/feature `cargo test --test store_gc_cli -- --nocapture`
+passed **17/17** (the Nix evaluator emitted only an ignored busy-cache
+warning). It actually ran identity-less Casita marker negatives under
+both selected backends with/without Snix files, foreign identity-less
+content, unknown identifier, ambient selection, wrong-backend sign,
+build and overlay, Casita Rust-cache daemon and plan preflights, signed
+Casita plan-bound GC, and Snix overlay store info. Rejected filesystem
+trees were compared byte-for-byte by the focused fixtures. The same
+`cargo test -p crunch-store --lib -- --nocapture` passed **405/405**,
+including `nario_casita_accepts_configured_1024_root_boundary` and
+`nario_casita_rejects_1025_new_roots_before_any_publication`.
+
+The first strict Clippy attempt against touched package targets passed
+`-- -D warnings` to vendored path dependencies too, and exited **101**
+before establishing first-party lint success: `fuse-backend-rs` alone
+raised **36** pre-existing `clippy::io_other_error` errors
+(`artifact://28720`). `cargo clippy --help` confirms `--no-deps` is the
+supported way to lint only selected first-party packages without
+linting their dependencies. That precise scoped follow-up and final
+rustfmt/whitespace checks are not claimed here until executed.
+
+The post-constructor `cargo check -p crunch-store --lib
+--no-default-features` passed against the isolated selection target.
+This is a production-default compile proof, not an optional-profile
+behavior fixture.
+
+`cargo test --test integration_build
+fetchurl_downloads_and_verifies_hash -- --exact --nocapture`
+passed **1/1**, exercising real local-file realization on the combined
+post-constructor source. The broader untouched build matrix is not
+claimed by this targeted integration result.
+
+## Signed Casita Nario 1,024/1,025 durable-state boundary
+
+Test-only source commit `3780360b`, cherry-picked as `8c0944ad`,
+strengthens the **existing signed** Nario v2 1,025-path fixture in
+`crates/crunch-store/src/nario.rs`. It snapshots every relative
+directory and the complete bytes of every file in the destination
+tree immediately before import, after the real `casita-batch-limit`
+rejection, and after the failed import handle closes. Each snapshot is
+equal; on fresh reopen all 1,025 PathInfos and physical output paths
+are absent. Its focused command passed **1/1; 404 filtered**, as did
+the separately executed signed 1,024-path import and fresh-reopen
+positive **1/1; 404 filtered**. The observed unchanged-production
+1,025 rejection is **green**; there was no failing-before durable
+mutation and no speculative production Nario rewrite.
+
+This proves no *durable* state bytes or output paths change on signed
+Nario over-bound rejection. Casita stages earlier NAR bytes in
+session-memory blob/temporary directory services before encountering
+the 1,025th record; the fixture does **not** claim zero transient
+memory effects, and the archive's declared 1 TiB aggregate limit can
+still imply substantial transient resource pressure. The separate
+backend-parameterized rail additionally uses real signed
+`put_batch_atomic` at 1,024/1,025 to exercise the selected backend
+root-commit bound; that lower-level operation is **not** substituted
+for the signed Nario importer regression.
+
+## Real dropped-child selection and T3.2 completion
+
+The post-constructor selected-child command
+`cargo test --test transcript_cli
+transcript_real_child_reopens_selected_casita_and_rejects_dropped_selection_without_mutation
+-- --exact --nocapture` passed **1/1; 11 filtered**. It launches a real
+transcript child under selected Casita, observes its recorded identity,
+then launches a child omitting backend selection and observes exact
+`store-backend-mismatch` with a complete directory-and-file-byte tree
+unchanged. A transcript explicitly selecting the wrong backend also
+gets the expected mismatch without mutation. In combination with the
+**17/17** backend-selection/identity/ambient CLI negative matrix above
+and the separate real `StoreConfig` Rust `E0063` compiler negative
+against byte-identical seeded state, T3.2's runtime/compile-time
+negative fixtures are checked. No runtime blocker is attributed to
+an unconstructible Rust config.
+
+## Selected build/store CLI integration suite
+
+`cargo test --test integration` completed **77/77 passed** on the
+combined selection checkout, including Casita repair rejection before
+state creation, selected Snix `store repair-final-nar` execution and
+fresh-process archive export, signed store metadata and verification,
+bootstrap seed creation/import, and the store pull HTTP closure round
+trip. Some builder and shell cases printed `skipping build test:
+bwrap or /nix/store not available` / `skipping: bwrap or /nix/store not
+available` and returned success through their test functions; the
+77/77 result is **not** proof those unavailable sandbox build paths
+executed.
+
+## First expanded optional-rail compile attempt
+
+The first expanded `cargo test --test store_archive_cli -- --nocapture`
+attempt failed **before running any test** with Rust `E0599`: the new
+Rust-cache rail helper tried to clone `StoreConfig`, which intentionally
+does not implement `Clone`. This did **not** create the historical fixed
+fixture root. The helper now constructs a fresh equivalent typed
+`StoreConfig` with a local closure for the first open, reopen, and
+unsupported-profile preflight. The failed compile is not counted as
+optional-profile or T4.3 proof; subsequent executions must determine
+whether the corrected fixture actually passes.
+
+## Expanded rail: environment quota failure and pinned retry
+
+The corrected one-test optional rail compiled, exercised the Snix
+core and new optional branches successfully, then **failed on the
+Casita 1,024-root positive import at root 226**, reporting
+`staging Casita ...: Disk quota exceeded (os error 122)`. Its run had
+not pinned `TMPDIR`; Casita creates transaction scratch with
+`tempfile::tempdir()`, so this process used `/tmp`. The immediately
+observed `df -h` reported `/tmp` on `datapool/tmp` **258G/258G used,
+25M available (100%)**, whereas the selected cargo-target filesystem
+had **306G available**. This is an environment resource failure, not
+evidence of a source correctness defect or a passing Casita bound.
+No unrelated `/tmp` or shared cargo state was deleted. A corrected
+exact-root conformance run was launched with
+`TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp`,
+the original absolute historical
+`MANTLE_RAIL_FIXTURE_ROOT=.../fixture-rail-compare`, and
+`CRUNCH_CONFIG_DIR`, `MANTLE_STORE_BACKEND` unset plus `LANG=C`,
+`LC_ALL=C`, `TZ=UTC`, `SOURCE_DATE_EPOCH=1600000000`; its result is
+recorded only after completion.
+
+## One disabled Rust-cache profile, real PathInfo action reuse
+
+On combined HEAD with source commit `fb7d28d4`, the corrected
+`cargo test -p mantle --bin mantle
+test_only_profile_without_rust_cache_blocks_cache_and_reuses_pathinfo_action_result
+-- --nocapture` passed **1/1; 2551 filtered**. An earlier invocation
+with `--exact` reported **0 tests** because the test is nested under
+`tests::`; that invocation is not proof. In the *same* test-only Snix
+profile with `rust_unit_cache: false`, the real `rust-cache serve`
+entry point rejects before creating state, output, or receipts. The
+test then publishes an actual signed PathInfo-backed ActionResult,
+reopens the selected store, discovers the persistent local record,
+verifies its detached signature, probes the output with
+`reused_nar_bytes` equal to the measured NAR and
+`transferred_nar_bytes == 0`, checks physical export, and rejects
+the Rust-cache command again without any receipt directory. This is
+not inferred from the separate real-Casita profile fixture.
+
+## Corrected fixed-root optional and bounded profile rail
+
+The corrected command reused the original *absolute historical* Snix
+rail root only after verifying it was absent:
+
+```sh
+test ! -e /home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-rail-compare &&
+env CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/selection-target \
+  TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  MANTLE_RAIL_FIXTURE_ROOT=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-rail-compare \
+  nix develop -c sh -c 'env -u CRUNCH_CONFIG_DIR -u MANTLE_STORE_BACKEND LANG=C LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1600000000 cargo test --test store_archive_cli admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail -- --exact --nocapture'
+```
+
+Observed **1 passed; 0 failed; 13 filtered**, with both
+`BACKEND_CORE_RAIL snix` and `BACKEND_CORE_RAIL casita` after all
+optional operations. Snix's new branches composed **two actual
+read-only bases** and resolved distinct signed paths in each while
+comparing base-file bytes, admitted and reopened a signed atomic
+batch, actually imported an unsigned Nario path with explicit
+`--trust-unsigned`, and published then restored a real Rust-unit
+cache artifact after fresh reopening without including mutable
+receipt material. Casita rejected overlay/unsigned/Rust-cache
+preflights with stable blockers before opening bases or mutating
+state, rejected a signed atomic 1,025-root batch with
+`casita-batch-limit` and byte-identical state, then admitted exactly
+1,024 roots and resolved representative PathInfos after reopening.
+The independent **signed Nario importer** 1,024/1,025 durable-tree
+regressions remain separately executed; the direct batch fixture
+does not replace them.
+
+The first preserved three-path 7ec GC execution IDs remain
+`b3:36eb6141fa768f053c08258dc684365f28e908643a2e51bffcb63a0b7cf31491`
+versus selected
+`b3:c73dcda6e8949135b7d49298cd219c3845e8eb6e18653d60b8cd5bb9c8b90e95`.
+No recapture or golden rewrite occurred. The original two-path
+fixed-root execution ID matched exactly, and the shared signed
+PathInfo/NAR/consumer facts matched. T3.3 is checked with the
+combined same-profile ActionResult fixture above; T3.1 remains
+unchecked under spec 193–197's literal every-positive-fixture golden
+clause pending explicit scope interpretation. A full 14-case archive
+suite under this pinned environment is recorded separately when it
+finishes; one selected test is not itself T4.3's whole suite.
+
+## Focused Mantle bin selectors, bounded partial receipt
+
+An initial three-selector command was cut off by its **3,600-second
+job deadline during compilation of the third selector**. Its first
+two actual executions passed:
+`cargo test -p mantle --bin mantle store_backend -- --nocapture`
+**1/1; 2,551 filtered**, and
+`cargo test -p mantle --bin mantle store_cmd -- --nocapture`
+**6/6; 2,546 filtered**. There was no third-test result; timeout is
+not a green Rust-cache selector. Only the unfinished
+`cargo test -p mantle --bin mantle rust_cache -- --nocapture` selector
+was launched again with pinned quota-safe `TMPDIR`, without rerunning
+either already-passed selector. Its outcome is recorded after it
+executes.
+
+## Definitive full selected archive CLI suite
+
+The full `cargo test --test store_archive_cli -- --nocapture`
+completed **14/14 passed** on the combined source and test-only peer
+commits, using the original absolute
+`MANTLE_RAIL_FIXTURE_ROOT=.../fixture-rail-compare`, pinned quota-safe
+`TMPDIR`, and unchanged baseline locale/time/signer environment
+shown in the corrected command above. It included both default and
+explicit Snix portable historical signed/GC facts, independently
+verified same-key versus distinct-key Snix signatures, signed Nario
+and native archive CLI admissions/rejections, Casita trust and unsigned
+preflights, state-byte identity/migration, and the new **actual**
+Snix/Casita optional-profile/bound one-rail fixture. Its
+`PRECHANGE_SNIX_RAIL_GC_PLAN` lines still display the preserved raw
+three-path numerical mismatch; 14/14 is not a claim that spec
+193–197's literal every-positive-golden clause was resolved.

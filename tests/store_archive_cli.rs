@@ -1550,6 +1550,8 @@ fn rail_archive_roundtrip(
 fn rail_check_profile(backend: crunch_store::StoreBackend, root: &Path, capabilities: &Value) {
     assert_eq!(capabilities["rust_unit_cache"], backend == crunch_store::StoreBackend::Snix);
     assert_eq!(capabilities["overlay_composition"], backend == crunch_store::StoreBackend::Snix);
+    assert_eq!(capabilities["atomic_batch_import"], true);
+    assert_eq!(capabilities["unsigned_admission"], backend == crunch_store::StoreBackend::Snix);
     if backend == crunch_store::StoreBackend::Casita {
         assert_eq!(capabilities["max_root_changes"], 1024);
         let state = root.join("imported-state");
@@ -1566,6 +1568,249 @@ fn rail_check_profile(backend: crunch_store::StoreBackend, root: &Path, capabili
     } else {
         assert!(capabilities["max_root_changes"].is_null());
     }
+}
+
+fn rail_check_overlay(backend: crunch_store::StoreBackend, root: &Path, retained: &PathInfo) {
+    let state = root.join("overlay-state");
+    let output = root.join("overlay-output");
+    if backend == crunch_store::StoreBackend::Casita {
+        let before = state_files(&root.join("imported-state"));
+        rail_cmd(backend, &state, &output)
+            .arg("--base-store")
+            .arg(root.join("imported-state"))
+            .args(["store", "list"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("casita-overlay-unsupported"));
+        assert!(!state.exists() && !output.exists());
+        assert_eq!(state_files(&root.join("imported-state")), before);
+        return;
+    }
+
+    let first = root.join("state");
+    let second = root.join("imported-state");
+    let second_info = run_async(seed_signed_file(
+        &root.join("imported-output"),
+        &second,
+        "rail-second-base",
+        b"second overlay base\n",
+        true,
+    ));
+    let mut original_permissions = Vec::new();
+    for base in [&first, &second] {
+        let mut pending = vec![base.to_path_buf()];
+        while let Some(path) = pending.pop() {
+            if path.is_dir() {
+                pending.extend(std::fs::read_dir(&path).unwrap().map(|entry| entry.unwrap().path()));
+            }
+            let original = std::fs::metadata(&path).unwrap().permissions();
+            let mut readonly = original.clone();
+            readonly.set_readonly(true);
+            std::fs::set_permissions(&path, readonly).unwrap();
+            original_permissions.push((path, original));
+        }
+    }
+    let before_first = state_files(&first);
+    let before_second = state_files(&second);
+    for (info, index) in [(retained, 1), (&second_info, 2)] {
+        let selected = rail_cmd(backend, &state, &output)
+            .arg("--base-store")
+            .arg(&first)
+            .arg("--base-store")
+            .arg(&second)
+            .args(["--json", "store", "info", info.store_path.name()])
+            .output()
+            .unwrap();
+        assert!(selected.status.success(), "{}", String::from_utf8_lossy(&selected.stderr));
+        let report: Value = serde_json::from_slice(&selected.stdout).unwrap();
+        assert_eq!(report["paths"][0]["store_path"], info.store_path.to_string());
+        assert_eq!(report["paths"][0]["layer"]["kind"], "base");
+        assert_eq!(report["paths"][0]["layer"]["index"], index);
+        assert_eq!(report["overlay"]["bases"].as_array().unwrap().len(), 2);
+        assert_eq!(report["backend_capabilities"]["overlay_composition"], true);
+    }
+    assert_eq!(state_files(&first), before_first, "first read-only base must remain byte-identical");
+    assert_eq!(state_files(&second), before_second, "second read-only base must remain byte-identical");
+    for (path, permissions) in original_permissions.into_iter().rev() {
+        std::fs::set_permissions(path, permissions).unwrap();
+    }
+}
+
+fn rail_check_atomic_batch(backend: crunch_store::StoreBackend, root: &Path, fixture_key: &str) {
+    let state = root.join("batch-state");
+    let output = root.join("batch-output");
+    std::fs::create_dir(&state).unwrap();
+    if backend == crunch_store::StoreBackend::Casita {
+        std::fs::write(state.join("casita-trusted-public-keys"), format!("{fixture_key}\n")).unwrap();
+    }
+    run_async(async {
+        let store = StoreHandle::open(StoreConfig::new(
+            backend,
+            state.clone(),
+            output,
+            TEST_STORE_PREFIX.to_owned(),
+        ))
+        .await
+        .unwrap();
+        let template = signed_file_pathinfo(&store, "rail-batch-template", b"shared batch NAR\n", true).await;
+        let count = if backend == crunch_store::StoreBackend::Casita { 1024 } else { 2 };
+        let infos = (0..=count)
+            .map(|index| {
+                let name = format!("rail-batch-{index:04}");
+                let mut info = template.clone();
+                info.store_path = StorePath::from_name_and_digest_fixed(&name, digest_from_name(&name)).unwrap();
+                info.signatures.clear();
+                sign_pathinfo(&mut info);
+                info
+            })
+            .collect::<Vec<_>>();
+        if backend == crunch_store::StoreBackend::Casita {
+            assert_eq!(backend.profile().max_root_changes, Some(count));
+            let before = state_files(&state);
+            let error = store.pathinfo_service().put_batch_atomic(infos.clone()).await.unwrap_err().to_string();
+            assert!(error.contains("casita-batch-limit: 1025 roots exceed 1024"), "{error}");
+            assert_eq!(state_files(&state), before, "oversize batch must not publish any root bytes");
+            assert!(store.pathinfo_service().get(*infos[0].store_path.digest()).await.unwrap().is_none());
+            assert!(store.pathinfo_service().get(*infos[count].store_path.digest()).await.unwrap().is_none());
+        }
+        let admitted = store.pathinfo_service().put_batch_atomic(infos[..count].to_vec()).await.unwrap();
+        assert_eq!(admitted, infos[..count]);
+        drop(store);
+        let reopened = StoreHandle::open(StoreConfig::new(
+            backend,
+            state.clone(),
+            root.join("batch-output"),
+            TEST_STORE_PREFIX.to_owned(),
+        ))
+        .await
+        .unwrap();
+        for index in [0, count / 2, count - 1] {
+            assert_eq!(reopened.pathinfo_service().get(*infos[index].store_path.digest()).await.unwrap(), Some(infos[index].clone()));
+        }
+        assert!(reopened.pathinfo_service().get(*infos[count].store_path.digest()).await.unwrap().is_none());
+    });
+}
+
+fn rail_check_unsigned(backend: crunch_store::StoreBackend, root: &Path) {
+    let state = root.join("unsigned-state");
+    let output = root.join("unsigned-output");
+    let archive = Path::new("fixtures/nario-v2/positive-single.nario");
+    if backend == crunch_store::StoreBackend::Casita {
+        let before = state_files(&root.join("imported-state"));
+        rail_cmd(backend, &root.join("imported-state"), &root.join("imported-output"))
+            .args(["store", "archive", "import", "--from"])
+            .arg(root.join("closure.mnar"))
+            .arg("--trust-unsigned")
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("casita-trust-unsigned-unsupported"));
+        assert_eq!(state_files(&root.join("imported-state")), before);
+        return;
+    }
+    let imported = mantle_cmd()
+        .args(["--store-backend", "snix", "--store-prefix", "/nix/store"])
+        .arg("--state-dir")
+        .arg(&state)
+        .arg("--store")
+        .arg(&output)
+        .args(["store", "archive", "import", "--format", "nario-v2", "--from"])
+        .arg(archive)
+        .arg("--trust-unsigned")
+        .output()
+        .unwrap();
+    assert!(imported.status.success(), "{}", String::from_utf8_lossy(&imported.stderr));
+    let expected_path = std::fs::read_to_string("fixtures/nario-v2/store-path.txt").unwrap();
+    let name = expected_path.trim().strip_prefix("/nix/store/").unwrap();
+    let observed = mantle_cmd()
+        .args(["--store-backend", "snix", "--store-prefix", "/nix/store"])
+        .arg("--state-dir")
+        .arg(&state)
+        .arg("--store")
+        .arg(&output)
+        .args(["--json", "store", "info", name])
+        .output()
+        .unwrap();
+    assert!(observed.status.success(), "{}", String::from_utf8_lossy(&observed.stderr));
+    let report: Value = serde_json::from_slice(&observed.stdout).unwrap();
+    assert_eq!(report["backend"], "snix");
+    assert_eq!(report["paths"][0]["store_path"], name);
+    assert_eq!(report["paths"][0]["signatures"], serde_json::json!([]));
+}
+
+fn rail_check_rust_cache(backend: crunch_store::StoreBackend, root: &Path) {
+    let state = root.join("rust-cache-state");
+    let output = root.join("rust-cache-store");
+    let config = || StoreConfig::new(backend, state.clone(), output.clone(), TEST_STORE_PREFIX.to_owned());
+    if backend == crunch_store::StoreBackend::Casita {
+        let error = run_async(crunch_rust_cache::RustCache::open_async(config())).unwrap_err().to_string();
+        assert!(error.contains("casita-rust-cache-unsupported"), "{error}");
+        assert!(!state.exists() && !output.exists());
+        rail_cmd(backend, &state, &output)
+            .args(["rust-cache", "serve", "--policy"])
+            .arg(root.join("missing-rust-cache-policy.json"))
+            .arg("--receipt-dir")
+            .arg(root.join("missing-rust-cache-receipts"))
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("casita-rust-cache-unsupported"));
+        assert!(!state.exists() && !output.exists());
+        assert!(!root.join("missing-rust-cache-receipts").exists());
+        return;
+    }
+    use crunch_rust_cache::PublishRequest;
+    use crunch_rust_cache_core::{LocalCachePolicy, RustUnitActionInput, canonical_rust_action};
+    const DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let action = canonical_rust_action(RustUnitActionInput {
+        unit_id: "rail-unit".to_owned(),
+        package_id: "rail-package".to_owned(),
+        crate_name: "rail_crate".to_owned(),
+        target_kind: "lib".to_owned(),
+        execution_kind: "target".to_owned(),
+        host_triple: "x86_64-unknown-linux-gnu".to_owned(),
+        target_triple: "x86_64-unknown-linux-gnu".to_owned(),
+        profile: "debug".to_owned(),
+        mode: "build".to_owned(),
+        features: Vec::new(),
+        source_digest_blake3: DIGEST.to_owned(),
+        compiler_digest_blake3: DIGEST.to_owned(),
+        compiler_version_digest_blake3: DIGEST.to_owned(),
+        toolchain_closure_digest_blake3: DIGEST.to_owned(),
+        execution_platform_digest_blake3: DIGEST.to_owned(),
+        semantic_arguments: Vec::new(),
+        admitted_environment: Default::default(),
+        dependency_artifacts: Vec::new(),
+        host_artifacts: Vec::new(),
+        build_script_facts: Vec::new(),
+        native_link_facts: Vec::new(),
+        compiler_policy_digest_blake3: DIGEST.to_owned(),
+    })
+    .unwrap();
+    let policy = LocalCachePolicy {
+        reads_enabled: true,
+        writes_enabled: true,
+        ..LocalCachePolicy::default()
+    };
+    let built = root.join("rust-cache-built");
+    let restored = root.join("rust-cache-restored");
+    std::fs::create_dir(&built).unwrap();
+    std::fs::write(built.join("librail_crate.rlib"), b"real backend-selected rust cache artifact\n").unwrap();
+    std::fs::write(built.join(crunch_rust_cache::RUST_UNIT_EXECUTION_RECEIPT_FILE), b"mutable receipt").unwrap();
+    let first = run_async(crunch_rust_cache::RustCache::open_async(config())).unwrap();
+    let published = run_async(first.publish(PublishRequest {
+        action: &action,
+        output_dir: &built,
+        producer_receipt_ref: &format!("mantle-rust-receipt://blake3/{DIGEST}"),
+        policy: &policy,
+    }))
+    .unwrap();
+    drop(first);
+    let reopened = run_async(crunch_rust_cache::RustCache::open_async(config())).unwrap();
+    let hit = run_async(reopened.restore(&action, &restored, &policy)).unwrap();
+    assert_eq!(hit.disposition, crunch_rust_cache::CACHE_DISPOSITION_HIT);
+    assert_eq!(hit.selected_result_ref.as_deref(), Some(published.result_ref.as_str()));
+    assert!(!hit.compiler_executed);
+    assert_eq!(std::fs::read(restored.join("librail_crate.rlib")).unwrap(), b"real backend-selected rust cache artifact\n");
+    assert!(!restored.join(crunch_rust_cache::RUST_UNIT_EXECUTION_RECEIPT_FILE).exists());
 }
 
 fn rail_sign_and_check_mixed_backend(
@@ -1801,6 +2046,10 @@ fn admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail(
         if backend == crunch_store::StoreBackend::Snix {
             rail_assert_snix_prechange(&golden, root, &reopen, &archive, &resigned, &gc);
         }
+        rail_check_overlay(backend, root, &retained);
+        rail_check_atomic_batch(backend, root, &fixture_key);
+        rail_check_unsigned(backend, root);
+        rail_check_rust_cache(backend, root);
         println!(
             "BACKEND_CORE_RAIL {} {}",
             backend.as_str(),
