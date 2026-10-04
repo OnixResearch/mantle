@@ -1025,7 +1025,7 @@ mod tests {
                         .contains("casita-root-missing")
                 );
                 assert!(
-                    crate::store_verify(store.pathinfo_service().as_ref(), None, &output)
+                    crate::query::store_verify(store.pathinfo_service().as_ref(), None, &output)
                         .await
                         .unwrap_err()
                         .to_string()
@@ -1299,7 +1299,7 @@ mod tests {
                 .contains("casita-signer-untrusted")
         );
         assert!(
-            crate::store_verify(reopened.pathinfo_service().as_ref(), None, &output)
+            crate::query::store_verify(reopened.pathinfo_service().as_ref(), None, &output)
                 .await
                 .unwrap_err()
                 .to_string()
@@ -1325,7 +1325,7 @@ mod tests {
         let old_envelope = tempfile::tempdir().unwrap();
         sign_repository.checkout(&old_target, old_envelope.path().join("envelope")).await.unwrap();
         let signed =
-            crate::store_sign(reopened.pathinfo_service().as_ref(), &extra_sign, Some("one"), false, STORE_DIR)
+            crate::query::store_sign(reopened.pathinfo_service().as_ref(), &extra_sign, Some("one"), false, STORE_DIR)
                 .await
                 .unwrap();
         assert!(matches!(signed.as_slice(), [result]
@@ -1717,7 +1717,7 @@ mod tests {
             replacement: replacement.clone(),
         };
         assert!(
-            crate::store_sign(&racing, &signing_two, Some("race-output"), false, STORE_DIR,)
+            crate::query::store_sign(&racing, &signing_two, Some("race-output"), false, STORE_DIR,)
                 .await
                 .unwrap_err()
                 .to_string()

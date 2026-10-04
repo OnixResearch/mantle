@@ -786,7 +786,7 @@ pub struct StoreHandle {
     /// Selected durable authority; Snix services are only session scratch under Casita.
     backend: StoreBackend,
     pub(crate) casita_store: Option<Arc<crate::casita::CasitaStore>>,
-    pathinfo_service: Arc<dyn PathInfoService>,
+    pub(crate) pathinfo_service: Arc<dyn PathInfoService>,
     /// Raw writable-overlay services retained for mutation and GC isolation.
     overlay_blob_service: Arc<dyn BlobService>,
     overlay_directory_service: Arc<dyn DirectoryService>,

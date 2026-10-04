@@ -51,8 +51,11 @@ const ADAPTER_ALLOWLIST: [&str; 1] = ["crunch-rust-cache"];
 /// Paths allowed to construct a `StoreHandle`: the CLI composition root,
 /// remote-build/foreign shells that own an executor store, pipeline
 /// orchestration, and the declared cache adapter.
-const HANDLE_CONSTRUCTION_ALLOWLIST: [&str; 11] = [
+const HANDLE_CONSTRUCTION_ALLOWLIST: [&str; 12] = [
     "src/main.rs",
+    // Bootstrap owns a guarded raw-seed store and immediately splits it into
+    // pipeline capabilities; it does not pass the broad handle to build code.
+    "src/bootstrap.rs",
     "src/remote_build.rs",
     "src/foreign_import_cmd.rs",
     "src/foreign_realization_shell.rs",

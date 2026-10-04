@@ -9,6 +9,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use nix_compat::narinfo::SigningKey;
+use nix_compat::narinfo::VerifyingKey;
 use nix_compat::nixhash::CAHash;
 use nix_compat::nixhash::NixHash;
 use nix_compat::store_path::StorePath;
@@ -1066,6 +1068,47 @@ impl StoreAdmin<'_> {
         self.handle.store_list_pathinfos_bounded(max_entries).await
     }
 
+    /// Sign selected PathInfo records without exposing their writable service.
+    pub async fn sign_pathinfos(
+        &self,
+        signing_key: &SigningKey<ed25519_dalek::SigningKey>,
+        path_filter: Option<&str>,
+        is_sign_all: bool,
+    ) -> Result<Vec<crate::SignResult>, Error> {
+        crate::query::store_sign(
+            self.handle.pathinfo_service.as_ref(),
+            signing_key,
+            path_filter,
+            is_sign_all,
+            self.handle.store_dir(),
+        )
+        .await
+    }
+
+    /// Compare exported files with their stored NAR facts at the physical output path.
+    pub async fn verify_exported_pathinfos(
+        &self,
+        path_filter: Option<&str>,
+        physical_output_dir: &Path,
+    ) -> Result<Vec<crate::VerifyResult>, Error> {
+        crate::query::store_verify(self.handle.pathinfo_service.as_ref(), path_filter, physical_output_dir).await
+    }
+
+    /// Verify signed PathInfo using the store's own logical fingerprint prefix.
+    pub async fn verify_pathinfo_signatures(
+        &self,
+        path_filter: Option<&str>,
+        trusted_keys: &[VerifyingKey],
+    ) -> Result<Vec<crate::SignatureVerifyResult>, Error> {
+        crate::query::store_verify_signatures(
+            self.handle.pathinfo_service.as_ref(),
+            path_filter,
+            trusted_keys,
+            self.handle.store_dir(),
+        )
+        .await
+    }
+
     pub fn migrate_legacy_root_registry(&self) -> Result<Vec<GcRootRecord>, Error> {
         roots::migrate_legacy_registry(self.handle.state_dir())
     }
@@ -1358,7 +1401,7 @@ mod tests {
                 assert_eq!(stored.node, *observed.node());
                 assert_eq!(stored.signatures.len(), 1);
                 assert!(stored.ca.is_some());
-                let signed = crate::store_verify_signatures(
+                let signed = crate::query::store_verify_signatures(
                     parts.slice_admission.pathinfo_service.as_ref(),
                     Some(&stored_path.to_string()),
                     std::slice::from_ref(&verifier),
@@ -1368,7 +1411,7 @@ mod tests {
                 .unwrap();
                 assert_eq!(signed.len(), 1);
                 assert_eq!(signed[0].trusted_count, 1, "{backend:?}: signature did not verify");
-                let wrong_key = crate::store_verify_signatures(
+                let wrong_key = crate::query::store_verify_signatures(
                     parts.slice_admission.pathinfo_service.as_ref(),
                     Some(&stored_path.to_string()),
                     std::slice::from_ref(&other_verifier),

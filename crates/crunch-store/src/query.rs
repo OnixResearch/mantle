@@ -119,7 +119,7 @@ pub async fn store_info(svc: &dyn PathInfoService, path_filter: &str) -> Result<
 /// Mismatch).
 // r[impl store_transports.nix_archive_filesystem_observation]
 // r[impl store_transports.nix_archive_boundary]
-pub async fn store_verify(
+pub(crate) async fn store_verify(
     svc: &dyn PathInfoService,
     path_filter: Option<&str>,
     store_dir: &std::path::Path,
@@ -185,7 +185,7 @@ pub async fn store_verify(
 /// that was used when the signatures were created. Fingerprints embed the
 /// prefix, so verification with the wrong prefix reports every signature as
 /// untrusted.
-pub async fn store_verify_signatures(
+pub(crate) async fn store_verify_signatures(
     svc: &dyn PathInfoService,
     path_filter: Option<&str>,
     trusted_keys: &[VerifyingKey],
@@ -262,7 +262,7 @@ pub struct SignResult {
 /// When `is_sign_all` is true, only unsigned PathInfos are updated. If a
 /// PathInfo already has a signature from the same key name, it is replaced
 /// instead of duplicated. Returns one result per updated path.
-pub async fn store_sign(
+pub(crate) async fn store_sign(
     svc: &dyn PathInfoService,
     signing_key: &SigningKey<ed25519_dalek::SigningKey>,
     path_filter: Option<&str>,

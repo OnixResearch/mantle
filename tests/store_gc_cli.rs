@@ -591,6 +591,31 @@ fn selected_backend_is_recorded_and_mismatch_rejects_without_mutation() {
 }
 
 #[test]
+fn wrong_backend_sign_rejects_before_creating_a_signer_or_changing_state() {
+    let state = tempfile::tempdir().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    crunch_cmd(state.path(), output_dir.path())
+        .env_remove("CRUNCH_CONFIG_DIR")
+        .args(["--store-backend", "snix", "store", "list"])
+        .assert()
+        .success();
+    let before = snapshot_state_tree(state.path());
+    assert!(!before.contains_key(Path::new("signing-key")));
+
+    let rejected = crunch_cmd(state.path(), output_dir.path())
+        .env_remove("CRUNCH_CONFIG_DIR")
+        .args(["--store-backend", "casita", "store", "sign", "--all"])
+        .output()
+        .unwrap();
+    assert!(!rejected.status.success());
+    let stderr = String::from_utf8_lossy(&rejected.stderr);
+    assert!(stderr.contains("store-backend-mismatch: requested casita, state declares snix"), "{stderr}");
+    assert!(!stderr.contains("Generated signing key"), "{stderr}");
+    assert_eq!(snapshot_state_tree(state.path()), before, "rejected sign changed existing state");
+    assert!(!state.path().join("signing-key").exists());
+}
+
+#[test]
 fn wrong_backend_build_rejects_before_creating_a_signer_or_changing_state() {
     let state = tempfile::tempdir().unwrap();
     let output_dir = tempfile::tempdir().unwrap();

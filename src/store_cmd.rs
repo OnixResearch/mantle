@@ -216,10 +216,9 @@ async fn cmd_store_mutation_or_transfer(
         }
         crate::StoreAction::Sign { path, all, signing_key } => {
             let _guard = store_mutation_guard(context)?;
-            let store = open_store_under_guard(context, &_guard).await?;
-            let svc = store.pathinfo_service();
-            cmd_store_sign(&*svc, path.as_deref(), all, signing_key.as_deref(), context.state_dir, context.store_dir)
-                .await
+            let mut store = open_store_under_guard(context, &_guard).await?;
+            let admin = store.store_admin();
+            cmd_store_sign(&admin, path.as_deref(), all, signing_key.as_deref(), context.state_dir).await
         }
         crate::StoreAction::RepairFinalNar {
             path,
@@ -444,17 +443,16 @@ struct StorePullAction {
 }
 
 async fn cmd_store_verify_action(context: StoreCommandContext<'_>, action: StoreVerifyAction) -> Result<(), RunError> {
-    let store = open_store(context).await?;
-    let svc = store.pathinfo_service();
-    cmd_store_verify(&*svc, StoreVerifyRequest {
+    let mut store = open_store(context).await?;
+    let admin = store.store_admin();
+    cmd_store_verify(&admin, StoreVerifyRequest {
         path_filter: action.path_filter.as_deref(),
         signing_key_path: action.signing_key_path.as_deref(),
         explicit_trusted_public_keys: &action.trusted_public_keys,
         backend: context.backend,
         is_trust_unsigned: action.is_trust_unsigned,
         state_dir: context.state_dir,
-        store_dir: context.output_dir,
-        store_prefix: context.store_dir,
+        physical_output_dir: context.output_dir,
     })
     .await
 }
@@ -1033,16 +1031,13 @@ struct StoreVerifyRequest<'a> {
     backend: crunch_store::StoreBackend,
     is_trust_unsigned: bool,
     state_dir: &'a Path,
-    /// Physical directory where build outputs are exported (the CLI `--store`
-    /// value), not the logical store prefix.
-    store_dir: &'a Path,
-    /// Logical store prefix (the CLI `--store-prefix` value) used for
-    /// signature fingerprints.
-    store_prefix: &'a str,
+    /// Physical CLI output directory; unlike the logical fingerprint prefix,
+    /// it may not be representable as UTF-8.
+    physical_output_dir: &'a Path,
 }
 
 async fn cmd_store_verify(
-    svc: &dyn snix_store::pathinfoservice::PathInfoService,
+    admin: &crunch_store::StoreAdmin<'_>,
     request: StoreVerifyRequest<'_>,
 ) -> Result<(), RunError> {
     let trusted_keys = resolve_store_verify_keys(
@@ -1051,13 +1046,14 @@ async fn cmd_store_verify(
         request.state_dir,
         request.backend,
     )?;
-    let hash_results = crunch_store::store_verify(svc, request.path_filter, request.store_dir)
+    let hash_results = admin
+        .verify_exported_pathinfos(request.path_filter, request.physical_output_dir)
         .await
         .map_err(|e| RunError::Internal(format!("{e}")))?;
-    let signature_results =
-        crunch_store::store_verify_signatures(svc, request.path_filter, &trusted_keys, request.store_prefix)
-            .await
-            .map_err(|e| RunError::Internal(format!("{e}")))?;
+    let signature_results = admin
+        .verify_pathinfo_signatures(request.path_filter, &trusted_keys)
+        .await
+        .map_err(|e| RunError::Internal(format!("{e}")))?;
     let signature_by_path = index_signature_results(signature_results)?;
     debug_assert_eq!(hash_results.len(), signature_by_path.len());
     debug_assert!(u32::try_from(hash_results.len()).is_ok());
@@ -1311,12 +1307,11 @@ fn print_final_nar_repair_report(
 }
 
 async fn cmd_store_sign(
-    svc: &dyn snix_store::pathinfoservice::PathInfoService,
+    admin: &crunch_store::StoreAdmin<'_>,
     path_filter: Option<&str>,
     is_sign_all: bool,
     signing_key_path: Option<&std::path::Path>,
     state_dir: &Path,
-    store_prefix: &str,
 ) -> Result<(), RunError> {
     if path_filter.is_none() && !is_sign_all {
         return Err(RunError::Internal("provide a store path or use --all to sign all entries".to_string()));
@@ -1326,7 +1321,8 @@ async fn cmd_store_sign(
 
     let keypair = crate::signing_key::load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
 
-    let results = crunch_store::store_sign(svc, &keypair.signing_key, path_filter, is_sign_all, store_prefix)
+    let results = admin
+        .sign_pathinfos(&keypair.signing_key, path_filter, is_sign_all)
         .await
         .map_err(|e| RunError::Internal(format!("{e}")))?;
 
