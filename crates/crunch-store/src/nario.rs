@@ -855,6 +855,8 @@ impl<R: AsyncRead + Unpin> AsyncRead for ArchiveHashReader<R> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use nix_compat::narinfo::SigningKey;
     use sha2::Sha256;
     use snix_castore::Node;
@@ -1268,13 +1270,39 @@ mod tests {
         fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", test_keys().1)).unwrap();
         let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
         assert_eq!(handle.casita_batch_root_change_limit(), Some(ROOT_COUNT - 1));
+        fn snapshot_tree(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
+            let mut snapshot = BTreeMap::new();
+            let mut pending = vec![root.to_path_buf()];
+            while let Some(dir) = pending.pop() {
+                for entry in fs::read_dir(dir).unwrap() {
+                    let entry = entry.unwrap();
+                    let path = entry.path();
+                    let relative = path.strip_prefix(root).unwrap().to_path_buf();
+                    let file_type = entry.file_type().unwrap();
+                    if file_type.is_dir() {
+                        snapshot.insert(relative, None);
+                        pending.push(path);
+                    } else if file_type.is_file() {
+                        snapshot.insert(relative, Some(fs::read(path).unwrap()));
+                    } else {
+                        panic!("unexpected non-file entry in Casita persistent state: {}", path.display());
+                    }
+                }
+            }
+            snapshot
+        }
+
+        let state_before = snapshot_tree(destination.path());
         let error = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap_err();
         assert!(error.to_string().contains("casita-batch-limit"), "{error}");
         assert!(error.to_string().contains(&paths[ROOT_COUNT - 1].to_string()), "{error}");
+        assert_eq!(snapshot_tree(destination.path()), state_before, "rejected archive mutated persistent state");
         drop(handle);
+        assert_eq!(snapshot_tree(destination.path()), state_before, "closing failed import mutated persistent state");
         let reopened = test_handle(destination.path(), crate::StoreBackend::Casita).await;
         for path in &paths {
             assert!(reopened.pathinfo_service().get(*path.digest()).await.unwrap().is_none(), "{path}");
+            assert!(!destination.path().join("store").join(path.to_string()).exists(), "{path}");
         }
     }
 
