@@ -1644,16 +1644,15 @@ fn rail_check_atomic_batch(backend: crunch_store::StoreBackend, root: &Path, fix
         std::fs::write(state.join("casita-trusted-public-keys"), format!("{fixture_key}\n")).unwrap();
     }
     run_async(async {
-        let store = StoreHandle::open(StoreConfig::new(
-            backend,
-            state.clone(),
-            output,
-            TEST_STORE_PREFIX.to_owned(),
-        ))
-        .await
-        .unwrap();
+        let store = StoreHandle::open(StoreConfig::new(backend, state.clone(), output, TEST_STORE_PREFIX.to_owned()))
+            .await
+            .unwrap();
         let template = signed_file_pathinfo(&store, "rail-batch-template", b"shared batch NAR\n", true).await;
-        let count = if backend == crunch_store::StoreBackend::Casita { 1024 } else { 2 };
+        let count = if backend == crunch_store::StoreBackend::Casita {
+            1024
+        } else {
+            2
+        };
         let infos = (0..=count)
             .map(|index| {
                 let name = format!("rail-batch-{index:04}");
@@ -1685,7 +1684,10 @@ fn rail_check_atomic_batch(backend: crunch_store::StoreBackend, root: &Path, fix
         .await
         .unwrap();
         for index in [0, count / 2, count - 1] {
-            assert_eq!(reopened.pathinfo_service().get(*infos[index].store_path.digest()).await.unwrap(), Some(infos[index].clone()));
+            assert_eq!(
+                reopened.pathinfo_service().get(*infos[index].store_path.digest()).await.unwrap(),
+                Some(infos[index].clone())
+            );
         }
         assert!(reopened.pathinfo_service().get(*infos[count].store_path.digest()).await.unwrap().is_none());
     });
@@ -1758,7 +1760,9 @@ fn rail_check_rust_cache(backend: crunch_store::StoreBackend, root: &Path) {
         return;
     }
     use crunch_rust_cache::PublishRequest;
-    use crunch_rust_cache_core::{LocalCachePolicy, RustUnitActionInput, canonical_rust_action};
+    use crunch_rust_cache_core::LocalCachePolicy;
+    use crunch_rust_cache_core::RustUnitActionInput;
+    use crunch_rust_cache_core::canonical_rust_action;
     const DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     let action = canonical_rust_action(RustUnitActionInput {
         unit_id: "rail-unit".to_owned(),
@@ -1809,7 +1813,10 @@ fn rail_check_rust_cache(backend: crunch_store::StoreBackend, root: &Path) {
     assert_eq!(hit.disposition, crunch_rust_cache::CACHE_DISPOSITION_HIT);
     assert_eq!(hit.selected_result_ref.as_deref(), Some(published.result_ref.as_str()));
     assert!(!hit.compiler_executed);
-    assert_eq!(std::fs::read(restored.join("librail_crate.rlib")).unwrap(), b"real backend-selected rust cache artifact\n");
+    assert_eq!(
+        std::fs::read(restored.join("librail_crate.rlib")).unwrap(),
+        b"real backend-selected rust cache artifact\n"
+    );
     assert!(!restored.join(crunch_rust_cache::RUST_UNIT_EXECUTION_RECEIPT_FILE).exists());
 }
 
