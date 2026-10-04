@@ -66,15 +66,18 @@ published source `61bd4465`, the 558-file zero-escape checker, diff
 check and pinned-policy Cairn gates. The broad Mantle bin run's two
 unrelated Slurm/seccomp failures, vendored-path lint failures, and
 sandbox-body skips remain nonclaims, not a green repository-wide suite.
-T4.4's **pre-archive** milestone is checked only after the revised
+T4.4's **pre-archive** milestone was checked only after the revised
 implementation/change commit `c74edfec`, the pinned-policy preview
 and actual accepted-spec sync into `.cairn/specs/store-backends/`,
 post-sync validation/tasks gates, and the archive preview showing
-only T4.4 itself as the remaining prerequisite. Actual named
-isolated-branch Cairn archive and captured post-archive validation
-remain mandatory *subsequent* lifecycle steps outside this completed
-pre-archive checklist. ADR 0082 remains Proposed while the separate
-Casita adoption has 28 open tasks.
+only T4.4 itself as the remaining prerequisite. This checkbox never
+claimed archive execution. Separately, **after** all 19
+pre-archive tasks and the synced accepted spec were committed at
+`d1b9dcf4`, the named isolated-branch Cairn archive was actually
+executed; its mutation receipt and passing post-archive validation
+are recorded in retained archived
+`evidence/finish-conformance-2026-10-04.md`. ADR 0082 remains
+Proposed while the separate Casita adoption has 28 open tasks.
 
 ## Phase 1: Baseline and contract
 

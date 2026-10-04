@@ -1034,3 +1034,79 @@ All four use explicit policy SHA-256
 and quota-safe target `TMPDIR`. Neither zero remaining **pre-archive**
 tasks nor a successful sync is proof that the separately required
 Cairn archive has happened.
+
+### Separate actual archive and post-archive policy validation
+
+The accepted spec and completed **pre-archive** task evidence above
+were committed on the isolated
+`work/finish-store-backend-selection-20261004` branch at `d1b9dcf4`;
+`git status --short --branch` then showed only the clean branch line.
+Before executing, the date-qualified destination
+`.cairn/archive/2026-10-04-add-store-backend-selection/` was absent.
+The actual named Cairn archive was then previewed with the pinned
+policy:
+
+```sh
+env CAIRN_ARCHIVE_DATE=2026-10-04 \
+  TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  nix run --offline --no-write-lock-file path:/home/brittonr/git/OnixResearch/cairn#cairn \
+  -- archive add-store-backend-selection --root . \
+  --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json
+```
+
+Preview exit **0**: `"blocked":false`, `"reasons":[]`,
+`"dry_run":true`, `"mutated":false`, one `archive_change`
+action, zero cross-repo dependencies, input hash
+`11f1ac23e48565fc81fedc26a39e297b124880bc420a77cdfd80ed5a73f010bd`,
+receipt `ca1dea26f553a81621a1e2eab338d6a53c7af818bb783f03b575b867f7e69987`.
+With all 19 tasks complete, the actual archive was executed using
+**the same command plus `--execute`** (same
+`CAIRN_ARCHIVE_DATE`, target `TMPDIR`, explicit policy, branch and root).
+Execute exit **0**: `"blocked":false`, `"reasons":[]`,
+`"dry_run":false`, `"mutated":true`, the same input hash,
+receipt `96747b9742328a852b4c2b05bf36f631ff87ff569330d301d81acf95ea02d880`.
+The action moved
+`.cairn/changes/add-store-backend-selection/` to
+`.cairn/archive/2026-10-04-add-store-backend-selection/`.
+The **at-move** archive mutation manifest hash is
+`adb41ef7fc246ffdf77e06bd9982daa3389b0fe41b00d68fd142562b4e2e1175`
+(before manifest `b174da926932ca32f32a12028ae8fcd4ebca45fc52dde78c2932683a8f5e72eb`,
+after manifest `df0206daa6023237c5df2b0c8e619debeb7a9e65e7e3738d862c0f86a9b1887a`);
+its `after` entries show the archive path present and the active change
+absent. As with sync, the preview and execute plan hashes differ;
+**input** identity and the actual execute receipt establish this run,
+not a false equality of preview and execution receipts.
+
+Immediately after the move, without claiming a checkbox as archive
+proof, the same explicitly pinned policy was run against the
+**archived** repository:
+
+```sh
+env TMPDIR=/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp \
+  nix run --offline --no-write-lock-file path:/home/brittonr/git/OnixResearch/cairn#cairn \
+  -- validate --root . \
+  --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json
+```
+
+Post-archive validate exit **0**, `"valid":true`, `"issues":[]`,
+`"change_issues":[]`, `"spec_issues":[]`, 34 **other active**
+changes and 96 validated specs (including the accepted
+`.cairn/specs/store-backends/spec.md`), receipt
+`b33e044671771c7109deff00013734cb429989053a31a3f8eb9e538a917a9867`
+(`artifact://28858`). The pre-archive proposal/design/tasks gates
+and their exact **PASS** receipts are immediately above. After the
+move, each of the three identically pinned commands
+`gate proposal add-store-backend-selection`,
+`gate design add-store-backend-selection`, and
+`gate tasks add-store-backend-selection` exited **1** with exact
+stderr `error: change not found: add-store-backend-selection`;
+Cairn gates address *active* changes and do not produce an archived
+selection gate receipt. These errors are **not** green
+post-archive gate results or a failed post-archive `validate`.
+
+The archive manifest describes the directory **at the moment of the
+move**, before this post-archive receipt was appended to the archived
+evidence (and before any archival-status wording updates). It is not
+a hash of the final annotated evidence bytes. The separate
+`adopt-casita-store-backend` change still has 28 open tasks; this
+selection archive does not imply its acceptance or release eligibility.

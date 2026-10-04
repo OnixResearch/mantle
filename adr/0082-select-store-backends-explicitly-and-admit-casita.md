@@ -13,15 +13,18 @@ the scoped canonical consumer-fact rail with its unchanged unequal
 three-path raw IDs, combined selection/identity/negative fixtures,
 the specified focused store and first-party quality gates, operator
 documentation, and actual pinned accepted-spec sync. All 19 selected
-implementation/**pre-archive** tasks are checked. The separate actual
-isolated-branch archive and post-archive validation remain mandatory
-and are not yet claimed. This record claims only tested behavior
-within [Evidence scope](#evidence-scope). The final repository quality gates
-for both changes have not all passed: the 2026-09-30 runs recorded strict
-Clippy, the first-party workspace suite, and `cargo deny` failures. Targeted
-2026-10-04 results do not imply workspace gates or release eligibility.
-This record can become Accepted only after both changes complete with the
-evidence named under [Evidence scope](#evidence-scope).
+implementation/**pre-archive** tasks were checked and committed
+before the separate actual named isolated-branch Cairn archive was
+executed. The archive mutation and **passing post-archive policy
+validation** receipts are retained in the archived selection
+evidence; neither is inferred from T4.4's checkbox. This record
+claims only tested behavior within [Evidence scope](#evidence-scope).
+The final repository quality gates for both changes have not all
+passed: the 2026-09-30 runs recorded strict Clippy, the first-party
+workspace suite, and `cargo deny` failures. Targeted 2026-10-04
+results do not imply workspace gates or release eligibility.
+This record can become Accepted only after both changes complete
+with the evidence named under [Evidence scope](#evidence-scope).
 
 ## Context
 
@@ -733,8 +736,8 @@ Evidence that exists on 2026-09-30:
   (failed: the build wrote a signing key before the mismatch) and after it
   (passed), the `store_gc_cli` suite and one-off smokes after the fix, post-fix
   formatting, Clippy, and TigerStyle checks, and a passing operator command
-  contract check. Task T4.1 is checked from that check; every other selection
-  task stays open.
+  contract check. At that 2026-09-30 capture, T4.1 was checked
+  from the contract check and every other selection task was still open.
 - `docs/dependency-audit.md` (Casita admission run) records the vendor rail's
   results. They are not copied into Cairn evidence, and the ADR author did not
   rerun them; the session logs confirm them. At 16:25 UTC
@@ -747,7 +750,8 @@ Evidence that exists on 2026-09-30:
   working tree (the untracked patch became visible to it only after
   `git add -N`), so it is not the clean-checkout proof that T1.2 asks for.
 
-Evidence added on 2026-10-04 in `add-store-backend-selection`:
+Evidence added on 2026-10-04 in the now archived
+`add-store-backend-selection` change:
 
 - `evidence/prechange-snix-golden-2026-10-04.{md,json}` records an executed
   isolated pre-selection Snix baseline at `7ec51777`, including the exact
@@ -756,7 +760,8 @@ Evidence added on 2026-10-04 in `add-store-backend-selection`:
   `evidence/finish-inventory-2026-10-04.md` inventories store constructors
   and launchers; `docs/store-backends.md` documents the explicit selector,
   identity migration, capability bounds and blocker catalog.
-- `evidence/finish-conformance-2026-10-04.md` records a full **14/14**
+- [Archived selection conformance and lifecycle evidence](../.cairn/archive/2026-10-04-add-store-backend-selection/evidence/finish-conformance-2026-10-04.md)
+  records a full **14/14**
   `store_archive_cli` run on the combined source, with an explicitly
   provisioned signer and the original fixed physical rail root. The
   backend-parameterized Snix/Casita rail exercises signed admission,
@@ -794,8 +799,7 @@ Evidence added on 2026-10-04 in `add-store-backend-selection`:
   These selected fixtures and checks do not establish repository-wide
   gates or release eligibility.
 
-Evidence that does not exist yet: the separately mandatory actual
-archive and post-archive validation; root-race, remaining batch,
+Evidence that does not exist yet: root-race, remaining batch,
 and trust-policy fixtures for the separate Casita change;
 castore payload-root fixtures; for T1.2, a vendor build
 from a clean checkout and the confirmation that every toolchain, including
