@@ -330,6 +330,9 @@
         ];
         cargoLockedPackages = (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
         casitaManifest = builtins.fromTOML (builtins.readFile ./crates/crunch-store/Cargo.toml);
+        casitaUpstreamManifest = builtins.fromTOML (
+          builtins.readFile (casitaSource + "/crates/casita/Cargo.toml")
+        );
         casitaLocked = builtins.filter (package: package.name == "casita") cargoLockedPackages;
         casitaRepositoryLocked = builtins.filter (
           package: pkgs.lib.hasPrefix "git+https://github.com/cachix/casita?" (package.source or "")
@@ -367,10 +370,8 @@
             && (builtins.head astralTarLocked).version == "0.6.4"
             && builtins.length blake3Locked == 1
             && (builtins.head blake3Locked).version == "1.8.2"
-            && (builtins.fromTOML (builtins.readFile (casitaSource + "/crates/casita/Cargo.toml"))).package.license
-              == "Apache-2.0"
-            && (builtins.fromTOML (builtins.readFile (casitaSource + "/crates/casita/Cargo.toml"))).package.rust-version
-              == "1.94.1"
+            && casitaUpstreamManifest.package.license == "Apache-2.0"
+            && casitaUpstreamManifest.package.rust-version == "1.94.1"
             && builtins.hashFile "sha256" (casitaSource + "/crates/casita/src/nar.rs")
               == casitaNarUpstreamSha256
             && builtins.hashFile "sha256" ./patches/casita-blake3-finalize.patch
