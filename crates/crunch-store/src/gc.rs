@@ -4079,6 +4079,37 @@ mod tests {
             assert_eq!(action_store.lookup(&record.record.action_ref).await.unwrap().records, vec![record.clone()]);
             assert_eq!(CaMappings::load(state.path()).get(&drv, "out"), Some(logical.as_str()));
         }
+        // A pending fence must not be recovered by an unguarded caller either.
+        let (_, target, _) = &original[0];
+        let fenced = CasitaGcFence {
+            plan_id: plan.plan_id,
+            entries: vec![casita_fence_entry(&info.store_path, target)],
+        };
+        persist_casita_fence(state.path(), &fenced).unwrap();
+        let fence_bytes = std::fs::read(casita_fence_path(state.path())).unwrap();
+        let index_paths = local_action_result_gc_candidates(state.path(), &BTreeSet::new()).unwrap();
+        let index_before = index_paths
+            .index_marker_paths
+            .iter()
+            .map(|path| (path.clone(), std::fs::read(path).unwrap()))
+            .collect::<Vec<_>>();
+        assert_eq!(index_before.len(), 1, "the guarded boundary must protect a real action-result index");
+        for result in [
+            store.garbage_collect(None).await,
+            store.garbage_collect_with_castore_roots(None, &[]).await,
+            store.garbage_collect(Some(&fenced.plan_id)).await,
+        ] {
+            assert!(result.unwrap_err().to_string().contains("casita-gc-guard-required"));
+            assert_eq!(std::fs::read(casita_fence_path(state.path())).unwrap(), fence_bytes);
+            assert!(!casita_fence_journal_path(state.path()).exists());
+            assert_eq!(store.casita_store.as_ref().unwrap().verified_gc_roots("/nix/store").await.unwrap(), original);
+            assert_eq!(std::fs::read_link(&physical).unwrap(), Path::new("signed-content"));
+            assert_eq!(action_store.lookup(&record.record.action_ref).await.unwrap().records, vec![record.clone()]);
+            assert_eq!(CaMappings::load(state.path()).get(&drv, "out"), Some(logical.as_str()));
+            for (path, bytes) in &index_before {
+                assert_eq!(std::fs::read(path).unwrap(), *bytes);
+            }
+        }
     }
 
     #[cfg(unix)]
@@ -4222,6 +4253,18 @@ mod tests {
         assert!(matches!(repointed, ConditionalPublishResult::Committed(_)));
         assert_ne!(replacement_target, later_expected);
         drop(store);
+        let fence_before = std::fs::read(casita_fence_path(state.path())).unwrap();
+        let index_paths = local_action_result_gc_candidates(state.path(), &BTreeSet::new()).unwrap();
+        let indexes_before = index_paths
+            .index_marker_paths
+            .iter()
+            .map(|path| (path.clone(), std::fs::read(path).unwrap()))
+            .collect::<Vec<_>>();
+        assert_eq!(indexes_before.len(), 1, "the fresh process must leave a real action-result index alone");
+        let root_snapshot = repository.metadata().snapshot().await.unwrap();
+        assert_eq!(root_snapshot.root(&first_name).await.unwrap(), None);
+        assert_eq!(root_snapshot.root(&later_name).await.unwrap(), Some(replacement_target.clone()));
+        drop(root_snapshot);
         let child = std::process::Command::new(std::env::current_exe().unwrap())
             .arg("gc::tests::casita_recovery_conflicting_later_root_preserves_earlier_export_and_indexes")
             .arg("--exact")
@@ -4238,6 +4281,15 @@ mod tests {
             String::from_utf8_lossy(&child.stdout),
             String::from_utf8_lossy(&child.stderr),
         );
+        assert_eq!(std::fs::read(casita_fence_path(state.path())).unwrap(), fence_before);
+        assert!(!casita_fence_journal_path(state.path()).exists());
+        let root_snapshot = repository.metadata().snapshot().await.unwrap();
+        assert_eq!(root_snapshot.root(&first_name).await.unwrap(), None);
+        assert_eq!(root_snapshot.root(&later_name).await.unwrap(), Some(replacement_target.clone()));
+        for (path, bytes) in &indexes_before {
+            assert_eq!(std::fs::read(path).unwrap(), *bytes);
+        }
+        assert_eq!(CaMappings::load(state.path()).get(&drv, "out"), Some(entries[0].path.as_str()));
         assert_eq!(std::fs::read_link(&first_export).unwrap(), Path::new(first_target));
         assert_eq!(action_store.lookup(&record.record.action_ref).await.unwrap().records, vec![record.clone()]);
 

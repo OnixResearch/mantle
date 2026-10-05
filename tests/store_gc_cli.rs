@@ -437,6 +437,130 @@ fn casita_store_gc_cli_collects_unpinned_signed_output_and_preserves_retained_na
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn casita_gc_cli_recovers_removed_root_before_planning_without_removing_other_roots() {
+    use casita::experimental::ChunkedBlobStore;
+    use casita::experimental::MetadataStore;
+    use casita::experimental::ObjectKey;
+    use casita::experimental::Repository;
+    use casita::experimental::RootName;
+    use casita::experimental::TursoMetadataStore;
+
+    let state = tempfile::tempdir().unwrap();
+    let exports = tempfile::tempdir().unwrap();
+    let raw_signer = ed25519_dalek::SigningKey::from_bytes(&[23_u8; 32]);
+    let trusted = nix_compat::narinfo::VerifyingKey::new("casita-gc-cli".to_string(), raw_signer.verifying_key());
+    let signer = nix_compat::narinfo::SigningKey::new("casita-gc-cli".to_string(), raw_signer);
+    std::fs::write(state.path().join("casita-trusted-public-keys"), format!("{trusted}\n")).unwrap();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (removed, fenced_other, retained) = rt.block_on(async {
+        let _guard = crunch_store::StoreMutationGuard::acquire_wait(state.path()).unwrap();
+        let store = StoreHandle::open(StoreConfig::new(
+            crunch_store::StoreBackend::Casita,
+            state.path().to_path_buf(),
+            exports.path().to_path_buf(),
+            STORE_DIR.to_string(),
+        ))
+        .await
+        .unwrap();
+        let removed = casita_signed_symlink_output(&store, "fenced-removed", "removed-content", &signer).await;
+        let fenced_other = casita_signed_symlink_output(&store, "fenced-other", "other-content", &signer).await;
+        let retained = casita_signed_symlink_output(&store, "fenced-retained", "retained-content", &signer).await;
+        for info in [&removed, &fenced_other, &retained] {
+            store.pathinfo_service().put(info.clone()).await.unwrap();
+            assert_eq!(store.export_cached_path_info(&info.store_path).await.unwrap(), Some(info.clone()));
+        }
+        (removed, fenced_other, retained)
+    });
+    // Model a stop immediately after the first root in the actual plan order.
+    let (removed, fenced_other) = if removed.store_path.to_absolute_path() < fenced_other.store_path.to_absolute_path() {
+        (removed, fenced_other)
+    } else {
+        (fenced_other, removed)
+    };
+    let casita_cmd = || {
+        let mut cmd = crunch_cmd(state.path(), exports.path());
+        cmd.args(["--store-backend", "casita"]);
+        cmd
+    };
+    casita_cmd().args(["store", "pin", &retained.store_path.to_absolute_path()]).assert().success();
+    let initial = casita_cmd().args(["--json", "store", "gc"]).output().unwrap();
+    assert!(initial.status.success(), "{}", String::from_utf8_lossy(&initial.stderr));
+    let initial: serde_json::Value = serde_json::from_slice(&initial.stdout).unwrap();
+    assert_eq!(initial["candidate_path_count"], 2);
+    let removed_logical = removed.store_path.to_absolute_path();
+    let other_logical = fenced_other.store_path.to_absolute_path();
+    let initial_paths = initial["candidate_paths"].as_array().unwrap();
+    assert_eq!(initial_paths, &vec![serde_json::json!(removed_logical), serde_json::json!(other_logical)]);
+
+    rt.block_on(async {
+        let repository = Repository::<ChunkedBlobStore, TursoMetadataStore>::local(state.path().join("casita"))
+            .await
+            .unwrap();
+        let name = |info: &PathInfo| {
+            RootName::try_from(format!("mantle/outputs/{}", data_encoding::HEXLOWER.encode(info.store_path.digest())))
+                .unwrap()
+        };
+        let removed_name = name(&removed);
+        let other_name = name(&fenced_other);
+        let retained_name = name(&retained);
+        let snapshot = repository.metadata().snapshot().await.unwrap();
+        let removed_target = snapshot.root(&removed_name).await.unwrap().unwrap();
+        let other_target = snapshot.root(&other_name).await.unwrap().unwrap();
+        let retained_target = snapshot.root(&retained_name).await.unwrap().unwrap();
+        drop(snapshot);
+        let fence_entry = |info: &PathInfo, name: &RootName, target: &ObjectKey| {
+            serde_json::json!({
+                "kind": "output",
+                "path": info.store_path.to_absolute_path(),
+                "root_name": name.to_string(),
+                "expected_target": target.to_string(),
+                "removed": false,
+                "cleaned": false,
+            })
+        };
+        std::fs::write(
+            state.path().join("casita-gc-fence.json"),
+            serde_json::to_vec(&serde_json::json!({
+                "plan_id": initial["plan_id"],
+                "entries": [
+                    fence_entry(&removed, &removed_name, &removed_target),
+                    fence_entry(&fenced_other, &other_name, &other_target),
+                ],
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(repository.remove_root_if_matches(&removed_name, &removed_target).await.unwrap().is_some());
+        assert_eq!(repository.metadata().snapshot().await.unwrap().root(&other_name).await.unwrap(), Some(other_target.clone()));
+        assert_eq!(repository.metadata().snapshot().await.unwrap().root(&retained_name).await.unwrap(), Some(retained_target.clone()));
+
+        let recovered = casita_cmd().args(["--json", "store", "gc"]).output().unwrap();
+        assert!(recovered.status.success(), "{}", String::from_utf8_lossy(&recovered.stderr));
+        let plan: serde_json::Value = serde_json::from_slice(&recovered.stdout).unwrap();
+        assert_eq!(plan["is_dry_run"], true);
+        assert_eq!(plan["candidate_paths"], serde_json::json!([other_logical]));
+        assert!(!state.path().join("casita-gc-fence.json").exists());
+        assert_eq!(repository.metadata().snapshot().await.unwrap().root(&removed_name).await.unwrap(), None);
+        assert_eq!(repository.metadata().snapshot().await.unwrap().root(&other_name).await.unwrap(), Some(other_target));
+        assert_eq!(repository.metadata().snapshot().await.unwrap().root(&retained_name).await.unwrap(), Some(retained_target));
+    });
+    let removed_export = exports.path().join(removed.store_path.to_string());
+    assert_eq!(std::fs::symlink_metadata(removed_export).unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    for info in [&fenced_other, &retained] {
+        let selector = info.store_path.to_string();
+        let result = casita_cmd().args(["--json", "store", "info", &selector]).output().unwrap();
+        assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+        let observed: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+        assert_eq!(observed["paths"][0]["nar_sha256"], data_encoding::HEXLOWER.encode(&info.nar_sha256));
+        casita_cmd()
+            .args(["store", "verify", "--trusted-public-keys", &trusted.to_string(), &selector])
+            .assert()
+            .success();
+    }
+}
+
 #[test]
 fn store_gc_execution_refuses_when_mutation_lock_is_held() {
     let (state_dir, output_dir) = seed_store(|_rt, _state, _output| {});
