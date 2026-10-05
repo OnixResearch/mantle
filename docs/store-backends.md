@@ -262,6 +262,9 @@ cargo test -p mantle --test store_gc_cli
 cargo test -p mantle --test integration_build signed_fixed_output_cli_cache_restores_missing_export_in_fresh_processes
 cargo test -p mantle --test integration_build casita_explicit_trust_policy_revokes_local_signer_across_fresh_processes
 cargo test -p mantle --test integration_build casita_legacy_bootstrap_fetch_uses_durable_local_signer_and_exclusive_policy
+cargo test -p mantle --test integration_build independently_built_backend_closures_have_identical_archives_and_offline_source_reports
+cargo test -p mantle --test store_archive_cli admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail
+cargo test -p mantle --test attest_cli casita_rejects_substituted_output_signed_only_by_cache_key_outside_policy
 cargo test -p mantle --test integration casita_repair_final_nar_rejects_before_creating_or_mutating_state
 cargo test -p mantle --test integration store_repair_final_nar_dry_run_then_execute_is_explicit_and_idempotent
 cargo test -p crunch-store --lib repair::tests::casita_repair_library_entrypoints_reject_without_publishing
@@ -287,12 +290,25 @@ The `add-store-backend-selection` and `adopt-casita-store-backend` Cairn evidenc
 - a CLI `store gc` under `casita` with one pinned and one unpinned signed output: the plan lists only the unpinned output, and executing that plan reports `casita-collection`, removes the unpinned output and its export, and leaves the pinned output's NAR SHA-256, NAR size, signatures, export, and `store verify` result of `trusted_signatures=1/1` unchanged;
 - historical interim-gate rejection of Rust cache modes under `casita`, before durable castore payload roots were implemented; the current capability profile and focused Rust cache reuse fixtures supersede that gate;
 - a signed fixed-output `file://` fetch under each backend: after only its physical export is deleted, a fresh `mantle --json build` process reports `built_total: 0` and `cached_total: 1`, restores identical bytes with the same store path, NAR SHA-256, NAR size, and signature under both backends, and passes `store verify` with `trusted_signatures=1/1`; under `casita`, the policy file stays byte-identical and no `pathinfo.redb`, `directories.redb`, or `blobs` appears in the state directory;
+- an independently built, signed two-path offline source closure under `snix`
+  and `casita`: one local HTTP response is captured before its server closes;
+  both backends then report equal full source-preflight JSON, build the root
+  with the fetched input, and export byte-identical closure archives with
+  equal listed paths while the source endpoint is unavailable;
+- a real Nix-compatible binary-cache substitute signed by a cache key that
+  transport trusts but the destination Casita policy does not: admission
+  fails with `casita-signer-untrusted` and no output root, then adding the
+  full cache key to that policy admits the same cached bytes without a build;
 - a `casita` build whose policy file omits the local signer, which fails with `casita-signer-untrusted`; after the key is listed, the build publishes; removing the key makes a fresh `store info` fail with `casita-signer-untrusted` while the export stays in place, and listing it again restores the read with the same signature, with Mantle leaving the policy file unchanged throughout;
 - a new OS process that reads a signed output after its physical export was deleted, with an `ActionResultPort::probe_outputs` check that reuses it, and a new process that reads a signed output without a content address;
 - conflicting admissions from a second handle, idempotent batch publication, a batch that fails on a bad NAR without publishing its valid path, also as seen from a new process, and permanent roots that survive a Casita disk-pressure pass;
 - a second Casita client that replaces content or metadata, writes non-canonical or oversized `pathinfo.json`, writes signed facts that do not match the content, points the root at another path's envelope, or removes the root, each rejected with its blocker, also in a new process;
 - `gc-recovery-required` while a fence is pending, with the root registry unchanged by fenced pin, unpin, and migration attempts;
 - library-level `store sign`, which republishes the envelope with the same content, leaves no root on the old envelope, and verifies in a new process;
+- the `store sign` CLI command in the signed two-backend conformance rail:
+  signing an imported output with an independently provisioned second key
+  adds its signature; `store info` reports both and `store verify` accepts
+  both trusted signatures under each backend;
 - library-level `store sign` against a root that a second client changed after Mantle read it, which fails with `casita-root-conflict` and keeps that client's root;
 - `store repair-final-nar` under `casita`: the dry run and `--execute` fail with `casita-repair-final-nar-unsupported` without creating the state or output directory, and against existing state and output directories each leaves every file and directory entry in both unchanged; the library inspection and execution calls on an open Casita store fail with the same blocker, publish nothing, and leave every file and directory entry in its state and output directories unchanged;
 - default `snix` final-NAR repair: a dry run reports `would-repair` without changes, `--execute` repairs the stale facts, and a second `--execute` reports `current`;
@@ -314,10 +330,14 @@ The `adopt-casita-store-backend` Cairn evidence also keeps the commands and outp
 
 These paths have no passing validation yet:
 
-- `mantle build` for derivations other than the fixed-output fetch and the two `examples/hello.ncl` variants above;
-- `mantle bootstrap --fetch` under `snix`, and under `casita` with the pinned musl.cc tarball or with `--offline-source-preflight`;
-- the `store sign` CLI command, `store push`, `store pull`, and remote substitution;
-- deleting the policy file while a process runs;
+- `mantle build` for derivation shapes beyond the fixed-output fetch, the
+  two `examples/hello.ncl` variants, and the signed offline two-path source
+  closure above;
+- `mantle bootstrap --fetch` under `snix`, and under `casita` with the pinned
+  musl.cc tarball rather than the local fixture tarball;
+- `store push`, `store pull`, and remote substitution;
+- a policy replacement concurrent with an in-flight trust check (removal
+  between two operations on one open handle is covered);
 - moves from `casita` back to `snix`.
 
 ## Portability and non-claims
