@@ -11,6 +11,8 @@ Run 62 records the authentic serial Rust 1.90 first-stage sidecar without
 claiming a completed source provider. Runs 63–65 record completed trust,
 capability, clean-source vendor, format-corrected quality and committed
 Cairn gates, with both the initial failed and passing corrective receipts.
+Run 66 records the terminal GNU-host Rust 1.91.1 build and ABI-incompatible
+runtime packaging failure, without claiming a validated source provider.
 The pin and locked dependency inventory are in
 `evidence/dependency-admission-2026-10-04.md`. An unchecked task remains
 open even when some subcases passed: the source-built Rust 1.94.1 profile
