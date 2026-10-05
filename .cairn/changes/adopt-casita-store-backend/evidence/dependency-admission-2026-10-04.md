@@ -16,3 +16,38 @@ Branch `work/adopt-casita-store-backend-20261004` from selection commit `d6f3ca7
 5. `nix shell --offline nixpkgs#cargo-deny nixpkgs#cargo --command cargo-deny --config deny.toml check` exited 9: `advisories FAILED, bans ok, licenses ok, sources FAILED`. Its six `source-not-allowed` reports name packages from four other git repositories (`onix-artifact`, `bounded-tree`, `durable-file-publication`, `transactional-reconciliation-core`), not Casita/Turso. The advisory output contains RUSTSEC-2024-0370 (`proc-macro-error 0.4.12`, reachable via Casita through `genawaiter`), RUSTSEC-2026-0253 (`lru 0.16.4`, via Snix), RUSTSEC-2026-0285 (`rustls 0.23.37`, including Casita's `object_store`), and yanked `chacha20 0.10.0` and `spin 0.10.0`. No waivers or policy bypass were made. This newer tool/advisory DB result does not replace the 2026-09-30 vendor-rail transcript.
 
 T1.1 manifest/lock were already present; the new admission guard checks the complete Turso git package family and singular lock pins in both Nix and the generator. T1.2 remains open for its clean-source Nix proof and Rust source-profile refresh. T1.3/T4.7 remain open because the audit failed. T1.4 contract text and trust-policy implementation were inspected only; this run does not assert the entire end-to-end backend contract.
+
+## Source-built Rust profile follow-up (same branch)
+
+The Rust project distributor's pinned
+[`rustc-1.94.1-src.tar.gz.sha256`](https://static.rust-lang.org/dist/rustc-1.94.1-src.tar.gz.sha256)
+returned `4c142a625f12e3cdf716c68ae19f4f60d98ad1482627b08579b15838e95ad514  rustc-1.94.1-src.tar.gz`;
+an HTTP HEAD on that archive returned status 200 and 651,725,417 bytes. This
+independent official checksum, not a local guess or an unpacked tree hash, is
+now in each typed Rust source plan. Both plans keep the 1.90.0 -> 1.91.1 ->
+1.92.0 -> 1.93.1 bootstrap stages and replace the final source, stage ID,
+source ID, URL, digest, and version together with Rust 1.94.1. The Rust
+bootstrap patch-plan version admission now recognizes 1.94.1; the old 1.94.0
+fixture remains as historical test input, not the checked-in final profile.
+
+Using the already available Nickel 1.17.0 binary,
+`nickel export --format json bootstrap/rust-source-plan.ncl` and the same
+command for `bootstrap/rust-source-musl-host-plan.ncl` both exited 0. Reading
+their evaluated JSON and checking the stage/source linkage printed:
+
+```text
+x86_64-unknown-linux-gnu final 1.94.1 sources 6 stages 5 sha256 4c142a625f12e3cdf716c68ae19f4f60d98ad1482627b08579b15838e95ad514
+x86_64-unknown-linux-musl final 1.94.1 sources 6 stages 5 sha256 4c142a625f12e3cdf716c68ae19f4f60d98ad1482627b08579b15838e95ad514
+```
+
+That check asserted exactly one `rustc-final` stage, source ID
+`rust-1.94.1`, stage ID `rust-1.94.1-final`, predecessor
+`rust-1.93.1-stage1`, version 1.94.1, source URL and exact official SHA-256.
+This is Nickel evaluation and shape/identity admission, **not** a successful
+Rust source build or compiler bootstrap. The new Rust tests for the plan
+deserialization/validator and patch planner were not compiled or run: the
+required nightly dev shell has an uncached `rustc-dev-1.96.0-nightly` derivation
+and unavailable configured remote builder (separately observed on the same
+source flake). T1.2 still needs actual compiler requalification and a
+clean-source Crane vendor build under the detached long-job workflow, which
+the user has prohibited.

@@ -106,10 +106,14 @@ assertion checks the same locked package family before selecting the patched
 Casita source. The local pin validator accepted the current 987 lock
 identities and rejected a changed `turso_core` source in a scratch lock; Nix
 evaluated the vendor derivation but did **not** build a clean-source closure.
-The two Rust-from-source self-build plans still select final compiler 1.94.0,
-below Casita's declared `rust-version` 1.94.1; the fetched bootstrap toolchain
-selects 1.94.1. Neither the source-profile refresh nor the clean-source proof
-is complete. The T1.2 checkbox and dependency audit gate remain open.
+At the first bounded read, both Rust-from-source self-build plans selected
+final compiler 1.94.0, below Casita's declared `rust-version` 1.94.1. They
+now declare 1.94.1 with the official Rust distribution source SHA-256 and
+matching final-stage/source identities; both typed Nickel plans evaluated
+and passed the bounded identity check recorded in the active change's
+`evidence/dependency-admission-2026-10-04.md`. This does not qualify a
+source-built compiler: its build/requalification and the clean-source vendor
+proof remain unrun. T1.2 and the dependency audit gate remain open.
 
 With `cargo-deny 0.20.2` and its available advisory database, the scoped
 `nix shell --offline nixpkgs#cargo-deny nixpkgs#cargo --command cargo-deny

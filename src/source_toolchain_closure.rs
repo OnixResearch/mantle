@@ -2137,6 +2137,8 @@ mod tests {
     const EXPECTED_PROVIDER_STATUS_RECEIPT_COUNT: usize = 1;
     const MRUSTC_SOURCE_SHA256_HEX: &str = "c1ba35f5fc5c4ca2952d9f5526e900dcb6632ea7fd4d71fa58029b3bb563ae56";
     const FINAL_RUST_VERSION: &str = "1.94.0";
+    const CHECKED_IN_FINAL_RUST_VERSION: &str = "1.94.1";
+    const CHECKED_IN_FINAL_RUST_SHA256_HEX: &str = "4c142a625f12e3cdf716c68ae19f4f60d98ad1482627b08579b15838e95ad514";
 
     #[test]
     fn absent_closure_status_preserves_current_non_claim() {
@@ -2780,7 +2782,7 @@ mod tests {
 
         let validation = validate_rust_source_provider_bootstrap_plan(&plan).unwrap();
 
-        assert_eq!(plan.final_version, FINAL_RUST_VERSION);
+        assert_eq!(plan.final_version, CHECKED_IN_FINAL_RUST_VERSION);
         assert_eq!(plan.host_triple, "x86_64-unknown-linux-gnu");
         assert_eq!(plan.target_triple, "x86_64-unknown-linux-musl");
         assert!(plan.final_outputs.iter().any(|output| {
@@ -2804,6 +2806,18 @@ mod tests {
             stage.kind == RustSourceProviderBootstrapStageKind::RustcFinal
                 && stage.bootstrap_stage_id == "rust-1.93.1-stage1"
         }));
+        assert!(plan.sources.iter().any(|source| {
+            source.id == "rust-1.94.1"
+                && source.version == CHECKED_IN_FINAL_RUST_VERSION
+                && source.sha256_hex == CHECKED_IN_FINAL_RUST_SHA256_HEX
+                && source.url == "https://static.rust-lang.org/dist/rustc-1.94.1-src.tar.gz"
+        }));
+        assert!(plan.stages.iter().any(|stage| {
+            stage.kind == RustSourceProviderBootstrapStageKind::RustcFinal
+                && stage.id == "rust-1.94.1-final"
+                && stage.source_ids == ["rust-1.94.1"]
+                && stage.rust_version == CHECKED_IN_FINAL_RUST_VERSION
+        }));
     }
 
     #[test]
@@ -2816,7 +2830,7 @@ mod tests {
 
         let validation = validate_rust_source_provider_bootstrap_plan(&plan).unwrap();
 
-        assert_eq!(plan.final_version, FINAL_RUST_VERSION);
+        assert_eq!(plan.final_version, CHECKED_IN_FINAL_RUST_VERSION);
         assert_eq!(plan.host_triple, "x86_64-unknown-linux-musl");
         assert_eq!(plan.target_triple, "x86_64-unknown-linux-musl");
         assert!(plan.policy.source_built);
@@ -2830,6 +2844,18 @@ mod tests {
         }));
         assert_eq!(validation.source_count, EXPECTED_BOOTSTRAP_PLAN_SOURCE_COUNT);
         assert_eq!(validation.stage_count, EXPECTED_BOOTSTRAP_PLAN_STAGE_COUNT);
+        assert!(plan.sources.iter().any(|source| {
+            source.id == "rust-1.94.1"
+                && source.version == CHECKED_IN_FINAL_RUST_VERSION
+                && source.sha256_hex == CHECKED_IN_FINAL_RUST_SHA256_HEX
+                && source.url == "https://static.rust-lang.org/dist/rustc-1.94.1-src.tar.gz"
+        }));
+        assert!(plan.stages.iter().any(|stage| {
+            stage.kind == RustSourceProviderBootstrapStageKind::RustcFinal
+                && stage.id == "rust-1.94.1-final"
+                && stage.source_ids == ["rust-1.94.1"]
+                && stage.rust_version == CHECKED_IN_FINAL_RUST_VERSION
+        }));
     }
 
     #[test]
