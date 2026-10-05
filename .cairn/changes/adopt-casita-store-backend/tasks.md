@@ -13,6 +13,10 @@ capability, clean-source vendor, format-corrected quality and committed
 Cairn gates, with both the initial failed and passing corrective receipts.
 Run 66 records the terminal GNU-host Rust 1.91.1 build and ABI-incompatible
 runtime packaging failure, without claiming a validated source provider.
+Run 67 records the reviewed fail-closed host-ABI correction, re-pinned
+locked source archive, real GNU ELF regression, clean-source Nix positive
+and isolated wrong-pin negative, strict first-party Clippy and rebuilt
+read-only CLI smoke, without claiming a canonical Rust 1.94.1 provider.
 The pin and locked dependency inventory are in
 `evidence/dependency-admission-2026-10-04.md`. An unchecked task remains
 open even when some subcases passed: the source-built Rust 1.94.1 profile

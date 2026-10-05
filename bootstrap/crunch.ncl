@@ -16,7 +16,7 @@
 # The source tarball includes the exact locked offline Cargo closure under
 # vendor-deps/, including reviewed Casita source patches.
 # The hash below identifies pinned source commit
-# 2ab0f6dc58eee9978c84667fcb7da490ea7ad702 plus its generated
+# 810c40b8c7ee41c65d6526e16a6bfea17b9130e2 plus its generated
 # vendor-deps/ closure; later recipe/evidence edits are not in that archive.
 #
 # Usage:
@@ -25,7 +25,7 @@
 # Generating the source tarball and its unpacked-source BLAKE3 SRI hash:
 #   python3 scripts/vendor-deps.py generate
 #   python3 scripts/vendor-deps.py check
-#   git archive --prefix=crunch-src/ 2ab0f6dc58eee9978c84667fcb7da490ea7ad702 -o /tmp/crunch-src.tar
+#   git archive --prefix=crunch-src/ 810c40b8c7ee41c65d6526e16a6bfea17b9130e2 -o /tmp/crunch-src.tar
 #   tar rf /tmp/crunch-src.tar --transform='s,^vendor-deps/,crunch-src/vendor-deps/,' vendor-deps/
 #   xz -T4 /tmp/crunch-src.tar
 #   mkdir -p /tmp/crunch-src-unpacked
@@ -50,7 +50,7 @@ let rust = (import "rust.ncl") in
 
 let crunch_src = crunch.fetchTarball {
   url = "file:///tmp/crunch-src.tar.xz",
-  hash = "blake3-6nOZ9WOsN6DrvnTfKR5/C2DojRZH6cICZlxvNWf8TA8=",
+  hash = "blake3-Lm0DLBYankN8QtflGflSJ52WwnoqJN/m2Cdf1wqQyiU=",
   name = "crunch-src",
 } in
 
