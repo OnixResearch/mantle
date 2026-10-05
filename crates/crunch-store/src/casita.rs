@@ -1831,4 +1831,30 @@ mod tests {
         );
         assert!(!state.join(TRUST_FILE_NAME).exists());
     }
+    #[tokio::test]
+    async fn cached_node_rechecks_revoked_policy_in_same_session() {
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("state");
+        let output = root.path().join("output");
+        std::fs::create_dir(&state).unwrap();
+        let raw = ed25519_dalek::SigningKey::from_bytes(&[29_u8; 32]);
+        let signer = SigningKey::new("casita-revoked".to_string(), raw.clone());
+        let trusted = VerifyingKey::new("casita-revoked".to_string(), raw.verifying_key());
+        let other_raw = ed25519_dalek::SigningKey::from_bytes(&[30_u8; 32]);
+        let other = VerifyingKey::new("casita-other".to_string(), other_raw.verifying_key());
+        let policy = state.join(TRUST_FILE_NAME);
+        std::fs::write(&policy, format!("{trusted}\n")).unwrap();
+        let mut store =
+            StoreHandle::open(StoreConfig::new(StoreBackend::Casita, state, output, STORE_DIR.to_string()))
+                .await
+                .unwrap();
+        let info = fixture(&store, root.path(), "revoked-cache", b"trusted before revocation", &signer).await;
+        store.pathinfo_service().put(info.clone()).await.unwrap();
+        assert_eq!(store.cached_node_for_path(&info.store_path).await.unwrap(), Some(info.node.clone()));
+        std::fs::write(&policy, format!("{other}\n")).unwrap();
+        let error = store.cached_node_for_path(&info.store_path).await.unwrap_err();
+        assert!(error.to_string().contains("casita-signer-untrusted"), "{error}");
+        std::fs::write(&policy, format!("{trusted}\n")).unwrap();
+        assert_eq!(store.cached_node_for_path(&info.store_path).await.unwrap(), Some(info.node));
+    }
 }

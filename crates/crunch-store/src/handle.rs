@@ -1940,9 +1940,10 @@ impl StoreHandle {
 
     /// Reuse a previously known castore node for `path` when possible.
     ///
-    /// Checks the session cache first, then local PathInfo. Returns `None`
-    /// when no reusable local node is known or when the referenced castore
-    /// content is missing.
+    /// Snix checks the session cache before local PathInfo. Casita always
+    /// rechecks its durable root, envelope, and trust policy instead of treating
+    /// session nodes as authority. Returns `None` when no reusable local node
+    /// is known or when the referenced castore content is missing.
     pub async fn cached_node_for_path(&mut self, path: &StorePath<String>) -> Result<Option<Node>, Error> {
         Ok(self.cached_node_for_path_with_layer(path).await?.map(|read| read.value))
     }
@@ -1954,7 +1955,9 @@ impl StoreHandle {
         if path.name().is_empty() || !path.to_string().contains('-') {
             return Err(Error::Store(format!("invalid logical store path: {path}")));
         }
-        if let Some(node) = self.output_nodes.get(path).cloned() {
+        if self.backend == StoreBackend::Snix
+            && let Some(node) = self.output_nodes.get(path).cloned()
+        {
             if self.castore_has_complete_content(&node).await? {
                 return Ok(Some(crate::layer::Layered::overlay(node)));
             }
@@ -1978,7 +1981,7 @@ impl StoreHandle {
         self.record_layer_selection(path, &path_info)?;
 
         let layered_node = path_info.map(|value| value.node);
-        if layered_node.layer.is_overlay() {
+        if self.backend == StoreBackend::Snix && layered_node.layer.is_overlay() {
             self.output_nodes.insert(path.clone(), layered_node.value.clone());
         }
         Ok(Some(layered_node))
