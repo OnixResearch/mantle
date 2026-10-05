@@ -104,7 +104,7 @@ Details are in `evidence/casita-review.md` and ADR 0082. At
 | --- | --- | --- | --- |
 | Session staging and conditional publication | Unrooted import in a `MutationSession`, then `publish_if_roots_match` expecting absence | Selected | Root-race, idempotent, interrupted-staging, and batch fixtures |
 | Conditional envelope replacement | Stage a new envelope, then `RootChange::Set` expecting the current target | Selected | Replacement fixtures |
-| Mantle-owned castore payload roots | Permanent roots under `mantle/castore/` with `content` and `node.postcard` | Selected once `rust-unit-cache` is declared; planned, not implemented | Payload reuse, tamper, and GC fixtures |
+| Mantle-owned castore payload roots | Permanent roots under `mantle/castore/` with `content` and `node.postcard` | Selected and implemented with `rust-unit-cache` | Payload reuse, tamper, and GC fixtures |
 | Destination-owned trust policy | `casita-trusted-public-keys` when present, otherwise only the local signing key; the file is written by the operator | Selected | Missing, invalid, unauthorized, removed-key, local-signer listed and unlisted, and reopen fixtures |
 | Split an oversized batch across commits | Several conditional publications | Rejected: breaks all-or-none | Batch-limit fixtures |
 | Reject `store sign` in Casita mode | Fail the command under `casita` | Rejected: drops a core capability | Replacement fixtures |
@@ -139,10 +139,10 @@ Details are in `evidence/casita-review.md` and ADR 0082. At
   `pathinfo.json`, the deterministic serde JSON encoding of the signed
   PathInfo; `mantle/castore/<64 lowercase hex of the BLAKE3 digest of the
   postcard-encoded castore node>` for castore-only payloads, with an envelope
-  of exactly `content` and `node.postcard`, planned and used only once the
-  profile declares `rust-unit-cache`. Mantle manages and removes roots only in
-  these two namespaces. No other durable PathInfo mapping exists in Casita
-  mode.
+  of exactly `content` and `node.postcard`. The `rust-unit-cache` profile
+  declares this implemented durable payload-root path. Mantle manages and
+  removes roots only in these two namespaces. No other durable PathInfo
+  mapping exists in Casita mode.
 - **Trust policy**: `casita-trusted-public-keys` in the state directory,
   written by the operator and parsed with the overlay trust-key rules. When the
   file exists, the trust set is exactly its keys. Without it, the trust set is
