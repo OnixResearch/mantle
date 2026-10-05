@@ -1414,6 +1414,106 @@ fn shared_action_result_roundtrip_reuses_trusted_http_result_and_separates_actio
 }
 
 #[test]
+fn casita_local_action_result_reuses_verified_output_after_export_removal() {
+    if !can_build_fast_projects() {
+        eprintln!("SKIP: Casita action-result reuse requires Linux, bwrap, and static BusyBox");
+        return;
+    }
+
+    let root = tempfile::tempdir().unwrap();
+    let store = root.path().join("store");
+    let state = root.path().join("state");
+    std::fs::create_dir(&store).unwrap();
+    std::fs::create_dir(&state).unwrap();
+    let policy = state.join("casita-trusted-public-keys");
+    std::fs::write(&policy, format!("{ACTION_RESULT_TRUSTED_KEY}\n")).unwrap();
+    let key = project_root(SHARED_ACTION_RESULT_PROJECT).join("fixtures/action.key");
+    let build = || {
+        parse_successful_json(
+            project_command_with_build_environment(SHARED_ACTION_RESULT_PROJECT)
+                .args(["--json", "--store-backend", "casita", "--store"])
+                .arg(&store)
+                .arg("--state-dir")
+                .arg(&state)
+                .args(["--nix-compat", "build", "--no-substitute", "--signing-key"])
+                .arg(&key)
+                .arg(".#payload")
+                .output()
+                .unwrap(),
+            "Casita local action-result build",
+        )
+    };
+
+    let first = build();
+    assert_eq!(first["counts"]["built_total"], 1);
+    let published = action_result_report_with_disposition(&first, "published");
+    let output = PathBuf::from(first["outcomes"][0]["outputs"][0]["path"].as_str().unwrap());
+    let logical = first["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"]
+        .as_str()
+        .unwrap();
+    assert_eq!(std::fs::read_to_string(output.join("result.txt")).unwrap(), "shared-action-result: original action\n");
+    let record_dir = state.join("action-results/v1/records");
+    let records = std::fs::read_dir(record_dir).unwrap().collect::<Result<Vec<_>, _>>().unwrap();
+    assert_eq!(records.len(), 1, "builder must publish a real local action-result record");
+    let signed: crunch_action_result_core::SignedActionResultRecord =
+        serde_json::from_slice(&std::fs::read(records[0].path()).unwrap()).unwrap();
+    assert_eq!(published["action_ref"].as_str(), Some(signed.record.action_ref.as_str()));
+    assert_eq!(signed.record.outputs.len(), 1);
+    assert_eq!(signed.record.outputs[0].store_path, logical);
+    assert!(!signed.record.outputs[0].path_info_ref.is_empty());
+    assert!(!signed.record_signatures.is_empty());
+
+    #[cfg(unix)]
+    std::fs::set_permissions(&output, std::fs::Permissions::from_mode(EXECUTABLE_MODE)).unwrap();
+    std::fs::remove_dir_all(&output).unwrap();
+    assert!(!output.exists());
+    assert!(!state.join("pathinfo.redb").exists());
+    assert!(!state.join("directories.redb").exists());
+    assert!(!state.join("blobs").exists());
+    assert!(state.join("casita/casita.sqlite").is_file());
+    let selector = output.file_name().unwrap().to_str().unwrap();
+    let info = parse_successful_json(
+        project_command_with_build_environment(SHARED_ACTION_RESULT_PROJECT)
+            .args(["--json", "--store-backend", "casita", "--state-dir"])
+            .arg(&state)
+            .arg("--store")
+            .arg(&store)
+            .args(["--nix-compat", "store", "info", selector])
+            .output()
+            .unwrap(),
+        "Casita output-root lookup without physical export",
+    );
+    assert_eq!(info["backend"], "casita");
+    assert_eq!(info["backend_capabilities"]["rust_unit_cache"], false);
+    assert_eq!(info["paths"].as_array().unwrap().len(), 1);
+    assert_eq!(info["paths"][0]["store_path"], selector);
+    assert_eq!(info["paths"][0]["signatures"].as_array().unwrap().len(), 1);
+    assert!(!output.exists(), "verified root lookup must not substitute for Builder rehydration");
+
+    let second = build();
+    assert_eq!(second["counts"]["built_total"], 0, "fresh Builder must not execute the action again");
+    assert_eq!(second["counts"]["cached_total"], 1);
+    let reused = action_result_report_with_disposition(&second, "reused");
+    assert_eq!(reused["action_ref"].as_str(), Some(signed.record.action_ref.as_str()));
+    assert_eq!(reused["selected_result_ref"].as_str(), Some(signed.record.result_ref.as_str()));
+    assert_eq!(reused["selected_source_class"], "local");
+    assert_eq!(second["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"], logical);
+    assert_eq!(std::fs::read_to_string(output.join("result.txt")).unwrap(), "shared-action-result: original action\n");
+    assert_eq!(reused["transfer"]["transferred_nar_bytes"], 0);
+    assert_eq!(reused["transfer"]["reused_nar_bytes"], info["paths"][0]["nar_size"]);
+    project_command_with_build_environment(SHARED_ACTION_RESULT_PROJECT)
+        .args(["--store-backend", "casita", "--state-dir"])
+        .arg(&state)
+        .arg("--store")
+        .arg(&store)
+        .args(["--nix-compat", "store", "verify", "--trusted-public-keys", ACTION_RESULT_TRUSTED_KEY, selector])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("trusted_signatures=1/1"));
+    assert_eq!(std::fs::read(&policy).unwrap(), format!("{ACTION_RESULT_TRUSTED_KEY}\n").into_bytes());
+}
+
+#[test]
 fn shared_action_result_roundtrip_rejects_unknown_signer_missing_output_and_corrupt_artifact() {
     if !can_build_fast_projects() {
         eprintln!("SKIP: shared action-result workflow requires Linux, bwrap, static BusyBox, and loopback HTTP");
