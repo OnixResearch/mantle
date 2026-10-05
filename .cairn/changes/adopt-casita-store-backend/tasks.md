@@ -21,6 +21,9 @@ The pin and locked dependency inventory are in
 `evidence/dependency-admission-2026-10-04.md`. An unchecked task remains
 open even when some subcases passed: the source-built Rust 1.94.1 profile
 and dependency audit are independent of the completed vendor and QA gates.
+Run 69 records the canonical MUSL route's six authenticated offline source
+archives, read-only native source graph plan and bounded disk/object inventory;
+native provider construction and Rust self-build remain unproved.
 
 ## Phase 1: Pin, vendor closure, and contract
 

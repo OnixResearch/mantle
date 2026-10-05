@@ -167,6 +167,21 @@ target with an authenticated native closure. Neither a successful stage
 compiler build nor this check proves final Rust provider publication or
 full-source toolchain closure.
 
+For the 2026-10-05 canonical MUSL prerequisite inventory, the six archives
+named by `bootstrap/rust-source-musl-host-plan.ncl` were staged and SHA-256
+checked in an isolated offline input directory; Rust 1.92.0 and 1.93.1 were
+acquired before the run using the distributor's `.tar.gz.sha256` files.
+The archive manifest and the read-only native source graph plan are recorded
+in the active Casita change's Run 69 evidence. This is source-input preparation,
+not a native provider or compiler build. `bootstrap/seed-full-toolchain.ncl`
+builds the normalized GCC/musl/binutils provider from declared sources; the
+source-built fixed-point route separately builds Make, Linux headers, BusyBox,
+CMake, Python and Perl, verifies each artifact attestation, and binds their
+manifest to the newly admitted native provider before the offline Rust stages.
+The historical native provider and 51-record source closure cannot be inferred
+from a recipe or source plan. Do not launch this route without its fresh
+source-root admission, host-tool receipts, and the full disk preflight.
+
 ## Genuine release rebuild proof
 
 Use the reviewed production recipe with an explicit content-bound toolchain
