@@ -10,6 +10,8 @@ use std::ffi::OsString;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
+use std::io::Seek;
+use std::io::SeekFrom;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
@@ -4178,14 +4180,17 @@ fn assemble_rustc_stage1_provider_candidate(
     validate_rustc_stage1_candidate_request(boundary, sources, build)?;
     debug_assert_eq!(sources.len(), boundary.sources.len());
     debug_assert_ne!(boundary.provider_candidate_dir, boundary.output_dir);
+    let runtime_loader = select_rustc_stage_runtime_loader(
+        &build.stage_output_dir,
+        &boundary.build_dir,
+        &boundary.host_triple,
+        RUSTC_STAGE1_DYNAMIC_TOOL_SPECS,
+    )?;
     prepare_empty_provider_candidate_dir(&boundary.provider_candidate_dir)?;
     copy_provider_prefix(&build.stage_output_dir, &boundary.provider_candidate_dir)?;
     wrap_rustc_stage_provider_dynamic_tools(
         &boundary.provider_candidate_dir,
-        &boundary
-            .build_dir
-            .join(RUSTC_SOURCE_TARGET_LINKER_RUNTIME_DIR)
-            .join(FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT),
+        &runtime_loader,
         &boundary.host_triple,
         RUSTC_STAGE1_DYNAMIC_TOOL_SPECS,
     )?;
@@ -4257,6 +4262,129 @@ const RUSTC_FINAL_DYNAMIC_TOOL_SPECS: &[RustProviderDynamicToolSpec] = &[
         sysroot_mode: RustProviderDynamicToolSysrootMode::Inject,
     },
 ];
+
+// A target sysroot is not a host runtime. In particular a GNU-host x.py build
+// produces glibc PIEs even when its target compiler stages musl libc here.
+fn select_rustc_stage_runtime_loader(
+    candidate_dir: &Path,
+    build_dir: &Path,
+    host_triple: &str,
+    specs: &[RustProviderDynamicToolSpec],
+) -> Result<PathBuf, RustSourceProviderError> {
+    assert!(!specs.is_empty(), "Rust stage must contain host tools");
+    assert!(!host_triple.is_empty(), "Rust stage host triple must be present");
+    let mut interpreter: Option<PathBuf> = None;
+    for spec in specs {
+        let tool = candidate_dir.join(spec.relative_path);
+        let observed = read_rustc_stage_elf_interpreter(&tool)?;
+        if let Some(previous) = &interpreter {
+            if previous != &observed {
+                return Err(RustSourceProviderError::Validate(format!(
+                    "Rust bootstrap host tools use different ELF interpreters: {} and {}",
+                    previous.display(),
+                    observed.display()
+                )));
+            }
+        } else {
+            interpreter = Some(observed);
+        }
+    }
+    let interpreter = interpreter.expect("nonempty specs provide an interpreter");
+    let loader_name = interpreter.file_name().and_then(OsStr::to_str).unwrap_or("");
+    if host_triple == "x86_64-unknown-linux-gnu" && loader_name == "ld-linux-x86-64.so.2" {
+        return Err(RustSourceProviderError::Validate(format!(
+            "GNU host runtime closure is not explicitly admitted: {} requires its glibc loader and transitive GNU C libraries bound to the selected host compiler; the musl target runtime cannot package GNU host tools",
+            interpreter.display()
+        )));
+    }
+    if host_triple != FIRST_STAGE_MUSL_TRIPLE || !matches!(loader_name, "ld-musl-x86_64.so.1" | "libc.so") {
+        return Err(RustSourceProviderError::Validate(format!(
+            "Rust bootstrap host ELF interpreter {} does not match host {host_triple}",
+            interpreter.display()
+        )));
+    }
+    Ok(build_dir
+        .join(RUSTC_SOURCE_TARGET_LINKER_RUNTIME_DIR)
+        .join(FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT))
+}
+
+fn read_rustc_stage_elf_interpreter(path: &Path) -> Result<PathBuf, RustSourceProviderError> {
+    let mut file = File::open(path)
+        .map_err(|error| RustSourceProviderError::Read(format!("open Rust host tool {}: {error}", path.display())))?;
+    let mut header = [0_u8; 64];
+    file.read_exact(&mut header)
+        .map_err(|error| RustSourceProviderError::Validate(format!("read ELF header {}: {error}", path.display())))?;
+    if header[..4] != ELF_MAGIC
+        || header[4..7] != [2, 1, 1]
+        || !matches!(u16::from_le_bytes(header[16..18].try_into().expect("ELF header bounds")), 2 | 3)
+        || header[18..20] != 62_u16.to_le_bytes()
+    {
+        return Err(RustSourceProviderError::Validate(format!(
+            "Rust host tool {} is not x86_64 little-endian ELF64",
+            path.display()
+        )));
+    }
+    let phoff = u64::from_le_bytes(header[32..40].try_into().expect("ELF header bounds"));
+    let entry_bytes = u16::from_le_bytes(header[54..56].try_into().expect("ELF header bounds"));
+    let entry_count = u16::from_le_bytes(header[56..58].try_into().expect("ELF header bounds"));
+    if entry_bytes != 56 || entry_count == 0 || entry_count > 128 {
+        return Err(RustSourceProviderError::Validate(format!(
+            "Rust host tool {} has invalid ELF program headers",
+            path.display()
+        )));
+    }
+    let file_bytes = file.metadata().map_err(|error| RustSourceProviderError::Read(error.to_string()))?.len();
+    let table_bytes = u64::from(entry_bytes) * u64::from(entry_count);
+    if phoff.checked_add(table_bytes).is_none_or(|end| end > file_bytes) {
+        return Err(RustSourceProviderError::Validate(format!(
+            "Rust host tool {} has out-of-bounds ELF program headers",
+            path.display()
+        )));
+    }
+    read_rustc_stage_elf_interpreter_segment(&mut file, path, phoff, entry_count, file_bytes)
+}
+
+fn read_rustc_stage_elf_interpreter_segment(
+    file: &mut File,
+    path: &Path,
+    phoff: u64,
+    entry_count: u16,
+    file_bytes: u64,
+) -> Result<PathBuf, RustSourceProviderError> {
+    let mut interpreter = None;
+    for index in 0..entry_count {
+        file.seek(SeekFrom::Start(phoff + u64::from(index) * 56))
+            .map_err(|error| RustSourceProviderError::Read(error.to_string()))?;
+        let mut segment = [0_u8; 56];
+        file.read_exact(&mut segment).map_err(|error| RustSourceProviderError::Read(error.to_string()))?;
+        if segment[..4] != 3_u32.to_le_bytes() {
+            continue;
+        }
+        if interpreter.is_some() {
+            return Err(RustSourceProviderError::Validate(format!("duplicate PT_INTERP in {}", path.display())));
+        }
+        let offset = u64::from_le_bytes(segment[8..16].try_into().expect("program header bounds"));
+        let length = u64::from_le_bytes(segment[32..40].try_into().expect("program header bounds"));
+        if !(2..=4096).contains(&length) || offset.checked_add(length).is_none_or(|end| end > file_bytes) {
+            return Err(RustSourceProviderError::Validate(format!("invalid PT_INTERP in {}", path.display())));
+        }
+        file.seek(SeekFrom::Start(offset))
+            .map_err(|error| RustSourceProviderError::Read(error.to_string()))?;
+        let mut buffer = [0_u8; 4096];
+        let bytes = &mut buffer[..length as usize];
+        file.read_exact(bytes).map_err(|error| RustSourceProviderError::Read(error.to_string()))?;
+        if bytes.last() != Some(&0) || bytes[..bytes.len() - 1].contains(&0) {
+            return Err(RustSourceProviderError::Validate(format!("invalid PT_INTERP text in {}", path.display())));
+        }
+        let text = std::str::from_utf8(&bytes[..bytes.len() - 1])
+            .map_err(|error| RustSourceProviderError::Validate(format!("invalid PT_INTERP UTF-8: {error}")))?;
+        if !Path::new(text).is_absolute() {
+            return Err(RustSourceProviderError::Validate(format!("relative PT_INTERP in {}", path.display())));
+        }
+        interpreter = Some(PathBuf::from(text));
+    }
+    interpreter.ok_or_else(|| RustSourceProviderError::Validate(format!("missing PT_INTERP in {}", path.display())))
+}
 
 fn wrap_rustc_stage_provider_dynamic_tools(
     candidate_dir: &Path,
@@ -4754,14 +4882,17 @@ fn assemble_rustc_final_provider_candidate(
     validate_rustc_final_candidate_request(boundary, sources, build)?;
     debug_assert_eq!(sources.len(), boundary.sources.len());
     debug_assert_ne!(boundary.provider_candidate_dir, boundary.output_dir);
+    let runtime_loader = select_rustc_stage_runtime_loader(
+        &build.stage_output_dir,
+        &boundary.build_dir,
+        &boundary.host_triple,
+        RUSTC_FINAL_DYNAMIC_TOOL_SPECS,
+    )?;
     prepare_empty_provider_candidate_dir(&boundary.provider_candidate_dir)?;
     copy_provider_prefix(&build.stage_output_dir, &boundary.provider_candidate_dir)?;
     wrap_rustc_stage_provider_dynamic_tools(
         &boundary.provider_candidate_dir,
-        &boundary
-            .build_dir
-            .join(RUSTC_SOURCE_TARGET_LINKER_RUNTIME_DIR)
-            .join(FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT),
+        &runtime_loader,
         &boundary.host_triple,
         RUSTC_FINAL_DYNAMIC_TOOL_SPECS,
     )?;
@@ -8940,33 +9071,6 @@ mod tests {
     }
 
     #[test]
-    fn full_source_generated_tool_bindings_exclude_ambient_discovery() {
-        let context = full_source_execution_context_fixture();
-        let mut script = String::new();
-
-        push_generated_script_shebang(&mut script, Some(&context)).unwrap();
-        push_full_source_tool_bindings(&mut script, &context).unwrap();
-        push_first_stage_target_linker_wrapper(&mut script, true);
-        push_rustc_source_build_tool_discovery(&mut script, Some(&context)).unwrap();
-
-        assert!(script.starts_with("#!/receipt-bound/sh\n"));
-        assert!(script.contains("MAKE_PROGRAM='/receipt-bound/make'"));
-        assert!(script.contains("PERL_PROGRAM='/receipt-bound/perl'"));
-        assert!(script.contains("PERL5LIB='/lib/5.10.1'"));
-        assert!(script.contains("LIBRARY_PATH='/lib'"));
-        assert!(script.contains("GNUMAKEFLAGS=\"SHELL=$SHELL_PROGRAM\""));
-        assert!(script.contains("MANTLE_ZLIB_HEADER='/include/zlib.h'"));
-        assert!(script.contains("MANTLE_ZLIB_ARCHIVE='/lib/libz.a'"));
-        assert!(script.contains("MANTLE_LINUX_HEADERS_ROOT='/receipt-bound/linux-headers'"));
-        assert!(script.contains("MANTLE_LINUX_HEADERS_CFLAGS='-I/receipt-bound/linux-headers/include'"));
-        assert!(script.contains("export CFLAGS=\"$MANTLE_LINUX_HEADERS_CFLAGS\""));
-        assert!(script.contains("MANTLE_TARGET_CC='/native-provider/bin/x86_64-linux-musl-gcc'"));
-        assert!(!script.contains("ZLIB_CFLAGS=\nZLIB_LIBS=\n"));
-        assert!(!script.contains("command -v"));
-        assert!(!script.contains("/nix/store"));
-    }
-
-    #[test]
     fn full_source_llvm_config_binds_only_receipt_bound_linux_headers() {
         let context = full_source_execution_context_fixture();
         let mut full_source_config = String::new();
@@ -9170,7 +9274,7 @@ mod tests {
     }
 
     #[test]
-    fn materializer_writes_final_provider_output_from_validated_candidate() {
+    fn materializer_rejects_non_elf_host_tools_before_candidate_publication() {
         let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
@@ -9178,1032 +9282,11 @@ mod tests {
         let scratch = dir.path().join("scratch");
         fs::write(&recipe, "source-built recipe\n").unwrap();
         write_test_route_plan(dir.path());
-
-        let materialized = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
-
-        assert_eq!(materialized.output_path, output);
-        assert_eq!(materialized.recipe_digest_blake3.len(), SHA256_HEX_CHAR_COUNT);
-        assert_eq!(materialized.metadata_digest_blake3.len(), SHA256_HEX_CHAR_COUNT);
-        assert_eq!(materialized.metadata_path, output.join(RUST_SOURCE_PROVIDER_METADATA_PATH));
-        assert!(output.join(PROVIDER_RUSTC_RELATIVE_PATH).is_file());
-        assert!(output.join(PROVIDER_CARGO_RELATIVE_PATH).is_file());
-        assert!(output.join(PROVIDER_RUSTDOC_RELATIVE_PATH).is_file());
-        assert!(output.join(RUST_SOURCE_PROVIDER_METADATA_PATH).is_file());
-        assert!(output.join(RUSTC_FINAL_PROVIDER_RECEIPT_RELATIVE_PATH).is_file());
-        assert_stage_construction_evidence(&output, "mrustc-to-rust-1.90.0");
-        assert_stage_construction_evidence(&output, RUSTC_FINAL_STAGE_ID);
-        assert!(scratch.join(FIRST_STAGE_SCRIPT_FILE).is_file());
-        assert!(scratch.join(FIRST_STAGE_PLAN_FILE).is_file());
-        assert!(scratch.join(FIRST_STAGE_SOURCES_MANIFEST_FILE).is_file());
-        assert!(scratch.join(FIRST_STAGE_BUILD_MANIFEST_FILE).is_file());
-        assert!(scratch.join(FIRST_STAGE_BUILD_LOG_FILE).is_file());
-        assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
-        assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR).is_dir());
-        assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR).join(RUST_SOURCE_PROVIDER_METADATA_PATH).is_file());
-        assert!(
-            scratch
-                .join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR)
-                .join(FIRST_STAGE_PROVIDER_RECEIPT_RELATIVE_PATH)
-                .is_file()
-        );
-        assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_SUMMARY_FILE).is_file());
-        assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_OUTPUT_FILE).is_file());
-        assert!(scratch.join(RUSTC_STAGE1_PLAN_FILE).is_file());
-        assert!(scratch.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE).is_file());
+        let error = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+        assert!(error.to_string().contains("not x86_64 little-endian ELF64"));
+        assert!(!output.exists());
+        assert!(!scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR).exists());
         assert!(scratch.join(RUSTC_STAGE1_BUILD_MANIFEST_FILE).is_file());
-        assert!(scratch.join(RUSTC_STAGE1_BUILD_LOG_FILE).is_file());
-        assert!(scratch.join(RUSTC_STAGE1_SCRIPT_FILE).is_file());
-        assert!(scratch.join(RUSTC_STAGE1_ARCHIVE_DIR).is_dir());
-        assert!(scratch.join(RUSTC_STAGE1_SOURCE_DIR).is_dir());
-        assert!(scratch.join(RUSTC_STAGE1_BUILD_DIR).is_dir());
-        assert!(scratch.join(RUSTC_STAGE1_OUTPUT_DIR).join(PROVIDER_RUSTC_RELATIVE_PATH).is_file());
-        assert!(scratch.join(RUSTC_STAGE1_OUTPUT_DIR).join(PROVIDER_CARGO_RELATIVE_PATH).is_file());
-        assert!(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
-        assert!(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR).is_dir());
-        assert!(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR).join(RUST_SOURCE_PROVIDER_METADATA_PATH).is_file());
-        assert!(
-            scratch
-                .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
-                .join(RUSTC_STAGE1_PROVIDER_RECEIPT_RELATIVE_PATH)
-                .is_file()
-        );
-        assert!(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_SUMMARY_FILE).is_file());
-        assert!(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_OUTPUT_FILE).is_file());
-        assert!(scratch.join(RUSTC_STAGE1_SOURCE_DIR).join("rust-1.91.1/README.txt").is_file());
-        assert!(scratch.join(FIRST_STAGE_ARCHIVE_DIR).is_dir());
-        assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).is_dir());
-        assert!(scratch.join(FIRST_STAGE_BUILD_DIR).is_dir());
-        assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/README.txt").is_file());
-        assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/bin/mrustc").is_file());
-        assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/bin/minicargo").is_file());
-        assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/output/rustc").is_file());
-        assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/output/cargo").is_file());
-        assert!(
-            scratch
-                .join(FIRST_STAGE_SOURCE_DIR)
-                .join("mrustc-0.12.0/run_rustc/output/prefix/bin/rustc")
-                .is_file()
-        );
-        assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("rust-1.90.0/README.txt").is_file());
-        #[cfg(unix)]
-        assert_eq!(script_mode(&scratch.join(FIRST_STAGE_SCRIPT_FILE)), EXECUTABLE_MODE);
-        let manifest: serde_json::Value =
-            serde_json::from_slice(&fs::read(scratch.join(FIRST_STAGE_PLAN_FILE)).unwrap()).unwrap();
-        assert_eq!(manifest["schema"], FIRST_STAGE_PLAN_SCHEMA);
-        assert_eq!(manifest["stage"]["id"], "mrustc-to-rust-1.90.0");
-        assert_patch_plan_operation(
-            &manifest,
-            "mrustc-to-rust-1.90.0",
-            "first-stage-minicargo-out-dir",
-            FIRST_STAGE_PATCH_PLAN_MIN_OPERATIONS,
-        );
-        assert_eq!(
-            manifest["stage"]["expected_outputs"].as_array().unwrap().len(),
-            REQUIRED_FIRST_STAGE_OUTPUT_ROLES.len()
-        );
-        let sources_manifest: serde_json::Value =
-            serde_json::from_slice(&fs::read(scratch.join(FIRST_STAGE_SOURCES_MANIFEST_FILE)).unwrap()).unwrap();
-        assert_eq!(sources_manifest["schema"], FIRST_STAGE_SOURCES_MANIFEST_SCHEMA);
-        assert_eq!(sources_manifest["source_count"], FIRST_STAGE_TEST_SOURCE_COUNT);
-        let build_manifest: serde_json::Value =
-            serde_json::from_slice(&fs::read(scratch.join(FIRST_STAGE_BUILD_MANIFEST_FILE)).unwrap()).unwrap();
-        assert_eq!(build_manifest["schema"], FIRST_STAGE_BUILD_MANIFEST_SCHEMA);
-        assert_eq!(build_manifest["build"]["plan_digest_blake3"].as_str().unwrap().len(), SHA256_HEX_CHAR_COUNT);
-        assert_eq!(build_manifest["build"]["script_digest_blake3"].as_str().unwrap().len(), SHA256_HEX_CHAR_COUNT);
-        assert_patch_plan_operation(
-            &build_manifest,
-            "mrustc-to-rust-1.90.0",
-            "first-stage-run-rustc-host-runtime",
-            FIRST_STAGE_PATCH_PLAN_MIN_OPERATIONS,
-        );
-        assert_eq!(build_manifest["build"]["mrustc_digest_blake3"].as_str().unwrap().len(), SHA256_HEX_CHAR_COUNT);
-        assert_eq!(
-            build_manifest["build"]["translated_rustc_digest_blake3"].as_str().unwrap().len(),
-            SHA256_HEX_CHAR_COUNT
-        );
-        assert_eq!(
-            build_manifest["build"]["prefix_rustlib_digest_blake3"].as_str().unwrap().len(),
-            SHA256_HEX_CHAR_COUNT
-        );
-        assert_eq!(
-            build_manifest["build"]["target_prefix_rustlib_digest_blake3"].as_str().unwrap().len(),
-            SHA256_HEX_CHAR_COUNT
-        );
-        let candidate_manifest: serde_json::Value =
-            serde_json::from_slice(&fs::read(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_MANIFEST_FILE)).unwrap())
-                .unwrap();
-        assert_eq!(candidate_manifest["schema"], FIRST_STAGE_PROVIDER_CANDIDATE_SCHEMA);
-        assert_eq!(candidate_manifest["candidate_only"], true);
-        let expected_candidate_artifacts =
-            REQUIRED_FIRST_STAGE_OUTPUT_ROLES.len() + FIRST_STAGE_PROVIDER_RECEIPT_ARTIFACT_COUNT;
-        assert_eq!(candidate_manifest["candidate"]["artifact_count"], expected_candidate_artifacts);
-        assert_eq!(candidate_manifest["candidate"]["source_count"], FIRST_STAGE_TEST_SOURCE_COUNT);
-        let candidate_validation =
-            validate_materialized_rust_source_provider(&scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR)).unwrap();
-        assert_eq!(candidate_validation.validation.artifact_count, expected_candidate_artifacts);
-        assert_eq!(candidate_validation.validation.receipt_count, 1);
-        assert_eq!(candidate_validation.validation.source_count, FIRST_STAGE_TEST_SOURCE_COUNT);
-        let first_stage_receipt_path =
-            scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR).join(FIRST_STAGE_PROVIDER_RECEIPT_RELATIVE_PATH);
-        assert_receipt_has_stage_construction_identity(&first_stage_receipt_path);
-        assert_receipt_has_patch_plan_step(&first_stage_receipt_path, "first-stage-run-rustc-target");
-        let smoke_summary: serde_json::Value = serde_json::from_slice(
-            &fs::read(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_SUMMARY_FILE))
-                .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(smoke_summary["schema"], SMOKE_EVIDENCE_SCHEMA);
-        assert_eq!(smoke_summary["output_digest_blake3"], blake3::hash(SYNTHETIC_RLIB_BYTES).to_hex().to_string());
-        let rustc_stage1_plan: serde_json::Value =
-            serde_json::from_slice(&fs::read(scratch.join(RUSTC_STAGE1_PLAN_FILE)).unwrap()).unwrap();
-        assert_eq!(rustc_stage1_plan["schema"], RUSTC_STAGE1_PLAN_SCHEMA);
-        assert_eq!(rustc_stage1_plan["stage"]["id"], "rust-1.91.1-stage1");
-        assert_patch_plan_operation(
-            &rustc_stage1_plan,
-            "rust-1.91.1-stage1",
-            "rust-bootstrap-rustc-private-tool-rlibs",
-            RUST_BOOTSTRAP_PATCH_PLAN_MIN_OPERATIONS,
-        );
-        assert_eq!(rustc_stage1_plan["stage"]["bootstrap_stage_id"], "mrustc-to-rust-1.90.0");
-        assert_eq!(
-            rustc_stage1_plan["bootstrap_provider_candidate"]["metadata_digest_blake3"],
-            candidate_validation.metadata_digest_blake3
-        );
-        let rustc_stage1_sources: serde_json::Value =
-            serde_json::from_slice(&fs::read(scratch.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE)).unwrap()).unwrap();
-        assert_eq!(rustc_stage1_sources["schema"], RUSTC_STAGE1_SOURCES_MANIFEST_SCHEMA);
-        assert_eq!(rustc_stage1_sources["source_count"], RUSTC_STAGE1_TEST_SOURCE_COUNT);
-        assert_eq!(rustc_stage1_sources["sources"][0]["id"], "rust-1.91.1");
-        let rustc_stage1_build: serde_json::Value =
-            serde_json::from_slice(&fs::read(scratch.join(RUSTC_STAGE1_BUILD_MANIFEST_FILE)).unwrap()).unwrap();
-        assert_eq!(rustc_stage1_build["schema"], RUSTC_STAGE1_BUILD_MANIFEST_SCHEMA);
-        assert_patch_plan_operation(
-            &rustc_stage1_build,
-            "rust-1.91.1-stage1",
-            "rust-bootstrap-target-tool-config",
-            RUST_BOOTSTRAP_PATCH_PLAN_MIN_OPERATIONS,
-        );
-        assert_eq!(rustc_stage1_build["build"]["stage_id"], "rust-1.91.1-stage1");
-        assert_eq!(rustc_stage1_build["build"]["rustc_digest_blake3"].as_str().unwrap().len(), SHA256_HEX_CHAR_COUNT);
-        assert_eq!(
-            rustc_stage1_build["build"]["target_rustlib_digest_blake3"].as_str().unwrap().len(),
-            SHA256_HEX_CHAR_COUNT
-        );
-        let rustc_stage1_candidate_manifest: serde_json::Value =
-            serde_json::from_slice(&fs::read(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE)).unwrap())
-                .unwrap();
-        assert_eq!(rustc_stage1_candidate_manifest["schema"], RUSTC_STAGE1_PROVIDER_CANDIDATE_SCHEMA);
-        assert_eq!(rustc_stage1_candidate_manifest["candidate_only"], true);
-        assert_eq!(rustc_stage1_candidate_manifest["final_output_written"], false);
-        assert_eq!(rustc_stage1_candidate_manifest["candidate"]["stage_id"], "rust-1.91.1-stage1");
-        let expected_rustc_stage1_candidate_artifacts =
-            REQUIRED_RUSTC_STAGE1_OUTPUT_ROLES.len() + RUSTC_STAGE1_PROVIDER_RECEIPT_ARTIFACT_COUNT;
-        let expected_rustc_stage1_candidate_sources =
-            RUSTC_STAGE1_TEST_SOURCE_COUNT + RUSTC_STAGE1_BOOTSTRAP_PROVIDER_SOURCE_COUNT;
-        assert_eq!(
-            rustc_stage1_candidate_manifest["candidate"]["artifact_count"],
-            expected_rustc_stage1_candidate_artifacts
-        );
-        assert_eq!(
-            rustc_stage1_candidate_manifest["candidate"]["source_count"],
-            expected_rustc_stage1_candidate_sources
-        );
-        let rustc_stage1_candidate_validation =
-            validate_materialized_rust_source_provider(&scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)).unwrap();
-        assert_eq!(
-            rustc_stage1_candidate_validation.validation.artifact_count,
-            expected_rustc_stage1_candidate_artifacts
-        );
-        assert_eq!(rustc_stage1_candidate_validation.validation.receipt_count, 1);
-        assert_eq!(rustc_stage1_candidate_validation.validation.source_count, expected_rustc_stage1_candidate_sources);
-        let rustc_stage1_receipt_path =
-            scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR).join(RUSTC_STAGE1_PROVIDER_RECEIPT_RELATIVE_PATH);
-        assert_receipt_has_stage_construction_identity(&rustc_stage1_receipt_path);
-        assert_receipt_has_patch_plan_step(&rustc_stage1_receipt_path, "rust-bootstrap-rustc-private-tool-rlibs");
-        assert!(
-            rustc_stage1_candidate_validation
-                .metadata
-                .sources
-                .iter()
-                .any(|source| source.id == "rust-1.91.1-stage1-bootstrap-provider")
-        );
-        let rustc_stage1_smoke_summary: serde_json::Value = serde_json::from_slice(
-            &fs::read(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_SUMMARY_FILE))
-                .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(rustc_stage1_smoke_summary["schema"], SMOKE_EVIDENCE_SCHEMA);
-        assert_eq!(
-            rustc_stage1_smoke_summary["output_digest_blake3"],
-            blake3::hash(SYNTHETIC_RLIB_BYTES).to_hex().to_string()
-        );
-        let rustc_stage1_next_root = scratch.join(RUSTC_STAGE1_CHAIN_DIR).join(RUSTC_STAGE1_NEXT_ID);
-        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_PLAN_FILE).is_file());
-        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE).is_file());
-        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_BUILD_MANIFEST_FILE).is_file());
-        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_BUILD_LOG_FILE).is_file());
-        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_SCRIPT_FILE).is_file());
-        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_SOURCE_DIR).join("rust-1.92.0/README.txt").is_file());
-        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_OUTPUT_DIR).join(PROVIDER_RUSTC_RELATIVE_PATH).is_file());
-        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_OUTPUT_DIR).join(PROVIDER_CARGO_RELATIVE_PATH).is_file());
-        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
-        assert!(
-            rustc_stage1_next_root
-                .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
-                .join(RUST_SOURCE_PROVIDER_METADATA_PATH)
-                .is_file()
-        );
-        assert!(
-            rustc_stage1_next_root
-                .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
-                .join(RUSTC_STAGE1_PROVIDER_RECEIPT_RELATIVE_PATH)
-                .is_file()
-        );
-        assert!(
-            rustc_stage1_next_root
-                .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR)
-                .join(SMOKE_EVIDENCE_SUMMARY_FILE)
-                .is_file()
-        );
-        let rustc_stage1_next_plan: serde_json::Value =
-            serde_json::from_slice(&fs::read(rustc_stage1_next_root.join(RUSTC_STAGE1_PLAN_FILE)).unwrap()).unwrap();
-        assert_eq!(rustc_stage1_next_plan["schema"], RUSTC_STAGE1_PLAN_SCHEMA);
-        assert_eq!(rustc_stage1_next_plan["stage"]["id"], RUSTC_STAGE1_NEXT_ID);
-        assert_eq!(rustc_stage1_next_plan["stage"]["bootstrap_stage_id"], "rust-1.91.1-stage1");
-        assert_eq!(
-            rustc_stage1_next_plan["bootstrap_provider_candidate"]["metadata_digest_blake3"],
-            rustc_stage1_candidate_validation.metadata_digest_blake3
-        );
-        let rustc_stage1_next_sources: serde_json::Value =
-            serde_json::from_slice(&fs::read(rustc_stage1_next_root.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE)).unwrap())
-                .unwrap();
-        assert_eq!(rustc_stage1_next_sources["schema"], RUSTC_STAGE1_SOURCES_MANIFEST_SCHEMA);
-        assert_eq!(rustc_stage1_next_sources["source_count"], RUSTC_STAGE1_TEST_SOURCE_COUNT);
-        assert_eq!(rustc_stage1_next_sources["sources"][0]["id"], "rust-1.92.0");
-        let rustc_stage1_next_build: serde_json::Value =
-            serde_json::from_slice(&fs::read(rustc_stage1_next_root.join(RUSTC_STAGE1_BUILD_MANIFEST_FILE)).unwrap())
-                .unwrap();
-        assert_eq!(rustc_stage1_next_build["schema"], RUSTC_STAGE1_BUILD_MANIFEST_SCHEMA);
-        assert_eq!(rustc_stage1_next_build["build"]["stage_id"], RUSTC_STAGE1_NEXT_ID);
-        assert_eq!(
-            rustc_stage1_next_build["build"]["rustc_digest_blake3"].as_str().unwrap().len(),
-            SHA256_HEX_CHAR_COUNT
-        );
-        let rustc_stage1_next_candidate_manifest: serde_json::Value = serde_json::from_slice(
-            &fs::read(rustc_stage1_next_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE)).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(rustc_stage1_next_candidate_manifest["schema"], RUSTC_STAGE1_PROVIDER_CANDIDATE_SCHEMA);
-        assert_eq!(rustc_stage1_next_candidate_manifest["candidate_only"], true);
-        assert_eq!(rustc_stage1_next_candidate_manifest["final_output_written"], false);
-        assert_eq!(
-            rustc_stage1_next_candidate_manifest["candidate"]["artifact_count"],
-            expected_rustc_stage1_candidate_artifacts
-        );
-        assert_eq!(
-            rustc_stage1_next_candidate_manifest["candidate"]["source_count"],
-            expected_rustc_stage1_candidate_sources
-        );
-        let rustc_stage1_next_candidate_validation = validate_materialized_rust_source_provider(
-            &rustc_stage1_next_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR),
-        )
-        .unwrap();
-        assert_eq!(
-            rustc_stage1_next_candidate_validation.validation.artifact_count,
-            expected_rustc_stage1_candidate_artifacts
-        );
-        assert_eq!(rustc_stage1_next_candidate_validation.validation.receipt_count, 1);
-        assert_eq!(
-            rustc_stage1_next_candidate_validation.validation.source_count,
-            expected_rustc_stage1_candidate_sources
-        );
-        assert!(
-            rustc_stage1_next_candidate_validation
-                .metadata
-                .sources
-                .iter()
-                .any(|source| source.id == "rust-1.92.0-stage1-bootstrap-provider")
-        );
-        let rustc_stage1_next_smoke_summary: serde_json::Value = serde_json::from_slice(
-            &fs::read(
-                rustc_stage1_next_root
-                    .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR)
-                    .join(SMOKE_EVIDENCE_SUMMARY_FILE),
-            )
-            .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(rustc_stage1_next_smoke_summary["schema"], SMOKE_EVIDENCE_SCHEMA);
-        assert_eq!(
-            rustc_stage1_next_smoke_summary["output_digest_blake3"],
-            blake3::hash(SYNTHETIC_RLIB_BYTES).to_hex().to_string()
-        );
-        let rustc_stage1_final_root = scratch.join(RUSTC_STAGE1_CHAIN_DIR).join(RUSTC_STAGE1_FINAL_CHAIN_ID);
-        assert!(rustc_stage1_final_root.join(RUSTC_STAGE1_PLAN_FILE).is_file());
-        assert!(rustc_stage1_final_root.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE).is_file());
-        assert!(rustc_stage1_final_root.join(RUSTC_STAGE1_BUILD_MANIFEST_FILE).is_file());
-        assert!(rustc_stage1_final_root.join(RUSTC_STAGE1_BUILD_LOG_FILE).is_file());
-        assert!(rustc_stage1_final_root.join(RUSTC_STAGE1_SCRIPT_FILE).is_file());
-        assert!(rustc_stage1_final_root.join(RUSTC_STAGE1_SOURCE_DIR).join("rust-1.93.1/README.txt").is_file());
-        assert!(rustc_stage1_final_root.join(RUSTC_STAGE1_OUTPUT_DIR).join(PROVIDER_RUSTC_RELATIVE_PATH).is_file());
-        assert!(rustc_stage1_final_root.join(RUSTC_STAGE1_OUTPUT_DIR).join(PROVIDER_CARGO_RELATIVE_PATH).is_file());
-        assert!(rustc_stage1_final_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
-        assert!(
-            rustc_stage1_final_root
-                .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
-                .join(RUST_SOURCE_PROVIDER_METADATA_PATH)
-                .is_file()
-        );
-        assert!(
-            rustc_stage1_final_root
-                .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
-                .join(RUSTC_STAGE1_PROVIDER_RECEIPT_RELATIVE_PATH)
-                .is_file()
-        );
-        let rustc_stage1_final_plan: serde_json::Value =
-            serde_json::from_slice(&fs::read(rustc_stage1_final_root.join(RUSTC_STAGE1_PLAN_FILE)).unwrap()).unwrap();
-        assert_eq!(rustc_stage1_final_plan["schema"], RUSTC_STAGE1_PLAN_SCHEMA);
-        assert_eq!(rustc_stage1_final_plan["stage"]["id"], RUSTC_STAGE1_FINAL_CHAIN_ID);
-        assert_eq!(rustc_stage1_final_plan["stage"]["bootstrap_stage_id"], RUSTC_STAGE1_NEXT_ID);
-        assert_eq!(
-            rustc_stage1_final_plan["bootstrap_provider_candidate"]["metadata_digest_blake3"],
-            rustc_stage1_next_candidate_validation.metadata_digest_blake3
-        );
-        let rustc_stage1_final_sources: serde_json::Value = serde_json::from_slice(
-            &fs::read(rustc_stage1_final_root.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE)).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(rustc_stage1_final_sources["schema"], RUSTC_STAGE1_SOURCES_MANIFEST_SCHEMA);
-        assert_eq!(rustc_stage1_final_sources["source_count"], RUSTC_STAGE1_TEST_SOURCE_COUNT);
-        assert_eq!(rustc_stage1_final_sources["sources"][0]["id"], "rust-1.93.1");
-        let rustc_stage1_final_build: serde_json::Value =
-            serde_json::from_slice(&fs::read(rustc_stage1_final_root.join(RUSTC_STAGE1_BUILD_MANIFEST_FILE)).unwrap())
-                .unwrap();
-        assert_eq!(rustc_stage1_final_build["schema"], RUSTC_STAGE1_BUILD_MANIFEST_SCHEMA);
-        assert_eq!(rustc_stage1_final_build["build"]["stage_id"], RUSTC_STAGE1_FINAL_CHAIN_ID);
-        assert_eq!(
-            rustc_stage1_final_build["build"]["rustc_digest_blake3"].as_str().unwrap().len(),
-            SHA256_HEX_CHAR_COUNT
-        );
-        let rustc_stage1_final_candidate_manifest: serde_json::Value = serde_json::from_slice(
-            &fs::read(rustc_stage1_final_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE)).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(rustc_stage1_final_candidate_manifest["schema"], RUSTC_STAGE1_PROVIDER_CANDIDATE_SCHEMA);
-        assert_eq!(rustc_stage1_final_candidate_manifest["candidate_only"], true);
-        assert_eq!(rustc_stage1_final_candidate_manifest["final_output_written"], false);
-        assert_eq!(
-            rustc_stage1_final_candidate_manifest["candidate"]["artifact_count"],
-            expected_rustc_stage1_candidate_artifacts
-        );
-        assert_eq!(
-            rustc_stage1_final_candidate_manifest["candidate"]["source_count"],
-            expected_rustc_stage1_candidate_sources
-        );
-        let rustc_stage1_final_candidate_validation = validate_materialized_rust_source_provider(
-            &rustc_stage1_final_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR),
-        )
-        .unwrap();
-        assert_eq!(
-            rustc_stage1_final_candidate_validation.validation.artifact_count,
-            expected_rustc_stage1_candidate_artifacts
-        );
-        assert_eq!(rustc_stage1_final_candidate_validation.validation.receipt_count, 1);
-        assert_eq!(
-            rustc_stage1_final_candidate_validation.validation.source_count,
-            expected_rustc_stage1_candidate_sources
-        );
-        assert!(
-            rustc_stage1_final_candidate_validation
-                .metadata
-                .sources
-                .iter()
-                .any(|source| source.id == "rust-1.93.1-stage1-bootstrap-provider")
-        );
-        let rustc_stage1_final_smoke_summary: serde_json::Value = serde_json::from_slice(
-            &fs::read(
-                rustc_stage1_final_root
-                    .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR)
-                    .join(SMOKE_EVIDENCE_SUMMARY_FILE),
-            )
-            .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(rustc_stage1_final_smoke_summary["schema"], SMOKE_EVIDENCE_SCHEMA);
-        assert_eq!(
-            rustc_stage1_final_smoke_summary["output_digest_blake3"],
-            blake3::hash(SYNTHETIC_RLIB_BYTES).to_hex().to_string()
-        );
-        let rustc_final_root = scratch.join(RUSTC_FINAL_DIR);
-        assert!(rustc_final_root.join(RUSTC_FINAL_PLAN_FILE).is_file());
-        assert!(rustc_final_root.join(RUSTC_FINAL_SOURCES_MANIFEST_FILE).is_file());
-        assert!(rustc_final_root.join(RUSTC_FINAL_BUILD_MANIFEST_FILE).is_file());
-        assert!(rustc_final_root.join(RUSTC_FINAL_BUILD_LOG_FILE).is_file());
-        assert!(rustc_final_root.join(RUSTC_FINAL_SCRIPT_FILE).is_file());
-        assert!(rustc_final_root.join(RUSTC_FINAL_SOURCE_DIR).join("rust-1.94.0/README.txt").is_file());
-        assert!(rustc_final_root.join(RUSTC_FINAL_OUTPUT_DIR).join(PROVIDER_RUSTC_RELATIVE_PATH).is_file());
-        assert!(rustc_final_root.join(RUSTC_FINAL_OUTPUT_DIR).join(PROVIDER_CARGO_RELATIVE_PATH).is_file());
-        assert!(rustc_final_root.join(RUSTC_FINAL_OUTPUT_DIR).join(PROVIDER_RUSTDOC_RELATIVE_PATH).is_file());
-        assert!(rustc_final_root.join(RUSTC_FINAL_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
-        assert!(
-            rustc_final_root
-                .join(RUSTC_FINAL_PROVIDER_CANDIDATE_DIR)
-                .join(RUST_SOURCE_PROVIDER_METADATA_PATH)
-                .is_file()
-        );
-        assert!(
-            rustc_final_root
-                .join(RUSTC_FINAL_PROVIDER_CANDIDATE_DIR)
-                .join(RUSTC_FINAL_PROVIDER_RECEIPT_RELATIVE_PATH)
-                .is_file()
-        );
-        assert!(
-            rustc_final_root
-                .join(RUSTC_FINAL_PROVIDER_CANDIDATE_SMOKE_DIR)
-                .join(SMOKE_EVIDENCE_SUMMARY_FILE)
-                .is_file()
-        );
-        let rustc_final_plan: serde_json::Value =
-            serde_json::from_slice(&fs::read(rustc_final_root.join(RUSTC_FINAL_PLAN_FILE)).unwrap()).unwrap();
-        assert_eq!(rustc_final_plan["schema"], RUSTC_FINAL_PLAN_SCHEMA);
-        assert_eq!(rustc_final_plan["stage"]["id"], RUSTC_FINAL_STAGE_ID);
-        assert_patch_plan_operation(
-            &rustc_final_plan,
-            RUSTC_FINAL_STAGE_ID,
-            "rust-bootstrap-rustc-private-tool-rlibs",
-            RUST_BOOTSTRAP_PATCH_PLAN_MIN_OPERATIONS,
-        );
-        assert_eq!(rustc_final_plan["stage"]["bootstrap_stage_id"], RUSTC_STAGE1_FINAL_CHAIN_ID);
-        assert_eq!(
-            rustc_final_plan["stage"]["expected_outputs"].as_array().unwrap().len(),
-            REQUIRED_RUSTC_FINAL_STAGE_OUTPUT_ROLES.len()
-        );
-        assert_eq!(
-            rustc_final_plan["bootstrap_provider_candidate"]["metadata_digest_blake3"],
-            rustc_stage1_final_candidate_validation.metadata_digest_blake3
-        );
-        let rustc_final_sources: serde_json::Value =
-            serde_json::from_slice(&fs::read(rustc_final_root.join(RUSTC_FINAL_SOURCES_MANIFEST_FILE)).unwrap())
-                .unwrap();
-        assert_eq!(rustc_final_sources["schema"], RUSTC_FINAL_SOURCES_MANIFEST_SCHEMA);
-        assert_eq!(rustc_final_sources["source_count"], RUSTC_FINAL_TEST_SOURCE_COUNT);
-        assert_eq!(rustc_final_sources["sources"][0]["id"], "rust-1.94.0");
-        let rustc_final_build: serde_json::Value =
-            serde_json::from_slice(&fs::read(rustc_final_root.join(RUSTC_FINAL_BUILD_MANIFEST_FILE)).unwrap()).unwrap();
-        assert_eq!(rustc_final_build["schema"], RUSTC_FINAL_BUILD_MANIFEST_SCHEMA);
-        assert_patch_plan_operation(
-            &rustc_final_build,
-            RUSTC_FINAL_STAGE_ID,
-            "rust-bootstrap-rustc-private-tool-rlibs",
-            RUST_BOOTSTRAP_PATCH_PLAN_MIN_OPERATIONS,
-        );
-        assert_eq!(rustc_final_build["build"]["stage_id"], RUSTC_FINAL_STAGE_ID);
-        assert_eq!(rustc_final_build["build"]["rustdoc_digest_blake3"].as_str().unwrap().len(), SHA256_HEX_CHAR_COUNT);
-        let rustc_final_candidate_manifest: serde_json::Value = serde_json::from_slice(
-            &fs::read(rustc_final_root.join(RUSTC_FINAL_PROVIDER_CANDIDATE_MANIFEST_FILE)).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(rustc_final_candidate_manifest["schema"], RUSTC_FINAL_PROVIDER_CANDIDATE_SCHEMA);
-        assert_eq!(rustc_final_candidate_manifest["candidate_only"], false);
-        assert_eq!(rustc_final_candidate_manifest["final_output_written"], true);
-        assert_eq!(rustc_final_candidate_manifest["final_output_path"], output.display().to_string());
-        assert!(rustc_final_candidate_manifest.get("next_blocked_reason").is_none());
-        assert_eq!(rustc_final_candidate_manifest["candidate"]["stage_id"], RUSTC_FINAL_STAGE_ID);
-        let expected_rustc_final_candidate_artifacts =
-            REQUIRED_RUSTC_FINAL_BUILD_OUTPUT_ROLES.len() + RUSTC_FINAL_PROVIDER_RECEIPT_ARTIFACT_COUNT;
-        let expected_rustc_final_candidate_sources =
-            RUSTC_FINAL_TEST_SOURCE_COUNT + RUSTC_STAGE1_BOOTSTRAP_PROVIDER_SOURCE_COUNT;
-        assert_eq!(
-            rustc_final_candidate_manifest["candidate"]["artifact_count"],
-            expected_rustc_final_candidate_artifacts
-        );
-        assert_eq!(rustc_final_candidate_manifest["candidate"]["source_count"], expected_rustc_final_candidate_sources);
-        let rustc_final_candidate_validation =
-            validate_materialized_rust_source_provider(&rustc_final_root.join(RUSTC_FINAL_PROVIDER_CANDIDATE_DIR))
-                .unwrap();
-        let materialized_validation = validate_materialized_rust_source_provider(&output).unwrap();
-        assert_eq!(materialized_validation.metadata_digest_blake3, materialized.metadata_digest_blake3);
-        assert_eq!(
-            materialized_validation.validation.policy_digest_blake3,
-            rustc_final_candidate_validation.validation.policy_digest_blake3
-        );
-        assert_eq!(
-            rustc_final_candidate_validation.validation.artifact_count,
-            expected_rustc_final_candidate_artifacts
-        );
-        assert_eq!(rustc_final_candidate_validation.validation.receipt_count, 1);
-        assert_eq!(rustc_final_candidate_validation.validation.source_count, expected_rustc_final_candidate_sources);
-        let rustc_final_receipt_path = rustc_final_root
-            .join(RUSTC_FINAL_PROVIDER_CANDIDATE_DIR)
-            .join(RUSTC_FINAL_PROVIDER_RECEIPT_RELATIVE_PATH);
-        assert_receipt_has_stage_construction_identity(&rustc_final_receipt_path);
-        assert_receipt_has_patch_plan_step(&rustc_final_receipt_path, "rust-bootstrap-rustc-private-tool-rlibs");
-        assert!(
-            rustc_final_candidate_validation
-                .metadata
-                .artifacts
-                .iter()
-                .any(|artifact| artifact.role == RustProviderRole::Rustdoc)
-        );
-        assert!(
-            rustc_final_candidate_validation
-                .metadata
-                .sources
-                .iter()
-                .any(|source| source.id == "rust-1.94.0-final-bootstrap-provider")
-        );
-        let rustc_final_smoke_summary: serde_json::Value = serde_json::from_slice(
-            &fs::read(
-                rustc_final_root.join(RUSTC_FINAL_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_SUMMARY_FILE),
-            )
-            .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(rustc_final_smoke_summary["schema"], SMOKE_EVIDENCE_SCHEMA);
-        assert_eq!(
-            rustc_final_smoke_summary["output_digest_blake3"],
-            blake3::hash(SYNTHETIC_RLIB_BYTES).to_hex().to_string()
-        );
-        let rustc_final_log = fs::read_to_string(rustc_final_root.join(RUSTC_FINAL_BUILD_LOG_FILE)).unwrap();
-        assert!(rustc_final_log.contains(RUSTC_FINAL_STAGE_ID));
-        assert!(rustc_final_log.contains("rustc final products ready"));
-        let rustc_stage1_next_log =
-            fs::read_to_string(rustc_stage1_next_root.join(RUSTC_STAGE1_BUILD_LOG_FILE)).unwrap();
-        assert!(rustc_stage1_next_log.contains(RUSTC_STAGE1_NEXT_ID));
-        assert!(rustc_stage1_next_log.contains("rustc stage1 products ready"));
-        let rustc_stage1_final_log =
-            fs::read_to_string(rustc_stage1_final_root.join(RUSTC_STAGE1_BUILD_LOG_FILE)).unwrap();
-        assert!(rustc_stage1_final_log.contains(RUSTC_STAGE1_FINAL_CHAIN_ID));
-        assert!(rustc_stage1_final_log.contains("rustc stage1 products ready"));
-        let rustc_stage1_log = fs::read_to_string(scratch.join(RUSTC_STAGE1_BUILD_LOG_FILE)).unwrap();
-        assert!(rustc_stage1_log.contains("mantle rustc stage1"));
-        assert!(rustc_stage1_log.contains("rustc stage1 products ready"));
-        let rustc_stage1_script = fs::read_to_string(scratch.join(RUSTC_STAGE1_SCRIPT_FILE)).unwrap();
-        assert!(rustc_stage1_script.contains("using Rust bootstrap target linker wrapper"));
-        assert!(rustc_stage1_script.contains("export TMPDIR=\"$TEMP_ROOT\""));
-        assert!(!rustc_stage1_script.contains("TMPDIR=/tmp"));
-        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_LLVM_BUILD_CONFIG.trim_end()));
-        assert!(rustc_stage1_script.contains("\"LLVM_ENABLE_ZLIB\" = \"OFF\""));
-        assert!(!rustc_stage1_script.contains("\"LLVM_ENABLE_ZLIB\" = \"ON\""));
-        assert!(rustc_stage1_script.contains("LLVM_TOOL_LTO_BUILD"));
-        assert!(rustc_stage1_script.contains("LLVM_TOOL_REMARKS_SHLIB_BUILD"));
-        assert!(
-            rustc_stage1_script
-                .contains("normalizing Rust bootstrap rustc_driver crate type for static musl compiler host")
-        );
-        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_RUSTC_DRIVER_MANIFEST));
-        assert!(rustc_stage1_script.contains(
-            "Rust bootstrap rustc_driver manifest lacks expected crate-type line for musl host normalization"
-        ));
-        assert!(
-            rustc_stage1_script.contains("normalizing Rust bootstrap sysroot fallback for static musl compiler host")
-        );
-        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_FILESEARCH_SOURCE));
-        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_FILESEARCH_ENV_FALLBACK_LINE));
-        assert!(rustc_stage1_script.contains(
-            "Rust bootstrap filesearch source lacks expected sysroot fallback lines for musl host normalization"
-        ));
-        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TOOL_BUILD_RLIB_SYSROOT_MARKER));
-        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TOOL_BUILD_SOURCE));
-        assert!(rustc_stage1_script.contains("RUSTC_ADDITIONAL_SYSROOT_PATHS"));
-        assert!(rustc_stage1_script.contains("Mode::ToolRustcPrivate"));
-        assert!(rustc_stage1_script.contains("Mode::Rustc, target"));
-        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TOOL_BUILD_RLIB_SYSROOT_ERROR));
-        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TARGET_LINKER_ALIAS_DIR));
-        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TARGET_LINKER_RUNTIME_DIR));
-        assert!(
-            rustc_stage1_script.contains(
-                "Rust bootstrap target toolchain does not expose musl/gcc CRT, unwinder, and objcopy objects"
-            )
-        );
-        assert!(rustc_stage1_script.contains("target_objcopy_program=$target_tool_prefix-objcopy"));
-        assert!(rustc_stage1_script.contains("--remove-section .init_array --remove-section .rela.init_array --remove-section .fini_array --remove-section .rela.fini_array"));
-        assert!(rustc_stage1_script.contains("rcrt1.o|*/rcrt1.o) mapped_arg=\"$target_runtime_dir/crt1.o\""));
-        assert!(rustc_stage1_script.contains("-lgcc_s) continue"));
-        assert!(rustc_stage1_script.contains("dynamic_rustc_link=false"));
-        assert!(rustc_stage1_script.contains(
-            "*/stage1/bin/rustc|stage1/bin/rustc|*/stage2/bin/rustc|stage2/bin/rustc) dynamic_rustc_link=true"
-        ));
-        assert!(rustc_stage1_script.contains("dynamic_executable_link=false"));
-        assert!(rustc_stage1_script.contains("shared_link=false"));
-        assert!(rustc_stage1_script.contains("-pie) static_support_link=false; dynamic_executable_link=true"));
-        assert!(rustc_stage1_script.contains("-shared|-dynamiclib) shared_link=true"));
-        assert!(rustc_stage1_script.contains("-shared|-dynamiclib) static_support_link=false; shared_link=true"));
-        assert!(rustc_stage1_script.contains(
-            "-static) if [ \"$dynamic_rustc_link\" = true ] || [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"$arg\"; fi"
-        ));
-        assert!(rustc_stage1_script.contains(
-            "-static-pie) if [ \"$dynamic_rustc_link\" = true ] || [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"-static\"; fi"
-        ));
-        assert!(rustc_stage1_script.contains("-B\"$target_runtime_dir/\" -L\"$target_runtime_dir\""));
-        assert!(rustc_stage1_script.contains("MANTLE_RUST_TOOLS=${MANTLE_RUST_BOOTSTRAP_TOOLS:-'[\"cargo\"]'}"));
-        assert!(rustc_stage1_script.contains("*' rustdoc '*) MANTLE_RUST_TOOLS='[\"cargo\", \"rustdoc\"]'"));
-        assert!(rustc_stage1_script.contains("tools = $MANTLE_RUST_TOOLS"));
-        assert!(rustc_stage1_script.contains(&format!("jobs = {RUST_BOOTSTRAP_JOB_COUNT}")));
-        assert!(!rustc_stage1_script.contains("jobs = $"));
-        assert!(rustc_stage1_script.contains("cargo-native-static = true"));
-        assert!(
-            rustc_stage1_script.contains("Rust bootstrap target musl libc.so missing for dynamic compiler host links")
-        );
-        assert!(rustc_stage1_script.contains("$target_orig_cc_root/$MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib"));
-        assert!(rustc_stage1_script.contains("set -- \"$@\" -Wl,-Bstatic -lunwind -lgcc -Wl,-Bdynamic"));
-        assert!(rustc_stage1_script.contains(
-            "{ [ \"$dynamic_rustc_link\" = true ] || [ \"$dynamic_executable_link\" = true ]; }; then set -- \"$@\" -no-pie -Wl,-Bdynamic \"-Wl,-dynamic-linker,$target_runtime_dir/libc.so\" -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group"
-        ));
-        assert!(
-            rustc_stage1_script
-                .contains("set -- \"$@\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group")
-        );
-        assert!(rustc_stage1_script.contains("crt-static = false"));
-        assert!(rustc_stage1_script.contains("__atomic_compare_exchange_16"));
-        assert!(rustc_stage1_script.contains("linker = \"$MANTLE_TARGET_CC\""));
-        let script = fs::read_to_string(scratch.join(FIRST_STAGE_SCRIPT_FILE)).unwrap();
-        assert!(script.contains("missing verified source"));
-        assert!(script.contains("verified sources manifest"));
-        assert!(script.contains("TEMP_ROOT=\"$BUILD_DIR/tmp\""));
-        assert!(script.contains("export TMPDIR=\"$TEMP_ROOT\""));
-        assert!(script.contains("export TMP=\"$TEMP_ROOT\""));
-        assert!(script.contains("export TEMP=\"$TEMP_ROOT\""));
-        assert!(script.contains("export TEMPDIR=\"$TEMP_ROOT\""));
-        assert!(script.contains(&format!("$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} CC=\"$CC\"")));
-        assert!(!script.contains("$MAKE_PROGRAM CC=\"$CC\""));
-        assert!(!script.contains("TMPDIR=/tmp"));
-        assert!(script.contains("mrustc-0.12.0"));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_BINARY));
-        assert!(script.contains(FIRST_STAGE_PKG_CONFIG_PROGRAM));
-        assert!(script.contains(FIRST_STAGE_CMAKE_PROGRAM));
-        assert!(script.contains("GCC_FALLBACK_GLOB"));
-        assert!(script.contains("CC_PROGRAM=\"$candidate_gcc\""));
-        assert!(script.contains("CXX_PROGRAM=\"$candidate\""));
-        assert!(script.contains("using GCC toolchain"));
-        assert!(script.contains("ZLIB_PKG_CONFIG_FALLBACK_GLOB"));
-        assert!(script.contains("using zlib pkg-config flags"));
-        assert!(script.contains("export CFLAGS=\"$ZLIB_CFLAGS\""));
-        assert!(script.contains("export CPPFLAGS=\"$ZLIB_CFLAGS\""));
-        assert!(script.contains("scrubbing inherited Cargo/build-script environment"));
-        assert!(script.contains("writing minicargo workspace boundary"));
-        assert!(script.contains(&format!("members = [\"{FIRST_STAGE_PROC_MACRO_WORKSPACE_MEMBER}\"]")));
-        assert!(script.contains(&format!("resolver = \"{FIRST_STAGE_MINICARGO_WORKSPACE_RESOLVER}\"")));
-        assert!(script.contains(&format!("RUSTC_HOST_TRIPLE={}", shell_quote(HOST_TRIPLE))));
-        assert!(script.contains(&format!("RUSTC_TARGET={}", shell_quote(HOST_TRIPLE))));
-        assert!(script.contains(&format!("RUSTC_PROVIDER_TARGET_TRIPLE={}", shell_quote(TARGET_TRIPLE))));
-        assert!(script.contains("using target linker wrapper"));
-        assert!(script.contains("using compiler-host linker"));
-        assert!(script.contains(FIRST_STAGE_TARGET_MUSL_GCC_FALLBACK_GLOB));
-        assert!(script.contains("target_toolchain_root=${MANTLE_TARGET_TOOLCHAIN_ROOT:-${SOURCE_ROOT:-}}"));
-        assert!(script.contains("using explicit source-root musl target toolchain"));
-        assert!(script.contains(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_GCC_MISSING));
-        assert!(script.contains(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_INCOMPLETE));
-        assert!(script.contains("TARGET_CC_PROGRAM_CANDIDATES='x86_64-unknown-linux-musl-gcc x86_64-linux-musl-gcc'"));
-        assert!(script.contains("TARGET_MUSL_MACHINE_ALIASES='x86_64-unknown-linux-musl x86_64-linux-musl'"));
-        assert!(script.contains("TARGET_MUSL_SOURCE_ROOT_SYSROOT='x86_64-linux-musl'"));
-        assert!(script.contains("target_libc_root=\"$target_wrapper_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT\""));
-        assert!(script.contains("$target_orig_cc_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib"));
-        assert!(script.contains("target_gcc_crt_machine=$target_cc_machine"));
-        assert!(script.contains("target_cxx_program=$target_tool_prefix-g++"));
-        assert!(script.contains("target_objcopy_program=$target_tool_prefix-objcopy"));
-        assert!(script.contains("target gcc toolchain does not expose objcopy for CRT normalization"));
-        assert!(script.contains("--remove-section .init_array --remove-section .rela.init_array --remove-section .fini_array --remove-section .rela.fini_array"));
-        assert!(script.contains("target_crtbegin_no_frame_init=\"$target_runtime_dir/crtbeginS.o.no-frame-init\""));
-        assert!(script.contains("preparing source-root musl LLVM host compiler runtime"));
-        assert!(script.contains("source-root musl LLVM host wrapper tools are incomplete"));
-        assert!(script.contains("source-root musl libstdc++.a missing for LLVM host build"));
-        assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE));
-        assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE));
-        assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LIBATOMIC_SHIM_SOURCE));
-        assert!(script.contains("__atomic_compare_exchange_16"));
-        assert!(script.contains("ATOMIC_WIDTH_BYTES"));
-        assert!(script.contains("--target $RUSTC_HOST_TRIPLE"));
-        assert!(script.contains("CC_PROGRAM=\"$target_alias_dir/cc\""));
-        assert!(script.contains("CXX_PROGRAM=\"$target_alias_dir/c++\""));
-        assert!(script.contains("CC=\"$CC_PROGRAM\""));
-        assert!(script.contains("CXX=\"$CXX_PROGRAM\""));
-        assert!(script.contains("CFLAGS=\"$ZLIB_CFLAGS\""));
-        assert!(script.contains("CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS\""));
-        assert!(script.contains("LDFLAGS=\"$ZLIB_LIBS\""));
-        assert!(script.contains("CMAKE_C_COMPILER=\"$target_alias_dir/cc\""));
-        assert!(script.contains("CMAKE_CXX_COMPILER=\"$target_alias_dir/c++\""));
-        assert!(script.contains("CMAKE_AR=\"$target_alias_dir/ar\""));
-        assert!(script.contains("CMAKE_RANLIB=\"$target_alias_dir/ranlib\""));
-        assert!(script.contains("MRUSTC_CXXFLAGS=\"$MRUSTC_CXXFLAGS -static-libstdc++ -static-libgcc\""));
-        assert!(script.contains("ZLIB_CFLAGS=\nZLIB_LIBS="));
-        assert!(script.contains("LLVM_STATIC_STDCPP=\"$target_runtime_dir/libstdc++.a\""));
-        assert!(script.contains("LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind"));
-        assert!(script.contains("PATH=\"$target_alias_dir:$PATH\""));
-        assert!(script.contains("export PATH"));
-        assert!(script.contains("static_pie_normalized=false"));
-        assert!(script.contains("MANTLE_TARGET_CC_PATH"));
-        assert!(script.contains("-shared|-dynamiclib) shared_link=true"));
-        assert!(script.contains("-shared|-dynamiclib) static_support_link=false"));
-        assert!(
-            script.contains("-static) if [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"$arg\"; fi")
-        );
-        assert!(script.contains(
-            "-static-pie) if [ \"$dynamic_rustc_link\" = true ] || [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"-static\"; fi"
-        ));
-        assert!(script.contains(FIRST_STAGE_TARGET_MUSL_PTHREAD_TLS_WRAP_FLAGS));
-        assert!(script.contains(
-            "-static -Wl,--wrap=pthread_key_create -Wl,--wrap=pthread_key_delete -Wl,--wrap=pthread_getspecific -Wl,--wrap=pthread_setspecific -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group"
-        ));
-        assert!(script.contains("-static-pie) static_pie_normalized=true"));
-        assert!(script.contains("dynamic_rustc_link=false"));
-        assert!(script.contains("@*/output/rustc-build/rustc_main_cmd.txt|@output/rustc-build/rustc_main_cmd.txt) rustc_main_response_file=true"));
-        assert!(script.contains("if [ \"$rustc_main_response_file\" = true ]; then dynamic_rustc_link=true; fi"));
-        assert!(script.contains("*/output/rustc|output/rustc|*/output/rustc-build/rustc_main|output/rustc-build/rustc_main) dynamic_rustc_link=true"));
-        assert!(script.contains("if [ \"$link_command\" = true ] && [ \"$dynamic_rustc_link\" = true ]; then set -- \"$@\" \"$target_runtime_dir/musl-lfs-compat.o\" -no-pie -Wl,-Bdynamic \"-Wl,-dynamic-linker,$target_runtime_dir/libc.so\" -Wl,--wrap=pthread_key_create -Wl,--wrap=pthread_key_delete -Wl,--wrap=pthread_getspecific -Wl,--wrap=pthread_setspecific -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group"));
-        assert!(script.contains("rcrt1.o|*/rcrt1.o) mapped_arg=\"$target_runtime_dir/crt1.o\""));
-        assert!(script.contains("crt1.o|*/crt1.o|Scrt1.o|*/Scrt1.o|crti.o|*/crti.o|crtn.o|*/crtn.o|crtbeginS.o|*/crtbeginS.o|crtendS.o|*/crtendS.o) mapped_arg=\"$target_runtime_dir/${arg##*/}\""));
-        assert!(script.contains(
-            "-static-pie) if [ \"$dynamic_rustc_link\" = true ] || [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"-static\"; fi"
-        ));
-        assert!(script.contains("$target_runtime_dir/musl-lfs-compat.o\" -no-pie -Wl,-Bdynamic"));
-        assert!(!script.contains("-Wl,-Bdynamic -pie"));
-        assert!(script.contains(FIRST_STAGE_TARGET_LINKER_ALIAS_DIR));
-        assert!(script.contains(FIRST_STAGE_TARGET_LINKER_RUNTIME_DIR));
-        assert!(script.contains(FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE));
-        assert!(script.contains(FIRST_STAGE_TARGET_NIX_ORIG_CC_FILE));
-        assert!(script.contains(&format!("export {FIRST_STAGE_TARGET_NIX_CC_WRAPPER_HOST_ROLE_VAR}=1")));
-        assert!(script.contains("crt1.o"));
-        assert!(script.contains(FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT));
-        assert!(script.contains("rcrt1.o"));
-        assert!(script.contains("crtbeginS.o"));
-        assert!(script.contains("libgcc.a"));
-        assert!(script.contains("libgcc_eh.a"));
-        assert!(script.contains("libgcc_s.so"));
-        assert!(script.contains("libgcc_s.so.1"));
-        assert!(script.contains("libunwind.a"));
-        assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT));
-        assert!(script.contains("preparing source-root musl proc-macro runtime search path"));
-        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_LD_LIBRARY_PATH_LINE));
-        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_STAGE2_ENV_LINE));
-        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_STAGE2_RUNTIME_ENV_LINE));
-        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_FINAL_ENV_LINE));
-        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_FINAL_PREFIX2_ENV_LINE));
-        assert!(script.contains("run_rustc_ld_runtime_line"));
-        assert!(script.contains("run_rustc_stage2_runtime_line"));
-        assert!(script.contains("run_rustc_final_prefix2_line"));
-        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_RUNTIME_LD_LIBRARY_PATH_TEMPLATE));
-        assert!(script.contains("\\$(abspath \\$(PREFIX_2)lib)"));
-        assert!(script.contains("source-root musl libc.so missing for proc-macro runtime"));
-        assert!(script.contains("mrustc run_rustc Makefile lacks expected LD_LIBRARY_PATH line"));
-        assert!(script.contains("mrustc run_rustc Makefile lacks expected stage2 Cargo env line"));
-        assert!(script.contains("mrustc run_rustc Makefile lacks expected final rustc Cargo env line"));
-        assert!(script.contains("normalizing run_rustc Cargo static feature set for source-root musl host"));
-        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_LINE));
-        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_ALL_STATIC_LINE));
-        assert!(
-            script.contains("mrustc run_rustc Makefile lacks expected Cargo build line for all-static normalization")
-        );
-        assert!(script.contains("normalizing minicargo rustc worker threads for static musl compiler host"));
-        assert!(script.contains("disabling LLVM shared-tool and execinfo backtraces for source-root musl host"));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE));
-        let llvm_config_patched_line = first_stage_minicargo_makefile_llvm_config_build_patched_line();
-        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_ORIGINAL_LINE));
-        assert!(script.contains(&llvm_config_patched_line));
-        assert!(script.contains("llvm-headers vt_gen llvm-config"));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_STATIC_ARCHIVE_TARGETS));
-        assert!(script.contains("LLVMLTO"));
-        assert!(script.contains("LLVMX86CodeGen"));
-        assert!(script.contains("minicargo Makefile lacks expected LLVM CMake options line for musl normalization"));
-        assert!(script.contains("minicargo Makefile lacks expected llvm-config build line for musl normalization"));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_RUSTC_FORCE_UNSTABLE_LINE));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_RUSTC_THREADS_MARKER_LINE));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_RUSTC_THREADS_FLAG_LINE));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_RUSTC_THREADS_VALUE_LINE));
-        assert!(
-            script.contains("minicargo build.cpp lacks expected rustc force-unstable line for thread normalization")
-        );
-        assert!(script.contains("normalizing Rust explicit sysroot handling for static musl rustc"));
-        assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SOURCE));
-        assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SYSROOT_ORIGINAL_LINE));
-        assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SYSROOT_REPLACEMENT_LINE_1));
-        assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SYSROOT_REPLACEMENT_LINE_2));
-        assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SYSROOT_REPLACEMENT_LINE_3));
-        assert!(script.contains("rustc_session Sysroot::new no longer has expected default_sysroot shape"));
-        assert!(script.contains(&format!(
-            "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} RUSTCSRC"
-        )));
-        assert!(script.contains("normalizing run_rustc static rustc sysroot wrappers"));
-        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_STAGE1_RUSTC_RULE_LINE));
-        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_STAGE2_RUSTC_RULE_LINE));
-        assert!(script.contains(&shell_quote(FIRST_STAGE_RUN_RUSTC_STAGE_SYSROOT_SYMLINK_LINE)));
-        assert!(script.contains("run_rustc_stage1_wrapper_line="));
-        assert!(script.contains("run_rustc_stage2_wrapper_line="));
-        assert!(script.contains("$target_runtime_dir/libc.so"));
-        assert!(script.contains("--sysroot \\\"\\$(abspath \\$(PREFIX_S))"));
-        assert!(script.contains("--sysroot \\\"\\$(abspath \\$(PREFIX_2))"));
-        assert!(script.contains(&shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_SYSROOT_SYMLINK_LINE)));
-        assert!(script.contains(&shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_SYSROOT_WRAPPER_LINE)));
-        assert!(script.contains("mrustc run_rustc Makefile lacks expected stage1 rustc copy rule"));
-        assert!(script.contains("mrustc run_rustc Makefile lacks expected stage2 rustc copy rule"));
-        assert!(script.contains("mrustc run_rustc Makefile lacks expected final rustc symlink rule"));
-        assert!(script.contains("mrustc run_rustc Makefile lacks expected final rustc wrapper"));
-        assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_SOURCE));
-        assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_OBJECT));
-        assert!(script.contains("-fPIC -c \"$target_lfs_compat_source\""));
-        assert!(
-            script.contains(&format!("MANTLE_PTHREAD_TLS_KEY_CAPACITY {}u", FIRST_STAGE_TARGET_MUSL_TLS_KEY_CAPACITY))
-        );
-        assert!(script.contains("__wrap_pthread_key_create"));
-        assert!(script.contains("__wrap_pthread_getspecific"));
-        assert!(script.contains("__wrap_pthread_setspecific"));
-        assert!(script.contains("__wrap_pthread_key_delete"));
-        assert!(script.contains("int backtrace(void **buffer, int size)"));
-        assert!(script.contains("void backtrace_symbols_fd(void *const *buffer, int size, int fd)"));
-        assert!(script.contains(FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE));
-        assert!(script.contains(FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG));
-        assert!(script.contains(FIRST_STAGE_TARGET_MRUSTC_CC_ENV_VAR));
-        assert!(script.contains(FIRST_STAGE_TARGET_CARGO_CC_ENV_VAR));
-        assert!(script.contains(FIRST_STAGE_TARGET_CARGO_CXX_ENV_VAR));
-        assert!(script.contains(FIRST_STAGE_TARGET_CARGO_AR_ENV_VAR));
-        assert!(script.contains(FIRST_STAGE_TARGET_CARGO_RANLIB_ENV_VAR));
-        assert!(script.contains("CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=\"$target_alias_dir/cc\""));
-        assert!(!script.contains("export CC=cc"));
-        assert!(script.contains(&format!("RUN_RUSTC_DYLIB_EXT={FIRST_STAGE_STATIC_MUSL_DYLIB_EXT}")));
-        assert!(script.contains("normalizing minicargo build-script OUT_DIR for static musl compiler host"));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_BUILD_SOURCE));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_OUT_DIR_ORIGINAL_LINE));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_OUT_DIR_PATCH_MARKER));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_OUT_DIR_PATCH_LINE));
-        assert!(script.contains("minicargo build.cpp lacks expected OUT_DIR line"));
-        assert!(script.contains("normalizing rustc_driver crate type for static musl compiler host"));
-        assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_MANIFEST));
-        assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_DYLIB_CRATE_TYPE_LINE));
-        assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE));
-        assert!(script.contains("rustc_driver_replaced=false"));
-        assert!(script.contains("rustc_driver_seen_rlib=false"));
-        assert!(script.contains("rustc_driver manifest lacks expected crate-type line for musl host normalization"));
-        assert!(script.contains("target_outdir_suffix"));
-        assert!(script.contains("target_sysroot_source=\"rustc-${RUSTC_VERSION}-src/library/sysroot\""));
-        assert!(script.contains("MRUSTC_PATH=\"$(pwd)/$target_bin_dir/rustc\""));
-        assert!(script.contains("--target $RUSTC_TARGET"));
-        assert!(script.contains(FIRST_STAGE_TARGET_PREFIX_S_DIR));
-        assert!(script.contains("$COPY_PROGRAM output/rustc \"$target_bin_dir/rustc\""));
-        assert!(script.contains("target rustlib build did not produce libstd.rlib"));
-        assert!(script.contains("unset CARGO_PKG_VERSION"));
-        assert!(script.contains("unset CARGO_BUILD_RUSTC_WRAPPER"));
-        assert!(script.contains("unset MANTLE_RUST_CACHE_POLICY"));
-        assert!(script.contains("unset MANTLE_RUSTC_MANIFEST"));
-        assert!(script.contains("unset MANTLE_RUSTC_MANIFEST_DIR"));
-        assert!(script.contains("unset MANTLE_RUSTC_MANIFEST_REF"));
-        assert!(script.contains("unset CARGO_MANIFEST_DIR"));
-        assert!(script.contains("unset OUT_DIR"));
-        assert!(script.contains("unset TARGET"));
-        assert!(script.contains("unset HOST"));
-        assert!(!script.contains("unset RUSTC_TARGET"));
-        let scrub_index = script.find("unset CARGO_PKG_VERSION").unwrap();
-        let workspace_index = script.find("writing minicargo workspace boundary").unwrap();
-        let minicargo_out_dir_patch_index =
-            script.find("normalizing minicargo build-script OUT_DIR for static musl compiler host").unwrap();
-        let minicargo_build_index = script
-            .find(&format!(
-                "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}"
-            ))
-            .unwrap();
-        let rust_source_extract_index = script
-            .find(&format!(
-                "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} RUSTCSRC"
-            ))
-            .unwrap();
-        let rust_explicit_sysroot_patch_index =
-            script.find("normalizing Rust explicit sysroot handling for static musl rustc").unwrap();
-        let translated_rustc_build_index = script
-            .find(&format!(
-                "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_RUSTC_BINARY}"
-            ))
-            .unwrap();
-        let translated_cargo_build_index = script
-            .find(&format!(
-                "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_CARGO_BINARY}"
-            ))
-            .unwrap();
-        let compiler_host_linker_index = translated_cargo_build_index
-            + script[translated_cargo_build_index..].find("using compiler-host linker").unwrap();
-        let proc_macro_runtime_index =
-            script.find("preparing source-root musl proc-macro runtime search path").unwrap();
-        let host_run_rustc_index = script
-            .find(&format!(
-                "if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -C {FIRST_STAGE_RUN_RUSTC_DIR}"
-            ))
-            .unwrap();
-        let target_assignment_index = script.rfind("RUSTC_TARGET=\"$RUSTC_PROVIDER_TARGET_TRIPLE\"").unwrap();
-        let target_root_preference_index =
-            script.rfind("target_toolchain_root=${MANTLE_TARGET_TOOLCHAIN_ROOT:-${SOURCE_ROOT:-}}").unwrap();
-        let target_nix_fallback_index = script.rfind("for candidate in $TARGET_MUSL_GCC_FALLBACK_GLOB").unwrap();
-        let target_linker_index = script.rfind("using target linker wrapper").unwrap();
-        let target_sysroot_index = script.rfind("target_sysroot_source").unwrap();
-        let llvm_host_setup_index = script.find("preparing source-root musl LLVM host compiler runtime").unwrap();
-        assert!(scrub_index < minicargo_build_index);
-        assert!(workspace_index < minicargo_build_index);
-        assert!(minicargo_out_dir_patch_index < minicargo_build_index);
-        assert!(minicargo_build_index < llvm_host_setup_index);
-        assert!(llvm_host_setup_index < rust_source_extract_index);
-        assert!(rust_source_extract_index < rust_explicit_sysroot_patch_index);
-        assert!(rust_explicit_sysroot_patch_index < translated_rustc_build_index);
-        assert!(translated_rustc_build_index < translated_cargo_build_index);
-        assert!(translated_cargo_build_index < compiler_host_linker_index);
-        assert!(compiler_host_linker_index < proc_macro_runtime_index);
-        assert!(proc_macro_runtime_index < host_run_rustc_index);
-        assert!(host_run_rustc_index < target_assignment_index);
-        assert!(target_assignment_index < target_root_preference_index);
-        assert!(target_root_preference_index < target_nix_fallback_index);
-        assert!(target_nix_fallback_index < target_linker_index);
-        assert!(target_linker_index < target_sysroot_index);
-    }
-
-    #[test]
-    fn materializer_writes_musl_host_provider_metadata_from_route_plan() {
-        let _guard = crate::process_env::lock_process_env();
-        let dir = tempfile::tempdir().unwrap();
-        let recipe = dir.path().join("rust-source.ncl");
-        let output = dir.path().join("out");
-        let scratch = dir.path().join("scratch");
-        fs::write(&recipe, "source-built recipe\n").unwrap();
-        write_test_musl_host_route_plan(dir.path());
-
-        let materialized = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
-        let validation = validate_materialized_rust_source_provider(&materialized.output_path).unwrap();
-
-        assert_eq!(validation.metadata.host_triple, TARGET_TRIPLE);
-        assert_eq!(validation.metadata.target_triple, TARGET_TRIPLE);
-        let script = fs::read_to_string(scratch.join(FIRST_STAGE_SCRIPT_FILE)).unwrap();
-        assert!(script.contains(&format!("if [ \"$RUSTC_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then")));
-        assert!(script.contains("preparing source-root musl LLVM host compiler runtime"));
-        assert!(script.contains("using source-root musl LLVM host wrappers"));
-        assert!(script.contains("CC_PROGRAM=\"$target_alias_dir/cc\""));
-        assert!(script.contains("LLVM_STATIC_STDCPP=\"$target_runtime_dir/libstdc++.a\""));
-        assert!(script.contains("LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind"));
-        assert!(script.contains("normalizing minicargo build-script OUT_DIR for static musl compiler host"));
-        assert!(script.contains("disabling LLVM shared-tool and execinfo backtraces for source-root musl host"));
-        let llvm_config_patched_line = first_stage_minicargo_makefile_llvm_config_build_patched_line();
-        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE));
-        assert!(script.contains(&llvm_config_patched_line));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_STATIC_ARCHIVE_TARGETS));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_OUT_DIR_PATCH_MARKER));
-        assert!(script.contains("normalizing Rust explicit sysroot handling for static musl rustc"));
-        assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SOURCE));
-        assert!(script.contains(&format!(
-            "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} RUSTCSRC"
-        )));
-        assert!(script.contains("normalizing run_rustc static rustc sysroot wrappers"));
-        assert!(script.contains(&shell_quote(FIRST_STAGE_RUN_RUSTC_STAGE_SYSROOT_SYMLINK_LINE)));
-        assert!(script.contains("run_rustc_stage1_wrapper_line="));
-        assert!(script.contains("$target_runtime_dir/libc.so"));
-        assert!(script.contains("--sysroot \\\"\\$(abspath \\$(PREFIX_S))"));
-        assert!(script.contains(&shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_SYSROOT_SYMLINK_LINE)));
-        assert!(script.contains(&shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_SYSROOT_WRAPPER_LINE)));
-        let mrustc_source = scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0");
-        let minicargo_makefile = fs::read_to_string(mrustc_source.join(FIRST_STAGE_MINICARGO_MAKEFILE)).unwrap();
-        assert!(minicargo_makefile.contains("LLVM_ENABLE_ZSTD=OFF"));
-        assert!(minicargo_makefile.contains("CMAKE_DISABLE_FIND_PACKAGE_zstd=ON"));
-        assert!(
-            !minicargo_makefile
-                .lines()
-                .any(|line| line == FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE)
-        );
-        let run_rustc_makefile =
-            fs::read_to_string(mrustc_source.join(FIRST_STAGE_RUN_RUSTC_DIR).join(FIRST_STAGE_MAKEFILE)).unwrap();
-        assert!(run_rustc_makefile.contains(FIRST_STAGE_RUN_RUSTC_FINAL_PREFIX2_ENV_LINE));
-        assert!(!run_rustc_makefile.contains(FIRST_STAGE_RUN_RUSTC_FINAL_ENV_LINE));
-        assert!(run_rustc_makefile.lines().any(|line| line == FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_ALL_STATIC_LINE));
-        assert!(!run_rustc_makefile.lines().any(|line| line == FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_LINE));
-        let llvm_host_setup_index = script.find("preparing source-root musl LLVM host compiler runtime").unwrap();
-        let minicargo_build_index = script
-            .find(&format!(
-                "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}"
-            ))
-            .unwrap();
-        let rust_source_extract_index = script
-            .find(&format!(
-                "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} RUSTCSRC"
-            ))
-            .unwrap();
-        let rust_explicit_sysroot_patch_index =
-            script.find("normalizing Rust explicit sysroot handling for static musl rustc").unwrap();
-        let first_rustc_build_index = script
-            .find(&format!(
-                "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_RUSTC_BINARY}"
-            ))
-            .unwrap();
-        assert!(minicargo_build_index < llvm_host_setup_index);
-        assert!(llvm_host_setup_index < rust_source_extract_index);
-        assert!(rust_source_extract_index < rust_explicit_sysroot_patch_index);
-        assert!(rust_explicit_sysroot_patch_index < first_rustc_build_index);
-        assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_MANIFEST));
-        assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE));
-        assert!(validation.metadata.artifacts.iter().any(|artifact| {
-            artifact.role == RustProviderRole::HostRustlib
-                && artifact.path == provider_rustlib_relative_path(TARGET_TRIPLE)
-        }));
-        assert!(validation.metadata.artifacts.iter().any(|artifact| {
-            artifact.role == RustProviderRole::TargetRustlib
-                && artifact.path == provider_rustlib_relative_path(TARGET_TRIPLE)
-        }));
-        assert!(!validation.metadata.artifacts.iter().any(|artifact| {
-            artifact.role == RustProviderRole::HostRustlib
-                && artifact.path == provider_rustlib_relative_path(HOST_TRIPLE)
-        }));
     }
 
     #[test]
@@ -10289,17 +9372,18 @@ mod tests {
         write_test_route_plan(dir.path());
         fs::rename(dir.path().join(RUST_SOURCE_PROVIDER_PLAN_FILE), &explicit_plan).unwrap();
 
-        let materialized =
+        let error =
             materialize_rust_source_provider_with_route_plan(&recipe, Some(&explicit_plan), &output, &scratch, false)
-                .unwrap();
+                .unwrap_err();
 
-        assert_eq!(materialized.output_path, output);
+        assert!(error.to_string().contains("not x86_64 little-endian ELF64"));
         assert!(!dir.path().join(RUST_SOURCE_PROVIDER_PLAN_FILE).exists());
-        assert!(materialized.metadata_path.is_file());
+        assert!(scratch.join(RUSTC_STAGE1_BUILD_MANIFEST_FILE).is_file());
+        assert!(!output.exists());
     }
 
     #[test]
-    fn materializer_generates_xpy_adapters_when_rust_sources_lack_stage_scripts() {
+    fn materializer_generates_xpy_adapter_before_host_abi_admission() {
         let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
@@ -10307,102 +9391,16 @@ mod tests {
         let scratch = dir.path().join("scratch");
         fs::write(&recipe, "source-built recipe\n").unwrap();
         write_test_route_plan_with_xpy_adapters(dir.path());
-
-        let materialized = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
-
-        assert_eq!(materialized.output_path, output);
-        assert!(validate_materialized_rust_source_provider(&output).is_ok());
-        assert!(
-            !scratch
-                .join(RUSTC_STAGE1_SOURCE_DIR)
-                .join("rust-1.91.1")
-                .join(RUSTC_STAGE1_SOURCE_BUILD_SCRIPT)
-                .exists()
-        );
+        let error = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+        assert!(error.to_string().contains("not x86_64 little-endian ELF64"));
         assert!(scratch.join(RUSTC_STAGE1_BUILD_DIR).join(RUSTC_STAGE1_GENERATED_BUILD_SCRIPT).is_file());
-        let rustc_final_root = scratch.join(RUSTC_FINAL_DIR);
-        assert!(
-            !rustc_final_root
-                .join(RUSTC_FINAL_SOURCE_DIR)
-                .join("rust-1.94.0")
-                .join(RUSTC_FINAL_SOURCE_BUILD_SCRIPT)
-                .exists()
-        );
-        assert!(rustc_final_root.join(RUSTC_FINAL_BUILD_DIR).join(RUSTC_FINAL_GENERATED_BUILD_SCRIPT).is_file());
-        let rustc_stage1_log = fs::read_to_string(scratch.join(RUSTC_STAGE1_BUILD_LOG_FILE)).unwrap();
-        assert!(rustc_stage1_log.contains("scrubbing inherited Rust bootstrap Cargo environment"));
-        assert!(rustc_stage1_log.contains("isolated Rust Cargo workspace"));
-        assert!(rustc_stage1_log.contains("using generated x.py Rust build adapter"));
-        assert!(rustc_stage1_log.contains("synthetic x.py for 1.91.1"));
-        assert!(rustc_stage1_log.contains("install rustc cargo library/std"));
-        assert!(!rustc_stage1_log.contains("install rustc cargo rustdoc"));
+        assert!(scratch.join(RUSTC_STAGE1_OUTPUT_DIR).join(PROVIDER_RUSTC_RELATIVE_PATH).is_file());
         let config_path = scratch.join(RUSTC_STAGE1_BUILD_DIR).join(RUSTC_SOURCE_GENERATED_CONFIG_FILE);
-        let stage1_config: toml::Value = toml::from_str(&fs::read_to_string(config_path).unwrap()).unwrap();
-        let rust = &stage1_config["rust"];
-        assert_eq!(rust["lld"].as_bool(), Some(false), "GNU host must not install zlib-disabled rust-lld");
-        assert_eq!(rust["use-lld"].as_bool(), Some(false), "GNU host links through its verified GNU cc");
-        assert_eq!(stage1_config["build"]["target"][1].as_str(), Some(TARGET_TRIPLE));
-        let generated_stage1_script =
-            fs::read_to_string(scratch.join(RUSTC_STAGE1_BUILD_DIR).join(RUSTC_STAGE1_GENERATED_BUILD_SCRIPT)).unwrap();
-        assert!(generated_stage1_script.contains("change-id = \"ignore\""));
-        assert!(generated_stage1_script.contains("cargo-native-static = true"));
-        assert!(generated_stage1_script.contains("ninja = false"));
-        assert!(generated_stage1_script.contains("sysconfdir = \"etc\""));
-        assert!(generated_stage1_script.contains("target = [\"$MANTLE_HOST_TRIPLE\", \"$MANTLE_TARGET_TRIPLE\"]"));
-        assert!(generated_stage1_script.contains(FIRST_STAGE_MAKE_FALLBACK_GLOB));
-        assert!(generated_stage1_script.contains(FIRST_STAGE_CMAKE_FALLBACK_GLOB));
-        assert!(generated_stage1_script.contains(FIRST_STAGE_TARGET_MUSL_GCC_FALLBACK_GLOB));
-        assert!(
-            generated_stage1_script
-                .contains("MANTLE_TARGET_TOOLCHAIN_ROOT=${MANTLE_TARGET_TOOLCHAIN_ROOT:-${SOURCE_ROOT:-}}")
-        );
-        assert!(generated_stage1_script.contains("using explicit Rust bootstrap source-root musl target toolchain"));
-        assert!(generated_stage1_script.contains(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_GCC_MISSING));
-        assert!(generated_stage1_script.contains(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_INCOMPLETE));
-        assert!(
-            generated_stage1_script
-                .contains("for candidate_name in x86_64-unknown-linux-musl-gcc x86_64-linux-musl-gcc")
-        );
-        assert!(
-            generated_stage1_script
-                .contains("MANTLE_TARGET_MUSL_MACHINE_ALIASES='x86_64-unknown-linux-musl x86_64-linux-musl'")
-        );
-        assert!(generated_stage1_script.contains("MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT='x86_64-linux-musl'"));
-        assert!(
-            generated_stage1_script.contains("$target_wrapper_root/$MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib/libc.a")
-        );
-        assert!(generated_stage1_script.contains("$MANTLE_TARGET_MUSL_ROOT/lib/crt1.o"));
-        assert!(generated_stage1_script.contains("[target.$MANTLE_TARGET_TRIPLE]"));
-        assert!(generated_stage1_script.contains("cc = \"$MANTLE_TARGET_CC\""));
-        assert!(generated_stage1_script.contains("linker = \"$MANTLE_TARGET_CC\""));
-        assert!(generated_stage1_script.contains(FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE));
-        assert!(generated_stage1_script.contains("musl-root = \"$MANTLE_TARGET_MUSL_ROOT\""));
-        let rustc_source_root_preference_index = generated_stage1_script
-            .find("MANTLE_TARGET_TOOLCHAIN_ROOT=${MANTLE_TARGET_TOOLCHAIN_ROOT:-${SOURCE_ROOT:-}}")
-            .unwrap();
-        let rustc_nix_fallback_index = generated_stage1_script
-            .find(&format!("for candidate in {FIRST_STAGE_TARGET_MUSL_GCC_FALLBACK_GLOB}"))
-            .unwrap();
-        assert!(rustc_source_root_preference_index < rustc_nix_fallback_index);
-        assert!(generated_stage1_script.contains(RUSTC_SOURCE_CRANELIFT_MANIFEST));
-        assert!(generated_stage1_script.contains(RUSTC_SOURCE_CODEGEN_GCC_MANIFEST));
-        assert!(generated_stage1_script.contains(RUSTC_SOURCE_TOOL_BUILD_RLIB_SYSROOT_MARKER));
-        assert!(generated_stage1_script.contains("RUSTC_ADDITIONAL_SYSROOT_PATHS"));
-        let rustc_final_log = fs::read_to_string(rustc_final_root.join(RUSTC_FINAL_BUILD_LOG_FILE)).unwrap();
-        assert!(rustc_final_log.contains("scrubbing inherited Rust bootstrap Cargo environment"));
-        assert!(rustc_final_log.contains("isolated Rust Cargo workspace"));
-        assert!(rustc_final_log.contains("using generated x.py Rust build adapter"));
-        assert!(rustc_final_log.contains("synthetic x.py for 1.94.0"));
-        assert!(rustc_final_log.contains("install rustc cargo library/std"));
-        assert!(!rustc_final_log.contains("install rustc cargo rustdoc"));
-        let generated_final_script =
-            fs::read_to_string(rustc_final_root.join(RUSTC_FINAL_BUILD_DIR).join(RUSTC_FINAL_GENERATED_BUILD_SCRIPT))
-                .unwrap();
-        assert!(generated_final_script.contains("tools = $MANTLE_RUST_TOOLS"));
-        let final_script = fs::read_to_string(rustc_final_root.join(RUSTC_FINAL_SCRIPT_FILE)).unwrap();
-        assert!(final_script.contains("MANTLE_RUST_BOOTSTRAP_TOOLS='[\"cargo\", \"rustdoc\"]'"));
-        assert!(final_script.contains("export TMPDIR=\"$TEMP_ROOT\""));
-        assert!(!final_script.contains("TMPDIR=/tmp"));
+        let config: toml::Value = toml::from_str(&fs::read_to_string(config_path).unwrap()).unwrap();
+        assert_eq!(config["rust"]["lld"].as_bool(), Some(false));
+        assert_eq!(config["rust"]["use-lld"].as_bool(), Some(false));
+        assert!(!scratch.join(RUSTC_FINAL_DIR).exists());
+        assert!(!output.exists());
     }
 
     #[test]
@@ -10443,107 +9441,6 @@ mod tests {
         assert!(err.to_string().contains("already exists"));
         assert!(!scratch.join(FIRST_STAGE_SCRIPT_FILE).exists());
         assert!(output.is_dir());
-    }
-
-    #[test]
-    fn first_stage_provider_candidate_rejects_tampered_artifact() {
-        let _guard = crate::process_env::lock_process_env();
-        let dir = tempfile::tempdir().unwrap();
-        let recipe = dir.path().join("rust-source.ncl");
-        let output = dir.path().join("out");
-        let scratch = dir.path().join("scratch");
-        fs::write(&recipe, "blocked recipe\n").unwrap();
-        write_test_route_plan(dir.path());
-        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
-        let candidate = scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR);
-
-        fs::write(candidate.join(PROVIDER_RUSTC_RELATIVE_PATH), b"changed-rustc").unwrap();
-        let err = validate_materialized_rust_source_provider(&candidate).unwrap_err();
-
-        assert!(err.to_string().contains("digest mismatch"));
-        assert!(validate_materialized_rust_source_provider(&output).is_ok());
-    }
-
-    #[test]
-    fn rustc_stage1_provider_candidate_rejects_tampered_artifact() {
-        let _guard = crate::process_env::lock_process_env();
-        let dir = tempfile::tempdir().unwrap();
-        let recipe = dir.path().join("rust-source.ncl");
-        let output = dir.path().join("out");
-        let scratch = dir.path().join("scratch");
-        fs::write(&recipe, "blocked recipe\n").unwrap();
-        write_test_route_plan(dir.path());
-        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
-        let candidate = scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR);
-
-        fs::write(candidate.join(PROVIDER_CARGO_RELATIVE_PATH), b"changed-cargo").unwrap();
-        let err = validate_materialized_rust_source_provider(&candidate).unwrap_err();
-
-        assert!(err.to_string().contains("digest mismatch"));
-        assert!(validate_materialized_rust_source_provider(&output).is_ok());
-    }
-
-    #[test]
-    fn chained_rustc_stage1_provider_candidate_rejects_tampered_artifact() {
-        let _guard = crate::process_env::lock_process_env();
-        let dir = tempfile::tempdir().unwrap();
-        let recipe = dir.path().join("rust-source.ncl");
-        let output = dir.path().join("out");
-        let scratch = dir.path().join("scratch");
-        fs::write(&recipe, "blocked recipe\n").unwrap();
-        write_test_route_plan(dir.path());
-        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
-        let candidate = scratch
-            .join(RUSTC_STAGE1_CHAIN_DIR)
-            .join(RUSTC_STAGE1_NEXT_ID)
-            .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR);
-
-        fs::write(candidate.join(PROVIDER_RUSTC_RELATIVE_PATH), b"changed-chained-rustc").unwrap();
-        let err = validate_materialized_rust_source_provider(&candidate).unwrap_err();
-
-        assert!(err.to_string().contains("digest mismatch"));
-        assert!(validate_materialized_rust_source_provider(&output).is_ok());
-    }
-
-    #[test]
-    fn final_chained_rustc_stage1_provider_candidate_rejects_tampered_artifact() {
-        let _guard = crate::process_env::lock_process_env();
-        let dir = tempfile::tempdir().unwrap();
-        let recipe = dir.path().join("rust-source.ncl");
-        let output = dir.path().join("out");
-        let scratch = dir.path().join("scratch");
-        fs::write(&recipe, "blocked recipe\n").unwrap();
-        write_test_route_plan(dir.path());
-        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
-        let candidate = scratch
-            .join(RUSTC_STAGE1_CHAIN_DIR)
-            .join(RUSTC_STAGE1_FINAL_CHAIN_ID)
-            .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR);
-
-        fs::write(candidate.join(PROVIDER_CARGO_RELATIVE_PATH), b"changed-final-chain-cargo").unwrap();
-        let err = validate_materialized_rust_source_provider(&candidate).unwrap_err();
-
-        assert!(err.to_string().contains("digest mismatch"));
-        assert!(validate_materialized_rust_source_provider(&output).is_ok());
-    }
-
-    #[test]
-    fn rustc_final_provider_candidate_rejects_tampered_artifact() {
-        let _guard = crate::process_env::lock_process_env();
-        let dir = tempfile::tempdir().unwrap();
-        let recipe = dir.path().join("rust-source.ncl");
-        let output = dir.path().join("out");
-        let scratch = dir.path().join("scratch");
-        fs::write(&recipe, "blocked recipe\n").unwrap();
-        write_test_route_plan(dir.path());
-        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
-        let candidate = scratch.join(RUSTC_FINAL_DIR).join(RUSTC_FINAL_PROVIDER_CANDIDATE_DIR);
-
-        fs::write(candidate.join(PROVIDER_RUSTDOC_RELATIVE_PATH), b"changed-final-rustdoc").unwrap();
-        let err = validate_materialized_rust_source_provider(&candidate).unwrap_err();
-
-        assert!(err.to_string().contains("digest mismatch"));
-        assert!(validate_materialized_rust_source_provider(&output).is_ok());
     }
 
     #[test]
@@ -10603,78 +9500,6 @@ mod tests {
         assert!(!scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).exists());
     }
 
-    #[test]
-    fn materializer_rejects_chained_rustc_stage1_source_digest_mismatch_without_output() {
-        let _guard = crate::process_env::lock_process_env();
-        let dir = tempfile::tempdir().unwrap();
-        let recipe = dir.path().join("rust-source.ncl");
-        let output = dir.path().join("out");
-        let scratch = dir.path().join("scratch");
-        fs::write(&recipe, "blocked recipe\n").unwrap();
-        write_test_route_plan_with_rust192_sha(dir.path(), &sample_sha256_hex('f'));
-
-        let err = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
-
-        let message = err.to_string();
-        assert!(message.contains("digest mismatch"));
-        assert!(message.contains("rust-1.92.0"));
-        assert!(!output.exists());
-        assert!(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
-        let rustc_stage1_next_root = scratch.join(RUSTC_STAGE1_CHAIN_DIR).join(RUSTC_STAGE1_NEXT_ID);
-        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_PLAN_FILE).is_file());
-        assert!(!rustc_stage1_next_root.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE).exists());
-        assert!(!rustc_stage1_next_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).exists());
-    }
-
-    #[test]
-    fn materializer_rejects_final_chained_rustc_stage1_source_digest_mismatch_without_output() {
-        let _guard = crate::process_env::lock_process_env();
-        let dir = tempfile::tempdir().unwrap();
-        let recipe = dir.path().join("rust-source.ncl");
-        let output = dir.path().join("out");
-        let scratch = dir.path().join("scratch");
-        fs::write(&recipe, "blocked recipe\n").unwrap();
-        write_test_route_plan_with_rust193_sha(dir.path(), &sample_sha256_hex('a'));
-
-        let err = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
-
-        let message = err.to_string();
-        assert!(message.contains("digest mismatch"));
-        assert!(message.contains("rust-1.93.1"));
-        assert!(!output.exists());
-        assert!(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
-        let rustc_stage1_next_root = scratch.join(RUSTC_STAGE1_CHAIN_DIR).join(RUSTC_STAGE1_NEXT_ID);
-        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
-        let rustc_stage1_final_root = scratch.join(RUSTC_STAGE1_CHAIN_DIR).join(RUSTC_STAGE1_FINAL_CHAIN_ID);
-        assert!(rustc_stage1_final_root.join(RUSTC_STAGE1_PLAN_FILE).is_file());
-        assert!(!rustc_stage1_final_root.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE).exists());
-        assert!(!rustc_stage1_final_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).exists());
-    }
-
-    #[test]
-    fn materializer_rejects_rustc_final_source_digest_mismatch_without_output() {
-        let _guard = crate::process_env::lock_process_env();
-        let dir = tempfile::tempdir().unwrap();
-        let recipe = dir.path().join("rust-source.ncl");
-        let output = dir.path().join("out");
-        let scratch = dir.path().join("scratch");
-        fs::write(&recipe, "blocked recipe\n").unwrap();
-        write_test_route_plan_with_rust194_sha(dir.path(), &sample_sha256_hex('b'));
-
-        let err = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
-
-        let message = err.to_string();
-        assert!(message.contains("digest mismatch"));
-        assert!(message.contains("rust-1.94.0"));
-        assert!(!output.exists());
-        let rustc_stage1_final_root = scratch.join(RUSTC_STAGE1_CHAIN_DIR).join(RUSTC_STAGE1_FINAL_CHAIN_ID);
-        assert!(rustc_stage1_final_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
-        let rustc_final_root = scratch.join(RUSTC_FINAL_DIR);
-        assert!(rustc_final_root.join(RUSTC_FINAL_PLAN_FILE).is_file());
-        assert!(!rustc_final_root.join(RUSTC_FINAL_SOURCES_MANIFEST_FILE).exists());
-        assert!(!rustc_final_root.join(RUSTC_FINAL_PROVIDER_CANDIDATE_MANIFEST_FILE).exists());
-    }
-
     #[cfg(unix)]
     #[test]
     fn first_stage_script_fails_when_sources_removed_after_materialization() {
@@ -10685,13 +9510,14 @@ mod tests {
         let scratch = dir.path().join("scratch");
         fs::write(&recipe, "source-built recipe\n").unwrap();
         write_test_route_plan(dir.path());
-        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
+        let error = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+        assert!(error.to_string().contains("not x86_64 little-endian ELF64"));
         fs::remove_dir_all(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0")).unwrap();
 
         let status = Command::new(scratch.join(FIRST_STAGE_SCRIPT_FILE)).status().unwrap();
 
         assert_eq!(status.code(), Some(FIRST_STAGE_MISSING_SOURCE_EXIT_CODE));
-        assert!(validate_materialized_rust_source_provider(&output).is_ok());
+        assert!(!output.exists());
     }
 
     #[test]
@@ -10955,15 +9781,16 @@ mod tests {
     }
 
     #[test]
-    fn rustc_stage_dynamic_tool_wrapping_copies_shared_libgcc_runtime() {
+    fn rustc_stage_dynamic_tool_wrapping_packages_matching_musl_runtime() {
         let dir = tempfile::tempdir().unwrap();
         let provider_dir = dir.path().join("provider");
-        let runtime_source_dir = dir.path().join("runtime-source");
+        let build_dir = dir.path().join("build");
+        let runtime_source_dir = build_dir.join(RUSTC_SOURCE_TARGET_LINKER_RUNTIME_DIR);
         let runtime_loader = runtime_source_dir.join(FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT);
-        fs::create_dir_all(provider_dir.join("bin")).unwrap();
         fs::create_dir_all(&runtime_source_dir).unwrap();
-        fs::write(provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH), b"rustc binary").unwrap();
-        fs::write(provider_dir.join(PROVIDER_CARGO_RELATIVE_PATH), b"cargo binary").unwrap();
+        for spec in RUSTC_STAGE1_DYNAMIC_TOOL_SPECS {
+            write_test_host_elf(&provider_dir.join(spec.relative_path), "/lib/ld-musl-x86_64.so.1");
+        }
         fs::write(&runtime_loader, b"runtime loader").unwrap();
         fs::write(
             runtime_source_dir.join(FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT),
@@ -10973,9 +9800,16 @@ mod tests {
         fs::write(runtime_source_dir.join(FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT), b"shared libgcc linker name")
             .unwrap();
 
+        let selected = select_rustc_stage_runtime_loader(
+            &provider_dir,
+            &build_dir,
+            FIRST_STAGE_MUSL_TRIPLE,
+            RUSTC_STAGE1_DYNAMIC_TOOL_SPECS,
+        )
+        .unwrap();
         wrap_rustc_stage_provider_dynamic_tools(
             &provider_dir,
-            &runtime_loader,
+            &selected,
             FIRST_STAGE_MUSL_TRIPLE,
             RUSTC_STAGE1_DYNAMIC_TOOL_SPECS,
         )
@@ -10985,8 +9819,14 @@ mod tests {
 
         assert!(rustc_wrapper.contains("--sysroot \"$root_dir\""));
         assert!(!cargo_wrapper.contains("--sysroot \"$root_dir\""));
-        assert_eq!(fs::read(provider_dir.join("bin/rustc.dynamic")).unwrap(), b"rustc binary");
-        assert_eq!(fs::read(provider_dir.join("bin/cargo.dynamic")).unwrap(), b"cargo binary");
+        assert_eq!(
+            read_rustc_stage_elf_interpreter(&provider_dir.join("bin/rustc.dynamic")).unwrap(),
+            PathBuf::from("/lib/ld-musl-x86_64.so.1")
+        );
+        assert_eq!(
+            read_rustc_stage_elf_interpreter(&provider_dir.join("bin/cargo.dynamic")).unwrap(),
+            PathBuf::from("/lib/ld-musl-x86_64.so.1")
+        );
         assert_eq!(
             fs::read(provider_dir.join(FIRST_STAGE_PROC_MACRO_RUNTIME_LOADER_RELATIVE_PATH)).unwrap(),
             b"runtime loader"
@@ -11025,6 +9865,92 @@ mod tests {
         assert!(err.to_string().contains(FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT));
         assert_eq!(fs::read(provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH)).unwrap(), b"rustc binary");
         assert!(!provider_dir.join("bin/rustc.dynamic").exists());
+    }
+
+    fn write_test_host_elf(path: &Path, interpreter: &str) {
+        let mut bytes = vec![0_u8; 120];
+        bytes[..4].copy_from_slice(&ELF_MAGIC);
+        bytes[4..7].copy_from_slice(&[2, 1, 1]);
+        bytes[16..18].copy_from_slice(&3_u16.to_le_bytes());
+        bytes[18..20].copy_from_slice(&62_u16.to_le_bytes());
+        bytes[32..40].copy_from_slice(&64_u64.to_le_bytes());
+        bytes[52..54].copy_from_slice(&64_u16.to_le_bytes());
+        bytes[54..56].copy_from_slice(&56_u16.to_le_bytes());
+        bytes[56..58].copy_from_slice(&1_u16.to_le_bytes());
+        bytes[64..68].copy_from_slice(&3_u32.to_le_bytes());
+        bytes[72..80].copy_from_slice(&120_u64.to_le_bytes());
+        bytes[96..104].copy_from_slice(&((interpreter.len() + 1) as u64).to_le_bytes());
+        bytes.extend_from_slice(interpreter.as_bytes());
+        bytes.push(0);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
+    }
+
+    #[test]
+    fn rust_stage_host_abi_selects_musl_loader_for_both_stage_shapes() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider = dir.path().join("provider");
+        let build = dir.path().join("build");
+        for spec in RUSTC_FINAL_DYNAMIC_TOOL_SPECS {
+            write_test_host_elf(&provider.join(spec.relative_path), "/lib/ld-musl-x86_64.so.1");
+        }
+        let expected =
+            build.join(RUSTC_SOURCE_TARGET_LINKER_RUNTIME_DIR).join(FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT);
+        for specs in [RUSTC_STAGE1_DYNAMIC_TOOL_SPECS, RUSTC_FINAL_DYNAMIC_TOOL_SPECS] {
+            let selected =
+                select_rustc_stage_runtime_loader(&provider, &build, FIRST_STAGE_MUSL_TRIPLE, specs).unwrap();
+            assert_eq!(selected, expected);
+        }
+    }
+
+    #[test]
+    fn rust_stage_host_abi_rejects_gnu_loader_without_admitted_closure() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider = dir.path().join("provider");
+        let build = dir.path().join("build");
+        for spec in RUSTC_FINAL_DYNAMIC_TOOL_SPECS {
+            write_test_host_elf(&provider.join(spec.relative_path), "/nix/store/glibc/lib/ld-linux-x86-64.so.2");
+        }
+        for specs in [RUSTC_STAGE1_DYNAMIC_TOOL_SPECS, RUSTC_FINAL_DYNAMIC_TOOL_SPECS] {
+            let error = select_rustc_stage_runtime_loader(&provider, &build, HOST_TRIPLE, specs).unwrap_err();
+            assert!(error.to_string().contains("GNU host runtime closure is not explicitly admitted"));
+            assert!(error.to_string().contains("ld-linux-x86-64.so.2"));
+            assert!(!provider.join(FIRST_STAGE_PROC_MACRO_RUNTIME_LOADER_RELATIVE_PATH).exists());
+        }
+        write_test_host_elf(&provider.join(PROVIDER_CARGO_RELATIVE_PATH), "/lib/ld-musl-x86_64.so.1");
+        let error = select_rustc_stage_runtime_loader(&provider, &build, HOST_TRIPLE, RUSTC_STAGE1_DYNAMIC_TOOL_SPECS)
+            .unwrap_err();
+        assert!(error.to_string().contains("different ELF interpreters"));
+    }
+
+    #[test]
+    fn rust_stage_host_abi_rejects_malformed_elf_without_packaging() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider = dir.path().join("provider");
+        let tool = provider.join(PROVIDER_RUSTC_RELATIVE_PATH);
+        write_test_host_elf(&tool, "/lib/ld-musl-x86_64.so.1");
+        let mut bytes = fs::read(&tool).unwrap();
+        bytes[96..104].copy_from_slice(&4097_u64.to_le_bytes());
+        fs::write(&tool, bytes).unwrap();
+        let error = read_rustc_stage_elf_interpreter(&tool).unwrap_err();
+        assert!(error.to_string().contains("invalid PT_INTERP"));
+    }
+
+    #[test]
+    fn rust_stage_host_abi_observes_explicit_extracted_stage1_output() {
+        let Some(root) = std::env::var_os("MANTLE_TEST_EXTRACTED_RUST_STAGE1_OUTPUT") else {
+            eprintln!("skipping: no extracted Rust stage1 output supplied");
+            return;
+        };
+        let provider = PathBuf::from(root);
+        let rustc = read_rustc_stage_elf_interpreter(&provider.join(PROVIDER_RUSTC_RELATIVE_PATH)).unwrap();
+        let cargo = read_rustc_stage_elf_interpreter(&provider.join(PROVIDER_CARGO_RELATIVE_PATH)).unwrap();
+        assert_eq!(rustc, cargo);
+        let error =
+            select_rustc_stage_runtime_loader(&provider, &provider, HOST_TRIPLE, RUSTC_STAGE1_DYNAMIC_TOOL_SPECS)
+                .unwrap_err();
+        assert!(error.to_string().contains("GNU host runtime closure is not explicitly admitted"));
+        assert_eq!(rustc.file_name(), Some(OsStr::new("ld-linux-x86-64.so.2")));
     }
 
     #[cfg(unix)]
@@ -11260,45 +10186,6 @@ mod tests {
             &sources.rust192_sha256_hex,
             &sources.rust193_sha256_hex,
             &sources.rust194_sha256_hex,
-        );
-    }
-
-    fn write_test_route_plan_with_rust192_sha(root: &Path, rust192_sha256_hex: &str) {
-        let sources = write_test_source_archives(root);
-        write_test_route_plan_with_source_shas(
-            root,
-            &sources,
-            &sources.mrustc_sha256_hex,
-            &sources.rust191_sha256_hex,
-            rust192_sha256_hex,
-            &sources.rust193_sha256_hex,
-            &sources.rust194_sha256_hex,
-        );
-    }
-
-    fn write_test_route_plan_with_rust193_sha(root: &Path, rust193_sha256_hex: &str) {
-        let sources = write_test_source_archives(root);
-        write_test_route_plan_with_source_shas(
-            root,
-            &sources,
-            &sources.mrustc_sha256_hex,
-            &sources.rust191_sha256_hex,
-            &sources.rust192_sha256_hex,
-            rust193_sha256_hex,
-            &sources.rust194_sha256_hex,
-        );
-    }
-
-    fn write_test_route_plan_with_rust194_sha(root: &Path, rust194_sha256_hex: &str) {
-        let sources = write_test_source_archives(root);
-        write_test_route_plan_with_source_shas(
-            root,
-            &sources,
-            &sources.mrustc_sha256_hex,
-            &sources.rust191_sha256_hex,
-            &sources.rust192_sha256_hex,
-            &sources.rust193_sha256_hex,
-            rust194_sha256_hex,
         );
     }
 

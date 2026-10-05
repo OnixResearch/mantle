@@ -154,6 +154,19 @@ the digest of its producer-rendered bytes before launching it. This local
 integrity check does not inventory script-spawned child processes, confer root
 action trust, or admit a source-built fixed-point/v2 proof.
 
+Rust source stage1 and final packaging inspect the installed host tools'
+ELF interpreters before copying a candidate. The authenticated full-source
+plan uses a musl host and musl target, with a separately admitted source-built
+native runtime. An explicit GNU-host override that produces glibc tools
+cannot run through the staged musl target loader and fails closed before
+candidate publication. The recipe forbids Nix provenance, so libraries found
+in a development shell are not an admissible substitute. A separately
+admitted source-built GNU C closure would only address the GNU override's
+runtime mismatch; the full-source binding still requires a musl host and
+target with an authenticated native closure. Neither a successful stage
+compiler build nor this check proves final Rust provider publication or
+full-source toolchain closure.
+
 ## Genuine release rebuild proof
 
 Use the reviewed production recipe with an explicit content-bound toolchain
