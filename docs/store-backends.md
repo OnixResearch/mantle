@@ -103,6 +103,7 @@ An empty, malformed, oversized, or over-limit file, or any symlink or other non-
 
 Mantle validates the policy file when it opens the store.
 It then reads the file again, up to 65,536 bytes, for every admission, every read, and every import preflight, and it keeps no cached trust set, so a key added or removed while a process runs takes effect at that process's next check.
+Repeated lookup or reuse within one process also rechecks the Casita root, signed envelope, content, and current policy; the in-memory Snix session-node cache is not an alternate Casita read authority.
 Mantle does not lock the file, so a check that overlaps an edit can see a partial file; write the new file elsewhere and rename it into place.
 Mantle publishes an output only when its PathInfo carries a valid signature from the trust set; otherwise the build fails with `casita-signer-untrusted`.
 After a key leaves the file, reads of outputs signed only by that key fail with `casita-signer-untrusted`, including outputs of the local signer and reads during GC planning.
