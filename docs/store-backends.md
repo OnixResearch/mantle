@@ -221,9 +221,17 @@ metadata. `generate` refuses to replace an existing directory. Run
 `python3 scripts/vendor-deps.py dev-shell-check` to verify that plain Cargo
 metadata (without `--config`) resolves the pinned, patched Casita from Crane's
 immutable default dev-shell source replacement rather than an unpatched git
-checkout. Compile with `cargo check -p crunch-store` without `--config`;
-`cargo check -p crunch-store --config .cargo/vendor-config.toml` explicitly
-selects the checkout-local closure.
+checkout. Compile the immutable default shell source with
+`cargo check --locked -p crunch-store` without `--config`. From that same shell,
+use a separate empty Cargo home for an explicit checkout-local compile.
+Combining the default shell's source map with
+`.cargo/vendor-config.toml` defines the same git sources twice.
+
+```bash
+CARGO_HOME="$(mktemp -d)" cargo check --locked -p crunch-store \
+  --config .cargo/vendor-config.toml
+```
+
 `nix build .#checks.x86_64-linux.casita-vendor-closure`
 builds the clean-source Crane vendor closure, while
 `nix build .#checks.x86_64-linux.casita-crunch-store-check` also runs
