@@ -149,6 +149,7 @@ retrying or overriding the old one.
 Casita GC keeps the two-step flow: `store gc` writes a plan, and `store gc --execute --plan-id <blake3-plan-id>` runs it.
 Under `casita`, `store usage` and `store gc` take the store mutation lock even when they only plan.
 Execution replans under the lock, and any drift fails with `gc-plan-stale` before Mantle writes a fence or changes a root.
+Casita output root targets remain bound into the plan ID even while `rust-unit-cache` is undeclared; payload roots and Rust retention live nodes enter GC planning only if that capability is declared.
 
 Execution then writes `casita-gc-fence.json`.
 It removes each candidate root only while the root still has its planned target, records each outcome in `casita-gc-fence.progress`, deletes dead exports and index entries, and runs Casita collection.
@@ -161,6 +162,7 @@ While a fence is pending, reads such as `store list` and `store info`, admission
 The next guarded store command, such as `store usage`, `store gc`, `store pin`, or `store unpin`, finishes the pending fence first.
 Recovery never removes a root.
 It cleans up only fenced roots that are already absent, fails with `casita-root-conflict` when a fenced root changed, and then runs collection.
+Recovery checks every fenced root against its expected target before cleaning any removed root; a later repointed root leaves earlier exports and indexes untouched and keeps the fence pending for operator review.
 The retained set comes from the same root records and pins as under `snix`.
 
 ## Migrate from Snix to Casita
