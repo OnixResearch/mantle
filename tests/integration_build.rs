@@ -1096,6 +1096,214 @@ fn signed_fixed_output_cli_cache_restores_missing_export_in_fresh_processes() {
     }
 }
 
+// r[impl mantle.casita_store_backend.offline_boundary]
+#[test]
+fn independently_built_backend_closures_have_identical_archives_and_offline_source_reports() {
+    use sha2::Digest;
+    use std::io::BufRead;
+    use std::io::Write;
+    use std::time::Duration;
+    use std::time::Instant;
+
+    if !has_bwrap() {
+        eprintln!("skipping: two-output closure build requires a working bwrap sandbox");
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let url = format!("http://{}/source.txt", listener.local_addr().unwrap());
+    let server = std::thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+                    let mut request = String::new();
+                    let count = std::io::BufReader::new(&mut stream).read_line(&mut request).unwrap();
+                    assert!(count > 0 && request.starts_with("GET /source.txt "));
+                    write!(
+                        stream,
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        CLI_FETCH_PAYLOAD.len()
+                    )
+                    .unwrap();
+                    stream.write_all(CLI_FETCH_PAYLOAD).unwrap();
+                    return;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("source capture did not make its one HTTP request: {error}"),
+            }
+        }
+    });
+    let hash = format!("sha256-{}", data_encoding::BASE64.encode(&sha2::Sha256::digest(CLI_FETCH_PAYLOAD)));
+    let fixture = root.path().join("offline-chain.ncl");
+    let library = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib/lib.ncl");
+    std::fs::write(
+        &fixture,
+        format!(
+            r#"let mantle = import "{}" in
+let source = mantle.fetchurl {{ url = "{url}", hash = "{hash}", name = "offline-chain-source" }} in
+{{
+  name = "offline-chain-root",
+  builder = "/bin/sh",
+  inputs = [source],
+  args = ["-c", "set -eu; for path in \"$NIX_STORE\"/*-offline-chain-source; do if [ -f \"$path\" ]; then /bin/busybox mkdir -p \"$out\"; /bin/busybox cp \"$path\" \"$out/payload\"; echo \"$path\" > \"$out/source-reference.txt\"; exit 0; fi; done; exit 1"],
+}} | mantle.Derivation
+"#,
+            library.display()
+        ),
+    )
+    .unwrap();
+    let bundle = root.path().join("sources.json");
+    let capture = assert_cmd::Command::cargo_bin("mantle")
+        .unwrap()
+        .args(["--state-dir"])
+        .arg(root.path().join("capture-state"))
+        .arg("--store")
+        .arg(root.path().join("capture-store"))
+        .args(["--json", "source", "bundle", "export", "--build-root"])
+        .arg(&fixture)
+        .args(["--to"])
+        .arg(&bundle)
+        .arg("--fetch-missing")
+        .env("NO_PROXY", "127.0.0.1,localhost")
+        .env("no_proxy", "127.0.0.1,localhost")
+        .output()
+        .unwrap();
+    server.join().unwrap();
+    assert!(
+        capture.status.success(),
+        "connected source capture: {}",
+        String::from_utf8_lossy(&capture.stderr)
+    );
+    let bundle_bytes = std::fs::read(&bundle).unwrap();
+    // The source endpoint has closed; an attempted HTTP fetch during either build now fails.
+    let public_key = test_keypair().verifying_key.to_string();
+    let mut reference_report = None;
+    let mut reference_archive = None;
+    let mut reference_paths = None;
+    for backend in ["snix", "casita"] {
+        let state = root.path().join(format!("{backend}-state"));
+        let store = root.path().join(format!("{backend}-store"));
+        std::fs::create_dir(&state).unwrap();
+        std::fs::create_dir(&store).unwrap();
+        if backend == "casita" {
+            std::fs::write(state.join("casita-trusted-public-keys"), format!("{public_key}\n")).unwrap();
+        }
+        let run = |args: &[&str]| {
+            let output = assert_cmd::Command::cargo_bin("mantle")
+                .unwrap()
+                .arg("--store-backend")
+                .arg(backend)
+                .arg("--state-dir")
+                .arg(&state)
+                .arg("--store")
+                .arg(&store)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{backend} {:?}: stdout={} stderr={}",
+                args,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            output
+        };
+        // Bind the initially empty Casita repository before Mantle-owned source records
+        // populate its state directory; an identityless nonempty Casita state must fail closed.
+        run(&["store", "roots"]);
+        let signing_key = state.join("signing-key");
+        std::fs::write(&signing_key, format!("{CLI_TEST_KEYPAIR}\n")).unwrap();
+        let bundle_path = bundle.to_str().unwrap();
+        run(&["source", "bundle", "import", "--from", bundle_path, "--pin"]);
+        assert!(state.join("source-bundles/records").is_dir(), "{backend} source records remain Mantle-owned");
+        assert!(state.join("source-bundles/pins").is_dir(), "{backend} source pins remain Mantle-owned");
+        let root_path = fixture.to_str().unwrap();
+        let source_export = root.path().join(format!("{backend}-sources.json"));
+        run(&[
+            "source",
+            "bundle",
+            "export",
+            "--build-root",
+            root_path,
+            "--to",
+            source_export.to_str().unwrap(),
+        ]);
+        assert_eq!(
+            std::fs::read(source_export).unwrap(),
+            bundle_bytes,
+            "{backend} changed offline source bundle bytes"
+        );
+        let report: serde_json::Value = serde_json::from_slice(
+            &run(&["--json", "source", "bundle", "preflight", "--build-root", root_path]).stdout,
+        )
+        .unwrap();
+        assert_eq!(report["ready_class"], "ready", "{backend}");
+        assert_eq!(report["record_count"], 1, "{backend}");
+        if let Some(previous) = &reference_report {
+            assert_eq!(&report, previous, "offline preflight report differs for {backend}");
+        }
+        reference_report = Some(report);
+        let built: serde_json::Value = serde_json::from_slice(
+            &run(&[
+                "--json",
+                "build",
+                "--offline-source-preflight",
+                "--no-substitute",
+                "--signing-key",
+                signing_key.to_str().unwrap(),
+                "--trusted-public-keys",
+                &public_key,
+                root_path,
+            ])
+            .stdout,
+        )
+        .unwrap();
+        let root_output = built["outcomes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|outcome| outcome["outputs"].as_array().unwrap())
+            .find_map(|output| {
+                let path = output["path"].as_str()?;
+                path.ends_with("-offline-chain-root").then_some(PathBuf::from(path))
+            })
+            .expect("built dependency root output");
+        assert_eq!(std::fs::read(root_output.join("payload")).unwrap(), CLI_FETCH_PAYLOAD);
+        assert!(
+            std::fs::read_to_string(root_output.join("source-reference.txt"))
+                .unwrap()
+                .contains("-offline-chain-source"),
+            "{backend} root must retain a real reference to its fetched input"
+        );
+        let selector = root_output.file_name().unwrap().to_str().unwrap();
+        let archive = root.path().join(format!("{backend}-closure.mnar"));
+        run(&["store", "archive", "export", "--to", archive.to_str().unwrap(), selector]);
+        let listed: serde_json::Value = serde_json::from_slice(
+            &run(&["--json", "store", "archive", "list", "--from", archive.to_str().unwrap()]).stdout,
+        )
+        .unwrap();
+        let paths = listed["paths"].as_array().unwrap();
+        assert_eq!(paths.len(), 2, "{backend} must export the root and its fetched input");
+        assert!(paths.iter().any(|path| path["store_path"].as_str().unwrap().ends_with("-offline-chain-source")));
+        assert!(paths.iter().any(|path| path["store_path"].as_str().unwrap().ends_with("-offline-chain-root")));
+        if let Some(previous) = &reference_paths {
+            assert_eq!(paths, previous, "closure paths differ for {backend}");
+        }
+        reference_paths = Some(paths.clone());
+        let bytes = std::fs::read(archive).unwrap();
+        if let Some(previous) = &reference_archive {
+            assert_eq!(&bytes, previous, "independently built closure archive differs for {backend}");
+        }
+        reference_archive = Some(bytes);
+    }
+}
+
 #[test]
 fn casita_legacy_bootstrap_fetch_uses_durable_local_signer_and_exclusive_policy() {
     let root = tempfile::tempdir().unwrap();
