@@ -83,3 +83,9 @@ the newly added `tests/integration_build.rs` fixture nor proof that the current
 source compiles. The fixture additionally checks the empty root listing after
 rejection and unchanged physical content after revocation. The test is still
 uncompiled because the checked-in nightly shell is unavailable as above.
+An already cached standalone Rust 1.97.1 compiler parsed the three touched
+Rust files (`src/rust_bootstrap_patch_plan.rs`,
+`src/source_toolchain_closure.rs`, `tests/integration_build.rs`) using
+`RUSTC_BOOTSTRAP=1 rustc --edition 2024 -Z unpretty=normal --crate-type lib`
+with zero parse errors. This is **syntax only**: no type checking, linking,
+test execution, or current-source binary build is claimed.
