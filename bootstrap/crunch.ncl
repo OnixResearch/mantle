@@ -13,17 +13,21 @@
 #   - No protoc needed (pre-generated proto files)
 #   - No clang/mold needed (gcc+ld override in .cargo/config.toml)
 #
-# The source tarball includes vendored Cargo deps (cargo vendor),
-# so no network access is needed during the build.
+# The source tarball includes the exact locked offline Cargo closure under
+# vendor-deps/, including reviewed Casita source patches.
 #
 # Usage:
 #   crunch build bootstrap/crunch.ncl -I lib --store /tmp/crunch-store
 #
-# Generating the source tarball:
-#   cd crunch && cargo vendor --locked vendor-deps
+# Generating the source tarball and its unpacked-source BLAKE3 SRI hash:
+#   python3 scripts/vendor-deps.py generate
+#   python3 scripts/vendor-deps.py check
 #   git archive --prefix=crunch-src/ HEAD -o /tmp/crunch-src.tar
 #   tar rf /tmp/crunch-src.tar --transform='s,^vendor-deps/,crunch-src/vendor-deps/,' vendor-deps/
-#   xz -T0 /tmp/crunch-src.tar
+#   xz -T4 /tmp/crunch-src.tar
+#   mkdir -p /tmp/crunch-src-unpacked
+#   tar -xf /tmp/crunch-src.tar.xz -C /tmp/crunch-src-unpacked
+#   nix hash path --type blake3 --sri /tmp/crunch-src-unpacked/crunch-src
 
 let crunch = import "lib.ncl" in
 
@@ -145,27 +149,17 @@ let crunch_src = crunch.fetchTarball {
       chmod -R u+w /tmp/build/crunch
       cd /tmp/build/crunch
 
-      # Write .cargo/config.toml for self-build:
-      # - Use gcc instead of clang
-      # - Use system ld instead of mold
-      # - Point to vendored deps
+      # Reuse the tracked exact-pin vendor map; the fixed source archive
+      # supplies the entire locked closure, including Casita and Turso.
+      # Append only the self-hosted musl target and GCC linker settings.
       # Determine library search path for libgcc_s.so.
       GCC_LIB=""
       if [ -n "$MUSL_GCC" ]; then GCC_LIB="$MUSL_GCC"
       elif [ -f "$GCC/lib/libgcc_s.so" ]; then GCC_LIB="$GCC/lib"
       fi
 
-      $BB mkdir -p .cargo
-      cat > .cargo/config.toml << CARGOEOF
-[source.crates-io]
-replace-with = "vendored-sources"
-
-[source."git+https://github.com/tvlfyi/wu-manber.git"]
-git = "https://github.com/tvlfyi/wu-manber.git"
-replace-with = "vendored-sources"
-
-[source.vendored-sources]
-directory = "vendor-deps"
+      cp .cargo/vendor-config.toml .cargo/config.toml
+      cat >> .cargo/config.toml << CARGOEOF
 
 [build]
 target = "x86_64-unknown-linux-musl"
@@ -181,6 +175,7 @@ CARGOEOF
       # Set environment for the Rust build.
       export CARGO_HOME=/tmp/cargo-home
       export CARGO_TARGET_DIR=/tmp/cargo-target
+      export CARGO_NET_OFFLINE=true
       export SNIX_BUILD_SANDBOX_SHELL=/bin/sh
       export CC=gcc
       export AR=ar
@@ -206,6 +201,7 @@ CARGOEOF
       cargo build \
         --release \
         --locked \
+        --offline \
         -j 4 \
         2>&1 || exit 1
 

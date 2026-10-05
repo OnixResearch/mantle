@@ -17067,16 +17067,14 @@ fn try_restore_shared_cache_result(
     let Some(shared) = local_selection.shared.as_ref() else {
         return Ok(None);
     };
-    let report = match local_selection
-        .cache
-        .restore_shared_blocking(SharedRestoreRequest {
-            action,
-            output_dir: &inputs.output_dir,
-            local_policy: &local_selection.policy,
-            shared_policy: &shared.policy,
-            trust_policy: &shared.trust_policy,
-            sources: &shared.sources,
-        }) {
+    let report = match local_selection.cache.restore_shared_blocking(SharedRestoreRequest {
+        action,
+        output_dir: &inputs.output_dir,
+        local_policy: &local_selection.policy,
+        shared_policy: &shared.policy,
+        trust_policy: &shared.trust_policy,
+        sources: &shared.sources,
+    }) {
         Ok(report) => report,
         Err(crunch_rust_cache::Error::Authority(error)) => {
             return Err(RunError::Build(format!("restoring shared retained Rust unit: {error}")));
@@ -26599,7 +26597,8 @@ checksum = "0123456789abcdef"
         let admitted = rust_cache_admitted_environment(&manifest, &replacements).unwrap();
         assert_eq!(admitted[BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV], "@manifest-root");
         assert!(!admitted.contains_key("CARGO_PKG_AUTHORS"));
-        let without_empty = BTreeMap::from([(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), "/project/unit".to_string())]);
+        let without_empty =
+            BTreeMap::from([(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), "/project/unit".to_string())]);
         let admitted_without_empty = rust_cache_admitted_environment(&without_empty, &replacements).unwrap();
         assert_ne!(
             admitted[RUST_CACHE_EFFECTIVE_ENV_DIGEST_KEY],

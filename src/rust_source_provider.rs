@@ -61,6 +61,10 @@ const GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS: u32 = 16;
 const GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS: u64 = 20;
 const SHELL_COMMAND_NOT_EXECUTABLE_EXIT_CODE: i32 = 126;
 const TEXT_FILE_BUSY_MESSAGE: &str = "Text file busy";
+// Pinned mrustc's minicargo launched two writers for one host sysroot archive at four jobs.
+// mrustc v0.12.0's README recommends PARLEVEL=1 outside experiments; serial scheduling
+// prevents concurrent writes to that archive.
+const FIRST_STAGE_JOB_COUNT: u32 = 1;
 const RUST_BOOTSTRAP_JOB_COUNT: u32 = 4;
 #[cfg(test)]
 #[cfg(unix)]
@@ -68,6 +72,7 @@ const UNIX_EXIT_STATUS_SHIFT_BITS: u32 = 8;
 const _: () = assert!(GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS > 1);
 const _: () = assert!(GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS > 0);
 const _: () = assert!(SHELL_COMMAND_NOT_EXECUTABLE_EXIT_CODE > 1);
+const _: () = assert!(FIRST_STAGE_JOB_COUNT == 1);
 const _: () = assert!(RUST_BOOTSTRAP_JOB_COUNT > 0);
 const _: () = assert!(RUST_BOOTSTRAP_JOB_COUNT <= FULL_SOURCE_RUST_STAGE_PARALLEL_JOB_COUNT_MAX);
 const ELF_MAGIC: [u8; ELF_MAGIC_LEN] = [0x7f, b'E', b'L', b'F'];
@@ -3059,7 +3064,9 @@ fn push_rustc_source_target_runtime_config(script: &mut String, allow_nix_host_f
     script.push_str("      host_cc_path=$(command -v cc 2>/dev/null || true)\n");
     script.push_str("      host_cc_machine=\n");
     script.push_str("      if [ -n \"$host_cc_path\" ]; then host_cc_machine=$(\"$host_cc_path\" -dumpmachine 2>/dev/null || true); fi\n");
-    script.push_str("      case \"$host_cc_machine\" in \"$MANTLE_HOST_TRIPLE\"|x86_64-linux-gnu) ;; *) host_cc_path= ;; esac\n");
+    script.push_str(
+        "      case \"$host_cc_machine\" in \"$MANTLE_HOST_TRIPLE\"|x86_64-linux-gnu) ;; *) host_cc_path= ;; esac\n",
+    );
     if allow_nix_host_fallback {
         script.push_str("      if [ -z \"$host_cc_path\" ]; then\n");
         script.push_str("        for candidate in /nix/store/*-bootstrap-stage*-gcc-wrapper-*/bin/cc /nix/store/*-gcc-wrapper-*/bin/cc; do\n");
@@ -5095,7 +5102,7 @@ fn run_first_stage_build(
         plan_digest_blake3: file_digest_blake3(&boundary.plan_path)?,
         script_path: boundary.script_path.clone(),
         script_digest_blake3: file_digest_blake3(&boundary.script_path)?,
-        parallel_job_count: RUST_BOOTSTRAP_JOB_COUNT,
+        parallel_job_count: FIRST_STAGE_JOB_COUNT,
         log_path: boundary.build_log_path.clone(),
         mrustc_digest_blake3: file_digest_blake3(&mrustc_path)?,
         minicargo_digest_blake3: file_digest_blake3(&minicargo_path)?,
@@ -6430,7 +6437,7 @@ fn push_first_stage_script_header(
     script
         .push_str(&format!("SOURCE_MANIFEST={}\n", shell_quote(&boundary.sources_manifest_path.display().to_string())));
     script.push_str(&format!("MAKE_PROGRAM={}\n", shell_quote(FIRST_STAGE_MAKE_PROGRAM)));
-    script.push_str(&format!("PARLEVEL={RUST_BOOTSTRAP_JOB_COUNT}\n"));
+    script.push_str(&format!("PARLEVEL={FIRST_STAGE_JOB_COUNT}\n"));
     script.push_str("export PARLEVEL\n");
     if !full_source_bound {
         script.push_str(&format!("MAKE_FALLBACK_GLOB={}\n", shell_quote(FIRST_STAGE_MAKE_FALLBACK_GLOB)));
@@ -8859,7 +8866,6 @@ mod tests {
                 value.strip_prefix("script-blake3=").is_some_and(|digest| digest.len() == SHA256_HEX_CHAR_COUNT)
             })
         }));
-        assert!(arguments.iter().any(|argument| argument == &format!("parallel-jobs={RUST_BOOTSTRAP_JOB_COUNT}")));
     }
 
     fn unsupported_patch_operation(phase: RustBootstrapPatchPhase) -> RustBootstrapPatchOperation {
@@ -9264,7 +9270,6 @@ mod tests {
         assert_eq!(build_manifest["schema"], FIRST_STAGE_BUILD_MANIFEST_SCHEMA);
         assert_eq!(build_manifest["build"]["plan_digest_blake3"].as_str().unwrap().len(), SHA256_HEX_CHAR_COUNT);
         assert_eq!(build_manifest["build"]["script_digest_blake3"].as_str().unwrap().len(), SHA256_HEX_CHAR_COUNT);
-        assert_eq!(build_manifest["build"]["parallel_job_count"], RUST_BOOTSTRAP_JOB_COUNT);
         assert_patch_plan_operation(
             &build_manifest,
             "mrustc-to-rust-1.90.0",
@@ -9820,10 +9825,8 @@ mod tests {
         assert!(script.contains("export TMP=\"$TEMP_ROOT\""));
         assert!(script.contains("export TEMP=\"$TEMP_ROOT\""));
         assert!(script.contains("export TEMPDIR=\"$TEMP_ROOT\""));
-        assert!(script.contains(&format!("PARLEVEL={RUST_BOOTSTRAP_JOB_COUNT}\nexport PARLEVEL")));
         assert!(script.contains(&format!("$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} CC=\"$CC\"")));
         assert!(!script.contains("$MAKE_PROGRAM CC=\"$CC\""));
-        assert!(!script.contains("PARLEVEL=${"));
         assert!(!script.contains("TMPDIR=/tmp"));
         assert!(script.contains("mrustc-0.12.0"));
         assert!(script.contains(FIRST_STAGE_MINICARGO_BINARY));

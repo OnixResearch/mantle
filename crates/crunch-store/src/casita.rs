@@ -803,8 +803,7 @@ impl CasitaStore {
         let gate = self.before_output_publish.lock().await.clone();
         #[cfg(test)]
         if let Some(gate) = gate {
-            *gate.staged_targets.lock().await =
-                newly_published.iter().map(|(_, target, _)| target.clone()).collect();
+            *gate.staged_targets.lock().await = newly_published.iter().map(|(_, target, _)| target.clone()).collect();
             gate.staged.wait().await;
             gate.resume.wait().await;
         }
@@ -1078,9 +1077,8 @@ mod tests {
                     let repository = LocalRepository::local(state.join("casita")).await.unwrap();
                     let name = CasitaStore::root_name(&store_path).unwrap();
                     let target = repository.metadata().snapshot().await.unwrap().root(&name).await.unwrap();
-                    let error = crate::query::store_verify(store.pathinfo_service().as_ref(), None, &output)
-                        .await
-                        .unwrap_err();
+                    let error =
+                        crate::query::store_verify(store.pathinfo_service().as_ref(), None, &output).await.unwrap_err();
                     assert!(error.to_string().contains(&expected), "{error}");
                     let guard = StoreMutationGuard::try_acquire(&state).unwrap();
                     let error = store.garbage_collect_under_guard(&guard, None).await.unwrap_err();
@@ -1157,7 +1155,10 @@ mod tests {
         let admitted_target = repository.metadata().snapshot().await.unwrap().root(&one_name).await.unwrap().unwrap();
         let before_idempotent = repository.metadata().snapshot().await.unwrap().revision();
         assert_eq!(other.pathinfo_service().put(one.clone()).await.unwrap(), one);
-        assert_eq!(repository.metadata().snapshot().await.unwrap().root(&one_name).await.unwrap(), Some(admitted_target));
+        assert_eq!(
+            repository.metadata().snapshot().await.unwrap().root(&one_name).await.unwrap(),
+            Some(admitted_target)
+        );
         assert_eq!(
             repository.metadata().snapshot().await.unwrap().revision(),
             before_idempotent,
@@ -1778,15 +1779,15 @@ mod tests {
         resign(&mut rival, &signing_key);
         let first_name = CasitaStore::root_name(&first.store_path).unwrap();
         let second_name = CasitaStore::root_name(&second.store_path).unwrap();
-        // Explicitly drive the envelope/session/CAS seam to interleave a real second client without a test hook.
+        // Explicitly drive the envelope/session/CAS seam to interleave a real second client without a test
+        // hook.
         let scratch = tempfile::tempdir_in(root.path()).unwrap();
         let session = repository.mutation_session().await.unwrap();
         let mut expectations = Vec::with_capacity(2);
         let mut changes = Vec::with_capacity(2);
         let mut staged_targets = Vec::with_capacity(2);
-        for (index, (name, info)) in [(first_name.clone(), &first), (second_name.clone(), &second)]
-            .into_iter()
-            .enumerate()
+        for (index, (name, info)) in
+            [(first_name.clone(), &first), (second_name.clone(), &second)].into_iter().enumerate()
         {
             let envelope = scratch.path().join(index.to_string());
             selected.casita_store.as_ref().unwrap().prepare_output_envelope(info, &envelope).await.unwrap();
@@ -1877,14 +1878,7 @@ mod tests {
             resume: tokio::sync::Barrier::new(2),
             staged_targets: tokio::sync::Mutex::new(Vec::new()),
         });
-        selected
-            .casita_store
-            .as_ref()
-            .unwrap()
-            .before_output_publish
-            .lock()
-            .await
-            .replace(gate.clone());
+        selected.casita_store.as_ref().unwrap().before_output_publish.lock().await.replace(gate.clone());
         let selected_pathinfos = selected.pathinfo_service();
         let staged = tokio::spawn(async move { selected_pathinfos.put_batch_atomic(vec![first, second]).await });
         tokio::time::timeout(std::time::Duration::from_secs(30), gate.staged.wait())
@@ -1955,7 +1949,8 @@ mod tests {
             std::fs::write(root.join("staged-target"), target.to_string()).unwrap();
             drop(session);
             drop(store);
-            // Casita releases durable staging pins asynchronously on drop; drain them before stopping this runtime.
+            // Casita releases durable staging pins asynchronously on drop; drain them before stopping this
+            // runtime.
             casita::experimental::flush_repository_leases().await.unwrap();
             std::fs::remove_dir_all(scratch).unwrap();
             println!("casita-stage-child-stopped");
@@ -1987,7 +1982,8 @@ mod tests {
             String::from_utf8_lossy(&child.stdout),
         );
         assert!(!root.path().join("child-scratch").exists());
-        let staged: PathInfo = serde_json::from_slice(&std::fs::read(root.path().join("staged-info.json")).unwrap()).unwrap();
+        let staged: PathInfo =
+            serde_json::from_slice(&std::fs::read(root.path().join("staged-info.json")).unwrap()).unwrap();
         let target: ObjectKey = std::fs::read_to_string(root.path().join("staged-target")).unwrap().parse().unwrap();
         let name = CasitaStore::root_name(&staged.store_path).unwrap();
         let repository = LocalRepository::local(state.join("casita")).await.unwrap();
@@ -2204,10 +2200,9 @@ mod tests {
         let replacement = VerifyingKey::new("casita-revoked".to_string(), other_raw.verifying_key());
         let policy = state.join(TRUST_FILE_NAME);
         std::fs::write(&policy, format!("{trusted}\n")).unwrap();
-        let mut store =
-            StoreHandle::open(StoreConfig::new(StoreBackend::Casita, state, output, STORE_DIR.to_string()))
-                .await
-                .unwrap();
+        let mut store = StoreHandle::open(StoreConfig::new(StoreBackend::Casita, state, output, STORE_DIR.to_string()))
+            .await
+            .unwrap();
         let info = fixture(&store, root.path(), "revoked-cache", b"trusted before revocation", &signer).await;
         store.pathinfo_service().put(info.clone()).await.unwrap();
         assert_eq!(store.cached_node_for_path(&info.store_path).await.unwrap(), Some(info.node.clone()));

@@ -1099,11 +1099,12 @@ fn signed_fixed_output_cli_cache_restores_missing_export_in_fresh_processes() {
 // r[impl mantle.casita_store_backend.offline_boundary]
 #[test]
 fn independently_built_backend_closures_have_identical_archives_and_offline_source_reports() {
-    use sha2::Digest;
     use std::io::BufRead;
     use std::io::Write;
     use std::time::Duration;
     use std::time::Instant;
+
+    use sha2::Digest;
 
     if !has_bwrap() {
         eprintln!("skipping: two-output closure build requires a working bwrap sandbox");
@@ -1174,11 +1175,7 @@ let source = mantle.fetchurl {{ url = "{url}", hash = "{hash}", name = "offline-
         .output()
         .unwrap();
     server.join().unwrap();
-    assert!(
-        capture.status.success(),
-        "connected source capture: {}",
-        String::from_utf8_lossy(&capture.stderr)
-    );
+    assert!(capture.status.success(), "connected source capture: {}", String::from_utf8_lossy(&capture.stderr));
     let bundle_bytes = std::fs::read(&bundle).unwrap();
     // The source endpoint has closed; an attempted HTTP fetch during either build now fails.
     let public_key = test_keypair().verifying_key.to_string();
@@ -1283,9 +1280,24 @@ let source = mantle.fetchurl {{ url = "{url}", hash = "{hash}", name = "offline-
         );
         let selector = root_output.file_name().unwrap().to_str().unwrap();
         let archive = root.path().join(format!("{backend}-closure.mnar"));
-        run(&["store", "archive", "export", "--to", archive.to_str().unwrap(), selector]);
+        run(&[
+            "store",
+            "archive",
+            "export",
+            "--to",
+            archive.to_str().unwrap(),
+            selector,
+        ]);
         let listed: serde_json::Value = serde_json::from_slice(
-            &run(&["--json", "store", "archive", "list", "--from", archive.to_str().unwrap()]).stdout,
+            &run(&[
+                "--json",
+                "store",
+                "archive",
+                "list",
+                "--from",
+                archive.to_str().unwrap(),
+            ])
+            .stdout,
         )
         .unwrap();
         let paths = listed["paths"].as_array().unwrap();
@@ -1368,6 +1380,8 @@ fn casita_legacy_bootstrap_fetch_uses_durable_local_signer_and_exclusive_policy(
     let seed_arg = seed.to_str().unwrap();
     let first = run(&state, &store, &["bootstrap", "--fetch", "--output", seed_arg]);
     assert!(first.status.success(), "{}", String::from_utf8_lossy(&first.stderr));
+    let local_policy = state.join("casita-trusted-public-keys");
+    assert!(!local_policy.exists(), "bootstrap must not enroll the durable signer into a new policy file");
     assert!(String::from_utf8_lossy(&first.stderr).contains("(reduced provider built)"));
     let seed_bytes = std::fs::read(&seed).unwrap();
     assert!(String::from_utf8_lossy(&seed_bytes).contains("/crunch/store/"));
@@ -1387,6 +1401,12 @@ fn casita_legacy_bootstrap_fetch_uses_durable_local_signer_and_exclusive_policy(
     let paths: serde_json::Value = serde_json::from_slice(&listed.stdout).unwrap();
     let raw_selector = paths["paths"][0]["store_path"].as_str().unwrap();
     assert_eq!(paths["paths"].as_array().unwrap().len(), 1);
+    let info_without_policy = run(&state, &store, &["--json", "store", "info", raw_selector]);
+    assert!(
+        info_without_policy.status.success(),
+        "fresh process could not verify the fetched output with the durable local signer: {}",
+        String::from_utf8_lossy(&info_without_policy.stderr)
+    );
     let verify = run(&state, &store, &["store", "verify", "--trusted-public-keys", &public_key, raw_selector]);
     assert!(verify.status.success(), "{}", String::from_utf8_lossy(&verify.stderr));
     assert!(String::from_utf8_lossy(&verify.stdout).contains("trusted_signatures=1/1"));
@@ -1397,6 +1417,7 @@ fn casita_legacy_bootstrap_fetch_uses_durable_local_signer_and_exclusive_policy(
     assert!(second_log.contains("(cached)") && second_log.contains("(reduced provider cached)"));
     assert_eq!(std::fs::read(&signing_key).unwrap(), key_bytes);
     assert_eq!(std::fs::read(&seed).unwrap(), seed_bytes);
+    assert!(!local_policy.exists(), "cached bootstrap must not create a policy file");
 
     let foreign_state = root.path().join("foreign-state");
     let foreign_store = root.path().join("foreign-store");

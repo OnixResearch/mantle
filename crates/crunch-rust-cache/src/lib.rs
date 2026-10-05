@@ -355,21 +355,10 @@ impl RustCache {
         }
         // r[impl mantle.casita_store_backend.castore_payload_roots]
         if let Some(store) = &self.store {
-            if self
-                .retention()?
-                .retained_results
-                .values()
-                .any(|retained| retained == &result.input.root_node)
-            {
-                store
-                    .rehydrate_castore_payload_root(&node)
-                    .await
-                    .map_err(Error::Authority)?;
+            if self.retention()?.retained_results.values().any(|retained| retained == &result.input.root_node) {
+                store.rehydrate_castore_payload_root(&node).await.map_err(Error::Authority)?;
             } else {
-                store
-                    .admit_castore_payload_root(&node)
-                    .await
-                    .map_err(Error::Authority)?;
+                store.admit_castore_payload_root(&node).await.map_err(Error::Authority)?;
             }
         }
         self.publish_record_and_index(&result)?;
@@ -593,10 +582,7 @@ impl RustCache {
             let result = self.read_result(result_ref)?;
             let node = node_from_identity(&result.input.root_node)?;
             if let Some(store) = &self.store {
-                store
-                    .rehydrate_castore_payload_root(&node)
-                    .await
-                    .map_err(Error::Authority)?;
+                store.rehydrate_castore_payload_root(&node).await.map_err(Error::Authority)?;
             }
             let is_complete =
                 crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
@@ -1503,10 +1489,7 @@ mod tests {
             ))
             .await
             .unwrap();
-            let report = cache
-                .restore(&test_action(), &root.join("restored"), &read_write_policy())
-                .await
-                .unwrap();
+            let report = cache.restore(&test_action(), &root.join("restored"), &read_write_policy()).await.unwrap();
             assert_eq!(report.disposition, CACHE_DISPOSITION_HIT);
             assert!(!report.compiler_executed);
             assert_eq!(fs::read(root.join("restored/libcrate.rlib")).unwrap(), TEST_OUTPUT);
@@ -1555,12 +1538,17 @@ mod tests {
         drop(cache);
         fs::remove_dir_all(&built).unwrap();
         let child = std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "tests::casita_payload_is_reused_by_fresh_process_without_compiler", "--nocapture"])
+            .args([
+                "--exact",
+                "tests::casita_payload_is_reused_by_fresh_process_without_compiler",
+                "--nocapture",
+            ])
             .env("MANTLE_CASITA_RUST_CACHE_CHILD", root.path())
             .output()
             .unwrap();
         assert!(
-            child.status.success() && String::from_utf8_lossy(&child.stdout).contains("casita-rust-cache-fresh-process-hit"),
+            child.status.success()
+                && String::from_utf8_lossy(&child.stdout).contains("casita-rust-cache-fresh-process-hit"),
             "status={} stdout={} stderr={}",
             child.status,
             String::from_utf8_lossy(&child.stdout),

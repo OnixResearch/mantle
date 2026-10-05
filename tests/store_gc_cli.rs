@@ -474,7 +474,8 @@ fn casita_gc_cli_recovers_removed_root_before_planning_without_removing_other_ro
         (removed, fenced_other, retained)
     });
     // Model a stop immediately after the first root in the actual plan order.
-    let (removed, fenced_other) = if removed.store_path.to_absolute_path() < fenced_other.store_path.to_absolute_path() {
+    let (removed, fenced_other) = if removed.store_path.to_absolute_path() < fenced_other.store_path.to_absolute_path()
+    {
         (removed, fenced_other)
     } else {
         (fenced_other, removed)
@@ -533,8 +534,14 @@ fn casita_gc_cli_recovers_removed_root_before_planning_without_removing_other_ro
         )
         .unwrap();
         assert!(repository.remove_root_if_matches(&removed_name, &removed_target).await.unwrap().is_some());
-        assert_eq!(repository.metadata().snapshot().await.unwrap().root(&other_name).await.unwrap(), Some(other_target.clone()));
-        assert_eq!(repository.metadata().snapshot().await.unwrap().root(&retained_name).await.unwrap(), Some(retained_target.clone()));
+        assert_eq!(
+            repository.metadata().snapshot().await.unwrap().root(&other_name).await.unwrap(),
+            Some(other_target.clone())
+        );
+        assert_eq!(
+            repository.metadata().snapshot().await.unwrap().root(&retained_name).await.unwrap(),
+            Some(retained_target.clone())
+        );
 
         let recovered = casita_cmd().args(["--json", "store", "gc"]).output().unwrap();
         assert!(recovered.status.success(), "{}", String::from_utf8_lossy(&recovered.stderr));
@@ -543,8 +550,14 @@ fn casita_gc_cli_recovers_removed_root_before_planning_without_removing_other_ro
         assert_eq!(plan["candidate_paths"], serde_json::json!([other_logical]));
         assert!(!state.path().join("casita-gc-fence.json").exists());
         assert_eq!(repository.metadata().snapshot().await.unwrap().root(&removed_name).await.unwrap(), None);
-        assert_eq!(repository.metadata().snapshot().await.unwrap().root(&other_name).await.unwrap(), Some(other_target));
-        assert_eq!(repository.metadata().snapshot().await.unwrap().root(&retained_name).await.unwrap(), Some(retained_target));
+        assert_eq!(
+            repository.metadata().snapshot().await.unwrap().root(&other_name).await.unwrap(),
+            Some(other_target)
+        );
+        assert_eq!(
+            repository.metadata().snapshot().await.unwrap().root(&retained_name).await.unwrap(),
+            Some(retained_target)
+        );
     });
     let removed_export = exports.path().join(removed.store_path.to_string());
     assert_eq!(std::fs::symlink_metadata(removed_export).unwrap_err().kind(), std::io::ErrorKind::NotFound);
@@ -555,7 +568,13 @@ fn casita_gc_cli_recovers_removed_root_before_planning_without_removing_other_ro
         let observed: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
         assert_eq!(observed["paths"][0]["nar_sha256"], data_encoding::HEXLOWER.encode(&info.nar_sha256));
         casita_cmd()
-            .args(["store", "verify", "--trusted-public-keys", &trusted.to_string(), &selector])
+            .args([
+                "store",
+                "verify",
+                "--trusted-public-keys",
+                &trusted.to_string(),
+                &selector,
+            ])
             .assert()
             .success();
     }
@@ -911,7 +930,6 @@ fn unknown_backend_is_rejected_before_creating_state() {
     assert!(!output_dir.exists());
     assert_eq!(snapshot_state_tree(root.path()), before, "unknown backend changed filesystem");
 }
-
 
 #[test]
 fn ambient_backend_name_cannot_override_default_snix_selection() {

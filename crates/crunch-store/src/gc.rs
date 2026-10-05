@@ -509,21 +509,20 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
         action_result_indexes: &action_result_gc.index_marker_paths,
     })?;
     let mut candidate_paths = core_plan.candidate_path_ids.clone();
-    let (casita_castore_candidates, casita_targets, castore_core_id) =
-        if let Some(store) = ctx.casita_store.as_ref() {
-            let castore = plan_casita_castore_roots(store, ctx.retained_castore_roots, is_execution_requested).await?;
-            candidate_paths.extend(castore.candidate_roots.iter().cloned());
-            usage.unknown_object_count = usage.unknown_object_count.saturating_add(castore.targets.len());
-            let mut targets = casita_targets;
-            for (id, root) in castore.targets {
-                if targets.insert(id.clone(), root).is_some() {
-                    return Err(Error::Gc(format!("duplicate Casita GC target identity: {id}")));
-                }
+    let (casita_castore_candidates, casita_targets, castore_core_id) = if let Some(store) = ctx.casita_store.as_ref() {
+        let castore = plan_casita_castore_roots(store, ctx.retained_castore_roots, is_execution_requested).await?;
+        candidate_paths.extend(castore.candidate_roots.iter().cloned());
+        usage.unknown_object_count = usage.unknown_object_count.saturating_add(castore.targets.len());
+        let mut targets = casita_targets;
+        for (id, root) in castore.targets {
+            if targets.insert(id.clone(), root).is_some() {
+                return Err(Error::Gc(format!("duplicate Casita GC target identity: {id}")));
             }
-            (castore.candidate_roots, targets, Some(castore.core_plan_id))
-        } else {
-            (Vec::new(), casita_targets, None)
-        };
+        }
+        (castore.candidate_roots, targets, Some(castore.core_plan_id))
+    } else {
+        (Vec::new(), casita_targets, None)
+    };
     if ctx.casita_store.is_some() && candidate_paths.len() > MAX_CASITA_GC_FENCE_ENTRIES {
         return Err(Error::Gc(format!(
             "Casita GC candidate count exceeds the bounded fence limit of {MAX_CASITA_GC_FENCE_ENTRIES}",
@@ -1041,7 +1040,8 @@ pub(crate) async fn recover_casita_gc(
     let mut root_observations = Vec::with_capacity(fence.entries.len());
     for entry in &fence.entries {
         let (path, name, _) = fence_entry_identity(entry, paths.store_dir)?;
-        let observed = snapshot.root(&name).await.map_err(|error| Error::Gc(format!("reading fenced root: {error}")))?;
+        let observed =
+            snapshot.root(&name).await.map_err(|error| Error::Gc(format!("reading fenced root: {error}")))?;
         let was_removed = fenced_root_was_removed(entry, observed.as_ref())?;
         root_observations.push((path, name, observed, was_removed));
     }
@@ -3273,7 +3273,6 @@ mod tests {
         );
     }
 
-
     #[tokio::test]
     async fn casita_gc_rejects_repointed_retained_payload_and_missing_root() {
         use casita::experimental::ConditionalPublishResult;
@@ -3336,7 +3335,11 @@ mod tests {
             std::fs::create_dir(&content).unwrap();
             std::fs::write(
                 content.join("libunit.rlib"),
-                if tamper == "content" { &b"substituted compiled unit"[..] } else { &b"retained compiled unit"[..] },
+                if tamper == "content" {
+                    &b"substituted compiled unit"[..]
+                } else {
+                    &b"retained compiled unit"[..]
+                },
             )
             .unwrap();
             let encoded_node = if tamper == "node.postcard" {
@@ -3385,12 +3388,7 @@ mod tests {
             assert_eq!(outsider.metadata().snapshot().await.unwrap().root(&name).await.unwrap(), Some(changed.clone()));
             assert!(!casita_gc_fence_pending(state.path()).unwrap());
             drop(_guard);
-            assert_rejected_payload_in_fresh_process(
-                state.path(),
-                exports.path(),
-                &node,
-                "casita-envelope-invalid",
-            );
+            assert_rejected_payload_in_fresh_process(state.path(), exports.path(), &node, "casita-envelope-invalid");
             let session = outsider.mutation_session().await.unwrap();
             let removed = session
                 .publish_if_roots_match(
@@ -3999,7 +3997,15 @@ mod tests {
                 .arg(state.path())
                 .arg("--store")
                 .arg(exports.path())
-                .args(["--store-prefix", "/nix/store", "--store-backend", "casita", "--json", "store", "gc"])
+                .args([
+                    "--store-prefix",
+                    "/nix/store",
+                    "--store-backend",
+                    "casita",
+                    "--json",
+                    "store",
+                    "gc",
+                ])
                 .output()
                 .unwrap();
             assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
@@ -4051,8 +4057,7 @@ mod tests {
         .unwrap();
         let info = casita_gc_signed_symlink_output(&store, "unguarded", "signed-content", &signing).await;
         store.pathinfo_service().put(info.clone()).await.unwrap();
-        let physical =
-            PathBuf::from(info.store_path.to_absolute_path_with_prefix(exports.path().to_str().unwrap()));
+        let physical = PathBuf::from(info.store_path.to_absolute_path_with_prefix(exports.path().to_str().unwrap()));
         std::os::unix::fs::symlink("signed-content", &physical).unwrap();
         let action_store = crate::LocalActionResultStore::new(state.path());
         let record = casita_gc_action_result("unguarded", &info.store_path);
@@ -4128,10 +4133,14 @@ mod tests {
             let exports = PathBuf::from(std::env::var_os(CHILD_EXPORTS).unwrap());
             let logical = std::env::var(CHILD_PATH).unwrap();
             let path = StorePath::from_absolute_path_with_prefix(logical.as_bytes(), "/nix/store").unwrap();
-            let mut store =
-                StoreHandle::open(StoreConfig::new(crate::StoreBackend::Casita, state.clone(), exports, "/nix/store".to_string()))
-                    .await
-                    .unwrap();
+            let mut store = StoreHandle::open(StoreConfig::new(
+                crate::StoreBackend::Casita,
+                state.clone(),
+                exports,
+                "/nix/store".to_string(),
+            ))
+            .await
+            .unwrap();
             assert!(casita_gc_fence_pending(&state).unwrap());
             let raw = ed25519_dalek::SigningKey::from_bytes(&[23_u8; 32]);
             let signer = nix_compat::narinfo::SigningKey::new("casita-gc-output-fixture".to_string(), raw);
@@ -4152,12 +4161,13 @@ mod tests {
                 store.export_cached_path_info(&path).await.unwrap_err().to_string(),
                 store.pathinfo_service().put(admission).await.unwrap_err().to_string(),
                 store.register_retained_root(&path, GcRootSource::Build).await.unwrap_err().to_string(),
-                store.rehydrate_castore_payload_root(&Node::Symlink {
-                    target: SymlinkTarget::try_from("new-content").unwrap(),
-                })
-                .await
-                .unwrap_err()
-                .to_string(),
+                store
+                    .rehydrate_castore_payload_root(&Node::Symlink {
+                        target: SymlinkTarget::try_from("new-content").unwrap(),
+                    })
+                    .await
+                    .unwrap_err()
+                    .to_string(),
             ] {
                 assert!(rejected.contains("gc-recovery-required"), "{rejected}");
             }
@@ -4275,7 +4285,8 @@ mod tests {
             .output()
             .unwrap();
         assert!(
-            child.status.success() && String::from_utf8_lossy(&child.stdout).contains("casita-gc-fenced-fresh-child-blocked"),
+            child.status.success()
+                && String::from_utf8_lossy(&child.stdout).contains("casita-gc-fenced-fresh-child-blocked"),
             "child status={} stdout={} stderr={}",
             child.status,
             String::from_utf8_lossy(&child.stdout),

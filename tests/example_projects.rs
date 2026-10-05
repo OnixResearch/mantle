@@ -1437,7 +1437,10 @@ fn casita_local_action_result_reuses_verified_output_after_export_removal() {
                 "PathInfo-only Builder published a castore payload root"
             );
         });
-        assert!(!state.join(crunch_rust_cache::RUST_CACHE_STATE_DIRECTORY).exists(), "PathInfo-only Builder opened Rust unit cache");
+        assert!(
+            !state.join(crunch_rust_cache::RUST_CACHE_STATE_DIRECTORY).exists(),
+            "PathInfo-only Builder opened Rust unit cache"
+        );
     };
     let key = project_root(SHARED_ACTION_RESULT_PROJECT).join("fixtures/action.key");
     let build = || {
@@ -1461,10 +1464,11 @@ fn casita_local_action_result_reuses_verified_output_after_export_removal() {
     assert_eq!(first["counts"]["built_total"], 1);
     let published = action_result_report_with_disposition(&first, "published");
     let output = PathBuf::from(first["outcomes"][0]["outputs"][0]["path"].as_str().unwrap());
-    let logical = first["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"]
-        .as_str()
-        .unwrap();
-    assert_eq!(std::fs::read_to_string(output.join("result.txt")).unwrap(), "shared-action-result: original action\n");
+    let logical = first["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"].as_str().unwrap();
+    assert_eq!(
+        std::fs::read_to_string(output.join("result.txt")).unwrap(),
+        "shared-action-result: original action\n"
+    );
     let record_dir = state.join("action-results/v1/records");
     let records = std::fs::read_dir(record_dir).unwrap().collect::<Result<Vec<_>, _>>().unwrap();
     assert_eq!(records.len(), 1, "builder must publish a real local action-result record");
@@ -1511,7 +1515,10 @@ fn casita_local_action_result_reuses_verified_output_after_export_removal() {
     assert_eq!(reused["selected_result_ref"].as_str(), Some(signed.record.result_ref.as_str()));
     assert_eq!(reused["selected_source_class"], "local");
     assert_eq!(second["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"], logical);
-    assert_eq!(std::fs::read_to_string(output.join("result.txt")).unwrap(), "shared-action-result: original action\n");
+    assert_eq!(
+        std::fs::read_to_string(output.join("result.txt")).unwrap(),
+        "shared-action-result: original action\n"
+    );
     assert_eq!(reused["transfer"]["transferred_nar_bytes"], 0);
     assert_eq!(reused["transfer"]["reused_nar_bytes"], info["paths"][0]["nar_size"]);
     project_command_with_build_environment(SHARED_ACTION_RESULT_PROJECT)
@@ -1519,7 +1526,14 @@ fn casita_local_action_result_reuses_verified_output_after_export_removal() {
         .arg(&state)
         .arg("--store")
         .arg(&store)
-        .args(["--nix-compat", "store", "verify", "--trusted-public-keys", ACTION_RESULT_TRUSTED_KEY, selector])
+        .args([
+            "--nix-compat",
+            "store",
+            "verify",
+            "--trusted-public-keys",
+            ACTION_RESULT_TRUSTED_KEY,
+            selector,
+        ])
         .assert()
         .success()
         .stdout(predicates::str::contains("trusted_signatures=1/1"));

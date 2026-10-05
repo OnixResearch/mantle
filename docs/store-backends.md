@@ -139,6 +139,11 @@ Every read checks out the envelope, re-ingests `content`, and re-measures its NA
 The read checks the root target before and after checkout, the two envelope entries, canonical `pathinfo.json`, the root name against the store path, the content-address identity, a trusted signature, the content node, and the NAR size and SHA-256.
 Failures report `casita-envelope-invalid`, `casita-signer-untrusted`, `casita-nar-mismatch`, or `casita-root-conflict`.
 A retained path without its root reports `casita-root-missing`.
+Before `store archive export` writes any bytes, Mantle verifies the selected
+Casita root and every referenced closure member under the current policy.
+Revoking a reference's sole signer rejects the entire export with
+`casita-signer-untrusted`, without changing either root or writing a partial
+archive. Restoring the policy allows the same signed closure to export again.
 
 Under `casita`, `store verify` also checks signatures against the keys named with `--trusted-public-keys`, in the configured `trusted-public-keys` file, or given with `--signing-key`.
 It never adds or creates the local signing key on its own, so name the signer's public key when you run it.

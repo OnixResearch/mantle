@@ -532,9 +532,7 @@ fn casita_rejects_substituted_output_signed_only_by_cache_key_outside_policy() {
         "casita-unlisted-cache-signer",
         true,
     );
-    let logical_path = first["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"]
-        .as_str()
-        .unwrap();
+    let logical_path = first["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"].as_str().unwrap();
     let path_info = load_signed_output_pathinfo(source_state.path(), logical_path, "/nix/store");
     assert_eq!(path_info.signatures.len(), 1, "cache-only output must have no local policy signer");
     let cache = FakeBinaryCache::serve(&path_info, render_nar_bytes(source_state.path(), &path_info));
@@ -570,11 +568,8 @@ fn casita_rejects_substituted_output_signed_only_by_cache_key_outside_policy() {
             .unwrap()
     };
     let rejected = build();
-    let diagnostic = format!(
-        "{}{}",
-        String::from_utf8_lossy(&rejected.stdout),
-        String::from_utf8_lossy(&rejected.stderr),
-    );
+    let diagnostic =
+        format!("{}{}", String::from_utf8_lossy(&rejected.stdout), String::from_utf8_lossy(&rejected.stderr),);
     assert!(!rejected.status.success() && diagnostic.contains("casita-signer-untrusted"), "{diagnostic}");
     assert_eq!(std::fs::read(&policy).unwrap().as_slice(), excluded_policy.as_bytes());
     assert_eq!(std::fs::read(&signing_key_path).unwrap().as_slice(), local_key_file.as_bytes());
@@ -599,7 +594,10 @@ fn casita_rejects_substituted_output_signed_only_by_cache_key_outside_policy() {
     let report: serde_json::Value = serde_json::from_slice(&admitted.stdout).unwrap();
     assert_eq!(report["counts"]["built_total"], 0);
     assert_eq!(report["counts"]["cached_total"], 1);
-    assert_eq!(std::fs::read(destination_store.path().join(path_info.store_path.to_string())).unwrap(), b"workflow\n");
+    assert_eq!(
+        std::fs::read(destination_store.path().join(path_info.store_path.to_string())).unwrap(),
+        b"workflow\n"
+    );
     assert_eq!(std::fs::read(&policy).unwrap().as_slice(), admitted_policy.as_bytes());
 }
 

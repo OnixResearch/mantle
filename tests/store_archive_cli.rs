@@ -1775,7 +1775,14 @@ fn rail_check_rust_cache(backend: crunch_store::StoreBackend, root: &Path) {
         assert_eq!(planned["retained_castore_root_count"], 1);
         assert_eq!(planned["candidate_paths"], serde_json::json!([]));
         let executed = rail_cmd(backend, &state, &output)
-            .args(["--json", "store", "gc", "--execute", "--plan-id", planned["plan_id"].as_str().unwrap()])
+            .args([
+                "--json",
+                "store",
+                "gc",
+                "--execute",
+                "--plan-id",
+                planned["plan_id"].as_str().unwrap(),
+            ])
             .output()
             .unwrap();
         assert!(executed.status.success(), "{}", String::from_utf8_lossy(&executed.stderr));

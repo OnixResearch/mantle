@@ -1521,7 +1521,10 @@ mod tests {
         sign_pathinfo(&mut root);
         store.pathinfo_service().put(reference.clone()).await.unwrap();
         store.pathinfo_service().put(root.clone()).await.unwrap();
-        assert_eq!(store.pathinfo_service().get(*reference.store_path.digest()).await.unwrap(), Some(reference.clone()));
+        assert_eq!(
+            store.pathinfo_service().get(*reference.store_path.digest()).await.unwrap(),
+            Some(reference.clone())
+        );
         assert_eq!(store.pathinfo_service().get(*root.store_path.digest()).await.unwrap(), Some(root.clone()));
 
         let options = ArchiveExportOptions { trust_unsigned: false };

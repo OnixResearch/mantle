@@ -694,7 +694,12 @@ fn casita_rust_plan_reuses_compiled_unit_in_fresh_process() {
             .arg(&crate_dir)
             .args(["--rustc"])
             .arg(&wrapper)
-            .args(["--execute-first-supported-unit", "--local-rust-cache", "read-write", "--execution-output-root"])
+            .args([
+                "--execute-first-supported-unit",
+                "--local-rust-cache",
+                "read-write",
+                "--execution-output-root",
+            ])
             .arg(&output_root)
             .output()
             .unwrap();
@@ -710,7 +715,12 @@ fn casita_rust_plan_reuses_compiled_unit_in_fresh_process() {
     let first = build();
     let first_execution = &first["unit_execution"];
     assert_eq!(first_execution["execution_status"], "success");
-    assert_eq!(first_execution["local_cache"]["disposition"], crunch_rust_cache::CACHE_DISPOSITION_MISS, "first cache report: {}", first_execution["local_cache"]);
+    assert_eq!(
+        first_execution["local_cache"]["disposition"],
+        crunch_rust_cache::CACHE_DISPOSITION_MISS,
+        "first cache report: {}",
+        first_execution["local_cache"]
+    );
     assert_eq!(first_execution["local_cache"]["compiler_executed"], true);
     let compiled = std::fs::read(&count).unwrap();
     assert!(!compiled.is_empty(), "actual rustc was not invoked for the first unit");
@@ -764,13 +774,12 @@ fn casita_rust_plan_reuses_compiled_unit_in_fresh_process() {
 
     let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
     let (name, changed) = runtime.block_on(async {
-        let outsider = Repository::<ChunkedBlobStore, TursoMetadataStore>::local(state.join("casita"))
-            .await
-            .unwrap();
+        let outsider = Repository::<ChunkedBlobStore, TursoMetadataStore>::local(state.join("casita")).await.unwrap();
         let snapshot = outsider.metadata().snapshot().await.unwrap();
         let prefix = RootName::try_from("mantle/castore").unwrap();
         let mut roots = snapshot.roots_under(&prefix);
-        let retained = roots.try_next().await.unwrap().expect("the compiled unit must have a durable Casita payload root");
+        let retained =
+            roots.try_next().await.unwrap().expect("the compiled unit must have a durable Casita payload root");
         let name = retained.name().clone();
         let original = retained.target().clone();
         assert!(roots.try_next().await.unwrap().is_none(), "one compiled unit must publish one payload root");
@@ -810,7 +819,12 @@ fn casita_rust_plan_reuses_compiled_unit_in_fresh_process() {
             .arg(&crate_dir)
             .args(["--rustc"])
             .arg(&wrapper)
-            .args(["--execute-first-supported-unit", "--local-rust-cache", "read-write", "--execution-output-root"])
+            .args([
+                "--execute-first-supported-unit",
+                "--local-rust-cache",
+                "read-write",
+                "--execution-output-root",
+            ])
             .arg(&output_root)
             .output()
             .unwrap();
@@ -842,9 +856,7 @@ fn casita_rust_plan_reuses_compiled_unit_in_fresh_process() {
     };
     reject_without_compiling("casita-envelope-invalid");
     runtime.block_on(async {
-        let outsider = Repository::<ChunkedBlobStore, TursoMetadataStore>::local(state.join("casita"))
-            .await
-            .unwrap();
+        let outsider = Repository::<ChunkedBlobStore, TursoMetadataStore>::local(state.join("casita")).await.unwrap();
         let session = outsider.mutation_session().await.unwrap();
         let removed = session
             .publish_if_roots_match(

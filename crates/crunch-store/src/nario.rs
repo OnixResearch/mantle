@@ -856,9 +856,9 @@ impl<R: AsyncRead + Unpin> AsyncRead for ArchiveHashReader<R> {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+
     use casita::experimental::MetadataStore;
     use futures::TryStreamExt;
-
     use nix_compat::narinfo::SigningKey;
     use sha2::Sha256;
     use snix_castore::Node;
@@ -1187,8 +1187,7 @@ mod tests {
         let state = destination.path().join("state");
         fs::create_dir_all(&state).unwrap();
         let different = ed25519_dalek::SigningKey::from_bytes(&[31u8; 32]);
-        let same_name_different_key =
-            VerifyingKey::new("nario-casita-test-1".to_string(), different.verifying_key());
+        let same_name_different_key = VerifyingKey::new("nario-casita-test-1".to_string(), different.verifying_key());
         let policy = state.join("casita-trusted-public-keys");
         let policy_bytes = format!("{same_name_different_key}\n");
         fs::write(&policy, &policy_bytes).unwrap();
@@ -1285,7 +1284,8 @@ mod tests {
         let source = tempfile::tempdir().unwrap();
         let source_handle = test_handle(source.path(), crate::StoreBackend::Snix).await;
         let (first, first_nar) = record_fixture(&source_handle, "casita-staged-first", b"first staged payload").await;
-        let (mut second, second_nar) = record_fixture(&source_handle, "casita-oversize-second", b"second payload").await;
+        let (mut second, second_nar) =
+            record_fixture(&source_handle, "casita-oversize-second", b"second payload").await;
         // These extra signatures are syntactically valid Nario metadata; the first signature
         // still authenticates the record. Only the Casita envelope's JSON size bound rejects it.
         let padding = Signature::new(format!("padding-{}", "x".repeat(1024)), *second.signatures[0].bytes());
@@ -1304,7 +1304,8 @@ mod tests {
         let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
         let repository = handle.casita_store.as_ref().unwrap().repository.clone();
         let before = repository.metadata().snapshot().await.unwrap();
-        let existing = before.objects().map_ok(|record| record.key().clone()).try_collect::<BTreeSet<_>>().await.unwrap();
+        let existing =
+            before.objects().map_ok(|record| record.key().clone()).try_collect::<BTreeSet<_>>().await.unwrap();
         drop(before);
 
         let error = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap_err();
@@ -1382,9 +1383,16 @@ mod tests {
             .filter(|root| root.name().as_str().starts_with("mantle/outputs/"))
             .map(|root| root.name().clone())
             .collect::<BTreeSet<_>>();
-        let expected_names =
-            paths.iter().map(|path| crate::casita::CasitaStore::root_name(path).unwrap()).collect::<BTreeSet<_>>();
-        assert_eq!(published_names, expected_names, "all output roots must coexist in Casita revision {}", snapshot.revision());
+        let expected_names = paths
+            .iter()
+            .map(|path| crate::casita::CasitaStore::root_name(path).unwrap())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            published_names,
+            expected_names,
+            "all output roots must coexist in Casita revision {}",
+            snapshot.revision()
+        );
         drop(snapshot);
         for path in &paths {
             let loaded = reopened.pathinfo_service().get(*path.digest()).await.unwrap();

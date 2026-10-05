@@ -1248,15 +1248,9 @@ impl RustCache {
                 let identity = &candidate.signed.envelope.result.input.root_node;
                 let node = node_from_identity(identity)?;
                 if retention.retained_results.values().any(|retained| retained == identity) {
-                    store
-                        .rehydrate_castore_payload_root(&node)
-                        .await
-                        .map_err(Error::Authority)?;
+                    store.rehydrate_castore_payload_root(&node).await.map_err(Error::Authority)?;
                 } else {
-                    store
-                        .admit_castore_payload_root(&node)
-                        .await
-                        .map_err(Error::Authority)?;
+                    store.admit_castore_payload_root(&node).await.map_err(Error::Authority)?;
                 }
             }
         }
@@ -1314,10 +1308,7 @@ impl RustCache {
     async fn render_shared_object(&self, result: &RustUnitResult) -> Result<StagedSharedObject, Error> {
         let node = node_from_identity(&result.input.root_node)?;
         if let Some(store) = &self.store {
-            store
-                .rehydrate_castore_payload_root(&node)
-                .await
-                .map_err(Error::Authority)?;
+            store.rehydrate_castore_payload_root(&node).await.map_err(Error::Authority)?;
         }
         let is_complete =
             crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
@@ -2132,10 +2123,8 @@ mod tests {
             assert_eq!(report.disposition, SHARED_CACHE_HIT);
             assert!(!report.compiler_executed);
             assert_eq!(fs::read(root.join("fresh-shared-output/artifact.rlib")).unwrap(), b"shared-origin-payload");
-            let local = client
-                .restore(&test_action(), &root.join("fresh-local-output"), &local_policy())
-                .await
-                .unwrap();
+            let local =
+                client.restore(&test_action(), &root.join("fresh-local-output"), &local_policy()).await.unwrap();
             assert_eq!(local.disposition, crate::CACHE_DISPOSITION_HIT);
             assert!(!local.compiler_executed);
             assert_eq!(fs::read(root.join("fresh-local-output/artifact.rlib")).unwrap(), b"shared-origin-payload");
@@ -2187,12 +2176,17 @@ mod tests {
         assert_eq!(client.retention().unwrap().retained_results.get(&result.result_ref), Some(&result.input.root_node));
         drop(client);
         let child = std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "shared::tests::casita_shared_origin_is_retained_and_reused_by_fresh_process", "--nocapture"])
+            .args([
+                "--exact",
+                "shared::tests::casita_shared_origin_is_retained_and_reused_by_fresh_process",
+                "--nocapture",
+            ])
             .env("MANTLE_CASITA_SHARED_CACHE_CHILD", root.path())
             .output()
             .unwrap();
         assert!(
-            child.status.success() && String::from_utf8_lossy(&child.stdout).contains("casita-shared-origin-fresh-process-hit"),
+            child.status.success()
+                && String::from_utf8_lossy(&child.stdout).contains("casita-shared-origin-fresh-process-hit"),
             "status={} stdout={} stderr={}",
             child.status,
             String::from_utf8_lossy(&child.stdout),
