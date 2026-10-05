@@ -468,9 +468,7 @@
           filter = path: type: sourceFilter path type && !isContentBoundRequirementFixture (toString path);
         };
 
-        cargoVendorDir =
-          assert casitaSourceAdmitted;
-          craneLib.vendorCargoDeps {
+        cargoVendorDir = assert casitaSourceAdmitted; craneLib.vendorCargoDeps {
           inherit src;
           cargoLock = ./Cargo.lock;
           overrideVendorGitCheckout =
