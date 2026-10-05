@@ -1727,6 +1727,7 @@ impl StoreHandle {
             overlay_blob_service: self.overlay_blob_service.as_ref(),
             overlay_plan_identity: self.overlay_state.as_ref().map(|state| state.plan.plan_identity.into_bytes()),
             retained_castore_roots,
+            rust_unit_cache_supported: self.backend.profile().rust_unit_cache,
             casita_store: self.casita_store.clone(),
         };
         let report = gc::run_gc(&ctx, &mut self.ca_mappings, accepted_plan_id).await?;
