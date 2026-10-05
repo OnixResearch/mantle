@@ -23,6 +23,11 @@ DEST = ROOT / "vendor-deps"
 CONFIG = ROOT / ".cargo/vendor-config.toml"
 REV = "90404fcb1cfb3d83f2233715448dfefe913f5fd1"
 TURSO_REV = "dca55133caa690f90dcdd58d3c4329fb0703659c"
+TURSO_PACKAGES = {
+    "turso", "turso_core", "turso_ext", "turso_macros", "turso_parser",
+    "turso_sdk_kit", "turso_sdk_kit_macros", "turso_sync_engine",
+    "turso_sync_sdk_kit",
+}
 CASITA_PATCH = ROOT / "patches/casita-blake3-finalize.patch"
 CASITA_NAR_SHA256 = "bed3012bed878a81b19348a2b927b95ea7e736b6888229d41a6342918a813e09"
 
@@ -53,10 +58,33 @@ def check_pins():
     require(dep.get("default-features") is False, "casita: default features must be disabled")
     require(sorted(dep.get("features", [])) == ["experimental", "native"], "casita: feature drift")
     packages = tomllib.loads((ROOT / "Cargo.lock").read_text())["package"]
-    names = {p["name"]: p for p in packages if p["name"] in {"casita", "turso", "astral-tokio-tar"}}
-    require(names.get("casita", {}).get("source") == f"git+https://github.com/cachix/casita?rev={REV}#{REV}", "casita: Cargo.lock source drift")
-    require(names.get("turso", {}).get("source") == f"git+https://github.com/cachix/turso.git?rev={TURSO_REV}#{TURSO_REV}", "turso: Cargo.lock source drift")
-    require(names.get("astral-tokio-tar", {}).get("version") == "0.6.4", "astral-tokio-tar: Cargo.lock version drift")
+    casita = [p for p in packages if p["name"] == "casita"]
+    require(len(casita) == 1 and casita[0].get("version") == "0.1.0", "casita: Cargo.lock package drift")
+    casita_source = f"git+https://github.com/cachix/casita?rev={REV}#{REV}"
+    require(casita[0].get("source") == casita_source, "casita: Cargo.lock source drift")
+    require(
+        all(p["name"] == "casita" for p in packages if p.get("source", "").startswith("git+https://github.com/cachix/casita?")),
+        "casita: unexpected package from pinned repository",
+    )
+    turso = [p for p in packages if p["name"] in TURSO_PACKAGES]
+    require(
+        len(turso) == len(TURSO_PACKAGES) and {p["name"] for p in turso} == TURSO_PACKAGES,
+        "turso: Cargo.lock package set drift",
+    )
+    turso_source = f"git+https://github.com/cachix/turso.git?rev={TURSO_REV}#{TURSO_REV}"
+    require(
+        all(p.get("version") == "0.8.0-pre.7" and p.get("source") == turso_source for p in turso),
+        "turso: Cargo.lock version or source drift",
+    )
+    require(
+        {p["name"] for p in packages if p.get("source", "").startswith("git+https://github.com/cachix/turso.git?")}
+        == TURSO_PACKAGES,
+        "turso: unexpected package from pinned repository",
+    )
+    tar = [p for p in packages if p["name"] == "astral-tokio-tar"]
+    require(len(tar) == 1 and tar[0]["version"] == "0.6.4", "astral-tokio-tar: Cargo.lock version drift")
+    blake3 = [p for p in packages if p["name"] == "blake3"]
+    require(len(blake3) == 1 and blake3[0]["version"] == "1.8.2", "blake3: Cargo.lock version drift")
     return {(p["name"], p["version"], p.get("source")) for p in packages}
 
 

@@ -98,6 +98,29 @@ The four sources are `ssh://git@github.com/OnixResearch/onix-artifact.git`, `htt
 
 The dependency gate stays open. This change adds no waiver. This record does not claim a clean `cargo-deny` result, Casita correctness, experimental API stability, or release eligibility.
 
+2026-10-04 bounded admission follow-up (not a passing dependency gate):
+`scripts/vendor-deps.py` now rejects lock-source or version drift for all nine
+locked `turso` workspace packages, not just `turso`, and rejects drift in the
+sole `casita`, `astral-tokio-tar`, and `blake3` entries. The Nix admission
+assertion checks the same locked package family before selecting the patched
+Casita source. The local pin validator accepted the current 987 lock
+identities and rejected a changed `turso_core` source in a scratch lock; Nix
+evaluated the vendor derivation but did **not** build a clean-source closure.
+The two Rust-from-source self-build plans still select final compiler 1.94.0,
+below Casita's declared `rust-version` 1.94.1; the fetched bootstrap toolchain
+selects 1.94.1. Neither the source-profile refresh nor the clean-source proof
+is complete. The T1.2 checkbox and dependency audit gate remain open.
+
+With `cargo-deny 0.20.2` and its available advisory database, the scoped
+`nix shell --offline nixpkgs#cargo-deny nixpkgs#cargo --command cargo-deny
+--config deny.toml check` exited 9: `advisories FAILED, bans ok, licenses ok,
+sources FAILED`. The source errors are six lock packages from the four
+already-unadmitted repositories below, not the Casita or Turso sources. Its
+advisory output includes the Casita-reached `proc-macro-error 0.4.12`
+unmaintained finding and existing vulnerable `rustls 0.23.37`; it also reports
+`lru 0.16.4` (RUSTSEC-2026-0253, through Snix) and yanked `chacha20 0.10.0`
+and `spin 0.10.0`. No waiver or unrelated dependency update was added.
+
 ## Remaining waiver inventory
 
 | Finding | Affected crate | Scope | Rationale | Review trigger |

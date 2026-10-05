@@ -307,10 +307,30 @@
           nickelExportCore;
         firstPartyCargoScope = pkgs.lib.concatStringsSep " " cargoManifest.workspace.metadata.tigerstyle.default_scope;
         casitaRevision = "90404fcb1cfb3d83f2233715448dfefe913f5fd1";
+        tursoRevision = "dca55133caa690f90dcdd58d3c4329fb0703659c";
+        tursoPackageNames = [
+          "turso"
+          "turso_core"
+          "turso_ext"
+          "turso_macros"
+          "turso_parser"
+          "turso_sdk_kit"
+          "turso_sdk_kit_macros"
+          "turso_sync_engine"
+          "turso_sync_sdk_kit"
+        ];
+        cargoLockedPackages = (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
         casitaManifest = builtins.fromTOML (builtins.readFile ./crates/crunch-store/Cargo.toml);
-        casitaLocked = builtins.filter (
-          package: package.name == "casita"
-        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        casitaLocked = builtins.filter (package: package.name == "casita") cargoLockedPackages;
+        casitaRepositoryLocked = builtins.filter (
+          package: pkgs.lib.hasPrefix "git+https://github.com/cachix/casita?" (package.source or "")
+        ) cargoLockedPackages;
+        tursoLocked = builtins.filter (package: builtins.elem package.name tursoPackageNames) cargoLockedPackages;
+        tursoRepositoryLocked = builtins.filter (
+          package: pkgs.lib.hasPrefix "git+https://github.com/cachix/turso.git?" (package.source or "")
+        ) cargoLockedPackages;
+        blake3Locked = builtins.filter (package: package.name == "blake3") cargoLockedPackages;
+        astralTarLocked = builtins.filter (package: package.name == "astral-tokio-tar") cargoLockedPackages;
         casitaSourceAdmitted =
           assert pkgs.lib.assertMsg (
             casitaManifest.dependencies.casita.git == "https://github.com/cachix/casita"
@@ -319,8 +339,25 @@
             && casitaManifest.dependencies.casita.features == [ "native" "experimental" ]
             && casitaSource.rev == casitaRevision
             && builtins.length casitaLocked == 1
+            && (builtins.head casitaLocked).version == "0.1.0"
             && (builtins.head casitaLocked).source
               == "git+https://github.com/cachix/casita?rev=${casitaRevision}#${casitaRevision}"
+            && builtins.length casitaRepositoryLocked == 1
+            && builtins.sort builtins.lessThan (map (package: package.name) tursoLocked)
+              == tursoPackageNames
+            && builtins.length tursoRepositoryLocked == builtins.length tursoLocked
+            && builtins.sort builtins.lessThan (map (package: package.name) tursoRepositoryLocked)
+              == tursoPackageNames
+            && builtins.all (
+              package:
+              package.version == "0.8.0-pre.7"
+              && package.source
+                == "git+https://github.com/cachix/turso.git?rev=${tursoRevision}#${tursoRevision}"
+            ) tursoLocked
+            && builtins.length astralTarLocked == 1
+            && (builtins.head astralTarLocked).version == "0.6.4"
+            && builtins.length blake3Locked == 1
+            && (builtins.head blake3Locked).version == "1.8.2"
             && (builtins.fromTOML (builtins.readFile (casitaSource + "/crates/casita/Cargo.toml"))).package.license
               == "Apache-2.0"
           ) "Mantle Casita source, Cargo lock, Nix pin, or license drifted";
