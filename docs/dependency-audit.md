@@ -196,6 +196,20 @@ upstream/pin or dependency replacement with build proof, or explicit policy
 exception, requires an owner decision. T1.3/T4.7 stay unchecked, as do the
 independent pre-existing advisory and yank findings.
 
+A bounded read-only upstream survey reported on 2026-10-05 found Casita
+main `84ec2920791276cd4ad8c029cd60529810e15705` still declares optional
+`bao-tree = "0.16"`. Bao-tree 0.16.1's default `validate` feature reaches
+genawaiter 0.99.1's default `proc_macro` feature and the same
+`proc-macro-error 0.4.12`. Bao-tree issues
+[#77](https://github.com/n0-computer/bao-tree/issues/77),
+[#69](https://github.com/n0-computer/bao-tree/issues/69), and
+[#62](https://github.com/n0-computer/bao-tree/issues/62) remain open and
+unrelated; the survey found no relevant Casita PR or qualifying reviewed fix.
+The external prerequisite is a n0-computer/bao-tree maintainer-reviewed,
+validation-preserving `genawaiter` `default-features = false` fix and release,
+followed by a Casita-maintainer-reviewed precise revision. Disabling
+validation is not a resolution.
+
 ## Remaining waiver inventory
 
 | Finding | Affected crate | Scope | Rationale | Review trigger |
