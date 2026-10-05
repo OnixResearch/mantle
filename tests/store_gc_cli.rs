@@ -456,7 +456,7 @@ fn casita_gc_cli_recovers_removed_root_before_planning_without_removing_other_ro
     let rt = tokio::runtime::Runtime::new().unwrap();
     let (removed, fenced_other, retained) = rt.block_on(async {
         let _guard = crunch_store::StoreMutationGuard::acquire_wait(state.path()).unwrap();
-        let store = StoreHandle::open(StoreConfig::new(
+        let mut store = StoreHandle::open(StoreConfig::new(
             crunch_store::StoreBackend::Casita,
             state.path().to_path_buf(),
             exports.path().to_path_buf(),
