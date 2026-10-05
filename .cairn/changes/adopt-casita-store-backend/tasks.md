@@ -7,11 +7,14 @@ trust, cache, replacement, GC, archive and conformance fixtures; Run 60
 covers integrated trust, staging, archive and cache parity; Run 61
 covers automatic second-client admission, guarded GC recovery, later-path
 Nario failure and its bounded source-level one-publication-revision proof.
+Run 62 records the authentic serial Rust 1.90 first-stage sidecar without
+claiming a completed source provider. Runs 63–65 record completed trust,
+capability, clean-source vendor, format-corrected quality and committed
+Cairn gates, with both the initial failed and passing corrective receipts.
 The pin and locked dependency inventory are in
 `evidence/dependency-admission-2026-10-04.md`. An unchecked task remains
-open even when some of its subcases passed; neither isolated fixture
-success nor a generated recipe alone qualifies the Rust source build,
-clean-source bundle, full quality gate or dependency audit.
+open even when some subcases passed: the source-built Rust 1.94.1 profile
+and dependency audit are independent of the completed vendor and QA gates.
 
 ## Phase 1: Pin, vendor closure, and contract
 
