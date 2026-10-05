@@ -1518,7 +1518,6 @@ fn rail_archive_roundtrip(
 }
 
 fn rail_check_profile(backend: crunch_store::StoreBackend, root: &Path, capabilities: &Value) {
-    assert_eq!(capabilities["rust_unit_cache"], backend == crunch_store::StoreBackend::Snix);
     assert_eq!(capabilities["overlay_composition"], backend == crunch_store::StoreBackend::Snix);
     assert_eq!(capabilities["atomic_batch_import"], true);
     assert_eq!(capabilities["unsigned_admission"], backend == crunch_store::StoreBackend::Snix);

@@ -3278,7 +3278,6 @@ mod tests {
     async fn casita_gc_rejects_repointed_retained_payload_and_missing_root() {
         use casita::experimental::ConditionalPublishResult;
         use casita::experimental::MetadataStore;
-        use casita::experimental::Repository;
         use casita::experimental::RootChange;
         use casita::experimental::RootExpectation;
         use casita::import::UnrootedFilesystemImport;

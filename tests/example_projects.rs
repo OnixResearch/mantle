@@ -1437,6 +1437,7 @@ fn casita_local_action_result_reuses_verified_output_after_export_removal() {
                 "PathInfo-only Builder published a castore payload root"
             );
         });
+        assert!(!state.join(crunch_rust_cache::RUST_CACHE_STATE_DIRECTORY).exists(), "PathInfo-only Builder opened Rust unit cache");
     };
     let key = project_root(SHARED_ACTION_RESULT_PROJECT).join("fixtures/action.key");
     let build = || {

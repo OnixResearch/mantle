@@ -710,7 +710,7 @@ fn casita_rust_plan_reuses_compiled_unit_in_fresh_process() {
     let first = build();
     let first_execution = &first["unit_execution"];
     assert_eq!(first_execution["execution_status"], "success");
-    assert_eq!(first_execution["local_cache"]["disposition"], crunch_rust_cache::CACHE_DISPOSITION_MISS);
+    assert_eq!(first_execution["local_cache"]["disposition"], crunch_rust_cache::CACHE_DISPOSITION_MISS, "first cache report: {}", first_execution["local_cache"]);
     assert_eq!(first_execution["local_cache"]["compiler_executed"], true);
     let compiled = std::fs::read(&count).unwrap();
     assert!(!compiled.is_empty(), "actual rustc was not invoked for the first unit");
@@ -730,6 +730,27 @@ fn casita_rust_plan_reuses_compiled_unit_in_fresh_process() {
     assert_eq!(second_execution["output_artifact_digests"], first_execution["output_artifact_digests"]);
     assert_eq!(std::fs::read(&count).unwrap(), compiled, "fresh process recompiled instead of restoring the unit");
     assert!(unit_output.join(crunch_rust_cache::RUST_UNIT_EXECUTION_RECEIPT_FILE).is_file());
+    for command in [["store", "usage"], ["store", "gc"]] {
+        let observed = mantle_cmd()
+            .args(["--store-backend", "casita", "--json", "--state-dir"])
+            .arg(&state)
+            .arg("--store")
+            .arg(&store)
+            .args(command)
+            .output()
+            .unwrap();
+        assert!(
+            observed.status.success(),
+            "{command:?} rejected healthy Rust retention: {}",
+            String::from_utf8_lossy(&observed.stderr)
+        );
+        if command == ["store", "gc"] {
+            let report: Value = serde_json::from_slice(&observed.stdout).unwrap();
+            assert_eq!(report["retained_castore_root_count"], 1);
+            assert_eq!(report["candidate_path_count"], 0);
+        }
+        assert!(!crunch_store::StoreHandle::casita_gc_fence_pending(&state).unwrap());
+    }
     use casita::experimental::ChunkedBlobStore;
     use casita::experimental::ConditionalPublishResult;
     use casita::experimental::MetadataStore;

@@ -16594,6 +16594,12 @@ fn rust_cache_path_replacements(
         if let Some(parent) = source.parent() {
             replacements.push((normalize_path_string(parent), "@source-root".to_string()));
         }
+        if let Some(manifest_root) = unit.derivation.env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV) {
+            let manifest_root = Path::new(manifest_root);
+            if manifest_root.is_absolute() && source.starts_with(manifest_root) {
+                replacements.push((normalize_path_string(manifest_root), "@manifest-root".to_string()));
+            }
+        }
     }
     replacements.push((normalize_path_string(&options.output_root), "@execution-output".to_string()));
     replacements.push((normalize_path_string(&inputs.output_dir), "@unit-output".to_string()));
@@ -16631,6 +16637,10 @@ fn rust_cache_admitted_environment(
 ) -> Result<BTreeMap<String, String>, RunError> {
     let mut normalized = BTreeMap::new();
     for (name, value) in environment {
+        // The effective child-environment digest still binds presence and value, including empty values.
+        if value.is_empty() {
+            continue;
+        }
         let value = normalize_rust_cache_text(value, replacements);
         if contains_absolute_path_text(&value) {
             return Err(RunError::Internal(format!(
@@ -16648,7 +16658,7 @@ fn rust_cache_admitted_environment(
         RUST_CACHE_EFFECTIVE_ENV_DIGEST_KEY.to_string(),
         rust_cache_effective_environment_digest(&effective)?,
     );
-    assert_eq!(normalized.len(), environment.len().saturating_add(1));
+    assert!(normalized.len() <= environment.len().saturating_add(1));
     assert!(normalized.keys().all(|name| !name.is_empty()));
     Ok(normalized)
 }
@@ -16677,9 +16687,16 @@ fn rust_cache_effective_environment_digest(environment: &BTreeMap<String, OsStri
 fn normalize_rust_cache_text(value: &str, replacements: &[(String, String)]) -> String {
     let mut normalized = value.to_string();
     for (source, target) in replacements {
-        normalized = normalized.replace(source, target);
+        if target == "@manifest-root" {
+            if let Some(suffix) = normalized.strip_prefix(source)
+                && (suffix.is_empty() || suffix.starts_with('/'))
+            {
+                normalized.replace_range(..source.len(), target);
+            }
+        } else {
+            normalized = normalized.replace(source, target);
+        }
     }
-    assert!(!value.is_empty());
     assert!(normalized.len() <= value.len().saturating_add(replacements.len().saturating_mul(BLAKE3_HEX_CHARS)));
     normalized
 }
@@ -16689,7 +16706,6 @@ fn contains_absolute_path_text(value: &str) -> bool {
         .split(|character: char| character.is_ascii_whitespace() || matches!(character, '=' | ',' | ';'))
         .any(|token| token.starts_with('/'));
     let has_assignment_root = value.contains("=/");
-    debug_assert!(!value.is_empty());
     debug_assert!(!has_assignment_root || value.contains('/'));
     has_root_token || has_assignment_root
 }
@@ -26575,8 +26591,28 @@ checksum = "0123456789abcdef"
         assert_ne!(digest_a, digest_b);
         assert_eq!(digest_a.len(), BLAKE3_HEX_CHARS);
 
-        let unclassified = BTreeMap::from([("CUSTOM_TOOL".to_string(), "/ambient/tool".to_string())]);
-        let error = rust_cache_admitted_environment(&unclassified, &[]).unwrap_err().to_string();
+        let replacements = vec![("/project/unit".to_string(), "@manifest-root".to_string())];
+        let manifest = BTreeMap::from([
+            (BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), "/project/unit".to_string()),
+            ("CARGO_PKG_AUTHORS".to_string(), String::new()),
+        ]);
+        let admitted = rust_cache_admitted_environment(&manifest, &replacements).unwrap();
+        assert_eq!(admitted[BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV], "@manifest-root");
+        assert!(!admitted.contains_key("CARGO_PKG_AUTHORS"));
+        let without_empty = BTreeMap::from([(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), "/project/unit".to_string())]);
+        let admitted_without_empty = rust_cache_admitted_environment(&without_empty, &replacements).unwrap();
+        assert_ne!(
+            admitted[RUST_CACHE_EFFECTIVE_ENV_DIGEST_KEY],
+            admitted_without_empty[RUST_CACHE_EFFECTIVE_ENV_DIGEST_KEY]
+        );
+
+        let mut unclassified = manifest;
+        unclassified.insert("CUSTOM_TOOL".to_string(), "/ambient/tool".to_string());
+        let error = rust_cache_admitted_environment(&unclassified, &replacements).unwrap_err().to_string();
+        assert!(error.contains("unclassified absolute path"));
+        assert!(error.contains("CUSTOM_TOOL"));
+        unclassified.insert("CUSTOM_TOOL".to_string(), "/project/unit-sibling/tool".to_string());
+        let error = rust_cache_admitted_environment(&unclassified, &replacements).unwrap_err().to_string();
         assert!(error.contains("unclassified absolute path"));
         assert!(error.contains("CUSTOM_TOOL"));
     }

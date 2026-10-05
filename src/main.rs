@@ -3281,22 +3281,12 @@ struct RunContext {
     resolved_state_dir: PathBuf,
     store_prefix: String,
     store_backend: crunch_store::StoreBackend,
-    #[cfg(test)]
-    test_profile: Option<crunch_store::StoreBackendCapabilityProfile>,
     verbose: bool,
     json: bool,
     base_state_dirs: Vec<PathBuf>,
 }
 
 impl RunContext {
-    fn backend_profile(&self) -> crunch_store::StoreBackendCapabilityProfile {
-        #[cfg(test)]
-        if let Some(profile) = self.test_profile {
-            return profile;
-        }
-        self.store_backend.profile()
-    }
-
     /// Typed output format for the presentation boundary.
     fn output_format(&self) -> mantle_application_contract::OutputFormat {
         mantle_application_contract::output_format(self.json)
@@ -3541,8 +3531,6 @@ fn build_run_context(args: &Args) -> RunContext {
         resolved_state_dir: state_dir(),
         store_prefix,
         store_backend: args.store_backend,
-        #[cfg(test)]
-        test_profile: None,
         verbose: args.verbose,
         json: args.json,
         base_state_dirs: args.base_stores.clone(),
@@ -9022,7 +9010,6 @@ mod tests {
             resolved_state_dir: state.clone(),
             store_prefix: "/nix/store".to_string(),
             store_backend: crunch_store::StoreBackend::Snix,
-            test_profile: None,
             verbose: false,
             json: false,
             base_state_dirs: Vec::new(),
