@@ -5,7 +5,7 @@ Branch `work/adopt-casita-store-backend-20261004` from selection commit `d6f3ca7
 ## Source observations
 
 - `crates/crunch-store/Cargo.toml:16` already pins Casita to `90404fcb1cfb3d83f2233715448dfefe913f5fd1` with default features disabled and exactly `native`, `experimental`. `Cargo.lock` contains Casita 0.1.0, nine Turso packages from `dca55133caa690f90dcdd58d3c4329fb0703659c` at 0.8.0-pre.7, `astral-tokio-tar` 0.6.4, and exactly one `blake3` at 1.8.2. The existing Nix vendor derivation overrides the pinned checkout with the tracked Casita patch, and `scripts/vendor-deps.py` generates the ignored closure without replacing an existing directory.
-- `bootstrap/rust.ncl:28` fetches Rust 1.94.1. `bootstrap/rust-source-plan.ncl:56` and `bootstrap/rust-source-musl-host-plan.ncl:52` both select **1.94.0** as their final toolchain, below Casita's 1.94.1 `rust-version`. These two profiles must be refreshed and requalified before T1.2 can close. No source-built compiler or self-host proof was run (the owner forbade pueue-dependent long proofs).
+- At the first bounded read, `bootstrap/rust-source-plan.ncl` and `bootstrap/rust-source-musl-host-plan.ncl` still selected **1.94.0** below Casita's 1.94.1 `rust-version`. Both checked-in final profiles have since been refreshed to 1.94.1 (see below); source-built compiler requalification remains unrun.
 
 ## Exercised checks
 
@@ -15,7 +15,33 @@ Branch `work/adopt-casita-store-backend-20261004` from selection commit `d6f3ca7
 4. A bounded read of the two Rust source plans printed `final_version = "1.94.0" compatible: False` for each against the 1.94.1 floor, and the fetched profile included `rust-1.94.1-x86_64-unknown-linux-musl.tar.xz`.
 5. `nix shell --offline nixpkgs#cargo-deny nixpkgs#cargo --command cargo-deny --config deny.toml check` exited 9: `advisories FAILED, bans ok, licenses ok, sources FAILED`. Its six `source-not-allowed` reports name packages from four other git repositories (`onix-artifact`, `bounded-tree`, `durable-file-publication`, `transactional-reconciliation-core`), not Casita/Turso. The advisory output contains RUSTSEC-2024-0370 (`proc-macro-error 0.4.12`, reachable via Casita through `genawaiter`), RUSTSEC-2026-0253 (`lru 0.16.4`, via Snix), RUSTSEC-2026-0285 (`rustls 0.23.37`, including Casita's `object_store`), and yanked `chacha20 0.10.0` and `spin 0.10.0`. No waivers or policy bypass were made. This newer tool/advisory DB result does not replace the 2026-09-30 vendor-rail transcript.
 
-T1.1 manifest/lock were already present; the new admission guard checks the complete Turso git package family and singular lock pins in both Nix and the generator. T1.2 remains open for its clean-source Nix proof and Rust source-profile refresh. T1.3/T4.7 remain open because the audit failed. T1.4 contract text and trust-policy implementation were inspected only; this run does not assert the entire end-to-end backend contract.
+T1.1 manifest/lock and the complete admission delta are recorded below; the new admission guard checks the complete Turso git package family and singular lock pins in both Nix and the generator. T1.2 remains open for its clean-source Nix proof and source compiler requalification. T1.3/T4.7 remain open because the audit failed. T1.4's declared contract was reviewed, but its serial checkbox remains open while T1.2/T1.3 are open; this run does not assert the entire end-to-end backend contract.
+
+## Complete original Casita lock admission inventory
+
+Parsed `da00f584^:Cargo.lock` and `da00f584:Cargo.lock` with `tomllib` and compared `(name, version, source)` package identities and full records. The checked-in `Cargo.lock` has the same records as `da00f584:Cargo.lock`: 889 original and 987 current package records; 99 added identities, one removed identity, and 50 previously present identities with modified dependency lists only. The lock format and other top-level keys did not change. This lists the entire admission commit's lock delta, not an assertion that each registry record is exclusively used by Casita. The exact dependency-list edits and registry checksums remain reviewable with `git diff da00f584^ da00f584 -- Cargo.lock`.
+
+The ten new locked git identities are `casita@0.1.0` from `https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb1cfb3d83f2233715448dfefe913f5fd1`, and `turso@0.8.0-pre.7`, `turso_core@0.8.0-pre.7`, `turso_ext@0.8.0-pre.7`, `turso_macros@0.8.0-pre.7`, `turso_parser@0.8.0-pre.7`, `turso_sdk_kit@0.8.0-pre.7`, `turso_sdk_kit_macros@0.8.0-pre.7`, `turso_sync_engine@0.8.0-pre.7`, `turso_sync_sdk_kit@0.8.0-pre.7`, each from `https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133caa690f90dcdd58d3c4329fb0703659c`. The pinned Casita checkout declares `rust-version = "1.94.1"`, Turso `=0.8.0-pre.7` at that git revision, and optional `astral-tokio-tar = "=0.6.4"`.
+
+The 89 added registry identities (name@version) are:
+
+```text
+aead@0.5.2 aegis@0.9.8 aes@0.8.4 aes-gcm@0.10.3 allocator-api2@0.4.0 antithesis_sdk@0.2.9 archery@1.2.3 aristo@0.4.1 aristo-macros@0.4.1 assoc@0.1.3 astral-tokio-tar@0.6.4 bao-tree@0.16.1 bigdecimal@0.4.11 binary-merge@0.1.2 bindgen@0.69.5 bitvec@1.1.1 branches@0.4.6 bytemuck_derive@1.12.1 cexpr@0.6.0 cfg_block@0.1.1 cipher@0.4.4 clang-sys@1.9.1 const-oid@0.10.2 crc32c@0.6.8 ctr@0.9.2
+env_filter@2.0.0 env_logger@0.11.11 fastbloom@0.14.1 fastcdc@5.0.0 fs4@1.1.0 funty@2.0.0 genawaiter@0.99.1 genawaiter-macro@0.99.1 genawaiter-proc-macro@0.99.1 ghash@0.5.1 home@0.5.12 icu_collator@2.2.1 icu_collator_data@2.2.0 icu_locale@2.2.0 icu_locale_data@2.2.0 imbl@7.0.2 imbl-sized-chunks@0.2.0 inout@0.1.4 inplace-vec-builder@0.1.1 intrusive-collections@0.9.7 io-uring@0.7.15 iroh-io@0.6.2 lazycell@1.3.0 libloading@0.8.9 memoffset@0.9.1 minimal-lexical@0.2.1
+nix-archive@0.6.0 nom@7.1.3 num-bigint@0.4.8 opaque-debug@0.3.1 owo-colors@3.5.0 pack1@1.1.0 pastey@0.2.3 polyval@0.6.2 positioned-io@0.3.5 proc-macro-error@0.4.12 proc-macro-error-attr@0.4.12 proc-macro-hack@0.5.20+deprecated radium@0.7.0 rand_pcg@0.3.1 rand_xoshiro@0.7.0 range-collections@0.4.6 rapidhash@4.5.1 roaring@0.11.4 rustc-hash@1.1.0 rustc_version_runtime@0.3.0 safe_arch@0.7.4 self_cell@1.3.0 sha1_smol@1.0.1 shuttle@0.8.1
+simdutf8@0.1.5 simsimd@6.5.16 softaes@0.1.7 symlink@0.1.0 syn-mid@0.5.4 tap@1.0.1 tracing-appender@0.2.5 uncased@0.9.10 universal-hash@0.5.1 utf16_iter@1.0.5 which@4.4.2 wide@0.7.33 write16@1.0.0 wyz@0.5.1
+```
+
+The only removed identity is `astral-tokio-tar@0.6.3` (registry), replaced by the added `astral-tokio-tar@0.6.4`; `blake3@1.8.2` is unchanged and unique in the current lock. The 50 previously present identities with changed dependency lists (not changed versions or checksums) are:
+
+```text
+bumpalo@3.20.2 bytemuck@1.25.0 colored@3.1.1 cranelift-codegen@0.116.1 crunch-nar@0.1.0 crunch-store@0.1.0 crypto-common@0.1.7 der@0.7.10 digest@0.10.7 digest@0.11.3 errno@0.3.14 fs-set-times@0.20.3 fuse-backend-rs@0.12.0 getrandom@0.4.2 hashbrown@0.15.5 hashbrown@0.16.1 icu_locale_core@2.2.0 icu_normalizer@2.2.0 icu_provider@2.2.0 io-extras@0.19.0 is-terminal@0.4.17 jiff@0.2.23 malachite-nz@0.9.2 miette@7.6.0 nickel-lang-vector@0.2.0
+nix@0.24.3 nix-compat@0.1.0 potential_utf@0.1.5 quinn@0.11.9 quinn-proto@0.11.14 quinn-udp@0.5.14 regalloc2@0.11.2 rsa@0.9.10 rustix@0.38.44 rustix@1.1.4 rustls-platform-verifier@0.6.2 snix-castore@0.1.0 strum@0.26.3 tempfile@3.27.0 tinystr@0.8.3 tokio-stream@0.1.18 tokio-uring@0.4.0 tracy-client-sys@0.28.0 twox-hash@2.1.2 uuid@1.23.0 wide@1.7.0 winapi-util@0.1.11 winx@0.36.4 zerotrie@0.2.4 zerovec@0.11.6
+```
+
+An independent bounded Python assertion parsed the manifest and all three locks (`da00f584^`, `da00f584`, and the checked-in file), verified their complete record equality where expected, checked every listed identity against the calculated sets, verified exact source strings for all ten git additions and unique `astral-tokio-tar@0.6.4` and `blake3@1.8.2`, and printed: `PASS: exact Casita manifest pin; checked-in lock equals admission lock; all 99 additions (10 git, 89 registry), one removal, 50 modified records listed; astral and blake3 unique`. This is bounded lock bookkeeping, not a vendor closure proof.
+
+The bounded `cairn gate tasks adopt-casita-store-backend --root .` check after marking T1.1 returned `verdict: PASS`, `issues: []`, and 9 done / 27 open tasks in advisory mode. It validates task structure, not vendor or implementation claims.
 
 ## Source-built Rust profile follow-up (same branch)
 
@@ -52,7 +78,11 @@ source flake). T1.2 still needs actual compiler requalification and a
 clean-source Crane vendor build under the detached long-job workflow, which
 the user has prohibited.
 
+A targeted search in `bootstrap/`, `src/`, `tests/`, and `scripts/` found no production caller of the old `rust-1.94.0` source or `rust-1.94.0-final` stage IDs: remaining occurrences in `main.rs`, `rust_source_provider.rs`, and `source_toolchain_closure.rs` are inside `#[cfg(test)]` synthetic fixtures, and `rust_bootstrap_patch_plan.rs` retains historical fixture text. The checked-in plans and their new assertions use 1.94.1. No fixture was rewritten merely to erase historical input.
+
 ## Contract and destination-trust boundary review
+
+For T1.4 specifically, `design.md:135-164` names the repository subdirectory, both root namespaces, both exact envelopes, payload-name digest, capability profile, and trust policy/set; `design.md:360-422` declares admission/read verification order and the fence/recovery record; `design.md:460-500` declares every blocker in the task catalog (and `casita-repair-final-nar-unsupported`). This is a complete *declared contract*, not a passing end-to-end adapter check. T1.4 stays open in the serial sequence behind the unproved T1.2 and failed T1.3 gates.
 
 The proposed T1.4 layout and blockers are declared in the active design
 (`design.md:124-172,461-501`) and ADR 0082. Source review found

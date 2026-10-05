@@ -61,11 +61,13 @@ This run belongs to the Cairn change `adopt-casita-store-backend`. Its results c
 Admitted sources and lock updates:
 
 - `casita` 0.1.0 from `https://github.com/cachix/casita` at revision `90404fcb1cfb3d83f2233715448dfefe913f5fd1`, with default features disabled and exactly `native` and `experimental`
-- `turso` 0.8.0-pre.7, a `casita` dependency, from `https://github.com/cachix/turso.git` at revision `dca55133caa690f90dcdd58d3c4329fb0703659c`
-- `deny.toml` admits both repositories individually; the `casitaSourceAdmitted` assertion in `flake.nix` checks the Casita revision, features, lock source, and `Apache-2.0` license, and `scripts/vendor-deps.py` checks the Casita manifest pin and the locked `casita`, `turso`, and `astral-tokio-tar` entries
+- `turso`, `turso_core`, `turso_ext`, `turso_macros`, `turso_parser`, `turso_sdk_kit`, `turso_sdk_kit_macros`, `turso_sync_engine`, and `turso_sync_sdk_kit`, each locked at 0.8.0-pre.7 from `https://github.com/cachix/turso.git` revision `dca55133caa690f90dcdd58d3c4329fb0703659c` via `casita`
+- `deny.toml` admits both repositories individually; the `casitaSourceAdmitted` assertion in `flake.nix` checks the Casita revision, features, lock source, and `Apache-2.0` license, and `scripts/vendor-deps.py` checks the Casita manifest pin and all nine locked Turso identities plus the `casita`, `astral-tokio-tar`, and `blake3` entries
 - `blake3` stays at `1.8.2`; `astral-tokio-tar` moves from `0.6.3` to `0.6.4`
 - `patches/casita-blake3-finalize.patch` changes one hunk in `crates/casita/src/nar.rs` for this revision only: method resolution in Mantle's graph selects `sha2::Digest::finalize` there, so the patch calls the BLAKE3 method explicitly; the Nix vendor closure and `scripts/vendor-deps.py` both apply it
 - [ADR 0082](../adr/0082-select-store-backends-explicitly-and-admit-casita.md) lists the experimental Casita API that Mantle uses; a new Casita revision or feature set needs its own reviewed change that updates ADR 0082 and this record and reruns the checks below
+
+The [complete admission lock inventory](../.cairn/changes/adopt-casita-store-backend/evidence/dependency-admission-2026-10-04.md#complete-original-casita-lock-admission-inventory) compares the pre-admission lock to the unchanged current lock: ten git and 89 registry identities added (including `astral-tokio-tar 0.6.4`), `astral-tokio-tar 0.6.3` removed, and dependency lists modified on 50 previously present identities. It records every new locked git identity and every changed lock-record identity; none is a passing clean-source closure or audit claim.
 
 Commands:
 

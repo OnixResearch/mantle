@@ -3,12 +3,14 @@
 T3.4 is checked from Run 14, T2.15 from Runs 26 and 29, T3.3 from Run 36, T2.13
 from Run 38, T2.5 from Run 47, Runs 44 to 46, and the recorder's code review,
 T3.6 from Runs 48 and 49, T3.5 from Run 51, and T2.10 from Runs 44 to 47, 55,
-and 56, in `evidence/test-runs-2026-09-30.md`. Every other task remains open.
+and 56, in `evidence/test-runs-2026-09-30.md`. T1.1 is checked from the
+manifest/lock comparison and complete lock inventory in
+`evidence/dependency-admission-2026-10-04.md`. Every other task remains open.
 Creating this proposal is not implementation evidence.
 
 ## Phase 1: Pin, vendor closure, and contract
 
-- [ ] [serial] T1.1 Pin revision `90404fcb1cfb3d83f2233715448dfefe913f5fd1` in `Cargo.toml` with default features disabled and exactly `native` and `experimental`, update `Cargo.lock`, and record every locked git dependency and lock update it requires, including `turso` and `astral-tokio-tar =0.6.4`. r[mantle.casita_store_backend.pinned_dependency]
+- [x] [serial] T1.1 Pin revision `90404fcb1cfb3d83f2233715448dfefe913f5fd1` in `Cargo.toml` with default features disabled and exactly `native` and `experimental`, update `Cargo.lock`, and record every locked git dependency and lock update it requires, including `turso` and `astral-tokio-tar =0.6.4`. r[mantle.casita_store_backend.pinned_dependency]
 - [ ] [serial] T1.2 Prove from a clean checkout that the flake's Crane `vendorCargoDeps` closure vendors the exact locked Casita sources, add the Nix admission assertion for the revision and feature set, and add the repository-owned, no-clobber generation and check path for the ignored `vendor-deps/` closure. Confirm that every toolchain that builds Mantle, including self-build source-bundle profiles, meets Casita's `rust-version`, and refresh any profile whose vendored closure changes. Never hand-edit vendored files. r[mantle.casita_store_backend.pinned_dependency]
 - [ ] [serial] T1.3 Admit exactly the pinned Casita and `turso` git sources in `deny.toml`, run `cargo deny check`, confirm `blake3` still resolves to `=1.8.2`, and record the pin, the experimental APIs used, license review, advisories, and bump policy in ADR 0082, `adr/README.md`, and `docs/dependency-audit.md`. r[mantle.casita_store_backend.pinned_dependency]
 - [ ] [serial] T1.4 Define the repository subdirectory `<state-dir>/casita`, the `mantle/outputs/` and `mantle/castore/` root namespaces, the output envelope (`content`, `pathinfo.json` holding the deterministic serde JSON encoding of the signed PathInfo) and payload envelope (`content`, `node.postcard`), the payload root name (64-hex BLAKE3 of the postcard-encoded castore node), the verification order, the fence record, the Casita capability profile, the trust policy file and trust set, and the blocker catalog (`casita-nar-mismatch`, `casita-envelope-invalid`, `casita-signer-untrusted`, `casita-trust-policy-missing`, `casita-trust-policy-invalid`, `casita-import-key-unauthorized`, `casita-trust-unsigned-unsupported`, `casita-batch-limit`, `casita-root-conflict`, `casita-root-missing`, `casita-overlay-unsupported`, `casita-rust-cache-unsupported`, `casita-gc-guard-required`, `gc-recovery-required`, `gc-plan-stale`). r[mantle.casita_store_backend.output_admission] r[mantle.casita_store_backend.plan_bound_gc] r[mantle.casita_store_backend.trust_policy]
