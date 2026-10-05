@@ -13,7 +13,18 @@ Branch `work/adopt-casita-store-backend-20261004` from selection commit `d6f3ca7
 2. A scratch `vendor-deps/` with a `user-data` file made `scripts/vendor-deps.py generate` fail before Cargo ran: `vendor-deps exists; refusing to clobber user data (run check, or move it aside yourself)`. The file remained byte-identical (`preserve`). The real clone has no `vendor-deps/`; no generator run or offline Cargo resolution is claimed.
 3. `nix eval --offline --no-write-lock-file --raw .#checks.x86_64-linux.casita-vendor-closure.drvPath` exited 0 and printed `/nix/store/jd10wgpk79p74drd2nhpzbylkvsf1jbs-vendor-cargo-deps.drv`. This evaluates the derivation, **not** the clean-source build or a compile. Neither the Nix closure nor the patched default dev shell was built in this run.
 4. A bounded read of the two Rust source plans printed `final_version = "1.94.0" compatible: False` for each against the 1.94.1 floor, and the fetched profile included `rust-1.94.1-x86_64-unknown-linux-musl.tar.xz`.
-5. `nix shell --offline nixpkgs#cargo-deny nixpkgs#cargo --command cargo-deny --config deny.toml check` exited 9: `advisories FAILED, bans ok, licenses ok, sources FAILED`. Its six `source-not-allowed` reports name packages from four other git repositories (`onix-artifact`, `bounded-tree`, `durable-file-publication`, `transactional-reconciliation-core`), not Casita/Turso. The advisory output contains RUSTSEC-2024-0370 (`proc-macro-error 0.4.12`, reachable via Casita through `genawaiter`), RUSTSEC-2026-0253 (`lru 0.16.4`, via Snix), RUSTSEC-2026-0285 (`rustls 0.23.37`, including Casita's `object_store`), and yanked `chacha20 0.10.0` and `spin 0.10.0`. No waivers or policy bypass were made. This newer tool/advisory DB result does not replace the 2026-09-30 vendor-rail transcript.
+5. Before the four source admissions,
+   `nix shell --offline nixpkgs#cargo-deny nixpkgs#cargo --command cargo-deny --config deny.toml check`
+   exited 9: `advisories FAILED, bans ok, licenses ok, sources FAILED`. Its six
+   `source-not-allowed` reports name packages from four other git repositories
+   (`onix-artifact`, `bounded-tree`, `durable-file-publication`,
+   `transactional-reconciliation-core`), not Casita/Turso. The advisory
+   output contains RUSTSEC-2024-0370 (`proc-macro-error 0.4.12`, reached via
+   Casita through `genawaiter`), RUSTSEC-2026-0253 (`lru 0.16.4`, via Snix),
+   RUSTSEC-2026-0285 (`rustls 0.23.37`, including Casita's `object_store`),
+   and yanked `chacha20 0.10.0` and `spin 0.10.0`. No waivers or policy bypass
+   were made. This tool/advisory DB result does not replace the 2026-09-30
+   vendor-rail transcript or establish post-change categories.
 
 T1.1 manifest/lock and the complete admission delta are recorded below; the new admission guard checks the complete Turso git package family and singular lock pins in both Nix and the generator. T1.2 remains open for its clean-source Nix proof and source compiler requalification. T1.3/T4.7 remain open because the audit failed. T1.4's declared contract was reviewed, but its serial checkbox remains open while T1.2/T1.3 are open; this run does not assert the entire end-to-end backend contract.
 
@@ -122,8 +133,57 @@ test execution, or current-source binary build is claimed.
 
 ## No-waiver source-policy and advisory follow-up
 
-`deny.toml` now adds only four previously unadmitted Git origin URLs: `ssh://git@github.com/OnixResearch/onix-artifact.git` at `c932138d880ddf4c2967f4c024b489b5c0022bf1` (two artifact-auth packages), `https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git` at `b0fd0103bc9eed2c1b6d852045959462d105d8f1` (two bounded-tree packages), `https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git` at `951c27f59003cea9bfdb40ed4d89653d50fada1f` (durable-file-publication), and `https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git` at `606489b5f40298181214bb76bc3457b607f225d9` (transactional-reconciliation-core). Each has a separate exact-revision `flake.nix` source-input/Cargo manifest/lock-source assertion (`flake.nix:162-300`), so `allow-git` does not serve as a floating-revision authorization. A bounded Python positive/negative fixture parsed each manifest and all six relevant lock entries, compared exact `?rev=...#...` strings and the independent Nix guard strings, and rejected an alien policy URL and changed revision in memory. Output ended `PASS all four reviewed Git source policy fixtures`. This is static policy/pin admission, not a run of Cargo Deny or Nix build.
+`deny.toml` now adds only four previously unadmitted Git origin URLs:
 
-The requested post-change `nix shell --offline nixpkgs#cargo-deny nixpkgs#cargo --command cargo-deny --config deny.toml check` attempted to build uncached `/nix/store/dp031zrwj47zprpjf99v6csvg5c01drn-source.drv`, `/nix/store/mfkbl31bv2vg9iip181hzj60jlm597rs-cargo-deny-0.20.2-vendor-staging.drv`, `/nix/store/cj722h87z9w2irp1s5z67mw3vk6x2zyx-cargo-deny-0.20.2-vendor.drv`, and `/nix/store/5p3ka6524czcrsvpmfh1qaa80m83ph4k-cargo-deny-0.20.2.drv`; Nix reported `failed to start SSH connection to 'aspen1.local'`. It was canceled immediately per the no-long-build instruction; no audit binary ran and **there is no post-change exit code or measured advisory/source category result**. The last completed pre-change Cargo Deny result remains exit 9 with advisories/sources failed and bans/licenses okay. Four exact source admissions are expected to remove those six old source-policy findings, but that is unverified.
+- `ssh://git@github.com/OnixResearch/onix-artifact.git` at
+  `c932138d880ddf4c2967f4c024b489b5c0022bf1` (two artifact-auth packages).
+- `https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git` at
+  `b0fd0103bc9eed2c1b6d852045959462d105d8f1` (two bounded-tree packages).
+- `https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git` at
+  `951c27f59003cea9bfdb40ed4d89653d50fada1f` (durable-file-publication).
+- `https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git` at
+  `606489b5f40298181214bb76bc3457b607f225d9`
+  (transactional-reconciliation-core).
 
-The locked dependency path `casita@90404fcb -> bao-tree@0.16.1 -> genawaiter@0.99.1 -> genawaiter-proc-macro@0.99.1 -> proc-macro-error@0.4.12` is explicit in `Cargo.lock:944-980,570-585,3043-3072,6708-6719`; the cached `genawaiter-proc-macro` manifest requires `proc-macro-error = "0.4"` and the local RUSTSEC-2024-0370 advisory marks it unmaintained with `patched = []`. Keeping the exact mandated Casita revision, rejecting waivers/forks/vendor edits, and requiring current-source proof for a dependency graph update leave no proven no-waiver fix. An approved reviewed upstream pin/dependency replacement plus compiler validation, or a policy exception, would be required to close that advisory; none was chosen here. T1.2/T1.3/T4.7 remain open and no lock entry, Casita revision, or waiver changed.
+Each has a separate exact-revision `flake.nix` source-input/Cargo
+manifest/lock-source assertion (`flake.nix:162-300`), so `allow-git` does not
+serve as a floating-revision authorization. A bounded Python positive/negative
+fixture parsed each manifest and all six relevant lock entries, compared exact
+`?rev=...#...` strings and the independent Nix guard strings, and rejected an
+alien policy URL and changed revision in memory. Output ended
+`PASS all four reviewed Git source policy fixtures`. This is static policy/pin
+admission, not a run of Cargo Deny or Nix build.
+
+The requested post-change
+`nix shell --offline nixpkgs#cargo-deny nixpkgs#cargo --command cargo-deny --config deny.toml check`
+scheduled four uncached derivations:
+
+- `/nix/store/dp031zrwj47zprpjf99v6csvg5c01drn-source.drv`
+- `/nix/store/mfkbl31bv2vg9iip181hzj60jlm597rs-cargo-deny-0.20.2-vendor-staging.drv`
+- `/nix/store/cj722h87z9w2irp1s5z67mw3vk6x2zyx-cargo-deny-0.20.2-vendor.drv`
+- `/nix/store/5p3ka6524czcrsvpmfh1qaa80m83ph4k-cargo-deny-0.20.2.drv`
+
+Nix reported `failed to start SSH connection to 'aspen1.local'`. The job
+was canceled immediately per the no-long-build instruction; no audit binary
+ran and **there is no post-change exit code or measured advisory/source
+category result**. The last completed pre-change Cargo Deny result remains
+exit 9 with advisories/sources failed and bans/licenses okay. Four exact
+source admissions are expected to remove those six old source-policy
+findings, but that is unverified.
+
+The locked dependency path is:
+
+```text
+casita@90404fcb -> bao-tree@0.16.1 -> genawaiter@0.99.1
+  -> genawaiter-proc-macro@0.99.1 -> proc-macro-error@0.4.12
+```
+
+It is explicit in `Cargo.lock:944-980,570-585,3043-3072,6708-6719`; the
+cached `genawaiter-proc-macro` manifest requires `proc-macro-error = "0.4"`
+and the local RUSTSEC-2024-0370 advisory marks it unmaintained with
+`patched = []`. Keeping the exact mandated Casita revision, rejecting
+waivers/forks/vendor edits, and requiring current-source proof for a
+dependency graph update leave no proven no-waiver fix. An approved reviewed
+upstream pin/dependency replacement plus compiler validation, or a policy
+exception, would be required to close that advisory; none was chosen here.
+T1.2/T1.3/T4.7 remain open and no lock entry, Casita revision, or waiver changed.

@@ -96,7 +96,23 @@ Results:
 | RUSTSEC-2023-0071 (vulnerability) | `rsa 0.9.10` | in the HEAD lock; not reached from `casita` | open; no waiver |
 | source policy | four git sources without `allow-git` at the 2026-09-30 run | not from `casita`; independently pinned in manifests, lock, and Nix assertions | exact URLs added to `allow-git` on 2026-10-04; post-change `cargo-deny` execution still unavailable |
 
-The four now allowlisted sources are `ssh://git@github.com/OnixResearch/onix-artifact.git` (`artifact-auth-core` and `artifact-auth-ed25519`, revision `c932138d880ddf4c2967f4c024b489b5c0022bf1`), `https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git` (`bounded-tree-cap` and `bounded-tree-core`, `b0fd0103bc9eed2c1b6d852045959462d105d8f1`), `https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git` (`durable-file-publication`, `951c27f59003cea9bfdb40ed4d89653d50fada1f`), and `https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git` (`transactional-reconciliation-core`, `606489b5f40298181214bb76bc3457b607f225d9`). Each origin has an independent exact-revision manifest/lock/input assertion in `flake.nix`; `deny.toml` lists each URL individually with `unknown-git = "deny"` and no wildcard.
+The four now allowlisted sources are:
+
+- `ssh://git@github.com/OnixResearch/onix-artifact.git`
+  (`artifact-auth-core` and `artifact-auth-ed25519`, revision
+  `c932138d880ddf4c2967f4c024b489b5c0022bf1`)
+- `https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git`
+  (`bounded-tree-cap` and `bounded-tree-core`,
+  `b0fd0103bc9eed2c1b6d852045959462d105d8f1`)
+- `https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git`
+  (`durable-file-publication`, `951c27f59003cea9bfdb40ed4d89653d50fada1f`)
+- `https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git`
+  (`transactional-reconciliation-core`,
+  `606489b5f40298181214bb76bc3457b607f225d9`)
+
+Each origin has an independent exact-revision manifest/lock/input assertion in
+`flake.nix`; `deny.toml` lists each URL individually with
+`unknown-git = "deny"` and no wildcard.
 
 The dependency gate stays open. This change adds no waiver. This record does not claim a clean `cargo-deny` result, Casita correctness, experimental API stability, or release eligibility.
 
@@ -127,9 +143,38 @@ unmaintained finding and existing vulnerable `rustls 0.23.37`; it also reports
 `lru 0.16.4` (RUSTSEC-2026-0253, through Snix) and yanked `chacha20 0.10.0`
 and `spin 0.10.0`. No waiver or unrelated dependency update was added.
 
-2026-10-04 no-waiver policy follow-up: a bounded positive/negative fixture parsed the four manifest pin sets, all six corresponding lock package identities and their full `?rev=...#...` sources, the separate `flake.nix` revision/source assertions, and `deny.toml`. All four pinned sets matched; an alien repository URL was outside the policy, and a scratch changed revision did not match any expected lock source. This is a static guard check, **not** a `cargo-deny` pass or proof of Nix build evaluation. A post-change attempt to run `nix shell --offline nixpkgs#cargo-deny nixpkgs#cargo --command cargo-deny --config deny.toml check` scheduled four uncached `cargo-deny 0.20.2` source/vendor/binary derivations and reported `failed to start SSH connection to 'aspen1.local'`; it was canceled immediately under the no-long-build instruction. There is **no post-change `cargo-deny` exit code or category result**. The last completed check remains the pre-admission exit 9 above.
+2026-10-04 no-waiver policy follow-up: a bounded positive/negative fixture
+parsed the four manifest pin sets, all six corresponding lock package
+identities and their full `?rev=...#...` sources, the separate `flake.nix`
+revision/source assertions, and `deny.toml`. All four pinned sets matched;
+an alien repository URL was outside the policy, and a scratch changed
+revision did not match any expected lock source. This is a static guard
+check, **not** a `cargo-deny` pass or proof of Nix build evaluation.
+A post-change attempt to run
+`nix shell --offline nixpkgs#cargo-deny nixpkgs#cargo --command cargo-deny --config deny.toml check`
+scheduled four uncached `cargo-deny 0.20.2` source/vendor/binary derivations
+and reported `failed to start SSH connection to 'aspen1.local'`; it was
+canceled immediately under the no-long-build instruction. There is
+**no post-change `cargo-deny` exit code or category result**. The last
+completed check remains the pre-admission exit 9 above.
 
-The exact Casita revision `90404fcb1cfb3d83f2233715448dfefe913f5fd1` locks `casita -> bao-tree 0.16.1 -> genawaiter 0.99.1 -> genawaiter-proc-macro 0.99.1 -> proc-macro-error 0.4.12`. The proc-macro manifest requests `proc-macro-error ^0.4`; the local RUSTSEC-2024-0370 advisory calls it unmaintained and lists `patched = []`. Consequently a patch-level lock bump cannot clear this finding. Under the required exact Casita pin, no new waiver, no fork/vendor edit, and no uncompiled dependency graph changes, there is no proven remediation for this advisory; a reviewed upstream/pin or dependency replacement with build proof, or explicit policy exception, requires an owner decision. T1.3/T4.7 stay unchecked, as do the independent pre-existing advisory and yank findings.
+The exact Casita revision `90404fcb1cfb3d83f2233715448dfefe913f5fd1`
+locks the following path:
+
+```text
+casita -> bao-tree 0.16.1 -> genawaiter 0.99.1
+  -> genawaiter-proc-macro 0.99.1 -> proc-macro-error 0.4.12
+```
+
+The proc-macro
+manifest requests `proc-macro-error ^0.4`; the local RUSTSEC-2024-0370
+advisory calls it unmaintained and lists `patched = []`. Consequently a
+patch-level lock bump cannot clear this finding. Under the required exact
+Casita pin, no new waiver, no fork/vendor edit, and no uncompiled dependency
+graph changes, there is no proven remediation for this advisory; a reviewed
+upstream/pin or dependency replacement with build proof, or explicit policy
+exception, requires an owner decision. T1.3/T4.7 stay unchecked, as do the
+independent pre-existing advisory and yank findings.
 
 ## Remaining waiver inventory
 
