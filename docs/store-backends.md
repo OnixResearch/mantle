@@ -205,12 +205,34 @@ The import keeps the original signatures, adds none, and registers no root, so p
 
 Mantle depends on `casita` 0.1.0 from `https://github.com/cachix/casita` at revision `90404fcb1cfb3d83f2233715448dfefe913f5fd1`, with default features off and only `native` and `experimental` enabled.
 Casita has no release, and upstream says that its `experimental` API may change between revisions.
-The pinned revision does not compile unmodified in Mantle's dependency graph, so the Nix vendor closure and `scripts/vendor-deps.py` both apply the one-line `patches/casita-blake3-finalize.patch`.
+The pinned revision does not compile unmodified in Mantle's dependency graph.
+The tracked one-line `patches/casita-blake3-finalize.patch` is applied to the
+Nix Crane `overrideVendorGitCheckout` source and to the ignored checkout-local
+`vendor-deps/` closure. Nix admission checks the upstream revision, feature
+set, `rust-version = 1.94.1`, original `nar.rs` digest, and patch digest before
+vendoring. The generator checks these inputs and the patched file digest, then
+updates Cargo's per-file vendor checksum. Do not edit a vendor snapshot or use
+a fork.
 
-Run `python3 scripts/vendor-deps.py generate` or `python3 scripts/vendor-deps.py check` from `nix develop` to create or check the checkout-local `vendor-deps/` closure.
-Both commands check the Casita and `turso` pins first.
-`generate` never replaces an existing `vendor-deps/`.
-`check` compares a fresh generation file by file and resolves locked offline Cargo metadata.
+From `nix develop`, run `python3 scripts/vendor-deps.py generate` to create
+the ignored checkout-local closure, or `python3 scripts/vendor-deps.py check`
+to compare a fresh generation file by file and resolve locked offline Cargo
+metadata. `generate` refuses to replace an existing directory. Run
+`python3 scripts/vendor-deps.py dev-shell-check` to verify that plain Cargo
+metadata (without `--config`) resolves the pinned, patched Casita from Crane's
+immutable default dev-shell source replacement rather than an unpatched git
+checkout. Compile with `cargo check -p crunch-store` without `--config`;
+`cargo check -p crunch-store --config .cargo/vendor-config.toml` explicitly
+selects the checkout-local closure.
+`nix build .#checks.x86_64-linux.casita-vendor-closure`
+builds the clean-source Crane vendor closure, while
+`nix build .#checks.x86_64-linux.casita-crunch-store-check` also runs
+`cargo check --locked -p crunch-store` using that closure. These are separate
+compile and source-admission checks, not substitutes for one another.
+Both self-build Rust source-bundle plans select a final 1.94.1 compiler.
+Their plan values alone do not establish that the source-built compiler exists
+or that any of these three Cargo checks passed.
+
 The [dependency audit](dependency-audit.md#casita-admission-run-2026-09-30) records the check results and the open `cargo-deny` findings.
 
 ## Validation

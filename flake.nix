@@ -141,7 +141,14 @@
           else
             null;
 
-        rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+        rustToolchain =
+          let
+            selected = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+          in
+          assert pkgs.lib.assertMsg (
+            builtins.compareVersions selected.version "1.94.1" >= 0
+          ) "Mantle's Rust toolchain must meet Casita's rust-version 1.94.1";
+          selected;
         componentRustVersion = "1.90.0";
         componentRustToolchain = pkgs.rust-bin.stable.${componentRustVersion}.default.override {
           targets = [ "wasm32-wasip2" ];
@@ -308,6 +315,8 @@
         firstPartyCargoScope = pkgs.lib.concatStringsSep " " cargoManifest.workspace.metadata.tigerstyle.default_scope;
         casitaRevision = "90404fcb1cfb3d83f2233715448dfefe913f5fd1";
         tursoRevision = "dca55133caa690f90dcdd58d3c4329fb0703659c";
+        casitaNarUpstreamSha256 = "bed3012bed878a81b19348a2b927b95ea7e736b6888229d41a6342918a813e09";
+        casitaPatchSha256 = "c0def0527dcc56beafa8d3f89c418a071b1d93df418245ebcd6a69aeb580840a";
         tursoPackageNames = [
           "turso"
           "turso_core"
@@ -360,6 +369,12 @@
             && (builtins.head blake3Locked).version == "1.8.2"
             && (builtins.fromTOML (builtins.readFile (casitaSource + "/crates/casita/Cargo.toml"))).package.license
               == "Apache-2.0"
+            && (builtins.fromTOML (builtins.readFile (casitaSource + "/crates/casita/Cargo.toml"))).package.rust-version
+              == "1.94.1"
+            && builtins.hashFile "sha256" (casitaSource + "/crates/casita/src/nar.rs")
+              == casitaNarUpstreamSha256
+            && builtins.hashFile "sha256" ./patches/casita-blake3-finalize.patch
+              == casitaPatchSha256
           ) "Mantle Casita source, Cargo lock, Nix pin, or license drifted";
           true;
         # Exact-revision upstream compile fix, kept as an auditable tracked patch.
@@ -453,7 +468,9 @@
           filter = path: type: sourceFilter path type && !isContentBoundRequirementFixture (toString path);
         };
 
-        cargoVendorDir = craneLib.vendorCargoDeps {
+        cargoVendorDir =
+          assert casitaSourceAdmitted;
+          craneLib.vendorCargoDeps {
           inherit src;
           cargoLock = ./Cargo.lock;
           overrideVendorGitCheckout =
@@ -928,6 +945,18 @@
           inherit cargoVendorDir;
         };
 
+        # Compile the adapter with the same pinned, patched Crane closure as
+        # the package build; vendor construction alone does not check Rust code.
+        casitaCrunchStoreCheck = craneLib.mkCargoDerivation {
+          pname = "mantle-casita-crunch-store-check";
+          version = "0.1.0";
+          inherit src cargoVendorDir cargoArtifacts nativeBuildInputs buildInputs;
+          buildPhaseCargoCommand = "cargoWithProfile check --locked -p crunch-store";
+          doCheck = false;
+          doInstallCargoArtifacts = false;
+          SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
+        };
+
         # Build the actual package
         crunch = craneLib.buildPackage {
           inherit
@@ -1369,6 +1398,7 @@
 
         checks = {
           inherit crunch;
+          casita-crunch-store-check = casitaCrunchStoreCheck;
           # Builds exactly the locked, clean-source Crane dependency closure.
           casita-vendor-closure = cargoVendorDir;
           bounded-tree-source-admission =
