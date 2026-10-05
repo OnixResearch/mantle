@@ -1319,6 +1319,73 @@ fn casita_explicit_trust_policy_revokes_local_signer_across_fresh_processes() {
 }
 
 #[test]
+fn casita_external_config_signer_requires_destination_policy_for_build_and_read() {
+    let root = tempfile::tempdir().unwrap();
+    let fixture = write_cli_fetch_fixture(root.path());
+    let state = root.path().join("state");
+    let store = root.path().join("store");
+    let config = root.path().join("external-config");
+    std::fs::create_dir(&state).unwrap();
+    std::fs::create_dir(&store).unwrap();
+    std::fs::create_dir(&config).unwrap();
+    let signing_key = config.join("signing-key");
+    let key_bytes = format!("{CLI_TEST_KEYPAIR}\n");
+    std::fs::write(&signing_key, &key_bytes).unwrap();
+    let public_key = test_keypair().verifying_key.to_string();
+    let policy = state.join("casita-trusted-public-keys");
+    let run = |args: &[&str]| {
+        assert_cmd::Command::cargo_bin("mantle")
+            .unwrap()
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .env("CRUNCH_CONFIG_DIR", &config)
+            .arg("--store-backend")
+            .arg("casita")
+            .arg("--state-dir")
+            .arg(&state)
+            .arg("--store")
+            .arg(&store)
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let build_args = ["--json", "build", "--no-substitute", fixture.to_str().unwrap()];
+    let unlisted = run(&build_args);
+    assert!(!unlisted.status.success(), "external signer was trusted without destination policy");
+    let report: serde_json::Value = serde_json::from_slice(&unlisted.stdout).unwrap();
+    assert!(
+        report["failed"][0]["message"].as_str().unwrap_or_default().contains("casita-signer-untrusted"),
+        "{report}"
+    );
+    assert!(!state.join("signing-key").exists());
+    assert!(!policy.exists());
+    let listing = run(&["--json", "store", "list"]);
+    assert!(listing.status.success(), "{}", String::from_utf8_lossy(&listing.stderr));
+    let listed: serde_json::Value = serde_json::from_slice(&listing.stdout).unwrap();
+    assert!(listed["paths"].as_array().unwrap().is_empty());
+
+    let policy_bytes = format!("{public_key}\n");
+    std::fs::write(&policy, &policy_bytes).unwrap();
+    let admitted = run(&build_args);
+    assert!(admitted.status.success(), "{}", String::from_utf8_lossy(&admitted.stderr));
+    let report: serde_json::Value = serde_json::from_slice(&admitted.stdout).unwrap();
+    assert_eq!(report["counts"]["built_total"], 1);
+    let output = PathBuf::from(report["outcomes"][0]["outputs"][0]["path"].as_str().unwrap());
+    assert_eq!(std::fs::read(&output).unwrap(), CLI_FETCH_PAYLOAD);
+    let selector = output.file_name().unwrap().to_str().unwrap();
+    let verified = run(&["--json", "store", "info", selector]);
+    assert!(verified.status.success(), "{}", String::from_utf8_lossy(&verified.stderr));
+    assert_eq!(std::fs::read(&policy).unwrap(), policy_bytes.as_bytes());
+
+    std::fs::remove_file(&policy).unwrap();
+    let revoked = run(&["--json", "store", "info", selector]);
+    assert!(!revoked.status.success());
+    assert!(String::from_utf8_lossy(&revoked.stderr).contains("casita-signer-untrusted"));
+    assert_eq!(std::fs::read(&signing_key).unwrap(), key_bytes.as_bytes());
+    assert!(!state.join("signing-key").exists());
+    assert_eq!(std::fs::read(&output).unwrap(), CLI_FETCH_PAYLOAD);
+}
+
+#[test]
 fn fetch_tarball_unpacks_and_strips_prefix() {
     let output_dir = tempfile::tempdir().unwrap();
     let output_dir_str = output_dir.path().to_str().unwrap();

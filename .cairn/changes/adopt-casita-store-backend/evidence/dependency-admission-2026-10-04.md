@@ -51,3 +51,35 @@ and unavailable configured remote builder (separately observed on the same
 source flake). T1.2 still needs actual compiler requalification and a
 clean-source Crane vendor build under the detached long-job workflow, which
 the user has prohibited.
+
+## Contract and destination-trust boundary review
+
+The proposed T1.4 layout and blockers are declared in the active design
+(`design.md:124-172,461-501`) and ADR 0082. Source review found
+`CasitaStore::open` validates `casita-trusted-public-keys` before opening the
+repository at `<state-dir>/casita`, uses in-memory Snix blobs and temporary
+directories, and `verify_signer` rereads the destination policy for each
+PathInfo verification; `backend.rs` excludes repair, overlay composition,
+unsigned admission, and Rust unit cache in the Casita profile while keeping
+PathInfo-backed action-result outputs core. CLI and library selection both
+reject overlays; the CLI denies unsigned flags before state access. In Casita
+mode `bootstrap --fetch` loads the same durable default signer as `mantle build`
+after backend identity preflight, while Snix keeps its per-run signer. This
+review does not establish all T2.1–T2.3 runtime scenarios, so their task
+checkboxes remain open. The castore-only Rust cache remains intentionally
+unsupported until the separate parity gate is satisfied.
+
+A bounded **existing prebuilt binary** CLI smoke (the binary was not built
+from the current commit) used a fresh Casita state directory, a key in an
+explicit external `CRUNCH_CONFIG_DIR`, and a `file://` fixed-output source.
+With no destination policy, `--json build --no-substitute` exited 1 with
+`casita-signer-untrusted`, left no state-dir `signing-key`, and created no
+policy. After provisioning that public key into the destination policy, a
+second build exited 0 with `built_total=1`, and a fresh `store info` succeeded.
+After removing the policy, a fresh `store info` exited 3 with
+`casita-signer-untrusted`; the external key remained byte-identical. This is
+one production-binary behavioral probe for the trust boundary, not a run of
+the newly added `tests/integration_build.rs` fixture nor proof that the current
+source compiles. The fixture additionally checks the empty root listing after
+rejection and unchanged physical content after revocation. The test is still
+uncompiled because the checked-in nightly shell is unavailable as above.
