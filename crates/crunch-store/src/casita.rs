@@ -1053,6 +1053,19 @@ mod tests {
             if let Ok(expected) = std::env::var("MANTLE_CASITA_CHILD_EXPECT_ERROR") {
                 let error = store.pathinfo_service().get(*store_path.digest()).await.unwrap_err();
                 assert!(error.to_string().contains(&expected), "{error}");
+                if std::env::var_os("MANTLE_CASITA_CHILD_TRUST_READS").is_some() {
+                    let repository = LocalRepository::local(state.join("casita")).await.unwrap();
+                    let name = CasitaStore::root_name(&store_path).unwrap();
+                    let target = repository.metadata().snapshot().await.unwrap().root(&name).await.unwrap();
+                    let error = crate::query::store_verify(store.pathinfo_service().as_ref(), None, &output)
+                        .await
+                        .unwrap_err();
+                    assert!(error.to_string().contains(&expected), "{error}");
+                    let guard = StoreMutationGuard::try_acquire(&state).unwrap();
+                    let error = store.garbage_collect_under_guard(&guard, None).await.unwrap_err();
+                    assert!(error.to_string().contains(&expected), "{error}");
+                    assert_eq!(repository.metadata().snapshot().await.unwrap().root(&name).await.unwrap(), target);
+                }
                 println!("casita-child-rejected");
                 return;
             }
@@ -1065,8 +1078,13 @@ mod tests {
             let info = store.pathinfo_service().get(*store_path.digest()).await.unwrap().unwrap();
             if std::env::var_os("MANTLE_CASITA_CHILD_NO_CASTORE").is_some() {
                 let repository = LocalRepository::local(state.join("casita")).await.unwrap();
-                let name = CasitaStore::castore_root_name(&info.node).unwrap();
-                assert!(repository.metadata().snapshot().await.unwrap().root(&name).await.unwrap().is_none());
+                let prefix = RootName::try_from("mantle/castore").unwrap();
+                let snapshot = repository.metadata().snapshot().await.unwrap();
+                let mut roots = snapshot.roots_under(&prefix);
+                assert!(
+                    roots.try_next().await.unwrap().is_none(),
+                    "PathInfo-only action result unexpectedly published a mantle/castore root"
+                );
             }
             assert_eq!(info.store_path, store_path);
             if let Ok(signer) = std::env::var("MANTLE_CASITA_CHILD_SIGNED") {
@@ -1113,6 +1131,18 @@ mod tests {
         let other = StoreHandle::open(config()).await.unwrap();
         let one = fixture(&store, root.path(), "one", b"casita durable content", &signing_key).await;
         store.pathinfo_service().put(one.clone()).await.unwrap();
+        let repository = store.casita_store.as_ref().unwrap().repository.clone();
+        let one_name = CasitaStore::root_name(&one.store_path).unwrap();
+        let admitted_target = repository.metadata().snapshot().await.unwrap().root(&one_name).await.unwrap().unwrap();
+        let before_idempotent = repository.metadata().snapshot().await.unwrap().revision();
+        assert_eq!(other.pathinfo_service().put(one.clone()).await.unwrap(), one);
+        assert_eq!(repository.metadata().snapshot().await.unwrap().root(&one_name).await.unwrap(), Some(admitted_target));
+        assert_eq!(
+            repository.metadata().snapshot().await.unwrap().revision(),
+            before_idempotent,
+            "an identical existing PathInfo should not publish a new Casita revision",
+        );
+        drop(repository);
         // PathInfo-backed action results do not require a separate castore root.
         let exported = store.export_cached_path_info(&one.store_path).await.unwrap().unwrap();
         assert_eq!(exported, one);
@@ -1198,6 +1228,11 @@ mod tests {
         assert!(store.pathinfo_service().get(*invalid.store_path.digest()).await.unwrap().is_none());
         assert!(!output.join(staged.store_path.to_string()).exists());
         assert_scratch_missing_in_new_process(root.path(), &staged.store_path);
+        let reclaimed = store.casita_store.as_ref().unwrap().repository.try_collect().await.unwrap();
+        assert!(reclaimed.removed.logical_objects > 0, "failed batch left unrooted staged envelopes");
+        assert!(store.pathinfo_service().get(*staged.store_path.digest()).await.unwrap().is_none());
+        store.pathinfo_service().put(staged.clone()).await.unwrap();
+        assert_eq!(store.pathinfo_service().get(*staged.store_path.digest()).await.unwrap(), Some(staged));
         drop(other);
         drop(store);
         let child = std::process::Command::new(std::env::current_exe().unwrap())
@@ -1315,8 +1350,44 @@ mod tests {
         );
         assert_eq!(
             live_repository.metadata().snapshot().await.unwrap().root(&live_name).await.unwrap(),
-            Some(live_target),
+            Some(live_target.clone()),
         );
+        drop(right_guard);
+        let policy = state.join(TRUST_FILE_NAME);
+        let key_removed_policy = std::fs::read(&policy).unwrap();
+        for remove_policy_file in [false, true] {
+            if remove_policy_file {
+                std::fs::remove_file(&policy).unwrap();
+                let error = reopened.pathinfo_service().get(*live.store_path.digest()).await.unwrap_err();
+                assert!(error.to_string().contains("casita-signer-untrusted"), "{error}");
+            }
+            let child = std::process::Command::new(std::env::current_exe().unwrap())
+                .arg("casita::tests::signed_roots_survive_export_removal_and_reopen_with_conflicts_and_guard")
+                .arg("--exact")
+                .arg("--nocapture")
+                .env("MANTLE_CASITA_CHILD_ROOT", root.path())
+                .env("MANTLE_CASITA_CHILD_PATH", live.store_path.to_absolute_path_with_prefix(STORE_DIR))
+                .env("MANTLE_CASITA_CHILD_EXPECT_ERROR", "casita-signer-untrusted")
+                .env("MANTLE_CASITA_CHILD_TRUST_READS", "1")
+                .output()
+                .unwrap();
+            assert!(
+                child.status.success() && String::from_utf8_lossy(&child.stdout).contains("casita-child-rejected"),
+                "fresh-process trust removal failed: stderr={}, stdout={}",
+                String::from_utf8_lossy(&child.stderr),
+                String::from_utf8_lossy(&child.stdout),
+            );
+            assert_eq!(
+                live_repository.metadata().snapshot().await.unwrap().root(&live_name).await.unwrap(),
+                Some(live_target.clone()),
+            );
+            if remove_policy_file {
+                assert!(!policy.exists());
+            } else {
+                assert_eq!(std::fs::read(&policy).unwrap(), key_removed_policy);
+            }
+        }
+        let right_guard = StoreMutationGuard::try_acquire(&state).unwrap();
         std::fs::write(state.join("casita-trusted-public-keys"), format!("{verifying_key}\n{extra_verify}\n")).unwrap();
         assert_eq!(reopened.pathinfo_service().get(*live.store_path.digest()).await.unwrap(), Some(live));
         let root_name = CasitaStore::root_name(&one.store_path).unwrap();
@@ -1663,6 +1734,203 @@ mod tests {
         assert!(verified.iter().any(|(_, _, info)| info.store_path == last_path));
     }
 
+    #[tokio::test]
+    async fn staged_output_batch_rejects_competing_root_and_reclaims_abandoned_envelopes() {
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("state");
+        let output = root.path().join("output");
+        std::fs::create_dir(&state).unwrap();
+        std::fs::create_dir(&output).unwrap();
+        let raw = ed25519_dalek::SigningKey::from_bytes(&[21_u8; 32]);
+        let signing_key = SigningKey::new("casita-stage-race".to_string(), raw.clone());
+        let verifying_key = VerifyingKey::new("casita-stage-race".to_string(), raw.verifying_key());
+        std::fs::write(state.join(TRUST_FILE_NAME), format!("{verifying_key}\n")).unwrap();
+        let config = || StoreConfig::new(StoreBackend::Casita, state.clone(), output.clone(), STORE_DIR.to_string());
+        let selected = StoreHandle::open(config()).await.unwrap();
+        let competitor = StoreHandle::open(config()).await.unwrap();
+        let repository = LocalRepository::local(state.join("casita")).await.unwrap();
+        let first = fixture(&selected, root.path(), "stage-race-first", b"candidate first", &signing_key).await;
+        let second = fixture(&selected, root.path(), "stage-race-second", b"candidate second", &signing_key).await;
+        let mut rival = fixture(&competitor, root.path(), "stage-race-rival", b"competing content", &signing_key).await;
+        rival.store_path = first.store_path.clone();
+        rival.ca = None;
+        resign(&mut rival, &signing_key);
+        let first_name = CasitaStore::root_name(&first.store_path).unwrap();
+        let second_name = CasitaStore::root_name(&second.store_path).unwrap();
+        // Explicitly drive the envelope/session/CAS seam to interleave a real second client without a test hook.
+        let scratch = tempfile::tempdir_in(root.path()).unwrap();
+        let session = repository.mutation_session().await.unwrap();
+        let mut expectations = Vec::with_capacity(2);
+        let mut changes = Vec::with_capacity(2);
+        let mut staged_targets = Vec::with_capacity(2);
+        for (index, (name, info)) in [(first_name.clone(), &first), (second_name.clone(), &second)]
+            .into_iter()
+            .enumerate()
+        {
+            let envelope = scratch.path().join(index.to_string());
+            selected.casita_store.as_ref().unwrap().prepare_output_envelope(info, &envelope).await.unwrap();
+            let target = session.import(UnrootedFilesystemImport::new(&envelope)).await.unwrap();
+            expectations.push(RootExpectation {
+                name: name.clone(),
+                target: None,
+            });
+            changes.push(RootChange::Set {
+                name,
+                target: target.clone(),
+            });
+            staged_targets.push(target);
+        }
+        let staged_snapshot = repository.metadata().snapshot().await.unwrap();
+        assert!(staged_snapshot.root(&first_name).await.unwrap().is_none());
+        assert!(staged_snapshot.root(&second_name).await.unwrap().is_none());
+        for target in &staged_targets {
+            assert!(staged_snapshot.object(target).await.unwrap().is_some(), "staged envelope not durable");
+        }
+        drop(staged_snapshot);
+
+        competitor.pathinfo_service().put(rival.clone()).await.unwrap();
+        assert_eq!(competitor.pathinfo_service().get(*rival.store_path.digest()).await.unwrap(), Some(rival));
+        let rival_target = repository.metadata().snapshot().await.unwrap().root(&first_name).await.unwrap().unwrap();
+        assert_ne!(rival_target, staged_targets[0]);
+        let error = selected.pathinfo_service().put(first.clone()).await.unwrap_err();
+        assert!(error.to_string().contains("casita-root-conflict"), "{error}");
+        let after_mantle = repository.metadata().snapshot().await.unwrap();
+        assert_eq!(after_mantle.root(&first_name).await.unwrap(), Some(rival_target.clone()));
+        assert!(after_mantle.root(&second_name).await.unwrap().is_none());
+        drop(after_mantle);
+        let raced = session.publish_if_roots_match(Vec::new(), expectations, changes).await.unwrap();
+        assert!(matches!(raced, ConditionalPublishResult::RootMismatch { name, .. } if name == first_name));
+        let snapshot = repository.metadata().snapshot().await.unwrap();
+        assert_eq!(snapshot.root(&first_name).await.unwrap(), Some(rival_target.clone()));
+        assert!(snapshot.root(&second_name).await.unwrap().is_none(), "conflicting batch partially published");
+        drop(snapshot);
+        drop(session);
+        drop(scratch);
+
+        let reclaimed = repository.try_collect().await.unwrap();
+        assert!(reclaimed.removed.logical_objects > 0, "abandoned staged envelopes were not reclaimed");
+        let snapshot = repository.metadata().snapshot().await.unwrap();
+        assert_eq!(snapshot.root(&first_name).await.unwrap(), Some(rival_target.clone()));
+        assert!(snapshot.root(&second_name).await.unwrap().is_none());
+        for target in &staged_targets {
+            assert!(snapshot.object(target).await.unwrap().is_none(), "abandoned envelope remained reachable");
+        }
+        drop(snapshot);
+
+        assert!(repository.remove_root_if_matches(&first_name, &rival_target).await.unwrap().is_some());
+        assert!(repository.metadata().snapshot().await.unwrap().root(&first_name).await.unwrap().is_none());
+        selected.pathinfo_service().put_batch_atomic(vec![first.clone(), second.clone()]).await.unwrap();
+        drop(selected);
+        drop(competitor);
+        drop(repository);
+        let reopened = StoreHandle::open(config()).await.unwrap();
+        assert_eq!(reopened.pathinfo_service().get(*first.store_path.digest()).await.unwrap(), Some(first));
+        assert_eq!(reopened.pathinfo_service().get(*second.store_path.digest()).await.unwrap(), Some(second));
+    }
+
+    #[tokio::test]
+    async fn stopped_staging_process_leaves_no_root_and_collection_allows_retry() {
+        const NAME: &str = "abandoned-stage";
+        const CONTENT: &[u8] = b"abandoned output envelope";
+        if let Some(root) = std::env::var_os("MANTLE_CASITA_STAGE_CHILD_ROOT") {
+            let root = PathBuf::from(root);
+            let state = root.join("state");
+            let store = StoreHandle::open(StoreConfig::new(
+                StoreBackend::Casita,
+                state,
+                root.join("output"),
+                STORE_DIR.to_string(),
+            ))
+            .await
+            .unwrap();
+            let raw = ed25519_dalek::SigningKey::from_bytes(&[22_u8; 32]);
+            let signing_key = SigningKey::new("casita-abandoned-stage".to_string(), raw);
+            let info = fixture(&store, &root, NAME, CONTENT, &signing_key).await;
+            let scratch = root.join("child-scratch");
+            std::fs::create_dir(&scratch).unwrap();
+            let envelope = scratch.join("envelope");
+            let casita = store.casita_store.as_ref().unwrap();
+            casita.prepare_output_envelope(&info, &envelope).await.unwrap();
+            let session = casita.repository.mutation_session().await.unwrap();
+            let target = session.import(UnrootedFilesystemImport::new(&envelope)).await.unwrap();
+            let name = CasitaStore::root_name(&info.store_path).unwrap();
+            let snapshot = casita.repository.metadata().snapshot().await.unwrap();
+            assert!(snapshot.root(&name).await.unwrap().is_none());
+            assert!(snapshot.object(&target).await.unwrap().is_some());
+            drop(snapshot);
+            assert!(store.pathinfo_service().get(*info.store_path.digest()).await.unwrap().is_none());
+            std::fs::write(root.join("staged-info.json"), serde_json::to_vec(&info).unwrap()).unwrap();
+            std::fs::write(root.join("staged-target"), target.to_string()).unwrap();
+            drop(session);
+            drop(store);
+            // Casita releases durable staging pins asynchronously on drop; drain them before stopping this runtime.
+            casita::experimental::flush_repository_leases().await.unwrap();
+            std::fs::remove_dir_all(scratch).unwrap();
+            println!("casita-stage-child-stopped");
+            return;
+        }
+
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("state");
+        let output = root.path().join("output");
+        std::fs::create_dir(&state).unwrap();
+        std::fs::create_dir(&output).unwrap();
+        let raw = ed25519_dalek::SigningKey::from_bytes(&[22_u8; 32]);
+        let verifying_key = VerifyingKey::new("casita-abandoned-stage".to_string(), raw.verifying_key());
+        let signing_key = SigningKey::new("casita-abandoned-stage".to_string(), raw);
+        let policy = state.join(TRUST_FILE_NAME);
+        let policy_bytes = format!("{verifying_key}\n");
+        std::fs::write(&policy, &policy_bytes).unwrap();
+        let child = std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("casita::tests::stopped_staging_process_leaves_no_root_and_collection_allows_retry")
+            .arg("--exact")
+            .arg("--nocapture")
+            .env("MANTLE_CASITA_STAGE_CHILD_ROOT", root.path())
+            .output()
+            .unwrap();
+        assert!(
+            child.status.success() && String::from_utf8_lossy(&child.stdout).contains("casita-stage-child-stopped"),
+            "staging child failed: stderr={}, stdout={}",
+            String::from_utf8_lossy(&child.stderr),
+            String::from_utf8_lossy(&child.stdout),
+        );
+        assert!(!root.path().join("child-scratch").exists());
+        let staged: PathInfo = serde_json::from_slice(&std::fs::read(root.path().join("staged-info.json")).unwrap()).unwrap();
+        let target: ObjectKey = std::fs::read_to_string(root.path().join("staged-target")).unwrap().parse().unwrap();
+        let name = CasitaStore::root_name(&staged.store_path).unwrap();
+        let repository = LocalRepository::local(state.join("casita")).await.unwrap();
+        let snapshot = repository.metadata().snapshot().await.unwrap();
+        assert!(snapshot.root(&name).await.unwrap().is_none());
+        assert!(snapshot.object(&target).await.unwrap().is_some(), "child stage was not durable");
+        drop(snapshot);
+        let config = || StoreConfig::new(StoreBackend::Casita, state.clone(), output.clone(), STORE_DIR.to_string());
+        let reader = StoreHandle::open(config()).await.unwrap();
+        assert!(reader.pathinfo_service().get(*staged.store_path.digest()).await.unwrap().is_none());
+        drop(reader);
+        let preview = repository.preview_collection().await.unwrap();
+        assert!(
+            preview.logical_objects > 0,
+            "stopped child left no reclaimable unrooted objects; pins={:?}",
+            repository.metadata().pin_store().await.unwrap().inventory().await.unwrap().pins,
+        );
+        let reclaimed = repository.try_collect().await.unwrap();
+        assert!(reclaimed.removed.logical_objects > 0, "child's unrooted envelope was not reclaimed");
+        let snapshot = repository.metadata().snapshot().await.unwrap();
+        assert!(snapshot.root(&name).await.unwrap().is_none());
+        assert!(snapshot.object(&target).await.unwrap().is_none());
+        drop(snapshot);
+        let store = StoreHandle::open(config()).await.unwrap();
+        assert!(store.pathinfo_service().get(*staged.store_path.digest()).await.unwrap().is_none());
+        let retry = fixture(&store, root.path(), NAME, CONTENT, &signing_key).await;
+        assert_eq!(retry, staged);
+        store.pathinfo_service().put(retry.clone()).await.unwrap();
+        drop(store);
+        drop(repository);
+        let reopened = StoreHandle::open(config()).await.unwrap();
+        assert_eq!(reopened.pathinfo_service().get(*retry.store_path.digest()).await.unwrap(), Some(retry));
+        assert_eq!(std::fs::read(&policy).unwrap().as_slice(), policy_bytes.as_bytes());
+    }
+
     struct RepointBeforeSigning {
         selected: Arc<dyn PathInfoService>,
         competing: Arc<dyn PathInfoService>,
@@ -1841,7 +2109,7 @@ mod tests {
         let signer = SigningKey::new("casita-revoked".to_string(), raw.clone());
         let trusted = VerifyingKey::new("casita-revoked".to_string(), raw.verifying_key());
         let other_raw = ed25519_dalek::SigningKey::from_bytes(&[30_u8; 32]);
-        let other = VerifyingKey::new("casita-other".to_string(), other_raw.verifying_key());
+        let replacement = VerifyingKey::new("casita-revoked".to_string(), other_raw.verifying_key());
         let policy = state.join(TRUST_FILE_NAME);
         std::fs::write(&policy, format!("{trusted}\n")).unwrap();
         let mut store =
@@ -1851,10 +2119,28 @@ mod tests {
         let info = fixture(&store, root.path(), "revoked-cache", b"trusted before revocation", &signer).await;
         store.pathinfo_service().put(info.clone()).await.unwrap();
         assert_eq!(store.cached_node_for_path(&info.store_path).await.unwrap(), Some(info.node.clone()));
-        std::fs::write(&policy, format!("{other}\n")).unwrap();
+        let replaced_policy = format!("{replacement}\n");
+        std::fs::write(&policy, &replaced_policy).unwrap();
         let error = store.cached_node_for_path(&info.store_path).await.unwrap_err();
         assert!(error.to_string().contains("casita-signer-untrusted"), "{error}");
+        assert_eq!(std::fs::read(&policy).unwrap().as_slice(), replaced_policy.as_bytes());
         std::fs::write(&policy, format!("{trusted}\n")).unwrap();
         assert_eq!(store.cached_node_for_path(&info.store_path).await.unwrap(), Some(info.node));
+        let repository = store.casita_store.as_ref().unwrap().repository.clone();
+        let name = CasitaStore::root_name(&info.store_path).unwrap();
+        let expected = repository.metadata().snapshot().await.unwrap().root(&name).await.unwrap().unwrap();
+        let invalid_policy = b"not-an-ed25519-key\n";
+        std::fs::write(&policy, invalid_policy).unwrap();
+        let error = store.cached_node_for_path(&info.store_path).await.unwrap_err();
+        assert!(error.to_string().contains("casita-trust-policy-invalid"), "{error}");
+        let error = crate::query::store_verify(store.pathinfo_service().as_ref(), None, &root.path().join("output"))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("casita-trust-policy-invalid"), "{error}");
+        let guard = StoreMutationGuard::try_acquire(&root.path().join("state")).unwrap();
+        let error = store.garbage_collect_under_guard(&guard, None).await.unwrap_err();
+        assert!(error.to_string().contains("casita-trust-policy-invalid"), "{error}");
+        assert_eq!(std::fs::read(&policy).unwrap().as_slice(), invalid_policy);
+        assert_eq!(repository.metadata().snapshot().await.unwrap().root(&name).await.unwrap(), Some(expected));
     }
 }

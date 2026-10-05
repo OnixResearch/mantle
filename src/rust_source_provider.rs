@@ -2847,7 +2847,7 @@ fn push_rustc_source_build_tool_discovery(
         push_rustc_source_target_compiler_discovery(script);
     }
     push_rustc_source_target_tool_prefix(script);
-    push_rustc_source_target_runtime_config(script);
+    push_rustc_source_target_runtime_config(script, full_source_context.is_none());
     Ok(())
 }
 
@@ -3004,7 +3004,7 @@ fn push_rustc_source_target_tool_prefix(script: &mut String) {
     push_rustc_source_target_toolchain_root_validation(script);
 }
 
-fn push_rustc_source_target_runtime_config(script: &mut String) {
+fn push_rustc_source_target_runtime_config(script: &mut String, allow_nix_host_fallback: bool) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     script.push_str("  target_wrapper_root=${target_tool_dir%/*}\n");
@@ -3048,7 +3048,28 @@ fn push_rustc_source_target_runtime_config(script: &mut String) {
     script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
     script.push_str("/lib/rcrt1.o\" ]; then\n");
     push_rustc_source_target_linker_wrapper(script);
-    script.push_str("    PATH=\"$target_alias_dir:$target_tool_dir:$PATH\"\n");
+    script.push_str("    if [ \"$MANTLE_HOST_TRIPLE\" = \"$MANTLE_TARGET_TRIPLE\" ]; then\n");
+    script.push_str("      PATH=\"$target_alias_dir:$target_tool_dir:$PATH\"\n");
+    script.push_str("    else\n");
+    script.push_str("      host_cc_path=$(command -v cc 2>/dev/null || true)\n");
+    script.push_str("      host_cc_machine=\n");
+    script.push_str("      if [ -n \"$host_cc_path\" ]; then host_cc_machine=$(\"$host_cc_path\" -dumpmachine 2>/dev/null || true); fi\n");
+    script.push_str("      case \"$host_cc_machine\" in \"$MANTLE_HOST_TRIPLE\"|x86_64-linux-gnu) ;; *) host_cc_path= ;; esac\n");
+    if allow_nix_host_fallback {
+        script.push_str("      if [ -z \"$host_cc_path\" ]; then\n");
+        script.push_str("        for candidate in /nix/store/*-bootstrap-stage*-gcc-wrapper-*/bin/cc /nix/store/*-gcc-wrapper-*/bin/cc; do\n");
+        script.push_str("          if [ ! -x \"$candidate\" ]; then continue; fi\n");
+        script.push_str("          host_cc_machine=$(\"$candidate\" -dumpmachine 2>/dev/null || true)\n");
+        script.push_str("          case \"$host_cc_machine\" in \"$MANTLE_HOST_TRIPLE\"|x86_64-linux-gnu) host_cc_path=\"$candidate\"; break ;; esac\n");
+        script.push_str("        done\n");
+        script.push_str("      fi\n");
+    }
+    script.push_str("      if [ -z \"$host_cc_path\" ]; then printf '%s\\n' 'GNU host cc is required for Rust bootstrap host builds' >&2; exit 3; fi\n");
+    script.push_str("      host_cc_dir=${host_cc_path%/*}\n");
+    script.push_str("      PATH=\"$host_cc_dir:$target_tool_dir:$PATH\"\n");
+    script.push_str("      if [ \"$(cc -dumpmachine 2>/dev/null || true)\" != \"$host_cc_machine\" ]; then printf '%s\\n' 'Rust bootstrap host PATH did not select the verified GNU cc' >&2; exit 3; fi\n");
+    script.push_str("      printf '%s\\n' \"using Rust bootstrap host compiler: $host_cc_path ($host_cc_machine)\"\n");
+    script.push_str("    fi\n");
     script.push_str("    export ");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
     script.push(' ');

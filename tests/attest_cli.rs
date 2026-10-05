@@ -514,6 +514,96 @@ fn attest_remote_substitution_workflow_persists_sidecars_and_verifies() {
 }
 
 #[test]
+fn casita_rejects_substituted_output_signed_only_by_cache_key_outside_policy() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    let work = tempfile::tempdir().unwrap();
+    let source_store = tempfile::tempdir().unwrap();
+    let source_state = tempfile::tempdir().unwrap();
+    let destination_store = tempfile::tempdir().unwrap();
+    let destination_state = tempfile::tempdir().unwrap();
+    let first = build_simple_ncl_with_nix_compat(
+        work.path(),
+        source_store.path(),
+        source_state.path(),
+        "casita-unlisted-cache-signer",
+        true,
+    );
+    let logical_path = first["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"]
+        .as_str()
+        .unwrap();
+    let path_info = load_signed_output_pathinfo(source_state.path(), logical_path, "/nix/store");
+    assert_eq!(path_info.signatures.len(), 1, "cache-only output must have no local policy signer");
+    let cache = FakeBinaryCache::serve(&path_info, render_nar_bytes(source_state.path(), &path_info));
+    let cache_key = trusted_public_key_arg(source_state.path());
+    let signer = ed25519_dalek::SigningKey::from_bytes(&[23u8; 32]);
+    let mut key_bytes = [0u8; 64];
+    key_bytes[..32].copy_from_slice(signer.as_bytes());
+    key_bytes[32..].copy_from_slice(signer.verifying_key().as_bytes());
+    let local_key_file = format!("casita-local-fixture-1:{}\n", data_encoding::BASE64.encode(&key_bytes));
+    let local_key = load_keypair(&local_key_file).unwrap().verifying_key.to_string();
+    assert_ne!(cache_key, local_key);
+    let signing_key_path = destination_state.path().join("signing-key");
+    std::fs::write(&signing_key_path, &local_key_file).unwrap();
+    let policy = destination_state.path().join("casita-trusted-public-keys");
+    let excluded_policy = format!("{local_key}\n");
+    std::fs::write(&policy, &excluded_policy).unwrap();
+    let ncl_file = work.path().join("casita-unlisted-cache-signer.ncl");
+    let build = || {
+        crunch_cmd()
+            .args(["--json", "--store-backend", "casita", "--nix-compat"])
+            .arg("--store")
+            .arg(destination_store.path())
+            .arg("--state-dir")
+            .arg(destination_state.path())
+            .args(["build", "--substituters"])
+            .arg(&cache.url)
+            .arg("--trusted-public-keys")
+            .arg(&cache_key)
+            .arg("-I")
+            .arg(work.path())
+            .arg(&ncl_file)
+            .output()
+            .unwrap()
+    };
+    let rejected = build();
+    let diagnostic = format!(
+        "{}{}",
+        String::from_utf8_lossy(&rejected.stdout),
+        String::from_utf8_lossy(&rejected.stderr),
+    );
+    assert!(!rejected.status.success() && diagnostic.contains("casita-signer-untrusted"), "{diagnostic}");
+    assert_eq!(std::fs::read(&policy).unwrap().as_slice(), excluded_policy.as_bytes());
+    assert_eq!(std::fs::read(&signing_key_path).unwrap().as_slice(), local_key_file.as_bytes());
+    assert!(!destination_store.path().join(path_info.store_path.to_string()).exists());
+    let listing = crunch_cmd()
+        .args(["--json", "--store-backend", "casita", "--nix-compat"])
+        .arg("--store")
+        .arg(destination_store.path())
+        .arg("--state-dir")
+        .arg(destination_state.path())
+        .args(["store", "list"])
+        .output()
+        .unwrap();
+    assert!(listing.status.success(), "{}", String::from_utf8_lossy(&listing.stderr));
+    let listed: serde_json::Value = serde_json::from_slice(&listing.stdout).unwrap();
+    assert!(listed["paths"].as_array().unwrap().is_empty(), "cache-only signer published a root: {listed}");
+
+    let admitted_policy = format!("{local_key}\n{cache_key}\n");
+    std::fs::write(&policy, &admitted_policy).unwrap();
+    let admitted = build();
+    assert!(admitted.status.success(), "{}", String::from_utf8_lossy(&admitted.stderr));
+    let report: serde_json::Value = serde_json::from_slice(&admitted.stdout).unwrap();
+    assert_eq!(report["counts"]["built_total"], 0);
+    assert_eq!(report["counts"]["cached_total"], 1);
+    assert_eq!(std::fs::read(destination_store.path().join(path_info.store_path.to_string())).unwrap(), b"workflow\n");
+    assert_eq!(std::fs::read(&policy).unwrap().as_slice(), admitted_policy.as_bytes());
+}
+
+#[test]
 fn attest_project_workflow_on_built_root() {
     if !can_build() {
         eprintln!("skipping: bwrap or /nix/store not available");

@@ -1491,6 +1491,10 @@ fn casita_explicit_trust_policy_revokes_local_signer_across_fresh_processes() {
         "{excluded_report}"
     );
     assert_eq!(std::fs::read(&policy).unwrap(), excluded_policy.as_bytes());
+    let listing = run(&["--json", "store", "list"]);
+    assert!(listing.status.success(), "{}", String::from_utf8_lossy(&listing.stderr));
+    let listed: serde_json::Value = serde_json::from_slice(&listing.stdout).unwrap();
+    assert!(listed["paths"].as_array().unwrap().is_empty(), "untrusted --signing-key published a root: {listed}");
 
     std::fs::write(&policy, &included_policy).unwrap();
     let included = run(&build_args);
