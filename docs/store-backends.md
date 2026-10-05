@@ -122,6 +122,13 @@ Mantle checks the envelope's NAR size and SHA-256 against the signed PathInfo, s
 If the root already targets an identical envelope, the admission succeeds without a write.
 If the root targets anything else, the admission fails with `casita-root-conflict` and leaves that root unchanged.
 
+`store sign` reads the current output, stages a replacement envelope with the
+same `content` and updated signed `pathinfo.json`, and conditionally replaces
+the root only if it still targets the envelope that Mantle read. A second
+client repointing that root makes signing fail with `casita-root-conflict`;
+Mantle leaves the second client's target unchanged. A successful replacement
+leaves the old envelope unrooted for later collection, not immediately deleted.
+
 Native store archive import publishes one path per commit in archive order, so the 1,024 bound does not limit the archive size.
 If a later path fails, the paths before it stay published.
 Nario v2 import publishes all new paths in one commit or none of them; a conflicting root or a later path that fails verification publishes nothing.
