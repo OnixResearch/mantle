@@ -73,6 +73,15 @@ Under `casita`, `--base-store`, every `--trust-unsigned` option, `--nario-trust-
 `store usage` and `store gc`, with or without `--execute`, fail with `casita-rust-cache-unsupported`, and change nothing, when `<state-dir>/rust-unit-cache` exists.
 `casita` has no Rust unit cache parity with `snix`.
 
+The store capability boundary keeps Casita repository types and mutation
+sessions inside the `crunch-store` store shell. The declared
+`crunch-rust-cache` adapter may own private Snix services, but that exception
+does **not** authorize Casita types or sessions in the adapter or any other
+first-party shell. `tools/check_store_capability_boundary.rs` scans production
+Rust sources for known escape patterns and exercises negative fixtures; zero
+reported escapes prove only this bounded source check, not runtime isolation,
+absence of other escape forms, Casita correctness, or release safety.
+
 ## Casita layout and trust
 
 The Casita repository lives in `<state-dir>/casita`, next to Mantle-owned files such as `store-identity.json`, `casita-trusted-public-keys`, and `gc-roots.json`.

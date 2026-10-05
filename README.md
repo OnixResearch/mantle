@@ -133,6 +133,11 @@ Mantle rejects a different `--store-backend` before it changes any file.
 `casita` is a pinned, pre-release backend with a smaller capability profile and a destination-owned signer policy.
 See [Store backends](docs/store-backends.md) for profiles, validation, and the Snix-to-Casita migration.
 
+Casita repository types and mutation sessions belong only to the
+`crunch-store` store shell, including when a separate adapter is allowed to
+use private Snix services. The source boundary checker covers named patterns,
+not runtime isolation or a Casita correctness proof.
+
 ### Read-only overlay composition
 
 Use `--base-store <state-dir>` to add an ordered read-only base.

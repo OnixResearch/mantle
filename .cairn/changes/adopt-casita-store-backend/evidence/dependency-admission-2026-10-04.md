@@ -187,3 +187,49 @@ dependency graph update leave no proven no-waiver fix. An approved reviewed
 upstream pin/dependency replacement plus compiler validation, or a policy
 exception, would be required to close that advisory; none was chosen here.
 T1.2/T1.3/T4.7 remain open and no lock entry, Casita revision, or waiver changed.
+
+## Detached Rust prerequisites and boundary checker integration
+
+The user subsequently authorized detached pueue builds. Pueue task **254**
+(`mantle-rust-1941-devshell-local-20261004`) began from HEAD
+`36f199edbbb2fec58f67ab9a3c2e77525414c719` with
+`nix develop --offline --no-write-lock-file --option builders '' --option max-jobs 2 --option cores 4`.
+Its dedicated log is
+`/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/devshell-rust-1941-20261004/run.log`.
+The last observed pueue status was **Running**; the log showed local builds
+including `rustc-dev-1.96.0-nightly` and, incidentally, the old-pin Casita
+checkout. This is a nightly shell prerequisite, **not** Rust 1.94.1 compiler
+requalification or final-pin Casita vendor evidence. Local-only builders
+avoid the previously observed `aspen1.local` SSH failure.
+
+Independent pueue task **255**
+(`mantle-rust-1941-source-archive-20261004`) completed successfully after
+fetching the official Rust 1.94.1 source tarball; its log is
+`/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/rust-1941-source-archive-20261004/run.log`.
+The captured `sha256sum` is
+`4c142a625f12e3cdf716c68ae19f4f60d98ad1482627b08579b15838e95ad514`,
+matching both checked-in source plans and the Rust distributor's checksum.
+Task 255 authenticates one source archive; it did not build a compiler.
+
+The privately proven capability checker change was integrated as `e79d911f`
+from private commit `2eb576fe`. On integrated HEAD, standalone nightly
+`cargo -Zscript` with the repository's missing `clang` linker overridden by
+`cc` ran `tools/check_store_capability_boundary.rs --self-test`, producing
+`self-test: ok`. Its `--root .` run scanned 558 files and reported
+`raw_service_escape_count=0`, `writable_authority_escape_count=0`,
+`handle_construction_escape_count=0`, `casita_type_escape_count=0`, and
+`casita_session_escape_count=0`. T4.1 stays unchecked: it is marked serial
+behind unfinished earlier tasks and must be rechecked on the final subject.
+
+Upstream pin research found `cachix/casita` main at
+`6711e0c8741347e9a6f1e78cc0ad2c9d2750dfa4` still declares native
+`bao-tree = "0.16"` and adds Turso/Chroma dependency changes, so bumping to
+main alone does not establish a no-waiver fix. The most recent upstream
+`n0-computer/bao-tree` tag is `v0.16.1`; its default `validate` feature pulls
+optional `genawaiter 0.99.1`. Casita's checked-in pinned source calls
+`bao_tree::io::fsm::encode_ranges_validated`, which is not the same as the
+`#[cfg(feature = "validate")]` range-validation API. No maintained upstream
+revision replacing Genawaiter while preserving that verified-streaming
+contract was identified. Disabling `validate` solely to clear Cargo Deny
+would need upstream contract review and negative corruption fixtures; no
+feature, pin, source patch, lock entry, or waiver was changed.
