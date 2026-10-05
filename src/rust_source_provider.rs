@@ -2443,6 +2443,10 @@ fn push_generated_rustc_source_build_script(
     script.push_str(
         "case \" $MANTLE_RUST_BUILD_GOALS \" in *' rustdoc '*) MANTLE_RUST_TOOLS='[\"cargo\", \"rustdoc\"]' ;; esac\n",
     );
+    script.push_str("MANTLE_RUST_GNU_HOST_LLD_CONFIG=\n");
+    script.push_str("if [ \"$MANTLE_HOST_TRIPLE\" = \"x86_64-unknown-linux-gnu\" ]; then\n");
+    script.push_str("  MANTLE_RUST_GNU_HOST_LLD_CONFIG='lld = false\nuse-lld = false'\n");
+    script.push_str("fi\n");
     script.push_str("cat > \"$CONFIG\" <<MANTLE_RUST_BUILD_CONFIG\n");
     script.push_str("profile = \"compiler\"\n");
     script.push_str("change-id = \"ignore\"\n\n");
@@ -2466,6 +2470,7 @@ fn push_generated_rustc_source_build_script(
     script.push_str("channel = \"stable\"\n");
     script.push_str("codegen-tests = false\n");
     script.push_str("deny-warnings = false\n\n");
+    script.push_str("$MANTLE_RUST_GNU_HOST_LLD_CONFIG\n");
     script.push_str("[llvm]\n");
     push_rustc_source_llvm_config(script, full_source_context);
     script.push_str("MANTLE_RUST_BUILD_CONFIG\n");
@@ -10328,6 +10333,12 @@ mod tests {
         assert!(rustc_stage1_log.contains("synthetic x.py for 1.91.1"));
         assert!(rustc_stage1_log.contains("install rustc cargo library/std"));
         assert!(!rustc_stage1_log.contains("install rustc cargo rustdoc"));
+        let config_path = scratch.join(RUSTC_STAGE1_BUILD_DIR).join(RUSTC_SOURCE_GENERATED_CONFIG_FILE);
+        let stage1_config: toml::Value = toml::from_str(&fs::read_to_string(config_path).unwrap()).unwrap();
+        let rust = &stage1_config["rust"];
+        assert_eq!(rust["lld"].as_bool(), Some(false), "GNU host must not install zlib-disabled rust-lld");
+        assert_eq!(rust["use-lld"].as_bool(), Some(false), "GNU host links through its verified GNU cc");
+        assert_eq!(stage1_config["build"]["target"][1].as_str(), Some(TARGET_TRIPLE));
         let generated_stage1_script =
             fs::read_to_string(scratch.join(RUSTC_STAGE1_BUILD_DIR).join(RUSTC_STAGE1_GENERATED_BUILD_SCRIPT)).unwrap();
         assert!(generated_stage1_script.contains("change-id = \"ignore\""));
