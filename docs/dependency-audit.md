@@ -133,6 +133,26 @@ and passed the bounded identity check recorded in the active change's
 source-built compiler: its build/requalification and the clean-source vendor
 proof remain unrun. T1.2 and the dependency audit gate remain open.
 
+2026-10-05 clean-source follow-up (still not an audit pass): the Nix
+`casita-vendor-closure` derivation built, and the separate Nix
+`casita-crunch-store-check` built and ran `cargo check`. The default dev
+shell compiled patched pinned Casita without an explicit Cargo config;
+the generated ignored `vendor-deps/` closure compiled in an isolated Cargo
+home, matched a fresh generation (53,491 entries), and passed unpatched,
+hand-edited, mutable-checkout and upstream/patch-drift negative controls.
+An archive of exact source commit
+`2ab0f6dc58eee9978c84667fcb7da490ea7ad702` plus that closure
+resolved 850 external packages offline under its extracted `vendor-deps/`;
+its recursive unpacked source BLAKE3 SRI is
+`blake3-6nOZ9WOsN6DrvnTfKR5/C2DojRZH6cICZlxvNWf8TA8=`.
+The initial archive script exited 127 when ambient Cargo was absent; a
+no-clobber Nix dev-shell metadata proof passed against the unchanged archive.
+Runs 63 and 64 in the active change evidence retain the original failed
+log, passing corrective receipt, exact archive hash and patch digest. The
+source-built Rust 1.90 sidecar in Run 62 does not qualify the final 1.94.1
+source profile, and none of these closures clears the separate unwaived
+`cargo-deny` advisory gate or marks T1.2 complete.
+
 Before those four exact-URL admissions, with `cargo-deny 0.20.2` and its available advisory database, the scoped
 `nix shell --offline nixpkgs#cargo-deny nixpkgs#cargo --command cargo-deny
 --config deny.toml check` exited 9: `advisories FAILED, bans ok, licenses ok,
