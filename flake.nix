@@ -376,7 +376,7 @@
               == casitaNarUpstreamSha256
             && builtins.hashFile "sha256" ./patches/casita-blake3-finalize.patch
               == casitaPatchSha256
-          ) "Mantle Casita source, Cargo lock, Nix pin, or license drifted";
+          ) "Mantle Casita source, lock, Nix pin, license, rust-version, or patch drifted";
           true;
         # Exact-revision upstream compile fix, kept as an auditable tracked patch.
         casitaPatchedSource =
