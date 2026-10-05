@@ -222,14 +222,17 @@ metadata. `generate` refuses to replace an existing directory. Run
 metadata (without `--config`) resolves the pinned, patched Casita from Crane's
 immutable default dev-shell source replacement rather than an unpatched git
 checkout. Compile the immutable default shell source with
-`cargo check --locked -p crunch-store` without `--config`. From that same shell,
-use a separate empty Cargo home for an explicit checkout-local compile.
-Combining the default shell's source map with
-`.cargo/vendor-config.toml` defines the same git sources twice.
+`cargo check --locked -p crunch-store` without `--config`. For an explicit
+checkout-local compile, use a separate empty Cargo home and a fresh target
+directory. Combining both source maps defines the same git sources twice;
+reusing build-script output can also try to overwrite read-only copied vendor
+headers.
 
 ```bash
-CARGO_HOME="$(mktemp -d)" cargo check --locked -p crunch-store \
-  --config .cargo/vendor-config.toml
+mkdir -p target
+CARGO_HOME="$(mktemp -d)" \
+CARGO_TARGET_DIR="$(mktemp -d "$PWD/target/checkout-vendor.XXXXXXXX")" \
+  cargo check --locked -p crunch-store --config .cargo/vendor-config.toml
 ```
 
 `nix build .#checks.x86_64-linux.casita-vendor-closure`
