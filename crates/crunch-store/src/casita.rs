@@ -50,6 +50,13 @@ const MAX_TRUST_FILE_BYTES: u64 = 65_536;
 const MAX_PATHINFO_BYTES: usize = crate::archive::MAX_ARCHIVE_METADATA_BYTES;
 const TRUST_FILE_NAME: &str = "casita-trusted-public-keys";
 
+#[cfg(test)]
+struct AdmissionRaceGate {
+    staged: tokio::sync::Barrier,
+    resume: tokio::sync::Barrier,
+    staged_targets: tokio::sync::Mutex<Vec<ObjectKey>>,
+}
+
 /// One owned handle to the durable Casita repository.
 #[derive(Clone)]
 pub(crate) struct CasitaStore {
@@ -59,6 +66,8 @@ pub(crate) struct CasitaStore {
     pub(crate) blob_service: Arc<dyn BlobService>,
     pub(crate) directory_service: Arc<dyn DirectoryService>,
     observed_roots: Arc<Mutex<BTreeMap<[u8; 20], ObjectKey>>>,
+    #[cfg(test)]
+    before_output_publish: Arc<tokio::sync::Mutex<Option<Arc<AdmissionRaceGate>>>>,
 }
 
 impl CasitaStore {
@@ -85,6 +94,8 @@ impl CasitaStore {
             blob_service,
             directory_service,
             observed_roots: Arc::new(Mutex::new(BTreeMap::new())),
+            #[cfg(test)]
+            before_output_publish: Arc::new(tokio::sync::Mutex::new(None)),
         }))
     }
 
@@ -786,6 +797,15 @@ impl CasitaStore {
                 }
             }
             return Ok(());
+        }
+        #[cfg(test)]
+        let gate = self.before_output_publish.lock().await.clone();
+        #[cfg(test)]
+        if let Some(gate) = gate {
+            *gate.staged_targets.lock().await =
+                newly_published.iter().map(|(_, target, _)| target.clone()).collect();
+            gate.staged.wait().await;
+            gate.resume.wait().await;
         }
         match session
             .publish_if_roots_match(Vec::new(), expectations, changes)
@@ -1826,6 +1846,77 @@ mod tests {
         let reopened = StoreHandle::open(config()).await.unwrap();
         assert_eq!(reopened.pathinfo_service().get(*first.store_path.digest()).await.unwrap(), Some(first));
         assert_eq!(reopened.pathinfo_service().get(*second.store_path.digest()).await.unwrap(), Some(second));
+    }
+
+    #[tokio::test]
+    async fn pathinfo_batch_rejects_second_client_root_published_after_staging() {
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("state");
+        let output = root.path().join("output");
+        std::fs::create_dir(&state).unwrap();
+        std::fs::create_dir(&output).unwrap();
+        let raw = ed25519_dalek::SigningKey::from_bytes(&[27_u8; 32]);
+        let signing_key = SigningKey::new("casita-admission-race".to_string(), raw.clone());
+        let verifying_key = VerifyingKey::new("casita-admission-race".to_string(), raw.verifying_key());
+        std::fs::write(state.join(TRUST_FILE_NAME), format!("{verifying_key}\n")).unwrap();
+        let config = || StoreConfig::new(StoreBackend::Casita, state.clone(), output.clone(), STORE_DIR.to_string());
+        let selected = StoreHandle::open(config()).await.unwrap();
+        let competitor = StoreHandle::open(config()).await.unwrap();
+        let first = fixture(&selected, root.path(), "admission-first", b"original candidate", &signing_key).await;
+        let second = fixture(&selected, root.path(), "admission-second", b"other candidate", &signing_key).await;
+        let mut rival = fixture(&competitor, root.path(), "admission-rival", b"competing content", &signing_key).await;
+        rival.store_path = first.store_path.clone();
+        rival.ca = None;
+        resign(&mut rival, &signing_key);
+        let first_name = CasitaStore::root_name(&first.store_path).unwrap();
+        let second_name = CasitaStore::root_name(&second.store_path).unwrap();
+        let repository = LocalRepository::local(state.join("casita")).await.unwrap();
+        let gate = Arc::new(AdmissionRaceGate {
+            staged: tokio::sync::Barrier::new(2),
+            resume: tokio::sync::Barrier::new(2),
+            staged_targets: tokio::sync::Mutex::new(Vec::new()),
+        });
+        selected
+            .casita_store
+            .as_ref()
+            .unwrap()
+            .before_output_publish
+            .lock()
+            .await
+            .replace(gate.clone());
+        let selected_pathinfos = selected.pathinfo_service();
+        let staged = tokio::spawn(async move { selected_pathinfos.put_batch_atomic(vec![first, second]).await });
+        tokio::time::timeout(std::time::Duration::from_secs(30), gate.staged.wait())
+            .await
+            .expect("the actual PathInfo batch must stage both envelopes before its CAS commit");
+        let staged_targets = gate.staged_targets.lock().await.clone();
+        assert_eq!(staged_targets.len(), 2);
+        let snapshot = repository.metadata().snapshot().await.unwrap();
+        assert!(snapshot.root(&first_name).await.unwrap().is_none());
+        assert!(snapshot.root(&second_name).await.unwrap().is_none());
+        for target in &staged_targets {
+            assert!(snapshot.object(target).await.unwrap().is_some(), "staged envelope was not durable");
+        }
+        drop(snapshot);
+        competitor.pathinfo_service().put(rival.clone()).await.unwrap();
+        let rival_target = repository.metadata().snapshot().await.unwrap().root(&first_name).await.unwrap().unwrap();
+        gate.resume.wait().await;
+        let error = staged.await.unwrap().unwrap_err();
+        drop(selected);
+        assert!(error.to_string().contains("casita-root-conflict"), "{error}");
+        let snapshot = repository.metadata().snapshot().await.unwrap();
+        assert_eq!(snapshot.root(&first_name).await.unwrap(), Some(rival_target.clone()));
+        assert!(snapshot.root(&second_name).await.unwrap().is_none(), "conflicting batch partially published");
+        drop(snapshot);
+        assert_eq!(competitor.pathinfo_service().get(*rival.store_path.digest()).await.unwrap(), Some(rival));
+        casita::experimental::flush_repository_leases().await.unwrap();
+        repository.try_collect().await.unwrap();
+        let snapshot = repository.metadata().snapshot().await.unwrap();
+        assert_eq!(snapshot.root(&first_name).await.unwrap(), Some(rival_target));
+        assert!(snapshot.root(&second_name).await.unwrap().is_none());
+        for target in &staged_targets {
+            assert!(snapshot.object(target).await.unwrap().is_none(), "failed batch envelope survived collection");
+        }
     }
 
     #[tokio::test]
