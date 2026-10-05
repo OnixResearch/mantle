@@ -233,3 +233,33 @@ revision replacing Genawaiter while preserving that verified-streaming
 contract was identified. Disabling `validate` solely to clear Cargo Deny
 would need upstream contract review and negative corruption fixtures; no
 feature, pin, source patch, lock entry, or waiver was changed.
+
+## Independent upstream review, 2026-10-05
+
+The [latest Bao-tree tag `v0.16.1`](https://github.com/n0-computer/bao-tree/tags)
+is commit `2be9abd144783455606424424c29bd3a57f926f8`, also the
+current upstream `main` commit. Its
+[`Cargo.toml`](https://github.com/n0-computer/bao-tree/blob/2be9abd144783455606424424c29bd3a57f926f8/Cargo.toml)
+still declares optional `genawaiter = "0.99.1"`, `validate =
+["dep:genawaiter"]`, and a default feature set containing `validate`.
+[Bao-tree PR #42](https://github.com/n0-computer/bao-tree/pull/42)
+introduced Genawaiter to stream complete data/outboard validation. The
+current [Casita `main` manifest](https://github.com/cachix/casita/blob/main/crates/casita/Cargo.toml)
+still admits optional `bao-tree = "0.16"` through `native`; the current
+Casita release list contains no Casita dependency release. Thus neither
+the latest Bao-tree release nor Casita `main` provides a reviewed,
+validation-preserving replacement for this locked advisory path.
+
+The missing upstream prerequisite is a Bao-tree maintainer-reviewed
+replacement of the Genawaiter-based complete validation stream, preserving
+its public validation API and error behavior, with tests rejecting corrupt
+data and outboards, followed by a Bao-tree release and Casita maintainer
+adoption with its verified streaming contract exercised. An explicit
+streaming state machine is one feasible upstream patch direction; it is
+not an approved downstream implementation. Only after that reviewed
+adoption can Mantle assess the new Casita revision, update its exact pin,
+lock and Nix/vendor admission together, and run unwaived `cargo deny
+check` plus functional verification. Merely disabling Bao `validate`,
+replacing the pinned vendored source, or adding an advisory waiver would
+not satisfy the required contract. This read-only review did not change
+the Mantle dependency graph, execute Cargo Deny, or close T1.2/T1.3/T4.7.
