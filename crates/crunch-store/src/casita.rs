@@ -620,7 +620,8 @@ impl CasitaStore {
             .map_err(|error| Error::Store(format!("serializing Casita PathInfo {}: {error}", info.store_path)))?;
         if encoded.is_empty() || encoded.len() > MAX_PATHINFO_BYTES {
             return Err(Error::Store(format!(
-                "casita-envelope-invalid: PathInfo size is outside 1..={MAX_PATHINFO_BYTES}"
+                "casita-envelope-invalid: PathInfo for {} has size outside 1..={MAX_PATHINFO_BYTES}",
+                info.store_path
             )));
         }
         std::fs::write(envelope.join("pathinfo.json"), encoded)

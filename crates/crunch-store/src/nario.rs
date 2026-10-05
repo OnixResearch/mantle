@@ -1281,6 +1281,82 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn nario_casita_late_envelope_failure_reclaims_first_staged_path() {
+        let source = tempfile::tempdir().unwrap();
+        let source_handle = test_handle(source.path(), crate::StoreBackend::Snix).await;
+        let (first, first_nar) = record_fixture(&source_handle, "casita-staged-first", b"first staged payload").await;
+        let (mut second, second_nar) = record_fixture(&source_handle, "casita-oversize-second", b"second payload").await;
+        // These extra signatures are syntactically valid Nario metadata; the first signature
+        // still authenticates the record. Only the Casita envelope's JSON size bound rejects it.
+        let padding = Signature::new(format!("padding-{}", "x".repeat(1024)), *second.signatures[0].bytes());
+        second.signatures.extend(std::iter::repeat_n(padding, 1024));
+        assert!(second.signatures.len() <= MAX_SIGNATURES);
+        assert!(serde_json::to_vec(&second).unwrap().len() > crate::archive::MAX_ARCHIVE_METADATA_BYTES);
+        let archive = wire_archive(&[(&first, &first_nar), (&second, &second_nar)]);
+        let listed = list_nario_v2(&mut std::io::Cursor::new(&archive)).await.unwrap();
+        assert_eq!(listed.record_count, 2, "both NARs must parse and verify before Casita staging");
+        assert_eq!(listed.paths[1].store_path, second.store_path.to_absolute_path_with_prefix(NARIO_V2_STORE_PREFIX));
+        assert_eq!(listed.paths[1].signatures.len(), second.signatures.len(), "every padded signature must parse");
+
+        let destination = tempfile::tempdir().unwrap();
+        fs::create_dir_all(destination.path().join("state")).unwrap();
+        fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", test_keys().1)).unwrap();
+        let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        let repository = handle.casita_store.as_ref().unwrap().repository.clone();
+        let before = repository.metadata().snapshot().await.unwrap();
+        let existing = before.objects().map_ok(|record| record.key().clone()).try_collect::<BTreeSet<_>>().await.unwrap();
+        drop(before);
+
+        let error = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap_err();
+        assert!(error.to_string().contains("nario-v2-atomic-publication"), "{error}");
+        assert!(error.to_string().contains("casita-envelope-invalid"), "{error}");
+        assert!(error.to_string().contains(&second.store_path.to_string()), "{error}");
+        let first_name = crate::casita::CasitaStore::root_name(&first.store_path).unwrap();
+        let second_name = crate::casita::CasitaStore::root_name(&second.store_path).unwrap();
+        let after = repository.metadata().snapshot().await.unwrap();
+        assert!(after.roots().try_collect::<Vec<_>>().await.unwrap().is_empty(), "failed batch committed a root");
+        assert!(after.root(&first_name).await.unwrap().is_none());
+        assert!(after.root(&second_name).await.unwrap().is_none());
+        let new_objects = after
+            .objects()
+            .try_collect::<Vec<_>>()
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|record| !existing.contains(record.key()))
+            .collect::<Vec<_>>();
+        let envelopes = new_objects
+            .iter()
+            .filter(|record| record.links().len() == 2)
+            .map(|record| record.key().clone())
+            .collect::<Vec<_>>();
+        assert_eq!(envelopes.len(), 1, "first envelope must be staged, second must fail before import");
+        assert!(after.object(&envelopes[0]).await.unwrap().is_some());
+        drop(after);
+        let checkout = tempfile::tempdir().unwrap();
+        repository.checkout(&envelopes[0], checkout.path().join("envelope")).await.unwrap();
+        assert_eq!(
+            fs::read(checkout.path().join("envelope/pathinfo.json")).unwrap(),
+            serde_json::to_vec(&first).unwrap(),
+            "the durable unrooted object must be the first path's envelope"
+        );
+        assert_eq!(fs::read(checkout.path().join("envelope/content")).unwrap(), b"first staged payload");
+        drop(checkout);
+        assert!(handle.pathinfo_service().get(*first.store_path.digest()).await.unwrap().is_none());
+        assert!(handle.pathinfo_service().get(*second.store_path.digest()).await.unwrap().is_none());
+        drop(handle);
+        casita::experimental::flush_repository_leases().await.unwrap();
+        assert!(repository.preview_collection().await.unwrap().logical_objects > 0);
+        let collected = repository.try_collect().await.unwrap();
+        assert!(collected.removed.logical_objects > 0);
+        let after_collection = repository.metadata().snapshot().await.unwrap();
+        assert!(after_collection.roots().try_collect::<Vec<_>>().await.unwrap().is_empty());
+        for envelope in &envelopes {
+            assert!(after_collection.object(envelope).await.unwrap().is_none(), "unrooted envelope was not reclaimed");
+        }
+    }
+
+    #[tokio::test]
     async fn nario_casita_accepts_configured_1024_root_boundary() {
         const ROOT_COUNT: usize = 1024;
         let source = tempfile::tempdir().unwrap();
