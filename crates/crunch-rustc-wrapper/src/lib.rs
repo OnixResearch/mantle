@@ -271,9 +271,6 @@ pub fn run_wrapper_from_environment() -> Result<i32, Error> {
 }
 
 pub fn run_daemon(options: DaemonOptions) -> Result<(), Error> {
-    if !options.backend.profile().rust_unit_cache {
-        return Err(Error::Process(format!("{}-rust-cache-unsupported", options.backend.as_str())));
-    }
     assert!(!options.policy_path.as_os_str().is_empty());
     assert!(!options.state_dir.as_os_str().is_empty());
     SHUTDOWN_REQUESTED.store(false, Ordering::SeqCst);
@@ -2639,27 +2636,6 @@ mod tests {
         let payload_error = read_frame::<serde_json::Value>(&mut truncated_payload.as_slice(), FRAME_LIMIT_BYTES)
             .expect_err("a truncated payload must fail");
         assert!(payload_error.to_string().contains("read-protocol-frame-body"));
-    }
-
-    #[test]
-    fn casita_daemon_rejects_before_policy_and_state_effects() {
-        let root = tempfile::tempdir().unwrap();
-        let state_dir = root.path().join("unopened-state");
-        let store_output_dir = root.path().join("unopened-store");
-        let receipt_dir = root.path().join("unopened-receipts");
-        let error = run_daemon(DaemonOptions {
-            policy_path: root.path().join("missing-policy.json"),
-            state_dir: state_dir.clone(),
-            backend: crunch_store::StoreBackend::Casita,
-            store_output_dir: store_output_dir.clone(),
-            receipt_dir: receipt_dir.clone(),
-            run_once: true,
-        })
-        .unwrap_err();
-        assert_eq!(error.to_string(), "casita-rust-cache-unsupported");
-        assert!(!state_dir.exists(), "daemon created rejected backend state");
-        assert!(!store_output_dir.exists(), "daemon created rejected output store");
-        assert!(!receipt_dir.exists(), "daemon created rejected receipts");
     }
 
     #[test]

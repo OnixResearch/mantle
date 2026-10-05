@@ -5368,6 +5368,7 @@ dependencies = [
  "bstr",
  "cap-fs-ext",
  "cap-std",
+ "casita",
  "chapter-tgz",
  "clap",
  "crunch-action-result-core",

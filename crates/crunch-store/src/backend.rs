@@ -68,7 +68,7 @@ impl StoreBackend {
             },
             overlay_composition: matches!(self, Self::Snix),
             atomic_batch_import: true,
-            rust_unit_cache: matches!(self, Self::Snix),
+            rust_unit_cache: true,
             unsigned_admission: matches!(self, Self::Snix),
             max_root_changes: match self {
                 Self::Snix => None,

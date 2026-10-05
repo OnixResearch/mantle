@@ -902,7 +902,15 @@ impl RustCache {
         if request.policy.offline && source.is_remote() {
             return Err(Error::State("shared-cache-offline-publication-rejected".to_string()));
         }
-        let staged = self.render_shared_object(request.result).await?;
+        let staged = {
+            let _store_guard = self
+                .store
+                .as_ref()
+                .map(|_| crunch_store::StoreMutationGuard::acquire_wait(&self.state_dir))
+                .transpose()
+                .map_err(|error| Error::State(format!("store-mutation-lock:{error}")))?;
+            self.render_shared_object(request.result).await?
+        };
         let signed = sign_rust_result_envelope(
             request.result.clone(),
             staged.identity.clone(),
@@ -1225,9 +1233,37 @@ impl RustCache {
             .collect::<Vec<_>>();
         let plan = plan_local_reuse(&admitted[0].signed.envelope.result.input.action_ref, local_policy, facts)
             .map_err(|error| Error::Core(String::from(error.code())))?;
+        let _store_guard = if self.store.is_some() {
+            Some(
+                crunch_store::StoreMutationGuard::acquire_wait(&self.state_dir)
+                    .map_err(|error| Error::State(format!("store-mutation-lock:{error}")))?,
+            )
+        } else {
+            None
+        };
+        if let Some(store) = &self.store {
+            let retention = self.retention()?;
+            // r[impl mantle.casita_store_backend.castore_payload_roots]
+            for candidate in &admitted {
+                let identity = &candidate.signed.envelope.result.input.root_node;
+                let node = node_from_identity(identity)?;
+                if retention.retained_results.values().any(|retained| retained == identity) {
+                    store
+                        .rehydrate_castore_payload_root(&node)
+                        .await
+                        .map_err(Error::Authority)?;
+                } else {
+                    store
+                        .admit_castore_payload_root(&node)
+                        .await
+                        .map_err(Error::Authority)?;
+                }
+            }
+        }
         for candidate in &admitted {
             self.publish_record_and_index(&candidate.signed.envelope.result)?;
         }
+        drop(_store_guard);
         if plan.conflict_class.is_some() {
             let mut outcome = shared_report(SharedReportKind {
                 disposition: SHARED_CACHE_CONFLICT,
@@ -1277,6 +1313,12 @@ impl RustCache {
 
     async fn render_shared_object(&self, result: &RustUnitResult) -> Result<StagedSharedObject, Error> {
         let node = node_from_identity(&result.input.root_node)?;
+        if let Some(store) = &self.store {
+            store
+                .rehydrate_castore_payload_root(&node)
+                .await
+                .map_err(Error::Authority)?;
+        }
         let is_complete =
             crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
                 .await
@@ -1975,6 +2017,7 @@ fn stable_cache_error(error: &Error) -> String {
         Error::Io { .. } => "shared-candidate-io-rejected",
         Error::Json(_) => "shared-candidate-json-rejected",
         Error::Castore(_) => "shared-candidate-castore-rejected",
+        Error::Authority(_) => "shared-candidate-store-authority-rejected",
         Error::Bound(_) => "shared-candidate-bound-rejected",
         Error::State(_) => "shared-candidate-state-rejected",
         Error::LockTimeout => "shared-candidate-lock-timeout",
@@ -2058,6 +2101,103 @@ mod tests {
         assert_eq!(fs::read(restored.join("artifact.rlib")).unwrap(), b"shared-result");
         assert!(report.transferred_bytes > 0);
         assert!(!report.compiler_executed);
+    }
+
+    #[tokio::test]
+    async fn casita_shared_origin_is_retained_and_reused_by_fresh_process() {
+        if let Some(root) = std::env::var_os("MANTLE_CASITA_SHARED_CACHE_CHILD") {
+            let root = PathBuf::from(root);
+            let client = RustCache::open_async(crunch_store::StoreConfig::new(
+                crunch_store::StoreBackend::Casita,
+                root.join("client-state"),
+                root.join("store"),
+                "/mantle/store".to_string(),
+            ))
+            .await
+            .unwrap();
+            let source: Arc<dyn RustResultSource> =
+                Arc::new(DirectoryRustResultSource::open(root.join("shared"), true).unwrap());
+            let trust = trust_policy(&signing_key(TEST_KEY_BYTE));
+            let report = client
+                .restore_shared(SharedRestoreRequest {
+                    action: &test_action(),
+                    output_dir: &root.join("fresh-shared-output"),
+                    local_policy: &local_policy(),
+                    shared_policy: &shared_policy(),
+                    trust_policy: &trust,
+                    sources: &[source],
+                })
+                .await
+                .unwrap();
+            assert_eq!(report.disposition, SHARED_CACHE_HIT);
+            assert!(!report.compiler_executed);
+            assert_eq!(fs::read(root.join("fresh-shared-output/artifact.rlib")).unwrap(), b"shared-origin-payload");
+            let local = client
+                .restore(&test_action(), &root.join("fresh-local-output"), &local_policy())
+                .await
+                .unwrap();
+            assert_eq!(local.disposition, crate::CACHE_DISPOSITION_HIT);
+            assert!(!local.compiler_executed);
+            assert_eq!(fs::read(root.join("fresh-local-output/artifact.rlib")).unwrap(), b"shared-origin-payload");
+            println!("casita-shared-origin-fresh-process-hit");
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+        let producer = test_cache(&root.path().join("producer")).await;
+        let client = RustCache::open_async(crunch_store::StoreConfig::new(
+            crunch_store::StoreBackend::Casita,
+            root.path().join("client-state"),
+            root.path().join("store"),
+            "/mantle/store".to_string(),
+        ))
+        .await
+        .unwrap();
+        let source: Arc<dyn RustResultSource> =
+            Arc::new(DirectoryRustResultSource::open(root.path().join("shared"), true).unwrap());
+        let action = test_action();
+        let output = root.path().join("producer-output");
+        write_output(&output, b"shared-origin-payload");
+        let result = producer
+            .publish(PublishRequest {
+                action: &action,
+                output_dir: &output,
+                producer_receipt_ref: &receipt_ref(),
+                policy: &local_policy(),
+            })
+            .await
+            .unwrap();
+        let key = signing_key(TEST_KEY_BYTE);
+        producer
+            .publish_shared(source.as_ref(), shared_publish_request(&result, &key, &shared_policy()))
+            .await
+            .unwrap();
+        let trust = trust_policy(&key);
+        let report = client
+            .restore_shared(SharedRestoreRequest {
+                action: &action,
+                output_dir: &root.path().join("first-shared-output"),
+                local_policy: &local_policy(),
+                shared_policy: &shared_policy(),
+                trust_policy: &trust,
+                sources: &[source],
+            })
+            .await
+            .unwrap();
+        assert_eq!(report.disposition, SHARED_CACHE_HIT);
+        assert_eq!(client.retention().unwrap().retained_results.get(&result.result_ref), Some(&result.input.root_node));
+        drop(client);
+        let child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "shared::tests::casita_shared_origin_is_retained_and_reused_by_fresh_process", "--nocapture"])
+            .env("MANTLE_CASITA_SHARED_CACHE_CHILD", root.path())
+            .output()
+            .unwrap();
+        assert!(
+            child.status.success() && String::from_utf8_lossy(&child.stdout).contains("casita-shared-origin-fresh-process-hit"),
+            "status={} stdout={} stderr={}",
+            child.status,
+            String::from_utf8_lossy(&child.stdout),
+            String::from_utf8_lossy(&child.stderr)
+        );
     }
 
     #[tokio::test]

@@ -1427,6 +1427,17 @@ fn casita_local_action_result_reuses_verified_output_after_export_removal() {
     std::fs::create_dir(&state).unwrap();
     let policy = state.join("casita-trusted-public-keys");
     std::fs::write(&policy, format!("{ACTION_RESULT_TRUSTED_KEY}\n")).unwrap();
+    let assert_no_payload_roots = || {
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        runtime.block_on(async {
+            let repository = casita::Repository::local(state.join("casita")).await.unwrap();
+            let prefix = casita::RootName::try_from("mantle/castore").unwrap();
+            assert!(
+                repository.roots_under(&prefix).await.unwrap().is_empty(),
+                "PathInfo-only Builder published a castore payload root"
+            );
+        });
+    };
     let key = project_root(SHARED_ACTION_RESULT_PROJECT).join("fixtures/action.key");
     let build = || {
         parse_successful_json(
@@ -1445,6 +1456,7 @@ fn casita_local_action_result_reuses_verified_output_after_export_removal() {
     };
 
     let first = build();
+    assert_no_payload_roots();
     assert_eq!(first["counts"]["built_total"], 1);
     let published = action_result_report_with_disposition(&first, "published");
     let output = PathBuf::from(first["outcomes"][0]["outputs"][0]["path"].as_str().unwrap());
@@ -1484,13 +1496,13 @@ fn casita_local_action_result_reuses_verified_output_after_export_removal() {
         "Casita output-root lookup without physical export",
     );
     assert_eq!(info["backend"], "casita");
-    assert_eq!(info["backend_capabilities"]["rust_unit_cache"], false);
     assert_eq!(info["paths"].as_array().unwrap().len(), 1);
     assert_eq!(info["paths"][0]["store_path"], selector);
     assert_eq!(info["paths"][0]["signatures"].as_array().unwrap().len(), 1);
     assert!(!output.exists(), "verified root lookup must not substitute for Builder rehydration");
 
     let second = build();
+    assert_no_payload_roots();
     assert_eq!(second["counts"]["built_total"], 0, "fresh Builder must not execute the action again");
     assert_eq!(second["counts"]["cached_total"], 1);
     let reused = action_result_report_with_disposition(&second, "reused");

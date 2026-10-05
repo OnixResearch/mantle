@@ -4192,9 +4192,6 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
 }
 
 fn run_rust_cache_command(ctx: &RunContext, action: &RustCacheAction) -> Result<(), RunError> {
-    if !ctx.backend_profile().rust_unit_cache {
-        return Err(RunError::Build(format!("{}-rust-cache-unsupported", ctx.store_backend.as_str())));
-    }
     match action {
         RustCacheAction::Serve {
             policy,
@@ -7594,11 +7591,6 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         patch_source_topology: *execute_patch_source_topology,
     });
     validate_rust_local_cache_mode(*local_rust_cache, execution_mode)?;
-    if !ctx.backend_profile().rust_unit_cache
-        && (*local_rust_cache != RustLocalCacheMode::Off || *shared_rust_cache != RustSharedCacheMode::Off)
-    {
-        return Err(RunError::Build(format!("{}-rust-cache-unsupported", ctx.store_backend.as_str())));
-    }
     let root = root.clone().unwrap_or(current_dir_or_error()?);
     let captured = capture_rust_plan_command(RustPlanCaptureRequest {
         root,
@@ -9018,39 +9010,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_only_profile_without_rust_cache_blocks_cache_and_reuses_pathinfo_action_result() {
+    async fn pathinfo_action_result_reopens_without_rust_cache_dependency() {
         use snix_store::nar::NarCalculationService;
         use tokio::io::AsyncWriteExt;
 
         let root = tempfile::tempdir().unwrap();
         let state = root.path().join("unopened-state");
         let store = root.path().join("unopened-store");
-        let receipts = root.path().join("unopened-receipts");
-        let profile = crunch_store::StoreBackendCapabilityProfile {
-            rust_unit_cache: false,
-            ..crunch_store::StoreBackend::Snix.profile()
-        };
-        assert!(profile.core.contains(&"action-result-pathinfo-output-reuse"));
         let context = RunContext {
             store: store.clone(),
             resolved_state_dir: state.clone(),
             store_prefix: "/nix/store".to_string(),
             store_backend: crunch_store::StoreBackend::Snix,
-            test_profile: Some(profile),
+            test_profile: None,
             verbose: false,
             json: false,
             base_state_dirs: Vec::new(),
         };
-        let cache_command = RustCacheAction::Serve {
-            policy: root.path().join("missing-policy.json"),
-            receipt_dir: receipts.clone(),
-            once: true,
-        };
-        let error = run_rust_cache_command(&context, &cache_command).unwrap_err();
-        assert!(error.to_string().contains("snix-rust-cache-unsupported"), "{error}");
-        assert!(!state.exists(), "cache rejection created state");
-        assert!(!store.exists(), "cache rejection created output store");
-        assert!(!receipts.exists(), "cache rejection opened receipt directory");
 
         let config = || {
             crunch_store::StoreConfig::new(
@@ -9061,7 +9037,7 @@ mod tests {
             )
         };
         let selected_store = crunch_store::StoreHandle::open(config()).await.unwrap();
-        let content = b"PathInfo output survives a disabled Rust unit cache";
+        let content = b"PathInfo-backed action result survives process reopen";
         let mut writer = selected_store.blob_service().open_write().await;
         writer.write_all(content).await.unwrap();
         let digest = writer.close().await.unwrap();
@@ -9162,7 +9138,6 @@ mod tests {
         assert_eq!(publication[0].index_status, crunch_store::ActionResultPublicationStatus::Published);
         drop(action_results);
 
-        assert!(!context.backend_profile().rust_unit_cache);
         let reopened = crunch_store::StoreHandle::open(config()).await.unwrap();
         let action_results = reopened.into_builder_store_parts().action_results;
         let discovery = action_results.discover(&signed.record.action_ref).await;
@@ -9185,10 +9160,7 @@ mod tests {
 
         let mut reopened = crunch_store::StoreHandle::open(config()).await.unwrap();
         assert_eq!(reopened.export_cached_path_info(&store_path).await.unwrap(), Some(path_info));
-        let error = run_rust_cache_command(&context, &cache_command).unwrap_err();
-        assert!(error.to_string().contains("snix-rust-cache-unsupported"), "{error}");
         assert_eq!(fs::read(store.join(store_path.to_string())).unwrap(), content);
-        assert!(!receipts.exists(), "PathInfo-backed action reuse created Rust cache receipts");
     }
 
     #[test]

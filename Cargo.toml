@@ -248,6 +248,7 @@ chapter-tgz = "=0.1.0"
 fuse-backend-rs = { path = "vendor/fuse-backend-rs" }
 
 [dev-dependencies]
+casita = { git = "https://github.com/cachix/casita", rev = "90404fcb1cfb3d83f2233715448dfefe913f5fd1", default-features = false, features = ["native", "experimental"] }
 crunch-hardware-simulation-core = { path = "crates/crunch-hardware-simulation-core" }
 crunch-gc-core = { path = "crates/crunch-gc-core" }
 crunch-hardware-simulation = { path = "crates/crunch-hardware-simulation" }

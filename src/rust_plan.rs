@@ -16908,7 +16908,7 @@ fn finalize_successful_rust_unit_execution(
     }
     if publish_cache_result {
         let published = publish_local_cache_result(options, cache_action.as_ref(), &output_dir, &receipt)?;
-        if let Some(publication) = publish_shared_cache_result(options, published.as_ref()) {
+        if let Some(publication) = publish_shared_cache_result(options, published.as_ref())? {
             let shared_report = receipt
                 .shared_cache
                 .get_or_insert_with(|| SharedRustCacheReport::rejected("shared-cache-lookup-not-recorded"));
@@ -16941,6 +16941,9 @@ fn publish_local_cache_result(
     };
     let result = match selection.cache.publish_blocking(request) {
         Ok(result) => result,
+        Err(crunch_rust_cache::Error::Authority(error)) => {
+            return Err(RunError::Build(format!("publishing retained Rust unit: {error}")));
+        }
         Err(_) => return Ok(None),
     };
     assert_eq!(producer_receipt_ref.len(), RUST_CACHE_RECEIPT_REF_PREFIX.len() + BLAKE3_HEX_CHARS);
@@ -16951,22 +16954,28 @@ fn publish_local_cache_result(
 fn publish_shared_cache_result(
     options: &RustUnitExecutionOptions,
     result: Option<&crunch_rust_cache_core::RustUnitResult>,
-) -> Option<SharedPublicationObservation> {
-    let local = options.local_cache.as_ref()?;
-    let shared = local.shared.as_ref()?;
-    let source = shared.publication_source.as_ref()?;
+) -> Result<Option<SharedPublicationObservation>, RunError> {
+    let Some(local) = options.local_cache.as_ref() else {
+        return Ok(None);
+    };
+    let Some(shared) = local.shared.as_ref() else {
+        return Ok(None);
+    };
+    let Some(source) = shared.publication_source.as_ref() else {
+        return Ok(None);
+    };
     let Some(result) = result else {
-        return Some(SharedPublicationObservation::rejected(
+        return Ok(Some(SharedPublicationObservation::rejected(
             source.source_id().to_string(),
             "shared-local-result-unavailable",
-        ));
+        )));
     };
     let Some(signing_key) = shared.signing_key.as_ref() else {
-        return Some(SharedPublicationObservation::rejected_for_result(
+        return Ok(Some(SharedPublicationObservation::rejected_for_result(
             source.source_id().to_string(),
             result.result_ref.clone(),
             "shared-signing-key-unavailable",
-        ));
+        )));
     };
     let request = SharedPublishRequest {
         result,
@@ -16978,14 +16987,17 @@ fn publish_shared_cache_result(
     let publication = local.cache.publish_shared_blocking(source.as_ref(), request);
     assert!(shared.policy.publishes_enabled);
     assert!(!shared.signer_name.is_empty());
-    Some(match publication {
+    Ok(Some(match publication {
         Ok(report) => SharedPublicationObservation::accepted(report),
+        Err(crunch_rust_cache::Error::Authority(error)) => {
+            return Err(RunError::Build(format!("publishing shared retained Rust unit: {error}")));
+        }
         Err(_) => SharedPublicationObservation::rejected_for_result(
             source.source_id().to_string(),
             result.result_ref.clone(),
             "shared-publication-failed",
         ),
-    })
+    }))
 }
 
 fn try_restore_local_cache_result(
@@ -17007,6 +17019,9 @@ fn try_restore_local_cache_result(
     inputs.local_cache_action = Some(action.clone());
     let report = match selection.cache.restore_blocking(&action, &inputs.output_dir, &selection.policy) {
         Ok(report) => report,
+        Err(crunch_rust_cache::Error::Authority(error)) => {
+            return Err(RunError::Build(format!("restoring retained Rust unit: {error}")));
+        }
         Err(error) => RustCacheReport {
             disposition: crunch_rust_cache::CACHE_DISPOSITION_REJECTED.to_string(),
             reason_codes: vec![format!("local-cache-restore-error:{error}")],
@@ -17036,7 +17051,7 @@ fn try_restore_shared_cache_result(
     let Some(shared) = local_selection.shared.as_ref() else {
         return Ok(None);
     };
-    let report = local_selection
+    let report = match local_selection
         .cache
         .restore_shared_blocking(SharedRestoreRequest {
             action,
@@ -17045,8 +17060,13 @@ fn try_restore_shared_cache_result(
             shared_policy: &shared.policy,
             trust_policy: &shared.trust_policy,
             sources: &shared.sources,
-        })
-        .unwrap_or_else(|_| SharedRustCacheReport::rejected("shared-cache-restore-error"));
+        }) {
+        Ok(report) => report,
+        Err(crunch_rust_cache::Error::Authority(error)) => {
+            return Err(RunError::Build(format!("restoring shared retained Rust unit: {error}")));
+        }
+        Err(_) => SharedRustCacheReport::rejected("shared-cache-restore-error"),
+    };
     let is_hit = report.disposition == crunch_rust_cache::shared::SHARED_CACHE_HIT;
     let is_conflict = report.disposition == crunch_rust_cache::shared::SHARED_CACHE_CONFLICT;
     let must_block =

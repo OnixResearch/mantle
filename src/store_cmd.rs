@@ -150,9 +150,6 @@ async fn cmd_store_async(action: crate::StoreAction, context: StoreCommandContex
         }
         crate::StoreAction::Usage => {
             preflight_store_backend(context)?;
-            if context.backend == crunch_store::StoreBackend::Casita {
-                ensure_no_unsupported_rust_cache_state(context.state_dir)?;
-            }
             let _guard = if context.backend == crunch_store::StoreBackend::Casita {
                 Some(
                     crunch_store::StoreMutationGuard::try_acquire(context.state_dir)
@@ -161,16 +158,9 @@ async fn cmd_store_async(action: crate::StoreAction, context: StoreCommandContex
             } else {
                 None
             };
-            let rust_retention = if context.backend == crunch_store::StoreBackend::Snix
-                && !rust_cache_state_present(context.state_dir)
-                    .map_err(|error| RunError::Build(format!("inspecting Rust cache state: {error}")))?
-            {
-                None
-            } else {
-                plan_rust_cache_retention(context).await?
-            };
             let mut store = open_store(context).await?;
             recover_pending_casita_gc(&mut store, context, _guard.as_ref()).await?;
+            let rust_retention = plan_rust_cache_retention(context).await?;
             cmd_store_usage(&mut store, _guard.as_ref(), rust_retention.as_ref(), context.is_json_output).await
         }
         other => cmd_store_mutation_or_transfer(other, context).await,
@@ -294,9 +284,6 @@ async fn cmd_store_gc_action(
         return Err(RunError::Build("store gc execution requires both --execute and --plan-id".to_string()));
     }
     preflight_store_backend(context)?;
-    if context.backend == crunch_store::StoreBackend::Casita {
-        ensure_no_unsupported_rust_cache_state(context.state_dir)?;
-    }
     let _guard = if execute || context.backend == crunch_store::StoreBackend::Casita {
         Some(
             crunch_store::StoreMutationGuard::try_acquire(context.state_dir)
@@ -305,9 +292,9 @@ async fn cmd_store_gc_action(
     } else {
         None
     };
-    let rust_retention = plan_rust_cache_retention(context).await?;
     let mut store = open_store(context).await?;
     recover_pending_casita_gc(&mut store, context, _guard.as_ref()).await?;
+    let rust_retention = plan_rust_cache_retention(context).await?;
     cmd_store_gc(&mut store, _guard.as_ref(), rust_retention.as_ref(), accepted_plan_id, context.is_json_output).await
 }
 
@@ -346,26 +333,12 @@ fn rust_cache_state_present(state_dir: &Path) -> Result<bool, std::io::Error> {
     }
 }
 
-fn ensure_no_unsupported_rust_cache_state(state_dir: &Path) -> Result<(), RunError> {
-    let cache_path = state_dir.join(crunch_rust_cache::RUST_CACHE_STATE_DIRECTORY);
-    match rust_cache_state_present(state_dir) {
-        Ok(false) => Ok(()),
-        Ok(true) => Err(RunError::Build(format!(
-            "casita-rust-cache-unsupported: refusing GC or usage with Rust cache state at {}",
-            cache_path.display(),
-        ))),
-        Err(error) => Err(RunError::Build(format!(
-            "casita-rust-cache-unsupported: cannot inspect Rust cache state at {}: {error}",
-            cache_path.display(),
-        ))),
-    }
-}
-
 async fn plan_rust_cache_retention(
     context: StoreCommandContext<'_>,
 ) -> Result<Option<crunch_rust_cache::RustCacheRetentionPlan>, RunError> {
-    if context.backend == crunch_store::StoreBackend::Casita {
-        ensure_no_unsupported_rust_cache_state(context.state_dir)?;
+    if !rust_cache_state_present(context.state_dir)
+        .map_err(|error| RunError::Build(format!("inspecting Rust cache state: {error}")))?
+    {
         return Ok(None);
     }
     let rust_cache = crunch_rust_cache::RustCache::open_async(crunch_store::StoreConfig {

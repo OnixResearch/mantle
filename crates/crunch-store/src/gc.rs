@@ -66,7 +66,6 @@ pub struct GcContext<'a> {
     pub overlay_blob_service: &'a dyn BlobService,
     pub overlay_plan_identity: Option<[u8; blake3::OUT_LEN]>,
     pub retained_castore_roots: &'a [Node],
-    pub(crate) rust_unit_cache_supported: bool,
     pub(crate) casita_store: Option<Arc<CasitaStore>>,
 }
 use crate::artifact_attestation_file_path;
@@ -388,12 +387,6 @@ pub async fn run_gc(
 async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result<GcPlan, Error> {
     assert!(!ctx.store_dir.is_empty(), "build_plan: store_dir must not be empty");
     assert!(ctx.store_dir.starts_with('/'), "build_plan: store_dir must be absolute");
-    if ctx.casita_store.is_some() && !ctx.rust_unit_cache_supported && !ctx.retained_castore_roots.is_empty() {
-        return Err(Error::Gc(
-            "casita-rust-cache-unsupported: Casita GC cannot retain Rust unit cache roots".to_string(),
-        ));
-    }
-
     let all_roots = roots::list_roots(ctx.state_dir)?;
     let current_unix_s = roots::current_unix_seconds()?;
     let retention_policy = crate::retention::core_retention_policy();
@@ -517,7 +510,7 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
     })?;
     let mut candidate_paths = core_plan.candidate_path_ids.clone();
     let (casita_castore_candidates, casita_targets, castore_core_id) =
-        if let Some(store) = ctx.casita_store.as_ref().filter(|_| ctx.rust_unit_cache_supported) {
+        if let Some(store) = ctx.casita_store.as_ref() {
             let castore = plan_casita_castore_roots(store, ctx.retained_castore_roots, is_execution_requested).await?;
             candidate_paths.extend(castore.candidate_roots.iter().cloned());
             usage.unknown_object_count = usage.unknown_object_count.saturating_add(castore.targets.len());
@@ -3254,43 +3247,168 @@ mod tests {
             overlay_plan_identity: None,
             retained_castore_roots: retained,
             casita_store: Some(store.clone()),
-            rust_unit_cache_supported: true,
         }
     }
 
-    #[tokio::test]
-    async fn casita_gc_without_rust_cache_capability_ignores_payload_roots_and_rejects_retention() {
-        let state = tempfile::tempdir().unwrap();
-        let exports = tempfile::tempdir().unwrap();
-        let _guard = crate::StoreMutationGuard::acquire_wait(state.path()).unwrap();
-        let store = CasitaStore::open(state.path(), "/nix/store").await.unwrap();
-        let node = Node::Symlink {
-            target: SymlinkTarget::try_from("preexisting-castore-payload").unwrap(),
-        };
-        store.admit_castore_payload_root(&node).await.unwrap();
-        let original = store.verified_gc_castore_roots().await.unwrap();
-        let empty_pathinfo = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
-            "casita-gc-cache-disabled".to_string(),
-            std::num::NonZeroUsize::new(2).unwrap(),
+    fn assert_rejected_payload_in_fresh_process(state: &Path, exports: &Path, node: &Node, expected: &str) {
+        let encoded = data_encoding::HEXLOWER.encode(&postcard::to_stdvec(node).unwrap());
+        let child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "gc::tests::casita_gc_rejects_repointed_retained_payload_and_missing_root",
+                "--nocapture",
+            ])
+            .env("MANTLE_CASITA_PAYLOAD_CHILD_STATE", state)
+            .env("MANTLE_CASITA_PAYLOAD_CHILD_EXPORTS", exports)
+            .env("MANTLE_CASITA_PAYLOAD_CHILD_NODE", encoded)
+            .env("MANTLE_CASITA_PAYLOAD_CHILD_EXPECTED", expected)
+            .output()
+            .unwrap();
+        assert!(
+            child.status.success() && String::from_utf8_lossy(&child.stdout).contains("casita-payload-child-rejected"),
+            "status={} stdout={} stderr={}",
+            child.status,
+            String::from_utf8_lossy(&child.stdout),
+            String::from_utf8_lossy(&child.stderr)
         );
-        let mut ca_mappings = CaMappings::load(state.path());
-        let disabled = GcContext {
-            rust_unit_cache_supported: false,
-            ..casita_gc_test_context(state.path(), exports.path().to_str().unwrap(), &store, &empty_pathinfo, &[])
-        };
-        let plan = run_gc(&disabled, &mut ca_mappings, None).await.unwrap();
-        assert!(plan.candidate_paths.is_empty(), "unsupported payload roots must not enter output GC");
-        assert_eq!(store.verified_gc_castore_roots().await.unwrap(), original);
+    }
 
-        let retained = [node];
-        let disabled_retention = GcContext {
-            rust_unit_cache_supported: false,
-            ..casita_gc_test_context(state.path(), exports.path().to_str().unwrap(), &store, &empty_pathinfo, &retained)
-        };
-        let error = run_gc(&disabled_retention, &mut ca_mappings, None).await.unwrap_err();
-        assert!(error.to_string().contains("casita-rust-cache-unsupported"), "{error}");
-        assert_eq!(store.verified_gc_castore_roots().await.unwrap(), original);
-        assert!(!casita_gc_fence_pending(state.path()).unwrap());
+
+    #[tokio::test]
+    async fn casita_gc_rejects_repointed_retained_payload_and_missing_root() {
+        use casita::experimental::ConditionalPublishResult;
+        use casita::experimental::MetadataStore;
+        use casita::experimental::Repository;
+        use casita::experimental::RootChange;
+        use casita::experimental::RootExpectation;
+        use casita::import::UnrootedFilesystemImport;
+        if let Some(state) = std::env::var_os("MANTLE_CASITA_PAYLOAD_CHILD_STATE") {
+            let state = PathBuf::from(state);
+            let exports = PathBuf::from(std::env::var_os("MANTLE_CASITA_PAYLOAD_CHILD_EXPORTS").unwrap());
+            let encoded = std::env::var("MANTLE_CASITA_PAYLOAD_CHILD_NODE").unwrap();
+            let bytes = data_encoding::HEXLOWER.decode(encoded.as_bytes()).unwrap();
+            let node: Node = postcard::from_bytes(&bytes).unwrap();
+            let expected = std::env::var("MANTLE_CASITA_PAYLOAD_CHILD_EXPECTED").unwrap();
+            let _guard = crate::StoreMutationGuard::acquire_wait(&state).unwrap();
+            let store = CasitaStore::open(&state, "/nix/store").await.unwrap();
+            let error = store.rehydrate_castore_payload_root(&node).await.unwrap_err();
+            assert!(error.to_string().contains(&expected), "{error}");
+            let empty_pathinfo = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
+                "casita-payload-child".to_string(),
+                std::num::NonZeroUsize::new(2).unwrap(),
+            );
+            let retained = [node];
+            let ctx = casita_gc_test_context(&state, exports.to_str().unwrap(), &store, &empty_pathinfo, &retained);
+            let mut ca_mappings = CaMappings::load(&state);
+            let error = run_gc(&ctx, &mut ca_mappings, None).await.unwrap_err();
+            assert!(error.to_string().contains(&expected), "{error}");
+            assert!(!casita_gc_fence_pending(&state).unwrap());
+            println!("casita-payload-child-rejected");
+            return;
+        }
+
+        for tamper in ["content", "node.postcard"] {
+            let state = tempfile::tempdir().unwrap();
+            let exports = tempfile::tempdir().unwrap();
+            let _guard = crate::StoreMutationGuard::acquire_wait(state.path()).unwrap();
+            let store = CasitaStore::open(state.path(), "/nix/store").await.unwrap();
+            let payload = tempfile::tempdir().unwrap();
+            std::fs::write(payload.path().join("libunit.rlib"), b"retained compiled unit").unwrap();
+            let node = snix_castore::import::fs::ingest_path(
+                store.blob_service.clone(),
+                store.directory_service.clone(),
+                payload.path().to_path_buf(),
+                None::<&snix_castore::refscan::ReferenceScanner<&[u8]>>,
+            )
+            .await
+            .unwrap();
+            store.admit_castore_payload_root(&node).await.unwrap();
+            let name = CasitaStore::castore_root_name(&node).unwrap();
+            assert_eq!(
+                name.as_str(),
+                format!("mantle/castore/{}", blake3::hash(&postcard::to_stdvec(&node).unwrap()).to_hex())
+            );
+            let outsider = crate::casita::LocalRepository::local(state.path().join("casita")).await.unwrap();
+            let original = outsider.metadata().snapshot().await.unwrap().root(&name).await.unwrap().unwrap();
+            let scratch = tempfile::tempdir().unwrap();
+            let envelope = scratch.path().join("envelope");
+            std::fs::create_dir(&envelope).unwrap();
+            let content = envelope.join("content");
+            std::fs::create_dir(&content).unwrap();
+            std::fs::write(
+                content.join("libunit.rlib"),
+                if tamper == "content" { &b"substituted compiled unit"[..] } else { &b"retained compiled unit"[..] },
+            )
+            .unwrap();
+            let encoded_node = if tamper == "node.postcard" {
+                Node::Symlink {
+                    target: SymlinkTarget::try_from("other-node").unwrap(),
+                }
+            } else {
+                node.clone()
+            };
+            std::fs::write(envelope.join("node.postcard"), postcard::to_stdvec(&encoded_node).unwrap()).unwrap();
+            let session = outsider.mutation_session().await.unwrap();
+            let changed = session.import(UnrootedFilesystemImport::new(&envelope)).await.unwrap();
+            let committed = session
+                .publish_if_roots_match(
+                    Vec::new(),
+                    vec![RootExpectation {
+                        name: name.clone(),
+                        target: Some(original),
+                    }],
+                    vec![RootChange::Set {
+                        name: name.clone(),
+                        target: changed.clone(),
+                    }],
+                )
+                .await
+                .unwrap();
+            assert!(matches!(committed, ConditionalPublishResult::Committed(_)));
+            let reopened = CasitaStore::open(state.path(), "/nix/store").await.unwrap();
+            let error = reopened.rehydrate_castore_payload_root(&node).await.unwrap_err();
+            assert!(error.to_string().contains("casita-envelope-invalid"), "{error}");
+            let empty_pathinfo = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
+                "casita-payload-tamper".to_string(),
+                std::num::NonZeroUsize::new(2).unwrap(),
+            );
+            let retained = [node.clone()];
+            let ctx = casita_gc_test_context(
+                state.path(),
+                exports.path().to_str().unwrap(),
+                &reopened,
+                &empty_pathinfo,
+                &retained,
+            );
+            let mut ca_mappings = CaMappings::load(state.path());
+            let error = run_gc(&ctx, &mut ca_mappings, None).await.unwrap_err();
+            assert!(error.to_string().contains("casita-envelope-invalid"), "{error}");
+            assert_eq!(outsider.metadata().snapshot().await.unwrap().root(&name).await.unwrap(), Some(changed.clone()));
+            assert!(!casita_gc_fence_pending(state.path()).unwrap());
+            drop(_guard);
+            assert_rejected_payload_in_fresh_process(
+                state.path(),
+                exports.path(),
+                &node,
+                "casita-envelope-invalid",
+            );
+            let session = outsider.mutation_session().await.unwrap();
+            let removed = session
+                .publish_if_roots_match(
+                    Vec::new(),
+                    vec![RootExpectation {
+                        name: name.clone(),
+                        target: Some(changed),
+                    }],
+                    vec![RootChange::Remove { name: name.clone() }],
+                )
+                .await
+                .unwrap();
+            assert!(matches!(removed, ConditionalPublishResult::Committed(_)));
+            assert_eq!(outsider.metadata().snapshot().await.unwrap().root(&name).await.unwrap(), None);
+            assert_rejected_payload_in_fresh_process(state.path(), exports.path(), &node, "casita-root-missing");
+            assert!(!casita_gc_fence_pending(state.path()).unwrap());
+        }
     }
 
     #[tokio::test]

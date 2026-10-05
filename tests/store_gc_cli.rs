@@ -382,39 +382,6 @@ fn casita_store_gc_cli_collects_unpinned_signed_output_and_preserves_retained_na
     assert!(std::fs::symlink_metadata(&removed_export).is_ok(), "GC plan must not remove an export");
 
     let plan_id = plan["plan_id"].as_str().unwrap();
-    let roots_before = std::fs::read(state_dir.path().join("gc-roots.json")).unwrap();
-    let listed_before_output = casita_cmd().args(["--json", "store", "list"]).output().unwrap();
-    assert!(listed_before_output.status.success(), "{}", String::from_utf8_lossy(&listed_before_output.stderr));
-    let listed_before: serde_json::Value = serde_json::from_slice(&listed_before_output.stdout).unwrap();
-    assert_eq!(listed_before["paths"].as_array().unwrap().len(), 2);
-    let rust_cache_state = state_dir.path().join(crunch_rust_cache::RUST_CACHE_STATE_DIRECTORY);
-    std::fs::create_dir(&rust_cache_state).unwrap();
-    let cache_marker = rust_cache_state.join("retained-cache-state");
-    let marker_bytes = b"existing Rust cache retention state";
-    std::fs::write(&cache_marker, marker_bytes).unwrap();
-    casita_cmd()
-        .args(["store", "gc"])
-        .assert()
-        .failure()
-        .stderr(predicates::str::contains("casita-rust-cache-unsupported"));
-    casita_cmd()
-        .args(["store", "gc", "--execute", "--plan-id", plan_id])
-        .assert()
-        .failure()
-        .stderr(predicates::str::contains("casita-rust-cache-unsupported"));
-    assert_eq!(std::fs::read(&cache_marker).unwrap(), marker_bytes);
-    assert_eq!(std::fs::read(state_dir.path().join("gc-roots.json")).unwrap(), roots_before);
-    assert!(!state_dir.path().join("casita-gc-fence.json").exists());
-    assert!(!state_dir.path().join("casita-gc-fence.progress").exists());
-    assert_eq!(std::fs::read_link(&kept_export).unwrap(), Path::new("kept-nar-content"));
-    assert_eq!(std::fs::read_link(&removed_export).unwrap(), Path::new("collected-nar-content"));
-    let listed_after_output = casita_cmd().args(["--json", "store", "list"]).output().unwrap();
-    assert!(listed_after_output.status.success(), "{}", String::from_utf8_lossy(&listed_after_output.stderr));
-    let listed_after: serde_json::Value = serde_json::from_slice(&listed_after_output.stdout).unwrap();
-    assert_eq!(listed_after["paths"], listed_before["paths"]);
-    std::fs::remove_file(cache_marker).unwrap();
-    std::fs::remove_dir(rust_cache_state).unwrap();
-
     let execution_output =
         casita_cmd().args(["--json", "store", "gc", "--execute", "--plan-id", plan_id]).output().unwrap();
     assert!(execution_output.status.success(), "{}", String::from_utf8_lossy(&execution_output.stderr));
@@ -461,7 +428,6 @@ fn casita_store_gc_cli_collects_unpinned_signed_output_and_preserves_retained_na
         serde_json::json!({
             "plan_id": plan["plan_id"],
             "retained_root_count": plan["retained_root_count"],
-            "rust_cache_gc_preflight": "rejected-before-fence",
             "candidate_paths": execution["candidate_paths"],
             "execution_complete": execution["execution_complete"],
             "operations": execution["operations"],
@@ -538,7 +504,6 @@ fn store_info_reports_base_layer_without_mutating_base() {
         .stdout(predicates::str::contains("backend:    snix"))
         .stdout(predicates::str::contains("overlay-composition: true"))
         .stdout(predicates::str::contains("atomic-batch-import: true"))
-        .stdout(predicates::str::contains("rust-unit-cache: true"))
         .stdout(predicates::str::contains("unsigned-admission: true"))
         .stdout(predicates::str::contains("max-root-changes: unbounded-by-backend"));
     let base_after = blake3::hash(&std::fs::read(&base_database).unwrap());
@@ -823,49 +788,6 @@ fn unknown_backend_is_rejected_before_creating_state() {
     assert_eq!(snapshot_state_tree(root.path()), before, "unknown backend changed filesystem");
 }
 
-#[test]
-fn casita_rust_cache_daemon_fails_before_loading_policy_or_creating_state() {
-    let root = tempfile::tempdir().unwrap();
-    let state = root.path().join("state");
-    let store = root.path().join("store");
-    let receipts = root.path().join("receipts");
-    crunch_cmd(&state, &store)
-        .args(["--store-backend", "casita", "rust-cache", "serve", "--policy"])
-        .arg(root.path().join("missing-policy.json"))
-        .arg("--receipt-dir")
-        .arg(&receipts)
-        .assert()
-        .failure()
-        .stderr(predicates::str::contains("casita-rust-cache-unsupported"));
-    assert!(!state.exists());
-    assert!(!store.exists());
-    assert!(!receipts.exists());
-}
-
-#[test]
-fn casita_rust_plan_cache_modes_fail_before_cargo_capture() {
-    let root = tempfile::tempdir().unwrap();
-    let state = root.path().join("state");
-    let store = root.path().join("store");
-    for mode in ["--local-rust-cache", "--shared-rust-cache"] {
-        crunch_cmd(&state, &store)
-            .args([
-                "--store-backend",
-                "casita",
-                "rust-plan",
-                "--execute-first-supported-unit",
-                mode,
-                "read",
-                "--root",
-            ])
-            .arg(root.path().join("missing-workspace"))
-            .assert()
-            .failure()
-            .stderr(predicates::str::contains("casita-rust-cache-unsupported"));
-        assert!(!state.exists());
-        assert!(!store.exists());
-    }
-}
 
 #[test]
 fn ambient_backend_name_cannot_override_default_snix_selection() {

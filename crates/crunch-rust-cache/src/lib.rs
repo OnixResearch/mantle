@@ -105,6 +105,8 @@ pub enum Error {
     Json(String),
     #[error("rust-cache-castore:{0}")]
     Castore(String),
+    #[error("rust-cache-authority:{0}")]
+    Authority(#[source] crunch_store::Error),
     #[error("rust-cache-bound:{0}")]
     Bound(String),
     #[error("rust-cache-state:{0}")]
@@ -122,6 +124,7 @@ pub struct RustCache {
     staging_dir: PathBuf,
     blob_service: Arc<dyn BlobService>,
     directory_service: Arc<dyn DirectoryService>,
+    store: Option<Arc<crunch_store::StoreHandle>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -250,15 +253,22 @@ impl RustCache {
     }
 
     pub async fn open_async(config: crunch_store::StoreConfig) -> Result<Self, Error> {
-        if config.backend == crunch_store::StoreBackend::Casita {
-            return Err(Error::State("casita-rust-cache-unsupported".to_string()));
-        }
         let handle = crunch_store::StoreHandle::open(config)
             .await
             .map_err(|error| Error::Castore(format!("open-store:{error}")))?;
-        let cache = Self::new(handle.state_dir().to_path_buf(), handle.blob_service(), handle.directory_service())?;
+        if handle.backend() == crunch_store::StoreBackend::Casita
+            && crunch_store::StoreHandle::casita_gc_fence_pending(handle.state_dir()).map_err(Error::Authority)?
+        {
+            return Err(Error::Authority(crunch_store::Error::Gc(
+                "gc-recovery-required: recover fenced Casita GC before opening the Rust unit cache".to_string(),
+            )));
+        }
+        let mut cache = Self::new(handle.state_dir().to_path_buf(), handle.blob_service(), handle.directory_service())?;
         assert_eq!(cache.state_dir(), handle.state_dir());
         assert!(cache.cache_dir.starts_with(handle.state_dir()));
+        if handle.backend() == crunch_store::StoreBackend::Casita {
+            cache.store = Some(Arc::new(handle));
+        }
         Ok(cache)
     }
 
@@ -287,6 +297,7 @@ impl RustCache {
             staging_dir,
             blob_service,
             directory_service,
+            store: None,
         })
     }
 
@@ -341,6 +352,25 @@ impl RustCache {
                 .map_err(|error| Error::Castore(format!("completeness:{error}")))?;
         if !is_complete {
             return Err(Error::Castore("ingested-tree-incomplete".to_string()));
+        }
+        // r[impl mantle.casita_store_backend.castore_payload_roots]
+        if let Some(store) = &self.store {
+            if self
+                .retention()?
+                .retained_results
+                .values()
+                .any(|retained| retained == &result.input.root_node)
+            {
+                store
+                    .rehydrate_castore_payload_root(&node)
+                    .await
+                    .map_err(Error::Authority)?;
+            } else {
+                store
+                    .admit_castore_payload_root(&node)
+                    .await
+                    .map_err(Error::Authority)?;
+            }
         }
         self.publish_record_and_index(&result)?;
         assert_eq!(result.input.action_ref, request.action.action_ref);
@@ -562,6 +592,12 @@ impl RustCache {
         for result_ref in &index.result_refs {
             let result = self.read_result(result_ref)?;
             let node = node_from_identity(&result.input.root_node)?;
+            if let Some(store) = &self.store {
+                store
+                    .rehydrate_castore_payload_root(&node)
+                    .await
+                    .map_err(Error::Authority)?;
+            }
             let is_complete =
                 crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
                     .await
@@ -1455,21 +1491,84 @@ mod tests {
     const TEST_DEVICE_B: u64 = 11;
 
     #[tokio::test]
-    async fn casita_cache_refuses_before_creating_state() {
+    async fn casita_payload_is_reused_by_fresh_process_without_compiler() {
+        let child_root = std::env::var_os("MANTLE_CASITA_RUST_CACHE_CHILD");
+        if let Some(root) = child_root {
+            let root = PathBuf::from(root);
+            let cache = RustCache::open_async(crunch_store::StoreConfig::new(
+                crunch_store::StoreBackend::Casita,
+                root.join("state"),
+                root.join("store"),
+                "/mantle/store".to_string(),
+            ))
+            .await
+            .unwrap();
+            let report = cache
+                .restore(&test_action(), &root.join("restored"), &read_write_policy())
+                .await
+                .unwrap();
+            assert_eq!(report.disposition, CACHE_DISPOSITION_HIT);
+            assert!(!report.compiler_executed);
+            assert_eq!(fs::read(root.join("restored/libcrate.rlib")).unwrap(), TEST_OUTPUT);
+            assert!(!root.join("restored").join(RUST_UNIT_EXECUTION_RECEIPT_FILE).exists());
+            let retention = cache.plan_retention_gc().unwrap();
+            assert_eq!(retention.live_nodes().len(), 1);
+            let mut store = crunch_store::StoreHandle::open(crunch_store::StoreConfig::new(
+                crunch_store::StoreBackend::Casita,
+                root.join("state"),
+                root.join("store"),
+                "/mantle/store".to_string(),
+            ))
+            .await
+            .unwrap();
+            let guard = crunch_store::StoreMutationGuard::acquire_wait(&root.join("state")).unwrap();
+            let gc_plan = store
+                .garbage_collect_with_castore_roots_under_guard(&guard, None, retention.live_nodes())
+                .await
+                .unwrap();
+            assert_eq!(gc_plan.retained_castore_root_count, 1);
+            assert_eq!(gc_plan.candidate_path_count, 0);
+            println!("casita-rust-cache-fresh-process-hit");
+            return;
+        }
         let root = tempfile::tempdir().unwrap();
-        let state_dir = root.path().join("state");
-        let output_dir = root.path().join("store");
-        let error = RustCache::open_async(crunch_store::StoreConfig::new(
+        let cache = RustCache::open_async(crunch_store::StoreConfig::new(
             crunch_store::StoreBackend::Casita,
-            state_dir.clone(),
-            output_dir.clone(),
+            root.path().join("state"),
+            root.path().join("store"),
             "/mantle/store".to_string(),
         ))
         .await
-        .unwrap_err();
-        assert_eq!(error.to_string(), "rust-cache-state:casita-rust-cache-unsupported");
-        assert!(!state_dir.exists());
-        assert!(!output_dir.exists());
+        .unwrap();
+        let built = root.path().join("built");
+        write_output(&built, TEST_OUTPUT);
+        let result = cache
+            .publish(PublishRequest {
+                action: &test_action(),
+                output_dir: &built,
+                producer_receipt_ref: &format!("mantle-rust-receipt://blake3/{DIGEST}"),
+                policy: &read_write_policy(),
+            })
+            .await
+            .unwrap();
+        assert_eq!(cache.retention().unwrap().retained_results.get(&result.result_ref), Some(&result.input.root_node));
+        drop(cache);
+        fs::remove_dir_all(&built).unwrap();
+        let child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "tests::casita_payload_is_reused_by_fresh_process_without_compiler", "--nocapture"])
+            .env("MANTLE_CASITA_RUST_CACHE_CHILD", root.path())
+            .output()
+            .unwrap();
+        assert!(
+            child.status.success() && String::from_utf8_lossy(&child.stdout).contains("casita-rust-cache-fresh-process-hit"),
+            "status={} stdout={} stderr={}",
+            child.status,
+            String::from_utf8_lossy(&child.stdout),
+            String::from_utf8_lossy(&child.stderr)
+        );
+        for path in ["pathinfo.redb", "directories.redb", "blobs"] {
+            assert!(!root.path().join("state").join(path).exists(), "Casita wrote Snix state at {path}");
+        }
     }
 
     async fn test_cache(state_dir: &Path) -> RustCache {
