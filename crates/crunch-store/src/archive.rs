@@ -1074,6 +1074,7 @@ mod tests {
     use std::num::NonZeroUsize;
     use std::sync::Arc;
 
+    use casita::experimental::MetadataStore;
     use nix_compat::narinfo::SigningKey;
     use nix_compat::store_path::StorePath;
     use nix_compat::store_path::build_ca_path_with_store_dir;
@@ -1181,7 +1182,10 @@ mod tests {
     }
 
     fn sign_pathinfo(path_info: &mut PathInfo) {
-        let (signing_key, _) = test_keypair();
+        sign_pathinfo_with_key(path_info, &test_keypair().0);
+    }
+
+    fn sign_pathinfo_with_key(path_info: &mut PathInfo, signing_key: &SigningKey<ed25519_dalek::SigningKey>) {
         let store_path_ref: StorePathRef = path_info.store_path.as_ref();
         let refs: Vec<StorePathRef> = path_info.references.iter().map(StorePath::as_ref).collect();
         let fp = nix_compat::narinfo::fingerprint_with_store_dir(
@@ -1492,6 +1496,67 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(exported_again, archive);
+    }
+
+    #[tokio::test]
+    async fn casita_archive_export_rechecks_revoked_closure_signer_before_writing() {
+        let temp = tempfile::tempdir().unwrap();
+        let state = temp.path().join("state");
+        std::fs::create_dir(&state).unwrap();
+        let policy = state.join("casita-trusted-public-keys");
+        let root_key = test_keypair().1;
+        let reference_raw = ed25519_dalek::SigningKey::from_bytes(&[7u8; 32]);
+        let reference_key = VerifyingKey::new("archive-reference-1".to_string(), reference_raw.verifying_key());
+        let reference_signer = SigningKey::new("archive-reference-1".to_string(), reference_raw);
+        let both_keys = format!("{root_key}\n{reference_key}\n");
+        std::fs::write(&policy, &both_keys).unwrap();
+
+        let store = open_casita_test_store(temp.path()).await;
+        let mut reference = signed_pathinfo(&store, "revocable-reference", b"reference bytes").await;
+        reference.signatures.clear();
+        sign_pathinfo_with_key(&mut reference, &reference_signer);
+        let mut root = signed_pathinfo(&store, "trusted-closure-root", b"root bytes").await;
+        root.references.push(reference.store_path.clone());
+        root.signatures.clear();
+        sign_pathinfo(&mut root);
+        store.pathinfo_service().put(reference.clone()).await.unwrap();
+        store.pathinfo_service().put(root.clone()).await.unwrap();
+        assert_eq!(store.pathinfo_service().get(*reference.store_path.digest()).await.unwrap(), Some(reference.clone()));
+        assert_eq!(store.pathinfo_service().get(*root.store_path.digest()).await.unwrap(), Some(root.clone()));
+
+        let options = ArchiveExportOptions { trust_unsigned: false };
+        let mut expected = Vec::new();
+        let report = export_store_archive(&store, std::slice::from_ref(&root), &mut expected, &options).await.unwrap();
+        assert_eq!(report.exported_count, 2);
+        let repository = &store.casita_store.as_ref().unwrap().repository;
+        let root_name = crate::casita::CasitaStore::root_name(&root.store_path).unwrap();
+        let reference_name = crate::casita::CasitaStore::root_name(&reference.store_path).unwrap();
+        let snapshot = repository.metadata().snapshot().await.unwrap();
+        let root_target = snapshot.root(&root_name).await.unwrap();
+        let reference_target = snapshot.root(&reference_name).await.unwrap();
+        assert!(root_target.is_some() && reference_target.is_some());
+        drop(snapshot);
+
+        let root_only = format!("{root_key}\n");
+        std::fs::write(&policy, &root_only).unwrap();
+        let mut refused = Vec::new();
+        let error =
+            export_store_archive(&store, std::slice::from_ref(&root), &mut refused, &options).await.unwrap_err();
+        assert!(error.to_string().contains("casita-signer-untrusted"), "{error}");
+        assert!(error.to_string().contains(&reference.store_path.to_string()), "{error}");
+        assert!(refused.is_empty(), "revoked reference leaked an archive header or payload");
+        assert_eq!(std::fs::read(&policy).unwrap(), root_only.as_bytes());
+        let snapshot = repository.metadata().snapshot().await.unwrap();
+        assert_eq!(snapshot.root(&root_name).await.unwrap(), root_target);
+        assert_eq!(snapshot.root(&reference_name).await.unwrap(), reference_target);
+        drop(snapshot);
+
+        std::fs::write(&policy, &both_keys).unwrap();
+        let mut restored = Vec::new();
+        let report = export_store_archive(&store, std::slice::from_ref(&root), &mut restored, &options).await.unwrap();
+        assert_eq!(report.exported_count, 2);
+        assert_eq!(restored, expected, "restored policy must export the same signed closure");
+        assert_eq!(std::fs::read(&policy).unwrap(), both_keys.as_bytes());
     }
 
     #[tokio::test]
