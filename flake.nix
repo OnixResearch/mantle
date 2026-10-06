@@ -1846,15 +1846,16 @@
             (tigerstyle.lib.mkConsumerCheck {
               inherit system nativeBuildInputs buildInputs;
               src = ./.;
-              # Its own Cargo-lock vendor closure omits Mantle's pinned Casita patch.
+              # Use Mantle's admitted Crane source map, including its exact-pin
+              # Casita patch, rather than the helper's independent git checkout.
               cargoLock = null;
+              cargoExtraArgs = "--lib --config ${cargoVendorDir}/config.toml";
             }).overrideAttrs
               (old: {
                 SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
                 buildCommand = ''
                   export CARGO_HOME="$PWD/.cargo-home"
                   mkdir -p "$CARGO_HOME"
-                  cp "${cargoVendorDir}/config.toml" "$CARGO_HOME/config.toml"
                   ${old.buildCommand}
                 '';
               });

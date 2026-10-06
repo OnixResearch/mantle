@@ -279,6 +279,13 @@ builds the clean-source Crane vendor closure, while
 `cargo check --locked -p crunch-store` using that closure. These are separate
 compile and source-admission checks, not substitutes for one another.
 
+The Nix Tigerstyle consumer passes that same Crane vendor config directly to
+its Cargo check; it does not resolve a second unpatched Casita checkout. Its
+source map uses revision `90404fcb1cfb3d83f2233715448dfefe913f5fd1` and
+the original tracked `patches/casita-blake3-finalize.patch` (SHA-256
+`c0def0527dcc56beafa8d3f89c418a071b1d93df418245ebcd6a69aeb580840a`).
+An evaluated source map is not a passing Tigerstyle or full-flake gate.
+
 Crane's `buildDepsOnly` normally replaces path sources with stub Rust files.
 `flake.nix` restores just the complete tracked Bao snapshot into that dummy
 dependency source before compiling Casita; otherwise the cached Casita
