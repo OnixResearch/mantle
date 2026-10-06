@@ -20,6 +20,8 @@ const TEST_SOURCE_IDENTITY: &str = "fixture";
 const TEST_SOURCE_FILE: &str = "src/main.txt";
 const TEST_SOURCE_BYTES: &[u8] = b"hello";
 const TAMPERED_SOURCE_CONTENT_HEX: &str = "6a656c6c6f";
+const TEST_CACHED_HTTPS_URL: &str = "https://example.invalid/pinned-android-tool.zip";
+const TEST_CACHED_HTTPS_BYTES: &[u8] = b"deterministic Android tool archive\n";
 
 fn crunch_cmd() -> Command {
     Command::cargo_bin("crunch").expect("crunch binary should be built")
@@ -65,6 +67,40 @@ mantle.fetchurl {{
 "#
     );
     std::fs::write(root, source).expect("write fetchurl build root");
+}
+
+fn write_cached_https_build_root(root: &Path) -> String {
+    use base64::Engine as _;
+    use sha2::Digest as _;
+
+    let hash = format!(
+        "sha256-{}",
+        base64::engine::general_purpose::STANDARD.encode(sha2::Sha256::digest(TEST_CACHED_HTTPS_BYTES))
+    );
+    let source = format!(
+        r#"let mantle = import "lib.ncl" in
+
+mantle.fetchurl {{
+  url = "{TEST_CACHED_HTTPS_URL}",
+  hash = "{hash}",
+  name = "pinned-android-tool",
+}}
+"#
+    );
+    std::fs::write(root, source).expect("write pinned HTTPS fetchurl build root");
+    hash
+}
+
+fn cached_https_export_command(state_dir: &Path, root: &Path) -> Command {
+    let mut command = crunch_cmd();
+    command
+        .arg("--json")
+        .arg("--state-dir")
+        .arg(state_dir)
+        .args(["source", "bundle", "export", "--build-root"])
+        .arg(root)
+        .args(["--import-path", "lib"]);
+    command
 }
 
 fn first_state_record_path(state_dir: &Path) -> PathBuf {
@@ -360,4 +396,120 @@ fn source_bundle_cli_rejects_tampered_bundle_without_persisting_records() {
     assert!(!output.status.success(), "tampered bundle import must fail");
     assert!(stderr.contains("digest mismatch"), "stderr should name the digest mismatch: {stderr}");
     assert!(!state_records_dir(&state_dir).exists(), "failed import must not persist source records");
+}
+
+#[test]
+fn source_bundle_cli_caches_pinned_https_archive_for_offline_import_and_preflight() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let root = temp.path().join("android-tool.ncl");
+    let archive = temp.path().join("android-tool.zip");
+    let state_dir = temp.path().join("state");
+    let bundle_path = temp.path().join("android-tool.bundle.json");
+    let hash = write_cached_https_build_root(&root);
+    std::fs::write(&archive, TEST_CACHED_HTTPS_BYTES).expect("write local pinned archive");
+    let mapping = format!("{TEST_CACHED_HTTPS_URL}={}", archive.display());
+
+    let export = read_json_stdout(
+        cached_https_export_command(&state_dir, &root)
+            .arg("--cached-fetch")
+            .arg(&mapping)
+            .arg("--to")
+            .arg(&bundle_path)
+            .output()
+            .expect("export exact pinned HTTPS archive from local file"),
+    );
+    assert_eq!(export["ready_class"], "ready");
+    assert_eq!(export["record_count"].as_u64(), Some(EXPECTED_RECORD_COUNT));
+    assert_eq!(
+        export["payload_bytes"].as_u64(),
+        Some(u64::try_from(TEST_CACHED_HTTPS_BYTES.len()).expect("fixture byte count fits"))
+    );
+    let bundle: Value =
+        serde_json::from_slice(&std::fs::read(&bundle_path).expect("read source bundle")).expect("parse source bundle");
+    assert_eq!(bundle["records"][0]["kind"], "fixed-url");
+    assert_eq!(bundle["records"][0]["metadata"]["url"], TEST_CACHED_HTTPS_URL);
+    assert_eq!(bundle["records"][0]["metadata"]["hash"], hash);
+
+    let imported = read_json_stdout(
+        crunch_cmd()
+            .arg("--json")
+            .arg("--state-dir")
+            .arg(&state_dir)
+            .args(["source", "bundle", "import", "--from"])
+            .arg(&bundle_path)
+            .arg("--pin")
+            .output()
+            .expect("import and pin cached HTTPS source"),
+    );
+    assert_eq!(imported["imported_count"].as_u64(), Some(EXPECTED_RECORD_COUNT));
+    assert_eq!(imported["pinned"], true);
+
+    let preflight = read_json_stdout(
+        crunch_cmd()
+            .arg("--json")
+            .arg("--state-dir")
+            .arg(&state_dir)
+            .args(["source", "bundle", "preflight", "--build-root"])
+            .arg(&root)
+            .args(["--import-path", "lib"])
+            .output()
+            .expect("preflight pinned HTTPS source without network"),
+    );
+    assert_eq!(preflight["ready_class"], "ready");
+    assert_eq!(preflight["record_count"].as_u64(), Some(EXPECTED_RECORD_COUNT));
+    assert!(preflight["network_required_records"].as_array().expect("network blockers").is_empty());
+    assert!(preflight["unpinned_records"].as_array().expect("unpinned blockers").is_empty());
+}
+
+#[test]
+fn source_bundle_cli_rejects_wrong_duplicate_and_drifted_cached_https_archives() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let root = temp.path().join("android-tool.ncl");
+    let archive = temp.path().join("android-tool.zip");
+    let state_dir = temp.path().join("state");
+    let bundle_path = temp.path().join("rejected.bundle.json");
+    write_cached_https_build_root(&root);
+    std::fs::write(&archive, TEST_CACHED_HTTPS_BYTES).expect("write local pinned archive");
+    let mapping = format!("{TEST_CACHED_HTTPS_URL}={}", archive.display());
+    let wrong_mapping = format!("https://example.invalid/other-android-tool.zip={}", archive.display());
+
+    let wrong = cached_https_export_command(&state_dir, &root)
+        .arg("--cached-fetch")
+        .arg(&wrong_mapping)
+        .arg("--to")
+        .arg(&bundle_path)
+        .output()
+        .expect("reject unmatched cached HTTPS URL");
+    let wrong_diagnostic = String::from_utf8_lossy(&wrong.stderr);
+    assert!(!wrong.status.success(), "unmatched URL must fail closed");
+    assert!(wrong_diagnostic.contains("does not match a pinned fixed-output source"), "{wrong_diagnostic}");
+    assert!(!bundle_path.exists(), "unmatched URL must not publish a bundle");
+
+    let duplicate = cached_https_export_command(&state_dir, &root)
+        .arg("--cached-fetch")
+        .arg(&mapping)
+        .arg("--cached-fetch")
+        .arg(&mapping)
+        .arg("--to")
+        .arg(&bundle_path)
+        .output()
+        .expect("reject duplicate cached HTTPS URL");
+    let duplicate_diagnostic = String::from_utf8_lossy(&duplicate.stderr);
+    assert!(!duplicate.status.success(), "duplicate URL must fail closed");
+    assert!(duplicate_diagnostic.contains("duplicate cached fetch URL"), "{duplicate_diagnostic}");
+    assert!(!bundle_path.exists(), "duplicate URL must not publish a bundle");
+
+    std::fs::write(&archive, b"drifted Android tool archive\n").expect("drift cached archive bytes");
+    let drifted = cached_https_export_command(&state_dir, &root)
+        .arg("--cached-fetch")
+        .arg(&mapping)
+        .arg("--to")
+        .arg(&bundle_path)
+        .output()
+        .expect("reject drifted cached archive");
+    let drift_diagnostic = String::from_utf8_lossy(&drifted.stderr);
+    assert!(!drifted.status.success(), "SHA drift must fail closed");
+    assert!(drift_diagnostic.contains("hash mismatch"), "{drift_diagnostic}");
+    assert!(!bundle_path.exists(), "drifted archive must not publish a bundle");
+    assert!(!state_records_dir(&state_dir).exists(), "rejected cached sources must not be imported");
 }

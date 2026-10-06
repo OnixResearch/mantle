@@ -4788,9 +4788,10 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
             sources,
             build_roots,
             import_paths,
+            cached_fetches,
             to,
             fetch_missing,
-        } => cmd_export_source_bundle(&sources, &build_roots, &import_paths, &to, fetch_missing, context),
+        } => cmd_export_source_bundle(&sources, &build_roots, &import_paths, &cached_fetches, &to, fetch_missing, context),
         crate::SourceBundleAction::BootstrapProfile {
             mode,
             provider_archive,
@@ -4857,6 +4858,7 @@ fn cmd_export_source_bundle(
     sources: &[String],
     build_roots: &[PathBuf],
     import_paths: &[PathBuf],
+    cached_fetches: &[String],
     to: &Path,
     fetch_missing: bool,
     context: &SourceBundleCliContext<'_>,
@@ -4865,6 +4867,7 @@ fn cmd_export_source_bundle(
         sources,
         build_roots,
         import_paths,
+        cached_fetches,
         context.store_prefix,
         context.state_dir,
         fetch_missing,
@@ -5103,25 +5106,94 @@ fn export_from_cli_inputs(
     sources: &[String],
     build_roots: &[PathBuf],
     import_paths: &[PathBuf],
+    cached_fetches: &[String],
     store_prefix: &str,
     state_dir: &Path,
     fetch_missing: bool,
 ) -> Result<SourceBundleManifest, RunError> {
     let specs = sources.iter().map(|source| parse_source_spec(source)).collect::<Result<Vec<_>, _>>()?;
+    if fetch_missing && !cached_fetches.is_empty() {
+        return Err(RunError::Internal("--cached-fetch cannot be combined with --fetch-missing".to_string()));
+    }
+    let mut cached = BTreeMap::<String, PathBuf>::new();
+    for mapping in cached_fetches {
+        let (url, filename) = mapping.split_once('=').ok_or_else(|| {
+            RunError::Internal(format!("invalid --cached-fetch mapping (expected URL=ABSOLUTE_FILE): {mapping}"))
+        })?;
+        let parsed = Url::parse(url)
+            .map_err(|error| RunError::Internal(format!("invalid cached fetch URL {url}: {error}")))?;
+        let path = PathBuf::from(filename);
+        if parsed.scheme() != "https" || !path.is_absolute() || filename.is_empty() {
+            return Err(RunError::Internal(format!(
+                "cached fetch requires a pinned HTTPS URL and an absolute local file: {mapping}"
+            )));
+        }
+        if cached.insert(url.to_string(), path).is_some() {
+            return Err(RunError::Internal(format!("duplicate cached fetch URL: {url}")));
+        }
+    }
     if build_roots.is_empty() {
+        if !cached.is_empty() {
+            return Err(RunError::Internal("--cached-fetch requires --build-root with pinned fetch records".to_string()));
+        }
         return plan_source_bundle(&specs, store_prefix);
     }
     let evaluation_paths = crate::build_cmd::build_import_paths(import_paths)?;
     let derived_records = collect_build_source_records_from_files(build_roots, &evaluation_paths, store_prefix)?;
-    let available_sources = read_imported_source_records(state_dir)?;
+    let mut available_sources = read_imported_source_records(state_dir)?;
     let mut records = canonicalize_source_specs(&specs, store_prefix)?;
     let expected = normalize_source_records(derived_records)?;
+    let mut used_cached = BTreeSet::<String>::new();
+    for record in &expected {
+        let Some(url) = record.metadata.get(RECORD_METADATA_URL_KEY) else {
+            continue;
+        };
+        let Some(path) = cached.get(url) else {
+            continue;
+        };
+        if record.kind != SourceRecordKind::FixedUrl {
+            return Err(RunError::Internal(format!(
+                "cached fetch URL {url} does not identify a fixed-output URL source"
+            )));
+        }
+        used_cached.insert(url.clone());
+        let materialized = materialize_cached_fetch_record(record, path)?;
+        available_sources.retain(|existing| existing.identity != record.identity);
+        available_sources.push(materialized);
+    }
+    if let Some(unmatched) = cached.keys().find(|url| !used_cached.contains(*url)) {
+        return Err(RunError::Internal(format!(
+            "cached fetch URL does not match a pinned fixed-output source in --build-root: {unmatched}"
+        )));
+    }
     if fetch_missing {
         records.extend(materialize_export_records_with_connected_fetch(&expected, &available_sources)?);
     } else {
         records.extend(materialize_export_records(&expected, &available_sources)?);
     }
     assemble_source_bundle(records, store_prefix)
+}
+
+fn materialize_cached_fetch_record(record: &SourceRecord, path: &Path) -> Result<SourceRecord, RunError> {
+    let url = record
+        .metadata
+        .get(RECORD_METADATA_URL_KEY)
+        .ok_or_else(|| RunError::Internal(format!("cached fetch {} is missing its pinned URL", record.identity)))?;
+    if record.kind != SourceRecordKind::FixedUrl
+        || record.metadata.get(RECORD_METADATA_HASH_MODE_KEY).map(String::as_str) != Some("flat")
+    {
+        return Err(RunError::Internal(format!("cached fetch URL {url} requires a pinned flat fixed-output URL")));
+    }
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| RunError::Internal(format!("reading cached fetch {}: {error}", path.display())))?;
+    if !metadata.is_file() {
+        return Err(RunError::Internal(format!("cached fetch must be a regular file: {}", path.display())));
+    }
+    let materialized = materialize_source_record_from_path(record, path, false)?;
+    // Hash the captured record, not the caller's path: a changing archive must
+    // not be pinned under the immutable upstream URL after capture.
+    verify_imported_record_fixed_output(record, &materialized)?;
+    Ok(materialized)
 }
 
 fn collect_build_source_records_from_files(
@@ -7399,6 +7471,35 @@ mod tests {
         assert!(diagnostic.contains("validating captured source record"), "unexpected diagnostic: {diagnostic}");
     }
 
+    #[test]
+    fn cached_https_archive_keeps_its_upstream_identity_and_rejects_hash_drift() {
+        use base64::Engine as _;
+        use sha2::Digest as _;
+
+        const URL: &str = "https://example.invalid/pinned-android-tool.zip";
+        const PAYLOAD: &[u8] = b"small pinned tool archive";
+        let temp = tempfile::tempdir().unwrap();
+        let archive = temp.path().join("tool.zip");
+        fs::write(&archive, PAYLOAD).unwrap();
+        let mut fetcher = fixed_fetcher("pinned-android-tool", URL);
+        fetcher.fixed_output.as_mut().unwrap().hash =
+            format!("sha256-{}", base64::engine::general_purpose::STANDARD.encode(sha2::Sha256::digest(PAYLOAD)));
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let roots = [("default".to_string(), root)];
+        let planned = plan_source_bundle_from_derivations(&roots, &[], "/mantle/store").unwrap();
+        let captured = materialize_cached_fetch_record(&planned.records[0], &archive).unwrap();
+        assert_eq!(captured.metadata[RECORD_METADATA_URL_KEY], URL);
+        let manifest = assemble_source_bundle(vec![captured], "/mantle/store").unwrap();
+        let state = temp.path().join("source-state");
+        import_source_bundle(&manifest, &state, true).unwrap();
+        let ready = offline_preflight_for_derivations(&roots, &state, "/mantle/store").unwrap();
+        assert_eq!(ready.ready_class, SourceReadiness::Ready);
+
+        fs::write(&archive, b"drifted archive").unwrap();
+        let error = materialize_cached_fetch_record(&planned.records[0], &archive).unwrap_err();
+        assert!(error.to_string().contains("hash mismatch"), "{error}");
+    }
+
     // r[verify source_transports.source_bundle_realizes_fetcher_inputs]
     #[test]
     fn source_fetch_override_plan_materializes_pinned_file_fetcher_payload() {
@@ -7420,6 +7521,131 @@ mod tests {
         assert_eq!(plan.overrides[0].url, file_url(&payload));
         assert_eq!(fs::read(&plan.overrides[0].payload_path).unwrap(), b"payload");
         assert!(plan.overrides[0].source_state_blake3.len() == BLAKE3_HEX_BYTES);
+    }
+
+    #[tokio::test]
+    async fn source_fetch_override_plan_routes_synthetic_file_and_blocks_tool_on_drift() {
+        use base64::Engine as _;
+        use sha2::Digest as _;
+        use snix_build::buildservice::BuildService as _;
+
+        const URL: &str = "https://example.invalid/android-synthetic-tool.tar.gz";
+        const BYTES: &[u8] = b"small deterministic synthetic tool archive\n";
+        const DRIFTED: &[u8] = b"changed synthetic tool archive\n";
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("synthetic-tool.tar.gz");
+        fs::write(&payload, BYTES).unwrap();
+        let pinned_sri =
+            format!("sha256-{}", base64::engine::general_purpose::STANDARD.encode(sha2::Sha256::digest(BYTES)));
+        let mut fetcher = fixed_fetcher("synthetic-android-tool-source", URL);
+        fetcher.fixed_output.as_mut().unwrap().hash = pinned_sri.clone();
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let roots = [("default".to_string(), root)];
+        let planned = plan_source_bundle_from_derivations(&roots, &[], "/nix/store").unwrap();
+        assert_eq!(planned.records.len(), 1);
+        assert_eq!(planned.records[0].metadata[RECORD_METADATA_URL_KEY], URL);
+        let record = materialized_record_from_payload(&planned.records[0], &payload, false);
+        let manifest = assemble_source_bundle(vec![record], "/nix/store").unwrap();
+        let state = temp.path().join("source-state");
+        import_source_bundle(&manifest, &state, true).unwrap();
+        let plan = source_fetch_override_plan_for_derivations(&roots, &state, "/nix/store").unwrap();
+        assert_eq!(plan.report.ready_class, SourceReadiness::Ready);
+        assert_eq!(plan.overrides.len(), 1);
+        assert_eq!(plan.overrides[0].url, URL);
+        assert_eq!(plan.overrides[0].kind, crunch_build::FetchSourceOverrideKind::File);
+        assert_eq!(fs::read(&plan.overrides[0].payload_path).unwrap(), BYTES);
+
+        let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig::new(
+            crunch_store::StoreBackend::Snix,
+            temp.path().join("fetch-state"),
+            temp.path().join("fetch-store"),
+            "/nix/store".to_string(),
+        ))
+        .await
+        .unwrap();
+        let service = crunch_build::FetchBuildService::new(store.into_pipeline_store_parts().build_service_store)
+            .with_source_overrides(plan.overrides.clone())
+            .with_source_policy(crunch_build::FetchSourcePolicy::RequireOverride);
+        let request = |url: &str| snix_build::buildservice::BuildRequest {
+            command_args: vec!["builtin:fetchurl".to_string()],
+            outputs: vec![PathBuf::from("nix/store/synthetic-android-source")],
+            environment_vars: vec![snix_build::buildservice::EnvVar {
+                key: "url".to_string(),
+                value: url.to_string().into(),
+            }],
+            ..snix_build::buildservice::BuildRequest::default()
+        };
+        let fetched = service.do_build(request(URL)).await.unwrap();
+        match &fetched.outputs[0].node {
+            snix_castore::Node::File { digest, size, .. } => {
+                assert_eq!(*digest, blake3::hash(BYTES).into());
+                assert_eq!(*size, BYTES.len() as u64);
+            }
+            other => panic!("pinned synthetic archive must replay as a flat file: {other:?}"),
+        }
+        let unmatched_url = file_url(&payload);
+        let unmatched = service.do_build(request(&unmatched_url)).await.unwrap_err();
+        assert!(unmatched.to_string().contains("offline source policy rejected unmatched builtin fetch"));
+        assert!(unmatched.to_string().contains(&unmatched_url));
+
+        // Corrupt only the plan's scratch payload after import, never the pinned
+        // source declaration or its original local fixture.
+        fs::write(&plan.overrides[0].payload_path, DRIFTED).unwrap();
+        let root_file = temp.path().join("synthetic-consumer.ncl");
+        fs::write(
+            &root_file,
+            format!(
+                r#"let fetch = import "fetch.ncl" in
+let Derivation = import "derivation.ncl" in
+({{name = "synthetic-android-tool-consumer",
+   builder = "/bin/sh",
+   args = ["-c", "printf TOOL_RAN > $out"],
+   inputs = [fetch.fetchurl {{url = "{URL}", hash = "{pinned_sri}", name = "synthetic-android-tool-source"}}]}} | Derivation)"#
+            ),
+        )
+        .unwrap();
+        let output = tempfile::tempdir().unwrap();
+        let build_state = tempfile::tempdir().unwrap();
+        let keypair = crunch_build::load_keypair(
+            "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==",
+        )
+        .unwrap();
+        let trusted_keys = crunch_build::build_trusted_keys(&keypair, None);
+        let config = crunch_pipeline::BuildConfig {
+            file: root_file,
+            import_paths: vec![PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()],
+            output_dir: output.path().to_path_buf(),
+            state_dir: build_state.path().to_path_buf(),
+            backend: crunch_store::StoreBackend::Snix,
+            base_state_dirs: Vec::new(),
+            store_dir: "/nix/store".to_string(),
+            verbose: false,
+            max_jobs: 2,
+            scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
+            substituter_urls: Vec::new(),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            keypair,
+            trusted_keys,
+            trust_unsigned: false,
+            root_retention_source: None,
+            root_registration: None,
+            source_fetch_overrides: plan.overrides.clone(),
+            remote_enabled: false,
+            interchange_dir: None,
+        };
+        let drifted = crunch_pipeline::build(&config).await.unwrap();
+        assert!(drifted.outcomes.is_empty(), "changed source-plan bytes must not execute a dependent tool");
+        let mismatch = drifted
+            .failed
+            .iter()
+            .find_map(|failure| crunch_pipeline::parse_fod_mismatch_error(&failure.origin_error))
+            .unwrap_or_else(|| panic!("missing fixed-output drift reason: {:?}", drifted.failed));
+        let observed_sri =
+            format!("sha256-{}", base64::engine::general_purpose::STANDARD.encode(sha2::Sha256::digest(DRIFTED)));
+        assert_eq!(mismatch.name, "synthetic-android-tool-source");
+        assert_eq!(mismatch.expected_sri, pinned_sri);
+        assert_eq!(mismatch.actual_sri, observed_sri);
+        assert!(fs::read_dir(output.path()).unwrap().next().is_none(), "tool output marker must remain absent");
     }
 
     #[test]

@@ -661,6 +661,7 @@ mod source_tests {
                 sources: Vec::new(),
                 build_roots: Vec::new(),
                 import_paths: Vec::new(),
+                cached_fetches: Vec::new(),
                 to: PathBuf::new(),
                 fetch_missing: false,
             },

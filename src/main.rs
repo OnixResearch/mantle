@@ -3023,6 +3023,10 @@ pub enum SourceBundleAction {
         #[arg(long = "import-path", short = 'I')]
         import_paths: Vec<std::path::PathBuf>,
 
+        /// Reuse a local archive for an exact pinned HTTPS fetch URL, as URL=ABSOLUTE_FILE
+        #[arg(long = "cached-fetch", value_name = "URL=ABSOLUTE_FILE", conflicts_with = "fetch_missing")]
+        cached_fetches: Vec<String>,
+
         /// Bundle output path
         #[arg(long)]
         to: std::path::PathBuf,

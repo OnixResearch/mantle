@@ -89,3 +89,4 @@ compatibility surface, crate name, or historical decision.
 | [0080](0080-separate-coordination-from-batch-building.md) | Separate build coordination from batch building | Accepted |
 | [0082](0082-select-store-backends-explicitly-and-admit-casita.md) | Select store backends explicitly and admit Casita as a pinned backend | Proposed |
 | [0084](0084-dynamic-plan-source-slices.md) | Version dynamic plans for output-owned source slices | Proposed |
+| [0089](0089-admit-prebuilt-android-toolchain-through-fixed-output-sources.md) | Admit prebuilt Android tools through pinned fixed-output sources | Proposed |

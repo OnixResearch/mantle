@@ -9,6 +9,7 @@ let fetch = import "fetch.ncl" in
 let offline_cargo = import "offline_cargo.ncl" in
 let wasm_component = import "wasm_component.ncl" in
 let kernelscript_experiment = import "kernelscript_experiment.ncl" in
+let android = import "android.ncl" in
 let scheduling = import "scheduling.ncl" in
 
 {
@@ -42,6 +43,9 @@ let scheduling = import "scheduling.ncl" in
   # Fetch validators
   Url = fetch.Url,
   Hash = fetch.Hash,
+
+  # Fixed-output Android toolchain cohort and explicit identity binding.
+  AndroidSources = android,
 
   # Project outputs contract. Apply with: record | crunch.Project
   Project = import "project_outputs.ncl",

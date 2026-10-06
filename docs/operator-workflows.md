@@ -200,6 +200,15 @@ mantle source bundle export --build-root ./package.ncl --import-path lib --to so
 mantle source bundle verify --from source-bundle.json
 ```
 
+If the root declares pinned flat fixed-output HTTPS fetches and the exact
+archives are already cached locally, repeat `--cached-fetch
+'<pinned HTTPS URL>=<absolute local archive file>'` on the export command for
+each archive. The URL must match the root's original fetch declaration exactly;
+export verifies the captured archive bytes against its declared fixed-output
+hash and keeps that URL in the bundle. This does not download anything, cannot
+be combined with `--fetch-missing`, and proves source availability and identity
+only—not tool binary provenance or a successful downstream build.
+
 Copy `source-bundle.json` to the offline host, then import and pin it into the
 selected state directory:
 
