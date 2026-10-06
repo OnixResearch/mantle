@@ -1494,8 +1494,20 @@ mod linux {
 
         fn run_deep_parent_child() {
             let current_exe = std::env::current_exe().unwrap();
-            let digest_hex = blake3_file_hex(&current_exe).unwrap();
-            let supervisor = install_current_thread_exec_supervisor(current_exe_policy(digest_hex)).unwrap();
+            // A small, real ELF keeps the orphan/reaper boundary independent of
+            // debug-profile hashing time for the much larger test executable.
+            let descendant_exe = std::fs::canonicalize("/bin/sh").unwrap();
+            let current_digest = blake3_file_hex(&current_exe).unwrap();
+            let descendant_digest = blake3_file_hex(&descendant_exe).unwrap();
+            let policy = ProtectedExecPolicy::from_inventory(Stage0Inventory {
+                executable_entries: vec![
+                    seed_entry("sandbox-entry", "sandbox-entry", &current_exe, current_digest, true),
+                    seed_entry("sandbox-shell", "sandbox-shell", &descendant_exe, descendant_digest, true),
+                ],
+                source_entries: Vec::new(),
+            })
+            .unwrap();
+            let supervisor = install_current_thread_exec_supervisor(policy).unwrap();
             let status = Command::new(&current_exe)
                 .arg("--exact")
                 .arg("protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path")
@@ -1510,17 +1522,27 @@ mod linux {
             assert_eq!(reaped_count, 1);
             assert_eq!(events.len(), 2);
             assert!(events.iter().all(|event| event.policy_decision == "allowed"));
+            assert_eq!(events[1].resolved_host_path, descendant_exe);
+            assert_ne!(events[0].pid, events[1].pid);
         }
 
         fn run_deep_middle_child() {
-            let current_exe = std::env::current_exe().unwrap();
+            let deep_mode = std::env::var(CHILD_MODE_VAR).ok().as_deref() == Some("deep-middle");
+            let executable = if deep_mode {
+                std::fs::canonicalize("/bin/sh").unwrap()
+            } else {
+                std::env::current_exe().unwrap()
+            };
             let pid = unsafe { libc::fork() };
             assert!(pid >= 0, "fork failed: {}", std::io::Error::last_os_error());
             if pid == 0 {
                 unsafe {
                     libc::usleep(ORPHAN_EXEC_DELAY_US);
                 }
-                execve_current_exe_help(&current_exe);
+                if deep_mode {
+                    execve_shell_exit(&executable);
+                }
+                execve_current_exe_help(&executable);
             }
         }
 
@@ -1647,11 +1669,24 @@ mod linux {
             }
         }
 
-        fn execve_current_exe_help(current_exe: &Path) -> ! {
-            let path = CString::new(current_exe.as_os_str().as_encoded_bytes()).unwrap();
+        fn execve_current_exe_help(executable: &Path) -> ! {
+            let path = CString::new(executable.as_os_str().as_encoded_bytes()).unwrap();
             let argv0 = CString::new("crunch-seccomp-test").unwrap();
             let arg_help = CString::new("--help").unwrap();
             let argv = [argv0.as_ptr(), arg_help.as_ptr(), std::ptr::null()];
+            let envp = [std::ptr::null::<libc::c_char>()];
+            unsafe {
+                libc::execve(path.as_ptr(), argv.as_ptr(), envp.as_ptr());
+                libc::_exit(127);
+            }
+        }
+
+        fn execve_shell_exit(shell: &Path) -> ! {
+            let path = CString::new(shell.as_os_str().as_encoded_bytes()).unwrap();
+            let argv0 = CString::new("sh").unwrap();
+            let arg_command = CString::new("-c").unwrap();
+            let script = CString::new("exit 0").unwrap();
+            let argv = [argv0.as_ptr(), arg_command.as_ptr(), script.as_ptr(), std::ptr::null()];
             let envp = [std::ptr::null::<libc::c_char>()];
             unsafe {
                 libc::execve(path.as_ptr(), argv.as_ptr(), envp.as_ptr());
