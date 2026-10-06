@@ -40,9 +40,10 @@ use crunch_rust_cache_core::cc::decode_cc_probe_result;
 use crunch_rust_cache_core::cc::validate_cc_response;
 use serde::Serialize;
 
+const RECEIPT_SCHEMA: &str = "mantle-cc-driver-receipt-v1";
 const MAX_DEPFILE: u64 = 1024 * 1024;
-const MAX_FILE: u64 = 32 * 1024 * 1024;
-const MAX_TREE: u64 = 128 * 1024 * 1024;
+const MAX_FILE: u64 = 33_554_432; // 32 MiB
+const MAX_TREE: u64 = 134_217_728; // 128 MiB
 const MAX_FILES: usize = 8192;
 const MAX_ARGS: usize = 256;
 const MAX_ARG_BYTES: usize = 4096;
@@ -75,50 +76,19 @@ struct Receipt<'a> {
     probe_reads: Option<&'a [ProbeRead]>,
 }
 
-fn receipt(path: &Path, disposition: &str, reason: &str, action_key: Option<&str>, exit: i32) {
-    let document = Receipt {
-        schema: "mantle-cc-driver-receipt-v1",
-        disposition,
-        reason,
-        action_key,
-        compiler_exit_code: exit,
-        probe_reads: None,
-    };
+fn receipt(path: &Path, document: Receipt<'_>) {
     let result = (|| -> Result<(), String> {
         let bytes = serde_json::to_vec(&document).map_err(|e| e.to_string())?;
         if bytes.len() > MAX_RECEIPT {
             return Err("receipt too large".into());
         }
+        assert!(!bytes.is_empty());
+        assert!(bytes.len() <= MAX_RECEIPT);
         let parent = path.parent().ok_or("receipt has no parent")?;
         let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
         temporary.write_all(&bytes).map_err(|e| e.to_string())?;
         temporary.as_file().sync_all().map_err(|e| e.to_string())?;
         temporary.persist(path).map_err(|e| e.to_string())?;
-        Ok(())
-    })();
-    if let Err(error) = result {
-        eprintln!("mantle-cc-cache-driver: cannot record receipt: {error}");
-    }
-}
-fn probe_receipt(options: &DriverOptions, disposition: &str, reason: &str, key: &str, exit: i32, reads: &[ProbeRead]) {
-    let document = Receipt {
-        schema: "mantle-cc-driver-receipt-v1",
-        disposition,
-        reason,
-        action_key: Some(key),
-        compiler_exit_code: exit,
-        probe_reads: Some(reads),
-    };
-    let result = (|| -> Result<(), String> {
-        let bytes = serde_json::to_vec(&document).map_err(|e| e.to_string())?;
-        if bytes.len() > MAX_RECEIPT {
-            return Err("receipt too large".into());
-        }
-        let parent = options.receipt.parent().ok_or("receipt has no parent")?;
-        let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
-        temporary.write_all(&bytes).map_err(|e| e.to_string())?;
-        temporary.as_file().sync_all().map_err(|e| e.to_string())?;
-        temporary.persist(&options.receipt).map_err(|e| e.to_string())?;
         Ok(())
     })();
     if let Err(error) = result {
@@ -142,37 +112,47 @@ where
 
 fn fallback(options: &DriverOptions, reason: &str, action_key: Option<&str>) -> i32 {
     let exit = compiler_status(&options.compiler, &options.arguments);
-    receipt(&options.receipt, "fallback", reason, action_key, exit);
+    receipt(&options.receipt, Receipt {
+        schema: RECEIPT_SCHEMA,
+        disposition: "fallback",
+        reason,
+        action_key,
+        compiler_exit_code: exit,
+        probe_reads: None,
+    });
     exit
 }
 
 /// Preserve arbitrary Unix compiler arguments byte-for-byte when classification is impossible.
-pub fn run_os(
-    compiler: PathBuf,
-    socket: PathBuf,
-    receipt_path: PathBuf,
-    platform_digest: String,
-    probe_script: Option<PathBuf>,
-    arguments: Vec<OsString>,
-) -> i32 {
-    if !compiler.is_absolute() {
-        receipt(&receipt_path, "rejected", "compiler-must-be-absolute", None, 2);
+pub fn run_os(mut options: DriverOptions, arguments: Vec<OsString>) -> i32 {
+    if !options.compiler.is_absolute() {
+        receipt(&options.receipt, Receipt {
+            schema: RECEIPT_SCHEMA,
+            disposition: "rejected",
+            reason: "compiler-must-be-absolute",
+            action_key: None,
+            compiler_exit_code: 2,
+            probe_reads: None,
+        });
         return 2;
     }
     let Some(arguments_utf8) = arguments.iter().map(|arg| arg.to_str().map(str::to_owned)).collect::<Option<Vec<_>>>()
     else {
-        let exit = compiler_status(&compiler, &arguments);
-        receipt(&receipt_path, "fallback", "non-utf8-compiler-argument", None, exit);
+        let exit = compiler_status(&options.compiler, &arguments);
+        receipt(&options.receipt, Receipt {
+            schema: RECEIPT_SCHEMA,
+            disposition: "fallback",
+            reason: "non-utf8-compiler-argument",
+            action_key: None,
+            compiler_exit_code: exit,
+            probe_reads: None,
+        });
         return exit;
     };
-    run(&DriverOptions {
-        compiler,
-        socket,
-        receipt: receipt_path,
-        platform_digest,
-        arguments: arguments_utf8,
-        probe_script,
-    })
+    assert_eq!(arguments_utf8.len(), arguments.len());
+    assert!(options.compiler.is_absolute());
+    options.arguments = arguments_utf8;
+    run(&options)
 }
 
 fn digest_file(path: &Path, bound: u64) -> Result<String, String> {
@@ -180,14 +160,17 @@ fn digest_file(path: &Path, bound: u64) -> Result<String, String> {
     if !metadata.file_type().is_file() || metadata.len() > bound {
         return Err("file is nonregular or exceeds bound".into());
     }
+    assert!(metadata.len() <= bound);
     let mut file = File::open(path).map_err(|e| e.to_string())?;
     let mut hash = blake3::Hasher::new();
     let mut buffer = [0; 16384];
     let mut total = 0_u64;
-    loop {
+    // Each nonempty read advances at least one byte; allow a final EOF read at the bound.
+    for _ in 0..=bound {
         let count = file.read(&mut buffer).map_err(|e| e.to_string())?;
         if count == 0 {
-            break;
+            assert!(total <= bound);
+            return Ok(hash.finalize().to_hex().to_string());
         }
         total = total.checked_add(count as u64).ok_or("file length overflow")?;
         if total > bound {
@@ -195,7 +178,7 @@ fn digest_file(path: &Path, bound: u64) -> Result<String, String> {
         }
         hash.update(&buffer[..count]);
     }
-    Ok(hash.finalize().to_hex().to_string())
+    Err("file exceeds bound".into())
 }
 
 struct Classified {
@@ -253,17 +236,53 @@ fn next_argument<'a>(args: &'a [String], index: &mut usize) -> Result<&'a str, S
     args.get(*index).map(String::as_str).ok_or("missing option argument".into())
 }
 
-/// Classify only an explicit dependency-producing object compilation, without implicit includes.
-fn classify(args: &[String]) -> Result<Classified, String> {
-    if args.len() > MAX_ARGS || args.iter().any(|arg| arg.is_empty() || arg.len() > MAX_ARG_BYTES || arg.contains('\0'))
-    {
-        return Err("argument bound or encoding".into());
+struct ParsedArguments {
+    source: Option<PathBuf>,
+    output: Option<PathBuf>,
+    depfile: Option<PathBuf>,
+    includes: Vec<(String, PathBuf)>,
+    maps: Vec<(PathBuf, String)>,
+    normalized: Vec<String>,
+}
+
+fn admitted_definition(arg: &str) -> bool {
+    if !(arg.starts_with("-D") || arg.starts_with("-U")) {
+        return false;
     }
+    if arg.len() <= 2 {
+        return false;
+    }
+    if ["__DATE__", "__TIME__", "__TIMESTAMP__"].iter().any(|name| arg.contains(name)) {
+        return false;
+    }
+    arg[2..].bytes().all(|b| b.is_ascii_alphanumeric() || b"_=.()+-*".contains(&b))
+}
+
+fn include_root(includes: &mut Vec<(String, PathBuf)>, arg_count: usize, kind: String, root: PathBuf) {
+    if includes.is_empty() {
+        includes.reserve(arg_count);
+    }
+    includes.push((kind, root));
+}
+
+fn prefix_map(arg: &str) -> Result<(PathBuf, String), String> {
+    let value = &arg[18..];
+    let (from, to) = value.split_once('=').ok_or("invalid prefix map")?;
+    if to.is_empty() || to.contains('\\') {
+        return Err("unsafe prefix map destination".into());
+    }
+    if to.contains("/nix/store") || to.contains("/mantle/store") {
+        return Err("unsafe prefix map destination".into());
+    }
+    Ok((absolute_dir(from)?, to.into()))
+}
+
+fn parse_arguments(args: &[String]) -> Result<ParsedArguments, String> {
     let (mut source, mut output, mut depfile) = (None, None, None);
     let (mut compile, mut deps, mut nostdinc, mut suppress_warnings) = (false, false, false, false);
     let mut includes: Vec<(String, PathBuf)> = Vec::new();
-    let mut maps: Vec<(PathBuf, String)> = Vec::new();
-    let mut normalized = Vec::new();
+    let mut maps: Vec<(PathBuf, String)> = Vec::with_capacity(args.len());
+    let mut normalized = Vec::with_capacity(args.len());
     let mut index = 0;
     while index < args.len() {
         let arg = &args[index];
@@ -288,36 +307,81 @@ fn classify(args: &[String]) -> Result<Classified, String> {
             "-MF" if depfile.is_none() => depfile = Some(output_path(next_argument(args, &mut index)?)?),
             "-I" | "-isystem" => {
                 let root = absolute_dir(next_argument(args, &mut index)?)?;
-                includes.push((arg.clone(), root));
+                include_root(&mut includes, args.len(), arg.clone(), root);
             }
-            _ if arg.starts_with("-I") && arg.len() > 2 => includes.push(("-I".into(), absolute_dir(&arg[2..])?)),
-            _ if arg.starts_with("-ffile-prefix-map=") => {
-                let value = &arg[18..];
-                let (from, to) = value.split_once('=').ok_or("invalid prefix map")?;
-                if to.is_empty() || to.contains('\\') || to.contains("/nix/store") || to.contains("/mantle/store") {
-                    return Err("unsafe prefix map destination".into());
-                }
-                maps.push((absolute_dir(from)?, to.into()));
+            _ if arg.starts_with("-I") && arg.len() > 2 => {
+                include_root(&mut includes, args.len(), "-I".into(), absolute_dir(&arg[2..])?);
             }
+            _ if arg.starts_with("-ffile-prefix-map=") => maps.push(prefix_map(arg)?),
             "-O0" | "-O1" | "-O2" | "-O3" | "-Os" | "-Og" | "-Oz" | "-fPIC" | "-fpic" => normalized.push(arg.clone()),
             _ if arg.starts_with("-std=") && arg[5..].bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+') => {
                 normalized.push(arg.clone())
             }
-            _ if (arg.starts_with("-D") || arg.starts_with("-U"))
-                && arg.len() > 2
-                && !["__DATE__", "__TIME__", "__TIMESTAMP__"].iter().any(|name| arg.contains(name))
-                && arg[2..].bytes().all(|b| b.is_ascii_alphanumeric() || b"_=.()+-*".contains(&b)) =>
-            {
-                normalized.push(arg.clone())
-            }
+            _ if admitted_definition(arg) => normalized.push(arg.clone()),
             _ if !arg.starts_with('-') && source.is_none() => source = Some(absolute_file(arg)?),
             _ => return Err("unknown compiler argument or side effect".into()),
         }
         index += 1;
     }
-    if !compile || !deps || !nostdinc || !suppress_warnings {
+    if !compile || !deps {
         return Err("required -c, -MD/-MMD, -nostdinc, -w".into());
     }
+    if !nostdinc || !suppress_warnings {
+        return Err("required -c, -MD/-MMD, -nostdinc, -w".into());
+    }
+    assert!(includes.len() <= args.len());
+    assert!(maps.len() <= args.len());
+    Ok(ParsedArguments {
+        source,
+        output,
+        depfile,
+        includes,
+        maps,
+        normalized,
+    })
+}
+
+fn validate_root_maps(roots: &[PathBuf], maps: &[(PathBuf, String)]) -> Result<(), String> {
+    if roots.len() > MAX_ROOTS {
+        return Err("too many roots".into());
+    }
+    for (index, root) in roots.iter().enumerate() {
+        if roots
+            .iter()
+            .skip(index.saturating_add(1))
+            .any(|other| root.starts_with(other) || other.starts_with(root))
+        {
+            return Err("overlapping roots make prefix remapping ambiguous".into());
+        }
+    }
+    if maps.len() != roots.len() {
+        return Err("one explicit -ffile-prefix-map per root required".into());
+    }
+    for (index, root) in roots.iter().enumerate() {
+        let expected = format!("/cc-root-{index}");
+        if maps.iter().filter(|(from, to)| from == root && to == &expected).count() != 1 {
+            return Err("missing stable source/include path remapping".into());
+        }
+    }
+    assert!(roots.len() <= MAX_ROOTS);
+    assert!(maps.len() <= MAX_ROOTS);
+    Ok(())
+}
+
+/// Classify only an explicit dependency-producing object compilation, without implicit includes.
+fn classify(args: &[String]) -> Result<Classified, String> {
+    if args.len() > MAX_ARGS || args.iter().any(|arg| arg.is_empty() || arg.len() > MAX_ARG_BYTES || arg.contains('\0'))
+    {
+        return Err("argument bound or encoding".into());
+    }
+    let ParsedArguments {
+        source,
+        output,
+        depfile,
+        includes,
+        maps,
+        mut normalized,
+    } = parse_arguments(args)?;
     let source = source.ok_or("missing source")?;
     if !matches!(source.extension().and_then(|e| e.to_str()), Some("c" | "cc" | "cpp" | "cxx")) {
         return Err("unsupported source extension".into());
@@ -333,30 +397,16 @@ fn classify(args: &[String]) -> Result<Classified, String> {
     if output.extension().and_then(|e| e.to_str()) != Some("o") {
         return Err("expected .o output".into());
     }
-    let mut roots = vec![source.parent().ok_or("missing source parent")?.to_path_buf()];
+    let mut roots = Vec::with_capacity(includes.len().saturating_add(1));
+    roots.push(source.parent().ok_or("missing source parent")?.to_path_buf());
     for (_, root) in &includes {
         if roots.contains(root) {
             return Err("duplicate include root".into());
         }
         roots.push(root.clone());
     }
-    if roots.len() > MAX_ROOTS {
-        return Err("too many roots".into());
-    }
-    for (index, root) in roots.iter().enumerate() {
-        if roots.iter().skip(index + 1).any(|other| root.starts_with(other) || other.starts_with(root)) {
-            return Err("overlapping roots make prefix remapping ambiguous".into());
-        }
-    }
-    if maps.len() != roots.len() {
-        return Err("one explicit -ffile-prefix-map per root required".into());
-    }
-    for (index, root) in roots.iter().enumerate() {
-        let expected = format!("/cc-root-{index}");
-        if maps.iter().filter(|(from, to)| from == root && to == &expected).count() != 1 {
-            return Err("missing stable source/include path remapping".into());
-        }
-    }
+    validate_root_maps(&roots, &maps)?;
+    assert!(roots.len() <= MAX_ROOTS);
     for (kind, root) in &includes {
         let index = roots.iter().position(|item| item == root).ok_or("unmapped include root")?;
         normalized.push(format!("{kind}@root:{index}"));
@@ -365,6 +415,7 @@ fn classify(args: &[String]) -> Result<Classified, String> {
         normalized.push(format!("map:@root:{index}:cc-root-{index}"));
     }
     normalized.push(format!("source:@root:0/{}", source.file_name().ok_or("missing filename")?.to_string_lossy()));
+    assert!(normalized.len() <= args.len());
     // Normalize semantic switches in their original order instead of normalizing away -I precedence.
     // Input root tree identities still bind every physical path's complete content.
     Ok(Classified {
@@ -383,7 +434,7 @@ fn file_bytes(path: &Path, bound: u64) -> Result<Vec<u8>, String> {
     }
     let file = File::open(path).map_err(|e| e.to_string())?;
     let mut data = Vec::new();
-    file.take(bound + 1).read_to_end(&mut data).map_err(|e| e.to_string())?;
+    file.take(bound.saturating_add(1)).read_to_end(&mut data).map_err(|e| e.to_string())?;
     if data.len() as u64 > bound {
         return Err("file exceeds bound".into());
     }
@@ -394,21 +445,26 @@ fn scan_root_file(path: &Path) -> Result<String, String> {
     let mut file = File::open(path).map_err(|e| e.to_string())?;
     let mut hasher = blake3::Hasher::new();
     let mut buffer = [0_u8; 16384];
-    let mut inspection = [0_u8; 16384 + 14];
+    let mut inspection = [0_u8; 16398];
     let mut trailing = 0_usize;
     let mut total = 0_u64;
-    loop {
+    // Short reads still advance by at least one byte; allow an EOF read at exactly 32 MiB.
+    for _ in 0..=MAX_FILE {
         let count = file.read(&mut buffer).map_err(|e| e.to_string())?;
         if count == 0 {
-            break;
+            assert!(total <= MAX_FILE);
+            return Ok(hasher.finalize().to_hex().to_string());
         }
         total = total.checked_add(count as u64).ok_or("root file size overflow")?;
         if total > MAX_FILE {
             return Err("root file exceeds bound".into());
         }
         hasher.update(&buffer[..count]);
-        inspection[trailing..trailing + count].copy_from_slice(&buffer[..count]);
-        let examined = &inspection[..trailing + count];
+        assert!(trailing <= 14);
+        let length_bytes = trailing.checked_add(count).ok_or("inspection length overflow")?;
+        assert!(length_bytes <= inspection.len());
+        inspection[trailing..length_bytes].copy_from_slice(&buffer[..count]);
+        let examined = &inspection[..length_bytes];
         if examined.windows(2).any(|window| window == b"##")
             || [b"__DATE__".as_slice(), b"__TIME__", b"__TIMESTAMP__"]
                 .iter()
@@ -416,17 +472,16 @@ fn scan_root_file(path: &Path) -> Result<String, String> {
         {
             return Err("time-dependent or dynamically synthesized compiler macro".into());
         }
-        let length = trailing + count;
-        trailing = length.min(14);
-        inspection.copy_within(length - trailing..length, 0);
+        trailing = length_bytes.min(14);
+        inspection.copy_within(length_bytes.saturating_sub(trailing)..length_bytes, 0);
     }
-    Ok(hasher.finalize().to_hex().to_string())
+    Err("root file exceeds bound".into())
 }
 
 fn tree_digests(classified: &Classified, options: &DriverOptions) -> Result<Vec<String>, String> {
     let mut total = 0_u64;
     let mut entries_seen = 0_usize;
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(classified.roots.len());
     for root in &classified.roots {
         let mut hasher = blake3::Hasher::new();
         hasher.update(b"mantle.cc.complete-root.v1\0");
@@ -436,10 +491,12 @@ fn tree_digests(classified: &Classified, options: &DriverOptions) -> Result<Vec<
             for item in fs::read_dir(directory).map_err(|e| e.to_string())? {
                 let entry = item.map_err(|e| e.to_string())?;
                 let path = entry.path();
-                entries_seen += 1;
-                if entries_seen > MAX_FILES || path.components().count() > root.components().count() + 128 {
+                entries_seen = entries_seen.checked_add(1).ok_or("root entries overflow")?;
+                let max_depth_components = root.components().count().saturating_add(128);
+                if entries_seen > MAX_FILES || path.components().count() > max_depth_components {
                     return Err("root entries or depth exceeded".into());
                 }
+                assert!(entries_seen <= MAX_FILES);
                 if path == options.receipt || path == options.socket {
                     continue;
                 }
@@ -464,12 +521,16 @@ fn tree_digests(classified: &Classified, options: &DriverOptions) -> Result<Vec<
                 if total > MAX_TREE || metadata.len() > MAX_FILE {
                     return Err("root bound exceeded".into());
                 }
+                assert!(total <= MAX_TREE);
                 let relative =
                     path.strip_prefix(root).map_err(|e| e.to_string())?.to_str().ok_or("non-UTF8 root path")?;
                 if relative.contains('\\') || relative.len() > 4096 {
                     return Err("unsupported root filename".into());
                 }
                 // Read once while checking macro safety and hashing the complete file.
+                if entries.len() >= MAX_FILES {
+                    return Err("root entries exceeded".into());
+                }
                 entries.insert(relative.to_owned(), scan_root_file(&path)?);
             }
         }
@@ -483,21 +544,16 @@ fn tree_digests(classified: &Classified, options: &DriverOptions) -> Result<Vec<
     Ok(result)
 }
 
-/// Parse a single make-style depfile with backslash-escaped whitespace and continuations.
-/// Unknown constructs fail closed rather than publishing an incomplete manifest.
-pub fn parse_depfile(bytes: &[u8]) -> Result<Vec<String>, String> {
-    if bytes.is_empty() || bytes.len() as u64 > MAX_DEPFILE || bytes.contains(&0) {
-        return Err("invalid depfile length".into());
-    }
+fn depfile_target_separator(bytes: &[u8]) -> Result<usize, String> {
     let mut colon = None;
-    let mut escaped = false;
+    let mut is_escaped = false;
     for (index, byte) in bytes.iter().enumerate() {
-        if escaped {
-            escaped = false;
+        if is_escaped {
+            is_escaped = false;
             continue;
         }
         if *byte == b'\\' {
-            escaped = true;
+            is_escaped = true;
             continue;
         }
         if *byte == b':' {
@@ -512,9 +568,23 @@ pub fn parse_depfile(bytes: &[u8]) -> Result<Vec<String>, String> {
     if colon == 0 {
         return Err("depfile empty target".into());
     }
-    let mut paths = Vec::new();
-    let mut token = Vec::new();
-    let mut index = colon + 1;
+    assert!(colon < bytes.len());
+    assert_eq!(bytes[colon], b':');
+    Ok(colon)
+}
+
+/// Parse a single make-style depfile with backslash-escaped whitespace and continuations.
+/// Unknown constructs fail closed rather than publishing an incomplete manifest.
+pub fn parse_depfile(bytes: &[u8]) -> Result<Vec<String>, String> {
+    if bytes.is_empty() || bytes.len() as u64 > MAX_DEPFILE || bytes.contains(&0) {
+        return Err("invalid depfile length".into());
+    }
+    let colon = depfile_target_separator(bytes)?;
+    let mut paths = Vec::with_capacity(bytes.len().min(MAX_DEPENDENCIES));
+    let mut token = Vec::with_capacity(bytes.len().min(4096));
+    let mut index = colon.checked_add(1).ok_or("depfile index overflow")?;
+    assert!(index <= bytes.len());
+    assert!(bytes.len() as u64 <= MAX_DEPFILE);
     while index < bytes.len() {
         let byte = bytes[index];
         if byte == b'\\' {
@@ -522,7 +592,7 @@ pub fn parse_depfile(bytes: &[u8]) -> Result<Vec<String>, String> {
             if index == bytes.len() {
                 return Err("unterminated depfile escape".into());
             }
-            if bytes[index] == b'\r' && bytes.get(index + 1) == Some(&b'\n') {
+            if bytes[index] == b'\r' && bytes.get(index.saturating_add(1)) == Some(&b'\n') {
                 index += 2;
                 continue;
             }
@@ -533,6 +603,9 @@ pub fn parse_depfile(bytes: &[u8]) -> Result<Vec<String>, String> {
             token.push(bytes[index]);
         } else if byte.is_ascii_whitespace() {
             if !token.is_empty() {
+                if paths.len() >= MAX_DEPENDENCIES {
+                    return Err("depfile bound exceeded".into());
+                }
                 paths.push(String::from_utf8(std::mem::take(&mut token)).map_err(|e| e.to_string())?);
             }
         } else if byte == b':' || byte == b'#' || byte == b'$' {
@@ -546,11 +619,15 @@ pub fn parse_depfile(bytes: &[u8]) -> Result<Vec<String>, String> {
         index += 1;
     }
     if !token.is_empty() {
+        if paths.len() >= MAX_DEPENDENCIES {
+            return Err("depfile bound exceeded".into());
+        }
         paths.push(String::from_utf8(token).map_err(|e| e.to_string())?);
     }
     if paths.is_empty() {
         return Err("depfile lacks prerequisites".into());
     }
+    assert!(paths.len() <= MAX_DEPENDENCIES);
     Ok(paths)
 }
 
@@ -562,18 +639,19 @@ fn dependency(path: &Path, classified: &Classified) -> Result<CcDependency, Stri
     for (index, root) in classified.roots.iter().enumerate() {
         if let Ok(relative) = canonical.strip_prefix(root) {
             let value = relative.to_str().ok_or("non-UTF8 dependency")?;
-            if value.is_empty()
-                || value.len() > 4096
-                || value.contains('\\')
-                || value.split('/').any(|c| c == "." || c == ".." || c.is_empty())
-            {
+            if value.is_empty() || value.len() > 4096 {
+                return Err("unsafe dependency label".into());
+            }
+            if value.contains('\\') || value.split('/').any(|c| c == "." || c == ".." || c.is_empty()) {
                 return Err("unsafe dependency label".into());
             }
             if canonical == classified.output || canonical == classified.depfile {
                 return Err("dependency is output".into());
             }
+            assert!(index < MAX_ROOTS);
+            assert!(value.len() <= 4096);
             return Ok(CcDependency {
-                root_index: index as u32,
+                root_index: u32::try_from(index).map_err(|_| "root index overflow")?,
                 relative_path: value.into(),
                 digest_blake3: digest_file(&canonical, MAX_FILE)?,
             });
@@ -585,7 +663,7 @@ fn dependency(path: &Path, classified: &Classified) -> Result<CcDependency, Stri
 fn dependencies_from_depfile(classified: &Classified) -> Result<Vec<CcDependency>, String> {
     let data = file_bytes(&classified.depfile, MAX_DEPFILE)?;
     let paths = parse_depfile(&data)?;
-    let mut dependencies = Vec::new();
+    let mut dependencies = Vec::with_capacity(paths.len());
     let mut seen = BTreeSet::new();
     for name in paths {
         let path = Path::new(&name);
@@ -593,9 +671,12 @@ fn dependencies_from_depfile(classified: &Classified) -> Result<Vec<CcDependency
             return Err("nonliteral dependency path".into());
         }
         let entry = dependency(path, classified)?;
-        if path != classified.roots[entry.root_index as usize].join(&entry.relative_path)
-            || !seen.insert((entry.root_index, entry.relative_path.clone()))
-        {
+        let root_index = usize::try_from(entry.root_index).map_err(|_| "root index overflow")?;
+        let root = classified.roots.get(root_index).ok_or("unknown root index")?;
+        if path != root.join(&entry.relative_path) {
+            return Err("noncanonical or duplicate dependency".into());
+        }
+        if !seen.insert((entry.root_index, entry.relative_path.clone())) {
             return Err("noncanonical or duplicate dependency".into());
         }
         dependencies.push(entry);
@@ -607,13 +688,16 @@ fn dependencies_from_depfile(classified: &Classified) -> Result<Vec<CcDependency
     if data != serialized_depfile(classified, &dependencies)?.as_bytes() {
         return Err("unknown depfile formatting".into());
     }
+    assert_eq!(dependencies.len(), seen.len());
+    assert!(dependencies.len() <= MAX_DEPENDENCIES);
     Ok(dependencies)
 }
 
 fn dependencies_from_record(classified: &Classified, record: &[CcDependency]) -> Result<Vec<CcDependency>, String> {
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(record.len());
     for entry in record {
-        let root = classified.roots.get(entry.root_index as usize).ok_or("unknown root index")?;
+        let root_index = usize::try_from(entry.root_index).map_err(|_| "root index overflow")?;
+        let root = classified.roots.get(root_index).ok_or("unknown root index")?;
         let path = root.join(&entry.relative_path);
         let current = dependency(&path, classified)?;
         if current.root_index != entry.root_index || current.relative_path != entry.relative_path {
@@ -626,9 +710,9 @@ fn dependencies_from_record(classified: &Classified, record: &[CcDependency]) ->
 
 fn connect(socket: &Path) -> Result<UnixStream, String> {
     let stream = UnixStream::connect(socket).map_err(|e| e.to_string())?;
-    let timeout = Some(Duration::from_secs(3));
-    stream.set_read_timeout(timeout).map_err(|e| e.to_string())?;
-    stream.set_write_timeout(timeout).map_err(|e| e.to_string())?;
+    let timeout_seconds = Some(Duration::from_secs(3));
+    stream.set_read_timeout(timeout_seconds).map_err(|e| e.to_string())?;
+    stream.set_write_timeout(timeout_seconds).map_err(|e| e.to_string())?;
     Ok(stream)
 }
 
@@ -638,6 +722,8 @@ fn request(socket: &Path, wire: CcWireRequest) -> Result<CcWireResponse, String>
     if bytes.is_empty() || bytes.len() as u64 > MAX_FRAME {
         return Err("request frame bound exceeded".into());
     }
+    assert!(!bytes.is_empty());
+    assert!(bytes.len() as u64 <= MAX_FRAME);
     stream.write_all(&(bytes.len() as u64).to_be_bytes()).map_err(|e| e.to_string())?;
     stream.write_all(&bytes).map_err(|e| e.to_string())?;
     let mut prefix = [0; 8];
@@ -646,7 +732,9 @@ fn request(socket: &Path, wire: CcWireRequest) -> Result<CcWireResponse, String>
     if count == 0 || count > MAX_FRAME {
         return Err("response frame bound exceeded".into());
     }
-    let mut body = vec![0; count as usize];
+    let length_bytes = usize::try_from(count).map_err(|_| "response frame length exceeds platform")?;
+    assert!(length_bytes <= usize::try_from(MAX_FRAME).unwrap_or(usize::MAX));
+    let mut body = vec![0; length_bytes];
     stream.read_exact(&mut body).map_err(|e| e.to_string())?;
     let response: CcWireResponse = serde_json::from_slice(&body).map_err(|e| e.to_string())?;
     if response.schema != CC_RESPONSE_SCHEMA || response.action_key != wire.action_key {
@@ -680,27 +768,33 @@ fn serialized_depfile(classified: &Classified, dependencies: &[CcDependency]) ->
     if !safe_make_path(&classified.output) {
         return Err("unsafe make target".into());
     }
+    if dependencies.len() > MAX_DEPENDENCIES {
+        return Err("restored depfile exceeds bound".into());
+    }
+    assert!(dependencies.len() <= MAX_DEPENDENCIES);
     let mut dep = format!("{}:", classified.output.display());
     let mut column = dep.len();
     for entry in dependencies {
-        let root = classified.roots.get(entry.root_index as usize).ok_or("unknown dep root")?;
+        let root_index = usize::try_from(entry.root_index).map_err(|_| "root index overflow")?;
+        let root = classified.roots.get(root_index).ok_or("unknown dep root")?;
         let path = root.join(&entry.relative_path);
         if !safe_make_path(&path) {
             return Err("unsafe make prerequisite".into());
         }
         let text = path.to_str().ok_or("non-UTF8 prerequisite")?;
-        if column + text.len() > 72 {
+        if column.saturating_add(text.len()) > 72 {
             dep.push_str(" \\\n");
             column = 0;
         }
         dep.push(' ');
         dep.push_str(text);
-        column += 1 + text.len();
+        column = column.saturating_add(1).saturating_add(text.len());
     }
     dep.push('\n');
     if dep.len() as u64 > MAX_DEPFILE {
         return Err("restored depfile exceeds bound".into());
     }
+    assert!(dep.len() as u64 <= MAX_DEPFILE);
     Ok(dep)
 }
 
@@ -718,6 +812,8 @@ fn restore(classified: &Classified, dependencies: &[CcDependency], object: &[u8]
         return Err("oversized restored object".into());
     }
     let dep = serialized_depfile(classified, dependencies)?;
+    assert!(object.len() as u64 <= MAX_OBJECT);
+    assert!(dep.len() as u64 <= MAX_DEPFILE);
     // Stage both files before publishing either. A failed restoration never
     // commits a cached object before the fallback compiler has run.
     let dep_parent = classified.depfile.parent().ok_or("depfile parent missing")?;
@@ -748,6 +844,8 @@ fn gnu_compiler(compiler: &Path) -> bool {
     let Some(name) = canonical.file_name().and_then(|s| s.to_str()) else {
         return false;
     };
+    assert!(!name.is_empty());
+    assert!(canonical.is_absolute());
     let stem = name
         .split_once("-gcc")
         .map(|(prefix, suffix)| (!prefix.is_empty(), suffix))
@@ -766,34 +864,45 @@ fn gnu_compiler(compiler: &Path) -> bool {
         })
 }
 
+#[derive(Clone, Copy)]
+struct ProbeIdentity<'a> {
+    key: &'a str,
+    roots: &'a [String],
+    kind: &'static str,
+    script_digest: &'a str,
+    tool_digest: &'a str,
+    roots_count: usize,
+}
+
 fn probe_attempt(
     options: &DriverOptions,
-    key: &str,
-    kind: &'static str,
+    identity: ProbeIdentity<'_>,
     operation: CcOperation,
     dependencies: Vec<CcDependency>,
     reads: &mut Vec<ProbeRead>,
-    roots_count: usize,
 ) -> Option<CcWireResponse> {
+    assert!(identity.roots_count <= MAX_ROOTS);
     let label = if operation == CcOperation::Manifest {
         "manifest"
     } else {
         "read"
     };
-    let response = request(&options.socket, wire(operation, key, dependencies, None));
+    let response = request(&options.socket, wire(operation, identity.key, dependencies, None));
     let (result, disposition) = match response {
-        Ok(reply)
-            if validate_cc_response(&reply, roots_count).is_ok()
-                && (reply.disposition == "hit" || reply.disposition == "miss") =>
-        {
-            let label = if reply.disposition == "hit" { "hit" } else { "miss" };
-            (Some(reply), label)
+        Ok(reply) if validate_cc_response(&reply, identity.roots_count).is_ok() => {
+            if reply.disposition == "hit" || reply.disposition == "miss" {
+                let label = if reply.disposition == "hit" { "hit" } else { "miss" };
+                (Some(reply), label)
+            } else {
+                (None, "invalid")
+            }
         }
         Ok(_) => (None, "invalid"),
         Err(_) => (None, "unavailable"),
     };
+    assert!(reads.len() < 4);
     reads.push(ProbeRead {
-        kind,
+        kind: identity.kind,
         operation: label,
         disposition,
     });
@@ -802,31 +911,34 @@ fn probe_attempt(
 
 fn capture_diagnostic<R: Read, W: Write>(mut input: R, mut output: W) -> (Vec<u8>, bool) {
     let mut captured = Vec::new();
-    let mut complete = true;
+    let mut is_complete = true;
     let mut buffer = [0; 8192];
-    loop {
-        match input.read(&mut buffer) {
-            Ok(0) => break,
-            Ok(count) => {
-                if output.write_all(&buffer[..count]).is_err() {
-                    complete = false;
-                }
-                if captured.len() + count <= MAX_CC_PROBE_DIAGNOSTIC_BYTES {
-                    captured.extend_from_slice(&buffer[..count]);
-                } else {
-                    complete = false;
-                }
-            }
-            Err(_) => {
-                complete = false;
-                break;
-            }
+    let mut next = input.read(&mut buffer);
+    // Compiler streams are forwarded until EOF; only the cacheable copy is byte-bounded.
+    while let Ok(count) = next {
+        if count == 0 {
+            assert!(captured.len() <= MAX_CC_PROBE_DIAGNOSTIC_BYTES);
+            return (captured, is_complete);
         }
+        assert!(count <= buffer.len());
+        if output.write_all(&buffer[..count]).is_err() {
+            is_complete = false;
+        }
+        if captured.len().checked_add(count).is_some_and(|size| size <= MAX_CC_PROBE_DIAGNOSTIC_BYTES) {
+            captured.extend_from_slice(&buffer[..count]);
+        } else {
+            is_complete = false;
+        }
+        next = input.read(&mut buffer);
     }
-    (captured, complete)
+    (captured, false)
 }
 
-fn compiler_with_diagnostics(options: &DriverOptions) -> (i32, Option<(Vec<u8>, Vec<u8>)>) {
+type CompilerDiagnostics = (Vec<u8>, Vec<u8>);
+
+fn compiler_with_diagnostics(options: &DriverOptions) -> (i32, Option<CompilerDiagnostics>) {
+    assert!(options.compiler.is_absolute());
+    assert!(options.arguments.len() <= MAX_ARGS);
     let mut child = match Command::new(&options.compiler)
         .args(&options.arguments)
         .stdout(Stdio::piped())
@@ -839,8 +951,16 @@ fn compiler_with_diagnostics(options: &DriverOptions) -> (i32, Option<(Vec<u8>, 
             return (127, None);
         }
     };
-    let stdout = child.stdout.take().expect("piped compiler stdout");
-    let stderr = child.stderr.take().expect("piped compiler stderr");
+    let Some(stdout) = child.stdout.take() else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return (127, None);
+    };
+    let Some(stderr) = child.stderr.take() else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return (127, None);
+    };
     let out = thread::spawn(move || capture_diagnostic(stdout, std::io::stdout().lock()));
     let err = thread::spawn(move || capture_diagnostic(stderr, std::io::stderr().lock()));
     let status = child.wait();
@@ -860,6 +980,7 @@ fn restore_failure_depfile(classified: &Classified, dependencies: &[CcDependency
         return Err("stale artifact".into());
     }
     let bytes = serialized_depfile(classified, dependencies)?;
+    assert!(bytes.len() as u64 <= MAX_DEPFILE);
     let parent = classified.depfile.parent().ok_or("depfile parent missing")?;
     let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
     temporary.write_all(bytes.as_bytes()).map_err(|e| e.to_string())?;
@@ -872,290 +993,490 @@ fn restore_failure_depfile(classified: &Classified, dependencies: &[CcDependency
     Ok(())
 }
 
+struct VerifiedProbeArtifact<'a> {
+    dependencies: &'a [CcDependency],
+    bytes: &'a [u8],
+    reads: &'a [ProbeRead],
+}
+
+fn restore_probe_hit(
+    options: &DriverOptions,
+    classified: &Classified,
+    identity: ProbeIdentity<'_>,
+    artifact: VerifiedProbeArtifact<'_>,
+) -> Option<i32> {
+    if identity.kind == "object" {
+        assert!(artifact.bytes.len() as u64 <= MAX_OBJECT);
+        assert!(!artifact.dependencies.is_empty());
+        restore(classified, artifact.dependencies, artifact.bytes).ok()?;
+        receipt(&options.receipt, Receipt {
+            schema: RECEIPT_SCHEMA,
+            disposition: "hit",
+            reason: "verified-object-and-dependencies",
+            action_key: Some(identity.key),
+            compiler_exit_code: 0,
+            probe_reads: Some(artifact.reads),
+        });
+        return Some(0);
+    }
+    let result: CcProbeResult = serde_json::from_slice(artifact.bytes).ok()?;
+    let (stdout, stderr) = decode_cc_probe_result(&result).ok()?;
+    if result.script_digest_blake3 != identity.script_digest || result.compiler_digest_blake3 != identity.tool_digest {
+        return None;
+    }
+    if result.source_path != classified.source.to_str()?
+        || result.output_path != classified.output.to_str()?
+        || result.depfile_path != classified.depfile.to_str()?
+    {
+        return None;
+    }
+    let script = options.probe_script.as_ref()?;
+    if digest_file(script, MAX_FILE).ok().as_deref() != Some(identity.script_digest) {
+        return None;
+    }
+    if digest_file(&options.compiler.canonicalize().ok()?, MAX_TREE).ok().as_deref() != Some(identity.tool_digest) {
+        return None;
+    }
+    restore_failure_depfile(classified, artifact.dependencies).ok()?;
+    std::io::stdout().write_all(&stdout).ok()?;
+    std::io::stderr().write_all(&stderr).ok()?;
+    receipt(&options.receipt, Receipt {
+        schema: RECEIPT_SCHEMA,
+        disposition: "probe-failure-hit",
+        reason: "verified-failure-and-dependencies",
+        action_key: Some(identity.key),
+        compiler_exit_code: result.compiler_exit_code,
+        probe_reads: Some(artifact.reads),
+    });
+    Some(result.compiler_exit_code)
+}
+
 fn probe_hit(
     options: &DriverOptions,
     classified: &Classified,
-    key: &str,
-    roots: &[String],
-    kind: &'static str,
-    script_digest: &str,
-    tool_digest: &str,
+    identity: ProbeIdentity<'_>,
     reads: &mut Vec<ProbeRead>,
 ) -> Option<i32> {
-    let manifest = probe_attempt(options, key, kind, CcOperation::Manifest, Vec::new(), reads, classified.roots.len())?;
+    let manifest = probe_attempt(options, identity, CcOperation::Manifest, Vec::new(), reads)?;
     if manifest.disposition != "hit" {
         return None;
     }
     let record = manifest.record.as_ref()?;
     let current = dependencies_from_record(classified, &record.dependencies).ok()?;
-    if record.action_key != key
-        || record.dependencies.is_empty()
-        || admit_cc_reuse(record, &current, classified.roots.len()) != Ok(true)
-        || tree_digests(classified, options).as_deref() != Ok(roots)
+    if record.action_key != identity.key || record.dependencies.is_empty() {
+        return None;
+    }
+    if admit_cc_reuse(record, &current, identity.roots_count) != Ok(true)
+        || tree_digests(classified, options).as_deref() != Ok(identity.roots)
     {
         return None;
     }
-    let response =
-        probe_attempt(options, key, kind, CcOperation::Read, current.clone(), reads, classified.roots.len())?;
+    let response = probe_attempt(options, identity, CcOperation::Read, current.clone(), reads)?;
     let read_record = response.record.as_ref()?;
     let encoded = response.object_base64.as_ref()?;
-    if response.disposition != "hit"
-        || read_record != record
-        || admit_cc_reuse(read_record, &current, classified.roots.len()) != Ok(true)
-    {
+    if response.disposition != "hit" || read_record != record {
+        return None;
+    }
+    if admit_cc_reuse(read_record, &current, identity.roots_count) != Ok(true) {
         return None;
     }
     let bytes = STANDARD.decode(encoded).ok()?;
-    if bytes.len() as u64 != record.object_bytes
-        || bytes.len() as u64 > MAX_OBJECT
-        || blake3::hash(&bytes).to_hex().as_str() != record.object_digest_blake3
-        || tree_digests(classified, options).as_deref() != Ok(roots)
+    if bytes.len() as u64 != record.object_bytes || bytes.len() as u64 > MAX_OBJECT {
+        return None;
+    }
+    if blake3::hash(&bytes).to_hex().as_str() != record.object_digest_blake3
+        || tree_digests(classified, options).as_deref() != Ok(identity.roots)
     {
         return None;
     }
-    if kind == "object" {
-        restore(classified, &current, &bytes).ok()?;
-        probe_receipt(options, "hit", "verified-object-and-dependencies", key, 0, reads);
-        return Some(0);
-    }
-    let result: CcProbeResult = serde_json::from_slice(&bytes).ok()?;
-    let (stdout, stderr) = decode_cc_probe_result(&result).ok()?;
-    if result.script_digest_blake3 != script_digest
-        || result.compiler_digest_blake3 != tool_digest
-        || result.source_path != classified.source.to_str()?
-        || result.output_path != classified.output.to_str()?
-        || result.depfile_path != classified.depfile.to_str()?
-        || options.probe_script.as_ref().and_then(|path| digest_file(path, MAX_FILE).ok()).as_deref()
-            != Some(script_digest)
-        || digest_file(&options.compiler.canonicalize().ok()?, MAX_TREE).ok().as_deref() != Some(tool_digest)
-    {
-        return None;
-    }
-    restore_failure_depfile(classified, &current).ok()?;
-    std::io::stdout().write_all(&stdout).ok()?;
-    std::io::stderr().write_all(&stderr).ok()?;
-    probe_receipt(
-        options,
-        "probe-failure-hit",
-        "verified-failure-and-dependencies",
-        key,
-        result.compiler_exit_code,
+    assert!(bytes.len() as u64 <= MAX_OBJECT);
+    assert!(identity.roots_count <= MAX_ROOTS);
+    restore_probe_hit(options, classified, identity, VerifiedProbeArtifact {
+        dependencies: &current,
+        bytes: &bytes,
         reads,
-    );
-    Some(result.compiler_exit_code)
+    })
+}
+
+fn probe_fallback(options: &DriverOptions, identity: ProbeIdentity<'_>, reads: &[ProbeRead], reason: &str) -> i32 {
+    let exit = compiler_status(&options.compiler, &options.arguments);
+    receipt(&options.receipt, Receipt {
+        schema: RECEIPT_SCHEMA,
+        disposition: "fallback",
+        reason,
+        action_key: Some(identity.key),
+        compiler_exit_code: exit,
+        probe_reads: Some(reads),
+    });
+    exit
+}
+
+fn probe_read_uncertain(reads: &mut [ProbeRead]) -> bool {
+    if let Some(attempt) = reads.last_mut()
+        && attempt.disposition == "hit"
+    {
+        attempt.disposition = "invalid";
+    }
+    reads.last().is_some_and(|attempt| matches!(attempt.disposition, "invalid" | "unavailable"))
+}
+
+fn probe_cache_hits(
+    options: &DriverOptions,
+    classified: &Classified,
+    identity: ProbeIdentity<'_>,
+    failure_key: &str,
+    reads: &mut Vec<ProbeRead>,
+) -> Result<Option<i32>, i32> {
+    assert!(reads.is_empty());
+    assert!(identity.roots_count <= MAX_ROOTS);
+    let failure = ProbeIdentity {
+        key: failure_key,
+        kind: "failure",
+        ..identity
+    };
+    if let Some(exit) = probe_hit(options, classified, failure, reads) {
+        return Ok(Some(exit));
+    }
+    if probe_read_uncertain(reads) {
+        return Err(probe_fallback(options, identity, reads, "unknown-failure-manifest-or-read"));
+    }
+    if let Some(exit) = probe_hit(options, classified, identity, reads) {
+        return Ok(Some(exit));
+    }
+    if probe_read_uncertain(reads) {
+        return Err(probe_fallback(options, identity, reads, "unknown-object-manifest-or-read"));
+    }
+    Ok(None)
+}
+
+fn publish_ack(
+    options: &DriverOptions,
+    classified: &Classified,
+    key: &str,
+    dependencies: Vec<CcDependency>,
+    bytes: &[u8],
+) -> Result<(), String> {
+    assert!(bytes.len() as u64 <= MAX_OBJECT);
+    assert!(dependencies.len() <= MAX_DEPENDENCIES);
+    let digest = blake3::hash(bytes).to_hex().to_string();
+    let reply =
+        request(&options.socket, wire(CcOperation::Publish, key, dependencies.clone(), Some(STANDARD.encode(bytes))))?;
+    validate_cc_response(&reply, classified.roots.len()).map_err(|e| e.to_string())?;
+    if reply.disposition != "published" {
+        return Err("publication unacknowledged".into());
+    }
+    let record = reply.record.as_ref().ok_or("publication unacknowledged")?;
+    if record.action_key != key || record.dependencies != dependencies {
+        return Err("publication unacknowledged".into());
+    }
+    if record.object_digest_blake3 != digest || record.object_bytes != bytes.len() as u64 {
+        return Err("publication unacknowledged".into());
+    }
+    assert!(record.object_bytes <= MAX_OBJECT);
+    Ok(())
+}
+
+struct ProbeCompilation<'a> {
+    options: &'a DriverOptions,
+    classified: &'a Classified,
+    input: &'a CcActionInput,
+    identity: ProbeIdentity<'a>,
+    failure_key: &'a str,
+    exit: i32,
+    diagnostics: Option<CompilerDiagnostics>,
+    is_clean_depfile: bool,
+    is_clean_object: bool,
+}
+
+fn probe_inputs_current(compilation: &ProbeCompilation<'_>) -> Result<(), String> {
+    let script = compilation.options.probe_script.as_ref().ok_or("classified probe script missing")?;
+    if digest_file(script, MAX_FILE)? != compilation.identity.script_digest {
+        return Err("probe inputs changed".into());
+    }
+    let compiler = compilation.options.compiler.canonicalize().map_err(|e| e.to_string())?;
+    if digest_file(&compiler, MAX_TREE)? != compilation.identity.tool_digest {
+        return Err("probe inputs changed".into());
+    }
+    if tree_digests(compilation.classified, compilation.options)?.as_slice() != compilation.identity.roots {
+        return Err("probe inputs changed".into());
+    }
+    Ok(())
+}
+
+fn publish_probe_failure(compilation: &ProbeCompilation<'_>) -> Result<(), String> {
+    if !(1..=125).contains(&compilation.exit) || !compilation.is_clean_depfile {
+        return Err("ineligible failure artifacts".into());
+    }
+    if !compilation.is_clean_object || compilation.classified.output.exists() {
+        return Err("ineligible failure artifacts".into());
+    }
+    let (stdout, stderr) = compilation.diagnostics.as_ref().ok_or("unbounded diagnostics")?;
+    assert!((1..=125).contains(&compilation.exit));
+    assert!(stdout.len() <= MAX_CC_PROBE_DIAGNOSTIC_BYTES);
+    assert!(stderr.len() <= MAX_CC_PROBE_DIAGNOSTIC_BYTES);
+    probe_inputs_current(compilation)?;
+    let dependencies = dependencies_from_depfile(compilation.classified)?;
+    let payload = CcProbeResult {
+        schema: CC_PROBE_RESULT_SCHEMA.into(),
+        script_digest_blake3: compilation.identity.script_digest.into(),
+        compiler_digest_blake3: compilation.input.tool_digest_blake3.clone(),
+        source_path: compilation.classified.source.to_str().ok_or("source encoding")?.into(),
+        output_path: compilation.classified.output.to_str().ok_or("output encoding")?.into(),
+        depfile_path: compilation.classified.depfile.to_str().ok_or("depfile encoding")?.into(),
+        compiler_exit_code: compilation.exit,
+        stdout_base64: STANDARD.encode(stdout),
+        stderr_base64: STANDARD.encode(stderr),
+    };
+    decode_cc_probe_result(&payload).map_err(|e| e.to_string())?;
+    let bytes = serde_json::to_vec(&payload).map_err(|e| e.to_string())?;
+    publish_ack(compilation.options, compilation.classified, compilation.failure_key, dependencies, &bytes)
+}
+
+fn publish_probe_object(compilation: &ProbeCompilation<'_>) -> Result<(), String> {
+    if compilation
+        .diagnostics
+        .as_ref()
+        .is_none_or(|(stdout, stderr)| !stdout.is_empty() || !stderr.is_empty())
+    {
+        return Err("nonempty or unbounded successful diagnostics".into());
+    }
+    probe_inputs_current(compilation)?;
+    let dependencies = dependencies_from_depfile(compilation.classified)?;
+    let bytes = file_bytes(&compilation.classified.output, MAX_OBJECT)?;
+    publish_ack(compilation.options, compilation.classified, compilation.identity.key, dependencies, &bytes)
 }
 
 fn run_probe(
     options: &DriverOptions,
     classified: &Classified,
     input: &CcActionInput,
-    key: &str,
-    script_digest: &str,
+    identity: ProbeIdentity<'_>,
 ) -> i32 {
-    let mut reads = Vec::new();
+    let mut reads = Vec::with_capacity(4);
     let mut failure = input.clone();
     failure.normalized_arguments.push("probe-failure-result-v1".into());
     let failure_key = match cc_action_key(&failure) {
         Ok(key) => key,
-        Err(_) => return fallback(options, "unbounded-or-unsafe-input", Some(key)),
+        Err(_) => return fallback(options, "unbounded-or-unsafe-input", Some(identity.key)),
     };
-    let script = options.probe_script.as_ref().expect("classified probe script");
-    if digest_file(script, MAX_FILE).as_deref() != Ok(script_digest) {
-        let exit = compiler_status(&options.compiler, &options.arguments);
-        probe_receipt(options, "fallback", "probe-script-changed", key, exit, &reads);
-        return exit;
+    let Some(script) = options.probe_script.as_ref() else {
+        return probe_fallback(options, identity, &reads, "probe-script-changed");
+    };
+    if digest_file(script, MAX_FILE).as_deref() != Ok(identity.script_digest) {
+        return probe_fallback(options, identity, &reads, "probe-script-changed");
     }
-    if let Some(exit) = probe_hit(
-        options,
-        classified,
-        &failure_key,
-        &input.roots_digest_blake3,
-        "failure",
-        script_digest,
-        &input.tool_digest_blake3,
-        &mut reads,
-    ) {
-        return exit;
+    match probe_cache_hits(options, classified, identity, &failure_key, &mut reads) {
+        Ok(Some(exit)) | Err(exit) => return exit,
+        Ok(None) => {}
     }
-    if let Some(attempt) = reads.last_mut() {
-        if attempt.disposition == "hit" {
-            attempt.disposition = "invalid";
-        }
-    }
-    if reads.last().is_some_and(|attempt| matches!(attempt.disposition, "invalid" | "unavailable")) {
-        let exit = compiler_status(&options.compiler, &options.arguments);
-        probe_receipt(options, "fallback", "unknown-failure-manifest-or-read", key, exit, &reads);
-        return exit;
-    }
-    if let Some(exit) = probe_hit(
-        options,
-        classified,
-        key,
-        &input.roots_digest_blake3,
-        "object",
-        script_digest,
-        &input.tool_digest_blake3,
-        &mut reads,
-    ) {
-        return exit;
-    }
-    if let Some(attempt) = reads.last_mut() {
-        if attempt.disposition == "hit" {
-            attempt.disposition = "invalid";
-        }
-    }
-    if reads.last().is_some_and(|attempt| matches!(attempt.disposition, "invalid" | "unavailable")) {
-        let exit = compiler_status(&options.compiler, &options.arguments);
-        probe_receipt(options, "fallback", "unknown-object-manifest-or-read", key, exit, &reads);
-        return exit;
-    }
-    let clean_depfile = !classified.depfile.exists();
-    let clean_object = !classified.output.exists();
+    assert!(reads.len() <= 4);
+    assert_eq!(identity.roots_count, classified.roots.len());
+    let is_clean_depfile = !classified.depfile.exists();
+    let is_clean_object = !classified.output.exists();
     let (exit, diagnostics) = compiler_with_diagnostics(options);
+    let compilation = ProbeCompilation {
+        options,
+        classified,
+        input,
+        identity,
+        failure_key: &failure_key,
+        exit,
+        diagnostics,
+        is_clean_depfile,
+        is_clean_object,
+    };
     if exit != 0 {
-        let publish = (|| -> Result<(), String> {
-            if !(1..=125).contains(&exit) || !clean_depfile || !clean_object || classified.output.exists() {
-                return Err("ineligible failure artifacts".into());
-            }
-            let (stdout, stderr) = diagnostics.ok_or("unbounded diagnostics")?;
-            if digest_file(script, MAX_FILE)? != script_digest
-                || digest_file(&options.compiler.canonicalize().map_err(|e| e.to_string())?, MAX_TREE)?
-                    != input.tool_digest_blake3
-                || tree_digests(classified, options)? != input.roots_digest_blake3
-            {
-                return Err("probe inputs changed".into());
-            }
-            let dependencies = dependencies_from_depfile(classified)?;
-            let payload = CcProbeResult {
-                schema: CC_PROBE_RESULT_SCHEMA.into(),
-                script_digest_blake3: script_digest.into(),
-                compiler_digest_blake3: input.tool_digest_blake3.clone(),
-                source_path: classified.source.to_str().ok_or("source encoding")?.into(),
-                output_path: classified.output.to_str().ok_or("output encoding")?.into(),
-                depfile_path: classified.depfile.to_str().ok_or("depfile encoding")?.into(),
-                compiler_exit_code: exit,
-                stdout_base64: STANDARD.encode(stdout),
-                stderr_base64: STANDARD.encode(stderr),
-            };
-            decode_cc_probe_result(&payload).map_err(|e| e.to_string())?;
-            let bytes = serde_json::to_vec(&payload).map_err(|e| e.to_string())?;
-            let digest = blake3::hash(&bytes).to_hex().to_string();
-            let reply = request(
-                &options.socket,
-                wire(CcOperation::Publish, &failure_key, dependencies.clone(), Some(STANDARD.encode(&bytes))),
-            )?;
-            validate_cc_response(&reply, classified.roots.len()).map_err(|e| e.to_string())?;
-            if reply.disposition != "published"
-                || reply.record.as_ref().is_none_or(|record| {
-                    record.action_key != failure_key
-                        || record.dependencies != dependencies
-                        || record.object_digest_blake3 != digest
-                        || record.object_bytes != bytes.len() as u64
-                })
-            {
-                return Err("failure publication unacknowledged".into());
-            }
-            Ok(())
-        })();
-        let status = if publish.is_ok() {
-            "probe-failure-published"
-        } else {
-            "probe-compiler-failure"
-        };
-        probe_receipt(
-            options,
-            status,
-            "compiler-failure",
-            if publish.is_ok() { &failure_key } else { key },
-            exit,
-            &reads,
-        );
+        let is_published = publish_probe_failure(&compilation).is_ok();
+        receipt(&options.receipt, Receipt {
+            schema: RECEIPT_SCHEMA,
+            disposition: if is_published {
+                "probe-failure-published"
+            } else {
+                "probe-compiler-failure"
+            },
+            reason: "compiler-failure",
+            action_key: Some(if is_published {
+                failure_key.as_str()
+            } else {
+                identity.key
+            }),
+            compiler_exit_code: exit,
+            probe_reads: Some(&reads),
+        });
         return exit;
     }
-    let publish = (|| -> Result<(), String> {
-        if diagnostics.as_ref().is_none_or(|(stdout, stderr)| !stdout.is_empty() || !stderr.is_empty()) {
-            return Err("nonempty or unbounded successful diagnostics".into());
-        }
-        if digest_file(script, MAX_FILE)? != script_digest
-            || digest_file(&options.compiler.canonicalize().map_err(|e| e.to_string())?, MAX_TREE)?
-                != input.tool_digest_blake3
-            || tree_digests(classified, options)? != input.roots_digest_blake3
-        {
-            return Err("probe inputs changed".into());
-        }
-        let dependencies = dependencies_from_depfile(classified)?;
-        let bytes = file_bytes(&classified.output, MAX_OBJECT)?;
-        let digest = blake3::hash(&bytes).to_hex().to_string();
-        let reply = request(
-            &options.socket,
-            wire(CcOperation::Publish, key, dependencies.clone(), Some(STANDARD.encode(&bytes))),
-        )?;
-        validate_cc_response(&reply, classified.roots.len()).map_err(|e| e.to_string())?;
-        if reply.disposition != "published"
-            || reply.record.as_ref().is_none_or(|record| {
-                record.action_key != key
-                    || record.dependencies != dependencies
-                    || record.object_digest_blake3 != digest
-                    || record.object_bytes != bytes.len() as u64
-            })
-        {
-            return Err("object publication unacknowledged".into());
-        }
-        Ok(())
-    })();
-    let status = if publish.is_ok() { "published" } else { "compiler-only" };
-    probe_receipt(options, status, "compiled", key, exit, &reads);
+    let is_published = publish_probe_object(&compilation).is_ok();
+    receipt(&options.receipt, Receipt {
+        schema: RECEIPT_SCHEMA,
+        disposition: if is_published { "published" } else { "compiler-only" },
+        reason: "compiled",
+        action_key: Some(identity.key),
+        compiler_exit_code: exit,
+        probe_reads: Some(&reads),
+    });
     exit
 }
 
-/// Run one compiler invocation; the integer returned is the compiler-compatible process exit code.
-pub fn run(options: &DriverOptions) -> i32 {
-    if !options.compiler.is_absolute() {
-        receipt(&options.receipt, "rejected", "compiler-must-be-absolute", None, 2);
-        return 2;
+fn probe_environment_admitted(options: &DriverOptions, script: &Path) -> bool {
+    if !script.is_absolute() {
+        return false;
     }
-    if !options.socket.is_absolute()
-        || !options.receipt.is_absolute()
-        || !matches!(options.platform_digest.as_bytes(), digest if digest.len() == 64 && digest.iter().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()))
+    let script_utf8 = script.to_str();
+    if script_utf8.is_none() {
+        return false;
+    }
+    assert!(script.is_absolute());
+    assert!(script_utf8.is_some());
+    if script.canonicalize().as_deref().ok() != Some(script) {
+        return false;
+    }
+    if !options.arguments.iter().any(|arg| arg == "-fdiagnostics-color=never")
+        || !options.arguments.iter().any(|arg| arg == "-fmessage-length=0")
     {
-        return fallback(options, "invalid-driver-options", None);
+        return false;
     }
-    if std::env::var_os("MANTLE_CC_CACHE_DISABLE").is_some() {
-        return fallback(options, "disabled", None);
+    if std::env::var_os("LC_ALL").as_deref() != Some(OsStr::new("C")) {
+        return false;
     }
-    let mut classified = match classify(&options.arguments) {
-        Ok(value) => value,
-        Err(_) => return fallback(options, "unclassified-invocation", None),
+    !std::env::vars_os().any(|(name, _)| {
+        let name = name.to_string_lossy();
+        if name.starts_with("LC_") && name != "LC_ALL" {
+            return true;
+        }
+        name.starts_with("GCC_") || matches!(name.as_ref(), "LANGUAGE" | "DEPENDENCIES_OUTPUT" | "SUNPRO_DEPENDENCIES")
+    })
+}
+
+fn action_facts(
+    options: &DriverOptions,
+    classified: &mut Classified,
+    probe_digest: Option<&str>,
+) -> Result<(String, CcActionInput), String> {
+    let compiler_binary = options.compiler.canonicalize().map_err(|e| e.to_string())?;
+    let tool = digest_file(&compiler_binary, MAX_TREE)?;
+    let source = digest_file(&classified.source, MAX_FILE)?;
+    let roots = tree_digests(classified, options)?;
+    let name = options.compiler.file_name().and_then(|s| s.to_str()).ok_or("invalid compiler name")?;
+    classified.normalized.push(format!("compiler:{name}"));
+    if let Some(digest) = probe_digest {
+        classified.normalized.push(format!("probe-script-digest:{digest}"));
+    }
+    let input = CcActionInput {
+        tool_digest_blake3: tool,
+        source_digest_blake3: source,
+        platform_digest_blake3: options.platform_digest.clone(),
+        normalized_arguments: std::mem::take(&mut classified.normalized),
+        roots_digest_blake3: roots,
     };
-    if !gnu_compiler(&options.compiler) {
-        return fallback(options, "unclassified-compiler-family", None);
+    let key = cc_action_key(&input).map_err(|e| e.to_string())?;
+    assert!(input.roots_digest_blake3.len() <= MAX_ROOTS);
+    assert!(input.normalized_arguments.len() <= options.arguments.len());
+    Ok((key, input))
+}
+
+fn try_normal_hit(
+    options: &DriverOptions,
+    classified: &Classified,
+    key: &str,
+    roots: &[String],
+    manifest: &CcWireResponse,
+) -> bool {
+    let Some(record) = manifest.record.as_ref() else {
+        return false;
+    };
+    if record.action_key != key || record.dependencies.is_empty() {
+        return false;
     }
-    let probe_digest = if let Some(script) = &options.probe_script {
-        if !script.is_absolute()
-            || script.to_str().is_none()
-            || script.canonicalize().as_deref().ok() != Some(script.as_path())
-            || !options.arguments.iter().any(|arg| arg == "-fdiagnostics-color=never")
-            || !options.arguments.iter().any(|arg| arg == "-fmessage-length=0")
-            || std::env::var_os("LC_ALL").as_deref() != Some(OsStr::new("C"))
-            || std::env::vars_os().any(|(name, _)| {
-                let name = name.to_string_lossy();
-                (name.starts_with("LC_") && name != "LC_ALL")
-                    || name.starts_with("GCC_")
-                    || name == "LANGUAGE"
-                    || name == "DEPENDENCIES_OUTPUT"
-                    || name == "SUNPRO_DEPENDENCIES"
-            })
-        {
-            return fallback(options, "unclassified-probe-environment", None);
+    let Ok(current) = dependencies_from_record(classified, &record.dependencies) else {
+        return false;
+    };
+    if admit_cc_reuse(record, &current, classified.roots.len()) != Ok(true) {
+        return false;
+    }
+    if tree_digests(classified, options).as_deref() != Ok(roots) {
+        return false;
+    }
+    let Ok(reply) = request(&options.socket, wire(CcOperation::Read, key, current.clone(), None)) else {
+        return false;
+    };
+    if reply.disposition != "hit" {
+        return false;
+    }
+    let (Some(read_record), Some(encoded)) = (&reply.record, &reply.object_base64) else {
+        return false;
+    };
+    if read_record != record || admit_cc_reuse(read_record, &current, classified.roots.len()) != Ok(true) {
+        return false;
+    }
+    let Ok(bytes) = STANDARD.decode(encoded) else {
+        return false;
+    };
+    if bytes.len() as u64 != record.object_bytes || bytes.len() as u64 > MAX_OBJECT {
+        return false;
+    }
+    assert!(bytes.len() as u64 <= MAX_OBJECT);
+    assert!(current.len() <= MAX_DEPENDENCIES);
+    if blake3::hash(&bytes).to_hex().as_str() != record.object_digest_blake3 {
+        return false;
+    }
+    if tree_digests(classified, options).as_deref() != Ok(roots) {
+        return false;
+    }
+    if restore(classified, &current, &bytes).is_err() {
+        return false;
+    }
+    receipt(&options.receipt, Receipt {
+        schema: RECEIPT_SCHEMA,
+        disposition: "hit",
+        reason: "verified-object-and-dependencies",
+        action_key: Some(key),
+        compiler_exit_code: 0,
+        probe_reads: None,
+    });
+    true
+}
+
+fn compile_normal(options: &DriverOptions, classified: &Classified, key: &str, roots: &[String]) -> i32 {
+    let exit = compiler_status(&options.compiler, &options.arguments);
+    if exit != 0 {
+        receipt(&options.receipt, Receipt {
+            schema: RECEIPT_SCHEMA,
+            disposition: "compiler-failure",
+            reason: "not-cacheable",
+            action_key: Some(key),
+            compiler_exit_code: exit,
+            probe_reads: None,
+        });
+        return exit;
+    }
+    assert_eq!(exit, 0);
+    assert!(classified.roots.len() <= MAX_ROOTS);
+    let publish = (|| -> Result<(), String> {
+        if tree_digests(classified, options)?.as_slice() != roots {
+            return Err("source roots changed during compilation".into());
         }
-        match digest_file(script, MAX_FILE) {
-            Ok(digest) => Some(digest),
-            Err(_) => return fallback(options, "unbounded-or-unsafe-probe-script", None),
-        }
+        let dependencies = dependencies_from_depfile(classified)?;
+        let bytes = file_bytes(&classified.output, MAX_OBJECT)?;
+        publish_ack(options, classified, key, dependencies, &bytes)
+    })();
+    let (disposition, reason) = if publish.is_ok() {
+        ("published", "compiled-and-published")
     } else {
-        None
+        ("compiler-only", "publication-ineligible-or-unavailable")
     };
-    if [
+    receipt(&options.receipt, Receipt {
+        schema: RECEIPT_SCHEMA,
+        disposition,
+        reason,
+        action_key: Some(key),
+        compiler_exit_code: exit,
+        probe_reads: None,
+    });
+    exit
+}
+
+fn has_ambient_compiler_input() -> bool {
+    [
         "CPATH",
         "C_INCLUDE_PATH",
         "CPLUS_INCLUDE_PATH",
@@ -1166,122 +1487,88 @@ pub fn run(options: &DriverOptions) -> i32 {
     ]
     .iter()
     .any(|name| std::env::var_os(name).is_some())
-    {
+}
+
+/// Run one compiler invocation; the integer returned is the compiler-compatible process exit code.
+pub fn run(options: &DriverOptions) -> i32 {
+    if !options.compiler.is_absolute() {
+        receipt(&options.receipt, Receipt {
+            schema: RECEIPT_SCHEMA,
+            disposition: "rejected",
+            reason: "compiler-must-be-absolute",
+            action_key: None,
+            compiler_exit_code: 2,
+            probe_reads: None,
+        });
+        return 2;
+    }
+    if !options.socket.is_absolute() || !options.receipt.is_absolute() {
+        return fallback(options, "invalid-driver-options", None);
+    }
+    let digest = options.platform_digest.as_bytes();
+    if digest.len() != 64 || !digest.iter().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()) {
+        return fallback(options, "invalid-driver-options", None);
+    }
+    if std::env::var_os("MANTLE_CC_CACHE_DISABLE").is_some() {
+        return fallback(options, "disabled", None);
+    }
+    let mut classified = match classify(&options.arguments) {
+        Ok(value) => value,
+        Err(_) => return fallback(options, "unclassified-invocation", None),
+    };
+    assert!(classified.roots.len() <= MAX_ROOTS);
+    assert!(options.arguments.len() <= MAX_ARGS);
+    if !gnu_compiler(&options.compiler) {
+        return fallback(options, "unclassified-compiler-family", None);
+    }
+    let probe_digest = if let Some(script) = &options.probe_script {
+        if !probe_environment_admitted(options, script) {
+            return fallback(options, "unclassified-probe-environment", None);
+        }
+        match digest_file(script, MAX_FILE) {
+            Ok(digest) => Some(digest),
+            Err(_) => return fallback(options, "unbounded-or-unsafe-probe-script", None),
+        }
+    } else {
+        None
+    };
+    if has_ambient_compiler_input() {
         return fallback(options, "ambient-compiler-input", None);
     }
-    let facts = (|| -> Result<(String, CcActionInput), String> {
-        let compiler_binary = options.compiler.canonicalize().map_err(|e| e.to_string())?;
-        let tool = digest_file(&compiler_binary, MAX_TREE)?;
-        let source = digest_file(&classified.source, MAX_FILE)?;
-        let roots = tree_digests(&classified, options)?;
-        let name = options.compiler.file_name().and_then(|s| s.to_str()).ok_or("invalid compiler name")?;
-        classified.normalized.push(format!("compiler:{name}"));
-        if let Some(digest) = &probe_digest {
-            classified.normalized.push(format!("probe-script-digest:{digest}"));
-        }
-        let input = CcActionInput {
-            tool_digest_blake3: tool,
-            source_digest_blake3: source,
-            platform_digest_blake3: options.platform_digest.clone(),
-            normalized_arguments: std::mem::take(&mut classified.normalized),
-            roots_digest_blake3: roots,
-        };
-        let key = cc_action_key(&input).map_err(|e| e.to_string())?;
-        Ok((key, input))
-    })();
-    let (key, input) = match facts {
+    let (key, input) = match action_facts(options, &mut classified, probe_digest.as_deref()) {
         Ok(facts) => facts,
         Err(_) => return fallback(options, "unbounded-or-unsafe-input", None),
     };
-    if let Some(digest) = probe_digest.as_deref() {
-        return run_probe(options, &classified, &input, &key, digest);
+    if let Some(script_digest) = probe_digest.as_deref() {
+        let identity = ProbeIdentity {
+            key: &key,
+            roots: &input.roots_digest_blake3,
+            kind: "object",
+            script_digest,
+            tool_digest: &input.tool_digest_blake3,
+            roots_count: classified.roots.len(),
+        };
+        return run_probe(options, &classified, &input, identity);
     }
-    let roots = input.roots_digest_blake3;
-    let manifest = request(&options.socket, wire(CcOperation::Manifest, &key, Vec::new(), None));
-    let manifest = match manifest {
+    run_normal(options, &classified, &key, &input.roots_digest_blake3)
+}
+
+fn run_normal(options: &DriverOptions, classified: &Classified, key: &str, roots: &[String]) -> i32 {
+    let manifest = match request(&options.socket, wire(CcOperation::Manifest, key, Vec::new(), None)) {
         Ok(reply) => reply,
-        Err(_) => return fallback(options, "cache-unavailable", Some(&key)),
+        Err(_) => return fallback(options, "cache-unavailable", Some(key)),
     };
     if validate_cc_response(&manifest, classified.roots.len()).is_err() {
-        return fallback(options, "invalid-cache-response", Some(&key));
+        return fallback(options, "invalid-cache-response", Some(key));
     }
     if manifest.disposition == "hit" {
-        if let Some(record) = &manifest.record {
-            if record.action_key == key && !record.dependencies.is_empty() {
-                if let Ok(current) = dependencies_from_record(&classified, &record.dependencies) {
-                    if admit_cc_reuse(record, &current, classified.roots.len()) == Ok(true)
-                        && tree_digests(&classified, options).as_ref() == Ok(&roots)
-                    {
-                        let reply = request(&options.socket, wire(CcOperation::Read, &key, current.clone(), None));
-                        if let Ok(reply) = reply {
-                            if reply.disposition == "hit" {
-                                if let (Some(read_record), Some(encoded)) = (&reply.record, &reply.object_base64) {
-                                    if read_record == record
-                                        && admit_cc_reuse(read_record, &current, classified.roots.len()) == Ok(true)
-                                    {
-                                        if let Ok(bytes) = STANDARD.decode(encoded) {
-                                            if bytes.len() as u64 == record.object_bytes
-                                                && bytes.len() as u64 <= MAX_OBJECT
-                                                && blake3::hash(&bytes).to_hex().as_str() == record.object_digest_blake3
-                                                && tree_digests(&classified, options).as_ref() == Ok(&roots)
-                                                && restore(&classified, &current, &bytes).is_ok()
-                                            {
-                                                receipt(
-                                                    &options.receipt,
-                                                    "hit",
-                                                    "verified-object-and-dependencies",
-                                                    Some(&key),
-                                                    0,
-                                                );
-                                                return 0;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        if try_normal_hit(options, classified, key, roots, &manifest) {
+            return 0;
         }
     } else if manifest.disposition != "miss" || manifest.record.is_some() || manifest.object_base64.is_some() {
-        return fallback(options, "invalid-manifest-disposition", Some(&key));
+        return fallback(options, "invalid-manifest-disposition", Some(key));
     }
-    let exit = compiler_status(&options.compiler, &options.arguments);
-    if exit != 0 {
-        receipt(&options.receipt, "compiler-failure", "not-cacheable", Some(&key), exit);
-        return exit;
-    }
-    let publish = (|| -> Result<(), String> {
-        if tree_digests(&classified, options)? != roots {
-            return Err("source roots changed during compilation".into());
-        }
-        let dependencies = dependencies_from_depfile(&classified)?;
-        let bytes = file_bytes(&classified.output, MAX_OBJECT)?;
-        let object_digest = blake3::hash(&bytes).to_hex().to_string();
-        let object_size = bytes.len() as u64;
-        let reply = request(
-            &options.socket,
-            wire(CcOperation::Publish, &key, dependencies.clone(), Some(STANDARD.encode(bytes))),
-        )?;
-        validate_cc_response(&reply, classified.roots.len()).map_err(|e| e.to_string())?;
-        if reply.disposition != "published"
-            || reply.record.as_ref().is_none_or(|record| {
-                record.action_key != key
-                    || record.object_digest_blake3 != object_digest
-                    || record.object_bytes != object_size
-                    || record.dependencies != dependencies
-            })
-        {
-            return Err("publish not acknowledged".into());
-        }
-        Ok(())
-    })();
-    match publish {
-        Ok(()) => receipt(&options.receipt, "published", "compiled-and-published", Some(&key), exit),
-        Err(_) => receipt(&options.receipt, "compiler-only", "publication-ineligible-or-unavailable", Some(&key), exit),
-    }
-    exit
+    compile_normal(options, classified, key, roots)
 }
 
 #[cfg(test)]

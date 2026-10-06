@@ -2,6 +2,7 @@ use std::env;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use crunch_cc_driver::DriverOptions;
 use crunch_cc_driver::run_os;
 
 fn main() -> ExitCode {
@@ -18,7 +19,17 @@ fn main() -> ExitCode {
             let Some(receipt) = receipt else { break };
             let Some(platform_digest) = digest else { break };
             let arguments = args.collect::<Vec<_>>();
-            let status = run_os(compiler, socket, receipt, platform_digest, probe_script, arguments);
+            let status = run_os(
+                DriverOptions {
+                    compiler,
+                    socket,
+                    receipt,
+                    platform_digest,
+                    arguments: Vec::new(),
+                    probe_script,
+                },
+                arguments,
+            );
             return ExitCode::from(u8::try_from(status).unwrap_or(1));
         }
         let value = match args.next() {
