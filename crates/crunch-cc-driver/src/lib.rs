@@ -573,6 +573,17 @@ fn depfile_target_separator(bytes: &[u8]) -> Result<usize, String> {
     Ok(colon)
 }
 
+fn push_depfile_token(paths: &mut Vec<String>, token: &mut Vec<u8>) -> Result<(), String> {
+    if token.is_empty() {
+        return Ok(());
+    }
+    if paths.len() >= MAX_DEPENDENCIES {
+        return Err("depfile bound exceeded".into());
+    }
+    paths.push(String::from_utf8(std::mem::take(token)).map_err(|e| e.to_string())?);
+    Ok(())
+}
+
 /// Parse a single make-style depfile with backslash-escaped whitespace and continuations.
 /// Unknown constructs fail closed rather than publishing an incomplete manifest.
 pub fn parse_depfile(bytes: &[u8]) -> Result<Vec<String>, String> {
@@ -602,12 +613,7 @@ pub fn parse_depfile(bytes: &[u8]) -> Result<Vec<String>, String> {
             }
             token.push(bytes[index]);
         } else if byte.is_ascii_whitespace() {
-            if !token.is_empty() {
-                if paths.len() >= MAX_DEPENDENCIES {
-                    return Err("depfile bound exceeded".into());
-                }
-                paths.push(String::from_utf8(std::mem::take(&mut token)).map_err(|e| e.to_string())?);
-            }
+            push_depfile_token(&mut paths, &mut token)?;
         } else if byte == b':' || byte == b'#' || byte == b'$' {
             return Err("unsupported make dependency syntax".into());
         } else {
@@ -618,12 +624,7 @@ pub fn parse_depfile(bytes: &[u8]) -> Result<Vec<String>, String> {
         }
         index += 1;
     }
-    if !token.is_empty() {
-        if paths.len() >= MAX_DEPENDENCIES {
-            return Err("depfile bound exceeded".into());
-        }
-        paths.push(String::from_utf8(token).map_err(|e| e.to_string())?);
-    }
+    push_depfile_token(&mut paths, &mut token)?;
     if paths.is_empty() {
         return Err("depfile lacks prerequisites".into());
     }
@@ -710,9 +711,9 @@ fn dependencies_from_record(classified: &Classified, record: &[CcDependency]) ->
 
 fn connect(socket: &Path) -> Result<UnixStream, String> {
     let stream = UnixStream::connect(socket).map_err(|e| e.to_string())?;
-    let timeout_seconds = Some(Duration::from_secs(3));
-    stream.set_read_timeout(timeout_seconds).map_err(|e| e.to_string())?;
-    stream.set_write_timeout(timeout_seconds).map_err(|e| e.to_string())?;
+    let timeout_secs = Some(Duration::from_secs(3));
+    stream.set_read_timeout(timeout_secs).map_err(|e| e.to_string())?;
+    stream.set_write_timeout(timeout_secs).map_err(|e| e.to_string())?;
     Ok(stream)
 }
 
@@ -733,7 +734,7 @@ fn request(socket: &Path, wire: CcWireRequest) -> Result<CcWireResponse, String>
         return Err("response frame bound exceeded".into());
     }
     let length_bytes = usize::try_from(count).map_err(|_| "response frame length exceeds platform")?;
-    assert!(length_bytes <= usize::try_from(MAX_FRAME).unwrap_or(usize::MAX));
+    assert_eq!(length_bytes as u64, count);
     let mut body = vec![0; length_bytes];
     stream.read_exact(&mut body).map_err(|e| e.to_string())?;
     let response: CcWireResponse = serde_json::from_slice(&body).map_err(|e| e.to_string())?;
@@ -936,6 +937,15 @@ fn capture_diagnostic<R: Read, W: Write>(mut input: R, mut output: W) -> (Vec<u8
 
 type CompilerDiagnostics = (Vec<u8>, Vec<u8>);
 
+fn abort_compiler_after_missing_pipe(child: &mut std::process::Child) {
+    if let Err(error) = child.kill() {
+        eprintln!("mantle-cc-cache-driver: cannot stop compiler after missing pipe: {error}");
+    }
+    if let Err(error) = child.wait() {
+        eprintln!("mantle-cc-cache-driver: cannot reap compiler after missing pipe: {error}");
+    }
+}
+
 fn compiler_with_diagnostics(options: &DriverOptions) -> (i32, Option<CompilerDiagnostics>) {
     assert!(options.compiler.is_absolute());
     assert!(options.arguments.len() <= MAX_ARGS);
@@ -952,13 +962,11 @@ fn compiler_with_diagnostics(options: &DriverOptions) -> (i32, Option<CompilerDi
         }
     };
     let Some(stdout) = child.stdout.take() else {
-        let _ = child.kill();
-        let _ = child.wait();
+        abort_compiler_after_missing_pipe(&mut child);
         return (127, None);
     };
     let Some(stderr) = child.stderr.take() else {
-        let _ = child.kill();
-        let _ = child.wait();
+        abort_compiler_after_missing_pipe(&mut child);
         return (127, None);
     };
     let out = thread::spawn(move || capture_diagnostic(stdout, std::io::stdout().lock()));
