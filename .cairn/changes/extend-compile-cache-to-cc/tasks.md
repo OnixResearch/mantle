@@ -1,20 +1,25 @@
 # Tasks: Extend the compile cache to C and C++ builders
 
-All implementation and acceptance tasks remain open. Proposal creation is not
-producer acceptance.
+The contract, ADR, daemon, and local positive fixtures below have source-bound
+evidence. Producer baseline, protected integration, remaining negative fixtures,
+and proof acceptance remain open.
 
 ## Phase 1: Baseline and contract
 
 - [ ] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record the current cache seam (`crunch-rust-cache`, `crunch-rustc-wrapper`, daemon, strict lanes), a timed uncached baseline of one representative bootstrap chain rebuild, and focused test output. r[mantle.cc_compile_cache.proof_exclusion]
-- [ ] [serial] T1.2 Define the versioned C/C++ cache contract: driver boundary policy, key normalization, manifest learning, dispositions, and non-claims as a typed Nickel export. r[mantle.cc_compile_cache.driver_boundary] r[mantle.cc_compile_cache.content_keyed_identity]
-- [ ] [serial] T1.3 Record the reuse-existing-daemon and depfile-manifest decisions in an ADR, including the trust framing and proof-lane exclusion. r[mantle.cc_compile_cache.proof_exclusion]
+- [x] [serial] T1.2 Define the versioned C/C++ cache contract: driver boundary policy, key normalization, manifest learning, dispositions, and non-claims as a typed Nickel export. r[mantle.cc_compile_cache.driver_boundary] r[mantle.cc_compile_cache.content_keyed_identity]
+  Evidence: `config/cc-compile-cache/{contracts,default}.ncl` defines and exports `mantle-cc-cache-policy-v2`, including default-off admission, key/manifest identities, daemon dispositions, and proof non-claims; `config/cc-compile-cache/generated/cc-cache-policy.json` is the checked-in export.
+- [x] [serial] T1.3 Record the reuse-existing-daemon and depfile-manifest decisions in an ADR, including the trust framing and proof-lane exclusion. r[mantle.cc_compile_cache.proof_exclusion]
+  Evidence: ADR 0087, Decision and Consequences, explicitly bounds local daemon/object storage, ordered depfile admission, writer trust, and proof exclusion; it remains Proposed pending bootstrap acceptance.
 
 ## Phase 2: Core and driver
 
 - [ ] [serial] T2.1 Implement pure key normalization, manifest comparison, and typed admission decisions in a new core module beside `crunch-rust-cache-core`. r[mantle.cc_compile_cache.content_keyed_identity]
 - [ ] [serial] T2.2 Implement the driver seam with forward-unchanged behavior for unclassifiable invocations and protected-inventory compatibility. r[mantle.cc_compile_cache.driver_boundary]
-- [ ] [serial] T2.3 Extend the daemon with compile-object serving and depfile manifest storage. r[mantle.cc_compile_cache.content_keyed_identity]
-- [ ] [parallel] T2.4 Add positive fixtures: identical-content hit, rebuilt-identical dependency hit, forward-unchanged receipt. r[mantle.cc_compile_cache.content_keyed_identity] r[mantle.cc_compile_cache.driver_boundary]
+- [x] [serial] T2.3 Extend the daemon with compile-object serving and depfile manifest storage. r[mantle.cc_compile_cache.content_keyed_identity]
+  Evidence: `crates/crunch-rust-cache/src/cc.rs` `serve_cc_request`, `cc_manifest`, `cc_read`, and `cc_publish` persist and verify content-addressed local objects and dependency records; ADR 0087 Local verification records native/cold/hit/relocated real-daemon GCC/G++ results, not a StageX proof.
+- [x] [parallel] T2.4 Add positive fixtures: identical-content hit, rebuilt-identical dependency hit, forward-unchanged receipt. r[mantle.cc_compile_cache.content_keyed_identity] r[mantle.cc_compile_cache.driver_boundary]
+  Evidence: `crates/crunch-cc-driver/tests/cache_service.rs` `real_c_and_cpp_objects_and_depfiles_match_uncached_compilation_at_same_and_relocated_roots` checks cold, hit, relocated-identical object/depfile bytes and receipts; `crates/crunch-cc-driver/tests/os_argv.rs` `binary_preserves_non_utf8_filename_for_real_file_read` and `relative_artifacts_run_real_gcc_without_cache_admission` check actual forwarded arguments and fallback receipts. ADR 0087 Local verification records the earlier real-daemon observations; post-corrective driver parity is still unverified.
 - [ ] [parallel] T2.5 Add negative fixtures: changed source, argument, tool, or manifest input misses; unknown-manifest failure replay refusal; daemon-unavailable degradation. r[mantle.cc_compile_cache.content_keyed_identity] r[mantle.cc_compile_cache.non_input_cache_boundary]
 
 ## Phase 3: Build integration and proof lanes
