@@ -1018,6 +1018,7 @@
           inherit
             src
             cargoArtifacts
+            cargoVendorDir
             nativeBuildInputs
             buildInputs
             ;
@@ -1193,7 +1194,7 @@
 
         releaseDeterminismQuality = craneLib.cargoNextest {
           pname = "crunch-release-determinism-quality";
-          inherit src cargoArtifacts buildInputs;
+          inherit src cargoArtifacts cargoVendorDir buildInputs;
           nativeBuildInputs = nativeBuildInputs ++ [ pkgs.git ];
           cargoNextestExtraArgs = "--test release_cli release_reproduce_generated_two_clean_store_proof_verifies_deterministic_release";
           partitions = 1;
@@ -1206,7 +1207,7 @@
 
         releaseNixWitnessQuality = craneLib.cargoNextest {
           pname = "crunch-release-nix-witness-quality";
-          inherit src cargoArtifacts buildInputs;
+          inherit src cargoArtifacts cargoVendorDir buildInputs;
           nativeBuildInputs = nativeBuildInputs ++ [ pkgs.git ];
           cargoNextestExtraArgs = "--test release_cli release_nix_witness";
           partitions = 1;
@@ -1221,6 +1222,7 @@
           inherit
             src
             cargoArtifacts
+            cargoVendorDir
             nativeBuildInputs
             buildInputs
             ;
@@ -1631,6 +1633,7 @@
                   pkgs.b3sum
                   pkgs.jq
                   pkgs.nickel
+                  pkgs.nix
                   pkgs.ripgrep
                 ];
                 src = self;
@@ -1653,22 +1656,46 @@
                 expected_receipt_hash="$(tr -d '\n' < evidence/radicle/durable-file-publication-adoption-v1.blake3)"
                 test "$receipt_hash" = "$expected_receipt_hash"
 
-                for binding in \
-                  'cargo.manifest_blake3:Cargo.toml' \
-                  'cargo.lock_blake3:Cargo.lock' \
-                  'nix.flake_blake3:flake.nix' \
-                  'nix.lock_blake3:flake.lock'; do
-                  field="''${binding%%:*}"
-                  path="''${binding#*:}"
-                  expected="$(jq -r ".$field" evidence/radicle/durable-file-publication-adoption-v1.json)"
-                  actual="$(b3sum "$path" | cut -d ' ' -f 1)"
-                  test "$actual" = "$expected"
-                done
-
                 source_url='${durablePublicationRepository}'
                 source_rid='${durablePublicationRid}'
                 source_rev='${durablePublicationRevision}'
                 source_nar_hash='sha256-fKxZ+3rzWzVuawILnmpiYCCe8PT/z6usopFMbr2KFbI='
+                expected_flake_source="git+$source_url?rev=$source_rev"
+                wrong_source_rev='1111111111111111111111111111111111111111'
+                wrong_flake_source="git+$source_url?rev=$wrong_source_rev"
+                expected_flake_input="url = \"$expected_flake_source\";"
+                wrong_flake_input="url = \"$wrong_flake_source\";"
+                export NIX_STATE_DIR="$TMPDIR/nix-state"
+                export NIX_LOG_DIR="$TMPDIR/nix-log"
+                mkdir -p "$NIX_STATE_DIR" "$NIX_LOG_DIR"
+
+                # r[impl mantle.durable_file_publication.source]
+                scoped_flake_source() {
+                  source_file="$1"
+                  nix-instantiate --eval --strict --json \
+                    --attr inputs.durablePublicationSource.url "$source_file" | jq -r .
+                }
+                admitted_flake_source() {
+                  test "$(scoped_flake_source "$1")" = "$expected_flake_source"
+                }
+
+                admitted_flake_source flake.nix
+
+                cp flake.nix "$TMPDIR/unrelated-flake.nix"
+                chmod u+w "$TMPDIR/unrelated-flake.nix"
+                printf '\n# unrelated flake maintenance fixture\n' >> "$TMPDIR/unrelated-flake.nix"
+                admitted_flake_source "$TMPDIR/unrelated-flake.nix"
+
+                cp flake.nix "$TMPDIR/wrong-source-flake.nix"
+                chmod u+w "$TMPDIR/wrong-source-flake.nix"
+                substituteInPlace "$TMPDIR/wrong-source-flake.nix" \
+                  --replace-fail "$expected_flake_input" "$wrong_flake_input"
+                test "$(scoped_flake_source "$TMPDIR/wrong-source-flake.nix")" = "$wrong_flake_source"
+                if admitted_flake_source "$TMPDIR/wrong-source-flake.nix"; then
+                  echo 'wrong durable-file-publication flake revision passed scoped validation' >&2
+                  exit 1
+                fi
+
                 jq -e \
                   --arg url "$source_url" \
                   --arg rid "$source_rid" \
@@ -1681,7 +1708,16 @@
                    and $source.original.rev == $rev
                    and $source.locked.narHash == $nar_hash' \
                   flake.lock >/dev/null
-                test "$(jq -r '.source.rid' evidence/radicle/durable-file-publication-adoption-v1.json)" = "$source_rid"
+                jq -e \
+                  --arg url "$source_url" \
+                  --arg rid "$source_rid" \
+                  --arg rev "$source_rev" \
+                  --arg nar_hash "$source_nar_hash" \
+                  '.source.https_git == $url
+                   and .source.rid == $rid
+                   and .source.reviewed_revision == $rev
+                   and .nix.nar_hash == $nar_hash' \
+                  evidence/radicle/durable-file-publication-adoption-v1.json >/dev/null
 
                 github_host='github.com'
                 forbidden_source="$github_host/OnixResearch/durable-file-publication"
@@ -1708,6 +1744,7 @@
             inherit
               src
               cargoArtifacts
+              cargoVendorDir
               nativeBuildInputs
               buildInputs
               ;
@@ -1718,6 +1755,7 @@
             inherit
               src
               cargoArtifacts
+              cargoVendorDir
               nativeBuildInputs
               buildInputs
               ;
@@ -1748,10 +1786,17 @@
             (tigerstyle.lib.mkConsumerCheck {
               inherit system nativeBuildInputs buildInputs;
               src = ./.;
-              cargoLock = ./Cargo.lock;
+              # Its own Cargo-lock vendor closure omits Mantle's pinned Casita patch.
+              cargoLock = null;
             }).overrideAttrs
-              (_old: {
+              (old: {
                 SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+                buildCommand = ''
+                  export CARGO_HOME="$PWD/.cargo-home"
+                  mkdir -p "$CARGO_HOME"
+                  cp "${cargoVendorDir}/config.toml" "$CARGO_HOME/config.toml"
+                  ${old.buildCommand}
+                '';
               });
 
           # Run tests with nextest
@@ -1759,6 +1804,7 @@
             inherit
               src
               cargoArtifacts
+              cargoVendorDir
               nativeBuildInputs
               buildInputs
               ;
@@ -1782,6 +1828,7 @@
             inherit
               src
               cargoArtifacts
+              cargoVendorDir
               nativeBuildInputs
               buildInputs
               ;

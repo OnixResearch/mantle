@@ -16,4 +16,39 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v17
       - name: Verify the flake
-        run: nix flake check
+        run: |
+          set -o pipefail
+          if nix flake check --show-trace 2>&1 | tee "$RUNNER_TEMP/mantle-flake-check.log"; then
+            exit 0
+          else
+            status=$?
+            python3 - "$RUNNER_TEMP/mantle-flake-check.log" <<'PY'
+          from collections import deque
+          import os
+          import pathlib
+          import sys
+
+          first_error = None
+          last_error = None
+          tail = deque(maxlen=12)
+          with pathlib.Path(sys.argv[1]).open(encoding="utf-8", errors="replace") as log:
+              for line in log:
+                  line = line.strip()
+                  if not line:
+                      continue
+                  tail.append(line[:300])
+                  if line.startswith("error:") and line != "error:":
+                      first_error = first_error or line[:1000]
+                      last_error = line[:1000]
+          message = first_error or "nix flake check failed; inspect the job log"
+          if last_error and last_error != first_error:
+              message += f" | Final error: {last_error}"
+          escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+          print(f"::error title=nix flake check::{escaped}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write(f"### nix flake check failed\n\n{message}\n\nLast log lines:\n\n```\n")
+              summary.write("\n".join(tail))
+              summary.write("\n```\n")
+          PY
+            exit "$status"
+          fi

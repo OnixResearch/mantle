@@ -187,6 +187,12 @@ enum StoreOpenRejection<'a> {
     OverlayUnsupported,
 }
 
+#[derive(Clone, Copy)]
+struct StoreOpenIdentity<'a> {
+    logical_prefix: &'a str,
+    trust_policy_id: &'a str,
+}
+
 fn observe_store_identity(state_dir: &Path, maximum_identity_bytes: u64) -> Result<ObservedStoreIdentity, Error> {
     let path = state_dir.join(STORE_IDENTITY_FILE_NAME);
     if path.exists() {
@@ -204,9 +210,13 @@ fn observe_store_identity(state_dir: &Path, maximum_identity_bytes: u64) -> Resu
             let name = entry.file_name();
             if name == "casita" {
                 casita_marker = true;
-            } else if name == STORE_IDENTITY_FILE_NAME {
+                continue;
+            }
+            if name == STORE_IDENTITY_FILE_NAME {
                 identity_filename = true;
-            } else if !matches!(
+                continue;
+            }
+            if !matches!(
                 name.to_str(),
                 Some(
                     "store-mutation.lock"
@@ -231,8 +241,7 @@ fn decide_store_open<'a>(
     backend: StoreBackend,
     profile: StoreBackendCapabilityProfile,
     needs_overlay: bool,
-    logical_prefix: &str,
-    trust_policy_id: &str,
+    identity: StoreOpenIdentity<'_>,
 ) -> Result<StoreOpenDecision, StoreOpenRejection<'a>> {
     if needs_overlay && !profile.overlay_composition {
         return Err(StoreOpenRejection::OverlayUnsupported);
@@ -248,7 +257,7 @@ fn decide_store_open<'a>(
             if actual_backend != backend {
                 return Err(StoreOpenRejection::BackendMismatch(actual_backend));
             }
-            if actual.logical_prefix != logical_prefix || actual.trust_policy_id != trust_policy_id {
+            if actual.logical_prefix != identity.logical_prefix || actual.trust_policy_id != identity.trust_policy_id {
                 return Err(StoreOpenRejection::IdentityMismatch {
                     observed_prefix: &actual.logical_prefix,
                     observed_trust: &actual.trust_policy_id,
@@ -272,8 +281,7 @@ fn decide_store_open<'a>(
 fn store_open_rejection_error(
     rejection: StoreOpenRejection<'_>,
     state_dir: &Path,
-    logical_prefix: &str,
-    trust_policy_id: &str,
+    identity: StoreOpenIdentity<'_>,
     backend: StoreBackend,
 ) -> Error {
     match rejection {
@@ -289,7 +297,8 @@ fn store_open_rejection_error(
             observed_prefix,
             observed_trust,
         } => Error::Store(format!(
-            "store-identity-mismatch: requested prefix={logical_prefix} trust={trust_policy_id}, observed prefix={observed_prefix} trust={observed_trust}",
+            "store-identity-mismatch: requested prefix={} trust={}, observed prefix={observed_prefix} trust={observed_trust}",
+            identity.logical_prefix, identity.trust_policy_id,
         )),
         StoreOpenRejection::IdentitylessContent => Error::Store(format!(
             "store-backend-mismatch: state directory {} has content but no backend identity",
@@ -310,11 +319,12 @@ fn inspect_store_open(
 ) -> Result<(StoreOpenDecision, StoreOverlayRuntimePolicy), Error> {
     let policy = store_overlay_runtime_policy()?;
     let observed = observe_store_identity(state_dir, policy.limits.max_descriptor_bytes)?;
-    let decision =
-        decide_store_open(&observed, backend, profile, needs_overlay, logical_prefix, &policy.trust.policy_id)
-            .map_err(|rejection| {
-                store_open_rejection_error(rejection, state_dir, logical_prefix, &policy.trust.policy_id, backend)
-            })?;
+    let identity = StoreOpenIdentity {
+        logical_prefix,
+        trust_policy_id: &policy.trust.policy_id,
+    };
+    let decision = decide_store_open(&observed, backend, profile, needs_overlay, identity)
+        .map_err(|rejection| store_open_rejection_error(rejection, state_dir, identity, backend))?;
     Ok((decision, policy))
 }
 
@@ -1085,8 +1095,10 @@ mod tests {
                 backend,
                 profile.unwrap_or_else(|| backend.profile()),
                 needs_overlay,
-                PREFIX,
-                TRUST,
+                StoreOpenIdentity {
+                    logical_prefix: PREFIX,
+                    trust_policy_id: TRUST,
+                },
             );
             assert_eq!(actual, expected, "{name}");
         }

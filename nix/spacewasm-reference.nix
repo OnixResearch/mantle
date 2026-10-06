@@ -507,7 +507,7 @@ let
     pname = "mantle-spacewasm-reference-bundler";
     version = "0.1.0";
     src = bundlerSource;
-    cargoLock.lockFile = "${bundlerSource}/Cargo.lock";
+    cargoLock.lockFile = "${packageRoot}/bundler-Cargo.lock";
     cargoBuildFlags = [
       "--package"
       "crunch-spacewasm"

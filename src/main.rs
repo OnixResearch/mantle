@@ -1,4 +1,5 @@
 #![feature(register_tool)]
+#![recursion_limit = "256"]
 // machine-artifact-public: eval.raw-json-output
 #![register_tool(tigerstyle)]
 mod artifact_cmd;
@@ -10281,15 +10282,6 @@ let Plan = {
             "trust_notes": [],
             "expected_outputs": expected_outputs,
         })
-    }
-
-    #[test]
-    fn flake_check_workflow_has_one_verification_command() {
-        let workflow = include_str!("../.github/workflows/flake-check.yml");
-        let run_lines = workflow.lines().map(str::trim).filter(|line| line.starts_with("run:")).collect::<Vec<_>>();
-
-        assert_eq!(run_lines, vec!["run: nix flake check"]);
-        assert!(!workflow.contains("cargo test"));
     }
 
     #[test]

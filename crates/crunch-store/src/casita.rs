@@ -65,6 +65,8 @@ pub(crate) struct CasitaStore {
     store_dir: String,
     pub(crate) blob_service: Arc<dyn BlobService>,
     pub(crate) directory_service: Arc<dyn DirectoryService>,
+    // Lock order: no nested acquisition. Release observed_roots before the test-only
+    // before_output_publish gate; release that gate before gate.staged_targets.
     observed_roots: Arc<Mutex<BTreeMap<[u8; 20], ObjectKey>>>,
     #[cfg(test)]
     before_output_publish: Arc<tokio::sync::Mutex<Option<Arc<AdmissionRaceGate>>>>,

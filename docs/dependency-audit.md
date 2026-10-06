@@ -225,18 +225,48 @@ its log records a real release Cargo check of Bao, pinned Casita, and
 an independent consumer smoke, not proof of Bao multi-block validation
 semantics.
 
-With `cargo-deny 0.19.0` and `--config deny.toml`, the unwaived run after the
-cutover reported `advisories FAILED, bans ok, licenses ok, sources ok`.
-RUSTSEC-2024-0370 for `proc-macro-error 0.4.12` was absent. Five previously
-present unwaived findings remain: RUSTSEC-2026-0247 (`bitmaps 3.2.1`),
-RUSTSEC-2026-0258 (`h2 0.4.13`), RUSTSEC-2026-0292
-(`imbl-sized-chunks 0.1.3`), RUSTSEC-2023-0071 (`rsa 0.9.10`), and
-RUSTSEC-2026-0285 (`rustls 0.23.37`). It also warned about yanked
-`chacha20 0.10.0` and `spin 0.10.0`. This is **not** a passing dependency
-gate; T1.3 and T4.7 remain unchecked. Mantle's local import does not meet
-the earlier survey's upstream-reviewed Bao release or Casita-maintainer
-approval conditions. No waiver, broader advisory upgrade, or release claim
-is supplied by this change.
+The configured `cargo-deny 0.19.0` run after the Bao cutover reported
+`advisories FAILED, bans ok, licenses ok, sources ok`: Bao-reachable
+RUSTSEC-2024-0370 was absent, but five previously locked, unwaived findings
+remained. A subsequent offline, targeted lock update moves `h2 0.4.13` to
+`0.4.16` (the RUSTSEC-2026-0258 fixed threshold) and `rustls 0.23.37` to
+`0.23.45` (the RUSTSEC-2026-0285 fixed threshold). Rustls also requires
+`aws-lc-rs 1.18.0`, `aws-lc-sys 0.44.0`, and `rustls-webpki 0.103.14`.
+The pinned Casita and Turso sources, local Bao import, and `blake3 1.8.2`
+remain unchanged; no deny waiver was added.
+
+On the updated lock, `cargo-deny 0.19.0 check --config deny.toml` exits 1:
+`advisories FAILED, bans ok, licenses ok, sources ok`. Neither h2 nor rustls
+is reported. Three unwaived findings remain: RUSTSEC-2026-0247
+(`bitmaps 3.2.1`, unmaintained, no fixed release) and RUSTSEC-2026-0292
+(`imbl-sized-chunks 0.1.3`, fixed only at >=0.2.0) both pass through
+`nickel-lang-vector 0.2.0`, whose `^0.1` constraint has no compatible fixed
+release; RUSTSEC-2023-0071 (`rsa 0.9.10`, no patched release) comes from
+`secretspec 0.17.0`, which requires RSA unconditionally, as does its latest
+surveyed release 0.21.1. The audit also warns about yanked
+`chacha20 0.10.0` and `spin 0.10.0`. There is no published no-waiver lock
+upgrade for these three findings: review future Nickel, SecretSpec, and RSA
+upstream releases. T1.3 and T4.7 remain unchecked. This is not a passing
+dependency gate, full CI claim, StageX proof, upstream-reviewed Bao release,
+Casita-maintainer approval, or release claim.
+
+The selected offline CLI cache-restoration test initially failed while compiling
+both shared-root binaries with host nightly Rust 1.99: layout of
+`attest_cmd::cmd_attest_async()` exceeded the default compiler query depth.
+`src/main.rs` alone now sets `#![recursion_limit = "256"]`; the library crate
+did not need that bound. Rerunning the exact test passed (one test) and exercised
+Casita and Snix separately: each built a signed fixed output, removed its
+physical export, then restored identical BLAKE3 bytes from cache in a fresh
+process. That test used a local `file://` input. Separately, an ephemeral
+localhost HTTPS cache server with a temporary CA exercised Mantle's
+`--store-backend casita store pull` reqwest/rustls client: with `SSL_CERT_FILE`
+pointing at the trusted CA, the client fetched `/nix-cache-info` and a
+`.narinfo` path, then exited 0 reporting one intentionally missing narinfo
+and zero imports. Switching only `SSL_CERT_FILE` to an unrelated CA exited 3
+with a generic request transport error and sent no HTTP GET. Both cases used
+loopback, and all temporary TLS files were removed. This proves a trusted
+HTTPS connection and bounds the untrusted-certificate case; it does not
+demonstrate a successful store import or HTTP/2 protocol behavior.
 
 ## Remaining waiver inventory
 
