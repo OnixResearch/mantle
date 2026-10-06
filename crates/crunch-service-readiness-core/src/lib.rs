@@ -144,6 +144,10 @@ fn validate_declaration(service_id: &str, custom_states: &[String], dependencies
     if custom_states.len() > MAX_CUSTOM_STATES {
         return Err(Error::TooMany("custom_states"));
     }
+    // Duplicate checks below operate on bounded declaration lists.
+    debug_assert!(dependencies.len() <= MAX_DEPENDENCIES);
+    debug_assert!(custom_states.len() <= MAX_CUSTOM_STATES);
+    debug_assert!(!service_id.is_empty());
     for (index, dependency) in dependencies.iter().enumerate() {
         identifier(dependency, MAX_SERVICE_ID_BYTES, "dependency")?;
         if dependency == service_id {
@@ -347,11 +351,13 @@ fn active_available<'a>(
     if !states.contains("started") || !states.contains("ready") || !visiting.insert(canonical_id) {
         return false;
     }
+    debug_assert!(visiting.len() <= declarations.len());
     let is_available = declaration
         .dependencies
         .iter()
         .all(|dependency| active_available(dependency, active, declarations, visiting));
     visiting.remove(canonical_id.as_str());
+    debug_assert!(!visiting.contains(canonical_id.as_str()));
     is_available
 }
 
@@ -362,6 +368,7 @@ fn validate_dependency_graph(
     if declarations.len() > MAX_SERVICES {
         return Err(Error::TooMany("services"));
     }
+    debug_assert!(declarations.len() <= MAX_SERVICES);
     if !allow_departed {
         for declaration in declarations.values() {
             for dependency in &declaration.dependencies {
@@ -374,11 +381,12 @@ fn validate_dependency_graph(
     if declarations.is_empty() {
         return Ok(());
     }
+    debug_assert!(!declarations.is_empty());
     // A maximum of MAX_SERVICES passes settles every acyclic graph. A missing
     // dependency is permitted only when a previously declared service departed.
     let mut settled = BTreeSet::new();
     for _ in 0..declarations.len() {
-        let mut made_progress = false;
+        let mut has_progress = false;
         for (id, declaration) in declarations {
             if settled.contains(id.as_str()) {
                 continue;
@@ -389,13 +397,14 @@ fn validate_dependency_graph(
                 .all(|dependency| !declarations.contains_key(dependency) || settled.contains(dependency.as_str()))
             {
                 settled.insert(id.as_str());
-                made_progress = true;
+                has_progress = true;
             }
         }
+        debug_assert!(settled.len() <= declarations.len());
         if settled.len() == declarations.len() {
             return Ok(());
         }
-        if !made_progress {
+        if !has_progress {
             return Err(Error::DependencyCycle);
         }
     }
@@ -962,5 +971,16 @@ mod tests {
             graph.apply(&id, ServiceEvent::Ready).unwrap();
         }
         assert!(graph.snapshot("s63").unwrap().ready);
+    }
+
+    #[test]
+    fn declaration_rejects_over_limit_dependency_and_custom_state_lists() {
+        let mut service = declaration("api", &[], RestartPolicy::Always);
+        service.dependencies = (0..=MAX_DEPENDENCIES).map(|index| alloc::format!("dependency{index}")).collect();
+        assert_eq!(service.validate(), Err(Error::TooMany("dependencies")));
+
+        service.dependencies.clear();
+        service.custom_states = (0..=MAX_CUSTOM_STATES).map(|index| alloc::format!("state{index}")).collect();
+        assert_eq!(service.validate(), Err(Error::TooMany("custom_states")));
     }
 }
