@@ -235,20 +235,98 @@ remained. A subsequent offline, targeted lock update moves `h2 0.4.13` to
 The pinned Casita and Turso sources, local Bao import, and `blake3 1.8.2`
 remain unchanged; no deny waiver was added.
 
-On the updated lock, `cargo-deny 0.19.0 check --config deny.toml` exits 1:
+On the pre-port lock at `e7d91c31abab268852c09097b581e13c7a47d24b`,
+`cargo-deny 0.19.0 check --config deny.toml` exited 1:
 `advisories FAILED, bans ok, licenses ok, sources ok`. Neither h2 nor rustls
-is reported. Three unwaived findings remain: RUSTSEC-2026-0247
-(`bitmaps 3.2.1`, unmaintained, no fixed release) and RUSTSEC-2026-0292
-(`imbl-sized-chunks 0.1.3`, fixed only at >=0.2.0) both pass through
-`nickel-lang-vector 0.2.0`, whose `^0.1` constraint has no compatible fixed
-release; RUSTSEC-2023-0071 (`rsa 0.9.10`, no patched release) comes from
-`secretspec 0.17.0`, which requires RSA unconditionally, as does its latest
-surveyed release 0.21.1. The audit also warns about yanked
-`chacha20 0.10.0` and `spin 0.10.0`. There is no published no-waiver lock
-upgrade for these three findings: review future Nickel, SecretSpec, and RSA
-upstream releases. T1.3 and T4.7 remain unchecked. This is not a passing
-dependency gate, full CI claim, StageX proof, upstream-reviewed Bao release,
-Casita-maintainer approval, or release claim.
+was reported. The three then-unwaived findings were RUSTSEC-2026-0247
+(`bitmaps 3.2.1`) and RUSTSEC-2026-0292 (`imbl-sized-chunks 0.1.3`) through
+`nickel-lang-vector 0.2.0`, and RUSTSEC-2023-0071 (`rsa 0.9.10`) through
+`secretspec 0.17.0`. No compatible published package update removed all
+three without a waiver. This is historical pre-port evidence, superseded for
+the current lock by the bounded source-port audit below.
+
+### Exact registry source ports, no-waiver audit (2026-10-05)
+
+`third_party/nickel-lang-vector` and `third_party/secretspec` import the
+published crates.io **package** archives at the lock's exact versions, not an
+arbitrary repository checkout: Nickel vector 0.2.0, MIT, registry SHA-256
+`36f243832286908d8873add24a905d6732ffabd6cfb2bf74cb18d667e892e279`
+(published Git revision `f09fce4517c853a9845db13aa60d2b73405c799a`); SecretSpec
+0.17.0, Apache-2.0, registry SHA-256
+`68498f9695bb3662c157b8fd4b4665a594f1157de022ff5b0f891af4c7ec75d2`
+(published Git revision `a8794e46ec9664a0e1a3869cc3105d0853937e48`).
+`third_party/advisory-source-ports.json` records original and patched file
+SHA-256 identities (receipt SHA-256
+`ff3c1885a880ce2c260bfabbada13457c82c72b674dfd8031947e963434a157e`).
+`scripts/import-advisory-ports.py check` checks all tracked bytes and
+replays both patches forward and backward with `--fuzz=0`; when original
+registry archives are present it also verifies their checksums. Nix's
+`advisory-source-ports` check ran this validation on its actual filtered
+source. These are Mantle-owned ports of published packages, not upstream
+approval or new upstream releases.
+
+`patches/nickel-vector-safe-chunks.patch` (SHA-256
+`9199b87fb9cc197c1a9c7cd5c099b10cfe0cae0c1c1f276bdad9b69e88ed85c4`)
+changes only vector's normalized manifest from `imbl-sized-chunks = "0.1"`
+to `"0.2"`; its implementation already uses the compatible 0.2 API.
+`patches/secretspec-optional-rsa-generation.patch` (SHA-256
+`7fc086ecdc98d0d3e2b32c3f2ad367c661476f58ae3d409dc35c5df1dce9c98a`)
+gates RSA key generation under `rsa-generation = ["dep:rsa"]`, retaining that
+feature in SecretSpec's **default** set for other consumers. Mantle's
+pre-existing `default-features = false, features = ["sops"]` activates
+neither RSA nor default; its manifest still forbids secret generation.
+The root `Cargo.lock` now contains path-source vector 0.2.0 and SecretSpec
+0.17.0, `imbl-sized-chunks 0.2.0`, and none of `bitmaps 3.2.1`,
+`imbl-sized-chunks 0.1.3`, or `rsa 0.9.10`. No cargo-deny waiver was added;
+no generated vendor checksum was hand-edited (the existing Casita generator
+updates its own patched checksum on regeneration).
+
+The real Nickel `crunch-eval` `tests::eval_merge` passed before and after the
+port. An isolated copy of the published SecretSpec archive, with its
+publisher-revision test schema, passed RSA generation with
+`--no-default-features --features rsa-generation`; with
+`--no-default-features --features sops`, the disabled-RSA test failed closed
+and the SOPS provider decrypted its published JSON fixture. The Mantle CLI
+was built on the patched root lock and resolved freshly encrypted SOPS/age
+bootstrap and rotation fixtures to valid Ed25519 signing and keyed-BLAKE3
+verifier keys; an otherwise valid `generate = true` manifest was rejected
+before provider resolution. Fixture secret values were not recorded.
+The default Nix development-shell Cargo map resolved the patched pinned
+Casita and both selected source ports. The repository-owned generator
+refreshed its checkout-local `vendor-deps/` from a separate private copy of
+the original Cargo archive/index/Git caches, preserved the previous closure,
+and `check` matched a fresh locked offline generation of 53,023 entries.
+A separate fresh-target `cargo check --locked --offline -p crunch-store
+--config .cargo/vendor-config.toml` compiled this checkout-local closure.
+The Nix `casita-vendor-closure` and `casita-crunch-store-check` checks
+both built independently from the filtered source and Crane vendor graph.
+
+From this isolated source-port worktree, with a **private copied read-only
+registry index** and the checked-in `deny.toml`, this exact configured audit
+exited **0**:
+
+```sh
+nix develop --offline --option min-free 0 --option substituters '' \
+  --no-write-lock-file path:$PWD --command env \
+  CARGO_HOME=/tmp/mantle-advisory-deny-home-20261005 CARGO_NET_OFFLINE=true \
+  /nix/store/xqnwl8qppzhr3dq5nzw2ly6yx4lz9xyr-cargo-deny-0.19.0/bin/cargo-deny \
+  --locked --offline check --config deny.toml --hide-inclusion-graph
+```
+
+Result: `advisories ok, bans ok, licenses ok, sources ok`, no error or
+missing-index warning. Other existing warnings remain: duplicate crate
+versions, missing license fields in `cfg_block` and `wu-manber`, and yanked
+`chacha20 0.10.0` and `spin 0.10.0`. This is a passing **configured dependency
+gate for this lock and local advisory database only**, not full CI, StageX,
+source-built Rust 1.94.1, upstream review, Casita approval, or release
+eligibility. T4.7's no-waiver gate is evidenced; T1.3's configured audit is
+evidenced; T1.2's source-built compiler and clean-source qualification
+remain open. A future version bump must reverify the published package
+checksum and revision, reimport and review minimal exact patches at
+`--fuzz=0`, and rerun Nickel, SOPS, Nix vendor and configured audit checks.
+Rolling back either port requires reverting its patch, root path dependency,
+lock graph, and Nix/source-receipt assertions together; it would restore the
+old advisory findings, not preserve this passing gate.
 
 The selected offline CLI cache-restoration test initially failed while compiling
 both shared-root binaries with host nightly Rust 1.99: layout of
@@ -267,6 +345,45 @@ with a generic request transport error and sent no HTTP GET. Both cases used
 loopback, and all temporary TLS files were removed. This proves a trusted
 HTTPS connection and bounds the untrusted-certificate case; it does not
 demonstrate a successful store import or HTTP/2 protocol behavior.
+
+### Live combined workspace admission (2026-10-06)
+
+The exact source ports above were integrated into the live workspace
+**without** replacing its concurrent CC, service-readiness, coordination,
+or Android dependency graph. The original live lock had 986 package
+records and 899 fully resolved packages. The combined lock has 978
+records and 890/890 resolved packages across 54 workspace members;
+SHA-256 is `c24dfe66e47ccc19ad432d5ccf1530574f092c1a33d540bfb371bf3be6bc26b7`.
+Ten old registry identities were removed, including the two ported
+packages and their obsolete advisory dependencies, and two exact local
+ports took their place. The selected SecretSpec feature set is **only**
+`sops`; Casita/Turso revisions and `blake3 1.8.2` remain pinned.
+
+Actual `nix build --offline --no-link path:$PWD` source-port integrity,
+Crane `casita-vendor-closure`, and `casita-crunch-store-check` passed;
+the default `nix develop path:$PWD` source map resolved the patched
+Casita checkout and both local ports. The checkout-local vendor
+generator's preserve-and-refresh then matched 53,023 regenerated files,
+resolved 752 external names offline, and compiled `crunch-store` from
+that generated closure in a fresh private target. From a private
+copied Cargo index/advisory database,
+`cargo-deny 0.19.0 --locked --offline check --config deny.toml
+--hide-inclusion-graph` exited 0: `advisories ok, bans ok, licenses ok,
+sources ok`. The four previously documented waivers above remain
+unchanged; no new waiver or source exception was added.
+
+All 83 combined Nickel evaluator library tests passed. On byte-identical
+standalone published SecretSpec source, 32 real SOPS provider tests,
+one disabled-RSA rejection, and one optional-RSA preservation test
+passed. A rebuilt combined Mantle CLI with actual `sops 3.13.3` passed
+real age-encrypted bootstrap/rotation and timeout/oversized-output
+negative tests (three selected tests with `--include-ignored`).
+The separate [remote credentials policy](remote-credentials.md#provider-policy)
+records the SOPS-only, still-bounded worker address-space change and
+measured virtual/RSS tradeoff. Detailed commands, exact binaries, and
+scope boundaries are in the [live admission evidence](../.cairn/changes/adopt-casita-store-backend/evidence/dependency-admission-2026-10-04.md#live-combined-workspace-admission-2026-10-06).
+This audit does not qualify source-built Rust, StageX, unrelated CC
+parity, Android final suites, or release readiness.
 
 ## Remaining waiver inventory
 

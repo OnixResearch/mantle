@@ -6,7 +6,11 @@ members = [
   "crates/crunch-nar",
   "crates/crunch-rust-cache-core",
   "crates/crunch-rust-cache",
+  "crates/crunch-cc-driver",
   "crates/crunch-rustc-wrapper",
+  "crates/crunch-live-state-core",
+  "crates/crunch-coordination",
+  "crates/crunch-service-readiness-core",
   "crates/mantlepkgs-core",
   "crates/mantle-rust-plan-core",
   "crates/mantle-rust-plan-app",
@@ -97,7 +101,11 @@ default_scope = [
   "-p", "crunch-repair-core",
   "-p", "crunch-rust-cache-core",
   "-p", "crunch-rust-cache",
+  "-p", "crunch-cc-driver",
   "-p", "crunch-rustc-wrapper",
+  "-p", "crunch-live-state-core",
+  "-p", "crunch-coordination",
+  "-p", "crunch-service-readiness-core",
   "-p", "crunch-shell",
   "-p", "crunch-shell-core",
   "-p", "crunch-store",
@@ -196,6 +204,9 @@ crunch-rustc-wrapper = { path = "crates/crunch-rustc-wrapper" }
 mantlepkgs-core = { path = "crates/mantlepkgs-core" }
 mantle-portable-client-core = { path = "crates/mantle-portable-client-core" }
 crunch-build = { path = "crates/crunch-build" }
+crunch-live-state-core = { path = "crates/crunch-live-state-core" }
+crunch-service-readiness-core = { path = "crates/crunch-service-readiness-core" }
+crunch-coordination = { path = "crates/crunch-coordination" }
 crunch-store = { path = "crates/crunch-store" }
 crunch-wasm-component = { path = "crates/crunch-wasm-component" }
 crunch-project = { path = "crates/crunch-project" }
@@ -247,6 +258,8 @@ chapter-tgz = "=0.1.0"
 [patch.crates-io]
 fuse-backend-rs = { path = "vendor/fuse-backend-rs" }
 bao-tree = { path = "third_party/bao-tree" }
+nickel-lang-vector = { path = "third_party/nickel-lang-vector" }
+secretspec = { path = "third_party/secretspec" }
 
 [dev-dependencies]
 casita = { git = "https://github.com/cachix/casita", rev = "90404fcb1cfb3d83f2233715448dfefe913f5fd1", default-features = false, features = ["native", "experimental"] }

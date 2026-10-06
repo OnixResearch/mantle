@@ -345,6 +345,47 @@
         astralTarLocked = builtins.filter (package: package.name == "astral-tokio-tar") cargoLockedPackages;
         baoSourceReceipt = builtins.fromJSON (builtins.readFile ./third_party/bao-tree-source.json);
         baoSourceManifest = builtins.fromTOML (builtins.readFile ./third_party/bao-tree/Cargo.toml);
+        nickelVectorPortManifest = builtins.fromTOML (builtins.readFile ./third_party/nickel-lang-vector/Cargo.toml);
+        secretSpecPortManifest = builtins.fromTOML (builtins.readFile ./third_party/secretspec/Cargo.toml);
+        nickelVectorPortLocked = builtins.filter (package: package.name == "nickel-lang-vector") cargoLockedPackages;
+        secretSpecPortLocked = builtins.filter (package: package.name == "secretspec") cargoLockedPackages;
+        advisorySourcePortsAdmitted =
+          assert pkgs.lib.assertMsg (
+            cargoManifest.patch.crates-io.nickel-lang-vector.path == "third_party/nickel-lang-vector"
+            && cargoManifest.patch.crates-io.secretspec.path == "third_party/secretspec"
+            && cargoManifest.dependencies.secretspec.version == "=0.17.0"
+            && cargoManifest.dependencies.secretspec.default-features == false
+            && cargoManifest.dependencies.secretspec.features == [ "sops" ]
+            && nickelVectorPortManifest.package.name == "nickel-lang-vector"
+            && nickelVectorPortManifest.package.version == "0.2.0"
+            && nickelVectorPortManifest.package.license == "MIT"
+            && nickelVectorPortManifest.dependencies.imbl-sized-chunks.version == "0.2"
+            && secretSpecPortManifest.package.name == "secretspec"
+            && secretSpecPortManifest.package.version == "0.17.0"
+            && secretSpecPortManifest.package.license == "Apache-2.0"
+            && builtins.elem "rsa-generation" secretSpecPortManifest.features.default
+            && secretSpecPortManifest.features.rsa-generation == [ "dep:rsa" ]
+            && secretSpecPortManifest.dependencies.rsa.optional == true
+            && builtins.length nickelVectorPortLocked == 1
+            && builtins.length secretSpecPortLocked == 1
+            && !(builtins.hasAttr "source" (builtins.head nickelVectorPortLocked))
+            && !(builtins.hasAttr "source" (builtins.head secretSpecPortLocked))
+            && (builtins.head nickelVectorPortLocked).version == "0.2.0"
+            && (builtins.head secretSpecPortLocked).version == "0.17.0"
+            && (builtins.head nickelVectorPortLocked).dependencies == [ "imbl-sized-chunks" "serde" ]
+            && !(builtins.elem "rsa" (builtins.head secretSpecPortLocked).dependencies)
+            && !(builtins.any (
+              package: builtins.elem package.name [ "bitmaps" "rsa" ]
+                || (package.name == "imbl-sized-chunks" && package.version == "0.1.3")
+            ) cargoLockedPackages)
+            && builtins.hashFile "sha256" ./third_party/advisory-source-ports.json
+              == "ff3c1885a880ce2c260bfabbada13457c82c72b674dfd8031947e963434a157e"
+            && builtins.hashFile "sha256" ./patches/nickel-vector-safe-chunks.patch
+              == "9199b87fb9cc197c1a9c7cd5c099b10cfe0cae0c1c1f276bdad9b69e88ed85c4"
+            && builtins.hashFile "sha256" ./patches/secretspec-optional-rsa-generation.patch
+              == "7fc086ecdc98d0d3e2b32c3f2ad367c661476f58ae3d409dc35c5df1dce9c98a"
+          ) "Mantle exact Nickel vector / SecretSpec source ports or advisory-free lock drifted";
+          true;
         casitaSourceAdmitted =
           assert pkgs.lib.assertMsg (
             cargoManifest.patch.crates-io.bao-tree.path == "third_party/bao-tree"
@@ -471,6 +512,9 @@
             || pkgs.lib.hasPrefix "${toString ./docs}/" pathString
             || pathString == toString ./third_party
             || pkgs.lib.hasPrefix "${toString ./third_party}/" pathString
+            || pathString == toString ./patches
+            || pathString == toString ./patches/nickel-vector-safe-chunks.patch
+            || pathString == toString ./patches/secretspec-optional-rsa-generation.patch
             || pkgs.lib.hasPrefix "${toString ./scripts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./openspec}/" pathString
           );
@@ -483,7 +527,7 @@
           filter = path: type: sourceFilter path type && !isContentBoundRequirementFixture (toString path);
         };
 
-        cargoVendorDir = assert casitaSourceAdmitted; craneLib.vendorCargoDeps {
+        cargoVendorDir = assert casitaSourceAdmitted; assert advisorySourcePortsAdmitted; craneLib.vendorCargoDeps {
           inherit src;
           cargoLock = ./Cargo.lock;
           overrideVendorGitCheckout =
@@ -956,14 +1000,21 @@
         cargoArtifacts = craneLib.buildDepsOnly {
           inherit src nativeBuildInputs buildInputs;
           inherit cargoVendorDir;
-          # Casita is an external dependency of this path-patched crate. Crane
-          # stubs workspace/path sources in buildDepsOnly; restore only Bao's
-          # exact source and manifest before Casita compiles against its API.
+          # Crane stubs workspace/path sources in buildDepsOnly. Restore the
+          # exact Bao API required by Casita and both authenticated registry
+          # source ports required by the Nickel/SecretSpec dependency graph.
           extraDummyScript = ''
             test -d "$out/third_party/bao-tree"
             rm --recursive --force "$out/third_party/bao-tree"
             cp --archive ${./third_party/bao-tree} "$out/third_party/bao-tree"
             chmod --recursive u+w "$out/third_party/bao-tree"
+            for port in nickel-lang-vector secretspec; do
+              test -d "$out/third_party/$port"
+              rm --recursive --force "$out/third_party/$port"
+            done
+            cp --archive ${./third_party/nickel-lang-vector} "$out/third_party/nickel-lang-vector"
+            cp --archive ${./third_party/secretspec} "$out/third_party/secretspec"
+            chmod --recursive u+w "$out/third_party/nickel-lang-vector" "$out/third_party/secretspec"
           '';
         };
 
@@ -1432,6 +1483,15 @@
             }
             ''
               python3 "$src/scripts/import-bao-tree.py" check
+              touch "$out"
+            '';
+          advisory-source-ports = assert advisorySourcePortsAdmitted; pkgs.runCommand "mantle-advisory-source-ports"
+            {
+              inherit src;
+              nativeBuildInputs = [ pkgs.python3 pkgs.patch ];
+            }
+            ''
+              python3 "$src/scripts/import-advisory-ports.py" check
               touch "$out"
             '';
           bounded-tree-source-admission =

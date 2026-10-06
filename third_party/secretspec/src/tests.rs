@@ -1,0 +1,8987 @@
+use crate::config::{
+    Config, CredentialSource, GlobalConfig, GlobalDefaults, NativeAddress, ParseError, Profile,
+    Project, ProviderAlias, ProviderCache, RequireReason, Resolved, Secret,
+};
+use crate::error::{Result, SecretSpecError};
+use crate::secrets::Secrets;
+use crate::validation::{ValidatedSecrets, ValidationErrors};
+use secrecy::ExposeSecret;
+use std::collections::HashMap;
+use std::convert::TryFrom;
+use std::path::Path;
+use std::{fs, io};
+use tempfile::TempDir;
+
+// Helper function for tests that need to parse from string
+fn parse_spec_from_str(content: &str, _base_path: Option<&Path>) -> Result<Config> {
+    // Parse the TOML content directly
+    let config: Config = toml::from_str(content).map_err(SecretSpecError::Toml)?;
+
+    // Validate the configuration
+    if config.project.revision != "1.0" {
+        return Err(SecretSpecError::UnsupportedRevision(
+            config.project.revision,
+        ));
+    }
+
+    config.validate().map_err(SecretSpecError::from)?;
+
+    Ok(config)
+}
+
+// Builder pattern test removed - SecretsBuilder no longer exists
+
+#[test]
+fn test_new_with_project_config() {
+    let config = Config {
+        project: Project {
+            name: "test-project".to_string(),
+            ..Default::default()
+        },
+        profiles: HashMap::new(),
+        providers: None,
+        scopes: None,
+    };
+
+    let spec = Secrets::new(config, None, None, None);
+
+    assert_eq!(spec.config().project.name, "test-project");
+}
+
+#[test]
+fn profile_supports_consuming_iteration() {
+    let profile = Profile {
+        defaults: None,
+        secrets: HashMap::from([("API_KEY".to_string(), Secret::default())]),
+    };
+
+    let secrets: HashMap<String, Secret> = profile.into_iter().collect();
+
+    assert!(secrets.contains_key("API_KEY"));
+}
+
+#[test]
+fn test_new_with_custom_configs() {
+    let temp_dir = TempDir::new().unwrap();
+    let project_path = temp_dir.path().join("custom-secretspec.toml");
+    let global_path = temp_dir.path().join("custom-global.toml");
+
+    // Create test project config
+    let project_config = r#"
+[project]
+name = "custom-project"
+revision = "1.0"
+
+[profiles.default]
+API_KEY = { description = "API Key", required = true }
+"#;
+    fs::write(&project_path, project_config).unwrap();
+
+    // Create test global config
+    let global_config = r#"
+[defaults]
+provider = "keyring"
+profile = "development"
+"#;
+    fs::write(&global_path, global_config).unwrap();
+
+    // Load configs from files
+    let config = Config::try_from(project_path.as_path()).unwrap();
+    // For tests, we'll parse the global config directly since load_global_config uses a fixed path
+    let global_config_content = fs::read_to_string(&global_path).unwrap();
+    let global_config: Option<GlobalConfig> = Some(toml::from_str(&global_config_content).unwrap());
+
+    let spec = Secrets::new(config, global_config, None, None);
+
+    assert_eq!(spec.config().project.name, "custom-project");
+    assert_eq!(
+        spec.global_config()
+            .as_ref()
+            .unwrap()
+            .defaults
+            .provider
+            .as_ref(),
+        Some(&"keyring".to_string())
+    );
+}
+
+#[test]
+fn require_reason_always_blocks_access_without_reason() {
+    let temp_dir = TempDir::new().unwrap();
+    let project_path = temp_dir.path().join("secretspec.toml");
+    fs::write(
+        &project_path,
+        r#"
+[project]
+name = "policy-project"
+revision = "1.0"
+require_reason = true
+
+[profiles.default]
+"#,
+    )
+    .unwrap();
+
+    // Build hermetically from the parsed project config rather than via
+    // `load_from`, which would build a real audit logger and write to the user's
+    // real audit log. This still exercises that `require_reason = true` parses to
+    // the Always policy and that the gate is enforced.
+    let project_config = Config::try_from(project_path.as_path()).unwrap();
+    assert_eq!(
+        project_config.project.require_reason,
+        Some(RequireReason::Always)
+    );
+    let build = || {
+        let mut spec = Secrets::new(project_config.clone(), None, None, None);
+        spec.set_require_reason(RequireReason::Always);
+        spec
+    };
+
+    // require_reason = true -> any caller (agent or not) is refused without a reason.
+    assert!(matches!(
+        build().validate(),
+        Err(SecretSpecError::ReasonRequired)
+    ));
+
+    // With an explicit reason the policy is satisfied: validation proceeds past the
+    // gate. It may still fail later for environment reasons (e.g. no provider
+    // configured), so assert specifically that it is no longer the reason gate.
+    assert!(!matches!(
+        build().with_reason("running migrations").validate(),
+        Err(SecretSpecError::ReasonRequired)
+    ));
+
+    // A blank/whitespace-only reason must NOT satisfy the policy: it carries no
+    // audit value, so the gate still refuses access.
+    assert!(matches!(
+        build().with_reason("   ").validate(),
+        Err(SecretSpecError::ReasonRequired)
+    ));
+}
+
+#[test]
+fn require_reason_false_allows_access_without_reason() {
+    let temp_dir = TempDir::new().unwrap();
+    let project_path = temp_dir.path().join("secretspec.toml");
+    fs::write(
+        &project_path,
+        r#"
+[project]
+name = "open-project"
+revision = "1.0"
+require_reason = false
+
+[profiles.default]
+"#,
+    )
+    .unwrap();
+
+    // Hermetic build (see the sibling test) — no real audit log is touched.
+    let project_config = Config::try_from(project_path.as_path()).unwrap();
+    assert_eq!(
+        project_config.project.require_reason,
+        Some(RequireReason::Never)
+    );
+    let mut spec = Secrets::new(project_config, None, None, None);
+    spec.set_require_reason(RequireReason::Never);
+
+    // require_reason = false -> the reason gate never fires, even under an agent.
+    // (validate() may still fail later for environment reasons such as no provider
+    // configured, so assert specifically that it is not the ReasonRequired gate.)
+    assert!(!matches!(
+        spec.validate(),
+        Err(SecretSpecError::ReasonRequired)
+    ));
+}
+
+#[test]
+fn test_new_with_default_overrides() {
+    let config = Config {
+        project: Project {
+            name: "test-project".to_string(),
+            ..Default::default()
+        },
+        profiles: HashMap::new(),
+        providers: None,
+        scopes: None,
+    };
+
+    // Create a global config with specific defaults
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("dotenv".to_string()),
+            profile: Some("production".to_string()),
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config, Some(global_config), None, None);
+
+    assert_eq!(spec.config().project.name, "test-project");
+}
+
+#[test]
+fn test_extends_functionality() {
+    // Create temporary directory structure for testing
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create directory structure
+    fs::create_dir_all(base_path.join("common")).unwrap();
+    fs::create_dir_all(base_path.join("auth")).unwrap();
+    fs::create_dir_all(base_path.join("base")).unwrap();
+
+    // Create common config
+    let common_config = r#"
+[project]
+name = "common"
+revision = "1.0"
+
+[profiles.default]
+DATABASE_URL = { description = "Database connection string", required = true }
+REDIS_URL = { description = "Redis connection URL", required = false, default = "redis://localhost:6379" }
+
+[profiles.development]
+DATABASE_URL = { description = "Database connection string", required = false, default = "sqlite:///dev.db" }
+REDIS_URL = { description = "Redis connection URL", required = false, default = "redis://localhost:6379" }
+"#;
+    fs::write(base_path.join("common/secretspec.toml"), common_config).unwrap();
+
+    // Create auth config
+    let auth_config = r#"
+[project]
+name = "auth"
+revision = "1.0"
+
+[profiles.default]
+JWT_SECRET = { description = "Secret key for JWT token signing", required = true }
+OAUTH_CLIENT_ID = { description = "OAuth client ID", required = false }
+"#;
+    fs::write(base_path.join("auth/secretspec.toml"), auth_config).unwrap();
+
+    // Create base config that extends from common and auth
+    let base_config = r#"
+[project]
+name = "test_project"
+revision = "1.0"
+extends = ["../common", "../auth"]
+
+[profiles.default]
+API_KEY = { description = "API key for external service", required = true }
+# This should override the common one
+DATABASE_URL = { description = "Override database connection", required = true }
+
+[profiles.development]
+API_KEY = { description = "API key for external service", required = false, default = "dev-api-key" }
+"#;
+    fs::write(base_path.join("base/secretspec.toml"), base_config).unwrap();
+
+    // Parse the config
+    let config = Config::try_from(base_path.join("base/secretspec.toml").as_path()).unwrap();
+
+    // Verify the config has merged correctly
+    assert_eq!(config.project.name, "test_project");
+    assert_eq!(config.project.revision, "1.0");
+    assert_eq!(
+        config.project.extends,
+        Some(vec!["../common".to_string(), "../auth".to_string()])
+    );
+
+    // Check that all secrets are present
+    let default_profile = config.profiles.get("default").unwrap();
+    assert!(default_profile.secrets.contains_key("API_KEY"));
+    assert!(default_profile.secrets.contains_key("DATABASE_URL"));
+    assert!(default_profile.secrets.contains_key("REDIS_URL"));
+    assert!(default_profile.secrets.contains_key("JWT_SECRET"));
+    assert!(default_profile.secrets.contains_key("OAUTH_CLIENT_ID"));
+
+    // Check that base config takes precedence (DATABASE_URL should be overridden)
+    let database_url_config = default_profile.secrets.get("DATABASE_URL").unwrap();
+    assert_eq!(
+        database_url_config.description,
+        Some("Override database connection".to_string())
+    );
+
+    // Check that extended secrets are included
+    let redis_config = default_profile.secrets.get("REDIS_URL").unwrap();
+    assert_eq!(
+        redis_config.description,
+        Some("Redis connection URL".to_string())
+    );
+    assert_eq!(redis_config.required, Some(false));
+    assert_eq!(
+        redis_config.default,
+        Some("redis://localhost:6379".to_string())
+    );
+
+    let jwt_config = default_profile.secrets.get("JWT_SECRET").unwrap();
+    assert_eq!(
+        jwt_config.description,
+        Some("Secret key for JWT token signing".to_string())
+    );
+    assert_eq!(jwt_config.required, Some(true));
+}
+
+#[test]
+fn test_validation_result_structure() {
+    // Test ValidatedSecrets structure
+    let valid_result = ValidatedSecrets {
+        resolved: Resolved::new(HashMap::new(), "keyring".to_string(), "default".to_string()),
+        missing_optional: vec!["optional_secret".to_string()],
+        with_defaults: Vec::new(),
+        resolution: Vec::new(),
+        temp_files: Vec::new(),
+    };
+    assert_eq!(valid_result.missing_optional.len(), 1);
+    assert_eq!(valid_result.with_defaults.len(), 0);
+
+    // Test ValidationErrors structure
+    let validation_errors = ValidationErrors::new(
+        vec!["required_secret".to_string()],
+        vec!["optional_secret".to_string()],
+        vec![],
+        "keyring".to_string(),
+        "default".to_string(),
+    );
+    assert!(validation_errors.has_errors());
+    assert_eq!(validation_errors.missing_required.len(), 1);
+}
+
+#[test]
+fn test_resolution_report_provenance() {
+    use crate::report::ResolutionStatus;
+
+    let temp_dir = TempDir::new().unwrap();
+    // Only DATABASE_URL is present in the backend; everything else exercises a
+    // different resolution arm (default, missing-optional, missing-required).
+    let env_path = temp_dir.path().join(".env");
+    fs::write(&env_path, "DATABASE_URL=postgres://localhost/db\n").unwrap();
+
+    let secret = |required: bool, default: Option<&str>| Secret {
+        description: Some("test".to_string()),
+        required: Some(required),
+        default: default.map(String::from),
+        ..Default::default()
+    };
+
+    let mut secrets = HashMap::new();
+    secrets.insert("DATABASE_URL".to_string(), secret(true, None));
+    secrets.insert("LOG_LEVEL".to_string(), secret(false, Some("info")));
+    secrets.insert("SENTRY_DSN".to_string(), secret(false, None));
+    secrets.insert("STRIPE_KEY".to_string(), secret(true, None));
+
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets,
+        },
+    );
+
+    let config = Config {
+        project: Project {
+            name: "report-test".to_string(),
+            ..Default::default()
+        },
+        profiles,
+        providers: None,
+        scopes: None,
+    };
+
+    let provider = format!("dotenv://{}", env_path.display());
+    let spec = Secrets::new(config, None, Some(provider), None);
+
+    // A required secret (STRIPE_KEY) is missing, so validation reports an error,
+    // but the report still describes every declared secret.
+    let report = match spec.validate().unwrap() {
+        Ok(validated) => validated.report(),
+        Err(errors) => errors.report(),
+    };
+
+    assert_eq!(report.schema_version, 1);
+    assert_eq!(report.profile, "default");
+    assert!(!report.all_required_present());
+
+    // Entries are sorted by name for deterministic output.
+    let names: Vec<&str> = report.secrets.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(
+        names,
+        vec!["DATABASE_URL", "LOG_LEVEL", "SENTRY_DSN", "STRIPE_KEY"]
+    );
+
+    let by_name = |name: &str| {
+        report
+            .secrets
+            .iter()
+            .find(|s| s.name == name)
+            .unwrap_or_else(|| panic!("missing entry {name}"))
+    };
+
+    let db = by_name("DATABASE_URL");
+    assert_eq!(db.status, ResolutionStatus::Resolved);
+    assert!(db.required);
+    assert!(db.source_provider.is_some(), "provider hit is attributed");
+    assert!(!db.default_applied);
+    assert!(!db.generated);
+
+    let log = by_name("LOG_LEVEL");
+    assert_eq!(log.status, ResolutionStatus::Resolved);
+    assert!(log.default_applied);
+    assert!(log.source_provider.is_none(), "a default has no provider");
+
+    let sentry = by_name("SENTRY_DSN");
+    assert_eq!(sentry.status, ResolutionStatus::MissingOptional);
+    assert!(!sentry.required);
+
+    let stripe = by_name("STRIPE_KEY");
+    assert_eq!(stripe.status, ResolutionStatus::MissingRequired);
+    assert!(stripe.required);
+}
+
+#[test]
+fn profile_presence_constraints_validate_resolved_values() {
+    use crate::validation::ConstraintKind;
+
+    fn app(env_contents: &str, kind: ConstraintKind, groups: &[&str]) -> (TempDir, Secrets) {
+        let temp_dir = TempDir::new().unwrap();
+        let env_path = temp_dir.path().join(".env");
+        fs::write(&env_path, env_contents).unwrap();
+
+        let member = || Secret {
+            description: Some("alternative credential".to_string()),
+            at_least_one: (kind == ConstraintKind::AtLeastOne)
+                .then(|| groups.iter().map(|group| (*group).to_string()).collect()),
+            exactly_one: (kind == ConstraintKind::ExactlyOne)
+                .then(|| groups.iter().map(|group| (*group).to_string()).collect()),
+            ..Default::default()
+        };
+        let config = Config {
+            project: Project {
+                name: "constraint-test".to_string(),
+                ..Default::default()
+            },
+            profiles: HashMap::from([(
+                "default".to_string(),
+                Profile {
+                    defaults: None,
+                    secrets: HashMap::from([
+                        ("PASSWORD".to_string(), member()),
+                        ("ACCESS_TOKEN".to_string(), member()),
+                    ]),
+                },
+            )]),
+            providers: None,
+            scopes: None,
+        };
+        let provider = format!("dotenv://{}", env_path.display());
+        let app = Secrets::new(config, None, Some(provider), None);
+        (temp_dir, app)
+    }
+
+    fn validation_errors(spec: &Secrets) -> ValidationErrors {
+        match spec.validate().unwrap() {
+            Ok(_) => panic!("expected presence constraint to fail"),
+            Err(errors) => errors,
+        }
+    }
+
+    let (_temp_dir, spec) = app("", ConstraintKind::AtLeastOne, &["auth"]);
+    let errors = validation_errors(&spec);
+    assert!(errors.missing_required.is_empty());
+    assert_eq!(errors.constraint_violations.len(), 1);
+    assert_eq!(
+        errors.constraint_violations[0].kind,
+        ConstraintKind::AtLeastOne
+    );
+    assert_eq!(errors.constraint_violations[0].group, "auth");
+    assert!(errors.constraint_violations[0].present.is_empty());
+    let report = errors.report();
+    assert!(!report.all_required_present());
+    assert_eq!(
+        serde_json::to_value(&report).unwrap()["constraint_violations"][0]["kind"],
+        "at_least_one"
+    );
+    assert!(matches!(
+        spec.resolve(),
+        Err(SecretSpecError::ValidationFailed(_))
+    ));
+
+    let (_temp_dir, spec) = app(
+        "ACCESS_TOKEN=token\n",
+        ConstraintKind::AtLeastOne,
+        &["auth"],
+    );
+    assert!(spec.validate().unwrap().is_ok());
+
+    let (_temp_dir, spec) = app("", ConstraintKind::AtLeastOne, &["auth", "deploy"]);
+    let errors = validation_errors(&spec);
+    assert_eq!(
+        errors
+            .constraint_violations
+            .iter()
+            .map(|violation| violation.group.as_str())
+            .collect::<Vec<_>>(),
+        vec!["auth", "deploy"]
+    );
+
+    let (_temp_dir, spec) = app("", ConstraintKind::ExactlyOne, &["auth"]);
+    let errors = validation_errors(&spec);
+    assert_eq!(
+        errors.constraint_violations[0].kind,
+        ConstraintKind::ExactlyOne
+    );
+    assert!(errors.constraint_violations[0].present.is_empty());
+
+    let (_temp_dir, spec) = app(
+        "PASSWORD=p\nACCESS_TOKEN=t\n",
+        ConstraintKind::ExactlyOne,
+        &["auth"],
+    );
+    let errors = validation_errors(&spec);
+    assert_eq!(
+        errors.constraint_violations[0].present,
+        vec!["ACCESS_TOKEN".to_string(), "PASSWORD".to_string()]
+    );
+
+    let (_temp_dir, spec) = app("PASSWORD=p\n", ConstraintKind::ExactlyOne, &["auth"]);
+    assert!(spec.validate().unwrap().is_ok());
+}
+
+pub(crate) fn resolve_test_config(secrets: HashMap<String, Secret>) -> Config {
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets,
+        },
+    );
+    Config {
+        project: Project {
+            name: "resolve-test".to_string(),
+            ..Default::default()
+        },
+        profiles,
+        providers: None,
+        scopes: None,
+    }
+}
+
+/// Serializes tests that scrub the `SECRETSPEC_*` process environment. The
+/// environment is shared across all test threads, so scrub/restore pairs must
+/// not interleave.
+static RESOLUTION_ENV_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Removes `SECRETSPEC_PROVIDER` and `SECRETSPEC_PROFILE` for the guard's
+/// lifetime, restoring any previous values on drop. Tests that exercise
+/// provider or profile resolution hold this so the ambient shell of whoever
+/// runs `cargo test` (a natural place for these variables to be exported)
+/// cannot steer the routes and profiles under test.
+pub(crate) struct ResolutionEnvGuard {
+    _lock: std::sync::MutexGuard<'static, ()>,
+    saved: Vec<(&'static str, Option<std::ffi::OsString>)>,
+}
+
+pub(crate) fn scrub_resolution_env() -> ResolutionEnvGuard {
+    let lock = RESOLUTION_ENV_GUARD
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let saved = [
+        "SECRETSPEC_PROVIDER",
+        "SECRETSPEC_PROFILE",
+        "SECRETSPEC_SCOPE",
+    ]
+    .into_iter()
+    .map(|key| {
+        let previous = std::env::var_os(key);
+        // SAFETY: `RESOLUTION_ENV_GUARD` is held for the guard's whole
+        // lifetime, so no two guards mutate the environment concurrently.
+        unsafe { std::env::remove_var(key) };
+        (key, previous)
+    })
+    .collect();
+    ResolutionEnvGuard { _lock: lock, saved }
+}
+
+impl Drop for ResolutionEnvGuard {
+    fn drop(&mut self) {
+        for (key, previous) in self.saved.drain(..) {
+            if let Some(value) = previous {
+                // SAFETY: the lock in `_lock` is still held while `drop` runs.
+                unsafe { std::env::set_var(key, value) };
+            }
+        }
+    }
+}
+
+/// Sets or removes one environment variable and restores its previous value on
+/// drop, so a failing assertion cannot leak the mutation. The caller must hold
+/// the crate-wide env lock (via [`scrub_resolution_env`]) for the guard's
+/// lifetime: `set_var`/`remove_var` mutate the shared process environment and
+/// are only sound while no other thread touches it.
+pub(crate) struct EnvVarGuard {
+    key: &'static str,
+    previous: Option<std::ffi::OsString>,
+}
+
+impl EnvVarGuard {
+    pub(crate) fn set(key: &'static str, value: &str) -> Self {
+        let previous = std::env::var_os(key);
+        // SAFETY: serialized by the env lock the caller holds.
+        unsafe { std::env::set_var(key, value) };
+        Self { key, previous }
+    }
+
+    pub(crate) fn remove(key: &'static str) -> Self {
+        let previous = std::env::var_os(key);
+        // SAFETY: serialized by the env lock the caller holds.
+        unsafe { std::env::remove_var(key) };
+        Self { key, previous }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match self.previous.take() {
+            // SAFETY: serialized by the env lock the caller holds.
+            Some(value) => unsafe { std::env::set_var(self.key, value) },
+            None => unsafe { std::env::remove_var(self.key) },
+        }
+    }
+}
+
+#[test]
+fn test_resolve_carries_values_and_provenance() {
+    use crate::resolve::ResolvedSource;
+
+    let temp_dir = TempDir::new().unwrap();
+    let env_path = temp_dir.path().join(".env");
+    fs::write(&env_path, "DATABASE_URL=postgres://localhost/db\n").unwrap();
+
+    let secret = |required: bool, default: Option<&str>| Secret {
+        description: Some("test".to_string()),
+        required: Some(required),
+        default: default.map(String::from),
+        ..Default::default()
+    };
+
+    let mut secrets = HashMap::new();
+    secrets.insert("DATABASE_URL".to_string(), secret(true, None));
+    secrets.insert("LOG_LEVEL".to_string(), secret(false, Some("info")));
+    secrets.insert("SENTRY_DSN".to_string(), secret(false, None));
+
+    let provider = format!("dotenv://{}", env_path.display());
+    let spec = Secrets::new(resolve_test_config(secrets), None, Some(provider), None);
+
+    let response = spec.resolve().unwrap();
+    assert_eq!(response.schema_version, 2);
+    assert_eq!(response.profile, "default");
+    assert!(response.is_ok());
+    assert_eq!(response.missing_optional, vec!["SENTRY_DSN".to_string()]);
+
+    // Provider value is exposed with provenance.
+    let db = &response.secrets["DATABASE_URL"];
+    assert_eq!(db.value.as_deref(), Some("postgres://localhost/db"));
+    assert!(db.path.is_none());
+    assert!(!db.as_path);
+    assert_eq!(db.source, ResolvedSource::Provider);
+    assert!(db.source_provider.is_some());
+
+    // Default value is exposed and attributed to the default source.
+    let log = &response.secrets["LOG_LEVEL"];
+    assert_eq!(log.value.as_deref(), Some("info"));
+    assert_eq!(log.source, ResolvedSource::Default);
+    assert!(log.source_provider.is_none());
+
+    // Optional-missing does not appear in secrets.
+    assert!(!response.secrets.contains_key("SENTRY_DSN"));
+
+    // without_values strips values but keeps structure.
+    let stripped = response.without_values();
+    assert!(stripped.secrets["DATABASE_URL"].value.is_none());
+    assert_eq!(
+        stripped.secrets["DATABASE_URL"].source,
+        ResolvedSource::Provider
+    );
+}
+
+#[test]
+fn composed_secrets_resolve_in_dependency_order_without_reparsing_values() {
+    use crate::resolve::ResolvedSource;
+
+    let temp_dir = TempDir::new().unwrap();
+    let env_path = temp_dir.path().join(".env");
+    // The reference-looking password is intentional: composition must insert
+    // it as opaque text rather than recursively interpreting `${DB_HOST}`.
+    fs::write(
+        &env_path,
+        "DB_USER=alice\nDB_PASSWORD='${DB_HOST}'\nDB_HOST=db.example\n",
+    )
+    .unwrap();
+
+    let stored = |description: &str| Secret {
+        description: Some(description.to_string()),
+        ..Default::default()
+    };
+    let mut secrets = HashMap::from([
+        ("DB_USER".to_string(), stored("user")),
+        ("DB_PASSWORD".to_string(), stored("password")),
+        ("DB_HOST".to_string(), stored("host")),
+    ]);
+    // Nested compositions and hash-map declaration order must not affect the
+    // dependency graph's evaluation order.
+    secrets.insert(
+        "AUTH".to_string(),
+        Secret {
+            description: Some("credentials".to_string()),
+            composed: Some("${DB_USER}:${DB_PASSWORD}".to_string()),
+            ..Default::default()
+        },
+    );
+    secrets.insert(
+        "DATABASE_URL".to_string(),
+        Secret {
+            description: Some("dsn".to_string()),
+            composed: Some("postgres://${AUTH}@${DB_HOST}/app".to_string()),
+            ..Default::default()
+        },
+    );
+
+    let config = resolve_test_config(secrets);
+    config.validate().unwrap();
+    let provider = format!("dotenv://{}", env_path.display());
+    let spec = Secrets::new(config, None, Some(provider), None);
+
+    let response = spec.resolve().unwrap();
+    let auth = &response.secrets["AUTH"];
+    assert_eq!(auth.value.as_deref(), Some("alice:${DB_HOST}"));
+    assert_eq!(auth.source, ResolvedSource::Composed);
+    let dsn = &response.secrets["DATABASE_URL"];
+    assert_eq!(
+        dsn.value.as_deref(),
+        Some("postgres://alice:${DB_HOST}@db.example/app")
+    );
+    assert_eq!(dsn.source, ResolvedSource::Composed);
+    assert!(dsn.source_provider.is_none());
+
+    let report = spec.report().unwrap();
+    assert!(
+        report
+            .to_explain_string()
+            .contains("DATABASE_URL  ok        composed")
+    );
+}
+
+#[test]
+fn composed_secrets_propagate_missingness_and_are_read_only() {
+    let temp_dir = TempDir::new().unwrap();
+    let env_path = temp_dir.path().join(".env");
+    fs::write(&env_path, "").unwrap();
+    let secrets = HashMap::from([
+        (
+            "OPTIONAL_PART".to_string(),
+            Secret {
+                description: Some("optional".to_string()),
+                required: Some(false),
+                ..Default::default()
+            },
+        ),
+        (
+            "OPTIONAL_RESULT".to_string(),
+            Secret {
+                description: Some("optional result".to_string()),
+                required: Some(false),
+                composed: Some("prefix-${OPTIONAL_PART}".to_string()),
+                ..Default::default()
+            },
+        ),
+        (
+            "REQUIRED_RESULT".to_string(),
+            Secret {
+                description: Some("required result".to_string()),
+                composed: Some("prefix-${OPTIONAL_PART}".to_string()),
+                ..Default::default()
+            },
+        ),
+    ]);
+    let config = resolve_test_config(secrets);
+    config.validate().unwrap();
+    let spec = Secrets::new(
+        config,
+        None,
+        Some(format!("dotenv://{}", env_path.display())),
+        None,
+    );
+
+    let response = spec.resolve().unwrap();
+    assert_eq!(
+        response.missing_required,
+        vec!["REQUIRED_RESULT".to_string()]
+    );
+    assert!(
+        response
+            .missing_optional
+            .contains(&"OPTIONAL_RESULT".to_string())
+    );
+
+    let error = spec
+        .set("REQUIRED_RESULT", Some("override".to_string()))
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        SecretSpecError::ComposedSecretReadOnly(ref name) if name == "REQUIRED_RESULT"
+    ));
+}
+
+#[test]
+fn composed_secrets_use_the_exported_path_of_as_path_dependencies() {
+    let temp_dir = TempDir::new().unwrap();
+    let env_path = temp_dir.path().join(".env");
+    fs::write(&env_path, "CERT=certificate-bytes\n").unwrap();
+    let secrets = HashMap::from([
+        (
+            "CERT".to_string(),
+            Secret {
+                description: Some("certificate".to_string()),
+                as_path: Some(true),
+                ..Default::default()
+            },
+        ),
+        (
+            "CERT_ARG".to_string(),
+            Secret {
+                description: Some("certificate argument".to_string()),
+                composed: Some("--cert=${CERT}".to_string()),
+                ..Default::default()
+            },
+        ),
+    ]);
+    let config = resolve_test_config(secrets);
+    config.validate().unwrap();
+    let spec = Secrets::new(
+        config,
+        None,
+        Some(format!("dotenv://{}", env_path.display())),
+        None,
+    );
+
+    let response = spec.resolve().unwrap();
+    let cert_path = response.secrets["CERT"].path.as_deref().unwrap();
+    assert_eq!(
+        response.secrets["CERT_ARG"].value.as_deref(),
+        Some(format!("--cert={cert_path}").as_str())
+    );
+}
+
+#[test]
+fn test_resolve_missing_required_is_empty_with_error_list() {
+    let temp_dir = TempDir::new().unwrap();
+    let env_path = temp_dir.path().join(".env");
+    fs::write(&env_path, "").unwrap();
+
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "STRIPE_KEY".to_string(),
+        Secret {
+            description: Some("stripe".to_string()),
+            required: Some(true),
+            ..Default::default()
+        },
+    );
+
+    let provider = format!("dotenv://{}", env_path.display());
+    let spec = Secrets::new(resolve_test_config(secrets), None, Some(provider), None);
+
+    let response = spec.resolve().unwrap();
+    assert!(!response.is_ok());
+    assert_eq!(response.missing_required, vec!["STRIPE_KEY".to_string()]);
+    // A failed resolution returns no values, mirroring the derive crate's load().
+    assert!(response.secrets.is_empty());
+}
+
+#[test]
+fn test_resolve_as_path_returns_persisted_path() {
+    let temp_dir = TempDir::new().unwrap();
+    let env_path = temp_dir.path().join(".env");
+    fs::write(&env_path, "TLS_CERT=----cert-bytes----\n").unwrap();
+
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "TLS_CERT".to_string(),
+        Secret {
+            description: Some("cert".to_string()),
+            required: Some(true),
+            as_path: Some(true),
+            ..Default::default()
+        },
+    );
+
+    let provider = format!("dotenv://{}", env_path.display());
+    let spec = Secrets::new(resolve_test_config(secrets), None, Some(provider), None);
+
+    let response = spec.resolve().unwrap();
+    let cert = &response.secrets["TLS_CERT"];
+    assert!(cert.as_path);
+    assert!(cert.value.is_none());
+    let path = cert.path.as_deref().expect("as_path yields a path");
+    // The temp file is persisted, so the path is readable after resolve returns.
+    let contents = fs::read_to_string(path).unwrap();
+    assert_eq!(contents, "----cert-bytes----");
+    fs::remove_file(path).ok();
+}
+
+#[test]
+fn test_resolve_without_values_keeps_structure_but_no_value_or_path() {
+    use crate::resolve::ResolvedSource;
+
+    let temp_dir = TempDir::new().unwrap();
+    let env_path = temp_dir.path().join(".env");
+    fs::write(
+        &env_path,
+        "DATABASE_URL=postgres://localhost/db\nTLS_CERT=----cert----\n",
+    )
+    .unwrap();
+
+    let secret = |as_path: bool| Secret {
+        description: Some("t".to_string()),
+        required: Some(true),
+        as_path: Some(as_path),
+        ..Default::default()
+    };
+    let mut secrets = HashMap::new();
+    secrets.insert("DATABASE_URL".to_string(), secret(false));
+    secrets.insert("TLS_CERT".to_string(), secret(true));
+
+    let provider = format!("dotenv://{}", env_path.display());
+    let spec = Secrets::new(resolve_test_config(secrets), None, Some(provider), None);
+
+    let response = spec.resolve_without_values().unwrap();
+    assert!(response.is_ok());
+
+    // Plain secret: no value materialized, but structure + provenance preserved.
+    let db = &response.secrets["DATABASE_URL"];
+    assert!(db.value.is_none());
+    assert!(db.path.is_none());
+    assert!(!db.as_path);
+    assert_eq!(db.source, ResolvedSource::Provider);
+
+    // as_path secret: no value AND no path, so no temp file is persisted; the
+    // as_path flag is still reported so the shape is intact.
+    let cert = &response.secrets["TLS_CERT"];
+    assert!(cert.value.is_none());
+    assert!(cert.path.is_none());
+    assert!(cert.as_path);
+}
+
+#[test]
+fn test_report_lists_missing_required_without_failing() {
+    use crate::report::ResolutionStatus;
+
+    let temp_dir = TempDir::new().unwrap();
+    let env_path = temp_dir.path().join(".env");
+    fs::write(&env_path, "PRESENT=here\n").unwrap();
+
+    let secret = || Secret {
+        description: Some("t".to_string()),
+        required: Some(true),
+        ..Default::default()
+    };
+    let mut secrets = HashMap::new();
+    secrets.insert("PRESENT".to_string(), secret());
+    secrets.insert("MISSING".to_string(), secret());
+
+    let provider = format!("dotenv://{}", env_path.display());
+    let spec = Secrets::new(resolve_test_config(secrets), None, Some(provider), None);
+
+    // resolve() fails the whole call when a required secret is missing.
+    assert!(!spec.resolve().unwrap().is_ok());
+
+    // report() instead lists every secret with a status and never a value, so an
+    // inventory/preflight consumer still gets the shape back.
+    let report = spec.report().unwrap();
+    let status = |name: &str| {
+        report
+            .secrets
+            .iter()
+            .find(|s| s.name == name)
+            .map(|s| s.status.clone())
+    };
+    assert_eq!(status("PRESENT"), Some(ResolutionStatus::Resolved));
+    assert_eq!(status("MISSING"), Some(ResolutionStatus::MissingRequired));
+}
+
+/// A generatable secret with no stored value must be reported by the value-free
+/// surfaces (`report()`, `resolve_without_values()`) as *would-generate* without
+/// actually minting and storing it — a read-only preflight must not mutate the
+/// provider. The full `resolve()` still generates and writes.
+#[test]
+fn test_value_free_surfaces_do_not_generate_or_store() {
+    use crate::config::GenerateConfig;
+    use crate::report::ResolutionStatus;
+    use crate::resolve::ResolvedSource;
+
+    let temp_dir = TempDir::new().unwrap();
+    let env_path = temp_dir.path().join(".env");
+    fs::write(&env_path, "").unwrap();
+
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "SESSION_KEY".to_string(),
+        Secret {
+            description: Some("generated".to_string()),
+            required: Some(true),
+            secret_type: Some("hex".to_string()),
+            generate: Some(GenerateConfig::Bool(true)),
+            ..Default::default()
+        },
+    );
+
+    let provider = format!("dotenv://{}", env_path.display());
+    let spec = Secrets::new(resolve_test_config(secrets), None, Some(provider), None);
+
+    // report(): the secret would resolve via generation, but nothing is written.
+    let report = spec.report().unwrap();
+    let entry = report
+        .secrets
+        .iter()
+        .find(|s| s.name == "SESSION_KEY")
+        .expect("SESSION_KEY in report");
+    assert_eq!(entry.status, ResolutionStatus::Resolved);
+    assert!(entry.generated);
+    assert_eq!(
+        fs::read_to_string(&env_path).unwrap(),
+        "",
+        "report() must not store a generated secret"
+    );
+
+    // resolve_without_values(): same — provenance says generated, no value, no write.
+    let response = spec.resolve_without_values().unwrap();
+    let resolved = &response.secrets["SESSION_KEY"];
+    assert_eq!(resolved.source, ResolvedSource::Generated);
+    assert!(resolved.value.is_none());
+    assert_eq!(
+        fs::read_to_string(&env_path).unwrap(),
+        "",
+        "resolve_without_values() must not store a generated secret"
+    );
+
+    // The full resolve still generates and persists the value.
+    let full = spec.resolve().unwrap();
+    assert!(full.is_ok());
+    assert!(full.secrets["SESSION_KEY"].value.is_some());
+    assert!(
+        fs::read_to_string(&env_path)
+            .unwrap()
+            .contains("SESSION_KEY"),
+        "resolve() generates and stores the secret"
+    );
+}
+
+/// The value-free `report()` over a read-only provider must succeed (a missing
+/// generatable secret is reported as would-generate) rather than failing because
+/// a generated value cannot be stored. Regression: the value-free path used to
+/// reach the provider write and error on `env://`.
+#[test]
+fn test_value_free_report_tolerates_read_only_provider() {
+    use crate::config::GenerateConfig;
+    use crate::report::ResolutionStatus;
+
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "SESSION_KEY".to_string(),
+        Secret {
+            description: Some("generated".to_string()),
+            required: Some(true),
+            secret_type: Some("hex".to_string()),
+            generate: Some(GenerateConfig::Bool(true)),
+            ..Default::default()
+        },
+    );
+
+    let spec = Secrets::new(
+        resolve_test_config(secrets),
+        None,
+        Some("env://".to_string()),
+        None,
+    );
+
+    let report = spec.report().expect("report() must not fail on env://");
+    let entry = report
+        .secrets
+        .iter()
+        .find(|s| s.name == "SESSION_KEY")
+        .expect("SESSION_KEY in report");
+    assert_eq!(entry.status, ResolutionStatus::Resolved);
+    assert!(entry.generated);
+}
+
+/// When a per-secret provider chain's primary provider *errors* (not merely
+/// lacks the secret) and the fallback chain has no value, the resolution must
+/// surface the provider error — exactly like a single-provider failure — instead
+/// of silently downgrading to `missing_required`, so a machine consumer can tell
+/// an outage from an unprovisioned secret.
+#[test]
+fn test_chain_primary_error_surfaces_instead_of_missing() {
+    let temp_dir = TempDir::new().unwrap();
+    let env_path = temp_dir.path().join(".env");
+    // Fallback provider is reachable but does not hold the secret.
+    fs::write(&env_path, "").unwrap();
+
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "DB_PASSWORD".to_string(),
+        Secret {
+            description: Some("db".to_string()),
+            required: Some(true),
+            providers: Some(vec!["primary".to_string(), "fallback".to_string()]),
+            ..Default::default()
+        },
+    );
+
+    // Primary alias resolves to an unbuildable provider (the "outage"); fallback
+    // is a healthy dotenv that simply lacks the key.
+    let mut provider_aliases = HashMap::new();
+    provider_aliases.insert(
+        "primary".to_string(),
+        ProviderAlias::from("bogus://unreachable"),
+    );
+    provider_aliases.insert(
+        "fallback".to_string(),
+        ProviderAlias::from(format!("dotenv://{}", env_path.display())),
+    );
+
+    let mut config = resolve_test_config(secrets);
+    config.providers = Some(provider_aliases);
+
+    // No explicit provider override, so the per-secret chain is used.
+    let spec = Secrets::new(config, None, None, None);
+
+    // The primary provider error must propagate, not be reported as missing.
+    assert!(
+        spec.resolve().is_err(),
+        "a primary provider outage with an empty fallback must surface the error"
+    );
+    assert!(spec.report().is_err());
+}
+
+#[test]
+fn test_secretspec_new() {
+    let config = Config {
+        project: Project {
+            name: "test".to_string(),
+            ..Default::default()
+        },
+        profiles: HashMap::new(),
+        providers: None,
+        scopes: None,
+    };
+
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("keyring".to_string()),
+            profile: Some("dev".to_string()),
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config.clone(), Some(global_config.clone()), None, None);
+    assert_eq!(spec.config().project.name, "test");
+    assert!(spec.global_config().is_some());
+    assert_eq!(
+        spec.global_config().as_ref().unwrap().defaults.provider,
+        Some("keyring".to_string())
+    );
+
+    let spec_without_global = Secrets::new(config, None, None, None);
+    assert!(spec_without_global.global_config().is_none());
+}
+
+#[test]
+fn test_resolve_profile() {
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("keyring".to_string()),
+            profile: Some("development".to_string()),
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(
+        Config {
+            project: Project {
+                name: "test".to_string(),
+                ..Default::default()
+            },
+            profiles: HashMap::new(),
+            providers: None,
+            scopes: None,
+        },
+        Some(global_config),
+        None,
+        None,
+    );
+
+    // Test with explicit profile
+    assert_eq!(spec.resolve_profile_name(Some("production")), "production");
+
+    // Test with global config default
+    assert_eq!(spec.resolve_profile_name(None), "development");
+
+    // Test without global config
+    let spec_no_global = Secrets::new(
+        Config {
+            project: Project {
+                name: "test".to_string(),
+                ..Default::default()
+            },
+            profiles: HashMap::new(),
+            providers: None,
+            scopes: None,
+        },
+        None,
+        None,
+        None,
+    );
+    assert_eq!(spec_no_global.resolve_profile_name(None), "default");
+}
+
+#[test]
+fn test_resolve_secret_config() {
+    let mut default_secrets = HashMap::new();
+    default_secrets.insert(
+        "API_KEY".to_string(),
+        Secret {
+            description: Some("API Key".to_string()),
+            required: Some(true),
+            default: None,
+            providers: None,
+            as_path: None,
+            ..Default::default()
+        },
+    );
+    default_secrets.insert(
+        "DATABASE_URL".to_string(),
+        Secret {
+            description: Some("Database URL".to_string()),
+            required: Some(false),
+            default: Some("sqlite:///default.db".to_string()),
+            providers: None,
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    let mut dev_secrets = HashMap::new();
+    dev_secrets.insert(
+        "API_KEY".to_string(),
+        Secret {
+            description: Some("Dev API Key".to_string()),
+            required: Some(false),
+            default: Some("dev-key".to_string()),
+            providers: None,
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets: default_secrets,
+        },
+    );
+    profiles.insert(
+        "development".to_string(),
+        Profile {
+            defaults: None,
+            secrets: dev_secrets,
+        },
+    );
+
+    let spec = Secrets::new(
+        Config {
+            project: Project {
+                name: "test".to_string(),
+                ..Default::default()
+            },
+            profiles,
+            providers: None,
+            scopes: None,
+        },
+        None,
+        None,
+        None,
+    );
+
+    // Test profile-specific secret
+    let secret_config = spec
+        .resolve_secret_config("API_KEY", Some("development"))
+        .unwrap();
+    assert_eq!(secret_config.required, Some(false));
+    assert_eq!(secret_config.default, Some("dev-key".to_string()));
+
+    // Test fallback to default profile
+    let secret_config = spec
+        .resolve_secret_config("DATABASE_URL", Some("development"))
+        .unwrap();
+    assert_eq!(secret_config.required, Some(false));
+    assert_eq!(
+        secret_config.default,
+        Some("sqlite:///default.db".to_string())
+    );
+
+    // Test nonexistent secret
+    assert!(
+        spec.resolve_secret_config("NONEXISTENT", Some("development"))
+            .is_none()
+    );
+}
+
+#[test]
+fn test_get_provider_error_cases() {
+    let spec = Secrets::new(
+        Config {
+            project: Project {
+                name: "test".to_string(),
+                ..Default::default()
+            },
+            profiles: HashMap::new(),
+            providers: None,
+            scopes: None,
+        },
+        None,
+        None,
+        None,
+    );
+
+    // Test with no provider configured
+    let result = spec.get_provider(None, None);
+    assert!(matches!(result, Err(SecretSpecError::NoProviderConfigured)));
+}
+
+#[test]
+fn test_get_provider_with_global_config() {
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("keyring".to_string()),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(
+        Config {
+            project: Project {
+                name: "test".to_string(),
+                ..Default::default()
+            },
+            profiles: HashMap::new(),
+            providers: None,
+            scopes: None,
+        },
+        Some(global_config),
+        None,
+        None,
+    );
+
+    // Should not error with global config
+    let result = spec.get_provider(None, None);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_project_config_from_path_error_handling() {
+    let temp_dir = TempDir::new().unwrap();
+    let invalid_toml = temp_dir.path().join("invalid.toml");
+    fs::write(&invalid_toml, "[invalid toml content").unwrap();
+
+    let result = Config::try_from(invalid_toml.as_path()).map_err(Into::<SecretSpecError>::into);
+    assert!(matches!(result, Err(SecretSpecError::Toml(_))));
+
+    // Test nonexistent file
+    let nonexistent = temp_dir.path().join("nonexistent.toml");
+    let result = Config::try_from(nonexistent.as_path()).map_err(Into::<SecretSpecError>::into);
+    assert!(matches!(result, Err(SecretSpecError::NoManifest)));
+}
+
+#[test]
+fn test_parse_spec_from_str() {
+    let valid_toml = r#"
+[project]
+name = "test"
+revision = "1.0"
+
+[profiles.default]
+API_KEY = { description = "API Key", required = true }
+"#;
+
+    let result = parse_spec_from_str(valid_toml, None);
+    assert!(result.is_ok());
+    let config = result.unwrap();
+    assert_eq!(config.project.name, "test");
+
+    // Test invalid TOML
+    let invalid_toml = "[invalid";
+    let result = parse_spec_from_str(invalid_toml, None);
+    assert!(matches!(result, Err(SecretSpecError::Toml(_))));
+}
+
+#[test]
+fn test_extends_with_real_world_example() {
+    // Test a real-world scenario with multiple extends and profile overrides
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create directory structure
+    fs::create_dir_all(base_path.join("common")).unwrap();
+    fs::create_dir_all(base_path.join("auth")).unwrap();
+    fs::create_dir_all(base_path.join("base")).unwrap();
+
+    // Create common config with database and cache settings
+    let common_config = r#"
+[project]
+name = "common"
+revision = "1.0"
+
+[profiles.default]
+DATABASE_URL = { description = "Main database connection string", required = true }
+REDIS_URL = { description = "Redis cache connection", required = false, default = "redis://localhost:6379" }
+
+[profiles.development]
+DATABASE_URL = { description = "Development database", required = false, default = "sqlite:///dev.db" }
+REDIS_URL = { description = "Redis cache connection", required = false, default = "redis://localhost:6379" }
+
+[profiles.production]
+DATABASE_URL = { description = "Production database", required = true }
+REDIS_URL = { description = "Redis cache connection", required = true }
+"#;
+    fs::write(base_path.join("common/secretspec.toml"), common_config).unwrap();
+
+    // Create auth config with authentication settings
+    let auth_config = r#"
+[project]
+name = "auth"
+revision = "1.0"
+
+[profiles.default]
+JWT_SECRET = { description = "Secret for JWT signing", required = true }
+OAUTH_CLIENT_ID = { description = "OAuth client identifier", required = false }
+OAUTH_CLIENT_SECRET = { description = "OAuth client secret", required = false }
+
+[profiles.production]
+JWT_SECRET = { description = "Secret for JWT signing", required = true }
+OAUTH_CLIENT_ID = { description = "OAuth client identifier", required = true }
+OAUTH_CLIENT_SECRET = { description = "OAuth client secret", required = true }
+"#;
+    fs::write(base_path.join("auth/secretspec.toml"), auth_config).unwrap();
+
+    // Create base config that extends from both common and auth
+    let base_config = r#"
+[project]
+name = "my_app"
+revision = "1.0"
+extends = ["../common", "../auth"]
+
+[profiles.default]
+API_KEY = { description = "External API key", required = true }
+# Override the database description from common
+DATABASE_URL = { description = "Custom database for my app", required = true }
+
+[profiles.development]
+API_KEY = { description = "External API key", required = false, default = "dev-key-123" }
+
+[profiles.production]
+API_KEY = { description = "External API key", required = true }
+MONITORING_TOKEN = { description = "Token for monitoring service", required = true }
+"#;
+    fs::write(base_path.join("base/secretspec.toml"), base_config).unwrap();
+
+    // Parse the config
+    let config = Config::try_from(base_path.join("base/secretspec.toml").as_path()).unwrap();
+
+    // Verify project info
+    assert_eq!(config.project.name, "my_app");
+    assert_eq!(config.project.revision, "1.0");
+    assert_eq!(
+        config.project.extends,
+        Some(vec!["../common".to_string(), "../auth".to_string()])
+    );
+
+    // Verify default profile has all merged secrets
+    let default_profile = config.profiles.get("default").unwrap();
+    assert_eq!(default_profile.secrets.len(), 6); // API_KEY, DATABASE_URL, REDIS_URL, JWT_SECRET, OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET
+
+    // Verify base config overrides common config
+    let database_url = default_profile.secrets.get("DATABASE_URL").unwrap();
+    assert_eq!(
+        database_url.description,
+        Some("Custom database for my app".to_string())
+    );
+    assert_eq!(database_url.required, Some(true));
+
+    // Verify inherited secrets from common
+    let redis_url = default_profile.secrets.get("REDIS_URL").unwrap();
+    assert_eq!(
+        redis_url.description,
+        Some("Redis cache connection".to_string())
+    );
+    assert_eq!(redis_url.required, Some(false));
+    assert_eq!(
+        redis_url.default,
+        Some("redis://localhost:6379".to_string())
+    );
+
+    // Verify inherited secrets from auth
+    let jwt_secret = default_profile.secrets.get("JWT_SECRET").unwrap();
+    assert_eq!(
+        jwt_secret.description,
+        Some("Secret for JWT signing".to_string())
+    );
+    assert_eq!(jwt_secret.required, Some(true));
+
+    // Verify development profile
+    let dev_profile = config.profiles.get("development").unwrap();
+    let dev_api_key = dev_profile.secrets.get("API_KEY").unwrap();
+    assert_eq!(dev_api_key.required, Some(false));
+    assert_eq!(dev_api_key.default, Some("dev-key-123".to_string()));
+
+    let dev_database_url = dev_profile.secrets.get("DATABASE_URL").unwrap();
+    assert_eq!(
+        dev_database_url.description,
+        Some("Development database".to_string())
+    );
+    assert_eq!(dev_database_url.required, Some(false));
+    assert_eq!(
+        dev_database_url.default,
+        Some("sqlite:///dev.db".to_string())
+    );
+
+    // Verify production profile has all required secrets
+    let prod_profile = config.profiles.get("production").unwrap();
+    assert_eq!(
+        prod_profile.secrets.get("API_KEY").unwrap().required,
+        Some(true)
+    );
+    assert_eq!(
+        prod_profile.secrets.get("DATABASE_URL").unwrap().required,
+        Some(true)
+    );
+    assert_eq!(
+        prod_profile.secrets.get("REDIS_URL").unwrap().required,
+        Some(true)
+    );
+    assert_eq!(
+        prod_profile.secrets.get("JWT_SECRET").unwrap().required,
+        Some(true)
+    );
+    assert_eq!(
+        prod_profile
+            .secrets
+            .get("OAUTH_CLIENT_ID")
+            .unwrap()
+            .required,
+        Some(true)
+    );
+    assert_eq!(
+        prod_profile
+            .secrets
+            .get("OAUTH_CLIENT_SECRET")
+            .unwrap()
+            .required,
+        Some(true)
+    );
+    assert_eq!(
+        prod_profile
+            .secrets
+            .get("MONITORING_TOKEN")
+            .unwrap()
+            .required,
+        Some(true)
+    );
+}
+
+#[test]
+fn test_extends_with_direct_circular_dependency() {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create directory structure
+    fs::create_dir_all(base_path.join("a")).unwrap();
+    fs::create_dir_all(base_path.join("b")).unwrap();
+
+    // Create config A that extends B
+    let config_a = r#"
+[project]
+name = "config_a"
+revision = "1.0"
+extends = ["../b"]
+
+[profiles.default]
+SECRET_A = { description = "Secret A", required = true }
+"#;
+    fs::write(base_path.join("a/secretspec.toml"), config_a).unwrap();
+
+    // Create config B that extends A (circular dependency)
+    let config_b = r#"
+[project]
+name = "config_b"
+revision = "1.0"
+extends = ["../a"]
+
+[profiles.default]
+SECRET_B = { description = "Secret B", required = true }
+"#;
+    fs::write(base_path.join("b/secretspec.toml"), config_b).unwrap();
+
+    // Parse should fail with circular dependency error
+    let result = Config::try_from(base_path.join("a/secretspec.toml").as_path());
+    assert!(result.is_err());
+    match result {
+        Err(ParseError::CircularDependency(msg)) => {
+            assert!(msg.contains("circular dependency"));
+        }
+        _ => panic!("Expected CircularDependency error"),
+    }
+}
+
+#[test]
+fn test_extends_with_indirect_circular_dependency() {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create directory structure
+    fs::create_dir_all(base_path.join("a")).unwrap();
+    fs::create_dir_all(base_path.join("b")).unwrap();
+    fs::create_dir_all(base_path.join("c")).unwrap();
+
+    // Create config A that extends B
+    let config_a = r#"
+[project]
+name = "config_a"
+revision = "1.0"
+extends = ["../b"]
+
+[profiles.default]
+SECRET_A = { description = "Secret A", required = true }
+"#;
+    fs::write(base_path.join("a/secretspec.toml"), config_a).unwrap();
+
+    // Create config B that extends C
+    let config_b = r#"
+[project]
+name = "config_b"
+revision = "1.0"
+extends = ["../c"]
+
+[profiles.default]
+SECRET_B = { description = "Secret B", required = true }
+"#;
+    fs::write(base_path.join("b/secretspec.toml"), config_b).unwrap();
+
+    // Create config C that extends A (circular dependency through chain)
+    let config_c = r#"
+[project]
+name = "config_c"
+revision = "1.0"
+extends = ["../a"]
+
+[profiles.default]
+SECRET_C = { description = "Secret C", required = true }
+"#;
+    fs::write(base_path.join("c/secretspec.toml"), config_c).unwrap();
+
+    // Parse should fail with circular dependency error
+    let result = Config::try_from(base_path.join("a/secretspec.toml").as_path());
+    assert!(result.is_err());
+    match result {
+        Err(ParseError::CircularDependency(msg)) => {
+            assert!(msg.contains("circular dependency"));
+        }
+        _ => panic!("Expected CircularDependency error"),
+    }
+}
+
+#[test]
+fn test_nested_extends() {
+    // Test A extends B, B extends C scenario
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create directory structure
+    fs::create_dir_all(base_path.join("a")).unwrap();
+    fs::create_dir_all(base_path.join("b")).unwrap();
+    fs::create_dir_all(base_path.join("c")).unwrap();
+
+    // Create config C (base config)
+    let config_c = r#"
+[project]
+name = "config_c"
+revision = "1.0"
+
+[profiles.default]
+SECRET_C = { description = "Secret C from base", required = true }
+COMMON_SECRET = { description = "Common secret from C", required = true }
+
+[profiles.production]
+SECRET_C = { description = "Secret C for production", required = true }
+"#;
+    fs::write(base_path.join("c/secretspec.toml"), config_c).unwrap();
+
+    // Create config B that extends C
+    let config_b = r#"
+[project]
+name = "config_b"
+revision = "1.0"
+extends = ["../c"]
+
+[profiles.default]
+SECRET_B = { description = "Secret B", required = true }
+COMMON_SECRET = { description = "Common secret overridden by B", required = false, default = "default-b" }
+
+[profiles.staging]
+SECRET_B = { description = "Secret B for staging", required = true }
+"#;
+    fs::write(base_path.join("b/secretspec.toml"), config_b).unwrap();
+
+    // Create config A that extends B (which extends C)
+    let config_a = r#"
+[project]
+name = "config_a"
+revision = "1.0"
+extends = ["../b"]
+
+[profiles.default]
+SECRET_A = { description = "Secret A", required = true }
+
+[profiles.staging]
+SECRET_A = { description = "Secret A for staging", required = false, default = "staging-a" }
+"#;
+    fs::write(base_path.join("a/secretspec.toml"), config_a).unwrap();
+
+    // Parse config A
+    let config = Config::try_from(base_path.join("a/secretspec.toml").as_path()).unwrap();
+
+    // Verify project info
+    assert_eq!(config.project.name, "config_a");
+
+    // Verify default profile has all secrets from A, B, and C
+    let default_profile = config.profiles.get("default").unwrap();
+    assert_eq!(default_profile.secrets.len(), 4); // SECRET_A, SECRET_B, SECRET_C, COMMON_SECRET
+
+    // Verify secrets are inherited correctly
+    assert!(default_profile.secrets.contains_key("SECRET_A"));
+    assert!(default_profile.secrets.contains_key("SECRET_B"));
+    assert!(default_profile.secrets.contains_key("SECRET_C"));
+    assert!(default_profile.secrets.contains_key("COMMON_SECRET"));
+
+    // Verify B's override of COMMON_SECRET takes precedence over C's
+    let common_secret = default_profile.secrets.get("COMMON_SECRET").unwrap();
+    assert_eq!(
+        common_secret.description,
+        Some("Common secret overridden by B".to_string())
+    );
+    assert_eq!(common_secret.required, Some(false));
+    assert_eq!(common_secret.default, Some("default-b".to_string()));
+
+    // Verify staging profile exists from both A and B
+    let staging_profile = config.profiles.get("staging").unwrap();
+    assert!(staging_profile.secrets.contains_key("SECRET_A"));
+    assert!(staging_profile.secrets.contains_key("SECRET_B"));
+
+    // Verify production profile exists only from C
+    let prod_profile = config.profiles.get("production").unwrap();
+    assert!(prod_profile.secrets.contains_key("SECRET_C"));
+    assert!(!prod_profile.secrets.contains_key("SECRET_A")); // A doesn't define production
+    assert!(!prod_profile.secrets.contains_key("SECRET_B")); // B doesn't define production
+}
+
+#[test]
+fn test_extends_later_parent_wins_conflicts() {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+    fs::create_dir_all(base_path.join("parent-a")).unwrap();
+    fs::create_dir_all(base_path.join("parent-b")).unwrap();
+    fs::create_dir_all(base_path.join("root")).unwrap();
+
+    for (directory, description) in [("parent-a", "from A"), ("parent-b", "from B")] {
+        fs::write(
+            base_path.join(directory).join("secretspec.toml"),
+            format!(
+                r#"
+[project]
+name = "{directory}"
+revision = "1.0"
+
+[profiles.default]
+SHARED = {{ description = "{description}", required = true }}
+"#
+            ),
+        )
+        .unwrap();
+    }
+
+    fs::write(
+        base_path.join("root/secretspec.toml"),
+        r#"
+[project]
+name = "root"
+revision = "1.0"
+extends = ["../parent-a", "../parent-b"]
+
+[profiles.default]
+ROOT_ONLY = { description = "root", required = true }
+"#,
+    )
+    .unwrap();
+
+    let config = Config::try_from(base_path.join("root/secretspec.toml").as_path()).unwrap();
+    let shared = &config.profiles["default"].secrets["SHARED"];
+    assert_eq!(shared.description.as_deref(), Some("from B"));
+}
+
+#[test]
+fn test_extends_allows_diamond_and_preserves_branch_override() {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+    for directory in ["base", "left", "right", "root"] {
+        fs::create_dir_all(base_path.join(directory)).unwrap();
+    }
+
+    fs::write(
+        base_path.join("base/secretspec.toml"),
+        r#"
+[project]
+name = "base"
+revision = "1.0"
+
+[profiles.default]
+SHARED = { description = "from base", required = true }
+"#,
+    )
+    .unwrap();
+    fs::write(
+        base_path.join("left/secretspec.toml"),
+        r#"
+[project]
+name = "left"
+revision = "1.0"
+extends = ["../base"]
+
+[profiles.default]
+SHARED = { description = "from left", required = true }
+"#,
+    )
+    .unwrap();
+    fs::write(
+        base_path.join("right/secretspec.toml"),
+        r#"
+[project]
+name = "right"
+revision = "1.0"
+extends = ["../base"]
+
+[profiles.default]
+RIGHT_ONLY = { description = "right", required = true }
+"#,
+    )
+    .unwrap();
+    fs::write(
+        base_path.join("root/secretspec.toml"),
+        r#"
+[project]
+name = "root"
+revision = "1.0"
+extends = ["../left", "../right"]
+
+[profiles.default]
+ROOT_ONLY = { description = "root", required = true }
+"#,
+    )
+    .unwrap();
+
+    let config = Config::try_from(base_path.join("root/secretspec.toml").as_path())
+        .expect("a shared ancestor is not a dependency cycle");
+    let default = &config.profiles["default"].secrets;
+    assert_eq!(default["SHARED"].description.as_deref(), Some("from left"));
+    assert!(default.contains_key("RIGHT_ONLY"));
+    assert!(default.contains_key("ROOT_ONLY"));
+}
+
+#[test]
+fn test_extends_inherits_profile_defaults() {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+    fs::create_dir_all(base_path.join("parent")).unwrap();
+    fs::create_dir_all(base_path.join("child")).unwrap();
+
+    fs::write(
+        base_path.join("parent/secretspec.toml"),
+        r#"
+[project]
+name = "parent"
+revision = "1.0"
+
+[profiles.production]
+PARENT_ONLY = { description = "parent", required = true }
+
+[profiles.production.defaults]
+required = false
+providers = ["shared"]
+"#,
+    )
+    .unwrap();
+    fs::write(
+        base_path.join("child/secretspec.toml"),
+        r#"
+[project]
+name = "child"
+revision = "1.0"
+extends = ["../parent"]
+
+[profiles.production]
+CHILD_ONLY = { description = "child", required = true }
+"#,
+    )
+    .unwrap();
+
+    let config = Config::try_from(base_path.join("child/secretspec.toml").as_path()).unwrap();
+    let defaults = config.profiles["production"]
+        .defaults
+        .as_ref()
+        .expect("profile defaults should be inherited");
+    assert_eq!(defaults.required, Some(false));
+    assert_eq!(
+        defaults.providers.as_deref(),
+        Some(["shared".to_string()].as_slice())
+    );
+}
+
+/// A symlinked manifest resolves its relative `extends` against the symlink's
+/// own directory, not the canonicalized target directory. Here the `base`
+/// dependency lives next to the symlink; resolving against the real file's
+/// directory (which has no `base`) would raise `ExtendedConfigNotFound`.
+#[test]
+#[cfg(unix)]
+fn test_extends_resolves_relative_to_symlink_location() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().unwrap();
+    let link_dir = temp_dir.path().join("linkdir");
+    let real_dir = temp_dir.path().join("realdir");
+    fs::create_dir_all(link_dir.join("base")).unwrap();
+    fs::create_dir_all(&real_dir).unwrap();
+
+    // The `extends` target sits beside the SYMLINK, not the real file.
+    fs::write(
+        link_dir.join("base/secretspec.toml"),
+        r#"
+[project]
+name = "base"
+revision = "1.0"
+
+[profiles.default]
+SHARED = { description = "from base", required = true }
+"#,
+    )
+    .unwrap();
+
+    // The real manifest extends "base" with a path relative to itself.
+    fs::write(
+        real_dir.join("app.toml"),
+        r#"
+[project]
+name = "app"
+revision = "1.0"
+extends = ["base"]
+
+[profiles.default]
+APP_ONLY = { description = "app", required = true }
+"#,
+    )
+    .unwrap();
+
+    let manifest = link_dir.join("secretspec.toml");
+    symlink(real_dir.join("app.toml"), &manifest).unwrap();
+
+    let config = Config::try_from(manifest.as_path())
+        .expect("extends should resolve relative to the symlink's directory");
+    let secrets = &config.profiles["default"].secrets;
+    assert!(secrets.contains_key("SHARED"), "inherited from ../base");
+    assert!(secrets.contains_key("APP_ONLY"));
+}
+
+#[test]
+fn test_extends_with_path_resolution_edge_cases() {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create complex directory structure
+    fs::create_dir_all(base_path.join("project/src")).unwrap();
+    fs::create_dir_all(base_path.join("shared/common")).unwrap();
+    fs::create_dir_all(base_path.join("shared/auth")).unwrap();
+
+    // Create common config
+    let common_config = r#"
+[project]
+name = "common"
+revision = "1.0"
+
+[profiles.default]
+COMMON_SECRET = { description = "Common secret", required = true }
+"#;
+    fs::write(
+        base_path.join("shared/common/secretspec.toml"),
+        common_config,
+    )
+    .unwrap();
+
+    // Create auth config
+    let auth_config = r#"
+[project]
+name = "auth"
+revision = "1.0"
+
+[profiles.default]
+AUTH_SECRET = { description = "Auth secret", required = true }
+"#;
+    fs::write(base_path.join("shared/auth/secretspec.toml"), auth_config).unwrap();
+
+    // Test 1: Relative path with ../..
+    let config_relative = r#"
+[project]
+name = "project"
+revision = "1.0"
+extends = ["../../shared/common", "../../shared/auth"]
+
+[profiles.default]
+PROJECT_SECRET = { description = "Project secret", required = true }
+"#;
+    fs::write(
+        base_path.join("project/src/secretspec.toml"),
+        config_relative,
+    )
+    .unwrap();
+
+    let config = Config::try_from(base_path.join("project/src/secretspec.toml").as_path()).unwrap();
+    let default_profile = config.profiles.get("default").unwrap();
+    assert_eq!(default_profile.secrets.len(), 3);
+    assert!(default_profile.secrets.contains_key("COMMON_SECRET"));
+    assert!(default_profile.secrets.contains_key("AUTH_SECRET"));
+    assert!(default_profile.secrets.contains_key("PROJECT_SECRET"));
+
+    // Test 2: Path with ./ prefix
+    let config_dot_slash = r#"
+[project]
+name = "project2"
+revision = "1.0"
+extends = ["./../../shared/common"]
+
+[profiles.default]
+PROJECT2_SECRET = { description = "Project2 secret", required = true }
+"#;
+    fs::write(
+        base_path.join("project/src/secretspec2.toml"),
+        config_dot_slash,
+    )
+    .unwrap();
+
+    let config2 =
+        Config::try_from(base_path.join("project/src/secretspec2.toml").as_path()).unwrap();
+    let default_profile2 = config2.profiles.get("default").unwrap();
+    assert_eq!(default_profile2.secrets.len(), 2);
+    assert!(default_profile2.secrets.contains_key("COMMON_SECRET"));
+    assert!(default_profile2.secrets.contains_key("PROJECT2_SECRET"));
+
+    // Test 3: Path with spaces (if supported by the OS)
+    let dir_with_spaces = base_path.join("dir with spaces");
+    if fs::create_dir_all(&dir_with_spaces).is_ok() {
+        let config_spaces = r#"
+[project]
+name = "spaces"
+revision = "1.0"
+
+[profiles.default]
+SPACE_SECRET = { description = "Secret in dir with spaces", required = true }
+"#;
+        fs::write(dir_with_spaces.join("secretspec.toml"), config_spaces).unwrap();
+
+        let config_extends_spaces = r#"
+[project]
+name = "project3"
+revision = "1.0"
+extends = ["../dir with spaces"]
+
+[profiles.default]
+PROJECT3_SECRET = { description = "Project3 secret", required = true }
+"#;
+        fs::write(
+            base_path.join("project/secretspec3.toml"),
+            config_extends_spaces,
+        )
+        .unwrap();
+
+        let config3 =
+            Config::try_from(base_path.join("project/secretspec3.toml").as_path()).unwrap();
+        let default_profile3 = config3.profiles.get("default").unwrap();
+        assert_eq!(default_profile3.secrets.len(), 2);
+        assert!(default_profile3.secrets.contains_key("SPACE_SECRET"));
+        assert!(default_profile3.secrets.contains_key("PROJECT3_SECRET"));
+    }
+}
+
+#[test]
+fn test_empty_extends_array() {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create config with empty extends array
+    let config_empty_extends = r#"
+[project]
+name = "project"
+revision = "1.0"
+extends = []
+
+[profiles.default]
+SECRET_A = { description = "Secret A", required = true }
+
+[profiles.production]
+SECRET_B = { description = "Secret B", required = false, default = "prod-b" }
+"#;
+    fs::write(base_path.join("secretspec.toml"), config_empty_extends).unwrap();
+
+    // Parse should succeed with empty extends
+    let config = Config::try_from(base_path.join("secretspec.toml").as_path()).unwrap();
+
+    // Verify config is parsed correctly
+    assert_eq!(config.project.name, "project");
+    assert_eq!(config.project.extends, Some(vec![]));
+
+    // Verify profiles and secrets are intact
+    let default_profile = config.profiles.get("default").unwrap();
+    assert_eq!(default_profile.secrets.len(), 1);
+    assert!(default_profile.secrets.contains_key("SECRET_A"));
+
+    let prod_profile = config.profiles.get("production").unwrap();
+    assert_eq!(prod_profile.secrets.len(), 1);
+    assert!(prod_profile.secrets.contains_key("SECRET_B"));
+}
+
+#[test]
+fn test_extends_with_file_path() {
+    // Test that extends works with full file paths (ending in .toml)
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create shared directory with a custom-named config file
+    fs::create_dir_all(base_path.join("shared")).unwrap();
+    fs::create_dir_all(base_path.join("backend")).unwrap();
+
+    // Create shared config with a custom filename
+    let shared_config = r#"
+[project]
+name = "shared"
+revision = "1.0"
+
+[profiles.default]
+SHARED_SECRET = { description = "A shared secret", required = true }
+"#;
+    fs::write(base_path.join("shared/secretspec.toml"), shared_config).unwrap();
+
+    // Create backend config that extends using full file path
+    let backend_config = r#"
+[project]
+name = "backend"
+revision = "1.0"
+extends = ["../shared/secretspec.toml"]
+
+[profiles.default]
+BACKEND_SECRET = { description = "Backend specific secret", required = true }
+"#;
+    fs::write(base_path.join("backend/secretspec.toml"), backend_config).unwrap();
+
+    // Parse should succeed with file path extends
+    let config = Config::try_from(base_path.join("backend/secretspec.toml").as_path()).unwrap();
+
+    // Verify config merged correctly
+    assert_eq!(config.project.name, "backend");
+    assert_eq!(
+        config.project.extends,
+        Some(vec!["../shared/secretspec.toml".to_string()])
+    );
+
+    // Verify secrets from both configs are present
+    let default_profile = config.profiles.get("default").unwrap();
+    assert!(default_profile.secrets.contains_key("BACKEND_SECRET"));
+    assert!(default_profile.secrets.contains_key("SHARED_SECRET"));
+}
+
+#[test]
+fn test_self_extension() {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Test 1: Config that tries to extend itself with "."
+    let config_self_dot = r#"
+[project]
+name = "self_extend"
+revision = "1.0"
+extends = ["."]
+
+[profiles.default]
+SECRET_A = { description = "Secret A", required = true }
+"#;
+    fs::write(base_path.join("secretspec.toml"), config_self_dot).unwrap();
+
+    // This should fail with circular dependency
+    let result = Config::try_from(base_path.join("secretspec.toml").as_path());
+    assert!(result.is_err());
+    match result {
+        Err(ParseError::CircularDependency(msg)) => {
+            assert!(msg.contains("circular dependency"));
+        }
+        _ => panic!("Expected CircularDependency error for self-extension"),
+    }
+
+    // Test 2: Config in subdirectory that tries to extend its parent which extends it back
+    fs::create_dir_all(base_path.join("subdir")).unwrap();
+
+    let parent_config = r#"
+[project]
+name = "parent"
+revision = "1.0"
+extends = ["./subdir"]
+
+[profiles.default]
+PARENT_SECRET = { description = "Parent secret", required = true }
+"#;
+    fs::write(base_path.join("secretspec.toml"), parent_config).unwrap();
+
+    let child_config = r#"
+[project]
+name = "child"
+revision = "1.0"
+extends = [".."]
+
+[profiles.default]
+CHILD_SECRET = { description = "Child secret", required = true }
+"#;
+    fs::write(base_path.join("subdir/secretspec.toml"), child_config).unwrap();
+
+    // This should also fail with circular dependency
+    let result2 = Config::try_from(base_path.join("secretspec.toml").as_path());
+    assert!(result2.is_err());
+    match result2 {
+        Err(ParseError::CircularDependency(msg)) => {
+            assert!(msg.contains("circular dependency"));
+        }
+        _ => panic!("Expected CircularDependency error for parent-child circular reference"),
+    }
+}
+
+#[test]
+fn test_property_overrides() {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create directory structure
+    fs::create_dir_all(base_path.join("base")).unwrap();
+    fs::create_dir_all(base_path.join("override")).unwrap();
+
+    // Create base config with various secret properties
+    let base_config = r#"
+[project]
+name = "base"
+revision = "1.0"
+
+[profiles.default]
+SECRET_A = { description = "Original description A", required = true }
+SECRET_B = { description = "Original description B", required = true, default = "original-b" }
+SECRET_C = { description = "Original description C", required = false }
+SECRET_D = { description = "Original description D", required = false, default = "original-d" }
+"#;
+    fs::write(base_path.join("base/secretspec.toml"), base_config).unwrap();
+
+    // Create override config that selectively overrides properties
+    let override_config = r#"
+[project]
+name = "override"
+revision = "1.0"
+extends = ["../base"]
+
+[profiles.default]
+# Override just description
+SECRET_A = { description = "New description A", required = true }
+# Override just required flag
+SECRET_B = { description = "Original description B", required = false, default = "original-b" }
+# Override just default value
+SECRET_C = { description = "Original description C", required = false, default = "new-c" }
+# Override multiple properties
+SECRET_D = { description = "New description D", required = true }
+# Add new secret
+SECRET_E = { description = "New secret E", required = true }
+"#;
+    fs::write(base_path.join("override/secretspec.toml"), override_config).unwrap();
+
+    // Parse the override config
+    let config = Config::try_from(base_path.join("override/secretspec.toml").as_path()).unwrap();
+    let default_profile = config.profiles.get("default").unwrap();
+
+    // Verify SECRET_A: only description changed
+    let secret_a = default_profile.secrets.get("SECRET_A").unwrap();
+    assert_eq!(secret_a.description, Some("New description A".to_string()));
+    assert_eq!(secret_a.required, Some(true));
+    assert_eq!(secret_a.default, None);
+
+    // Verify SECRET_B: only required flag changed
+    let secret_b = default_profile.secrets.get("SECRET_B").unwrap();
+    assert_eq!(
+        secret_b.description,
+        Some("Original description B".to_string())
+    );
+    assert_eq!(secret_b.required, Some(false)); // Changed from true to false
+    assert_eq!(secret_b.default, Some("original-b".to_string()));
+
+    // Verify SECRET_C: only default value added
+    let secret_c = default_profile.secrets.get("SECRET_C").unwrap();
+    assert_eq!(
+        secret_c.description,
+        Some("Original description C".to_string())
+    );
+    assert_eq!(secret_c.required, Some(false));
+    assert_eq!(secret_c.default, Some("new-c".to_string()));
+
+    // Verify SECRET_D: multiple properties changed
+    let secret_d = default_profile.secrets.get("SECRET_D").unwrap();
+    assert_eq!(secret_d.description, Some("New description D".to_string()));
+    assert_eq!(secret_d.required, Some(true)); // Changed from false to true
+    assert_eq!(secret_d.default, None); // Removed default
+
+    // Verify SECRET_E: new secret added
+    let secret_e = default_profile.secrets.get("SECRET_E").unwrap();
+    assert_eq!(secret_e.description, Some("New secret E".to_string()));
+    assert_eq!(secret_e.required, Some(true));
+    assert_eq!(secret_e.default, None);
+}
+
+#[test]
+fn test_extends_with_missing_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create base config with non-existent extend path
+    let base_config = r#"
+[project]
+name = "test_project"
+revision = "1.0"
+extends = ["../nonexistent"]
+
+[profiles.default]
+API_KEY = { description = "API key for external service", required = true }
+"#;
+    fs::write(base_path.join("secretspec.toml"), base_config).unwrap();
+
+    // Parse should fail with missing file error
+    let result = Config::try_from(base_path.join("secretspec.toml").as_path());
+    assert!(result.is_err());
+    match result {
+        Err(ParseError::ExtendedConfigNotFound(path)) => {
+            assert!(path.contains("nonexistent"));
+        }
+        _ => panic!("Expected ExtendedConfigNotFound error for missing file"),
+    }
+}
+
+#[test]
+fn test_extends_with_invalid_inputs() {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Test 1: Extend to a file instead of directory
+    let some_file = base_path.join("notadir.txt");
+    fs::write(&some_file, "not a directory").unwrap();
+
+    let config_extend_file = r#"
+[project]
+name = "test"
+revision = "1.0"
+extends = ["./notadir.txt"]
+
+[profiles.default]
+SECRET_A = { description = "Secret A", required = true }
+"#;
+    fs::write(base_path.join("secretspec.toml"), config_extend_file).unwrap();
+
+    let result = Config::try_from(base_path.join("secretspec.toml").as_path());
+    assert!(result.is_err());
+    match result {
+        Err(ParseError::ExtendedConfigNotFound(path)) => {
+            assert!(path.contains("notadir.txt"));
+        }
+        _ => panic!("Expected ExtendedConfigNotFound error for extending to file"),
+    }
+
+    // Test 2: Extend with empty string
+    let config_empty_string = r#"
+[project]
+name = "test2"
+revision = "1.0"
+extends = [""]
+
+[profiles.default]
+SECRET_B = { description = "Secret B", required = true }
+"#;
+    fs::write(base_path.join("secretspec2.toml"), config_empty_string).unwrap();
+
+    let result2 = Config::try_from(base_path.join("secretspec2.toml").as_path());
+    assert!(result2.is_err());
+
+    // Test 3: Extend to non-existent directory
+    let config_no_dir = r#"
+[project]
+name = "test3"
+revision = "1.0"
+extends = ["./does_not_exist"]
+
+[profiles.default]
+SECRET_C = { description = "Secret C", required = true }
+"#;
+    fs::write(base_path.join("secretspec3.toml"), config_no_dir).unwrap();
+
+    let result3 = Config::try_from(base_path.join("secretspec3.toml").as_path());
+    assert!(result3.is_err());
+    match result3 {
+        Err(ParseError::ExtendedConfigNotFound(path)) => {
+            assert!(path.contains("does_not_exist"));
+        }
+        _ => panic!("Expected ExtendedConfigNotFound error for non-existent directory"),
+    }
+}
+
+#[test]
+fn test_extends_with_different_revisions() {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create directory
+    fs::create_dir_all(base_path.join("old")).unwrap();
+
+    // Create config with unsupported revision
+    let old_config = r#"
+[project]
+name = "old"
+revision = "0.9"
+
+[profiles.default]
+OLD_SECRET = { description = "Old secret", required = true }
+"#;
+    fs::write(base_path.join("old/secretspec.toml"), old_config).unwrap();
+
+    // Create config that tries to extend the old revision
+    let new_config = r#"
+[project]
+name = "new"
+revision = "1.0"
+extends = ["./old"]
+
+[profiles.default]
+NEW_SECRET = { description = "New secret", required = true }
+"#;
+    fs::write(base_path.join("secretspec.toml"), new_config).unwrap();
+
+    // This should fail with unsupported revision error
+    let result = Config::try_from(base_path.join("secretspec.toml").as_path());
+    assert!(result.is_err());
+    match result {
+        Err(ParseError::UnsupportedRevision(rev)) => {
+            assert_eq!(rev, "0.9");
+        }
+        _ => panic!("Expected UnsupportedRevision error"),
+    }
+}
+
+#[test]
+fn test_set_with_undefined_secret() {
+    let project_config = Config {
+        project: Project {
+            name: "test_project".to_string(),
+            ..Default::default()
+        },
+        profiles: {
+            let mut profiles = HashMap::new();
+            let mut secrets = HashMap::new();
+            secrets.insert(
+                "DEFINED_SECRET".to_string(),
+                Secret {
+                    description: Some("A defined secret".to_string()),
+                    required: Some(true),
+                    default: None,
+                    providers: None,
+                    as_path: None,
+                    ..Default::default()
+                },
+            );
+            profiles.insert(
+                "default".to_string(),
+                Profile {
+                    defaults: None,
+                    secrets,
+                },
+            );
+            profiles
+        },
+        providers: None,
+        scopes: None,
+    };
+
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("env".to_string()),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(project_config, Some(global_config), None, None);
+
+    // Test setting an undefined secret - env provider is read-only,
+    // but we should get the SecretNotFound error before the provider error
+    let result = spec.set("UNDEFINED_SECRET", Some("test_value".to_string()));
+
+    assert!(result.is_err());
+    match result {
+        Err(SecretSpecError::SecretNotFound(msg)) => {
+            assert!(msg.contains("UNDEFINED_SECRET"));
+            assert!(msg.contains("not defined in profile"));
+            assert!(msg.contains("DEFINED_SECRET"));
+        }
+        _ => panic!("Expected SecretNotFound error"),
+    }
+}
+
+#[test]
+fn test_set_with_defined_secret() {
+    use std::env;
+    use tempfile::TempDir;
+
+    // Serialize against other current-directory-mutating tests (the current
+    // directory is process-global and shared across test threads).
+    let _cwd = crate::secrets::lock_cwd();
+
+    // Create a temporary directory for dotenv file
+    let temp_dir = TempDir::new().unwrap();
+    let original_dir = env::current_dir().unwrap();
+    env::set_current_dir(&temp_dir).unwrap();
+
+    let project_config = Config {
+        project: Project {
+            name: "test_project".to_string(),
+            ..Default::default()
+        },
+        profiles: {
+            let mut profiles = HashMap::new();
+            let mut secrets = HashMap::new();
+            secrets.insert(
+                "DEFINED_SECRET".to_string(),
+                Secret {
+                    description: Some("A defined secret".to_string()),
+                    required: Some(true),
+                    default: None,
+                    providers: None,
+                    as_path: None,
+                    ..Default::default()
+                },
+            );
+            profiles.insert(
+                "default".to_string(),
+                Profile {
+                    defaults: None,
+                    secrets,
+                },
+            );
+            profiles
+        },
+        providers: None,
+        scopes: None,
+    };
+
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("dotenv".to_string()),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(project_config, Some(global_config), None, None);
+
+    // This should succeed with dotenv provider
+    let result = spec.set("DEFINED_SECRET", Some("test_value".to_string()));
+
+    // Restore original directory
+    env::set_current_dir(original_dir).unwrap();
+
+    // The set operation should succeed for a defined secret
+    assert!(result.is_ok(), "Setting a defined secret should succeed");
+}
+
+#[test]
+fn test_set_with_readonly_provider() {
+    let project_config = Config {
+        project: Project {
+            name: "test_project".to_string(),
+            ..Default::default()
+        },
+        profiles: {
+            let mut profiles = HashMap::new();
+            let mut secrets = HashMap::new();
+            secrets.insert(
+                "DEFINED_SECRET".to_string(),
+                Secret {
+                    description: Some("A defined secret".to_string()),
+                    required: Some(true),
+                    default: None,
+                    providers: None,
+                    as_path: None,
+                    ..Default::default()
+                },
+            );
+            profiles.insert(
+                "default".to_string(),
+                Profile {
+                    defaults: None,
+                    secrets,
+                },
+            );
+            profiles
+        },
+        providers: None,
+        scopes: None,
+    };
+
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("env".to_string()),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(project_config, Some(global_config), None, None);
+
+    // Test setting a defined secret with env provider (which is read-only)
+    let result = spec.set("DEFINED_SECRET", Some("test_value".to_string()));
+
+    assert!(result.is_err());
+    match result {
+        Err(SecretSpecError::ProviderOperationFailed(msg)) => {
+            assert!(msg.contains("read-only"));
+        }
+        _ => panic!("Expected ProviderOperationFailed error for read-only provider"),
+    }
+}
+
+#[test]
+fn test_import_between_dotenv_files() {
+    // Create temporary directory for testing
+    let temp_dir = TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Create project config
+    let project_config = Config {
+        project: Project {
+            name: "test_import_project".to_string(),
+            ..Default::default()
+        },
+        profiles: {
+            let mut profiles = HashMap::new();
+            let mut secrets = HashMap::new();
+
+            // Add test secrets
+            secrets.insert(
+                "SECRET_ONE".to_string(),
+                Secret {
+                    description: Some("First test secret".to_string()),
+                    required: Some(true),
+                    default: None,
+                    providers: None,
+                    as_path: None,
+                    ..Default::default()
+                },
+            );
+            secrets.insert(
+                "SECRET_TWO".to_string(),
+                Secret {
+                    description: Some("Second test secret".to_string()),
+                    required: Some(true),
+                    default: None,
+                    providers: None,
+                    as_path: None,
+                    ..Default::default()
+                },
+            );
+            secrets.insert(
+                "SECRET_THREE".to_string(),
+                Secret {
+                    description: Some("Third test secret".to_string()),
+                    required: Some(false),
+                    default: Some("default_value".to_string()),
+                    providers: None,
+                    as_path: None,
+                    ..Default::default()
+                },
+            );
+            secrets.insert(
+                "SECRET_FOUR".to_string(),
+                Secret {
+                    description: Some("Fourth test secret (not in source)".to_string()),
+                    required: Some(false),
+                    default: None,
+                    providers: None,
+                    as_path: None,
+                    ..Default::default()
+                },
+            );
+
+            profiles.insert(
+                "default".to_string(),
+                Profile {
+                    defaults: None,
+                    secrets,
+                },
+            );
+            profiles
+        },
+        providers: None,
+        scopes: None,
+    };
+
+    // Create source .env file
+    let source_env_path = project_path.join(".env.source");
+    fs::write(
+        &source_env_path,
+        "SECRET_ONE=value_one_from_source\nSECRET_TWO=value_two_from_source\n",
+    )
+    .unwrap();
+
+    // Create target .env file with existing value
+    let target_env_path = project_path.join(".env.target");
+    fs::write(&target_env_path, "SECRET_TWO=existing_value_in_target\n").unwrap();
+
+    // Create global config with target dotenv as default provider
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", target_env_path.display())),
+            profile: Some("default".to_string()),
+            providers: None,
+        },
+        audit: None,
+    };
+
+    // Create SecretSpec instance
+    let spec = Secrets::new(project_config, Some(global_config), None, None);
+
+    // Import from source dotenv to target dotenv
+    let from_provider = format!("dotenv://{}", source_env_path.display());
+    let result = spec.import(&from_provider);
+    assert!(result.is_ok(), "Import should succeed: {:?}", result);
+
+    // Verify using dotenvy that the values are correct
+    let vars: HashMap<String, String> = {
+        let mut result = HashMap::new();
+        let env_vars = dotenvy::from_path_iter(&target_env_path).unwrap();
+        for item in env_vars {
+            let (k, v) = item.unwrap();
+            result.insert(k, v);
+        }
+        result
+    };
+
+    // SECRET_ONE should be imported
+    assert_eq!(
+        vars.get("SECRET_ONE"),
+        Some(&"value_one_from_source".to_string()),
+        "SECRET_ONE should be imported from source"
+    );
+
+    // SECRET_TWO should NOT be overwritten (already exists)
+    assert_eq!(
+        vars.get("SECRET_TWO"),
+        Some(&"existing_value_in_target".to_string()),
+        "SECRET_TWO should not be overwritten"
+    );
+
+    // SECRET_THREE and SECRET_FOUR should not be in the file
+    assert!(
+        !vars.contains_key("SECRET_THREE"),
+        "SECRET_THREE should not be imported (not in source)"
+    );
+    assert!(
+        !vars.contains_key("SECRET_FOUR"),
+        "SECRET_FOUR should not be imported (not in source)"
+    );
+}
+
+#[test]
+fn test_import_edge_cases() {
+    let temp_dir = TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Create project config
+    let project_config = Config {
+        project: Project {
+            name: "test_edge_cases".to_string(),
+            ..Default::default()
+        },
+        profiles: {
+            let mut profiles = HashMap::new();
+            let mut secrets = HashMap::new();
+
+            secrets.insert(
+                "EMPTY_VALUE".to_string(),
+                Secret {
+                    description: Some("Secret with empty value".to_string()),
+                    required: Some(true),
+                    default: None,
+                    providers: None,
+                    as_path: None,
+                    ..Default::default()
+                },
+            );
+            secrets.insert(
+                "SPECIAL_CHARS".to_string(),
+                Secret {
+                    description: Some("Secret with special characters".to_string()),
+                    required: Some(true),
+                    default: None,
+                    providers: None,
+                    as_path: None,
+                    ..Default::default()
+                },
+            );
+            secrets.insert(
+                "MULTILINE".to_string(),
+                Secret {
+                    description: Some("Secret with multiline value".to_string()),
+                    required: Some(true),
+                    default: None,
+                    providers: None,
+                    as_path: None,
+                    ..Default::default()
+                },
+            );
+
+            profiles.insert(
+                "default".to_string(),
+                Profile {
+                    defaults: None,
+                    secrets,
+                },
+            );
+            profiles
+        },
+        providers: None,
+        scopes: None,
+    };
+
+    // Create source .env file with edge case values
+    let source_env_path = project_path.join(".env.edge");
+    fs::write(
+        &source_env_path,
+        concat!(
+            "EMPTY_VALUE=\n",
+            "SPECIAL_CHARS=\"value with spaces and special chars!\"\n",
+            "MULTILINE=single_line_value_no_spaces\n"
+        ),
+    )
+    .unwrap();
+
+    let target_env_path = project_path.join(".env.target");
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", target_env_path.display())),
+            profile: Some("default".to_string()),
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(project_config, Some(global_config), None, None);
+
+    // Import from source to target
+    let from_provider = format!("dotenv://{}", source_env_path.display());
+    let result = spec.import(&from_provider);
+    assert!(
+        result.is_ok(),
+        "Import should handle edge cases: {:?}",
+        result
+    );
+
+    // Verify using dotenvy that the values are correct
+    let vars: HashMap<String, String> = {
+        let mut result = HashMap::new();
+        let env_vars = dotenvy::from_path_iter(&target_env_path).unwrap();
+        for item in env_vars {
+            let (k, v) = item.unwrap();
+            result.insert(k, v);
+        }
+        result
+    };
+
+    // Empty value should be imported
+    assert_eq!(
+        vars.get("EMPTY_VALUE"),
+        Some(&"".to_string()),
+        "Empty value should be imported"
+    );
+
+    // Special characters should be preserved
+    assert_eq!(
+        vars.get("SPECIAL_CHARS"),
+        Some(&"value with spaces and special chars!".to_string()),
+        "Special characters should be preserved"
+    );
+
+    // Multiline value should be imported
+    assert_eq!(
+        vars.get("MULTILINE"),
+        Some(&"single_line_value_no_spaces".to_string()),
+        "Value should be imported"
+    );
+}
+
+#[test]
+fn test_profiles_inherit_from_default() {
+    let temp_dir = TempDir::new().unwrap();
+    let project_path = temp_dir.path().join("secretspec.toml");
+
+    // Create a secretspec.toml with default and development profiles
+    // where development has same secret with different description and default
+    let config_content = r#"
+[project]
+name = "test-no-merge"
+revision = "1.0"
+
+[profiles.default]
+DATABASE_URL = { description = "Default database connection", required = true, default = "postgres://localhost/default" }
+API_KEY = { description = "API key for services", required = true }
+CACHE_TTL = { description = "Cache time to live", required = false, default = "3600" }
+
+[profiles.development]
+DATABASE_URL = { description = "Dev database connection", required = true, default = "postgres://localhost/dev" }
+API_KEY = { description = "Dev API key", required = true }
+# Note: CACHE_TTL is NOT defined in development profile
+"#;
+    fs::write(&project_path, config_content).unwrap();
+
+    // Load the config
+    let config = Config::try_from(project_path.as_path()).unwrap();
+
+    // Create a global config with env provider
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("env".to_string()),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config.clone(), Some(global_config.clone()), None, None);
+
+    // Test that profiles are completely independent
+
+    // 1. Check default profile
+    let secret_config = spec
+        .resolve_secret_config("DATABASE_URL", Some("default"))
+        .expect("DATABASE_URL should exist in default");
+    assert_eq!(secret_config.required, Some(true));
+    assert_eq!(
+        secret_config.default,
+        Some("postgres://localhost/default".to_string())
+    );
+
+    // 2. Check development profile - should have its own description and default
+    let secret_config = spec
+        .resolve_secret_config("DATABASE_URL", Some("development"))
+        .expect("DATABASE_URL should exist in development");
+    assert_eq!(secret_config.required, Some(true));
+    assert_eq!(
+        secret_config.default,
+        Some("postgres://localhost/dev".to_string())
+    );
+
+    // 3. Check that CACHE_TTL exists in default and IS inherited by development
+    // This proves profiles inherit from default
+    assert!(
+        spec.resolve_secret_config("CACHE_TTL", Some("default"))
+            .is_some()
+    );
+    assert!(
+        spec.resolve_secret_config("CACHE_TTL", Some("development"))
+            .is_some(),
+        "CACHE_TTL should be inherited from default profile"
+    );
+
+    // 4. Verify through validation that development profile DOES see CACHE_TTL
+    // Create separate instances for each profile validation
+    let spec_default = Secrets::new(
+        config.clone(),
+        Some(global_config.clone()),
+        None,
+        Some("default".to_string()),
+    );
+    let default_validation_result = spec_default.validate().unwrap();
+
+    let spec_dev = Secrets::new(
+        config,
+        Some(global_config),
+        None,
+        Some("development".to_string()),
+    );
+    let dev_validation_result = spec_dev.validate().unwrap();
+
+    // Both should be errors since we're using env provider with no env vars set
+    let default_errors = default_validation_result
+        .err()
+        .expect("Should have validation errors");
+    let dev_errors = dev_validation_result
+        .err()
+        .expect("Should have validation errors");
+
+    // Default profile should know about 3 secrets
+    assert_eq!(
+        default_errors.missing_required.len()
+            + default_errors.missing_optional.len()
+            + default_errors.with_defaults.len(),
+        3
+    );
+
+    // Development profile should now know about 3 secrets (2 defined + 1 inherited)
+    assert_eq!(
+        dev_errors.missing_required.len()
+            + dev_errors.missing_optional.len()
+            + dev_errors.with_defaults.len(),
+        3,
+        "Development should see 3 secrets: DATABASE_URL, API_KEY, and inherited CACHE_TTL"
+    );
+}
+
+#[test]
+fn test_import_with_profiles() {
+    let temp_dir = TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Create project config with multiple profiles
+    let project_config = Config {
+        project: Project {
+            name: "test_profiles".to_string(),
+            ..Default::default()
+        },
+        profiles: {
+            let mut profiles = HashMap::new();
+
+            // Development profile
+            let mut dev_secrets = HashMap::new();
+            dev_secrets.insert(
+                "DEV_SECRET".to_string(),
+                Secret {
+                    description: Some("Development secret".to_string()),
+                    required: Some(true),
+                    default: None,
+                    providers: None,
+                    as_path: None,
+                    ..Default::default()
+                },
+            );
+            dev_secrets.insert(
+                "SHARED_SECRET".to_string(),
+                Secret {
+                    description: Some("Shared secret".to_string()),
+                    required: Some(true),
+                    default: None,
+                    providers: None,
+                    as_path: None,
+                    ..Default::default()
+                },
+            );
+            profiles.insert(
+                "development".to_string(),
+                Profile {
+                    defaults: None,
+                    secrets: dev_secrets,
+                },
+            );
+
+            // Production profile
+            let mut prod_secrets = HashMap::new();
+            prod_secrets.insert(
+                "PROD_SECRET".to_string(),
+                Secret {
+                    description: Some("Production secret".to_string()),
+                    required: Some(true),
+                    default: None,
+                    providers: None,
+                    as_path: None,
+                    ..Default::default()
+                },
+            );
+            prod_secrets.insert(
+                "SHARED_SECRET".to_string(),
+                Secret {
+                    description: Some("Shared secret".to_string()),
+                    required: Some(true),
+                    default: None,
+                    providers: None,
+                    as_path: None,
+                    ..Default::default()
+                },
+            );
+            profiles.insert(
+                "production".to_string(),
+                Profile {
+                    defaults: None,
+                    secrets: prod_secrets,
+                },
+            );
+
+            profiles
+        },
+        providers: None,
+        scopes: None,
+    };
+
+    // Create source .env file with all secrets
+    let source_env_path = project_path.join(".env.all");
+    fs::write(
+        &source_env_path,
+        concat!(
+            "DEV_SECRET=dev_value\n",
+            "PROD_SECRET=prod_value\n",
+            "SHARED_SECRET=shared_value\n"
+        ),
+    )
+    .unwrap();
+
+    let target_env_path = project_path.join(".env.dev");
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", target_env_path.display())),
+            profile: Some("development".to_string()),
+            providers: None, // Use development profile
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(project_config, Some(global_config), None, None);
+
+    // Import should only import secrets from the active profile (development)
+    let from_provider = format!("dotenv://{}", source_env_path.display());
+    let result = spec.import(&from_provider);
+    assert!(result.is_ok());
+
+    // Verify using dotenvy
+    let vars: HashMap<String, String> = {
+        let mut result = HashMap::new();
+        let env_vars = dotenvy::from_path_iter(&target_env_path).unwrap();
+        for item in env_vars {
+            let (k, v) = item.unwrap();
+            result.insert(k, v);
+        }
+        result
+    };
+
+    // Only DEV_SECRET and SHARED_SECRET should be imported (not PROD_SECRET)
+    assert_eq!(
+        vars.get("DEV_SECRET"),
+        Some(&"dev_value".to_string()),
+        "Development secret should be imported"
+    );
+    assert_eq!(
+        vars.get("SHARED_SECRET"),
+        Some(&"shared_value".to_string()),
+        "Shared secret should be imported for development profile"
+    );
+    assert!(
+        !vars.contains_key("PROD_SECRET"),
+        "Production secret should not be imported when using development profile"
+    );
+}
+
+#[test]
+fn test_run_with_empty_command() {
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env");
+    fs::write(&env_file, "").unwrap();
+
+    let spec = Secrets::new(
+        Config {
+            project: Project {
+                name: "test".to_string(),
+                ..Default::default()
+            },
+            profiles: HashMap::new(),
+            providers: None,
+            scopes: None,
+        },
+        Some(GlobalConfig {
+            defaults: GlobalDefaults {
+                provider: Some(format!("dotenv://{}", env_file.display())),
+                profile: None,
+                providers: None,
+            },
+            audit: None,
+        }),
+        None,
+        None,
+    );
+
+    let result = spec.run(vec![]);
+    assert!(result.is_err());
+
+    match result {
+        Err(SecretSpecError::Io(e)) => {
+            assert_eq!(e.kind(), io::ErrorKind::InvalidInput);
+            assert!(e.to_string().contains("No command specified"));
+        }
+        _ => panic!("Expected IO InvalidInput error"),
+    }
+}
+
+#[test]
+fn test_run_with_missing_required_secrets() {
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env");
+    // Create empty .env file so required secret is missing
+    fs::write(&env_file, "").unwrap();
+
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "REQUIRED_SECRET".to_string(),
+        Secret {
+            description: Some("A required secret".to_string()),
+            required: Some(true),
+            default: None,
+            providers: None,
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets,
+        },
+    );
+
+    let spec = Secrets::new(
+        Config {
+            project: Project {
+                name: "test".to_string(),
+                ..Default::default()
+            },
+            profiles,
+            providers: None,
+            scopes: None,
+        },
+        Some(GlobalConfig {
+            defaults: GlobalDefaults {
+                provider: Some(format!("dotenv://{}", env_file.display())),
+                profile: None,
+                providers: None,
+            },
+            audit: None,
+        }),
+        None,
+        None,
+    );
+
+    let result = spec.run(vec!["echo".to_string(), "hello".to_string()]);
+    assert!(result.is_err());
+
+    match result {
+        Err(SecretSpecError::RequiredSecretMissing(msg)) => {
+            assert!(msg.contains("REQUIRED_SECRET"));
+        }
+        _ => panic!("Expected RequiredSecretMissing error"),
+    }
+}
+
+#[test]
+fn test_get_existing_secret() {
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env");
+    fs::write(&env_file, "TEST_SECRET=test_value\n").unwrap();
+
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "TEST_SECRET".to_string(),
+        Secret {
+            description: Some("Test secret".to_string()),
+            required: Some(true),
+            default: None,
+            providers: None,
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets,
+        },
+    );
+
+    let spec = Secrets::new(
+        Config {
+            project: Project {
+                name: "test".to_string(),
+                ..Default::default()
+            },
+            profiles,
+            providers: None,
+            scopes: None,
+        },
+        Some(GlobalConfig {
+            defaults: GlobalDefaults {
+                provider: Some(format!("dotenv://{}", env_file.display())),
+                profile: None,
+                providers: None,
+            },
+            audit: None,
+        }),
+        None,
+        None,
+    );
+
+    let result = spec.get("TEST_SECRET");
+    assert!(result.is_ok(), "Failed to get secret: {:?}", result);
+}
+
+#[test]
+fn test_get_secret_with_default() {
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env");
+    // Create empty .env file so dotenv provider works but returns no value
+    fs::write(&env_file, "").unwrap();
+
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "SECRET_WITH_DEFAULT".to_string(),
+        Secret {
+            description: Some("Secret with default value".to_string()),
+            required: Some(false),
+            default: Some("default_value".to_string()),
+            providers: None,
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets,
+        },
+    );
+
+    let spec = Secrets::new(
+        Config {
+            project: Project {
+                name: "test".to_string(),
+                ..Default::default()
+            },
+            profiles,
+            providers: None,
+            scopes: None,
+        },
+        Some(GlobalConfig {
+            defaults: GlobalDefaults {
+                provider: Some(format!("dotenv://{}", env_file.display())),
+                profile: None,
+                providers: None,
+            },
+            audit: None,
+        }),
+        None,
+        None,
+    );
+
+    let result = spec.get("SECRET_WITH_DEFAULT");
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_get_nonexistent_secret() {
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env");
+    fs::write(&env_file, "EXISTING_SECRET=exists\n").unwrap();
+
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "EXISTING_SECRET".to_string(),
+        Secret {
+            description: Some("Existing secret".to_string()),
+            required: Some(true),
+            default: None,
+            providers: None,
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets,
+        },
+    );
+
+    let spec = Secrets::new(
+        Config {
+            project: Project {
+                name: "test".to_string(),
+                ..Default::default()
+            },
+            profiles,
+            providers: None,
+            scopes: None,
+        },
+        Some(GlobalConfig {
+            defaults: GlobalDefaults {
+                provider: Some(format!("dotenv://{}", env_file.display())),
+                profile: None,
+                providers: None,
+            },
+            audit: None,
+        }),
+        None,
+        None,
+    );
+
+    let result = spec.get("NONEXISTENT_SECRET");
+    assert!(result.is_err());
+
+    match result {
+        Err(SecretSpecError::SecretNotFound(msg)) => {
+            assert!(msg.contains("NONEXISTENT_SECRET"));
+        }
+        _ => panic!("Expected SecretNotFound error"),
+    }
+}
+
+#[test]
+fn test_import_dotenv_profile_issue_36() {
+    // Reproduces the exact bug reported in GitHub issue #36
+    // https://github.com/cachix/secretspec/issues/36
+
+    let temp_dir = TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Load project config from fixture that matches the bug report exactly
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let fixture_path = Path::new(manifest_dir).join("src/fixtures/issue_36_secretspec.toml");
+
+    let project_config =
+        Config::try_from(fixture_path.as_path()).expect("Should load fixture config");
+
+    // Create the .env file with only JWT_SECRET (matching the actual bug scenario)
+    // The bug is that other secrets with defaults show as "not found in source"
+    // instead of using their defaults from the development profile
+    let source_env_path = project_path.join(".env");
+    fs::write(&source_env_path, "JWT_SECRET=super-secret-jwt-token\n").unwrap();
+
+    // Create target .env for import (using mock provider for testing)
+    let target_env_path = project_path.join(".env.target");
+
+    // Create global config with development profile and mock provider as target
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", target_env_path.display())),
+            profile: Some("development".to_string()),
+            providers: None, // Using development profile as per bug report
+        },
+        audit: None,
+    };
+
+    // Create SecretSpec instance
+    let spec = Secrets::new(project_config, Some(global_config), None, None);
+
+    // Import from source dotenv (this should reproduce the bug)
+    let from_provider = format!("dotenv://{}", source_env_path.display());
+
+    println!("=== Testing Issue #36 Bug Reproduction ===");
+    println!("Source .env file: {}", source_env_path.display());
+    println!("Target provider: dotenv://{}", target_env_path.display());
+    println!("Profile: development");
+    println!("Source .env contents:");
+    println!("{}", fs::read_to_string(&source_env_path).unwrap());
+
+    let result = spec.import(&from_provider);
+
+    // The bug report shows that this results in "0 imported, 0 already exists, 7 not found in source"
+    // This test should initially fail, helping us identify the root cause
+
+    match result {
+        Ok(_) => {
+            // Check what was actually imported by reading the target file
+            if target_env_path.exists() {
+                let target_contents = fs::read_to_string(&target_env_path).unwrap();
+                println!("Target file after import:");
+                println!("{}", target_contents);
+
+                // The real bug: JWT_SECRET should be imported from .env
+                assert!(
+                    target_contents.contains("JWT_SECRET=\"super-secret-jwt-token\""),
+                    "JWT_SECRET should have been imported from source .env"
+                );
+
+                // The import should NOT import defaults - those stay as defaults
+                // The bug is that JWT_SECRET (which exists in .env but is only defined in [profiles.default])
+                // is not being imported because the import only looks at the active profile
+
+                // JWT_SECRET should be imported since it exists in source .env
+                // Other variables should NOT be in the target file since they have defaults and aren't in source
+                assert!(
+                    !target_contents.contains("MONGODB_HOST"),
+                    "MONGODB_HOST should not be in target - it has a default and isn't in source"
+                );
+                assert!(
+                    !target_contents.contains("MONGODB_PORT"),
+                    "MONGODB_PORT should not be in target - it has a default and isn't in source"
+                );
+            } else {
+                // The bug might also be that no file is created if only some secrets are imported
+                println!("Target file was not created - this might be part of the bug");
+
+                // At minimum, JWT_SECRET should be importable, so a file should be created
+                panic!("Target file should have been created after importing JWT_SECRET");
+            }
+        }
+        Err(e) => {
+            panic!("Import should not fail: {:?}", e);
+        }
+    }
+
+    println!("=== Issue #36 test completed ===");
+}
+
+#[test]
+fn test_per_secret_provider_configuration() {
+    // Test that secrets can specify their own providers
+    let mut secrets = HashMap::new();
+
+    // Secret with specific provider
+    secrets.insert(
+        "API_KEY".to_string(),
+        Secret {
+            description: Some("API Key from shared provider".to_string()),
+            required: Some(true),
+            default: None,
+            providers: Some(vec!["shared".to_string()]),
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    // Secret without provider (uses default)
+    secrets.insert(
+        "DATABASE_URL".to_string(),
+        Secret {
+            description: Some("Database URL from default provider".to_string()),
+            required: Some(true),
+            default: None,
+            providers: None,
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets,
+        },
+    );
+
+    let config = Config {
+        project: Project {
+            name: "test_per_secret_provider".to_string(),
+            ..Default::default()
+        },
+        profiles,
+        providers: None,
+        scopes: None,
+    };
+
+    // Create global config with provider aliases
+    let providers_map = aliases_map(&[("shared", "keyring://")]);
+
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("env".to_string()),
+            profile: None,
+            providers: Some(providers_map),
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config, Some(global_config), None, None);
+
+    // Verify API_KEY has providers configured
+    let api_key_config = spec
+        .resolve_secret_config("API_KEY", Some("default"))
+        .unwrap();
+    assert_eq!(api_key_config.providers, Some(vec!["shared".to_string()]));
+
+    // Verify DATABASE_URL has no providers (uses default)
+    let db_config = spec
+        .resolve_secret_config("DATABASE_URL", Some("default"))
+        .unwrap();
+    assert_eq!(db_config.providers, None);
+}
+
+#[test]
+fn test_provider_alias_resolution() {
+    let providers_map = aliases_map(&[
+        ("dev", "dotenv://.env.development"),
+        ("prod", "onepassword://Production"),
+    ]);
+
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("keyring".to_string()),
+            profile: None,
+            providers: Some(providers_map),
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(
+        Config {
+            project: Project {
+                name: "test".to_string(),
+                ..Default::default()
+            },
+            profiles: HashMap::new(),
+            providers: None,
+            scopes: None,
+        },
+        Some(global_config),
+        None,
+        None,
+    );
+
+    // Test resolving dev alias
+    let dev_uri = spec
+        .resolve_one_provider("dev")
+        .expect("Should resolve dev alias");
+    assert_eq!(dev_uri, "dotenv://.env.development");
+
+    // Test resolving prod alias
+    let prod_uri = spec
+        .resolve_one_provider("prod")
+        .expect("Should resolve prod alias");
+    assert_eq!(prod_uri, "onepassword://Production");
+}
+
+#[test]
+fn test_provider_alias_not_found() {
+    let providers_map = aliases_map(&[("existing", "dotenv://.env")]);
+
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("keyring".to_string()),
+            profile: None,
+            providers: Some(providers_map),
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(
+        Config {
+            project: Project {
+                name: "test".to_string(),
+                ..Default::default()
+            },
+            profiles: HashMap::new(),
+            providers: None,
+            scopes: None,
+        },
+        Some(global_config),
+        None,
+        None,
+    );
+
+    // Test resolving non-existent alias
+    let result = spec.resolve_one_provider("nonexistent");
+    assert!(result.is_err());
+    match result {
+        Err(SecretSpecError::ProviderNotFound(msg)) => {
+            assert!(msg.contains("nonexistent"));
+        }
+        _ => panic!("Expected ProviderNotFound error"),
+    }
+}
+
+#[test]
+fn test_per_secret_provider_with_fallback_chain() {
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env");
+    let keyring_file = temp_dir.path().join(".env.keyring");
+
+    // Primary provider has DATABASE_URL
+    fs::write(&env_file, "DATABASE_URL=postgres://localhost\n").unwrap();
+
+    // Fallback provider has API_KEY
+    fs::write(&keyring_file, "API_KEY=secret-key\n").unwrap();
+
+    let mut secrets = HashMap::new();
+
+    // Try env first, then keyring
+    secrets.insert(
+        "DATABASE_URL".to_string(),
+        Secret {
+            description: Some("Database URL".to_string()),
+            required: Some(true),
+            default: None,
+            providers: Some(vec!["primary".to_string(), "fallback".to_string()]),
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    // Try fallback first
+    secrets.insert(
+        "API_KEY".to_string(),
+        Secret {
+            description: Some("API Key".to_string()),
+            required: Some(true),
+            default: None,
+            providers: Some(vec!["fallback".to_string(), "primary".to_string()]),
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets,
+        },
+    );
+
+    let config = Config {
+        project: Project {
+            name: "test_fallback".to_string(),
+            ..Default::default()
+        },
+        profiles,
+        providers: None,
+        scopes: None,
+    };
+
+    let providers_map = aliases_map(&[
+        ("primary", &format!("dotenv://{}", env_file.display())),
+        ("fallback", &format!("dotenv://{}", keyring_file.display())),
+    ]);
+
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: None,
+            profile: None,
+            providers: Some(providers_map),
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config, Some(global_config), None, None);
+
+    // Verify DATABASE_URL config has providers in correct order
+    let db_config = spec
+        .resolve_secret_config("DATABASE_URL", Some("default"))
+        .unwrap();
+    assert_eq!(
+        db_config.providers,
+        Some(vec!["primary".to_string(), "fallback".to_string()])
+    );
+
+    // Verify API_KEY config has providers in reverse order
+    let api_config = spec
+        .resolve_secret_config("API_KEY", Some("default"))
+        .unwrap();
+    assert_eq!(
+        api_config.providers,
+        Some(vec!["fallback".to_string(), "primary".to_string()])
+    );
+}
+
+#[test]
+fn test_get_secret_with_fallback_chain() {
+    let temp_dir = TempDir::new().unwrap();
+    let primary_file = temp_dir.path().join(".env.primary");
+    let fallback_file = temp_dir.path().join(".env.fallback");
+
+    // Primary provider doesn't have API_KEY, but has DATABASE_URL
+    fs::write(&primary_file, "DATABASE_URL=postgres://localhost\n").unwrap();
+
+    // Fallback provider has API_KEY
+    fs::write(&fallback_file, "API_KEY=secret-key\n").unwrap();
+
+    let mut secrets = HashMap::new();
+
+    // API_KEY tries primary first, then fallback (should get from fallback)
+    secrets.insert(
+        "API_KEY".to_string(),
+        Secret {
+            description: Some("API Key from fallback".to_string()),
+            required: Some(true),
+            default: None,
+            providers: Some(vec!["primary".to_string(), "fallback".to_string()]),
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    // DATABASE_URL tries primary first (has it)
+    secrets.insert(
+        "DATABASE_URL".to_string(),
+        Secret {
+            description: Some("Database URL from primary".to_string()),
+            required: Some(true),
+            default: None,
+            providers: Some(vec!["primary".to_string(), "fallback".to_string()]),
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets,
+        },
+    );
+
+    let config = Config {
+        project: Project {
+            name: "test_fallback_integration".to_string(),
+            ..Default::default()
+        },
+        profiles,
+        providers: None,
+        scopes: None,
+    };
+
+    let providers_map = aliases_map(&[
+        ("primary", &format!("dotenv://{}", primary_file.display())),
+        ("fallback", &format!("dotenv://{}", fallback_file.display())),
+    ]);
+
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("keyring".to_string()), // Default fallback provider
+            profile: None,
+            providers: Some(providers_map),
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config, Some(global_config), None, None);
+
+    // Validate should find both secrets using fallback chain
+    match spec.validate().unwrap() {
+        Ok(valid) => {
+            // Both secrets should be found
+            assert!(valid.resolved.secrets.contains_key("API_KEY"));
+            assert!(valid.resolved.secrets.contains_key("DATABASE_URL"));
+
+            // API_KEY should have come from fallback
+            let api_key = valid.resolved.secrets.get("API_KEY").unwrap();
+            assert_eq!(api_key.expose_secret(), "secret-key");
+
+            // DATABASE_URL should have come from primary
+            let db_url = valid.resolved.secrets.get("DATABASE_URL").unwrap();
+            assert_eq!(db_url.expose_secret(), "postgres://localhost");
+        }
+        Err(e) => panic!("Validation should succeed: {:?}", e),
+    }
+}
+
+/// When the primary provider in a chain errors (e.g. authentication failure),
+/// validation should fall back to the next provider rather than propagating
+/// the error. Simulated here by pointing the primary dotenv at a directory,
+/// which causes `from_path_iter` to fail on read.
+#[test]
+fn test_validate_falls_back_on_primary_provider_error() {
+    let temp_dir = TempDir::new().unwrap();
+    let primary_dir = temp_dir.path().join("broken");
+    fs::create_dir(&primary_dir).unwrap();
+    let fallback_file = temp_dir.path().join(".env.fallback");
+    fs::write(&fallback_file, "API_KEY=from-fallback\n").unwrap();
+
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "API_KEY".to_string(),
+        Secret {
+            description: Some("API Key".to_string()),
+            required: Some(true),
+            default: None,
+            providers: Some(vec!["primary".to_string(), "fallback".to_string()]),
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets,
+        },
+    );
+
+    let config = Config {
+        project: Project {
+            name: "test_error_fallback".to_string(),
+            ..Default::default()
+        },
+        profiles,
+        providers: None,
+        scopes: None,
+    };
+
+    let providers_map = aliases_map(&[
+        ("primary", &format!("dotenv://{}", primary_dir.display())),
+        ("fallback", &format!("dotenv://{}", fallback_file.display())),
+    ]);
+
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("keyring".to_string()),
+            profile: None,
+            providers: Some(providers_map),
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config, Some(global_config), None, None);
+
+    match spec
+        .validate()
+        .expect("validate should not propagate primary failure")
+    {
+        Ok(valid) => {
+            let api_key = valid.resolved.secrets.get("API_KEY").unwrap();
+            assert_eq!(api_key.expose_secret(), "from-fallback");
+        }
+        Err(e) => panic!("Expected fallback to succeed, got: {:?}", e),
+    }
+}
+
+/// When every provider in the chain errors, the last error should surface
+/// rather than masking the failure as a missing secret.
+#[test]
+fn test_validate_surfaces_error_when_all_providers_fail() {
+    let temp_dir = TempDir::new().unwrap();
+    let broken_a = temp_dir.path().join("broken-a");
+    let broken_b = temp_dir.path().join("broken-b");
+    fs::create_dir(&broken_a).unwrap();
+    fs::create_dir(&broken_b).unwrap();
+
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "API_KEY".to_string(),
+        Secret {
+            description: Some("API Key".to_string()),
+            required: Some(true),
+            default: None,
+            providers: Some(vec!["a".to_string(), "b".to_string()]),
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets,
+        },
+    );
+
+    let config = Config {
+        project: Project {
+            name: "test_all_fail".to_string(),
+            ..Default::default()
+        },
+        profiles,
+        providers: None,
+        scopes: None,
+    };
+
+    let providers_map = aliases_map(&[
+        ("a", &format!("dotenv://{}", broken_a.display())),
+        ("b", &format!("dotenv://{}", broken_b.display())),
+    ]);
+
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("keyring".to_string()),
+            profile: None,
+            providers: Some(providers_map),
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config, Some(global_config), None, None);
+
+    let result = spec.validate();
+    assert!(
+        result.is_err(),
+        "Expected error when every provider in the chain fails"
+    );
+}
+
+#[test]
+fn test_validate_with_per_secret_providers() {
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env");
+    let keyring_file = temp_dir.path().join(".env.keyring");
+
+    // Env provider has API_KEY
+    fs::write(&env_file, "API_KEY=from-env\n").unwrap();
+
+    // Keyring provider has DATABASE_URL
+    fs::write(&keyring_file, "DATABASE_URL=from-keyring\n").unwrap();
+
+    let mut secrets = HashMap::new();
+
+    // API_KEY from env provider
+    secrets.insert(
+        "API_KEY".to_string(),
+        Secret {
+            description: Some("API Key".to_string()),
+            required: Some(true),
+            default: None,
+            providers: Some(vec!["env_provider".to_string()]),
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    // DATABASE_URL from keyring provider
+    secrets.insert(
+        "DATABASE_URL".to_string(),
+        Secret {
+            description: Some("Database URL".to_string()),
+            required: Some(true),
+            default: None,
+            providers: Some(vec!["keyring_provider".to_string()]),
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    // Optional secret without specific provider (uses default)
+    secrets.insert(
+        "OPTIONAL_CONFIG".to_string(),
+        Secret {
+            description: Some("Optional configuration".to_string()),
+            required: Some(false),
+            default: Some("default-config".to_string()),
+            providers: None,
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets,
+        },
+    );
+
+    let config = Config {
+        project: Project {
+            name: "test_multi_provider".to_string(),
+            ..Default::default()
+        },
+        profiles,
+        providers: None,
+        scopes: None,
+    };
+
+    let providers_map = aliases_map(&[
+        ("env_provider", &format!("dotenv://{}", env_file.display())),
+        (
+            "keyring_provider",
+            &format!("dotenv://{}", keyring_file.display()),
+        ),
+    ]);
+
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("env".to_string()),
+            profile: None,
+            providers: Some(providers_map),
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config, Some(global_config), None, None);
+
+    match spec.validate().unwrap() {
+        Ok(valid) => {
+            // All secrets should be resolved
+            assert_eq!(valid.resolved.secrets.len(), 3);
+
+            // Verify each secret came from correct provider
+            assert_eq!(
+                valid
+                    .resolved
+                    .secrets
+                    .get("API_KEY")
+                    .unwrap()
+                    .expose_secret(),
+                "from-env"
+            );
+            assert_eq!(
+                valid
+                    .resolved
+                    .secrets
+                    .get("DATABASE_URL")
+                    .unwrap()
+                    .expose_secret(),
+                "from-keyring"
+            );
+            assert_eq!(
+                valid
+                    .resolved
+                    .secrets
+                    .get("OPTIONAL_CONFIG")
+                    .unwrap()
+                    .expose_secret(),
+                "default-config"
+            );
+
+            // No missing required secrets
+            assert!(valid.missing_optional.is_empty());
+        }
+        Err(e) => panic!("Validation should succeed: {:?}", e),
+    }
+}
+
+#[test]
+fn test_secret_config_merges_providers_from_default() {
+    let mut default_secrets = HashMap::new();
+    default_secrets.insert(
+        "API_KEY".to_string(),
+        Secret {
+            description: Some("API Key from default".to_string()),
+            required: Some(true),
+            default: None,
+            providers: Some(vec!["shared".to_string()]),
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    let mut current_secrets = HashMap::new();
+    // Override API_KEY in current profile without specifying providers
+    // Should inherit from default profile
+    current_secrets.insert(
+        "API_KEY".to_string(),
+        Secret {
+            description: Some("API Key from current".to_string()),
+            required: Some(true),
+            default: None,
+            providers: None,
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    // Add new secret only in current profile
+    current_secrets.insert(
+        "DATABASE_URL".to_string(),
+        Secret {
+            description: Some("Database URL".to_string()),
+            required: Some(true),
+            default: None,
+            providers: Some(vec!["prod".to_string()]),
+            as_path: None,
+            ..Default::default()
+        },
+    );
+
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets: default_secrets,
+        },
+    );
+    profiles.insert(
+        "production".to_string(),
+        Profile {
+            defaults: None,
+            secrets: current_secrets,
+        },
+    );
+
+    let config = Config {
+        project: Project {
+            name: "test_merge".to_string(),
+            ..Default::default()
+        },
+        profiles,
+        providers: None,
+        scopes: None,
+    };
+
+    let spec = Secrets::new(config, None, None, None);
+
+    // When resolving API_KEY from production profile, should inherit providers from default
+    let api_key_config = spec
+        .resolve_secret_config("API_KEY", Some("production"))
+        .unwrap();
+    assert_eq!(
+        api_key_config.providers,
+        Some(vec!["shared".to_string()]),
+        "API_KEY should inherit providers from default profile"
+    );
+
+    // Database URL should have its own providers
+    let db_config = spec
+        .resolve_secret_config("DATABASE_URL", Some("production"))
+        .unwrap();
+    assert_eq!(
+        db_config.providers,
+        Some(vec!["prod".to_string()]),
+        "DATABASE_URL should use its own providers"
+    );
+}
+
+#[test]
+fn test_profile_defaults_from_toml() {
+    let temp_dir = TempDir::new().unwrap();
+    let config_file = temp_dir.path().join("secretspec.toml");
+
+    let toml_content = r#"[project]
+name = "test"
+revision = "1.0"
+
+[profiles.production.defaults]
+providers = ["prod_vault", "keyring"]
+
+[profiles.production]
+DATABASE_URL = { description = "Production DB" }
+API_KEY = { description = "API key" }
+SECRET_KEY = { description = "Secret key", providers = ["env"] }
+
+[profiles.development.defaults]
+required = false
+default = "dev-default"
+
+[profiles.development]
+DATABASE_URL = { description = "Dev DB" }
+API_KEY = { description = "Dev API key" }
+SPECIAL_SECRET = { description = "Special secret", required = true }
+"#;
+
+    fs::write(&config_file, toml_content).unwrap();
+
+    let config = Config::try_from(config_file.as_path()).unwrap();
+    let spec = Secrets::new(config, None, None, None);
+
+    // Test production profile provider defaults
+    let db_prod = spec
+        .resolve_secret_config("DATABASE_URL", Some("production"))
+        .unwrap();
+    assert_eq!(
+        db_prod.providers,
+        Some(vec!["prod_vault".to_string(), "keyring".to_string()]),
+        "DATABASE_URL should inherit production profile defaults"
+    );
+
+    let api_prod = spec
+        .resolve_secret_config("API_KEY", Some("production"))
+        .unwrap();
+    assert_eq!(
+        api_prod.providers,
+        Some(vec!["prod_vault".to_string(), "keyring".to_string()]),
+        "API_KEY should inherit production profile defaults"
+    );
+
+    let secret_prod = spec
+        .resolve_secret_config("SECRET_KEY", Some("production"))
+        .unwrap();
+    assert_eq!(
+        secret_prod.providers,
+        Some(vec!["env".to_string()]),
+        "SECRET_KEY should override with its own providers"
+    );
+
+    // Test development profile required and default values
+    let db_dev = spec
+        .resolve_secret_config("DATABASE_URL", Some("development"))
+        .unwrap();
+    assert_eq!(
+        db_dev.required,
+        Some(false),
+        "DATABASE_URL should inherit required=false from dev defaults"
+    );
+    assert_eq!(
+        db_dev.default,
+        Some("dev-default".to_string()),
+        "DATABASE_URL should inherit default value from dev defaults"
+    );
+
+    let api_dev = spec
+        .resolve_secret_config("API_KEY", Some("development"))
+        .unwrap();
+    assert_eq!(api_dev.required, Some(false));
+    assert_eq!(api_dev.default, Some("dev-default".to_string()));
+
+    let special_dev = spec
+        .resolve_secret_config("SPECIAL_SECRET", Some("development"))
+        .unwrap();
+    assert_eq!(
+        special_dev.required,
+        Some(true),
+        "SPECIAL_SECRET should override required setting"
+    );
+    assert_eq!(
+        special_dev.default,
+        Some("dev-default".to_string()),
+        "SPECIAL_SECRET should still inherit default value"
+    );
+}
+
+#[test]
+fn test_cli_provider_alias_operations() {
+    let temp_dir = TempDir::new().unwrap();
+    let config_dir = temp_dir.path().join(".config");
+    fs::create_dir(&config_dir).unwrap();
+
+    // Create a temporary config file
+    let config_path = config_dir.join("secretspec_config.toml");
+
+    // Write initial config
+    let initial_config = r#"
+[defaults]
+provider = "keyring"
+
+[providers]
+"#;
+    fs::write(&config_path, initial_config).unwrap();
+
+    // Parse the config
+    let mut config: GlobalConfig = toml::from_str(initial_config).unwrap();
+
+    // Simulate adding a provider alias
+    if config.defaults.providers.is_none() {
+        config.defaults.providers = Some(HashMap::new());
+    }
+    if let Some(providers) = &mut config.defaults.providers {
+        providers.insert(
+            "shared".to_string(),
+            ProviderAlias::from("onepassword://Shared"),
+        );
+        providers.insert(
+            "prod".to_string(),
+            ProviderAlias::from("onepassword://Production"),
+        );
+    }
+
+    // Verify providers were added
+    assert_eq!(config.defaults.providers.as_ref().unwrap().len(), 2);
+    assert_eq!(
+        config.defaults.providers.as_ref().unwrap().get("shared"),
+        Some(&ProviderAlias::from("onepassword://Shared"))
+    );
+
+    // Simulate removing a provider alias
+    if let Some(providers) = &mut config.defaults.providers {
+        providers.remove("prod");
+    }
+    assert_eq!(config.defaults.providers.as_ref().unwrap().len(), 1);
+
+    // Simulate listing provider aliases
+    let aliases: Vec<_> = config
+        .defaults
+        .providers
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    assert_eq!(aliases.len(), 1);
+    assert_eq!(aliases[0].0, "shared");
+}
+
+#[test]
+fn test_as_path_secrets() {
+    use secrecy::ExposeSecret;
+    use std::fs;
+
+    let temp_dir = TempDir::new().unwrap();
+    let secret_value = "my-secret-certificate-content";
+
+    // Create a dotenv file with a secret
+    let env_file = temp_dir.path().join(".env");
+    fs::write(&env_file, format!("CERT_DATA={}", secret_value)).unwrap();
+    fs::write(
+        &env_file,
+        format!("CERT_DATA={}\nREGULAR_SECRET=not-a-path", secret_value),
+    )
+    .unwrap();
+
+    // Create config with as_path secret
+    let config_file = temp_dir.path().join("secretspec.toml");
+    let toml_content = r#"[project]
+name = "test-as-path"
+revision = "1.0"
+
+[profiles.default]
+CERT_DATA = { description = "Certificate data", as_path = true }
+REGULAR_SECRET = { description = "Regular secret", as_path = false }
+"#;
+    fs::write(&config_file, toml_content).unwrap();
+
+    // Load and validate
+    let config = Config::try_from(config_file.as_path()).unwrap();
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", env_file.display())),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config, Some(global_config), None, None);
+    let validated = spec.validate().unwrap().unwrap();
+
+    // Check that CERT_DATA contains a path
+    let cert_path_str = validated
+        .resolved
+        .secrets
+        .get("CERT_DATA")
+        .unwrap()
+        .expose_secret();
+    let cert_path = std::path::PathBuf::from(cert_path_str);
+
+    // Verify the temp file exists and contains the secret
+    assert!(cert_path.exists(), "Temporary file should exist");
+    let file_content = fs::read_to_string(&cert_path).unwrap();
+    assert_eq!(
+        file_content, secret_value,
+        "Temporary file should contain the secret value"
+    );
+
+    // Check that REGULAR_SECRET contains the actual value (not a path)
+    let regular_secret = validated
+        .resolved
+        .secrets
+        .get("REGULAR_SECRET")
+        .unwrap()
+        .expose_secret();
+    assert_eq!(regular_secret, "not-a-path");
+
+    // Check that temp_files vector is not empty
+    assert!(
+        !validated.temp_files.is_empty(),
+        "temp_files should contain the temporary file"
+    );
+
+    // Drop validated to trigger cleanup
+    drop(validated);
+
+    // Verify the temp file is cleaned up
+    assert!(
+        !cert_path.exists(),
+        "Temporary file should be cleaned up after drop"
+    );
+}
+
+#[test]
+fn test_as_path_secrets_keep_temp_files() {
+    use secrecy::ExposeSecret;
+    use std::fs;
+
+    let temp_dir = TempDir::new().unwrap();
+    let secret_value = "certificate-data-to-keep";
+
+    // Create a dotenv file with a secret
+    let env_file = temp_dir.path().join(".env");
+    fs::write(&env_file, format!("CERT_DATA={}", secret_value)).unwrap();
+
+    // Create config with as_path secret
+    let config_file = temp_dir.path().join("secretspec.toml");
+    let toml_content = r#"[project]
+name = "test-keep-files"
+revision = "1.0"
+
+[profiles.default]
+CERT_DATA = { description = "Certificate data", as_path = true }
+"#;
+    fs::write(&config_file, toml_content).unwrap();
+
+    // Load and validate
+    let config = Config::try_from(config_file.as_path()).unwrap();
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", env_file.display())),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config, Some(global_config), None, None);
+    let mut validated = spec.validate().unwrap().unwrap();
+
+    // Get the cert path before keeping files
+    let cert_path_str = validated
+        .resolved
+        .secrets
+        .get("CERT_DATA")
+        .unwrap()
+        .expose_secret();
+    let cert_path = std::path::PathBuf::from(cert_path_str);
+
+    // Verify the temp file exists
+    assert!(cert_path.exists(), "Temporary file should exist");
+
+    // Keep the temp files (persist them)
+    let kept_paths = validated.keep_temp_files().unwrap();
+    assert_eq!(kept_paths.len(), 1, "Should have kept one temp file");
+
+    // Drop validated
+    drop(validated);
+
+    // Verify the temp file still exists after drop (because we kept it)
+    assert!(
+        cert_path.exists(),
+        "Temporary file should still exist after keep_temp_files()"
+    );
+
+    // Verify the content
+    let file_content = fs::read_to_string(&cert_path).unwrap();
+    assert_eq!(file_content, secret_value);
+
+    // Clean up manually
+    fs::remove_file(&cert_path).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn test_run_cleans_up_as_path_temp_files() {
+    use std::fs;
+
+    let temp_dir = TempDir::new().unwrap();
+    let secret_value = "secret-cert-content";
+
+    let env_file = temp_dir.path().join(".env");
+    fs::write(&env_file, format!("CERT_DATA={}", secret_value)).unwrap();
+
+    let config_file = temp_dir.path().join("secretspec.toml");
+    fs::write(
+        &config_file,
+        r#"[project]
+name = "test-run-cleanup"
+revision = "1.0"
+
+[profiles.default]
+CERT_DATA = { description = "Certificate data", as_path = true }
+"#,
+    )
+    .unwrap();
+
+    let config = Config::try_from(config_file.as_path()).unwrap();
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", env_file.display())),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+    let spec = Secrets::new(config, Some(global_config), None, None);
+
+    // Have the child write the path it received back to disk so the parent
+    // can inspect it after run_command returns.
+    let captured_path_file = temp_dir.path().join("captured-path");
+    let exit_code = spec
+        .run_command(vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            format!(
+                "printf '%s' \"$CERT_DATA\" > {}",
+                captured_path_file.display()
+            ),
+        ])
+        .unwrap();
+    assert_eq!(exit_code, 0);
+
+    let captured_path = fs::read_to_string(&captured_path_file).unwrap();
+    assert!(
+        !captured_path.is_empty(),
+        "child should have observed the temp file path via $CERT_DATA"
+    );
+    assert!(
+        !std::path::Path::new(&captured_path).exists(),
+        "as_path temp file at {} should be removed once `run` returns",
+        captured_path
+    );
+}
+
+// ========== Secret generation tests ==========
+
+#[test]
+fn test_config_parse_generate_bool() {
+    let toml_content = r#"
+[project]
+name = "test-gen"
+revision = "1.0"
+
+[profiles.default]
+DB_PASSWORD = { description = "Database password", type = "password", generate = true }
+"#;
+    let config = parse_spec_from_str(toml_content, None).unwrap();
+    let profile = config.profiles.get("default").unwrap();
+    let secret = profile.secrets.get("DB_PASSWORD").unwrap();
+    assert_eq!(secret.secret_type.as_deref(), Some("password"));
+    assert!(matches!(
+        secret.generate,
+        Some(crate::config::GenerateConfig::Bool(true))
+    ));
+}
+
+#[test]
+fn test_config_parse_generate_options() {
+    let toml_content = r#"
+[project]
+name = "test-gen"
+revision = "1.0"
+
+[profiles.default]
+API_TOKEN = { description = "API token", type = "hex", generate = { bytes = 32 } }
+"#;
+    let config = parse_spec_from_str(toml_content, None).unwrap();
+    let profile = config.profiles.get("default").unwrap();
+    let secret = profile.secrets.get("API_TOKEN").unwrap();
+    assert_eq!(secret.secret_type.as_deref(), Some("hex"));
+    match &secret.generate {
+        Some(crate::config::GenerateConfig::Options(opts)) => {
+            assert_eq!(opts.bytes, Some(32));
+        }
+        other => panic!("Expected Options, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_config_parse_generate_command() {
+    let toml_content = r#"
+[project]
+name = "test-gen"
+revision = "1.0"
+
+[profiles.default]
+MONGO_KEY = { description = "MongoDB keyfile", type = "command", generate = { command = "echo test" } }
+"#;
+    let config = parse_spec_from_str(toml_content, None).unwrap();
+    let profile = config.profiles.get("default").unwrap();
+    let secret = profile.secrets.get("MONGO_KEY").unwrap();
+    assert_eq!(secret.secret_type.as_deref(), Some("command"));
+    match &secret.generate {
+        Some(crate::config::GenerateConfig::Options(opts)) => {
+            assert_eq!(opts.command.as_deref(), Some("echo test"));
+        }
+        other => panic!("Expected Options, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_config_type_without_generate_is_valid() {
+    let toml_content = r#"
+[project]
+name = "test-gen"
+revision = "1.0"
+
+[profiles.default]
+STATIC_SECRET = { description = "Manually managed", type = "password" }
+"#;
+    let config = parse_spec_from_str(toml_content, None).unwrap();
+    let profile = config.profiles.get("default").unwrap();
+    let secret = profile.secrets.get("STATIC_SECRET").unwrap();
+    assert_eq!(secret.secret_type.as_deref(), Some("password"));
+    assert!(secret.generate.is_none());
+}
+
+#[test]
+fn test_config_generate_without_type_is_error() {
+    let toml_content = r#"
+[project]
+name = "test-gen"
+revision = "1.0"
+
+[profiles.default]
+BAD_SECRET = { description = "Missing type", generate = true }
+"#;
+    let result = parse_spec_from_str(toml_content, None);
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("requires 'type'"),
+        "Expected error about missing type, got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn test_config_generate_false_without_type_is_valid() {
+    let toml_content = r#"
+[project]
+name = "test-gen"
+revision = "1.0"
+
+[profiles.default]
+MANUAL_SECRET = { description = "No gen", generate = false }
+"#;
+    let config = parse_spec_from_str(toml_content, None).unwrap();
+    let profile = config.profiles.get("default").unwrap();
+    let secret = profile.secrets.get("MANUAL_SECRET").unwrap();
+    assert!(matches!(
+        secret.generate,
+        Some(crate::config::GenerateConfig::Bool(false))
+    ));
+}
+
+#[test]
+fn test_config_generate_and_default_is_error() {
+    let toml_content = r#"
+[project]
+name = "test-gen"
+revision = "1.0"
+
+[profiles.default]
+CONFLICT = { description = "Both", type = "password", generate = true, default = "foo" }
+"#;
+    let result = parse_spec_from_str(toml_content, None);
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("cannot both be set"),
+        "Expected conflict error, got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn test_config_command_type_generate_bool_is_error() {
+    let toml_content = r#"
+[project]
+name = "test-gen"
+revision = "1.0"
+
+[profiles.default]
+CMD_SECRET = { description = "Cmd", type = "command", generate = true }
+"#;
+    let result = parse_spec_from_str(toml_content, None);
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("command"),
+        "Expected command requirement error, got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn test_config_unknown_type_is_error() {
+    let toml_content = r#"
+[project]
+name = "test-gen"
+revision = "1.0"
+
+[profiles.default]
+BAD_TYPE = { description = "Unknown type", type = "rsa_key", generate = true }
+"#;
+    let result = parse_spec_from_str(toml_content, None);
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("unknown secret type"),
+        "Expected unknown type error, got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn test_validate_generates_missing_secret() {
+    use secrecy::ExposeSecret;
+
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env");
+    fs::write(&env_file, "").unwrap();
+
+    let config_file = temp_dir.path().join("secretspec.toml");
+    let toml_content = r#"[project]
+name = "test-gen-validate"
+revision = "1.0"
+
+[profiles.default]
+DB_PASSWORD = { description = "Database password", type = "password", generate = true }
+"#;
+    fs::write(&config_file, toml_content).unwrap();
+
+    let config = Config::try_from(config_file.as_path()).unwrap();
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", env_file.display())),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config, Some(global_config), None, None);
+    let result = spec.validate().unwrap();
+    let validated = result.unwrap();
+
+    // The secret should have been generated
+    let value = validated.resolved.secrets.get("DB_PASSWORD").unwrap();
+    let s = value.expose_secret();
+    assert_eq!(s.len(), 32, "Default password length should be 32");
+    assert!(
+        s.chars().all(|c| c.is_alphanumeric()),
+        "Default password should be alphanumeric"
+    );
+}
+
+#[test]
+fn test_generate_writes_through_ref_coordinates() {
+    use secrecy::ExposeSecret;
+
+    // A generatable secret that also carries a `ref`: generation mints the value
+    // and writes it to the ref coordinate (the dotenv key `MY_DB_SECRET`), not to
+    // SecretSpec's `{project}/{profile}/{key}` convention path.
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env");
+    fs::write(&env_file, "").unwrap();
+
+    let config_file = temp_dir.path().join("secretspec.toml");
+    let toml_content = r#"[project]
+name = "test-gen-ref"
+revision = "1.0"
+
+[profiles.default]
+DB_PASSWORD = { description = "Database password", type = "password", generate = true, ref = { item = "MY_DB_SECRET" } }
+"#;
+    fs::write(&config_file, toml_content).unwrap();
+
+    let config = Config::try_from(config_file.as_path()).unwrap();
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", env_file.display())),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config, Some(global_config), None, None);
+    let validated = spec.validate().unwrap().unwrap();
+
+    let generated = validated
+        .resolved
+        .secrets
+        .get("DB_PASSWORD")
+        .unwrap()
+        .expose_secret()
+        .to_string();
+    assert_eq!(generated.len(), 32);
+
+    // The generated value landed at the ref key, not the convention path.
+    let env_contents = fs::read_to_string(&env_file).unwrap();
+    assert!(
+        env_contents.contains("MY_DB_SECRET="),
+        "generated value should be stored under the ref key, got: {}",
+        env_contents
+    );
+    assert!(
+        env_contents.contains(&generated),
+        "the .env file should hold the generated value, got: {}",
+        env_contents
+    );
+}
+
+#[test]
+fn test_validate_does_not_regenerate_existing_secret() {
+    use secrecy::ExposeSecret;
+
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env");
+    fs::write(&env_file, "DB_PASSWORD=existing_value").unwrap();
+
+    let config_file = temp_dir.path().join("secretspec.toml");
+    let toml_content = r#"[project]
+name = "test-gen-existing"
+revision = "1.0"
+
+[profiles.default]
+DB_PASSWORD = { description = "Database password", type = "password", generate = true }
+"#;
+    fs::write(&config_file, toml_content).unwrap();
+
+    let config = Config::try_from(config_file.as_path()).unwrap();
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", env_file.display())),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config, Some(global_config), None, None);
+    let result = spec.validate().unwrap();
+    let validated = result.unwrap();
+
+    let value = validated
+        .resolved
+        .secrets
+        .get("DB_PASSWORD")
+        .unwrap()
+        .expose_secret();
+    assert_eq!(
+        value, "existing_value",
+        "Existing secret should not be regenerated"
+    );
+}
+
+#[test]
+fn test_validate_idempotent_generation() {
+    use secrecy::ExposeSecret;
+
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env");
+    fs::write(&env_file, "").unwrap();
+
+    let config_file = temp_dir.path().join("secretspec.toml");
+    let toml_content = r#"[project]
+name = "test-gen-idempotent"
+revision = "1.0"
+
+[profiles.default]
+DB_PASSWORD = { description = "Database password", type = "password", generate = true }
+"#;
+    fs::write(&config_file, toml_content).unwrap();
+
+    let config = Config::try_from(config_file.as_path()).unwrap();
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", env_file.display())),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config.clone(), Some(global_config.clone()), None, None);
+
+    // First validate generates the secret
+    let result1 = spec.validate().unwrap().unwrap();
+    let v1 = result1
+        .resolved
+        .secrets
+        .get("DB_PASSWORD")
+        .unwrap()
+        .expose_secret()
+        .to_string();
+
+    // Second validate should find the previously generated secret
+    let spec2 = Secrets::new(config, Some(global_config), None, None);
+    let result2 = spec2.validate().unwrap().unwrap();
+    let v2 = result2
+        .resolved
+        .secrets
+        .get("DB_PASSWORD")
+        .unwrap()
+        .expose_secret()
+        .to_string();
+
+    assert_eq!(v1, v2, "Second validate should return same generated value");
+}
+
+#[test]
+fn test_validate_multiple_generate_types() {
+    use secrecy::ExposeSecret;
+
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env");
+    fs::write(&env_file, "").unwrap();
+
+    let config_file = temp_dir.path().join("secretspec.toml");
+    let toml_content = r#"[project]
+name = "test-gen-multi"
+revision = "1.0"
+
+[profiles.default]
+DB_PASSWORD = { description = "Password", type = "password", generate = true }
+API_TOKEN = { description = "Token", type = "hex", generate = { bytes = 16 } }
+SESSION_KEY = { description = "Session", type = "base64", generate = { bytes = 24 } }
+REQUEST_ID = { description = "ID", type = "uuid", generate = true }
+"#;
+    fs::write(&config_file, toml_content).unwrap();
+
+    let config = Config::try_from(config_file.as_path()).unwrap();
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", env_file.display())),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config, Some(global_config), None, None);
+    let validated = spec.validate().unwrap().unwrap();
+
+    // All secrets should be present
+    assert!(validated.resolved.secrets.contains_key("DB_PASSWORD"));
+    assert!(validated.resolved.secrets.contains_key("API_TOKEN"));
+    assert!(validated.resolved.secrets.contains_key("SESSION_KEY"));
+    assert!(validated.resolved.secrets.contains_key("REQUEST_ID"));
+
+    // Verify types
+    let pw = validated
+        .resolved
+        .secrets
+        .get("DB_PASSWORD")
+        .unwrap()
+        .expose_secret();
+    assert_eq!(pw.len(), 32);
+
+    let hex = validated
+        .resolved
+        .secrets
+        .get("API_TOKEN")
+        .unwrap()
+        .expose_secret();
+    assert_eq!(hex.len(), 32); // 16 bytes = 32 hex chars
+
+    let uuid = validated
+        .resolved
+        .secrets
+        .get("REQUEST_ID")
+        .unwrap()
+        .expose_secret();
+    assert_eq!(uuid.len(), 36);
+    assert!(uuid.contains('-'));
+}
+
+#[test]
+fn test_validate_generate_with_profile() {
+    use secrecy::ExposeSecret;
+
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env");
+    fs::write(&env_file, "").unwrap();
+
+    let config_file = temp_dir.path().join("secretspec.toml");
+    let toml_content = r#"[project]
+name = "test-gen-profile"
+revision = "1.0"
+
+[profiles.default]
+SHARED_KEY = { description = "Shared", type = "password", generate = true }
+
+[profiles.production]
+PROD_KEY = { description = "Production key", type = "hex", generate = { bytes = 32 } }
+"#;
+    fs::write(&config_file, toml_content).unwrap();
+
+    let config = Config::try_from(config_file.as_path()).unwrap();
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", env_file.display())),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(
+        config,
+        Some(global_config),
+        None,
+        Some("production".to_string()),
+    );
+    let validated = spec.validate().unwrap().unwrap();
+
+    // Both secrets should be generated
+    assert!(validated.resolved.secrets.contains_key("SHARED_KEY"));
+    assert!(validated.resolved.secrets.contains_key("PROD_KEY"));
+
+    let hex = validated
+        .resolved
+        .secrets
+        .get("PROD_KEY")
+        .unwrap()
+        .expose_secret();
+    assert_eq!(hex.len(), 64); // 32 bytes = 64 hex chars
+}
+
+#[test]
+fn test_resolve_secret_config_merges_type_and_generate() {
+    let mut profiles = HashMap::new();
+    let mut default_secrets = HashMap::new();
+    default_secrets.insert(
+        "DB_PASSWORD".to_string(),
+        Secret {
+            description: Some("Database password".to_string()),
+            required: None,
+            at_least_one: None,
+            exactly_one: None,
+            default: None,
+            composed: None,
+            providers: None,
+            reference: None,
+            as_path: None,
+            secret_type: Some("password".to_string()),
+            generate: Some(crate::config::GenerateConfig::Bool(true)),
+        },
+    );
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets: default_secrets,
+        },
+    );
+
+    let mut prod_secrets = HashMap::new();
+    prod_secrets.insert(
+        "DB_PASSWORD".to_string(),
+        Secret {
+            description: Some("Prod DB password".to_string()),
+            required: Some(true),
+            default: None,
+            providers: None,
+            as_path: None,
+            ..Default::default()
+        },
+    );
+    profiles.insert(
+        "production".to_string(),
+        Profile {
+            defaults: None,
+            secrets: prod_secrets,
+        },
+    );
+
+    let config = Config {
+        project: Project {
+            name: "test".to_string(),
+            ..Default::default()
+        },
+        profiles,
+        providers: None,
+        scopes: None,
+    };
+
+    let spec = Secrets::new(config, None, Some("production".to_string()), None);
+    let resolved = spec
+        .resolve_secret_config("DB_PASSWORD", Some("production"))
+        .unwrap();
+
+    // type and generate should be inherited from default
+    assert_eq!(resolved.secret_type.as_deref(), Some("password"));
+    assert!(resolved.generate.is_some());
+    // description should come from production
+    assert_eq!(resolved.description.as_deref(), Some("Prod DB password"));
+}
+
+/// Builds a project + global config matching the scenario in
+/// https://github.com/cachix/secretspec/issues/81: profile defaults declare a
+/// `providers = ["personal", "team"]` chain whose aliases resolve to dotenv files,
+/// and the secret has no per-secret `providers` override.
+fn build_chain_scenario(
+    temp_dir: &TempDir,
+) -> (Config, GlobalConfig, std::path::PathBuf, std::path::PathBuf) {
+    let personal_path = temp_dir.path().join(".env.personal");
+    let team_path = temp_dir.path().join(".env.team");
+    fs::write(&personal_path, "").unwrap();
+    fs::write(&team_path, "").unwrap();
+
+    let config = Config {
+        project: Project {
+            name: "test_project".to_string(),
+            ..Default::default()
+        },
+        profiles: {
+            let mut profiles = HashMap::new();
+            let mut secrets = HashMap::new();
+            secrets.insert(
+                "MY_SECRET".to_string(),
+                Secret {
+                    description: Some("test secret".to_string()),
+                    required: Some(true),
+                    ..Default::default()
+                },
+            );
+            profiles.insert(
+                "development".to_string(),
+                Profile {
+                    defaults: Some(crate::config::ProfileDefaults {
+                        required: None,
+                        default: None,
+                        providers: Some(vec!["personal".to_string(), "team".to_string()]),
+                    }),
+                    secrets,
+                },
+            );
+            profiles
+        },
+        providers: None,
+        scopes: None,
+    };
+
+    let providers_map = aliases_map(&[
+        ("personal", &format!("dotenv://{}", personal_path.display())),
+        ("team", &format!("dotenv://{}", team_path.display())),
+    ]);
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("keyring".to_string()),
+            profile: Some("development".to_string()),
+            providers: Some(providers_map),
+        },
+        audit: None,
+    };
+
+    (config, global_config, personal_path, team_path)
+}
+
+fn read_env_var(path: &std::path::Path, key: &str) -> Option<String> {
+    dotenvy::from_path_iter(path)
+        .ok()?
+        .filter_map(|res| res.ok())
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v)
+}
+
+/// Builds a `Secrets` whose single required `MY_SECRET` declares the given
+/// per-secret `providers` chain (unlike [`build_chain_scenario`], whose chain
+/// lives in profile defaults). Each `files` entry (alias, initial contents)
+/// becomes a dotenv file in `temp_dir` with a same-named global alias,
+/// returned in order; chain entries without a backing file (e.g. `"ghost"`)
+/// stay undefined. The global default provider is keyring, so a chain bug
+/// cannot fall back to a dotenv store that happens to answer.
+fn chain_walk_spec(
+    temp_dir: &TempDir,
+    files: &[(&str, &str)],
+    chain: &[&str],
+) -> (Secrets, Vec<std::path::PathBuf>) {
+    let mut paths = Vec::new();
+    let mut aliases = Vec::new();
+    for (alias, contents) in files {
+        let path = temp_dir.path().join(format!(".env.{alias}"));
+        fs::write(&path, contents).unwrap();
+        aliases.push((alias.to_string(), format!("dotenv://{}", path.display())));
+        paths.push(path);
+    }
+
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "MY_SECRET".to_string(),
+        Secret {
+            description: Some("test secret".to_string()),
+            required: Some(true),
+            providers: Some(chain.iter().map(|s| s.to_string()).collect()),
+            ..Default::default()
+        },
+    );
+
+    let alias_refs: Vec<(&str, &str)> = aliases
+        .iter()
+        .map(|(alias, uri)| (alias.as_str(), uri.as_str()))
+        .collect();
+    let mut global_config = global_config_with_aliases(&alias_refs);
+    global_config.defaults.provider = Some("keyring".to_string());
+
+    let spec = Secrets::new(
+        resolve_test_config(secrets),
+        Some(global_config),
+        None,
+        None,
+    );
+    (spec, paths)
+}
+
+/// Runs a full batch resolution and returns the resolved value of `MY_SECRET`,
+/// panicking if validation errors or a required secret is missing.
+fn resolved_my_secret(spec: &Secrets) -> Option<String> {
+    spec.validate()
+        .expect("validation should not error")
+        .expect("required secret should resolve")
+        .resolved
+        .secrets
+        .get("MY_SECRET")
+        .map(|s| s.expose_secret().to_string())
+}
+
+/// Regression test for issue #81: `set --provider <alias>` must override the
+/// per-secret/profile providers chain, writing only to the chosen provider.
+#[test]
+fn test_set_provider_override_wins_over_chain() {
+    let temp_dir = TempDir::new().unwrap();
+    let (config, global_config, personal_path, team_path) = build_chain_scenario(&temp_dir);
+
+    // Builder-set provider mirrors `--provider team` from the CLI. Use the alias
+    // name; the override resolver must look it up in the global providers map.
+    let spec = Secrets::new(config, Some(global_config), Some("team".to_string()), None);
+    spec.set("MY_SECRET", Some("override_value".to_string()))
+        .expect("set should succeed");
+
+    assert_eq!(
+        read_env_var(&team_path, "MY_SECRET").as_deref(),
+        Some("override_value"),
+        "secret should be written to the overridden provider"
+    );
+    assert!(
+        read_env_var(&personal_path, "MY_SECRET").is_none(),
+        "secret must not leak into the first-in-chain provider when overridden"
+    );
+}
+
+/// Without an override, `set` still writes to the first provider in the chain
+/// (the documented convention). This guards against the override fix accidentally
+/// shifting the no-flag default.
+#[test]
+fn test_set_without_override_uses_chain_first() {
+    let temp_dir = TempDir::new().unwrap();
+    let (config, global_config, personal_path, team_path) = build_chain_scenario(&temp_dir);
+
+    let spec = Secrets::new(config, Some(global_config), None, None);
+    spec.set("MY_SECRET", Some("chain_value".to_string()))
+        .expect("set should succeed");
+
+    assert_eq!(
+        read_env_var(&personal_path, "MY_SECRET").as_deref(),
+        Some("chain_value"),
+        "without override, set writes to the first alias in the chain"
+    );
+    assert!(
+        read_env_var(&team_path, "MY_SECRET").is_none(),
+        "team provider must remain untouched"
+    );
+}
+
+/// A `providers` chain is tried in order, so an undefined alias *after* a
+/// provider that answers must not fail the operation — the broken link is never
+/// reached. Covers batch resolution (`check`/`run`), single reads (`get`), and
+/// writes (`set`, which uses only the primary).
+#[test]
+fn test_undefined_fallback_alias_is_ignored_when_the_primary_answers() {
+    let _env = scrub_resolution_env();
+    let temp_dir = TempDir::new().unwrap();
+    // The primary already holds the value, so the fallback is never reached;
+    // `ghost` is not defined anywhere.
+    let (spec, paths) = chain_walk_spec(
+        &temp_dir,
+        &[("personal", "MY_SECRET=already_here\n")],
+        &["personal", "ghost"],
+    );
+
+    // Batch resolution succeeds: the primary answers, so `ghost` is never
+    // resolved and its being undefined does not matter.
+    assert_eq!(resolved_my_secret(&spec).as_deref(), Some("already_here"));
+
+    // A single read walks the chain in order: the primary answers, so the
+    // undefined fallback is never resolved.
+    spec.get("MY_SECRET")
+        .expect("get reads the primary and ignores the undefined fallback");
+
+    // A write targets only the primary, so the undefined fallback is irrelevant.
+    spec.set("MY_SECRET", Some("updated".to_string()))
+        .expect("set writes to the primary and ignores the fallback");
+    assert_eq!(
+        read_env_var(&paths[0], "MY_SECRET").as_deref(),
+        Some("updated"),
+        "set must write through the primary"
+    );
+}
+
+/// Because each link is resolved only when reached, a defined provider that
+/// holds the value wins even when a *later* chain entry names an undefined
+/// alias: the primary misses, the second provider answers, and the broken third
+/// link is never resolved.
+#[test]
+fn test_a_live_fallback_before_an_undefined_alias_still_wins() {
+    let _env = scrub_resolution_env();
+    let temp_dir = TempDir::new().unwrap();
+    // Primary is empty (misses); the second provider holds the value; `ghost`
+    // is deliberately not defined.
+    let (spec, _paths) = chain_walk_spec(
+        &temp_dir,
+        &[("personal", ""), ("team", "MY_SECRET=from_team\n")],
+        &["personal", "team", "ghost"],
+    );
+
+    assert_eq!(
+        resolved_my_secret(&spec).as_deref(),
+        Some("from_team"),
+        "the live fallback must answer before the undefined link is reached",
+    );
+}
+
+/// An undefined alias in the *middle* of the chain is one broken link, not a
+/// reason to abandon the walk: the primary misses, the broken second link is
+/// skipped with a warning, and the third provider still answers. Both batch
+/// resolution and a single `get` walk the chain the same way.
+#[test]
+fn test_an_undefined_alias_mid_chain_does_not_block_a_later_provider() {
+    let _env = scrub_resolution_env();
+    let temp_dir = TempDir::new().unwrap();
+    // Primary is empty (misses); `ghost` is deliberately not defined; the
+    // provider after the broken link holds the value.
+    let (spec, _paths) = chain_walk_spec(
+        &temp_dir,
+        &[("personal", ""), ("team", "MY_SECRET=from_team\n")],
+        &["personal", "ghost", "team"],
+    );
+
+    assert_eq!(
+        resolved_my_secret(&spec).as_deref(),
+        Some("from_team"),
+        "a broken link must be skipped, not abort the chain",
+    );
+
+    spec.get("MY_SECRET")
+        .expect("get walks past the broken link to the provider that answers");
+}
+
+/// A chain entry that misspells `onepassword` as `1password` gets the same
+/// corrective message `--provider 1password` gets, not a generic
+/// "alias not defined" error.
+#[test]
+fn test_chain_entry_1password_gets_the_onepassword_hint() {
+    let _env = scrub_resolution_env();
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "API_KEY".to_string(),
+        Secret {
+            description: Some("test secret".to_string()),
+            required: Some(true),
+            providers: Some(vec!["1password".to_string()]),
+            ..Default::default()
+        },
+    );
+    let spec = Secrets::new(resolve_test_config(secrets), None, None, None);
+
+    let err = match spec.validate() {
+        Ok(_) => panic!("the misspelled provider cannot be constructed"),
+        Err(e) => e,
+    };
+    assert!(
+        err.to_string().contains("onepassword"),
+        "the error must point at the correct spelling: {err}"
+    );
+}
+
+/// A `ref` routed at a single store whose coordinates that store cannot honor
+/// is rejected up front — before any fetch — since there is no fallback that
+/// could answer instead. dotenv keys have no sub-fields, so a `field` ref is
+/// unsupported there.
+#[test]
+fn test_single_store_ref_rejects_unsupported_coordinate_up_front() {
+    let _env = scrub_resolution_env();
+    let temp_dir = TempDir::new().unwrap();
+    let env_path = temp_dir.path().join(".env");
+    // Value present under a plain key: the failure is the coordinate, not a miss.
+    fs::write(&env_path, "db=secret\n").unwrap();
+
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "DB_PASSWORD".to_string(),
+        Secret {
+            description: Some("db password".to_string()),
+            required: Some(true),
+            reference: Some(crate::config::NativeAddress {
+                item: "db".to_string(),
+                field: Some("password".to_string()),
+                ..Default::default()
+            }),
+            providers: Some(vec![format!("dotenv://{}", env_path.display())]),
+            ..Default::default()
+        },
+    );
+    let spec = Secrets::new(resolve_test_config(secrets), None, None, None);
+
+    let err = match spec.validate() {
+        Ok(_) => panic!("an unsupported ref coordinate must be rejected"),
+        Err(e) => e,
+    };
+    match err {
+        SecretSpecError::ProviderOperationFailed(msg) => {
+            assert!(
+                msg.contains("field"),
+                "message should name the coordinate: {msg}"
+            );
+            assert!(
+                msg.contains("dotenv"),
+                "message should name the store: {msg}"
+            );
+        }
+        other => panic!("expected ProviderOperationFailed, got {other:?}"),
+    }
+}
+
+/// `get` with an explicit override must read only from that provider, never
+/// falling back through the chain.
+#[test]
+fn test_override_skips_read_chain() {
+    let temp_dir = TempDir::new().unwrap();
+    let (config, global_config, _, team_path) = build_chain_scenario(&temp_dir);
+
+    let spec = Secrets::new(config, Some(global_config), Some("team".to_string()), None);
+    let secret_config = spec.resolve_secret_config("MY_SECRET", None).unwrap();
+    let override_spec = spec.explicit_provider_spec(None);
+    let route = spec
+        .route_for(&secret_config, &override_spec)
+        .expect("override resolution should succeed");
+
+    // The read walks the raw override spec only (the alias is expanded at build
+    // time, where its `credentials` is still reachable); the resolved URI is
+    // carried for display.
+    assert_eq!(
+        route.specs(),
+        Some(vec!["team".to_string()]),
+        "override must collapse the chain to the single override spec"
+    );
+    assert_eq!(
+        route.primary(),
+        Some(format!("dotenv://{}", team_path.display()).as_str())
+    );
+}
+
+/// `get` must accept the same provider specs `--provider` accepts everywhere
+/// else: `scheme:path` shorthand (no `://`) is a valid override, not an
+/// undefined alias. Regression test: the plan-routed read used to feed the
+/// already-resolved override back through alias resolution and reject it.
+#[test]
+fn test_get_accepts_provider_shorthand_override() {
+    let _env = scrub_resolution_env();
+    let temp_dir = TempDir::new().unwrap();
+    let env_path = temp_dir.path().join(".env");
+    fs::write(&env_path, "MY_SECRET=hello\n").unwrap();
+
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "MY_SECRET".to_string(),
+        Secret {
+            description: Some("test secret".to_string()),
+            required: Some(true),
+            ..Default::default()
+        },
+    );
+    let mut spec = Secrets::new(resolve_test_config(secrets), None, None, None);
+    spec.set_provider(format!("dotenv:{}", env_path.display()));
+
+    spec.get("MY_SECRET")
+        .expect("get must honor a scheme:path shorthand override");
+}
+
+/// Provider spec resolution expands aliases and passes through anything that
+/// names a registered provider (bare name or `scheme:path` shorthand); only a
+/// token that names neither an alias nor a provider errors.
+#[test]
+fn test_resolve_one_provider_accepts_bare_names_and_shorthand() {
+    let spec = Secrets::new(resolve_test_config(HashMap::new()), None, None, None);
+
+    assert_eq!(spec.resolve_one_provider("keyring").unwrap(), "keyring");
+    assert_eq!(
+        spec.resolve_one_provider("dotenv:.env.production").unwrap(),
+        "dotenv:.env.production"
+    );
+    assert!(matches!(
+        spec.resolve_one_provider("ghost"),
+        Err(SecretSpecError::ProviderNotFound(_))
+    ));
+}
+
+/// Strip ANSI escape sequences so summary assertions don't depend on whether
+/// the `colored` crate decides to emit them (TTY detection differs between
+/// local runs and CI).
+fn strip_ansi(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
+            i += 2;
+            while i < bytes.len() && bytes[i] != b'm' {
+                i += 1;
+            }
+            if i < bytes.len() {
+                i += 1;
+            }
+        } else {
+            out.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Regression for https://github.com/cachix/secretspec/issues/72: when every
+/// optional secret is set, the summary line keeps its previous two-segment
+/// form so we don't churn output for the common case.
+#[test]
+fn test_format_summary_omits_optional_when_none_missing() {
+    let line = Secrets::format_summary(5, 0, 0);
+    assert_eq!(strip_ansi(&line), "Summary: 5 found, 0 missing");
+}
+
+/// Regression for https://github.com/cachix/secretspec/issues/72: missing
+/// optional secrets must surface in the summary as a third segment rather
+/// than being silently absorbed into "found".
+#[test]
+fn test_format_summary_appends_optional_when_some_missing() {
+    let line = Secrets::format_summary(4, 0, 1);
+    assert_eq!(strip_ansi(&line), "Summary: 4 found, 0 missing, 1 optional");
+
+    let mixed = Secrets::format_summary(2, 3, 4);
+    assert_eq!(
+        strip_ansi(&mixed),
+        "Summary: 2 found, 3 missing, 4 optional"
+    );
+}
+
+/// End-to-end check for https://github.com/cachix/secretspec/issues/72:
+/// an optional secret that has no value in the backing provider must land in
+/// `missing_optional` instead of being treated as found. The display layer
+/// relies on this — without it, `secretspec check` would still print a green
+/// checkmark for optional-but-unset secrets and undercount them in the
+/// summary, which was the original user-visible bug.
+#[test]
+fn test_validate_marks_unset_optional_secret_as_missing_optional() {
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env");
+    fs::write(&env_file, "REQUIRED_PRESENT=value\n").unwrap();
+
+    let config_file = temp_dir.path().join("secretspec.toml");
+    let toml_content = r#"[project]
+name = "issue72"
+revision = "1.0"
+
+[profiles.default]
+REQUIRED_PRESENT = { description = "required, present" }
+OPTIONAL_MISSING = { description = "optional, not set", required = false }
+"#;
+    fs::write(&config_file, toml_content).unwrap();
+
+    let config = Config::try_from(config_file.as_path()).unwrap();
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", env_file.display())),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+
+    let spec = Secrets::new(config, Some(global_config), None, None);
+    let validated = spec
+        .validate()
+        .unwrap()
+        .expect("no required secrets are missing, so validation should succeed");
+
+    assert!(
+        validated.resolved.secrets.contains_key("REQUIRED_PRESENT"),
+        "required secret should be resolved"
+    );
+    assert!(
+        !validated.resolved.secrets.contains_key("OPTIONAL_MISSING"),
+        "unset optional secret must not appear in resolved secrets"
+    );
+    assert_eq!(
+        validated.missing_optional,
+        vec!["OPTIONAL_MISSING".to_string()],
+        "unset optional secret must be reported in missing_optional"
+    );
+}
+
+pub(crate) fn aliases_map(aliases: &[(&str, &str)]) -> HashMap<String, ProviderAlias> {
+    aliases
+        .iter()
+        .map(|(k, v)| (k.to_string(), ProviderAlias::from(*v)))
+        .collect()
+}
+
+fn config_with_project_aliases(aliases: &[(&str, &str)]) -> Config {
+    Config {
+        project: Project {
+            name: "alias-test".to_string(),
+            ..Default::default()
+        },
+        profiles: HashMap::new(),
+        providers: Some(aliases_map(aliases)),
+        scopes: None,
+    }
+}
+
+pub(crate) fn global_config_with_aliases(aliases: &[(&str, &str)]) -> GlobalConfig {
+    GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: None,
+            profile: None,
+            providers: Some(aliases_map(aliases)),
+        },
+        audit: None,
+    }
+}
+
+fn config_with_project_alias_secret(
+    alias: &str,
+    uri: &str,
+    secret_providers: Option<Vec<String>>,
+) -> Config {
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "API_KEY".to_string(),
+        Secret {
+            description: Some("API key".to_string()),
+            required: Some(true),
+            providers: secret_providers,
+            ..Default::default()
+        },
+    );
+
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets,
+        },
+    );
+
+    Config {
+        project: Project {
+            name: "alias-validation".to_string(),
+            ..Default::default()
+        },
+        profiles,
+        providers: Some(aliases_map(&[(alias, uri)])),
+        scopes: None,
+    }
+}
+
+#[test]
+fn test_project_providers_resolve_without_global_config() {
+    let config = config_with_project_aliases(&[("op_infra", "onepassword://Infra")]);
+    let spec = Secrets::new(config, None, None, None);
+
+    let resolved = spec
+        .resolve_one_provider("op_infra")
+        .expect("project alias should resolve");
+
+    assert_eq!(resolved, "onepassword://Infra");
+}
+
+#[test]
+fn test_project_providers_take_precedence_over_global() {
+    let config = config_with_project_aliases(&[("shared", "dotenv://.env.team")]);
+    let global = global_config_with_aliases(&[("shared", "dotenv://.env.user")]);
+    let spec = Secrets::new(config, Some(global), None, None);
+
+    let resolved = spec
+        .resolve_one_provider("shared")
+        .expect("alias should resolve");
+
+    assert_eq!(
+        resolved, "dotenv://.env.team",
+        "project alias must win on conflict with global"
+    );
+}
+
+#[test]
+fn test_unknown_alias_error_lists_both_sources() {
+    let config = config_with_project_aliases(&[("project_only", "dotenv://.env.team")]);
+    let global = global_config_with_aliases(&[("global_only", "dotenv://.env.user")]);
+    let spec = Secrets::new(config, Some(global), None, None);
+
+    let err = spec
+        .resolve_one_provider("does_not_exist")
+        .expect_err("missing alias must error");
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("project_only") && msg.contains("global_only"),
+        "error should list aliases from both project and global config, got: {}",
+        msg
+    );
+}
+
+#[test]
+fn test_extends_carries_project_providers() {
+    let temp_dir = TempDir::new().unwrap();
+    let base = temp_dir.path();
+    fs::create_dir_all(base.join("shared")).unwrap();
+    fs::create_dir_all(base.join("app")).unwrap();
+
+    fs::write(
+        base.join("shared/secretspec.toml"),
+        r#"
+[project]
+name = "shared"
+revision = "1.0"
+
+[providers]
+op_infra = "onepassword://Shared"
+op_overridden = "onepassword://OldVault"
+
+[profiles.default]
+SHARED_SECRET = { description = "Shared", required = true }
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        base.join("app/secretspec.toml"),
+        r#"
+[project]
+name = "app"
+revision = "1.0"
+extends = ["../shared"]
+
+[providers]
+op_overridden = "onepassword://NewVault"
+
+[profiles.default]
+APP_SECRET = { description = "App", required = true }
+"#,
+    )
+    .unwrap();
+
+    let config = Config::try_from(base.join("app/secretspec.toml").as_path()).unwrap();
+    let providers = config
+        .providers
+        .as_ref()
+        .expect("merged config should carry [providers]");
+
+    assert_eq!(
+        providers.get("op_infra").map(|alias| alias.uri.as_str()),
+        Some("onepassword://Shared"),
+        "alias defined only in extended config should be inherited"
+    );
+    assert_eq!(
+        providers
+            .get("op_overridden")
+            .map(|alias| alias.uri.as_str()),
+        Some("onepassword://NewVault"),
+        "alias defined in both should resolve to the current (extending) config's value"
+    );
+}
+
+#[test]
+fn test_provider_override_expands_project_alias() {
+    let config = config_with_project_aliases(&[("op_infra", "onepassword://Infra")]);
+    let spec = Secrets::new(config, None, None, Some("default".to_string()));
+    // builder-style override (mirrors `--provider <alias>`)
+    let mut spec = spec;
+    spec.set_provider("op_infra");
+
+    let resolved = spec
+        .explicit_provider_spec(None)
+        .map(|spec_str| spec.resolve_provider_spec(spec_str))
+        .expect("override should resolve to a URI");
+
+    assert_eq!(resolved, "onepassword://Infra");
+}
+
+#[test]
+fn test_global_alias_still_resolves_when_project_providers_present() {
+    // Project map defines `local`; we look up `team`, which only exists in
+    // global. Walks past the project source into the global one.
+    let config = config_with_project_aliases(&[("local", "dotenv://.env.local")]);
+    let global = global_config_with_aliases(&[("team", "onepassword://Team")]);
+    let spec = Secrets::new(config, Some(global), None, None);
+
+    let resolved = spec
+        .resolve_one_provider("team")
+        .expect("global alias should resolve when project map exists but doesn't define it");
+
+    assert_eq!(resolved, "onepassword://Team");
+}
+
+#[test]
+fn test_fallback_chain_resolves_aliases_from_mixed_sources() {
+    // Chain mixes a project-only alias and a global-only alias: the primary
+    // (defined in the project map) misses, so the read walks to the fallback
+    // resolved from the global map — exercising the same route and lazy
+    // per-link resolution the executor and `get` walk.
+    let _env = scrub_resolution_env();
+    let temp_dir = TempDir::new().unwrap();
+    let team_path = temp_dir.path().join(".env.team");
+    let user_path = temp_dir.path().join(".env.user");
+    // The project-defined primary misses; the global-defined fallback answers.
+    fs::write(&team_path, "").unwrap();
+    fs::write(&user_path, "MY_SECRET=from_user\n").unwrap();
+
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        "MY_SECRET".to_string(),
+        Secret {
+            description: Some("test secret".to_string()),
+            required: Some(true),
+            providers: Some(vec!["project_team".to_string(), "user_dotenv".to_string()]),
+            ..Default::default()
+        },
+    );
+    let mut config = resolve_test_config(secrets);
+    let team_uri = format!("dotenv://{}", team_path.display());
+    let user_uri = format!("dotenv://{}", user_path.display());
+    config.providers = Some(aliases_map(&[("project_team", &team_uri)]));
+    let global = global_config_with_aliases(&[("user_dotenv", &user_uri)]);
+    let spec = Secrets::new(config, Some(global), None, None);
+
+    assert_eq!(
+        resolved_my_secret(&spec).as_deref(),
+        Some("from_user"),
+        "the fallback resolved from the global source must answer after the project-defined primary misses"
+    );
+}
+
+#[test]
+fn test_provider_override_resolves_global_alias_when_project_providers_present() {
+    // `--provider <alias>` path must consult the same source order as the
+    // per-secret chain; a global-only alias resolves even when a project
+    // providers map is set.
+    let config = config_with_project_aliases(&[("local", "dotenv://.env.local")]);
+    let global = global_config_with_aliases(&[("team", "onepassword://Team")]);
+    let mut spec = Secrets::new(config, Some(global), None, None);
+    spec.set_provider("team");
+
+    let resolved = spec
+        .explicit_provider_spec(None)
+        .map(|spec_str| spec.resolve_provider_spec(spec_str))
+        .expect("override should resolve to a URI");
+
+    assert_eq!(resolved, "onepassword://Team");
+}
+
+#[test]
+fn test_import_source_expands_project_alias() {
+    let temp_dir = TempDir::new().unwrap();
+    let source_env_path = temp_dir.path().join(".env.source");
+    let target_env_path = temp_dir.path().join(".env.target");
+    fs::write(&source_env_path, "API_KEY=from-source\n").unwrap();
+
+    let source_uri = format!("dotenv://{}", source_env_path.display());
+    let target_uri = format!("dotenv://{}", target_env_path.display());
+
+    let config = config_with_project_alias_secret("source_env", &source_uri, None);
+    let global = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(target_uri),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let spec = Secrets::new(config, Some(global), None, None);
+
+    spec.import("source_env")
+        .expect("import source alias should resolve from project [providers]");
+
+    assert_eq!(
+        read_env_var(&target_env_path, "API_KEY").as_deref(),
+        Some("from-source")
+    );
+}
+
+#[test]
+fn test_import_source_literal_uri_still_works() {
+    let temp_dir = TempDir::new().unwrap();
+    let source_env_path = temp_dir.path().join(".env.source");
+    let target_env_path = temp_dir.path().join(".env.target");
+    fs::write(&source_env_path, "API_KEY=from-source\n").unwrap();
+
+    let source_uri = format!("dotenv://{}", source_env_path.display());
+    let target_uri = format!("dotenv://{}", target_env_path.display());
+
+    // The project defines an unrelated alias; the import source is a literal URI,
+    // which must still build after alias resolution moved into build_provider.
+    let config = config_with_project_alias_secret("unused", "dotenv://.env.unused", None);
+    let global = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(target_uri),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let spec = Secrets::new(config, Some(global), None, None);
+
+    spec.import(&source_uri)
+        .expect("import from a literal provider URI should still work");
+
+    assert_eq!(
+        read_env_var(&target_env_path, "API_KEY").as_deref(),
+        Some("from-source")
+    );
+}
+
+#[test]
+fn test_import_unknown_source_lists_available_aliases() {
+    let temp_dir = TempDir::new().unwrap();
+    let source_uri = format!("dotenv://{}", temp_dir.path().join(".env.source").display());
+
+    let config = config_with_project_alias_secret("source_env", &source_uri, None);
+    let spec = Secrets::new(config, None, None, None);
+
+    let err = spec
+        .import("source_emv")
+        .expect_err("import from an unknown provider/alias must error");
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("source_env") && msg.contains("available aliases"),
+        "unknown import source should list the defined aliases, got: {}",
+        msg
+    );
+}
+
+#[test]
+fn test_validate_project_provider_chain_without_global_default() {
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env.project");
+    fs::write(&env_file, "API_KEY=from-project\n").unwrap();
+    let uri = format!("dotenv://{}", env_file.display());
+
+    let config = config_with_project_alias_secret(
+        "project_env",
+        &uri,
+        Some(vec!["project_env".to_string()]),
+    );
+    let spec = Secrets::new(config, None, None, None);
+
+    let validated = spec
+        .validate()
+        .expect("project provider alias should not require a global provider")
+        .expect("secret should resolve from project provider alias");
+
+    assert_eq!(
+        validated
+            .resolved
+            .secrets
+            .get("API_KEY")
+            .unwrap()
+            .expose_secret(),
+        "from-project"
+    );
+    assert_eq!(
+        validated.resolved.provider, uri,
+        "validation metadata should report the resolved project provider URI"
+    );
+}
+
+#[test]
+fn test_validate_provider_override_project_alias_without_global_default() {
+    let temp_dir = TempDir::new().unwrap();
+    let env_file = temp_dir.path().join(".env.override");
+    fs::write(&env_file, "API_KEY=from-override\n").unwrap();
+    let uri = format!("dotenv://{}", env_file.display());
+
+    let config = config_with_project_alias_secret("project_env", &uri, None);
+    let mut spec = Secrets::new(config, None, None, None);
+    spec.set_provider("project_env");
+
+    let validated = spec
+        .validate()
+        .expect("override alias should not be reparsed as a provider scheme")
+        .expect("secret should resolve from explicit project alias");
+
+    assert_eq!(
+        validated
+            .resolved
+            .secrets
+            .get("API_KEY")
+            .unwrap()
+            .expose_secret(),
+        "from-override"
+    );
+    assert_eq!(
+        validated.resolved.provider, uri,
+        "validation metadata should report the resolved override URI"
+    );
+}
+
+/// Builds a Secrets backed by a dotenv provider over a temp `.env` file.
+///
+/// The caller must keep `temp_dir` alive for as long as the returned Secrets
+/// is used, since the `.env` file lives inside it.
+fn dotenv_spec(
+    env_contents: &str,
+    profiles: HashMap<String, Profile>,
+    temp_dir: &TempDir,
+) -> Secrets {
+    let env_file = temp_dir.path().join(".env");
+    fs::write(&env_file, env_contents).unwrap();
+    Secrets::new(
+        Config {
+            project: Project {
+                name: "test".to_string(),
+                ..Default::default()
+            },
+            profiles,
+            providers: None,
+            scopes: None,
+        },
+        Some(GlobalConfig {
+            defaults: GlobalDefaults {
+                provider: Some(format!("dotenv://{}", env_file.display())),
+                profile: None,
+                providers: None,
+            },
+            audit: None,
+        }),
+        None,
+        None,
+    )
+}
+
+fn required_secret_profile(name: &str) -> HashMap<String, Profile> {
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        name.to_string(),
+        Secret {
+            description: Some("A required secret".to_string()),
+            required: Some(true),
+            ..Default::default()
+        },
+    );
+    HashMap::from([(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets,
+        },
+    )])
+}
+
+#[test]
+fn test_check_returns_ok_when_required_present() {
+    let temp_dir = TempDir::new().unwrap();
+    let spec = dotenv_spec(
+        "REQUIRED=value\n",
+        required_secret_profile("REQUIRED"),
+        &temp_dir,
+    );
+
+    let validated = spec.check(true).expect("check should succeed");
+    assert!(validated.resolved.secrets.contains_key("REQUIRED"));
+}
+
+#[test]
+fn test_check_no_prompt_errors_when_required_missing() {
+    let temp_dir = TempDir::new().unwrap();
+    // Empty .env -> the required secret is missing.
+    let spec = dotenv_spec("", required_secret_profile("REQUIRED"), &temp_dir);
+
+    assert!(
+        matches!(
+            spec.check(true),
+            Err(SecretSpecError::RequiredSecretMissing(_))
+        ),
+        "expected RequiredSecretMissing when a required secret is absent"
+    );
+}
+
+#[test]
+fn test_run_command_returns_child_exit_code() {
+    let temp_dir = TempDir::new().unwrap();
+    // An empty (but present) default profile -> ensure_secrets passes and the
+    // child's exit code is propagated verbatim.
+    let empty_default = HashMap::from([(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets: HashMap::new(),
+        },
+    )]);
+    let spec = dotenv_spec("", empty_default, &temp_dir);
+
+    assert_eq!(
+        spec.run_command(vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            "exit 3".to_string()
+        ])
+        .unwrap(),
+        3
+    );
+    assert_eq!(spec.run_command(vec!["true".to_string()]).unwrap(), 0);
+    assert_eq!(spec.run_command(vec!["false".to_string()]).unwrap(), 1);
+}
+
+/// The audit `action`s emitted by an operation, in order.
+fn audit_actions(lines: &std::sync::Arc<std::sync::Mutex<Vec<String>>>) -> Vec<String> {
+    lines
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|l| {
+            serde_json::from_str::<serde_json::Value>(l).unwrap()["action"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        })
+        .collect()
+}
+
+#[test]
+fn audit_check_emits_single_check_event() {
+    let temp_dir = TempDir::new().unwrap();
+    let mut spec = dotenv_spec(
+        "REQUIRED=value\n",
+        required_secret_profile("REQUIRED"),
+        &temp_dir,
+    );
+    let (logger, lines) = crate::audit::test_support::collecting_logger();
+    spec.set_audit_for_test(logger);
+
+    spec.check(true).expect("check should succeed");
+
+    // Exactly one `check` event — not the 2-3 that the repeated internal
+    // re-validations used to produce.
+    assert_eq!(audit_actions(&lines), vec!["check"]);
+}
+
+#[test]
+fn audit_run_emits_run_not_check() {
+    let temp_dir = TempDir::new().unwrap();
+    // Present required secret -> resolution succeeds and the command runs.
+    let mut spec = dotenv_spec(
+        "REQUIRED=value\n",
+        required_secret_profile("REQUIRED"),
+        &temp_dir,
+    );
+    let (logger, lines) = crate::audit::test_support::collecting_logger();
+    spec.set_audit_for_test(logger);
+
+    spec.run_command(vec!["true".to_string()]).unwrap();
+
+    // `run` records itself as a single `run` event; the internal read it performs
+    // through `ensure_secrets` must not also be logged as a `check`.
+    assert_eq!(audit_actions(&lines), vec!["run"]);
+
+    // A successfully launched command is `started`, not `found`.
+    let event: serde_json::Value = serde_json::from_str(&lines.lock().unwrap()[0]).unwrap();
+    assert_eq!(event["outcome"], "started");
+}
+
+/// The full audit events emitted by an operation, parsed in order.
+fn audit_events(lines: &std::sync::Arc<std::sync::Mutex<Vec<String>>>) -> Vec<serde_json::Value> {
+    lines
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|l| serde_json::from_str::<serde_json::Value>(l).unwrap())
+        .collect()
+}
+
+/// A `default`-only profile: one optional secret carrying a fallback value, so a
+/// `get` with no stored value resolves to the default.
+fn defaulted_secret_profile(name: &str, default: &str) -> HashMap<String, Profile> {
+    let mut secrets = HashMap::new();
+    secrets.insert(
+        name.to_string(),
+        Secret {
+            description: Some("with default".to_string()),
+            required: Some(false),
+            default: Some(default.to_string()),
+            ..Default::default()
+        },
+    );
+    HashMap::from([(
+        "default".to_string(),
+        Profile {
+            defaults: None,
+            secrets,
+        },
+    )])
+}
+
+#[test]
+fn audit_get_present_records_found_without_value() {
+    let temp_dir = TempDir::new().unwrap();
+    let mut spec = dotenv_spec(
+        "REQUIRED=hunter2\n",
+        required_secret_profile("REQUIRED"),
+        &temp_dir,
+    );
+    let (logger, lines) = crate::audit::test_support::collecting_logger();
+    spec.set_audit_for_test(logger);
+
+    spec.get("REQUIRED").unwrap();
+
+    let events = audit_events(&lines);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["action"], "get");
+    assert_eq!(events[0]["outcome"], "found");
+    assert_eq!(events[0]["key"], "REQUIRED");
+    assert!(events[0]["provider"].as_str().unwrap().contains("dotenv"));
+    // The retrieved value never reaches the log.
+    assert!(!lines.lock().unwrap()[0].contains("hunter2"));
+}
+
+#[test]
+fn audit_get_missing_records_missing() {
+    let temp_dir = TempDir::new().unwrap();
+    // Empty .env -> a required secret with no default is missing.
+    let mut spec = dotenv_spec("", required_secret_profile("REQUIRED"), &temp_dir);
+    let (logger, lines) = crate::audit::test_support::collecting_logger();
+    spec.set_audit_for_test(logger);
+
+    assert!(matches!(
+        spec.get("REQUIRED"),
+        Err(SecretSpecError::SecretNotFound(_))
+    ));
+
+    let events = audit_events(&lines);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["action"], "get");
+    // A missing read is recorded as `missing` even though `get` then errors.
+    assert_eq!(events[0]["outcome"], "missing");
+    assert_eq!(events[0]["key"], "REQUIRED");
+}
+
+#[test]
+fn audit_get_default_records_default() {
+    let temp_dir = TempDir::new().unwrap();
+    // No stored value -> the configured default is served.
+    let mut spec = dotenv_spec(
+        "",
+        defaulted_secret_profile("OPTIONAL", "fallback"),
+        &temp_dir,
+    );
+    let (logger, lines) = crate::audit::test_support::collecting_logger();
+    spec.set_audit_for_test(logger);
+
+    spec.get("OPTIONAL").unwrap();
+
+    let events = audit_events(&lines);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["action"], "get");
+    assert_eq!(events[0]["outcome"], "default");
+    assert_eq!(events[0]["key"], "OPTIONAL");
+}
+
+#[test]
+fn audit_get_undefined_records_error() {
+    let temp_dir = TempDir::new().unwrap();
+    let mut spec = dotenv_spec("", required_secret_profile("REQUIRED"), &temp_dir);
+    let (logger, lines) = crate::audit::test_support::collecting_logger();
+    spec.set_audit_for_test(logger);
+
+    assert!(matches!(
+        spec.get("UNDEFINED"),
+        Err(SecretSpecError::SecretNotFound(_))
+    ));
+
+    let events = audit_events(&lines);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["action"], "get");
+    assert_eq!(events[0]["outcome"], "error");
+    assert_eq!(events[0]["error_kind"], "secret_not_found");
+    // No provider can be attributed to an undefined secret.
+    assert!(events[0].get("provider").is_none());
+}
+
+#[test]
+fn audit_set_records_written_without_value() {
+    let temp_dir = TempDir::new().unwrap();
+    let mut spec = dotenv_spec("", required_secret_profile("REQUIRED"), &temp_dir);
+    let (logger, lines) = crate::audit::test_support::collecting_logger();
+    spec.set_audit_for_test(logger);
+
+    spec.set("REQUIRED", Some("secret_value".to_string()))
+        .unwrap();
+
+    let events = audit_events(&lines);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["action"], "set");
+    assert_eq!(events[0]["outcome"], "written");
+    assert_eq!(events[0]["key"], "REQUIRED");
+    assert!(events[0]["provider"].as_str().unwrap().contains("dotenv"));
+    // The stored value is never logged.
+    assert!(!lines.lock().unwrap()[0].contains("secret_value"));
+}
+
+#[test]
+fn audit_set_undefined_records_error() {
+    let temp_dir = TempDir::new().unwrap();
+    let mut spec = dotenv_spec("", required_secret_profile("REQUIRED"), &temp_dir);
+    let (logger, lines) = crate::audit::test_support::collecting_logger();
+    spec.set_audit_for_test(logger);
+
+    assert!(matches!(
+        spec.set("UNDEFINED", Some("v".to_string())),
+        Err(SecretSpecError::SecretNotFound(_))
+    ));
+
+    let events = audit_events(&lines);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["action"], "set");
+    assert_eq!(events[0]["outcome"], "error");
+    assert_eq!(events[0]["error_kind"], "secret_not_found");
+}
+
+#[test]
+fn audit_set_provider_construction_failure_records_error() {
+    let temp_dir = TempDir::new().unwrap();
+    let mut spec = dotenv_spec("", required_secret_profile("REQUIRED"), &temp_dir);
+    spec.set_provider("ghost");
+    let (logger, lines) = crate::audit::test_support::collecting_logger();
+    spec.set_audit_for_test(logger);
+
+    assert!(matches!(
+        spec.set("REQUIRED", Some("v".to_string())),
+        Err(SecretSpecError::ProviderNotFound(_))
+    ));
+
+    let events = audit_events(&lines);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["action"], "set");
+    assert_eq!(events[0]["outcome"], "error");
+    assert_eq!(events[0]["error_kind"], "provider_not_found");
+    assert_eq!(events[0]["key"], "REQUIRED");
+}
+
+#[test]
+fn audit_set_readonly_provider_records_error() {
+    let project_config = Config {
+        project: Project {
+            name: "test".to_string(),
+            ..Default::default()
+        },
+        profiles: required_secret_profile("REQUIRED"),
+        providers: None,
+        scopes: None,
+    };
+    // `env` is read-only, so a `set` is rejected and recorded as an error.
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some("env".to_string()),
+            profile: None,
+            providers: None,
+        },
+        audit: None,
+    };
+    let mut spec = Secrets::new(project_config, Some(global_config), None, None);
+    let (logger, lines) = crate::audit::test_support::collecting_logger();
+    spec.set_audit_for_test(logger);
+
+    assert!(matches!(
+        spec.set("REQUIRED", Some("v".to_string())),
+        Err(SecretSpecError::ProviderOperationFailed(_))
+    ));
+
+    let events = audit_events(&lines);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["action"], "set");
+    assert_eq!(events[0]["outcome"], "error");
+    assert_eq!(events[0]["error_kind"], "provider_operation_failed");
+}
+
+#[test]
+fn audit_policy_denied_still_records_blocked_attempt() {
+    let temp_dir = TempDir::new().unwrap();
+    let mut spec = dotenv_spec(
+        "REQUIRED=value\n",
+        required_secret_profile("REQUIRED"),
+        &temp_dir,
+    );
+    // require_reason = Always with no reason supplied -> every access is denied.
+    spec.set_require_reason(RequireReason::Always);
+    let (logger, lines) = crate::audit::test_support::collecting_logger();
+    spec.set_audit_for_test(logger);
+
+    assert!(matches!(
+        spec.get("REQUIRED"),
+        Err(SecretSpecError::ReasonRequired)
+    ));
+
+    // A blocked access still leaves an audit trace.
+    let events = audit_events(&lines);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["action"], "get");
+    assert_eq!(events[0]["outcome"], "error");
+    assert_eq!(events[0]["error_kind"], "reason_required");
+    assert_eq!(events[0]["key"], "REQUIRED");
+}
+
+#[test]
+fn audit_import_records_keys_and_per_secret_writes() {
+    let temp_dir = TempDir::new().unwrap();
+    // Target provider (the spec default) starts empty.
+    let mut spec = dotenv_spec("", required_secret_profile("REQUIRED"), &temp_dir);
+    // Source provider holds the secret to copy.
+    let source = temp_dir.path().join("source.env");
+    fs::write(&source, "REQUIRED=from_source\n").unwrap();
+    let (logger, lines) = crate::audit::test_support::collecting_logger();
+    spec.set_audit_for_test(logger);
+
+    spec.import(&format!("dotenv://{}", source.display()))
+        .unwrap();
+
+    let events = audit_events(&lines);
+    let actions: Vec<&str> = events
+        .iter()
+        .map(|e| e["action"].as_str().unwrap())
+        .collect();
+    // Each copied secret is recorded as a `set`, then one bulk `import` event.
+    assert_eq!(actions, vec!["set", "import"]);
+
+    let set = &events[0];
+    assert_eq!(set["outcome"], "written");
+    assert_eq!(set["key"], "REQUIRED");
+
+    let import = &events[1];
+    assert_eq!(import["outcome"], "written");
+    assert_eq!(import["keys"][0], "REQUIRED");
+    // The copied value is never logged.
+    assert!(
+        !lines
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|l| l.contains("from_source"))
+    );
+}
+
+#[test]
+fn test_resolve_profile_unknown_returns_invalid_profile() {
+    let temp_dir = TempDir::new().unwrap();
+    let spec = dotenv_spec("", required_secret_profile("REQUIRED"), &temp_dir);
+
+    let result = spec.resolve_profile_secret_names(Some("nonexistent"));
+    match result {
+        Err(SecretSpecError::InvalidProfile(msg)) => {
+            assert!(msg.contains("nonexistent"));
+            assert!(msg.contains("Available profiles"));
+        }
+        other => panic!("expected InvalidProfile, got {other:?}"),
+    }
+}
+
+// --- Provider credential resolution and validation ---
+
+/// Builds a `Secrets` whose only project provider alias is `target`, carrying
+/// the given semantic credential-source map.
+fn secrets_with_credential_alias(
+    target_uri: &str,
+    credentials: HashMap<String, CredentialSource>,
+) -> Secrets {
+    let mut config = resolve_test_config(HashMap::new());
+    config.providers = Some(HashMap::from([(
+        "target".to_string(),
+        ProviderAlias {
+            uri: target_uri.to_string(),
+            credentials,
+            ..Default::default()
+        },
+    )]));
+    Secrets::new(config, None, None, None)
+}
+
+#[test]
+fn provider_credentials_read_convention_credential_from_source() {
+    let _guard = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    // dotenv addresses a convention secret by the flat key name.
+    std::fs::write(&source, "access_token=secret-abc\n").unwrap();
+
+    let secrets = secrets_with_credential_alias(
+        "bws://00000000-0000-0000-0000-000000000000",
+        HashMap::from([(
+            "access_token".to_string(),
+            CredentialSource::from(format!("dotenv://{}", source.display())),
+        )]),
+    );
+
+    let credentials = secrets
+        .resolve_provider_credentials("target", "default")
+        .unwrap();
+    assert_eq!(
+        credentials
+            .get("access_token")
+            .map(|value| value.expose_secret().to_string()),
+        Some("secret-abc".to_string()),
+    );
+}
+
+#[test]
+fn sourced_credential_reaches_target_provider_end_to_end() {
+    let _guard = scrub_resolution_env();
+    let _token = EnvVarGuard::remove("OP_SERVICE_ACCOUNT_TOKEN");
+    let temp = TempDir::new().unwrap();
+
+    let target_scope = |filename: &str, token: &str| {
+        let source = temp.path().join(filename);
+        std::fs::write(&source, format!("service_account_token={token}\n")).unwrap();
+        let secrets = secrets_with_credential_alias(
+            "onepassword://Private",
+            HashMap::from([(
+                "service_account_token".to_string(),
+                CredentialSource::from(format!("dotenv://{}", source.display())),
+            )]),
+        );
+
+        secrets
+            .get_provider(Some("target"), Some("default"))
+            .expect("the source credential should build the target provider")
+            .auth_scope_key()
+            .expect("onepassword should identify its effective authentication scope")
+    };
+
+    let first = target_scope("first.env", "source-token-a");
+    let same = target_scope("same.env", "source-token-a");
+    let different = target_scope("different.env", "source-token-b");
+
+    assert_eq!(
+        first, same,
+        "the same fetched credential yields the same scope"
+    );
+    assert_ne!(
+        first, different,
+        "changing the source credential must change the target's effective auth scope"
+    );
+    assert!(!first.contains("source-token-a"));
+    assert!(!different.contains("source-token-b"));
+}
+
+#[test]
+fn provider_credentials_read_from_systemd_credential_source() {
+    let _guard = scrub_resolution_env();
+    let directory = TempDir::new().unwrap();
+    std::fs::write(
+        directory.path().join("test_token"),
+        "systemd-delivered-token",
+    )
+    .unwrap();
+    let _credentials_directory =
+        EnvVarGuard::set("CREDENTIALS_DIRECTORY", directory.path().to_str().unwrap());
+
+    let secrets = secrets_with_credential_alias(
+        "memtest://",
+        HashMap::from([(
+            "test_token".to_string(),
+            CredentialSource::from("systemd-credential"),
+        )]),
+    );
+
+    let credentials = secrets
+        .resolve_provider_credentials("target", "default")
+        .expect("the systemd credential source should resolve");
+    assert_eq!(
+        credentials
+            .get("test_token")
+            .map(|value| value.expose_secret().to_string()),
+        Some("systemd-delivered-token".to_string()),
+    );
+}
+
+#[test]
+fn provider_credentials_read_ref_addressed_credential() {
+    let _guard = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    std::fs::write(&source, "SOURCE_KEY=secret-xyz\n").unwrap();
+
+    // The semantic credential name and the source key differ;
+    // `ref` pins the exact location.
+    let secrets = secrets_with_credential_alias(
+        "bws://00000000-0000-0000-0000-000000000000",
+        HashMap::from([(
+            "access_token".to_string(),
+            CredentialSource {
+                provider: format!("dotenv://{}", source.display()),
+                reference: Some(NativeAddress {
+                    item: "SOURCE_KEY".to_string(),
+                    ..Default::default()
+                }),
+            },
+        )]),
+    );
+
+    let credentials = secrets
+        .resolve_provider_credentials("target", "default")
+        .unwrap();
+    assert_eq!(
+        credentials
+            .get("access_token")
+            .map(|value| value.expose_secret().to_string()),
+        Some("secret-xyz".to_string()),
+    );
+}
+
+#[test]
+fn configured_credential_is_resolved_even_when_provider_env_is_set() {
+    let _guard = scrub_resolution_env();
+    let _var = EnvVarGuard::set("BWS_ACCESS_TOKEN", "from-env");
+
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    std::fs::write(&source, "access_token=from-source\n").unwrap();
+
+    let secrets = secrets_with_credential_alias(
+        "bws://00000000-0000-0000-0000-000000000000",
+        HashMap::from([(
+            "access_token".to_string(),
+            CredentialSource::from(format!("dotenv://{}", source.display())),
+        )]),
+    );
+
+    let credentials = secrets
+        .resolve_provider_credentials("target", "default")
+        .unwrap();
+    assert_eq!(
+        credentials
+            .get("access_token")
+            .map(|value| value.expose_secret()),
+        Some("from-source")
+    );
+}
+
+#[test]
+fn missing_provider_credential_is_an_actionable_error() {
+    let _guard = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    std::fs::write(&source, "").unwrap();
+
+    let secrets = secrets_with_credential_alias(
+        "bws://00000000-0000-0000-0000-000000000000",
+        HashMap::from([(
+            "access_token".to_string(),
+            CredentialSource::from(format!("dotenv://{}", source.display())),
+        )]),
+    );
+
+    let error = secrets
+        .resolve_provider_credentials("target", "default")
+        .unwrap_err();
+    let message = error.to_string();
+    assert!(
+        message.contains("access_token") && message.contains("not found"),
+        "error should name the credential and say it was not found: {message}"
+    );
+}
+
+#[test]
+fn credential_source_must_name_a_known_provider() {
+    let secrets = secrets_with_credential_alias(
+        "bws://00000000-0000-0000-0000-000000000000",
+        HashMap::from([(
+            "access_token".to_string(),
+            CredentialSource::from("not_a_real_provider"),
+        )]),
+    );
+    let error = secrets.validate_credential_sources("target").unwrap_err();
+    assert!(
+        error.to_string().contains("not_a_real_provider"),
+        "error should name the unknown source: {error}"
+    );
+}
+
+#[test]
+fn credential_name_must_be_supported_by_target_provider() {
+    let secrets = secrets_with_credential_alias(
+        "bws://00000000-0000-0000-0000-000000000000",
+        HashMap::from([(
+            "BWS_ACCESS_TOKEN".to_string(),
+            CredentialSource::from("keyring"),
+        )]),
+    );
+
+    let error = secrets.validate_credential_sources("target").unwrap_err();
+    let message = error.to_string();
+    assert!(message.contains("BWS_ACCESS_TOKEN"), "{message}");
+    assert!(message.contains("access_token"), "{message}");
+}
+
+#[test]
+fn declared_provider_credentials_validates_every_source_before_login() {
+    let secrets = secrets_with_credential_alias(
+        "vault://secret/app?auth=approle",
+        HashMap::from([
+            (
+                "role_id".to_string(),
+                CredentialSource::from("dotenv://source.env"),
+            ),
+            (
+                "secret_id".to_string(),
+                CredentialSource::from("not_a_real_provider"),
+            ),
+        ]),
+    );
+
+    let error = secrets.declared_provider_credentials("target").unwrap_err();
+    assert!(error.to_string().contains("secret_id"));
+}
+
+#[test]
+fn credential_source_display_redacts_inline_credentials() {
+    let source = CredentialSource::from("onepassword+token://ops_secret@Vault");
+    let displayed = source.display_provider();
+
+    assert_eq!(displayed, "onepassword+token://Vault");
+    assert!(!displayed.contains("ops_secret"));
+}
+
+#[test]
+fn credential_chain_is_limited_to_one_hop() {
+    let mut config = resolve_test_config(HashMap::new());
+    config.providers = Some(HashMap::from([
+        // `chained` itself declares credentials, so it may not be a source.
+        (
+            "chained".to_string(),
+            ProviderAlias {
+                uri: "keyring://".to_string(),
+                credentials: HashMap::from([(
+                    "access_token".to_string(),
+                    CredentialSource::from("keyring"),
+                )]),
+                ..Default::default()
+            },
+        ),
+        (
+            "target".to_string(),
+            ProviderAlias {
+                uri: "bws://00000000-0000-0000-0000-000000000000".to_string(),
+                credentials: HashMap::from([(
+                    "access_token".to_string(),
+                    CredentialSource::from("chained"),
+                )]),
+                ..Default::default()
+            },
+        ),
+    ]));
+    let secrets = Secrets::new(config, None, None, None);
+    let error = secrets.validate_credential_sources("target").unwrap_err();
+    assert!(
+        error.to_string().contains("one hop"),
+        "error should explain the one-hop limit: {error}"
+    );
+}
+
+#[test]
+fn provider_credential_round_trips_through_its_source() {
+    let _guard = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    std::fs::write(&source, "").unwrap();
+
+    let secrets = secrets_with_credential_alias(
+        "bws://00000000-0000-0000-0000-000000000000",
+        HashMap::from([(
+            "access_token".to_string(),
+            CredentialSource::from(format!("dotenv://{}", source.display())),
+        )]),
+    );
+
+    let credentials = secrets.declared_provider_credentials("target").unwrap();
+    assert_eq!(credentials.len(), 1);
+    let (var, source_spec) = &credentials[0];
+
+    secrets
+        .store_provider_credential(
+            source_spec,
+            var,
+            &secrecy::SecretString::new("stored-value".into()),
+        )
+        .unwrap();
+
+    // Stored and read back through the same address the resolver uses.
+    let resolved = secrets
+        .resolve_provider_credentials("target", "default")
+        .unwrap();
+    assert_eq!(
+        resolved
+            .get("access_token")
+            .map(|value| value.expose_secret().to_string()),
+        Some("stored-value".to_string()),
+    );
+}
+
+/// The credential memo is keyed by profile: building the target for one profile
+/// memoizes only that profile's credentials, and another profile re-fetches
+/// from the source instead of reusing them.
+#[test]
+fn provider_credentials_memoize_per_profile() {
+    let _guard = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    std::fs::write(&source, "access_token=v1\n").unwrap();
+
+    let secrets = secrets_with_credential_alias(
+        "bws://00000000-0000-0000-0000-000000000000",
+        HashMap::from([(
+            "access_token".to_string(),
+            CredentialSource::from(format!("dotenv://{}", source.display())),
+        )]),
+    );
+
+    // First build fetches the credential and memoizes it for this profile.
+    secrets
+        .get_provider(Some("target"), Some("default"))
+        .expect("the source supplies the credential");
+
+    // Empty the source: a fresh fetch can no longer succeed.
+    std::fs::write(&source, "").unwrap();
+
+    // Same profile: served from the memo, so the emptied source is not read.
+    secrets
+        .get_provider(Some("target"), Some("default"))
+        .expect("the memoized credential must be reused for the same profile");
+
+    // Another profile must not reuse the memo: it re-fetches and hard-misses.
+    assert!(
+        secrets.get_provider(Some("target"), Some("other")).is_err(),
+        "another profile must re-fetch rather than reuse the memoized credential"
+    );
+}
+
+/// Storing a credential through its source (the `login` flow) clears the
+/// credential memo, so the next build re-reads the store instead of resolving to
+/// the stale cached value.
+#[test]
+fn storing_a_provider_credential_invalidates_the_memo() {
+    let _guard = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    std::fs::write(&source, "access_token=old\n").unwrap();
+
+    let secrets = secrets_with_credential_alias(
+        "bws://00000000-0000-0000-0000-000000000000",
+        HashMap::from([(
+            "access_token".to_string(),
+            CredentialSource::from(format!("dotenv://{}", source.display())),
+        )]),
+    );
+
+    // Memoize the old credential.
+    secrets
+        .get_provider(Some("target"), Some("default"))
+        .expect("the source supplies the credential");
+
+    let credentials = secrets.declared_provider_credentials("target").unwrap();
+    let (var, source_spec) = &credentials[0];
+    secrets
+        .store_provider_credential(source_spec, var, &secrecy::SecretString::new("new".into()))
+        .unwrap();
+
+    // Empty the source: only a memo hit could satisfy the next build, so a
+    // success here would prove the store had NOT invalidated it.
+    std::fs::write(&source, "").unwrap();
+    assert!(
+        secrets
+            .get_provider(Some("target"), Some("default"))
+            .is_err(),
+        "the store must clear the memo so the credential is re-read"
+    );
+}
+
+#[test]
+fn declared_provider_credentials_errors_for_an_unknown_alias() {
+    let secrets = Secrets::new(resolve_test_config(HashMap::new()), None, None, None);
+    assert!(secrets.declared_provider_credentials("nope").is_err());
+}
+
+#[test]
+fn declared_provider_credentials_is_empty_for_an_alias_without_credentials() {
+    let mut config = resolve_test_config(HashMap::new());
+    config.providers = Some(HashMap::from([(
+        "plain".to_string(),
+        ProviderAlias::from("keyring://"),
+    )]));
+    let secrets = Secrets::new(config, None, None, None);
+    assert!(
+        secrets
+            .declared_provider_credentials("plain")
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn store_provider_credential_rejects_a_read_only_source() {
+    let secrets = secrets_with_credential_alias(
+        "bws://00000000-0000-0000-0000-000000000000",
+        HashMap::from([("access_token".to_string(), CredentialSource::from("env://"))]),
+    );
+    let credentials = secrets.declared_provider_credentials("target").unwrap();
+    let (var, source_spec) = &credentials[0];
+    let result = secrets.store_provider_credential(
+        source_spec,
+        var,
+        &secrecy::SecretString::new("x".into()),
+    );
+    assert!(result.is_err(), "the env provider is read-only");
+}
+
+// ========== Secret scope tests (#137) ==========
+
+#[cfg(test)]
+mod scopes {
+    use super::*;
+
+    /// Three required secrets in `default`, with two scopes carving out subsets.
+    const MANIFEST: &str = r#"
+[project]
+name = "scope-test"
+revision = "1.0"
+
+[profiles.default]
+DATABASE_URL = { description = "DB", required = true }
+API_KEY = { description = "API key", required = true }
+QUEUE_TOKEN = { description = "Queue token", required = true }
+
+[scopes.api]
+secrets = ["DATABASE_URL", "API_KEY"]
+
+[scopes.worker]
+secrets = ["DATABASE_URL", "QUEUE_TOKEN"]
+"#;
+
+    fn config(toml: &str) -> Config {
+        toml::from_str(toml).expect("valid manifest")
+    }
+
+    #[test]
+    fn scope_narrows_resolution_to_the_intersection() {
+        let mut spec = Secrets::new(config(MANIFEST), None, None, None);
+        spec.set_scope("api");
+        // Sorted, and only the scope's members — QUEUE_TOKEN is excluded.
+        assert_eq!(
+            spec.resolve_profile_secret_names(None).unwrap(),
+            vec!["API_KEY".to_string(), "DATABASE_URL".to_string()]
+        );
+    }
+
+    #[test]
+    fn no_scope_resolves_every_secret() {
+        let spec = Secrets::new(config(MANIFEST), None, None, None);
+        assert_eq!(
+            spec.resolve_profile_secret_names(None).unwrap(),
+            vec![
+                "API_KEY".to_string(),
+                "DATABASE_URL".to_string(),
+                "QUEUE_TOKEN".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn unknown_scope_errors_and_lists_the_defined_ones() {
+        let mut spec = Secrets::new(config(MANIFEST), None, None, None);
+        spec.set_scope("nope");
+        let err = spec
+            .resolve_profile_secret_names(None)
+            .expect_err("an undefined scope must fail resolution");
+        let SecretSpecError::InvalidScope(msg) = err else {
+            panic!("expected InvalidScope, got {err:?}");
+        };
+        assert!(msg.contains("nope"), "names the bad scope: {msg}");
+        assert!(
+            msg.contains("api") && msg.contains("worker"),
+            "lists the available scopes: {msg}"
+        );
+    }
+
+    #[test]
+    fn scope_membership_is_intersected_with_the_selected_profile() {
+        // `api` lists a secret that only `production` declares; resolving it under
+        // `default` yields just the intersection, with no error.
+        let manifest = r#"
+[project]
+name = "scope-intersect"
+revision = "1.0"
+
+[profiles.default]
+DATABASE_URL = { description = "DB", required = true }
+
+[profiles.production]
+SENTRY_DSN = { description = "Sentry", required = true }
+
+[scopes.api]
+secrets = ["DATABASE_URL", "SENTRY_DSN"]
+"#;
+        let mut spec = Secrets::new(config(manifest), None, None, None);
+        spec.set_scope("api");
+        // `default` does not declare SENTRY_DSN, so the scoped set is just DATABASE_URL.
+        assert_eq!(
+            spec.resolve_profile_secret_names(Some("default")).unwrap(),
+            vec!["DATABASE_URL".to_string()]
+        );
+        // `production` inherits DATABASE_URL from `default` and adds SENTRY_DSN,
+        // so the same scope admits both.
+        assert_eq!(
+            spec.resolve_profile_secret_names(Some("production"))
+                .unwrap(),
+            vec!["DATABASE_URL".to_string(), "SENTRY_DSN".to_string()]
+        );
+    }
+
+    #[test]
+    fn resolving_values_skips_required_secrets_outside_the_scope() {
+        // The `api` scope's own secrets (DATABASE_URL, API_KEY) are available;
+        // QUEUE_TOKEN is required but excluded by the scope, so resolution still
+        // succeeds even though the provider never supplies it.
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(
+            &env_path,
+            "DATABASE_URL=postgres://localhost/db\nAPI_KEY=secret\n",
+        )
+        .unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let mut scoped = Secrets::new(config(MANIFEST), None, Some(provider.clone()), None);
+        scoped.set_scope("api");
+        let response = scoped.resolve().unwrap();
+        assert!(
+            response.is_ok(),
+            "excluded required secret must not fail resolution"
+        );
+        assert!(response.secrets.contains_key("DATABASE_URL"));
+        assert!(response.secrets.contains_key("API_KEY"));
+        assert!(!response.secrets.contains_key("QUEUE_TOKEN"));
+
+        // Without a scope the same manifest fails: QUEUE_TOKEN is required and
+        // the provider does not supply it.
+        let unscoped = Secrets::new(config(MANIFEST), None, Some(provider), None);
+        let response = unscoped.resolve().unwrap();
+        assert!(!response.is_ok());
+        assert!(
+            response
+                .missing_required
+                .contains(&"QUEUE_TOKEN".to_string())
+        );
+    }
+
+    /// The scope's core isolation guarantee: `run --scope` removes a
+    /// declared-but-excluded secret the parent already exported, so it cannot
+    /// leak into the child even though the child would otherwise inherit it.
+    #[cfg(unix)]
+    #[test]
+    fn run_scope_scrubs_an_excluded_inherited_secret_from_the_child() {
+        let _env = scrub_resolution_env();
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(
+            &env_path,
+            "DATABASE_URL=postgres://localhost/db\nAPI_KEY=secret\n",
+        )
+        .unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        // Simulate a parent shell that already holds the full profile: QUEUE_TOKEN
+        // is exported into this process's environment, and the child would inherit
+        // it unless `run --scope api` actively removes it.
+        let _leaked = EnvVarGuard::set("QUEUE_TOKEN", "leaked-from-parent");
+
+        let mut spec = Secrets::new(config(MANIFEST), None, Some(provider), None);
+        spec.set_scope("api");
+
+        let excluded_file = temp.path().join("excluded");
+        let included_file = temp.path().join("included");
+        let exit = spec
+            .run_command(vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                format!(
+                    "printf '%s' \"$QUEUE_TOKEN\" > {}; printf '%s' \"$DATABASE_URL\" > {}",
+                    excluded_file.display(),
+                    included_file.display()
+                ),
+            ])
+            .unwrap();
+        assert_eq!(exit, 0);
+
+        assert_eq!(
+            fs::read_to_string(&excluded_file).unwrap(),
+            "",
+            "excluded QUEUE_TOKEN must not reach the child, even inherited from the parent"
+        );
+        assert_eq!(
+            fs::read_to_string(&included_file).unwrap(),
+            "postgres://localhost/db",
+            "the scoped DATABASE_URL is still injected"
+        );
+    }
+
+    /// A composed secret in the scope resolves its out-of-scope inputs to build
+    /// its value, but those inputs are never exposed: the scope sees the derived
+    /// value alone (`visible = {DATABASE_URL}`; `accessed` also fetched the
+    /// `DB_*` leaves, which are then dropped from the output).
+    #[test]
+    fn composed_scope_resolves_dependencies_without_exposing_them() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(
+            &env_path,
+            "DB_USER=alice\nDB_PASSWORD=s3cret\nDB_HOST=db.example\n",
+        )
+        .unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let manifest = r#"
+[project]
+name = "composed-scope"
+revision = "1.0"
+
+[profiles.default]
+DB_USER = { description = "DB user" }
+DB_PASSWORD = { description = "DB password" }
+DB_HOST = { description = "DB host" }
+DATABASE_URL = { description = "DSN", composed = "postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}/app" }
+
+[scopes.api]
+secrets = ["DATABASE_URL"]
+"#;
+        let mut spec = Secrets::new(config(manifest), None, Some(provider), None);
+        spec.set_scope("api");
+        let response = spec.resolve().unwrap();
+        assert!(response.is_ok());
+        // The composed value is built from its (out-of-scope) inputs...
+        assert_eq!(
+            response
+                .secrets
+                .get("DATABASE_URL")
+                .and_then(|s| s.value.as_deref()),
+            Some("postgres://alice:s3cret@db.example/app")
+        );
+        // ...but the inputs themselves never reach the scope.
+        assert!(!response.secrets.contains_key("DB_USER"));
+        assert!(!response.secrets.contains_key("DB_PASSWORD"));
+        assert!(!response.secrets.contains_key("DB_HOST"));
+    }
+
+    /// The dependency closure recurses: a composed secret whose only dependency
+    /// is itself composed still resolves under a scope naming just the outermost
+    /// secret, and neither the intermediate composition nor the leaves leak.
+    #[test]
+    fn nested_composition_resolves_under_scope_without_exposing_intermediates() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(
+            &env_path,
+            "DB_USER=alice\nDB_PASSWORD=s3cret\nDB_HOST=db.example\n",
+        )
+        .unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let manifest = r#"
+[project]
+name = "nested-composed-scope"
+revision = "1.0"
+
+[profiles.default]
+DB_USER = { description = "DB user" }
+DB_PASSWORD = { description = "DB password" }
+DB_HOST = { description = "DB host" }
+DATABASE_URL = { description = "DSN", composed = "postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}/app" }
+CONN = { description = "Connection string", composed = "url=${DATABASE_URL}" }
+
+[scopes.api]
+secrets = ["CONN"]
+"#;
+        let mut spec = Secrets::new(config(manifest), None, Some(provider), None);
+        spec.set_scope("api");
+        let response = spec.resolve().unwrap();
+        assert!(response.is_ok());
+        assert_eq!(
+            response
+                .secrets
+                .get("CONN")
+                .and_then(|s| s.value.as_deref()),
+            Some("url=postgres://alice:s3cret@db.example/app")
+        );
+        // Neither the intermediate composed secret nor the leaves are exposed.
+        assert!(!response.secrets.contains_key("DATABASE_URL"));
+        assert!(!response.secrets.contains_key("DB_USER"));
+        assert!(!response.secrets.contains_key("DB_PASSWORD"));
+        assert!(!response.secrets.contains_key("DB_HOST"));
+    }
+
+    /// `run --scope` scrubs a secret declared only under *another* profile: it is
+    /// manifest-declared and not visible, so an inherited parent value must not
+    /// reach the scoped child even though the selected profile never declares it.
+    #[cfg(unix)]
+    #[test]
+    fn run_scope_scrubs_a_secret_declared_only_under_another_profile() {
+        let _env = scrub_resolution_env();
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(&env_path, "DATABASE_URL=postgres://localhost/db\n").unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        // PROD_ONLY is declared only under `production`; the active profile is
+        // `default`. A parent shell exported it (e.g. a prior production run).
+        let manifest = r#"
+[project]
+name = "cross-profile-scrub"
+revision = "1.0"
+
+[profiles.default]
+DATABASE_URL = { description = "DB", required = true }
+
+[profiles.production]
+PROD_ONLY = { description = "prod secret", required = true }
+
+[scopes.api]
+secrets = ["DATABASE_URL"]
+"#;
+        let _leaked = EnvVarGuard::set("PROD_ONLY", "leaked-from-parent");
+
+        let mut spec = Secrets::new(config(manifest), None, Some(provider), None);
+        spec.set_scope("api");
+
+        let leaked_file = temp.path().join("prod_only");
+        let included_file = temp.path().join("db");
+        let exit = spec
+            .run_command(vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                format!(
+                    "printf '%s' \"$PROD_ONLY\" > {}; printf '%s' \"$DATABASE_URL\" > {}",
+                    leaked_file.display(),
+                    included_file.display()
+                ),
+            ])
+            .unwrap();
+        assert_eq!(exit, 0);
+        assert_eq!(
+            fs::read_to_string(&leaked_file).unwrap(),
+            "",
+            "a secret from another profile must be scrubbed from the scoped child"
+        );
+        assert_eq!(
+            fs::read_to_string(&included_file).unwrap(),
+            "postgres://localhost/db",
+            "the scoped DATABASE_URL is still injected"
+        );
+    }
+
+    /// Scrubbing is decided by scope *membership*, not by the visible set. A
+    /// secret the scope lists but the selected profile does not declare is
+    /// admitted, so an inherited parent value reaches the child untouched —
+    /// the same rule that already governs an admitted secret which does not
+    /// resolve. Narrowing by profile here would make a scope reused across
+    /// profiles unset a name the operator explicitly allowed.
+    #[cfg(unix)]
+    #[test]
+    fn run_scope_keeps_an_admitted_secret_the_profile_does_not_declare() {
+        let _env = scrub_resolution_env();
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(&env_path, "DATABASE_URL=postgres://localhost/db\n").unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        // SENTRY_DSN is declared only under `production` but the `api` scope
+        // lists it; PROD_ONLY is declared there and not listed by any scope.
+        let manifest = r#"
+[project]
+name = "admitted-across-profiles"
+revision = "1.0"
+
+[profiles.default]
+DATABASE_URL = { description = "DB", required = true }
+
+[profiles.production]
+SENTRY_DSN = { description = "error reporting", required = true }
+PROD_ONLY = { description = "prod secret", required = true }
+
+[scopes.api]
+secrets = ["DATABASE_URL", "SENTRY_DSN"]
+"#;
+        let _admitted = EnvVarGuard::set("SENTRY_DSN", "https://sentry.example/1");
+        let _leaked = EnvVarGuard::set("PROD_ONLY", "leaked-from-parent");
+
+        let mut spec = Secrets::new(config(manifest), None, Some(provider), None);
+        spec.set_scope("api");
+
+        let admitted_file = temp.path().join("sentry");
+        let leaked_file = temp.path().join("prod_only");
+        let exit = spec
+            .run_command(vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                format!(
+                    "printf '%s' \"$SENTRY_DSN\" > {}; printf '%s' \"$PROD_ONLY\" > {}",
+                    admitted_file.display(),
+                    leaked_file.display()
+                ),
+            ])
+            .unwrap();
+        assert_eq!(exit, 0);
+        assert_eq!(
+            fs::read_to_string(&admitted_file).unwrap(),
+            "https://sentry.example/1",
+            "a secret the scope admits must not be scrubbed, even when the \
+             selected profile does not declare it"
+        );
+        assert_eq!(
+            fs::read_to_string(&leaked_file).unwrap(),
+            "",
+            "a secret no scope admits is still scrubbed"
+        );
+    }
+
+    /// Provider diagnostics obey the same name-hiding rule as prompting: a
+    /// warning about a fallback-chain failure must not name a secret the scope
+    /// hides, since that discloses exactly what the output filter removed. A
+    /// visible secret keeps its own name, and with no scope active nothing is
+    /// relabelled.
+    #[test]
+    fn provider_diagnostics_never_name_a_hidden_dependency() {
+        let visible: std::collections::HashSet<String> =
+            ["DATABASE_URL".to_string()].into_iter().collect();
+
+        assert_eq!(
+            Secrets::diagnostic_secret_name("DB_PASSWORD", Some(&visible)),
+            crate::secrets::HIDDEN_SECRET_LABEL,
+            "an out-of-scope composition input is never named"
+        );
+        assert_eq!(
+            Secrets::diagnostic_secret_name("DATABASE_URL", Some(&visible)),
+            "DATABASE_URL",
+            "a secret the scope exposes keeps its own name"
+        );
+        assert_eq!(
+            Secrets::diagnostic_secret_name("DB_PASSWORD", None),
+            "DB_PASSWORD",
+            "unscoped, every name is its own label"
+        );
+        assert!(
+            !crate::secrets::HIDDEN_SECRET_LABEL.contains('_'),
+            "the placeholder must not look like a secret name"
+        );
+    }
+
+    /// `get` reads one named secret and has no `--scope`, so an active scope must
+    /// not narrow it: the scope surface is `check`/`run`/`export`. It reaches its
+    /// secret through `plan_secret` rather than the scope-filtered worklist, and
+    /// this pins that. The equivalent guarantee for `set` regressed once by
+    /// routing a listing through a helper that quietly became scope-aware, so the
+    /// read path is worth holding down too.
+    #[test]
+    fn get_ignores_the_active_scope() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(&env_path, "QUEUE_TOKEN=tok\n").unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let mut spec = Secrets::new(config(MANIFEST), None, Some(provider), None);
+        // `api` is {DATABASE_URL, API_KEY}: QUEUE_TOKEN is outside it.
+        spec.set_scope("api");
+
+        assert!(
+            spec.get("QUEUE_TOKEN").is_ok(),
+            "an out-of-scope secret is still readable by name"
+        );
+        // The assertion has teeth: `get` does fail for a name the profile never
+        // declares, so succeeding above is about the scope, not a lenient path.
+        assert!(
+            spec.get("NOT_DECLARED").is_err(),
+            "an undeclared secret is still an error"
+        );
+    }
+
+    /// `set` has no `--scope`, and an active scope does not restrict what it may
+    /// write, so its "Available secrets" listing must stay unscoped — the same
+    /// rule `import` follows.
+    #[test]
+    fn set_lists_every_profile_secret_under_an_active_scope() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(&env_path, "").unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let mut spec = Secrets::new(config(MANIFEST), None, Some(provider), None);
+        spec.set_scope("api");
+
+        let err = spec
+            .set("UNDEFINED", Some("v".to_string()))
+            .expect_err("an undeclared secret cannot be written");
+        let SecretSpecError::SecretNotFound(msg) = err else {
+            panic!("expected SecretNotFound, got {err:?}");
+        };
+        assert!(
+            msg.contains("QUEUE_TOKEN"),
+            "the listing must not hide the out-of-scope QUEUE_TOKEN: {msg}"
+        );
+    }
+
+    /// An undefined scope must not turn `set`'s undeclared-secret path into an
+    /// early `InvalidScope` return: that reports the wrong error and skips the
+    /// audit record for an attempted write.
+    #[test]
+    fn set_audits_an_undeclared_secret_even_under_an_undefined_scope() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(&env_path, "").unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let mut spec = Secrets::new(config(MANIFEST), None, Some(provider), None);
+        spec.set_scope("nope");
+        let (logger, lines) = crate::audit::test_support::collecting_logger();
+        spec.set_audit_for_test(logger);
+
+        assert!(
+            matches!(
+                spec.set("UNDEFINED", Some("v".to_string())),
+                Err(SecretSpecError::SecretNotFound(_))
+            ),
+            "the undefined scope must not mask the real error"
+        );
+
+        let events = audit_events(&lines);
+        assert_eq!(events.len(), 1, "the attempted write is still audited");
+        assert_eq!(events[0]["action"], "set");
+        assert_eq!(events[0]["outcome"], "error");
+        assert_eq!(events[0]["error_kind"], "secret_not_found");
+    }
+
+    /// A scope whose intersection with the selected profile is empty resolves to
+    /// nothing and must not initialize or contact any provider. Proven with a
+    /// deliberately broken provider: an unscoped resolve fails building it, while
+    /// the empty intersection short-circuits before any provider is built and so
+    /// succeeds. (An empty `secrets` *list* cannot occur — validation rejects it —
+    /// so the intersection is the only way to reach this path.)
+    #[test]
+    fn empty_scope_contacts_no_provider() {
+        let _env = scrub_resolution_env();
+        let manifest = r#"
+[project]
+name = "empty-scope"
+revision = "1.0"
+
+[profiles.default]
+DATABASE_URL = { description = "DB", required = true }
+
+[profiles.production]
+PROD_ONLY = { description = "prod only", required = true }
+
+[scopes.none]
+secrets = ["PROD_ONLY"]
+"#;
+        let mut spec = Secrets::new(config(manifest), None, Some("bogus://x".to_string()), None);
+        spec.set_scope("none");
+        let response = spec
+            .resolve()
+            .expect("an empty scope resolves without contacting a provider");
+        assert!(response.is_ok());
+        assert!(
+            response.secrets.is_empty(),
+            "an empty scope resolves to nothing"
+        );
+        assert!(response.missing_required.is_empty());
+        // Nothing was resolved, so there is no provider to attribute the result
+        // to and none may be built to name one. The empty string is the
+        // documented value of this field in that case (see
+        // `schema/resolution-report.schema.json`), so consumers can rely on it.
+        assert_eq!(
+            response.provider, "",
+            "a resolution that contacted no provider reports none"
+        );
+        assert_eq!(spec.report().unwrap().provider, "");
+
+        // Control: the same broken provider under no scope *does* fail, proving
+        // the provider is skipped only because the scope is empty.
+        let unscoped = Secrets::new(config(manifest), None, Some("bogus://x".to_string()), None);
+        assert!(
+            unscoped.resolve().is_err(),
+            "a broken provider must fail an unscoped resolve"
+        );
+    }
+
+    /// The `ignore_ambient_scope` flag gates *only* the ambient `SECRETSPEC_SCOPE`
+    /// fallback, never an explicitly set scope. (End-to-end coverage that a typed
+    /// load actually ignores the environment variable — which requires mutating
+    /// the process environment — lives in the isolated subprocess integration
+    /// test `tests/typed_scope_env.rs`, so it cannot race the parallel unit
+    /// suite, every member of which reads the scope env fallback.)
+    #[test]
+    fn ignore_ambient_scope_still_honors_an_explicit_scope() {
+        let mut spec = Secrets::new(config(MANIFEST), None, None, None);
+        spec.set_ignore_ambient_scope(true);
+        spec.set_scope("api");
+        assert_eq!(
+            spec.resolve_profile_secret_names(None).unwrap(),
+            vec!["API_KEY".to_string(), "DATABASE_URL".to_string()],
+            "an explicit scope is honored even when the ambient fallback is suppressed"
+        );
+    }
+
+    const COMPOSED_MANIFEST: &str = r#"
+[project]
+name = "composed-scope"
+revision = "1.0"
+
+[profiles.default]
+DB_USER = { description = "DB user" }
+DB_PASSWORD = { description = "DB password" }
+DB_HOST = { description = "DB host" }
+DATABASE_URL = { description = "DSN", composed = "postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}/app" }
+
+[scopes.api]
+secrets = ["DATABASE_URL"]
+"#;
+
+    /// A scoped interactive resolution must never offer to prompt for — or name —
+    /// a secret the scope hides. An out-of-scope composition dependency reaches
+    /// the raw promptable set (the visible-only resolution list makes its status
+    /// look unresolved); scoping must filter it back out, or `check --scope`
+    /// would disclose the hidden name and overwrite an already-present value.
+    #[test]
+    fn scoped_prompting_never_offers_out_of_scope_dependencies() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        // DB_PASSWORD is absent, so the composed DATABASE_URL cannot render.
+        fs::write(&env_path, "DB_USER=alice\nDB_HOST=db.example\n").unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        // Unscoped: prompting offers the genuinely-missing leaf.
+        let unscoped = Secrets::new(
+            config(COMPOSED_MANIFEST),
+            None,
+            Some(provider.clone()),
+            None,
+        );
+        let uerr = match unscoped.validate().unwrap() {
+            Ok(_) => panic!("DB_PASSWORD missing must fail resolution"),
+            Err(e) => e,
+        };
+        let uprompt = unscoped
+            .scoped_promptable_missing(&uerr, "default")
+            .unwrap();
+        assert!(
+            uprompt.contains(&"DB_PASSWORD".to_string()),
+            "unscoped prompting offers the missing leaf: {uprompt:?}"
+        );
+
+        // Scoped to {DATABASE_URL}: no hidden dependency is ever offered, and the
+        // only missing_required surfaced is the visible composed secret itself.
+        let mut scoped = Secrets::new(config(COMPOSED_MANIFEST), None, Some(provider), None);
+        scoped.set_scope("api");
+        let serr = match scoped.validate().unwrap() {
+            Ok(_) => panic!("the visible composed secret must be unrenderable"),
+            Err(e) => e,
+        };
+        assert_eq!(serr.missing_required, vec!["DATABASE_URL".to_string()]);
+        let sprompt = scoped.scoped_promptable_missing(&serr, "default").unwrap();
+        assert!(
+            sprompt.is_empty(),
+            "a scope must not offer hidden dependencies for prompting: {sprompt:?}"
+        );
+    }
+
+    /// `run --scope` scrubs the raw dependencies of an in-scope composed secret
+    /// from the child — via the separate `scope_excluded_names` path, not the
+    /// resolution output filter — even when the parent shell exported them.
+    #[cfg(unix)]
+    #[test]
+    fn run_scope_scrubs_composed_dependencies_from_the_child() {
+        let _env = scrub_resolution_env();
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(
+            &env_path,
+            "DB_USER=alice\nDB_PASSWORD=s3cret\nDB_HOST=db.example\n",
+        )
+        .unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        // A parent shell that already holds the raw dependency values.
+        let _u = EnvVarGuard::set("DB_USER", "leaked-user");
+        let _p = EnvVarGuard::set("DB_PASSWORD", "leaked-pass");
+
+        let mut spec = Secrets::new(config(COMPOSED_MANIFEST), None, Some(provider), None);
+        spec.set_scope("api");
+
+        let url_file = temp.path().join("url");
+        let user_file = temp.path().join("user");
+        let pass_file = temp.path().join("pass");
+        let exit = spec
+            .run_command(vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                format!(
+                    "printf '%s' \"$DATABASE_URL\" > {}; printf '%s' \"$DB_USER\" > {}; printf '%s' \"$DB_PASSWORD\" > {}",
+                    url_file.display(),
+                    user_file.display(),
+                    pass_file.display()
+                ),
+            ])
+            .unwrap();
+        assert_eq!(exit, 0);
+        // The composed value is injected...
+        assert_eq!(
+            fs::read_to_string(&url_file).unwrap(),
+            "postgres://alice:s3cret@db.example/app"
+        );
+        // ...but its raw dependencies are scrubbed, even the parent-exported ones.
+        assert_eq!(
+            fs::read_to_string(&user_file).unwrap(),
+            "",
+            "DB_USER must not reach the scoped child"
+        );
+        assert_eq!(
+            fs::read_to_string(&pass_file).unwrap(),
+            "",
+            "DB_PASSWORD must not reach the scoped child"
+        );
+    }
+
+    /// `export --scope` emits only the visible set.
+    #[test]
+    fn export_scope_emits_only_visible_secrets() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(&env_path, "DATABASE_URL=db\nAPI_KEY=key\nQUEUE_TOKEN=tok\n").unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let mut spec = Secrets::new(config(MANIFEST), None, Some(provider), None);
+        spec.set_scope("api");
+        let mut out = Vec::new();
+        spec.export(crate::ExportFormat::Dotenv, &mut out).unwrap();
+        let rendered = String::from_utf8(out).unwrap();
+        assert!(rendered.contains("DATABASE_URL"));
+        assert!(rendered.contains("API_KEY"));
+        assert!(
+            !rendered.contains("QUEUE_TOKEN"),
+            "export --scope must not emit an out-of-scope secret: {rendered}"
+        );
+    }
+
+    /// The active scope is surfaced in the untyped resolver and report output,
+    /// and omitted when no scope is active.
+    #[test]
+    fn active_scope_is_surfaced_in_resolve_and_report_output() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(&env_path, "DATABASE_URL=db\nAPI_KEY=key\nQUEUE_TOKEN=tok\n").unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let mut scoped = Secrets::new(config(MANIFEST), None, Some(provider.clone()), None);
+        scoped.set_scope("api");
+        assert_eq!(scoped.resolve().unwrap().scope.as_deref(), Some("api"));
+        let report = scoped.report().unwrap();
+        assert_eq!(report.scope.as_deref(), Some("api"));
+        let explained = report.to_explain_string();
+        assert!(
+            explained.contains("scope:") && explained.contains("api"),
+            "the explain output names the active scope: {explained}"
+        );
+
+        // Unscoped resolution omits the scope entirely.
+        let unscoped = Secrets::new(config(MANIFEST), None, Some(provider), None);
+        assert_eq!(unscoped.resolve().unwrap().scope, None);
+        assert_eq!(unscoped.report().unwrap().scope, None);
+    }
+
+    const CONSTRAINT_MANIFEST: &str = r#"
+[project]
+name = "scoped-constraints"
+revision = "1.0"
+
+[profiles.default]
+AWS_KEY = { description = "AWS credential", required = { at_least_one = "cloud" } }
+GCP_KEY = { description = "GCP credential", required = { at_least_one = "cloud" } }
+PRIMARY = { description = "Primary token", required = { exactly_one = "token" } }
+FALLBACK = { description = "Fallback token", required = { exactly_one = "token" } }
+UNRELATED = { description = "Unrelated" }
+
+[scopes.aws]
+secrets = ["AWS_KEY", "UNRELATED"]
+
+[scopes.tokens]
+secrets = ["PRIMARY", "FALLBACK"]
+
+[scopes.plain]
+secrets = ["UNRELATED"]
+"#;
+
+    /// A presence group is judged on the members the scope actually exposes.
+    /// `at_least_one = ["cloud"]` is satisfied for the whole profile by GCP_KEY
+    /// alone, but a scope that shows only AWS_KEY has no satisfying member it
+    /// can see, so the scoped resolution must fail rather than silently inherit
+    /// a guarantee backed by a secret it hides.
+    #[test]
+    fn a_presence_group_is_enforced_over_the_visible_members() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        // Only the *out-of-scope* member of the group is present.
+        fs::write(&env_path, "GCP_KEY=g\nPRIMARY=p\nUNRELATED=u\n").unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        // Unscoped, GCP_KEY satisfies the `cloud` group.
+        let unscoped = Secrets::new(
+            config(CONSTRAINT_MANIFEST),
+            None,
+            Some(provider.clone()),
+            None,
+        );
+        assert!(
+            unscoped.validate().unwrap().is_ok(),
+            "GCP_KEY satisfies at_least_one across the whole profile"
+        );
+
+        // Scoped to {AWS_KEY, UNRELATED}, the only visible `cloud` member is
+        // absent, so the group is violated.
+        let mut scoped = Secrets::new(config(CONSTRAINT_MANIFEST), None, Some(provider), None);
+        scoped.set_scope("aws");
+        let errors = match scoped.validate().unwrap() {
+            Ok(_) => panic!("a scope whose only visible group member is missing must fail"),
+            Err(e) => e,
+        };
+        let violation = errors
+            .constraint_violations
+            .iter()
+            .find(|v| v.group == "cloud")
+            .expect("the cloud group is violated under this scope");
+        // The message names only what the scope exposes: the hidden GCP_KEY,
+        // which is what satisfies the group unscoped, is never disclosed.
+        assert_eq!(violation.secrets, vec!["AWS_KEY".to_string()]);
+        assert!(violation.present.is_empty());
+    }
+
+    /// A scoped `constraintViolation.secrets` can hold a single visible member,
+    /// so the serialized `check --json` report must still validate against the
+    /// canonical schema.
+    #[test]
+    fn scoped_constraint_violation_report_matches_the_schema() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(&env_path, "GCP_KEY=g\nPRIMARY=p\nUNRELATED=u\n").unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let mut scoped = Secrets::new(config(CONSTRAINT_MANIFEST), None, Some(provider), None);
+        scoped.set_scope("aws");
+        let report = scoped.report().unwrap();
+
+        let violation = report
+            .constraint_violations
+            .iter()
+            .find(|v| v.group == "cloud")
+            .expect("the cloud group is violated under the aws scope");
+        assert_eq!(violation.secrets, vec!["AWS_KEY".to_string()]);
+
+        let instance = serde_json::to_value(&report).unwrap();
+        let schema: serde_json::Value =
+            serde_json::from_str(include_str!("../../schema/resolution-report.schema.json"))
+                .unwrap();
+        let validator = jsonschema::validator_for(&schema).expect("the committed schema compiles");
+        let errors: Vec<String> = validator
+            .iter_errors(&instance)
+            .map(|e| e.to_string())
+            .collect();
+        assert!(
+            errors.is_empty(),
+            "scoped report must validate against the schema: {errors:?}"
+        );
+    }
+
+    /// `import` has no `--scope`, so an active scope (here an ambient-style one
+    /// set on the builder) must not narrow its copy worklist: the out-of-scope
+    /// secret still gets imported.
+    #[test]
+    fn import_ignores_the_active_scope() {
+        let temp = TempDir::new().unwrap();
+        let source = temp.path().join(".env.source");
+        let target = temp.path().join(".env.target");
+        fs::write(&source, "IN_SCOPE=a\nOUT_OF_SCOPE=b\n").unwrap();
+        fs::write(&target, "").unwrap();
+
+        const MANIFEST: &str = r#"
+[project]
+name = "scoped-import"
+revision = "1.0"
+
+[profiles.default]
+IN_SCOPE = { description = "In scope" }
+OUT_OF_SCOPE = { description = "Out of scope" }
+
+[scopes.only_in]
+secrets = ["IN_SCOPE"]
+"#;
+        let mut spec = Secrets::new(
+            config(MANIFEST),
+            None,
+            Some(format!("dotenv://{}", target.display())),
+            None,
+        );
+        spec.set_scope("only_in");
+        spec.import(&format!("dotenv://{}", source.display()))
+            .unwrap();
+
+        let imported: HashMap<String, String> = dotenvy::from_path_iter(&target)
+            .unwrap()
+            .map(|item| item.unwrap())
+            .collect();
+        assert_eq!(imported.get("IN_SCOPE"), Some(&"a".to_string()));
+        assert_eq!(
+            imported.get("OUT_OF_SCOPE"),
+            Some(&"b".to_string()),
+            "import must copy the out-of-scope secret too"
+        );
+    }
+
+    /// A group with no visible member is not the scoped consumer's concern and
+    /// must not fail its resolution.
+    #[test]
+    fn a_presence_group_with_no_visible_member_is_not_enforced() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        // Neither `cloud` nor `token` has a present member.
+        fs::write(&env_path, "UNRELATED=u\n").unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let mut scoped = Secrets::new(config(CONSTRAINT_MANIFEST), None, Some(provider), None);
+        scoped.set_scope("plain");
+        assert!(
+            scoped.validate().unwrap().is_ok(),
+            "a scope exposing no member of any group resolves cleanly"
+        );
+    }
+
+    /// `exactly_one` is a safety property, so a scope that exposes both members
+    /// still rejects having both present — scoping narrows what is judged, it
+    /// never disables the judgement.
+    #[test]
+    fn exactly_one_is_still_enforced_when_the_scope_shows_both_members() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(&env_path, "PRIMARY=p\nFALLBACK=f\nGCP_KEY=g\nUNRELATED=u\n").unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let mut scoped = Secrets::new(config(CONSTRAINT_MANIFEST), None, Some(provider), None);
+        scoped.set_scope("tokens");
+        let errors = match scoped.validate().unwrap() {
+            Ok(_) => panic!("both members present must violate exactly_one under a scope"),
+            Err(e) => e,
+        };
+        let violation = errors
+            .constraint_violations
+            .iter()
+            .find(|v| v.group == "token")
+            .expect("the token group is violated under this scope");
+        assert_eq!(violation.present.len(), 2);
+    }
+
+    /// A visible composition whose input is an `as_path` secret embeds that
+    /// input's **temp-file path** in its value (composition substitutes the
+    /// resolved value, which for `as_path` is the path). Scoping must therefore
+    /// keep the hidden input's temp file alive: dropping it would hand the
+    /// consumer a path to a file that no longer exists.
+    #[cfg(unix)]
+    #[test]
+    fn a_hidden_as_path_input_keeps_its_file_alive_for_the_visible_composition() {
+        let _env = scrub_resolution_env();
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(&env_path, "DB_CERT=certificate-body\n").unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let manifest = r#"
+[project]
+name = "as-path-scope"
+revision = "1.0"
+
+[profiles.default]
+DB_CERT = { description = "Client certificate", as_path = true }
+PG_ARGS = { description = "Connection args", composed = "sslcert=${DB_CERT}" }
+
+[scopes.api]
+secrets = ["PG_ARGS"]
+"#;
+        let mut spec = Secrets::new(config(manifest), None, Some(provider), None);
+        spec.set_scope("api");
+
+        let args_file = temp.path().join("args");
+        let body_file = temp.path().join("body");
+        let cert_file = temp.path().join("cert");
+        let exit = spec
+            .run_command(vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                format!(
+                    "printf '%s' \"$PG_ARGS\" > {}; cat \"${{PG_ARGS#sslcert=}}\" > {} 2>/dev/null; printf '%s' \"$DB_CERT\" > {}",
+                    args_file.display(),
+                    body_file.display(),
+                    cert_file.display()
+                ),
+            ])
+            .unwrap();
+        assert_eq!(exit, 0);
+
+        // The composed value names a path...
+        let args = fs::read_to_string(&args_file).unwrap();
+        assert!(
+            args.starts_with("sslcert=/"),
+            "the composition embeds the input's temp-file path: {args}"
+        );
+        // ...and that path must still resolve to the certificate.
+        assert_eq!(
+            fs::read_to_string(&body_file).unwrap(),
+            "certificate-body",
+            "a hidden as_path input's file must outlive scope filtering"
+        );
+        // The hidden input is still absent from the environment itself.
+        assert_eq!(
+            fs::read_to_string(&cert_file).unwrap(),
+            "",
+            "DB_CERT must not reach the scoped child as a variable"
+        );
+    }
+
+    /// The audit answers "what was read from a provider", so a scoped `check`
+    /// records the *accessed* set — including a composition input the scope
+    /// hides — while `run` records what it actually injected, the visible set.
+    /// The two events record different facts and must not be conflated.
+    #[test]
+    fn audit_records_accessed_secrets_for_a_scoped_check() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(
+            &env_path,
+            "DB_USER=alice\nDB_PASSWORD=s3cret\nDB_HOST=db.example\n",
+        )
+        .unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let mut spec = Secrets::new(config(COMPOSED_MANIFEST), None, Some(provider), None);
+        spec.set_scope("api");
+        let (logger, lines) = crate::audit::test_support::collecting_logger();
+        spec.set_audit_for_test(logger);
+
+        spec.check(true).expect("the scoped check resolves");
+
+        let events = super::audit_events(&lines);
+        let check = events
+            .iter()
+            .find(|e| e["action"] == "check")
+            .expect("a check event is recorded");
+        assert_eq!(check["scope"], "api");
+        let mut keys: Vec<String> = check["keys"]
+            .as_array()
+            .expect("the check event lists keys")
+            .iter()
+            .map(|k| k.as_str().unwrap().to_string())
+            .collect();
+        keys.sort();
+        assert_eq!(
+            keys,
+            vec![
+                "DATABASE_URL".to_string(),
+                "DB_HOST".to_string(),
+                "DB_PASSWORD".to_string(),
+                "DB_USER".to_string(),
+            ],
+            "the audit records every secret actually read, not only the visible one"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn audit_records_scope_and_visible_keys_for_run() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(
+            &env_path,
+            "DATABASE_URL=db\nAPI_KEY=key\nQUEUE_TOKEN=token\n",
+        )
+        .unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let mut spec = Secrets::new(config(MANIFEST), None, Some(provider), None);
+        spec.set_scope("api");
+        let (logger, lines) = crate::audit::test_support::collecting_logger();
+        spec.set_audit_for_test(logger);
+
+        assert_eq!(spec.run_command(vec!["true".to_string()]).unwrap(), 0);
+
+        let events = super::audit_events(&lines);
+        let run = events
+            .iter()
+            .find(|e| e["action"] == "run")
+            .expect("a run event is recorded");
+        assert_eq!(run["scope"], "api");
+        assert_eq!(run["keys"], serde_json::json!(["API_KEY", "DATABASE_URL"]));
+    }
+
+    #[test]
+    fn audit_records_scope_and_visible_keys_for_export() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(
+            &env_path,
+            "DATABASE_URL=db\nAPI_KEY=key\nQUEUE_TOKEN=token\n",
+        )
+        .unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let mut spec = Secrets::new(config(MANIFEST), None, Some(provider), None);
+        spec.set_scope("worker");
+        let (logger, lines) = crate::audit::test_support::collecting_logger();
+        spec.set_audit_for_test(logger);
+
+        spec.export(crate::ExportFormat::Dotenv, &mut Vec::new())
+            .unwrap();
+
+        let events = super::audit_events(&lines);
+        let export = events
+            .iter()
+            .find(|e| e["action"] == "export")
+            .expect("an export event is recorded");
+        assert_eq!(export["scope"], "worker");
+        assert_eq!(
+            export["keys"],
+            serde_json::json!(["DATABASE_URL", "QUEUE_TOKEN"])
+        );
+    }
+
+    #[test]
+    fn audit_records_an_invalid_scope_name_on_failure() {
+        let mut spec = Secrets::new(config(MANIFEST), None, Some("env://".to_string()), None);
+        spec.set_scope("does-not-exist");
+        let (logger, lines) = crate::audit::test_support::collecting_logger();
+        spec.set_audit_for_test(logger);
+
+        assert!(spec.check(true).is_err());
+
+        let events = super::audit_events(&lines);
+        let check = events
+            .iter()
+            .find(|e| e["action"] == "check")
+            .expect("the failed check is recorded");
+        assert_eq!(check["scope"], "does-not-exist");
+        assert_eq!(check["outcome"], "error");
+    }
+
+    /// A secret fetched only as an out-of-scope composition input never counts
+    /// as "present" for a presence group: constraints are judged after the
+    /// output is narrowed to the visible set.
+    #[test]
+    fn a_hidden_composition_input_does_not_satisfy_a_group() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        fs::write(&env_path, "AWS_KEY=a\n").unwrap();
+        let provider = format!("dotenv://{}", env_path.display());
+
+        let manifest = r#"
+[project]
+name = "hidden-input-constraint"
+revision = "1.0"
+
+[profiles.default]
+AWS_KEY = { description = "AWS credential", required = { at_least_one = "cloud" } }
+GCP_KEY = { description = "GCP credential", required = { at_least_one = "cloud" } }
+DERIVED = { description = "Derived", composed = "aws=${AWS_KEY}" }
+
+[scopes.derived]
+secrets = ["DERIVED"]
+"#;
+        let mut scoped = Secrets::new(config(manifest), None, Some(provider), None);
+        scoped.set_scope("derived");
+        // AWS_KEY is fetched (DERIVED needs it) but hidden, so the `cloud` group
+        // has no visible member and is not enforced — rather than being counted
+        // as satisfied by a secret the consumer cannot see.
+        let validated = scoped.validate().unwrap();
+        assert!(validated.is_ok(), "the hidden input renders DERIVED");
+        let resolved = validated.unwrap();
+        assert!(!resolved.resolved.secrets.contains_key("AWS_KEY"));
+    }
+}
+/// A `myprovider` cached route over dotenv-backed sources, cached in
+/// `cache_uri`. Sources are named `source0`, `source1`, ... in order.
+fn cached_providers(
+    source_paths: &[&Path],
+    cache_uri: &str,
+    max_age: &str,
+) -> HashMap<String, ProviderAlias> {
+    let mut providers = HashMap::new();
+    let mut fallback = Vec::new();
+    for (index, path) in source_paths.iter().enumerate() {
+        let alias = format!("source{index}");
+        fallback.push(alias.clone());
+        providers.insert(
+            alias,
+            ProviderAlias::from(format!("dotenv://{}", path.display())),
+        );
+    }
+    providers.insert("local".to_string(), ProviderAlias::from(cache_uri));
+    providers.insert(
+        "myprovider".to_string(),
+        ProviderAlias::cached(fallback, ProviderCache::new("local", max_age).unwrap()).unwrap(),
+    );
+    providers
+}
+
+/// [`cached_providers`] with the cache in a dotenv file of its own.
+fn cached_dotenv_providers(
+    source_paths: &[&Path],
+    cache_path: &Path,
+    max_age: &str,
+) -> HashMap<String, ProviderAlias> {
+    cached_providers(
+        source_paths,
+        &format!("dotenv://{}", cache_path.display()),
+        max_age,
+    )
+}
+
+/// A `Secrets` over one `API_KEY` on the `myprovider` cached route.
+///
+/// `project` names the project the secret is addressed under, so a test using
+/// the process-global `memtest`/`failwrite` store can keep its entries to itself.
+fn cached_secrets_with(project: &str, providers: HashMap<String, ProviderAlias>) -> Secrets {
+    let mut config = resolve_test_config(HashMap::from([(
+        "API_KEY".to_string(),
+        Secret {
+            providers: Some(vec!["myprovider".to_string()]),
+            ..Default::default()
+        },
+    )]));
+    config.project.name = project.to_string();
+    config.providers = Some(providers);
+    Secrets::new(config, None, None, None)
+}
+
+fn cached_dotenv_secrets(source_paths: &[&Path], cache_path: &Path, max_age: &str) -> Secrets {
+    cached_secrets_with(
+        "resolve-test",
+        cached_dotenv_providers(source_paths, cache_path, max_age),
+    )
+}
+
+/// A profile-aware in-memory authoritative store with a shared flat dotenv
+/// cache. This combination exercises the namespace the cache envelope itself
+/// must preserve.
+fn cached_memtest_providers(cache_path: &Path) -> HashMap<String, ProviderAlias> {
+    HashMap::from([
+        ("source".to_string(), ProviderAlias::from("memtest://")),
+        (
+            "local".to_string(),
+            ProviderAlias::from(format!("dotenv://{}", cache_path.display())),
+        ),
+        (
+            "myprovider".to_string(),
+            ProviderAlias::cached(
+                vec!["source".to_string()],
+                ProviderCache::new("local", "8h").unwrap(),
+            )
+            .unwrap(),
+        ),
+    ])
+}
+
+fn resolved_value(secrets: &Secrets, name: &str) -> String {
+    secrets.resolve().unwrap().secrets[name]
+        .value
+        .clone()
+        .expect("inline resolved value")
+}
+
+#[test]
+fn a_cached_default_provider_reports_the_store_it_reads_first() {
+    let _env = scrub_resolution_env();
+    // The report names the user-global default provider when no secret picked a
+    // store of its own. A cached alias is a route and cannot be constructed, so
+    // reporting has to name the store it reads first instead of failing a
+    // report that needed no provider at all.
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    let cache = temp.path().join("cache.env");
+    let mut config =
+        resolve_test_config(HashMap::from([("API_KEY".to_string(), Secret::default())]));
+    config.providers = Some(cached_dotenv_providers(&[&source], &cache, "1h"));
+    let mut global = global_config_with_aliases(&[]);
+    global.defaults.provider = Some("myprovider".to_string());
+    let secrets = Secrets::new(config, Some(global), None, None);
+
+    let report = secrets.report().unwrap();
+    assert_eq!(report.provider, format!("dotenv://{}", source.display()));
+}
+
+#[test]
+fn cached_route_hits_cache_refreshes_after_clear_and_survives_source_loss() {
+    let _env = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    let cache = temp.path().join("cache.env");
+    fs::write(&source, "API_KEY=remote-1\n").unwrap();
+    let secrets = cached_dotenv_secrets(&[&source], &cache, "8h");
+
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "remote-1");
+    assert!(cache.exists(), "the first source hit should populate cache");
+
+    fs::write(&source, "API_KEY=remote-2\n").unwrap();
+    assert_eq!(
+        resolved_value(&secrets, "API_KEY"),
+        "remote-1",
+        "a fresh cache hit wins over the changed source"
+    );
+
+    assert_eq!(secrets.clear_cache(Some("API_KEY")).unwrap(), 1);
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "remote-2");
+
+    fs::remove_file(&source).unwrap();
+    fs::create_dir(&source).unwrap();
+    assert_eq!(
+        resolved_value(&secrets, "API_KEY"),
+        "remote-2",
+        "a fresh hit must not contact the now-broken authoritative provider"
+    );
+}
+
+#[test]
+fn cached_route_walks_fallback_in_order_and_caches_the_answer() {
+    let _env = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let missing = temp.path().join("missing.env");
+    let fallback = temp.path().join("fallback.env");
+    let cache = temp.path().join("cache.env");
+    fs::write(&fallback, "API_KEY=from-fallback\n").unwrap();
+    let secrets = cached_dotenv_secrets(&[&missing, &fallback], &cache, "1h");
+
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "from-fallback");
+    fs::remove_file(&fallback).unwrap();
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "from-fallback");
+}
+
+#[test]
+fn expired_cache_entry_falls_back_and_refreshes() {
+    let _env = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    let cache = temp.path().join("cache.env");
+    fs::write(&source, "API_KEY=remote-1\n").unwrap();
+    let secrets = cached_dotenv_secrets(&[&source], &cache, "8h");
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "remote-1");
+
+    backdate_cache_entry(&cache, "resolve-test", "API_KEY");
+
+    fs::write(&source, "API_KEY=remote-2\n").unwrap();
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "remote-2");
+}
+
+#[test]
+fn value_free_report_does_not_populate_cache() {
+    let _env = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    let cache = temp.path().join("cache.env");
+    fs::write(&source, "API_KEY=remote\n").unwrap();
+    let secrets = cached_dotenv_secrets(&[&source], &cache, "1h");
+
+    let report = secrets.report().unwrap();
+    assert!(report.all_required_present());
+    assert!(
+        !cache.exists(),
+        "value-free resolution must not create a cache entry"
+    );
+}
+
+#[test]
+fn set_writes_authoritative_provider_then_refreshes_cache() {
+    let _env = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    let cache = temp.path().join("cache.env");
+    let secrets = cached_dotenv_secrets(&[&source], &cache, "1h");
+
+    secrets.set("API_KEY", Some("written".to_string())).unwrap();
+    let source_value = dotenvy::from_path_iter(&source)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap();
+    assert_eq!(source_value, ("API_KEY".to_string(), "written".to_string()));
+    fs::remove_file(&source).unwrap();
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "written");
+}
+
+#[test]
+fn a_damaged_entry_of_our_own_is_replaced() {
+    let _env = scrub_resolution_env();
+    // An entry carrying the ownership marker but no readable payload — a
+    // truncated write — is unmistakably SecretSpec's, so it is safe to replace.
+    // That is the whole reason the marker exists: without it this case is
+    // indistinguishable from a value someone else stored, and recovering from
+    // corruption would mean risking their data.
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    let cache = temp.path().join("cache.env");
+    fs::write(&source, "API_KEY=remote-1\n").unwrap();
+    let secrets = cached_dotenv_secrets(&[&source], &cache, "1h");
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "remote-1");
+
+    let marker = crate::cache::CACHE_ENVELOPE_MARKER;
+    write_cache_entry(
+        &cache,
+        "resolve-test",
+        "API_KEY",
+        &format!("{marker}{{trunc"),
+    );
+    fs::write(&source, "API_KEY=remote-2\n").unwrap();
+
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "remote-2");
+    let refreshed = stored_cache_entry(&cache).expect("a replacement entry");
+    assert!(
+        refreshed
+            .strip_prefix(marker)
+            .is_some_and(|payload| { serde_json::from_str::<serde_json::Value>(payload).is_ok() }),
+        "{refreshed}"
+    );
+}
+
+#[test]
+fn changed_authoritative_route_invalidates_existing_cache() {
+    let _env = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source_a = temp.path().join("source-a.env");
+    let source_b = temp.path().join("source-b.env");
+    let cache = temp.path().join("cache.env");
+    fs::write(&source_a, "API_KEY=from-a\n").unwrap();
+    fs::write(&source_b, "API_KEY=from-b\n").unwrap();
+
+    let first = cached_dotenv_secrets(&[&source_a], &cache, "1h");
+    assert_eq!(resolved_value(&first, "API_KEY"), "from-a");
+
+    let changed = cached_dotenv_secrets(&[&source_b], &cache, "1h");
+    assert_eq!(
+        resolved_value(&changed, "API_KEY"),
+        "from-b",
+        "the cache must not survive a change to its authoritative provider route"
+    );
+}
+
+#[test]
+fn shared_flat_cache_does_not_cross_projects() {
+    let _env = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let cache = temp.path().join("cache.env");
+    let providers = cached_memtest_providers(&cache);
+    let project_a = cached_secrets_with("cache-project-a", providers.clone());
+    let project_b = cached_secrets_with("cache-project-b", providers);
+
+    project_a
+        .set("API_KEY", Some("from-project-a".to_string()))
+        .unwrap();
+    project_b
+        .set("API_KEY", Some("from-project-b".to_string()))
+        .unwrap();
+
+    assert_eq!(
+        resolved_value(&project_a, "API_KEY"),
+        "from-project-a",
+        "a shared flat cache must reject another project's envelope"
+    );
+}
+
+#[test]
+fn shared_flat_cache_does_not_cross_profiles() {
+    let _env = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let cache = temp.path().join("cache.env");
+    let mut config = resolve_test_config(HashMap::from([(
+        "API_KEY".to_string(),
+        Secret {
+            providers: Some(vec!["myprovider".to_string()]),
+            ..Default::default()
+        },
+    )]));
+    config.project.name = "cache-profile-test".to_string();
+    config
+        .profiles
+        .insert("production".to_string(), config.profiles["default"].clone());
+    config.providers = Some(cached_memtest_providers(&cache));
+    let mut secrets = Secrets::new(config, None, None, None);
+
+    secrets
+        .set("API_KEY", Some("from-default".to_string()))
+        .unwrap();
+    secrets.set_profile("production");
+    secrets
+        .set("API_KEY", Some("from-production".to_string()))
+        .unwrap();
+    secrets.set_profile("default");
+
+    assert_eq!(
+        resolved_value(&secrets, "API_KEY"),
+        "from-default",
+        "a shared flat cache must reject another profile's envelope"
+    );
+}
+
+#[test]
+fn cache_write_failure_does_not_hide_authoritative_value() {
+    let _env = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    fs::write(&source, "API_KEY=remote\n").unwrap();
+    // A cache whose writes always fail: the value still resolves from the
+    // authoritative source, the failure is only a warning.
+    let secrets = cached_secrets_with(
+        "cache-unwritable-test",
+        cached_providers(&[&source], "failwrite://", "1h"),
+    );
+
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "remote");
+}
+
+/// Rewrite a dotenv-backed cache entry's write time, so it reads as expired.
+fn backdate_cache_entry(cache: &Path, project: &str, name: &str) {
+    let marker = crate::cache::CACHE_ENVELOPE_MARKER;
+    let (_, stored) = dotenvy::from_path_iter(cache)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap();
+    let payload = stored
+        .strip_prefix(marker)
+        .expect("a cache entry carries the ownership marker");
+    let mut envelope: serde_json::Value = serde_json::from_str(payload).unwrap();
+    envelope["cached_at"] = serde_json::json!(0);
+    write_cache_entry(
+        cache,
+        project,
+        name,
+        &format!("{marker}{}", serde_json::to_string(&envelope).unwrap()),
+    );
+}
+
+/// Store `value` verbatim at a dotenv-backed cache's address for `name`.
+fn write_cache_entry(cache: &Path, project: &str, name: &str, value: &str) {
+    let provider = crate::provider::provider_from_spec(
+        &format!("dotenv://{}", cache.display()),
+        crate::provider::ProviderCredentials::new(),
+    )
+    .unwrap();
+    provider
+        .set(
+            crate::provider::Address::convention(project, "default", name),
+            &secrecy::SecretString::new(value.into()),
+        )
+        .unwrap();
+}
+
+#[test]
+fn an_expired_entry_is_dropped_even_when_nothing_replaces_it() {
+    let _env = scrub_resolution_env();
+    // A store that cannot expire values leaves that to SecretSpec, and a refresh
+    // only overwrites an entry when the authoritative read succeeds on a pass
+    // that materializes values. Neither holds here — the source is gone and the
+    // pass is value-free — so without eviction the expired plaintext would sit
+    // in the cache until some later command happened to overwrite it.
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    let cache = temp.path().join("cache.env");
+    fs::write(&source, "API_KEY=remote\n").unwrap();
+    let secrets = cached_dotenv_secrets(&[&source], &cache, "8h");
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "remote");
+
+    backdate_cache_entry(&cache, "resolve-test", "API_KEY");
+    fs::remove_file(&source).unwrap();
+    secrets.report().unwrap();
+
+    assert!(
+        !fs::read_to_string(&cache).unwrap().contains("API_KEY"),
+        "an entry no read can serve must not keep its plaintext"
+    );
+}
+
+#[test]
+fn a_cache_asks_its_store_to_expire_the_entry() {
+    let _env = scrub_resolution_env();
+    // A store that can expire a value on its own bounds how long a copy of
+    // another store's secret exists even if secretspec never runs again, so the
+    // window the alias declares has to reach the provider.
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    fs::write(&source, "API_KEY=remote\n").unwrap();
+    let secrets = cached_secrets_with(
+        "cache-expiry-test",
+        cached_providers(&[&source], "expiring://", "8h"),
+    );
+
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "remote");
+    assert_eq!(
+        crate::provider::tests::recorded_expiry("cache-expiry-test/default/API_KEY"),
+        Some(std::time::Duration::from_secs(8 * 60 * 60))
+    );
+}
+
+#[test]
+fn a_cache_that_cannot_delete_is_refused() {
+    let _env = scrub_resolution_env();
+    // Reads would work, so nothing would surface the problem until an entry
+    // needed dropping — by which point a stale value has already been served.
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    fs::write(&source, "API_KEY=remote\n").unwrap();
+    let secrets = cached_secrets_with(
+        "cache-undeletable-test",
+        cached_providers(&[&source], "env://", "1h"),
+    );
+
+    let message = secrets.resolve().unwrap_err().to_string();
+    assert!(message.contains("cannot delete secrets"), "{message}");
+}
+
+#[test]
+fn a_write_that_bypasses_the_cache_invalidates_it() {
+    let _env = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    let cache = temp.path().join("cache.env");
+    fs::write(&source, "API_KEY=remote-1\n").unwrap();
+    let secrets = cached_dotenv_secrets(&[&source], &cache, "8h");
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "remote-1");
+
+    // The documented escape hatch: name the leaf to skip the cached route. The
+    // authoritative value it writes supersedes the cache entry, which must not
+    // outlive it for the rest of the freshness window.
+    let mut direct = cached_dotenv_secrets(&[&source], &cache, "8h");
+    direct.set_provider("source0");
+    direct.set("API_KEY", Some("remote-2".to_string())).unwrap();
+
+    assert_eq!(
+        resolved_value(&secrets, "API_KEY"),
+        "remote-2",
+        "a write that bypassed the cache must invalidate what it superseded"
+    );
+}
+
+#[test]
+fn a_failed_cache_refresh_drops_the_superseded_entry() {
+    let _env = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    fs::write(&source, "API_KEY=remote-1\n").unwrap();
+    // `memtest` and `failwrite` share one in-memory store, and the second always
+    // refuses writes: a refresh through it fails while the entry it should have
+    // replaced is still readable through the first.
+    let project = "cache-refresh-failure-test";
+    let cached = cached_secrets_with(project, cached_providers(&[&source], "memtest://", "8h"));
+    let unwritable_cache =
+        cached_secrets_with(project, cached_providers(&[&source], "failwrite://", "8h"));
+    assert_eq!(resolved_value(&cached, "API_KEY"), "remote-1");
+
+    unwritable_cache
+        .set("API_KEY", Some("remote-2".to_string()))
+        .unwrap();
+
+    assert_eq!(
+        resolved_value(&cached, "API_KEY"),
+        "remote-2",
+        "an entry the refresh could not replace must be dropped, not served"
+    );
+}
+
+#[test]
+fn cache_construction_failure_drops_the_superseded_entry() {
+    let _env = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    let credential = temp.path().join("cache-credential.env");
+    fs::write(&source, "API_KEY=remote-1\n").unwrap();
+    fs::write(&credential, "test_token=available\n").unwrap();
+
+    let project = "cache-construction-failure-test";
+    let providers = || {
+        let mut providers = cached_providers(&[&source], "memtest://", "8h");
+        providers.insert(
+            "local".to_string(),
+            ProviderAlias {
+                uri: "memtest://".to_string(),
+                credentials: HashMap::from([(
+                    "test_token".to_string(),
+                    CredentialSource::from(format!("dotenv://{}", credential.display())),
+                )]),
+                ..Default::default()
+            },
+        );
+        providers
+    };
+
+    // Populate a fresh envelope while the cache credential is available.
+    let populated = cached_secrets_with(project, providers());
+    assert_eq!(resolved_value(&populated, "API_KEY"), "remote-1");
+
+    // A new session cannot construct the credential-backed cache, but can read
+    // the newer authoritative value. The failed refresh must remediate the old
+    // envelope instead of silently leaving it fresh and serveable.
+    fs::write(&source, "API_KEY=remote-2\n").unwrap();
+    fs::remove_file(&credential).unwrap();
+    fs::create_dir(&credential).unwrap();
+    let unavailable = cached_secrets_with(project, providers());
+    assert_eq!(resolved_value(&unavailable, "API_KEY"), "remote-2");
+
+    fs::remove_dir(&credential).unwrap();
+    fs::write(&credential, "test_token=available-again\n").unwrap();
+    let recovered = cached_secrets_with(project, providers());
+    assert_eq!(
+        resolved_value(&recovered, "API_KEY"),
+        "remote-2",
+        "credential recovery must not revive the superseded cache value"
+    );
+}
+
+/// The value a cache store holds at `API_KEY`'s cache address, or `None`.
+fn stored_cache_entry(cache: &Path) -> Option<String> {
+    dotenvy::from_path_iter(cache).unwrap().find_map(|item| {
+        let (key, value) = item.unwrap();
+        (key == "API_KEY").then_some(value)
+    })
+}
+
+#[test]
+fn a_value_secretspec_did_not_write_is_never_deleted() {
+    let _env = scrub_resolution_env();
+    // A cache pointed at a store holding other things — a misconfiguration, or a
+    // dotenv file someone keeps by hand — must not have those values treated as
+    // cache entries. Reading skips them and clearing refuses them, because
+    // deleting on the strength of the address alone is data loss.
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    let cache = temp.path().join("cache.env");
+    fs::write(&source, "API_KEY=remote\n").unwrap();
+    fs::write(&cache, "API_KEY=someone-elses-value\n").unwrap();
+    let secrets = cached_dotenv_secrets(&[&source], &cache, "8h");
+
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "remote");
+    let error = secrets
+        .clear_cache(Some("API_KEY"))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("not a SecretSpec cache entry"), "{error}");
+    assert_eq!(
+        stored_cache_entry(&cache).as_deref(),
+        Some("someone-elses-value"),
+        "a value SecretSpec did not write must survive both the read and the clear"
+    );
+}
+
+#[test]
+fn another_projects_cache_entry_is_never_deleted() {
+    let _env = scrub_resolution_env();
+    // A flat store gives every project the same key for a given secret name, so
+    // an entry found there may be another project's. Clearing must say so rather
+    // than delete it.
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    let cache = temp.path().join("cache.env");
+    fs::write(&source, "API_KEY=remote\n").unwrap();
+
+    let providers = cached_dotenv_providers(&[&source], &cache, "8h");
+    let theirs = cached_secrets_with("their-project", providers.clone());
+    assert_eq!(resolved_value(&theirs, "API_KEY"), "remote");
+    let entry = stored_cache_entry(&cache).expect("their cache entry");
+
+    let ours = cached_secrets_with("our-project", providers);
+    let error = ours.clear_cache(Some("API_KEY")).unwrap_err().to_string();
+    assert!(error.contains("their-project/default"), "{error}");
+    assert_eq!(
+        stored_cache_entry(&cache).as_deref(),
+        Some(entry.as_str()),
+        "another project's entry must survive our clear"
+    );
+}
+
+#[test]
+fn cached_reads_serve_every_secret_across_cache_stores() {
+    let _env = scrub_resolution_env();
+    // Caches are read one store at a time rather than one secret at a time, so
+    // two secrets sharing a cache and a third in its own store all have to come
+    // back from the batched read, each matched to the entry it planned.
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    let shared_cache = temp.path().join("shared-cache.env");
+    let other_cache = temp.path().join("other-cache.env");
+    fs::write(&source, "A_KEY=a\nB_KEY=b\nC_KEY=c\n").unwrap();
+
+    let cached_secret = |alias: &str| Secret {
+        providers: Some(vec![alias.to_string()]),
+        ..Default::default()
+    };
+    let mut config = resolve_test_config(HashMap::from([
+        ("A_KEY".to_string(), cached_secret("myprovider")),
+        ("B_KEY".to_string(), cached_secret("myprovider")),
+        ("C_KEY".to_string(), cached_secret("otherprovider")),
+    ]));
+    let mut providers = cached_dotenv_providers(&[&source], &shared_cache, "1h");
+    providers.insert(
+        "other_local".to_string(),
+        ProviderAlias::from(format!("dotenv://{}", other_cache.display())),
+    );
+    providers.insert(
+        "otherprovider".to_string(),
+        ProviderAlias::cached(
+            vec!["source0".to_string()],
+            ProviderCache::new("other_local", "1h").unwrap(),
+        )
+        .unwrap(),
+    );
+    config.providers = Some(providers);
+    let secrets = Secrets::new(config, None, None, None);
+
+    for (name, value) in [("A_KEY", "a"), ("B_KEY", "b"), ("C_KEY", "c")] {
+        assert_eq!(resolved_value(&secrets, name), value);
+    }
+
+    // With the source gone, only the caches can answer.
+    fs::remove_file(&source).unwrap();
+    for (name, value) in [("A_KEY", "a"), ("B_KEY", "b"), ("C_KEY", "c")] {
+        assert_eq!(resolved_value(&secrets, name), value, "{name} from cache");
+    }
+}
+
+#[test]
+fn cache_clear_counts_only_the_entries_it_removed() {
+    let _env = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    let cache = temp.path().join("cache.env");
+    fs::write(&source, "API_KEY=remote\n").unwrap();
+    let secrets = cached_dotenv_secrets(&[&source], &cache, "1h");
+
+    assert_eq!(
+        secrets.clear_cache(None).unwrap(),
+        0,
+        "nothing is cached yet, so nothing was cleared"
+    );
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "remote");
+    assert_eq!(secrets.clear_cache(None).unwrap(), 1);
+    assert_eq!(
+        secrets.clear_cache(None).unwrap(),
+        0,
+        "clearing an already-cleared cache removes nothing"
+    );
+}
+
+#[test]
+fn cache_clear_ignores_a_provider_override() {
+    let _env = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    let cache = temp.path().join("cache.env");
+    fs::write(&source, "API_KEY=remote-1\n").unwrap();
+    let secrets = cached_dotenv_secrets(&[&source], &cache, "8h");
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "remote-1");
+
+    // An exported `SECRETSPEC_PROVIDER` (or `--provider`) collapses the route and
+    // drops its cache. Cache maintenance has to look past that, or clearing would
+    // silently do nothing in exactly the shells where it is most often run.
+    let mut overridden = cached_dotenv_secrets(&[&source], &cache, "8h");
+    overridden.set_provider("source0");
+    assert_eq!(overridden.clear_cache(Some("API_KEY")).unwrap(), 1);
+
+    fs::write(&source, "API_KEY=remote-2\n").unwrap();
+    assert_eq!(resolved_value(&secrets, "API_KEY"), "remote-2");
+}
+
+#[test]
+fn cache_clear_clears_what_it_can_before_reporting_a_failure() {
+    let _env = scrub_resolution_env();
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source.env");
+    let cache = temp.path().join("cache.env");
+    fs::write(&source, "A_KEY=a\nB_KEY=b\n").unwrap();
+    let mut config = resolve_test_config(HashMap::from([
+        (
+            "A_KEY".to_string(),
+            Secret {
+                providers: Some(vec!["unclearable".to_string()]),
+                ..Default::default()
+            },
+        ),
+        (
+            "B_KEY".to_string(),
+            Secret {
+                providers: Some(vec!["myprovider".to_string()]),
+                ..Default::default()
+            },
+        ),
+    ]));
+    let mut providers = cached_dotenv_providers(&[&source], &cache, "1h");
+    // A store that claims deletion but fails at it — a locked keychain, an
+    // unreachable store — is what a declared capability cannot rule out. A_KEY
+    // is swept first, being first alphabetically, so its failure comes before
+    // B_KEY's entry has been cleared.
+    providers.insert(
+        "unreachable".to_string(),
+        ProviderAlias::from("faildelete://"),
+    );
+    providers.insert(
+        "unclearable".to_string(),
+        ProviderAlias::cached(
+            vec!["source0".to_string()],
+            ProviderCache::new("unreachable", "1h").unwrap(),
+        )
+        .unwrap(),
+    );
+    config.providers = Some(providers);
+    let secrets = Secrets::new(config, None, None, None);
+    assert_eq!(resolved_value(&secrets, "B_KEY"), "b");
+
+    let message = secrets.clear_cache(None).unwrap_err().to_string();
+    assert!(message.contains("cleared 1 cache entry"), "{message}");
+    assert!(message.contains("A_KEY"), "{message}");
+    assert!(
+        !fs::read_to_string(&cache).unwrap().contains("B_KEY"),
+        "one unclearable cache must not leave the rest of the profile cached"
+    );
+}

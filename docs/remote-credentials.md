@@ -33,6 +33,25 @@ The provider runs in a worker process. Mantle applies a deadline, process-group 
 
 Provider failure stops the operation. Mantle does not try another provider, generate a key, or write ticket state.
 
+On Linux, the worker keeps a 10-second CPU limit, a 15-second wall deadline,
+bounded stdout/stderr, and process-group termination. Its virtual-address
+limit remains **512 MiB** for `systemd-credential://` requests; only explicit
+`sops://` requests receive a **2,048 MiB** `RLIMIT_AS` cap. Go-based `sops`
+needs address reservations well above its resident memory: a measured decrypt
+used about 1,757,908 KiB virtual but 23,152 KiB RSS without the limit.
+The old 512 MiB cap rejected actual decryption; 768 MiB also failed, while
+1,024 MiB succeeded with less than 4 MiB virtual-address headroom in one
+observed run. The 2,048 MiB SOPS-only cap leaves headroom for this runtime
+without removing the bound. It increases the worst-case memory available to
+the SOPS worker; it does **not** raise the limit for systemd credentials or
+weaken provider/profile checks, CPU, deadline, or retained-output limits.
+`tests/fixtures/remote-ticket-sops-age.enc.json` is encrypted with the
+published SecretSpec test-only age key. The real encrypted
+`remote_credentials_cli` integration test is explicitly ignored in generic
+test runs; with `sops` present in `PATH`, run the SOPS-filtered tests using
+`--include-ignored` to exercise actual bootstrap/rotation and the ordinary
+timeout/output-limit negative controls without a silent dependency skip.
+
 ## Credential admission
 
 Wire and legacy-state records remain structural until the pure credential core admits them.

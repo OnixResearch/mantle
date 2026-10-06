@@ -1,0 +1,261 @@
+//! Validation results for secret checking
+
+use crate::config::Resolved;
+use crate::report::{ResolutionReport, SecretResolution};
+use secrecy::SecretString;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fmt;
+use tempfile::NamedTempFile;
+
+/// Container for validated secrets with metadata
+///
+/// This struct contains the validated secrets along with information about
+/// which secrets are present, missing, or using default values.
+pub struct ValidatedSecrets {
+    /// Resolved secrets with provider and profile information
+    pub resolved: Resolved<HashMap<String, SecretString>>,
+    /// List of optional secrets that are missing
+    pub missing_optional: Vec<String>,
+    /// List of secrets using their default values (name, default_value)
+    pub with_defaults: Vec<(String, String)>,
+    /// Value-free per-secret resolution provenance (which provider answered,
+    /// generated, defaulted, as_path). Drives `check --json`/`--explain`.
+    pub resolution: Vec<SecretResolution>,
+    /// Temporary files for secrets with as_path=true.
+    /// These are kept alive for the lifetime of ValidatedSecrets and automatically
+    /// cleaned up when dropped.
+    #[doc(hidden)]
+    pub(crate) temp_files: Vec<NamedTempFile>,
+}
+
+impl ValidatedSecrets {
+    /// Build the value-free [`ResolutionReport`] for this successful resolution.
+    pub fn report(&self) -> ResolutionReport {
+        ResolutionReport::new(
+            self.resolved.provider.clone(),
+            self.resolved.profile.clone(),
+            self.resolution.clone(),
+        )
+    }
+
+    /// Persist all temporary files, preventing automatic cleanup.
+    ///
+    /// This method consumes the temporary file handles and persists them,
+    /// so they won't be automatically deleted when this struct is dropped.
+    /// This is useful when you want the temporary files to outlive the
+    /// ValidatedSecrets instance, such as in CLI commands.
+    ///
+    /// # Returns
+    ///
+    /// A vector of paths to the persisted files
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any file cannot be persisted
+    pub fn keep_temp_files(&mut self) -> Result<Vec<std::path::PathBuf>, std::io::Error> {
+        let mut paths = Vec::new();
+        let temp_files = std::mem::take(&mut self.temp_files);
+
+        for temp_file in temp_files {
+            let temp_path = temp_file.into_temp_path();
+            let path = temp_path.keep().map_err(|e| {
+                std::io::Error::other(format!("Failed to persist temporary file: {}", e))
+            })?;
+            paths.push(path);
+        }
+
+        Ok(paths)
+    }
+}
+
+/// The kind of cross-secret presence constraint that failed.
+///
+/// Available since SecretSpec 0.17.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConstraintKind {
+    /// None of a group whose rule requires at least one member resolved.
+    AtLeastOne,
+    /// Zero or multiple members of a group whose rule requires exactly one
+    /// member resolved.
+    ExactlyOne,
+}
+
+/// A failed cross-secret presence constraint.
+///
+/// `secrets` is the configured group and `present` is the subset that resolved.
+/// Values are never included.
+///
+/// Available since SecretSpec 0.17.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConstraintViolation {
+    /// Which presence rule failed.
+    pub kind: ConstraintKind,
+    /// The group name declared by its member secrets.
+    pub group: String,
+    /// All secret names in the configured group.
+    pub secrets: Vec<String>,
+    /// Group members that resolved.
+    pub present: Vec<String>,
+}
+
+impl fmt::Display for ConstraintViolation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.kind {
+            ConstraintKind::AtLeastOne => {
+                write!(
+                    f,
+                    "at least one secret in group '{}' must be provided ({})",
+                    self.group,
+                    self.secrets.join(", ")
+                )
+            }
+            ConstraintKind::ExactlyOne if self.present.is_empty() => {
+                write!(
+                    f,
+                    "exactly one secret in group '{}' must be provided ({})",
+                    self.group,
+                    self.secrets.join(", ")
+                )
+            }
+            ConstraintKind::ExactlyOne => write!(
+                f,
+                "exactly one secret in group '{}' must be provided ({}); found {}",
+                self.group,
+                self.secrets.join(", "),
+                self.present.join(", ")
+            ),
+        }
+    }
+}
+
+/// Container for validation errors
+///
+/// This struct contains all the validation errors that occurred when
+/// validating secrets, including missing required secrets and other issues.
+#[derive(Debug, Clone)]
+pub struct ValidationErrors {
+    /// List of required secrets that are missing
+    pub missing_required: Vec<String>,
+    /// List of optional secrets that are missing
+    pub missing_optional: Vec<String>,
+    /// List of secrets using their default values (name, default_value)
+    pub with_defaults: Vec<(String, String)>,
+    /// The provider name that was used
+    pub provider: String,
+    /// The profile that was used
+    pub profile: String,
+    /// Value-free per-secret resolution provenance, including the missing
+    /// required secrets that caused this error. Empty unless populated by the
+    /// resolver; see [`ValidationErrors::report`].
+    pub resolution: Vec<SecretResolution>,
+    /// Cross-secret presence constraints that failed.
+    ///
+    /// Available since SecretSpec 0.17.
+    pub constraint_violations: Vec<ConstraintViolation>,
+}
+
+impl ValidationErrors {
+    /// Create a new ValidationErrors instance
+    pub fn new(
+        missing_required: Vec<String>,
+        missing_optional: Vec<String>,
+        with_defaults: Vec<(String, String)>,
+        provider: String,
+        profile: String,
+    ) -> Self {
+        Self {
+            missing_required,
+            missing_optional,
+            with_defaults,
+            provider,
+            profile,
+            resolution: Vec::new(),
+            constraint_violations: Vec::new(),
+        }
+    }
+
+    /// Check if there are any critical errors (missing required secrets)
+    pub fn has_errors(&self) -> bool {
+        !self.missing_required.is_empty() || !self.constraint_violations.is_empty()
+    }
+
+    /// Build the value-free [`ResolutionReport`] for this failed resolution.
+    /// The report still describes every declared secret, including the ones
+    /// that resolved, so consumers see the full picture, not just the gaps.
+    pub fn report(&self) -> ResolutionReport {
+        ResolutionReport::new(
+            self.provider.clone(),
+            self.profile.clone(),
+            self.resolution.clone(),
+        )
+        .with_constraint_violations(self.constraint_violations.clone())
+    }
+}
+
+impl fmt::Display for ValidationErrors {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if !self.missing_required.is_empty() {
+            write!(
+                f,
+                "Missing required secrets: {}",
+                self.missing_required.join(", ")
+            )?;
+        }
+        if !self.constraint_violations.is_empty() {
+            if !self.missing_required.is_empty() {
+                write!(f, "; ")?;
+            }
+            let messages: Vec<String> = self
+                .constraint_violations
+                .iter()
+                .map(ToString::to_string)
+                .collect();
+            write!(f, "Secret constraints failed: {}", messages.join("; "))?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for ValidationErrors {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn errors(missing_required: Vec<&str>) -> ValidationErrors {
+        ValidationErrors::new(
+            missing_required.into_iter().map(String::from).collect(),
+            vec![],
+            vec![],
+            "keyring".to_string(),
+            "default".to_string(),
+        )
+    }
+
+    #[test]
+    fn has_errors_true_only_when_required_missing() {
+        assert!(errors(vec!["A", "B"]).has_errors());
+        assert!(!errors(vec![]).has_errors());
+
+        // Missing optional / defaults alone are not errors.
+        let only_optional = ValidationErrors::new(
+            vec![],
+            vec!["OPT".to_string()],
+            vec![("X".to_string(), "v".to_string())],
+            "keyring".to_string(),
+            "default".to_string(),
+        );
+        assert!(!only_optional.has_errors());
+    }
+
+    #[test]
+    fn display_lists_missing_required_or_is_empty() {
+        assert_eq!(
+            errors(vec!["A", "B"]).to_string(),
+            "Missing required secrets: A, B"
+        );
+        assert_eq!(errors(vec![]).to_string(), "");
+    }
+}

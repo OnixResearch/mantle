@@ -89,3 +89,13 @@ compatibility surface, crate name, or historical decision.
 | [0080](0080-separate-coordination-from-batch-building.md) | Separate build coordination from batch building | Accepted |
 | [0082](0082-select-store-backends-explicitly-and-admit-casita.md) | Select store backends explicitly and admit Casita as a pinned backend | Proposed |
 | [0084](0084-dynamic-plan-source-slices.md) | Version dynamic plans for output-owned source slices | Proposed |
+| [0085](0085-carry-pattern-caveats-in-ucan-and-enforce-at-mantle-receivers.md) | Carry pattern caveats in UCAN and enforce at Mantle receivers | Proposed |
+| [0086](0086-use-declared-service-readiness-states.md) | Use declared, current service-readiness states | Accepted |
+| [0087](0087-cc-compile-cache.md) | Reuse the local Rust cache daemon for C/C++ compile objects | Proposed |
+| [0088](0088-live-build-state-coordination.md) | Keep live build-state subscriptions in a bounded Mantle daemon | Accepted |
+| [0089](0089-admit-prebuilt-android-toolchain-through-fixed-output-sources.md) | Admit prebuilt Android tools through pinned fixed-output sources | Proposed |
+
+ADR 0082 remains **Proposed**: its exact Casita/Turso pins, reviewed
+experimental API surface, license declarations, and 2026-10-05 configured
+no-waiver dependency pass are recorded there. The independent source-built
+Rust 1.94.1/self-build qualification and full acceptance gates are still open.

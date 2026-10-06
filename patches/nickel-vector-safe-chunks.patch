@@ -1,0 +1,23 @@
+From f09fce4517c853a9845db13aa60d2b73405c799a Mon Sep 17 00:00:00 2001
+Subject: [PATCH] Build Nickel's vector against panic-safe imbl-sized-chunks
+
+For the exact published nickel-lang-vector 0.2.0 package only. The vector
+uses Chunk, not bitmaps or the changed sparse chunk API; chunks 0.2.0 fixes
+RUSTSEC-2026-0292 and no longer depends on unmaintained bitmaps.
+
+---
+ Cargo.toml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -59,7 +59,7 @@
+ harness = false
+ 
+ [dependencies.imbl-sized-chunks]
+-version = "0.1"
++version = "0.2"
+ 
+ [dependencies.serde]
+ version = "1.0.164"

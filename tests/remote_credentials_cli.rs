@@ -212,22 +212,40 @@ fn key_rotation_invalidates_tickets_from_retired_verifier_key() {
 }
 
 #[test]
-fn bootstrap_sops_provider_resolves_inside_bounded_worker() {
+#[ignore = "requires a real sops executable in PATH; run with --include-ignored"]
+fn real_age_encrypted_sops_bootstrap_and_rotation_use_bounded_worker() {
     let root = tempfile::tempdir().unwrap();
-    let fake_bin = root.path().join("bin");
-    fs::create_dir_all(&fake_bin).unwrap();
-    write_fake_sops(&fake_bin.join("sops"), FakeSopsMode::Success);
-    let encrypted = root.path().join("bootstrap.enc.json");
-    fs::write(&encrypted, b"encrypted-fixture").unwrap();
-    let provider = format!("sops://{}?format=json", encrypted.display());
+    let provider = real_sops_provider();
     let (mut command, mut delivery_file) = base_create_command(root.path(), &provider, "bootstrap");
-    command.env("PATH", path_with_fake_bin(&fake_bin));
-    let output = command.output().unwrap();
-    let credential = read_delivery(&mut delivery_file);
+    let created = command.output().unwrap();
+    assert!(created.status.success(), "stderr={}", String::from_utf8_lossy(&created.stderr));
 
-    assert!(output.status.success(), "stderr={}", String::from_utf8_lossy(&output.stderr));
-    assert!(!credential.is_empty());
-    assert!(!String::from_utf8_lossy(&output.stdout).contains(credential.split_once(':').unwrap().1));
+    let report: Value = serde_json::from_slice(&created.stdout).unwrap();
+    let ticket_id = report["ticket"]["id"].as_str().unwrap();
+    let credential = read_delivery(&mut delivery_file);
+    assert!(credential.starts_with(&format!("{ticket_id}:")));
+    let bearer = credential.split_once(':').unwrap().1;
+    assert_secret_markers_absent(bearer, &created.stdout);
+    assert_secret_markers_absent(bearer, &created.stderr);
+
+    let rotated = mantle_command()
+        .args(["--json", "--state-dir"])
+        .arg(root.path())
+        .args(["remote", "ticket", "rotate-keys", "--secret-manifest"])
+        .arg(secret_manifest())
+        .args(["--secret-profile", "rotation", "--secret-provider", &provider])
+        .output()
+        .unwrap();
+    assert!(rotated.status.success(), "stderr={}", String::from_utf8_lossy(&rotated.stderr));
+    let rotation: Value = serde_json::from_slice(&rotated.stdout).unwrap();
+    assert_eq!(rotation["active_ticket_verifier_key_id"], "ticket-key-2");
+    assert!(rotation["invalidated_ticket_ids"].as_array().unwrap().iter().any(|id| id == ticket_id));
+    let state = fs::read_to_string(root.path().join("remote-builders/tickets.json")).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&state).unwrap()["tickets"][ticket_id]["revoked"], true);
+    assert!(!state.contains(bearer));
+    for output in [&rotated.stdout, &rotated.stderr] {
+        assert_secret_markers_absent(bearer, output);
+    }
 }
 
 #[test]
@@ -248,7 +266,9 @@ fn hanging_sops_provider_is_killed_without_state_or_secret_output() {
     assert!(started.elapsed() <= Duration::from_secs(PROVIDER_TIMEOUT_SECS_MAX));
     assert!(read_delivery(&mut delivery_file).is_empty());
     assert!(!root.path().join("remote-builders/tickets.json").exists());
-    assert!(!String::from_utf8_lossy(&output.stderr).contains(TICKET_KEY_ONE));
+    for output in [&output.stdout, &output.stderr] {
+        assert_secret_markers_absent(TICKET_KEY_ONE, output);
+    }
 }
 
 #[test]
@@ -267,6 +287,9 @@ fn oversized_sops_output_is_rejected_without_state_write() {
     assert!(!output.status.success());
     assert!(read_delivery(&mut delivery_file).is_empty());
     assert!(!root.path().join("remote-builders/tickets.json").exists());
+    for output in [&output.stdout, &output.stderr] {
+        assert_secret_markers_absent(TICKET_KEY_ONE, output);
+    }
 }
 
 fn build_with_ticket_fd(ticket_fd: i32) -> std::process::Output {
@@ -392,6 +415,7 @@ fn assert_secret_markers_absent(secret: &str, bytes: &[u8]) {
     assert!(!rendered.contains(secret));
     assert!(!rendered.contains(&secret_blake3));
     assert!(!rendered.contains(&verifier_key_blake3));
+    assert!(!rendered.contains(RESULT_SIGNING_KEY));
     assert!(!rendered.contains(&signing_key_blake3));
 }
 
@@ -400,20 +424,12 @@ fn file_mode(path: &Path) -> u32 {
 }
 
 enum FakeSopsMode {
-    Success,
     Sleep,
     OversizedOutput,
 }
 
 fn write_fake_sops(path: &Path, mode: FakeSopsMode) {
     let source = match mode {
-        FakeSopsMode::Success => format!(
-            "#!/bin/sh\nprintf '%s' '{}'\n",
-            serde_json::json!({
-                "TICKET_VERIFIER_KEY": TICKET_KEY_ONE,
-                "RESULT_SIGNING_KEY": RESULT_SIGNING_KEY,
-            })
-        ),
         FakeSopsMode::Sleep => format!("#!/bin/sh\nsleep {FAKE_SOPS_SLEEP_SECS}\n"),
         FakeSopsMode::OversizedOutput => format!("#!/bin/sh\nhead -c {FAKE_SOPS_OUTPUT_BYTES} /dev/zero\n"),
     };
@@ -425,4 +441,11 @@ fn path_with_fake_bin(fake_bin: &Path) -> std::ffi::OsString {
     let mut paths = vec![fake_bin.to_path_buf()];
     paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
     std::env::join_paths(paths).unwrap()
+}
+
+fn real_sops_provider() -> String {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let encrypted = root.join("tests/fixtures/remote-ticket-sops-age.enc.json");
+    let age_key = root.join("third_party/secretspec/src/provider/sops/test_fixtures/key.txt");
+    format!("sops://{}?format=json&age_key_file={}", encrypted.display(), age_key.display())
 }

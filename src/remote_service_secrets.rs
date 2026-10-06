@@ -34,8 +34,10 @@ const REMOTE_SECRET_WORKER_STDERR_BYTES_MAX: usize = 16_384;
 const REMOTE_SECRET_VALUE_BYTES_MAX: usize = 4_096;
 const REMOTE_SECRET_MANIFEST_BYTES_MAX: u64 = 65_536;
 const REMOTE_SECRET_WORKER_MEMORY_MIB: u64 = 512;
+// Go-based SOPS reserves significantly more virtual address space than it
+// occupies in RSS; this separate cap applies only to explicit sops:// requests.
+const REMOTE_SECRET_WORKER_SOPS_MEMORY_MIB: u64 = 2_048;
 const BYTES_PER_MIB: u64 = 1_048_576;
-const REMOTE_SECRET_WORKER_MEMORY_BYTES: u64 = REMOTE_SECRET_WORKER_MEMORY_MIB * BYTES_PER_MIB;
 const REMOTE_SECRET_WORKER_CPU_SECS: u64 = 10;
 const PIPE_BUFFER_BYTES: usize = 8_192;
 const WORKER_TERMINATION_WAIT_MS: u64 = 100;
@@ -179,7 +181,7 @@ pub fn resolve_remote_service_keys_bounded(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    configure_secret_worker_limits(&mut command);
+    configure_secret_worker_limits(&mut command, request.provider.starts_with("sops://"));
     let child = command.spawn().map_err(|_| secret_error("worker-spawn-failed"))?;
     let output = collect_secret_worker_output(child)?;
     if output.stdout_exceeded || output.stderr_exceeded {
@@ -452,18 +454,24 @@ fn drain_bounded_pipe(
 }
 
 #[cfg(unix)]
-fn configure_secret_worker_limits(command: &mut Command) {
+fn configure_secret_worker_limits(command: &mut Command, sops_provider: bool) {
     use std::os::unix::process::CommandExt as _;
+    let memory_mib = if sops_provider {
+        REMOTE_SECRET_WORKER_SOPS_MEMORY_MIB
+    } else {
+        REMOTE_SECRET_WORKER_MEMORY_MIB
+    };
+    let memory_bytes = memory_mib * BYTES_PER_MIB;
 
     // SAFETY: The closure calls only async-signal-safe libc functions before exec.
     unsafe {
-        command.pre_exec(|| {
+        command.pre_exec(move || {
             if libc::setpgid(0, 0) != 0 {
                 return Err(std::io::Error::last_os_error());
             }
             let memory_limit = libc::rlimit {
-                rlim_cur: REMOTE_SECRET_WORKER_MEMORY_BYTES,
-                rlim_max: REMOTE_SECRET_WORKER_MEMORY_BYTES,
+                rlim_cur: memory_bytes,
+                rlim_max: memory_bytes,
             };
             if libc::setrlimit(libc::RLIMIT_AS, &memory_limit) != 0 {
                 return Err(std::io::Error::last_os_error());
@@ -481,7 +489,7 @@ fn configure_secret_worker_limits(command: &mut Command) {
 }
 
 #[cfg(not(unix))]
-fn configure_secret_worker_limits(_command: &mut Command) {}
+fn configure_secret_worker_limits(_command: &mut Command, _sops_provider: bool) {}
 
 #[cfg(unix)]
 fn terminate_secret_worker_tree(child: &mut std::process::Child) -> Result<(), RunError> {

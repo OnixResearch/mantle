@@ -1,0 +1,755 @@
+use super::{Address, Provider, ProviderUrl};
+use crate::{Result, SecretSpecError};
+use secrecy::{ExposeSecret, SecretString};
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap};
+use std::fs;
+use std::path::PathBuf;
+
+/// Serializes a map of env vars into `.env` file content.
+///
+/// Each entry is emitted as `KEY="value"` with the escapes that
+/// [`dotenvy`] understands inside double-quoted values: `\\`, `\"`,
+/// `\$` (suppresses variable substitution), and `\n` (literal
+/// newlines folded onto a single line). Keys are sorted for stable
+/// output.
+pub(crate) fn serialize_dotenv(vars: &HashMap<String, String>) -> String {
+    let sorted: BTreeMap<&str, &str> = vars.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    serialize_dotenv_pairs(sorted.into_iter())
+}
+
+/// Serializes key/value pairs (already in the desired order) into `.env`
+/// content, applying the same double-quoting and escaping as
+/// [`serialize_dotenv`]. Shared with `secretspec export`, which passes its
+/// pre-sorted entries directly instead of rebuilding and re-sorting a map.
+pub(crate) fn serialize_dotenv_pairs<'a>(
+    pairs: impl Iterator<Item = (&'a str, &'a str)>,
+) -> String {
+    let mut out = String::new();
+    for (key, value) in pairs {
+        out.push_str(key);
+        out.push_str("=\"");
+        for ch in value.chars() {
+            match ch {
+                '\\' => out.push_str("\\\\"),
+                '"' => out.push_str("\\\""),
+                '$' => out.push_str("\\$"),
+                '\n' => out.push_str("\\n"),
+                c => out.push(c),
+            }
+        }
+        out.push_str("\"\n");
+    }
+    out
+}
+
+/// Rejects names the `.env` format cannot represent.
+///
+/// The dotenvy parser only accepts variable names matching
+/// `[A-Za-z_][A-Za-z0-9_.]*` (its exact grammar, mirrored here), while the
+/// serializer would happily emit any name it is handed. A single accepted
+/// write of an unparseable name (e.g. one with a dash) poisons the whole
+/// file: every later read or write of any secret in the store fails at that
+/// line. Rejecting the name up front keeps `set` the mirror of `get` (what
+/// one accepts, the other can read back). Convention names come from
+/// validated manifest declarations, so in practice this bites
+/// `ref = { item = ... }` coordinates, which name store entries freely.
+fn validate_env_key(key: &str) -> Result<()> {
+    let mut chars = key.chars();
+    let valid = match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => {
+            chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
+        }
+        _ => false,
+    };
+    if valid {
+        Ok(())
+    } else {
+        Err(SecretSpecError::ProviderOperationFailed(format!(
+            "the dotenv provider cannot store `{key}`: .env variable names must \
+             match [A-Za-z_][A-Za-z0-9_.]*. Rename the `ref` item to a valid name."
+        )))
+    }
+}
+
+/// Configuration for the dotenv provider.
+///
+/// This struct holds the configuration for accessing .env files,
+/// primarily the path to the .env file to read from and write to.
+///
+/// # Examples
+///
+/// ```ignore
+/// use std::path::PathBuf;
+/// use secretspec::provider::dotenv::DotEnvConfig;
+///
+/// let config = DotEnvConfig {
+///     path: PathBuf::from(".env.production"),
+/// };
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DotEnvConfig {
+    /// Path to the .env file.
+    ///
+    /// Can be either an absolute path (e.g., `/etc/secrets/.env`)
+    /// or a relative path (e.g., `.env`, `config/.env.local`).
+    pub path: PathBuf,
+}
+
+impl Default for DotEnvConfig {
+    /// Creates a default configuration with path set to `.env`.
+    ///
+    /// This is the conventional default location for dotenv files
+    /// in the current working directory.
+    fn default() -> Self {
+        Self {
+            path: PathBuf::from(".env"),
+        }
+    }
+}
+
+impl TryFrom<&ProviderUrl> for DotEnvConfig {
+    type Error = SecretSpecError;
+
+    /// Creates a DotEnvConfig from a URL.
+    ///
+    /// Parses a URL in the format `dotenv://[path]` to extract
+    /// the path to the .env file. The URL parsing handles several cases:
+    ///
+    /// # URL Formats
+    ///
+    /// - `dotenv:///absolute/path` - Absolute path
+    /// - `dotenv://.env` - Relative path (authority as filename)
+    /// - `dotenv://` - Uses default `.env` in current directory
+    fn try_from(url: &ProviderUrl) -> std::result::Result<Self, Self::Error> {
+        if url.scheme() != "dotenv" {
+            return Err(SecretSpecError::ProviderOperationFailed(format!(
+                "Invalid scheme '{}' for dotenv provider",
+                url.scheme()
+            )));
+        }
+
+        let path_str = url.path();
+        let path = if !path_str.is_empty() && path_str != "/" {
+            if let Some(host) = url.host() {
+                format!("{}{}", host, path_str)
+            } else {
+                path_str
+            }
+        } else if let Some(host) = url.host() {
+            host
+        } else {
+            ".env".to_string()
+        };
+
+        Ok(Self {
+            path: PathBuf::from(path),
+        })
+    }
+}
+
+/// Provider for managing secrets in .env files.
+///
+/// The DotEnvProvider implements the Provider trait to enable reading
+/// and writing secrets from/to .env files. It uses the dotenvy crate
+/// for parsing and a small local serializer for writing, with proper
+/// handling of special characters and escaping.
+///
+/// # Features
+///
+/// - Reads environment variables from .env files
+/// - Writes new or updated variables back to .env files
+/// - Preserves existing variables when updating
+/// - Handles proper escaping of values with special characters
+/// - Supports both relative and absolute file paths
+///
+/// # Note
+///
+/// This provider ignores the project and profile parameters as .env files
+/// typically don't have built-in namespacing. All secrets are stored
+/// flat in the file.
+pub struct DotEnvProvider {
+    /// Configuration containing the path to the .env file
+    config: DotEnvConfig,
+}
+
+crate::register_provider! {
+    struct: DotEnvProvider,
+    config: DotEnvConfig,
+    name: "dotenv",
+    description: "Traditional .env files",
+    schemes: ["dotenv"],
+    examples: ["dotenv://.env", "dotenv://.env.production"],
+    deletes: true,
+}
+
+impl DotEnvProvider {
+    /// Creates a new DotEnvProvider with the given configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The configuration specifying the .env file path
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use secretspec::provider::dotenv::{DotEnvProvider, DotEnvConfig};
+    ///
+    /// let config = DotEnvConfig::default();
+    /// let provider = DotEnvProvider::new(config);
+    /// ```
+    pub fn new(config: DotEnvConfig) -> Self {
+        Self { config }
+    }
+}
+
+impl Provider for DotEnvProvider {
+    /// Convention names map straight to the `.env` key named after the
+    /// secret; `.env` files have no project or profile namespacing.
+    fn convention_address(
+        &self,
+        _project: &str,
+        _profile: &str,
+        key: &str,
+    ) -> Result<crate::config::NativeAddress> {
+        Ok(crate::config::NativeAddress {
+            item: key.to_string(),
+            ..Default::default()
+        })
+    }
+
+    fn name(&self) -> &'static str {
+        Self::PROVIDER_NAME
+    }
+
+    fn uri(&self) -> String {
+        // Dotenv uses single colon format: dotenv:path
+        // The path can be relative or absolute
+        let path_str = self.config.path.display().to_string();
+
+        if path_str == ".env" {
+            "dotenv".to_string()
+        } else {
+            format!("dotenv:{}", path_str)
+        }
+    }
+
+    /// Resolves a relative `.env` path against the project root (the directory
+    /// containing `secretspec.toml`) rather than the current working directory.
+    ///
+    /// Without this, `secretspec run --file ../secretspec.toml` invoked from a
+    /// subdirectory would look for the `.env` file under the subdirectory
+    /// instead of next to the config that referenced it. Absolute paths are
+    /// left untouched.
+    fn with_base_dir(&mut self, base_dir: &std::path::Path) {
+        if self.config.path.is_relative() {
+            self.config.path = base_dir.join(&self.config.path);
+        }
+    }
+
+    /// Retrieves a secret value from the .env file.
+    ///
+    /// Reads the .env file and returns the value for the specified key.
+    /// The project and profile parameters are ignored as .env files
+    /// don't support namespacing.
+    ///
+    /// # Arguments
+    ///
+    /// * `_project` - Ignored, .env files don't support project namespacing
+    /// * `key` - The environment variable name to look up
+    /// * `_profile` - Ignored, .env files don't support profile namespacing
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Some(String))` - The value if the key exists
+    /// * `Ok(None)` - If the key doesn't exist or the file doesn't exist
+    /// * `Err(SecretSpecError)` - If reading the file fails
+    ///
+    /// # Implementation Details
+    ///
+    /// Uses the dotenvy crate for parsing to ensure compatibility with
+    /// standard .env file formats and proper handling of quoted values,
+    /// multiline strings, and escape sequences.
+    fn get(&self, addr: Address<'_>) -> Result<Option<SecretString>> {
+        let lookup = super::flat_item(self, addr)?;
+        // A name the format cannot represent can never be read back; reject it
+        // like any other coordinate this store has no equivalent for.
+        validate_env_key(&lookup)?;
+        if !self.config.path.exists() {
+            return Ok(None);
+        }
+
+        // Use dotenvy for reading to ensure compatibility
+        let mut vars = HashMap::new();
+        let env_vars = dotenvy::from_path_iter(&self.config.path)?;
+        for item in env_vars {
+            let (k, v) = item?;
+            vars.insert(k, v);
+        }
+
+        Ok(vars
+            .get(&*lookup)
+            .map(|v| SecretString::new(v.clone().into())))
+    }
+
+    /// Refuses an unrepresentable name before the CLI prompts for a value,
+    /// with the same error `set` would return.
+    fn check_writable(&self, addr: Address<'_>) -> Result<()> {
+        validate_env_key(&super::flat_item(self, addr)?)
+    }
+
+    /// Sets a secret value in the .env file.
+    ///
+    /// Updates or adds a key-value pair in the .env file. If the file
+    /// doesn't exist, it will be created. Existing variables are preserved.
+    ///
+    /// # Arguments
+    ///
+    /// * `_project` - Ignored, .env files don't support project namespacing
+    /// * `key` - The environment variable name to set
+    /// * `value` - The value to store
+    /// * `_profile` - Ignored, .env files don't support profile namespacing
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - If the value was successfully written
+    /// * `Err(SecretSpecError)` - If reading or writing the file fails
+    ///
+    /// # Implementation Details
+    ///
+    /// 1. Loads existing variables using dotenvy to preserve them
+    /// 2. Updates or adds the new key-value pair
+    /// 3. Serializes back with `serialize_dotenv` for proper escaping
+    fn set(&self, addr: Address<'_>, value: &SecretString) -> Result<()> {
+        let target = super::flat_item(self, addr)?;
+        // Refuse before touching the file: writing this name would produce a
+        // store no later read can parse.
+        validate_env_key(&target)?;
+        // Load existing vars using dotenvy
+        let mut vars = HashMap::new();
+        if self.config.path.exists() {
+            let env_vars = dotenvy::from_path_iter(&self.config.path)?;
+            for item in env_vars {
+                let (k, v) = item?;
+                vars.insert(k, v);
+            }
+        }
+
+        vars.insert(target.into_owned(), value.expose_secret().to_string());
+
+        let content = serialize_dotenv(&vars);
+        fs::write(&self.config.path, content)?;
+        Ok(())
+    }
+
+    fn delete(&self, addr: Address<'_>) -> Result<bool> {
+        let target = super::flat_item(self, addr)?;
+        validate_env_key(&target)?;
+        if !self.config.path.exists() {
+            return Ok(false);
+        }
+        let mut vars = HashMap::new();
+        for item in dotenvy::from_path_iter(&self.config.path)? {
+            let (key, value) = item?;
+            vars.insert(key, value);
+        }
+        if vars.remove(target.as_ref()).is_none() {
+            // Nothing to remove, so leave the file — and its comments and
+            // formatting — exactly as it is.
+            return Ok(false);
+        }
+        fs::write(&self.config.path, serialize_dotenv(&vars))?;
+        Ok(true)
+    }
+
+    fn reflect(&self) -> Result<HashMap<String, crate::config::Secret>> {
+        use crate::config::Secret;
+
+        if !self.config.path.exists() {
+            return Ok(HashMap::new());
+        }
+
+        // Check if path is a directory
+        if self.config.path.is_dir() {
+            return Err(SecretSpecError::Io(std::io::Error::new(
+                std::io::ErrorKind::IsADirectory,
+                format!(
+                    "Expected file but found directory: {}",
+                    self.config.path.display()
+                ),
+            )));
+        }
+
+        let mut secrets = HashMap::new();
+        let env_vars = dotenvy::from_path_iter(&self.config.path)?;
+        for item in env_vars {
+            let (key, _value) = item?;
+            secrets.insert(
+                key.clone(),
+                Secret {
+                    description: Some(format!("{} secret", key)),
+                    required: Some(true),
+                    ..Default::default()
+                },
+            );
+        }
+
+        Ok(secrets)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dotenv_url_parsing() {
+        use url::Url;
+
+        // Test with absolute path using three slashes - this is the main syntax we want to support
+        let url = ProviderUrl::new(Url::parse("dotenv:///tmp/test/.env").unwrap());
+        let config: DotEnvConfig = (&url).try_into().unwrap();
+        assert_eq!(config.path.to_str().unwrap(), "/tmp/test/.env");
+
+        // Test with relative path using two slashes - authority as filename
+        let url = ProviderUrl::new(Url::parse("dotenv://.env").unwrap());
+        let config: DotEnvConfig = (&url).try_into().unwrap();
+        assert_eq!(config.path.to_str().unwrap(), ".env");
+
+        // Test with relative path in subdirectory
+        let url = ProviderUrl::new(Url::parse("dotenv://config/.env.local").unwrap());
+        let config: DotEnvConfig = (&url).try_into().unwrap();
+        assert_eq!(config.path.to_str().unwrap(), "config/.env.local");
+
+        // Test with default (empty after //)
+        let url = ProviderUrl::new(Url::parse("dotenv://").unwrap());
+        let config: DotEnvConfig = (&url).try_into().unwrap();
+        assert_eq!(config.path.to_str().unwrap(), ".env");
+
+        // Test with relative path - host part becomes first part of path
+        let url = ProviderUrl::new(Url::parse("dotenv://foobar/custom/path/.env").unwrap());
+        let config: DotEnvConfig = (&url).try_into().unwrap();
+        assert_eq!(config.path.to_str().unwrap(), "foobar/custom/path/.env");
+
+        // A Windows absolute path is carried as a percent-encoded opaque host (the
+        // form produced by `Box::<dyn Provider>::try_from` for `dotenv://C:\...`)
+        // and decoded back to the original path.
+        let url = ProviderUrl::new(Url::parse("dotenv://C%3A%5CUsers%5Cfoo%5C.env").unwrap());
+        let config: DotEnvConfig = (&url).try_into().unwrap();
+        assert_eq!(config.path.to_str().unwrap(), r"C:\Users\foo\.env");
+    }
+
+    #[test]
+    fn test_default_config() {
+        let config = DotEnvConfig::default();
+        assert_eq!(config.path.to_str().unwrap(), ".env");
+    }
+
+    #[test]
+    fn test_with_base_dir_rebases_relative_paths() {
+        let base = std::path::Path::new("/project/root");
+
+        // A relative path is resolved against the project root.
+        let mut provider = DotEnvProvider::new(DotEnvConfig {
+            path: PathBuf::from(".config/.env"),
+        });
+        provider.with_base_dir(base);
+        assert_eq!(provider.config.path, base.join(".config/.env"));
+
+        // The bare default `.env` is rebased too.
+        let mut provider = DotEnvProvider::new(DotEnvConfig::default());
+        provider.with_base_dir(base);
+        assert_eq!(provider.config.path, base.join(".env"));
+
+        // Absolute paths are left untouched.
+        let absolute = PathBuf::from("/etc/secrets/.env");
+        let mut provider = DotEnvProvider::new(DotEnvConfig {
+            path: absolute.clone(),
+        });
+        provider.with_base_dir(base);
+        assert_eq!(provider.config.path, absolute);
+    }
+
+    #[test]
+    fn test_get_reads_relative_path_from_base_dir_not_cwd() {
+        use std::io::Write;
+
+        // Reproduces issue #59: a config at `<root>/secretspec.toml` referencing
+        // `dotenv:.config/.env` must read `<root>/.config/.env` regardless of the
+        // process's current working directory.
+        let root = tempfile::tempdir().unwrap();
+        let env_dir = root.path().join(".config");
+        std::fs::create_dir(&env_dir).unwrap();
+        let mut file = std::fs::File::create(env_dir.join(".env")).unwrap();
+        writeln!(file, "USER=hello").unwrap();
+
+        let mut provider = DotEnvProvider::new(DotEnvConfig {
+            path: PathBuf::from(".config/.env"),
+        });
+        provider.with_base_dir(root.path());
+
+        let value = provider
+            .get(Address::convention("hello-world", "default", "USER"))
+            .unwrap();
+        assert_eq!(value.unwrap().expose_secret(), "hello");
+    }
+
+    #[test]
+    fn test_reflect() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let env_file = dir.path().join(".env");
+
+        let mut file = std::fs::File::create(&env_file).unwrap();
+        writeln!(file, "API_KEY=test123").unwrap();
+        writeln!(file, "DATABASE_URL=postgres://localhost").unwrap();
+
+        let provider = DotEnvProvider::new(DotEnvConfig {
+            path: env_file.clone(),
+        });
+
+        let secrets = provider.reflect().unwrap();
+        assert_eq!(secrets.len(), 2);
+        assert!(secrets.contains_key("API_KEY"));
+        assert!(secrets.contains_key("DATABASE_URL"));
+
+        let api_key_config = &secrets["API_KEY"];
+        assert_eq!(
+            api_key_config.description,
+            Some("API_KEY secret".to_string())
+        );
+        assert_eq!(api_key_config.required, Some(true));
+        assert!(api_key_config.default.is_none());
+    }
+
+    #[test]
+    fn test_reflect_nonexistent_file() {
+        let provider = DotEnvProvider::new(DotEnvConfig {
+            path: PathBuf::from("/tmp/nonexistent/.env"),
+        });
+
+        let secrets = provider.reflect().unwrap();
+        assert!(secrets.is_empty());
+    }
+
+    #[test]
+    fn test_serialize_dotenv_escapes() {
+        let mut vars = HashMap::new();
+        vars.insert("PLAIN".to_string(), "hello".to_string());
+        vars.insert("QUOTES".to_string(), r#"{"a":"b"}"#.to_string());
+        vars.insert("BACKSLASH".to_string(), r"C:\path\to".to_string());
+        vars.insert("DOLLAR".to_string(), "$VAR".to_string());
+        vars.insert("NEWLINE".to_string(), "line1\nline2".to_string());
+
+        let out = serialize_dotenv(&vars);
+        // Sorted by key, double-quoted, with escapes applied.
+        assert_eq!(
+            out,
+            concat!(
+                "BACKSLASH=\"C:\\\\path\\\\to\"\n",
+                "DOLLAR=\"\\$VAR\"\n",
+                "NEWLINE=\"line1\\nline2\"\n",
+                "PLAIN=\"hello\"\n",
+                "QUOTES=\"{\\\"a\\\":\\\"b\\\"}\"\n",
+            )
+        );
+    }
+
+    #[test]
+    fn test_set_roundtrips_special_characters() {
+        let dir = tempfile::tempdir().unwrap();
+        let env_file = dir.path().join(".env");
+        let provider = DotEnvProvider::new(DotEnvConfig {
+            path: env_file.clone(),
+        });
+
+        // Each entry exercises a different class of input the previous
+        // serde-envfile bug or dotenvy's parser cared about.
+        let cases = [
+            ("PLAIN", "hello world"),
+            ("QUOTES", r#"{"a":"b"}"#),
+            ("LEADING_QUOTE", r#""leading"#),
+            ("TRAILING_QUOTE", r#"trailing""#),
+            ("BACKSLASH", r"C:\path\to"),
+            ("BACKSLASH_BEFORE_QUOTE", r#"a\"b"#),
+            ("BACKSLASH_BEFORE_DOLLAR", r"a\$b"),
+            ("DOLLAR_VAR", "literal $VAR not expanded"),
+            ("DOLLAR_BRACED", "literal ${VAR} not expanded"),
+            ("DOLLAR_ONLY", "$"),
+            ("HASH", "value with # not a comment"),
+            ("SINGLE_QUOTE", "it's literal"),
+            ("EQUALS", "k=v=more"),
+            ("NEWLINE", "line1\nline2"),
+            ("MIXED", "a\\b\"c$d\ne"),
+            ("UNICODE", "café — 🚀"),
+            ("WHITESPACE_EDGES", "  spaced  "),
+            ("EMPTY", ""),
+        ];
+
+        for (k, v) in cases {
+            provider
+                .set(
+                    Address::convention("proj", "default", k),
+                    &SecretString::new(v.into()),
+                )
+                .unwrap();
+        }
+
+        for (k, v) in cases {
+            let got = provider
+                .get(Address::convention("proj", "default", k))
+                .unwrap();
+            assert_eq!(
+                got.map(|s| s.expose_secret().to_string()),
+                Some(v.to_string()),
+                "round-trip failed for {k}",
+            );
+        }
+    }
+
+    // Regression test for https://github.com/cachix/secretspec/issues/74:
+    // setting a secret on a file that already holds a JSON-shaped value used to
+    // corrupt the existing value because the serializer did not escape quotes.
+    #[test]
+    fn test_set_preserves_existing_quoted_json_value() {
+        let dir = tempfile::tempdir().unwrap();
+        let env_file = dir.path().join(".env");
+        fs::write(&env_file, "FOO=\"{\\\"bar\\\":\\\"baz\\\"}\"\n").unwrap();
+
+        let provider = DotEnvProvider::new(DotEnvConfig {
+            path: env_file.clone(),
+        });
+
+        provider
+            .set(
+                Address::convention("proj", "default", "BAR"),
+                &SecretString::new("foobar".into()),
+            )
+            .unwrap();
+
+        let foo = provider
+            .get(Address::convention("proj", "default", "FOO"))
+            .unwrap();
+        assert_eq!(
+            foo.map(|s| s.expose_secret().to_string()),
+            Some(r#"{"bar":"baz"}"#.to_string()),
+        );
+        let bar = provider
+            .get(Address::convention("proj", "default", "BAR"))
+            .unwrap();
+        assert_eq!(
+            bar.map(|s| s.expose_secret().to_string()),
+            Some("foobar".to_string()),
+        );
+    }
+
+    /// A native address reads and writes the key its `item` names, regardless
+    /// of the secret's own name or any instance configuration.
+    #[test]
+    fn native_address_reads_and_writes_the_named_key() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join(".env");
+        let provider = DotEnvProvider::new(DotEnvConfig { path: path.clone() });
+        let addr = crate::config::NativeAddress {
+            item: "PINNED_KEY".into(),
+            ..Default::default()
+        };
+
+        provider
+            .set(Address::Native(&addr), &SecretString::new("v1".into()))
+            .unwrap();
+        let got = provider.get(Address::Native(&addr)).unwrap();
+        assert_eq!(
+            got.map(|s| s.expose_secret().to_string()),
+            Some("v1".into())
+        );
+
+        let contents = fs::read_to_string(&path).unwrap();
+        assert!(contents.contains("PINNED_KEY="), "wrote: {contents}");
+    }
+
+    /// Regression test for the write/read asymmetry hit by cachix: `set` used
+    /// to write any ref item verbatim, including names dotenvy cannot parse
+    /// back (e.g. containing a dash), after which every read or write of any
+    /// secret in the file failed at the poisoned line. Unrepresentable names
+    /// are now rejected up front by `set`, `get`, and `check_writable`, and a
+    /// rejected write leaves the store intact.
+    #[test]
+    fn rejects_names_the_env_format_cannot_represent() {
+        let dir = tempfile::tempdir().unwrap();
+        let env_file = dir.path().join(".env");
+        let provider = DotEnvProvider::new(DotEnvConfig {
+            path: env_file.clone(),
+        });
+
+        // A pre-existing secret that must survive every rejected write.
+        provider
+            .set(
+                Address::convention("proj", "default", "KEEP"),
+                &SecretString::new("kept".into()),
+            )
+            .unwrap();
+
+        for bad in [
+            "CACHIX_SIGNING_KEY_cache-a",
+            "with space",
+            "1LEADING_DIGIT",
+            ".leading.dot",
+            "",
+        ] {
+            let addr = crate::config::NativeAddress {
+                item: bad.into(),
+                ..Default::default()
+            };
+            for result in [
+                provider.set(Address::Native(&addr), &SecretString::new("v".into())),
+                provider.get(Address::Native(&addr)).map(|_| ()),
+                provider.check_writable(Address::Native(&addr)),
+            ] {
+                let err = result.unwrap_err();
+                assert!(err.to_string().contains("variable names"), "`{bad}`: {err}");
+            }
+        }
+
+        // The store is still parseable and the existing secret still readable.
+        let kept = provider
+            .get(Address::convention("proj", "default", "KEEP"))
+            .unwrap();
+        assert_eq!(
+            kept.map(|s| s.expose_secret().to_string()),
+            Some("kept".to_string())
+        );
+
+        // Names dotenvy's grammar does accept keep round-tripping: the
+        // sanitized shape cachix writes, and interior dots, which dotenvy
+        // parses even though POSIX shells cannot export them.
+        for good in ["CACHIX_SIGNING_KEY_CACHE_A", "dotted.name"] {
+            let addr = crate::config::NativeAddress {
+                item: good.into(),
+                ..Default::default()
+            };
+            provider
+                .set(Address::Native(&addr), &SecretString::new("key".into()))
+                .unwrap();
+            let got = provider.get(Address::Native(&addr)).unwrap();
+            assert_eq!(
+                got.map(|s| s.expose_secret().to_string()),
+                Some("key".to_string()),
+                "`{good}` should round-trip"
+            );
+        }
+    }
+
+    /// `.env` entries have no sub-components; a `field` coordinate is rejected.
+    #[test]
+    fn native_address_rejects_field() {
+        let provider = DotEnvProvider::new(DotEnvConfig::default());
+        let addr = crate::config::NativeAddress {
+            item: "KEY".into(),
+            field: Some("x".into()),
+            ..Default::default()
+        };
+        let err = provider.get(Address::Native(&addr)).unwrap_err();
+        assert!(err.to_string().contains("`field`"), "{err}");
+    }
+}

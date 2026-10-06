@@ -263,3 +263,242 @@ check` plus functional verification. Merely disabling Bao `validate`,
 replacing the pinned vendored source, or adding an advisory waiver would
 not satisfy the required contract. This read-only review did not change
 the Mantle dependency graph, execute Cargo Deny, or close T1.2/T1.3/T4.7.
+
+## Isolated no-waiver source-port admission, 2026-10-05
+
+This follow-up is on separate linked worktree
+`/home/brittonr/.cargo-target/mantle-advisory-source-ports-20261005`
+from `e7d91c31abab268852c09097b581e13c7a47d24b`; it is not an
+integration, archive, StageX, or release run. The read-only upstream review
+above was accurate when recorded; this later Mantle-owned cutover supplies
+new evidence, not a published upstream fix.
+
+1. Exact published crates.io source archive SHA-256 and publisher revision:
+   Nickel vector 0.2.0, MIT,
+   `36f243832286908d8873add24a905d6732ffabd6cfb2bf74cb18d667e892e279`,
+   `f09fce4517c853a9845db13aa60d2b73405c799a`; SecretSpec 0.17.0,
+   Apache-2.0,
+   `68498f9695bb3662c157b8fd4b4665a594f1157de022ff5b0f891af4c7ec75d2`,
+   `a8794e46ec9664a0e1a3869cc3105d0853937e48`. The manifest and
+   per-original/per-patched-file receipt is
+   `third_party/advisory-source-ports.json`, SHA-256
+   `ff3c1885a880ce2c260bfabbada13457c82c72b674dfd8031947e963434a157e`.
+   The vector patch SHA-256 is
+   `9199b87fb9cc197c1a9c7cd5c099b10cfe0cae0c1c1f276bdad9b69e88ed85c4`;
+   SecretSpec patch SHA-256 is
+   `7fc086ecdc98d0d3e2b32c3f2ad367c661476f58ae3d409dc35c5df1dce9c98a`.
+   `python3 scripts/import-advisory-ports.py check` verified each authentic
+   archive and replayed forward/reverse with `patch --fuzz=0`. An initial
+   hand-assembled SecretSpec hunk failed strict replay and was replaced by
+   the source-derived exact hunk; no fuzzy patch was accepted.
+2. The root path-port lock selects vector 0.2.0 ->
+   `imbl-sized-chunks 0.2.0`, and SecretSpec 0.17.0 without default or
+   `rsa-generation` features. It contains no `bitmaps 3.2.1`,
+   `imbl-sized-chunks 0.1.3`, or `rsa 0.9.10`. In contrast, isolated
+   **standalone** SecretSpec with `--no-default-features --features
+   rsa-generation` compiled RSA 0.9.10 and passed
+   `generator::tests::test_generate_rsa_default` (1/1), proving optional
+   RSA still works for other consumers. Locked offline `cargo metadata`
+   for that standalone package additionally resolved its **default**
+   feature to `rsa-generation` and an `rsa 0.9.10` dependency. The same
+   isolated package with `--no-default-features --features sops` passed
+   `generator::tests::test_disabled_rsa_generation_fails_closed` (1/1)
+   and `provider::sops::tests::test_sops_single_file_get_json` (1/1).
+   The published crate archive omits the repository test schema, so the
+   scratch-only test fixture used its publisher-revision
+   `schema/resolution-report.schema.json`; no tracked port file changed.
+3. Before the port, `crunch-eval` `tests::eval_merge` passed against chunks
+   0.1.3; after, the same test passed against compiled vector 0.2.0 from
+   `third_party/` and chunks 0.2.0 (1/1). Actual patched `mantle` CLI
+   compiled from the locked root, resolved freshly SOPS/age-encrypted
+   `bootstrap` and `rotation` fixtures through the SecretSpec SOPS provider,
+   and accepted both validated Ed25519 signing and keyed-BLAKE3 verifier
+   keys. A `generate = true` change to the otherwise valid manifest
+   exited 3 with `manifest-secret-write-or-cache-forbidden` before provider
+   access. Secrets were not printed or checked in.
+4. Actual Nix
+   `checks.x86_64-linux.advisory-source-ports`,
+   `checks.x86_64-linux.casita-vendor-closure`, and
+   `checks.x86_64-linux.casita-crunch-store-check` built offline with
+   `--option min-free 0 --option substituters '' --no-link`. The first
+   caught a missing `patches/` source-filter entry before its correction;
+   the final clean-store-source build passed. The default `nix develop`
+   `scripts/vendor-deps.py dev-shell-check` passed without overriding Cargo
+   source config. Repository-owned `scripts/vendor-deps.py refresh` using
+   a **private copied** original registry cache/index/Git input home kept
+   the prior ignored closure in a separate backup; `check` matched a new
+   locked offline generation, 53,023 entries and 752 distinct external
+   package names. No generated vendor source or checksum was hand-edited.
+   `cargo check --locked --offline -p crunch-store --config
+   .cargo/vendor-config.toml` compiled the generated closure in a fresh
+   private Cargo target. Its first attempt reused a private target from
+   another source map and failed when zstd-sys/bzip2-sys tried to overwrite
+   their own existing mode-0444 copied headers; the fresh-target run
+   exited 0 without touching generated vendor files or shared caches.
+5. A private cargo-deny home containing a copied **read-only** crates.io
+   registry index, offline advisory database, and immutable Crane source
+   map ran from this isolated worktree:
+
+   ```sh
+   nix develop --offline --option min-free 0 --option substituters '' \
+     --no-write-lock-file path:$PWD --command env \
+     CARGO_HOME=/tmp/mantle-advisory-deny-home-20261005 CARGO_NET_OFFLINE=true \
+     /nix/store/xqnwl8qppzhr3dq5nzw2ly6yx4lz9xyr-cargo-deny-0.19.0/bin/cargo-deny \
+     --locked --offline check --config deny.toml --hide-inclusion-graph
+   ```
+
+   **Exit 0**: `advisories ok, bans ok, licenses ok, sources ok`, zero
+   advisory/license/source errors or `index-failure` warnings. Remaining
+   warnings: `cfg_block` and `wu-manber` missing license fields, duplicate
+   crate versions, yanked `chacha20 0.10.0` and `spin 0.10.0`. Root
+   `deny.toml` waivers/bypasses were unchanged. Casita remains
+   `90404fcb1cfb3d83f2233715448dfefe913f5fd1` (Apache-2.0),
+   Turso remains `dca55133caa690f90dcdd58d3c4329fb0703659c` (MIT),
+   and `blake3` remains exactly `1.8.2`.
+
+The initial offline Cargo lock update used a scratch `CARGO_HOME` with
+symlinks to the shared registry/Git cache. That operation was not
+instrumented to prove the shared cache was read-only; do **not** claim
+retrospective non-mutation. All subsequent vendor-generation, test, and
+indexed audit inputs used privately copied original caches, isolated
+scratch fixtures, or immutable Nix source replacements. Only this
+isolated worktree's tracked source/lock/docs were changed. T1.3's
+configured audit and T4.7's no-waiver advisory gate now have scoped passing
+evidence. T1.2's clean-checkout/source-built Rust 1.94.1 and self-build
+source-bundle qualification remain open; this does not claim full CI,
+StageX, upstream approval, or release eligibility. Future upstream bumps
+must reauthenticate exact package archives, review/replay zero-fuzz
+patches and repeat the runtime, vendor, and configured audit proofs.
+
+## Live combined workspace admission, 2026-10-06
+
+The exact authenticated Nickel vector and SecretSpec ports above were
+applied to the primary live workspace without cherry-picking a stale
+root manifest/lock or replacing concurrently admitted CC, readiness,
+coordination, and Android dependencies. The saved pre-port live lock
+contained 986 package identities; the combined lock has 978. Exactly
+ten old registry identities were removed (including the two original
+crates, `bitmaps 3.2.1`, `imbl-sized-chunks 0.1.3`, `rsa 0.9.10` and
+their orphaned dependencies), and two unchanged-version path ports
+were added. Twenty-one retained package identities had dependency
+edge changes, but no other package identity/version was changed.
+Complete `cargo metadata --locked --offline` resolved **890/890**
+packages across **54** workspace members, versus the original live
+**899/899**; CC driver, service-readiness, live-state, and coordination
+members were all present. SecretSpec selected exactly `["sops"]`.
+The combined `Cargo.lock` SHA-256 is
+`c24dfe66e47ccc19ad432d5ccf1530574f092c1a33d540bfb371bf3be6bc26b7`.
+Casita revision `90404fcb1cfb3d83f2233715448dfefe913f5fd1`, Turso
+revision `dca55133caa690f90dcdd58d3c4329fb0703659c`, and unique
+`blake3 1.8.2` are unchanged.
+
+With that staged root graph, actual offline Nix
+`path:$PWD#checks.x86_64-linux.advisory-source-ports`,
+`path:$PWD#checks.x86_64-linux.casita-vendor-closure`, and
+`path:$PWD#checks.x86_64-linux.casita-crunch-store-check` built
+successfully offline using per-invocation `--option min-free 0
+--option substituters '' --no-write-lock-file --no-link`; the store
+check additionally specified `--option max-free 0`. The final
+store check built its clean-source Crane dependency closure and ran
+`cargo check --locked -p crunch-store` (934 derivations announced).
+Default `nix develop --offline ... path:$PWD --command python3
+scripts/vendor-deps.py dev-shell-check` resolved exactly the
+immutable patched Casita source and both selected ports. The
+repository-owned generator refreshed the ignored `vendor-deps/`
+from a **privately copied** Cargo archive/index/Git home without
+clobbering its prior checkout: `check` regenerated and compared
+**53,023** entries and resolved **752** external package names
+offline; a fresh-target `cargo check --locked --offline -p
+crunch-store --config .cargo/vendor-config.toml` passed. The
+authenticated importer's `check` verified both published revisions,
+all 85 imported source files, and zero-fuzz patch replay.
+
+Configured `/nix/store/xqnwl8qppzhr3dq5nzw2ly6yx4lz9xyr-cargo-deny-0.19.0/bin/cargo-deny`
+(SHA-256 `9e0d43e46b809981aba11b41d069bb330a0ad09c6af851aa2c508b2299e6d53b`)
+against the same lock and a copied private registry index/advisory
+database ran `--locked --offline check --config deny.toml
+--hide-inclusion-graph` with **exit 0** and
+`advisories ok, bans ok, licenses ok, sources ok`. The four historical
+`deny.toml` exceptions remain; no additional waiver, source exception,
+or disabled advisory class was introduced. Existing warnings about
+duplicate versions, missing upstream license fields, and the
+already-yanked `chacha20`/`spin` entries remain visible.
+
+Actual combined Nickel evaluator library tests passed **83/83** using
+nightly `cargo 1.99.0-nightly (3efb1f477)` and
+`rustc 1.99.0-nightly (dc3f85158)` from the named local toolchain.
+The host's configured `clang` linker was unavailable, so the host
+Nickel/SecretSpec runs used an explicitly available `cc` linker in
+fresh owned targets; source and global linker settings were not
+changed. A standalone published SecretSpec source copy was compared
+byte-for-byte with all **72** live imported manifest/source/test files
+and used its separately authenticated publisher-revision test schema:
+actual SOPS provider tests **32/32**, disabled RSA generation
+**1/1**, and optional RSA generation for other consumers **1/1**.
+The root graph nevertheless contains no `rsa`, `bitmaps`, or chunks
+0.1.3. The combined Mantle binary was compiled in the default Nix
+devshell, whose immutable source map applies the required reviewed
+Casita `nar.rs` patch; attempting a bare original-Git-Casita host
+binary build instead failed at its known unpatched BLAKE3
+`finalize().as_bytes()` call, so the host compile is **not**
+misreported as a production-path success.
+
+Actual `sops 3.13.3` was present at
+`/nix/store/9vlk37b1fgklzwl5bl9xb2dk8sn947ih-sops-3.13.3/bin/sops`
+(SHA-256 `ea54a71221a11a57642459f66677a0e83b76032ea8d8110ffb7613a048004498`).
+The rebuilt Nix-devshell combined CLI at
+`/home/brittonr/.cargo-target/mantle-ports-nix-combined-target-20261006/debug/mantle`
+(SHA-256 `3bd60481307964e726e4371ac8db00a5c09afe0690c2d7180174afa58829a50c`)
+ran the selected real age-encrypted bootstrap/rotation and bounded
+timeout/oversized-output negatives:
+
+```sh
+nix develop --offline --option min-free 0 --option max-free 0 \
+  --option substituters '' --no-write-lock-file path:$PWD --command \
+  nix shell --offline --option min-free 0 --option max-free 0 \
+    --option substituters '' nixpkgs#sops --command env \
+    CARGO_NET_OFFLINE=true \
+    CARGO_TARGET_DIR=/home/brittonr/.cargo-target/mantle-ports-nix-combined-target-20261006 \
+    cargo test --locked --offline -p mantle --test remote_credentials_cli \
+      sops -- --include-ignored --nocapture
+```
+
+**3/3 passed**; the real encrypted test is explicitly ignored when
+`sops` is absent, never silently accepted as passing. A separate
+freshly encrypted SOPS/age CLI smoke created a bootstrap ticket,
+rotated to a distinct verifier identity, revoked the old ticket, and
+found no bearer in outputs or durable state. With `generate = true`
+and an intentionally missing provider file, the parent CLI returned
+status 3 without changing ticket state; the direct isolated worker
+also returned status 3 with the specific
+`manifest-secret-write-or-cache-forbidden` marker **before** touching
+that missing provider. The parent emits its generic
+`remote-service-secret-worker-provider-failed` error, so only the
+direct-worker marker is claimed.
+
+That real smoke first reproduced a preexisting worker failure:
+the Go `sops` binary could decrypt directly but could not reserve
+its page-summary virtual memory when inherited worker `RLIMIT_AS`
+was 512 MiB. Three bounded trials each gave failure at **512 MiB**
+and **768 MiB**; **1,024 MiB** passed but left only **3,364 KiB**
+sampled virtual headroom; **2,048 MiB** passed with **265,448 KiB**
+sampled headroom. Unbounded SOPS decrypt sampled **1,757,908 KiB
+VmSize** against only **23,152 KiB VmRSS**. Source now chooses the
+still-bounded **2,048 MiB** virtual-address cap solely for an
+explicit validated `sops://` remote-secret worker; the
+`systemd-credential://` worker remains at **512 MiB**, and CPU
+10 seconds, deadline 15 seconds, retained-output bounds,
+provider/profile authority and process-group cleanup are unchanged.
+This increases the worst-case SOPS worker memory/address-space
+allowance rather than removing its limit; the owning
+`docs/remote-credentials.md` records this tradeoff. The old-cap
+failure is measurement evidence, **not** a permanent test assertion
+against future Go/SOPS versions.
+
+`PORTS_AUDIT_PASS` was sent separately from CC parity or Android
+readiness. At that handoff, `df -B1 .` reported **41,087,401,984**
+bytes available; StageX requires at least **171,798,691,840**
+actual free bytes. No StageX run, threshold bypass, global GC,
+archive, source-built Rust qualification, or final release readiness
+is claimed. The parent alone owns the eventual combined-ready
+signal after independent CC final parity.

@@ -64,8 +64,14 @@ def check_pins():
     require(dep.get("default-features") is False, "casita: default features must be disabled")
     require(sorted(dep.get("features", [])) == ["experimental", "native"], "casita: feature drift")
     run(sys.executable, str(ROOT / "scripts/import-bao-tree.py"), "check")
+    run(sys.executable, str(ROOT / "scripts/import-advisory-ports.py"), "check")
     root_manifest = tomllib.loads((ROOT / "Cargo.toml").read_text())
     require(root_manifest["patch"]["crates-io"]["bao-tree"] == {"path": "third_party/bao-tree"}, "bao-tree: crates.io path patch drift")
+    for name in ("nickel-lang-vector", "secretspec"):
+        require(root_manifest["patch"]["crates-io"].get(name) == {"path": f"third_party/{name}"}, f"{name}: exact local patch path drift")
+    require(root_manifest["dependencies"]["secretspec"] == {
+        "version": "=0.17.0", "default-features": False, "features": ["sops"],
+    }, "secretspec: bounded SOPS-only feature selection drift")
     bao_manifest = tomllib.loads((ROOT / "third_party/bao-tree/Cargo.toml").read_text())
     require(bao_manifest["package"]["version"] == "0.16.1", "bao-tree: imported package version drift")
     require(bao_manifest["features"]["validate"] == ["dep:futures-lite"], "bao-tree: validation feature drift")
@@ -81,6 +87,13 @@ def check_pins():
     bao = [p for p in packages if p["name"] == "bao-tree"]
     require(len(bao) == 1 and bao[0]["version"] == "0.16.1" and "source" not in bao[0], "bao-tree: Cargo.lock did not select local candidate")
     require(not any(p["name"] in {"genawaiter-proc-macro", "proc-macro-error", "proc-macro-error-attr", "proc-macro-hack", "syn-mid"} for p in packages), "bao-tree: obsolete generator proc macro remains locked")
+    vector = [p for p in packages if p["name"] == "nickel-lang-vector"]
+    secretspec = [p for p in packages if p["name"] == "secretspec"]
+    require(len(vector) == 1 and vector[0]["version"] == "0.2.0" and "source" not in vector[0] and "checksum" not in vector[0], "nickel-lang-vector: local exact package not locked")
+    require(vector[0]["dependencies"] == ["imbl-sized-chunks", "serde"], "nickel-lang-vector: fixed chunks dependency drift")
+    require(len(secretspec) == 1 and secretspec[0]["version"] == "0.17.0" and "source" not in secretspec[0] and "checksum" not in secretspec[0], "secretspec: local exact package not locked")
+    require("rsa" not in secretspec[0]["dependencies"], "secretspec: vulnerable RSA still unconditional")
+    require(not any(p["name"] in {"bitmaps", "rsa"} or (p["name"] == "imbl-sized-chunks" and p["version"] == "0.1.3") for p in packages), "unpatched Nickel vector / SecretSpec advisory graph remains locked")
     turso = [p for p in packages if p["name"] in TURSO_PACKAGES]
     require(
         len(turso) == len(TURSO_PACKAGES) and {p["name"] for p in turso} == TURSO_PACKAGES,
@@ -179,8 +192,23 @@ def compare_trees(generated, existing):
     return len(lhs)
 
 
+def verify_source_ports(data):
+    packages = data["packages"]
+    nodes = {node["id"]: node for node in data["resolve"]["nodes"]}
+    for name, version in (("nickel-lang-vector", "0.2.0"), ("secretspec", "0.17.0")):
+        matches = [package for package in packages if package["name"] == name]
+        require(len(matches) == 1, f"{name}: expected one local source port")
+        package = matches[0]
+        require(package["version"] == version and package["source"] is None, f"{name}: original registry source unexpectedly selected")
+        require(Path(package["manifest_path"]).resolve() == (ROOT / "third_party" / name / "Cargo.toml").resolve(), f"{name}: unreviewed package path selected")
+        if name == "secretspec":
+            features = nodes[package["id"]]["features"]
+            require("sops" in features and "rsa-generation" not in features and "default" not in features, "secretspec: selected features unexpectedly include RSA or omit SOPS")
+
 def offline_metadata(config, vendor, lock_packages):
+
     data = json.loads(run("cargo", "metadata", "--locked", "--offline", "--format-version", "1", "--config", str(config)))
+    verify_source_ports(data)
     found = set()
     vendor_resolved = vendor.resolve()
     for package in data["packages"]:
@@ -223,8 +251,9 @@ def check_dev_shell(lock_packages):
         cwd=ROOT, text=True, capture_output=True, check=False,
     )
     require(result.returncode == 0, f"default dev-shell Cargo metadata failed:\n{result.stderr}")
-    packages = json.loads(result.stdout)["packages"]
-    verify_dev_shell_casita(packages, lock_packages)
+    data = json.loads(result.stdout)
+    verify_source_ports(data)
+    verify_dev_shell_casita(data["packages"], lock_packages)
 
 
 def main():

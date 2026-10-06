@@ -4,9 +4,11 @@
 
 Proposed (2026-09-30)
 
-Implementation is partial, and this record is not Accepted. In
-`adopt-casita-store-backend`, T2.5, T2.10, T2.13, T2.15, T3.3, T3.4, T3.5,
-and T3.6 are checked from recorded runs; 28 tasks remain open. In
+Implementation is partial, and this record is not Accepted. In the
+2026-09-30 `adopt-casita-store-backend` snapshot, T2.5, T2.10, T2.13,
+T2.15, T3.3, T3.4, T3.5, and T3.6 were checked from recorded runs; 28
+tasks were then open. The subsequent 2026-10-05 isolated T1.3/T4.7
+dependency admission does not close T1.2 or T4.9. In
 `add-store-backend-selection`, T1.1–T1.4, T2.1–T2.7, T3.1–T3.4,
 and T4.1–T4.4 are checked from preserved pre-selection goldens,
 the scoped canonical consumer-fact rail with its unchanged unequal
@@ -21,8 +23,9 @@ evidence; neither is inferred from T4.4's checkbox. This record
 claims only tested behavior within [Evidence scope](#evidence-scope).
 The final repository quality gates for both changes have not all
 passed: the 2026-09-30 runs recorded strict Clippy, the first-party
-workspace suite, and `cargo deny` failures. Targeted 2026-10-04
-results do not imply workspace gates or release eligibility.
+workspace suite, and `cargo deny` failures. The 2026-10-05 configured
+dependency gate passes on the reviewed local source-port lock, but does not
+imply source-built Rust 1.94.1, all workspace gates, or release eligibility.
 This record can become Accepted only after both changes complete
 with the evidence named under [Evidence scope](#evidence-scope).
 
@@ -180,6 +183,19 @@ carry this decision.
    package instead of a stub lib because pinned Casita compiles against its
    API. This local review and receipt do not stand in for upstream maintainer
    approval or a Bao/Casita release.
+
+   **Pinned dependency and license review.** The pinned Casita manifest
+   declares Apache-2.0; pinned Turso 0.8.0-pre.7 declares MIT. Both are
+   admitted by their exact Git origins in `deny.toml` with independent locked
+   revisions, and Mantle still pins `blake3 = "=1.8.2"`. The experimental
+   Casita API used remains the complete table below; the source-port cutover
+   does not authorize additional experimental calls or floating Casita/Turso
+   revisions. Exact published Nickel vector 0.2.0 (MIT) and SecretSpec
+   0.17.0 (Apache-2.0) are independently imported, receipt-pinned, and
+   patched under `third_party/`; see the
+   [dependency audit](../docs/dependency-audit.md#exact-registry-source-ports-no-waiver-audit-2026-10-05)
+   for their registry SHA-256 identities, exact patch hashes, bounded
+   tests, warnings, and rollback.
 2. **Repository location.** The Casita repository uses Casita's standard
    local profile in a dedicated subdirectory of `--state-dir`.
    `Repository::local` creates `blobs/` and `casita.sqlite` under its root,
@@ -530,17 +546,21 @@ releases only roots marked evictable, and Mantle never marks one.
   `bao-tree`, `iroh-io`, and a git-pinned `turso`. `astral-tokio-tar` moves
   from 0.6.3 to exactly 0.6.4. `blake3` must stay at `=1.8.2`, which Casita's
   `1.8` requirement allows.
-- The 2026-09-30 vendor rail failed advisories and sources; later exact
-  Git-URL admissions resolved the source-policy category. The local Bao
-  cutover removes the *new* `proc-macro-error 0.4.12` advisory path without
-  weakening validation. A configured, unwaived `cargo-deny 0.19.0` rerun
-  still reports `advisories FAILED, bans ok, licenses ok, sources ok`:
-  pre-existing RUSTSEC-2026-0247 (`bitmaps 3.2.1`),
-  RUSTSEC-2026-0258 (`h2 0.4.13`),
-  RUSTSEC-2026-0292 (`imbl-sized-chunks 0.1.3`),
-  RUSTSEC-2023-0071 (`rsa 0.9.10`), and
-  RUSTSEC-2026-0285 (`rustls 0.23.37`) remain open. The dependency gate
-  stays unchecked; no waiver is added.
+- The 2026-09-30 vendor rail failed advisories and sources; subsequent
+  exact-URL admissions resolved sources, local Bao removed the
+  `proc-macro-error 0.4.12` path, and compatible h2 and rustls lock updates
+  removed two vulnerabilities. At the pre-port `e7d91c31` lock, configured
+  `cargo-deny 0.19.0` still found `bitmaps 3.2.1`,
+  `imbl-sized-chunks 0.1.3`, and `rsa 0.9.10` through Nickel vector and
+  SecretSpec. The exact published package source ports described above
+  move Nickel to `imbl-sized-chunks 0.2.0` and remove RSA only from Mantle's
+  SOPS-only feature graph while retaining it for default-feature consumers.
+  The offline, locked, configured `cargo-deny 0.19.0` rerun with a private
+  read-only registry index exited 0: `advisories ok, bans ok, licenses ok,
+  sources ok`, without changing waivers or `deny.toml`. Duplicate-version,
+  missing-license-field, and two yanked-crate warnings remain. This audit
+  is for the current lock and available database, not a permanent security,
+  Casita-correctness, or release guarantee.
 - Every read is a full content audit: it checks the envelope out, re-ingests
   `content`, and measures the NAR again, so read cost grows with output size.
 - Operators must provision `casita-trusted-public-keys` before a migration.
@@ -685,6 +705,13 @@ releases only roots marked evictable, and Mantle never marks one.
   `max_root_changes` default; permanent-by-default roots and the
   pressure-pass rules; the envelope key identity used for idempotent
   admission; and format migrations on open.
+- When updating Nickel vector or SecretSpec, reauthenticate the new exact
+  crates.io archive and published revision, rebase and review both minimal
+  source patches with zero fuzz, regenerate the original/patched file receipt,
+  and rerun Nickel evaluation, SOPS and optional RSA behavior, Crane/vendor
+  closure, and the configured no-waiver advisory gate. Removing a local
+  source port without an upstream replacement restores the old advisory
+  path; the package, patch, lock and Nix receipt assertions change together.
 
 ## Evidence scope
 
@@ -813,16 +840,20 @@ Evidence added on 2026-10-04 in the now archived
   These selected fixtures and checks do not establish repository-wide
   gates or release eligibility.
 
-Evidence that does not exist yet: root-race, remaining batch,
-and trust-policy fixtures for the separate Casita change;
-castore payload-root fixtures; for T1.2, a vendor build
-from a clean checkout and the confirmation that every toolchain, including
-self-build source-bundle profiles, meets Casita's `rust-version`; for T4.6,
-`cargo check` with the tracked Casita patch in the Nix build and with the
-`vendor-deps/` closure, and the patch drift checks; and a passing `cargo deny`
-result for the new dependency closure. The vendor rail's run failed advisories
-and sources, as recorded under Consequences. At the pin, `casita` itself
-declares Apache-2.0, which `deny.toml` allows. The advisory review belongs in
+The selected evidence has not yet established T1.2's source-built
+Rust 1.94.1 compiler, self-build source-bundle requalification, or its
+clean-checkout proof. The isolated linked-worktree Nix
+`advisory-source-ports`, `casita-vendor-closure`, and
+`casita-crunch-store-check` builds, exact locked offline vendor
+regeneration and checkout-local compile, real Nickel evaluation,
+SOPS-encrypted bootstrap/rotation, RSA-enabled standalone test,
+disabled-RSA negative, and passing configured no-waiver `cargo-deny`
+audit are separately recorded
+in the 2026-10-05 follow-up to
+`adopt-casita-store-backend/evidence/dependency-admission-2026-10-04.md`.
+Those are scoped T1.3/T4.7 admission evidence, not a substitute for T1.2,
+full CI, StageX, or release. At this pin Casita declares Apache-2.0 and
+Turso declares MIT; the audit and its remaining warnings are described in
 [`docs/dependency-audit.md`](../docs/dependency-audit.md).
 
 When complete, the evidence will cover only the tested behavior for the pinned
