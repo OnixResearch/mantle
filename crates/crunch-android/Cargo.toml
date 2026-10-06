@@ -1,0 +1,32 @@
+[package]
+name = "crunch-android"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "crunch-android-apk"
+path = "src/bin/apk.rs"
+
+[[bin]]
+name = "crunch-android-admit"
+path = "src/bin/admit.rs"
+
+[dependencies]
+base64 = "0.22"
+clap = { version = "4", features = ["derive"] }
+blake3 = "=1.8.2"
+crunch-build = { path = "../crunch-build" }
+crunch-nar = { path = "../crunch-nar" }
+crunch-store = { path = "../crunch-store" }
+data-encoding = "2.6"
+crunch-android-core = { path = "../crunch-android-core" }
+crunch-eval = { path = "../crunch-eval" }
+nix-compat = { path = "../../vendor/nix-compat" }
+crunch-glue = { path = "../crunch-glue" }
+snix-store = { path = "../../vendor/snix-store" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tempfile = "3"

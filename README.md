@@ -267,9 +267,82 @@ mantle --state-dir ./offline-state build \
   --offline-source-preflight --no-substitute ./package.ncl
 ```
 
-Source readiness proves declared input availability and identity only. Build
-success, output trust, compiler correctness, and release eligibility require
-separate evidence.
+Source readiness reports the declared source-bundle mappings; a virtual
+`store-path` record can report Ready without any signed PathInfo or physical
+store object. Treat it as a declaration, not proof of an admitted local input.
+For signed APKs, `crunch-android-admit observe` measures four independent,
+complete trees: app source, native glibc, native libgcc, and test-only signing.
+It creates no state. After independently reviewing each tree's NAR
+SHA-256/BLAKE3/size, `crunch-android-admit admit` requires those exact facts,
+an existing Mantle Ed25519 signing key and matching trusted public key, then
+verifies all four signed PathInfos and physical store objects. Its receipt
+claims only these observed local inputs; the four pinned Android HTTPS archives
+are separate source-bundle inputs. See
+`.cairn/changes/add-apk-build-adapter/design.md` for manifest fields and
+the failure/partial-admission boundary. APK bytes, SDK provenance, compiler
+correctness, and release eligibility require separate evidence.
+
+### Signed Android APK input admission
+
+The ordinary `cargo build -p mantle` and default `nix build` produce the Mantle
+CLI, **not** the APK adapter binaries. On Linux/x86_64, the dedicated
+`nix build .#android-apk-adapter` package installs both
+`bin/crunch-android-apk` and `bin/crunch-android-admit`. In a pinned
+development shell the equivalent local build is
+`cargo build --locked --offline -p crunch-android --bins`, which produces
+`target/debug/crunch-android-{apk,admit}` under the selected target directory.
+Build only after applying the APK replay's resource guards; neither package
+imports source bundles nor performs APK signing at installation time.
+
+For each guarded replay, set `APK_PROOF` to an isolated operator-owned proof
+directory. Create its `apk-stage/signed-plan.ncl`,
+`apk-stage/inputs-separate-libgcc.json`, and reviewed four-entry
+`apk-stage/local-inputs-separate-libgcc.json` manifest from that run's app,
+complete glibc, complete libgcc, and test-only signing trees; these paths are
+per-run artifacts, not checked-in fixtures. Provision the pinned Android
+toolchain archives and Mantle signing/trusted-public keys separately. Once
+the test-only keystore and both native trees exist, use the packaged command:
+
+```bash
+APK_PROOF=${APK_PROOF:?set APK_PROOF to an isolated proof directory}
+./result/bin/crunch-android-admit observe \
+  --plan "$APK_PROOF/apk-stage/signed-plan.ncl" \
+  --inputs "$APK_PROOF/apk-stage/inputs-separate-libgcc.json" \
+  --manifest "$APK_PROOF/apk-stage/local-inputs-separate-libgcc.json" \
+  --store-prefix /mantle/store
+```
+
+Review that observation and add the four matching
+`expected_nar_sha256`/`expected_nar_blake3`/`expected_nar_size` values to
+the same manifest. Only then run `crunch-android-admit admit` with those
+four common flags plus `--store "$APK_PROOF/replay-a/store"`,
+`--state-dir "$APK_PROOF/replay-a/state"`,
+`--signing-key "$MANTLE_SIGNING_KEY"` and
+`--trusted-public-key "$MANTLE_TRUSTED_PUBLIC_KEY"`. Use **new, disjoint**
+`replay-b` state/store for the second run and the *same immutable* inputs.
+`observe` emits `observed-only`; only verified PathInfos and physical objects
+produce a `signed-physical` admission receipt. This is a test signer, not
+production trust. The signed APK still requires the separately pinned four
+HTTPS source records, a `crunch-android-apk` graph render, and a real
+`mantle build --offline-source-preflight --no-substitute` followed by APK
+signature verification and bytewise A/B comparison; no such build is implied
+by input admission.
+
+Render the graph separately with `crunch-android-apk`:
+
+```bash
+./result/bin/crunch-android-apk \
+  --plan "$APK_PROOF/apk-stage/signed-plan.ncl" \
+  --inputs "$APK_PROOF/apk-stage/inputs-separate-libgcc.json" \
+  --store-prefix /mantle/store \
+  --output "$APK_PROOF/apk-stage/render.ncl"
+```
+
+The renderer loads its compile-time embedded Android cohort, checks the three
+local toolchain archives against its pinned SHA-256 records, and creates a new
+`.ncl` file plus an inert `.ncl.json` derivation graph. Its six-stage receipt
+and final store path do **not** establish a signed APK, imported sources, or
+release eligibility.
 
 ## Mantlepkgs catalogs
 

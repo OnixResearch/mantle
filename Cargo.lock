@@ -1651,6 +1651,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-android"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "blake3",
+ "clap",
+ "crunch-android-core",
+ "crunch-build",
+ "crunch-eval",
+ "crunch-glue",
+ "crunch-nar",
+ "crunch-store",
+ "data-encoding",
+ "nix-compat",
+ "serde",
+ "serde_json",
+ "sha2",
+ "snix-store",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "crunch-android-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "crunch-attestation"
 version = "0.1.0"
 dependencies = [

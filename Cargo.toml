@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
   "crates/crunch-action-result-core",
+  "crates/crunch-android-core",
+  "crates/crunch-android",
   "crates/crunch-composition-core",
   "crates/crunch-nar",
   "crates/crunch-rust-cache-core",
@@ -64,6 +66,8 @@ cargo_check_args = ["--lib"]
 default_scope = [
   "-p", "mantle",
   "-p", "crunch-action-result-core",
+  "-p", "crunch-android-core",
+  "-p", "crunch-android",
   "-p", "crunch-composition-core",
   "-p", "crunch-nar",
   "-p", "mantlepkgs-core",

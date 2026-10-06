@@ -9,10 +9,10 @@ The repo already has the pattern for this: execution-gated proof changes that re
 ## Architecture
 
 ```text
-examples/android-minimal.ncl
-  -> adapter lowering (unchanged)
+$APK_PROOF/apk-stage/signed-plan.ncl
+  -> adapter lowering (six signed SDK stages)
   -> admitted toolchain components (fixed-output fetch, or prefetched bundle)
-  -> five sandboxed derivations
+  -> aapt2 compile/link, javac, d8, zipalign, apksigner
   -> APK output
   -> structural verification + digest receipt
   -> second clean rebuild in a fresh store
@@ -21,7 +21,10 @@ examples/android-minimal.ncl
 
 ### Example application
 
-`examples/android-minimal.ncl` is deliberately small: one activity, the manifest, one Java source, no resources that need `aapt2 compile` beyond the manifest link step. It exercises every step boundary while keeping the first real run cheap. Application id and version are fixed in the example.
+The staged signed APK plan is deliberately small: one activity, its manifest,
+one Java source, and a string resource compiled by `aapt2` before manifest
+linking. It selects all six ordered SDK stages without claiming that any APK
+stage has executed. Application id and version are fixed in the plan.
 
 ### Evidence rail
 
@@ -34,9 +37,26 @@ A checked-in rail builds the example and writes a receipt binding:
 
 The rail runs detached with pueue under the repo's long-build conventions. Prefetched bundles replay offline through `SourceFetchOverridePlan`, so the expensive network dependency is one-time.
 
+### Four-tree local admission gate
+
+The signed replay binds four distinct complete source objects: app source,
+native glibc, native libgcc, and test-only signing. `ApkInputs` names the
+independent `native_libgcc_root`; its ordered runtime library directories bind
+glibc's loader and `libc.so.6` under the glibc root and `libgcc_s.so.1` under
+the libgcc root. Every SDK derivation depends on both native objects.
+The operator stages and independently checks each full native Nix tree rather
+than copying individual shared libraries. `crunch-android-admit observe` only
+reports NAR SHA-256, BLAKE3, and size without store effects. Review matching
+observations for both original Nix trees and staged copies, then supply
+expected facts for all four trees before any `admit`. Only a trusted signature
+on each exact non-CA PathInfo plus matching castore and physical NAR read-back
+can establish `signed-physical`; an observed-only receipt is not an APK build,
+a source-bundle admission, or a signed-ready claim. Disjoint fresh state/store
+roots are required for subsequent A/B replays.
+
 ### Determinism proof
 
-Two clean rebuilds in fresh store and state directories must produce the same output BLAKE3. A negative control perturbs the Java source and asserts the digest changes. This catches accidental ambient state in any of the five steps, the same class of drift the busybox kbuild pinning exposed in the self-hosting proof.
+Two clean rebuilds in fresh store and state directories must produce the same output BLAKE3. A negative control perturbs the Java source and asserts the digest changes. This catches accidental ambient state in any of the six signed stages, the same class of drift the busybox kbuild pinning exposed in the self-hosting proof.
 
 ### Structural verification
 

@@ -977,6 +977,21 @@
           nativeCheckInputs = [ pkgs.git ];
         };
 
+        # Ship both the typed APK graph renderer and its Android-only signed
+        # local input admission entry point from the same pinned Cargo closure.
+        androidApkAdapter = craneLib.buildPackage {
+          inherit
+            src
+            cargoArtifacts
+            cargoVendorDir
+            nativeBuildInputs
+            buildInputs
+            ;
+          SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
+          cargoExtraArgs = "--locked -p crunch-android --bins";
+          doCheck = false;
+        };
+
         rustcWrapper = craneLib.buildPackage {
           pname = "mantle-rustc-wrapper";
           inherit
@@ -1374,6 +1389,7 @@
           check-store-overlay-policy = checkStoreOverlayPolicy;
         }
         // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          android-apk-adapter = androidApkAdapter;
           oci-distribution-registry = pkgs.distribution;
           rustc-wrapper = rustcWrapper;
           kernelscript-compiler = kernelscriptExperiment.compiler;

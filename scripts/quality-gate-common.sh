@@ -8,6 +8,8 @@ readonly QUALITY_GATE_TEST_THREAD_COUNT=1
 # Keep first-party package scope in one checked-in place.
 readonly -a FIRST_PARTY_PACKAGES=(
   mantle
+  crunch-android-core
+  crunch-android
   crunch-attestation
   crunch-build
   crunch-delta
