@@ -18,6 +18,7 @@ use crunch_live_state_core::Fact;
 use crunch_live_state_core::FactKind;
 use crunch_live_state_core::Filter;
 use crunch_live_state_core::MAX_FILTER_BYTES;
+use crunch_live_state_core::MAX_FRAME_BYTES;
 use crunch_service_readiness_core::RestartPolicy;
 use crunch_service_readiness_core::SCHEMA;
 use crunch_service_readiness_core::ServiceAssertion;
@@ -269,6 +270,34 @@ async fn rejects_bad_frames_oversized_filter_forged_fact_and_foreign_retract() {
 }
 
 #[tokio::test]
+async fn exact_request_frame_is_accepted_and_one_byte_over_is_rejected() {
+    let daemon = Daemon::start().await;
+    let request = serde_json::to_vec(&json!({"op":"subscribe","filter":owned("unmatched")})).unwrap();
+    assert!(request.len() < MAX_FRAME_BYTES);
+    let mut exact_frame = request;
+    exact_frame.resize(MAX_FRAME_BYTES - 1, b' ');
+    exact_frame.push(b'\n');
+    assert_eq!(exact_frame.len(), MAX_FRAME_BYTES);
+    let mut accepted = Peer::connect(&daemon.socket).await;
+    accepted.write.write_all(&exact_frame).await.unwrap();
+    assert_eq!(accepted.next().await["op"], "snapshot_end");
+
+    let mut oversized_frame = exact_frame;
+    oversized_frame.insert(MAX_FRAME_BYTES - 1, b' ');
+    assert_eq!(oversized_frame.len(), MAX_FRAME_BYTES + 1);
+    let mut rejected = Peer::connect(&daemon.socket).await;
+    rejected.write.write_all(&oversized_frame).await.unwrap();
+    let mut response = String::new();
+    let received = tokio::time::timeout(WAIT, rejected.read.read_line(&mut response)).await.unwrap().unwrap();
+    if received != 0 {
+        assert_eq!(serde_json::from_str::<Value>(&response).unwrap()["op"], "error");
+    }
+    let mut healthy = Peer::connect(&daemon.socket).await;
+    healthy.subscribe(owned("unmatched")).await;
+    assert_eq!(healthy.next().await["op"], "snapshot_end");
+}
+
+#[tokio::test]
 async fn subscriber_disconnect_does_not_affect_publisher() {
     let daemon = Daemon::start().await;
     let mut dead = Peer::connect(&daemon.socket).await;
@@ -510,6 +539,27 @@ async fn blocking_session_rejects_foreign_owner_and_missing_endpoint() {
     );
 }
 
+#[test]
+fn blocking_connect_trickle_reset_obeys_one_absolute_deadline() {
+    let directory = tempfile::tempdir().unwrap();
+    let socket = directory.path().join("trickle.sock");
+    let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        for _ in 0..30 {
+            if std::io::Write::write_all(&mut stream, b" ").is_err() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    });
+    let started = std::time::Instant::now();
+    let error = BlockingPublisherSession::connect(&socket).err().unwrap();
+    assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+    assert!(started.elapsed() < Duration::from_secs(4), "response timeout reset after a partial read");
+    server.join().unwrap();
+}
+
 #[tokio::test]
 async fn background_publisher_delivers_started_then_ready_before_one_shot_exit() {
     let daemon = Daemon::start().await;
@@ -706,6 +756,49 @@ async fn dependency_loss_retracts_ready_without_retracting_unrelated_started() {
     after.subscribe(owned("dep-owner")).await;
     assert_eq!(after.next().await["fact"]["id"], failed.id);
     assert_eq!(after.next().await["op"], "snapshot_end");
+}
+
+#[tokio::test]
+async fn multihop_readiness_loss_retracts_each_dependent_without_losing_started() {
+    let daemon = Daemon::start().await;
+    let mut observer = Peer::connect(&daemon.socket).await;
+    observer.subscribe(owned("cascade")).await;
+    assert_eq!(observer.next().await["op"], "snapshot_end");
+    let mut publisher = Peer::connect(&daemon.socket).await;
+    let started = [
+        readiness("cascade", "database", ServiceState::Started),
+        readiness_with("cascade", "api", ServiceState::Started, &["database"], None),
+        readiness_with("cascade", "web", ServiceState::Started, &["api"], None),
+    ];
+    let ready = [
+        readiness("cascade", "database", ServiceState::Ready),
+        readiness_with("cascade", "api", ServiceState::Ready, &["database"], None),
+        readiness_with("cascade", "web", ServiceState::Ready, &["api"], None),
+    ];
+    for index in 0..started.len() {
+        publisher.publish(&started[index]).await;
+        publisher.publish(&ready[index]).await;
+        assert_eq!(asserted_state(&observer.next().await), ServiceState::Started);
+        assert_eq!(asserted_state(&observer.next().await), ServiceState::Ready);
+    }
+    publisher.retract(&ready[0].id).await;
+    let mut withdrawn = std::collections::BTreeSet::new();
+    for _ in 0..ready.len() {
+        let response = observer.next().await;
+        assert_eq!(response["op"], "retract");
+        withdrawn.insert(response["id"].as_str().unwrap().to_owned());
+    }
+    assert_eq!(withdrawn, ready.iter().map(|fact| fact.id.clone()).collect());
+    let mut current = Peer::connect(&daemon.socket).await;
+    current.subscribe(owned("cascade")).await;
+    let mut retained = std::collections::BTreeSet::new();
+    for _ in 0..started.len() {
+        let response = current.next().await;
+        assert_eq!(response["op"], "snapshot");
+        retained.insert(response["fact"]["id"].as_str().unwrap().to_owned());
+    }
+    assert_eq!(retained, started.iter().map(|fact| fact.id.clone()).collect());
+    assert_eq!(current.next().await["op"], "snapshot_end");
 }
 
 #[tokio::test]

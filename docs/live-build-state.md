@@ -79,6 +79,12 @@ A publisher connection sends `{"op":"publish","fact":FACT}` or
 maximum may close the connection instead of returning an error. Produce facts
 with the `crunch-live-state-core` `Fact::new` API, not a guessed ID.
 
+The 4,096-byte frame limit includes the terminating newline: an otherwise
+valid request exactly at that limit is accepted, while a 4,097-byte request
+is rejected. A blocking publisher uses one two-second monotonic deadline for
+connecting and one for each complete response, including all partial reads;
+an endpoint sending a slow trickle cannot extend a response's deadline.
+
 A fact is JSON with `version` (currently `1`), `id`, `owner`, `kind`, `subject`,
 and `state` fields; its `kind` is one of `goal`, `worker`, `reservation`,
 `outcome`, `service_readiness`. `id` is domain-separated BLAKE3 of

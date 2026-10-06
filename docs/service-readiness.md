@@ -40,6 +40,10 @@ The schema requires all eight fields and exactly one asserted state per fact. An
 
 If service `b` declares dependency `a`, report `blocked_by: "a"` while `a` lacks a current `ready` or `complete`; `b` may add `ready` alongside `started` only after that prerequisite and its own real work check. If `a` later retracts readiness, withdraw `b`'s `ready`, name `a` again, and require reevaluation before republishing. Termination before the first readiness is `failed`, whether exit is normal or abnormal, even if policy is `never` (Mantle's explicit precedence over the source's abnormal-exit-as-`complete` rule).
 
+For a chain of dependencies, a lost prerequisite withdraws the `ready`
+assertion from every affected transitive dependent. Their `started` facts
+remain visible; consumers must not interpret `started` as still ready.
+
 ## Restart policies
 
 Each assertion contains one required policy; ingress rejects an unknown or missing policy. The policy applies only to the named managed component/group, not arbitrary user programs:

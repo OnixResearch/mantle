@@ -23,9 +23,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use std::time::Instant;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use crunch_live_state_core::Fact;
 use crunch_live_state_core::FactKind;
@@ -55,9 +52,9 @@ use tokio::net::UnixStream;
 use tokio::sync::mpsc;
 use tokio::sync::watch;
 
-const MAX_CONNECTIONS: usize = MAX_SUBSCRIBERS * 2;
+const MAX_CONNECTIONS: usize = MAX_SUBSCRIBERS.saturating_mul(2);
 /// Aggregate budget for captured atomic snapshots (eight maximum-sized full sets).
-pub const MAX_ACTIVE_SNAPSHOT_BYTES: usize = 8 * MAX_FACTS * MAX_FACT_BYTES;
+pub const MAX_ACTIVE_SNAPSHOT_BYTES: usize = 8_usize.saturating_mul(MAX_FACTS).saturating_mul(MAX_FACT_BYTES);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 type Bytes = Arc<[u8]>;
 
@@ -128,24 +125,26 @@ struct State {
 
 impl State {
     fn broadcast(&mut self, fact: &Fact, frame: Bytes) {
-        let mut dropped = Vec::new();
-        for (id, subscriber) in &self.subscribers {
+        self.subscribers.retain(|id, subscriber| {
             if subscriber.filter.matches(fact) && subscriber.send.try_send(Outbound::One(frame.clone())).is_err() {
-                let _ = subscriber.stop.send(true);
-                dropped.push(*id);
+                subscriber.stop.send_replace(true);
+                eprintln!("mantle-coordination: subscriber {id} dropped (pending events exceeded bound)");
+                false
+            } else {
+                true
             }
-        }
-        for id in dropped {
-            self.subscribers.remove(&id);
-            eprintln!("mantle-coordination: subscriber {id} dropped (pending events exceeded bound)");
-        }
+        });
     }
 
-    fn retract_fact(&mut self, id: &str) -> Option<Fact> {
+    fn retract_fact(&mut self, id: &str) -> Result<Option<Fact>, String> {
+        if !self.ids.contains_key(id) {
+            return Ok(None);
+        }
+        let response = frame(&Response::Retract { id })?;
+        let fact = self.facts.retract(id).ok_or_else(|| "known fact disappeared before retraction".to_owned())?;
         self.ids.remove(id);
-        let fact = self.facts.retract(id)?;
-        self.broadcast(&fact, frame(&Response::Retract { id }));
-        Some(fact)
+        self.broadcast(&fact, response);
+        Ok(Some(fact))
     }
 
     fn owner_readiness(&self, owner: &str, exclude_id: Option<&str>) -> Result<Vec<ServiceAssertion>, String> {
@@ -162,7 +161,7 @@ impl State {
     }
 
     fn reconcile_readiness(&mut self, owner: &str) -> Result<(), String> {
-        loop {
+        for _ in 0..MAX_FACTS {
             let active = self.owner_readiness(owner, None)?;
             // r[impl mantle.service_readiness.declared_dependencies]
             let invalid = ServiceGraph::invalid_ready_subjects(&active).map_err(|error| error.to_string())?;
@@ -170,9 +169,13 @@ impl State {
                 return Ok(());
             }
             for subject in invalid {
-                self.retract_fact(&fact_id(owner, FactKind::ServiceReadiness, &subject));
+                let id = fact_id(owner, FactKind::ServiceReadiness, &subject);
+                if self.retract_fact(&id)?.is_none() {
+                    return Err("invalid readiness subject was not active".to_owned());
+                }
             }
         }
+        Err("readiness reconciliation exceeded active fact bound".to_owned())
     }
 
     fn retire_service(&mut self, owner: &str, service_id: &str) -> Result<(), String> {
@@ -182,7 +185,7 @@ impl State {
                 && !matches!(assertion.state, ServiceState::Complete | ServiceState::Failed)
             {
                 let id = fact_id(owner, FactKind::ServiceReadiness, &assertion.subject());
-                self.retract_fact(&id);
+                self.retract_fact(&id)?;
             }
         }
         self.reconcile_readiness(owner)
@@ -209,14 +212,14 @@ impl State {
         } else {
             None
         };
-        let changed = self.facts.publish(fact.clone()).map_err(|error| error.to_string())?;
+        let is_changed = self.facts.publish(fact.clone()).map_err(|error| error.to_string())?;
         if owner.is_none() {
             self.owner_sessions.insert(fact.owner.clone(), id);
             *owner = Some(fact.owner.clone());
         }
         self.ids.insert(fact.id.clone(), id);
-        if changed {
-            self.broadcast(&fact, frame(&Response::Publish { fact: &fact }));
+        if is_changed {
+            self.broadcast(&fact, frame(&Response::Publish { fact: &fact })?);
             if let Some(assertion) = readiness
                 && matches!(assertion.state, ServiceState::Complete | ServiceState::Failed)
             {
@@ -234,7 +237,7 @@ impl State {
             return Err("fact belongs to another publisher".to_owned());
         }
         if self.ids.contains_key(id)
-            && let Some(fact) = self.retract_fact(id)
+            && let Some(fact) = self.retract_fact(id)?
             && fact.kind == FactKind::ServiceReadiness
         {
             self.reconcile_readiness(&fact.owner)?;
@@ -250,7 +253,10 @@ impl State {
             // r[impl mantle.coordination_service.retraction_on_owner_stop]
             for fact in self.facts.retract_owner(owner) {
                 self.ids.remove(&fact.id);
-                self.broadcast(&fact, frame(&Response::Retract { id: &fact.id }));
+                match frame(&Response::Retract { id: &fact.id }) {
+                    Ok(response) => self.broadcast(&fact, response),
+                    Err(error) => eprintln!("mantle-coordination: cannot encode owner retraction: {error}"),
+                }
             }
         }
     }
@@ -266,35 +272,47 @@ fn parse_readiness(fact: &Fact) -> Result<ServiceAssertion, String> {
     Ok(assertion)
 }
 
-fn frame(value: &Response<'_>) -> Bytes {
-    let mut bytes = serde_json::to_vec(value).expect("serializable coordination response");
+fn frame(value: &Response<'_>) -> Result<Bytes, String> {
+    let mut bytes = serde_json::to_vec(value).map_err(|error| error.to_string())?;
     bytes.push(b'\n');
     if bytes.len() > MAX_FRAME_BYTES {
-        assert!(matches!(value, Response::Error { .. }));
+        if !matches!(value, Response::Error { .. }) {
+            return Err("coordination response exceeds frame bound".to_owned());
+        }
         bytes = serde_json::to_vec(&Response::Error {
             message: "error message exceeds frame bound",
         })
-        .expect("serializable bounded error");
+        .map_err(|error| error.to_string())?;
         bytes.push(b'\n');
     }
-    Bytes::from(bytes)
+    Ok(Bytes::from(bytes))
 }
 
 fn queue(send: &mpsc::Sender<Outbound>, stop: &watch::Sender<bool>, response: Response<'_>) {
-    if send.try_send(Outbound::One(frame(&response))).is_err() {
-        let _ = stop.send(true);
+    match frame(&response) {
+        Ok(bytes) => {
+            if send.try_send(Outbound::One(bytes)).is_err() {
+                stop.send_replace(true);
+            }
+        }
+        Err(error) => {
+            eprintln!("mantle-coordination: cannot encode response: {error}");
+            stop.send_replace(true);
+        }
     }
 }
 
-// r[impl mantle.coordination_service.live_state_subscription]
-fn apply(
-    state: &mut State,
+struct ClientSession<'a> {
     id: u64,
-    owner: &mut Option<String>,
-    send: &mpsc::Sender<Outbound>,
-    stop: &watch::Sender<bool>,
-    request: Request,
-) -> Result<(), String> {
+    owner: &'a mut Option<String>,
+    send: &'a mpsc::Sender<Outbound>,
+    stop: &'a watch::Sender<bool>,
+}
+
+// r[impl mantle.coordination_service.live_state_subscription]
+fn apply(state: &mut State, session: &mut ClientSession<'_>, request: Request) -> Result<(), String> {
+    debug_assert!(session.id > 0);
+    debug_assert!(state.connections.contains(&session.id));
     match request {
         Request::Subscribe { filter } => {
             filter.validate().map_err(|error| error.to_string())?;
@@ -302,7 +320,7 @@ fn apply(
             if filter_bytes.len() > MAX_FILTER_BYTES {
                 return Err("filter exceeds byte bound".to_owned());
             }
-            if state.subscribers.contains_key(&id) {
+            if state.subscribers.contains_key(&session.id) {
                 return Err("connection already subscribed".to_owned());
             }
             if state.subscribers.len() >= MAX_SUBSCRIBERS {
@@ -312,7 +330,9 @@ fn apply(
             // outside the lock. Deltas queue behind snapshot_end in the
             // connection's writer, without delaying a publisher.
             let facts: Vec<Fact> = state.facts.snapshot(&filter).cloned().collect();
-            let bytes = facts.len() * MAX_FACT_BYTES;
+            debug_assert!(facts.len() <= MAX_FACTS);
+            let bytes = facts.len().checked_mul(MAX_FACT_BYTES).ok_or("snapshot byte count overflow")?;
+            debug_assert!(bytes <= MAX_ACTIVE_SNAPSHOT_BYTES);
             state
                 .snapshot_budget
                 .try_update(Ordering::AcqRel, Ordering::Acquire, |used| {
@@ -324,26 +344,26 @@ fn apply(
                 bytes,
                 budget: state.snapshot_budget.clone(),
             };
-            if send.try_send(Outbound::Snapshot(snapshot)).is_err() {
-                let _ = stop.send(true);
+            if session.send.try_send(Outbound::Snapshot(snapshot)).is_err() {
+                session.stop.send_replace(true);
                 return Err("subscriber queue full".to_owned());
             }
-            state.subscribers.insert(id, Subscriber {
+            state.subscribers.insert(session.id, Subscriber {
                 filter,
-                send: send.clone(),
-                stop: stop.clone(),
+                send: session.send.clone(),
+                stop: session.stop.clone(),
             });
             if let Some(signal) = &state.ready_signal {
-                let _ = signal.send(true);
+                signal.send_replace(true);
             }
         }
         Request::Publish { fact } => {
-            state.publish_owned(id, owner, fact)?;
-            queue(send, stop, Response::Ack);
+            state.publish_owned(session.id, session.owner, fact)?;
+            queue(session.send, session.stop, Response::Ack);
         }
         Request::Retract { id: fact_id } => {
-            state.retract_owned(id, &fact_id)?;
-            queue(send, stop, Response::Ack);
+            state.retract_owned(session.id, &fact_id)?;
+            queue(session.send, session.stop, Response::Ack);
         }
     }
     Ok(())
@@ -351,7 +371,8 @@ fn apply(
 
 async fn read_line<R: AsyncRead + Unpin>(reader: &mut BufReader<R>) -> io::Result<Option<Vec<u8>>> {
     let mut line = Vec::new();
-    loop {
+    for _ in 0..=MAX_FRAME_BYTES {
+        debug_assert!(line.len() <= MAX_FRAME_BYTES);
         let available = reader.fill_buf().await?;
         if available.is_empty() {
             return if line.is_empty() {
@@ -360,8 +381,14 @@ async fn read_line<R: AsyncRead + Unpin>(reader: &mut BufReader<R>) -> io::Resul
                 Err(io::Error::new(io::ErrorKind::InvalidData, "unterminated request"))
             };
         }
-        let count = available.iter().position(|byte| *byte == b'\n').map_or(available.len(), |pos| pos + 1);
-        if line.len() + count > MAX_FRAME_BYTES {
+        let count = match available.iter().position(|byte| *byte == b'\n') {
+            Some(pos) => pos
+                .checked_add(1)
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "NDJSON frame position overflow"))?,
+            None => available.len(),
+        };
+        debug_assert!(count <= available.len());
+        if line.len().checked_add(count).is_none_or(|bytes| bytes > MAX_FRAME_BYTES) {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "NDJSON frame exceeds byte bound"));
         }
         line.extend_from_slice(&available[..count]);
@@ -370,6 +397,7 @@ async fn read_line<R: AsyncRead + Unpin>(reader: &mut BufReader<R>) -> io::Resul
             return Ok(Some(line));
         }
     }
+    Err(io::Error::new(io::ErrorKind::InvalidData, "NDJSON frame exceeded read bound"))
 }
 
 async fn write_one(
@@ -400,30 +428,60 @@ async fn write_frames(
         match event {
             Outbound::One(bytes) => {
                 if !matches!(write_one(&mut writer, &bytes, &mut cancelled).await, Ok(true)) {
-                    let _ = stop.send(true);
+                    stop.send_replace(true);
                     return;
                 }
             }
             Outbound::Snapshot(snapshot) => {
+                debug_assert!(snapshot.facts.len() <= MAX_FACTS);
+                debug_assert!(snapshot.bytes <= MAX_ACTIVE_SNAPSHOT_BYTES);
                 for fact in &snapshot.facts {
-                    let bytes = frame(&Response::Snapshot { fact });
+                    let bytes = match frame(&Response::Snapshot { fact }) {
+                        Ok(bytes) => bytes,
+                        Err(error) => {
+                            eprintln!("mantle-coordination: cannot encode snapshot: {error}");
+                            stop.send_replace(true);
+                            return;
+                        }
+                    };
                     if !matches!(write_one(&mut writer, &bytes, &mut cancelled).await, Ok(true)) {
-                        let _ = stop.send(true);
+                        stop.send_replace(true);
                         return;
                     }
                 }
-                let end = frame(&Response::SnapshotEnd);
+                let end = match frame(&Response::SnapshotEnd) {
+                    Ok(bytes) => bytes,
+                    Err(error) => {
+                        eprintln!("mantle-coordination: cannot encode snapshot end: {error}");
+                        stop.send_replace(true);
+                        return;
+                    }
+                };
                 if !matches!(write_one(&mut writer, &end, &mut cancelled).await, Ok(true)) {
-                    let _ = stop.send(true);
+                    stop.send_replace(true);
                     return;
                 }
             }
         }
     }
-    let _ = stop.send(true);
+    stop.send_replace(true);
+}
+
+// A poisoned shared set cannot safely keep publishing purportedly live facts.
+// Terminate the daemon so clients observe EOF and retract the entire generation.
+fn lock_state(state: &Mutex<State>) -> std::sync::MutexGuard<'_, State> {
+    match state.lock() {
+        Ok(guard) => guard,
+        Err(_) => {
+            eprintln!("mantle-coordination: shared state poisoned; stopping daemon");
+            std::process::abort();
+        }
+    }
 }
 
 async fn connection(stream: UnixStream, id: u64, shared: Arc<Mutex<State>>, generation: Arc<str>) {
+    debug_assert!(id > 0);
+    debug_assert!(!generation.is_empty());
     let (read_half, write_half) = stream.into_split();
     let (send, receiver) = mpsc::channel(MAX_PENDING_EVENTS);
     let (stop, mut cancelled) = watch::channel(false);
@@ -450,7 +508,16 @@ async fn connection(stream: UnixStream, id: u64, shared: Arc<Mutex<State>>, gene
         };
         match serde_json::from_slice::<Request>(&bytes) {
             Ok(request) => {
-                let result = apply(&mut shared.lock().expect("state lock"), id, &mut owner, &send, &stop, request);
+                let result = {
+                    let mut guard = lock_state(&shared);
+                    let mut session = ClientSession {
+                        id,
+                        owner: &mut owner,
+                        send: &send,
+                        stop: &stop,
+                    };
+                    apply(&mut guard, &mut session, request)
+                };
                 if let Err(message) = result {
                     queue(&send, &stop, Response::Error { message: &message });
                 }
@@ -463,10 +530,12 @@ async fn connection(stream: UnixStream, id: u64, shared: Arc<Mutex<State>>, gene
             break;
         }
     }
-    shared.lock().expect("state lock").disconnect(id, owner.as_deref());
-    let _ = stop.send(true);
+    lock_state(&shared).disconnect(id, owner.as_deref());
+    stop.send_replace(true);
     drop(send);
-    let _ = writer.await;
+    if let Err(error) = writer.await {
+        eprintln!("mantle-coordination: connection writer failed: {error}");
+    }
 }
 
 struct OwnedSocket {
@@ -477,12 +546,15 @@ struct OwnedSocket {
 
 impl Drop for OwnedSocket {
     fn drop(&mut self) {
-        if let Ok(metadata) = fs::symlink_metadata(&self.path)
-            && metadata.file_type().is_socket()
-            && metadata.dev() == self.device
-            && metadata.ino() == self.inode
-        {
-            let _ = fs::remove_file(&self.path);
+        let Ok(metadata) = fs::symlink_metadata(&self.path) else {
+            return;
+        };
+        if !metadata.file_type().is_socket() {
+            return;
+        }
+        let is_owned = metadata.dev() == self.device && metadata.ino() == self.inode;
+        if is_owned && let Err(error) = fs::remove_file(&self.path) {
+            eprintln!("mantle-coordination: could not remove owned socket: {error}");
         }
     }
 }
@@ -510,12 +582,24 @@ fn bind_socket(path: &Path) -> io::Result<(OwnedSocket, UnixListener)> {
     }
     let listener = UnixListener::bind(path)?;
     let metadata = fs::symlink_metadata(path)?;
+    if !metadata.file_type().is_socket() {
+        return Err(io::Error::new(io::ErrorKind::AlreadyExists, "socket changed during bind"));
+    }
     let owned = OwnedSocket {
         path: path.to_owned(),
         device: metadata.dev(),
         inode: metadata.ino(),
     };
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+    let secured = fs::symlink_metadata(path)?;
+    let is_owned_socket =
+        secured.file_type().is_socket() && secured.dev() == owned.device && secured.ino() == owned.inode;
+    let is_private = secured.permissions().mode() & 0o777 == 0o600;
+    if !is_owned_socket || !is_private {
+        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "socket changed during permission setup"));
+    }
+    debug_assert!(secured.file_type().is_socket());
+    debug_assert_eq!(secured.permissions().mode() & 0o777, 0o600);
     Ok((owned, listener))
 }
 
@@ -540,6 +624,43 @@ fn daemon_fact(owner: &str, assertion: &ServiceAssertion) -> io::Result<Fact> {
         .map_err(|error| io::Error::other(error.to_string()))
 }
 
+// Linux daemon and blocking-client shell boundary. Realtime retains an epoch
+// generation; monotonic samples enforce absolute deadlines across retries.
+fn clock_time(clock_id: libc::clockid_t) -> io::Result<Duration> {
+    let mut raw: libc::timespec = unsafe { std::mem::zeroed() };
+    if unsafe { libc::clock_gettime(clock_id, &raw mut raw) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let seconds = u64::try_from(raw.tv_sec)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "clock reported negative seconds"))?;
+    let nanos = u32::try_from(raw.tv_nsec)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "clock reported negative nanoseconds"))?;
+    if nanos >= 1_000_000_000 {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "clock nanoseconds exceed one second"));
+    }
+    Ok(Duration::new(seconds, nanos))
+}
+
+fn daemon_graph() -> io::Result<ServiceGraph> {
+    ServiceGraph::new(vec![ServiceDeclaration {
+        service_id: "coordination".to_owned(),
+        custom_states: Vec::new(),
+        dependencies: Vec::new(),
+        restart_policy: RestartPolicy::Never,
+    }])
+    .map_err(|error| io::Error::other(error.to_string()))
+}
+
+fn daemon_terminal_fact(graph: &mut ServiceGraph, owner: &str, is_ready: bool) -> io::Result<Fact> {
+    let (event, terminal) = if is_ready {
+        (ServiceEvent::Complete, ServiceState::Complete)
+    } else {
+        (ServiceEvent::Failed, ServiceState::Failed)
+    };
+    let assertion = daemon_assertion(graph, event, terminal)?;
+    daemon_fact(owner, &assertion)
+}
+
 enum DaemonEvent {
     Client(UnixStream),
     FirstSubscription,
@@ -552,32 +673,28 @@ enum DaemonEvent {
 /// with a new generation; reconnecting subscribers retract prior IDs on reset.
 pub async fn serve(socket: &Path) -> io::Result<()> {
     let (owned_socket, listener) = bind_socket(socket)?;
-    let startup = SystemTime::now().duration_since(UNIX_EPOCH).map_err(io::Error::other)?;
+    let startup = clock_time(libc::CLOCK_REALTIME)?;
     let generation: Arc<str> = format!("{:x}-{:x}", startup.as_nanos(), std::process::id()).into();
+    debug_assert!(!generation.is_empty());
     let owner_name = format!("mantle-coordination-{generation}");
     let mut owner = None;
-    let mut graph = ServiceGraph::new(vec![ServiceDeclaration {
-        service_id: "coordination".to_owned(),
-        custom_states: Vec::new(),
-        dependencies: Vec::new(),
-        restart_policy: RestartPolicy::Never,
-    }])
-    .map_err(|error| io::Error::other(error.to_string()))?;
+    let mut graph = daemon_graph()?;
     // r[impl mantle.service_readiness.readiness_vocabulary]
     let started = daemon_assertion(&mut graph, ServiceEvent::Started, ServiceState::Started)?;
     let state = Arc::new(Mutex::new(State::default()));
     let (ready_sender, mut ready_receiver) = watch::channel(false);
     {
-        let mut guard = state.lock().expect("state lock");
+        let mut guard = lock_state(&state);
         guard.ready_signal = Some(ready_sender);
         guard.publish_owned(0, &mut owner, daemon_fact(&owner_name, &started)?).map_err(io::Error::other)?;
     }
+    debug_assert_eq!(owner.as_deref(), Some(owner_name.as_str()));
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
-    let mut ready = false;
+    let mut is_ready = false;
     loop {
         let next = tokio::select! {
             result = listener.accept() => DaemonEvent::Client(result?.0),
-            _ = ready_receiver.changed(), if !ready => DaemonEvent::FirstSubscription,
+            _ = ready_receiver.changed(), if !is_ready => DaemonEvent::FirstSubscription,
             _ = tokio::signal::ctrl_c() => DaemonEvent::Shutdown,
             _ = terminate.recv() => DaemonEvent::Shutdown,
         };
@@ -585,17 +702,15 @@ pub async fn serve(socket: &Path) -> io::Result<()> {
             DaemonEvent::FirstSubscription => {
                 if *ready_receiver.borrow() {
                     let assertion = daemon_assertion(&mut graph, ServiceEvent::Ready, ServiceState::Ready)?;
-                    state
-                        .lock()
-                        .expect("state lock")
+                    lock_state(&state)
                         .publish_owned(0, &mut owner, daemon_fact(&owner_name, &assertion)?)
                         .map_err(io::Error::other)?;
-                    ready = true;
+                    is_ready = true;
                 }
             }
             DaemonEvent::Client(stream) => {
                 let id = {
-                    let mut guard = state.lock().expect("state lock");
+                    let mut guard = lock_state(&state);
                     if guard.connections.len() >= MAX_CONNECTIONS {
                         continue;
                     }
@@ -610,21 +725,8 @@ pub async fn serve(socket: &Path) -> io::Result<()> {
             DaemonEvent::Shutdown => break,
         }
     }
-    let terminal = if ready {
-        ServiceState::Complete
-    } else {
-        ServiceState::Failed
-    };
-    let event = if ready {
-        ServiceEvent::Complete
-    } else {
-        ServiceEvent::Failed
-    };
-    let assertion = daemon_assertion(&mut graph, event, terminal)?;
-    state
-        .lock()
-        .expect("state lock")
-        .publish_owned(0, &mut owner, daemon_fact(&owner_name, &assertion)?)
+    lock_state(&state)
+        .publish_owned(0, &mut owner, daemon_terminal_fact(&mut graph, &owner_name, is_ready)?)
         .map_err(io::Error::other)?;
     drop(listener);
     // Give already connected subscribers a bounded chance to consume the
@@ -656,6 +758,20 @@ enum Incoming {
     Retract { id: String },
     Ack,
     Error { message: String },
+}
+
+fn publisher_ack(incoming: Incoming) -> io::Result<()> {
+    match incoming {
+        Incoming::Ack => Ok(()),
+        Incoming::Error { message } => Err(io::Error::new(io::ErrorKind::InvalidData, message)),
+        Incoming::Reset { .. }
+        | Incoming::Snapshot { .. }
+        | Incoming::SnapshotEnd
+        | Incoming::Publish { .. }
+        | Incoming::Retract { .. } => {
+            Err(io::Error::new(io::ErrorKind::InvalidData, "expected publisher acknowledgment"))
+        }
+    }
 }
 
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -722,16 +838,16 @@ impl PublisherSession {
             tokio::time::timeout(CLIENT_TIMEOUT, self.writer.write_all(&bytes))
                 .await
                 .map_err(client_timeout)??;
-            match incoming_frame(&mut self.reader).await? {
-                Incoming::Ack => Ok(()),
-                Incoming::Error { message } => Err(io::Error::new(io::ErrorKind::InvalidData, message)),
-                _ => Err(io::Error::new(io::ErrorKind::InvalidData, "expected publisher acknowledgment")),
-            }
+            publisher_ack(incoming_frame(&mut self.reader).await?)
         }
         .await;
         if result.is_err() {
             self.failed = true;
-            let _ = tokio::time::timeout(CLIENT_TIMEOUT, self.writer.shutdown()).await;
+            match tokio::time::timeout(CLIENT_TIMEOUT, self.writer.shutdown()).await {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => eprintln!("mantle-coordination: publisher shutdown failed: {error}"),
+                Err(_) => eprintln!("mantle-coordination: publisher shutdown timed out"),
+            }
         }
         result
     }
@@ -749,42 +865,61 @@ impl PublisherSession {
     }
 }
 
-fn remaining(deadline: Instant) -> io::Result<Duration> {
-    let time = deadline.saturating_duration_since(Instant::now());
+fn blocking_deadline() -> io::Result<Duration> {
+    clock_time(libc::CLOCK_MONOTONIC)?
+        .checked_add(CLIENT_TIMEOUT)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "client deadline overflow"))
+}
+
+fn remaining(deadline: Duration, now: Duration) -> io::Result<Duration> {
+    let time = deadline.saturating_sub(now);
     if time.is_zero() {
         return Err(io::Error::new(io::ErrorKind::TimedOut, "coordination operation timed out"));
     }
     Ok(time)
 }
 
-fn blocking_connect(socket: &Path) -> io::Result<StdUnixStream> {
-    let path = socket.as_os_str().as_bytes();
+fn unix_address(socket: &Path) -> io::Result<(libc::sockaddr_un, libc::socklen_t)> {
+    let path_bytes = socket.as_os_str().as_bytes();
     let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
-    if path.is_empty() || path.contains(&0) || path.len() >= address.sun_path.len() {
+    if path_bytes.is_empty() || path_bytes.contains(&0) || path_bytes.len() >= address.sun_path.len() {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid Unix socket path"));
     }
-    address.sun_family = libc::AF_UNIX as libc::sa_family_t;
-    for (slot, byte) in address.sun_path.iter_mut().zip(path) {
+    debug_assert!(!path_bytes.is_empty());
+    debug_assert!(path_bytes.len() < address.sun_path.len());
+    address.sun_family = libc::sa_family_t::try_from(libc::AF_UNIX)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid Unix socket family"))?;
+    for (slot, byte) in address.sun_path.iter_mut().zip(path_bytes) {
         *slot = *byte as libc::c_char;
     }
-    let length = (std::mem::offset_of!(libc::sockaddr_un, sun_path) + path.len() + 1)
-        .try_into()
+    let length_bytes = std::mem::offset_of!(libc::sockaddr_un, sun_path)
+        .checked_add(path_bytes.len())
+        .and_then(|count| count.checked_add(1))
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "socket address length overflow"))?;
+    let length = libc::socklen_t::try_from(length_bytes)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "socket address too long"))?;
+    Ok((address, length))
+}
+
+fn blocking_connect(socket: &Path) -> io::Result<StdUnixStream> {
+    let (address, length) = unix_address(socket)?;
     let fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC, 0) };
     if fd < 0 {
         return Err(io::Error::last_os_error());
     }
     // SAFETY: socket returned a newly owned descriptor, now guarded through every error path.
     let owned = unsafe { OwnedFd::from_raw_fd(fd) };
+    debug_assert!(owned.as_raw_fd() >= 0);
     let result = unsafe { libc::connect(owned.as_raw_fd(), (&raw const address).cast::<libc::sockaddr>(), length) };
     if result < 0 {
         let error = io::Error::last_os_error();
         if !matches!(error.raw_os_error(), Some(libc::EINPROGRESS | libc::EINTR | libc::EALREADY)) {
             return Err(error);
         }
-        let deadline = Instant::now() + CLIENT_TIMEOUT;
+        let deadline = blocking_deadline()?;
         loop {
-            let timeout_ms: i32 = remaining(deadline)?.as_millis().try_into().unwrap_or(i32::MAX);
+            let timeout_ms = i32::try_from(remaining(deadline, clock_time(libc::CLOCK_MONOTONIC)?)?.as_millis())
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "client timeout exceeds poll range"))?;
             let mut probe = libc::pollfd {
                 fd: owned.as_raw_fd(),
                 events: libc::POLLOUT,
@@ -819,6 +954,7 @@ fn blocking_connect(socket: &Path) -> io::Result<StdUnixStream> {
         if socket_error != 0 {
             return Err(io::Error::from_raw_os_error(socket_error));
         }
+        debug_assert_eq!(socket_error, 0);
     }
     let stream: StdUnixStream = owned.into();
     stream.set_nonblocking(false)?;
@@ -826,16 +962,29 @@ fn blocking_connect(socket: &Path) -> io::Result<StdUnixStream> {
 }
 
 fn blocking_incoming(reader: &mut io::BufReader<StdUnixStream>) -> io::Result<Incoming> {
-    let deadline = Instant::now() + CLIENT_TIMEOUT;
+    let deadline = blocking_deadline()?;
     let mut line = Vec::new();
-    loop {
-        reader.get_mut().set_read_timeout(Some(remaining(deadline)?))?;
-        let available = io::BufRead::fill_buf(reader)?;
+    for _ in 0..=MAX_FRAME_BYTES {
+        debug_assert!(line.len() <= MAX_FRAME_BYTES);
+        reader.get_mut().set_read_timeout(Some(remaining(deadline, clock_time(libc::CLOCK_MONOTONIC)?)?))?;
+        let available = io::BufRead::fill_buf(reader).map_err(|error| {
+            if matches!(error.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut) {
+                io::Error::new(io::ErrorKind::TimedOut, "coordination response timed out")
+            } else {
+                error
+            }
+        })?;
         if available.is_empty() {
             return Err(io::Error::from(io::ErrorKind::UnexpectedEof));
         }
-        let count = available.iter().position(|byte| *byte == b'\n').map_or(available.len(), |pos| pos + 1);
-        if line.len() + count > MAX_FRAME_BYTES {
+        let count = match available.iter().position(|byte| *byte == b'\n') {
+            Some(pos) => pos
+                .checked_add(1)
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "response frame position overflow"))?,
+            None => available.len(),
+        };
+        debug_assert!(count <= available.len());
+        if line.len().checked_add(count).is_none_or(|bytes| bytes > MAX_FRAME_BYTES) {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "response frame exceeds byte bound"));
         }
         line.extend_from_slice(&available[..count]);
@@ -844,6 +993,7 @@ fn blocking_incoming(reader: &mut io::BufReader<StdUnixStream>) -> io::Result<In
             return serde_json::from_slice(&line).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error));
         }
     }
+    Err(io::Error::new(io::ErrorKind::InvalidData, "response frame exceeded read bound"))
 }
 
 /// Synchronous publisher for callers without a Tokio runtime. One session
@@ -881,26 +1031,28 @@ impl BlockingPublisherSession {
         }
         let bytes = publisher_frame(&request)?;
         let result = (|| {
-            let deadline = Instant::now() + CLIENT_TIMEOUT;
-            let mut offset = 0;
-            while offset < bytes.len() {
-                self.writer.set_write_timeout(Some(remaining(deadline)?))?;
-                match io::Write::write(&mut self.writer, &bytes[offset..]) {
+            let deadline = blocking_deadline()?;
+            let mut offset_bytes = 0;
+            while offset_bytes < bytes.len() {
+                self.writer.set_write_timeout(Some(remaining(deadline, clock_time(libc::CLOCK_MONOTONIC)?)?))?;
+                match io::Write::write(&mut self.writer, &bytes[offset_bytes..]) {
                     Ok(0) => return Err(io::Error::from(io::ErrorKind::WriteZero)),
-                    Ok(count) => offset += count,
+                    Ok(count) => {
+                        offset_bytes = offset_bytes.checked_add(count).ok_or_else(|| {
+                            io::Error::new(io::ErrorKind::InvalidData, "publisher write offset overflow")
+                        })?;
+                    }
                     Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
                     Err(error) => return Err(error),
                 }
             }
-            match blocking_incoming(&mut self.reader)? {
-                Incoming::Ack => Ok(()),
-                Incoming::Error { message } => Err(io::Error::new(io::ErrorKind::InvalidData, message)),
-                _ => Err(io::Error::new(io::ErrorKind::InvalidData, "expected publisher acknowledgment")),
-            }
+            publisher_ack(blocking_incoming(&mut self.reader)?)
         })();
         if result.is_err() {
             self.failed = true;
-            let _ = self.writer.shutdown(Shutdown::Both);
+            if let Err(error) = self.writer.shutdown(Shutdown::Both) {
+                eprintln!("mantle-coordination: blocking publisher shutdown failed: {error}");
+            }
         }
         result
     }
@@ -943,7 +1095,7 @@ impl std::error::Error for BestEffortError {}
 enum BestEffortAction {
     Publish(Fact),
     Retract(String),
-    Finish(std::sync::mpsc::Sender<()>),
+    Finish(std::sync::mpsc::SyncSender<()>),
 }
 
 /// Nonblocking producer for service critical paths. One background thread
@@ -980,7 +1132,11 @@ impl BestEffortPublisher {
                         BestEffortAction::Finish(done) => {
                             drop(publisher);
                             worker_healthy.store(false, Ordering::Release);
-                            let _ = done.send(());
+                            if done.send(()).is_err() {
+                                eprintln!(
+                                    "mantle-coordination: completion receiver closed before flush acknowledgment"
+                                );
+                            }
                             return;
                         }
                     };
@@ -1038,7 +1194,7 @@ impl BestEffortPublisher {
     /// Try to drain ACKs before a one-shot process exits; never wait longer
     /// than 100ms. Returns false if the daemon is missing, stalled or full.
     pub fn finish(self, deadline: Duration) -> bool {
-        let (done, completed) = std::sync::mpsc::channel();
+        let (done, completed) = std::sync::mpsc::sync_channel(1);
         if self.enqueue(BestEffortAction::Finish(done)).is_err() {
             return false;
         }
