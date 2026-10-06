@@ -1,12 +1,12 @@
 # Tasks: One readiness vocabulary for long-lived Mantle services
 
-All tasks remain open. Creating this proposal is not producer acceptance.
+Only the bounded contract-definition tasks T1.2 and T1.3 are recorded as complete; all other tasks remain open. This is not producer acceptance or archive readiness.
 
 ## Phase 1: Contract
 
 - [ ] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record the current readiness behavior of the Rust cache daemon, remote serve, and proof stages, including one blocked-dependency observation. r[mantle.service_readiness.readiness_vocabulary]
-- [ ] [serial] T1.2 Define the state vocabulary, dependency declaration shape, and restart policy matrix as a versioned schema. r[mantle.service_readiness.readiness_vocabulary]
-- [ ] [serial] T1.3 Record the `ready`-additional, declared-dependency, and closed-matrix decisions in an ADR. r[mantle.service_readiness.restart_policy_matrix]
+- [x] [serial] T1.2 Define the state vocabulary, dependency declaration shape, and restart policy matrix as a versioned schema. r[mantle.service_readiness.readiness_vocabulary]
+- [x] [serial] T1.3 Record the `ready`-additional, declared-dependency, and closed-matrix decisions in an ADR. r[mantle.service_readiness.restart_policy_matrix]
 
 ## Phase 2: Core
 
