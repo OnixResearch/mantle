@@ -711,9 +711,9 @@ fn dependencies_from_record(classified: &Classified, record: &[CcDependency]) ->
 
 fn connect(socket: &Path) -> Result<UnixStream, String> {
     let stream = UnixStream::connect(socket).map_err(|e| e.to_string())?;
-    let timeout_secs = Some(Duration::from_secs(3));
-    stream.set_read_timeout(timeout_secs).map_err(|e| e.to_string())?;
-    stream.set_write_timeout(timeout_secs).map_err(|e| e.to_string())?;
+    let read_write_duration = Duration::from_secs(3);
+    stream.set_read_timeout(Some(read_write_duration)).map_err(|e| e.to_string())?;
+    stream.set_write_timeout(Some(read_write_duration)).map_err(|e| e.to_string())?;
     Ok(stream)
 }
 
