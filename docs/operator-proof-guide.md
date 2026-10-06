@@ -178,6 +178,20 @@ builds the normalized GCC/musl/binutils provider from declared sources; the
 source-built fixed-point route separately builds Make, Linux headers, BusyBox,
 CMake, Python and Perl, verifies each artifact attestation, and binds their
 manifest to the newly admitted native provider before the offline Rust stages.
+
+The plan's two `toolchain-source-root` records are the protected StageX
+intermediate provider and transition named by
+`bootstrap/stagex-provider-proof-input.ncl` and
+`bootstrap/stagex-transition-proof-input.ncl`. Their reserved store paths are
+not downloadable substitutes: a materialized fixed-URL subset does not admit
+either StageX output or a complete native source closure.
+
+The active Casita change's Run 70 records the checked 37-record fixed-URL
+subset and both still-virtual StageX roots; this does not relax the gate.
+
+Native provider admission rejects source closure records that remain planned
+or state-pinned; verifying a source-bundle manifest does not waive that gate.
+
 The historical native provider and 51-record source closure cannot be inferred
 from a recipe or source plan. Do not launch this route without its fresh
 source-root admission, host-tool receipts, and the full disk preflight.
