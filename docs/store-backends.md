@@ -6,7 +6,9 @@ Mantle keeps admitted outputs in one durable store backend per state directory.
 [ADR 0082](../adr/0082-select-store-backends-explicitly-and-admit-casita.md) records the decision and is still Proposed.
 
 Casita support covers only the paths listed under [Validation](#validation).
-Fresh `mantle build` processes have reused a fixed-output `file://` fetch and the sandboxed `examples/hello.ncl` derivation, in content-addressed and input-addressed form, from Casita after their physical exports were deleted; other `mantle build` derivations have no passing validation under `casita` yet.
+Fresh `mantle build` processes have reused a fixed-output `file://` fetch and the sandboxed `examples/hello.ncl` derivation, in content-addressed and input-addressed form, from Casita after their physical exports were deleted.
+A bounded offline fixture also built a signed two-path source closure under each backend from an imported pinned bundle after its local HTTP endpoint closed, with equal source-preflight reports and byte-identical archive exports.
+Other `mantle build` derivation shapes have no passing validation under `casita` yet.
 The backends are interchangeable only within their declared profiles.
 
 ## Select a backend
@@ -296,7 +298,7 @@ Both self-build Rust source-bundle plans select a final 1.94.1 compiler.
 Their plan values alone do not establish that the source-built compiler exists
 or that any of these three Cargo checks passed.
 
-The [dependency audit](dependency-audit.md#casita-admission-run-2026-09-30) records the check results and the open `cargo-deny` findings.
+The [dependency audit](dependency-audit.md#live-combined-workspace-admission-2026-10-06) records the configured locked offline `cargo-deny` exit 0 without new waivers on 2026-10-06, alongside historical failures; it does not qualify source-built Rust, hosted CI, or release.
 
 ## Validation
 
