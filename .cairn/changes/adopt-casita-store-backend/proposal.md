@@ -159,6 +159,14 @@ recovery, retention rules, the migration procedure, the Casita capability
 profile, offline and capability boundaries, and documentation. ADR 0082
 records the decision.
 
+The dependency closure additionally carries the exact validation-preserving
+Bao candidate `eecfbbb458cc684fd85e056881580d307a1d1868` (upstream base
+`2be9abd144783455606424424c29bd3a57f926f8`) as an in-repo path patch
+with tracked file identities, while Casita's original pin and native feature
+remain unchanged. This removes Bao's unmaintained proc-macro path locally;
+it is not an upstream-reviewed Bao/Casita publication. The dependency audit
+success criterion remains open while unrelated unwaived advisories fail.
+
 ## Non-Goals
 
 - Casita S3, SSH, Git, OCI, IPC, CLI, or FUSE features.

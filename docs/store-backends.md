@@ -225,6 +225,33 @@ vendoring. The generator checks these inputs and the patched file digest, then
 updates Cargo's per-file vendor checksum. Do not edit a vendor snapshot or use
 a fork.
 
+Casita's `native` graph selects `bao-tree` 0.16.1. Mantle carries the exact
+Bao candidate Git tree in `third_party/bao-tree/` and selects it with the root
+`[patch.crates-io]`, rather than requiring an unpublished fork or a machine-local
+path. The original upstream base is
+`2be9abd144783455606424424c29bd3a57f926f8`; the local validation-preserving
+candidate is `eecfbbb458cc684fd85e056881580d307a1d1868`. The tracked
+`third_party/bao-tree-source.json` records BLAKE3 identity for every one of its
+35 Git-tracked files, including both licenses, the unchanged Bao package and
+workspace manifests, source, tests, examples, and regression fixtures.
+`python3 scripts/import-bao-tree.py check` verifies the committed snapshot
+offline without the candidate checkout; pass a checkout path only to compare
+its clean, exact candidate revision and parent. An import refuses to replace
+an existing snapshot. Neither a matching local receipt nor Mantle's review
+confers upstream approval, publication, or release eligibility.
+
+The Bao `validate` feature remains enabled by Bao's default feature set and
+uses `futures-lite`, not `genawaiter`. `genawaiter` remains elsewhere in the
+locked Turso graph; do not infer its global absence from the Bao path. The
+checkout-local vendor generator verifies the local Bao snapshot before
+regenerating or checking external dependencies. After a lock change,
+`python3 scripts/vendor-deps.py refresh` preserves the former ignored closure
+in a named sibling backup before installing a newly generated closure;
+`check` then compares every generated entry. The Nix
+`bao-source-integrity` check validates the tracked snapshot in clean source,
+and the Casita Nix vendor/check rails still verify the separately pinned
+Casita source and its exact `nar.rs` patch.
+
 From `nix develop`, run `python3 scripts/vendor-deps.py generate` to create
 the ignored checkout-local closure, or `python3 scripts/vendor-deps.py check`
 to compare a fresh generation file by file and resolve locked offline Cargo
@@ -251,6 +278,13 @@ builds the clean-source Crane vendor closure, while
 `nix build .#checks.x86_64-linux.casita-crunch-store-check` also runs
 `cargo check --locked -p crunch-store` using that closure. These are separate
 compile and source-admission checks, not substitutes for one another.
+
+Crane's `buildDepsOnly` normally replaces path sources with stub Rust files.
+`flake.nix` restores just the complete tracked Bao snapshot into that dummy
+dependency source before compiling Casita; otherwise the cached Casita
+compiles against an empty Bao lib and fails its public API imports. The
+final package and check still consume the normal filtered real source tree.
+
 Both self-build Rust source-bundle plans select a final 1.94.1 compiler.
 Their plan values alone do not establish that the source-built compiler exists
 or that any of these three Cargo checks passed.

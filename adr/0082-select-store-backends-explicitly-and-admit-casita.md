@@ -167,6 +167,19 @@ carry this decision.
    and `fuzzing` features stay off, and Casita mode opens no network
    connection. Changing the revision or the features is a reviewed change
    that updates this ADR.
+
+   The `native` graph's Bao 0.16.1 dependency is separately patched through
+   Mantle's tracked `third_party/bao-tree/` path to the complete local
+   validation-preserving candidate `eecfbbb458cc684fd85e056881580d307a1d1868`
+   (upstream base `2be9abd144783455606424424c29bd3a57f926f8`).
+   `third_party/bao-tree-source.json` binds every imported file by BLAKE3;
+   the root Cargo patch and lock select this snapshot without relying on an
+   unpublished fork or a machine-local checkout. Keep Bao's `validate`
+   feature: replacing its generator traversal is the change, not disabling
+   verification. Crane's deps-only dummy source must preserve the real Bao
+   package instead of a stub lib because pinned Casita compiles against its
+   API. This local review and receipt do not stand in for upstream maintainer
+   approval or a Bao/Casita release.
 2. **Repository location.** The Casita repository uses Casita's standard
    local profile in a dedicated subdirectory of `--state-dir`.
    `Repository::local` creates `blobs/` and `casita.sqlite` under its root,
@@ -517,16 +530,17 @@ releases only roots marked evictable, and Mantle never marks one.
   `bao-tree`, `iroh-io`, and a git-pinned `turso`. `astral-tokio-tar` moves
   from 0.6.3 to exactly 0.6.4. `blake3` must stay at `=1.8.2`, which Casita's
   `1.8` requirement allows.
-- The vendor rail reports that `deny.toml` now admits the Casita and `turso`
-  git sources, and that its `cargo deny check` still fails advisories and
-  sources. In the lock, only `proc-macro-error 0.4.12` (unmaintained, not a
-  security advisory) is new, and it comes only from Casita's graph through
-  `genawaiter 0.99.1`. The `h2 0.4.13` and `rustls 0.23.37` advisories are
-  unchanged from HEAD and also reachable from `casita` through
-  `object_store 0.14.0`. `bitmaps 3.2.1`, `imbl-sized-chunks 0.1.3`, and
-  `rsa 0.9.10` are unchanged and off the Casita path, and four missing
-  `allow-git` sources predate this change. The dependency gate stays open,
-  with no waivers.
+- The 2026-09-30 vendor rail failed advisories and sources; later exact
+  Git-URL admissions resolved the source-policy category. The local Bao
+  cutover removes the *new* `proc-macro-error 0.4.12` advisory path without
+  weakening validation. A configured, unwaived `cargo-deny 0.19.0` rerun
+  still reports `advisories FAILED, bans ok, licenses ok, sources ok`:
+  pre-existing RUSTSEC-2026-0247 (`bitmaps 3.2.1`),
+  RUSTSEC-2026-0258 (`h2 0.4.13`),
+  RUSTSEC-2026-0292 (`imbl-sized-chunks 0.1.3`),
+  RUSTSEC-2023-0071 (`rsa 0.9.10`), and
+  RUSTSEC-2026-0285 (`rustls 0.23.37`) remain open. The dependency gate
+  stays unchecked; no waiver is added.
 - Every read is a full content audit: it checks the envelope out, re-ingests
   `content`, and measures the NAR again, so read cost grows with output size.
 - Operators must provision `casita-trusted-public-keys` before a migration.

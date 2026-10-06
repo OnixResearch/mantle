@@ -174,41 +174,69 @@ A post-change attempt to run
 `nix shell --offline nixpkgs#cargo-deny nixpkgs#cargo --command cargo-deny --config deny.toml check`
 scheduled four uncached `cargo-deny 0.20.2` source/vendor/binary derivations
 and reported `failed to start SSH connection to 'aspen1.local'`; it was
-canceled immediately under the no-long-build instruction. There is
-**no post-change `cargo-deny` exit code or category result**. The last
-completed check remains the pre-admission exit 9 above.
+canceled immediately under the no-long-build instruction. At that 2026-10-04
+point there was no post-admission `cargo-deny` exit code; the next configured
+run is recorded below.
 
-The exact Casita revision `90404fcb1cfb3d83f2233715448dfefe913f5fd1`
-locks the following path:
+### Mantle-owned Bao source candidate (2026-10-05)
+
+Before the in-repo Bao cutover, the exact Casita revision reached:
 
 ```text
-casita -> bao-tree 0.16.1 -> genawaiter 0.99.1
+casita -> registry bao-tree 0.16.1 -> genawaiter 0.99.1
   -> genawaiter-proc-macro 0.99.1 -> proc-macro-error 0.4.12
 ```
 
-The proc-macro
-manifest requests `proc-macro-error ^0.4`; the local RUSTSEC-2024-0370
-advisory calls it unmaintained and lists `patched = []`. Consequently a
-patch-level lock bump cannot clear this finding. Under the required exact
-Casita pin, no new waiver, no fork/vendor edit, and no uncompiled dependency
-graph changes, there is no proven remediation for this advisory; a reviewed
-upstream/pin or dependency replacement with build proof, or explicit policy
-exception, requires an owner decision. T1.3/T4.7 stay unchecked, as do the
-independent pre-existing advisory and yank findings.
+The registry Bao crate's `validate` feature used the unmaintained proc macro.
+Mantle now patches `bao-tree` 0.16.1 to the complete local candidate under
+`third_party/bao-tree/`, keeping Casita at
+`90404fcb1cfb3d83f2233715448dfefe913f5fd1` and its `native` and
+`experimental` features. The original Bao upstream base is
+`2be9abd144783455606424424c29bd3a57f926f8`; the locally validated,
+validation-preserving candidate is
+`eecfbbb458cc684fd85e056881580d307a1d1868`. The 35-file tracked
+`third_party/bao-tree-source.json` records each file's BLAKE3 identity:
+`Cargo.toml` is
+`d3367e0ef37daeda08d361c2399e9cf4938289e5bb076e4622f1a05412b4eb62`,
+and the replacement `src/io/validate.rs` is
+`857b4feffd0feb4d3933f867bf335c6186c3ec34b992424cdfba52a1e24bdd8c`.
+The importer's offline `check` and optional exact-candidate comparison verify
+local file identity, not GitHub authorship, upstream review, or release.
 
-A bounded read-only upstream survey reported on 2026-10-05 found Casita
-main `84ec2920791276cd4ad8c029cd60529810e15705` still declares optional
-`bao-tree = "0.16"`. Bao-tree 0.16.1's default `validate` feature reaches
-genawaiter 0.99.1's default `proc_macro` feature and the same
-`proc-macro-error 0.4.12`. Bao-tree issues
-[#77](https://github.com/n0-computer/bao-tree/issues/77),
-[#69](https://github.com/n0-computer/bao-tree/issues/69), and
-[#62](https://github.com/n0-computer/bao-tree/issues/62) remain open and
-unrelated; the survey found no relevant Casita PR or qualifying reviewed fix.
-The external prerequisite is a n0-computer/bao-tree maintainer-reviewed,
-validation-preserving `genawaiter` `default-features = false` fix and release,
-followed by a Casita-maintainer-reviewed precise revision. Disabling
-validation is not a resolution.
+`Cargo.lock` now contains one path-source Bao 0.16.1 and no
+`genawaiter-proc-macro`, `proc-macro-error`, `proc-macro-error-attr`,
+`proc-macro-hack`, or `syn-mid`. The Bao `validate` feature remains active and
+depends on `futures-lite`. `genawaiter` and `genawaiter-macro` **still remain**
+through Casita's pinned Turso sync graph; the graph change is the removal of
+the unmaintained *Bao-reachable* proc-macro path, not a global no-generator
+claim. Host `cargo check --locked --offline -p crunch-store --config
+.cargo/vendor-config.toml` compiled the patched Bao, pinned Casita, and
+Mantle adapter. Seven individually selected Bao validator tests passed with
+explicit `tokio_fsm,validate`, covering ordered corruption/short reads,
+right-outboard proof preservation, asynchronous on-demand/error ordering,
+and keyed outboard positive, negative, and wrong-key cases. The
+repository-owned generator regenerated the checkout-local vendor closure
+and compared 53,335 entries; the prior ignored closure was preserved in a
+named sibling backup. The clean-source Nix Bao integrity and Casita vendor
+closure checks passed. The Nix `casita-crunch-store-check` passed as
+`/nix/store/cp7jmx7ajlklg1mnx0lm2x5zz1fjp7lq-mantle-casita-crunch-store-check-0.1.0`;
+its log records a real release Cargo check of Bao, pinned Casita, and
+`crunch-store`. A Casita trust-policy store archive round trip passed as
+an independent consumer smoke, not proof of Bao multi-block validation
+semantics.
+
+With `cargo-deny 0.19.0` and `--config deny.toml`, the unwaived run after the
+cutover reported `advisories FAILED, bans ok, licenses ok, sources ok`.
+RUSTSEC-2024-0370 for `proc-macro-error 0.4.12` was absent. Five previously
+present unwaived findings remain: RUSTSEC-2026-0247 (`bitmaps 3.2.1`),
+RUSTSEC-2026-0258 (`h2 0.4.13`), RUSTSEC-2026-0292
+(`imbl-sized-chunks 0.1.3`), RUSTSEC-2023-0071 (`rsa 0.9.10`), and
+RUSTSEC-2026-0285 (`rustls 0.23.37`). It also warned about yanked
+`chacha20 0.10.0` and `spin 0.10.0`. This is **not** a passing dependency
+gate; T1.3 and T4.7 remain unchecked. Mantle's local import does not meet
+the earlier survey's upstream-reviewed Bao release or Casita-maintainer
+approval conditions. No waiver, broader advisory upgrade, or release claim
+is supplied by this change.
 
 ## Remaining waiver inventory
 

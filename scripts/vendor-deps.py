@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Generate or check the checkout-local Cargo vendor closure without modifying user data.
+"""Generate, check, or preserve-and-refresh the checkout-local Cargo vendor closure.
 
-Run from any directory: python3 scripts/vendor-deps.py generate|check|dev-shell-check.
+Run from any directory: python3 scripts/vendor-deps.py generate|check|refresh|dev-shell-check.
 The check regenerates the closure with Cargo, applies the reviewed exact-pin
 Casita patch, compares every file, then resolves locked offline metadata.
+refresh preserves the existing directory in a separate backup before it
+installs a fresh generated closure without clobbering a concurrent creator.
 dev-shell-check resolves Cargo metadata without --config and rejects an
 unpatched git checkout or a non-Crane source in the default Nix shell.
 """
@@ -61,6 +63,12 @@ def check_pins():
     require(dep.get("rev") == REV and not {"branch", "tag"}.intersection(dep), "casita: revision drift")
     require(dep.get("default-features") is False, "casita: default features must be disabled")
     require(sorted(dep.get("features", [])) == ["experimental", "native"], "casita: feature drift")
+    run(sys.executable, str(ROOT / "scripts/import-bao-tree.py"), "check")
+    root_manifest = tomllib.loads((ROOT / "Cargo.toml").read_text())
+    require(root_manifest["patch"]["crates-io"]["bao-tree"] == {"path": "third_party/bao-tree"}, "bao-tree: crates.io path patch drift")
+    bao_manifest = tomllib.loads((ROOT / "third_party/bao-tree/Cargo.toml").read_text())
+    require(bao_manifest["package"]["version"] == "0.16.1", "bao-tree: imported package version drift")
+    require(bao_manifest["features"]["validate"] == ["dep:futures-lite"], "bao-tree: validation feature drift")
     packages = tomllib.loads((ROOT / "Cargo.lock").read_text())["package"]
     casita = [p for p in packages if p["name"] == "casita"]
     require(len(casita) == 1 and casita[0].get("version") == "0.1.0", "casita: Cargo.lock package drift")
@@ -70,6 +78,9 @@ def check_pins():
         all(p["name"] == "casita" for p in packages if p.get("source", "").startswith("git+https://github.com/cachix/casita?")),
         "casita: unexpected package from pinned repository",
     )
+    bao = [p for p in packages if p["name"] == "bao-tree"]
+    require(len(bao) == 1 and bao[0]["version"] == "0.16.1" and "source" not in bao[0], "bao-tree: Cargo.lock did not select local candidate")
+    require(not any(p["name"] in {"genawaiter-proc-macro", "proc-macro-error", "proc-macro-error-attr", "proc-macro-hack", "syn-mid"} for p in packages), "bao-tree: obsolete generator proc macro remains locked")
     turso = [p for p in packages if p["name"] in TURSO_PACKAGES]
     require(
         len(turso) == len(TURSO_PACKAGES) and {p["name"] for p in turso} == TURSO_PACKAGES,
@@ -218,7 +229,7 @@ def check_dev_shell(lock_packages):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("generate", "check", "dev-shell-check"))
+    parser.add_argument("operation", choices=("generate", "check", "refresh", "dev-shell-check"))
     args = parser.parse_args()
     lock_packages = check_pins()
     if args.operation == "dev-shell-check":
@@ -229,6 +240,8 @@ def main():
         require(not DEST.exists(), "vendor-deps exists; refusing to clobber user data (run check, or move it aside yourself)")
     else:
         require(DEST.is_dir(), "vendor-deps missing; run generate")
+    if args.operation == "refresh":
+        entries(DEST)
     lock_before = (ROOT / "Cargo.lock").read_bytes()
     with tempfile.TemporaryDirectory(prefix="mantle-vendor-", dir=ROOT.parent) as staging:
         vendor = Path(staging) / "vendor-deps"
@@ -245,6 +258,17 @@ def main():
             count = compare_trees(vendor, DEST)
             offline_metadata(CONFIG, DEST, lock_packages)
             print(f"vendor-deps matches fresh Cargo generation ({count} entries)")
+        elif args.operation == "refresh":
+            backup_root = Path(tempfile.mkdtemp(prefix="mantle-vendor-backup-", dir=ROOT.parent))
+            backup = backup_root / "vendor-deps"
+            install_without_clobber(DEST, backup)
+            try:
+                install_without_clobber(vendor, DEST)
+            except OSError:
+                install_without_clobber(backup, DEST)
+                raise
+            offline_metadata(CONFIG, DEST, lock_packages)
+            print(f"refreshed vendor-deps; prior checkout-local closure retained at {backup}")
         else:
             install_without_clobber(vendor, DEST)
             offline_metadata(CONFIG, DEST, lock_packages)

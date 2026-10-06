@@ -343,8 +343,20 @@
         ) cargoLockedPackages;
         blake3Locked = builtins.filter (package: package.name == "blake3") cargoLockedPackages;
         astralTarLocked = builtins.filter (package: package.name == "astral-tokio-tar") cargoLockedPackages;
+        baoSourceReceipt = builtins.fromJSON (builtins.readFile ./third_party/bao-tree-source.json);
+        baoSourceManifest = builtins.fromTOML (builtins.readFile ./third_party/bao-tree/Cargo.toml);
         casitaSourceAdmitted =
           assert pkgs.lib.assertMsg (
+            cargoManifest.patch.crates-io.bao-tree.path == "third_party/bao-tree"
+            && baoSourceManifest.package.name == "bao-tree"
+            && baoSourceManifest.package.version == "0.16.1"
+            && baoSourceManifest.features.validate == [ "dep:futures-lite" ]
+            && baoSourceReceipt.candidate == "eecfbbb458cc684fd85e056881580d307a1d1868"
+            && baoSourceReceipt.upstream_base == "2be9abd144783455606424424c29bd3a57f926f8"
+            && builtins.length (builtins.filter (package: package.name == "bao-tree") cargoLockedPackages) == 1
+            && (builtins.head (builtins.filter (package: package.name == "bao-tree") cargoLockedPackages)).version == "0.16.1"
+            && !(builtins.hasAttr "source" (builtins.head (builtins.filter (package: package.name == "bao-tree") cargoLockedPackages)))
+            &&
             casitaManifest.dependencies.casita.git == "https://github.com/cachix/casita"
             && casitaManifest.dependencies.casita.rev == casitaRevision
             && casitaManifest.dependencies.casita.default-features == false
@@ -457,6 +469,8 @@
             || pkgs.lib.hasPrefix "${toString ./packages/kernelscript-experiment}/" pathString
             || pathString == toString ./nix/kernelscript-experiment.nix
             || pkgs.lib.hasPrefix "${toString ./docs}/" pathString
+            || pathString == toString ./third_party
+            || pkgs.lib.hasPrefix "${toString ./third_party}/" pathString
             || pkgs.lib.hasPrefix "${toString ./scripts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./openspec}/" pathString
           );
@@ -942,6 +956,15 @@
         cargoArtifacts = craneLib.buildDepsOnly {
           inherit src nativeBuildInputs buildInputs;
           inherit cargoVendorDir;
+          # Casita is an external dependency of this path-patched crate. Crane
+          # stubs workspace/path sources in buildDepsOnly; restore only Bao's
+          # exact source and manifest before Casita compiles against its API.
+          extraDummyScript = ''
+            test -d "$out/third_party/bao-tree"
+            rm --recursive --force "$out/third_party/bao-tree"
+            cp --archive ${./third_party/bao-tree} "$out/third_party/bao-tree"
+            chmod --recursive u+w "$out/third_party/bao-tree"
+          '';
         };
 
         # Compile the adapter with the same pinned, patched Crane closure as
@@ -1400,6 +1423,15 @@
           casita-crunch-store-check = casitaCrunchStoreCheck;
           # Builds exactly the locked, clean-source Crane dependency closure.
           casita-vendor-closure = cargoVendorDir;
+          bao-source-integrity = pkgs.runCommand "mantle-bao-source-integrity"
+            {
+              inherit src;
+              nativeBuildInputs = [ pkgs.python3 pkgs.b3sum ];
+            }
+            ''
+              python3 "$src/scripts/import-bao-tree.py" check
+              touch "$out"
+            '';
           bounded-tree-source-admission =
             assert boundedTreeSourceAdmitted;
             pkgs.runCommand "mantle-bounded-tree-source-admission"
@@ -1785,6 +1817,7 @@
           packages =
             with pkgs;
             [
+              b3sum
               cargo-deny
               cargo-nextest
               cargo-watch

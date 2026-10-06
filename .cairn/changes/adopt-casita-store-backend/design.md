@@ -129,6 +129,15 @@ Details are in `evidence/casita-review.md` and ADR 0082. At
   reproducible, adds the Nix admission assertion, checks the `rust-version`
   floor for every toolchain, and records the experimental APIs in ADR 0082 and
   the dependency audit.
+  The owner also keeps the exact Bao candidate as a path-patched, tracked
+  35-file source snapshot with BLAKE3 per-file receipt, a no-clobber importer,
+  an offline checkout-independent integrity check, and a separately generated
+  external dependency closure. Bao's `validate` feature remains active and
+  no upstream maintainer review or published Bao/Casita release is inferred.
+  Crane's deps-only dummy tree must restore only real Bao before compiling
+  Casita; otherwise its stubbed Bao library has none of the public validation
+  API, even though the later build uses the real source. The dependency gate
+  remains open for the separately existing advisories.
 - **Casita adapter (store shell)**: the only code that names Casita types. It
   implements the backend behind the existing capability views, including
   PathInfo-backed `ActionResultPort` outputs.

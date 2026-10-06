@@ -99,6 +99,7 @@ pub(crate) const STAGED_SOURCE_TOP_LEVEL_ENTRIES: &[&str] = &[
     "lib",
     "rust-toolchain.toml",
     "src",
+    "third_party",
     "vendor",
     "vendor-deps",
 ];
@@ -3538,6 +3539,7 @@ mod tests {
         std::fs::create_dir_all(dir.join("crates").join("crate-a")).unwrap();
         std::fs::create_dir_all(dir.join("lib")).unwrap();
         std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.join("third_party").join("bao-tree")).unwrap();
         std::fs::create_dir_all(dir.join("vendor").join("patched")).unwrap();
         let vendor_dep = dir.join("vendor-deps").join("dep-a");
         std::fs::create_dir_all(&vendor_dep).unwrap();
@@ -3567,6 +3569,11 @@ mod tests {
         std::fs::write(dir.join("crates").join("crate-a").join("lib.rs"), "pub fn x() {}\n").unwrap();
         std::fs::write(dir.join("lib").join("lib.ncl"), "{}").unwrap();
         std::fs::write(dir.join("src").join("main.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(
+            dir.join("third_party").join("bao-tree").join("Cargo.toml"),
+            "[package]\nname=\"bao-tree\"\nversion=\"0.16.1\"\n",
+        )
+        .unwrap();
         std::fs::write(dir.join("vendor").join("patched").join("README"), "vendor patch\n").unwrap();
         std::fs::write(vendor_dep.join("Cargo.toml"), "[package]\nname=\"dep-a\"\nversion=\"0.0.0\"\n").unwrap();
         std::fs::write(vendor_dep.join("lib.rs"), "pub fn dep_a() {}\n").unwrap();
@@ -3971,6 +3978,7 @@ mod tests {
         );
         assert!(stage.path().join("vendor").join("patched").join("README").is_file());
         assert!(stage.path().join("vendor-deps").join("dep-a").join("Cargo.toml").is_file());
+        assert!(stage.path().join("third_party").join("bao-tree").join("Cargo.toml").is_file());
         assert!(stage.path().join(".cargo").join("vendor-config.toml").is_file());
         assert!(!stage.path().join("target").exists());
         assert!(!stage.path().join("scratch.txt").exists());

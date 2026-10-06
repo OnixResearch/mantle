@@ -569,13 +569,10 @@ dependencies = [
 [[package]]
 name = "bao-tree"
 version = "0.16.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "149a2a6017771141e2cd5d0c55b3892d8ff1958df5c318b2e496bf3544b426ed"
 dependencies = [
  "blake3",
  "bytes",
  "futures-lite",
- "genawaiter",
  "iroh-io",
  "positioned-io",
  "range-collections",
@@ -2641,7 +2638,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2828,7 +2825,7 @@ checksum = "94e7099f6313ecacbe1256e8ff9d617b75d1bcb16a6fddef94866d225a01a14a"
 dependencies = [
  "io-lifetimes 2.0.4",
  "rustix 1.1.4",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3046,10 +3043,7 @@ version = "0.99.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c86bd0361bcbde39b13475e6e36cb24c329964aa2611be285289d1e4b751c1a0"
 dependencies = [
- "futures-core",
  "genawaiter-macro",
- "genawaiter-proc-macro",
- "proc-macro-hack",
 ]
 
 [[package]]
@@ -3057,19 +3051,6 @@ name = "genawaiter-macro"
 version = "0.99.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b32dfe1fdfc0bbde1f22a5da25355514b5e450c33a6af6770884c8750aedfbc"
-
-[[package]]
-name = "genawaiter-proc-macro"
-version = "0.99.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "784f84eebc366e15251c4a8c3acee82a6a6f427949776ecb88377362a9621738"
-dependencies = [
- "proc-macro-error",
- "proc-macro-hack",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
 
 [[package]]
 name = "generator"
@@ -4752,7 +4733,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20fd6de4ccfcc187e38bc21cfa543cb5a302cb86a8b114eb7f0bf0dc9f8ac00f"
 dependencies = [
  "io-lifetimes 3.0.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4850,7 +4831,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4919,7 +4900,7 @@ dependencies = [
  "portable-atomic",
  "portable-atomic-util",
  "serde_core",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6020,7 +6001,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6707,32 +6688,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proc-macro-error"
-version = "0.4.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18f33027081eba0a6d8aba6d1b1c3a3be58cbb12106341c2d5759fcd9b5277e7"
-dependencies = [
- "proc-macro-error-attr",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
- "version_check",
-]
-
-[[package]]
-name = "proc-macro-error-attr"
-version = "0.4.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a5b4b77fdb63c1eca72173d68d24501c54ab1269409f6b672c85deb18af69de"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
- "syn-mid",
- "version_check",
-]
-
-[[package]]
 name = "proc-macro-error-attr2"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6753,12 +6708,6 @@ dependencies = [
  "quote",
  "syn 2.0.117",
 ]
-
-[[package]]
-name = "proc-macro-hack"
-version = "0.5.20+deprecated"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc375e1527247fe1a97d8b7156678dfe7c1af2fc075c9a4db3690ecd2a148068"
 
 [[package]]
 name = "proc-macro2"
@@ -6838,7 +6787,7 @@ version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "343d3bd7056eda839b03204e68deff7d1b13aba7af2b2fd16890697274262ee7"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -6909,7 +6858,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe500dc80e757a75e1e8fb7290e448d62dfba3105ece1d058579cb00b58151cd"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "prost 0.14.3",
  "prost-build",
  "prost-types",
@@ -7023,7 +6972,7 @@ dependencies = [
  "once_cell",
  "socket2 0.6.3",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7554,7 +7503,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7567,7 +7516,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7636,7 +7585,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -8585,17 +8534,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "syn-mid"
-version = "0.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fea305d57546cc8cd04feb14b62ec84bf17f50e3f7b12560d7bfa9265f39d9ed"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "sync_wrapper"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8669,7 +8607,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -8678,7 +8616,7 @@ version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8c27177b12a6399ffc08b98f76f7c9a1f4fe9fc967c784c5a071fa8d93cf7e1"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -8697,7 +8635,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
 dependencies = [
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -10566,7 +10504,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f3fd376f71958b862e7afb20cfe5a22830e1963462f3a17f49d82a6c1d1f42d"
 dependencies = [
  "bitflags 2.11.0",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
