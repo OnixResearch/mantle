@@ -7,6 +7,9 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+use crunch_service_readiness_core::RestartPolicy;
+use crunch_service_readiness_core::ServiceDeclaration;
+use crunch_service_readiness_core::ServiceGraph;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -564,6 +567,49 @@ fn expected_stage_plans() -> Vec<SourceBuiltFixedPointStagePlan> {
     stages
 }
 
+/// Coordination-only dependencies come exclusively from signed stage output
+/// authority references. This graph never supplies proof or receipt authority.
+pub(crate) fn signed_plan_stage_declarations(
+    plan: &SourceBuiltFixedPointPlan,
+) -> Result<Vec<ServiceDeclaration>, String> {
+    if plan.stages.len() > EXPECTED_STAGE_COUNT as usize {
+        return Err("too many fixed-point proof stages for readiness".to_string());
+    }
+    let mut producers = BTreeMap::new();
+    for stage in &plan.stages {
+        if producers.insert(stage.output, stage.stage_id.as_str()).is_some() {
+            return Err(format!("duplicate readiness output producer for {:?}", stage.output));
+        }
+    }
+    let mut declarations = Vec::with_capacity(plan.stages.len());
+    for stage in &plan.stages {
+        let mut dependencies = Vec::new();
+        for input in &stage.inputs {
+            if let StageAuthorityInput::Output { role } = input {
+                let producer = producers
+                    .get(role)
+                    .ok_or_else(|| format!("readiness stage {} has no output producer for {role:?}", stage.stage_id))?;
+                dependencies.push((*producer).to_string());
+            }
+        }
+        declarations.push(ServiceDeclaration {
+            service_id: stage.stage_id.clone(),
+            custom_states: Vec::new(),
+            dependencies,
+            // Proof stages are not restartable processes. This policy is only
+            // required by the coordination graph; it never enters the signed plan.
+            restart_policy: RestartPolicy::Never,
+        });
+    }
+    ServiceGraph::new(declarations.clone()).map_err(|error| format!("invalid proof-stage readiness graph: {error}"))?;
+    Ok(declarations)
+}
+
+pub(crate) fn signed_plan_stage_graph(plan: &SourceBuiltFixedPointPlan) -> Result<ServiceGraph, String> {
+    ServiceGraph::new(signed_plan_stage_declarations(plan)?)
+        .map_err(|error| format!("invalid proof-stage readiness graph: {error}"))
+}
+
 fn stagex_transition_stage() -> SourceBuiltFixedPointStagePlan {
     stage_plan(
         "stagex-transition",
@@ -838,6 +884,73 @@ mod tests {
     const TEST_OPEN_FILE_DESCRIPTORS_MAX: u64 = SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX / 2;
     const TEST_EXEC_EVENT_COUNT_MAX: u32 = 131_072;
     const TEST_SOURCE_RECORD_COUNT_MAX: u32 = 32_768;
+    #[test]
+    fn signed_stage_output_graph_blocks_and_reblocks_on_dependency_loss() {
+        use crunch_service_readiness_core::ServiceEvent;
+        use crunch_service_readiness_core::TerminalState;
+
+        let plan = plan_source_built_fixed_point(valid_input()).unwrap();
+        let declarations = signed_plan_stage_declarations(&plan).unwrap();
+        assert_eq!(declarations.len(), EXPECTED_STAGE_COUNT as usize);
+        assert_eq!(declarations[0].service_id, "stagex-transition");
+        assert!(declarations[0].dependencies.is_empty());
+        assert_eq!(declarations[1].dependencies, ["stagex-transition"]);
+        assert_eq!(declarations[4].dependencies, ["full-source-native-provider", "full-source-rust-provider"],);
+        assert_eq!(declarations[5].dependencies, [
+            "full-source-native-provider",
+            "full-source-rust-provider",
+            "mantle-stage1"
+        ],);
+        let mut graph = signed_plan_stage_graph(&plan).unwrap();
+        let blocked = graph.apply("stagex-provider-publication", ServiceEvent::Started).unwrap();
+        assert_eq!(blocked.snapshot.blocked_by.as_deref(), Some("stagex-transition"));
+        assert!(!blocked.snapshot.ready);
+        assert!(graph.apply("stagex-provider-publication", ServiceEvent::Ready).is_err());
+
+        graph.apply("stagex-transition", ServiceEvent::Started).unwrap();
+        graph.apply("stagex-transition", ServiceEvent::Ready).unwrap();
+        assert_eq!(graph.snapshot("stagex-provider-publication").unwrap().blocked_by, None);
+        assert!(graph.apply("stagex-provider-publication", ServiceEvent::Ready).unwrap().snapshot.ready);
+        graph.apply("stagex-transition", ServiceEvent::Failed).unwrap();
+        let reblocked = graph.snapshot("stagex-provider-publication").unwrap();
+        assert_eq!(reblocked.blocked_by.as_deref(), Some("stagex-transition"));
+        assert!(!reblocked.ready);
+        assert!(
+            !graph
+                .assertions("stagex-provider-publication")
+                .unwrap()
+                .iter()
+                .any(|assertion| { assertion.state == crunch_service_readiness_core::ServiceState::Ready })
+        );
+
+        let mut completed = signed_plan_stage_graph(&plan).unwrap();
+        completed.apply("stagex-transition", ServiceEvent::Started).unwrap();
+        completed.apply("stagex-transition", ServiceEvent::Ready).unwrap();
+        completed.apply("stagex-transition", ServiceEvent::Complete).unwrap();
+        assert_eq!(completed.snapshot("stagex-transition").unwrap().terminal, Some(TerminalState::Complete));
+        assert!(
+            completed
+                .apply("stagex-provider-publication", ServiceEvent::Started)
+                .unwrap()
+                .snapshot
+                .blocked_by
+                .is_none()
+        );
+        assert!(completed.apply("stagex-provider-publication", ServiceEvent::Ready).unwrap().snapshot.ready);
+    }
+
+    #[test]
+    fn signed_stage_graph_rejects_unknown_producer_and_cycle() {
+        let mut plan = plan_source_built_fixed_point(valid_input()).unwrap();
+        plan.stages.remove(0);
+        assert!(signed_plan_stage_declarations(&plan).unwrap_err().contains("no output producer"));
+
+        let mut plan = plan_source_built_fixed_point(valid_input()).unwrap();
+        plan.stages[0].inputs.push(StageAuthorityInput::Output {
+            role: ProofOutputRole::MantleStage2,
+        });
+        assert!(signed_plan_stage_declarations(&plan).unwrap_err().contains("DependencyCycle"));
+    }
 
     #[test]
     fn plans_complete_source_built_fixed_point_authority() {

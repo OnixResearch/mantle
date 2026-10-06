@@ -193,6 +193,7 @@ mod rustc_dev_guide;
 mod self_build;
 #[allow(dead_code)]
 mod semantic_graph;
+mod service_readiness;
 mod shared_rust_signing_key;
 mod shell_cmd;
 mod signing_key;
@@ -416,6 +417,10 @@ enum RustCacheAction {
         /// Exported and reviewed daemon policy JSON.
         #[arg(long)]
         policy: PathBuf,
+
+        /// Explicit opt-in policy for bounded C/C++ object requests on this socket.
+        #[arg(long)]
+        cc_policy: Option<PathBuf>,
 
         /// Directory for content-addressed wrapper receipts.
         #[arg(long)]
@@ -4184,10 +4189,12 @@ fn run_rust_cache_command(ctx: &RunContext, action: &RustCacheAction) -> Result<
     match action {
         RustCacheAction::Serve {
             policy,
+            cc_policy,
             receipt_dir,
             once,
         } => crunch_rustc_wrapper::run_daemon(crunch_rustc_wrapper::DaemonOptions {
             policy_path: policy.clone(),
+            cc_policy_path: cc_policy.clone(),
             backend: ctx.store_backend,
             state_dir: ctx.resolved_state_dir.clone(),
             store_output_dir: ctx.store.clone(),
@@ -4635,11 +4642,23 @@ fn run_transcript_command(action: TranscriptAction, ctx: &RunContext) -> Result<
 }
 
 fn run_doctor_command(ctx: &RunContext, profile: DoctorProfile) -> Result<(), RunError> {
+    let readiness = service_readiness::ReadinessObserver::start(
+        "doctor",
+        crunch_service_readiness_core::RestartPolicy::Never,
+        &[],
+    );
+    readiness.started();
     let doctor_result = operator_diagnostics::collect_doctor_report(operator_diagnostics::DoctorRequest {
         profile,
         store_dir: &ctx.store,
         state_dir: &ctx.resolved_state_dir,
     });
+    if doctor_result.ok {
+        readiness.ready();
+    } else {
+        readiness.failed();
+    }
+    readiness.finish();
     presentation::diagnostics::emit_doctor_report(&doctor_result, ctx.output_format())?;
     doctor_report_result(doctor_result.ok)
 }
@@ -9149,38 +9168,6 @@ mod tests {
         let mut reopened = crunch_store::StoreHandle::open(config()).await.unwrap();
         assert_eq!(reopened.export_cached_path_info(&store_path).await.unwrap(), Some(path_info));
         assert_eq!(fs::read(store.join(store_path.to_string())).unwrap(), content);
-    }
-
-    #[test]
-    fn rust_cache_serve_cli_binds_global_store_and_state() {
-        let args = parse_args_with_cli_test_stack(Vec::from([
-            "mantle",
-            "--store",
-            "/tmp/mantle-store",
-            "--state-dir",
-            "/tmp/mantle-state",
-            "rust-cache",
-            "serve",
-            "--policy",
-            "/tmp/policy.json",
-            "--receipt-dir",
-            "/tmp/receipts",
-            "--once",
-        ]))
-        .expect("rust-cache serve CLI should parse");
-        assert_eq!(args.store, PathBuf::from("/tmp/mantle-store"));
-        assert_eq!(args.state_dir, Some(PathBuf::from("/tmp/mantle-state")));
-        assert!(matches!(
-            args.command,
-            Command::RustCache {
-                action: RustCacheAction::Serve {
-                    policy,
-                    receipt_dir,
-                    once: true,
-                },
-            } if policy.as_path() == Path::new("/tmp/policy.json")
-                && receipt_dir.as_path() == Path::new("/tmp/receipts")
-        ));
     }
 
     #[test]

@@ -11,6 +11,8 @@ use std::process::Output;
 use std::time::Duration;
 use std::time::Instant;
 
+use crunch_service_readiness_core::RestartPolicy;
+use crunch_service_readiness_core::ServiceEvent;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -18,6 +20,7 @@ use crate::cargo_free_self_build::CargoFreeSelfBuildOptions;
 use crate::errors::RunError;
 use crate::full_source_rust_binding_shell::FullSourceRustHostToolMaterializationRequest;
 use crate::native_toolchain_closure::NativeToolchainClosureOptions;
+use crate::service_readiness::ReadinessGroup;
 use crate::source_built_fixed_point::InitialOutputAuthorityState;
 use crate::source_built_fixed_point::ProofHermeticityMode;
 use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
@@ -297,6 +300,24 @@ pub(crate) struct ConstructedProviders {
 }
 
 pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions<'_>) -> Result<(), RunError> {
+    let observer =
+        crate::service_readiness::ReadinessObserver::start("source-built-fixed-point", RestartPolicy::Never, &[]);
+    observer.started();
+    let result = run_source_built_fixed_point_attempt(options);
+    match &result {
+        Ok(true) => {
+            // Only a fresh, validated and published proof is an admitted request.
+            observer.ready();
+            observer.complete();
+        }
+        Err(_) => observer.failed(),
+        Ok(false) => {} // Cache shortcuts are not fresh proof-stage successes.
+    }
+    observer.finish();
+    result.map(|_| ())
+}
+
+fn run_source_built_fixed_point_attempt(options: SourceBuiltFixedPointOptions<'_>) -> Result<bool, RunError> {
     validate_options(&options)?;
     let started_at = Instant::now();
     let expected_staging_dir = staging_path(options.output_dir)?;
@@ -328,9 +349,11 @@ pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions
             None,
         )?;
         emit_fast_fail_notice(&options, &prepared, prior.as_deref());
-        return Ok(());
+        return Ok(false);
     }
-    let adopted = match run_attempt(&options, &prepared) {
+    let mut stages =
+        StageReadinessProgress::start(&prepared.plan, options.dev_provider_cache.is_none() && !options.dev_resume);
+    let adopted = match run_attempt_with_stages(&options, &prepared, &mut stages) {
         Ok(adopted) => adopted,
         Err(error) => {
             let blocker = error.to_string();
@@ -351,7 +374,7 @@ pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions
         // Dev-only provider adoption: never publish to the success aliases and never
         // update `latest`/`latest-source-built-fixed-point`.
         print_dev_adopted_completion(&options, &prepared)?;
-        return Ok(());
+        return Ok(false);
     }
     if let Err(error) = publish_attempt(&prepared) {
         let blocker = error.to_string();
@@ -371,7 +394,9 @@ pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions
             status_root.display()
         )));
     }
-    print_completion(&options, &prepared)
+    print_completion(&options, &prepared)?;
+    stages.finish(true);
+    Ok(true)
 }
 
 fn validate_options(options: &SourceBuiltFixedPointOptions<'_>) -> Result<(), RunError> {
@@ -829,8 +854,71 @@ fn prepare_plan(
     debug_assert_eq!(plan.logical_store_prefix, LOGICAL_STORE_PREFIX);
     Ok(plan)
 }
+// All six stage facts share one coordination owner so declared output edges
+// can be checked against the same live graph. Neither observations nor
+// publication errors are inputs to proof admission.
+struct StageReadinessProgress {
+    group: Option<ReadinessGroup>,
+    active: Option<&'static str>,
+}
 
-fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAttempt) -> Result<bool, RunError> {
+impl StageReadinessProgress {
+    fn start(plan: &SourceBuiltFixedPointPlan, fresh: bool) -> Self {
+        let group = if fresh && ReadinessGroup::configured() {
+            crate::source_built_fixed_point::signed_plan_stage_declarations(plan)
+                .ok()
+                .map(ReadinessGroup::start)
+        } else {
+            None
+        };
+        Self { group, active: None }
+    }
+
+    fn begin(&mut self, id: &'static str) {
+        self.active = Some(id);
+        if let Some(group) = &mut self.group {
+            group.event(id, ServiceEvent::Started);
+        }
+    }
+
+    fn ready(&mut self, id: &'static str) {
+        if let Some(group) = &mut self.group {
+            group.event(id, ServiceEvent::Ready);
+        }
+        self.active = None;
+    }
+
+    fn finish(&mut self, success: bool) {
+        if let Some(mut group) = self.group.take() {
+            if success {
+                for id in [
+                    "stagex-transition",
+                    "stagex-provider-publication",
+                    "full-source-native-provider",
+                    "full-source-rust-provider",
+                    "mantle-stage1",
+                    "mantle-stage2",
+                ] {
+                    group.event(id, ServiceEvent::Complete);
+                }
+            } else if let Some(id) = self.active {
+                group.event(id, ServiceEvent::Failed);
+            }
+            group.finish();
+        }
+    }
+}
+impl Drop for StageReadinessProgress {
+    fn drop(&mut self) {
+        self.finish(false);
+    }
+}
+
+fn run_attempt_with_stages(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    stages: &mut StageReadinessProgress,
+) -> Result<bool, RunError> {
     enforce_open_file_descriptor_limit(prepared.plan.resource_bounds.open_file_descriptors_max)?;
     validate_runtime_bounds(options, prepared)?;
     let adopt = dev_cache_adoption(options, &prepared.plan)?;
@@ -853,6 +941,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
             prepared.staging_dir.join(STAGEX_TRANSITION_EXECUTION_DIR),
             synthesized_adopted_stagex_report(prepared),
             Some(adopted),
+            stages,
         )?
     } else {
         let stagex_transition_execution_dir = prepared.staging_dir.join(STAGEX_TRANSITION_EXECUTION_DIR);
@@ -870,6 +959,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         let transition_resume = options.dev_resume
             && stagex_transition_execution_dir.is_dir()
             && transition_marker_is_trusted(prepared, &transition_replay_digest)?;
+        stages.begin("stagex-transition");
         if !transition_resume {
             let transition_result = run_in_isolated_exec_thread("StageX transition", || {
                 crate::stagex_transition::materialize_protected_transition(StagexTransitionRequest {
@@ -948,6 +1038,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
             &prepared.native_state_dir,
             LOGICAL_STORE_PREFIX,
         )?;
+        stages.ready("stagex-transition");
 
         let stagex_provider_root = prepared.native_store_dir.join(STAGEX_PROVIDER_STORE_BASENAME);
         let reuse_stagex_provider = is_dev && stagex_provider_root.exists();
@@ -957,6 +1048,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         } else {
             &stagex_provider_root
         };
+        stages.begin("stagex-provider-publication");
         let stagex_provider_result = run_in_isolated_exec_thread("StageX provider publication", || {
             crate::stagex_provider::materialize_stagex_provider(StagexProviderRequest {
                 lineage_manifest_path: &prepared.stagex_lineage,
@@ -999,16 +1091,18 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
             &prepared.native_state_dir,
             LOGICAL_STORE_PREFIX,
         )?;
+        stages.ready("stagex-provider-publication");
         construct_full_source_providers(
             options,
             prepared,
             stagex_transition_execution_dir,
             stagex_provider_report,
             None,
+            stages,
         )?
     };
     validate_runtime_bounds(options, prepared)?;
-    run_cargo_free_fixed_point(options, prepared, &providers)?;
+    run_cargo_free_fixed_point(options, prepared, &providers, stages)?;
     validate_runtime_bounds(options, prepared)?;
     if is_dev {
         // Dev runs reuse the persistent content-addressed store and can adopt
@@ -1023,6 +1117,8 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
             &prepared.plan,
             &providers,
         )?;
+        stages.begin("mantle-stage2");
+        stages.ready("mantle-stage2");
         validate_runtime_bounds(options, prepared)?;
         Ok(false)
     }
@@ -1749,7 +1845,9 @@ fn construct_full_source_providers(
     stagex_transition_execution_dir: PathBuf,
     stagex_provider_report: crate::stagex_provider::StagexProviderPublicationReport,
     adopted_native: Option<BuildObservation>,
+    stages: &mut StageReadinessProgress,
 ) -> Result<ConstructedProviders, RunError> {
+    stages.begin("full-source-native-provider");
     let native_provider = match adopted_native {
         Some(observation) => observation,
         None => run_native_build(options, prepared, NATIVE_PROVIDER_ID, NATIVE_PROVIDER_NCL)?,
@@ -1769,6 +1867,7 @@ fn construct_full_source_providers(
             native_admission.status
         )));
     }
+    stages.ready("full-source-native-provider");
     let host_tools = build_full_source_host_tools(options, prepared)?;
     let host_tool_manifest_dir = prepared.staging_dir.join(HOST_TOOLS_EVIDENCE_DIR);
     let host_tool_manifest = crate::full_source_rust_binding_shell::materialize_full_source_rust_host_tools(
@@ -1794,6 +1893,7 @@ fn construct_full_source_providers(
     let rust_scratch = prepared.staging_dir.join(RUST_PROVIDER_SCRATCH_DIR);
     fs::create_dir(&rust_scratch)
         .map_err(|error| proof_error(format!("creating Rust provider scratch {}: {error}", rust_scratch.display())))?;
+    stages.begin("full-source-rust-provider");
     let rust_provider = crate::rust_source_provider::materialize_full_source_bound_rust_provider_with_route_plan(
         &prepared.source_root.join(RUST_RECIPE_NCL),
         Some(&prepared.source_root.join(RUST_ROUTE_PLAN_NCL)),
@@ -1812,6 +1912,7 @@ fn construct_full_source_providers(
         target_root: &native_provider.output.path,
         output: &toolchain_closure_path,
     })?;
+    stages.ready("full-source-rust-provider");
     Ok(ConstructedProviders {
         stagex_transition_execution_dir,
         stagex_provider_report,
@@ -1993,9 +2094,11 @@ fn run_cargo_free_fixed_point(
     options: &SourceBuiltFixedPointOptions<'_>,
     prepared: &PreparedAttempt,
     providers: &ConstructedProviders,
+    stages: &mut StageReadinessProgress,
 ) -> Result<(), RunError> {
     let target = TARGET_TRIPLE.to_string();
     let fixed_point_dir = prepared.staging_dir.join(FIXED_POINT_DIR);
+    stages.begin("mantle-stage1");
     crate::cargo_free_self_build::cmd_cargo_free_fixed_point_self_build(CargoFreeSelfBuildOptions {
         root: &prepared.source_root,
         out_dir: &fixed_point_dir,
@@ -2026,6 +2129,7 @@ fn run_cargo_free_fixed_point(
         return Err(proof_error("fixed-point binary digest has invalid length".to_string()));
     }
     debug_assert_eq!(providers.native_admission.output_digest_blake3, options.expected_native_provider_blake3);
+    stages.ready("mantle-stage1");
     Ok(())
 }
 

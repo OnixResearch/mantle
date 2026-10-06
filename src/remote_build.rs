@@ -12869,7 +12869,13 @@ fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> 
                 signing_key_id: builder_signing_key_id,
                 transfer_capabilities: RemoteTransferCapabilities::delta_and_full().with_streaming(),
             };
-            match local_executor {
+            let readiness = crate::service_readiness::ReadinessObserver::start(
+                "remote-serve",
+                crunch_service_readiness_core::RestartPolicy::OnError,
+                &[],
+            );
+            readiness.started();
+            let result = match local_executor {
                 Some(local_executor) => serve_stdio_remote_production_once(
                     &mut std::io::stdin().lock(),
                     &mut std::io::stdout().lock(),
@@ -12885,6 +12891,19 @@ fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> 
                 .map_err(|err| RunError::Internal(format!("remote production stdio serve once: {err}"))),
                 None => serve_stdio_remote_fixture_once(input.state_dir, &service_keys.verifier_key, &builder),
             }
+            .and_then(|()| {
+                std::io::stdout()
+                    .lock()
+                    .flush()
+                    .map_err(|error| RunError::Internal(format!("remote stdio serve once response flush: {error}")))
+            });
+            if result.is_ok() {
+                readiness.ready();
+            } else {
+                readiness.failed();
+            }
+            readiness.finish();
+            result
         }
     }
 }

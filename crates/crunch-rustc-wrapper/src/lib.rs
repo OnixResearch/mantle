@@ -6,6 +6,8 @@
 //! crate owns policy loading, peer admission, framing, sandbox execution,
 //! cache orchestration, output publication, and receipt persistence.
 
+mod daemon_readiness;
+
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::ffi::CString;
@@ -38,6 +40,7 @@ use std::time::Duration;
 
 use crunch_rust_cache::PublishRequest;
 use crunch_rust_cache::RustCache;
+use crunch_rust_cache::cc::CcAdmissionMode;
 use crunch_rust_cache::shared::DirectoryRustResultSource;
 use crunch_rust_cache::shared::HttpRustResultSource;
 use crunch_rust_cache::shared::RustResultSource;
@@ -46,10 +49,15 @@ use crunch_rust_cache::shared::SharedPublishRequest;
 use crunch_rust_cache::shared::SharedRestoreRequest;
 use crunch_rust_cache::shared::SharedRustCachePolicy;
 use crunch_rust_cache_core::LocalCachePolicy;
+use crunch_rust_cache_core::cc::CC_REQUEST_SCHEMA;
+use crunch_rust_cache_core::cc::CcWireRequest;
+use crunch_rust_cache_core::cc::MAX_CC_FRAME_BYTES;
+use crunch_rust_cache_core::cc::MAX_CC_ROOTS;
 use crunch_rust_cache_core::shared::RustResultProducerIdentity;
 use crunch_rust_cache_core::wrapper::CurrentManifestFacts;
 use crunch_rust_cache_core::wrapper::DeclaredInput;
 use crunch_rust_cache_core::wrapper::DeclaredInputKind;
+use crunch_rust_cache_core::wrapper::WRAPPER_REQUEST_SCHEMA;
 use crunch_rust_cache_core::wrapper::WRAPPER_RESPONSE_SCHEMA;
 use crunch_rust_cache_core::wrapper::WrapperArtifactKind;
 use crunch_rust_cache_core::wrapper::WrapperBypassClass;
@@ -76,7 +84,9 @@ use crunch_rust_cache_core::wrapper::validate_wrapper_policy;
 use crunch_rust_cache_core::wrapper::validate_wrapper_request;
 use crunch_rust_cache_core::wrapper::validate_wrapper_response;
 use crunch_store::StoreConfig;
+use daemon_readiness::DaemonReadiness;
 use ed25519_dalek::SigningKey;
+use serde::Deserialize;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tempfile::Builder;
@@ -142,6 +152,7 @@ pub struct PublishedManifest {
 #[derive(Debug, Clone)]
 pub struct DaemonOptions {
     pub policy_path: PathBuf,
+    pub cc_policy_path: Option<PathBuf>,
     pub state_dir: PathBuf,
     pub backend: crunch_store::StoreBackend,
     pub store_output_dir: PathBuf,
@@ -153,9 +164,11 @@ struct DaemonContext {
     policy: WrapperDaemonPolicy,
     cache: RustCache,
     local_policy: LocalCachePolicy,
+    cc_admission: CcAdmissionMode,
     shared_policy: SharedRustCachePolicy,
     sources: Vec<Arc<dyn RustResultSource>>,
     receipt_dir: PathBuf,
+    readiness: Option<Mutex<Option<DaemonReadiness>>>,
 }
 
 #[derive(Debug)]
@@ -275,7 +288,7 @@ pub fn run_daemon(options: DaemonOptions) -> Result<(), Error> {
     assert!(!options.state_dir.as_os_str().is_empty());
     SHUTDOWN_REQUESTED.store(false, Ordering::SeqCst);
     install_shutdown_handlers()?;
-    let context = Arc::new(open_daemon_context(&options)?);
+    let mut context = open_daemon_context(&options)?;
     let socket_path = context.policy.socket_path.clone();
     prepare_socket(&socket_path)?;
     let listener = UnixListener::bind(&socket_path).map_err(|source| Error::Io {
@@ -290,7 +303,15 @@ pub fn run_daemon(options: DaemonOptions) -> Result<(), Error> {
         context: "configure-daemon-socket".to_string(),
         source,
     })?;
-    let result = serve_listener(&listener, context, options.run_once);
+    context.readiness = DaemonReadiness::start().map(|readiness| Mutex::new(Some(readiness)));
+    let context = Arc::new(context);
+    let result = serve_listener(&listener, Arc::clone(&context), options.run_once);
+    if let Some(observer) = &context.readiness
+        && let Ok(mut observer) = observer.lock()
+        && let Some(observer) = observer.take()
+    {
+        observer.finish(result.is_ok());
+    }
     drop(listener);
     remove_socket(&socket_path);
     result
@@ -313,6 +334,15 @@ fn open_daemon_context(options: &DaemonOptions) -> Result<DaemonContext, Error> 
     create_private_directory(&options.state_dir)?;
     create_private_directory(&options.store_output_dir)?;
     create_private_directory(&options.receipt_dir)?;
+    let cc_admission = options
+        .cc_policy_path
+        .as_deref()
+        .map(|path| {
+            crunch_rust_cache::cc::load_cc_admission_policy(path, Path::new(&policy.socket_path), &options.receipt_dir)
+                .map_err(|error| Error::Policy(format!("cc-policy:{error}")))
+        })
+        .transpose()?
+        .unwrap_or(CcAdmissionMode::Off);
     let cache = RustCache::open(store_config).map_err(|error| Error::Process(format!("open-rust-cache:{error}")))?;
     let local_policy = LocalCachePolicy {
         schema: crunch_rust_cache_core::LOCAL_CACHE_POLICY_SCHEMA.to_string(),
@@ -352,6 +382,8 @@ fn open_daemon_context(options: &DaemonOptions) -> Result<DaemonContext, Error> 
         shared_policy,
         sources,
         receipt_dir: options.receipt_dir.clone(),
+        readiness: None,
+        cc_admission,
     })
 }
 
@@ -423,6 +455,12 @@ fn receive_stream(receiver: &Mutex<mpsc::Receiver<UnixStream>>) -> Result<Option
     Ok(stream)
 }
 
+#[derive(Deserialize)]
+struct RequestSchema<'a> {
+    #[serde(borrow)]
+    schema: &'a str,
+}
+
 fn handle_connection(stream: &mut UnixStream, context: &DaemonContext) -> Result<(), Error> {
     assert!(context.policy.limits.elapsed_millis > 0);
     let timeout_millis = Some(Duration::from_millis(context.policy.limits.elapsed_millis));
@@ -439,18 +477,74 @@ fn handle_connection(stream: &mut UnixStream, context: &DaemonContext) -> Result
         return Err(Error::Protocol("rustc-wrapper-peer-uid-rejected".to_string()));
     }
     assert!(context.policy.allowed_peer_uids.binary_search(&peer_uid).is_ok());
-    let request = read_frame::<WrapperRequest>(stream, context.policy.max_request_bytes)?;
-    validate_wrapper_request(&request).map_err(|error| Error::Core(String::from(error.code())))?;
-    let response = handle_request(context, &request)?;
-    validate_wrapper_response(&response, context.policy.max_response_bytes)
-        .map_err(|error| Error::Core(String::from(error.code())))?;
-    write_frame(stream, &response, context.policy.max_response_bytes)?;
-    stream.flush().map_err(|source| Error::Io {
-        context: "flush-daemon-response".to_string(),
+    let bytes = read_frame_bytes(stream, context.policy.max_request_bytes.max(MAX_CC_FRAME_BYTES))?;
+    let schema: RequestSchema<'_> = serde_json::from_slice(&bytes).map_err(|source| Error::Json {
+        context: "decode-protocol-frame-schema".to_string(),
         source,
     })?;
-    assert_eq!(response.request_ref, request.request_ref);
+    match schema.schema {
+        WRAPPER_REQUEST_SCHEMA => {
+            if bytes.len() as u64 > context.policy.max_request_bytes {
+                return Err(Error::Bound("rustc-wrapper-frame-size-invalid".to_string()));
+            }
+            let request: WrapperRequest = serde_json::from_slice(&bytes).map_err(|source| Error::Json {
+                context: "decode-protocol-frame".to_string(),
+                source,
+            })?;
+            validate_wrapper_request(&request).map_err(|error| Error::Core(String::from(error.code())))?;
+            let response = handle_request(context, &request)?;
+            validate_wrapper_response(&response, context.policy.max_response_bytes)
+                .map_err(|error| Error::Core(String::from(error.code())))?;
+            write_frame(stream, &response, context.policy.max_response_bytes)?;
+            stream.flush().map_err(|source| Error::Io {
+                context: "flush-daemon-response".to_string(),
+                source,
+            })?;
+            assert_eq!(response.request_ref, request.request_ref);
+            if response.compiler_status == 0
+                && matches!(
+                    response.disposition,
+                    WrapperDisposition::LocalHit | WrapperDisposition::SharedHit | WrapperDisposition::Compiled
+                )
+            {
+                mark_daemon_ready(context);
+            }
+        }
+        CC_REQUEST_SCHEMA => {
+            let request: CcWireRequest = serde_json::from_slice(&bytes).map_err(|source| Error::Json {
+                context: "decode-cc-protocol-frame".to_string(),
+                source,
+            })?;
+            crunch_rust_cache_core::cc::validate_cc_request(&request, MAX_CC_ROOTS)
+                .map_err(|error| Error::Core(String::from(error.code())))?;
+            if !context.cc_admission.permits(&request.operation) {
+                return Err(Error::Policy("cc-operation-not-admitted".to_string()));
+            }
+            let response = context
+                .cache
+                .serve_cc_request(&request)
+                .map_err(|error| Error::Process(format!("serve-cc-cache:{error}")))?;
+            crunch_rust_cache_core::cc::validate_cc_response(&response, MAX_CC_ROOTS)
+                .map_err(|error| Error::Core(String::from(error.code())))?;
+            write_frame(stream, &response, MAX_CC_FRAME_BYTES)?;
+            stream.flush().map_err(|source| Error::Io {
+                context: "flush-daemon-response".to_string(),
+                source,
+            })?;
+            mark_daemon_ready(context);
+        }
+        _ => return Err(Error::Protocol("daemon-request-schema-unsupported".to_string())),
+    }
     Ok(())
+}
+
+fn mark_daemon_ready(context: &DaemonContext) {
+    if let Some(observer) = &context.readiness
+        && let Ok(mut observer) = observer.lock()
+        && let Some(observer) = observer.as_mut()
+    {
+        observer.handled_request();
+    }
 }
 
 fn handle_request(context: &DaemonContext, request: &WrapperRequest) -> Result<WrapperResponse, Error> {
@@ -2199,6 +2293,14 @@ pub fn write_frame<T: Serialize>(writer: &mut impl Write, value: &T, limit: u64)
 }
 
 pub fn read_frame<T: DeserializeOwned>(reader: &mut impl Read, limit: u64) -> Result<T, Error> {
+    let bytes = read_frame_bytes(reader, limit)?;
+    serde_json::from_slice(&bytes).map_err(|source| Error::Json {
+        context: "decode-protocol-frame".to_string(),
+        source,
+    })
+}
+
+fn read_frame_bytes(reader: &mut impl Read, limit: u64) -> Result<Vec<u8>, Error> {
     let mut prefix = [0_u8; FRAME_PREFIX_BYTES];
     reader.read_exact(&mut prefix).map_err(|source| Error::Io {
         context: "read-protocol-frame-prefix".to_string(),
@@ -2215,13 +2317,9 @@ pub fn read_frame<T: DeserializeOwned>(reader: &mut impl Read, limit: u64) -> Re
         context: "read-protocol-frame-body".to_string(),
         source,
     })?;
-    let value = serde_json::from_slice(&bytes).map_err(|source| Error::Json {
-        context: "decode-protocol-frame".to_string(),
-        source,
-    })?;
     assert!(length_bytes > 0);
     assert_eq!(bytes.len(), frame_size_bytes);
-    Ok(value)
+    Ok(bytes)
 }
 
 fn publish_immutable_bytes(directory: &Path, destination: &Path, bytes: &[u8], context: &str) -> Result<(), Error> {
@@ -3025,6 +3123,7 @@ mod tests {
         );
         let options = DaemonOptions {
             policy_path: write_policy_fixture(root.path(), &policy),
+            cc_policy_path: None,
             state_dir: root.path().join("state"),
             backend: crunch_store::StoreBackend::Snix,
             store_output_dir: root.path().join("store"),
@@ -3200,6 +3299,7 @@ mod tests {
         .unwrap();
         let options = DaemonOptions {
             policy_path: write_policy_fixture(root.path(), &policy),
+            cc_policy_path: None,
             state_dir: root.path().join("state"),
             backend: crunch_store::StoreBackend::Snix,
             store_output_dir: root.path().join("store"),
@@ -3327,6 +3427,7 @@ mod tests {
             fs::remove_file(&output_path).unwrap();
             let remote_options = DaemonOptions {
                 policy_path: remote_policy_path.clone(),
+                cc_policy_path: None,
                 state_dir: root.path().join(format!("remote-state-{sample_index}")),
                 backend: crunch_store::StoreBackend::Snix,
                 store_output_dir: root.path().join(format!("remote-store-{sample_index}")),

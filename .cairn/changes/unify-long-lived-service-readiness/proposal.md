@@ -2,67 +2,75 @@
 
 ## Why
 
-Mantle describes readiness three ways. Goal transitions use their own state
-names. The Rust cache daemon announces startup by protocol handshake. Proof
-gates encode prerequisites as code order. A dependent component therefore has
-no shared way to wait for "this component is ready", and an operator has no
-single report that answers which long-lived components are up.
+Mantle describes readiness across four bounded consumers. The coordination
+daemon maintains live facts, the Rust cache daemon admits work after its policy
+loads, remote serve accepts work after its binding is usable, and source-built
+fixed-point proof gates have signed-plan predecessors. Process existence alone
+does not answer whether a dependent can take work. `mantle doctor` is an
+optional derived observer, not a fifth readiness authority.
 
-The Synit manual declares service state with a small vocabulary (`started`,
-`ready`, `complete`, `failed`, plus user-defined values), declares dependencies
-with `depends-on`, and names restart policies (`always`, `on-error`, `all`,
-`never`) (`~/.local/share/mantle-references/synit-book/pages/12-operation__service.md`,
-reviewed in `docs/synit-application-notes.md`). Its `ready` state is asserted in
-addition to `started`, so a consumer can distinguish "process running" from
-"able to take work".
-
-Mantle's long-lived components already have real readiness concepts: the cache
-daemon accepts requests only after admission policy loads, a remote serve
-binding is usable only after the binding exists, and a proof stage is usable
-only after its predecessor is complete.
+Synit declares service state and dependencies in
+`/home/brittonr/.local/share/mantle-references/synit-book/pages/12-operation__service.md:49-76`
+and its daemon restart matrix in
+`/home/brittonr/.local/share/mantle-references/synit-book/pages/18-operation__builtin__daemon.md:68-89`
+(reviewed in [the operator guide](../../../docs/service-readiness.md)).
+Synit's `started` and `ready` are *two concurrent assertions*, not successive
+values of one state: `ready` is asserted in addition to `started`. Mantle keeps
+that distinction in distinct, stable service-state fact identities.
 
 ## What Changes
 
 - Define one readiness vocabulary: `started`, `ready`, `complete`, `failed`,
-  and declared user-defined states. A component MUST be able to report
-  `started` and `ready` separately.
+  and declared user-defined states. A ready component MUST concurrently assert
+  `started` and `ready` as separate current facts, with distinct stable
+  subjects/IDs. `ready` follows successful handling of a real request.
   r[mantle.service_readiness.readiness_vocabulary]
-- Declare dependencies between long-lived components and declared proof gates.
-  A component MUST NOT report `ready` before its declared dependencies report
-  `ready` or `complete`.
+- Declare dependencies between the four consumers and proof gates. A
+  component MUST NOT report `ready` before declared dependencies report
+  `ready` or `complete`; it names blocking dependencies and withdraws `ready`
+  on dependency loss. Proof-stage dependencies come from signed-plan output
+  references, without changing plan digests.
   r[mantle.service_readiness.declared_dependencies]
-- Name the restart policy for each supervised component from the reviewed
-  matrix: `always`, `on-error`, `all`, `never`. The policy MUST appear in the
-  component's runtime report.
+- Name the restart policy for each supervised component from the exact closed
+  matrix `always`, `on-error`, `all`, `never`. Each runtime assertion carries
+  bounded versioned state with its policy, dependencies, and a
+  coordination-state marker; unknown or missing policy/state is rejected.
   r[mantle.service_readiness.restart_policy_matrix]
-- Make `mantle doctor` publish derived readiness state in addition to its human
-  and JSON output. Derived state MUST be marked as coordination state and MUST
-  NOT be accepted as evidence.
+- Let `mantle doctor` publish a transient derived coordination-state report
+  only when the daemon is available. It MUST preserve exact existing human
+  and JSON output bytes and evidence/receipt bytes, MUST NOT add doctor
+  stdout fields, and MUST NOT turn coordination state into evidence.
   r[mantle.service_readiness.doctor_derived_state]
-- Apply the vocabulary first to four bounded consumers: the coordination
-daemon, the Rust cache daemon, the remote serve binding, and the source-built
-fixed-point proof stages. The coordination daemon reports its own readiness
-under the same vocabulary (ADR 0080).
+- Apply the vocabulary to exactly four bounded consumers: the coordination
+  daemon, Rust cache daemon, remote serve binding, and source-built
+  fixed-point proof gates. The coordination daemon reports its own readiness
+  under the same vocabulary (ADR 0080).
 
 ## Impact
 
-- **Immediate consumer**: the coordination daemon, operator diagnostics, the
-  Rust cache daemon, remote serve, and proof-stage gating.
-- **Immediate outcome**: one question has one answer: which declared
-  components are ready, failed, or complete.
+- **Immediate consumers**: the coordination daemon, Rust cache daemon, remote
+  serve, and source-built fixed-point proof gates; doctor is an optional
+  diagnostic side channel.
+- **Immediate outcome**: current, retractable declarations of which
+  components are started, ready, failed, complete, or blocked.
 - **Durable capability**: a readiness model that later carries worker presence
   and demand facts on the coordination surface.
 - **Maintenance owner**: Mantle operator diagnostics owner, with the daemon and
   remote owners for their components.
-- **Repeatability evidence**: readiness fixtures per component, dependency
-  fixtures, restart-policy matrix fixtures, and doctor state rendering.
-- **Compatibility**: `doctor` keeps its current human and JSON output. New
-  state is additive and versioned.
+- **Review criteria**: real-request readiness, dependency loss and recovery,
+  early exit, invalid schema/policy, exact restart matrix, daemon restart, and
+  doctor/evidence separation; these are required behaviors, not claims that
+  acceptance has run.
+- **Compatibility**: doctor human/JSON output bytes and evidence/receipt
+  bytes remain exactly unchanged. Missing or nonreading coordination endpoints
+  never block builds or change receipts; one-shot best-effort publication has
+  a 100 ms cap.
 
 ## Scope
 
-The change covers the vocabulary, dependency declarations, restart-policy
-assignment, doctor state, and the three named consumers.
+This change covers vocabulary, dependency declarations, restart-policy
+assignment, and the four bounded consumers, with doctor as an optional
+derived diagnostic channel.
 
 ## Out of Scope
 
@@ -70,11 +78,15 @@ assignment, doctor state, and the three named consumers.
 - Process supervision outside the named components.
 - Service discovery, socket activation, or service dependencies for arbitrary
   user programs.
-- Treating readiness state as build or release evidence.
+- Activating StageX/protected proof or C cache policy through readiness.
+- Treating coordination readiness as build or release evidence.
 
 ## Success Criteria
 
-- A dependent component waits for `ready`, not for process start.
-- A process that exits before announcing readiness reports `failed`.
-- Each of the three consumers reports the declared restart policy.
-- Doctor state renders without changing existing doctor output shapes.
+- A dependent waits for `ready`, not only process start, and blocks again if
+  its dependency's current readiness is retracted.
+- A process exiting before readiness reports `failed`, regardless of `never`
+  treating abnormal termination as complete in the reviewed Synit matrix.
+- All four consumers declare policy; the exact four-case restart behavior is
+  enforced only within Mantle's bounded component lifecycle.
+- Doctor leaves existing human/JSON output and evidence/receipt bytes unchanged.

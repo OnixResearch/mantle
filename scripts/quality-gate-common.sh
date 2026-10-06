@@ -10,11 +10,18 @@ readonly -a FIRST_PARTY_PACKAGES=(
   mantle
   crunch-attestation
   crunch-build
+  crunch-cc-driver
+  crunch-coordination
   crunch-delta
   crunch-eval
   crunch-glue
+  crunch-live-state-core
   crunch-pipeline
   crunch-project
+  crunch-rust-cache
+  crunch-rust-cache-core
+  crunch-rustc-wrapper
+  crunch-service-readiness-core
   crunch-shell
   crunch-store
 )
