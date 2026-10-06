@@ -287,7 +287,14 @@ impl RustCache {
         let staging_dir = cache_dir.join(STAGING_DIRECTORY);
         let cc_objects_dir = cache_dir.join(cc::CC_OBJECT_DIRECTORY);
         let cc_manifests_dir = cache_dir.join(cc::CC_MANIFEST_DIRECTORY);
-        for directory in [&cache_dir, &indexes_dir, &results_dir, &staging_dir, &cc_objects_dir, &cc_manifests_dir] {
+        for directory in [
+            &cache_dir,
+            &indexes_dir,
+            &results_dir,
+            &staging_dir,
+            &cc_objects_dir,
+            &cc_manifests_dir,
+        ] {
             create_private_directory(directory)?;
         }
         assert!(cache_dir.starts_with(&state_dir));

@@ -8,8 +8,8 @@ use std::fs::OpenOptions;
 use std::io::Read;
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
-use std::path::Path;
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 
 use crunch_rust_cache_core::cc::CC_RECORD_SCHEMA;
 use crunch_rust_cache_core::cc::CC_REQUEST_SCHEMA;
@@ -18,11 +18,11 @@ use crunch_rust_cache_core::cc::CcObjectRecord;
 use crunch_rust_cache_core::cc::CcOperation;
 use crunch_rust_cache_core::cc::CcWireRequest;
 use crunch_rust_cache_core::cc::CcWireResponse;
-use crunch_rust_cache_core::cc::admit_cc_reuse;
-use crunch_rust_cache_core::cc::validate_cc_record;
 use crunch_rust_cache_core::cc::MAX_CC_DEPENDENCIES;
 use crunch_rust_cache_core::cc::MAX_CC_OBJECT_BYTES;
 use crunch_rust_cache_core::cc::MAX_CC_ROOTS;
+use crunch_rust_cache_core::cc::admit_cc_reuse;
+use crunch_rust_cache_core::cc::validate_cc_record;
 use data_encoding::BASE64;
 use serde_json::Value;
 use tempfile::Builder;
@@ -75,30 +75,27 @@ pub fn load_cc_admission_policy(
     daemon_socket: &Path,
     receipt_dir: &Path,
 ) -> Result<CcAdmissionMode, Error> {
-    let bytes = read_bounded_optional(policy_path)?
-        .ok_or_else(|| Error::State("cc-policy-missing".to_string()))?;
+    let bytes = read_bounded_optional(policy_path)?.ok_or_else(|| Error::State("cc-policy-missing".to_string()))?;
     if bytes.len() > CC_MAX_POLICY_BYTES {
         return Err(Error::Bound("cc-policy-bytes-exceeded".to_string()));
     }
     parse_cc_admission_policy(&bytes, daemon_socket, receipt_dir)
 }
 
-fn parse_cc_admission_policy(
-    bytes: &[u8],
-    daemon_socket: &Path,
-    receipt_dir: &Path,
-) -> Result<CcAdmissionMode, Error> {
+fn parse_cc_admission_policy(bytes: &[u8], daemon_socket: &Path, receipt_dir: &Path) -> Result<CcAdmissionMode, Error> {
     if bytes.is_empty() || bytes.len() > CC_MAX_POLICY_BYTES {
         return Err(Error::Bound("cc-policy-bytes-invalid".to_string()));
     }
-    let mut static_fields: Value = serde_json::from_slice(bytes)
-        .map_err(|error| Error::Json(format!("decode-cc-policy:{error}")))?;
+    let mut static_fields: Value =
+        serde_json::from_slice(bytes).map_err(|error| Error::Json(format!("decode-cc-policy:{error}")))?;
     let expected: Value = serde_json::from_str(CC_DEFAULT_POLICY_JSON)
         .map_err(|error| Error::Json(format!("decode-checked-cc-policy:{error}")))?;
     if static_fields.pointer("/schema").and_then(Value::as_str) != Some(CC_POLICY_SCHEMA) {
         return Err(Error::State("cc-policy-schema-invalid".to_string()));
     }
-    let static_driver = static_fields.pointer_mut("/driver").and_then(Value::as_object_mut)
+    let static_driver = static_fields
+        .pointer_mut("/driver")
+        .and_then(Value::as_object_mut)
         .ok_or_else(|| Error::State("cc-policy-driver-invalid".to_string()))?;
     let mode = take_cc_policy_field(static_driver, "mode")?;
     let driver_path = take_cc_policy_field(static_driver, "driver_path")?;
@@ -118,8 +115,18 @@ fn parse_cc_admission_policy(
         return Err(Error::State("cc-policy-static-contract-invalid".to_string()));
     }
     if admission == CcAdmissionMode::Off {
-        if [&driver_path, &compiler_path, &socket_path, &receipt_path, &driver_digest, &compiler_digest, &platform_digest]
-            .iter().any(|value| !value.is_empty()) {
+        if [
+            &driver_path,
+            &compiler_path,
+            &socket_path,
+            &receipt_path,
+            &driver_digest,
+            &compiler_digest,
+            &platform_digest,
+        ]
+        .iter()
+        .any(|value| !value.is_empty())
+        {
             return Err(Error::State("cc-policy-off-has-authority".to_string()));
         }
         return Ok(CcAdmissionMode::Off);
@@ -131,8 +138,10 @@ fn parse_cc_admission_policy(
     if socket != daemon_socket || !receipt.starts_with(receipt_dir) {
         return Err(Error::State("cc-policy-endpoint-mismatch".to_string()));
     }
-    if !is_lowercase_digest(&driver_digest) || !is_lowercase_digest(&compiler_digest)
-        || !is_lowercase_digest(&platform_digest) {
+    if !is_lowercase_digest(&driver_digest)
+        || !is_lowercase_digest(&compiler_digest)
+        || !is_lowercase_digest(&platform_digest)
+    {
         return Err(Error::State("cc-policy-tool-digest-invalid".to_string()));
     }
     verify_cc_policy_executable(driver, &driver_digest)?;
@@ -141,8 +150,7 @@ fn parse_cc_admission_policy(
 }
 
 fn take_cc_policy_field(fields: &mut serde_json::Map<String, Value>, name: &str) -> Result<String, Error> {
-    let value = fields.get_mut(name)
-        .ok_or_else(|| Error::State(format!("cc-policy-field-missing:{name}")))?;
+    let value = fields.get_mut(name).ok_or_else(|| Error::State(format!("cc-policy-field-missing:{name}")))?;
     let replacement = if name == "mode" { "off" } else { "" };
     match std::mem::replace(value, Value::String(replacement.to_string())) {
         Value::String(value) => Ok(value),
@@ -152,8 +160,12 @@ fn take_cc_policy_field(fields: &mut serde_json::Map<String, Value>, name: &str)
 
 fn validated_runtime_path(path: &str) -> Result<&Path, Error> {
     let parsed = Path::new(path);
-    if !parsed.is_absolute() || path.as_bytes().contains(&0)
-        || parsed.components().any(|component| matches!(component, std::path::Component::CurDir | std::path::Component::ParentDir)) {
+    if !parsed.is_absolute()
+        || path.as_bytes().contains(&0)
+        || parsed
+            .components()
+            .any(|component| matches!(component, std::path::Component::CurDir | std::path::Component::ParentDir))
+    {
         return Err(Error::State("cc-policy-path-invalid".to_string()));
     }
     Ok(parsed)
@@ -161,10 +173,14 @@ fn validated_runtime_path(path: &str) -> Result<&Path, Error> {
 
 fn verify_cc_policy_executable(path: &Path, digest: &str) -> Result<(), Error> {
     let metadata = fs::symlink_metadata(path).map_err(|source| Error::Io {
-        context: "stat-cc-policy-executable".to_string(), source,
+        context: "stat-cc-policy-executable".to_string(),
+        source,
     })?;
-    if !metadata.is_file() || metadata.file_type().is_symlink()
-        || metadata.len() > CC_MAX_COMPILER_BYTES || metadata.permissions().mode() & 0o111 == 0 {
+    if !metadata.is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.len() > CC_MAX_COMPILER_BYTES
+        || metadata.permissions().mode() & 0o111 == 0
+    {
         return Err(Error::State("cc-policy-executable-invalid".to_string()));
     }
     let (observed, size_bytes) = hash_file_bounded(path)?;
@@ -205,7 +221,9 @@ impl RustCache {
         let Some(record) = load_record(path, &request.action_key)? else {
             return Ok(cc_response(request, CC_DISPOSITION_MISS, None, None));
         };
-        if !admit_cc_reuse(&record, &request.dependencies, MAX_CC_ROOTS).map_err(|error| Error::Core(error.code().to_string()))? {
+        if !admit_cc_reuse(&record, &request.dependencies, MAX_CC_ROOTS)
+            .map_err(|error| Error::Core(error.code().to_string()))?
+        {
             return Ok(cc_response(request, CC_DISPOSITION_MISS, None, None));
         }
         let object_path = objects.join(format!("{}{}", record.object_digest_blake3, CC_OBJECT_SUFFIX));
@@ -216,11 +234,16 @@ impl RustCache {
     }
 
     fn cc_publish(&self, request: &CcWireRequest, path: &Path, objects: &Path) -> Result<CcWireResponse, Error> {
-        let encoded = request.object_base64.as_deref().ok_or_else(|| Error::State("cc-publish-object-missing".to_string()))?;
+        let encoded = request
+            .object_base64
+            .as_deref()
+            .ok_or_else(|| Error::State("cc-publish-object-missing".to_string()))?;
         if encoded.len() > (MAX_CC_OBJECT_BYTES as usize).div_ceil(3) * 4 {
             return Err(Error::Bound("cc-object-encoded-too-large".to_string()));
         }
-        let bytes = BASE64.decode(encoded.as_bytes()).map_err(|_| Error::State("cc-object-base64-invalid".to_string()))?;
+        let bytes = BASE64
+            .decode(encoded.as_bytes())
+            .map_err(|_| Error::State("cc-object-base64-invalid".to_string()))?;
         if bytes.is_empty() || bytes.len() as u64 > MAX_CC_OBJECT_BYTES {
             return Err(Error::Bound("cc-object-size-invalid".to_string()));
         }
@@ -230,7 +253,8 @@ impl RustCache {
             action_key: request.action_key.clone(),
             dependencies: request.dependencies.clone(),
             object_digest_blake3: digest.clone(),
-            object_bytes: u64::try_from(bytes.len()).map_err(|_| Error::Bound("cc-object-size-unrepresentable".to_string()))?,
+            object_bytes: u64::try_from(bytes.len())
+                .map_err(|_| Error::Bound("cc-object-size-unrepresentable".to_string()))?,
         };
         validate_cc_record(&record, MAX_CC_ROOTS).map_err(|error| Error::Core(error.code().to_string()))?;
         let _lock = CacheMutationLock::acquire(&self.cache_dir.join(MUTATION_LOCK_FILE))?;
@@ -255,7 +279,8 @@ fn validate_request(request: &CcWireRequest) -> Result<(), Error> {
 }
 
 fn is_lowercase_digest(digest: &str) -> bool {
-    digest.len() == crate::BLAKE3_HEX_CHARS && digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    digest.len() == crate::BLAKE3_HEX_CHARS
+        && digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 fn cc_response(
@@ -290,17 +315,30 @@ fn read_verified_object(path: &Path, record: &CcObjectRecord) -> Result<Option<V
     let file = match OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW).open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(source) => return Err(Error::Io { context: "open-cc-object".to_string(), source }),
+        Err(source) => {
+            return Err(Error::Io {
+                context: "open-cc-object".to_string(),
+                source,
+            });
+        }
     };
-    let metadata = file.metadata().map_err(|source| Error::Io { context: "stat-cc-object".to_string(), source })?;
+    let metadata = file.metadata().map_err(|source| Error::Io {
+        context: "stat-cc-object".to_string(),
+        source,
+    })?;
     if !metadata.is_file() || metadata.len() != record.object_bytes || metadata.len() > MAX_CC_OBJECT_BYTES {
         return Ok(None);
     }
-    let mut bytes = Vec::with_capacity(usize::try_from(metadata.len()).map_err(|_| Error::Bound("cc-object-size-unrepresentable".to_string()))?);
+    let mut bytes = Vec::with_capacity(
+        usize::try_from(metadata.len()).map_err(|_| Error::Bound("cc-object-size-unrepresentable".to_string()))?,
+    );
     file.take(MAX_CC_OBJECT_BYTES + 1).read_to_end(&mut bytes).map_err(|source| Error::Io {
-        context: "read-cc-object".to_string(), source,
+        context: "read-cc-object".to_string(),
+        source,
     })?;
-    if bytes.len() as u64 != record.object_bytes || blake3::hash(&bytes).to_hex().as_str() != record.object_digest_blake3 {
+    if bytes.len() as u64 != record.object_bytes
+        || blake3::hash(&bytes).to_hex().as_str() != record.object_digest_blake3
+    {
         return Ok(None);
     }
     Ok(Some(bytes))
@@ -312,13 +350,24 @@ fn publish_object(path: &Path, bytes: &[u8], record: &CcObjectRecord) -> Result<
     }
     let parent: &Path = path.parent().ok_or_else(|| Error::State("cc-object-parent-missing".to_string()))?;
     let mut staging = Builder::new().prefix("cc-object-").tempfile_in(parent).map_err(|source| Error::Io {
-        context: "stage-cc-object".to_string(), source,
+        context: "stage-cc-object".to_string(),
+        source,
     })?;
-    staging.as_file_mut().write_all(bytes).map_err(|source| Error::Io { context: "write-cc-object".to_string(), source })?;
-    staging.as_file_mut().sync_all().map_err(|source| Error::Io { context: "sync-cc-object".to_string(), source })?;
-    staging.as_file_mut().set_permissions(fs::Permissions::from_mode(PRIVATE_FILE_MODE)).map_err(|source| Error::Io {
-        context: "chmod-cc-object".to_string(), source,
+    staging.as_file_mut().write_all(bytes).map_err(|source| Error::Io {
+        context: "write-cc-object".to_string(),
+        source,
     })?;
+    staging.as_file_mut().sync_all().map_err(|source| Error::Io {
+        context: "sync-cc-object".to_string(),
+        source,
+    })?;
+    staging
+        .as_file_mut()
+        .set_permissions(fs::Permissions::from_mode(PRIVATE_FILE_MODE))
+        .map_err(|source| Error::Io {
+            context: "chmod-cc-object".to_string(),
+            source,
+        })?;
     match staging.persist_noclobber(path) {
         Ok(_) => sync_directory(parent)?,
         Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
@@ -326,7 +375,12 @@ fn publish_object(path: &Path, bytes: &[u8], record: &CcObjectRecord) -> Result<
                 return Err(Error::State("cc-object-content-conflict".to_string()));
             }
         }
-        Err(error) => return Err(Error::Io { context: "publish-cc-object".to_string(), source: error.error }),
+        Err(error) => {
+            return Err(Error::Io {
+                context: "publish-cc-object".to_string(),
+                source: error.error,
+            });
+        }
     }
     Ok(())
 }
@@ -347,18 +401,29 @@ mod tests {
 
     async fn cache(root: &Path) -> RustCache {
         let directories = RedbDirectoryService::new("cc-cache-test".to_string(), RedbDirectoryServiceConfig {
-            path: None, read_only: false, cache_size: None,
-        }).await.unwrap();
+            path: None,
+            read_only: false,
+            cache_size: None,
+        })
+        .await
+        .unwrap();
         RustCache::new(root.to_path_buf(), Arc::new(MemoryBlobService::default()), Arc::new(directories)).unwrap()
     }
 
     fn dependency(digest: &str) -> CcDependency {
-        CcDependency { root_index: 0, relative_path: "include/header.h".to_string(), digest_blake3: digest.to_string() }
+        CcDependency {
+            root_index: 0,
+            relative_path: "include/header.h".to_string(),
+            digest_blake3: digest.to_string(),
+        }
     }
 
     fn request(operation: CcOperation, dependencies: Vec<CcDependency>, payload: Option<&[u8]>) -> CcWireRequest {
         CcWireRequest {
-            schema: CC_REQUEST_SCHEMA.to_string(), operation, action_key: ACTION.to_string(), dependencies,
+            schema: CC_REQUEST_SCHEMA.to_string(),
+            operation,
+            action_key: ACTION.to_string(),
+            dependencies,
             object_base64: payload.map(|bytes| BASE64.encode(bytes)),
         }
     }
@@ -369,7 +434,9 @@ mod tests {
         let cache = cache(root.path()).await;
         let miss = cache.serve_cc_request(&request(CcOperation::Manifest, vec![], None)).unwrap();
         assert_eq!(miss.disposition, CC_DISPOSITION_MISS);
-        let published = cache.serve_cc_request(&request(CcOperation::Publish, vec![dependency(DIGEST)], Some(b"real-object"))).unwrap();
+        let published = cache
+            .serve_cc_request(&request(CcOperation::Publish, vec![dependency(DIGEST)], Some(b"real-object")))
+            .unwrap();
         assert_eq!(published.disposition, CC_DISPOSITION_PUBLISHED);
         let candidate = cache.serve_cc_request(&request(CcOperation::Manifest, vec![], None)).unwrap();
         assert_eq!(candidate.record.unwrap().dependencies, vec![dependency(DIGEST)]);
@@ -386,9 +453,12 @@ mod tests {
     async fn tampered_payload_never_returns_a_hit() {
         let root = tempfile::tempdir().unwrap();
         let cache = cache(root.path()).await;
-        let published = cache.serve_cc_request(&request(CcOperation::Publish, vec![dependency(DIGEST)], Some(b"verified"))).unwrap();
+        let published = cache
+            .serve_cc_request(&request(CcOperation::Publish, vec![dependency(DIGEST)], Some(b"verified")))
+            .unwrap();
         let digest = published.record.unwrap().object_digest_blake3;
-        fs::write(cache.cache_dir.join(CC_OBJECT_DIRECTORY).join(format!("{digest}{CC_OBJECT_SUFFIX}")), b"tampered").unwrap();
+        fs::write(cache.cache_dir.join(CC_OBJECT_DIRECTORY).join(format!("{digest}{CC_OBJECT_SUFFIX}")), b"tampered")
+            .unwrap();
         let response = cache.serve_cc_request(&request(CcOperation::Read, vec![dependency(DIGEST)], None)).unwrap();
         assert_eq!(response.disposition, CC_DISPOSITION_MISS);
         assert!(response.object_base64.is_none());
@@ -398,7 +468,10 @@ mod tests {
     async fn invalid_manifest_path_and_object_are_rejected_without_publication() {
         let root = tempfile::tempdir().unwrap();
         let cache = cache(root.path()).await;
-        let traversal = CcDependency { relative_path: "../outside.h".to_string(), ..dependency(DIGEST) };
+        let traversal = CcDependency {
+            relative_path: "../outside.h".to_string(),
+            ..dependency(DIGEST)
+        };
         assert!(cache.serve_cc_request(&request(CcOperation::Publish, vec![traversal], Some(b"object"))).is_err());
         assert!(cache.serve_cc_request(&request(CcOperation::Publish, vec![dependency(DIGEST)], None)).is_err());
         let miss = cache.serve_cc_request(&request(CcOperation::Manifest, vec![], None)).unwrap();

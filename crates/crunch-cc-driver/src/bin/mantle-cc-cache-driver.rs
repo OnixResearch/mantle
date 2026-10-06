@@ -1,5 +1,8 @@
+use std::env;
+use std::path::PathBuf;
+use std::process::ExitCode;
+
 use crunch_cc_driver::run_os;
-use std::{env, path::PathBuf, process::ExitCode};
 
 fn main() -> ExitCode {
     let mut args = env::args_os().skip(1);
@@ -31,6 +34,8 @@ fn main() -> ExitCode {
             _ => break,
         }
     }
-    eprintln!("usage: mantle-cc-cache-driver --compiler /ABS --socket /ABS --receipt /ABS --platform-digest <64hex> [--probe-script /ABS] -- <cc flags>");
+    eprintln!(
+        "usage: mantle-cc-cache-driver --compiler /ABS --socket /ABS --receipt /ABS --platform-digest <64hex> [--probe-script /ABS] -- <cc flags>"
+    );
     ExitCode::from(2)
 }

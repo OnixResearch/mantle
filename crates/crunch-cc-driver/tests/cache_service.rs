@@ -1,21 +1,26 @@
-use std::{
-    env, fs,
-    io::{Read, Write},
-    os::unix::net::UnixListener,
-    path::{Path, PathBuf},
-    process::{Command, Output},
-    sync::{atomic::{AtomicBool, Ordering}, Arc},
-    thread,
-    time::Duration,
-};
+use std::env;
+use std::fs;
+use std::io::Read;
+use std::io::Write;
+use std::os::unix::net::UnixListener;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Output;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::thread;
+use std::time::Duration;
 
 use crunch_rust_cache::RustCache;
-use crunch_rust_cache_core::cc::{CcWireRequest, MAX_CC_FRAME_BYTES, MAX_CC_PROBE_DIAGNOSTIC_BYTES};
+use crunch_rust_cache_core::cc::CcWireRequest;
+use crunch_rust_cache_core::cc::MAX_CC_FRAME_BYTES;
+use crunch_rust_cache_core::cc::MAX_CC_PROBE_DIAGNOSTIC_BYTES;
 use serde_json::Value;
-use snix_castore::{
-    blobservice::MemoryBlobService,
-    directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig},
-};
+use snix_castore::blobservice::MemoryBlobService;
+use snix_castore::directoryservice::RedbDirectoryService;
+use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 
 struct CacheService {
     socket: PathBuf,
@@ -26,11 +31,15 @@ struct CacheService {
 impl CacheService {
     fn start(root: &Path) -> Self {
         let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
-        let directories = runtime.block_on(RedbDirectoryService::new(
-            "cc-driver-service-test".to_string(),
-            RedbDirectoryServiceConfig { path: None, read_only: false, cache_size: None },
-        )).unwrap();
-        let cache = RustCache::new(root.join("state"), Arc::new(MemoryBlobService::default()), Arc::new(directories)).unwrap();
+        let directories = runtime
+            .block_on(RedbDirectoryService::new("cc-driver-service-test".to_string(), RedbDirectoryServiceConfig {
+                path: None,
+                read_only: false,
+                cache_size: None,
+            }))
+            .unwrap();
+        let cache =
+            RustCache::new(root.join("state"), Arc::new(MemoryBlobService::default()), Arc::new(directories)).unwrap();
         let socket = root.join("cache.sock");
         let listener = UnixListener::bind(&socket).unwrap();
         listener.set_nonblocking(true).unwrap();
@@ -60,7 +69,11 @@ impl CacheService {
                 stream.write_all(&bytes).unwrap();
             }
         });
-        Self { socket, stop, worker: Some(worker) }
+        Self {
+            socket,
+            stop,
+            worker: Some(worker),
+        }
     }
 }
 
@@ -76,16 +89,22 @@ fn compiler(name: &str) -> PathBuf {
         .map(|dir| dir.join(name))
         .find(|path| path.is_file())
         .unwrap_or_else(|| panic!("real {name} compiler required"))
-        .canonicalize().unwrap()
+        .canonicalize()
+        .unwrap()
 }
 
 fn compiler_args(source: &Path, object: &Path, depfile: &Path, extras: &[&str]) -> Vec<String> {
     let root = source.parent().unwrap();
     let mut args = vec![
-        "-c".to_string(), source.display().to_string(),
-        "-o".to_string(), object.display().to_string(),
-        "-MMD".to_string(), "-MF".to_string(), depfile.display().to_string(),
-        "-nostdinc".to_string(), "-w".to_string(),
+        "-c".to_string(),
+        source.display().to_string(),
+        "-o".to_string(),
+        object.display().to_string(),
+        "-MMD".to_string(),
+        "-MF".to_string(),
+        depfile.display().to_string(),
+        "-nostdinc".to_string(),
+        "-w".to_string(),
         format!("-ffile-prefix-map={}=/cc-root-0", root.display()),
     ];
     args.extend(extras.iter().map(|arg| (*arg).to_string()));
@@ -97,23 +116,40 @@ fn run_compiler(compiler: &Path, args: &[String]) -> Output {
 }
 
 fn run_driver(
-    compiler: &Path, service: &CacheService, receipt: &Path, script: Option<&Path>, args: &[String], platform: &str,
+    compiler: &Path,
+    service: &CacheService,
+    receipt: &Path,
+    script: Option<&Path>,
+    args: &[String],
+    platform: &str,
 ) -> (Output, Value) {
     let mut command = Command::new(env!("CARGO_BIN_EXE_mantle-cc-cache-driver"));
-    command.env_clear().env("LC_ALL", "C")
-        .arg("--compiler").arg(compiler)
-        .arg("--socket").arg(&service.socket)
-        .arg("--receipt").arg(receipt)
-        .arg("--platform-digest").arg(platform);
-    if let Some(script) = script { command.arg("--probe-script").arg(script); }
+    command
+        .env_clear()
+        .env("LC_ALL", "C")
+        .arg("--compiler")
+        .arg(compiler)
+        .arg("--socket")
+        .arg(&service.socket)
+        .arg("--receipt")
+        .arg(receipt)
+        .arg("--platform-digest")
+        .arg(platform);
+    if let Some(script) = script {
+        command.arg("--probe-script").arg(script);
+    }
     let output = command.arg("--").args(args).output().unwrap();
     let record = serde_json::from_slice(&fs::read(receipt).unwrap()).unwrap();
     (output, record)
 }
 
 fn discard_artifacts(object: &Path, depfile: &Path) {
-    if object.exists() { fs::remove_file(object).unwrap(); }
-    if depfile.exists() { fs::remove_file(depfile).unwrap(); }
+    if object.exists() {
+        fs::remove_file(object).unwrap();
+    }
+    if depfile.exists() {
+        fs::remove_file(depfile).unwrap();
+    }
 }
 
 #[test]
@@ -130,7 +166,11 @@ fn real_c_and_cpp_objects_and_depfiles_match_uncached_compilation_at_same_and_re
         fs::create_dir_all(&relocated).unwrap();
         let source_name = format!("ordered.{suffix}");
         for root in [&original, &relocated] {
-            fs::write(root.join(&source_name), "#include \"z.h\"\n#include \"a.h\"\nint answer(void) { return Z + A; }\n").unwrap();
+            fs::write(
+                root.join(&source_name),
+                "#include \"z.h\"\n#include \"a.h\"\nint answer(void) { return Z + A; }\n",
+            )
+            .unwrap();
             fs::write(root.join("z.h"), "#define Z 20\n").unwrap();
             fs::write(root.join("a.h"), "#define A 22\n").unwrap();
         }
@@ -153,8 +193,16 @@ fn real_c_and_cpp_objects_and_depfiles_match_uncached_compilation_at_same_and_re
             let (output, record) = run_driver(&compiler, &service, &receipt, None, &args, &"a".repeat(64));
             assert!(output.status.success(), "cached {compiler_name}: {}", String::from_utf8_lossy(&output.stderr));
             assert_eq!(record["disposition"], if iteration == 0 { "published" } else { "hit" });
-            assert_eq!(fs::read(&object).unwrap(), direct_object, "{compiler_name} object differs on iteration {iteration}");
-            assert_eq!(fs::read(&depfile).unwrap(), direct_depfile, "{compiler_name} depfile differs on iteration {iteration}");
+            assert_eq!(
+                fs::read(&object).unwrap(),
+                direct_object,
+                "{compiler_name} object differs on iteration {iteration}"
+            );
+            assert_eq!(
+                fs::read(&depfile).unwrap(),
+                direct_depfile,
+                "{compiler_name} depfile differs on iteration {iteration}"
+            );
             if iteration == 0 {
                 cold_key = record["action_key"].as_str().unwrap().to_string();
                 cold_object = direct_object;
@@ -258,10 +306,14 @@ fn classified_probe_replays_only_complete_bound_failures_and_changes_each_declar
     }
 
     let oversized = source_root.join("oversized.c");
-    fs::write(&oversized, format!(
-        "#include \"probe.h\"\nint probe(void) {{ return {}; }}\n",
-        "X".repeat(MAX_CC_PROBE_DIAGNOSTIC_BYTES + 1024),
-    )).unwrap();
+    fs::write(
+        &oversized,
+        format!(
+            "#include \"probe.h\"\nint probe(void) {{ return {}; }}\n",
+            "X".repeat(MAX_CC_PROBE_DIAGNOSTIC_BYTES + 1024),
+        ),
+    )
+    .unwrap();
     let oversized_args = compiler_args(&oversized, &object, &depfile, &stable_flags);
     let direct = run_compiler(&gcc, &oversized_args);
     assert!(!direct.status.success());
