@@ -710,10 +710,10 @@ fn dependencies_from_record(classified: &Classified, record: &[CcDependency]) ->
 }
 
 fn connect(socket: &Path) -> Result<UnixStream, String> {
+    const SOCKET_IO_TIMEOUT: Duration = Duration::from_secs(3);
     let stream = UnixStream::connect(socket).map_err(|e| e.to_string())?;
-    let read_write_duration = Duration::from_secs(3);
-    stream.set_read_timeout(Some(read_write_duration)).map_err(|e| e.to_string())?;
-    stream.set_write_timeout(Some(read_write_duration)).map_err(|e| e.to_string())?;
+    stream.set_read_timeout(Some(SOCKET_IO_TIMEOUT)).map_err(|e| e.to_string())?;
+    stream.set_write_timeout(Some(SOCKET_IO_TIMEOUT)).map_err(|e| e.to_string())?;
     Ok(stream)
 }
 
