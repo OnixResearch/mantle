@@ -21,9 +21,9 @@ pub const MAX_CC_DEPENDENCIES: usize = 8_192;
 const MAX_STRING_BYTES: usize = 4_096;
 pub const MAX_CC_OBJECT_BYTES: u64 = 4_194_304;
 pub const MAX_CC_PROBE_DIAGNOSTIC_BYTES: usize = 262_144;
-const MAX_RECORD_BYTES: usize = 2 * 1_024 * 1_024;
+const MAX_RECORD_BYTES: u64 = 2_097_152;
 pub const MAX_CC_FRAME_BYTES: u64 = 8_388_608;
-const MAX_BASE64_BYTES: usize = (MAX_CC_OBJECT_BYTES as usize).div_ceil(3) * 4;
+const MAX_BASE64_BYTES: u64 = MAX_CC_OBJECT_BYTES.div_ceil(3).saturating_mul(4);
 const DIGEST_HEX_BYTES: usize = 64;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -116,6 +116,8 @@ pub fn cc_action_key(input: &CcActionInput) -> Result<String, RustCacheError> {
     for digest in &input.roots_digest_blake3 {
         validate_digest(digest)?;
     }
+    assert!(!input.normalized_arguments.is_empty());
+    assert!(input.roots_digest_blake3.len() <= MAX_CC_ROOTS);
     let bytes = serde_json::to_vec(input).map_err(|_| reject("cc-action-json-invalid"))?;
     let mut hasher = blake3::Hasher::new();
     hasher.update(ACTION_DOMAIN);
@@ -124,13 +126,15 @@ pub fn cc_action_key(input: &CcActionInput) -> Result<String, RustCacheError> {
 }
 
 /// A record is not an assertion that compilation succeeded: only publish complete manifests.
-pub fn validate_cc_record(record: &CcObjectRecord, roots_count: usize) -> Result<(), RustCacheError> {
+pub fn validate_cc_record(record: &CcObjectRecord, roots_count: impl TryInto<u32>) -> Result<(), RustCacheError> {
     if record.schema != CC_RECORD_SCHEMA {
         return Err(reject("cc-record-schema-unsupported"));
     }
     validate_digest(&record.action_key)?;
     validate_digest(&record.object_digest_blake3)?;
-    if record.object_bytes == 0 || record.object_bytes > MAX_CC_OBJECT_BYTES || roots_count > MAX_CC_ROOTS {
+    let roots_count = roots_count.try_into().map_err(|_| reject("cc-record-limit"))?;
+    let max_roots = u32::try_from(MAX_CC_ROOTS).map_err(|_| reject("cc-record-limit"))?;
+    if record.object_bytes == 0 || record.object_bytes > MAX_CC_OBJECT_BYTES || roots_count > max_roots {
         return Err(reject("cc-record-limit"));
     }
     validate_dependencies(&record.dependencies, roots_count)?;
@@ -143,8 +147,9 @@ pub fn validate_cc_record(record: &CcObjectRecord, roots_count: usize) -> Result
 pub fn admit_cc_reuse(
     record: &CcObjectRecord,
     current: &[CcDependency],
-    roots_count: usize,
+    roots_count: impl TryInto<u32>,
 ) -> Result<bool, RustCacheError> {
+    let roots_count = roots_count.try_into().map_err(|_| reject("cc-record-limit"))?;
     validate_cc_record(record, roots_count)?;
     if record.dependencies.is_empty() || validate_dependencies(current, roots_count).is_err() {
         return Ok(false);
@@ -152,15 +157,19 @@ pub fn admit_cc_reuse(
     Ok(record.dependencies == current)
 }
 
-pub fn validate_cc_request(request: &CcWireRequest, roots_count: usize) -> Result<(), RustCacheError> {
+pub fn validate_cc_request(request: &CcWireRequest, roots_count: impl TryInto<u32>) -> Result<(), RustCacheError> {
     if request.schema != CC_REQUEST_SCHEMA {
         return Err(reject("cc-request-schema-unsupported"));
     }
     validate_digest(&request.action_key)?;
-    if roots_count > MAX_CC_ROOTS {
+    let roots_count = roots_count.try_into().map_err(|_| reject("cc-request-limit"))?;
+    let max_roots = u32::try_from(MAX_CC_ROOTS).map_err(|_| reject("cc-request-limit"))?;
+    if roots_count > max_roots {
         return Err(reject("cc-request-limit"));
     }
     validate_dependencies(&request.dependencies, roots_count)?;
+    assert!(request.dependencies.len() <= MAX_CC_DEPENDENCIES);
+    assert!(roots_count <= max_roots);
     match request.operation {
         CcOperation::Manifest | CcOperation::Read if request.object_base64.is_some() => {
             return Err(reject("cc-request-operation-invalid"));
@@ -173,10 +182,10 @@ pub fn validate_cc_request(request: &CcWireRequest, roots_count: usize) -> Resul
     if let Some(encoded) = &request.object_base64 {
         decode_object(encoded)?;
     }
-    ensure_json_bound(request, MAX_CC_FRAME_BYTES as usize)
+    ensure_json_bound(request, MAX_CC_FRAME_BYTES)
 }
 
-pub fn validate_cc_response(response: &CcWireResponse, roots_count: usize) -> Result<(), RustCacheError> {
+pub fn validate_cc_response(response: &CcWireResponse, roots_count: impl TryInto<u32>) -> Result<(), RustCacheError> {
     if response.schema != CC_RESPONSE_SCHEMA {
         return Err(reject("cc-response-schema-unsupported"));
     }
@@ -189,6 +198,8 @@ pub fn validate_cc_response(response: &CcWireResponse, roots_count: usize) -> Re
     }
     if let Some(record) = &response.record {
         validate_cc_record(record, roots_count)?;
+        assert!(record.dependencies.len() <= MAX_CC_DEPENDENCIES);
+        assert!(record.object_bytes <= MAX_CC_OBJECT_BYTES);
         if record.action_key != response.action_key {
             return Err(reject("cc-response-action-mismatch"));
         }
@@ -198,13 +209,13 @@ pub fn validate_cc_response(response: &CcWireResponse, roots_count: usize) -> Re
             return Err(reject("cc-response-record-missing"));
         };
         let object = decode_object(encoded)?;
-        if object.len() as u64 != record.object_bytes
+        if u64::try_from(object.len()) != Ok(record.object_bytes)
             || blake3::hash(&object).to_hex().as_str() != record.object_digest_blake3
         {
             return Err(reject("cc-response-object-mismatch"));
         }
     }
-    ensure_json_bound(response, MAX_CC_FRAME_BYTES as usize)
+    ensure_json_bound(response, MAX_CC_FRAME_BYTES)
 }
 
 /// Validate the complete failure envelope before replaying either diagnostic stream.
@@ -220,27 +231,30 @@ pub fn decode_cc_probe_result(result: &CcProbeResult) -> Result<(Vec<u8>, Vec<u8
     if !(1..=125).contains(&result.compiler_exit_code) {
         return Err(reject("cc-probe-exit-invalid"));
     }
-    ensure_json_bound(result, MAX_CC_OBJECT_BYTES as usize)?;
+    ensure_json_bound(result, MAX_CC_OBJECT_BYTES)?;
     let stdout = decode_probe_diagnostic(&result.stdout_base64)?;
     let stderr = decode_probe_diagnostic(&result.stderr_base64)?;
     Ok((stdout, stderr))
 }
 
 fn validate_probe_path(path: &str) -> Result<(), RustCacheError> {
-    if path.len() <= 1
-        || path.len() > MAX_STRING_BYTES
-        || !path.starts_with('/')
-        || path.contains('\\')
-        || path.bytes().any(|byte| byte.is_ascii_control())
-        || path[1..].split('/').any(|component| component.is_empty() || component == "." || component == "..")
-    {
+    if path.len() <= 1 || path.len() > MAX_STRING_BYTES {
+        return Err(reject("cc-probe-path-invalid"));
+    }
+    if !path.starts_with('/') || path.contains('\\') {
+        return Err(reject("cc-probe-path-invalid"));
+    }
+    if path.bytes().any(|byte| byte.is_ascii_control()) {
+        return Err(reject("cc-probe-path-invalid"));
+    }
+    if path[1..].split('/').any(|component| component.is_empty() || component == "." || component == "..") {
         return Err(reject("cc-probe-path-invalid"));
     }
     Ok(())
 }
 
 fn decode_probe_diagnostic(encoded: &str) -> Result<Vec<u8>, RustCacheError> {
-    let max_encoded = MAX_CC_PROBE_DIAGNOSTIC_BYTES.div_ceil(3) * 4;
+    let max_encoded = MAX_CC_PROBE_DIAGNOSTIC_BYTES.div_ceil(3).saturating_mul(4);
     if encoded.len() > max_encoded {
         return Err(reject("cc-probe-diagnostic-limit"));
     }
@@ -262,52 +276,61 @@ fn validate_digest(digest: &str) -> Result<(), RustCacheError> {
     Ok(())
 }
 
-fn validate_dependencies(dependencies: &[CcDependency], roots_count: usize) -> Result<(), RustCacheError> {
+fn validate_dependencies(dependencies: &[CcDependency], roots_count: u32) -> Result<(), RustCacheError> {
     if dependencies.len() > MAX_CC_DEPENDENCIES {
         return Err(reject("cc-dependencies-limit"));
     }
     let mut seen = HashSet::with_capacity(dependencies.len());
     for dependency in dependencies {
-        if dependency.root_index as usize >= roots_count {
+        if dependency.root_index >= roots_count {
             return Err(reject("cc-dependency-root-invalid"));
         }
         let path = dependency.relative_path.as_str();
-        if path.is_empty()
-            || path.len() > MAX_STRING_BYTES
-            || path.contains('\\')
-            || path.contains('\0')
-            || path.split('/').any(|component| component.is_empty() || component == "." || component == "..")
-            || path.starts_with('/')
-            || (path.as_bytes().get(1) == Some(&b':') && path.as_bytes().get(2) == Some(&b'/'))
-        {
+        if path.is_empty() || path.len() > MAX_STRING_BYTES {
+            return Err(reject("cc-dependency-path-invalid"));
+        }
+        if path.contains('\\') || path.contains('\0') || path.starts_with('/') {
+            return Err(reject("cc-dependency-path-invalid"));
+        }
+        if path.split('/').any(|component| component.is_empty() || component == "." || component == "..") {
+            return Err(reject("cc-dependency-path-invalid"));
+        }
+        if path.as_bytes().get(1) == Some(&b':') && path.as_bytes().get(2) == Some(&b'/') {
             return Err(reject("cc-dependency-path-invalid"));
         }
         validate_digest(&dependency.digest_blake3)?;
         if !seen.insert((dependency.root_index, path)) {
             return Err(reject("cc-dependency-duplicate"));
         }
+        assert!(dependency.root_index < roots_count);
     }
+    assert!(seen.len() <= MAX_CC_DEPENDENCIES);
     Ok(())
 }
 
 fn has_raw_absolute_path(argument: &str) -> bool {
-    if argument.contains('\0')
-        || argument.contains('\\')
-        || argument.contains("/nix/store")
-        || argument.contains("/mantle/store")
-    {
+    if argument.contains('\0') || argument.contains('\\') {
+        return true;
+    }
+    if argument.contains("/nix/store") || argument.contains("/mantle/store") {
         return true;
     }
     let bytes = argument.as_bytes();
-    bytes.iter().enumerate().any(|(index, byte)| {
+    for (index, byte) in bytes.iter().enumerate() {
         if *byte != b'/' {
-            return false;
+            continue;
         }
-        if index == 0 || b"=,:@ \t\r\n\"'([{;<".contains(&bytes[index - 1]) {
+        if index == 0 {
+            return true;
+        }
+        assert!(index < bytes.len());
+        assert!(argument.is_char_boundary(index));
+        let prefix = &argument[..index];
+        if prefix.as_bytes().last().is_some_and(|previous| b"=,:@ \t\r\n\"'([{;<".contains(previous)) {
             return true;
         }
         // A path glued to one of the compiler's path-taking switches.
-        [
+        if [
             "-I",
             "-L",
             "-F",
@@ -328,24 +351,28 @@ fn has_raw_absolute_path(argument: &str) -> bool {
             "-resource-dir",
         ]
         .iter()
-        .any(|switch| argument[..index].ends_with(switch))
-    })
+        .any(|switch| prefix.ends_with(switch))
+        {
+            return true;
+        }
+    }
+    false
 }
 
 fn decode_object(encoded: &str) -> Result<Vec<u8>, RustCacheError> {
-    if encoded.len() > MAX_BASE64_BYTES {
+    if u64::try_from(encoded.len()).map_or(true, |len| len > MAX_BASE64_BYTES) {
         return Err(reject("cc-object-limit"));
     }
     let bytes = data_encoding::BASE64.decode(encoded.as_bytes()).map_err(|_| reject("cc-object-base64-invalid"))?;
-    if bytes.len() as u64 > MAX_CC_OBJECT_BYTES {
+    if u64::try_from(bytes.len()).map_or(true, |len| len > MAX_CC_OBJECT_BYTES) {
         return Err(reject("cc-object-limit"));
     }
     Ok(bytes)
 }
 
-fn ensure_json_bound(value: &impl Serialize, limit: usize) -> Result<(), RustCacheError> {
+fn ensure_json_bound(value: &impl Serialize, limit: u64) -> Result<(), RustCacheError> {
     let bytes = serde_json::to_vec(value).map_err(|_| reject("cc-wire-json-invalid"))?;
-    if bytes.len() > limit {
+    if u64::try_from(bytes.len()).map_or(true, |len| len > limit) {
         return Err(reject("cc-wire-limit"));
     }
     Ok(())
@@ -525,6 +552,44 @@ mod tests {
         invalid_root = record(vec![dependency("a.h", A)]);
         invalid_root.dependencies[0].digest_blake3 = "invalid".into();
         assert!(validate_cc_record(&invalid_root, 1).is_err());
+    }
+
+    #[test]
+    fn root_count_and_index_boundaries_fail_closed_without_truncation() {
+        let mut last_root = dependency("include/a.h", A);
+        last_root.root_index = u32::try_from(MAX_CC_ROOTS.saturating_sub(1)).unwrap();
+        let stored = record(vec![last_root]);
+        let roots = MAX_CC_ROOTS;
+        assert_eq!(validate_cc_record(&stored, roots), Ok(()));
+        assert_eq!(admit_cc_reuse(&stored, &stored.dependencies, roots), Ok(true));
+        assert_eq!(
+            validate_cc_record(&stored, roots.saturating_sub(1)).unwrap_err().code(),
+            "cc-dependency-root-invalid"
+        );
+        assert_eq!(validate_cc_record(&stored, roots.saturating_add(1)).unwrap_err().code(), "cc-record-limit");
+        let wide_roots = u64::from(u32::MAX).saturating_add(1);
+        assert_eq!(validate_cc_record(&stored, wide_roots).unwrap_err().code(), "cc-record-limit");
+        assert_eq!(admit_cc_reuse(&stored, &stored.dependencies, wide_roots).unwrap_err().code(), "cc-record-limit");
+        let mut out_of_range = stored.clone();
+        out_of_range.dependencies[0].root_index = u32::MAX;
+        assert_eq!(validate_cc_record(&out_of_range, roots).unwrap_err().code(), "cc-dependency-root-invalid");
+    }
+
+    #[test]
+    fn slash_admission_preserves_relative_arguments_and_rejects_absolute_paths() {
+        let mut input = action();
+        input.normalized_arguments.push("é/root:0/include".into());
+        assert!(cc_action_key(&input).is_ok());
+        for argument in [
+            "-I/opt/include",
+            "prefix=/opt/include",
+            "/opt/include",
+            "--sysroot=/opt/sdk",
+        ] {
+            input.normalized_arguments.push(argument.into());
+            assert_eq!(cc_action_key(&input).unwrap_err().code(), "cc-action-argument-invalid", "{argument}");
+            input.normalized_arguments.pop();
+        }
     }
 
     #[test]
