@@ -74,6 +74,13 @@ rejected if it is exhausted; snapshot facts stream individually before
 `snapshot_end`. Reject invalid IDs, version, malformed/oversized facts and
 filters or exhausted fact capacity. A full subscriber delta queue or a frame
 write stalled more than five seconds drops the subscriber, never a build.
+
+Pure-core JSON byte accounting uses checked additions. Arithmetic overflow is
+treated as over-limit rather than wrapping into an admitted fact or filter;
+`Fact::new` checks the full serialized size before allocating owned fields.
+The exact maximum serialized fact/filter sizes are accepted, and a one-byte
+excess is rejected.
+
 The **publisher socket connection** owns every fact published over it, regardless
 of the `owner` field; on loss of that connection the daemon retracts its facts.
 Worker loss while the publisher remains connected must be observed by the

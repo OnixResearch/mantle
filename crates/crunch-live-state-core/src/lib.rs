@@ -92,33 +92,70 @@ impl fmt::Display for Error {
     }
 }
 
-fn check_text(value: &str, field: &'static str, bound: usize, too_large: Error) -> Result<(), Error> {
+#[derive(Clone, Copy)]
+enum TextField {
+    Owner,
+    Subject,
+    State,
+}
+
+impl TextField {
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Owner => "owner",
+            Self::Subject => "subject",
+            Self::State => "state",
+        }
+    }
+}
+
+fn check_text(value: &str, field: TextField, bound: usize, too_large: Error) -> Result<(), Error> {
     if value.is_empty() {
-        return Err(Error::EmptyField(field));
+        return Err(Error::EmptyField(field.name()));
     }
     if value.len() > bound {
         return Err(too_large);
     }
     if value.chars().any(char::is_control) {
-        return Err(Error::ControlCharacter(field));
+        return Err(Error::ControlCharacter(field.name()));
     }
     Ok(())
 }
 
 // All control characters are rejected, so JSON only expands quotes and backslashes.
-fn json_text_bytes(value: &str) -> usize {
-    value.len() + value.as_bytes().iter().filter(|&&byte| byte == b'"' || byte == b'\\').count()
+fn json_text_bytes(value: &str) -> Option<usize> {
+    let escapes = value.as_bytes().iter().filter(|&&byte| byte == b'"' || byte == b'\\').count();
+    value.len().checked_add(escapes)
 }
 
-fn fact_wire_bytes(owner: &str, kind: FactKind, subject: &str, state: &str) -> usize {
+struct FactFields<'a> {
+    owner: &'a str,
+    kind: FactKind,
+    subject: &'a str,
+    state: &'a str,
+}
+
+fn fact_wire_bytes(fields: FactFields<'_>) -> Option<usize> {
     // Exact JSON envelope, with its one version digit and 64 hexadecimal ID bytes.
-    r#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len()
-        + 1
-        + ID_BYTES
-        + json_text_bytes(owner)
-        + kind.as_str().len()
-        + json_text_bytes(subject)
-        + json_text_bytes(state)
+    let mut bytes = r#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len();
+    bytes = bytes.checked_add(1)?.checked_add(ID_BYTES)?;
+    bytes = bytes.checked_add(json_text_bytes(fields.owner)?)?;
+    bytes = bytes.checked_add(fields.kind.as_str().len())?;
+    bytes = bytes.checked_add(json_text_bytes(fields.subject)?)?;
+    bytes = bytes.checked_add(json_text_bytes(fields.state)?)?;
+    Some(bytes)
+}
+
+fn filter_wire_bytes(filter: &Filter) -> Option<usize> {
+    let field_bytes = |value: Option<&str>| match value {
+        Some(text) => json_text_bytes(text)?.checked_add(2),
+        None => Some(4), // null
+    };
+    let mut bytes = r#"{"owner":,"kind":,"subject_prefix":}"#.len();
+    bytes = bytes.checked_add(field_bytes(filter.owner.as_deref())?)?;
+    bytes = bytes.checked_add(field_bytes(filter.kind.map(FactKind::as_str))?)?;
+    bytes = bytes.checked_add(field_bytes(filter.subject_prefix.as_deref())?)?;
+    Some(bytes)
 }
 
 fn hash_field(hasher: &mut blake3::Hasher, field: &str) {
@@ -138,10 +175,17 @@ pub fn fact_id(owner: &str, kind: FactKind, subject: &str) -> String {
 
 impl Fact {
     pub fn new(owner: &str, kind: FactKind, subject: &str, state: &str) -> Result<Self, Error> {
-        check_text(owner, "owner", MAX_FACT_BYTES, Error::FactTooLarge)?;
-        check_text(subject, "subject", MAX_FACT_BYTES, Error::FactTooLarge)?;
-        check_text(state, "state", MAX_FACT_BYTES, Error::FactTooLarge)?;
-        if fact_wire_bytes(owner, kind, subject, state) > MAX_FACT_BYTES {
+        check_text(owner, TextField::Owner, MAX_FACT_BYTES, Error::FactTooLarge)?;
+        check_text(subject, TextField::Subject, MAX_FACT_BYTES, Error::FactTooLarge)?;
+        check_text(state, TextField::State, MAX_FACT_BYTES, Error::FactTooLarge)?;
+        if fact_wire_bytes(FactFields {
+            owner,
+            kind,
+            subject,
+            state,
+        })
+        .is_none_or(|bytes| bytes > MAX_FACT_BYTES)
+        {
             return Err(Error::FactTooLarge);
         }
         let fact = Self {
@@ -163,10 +207,17 @@ impl Fact {
         if self.id.len() != ID_BYTES || !self.id.bytes().all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')) {
             return Err(Error::InvalidId);
         }
-        check_text(&self.owner, "owner", MAX_FACT_BYTES, Error::FactTooLarge)?;
-        check_text(&self.subject, "subject", MAX_FACT_BYTES, Error::FactTooLarge)?;
-        check_text(&self.state, "state", MAX_FACT_BYTES, Error::FactTooLarge)?;
-        if fact_wire_bytes(&self.owner, self.kind, &self.subject, &self.state) > MAX_FACT_BYTES {
+        check_text(&self.owner, TextField::Owner, MAX_FACT_BYTES, Error::FactTooLarge)?;
+        check_text(&self.subject, TextField::Subject, MAX_FACT_BYTES, Error::FactTooLarge)?;
+        check_text(&self.state, TextField::State, MAX_FACT_BYTES, Error::FactTooLarge)?;
+        if fact_wire_bytes(FactFields {
+            owner: &self.owner,
+            kind: self.kind,
+            subject: &self.subject,
+            state: &self.state,
+        })
+        .is_none_or(|bytes| bytes > MAX_FACT_BYTES)
+        {
             return Err(Error::FactTooLarge);
         }
         if self.id != fact_id(&self.owner, self.kind, &self.subject) {
@@ -179,7 +230,7 @@ impl Fact {
 impl Filter {
     pub fn validate(&self) -> Result<(), Error> {
         if let Some(owner) = &self.owner {
-            check_text(owner, "owner", MAX_FILTER_BYTES, Error::FilterTooLarge)?;
+            check_text(owner, TextField::Owner, MAX_FILTER_BYTES, Error::FilterTooLarge)?;
         }
         if let Some(prefix) = &self.subject_prefix {
             if prefix.len() > MAX_FILTER_BYTES {
@@ -189,15 +240,7 @@ impl Filter {
                 return Err(Error::ControlCharacter("subject_prefix"));
             }
         }
-        let field_bytes = |value: Option<&str>| match value {
-            Some(text) => json_text_bytes(text) + 2,
-            None => 4, // null
-        };
-        let bytes = r#"{"owner":,"kind":,"subject_prefix":}"#.len()
-            + field_bytes(self.owner.as_deref())
-            + field_bytes(self.kind.map(FactKind::as_str))
-            + field_bytes(self.subject_prefix.as_deref());
-        if bytes > MAX_FILTER_BYTES {
+        if filter_wire_bytes(self).is_none_or(|bytes| bytes > MAX_FILTER_BYTES) {
             return Err(Error::FilterTooLarge);
         }
         Ok(())
@@ -299,6 +342,14 @@ mod tests {
         let escaped = fact("o", FactKind::Goal, "s", &"\\".repeat(900));
         assert!(serde_json::to_vec(&escaped).unwrap().len() <= MAX_FACT_BYTES);
         assert_eq!(Fact::new("o", FactKind::Goal, "s", &"\\".repeat(1_050)), Err(Error::FactTooLarge));
+        let baseline = fact("o", FactKind::Goal, "s", "x");
+        let available = MAX_FACT_BYTES.checked_sub(serde_json::to_vec(&baseline).unwrap().len()).unwrap();
+        let mut exact_state = "x".repeat(available.checked_add(1).unwrap());
+        let exact = fact("o", FactKind::Goal, "s", &exact_state);
+        assert_eq!(serde_json::to_vec(&exact).unwrap().len(), MAX_FACT_BYTES);
+        exact.validate().unwrap();
+        exact_state.push('x');
+        assert_eq!(Fact::new("o", FactKind::Goal, "s", &exact_state), Err(Error::FactTooLarge));
     }
 
     #[test]
@@ -309,7 +360,16 @@ mod tests {
             subject_prefix: Some("root/".into()),
         };
         filter.validate().unwrap();
-        assert!(serde_json::to_vec(&filter).unwrap().len() <= MAX_FILTER_BYTES);
+        let initial_bytes = serde_json::to_vec(&filter).unwrap().len();
+        let available = MAX_FILTER_BYTES.checked_sub(initial_bytes).unwrap();
+        let mut prefix = String::with_capacity("root/".len().checked_add(available).unwrap());
+        prefix.push_str("root/");
+        prefix.extend(core::iter::repeat_n('x', available));
+        filter.subject_prefix = Some(prefix);
+        assert_eq!(serde_json::to_vec(&filter).unwrap().len(), MAX_FILTER_BYTES);
+        filter.validate().unwrap();
+        filter.subject_prefix.as_mut().unwrap().push('x');
+        assert_eq!(filter.validate(), Err(Error::FilterTooLarge));
         filter.subject_prefix = Some("root/\n".into());
         assert_eq!(filter.validate(), Err(Error::ControlCharacter("subject_prefix")));
         filter.subject_prefix = Some("\\".repeat(MAX_FILTER_BYTES));
