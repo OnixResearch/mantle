@@ -1,0 +1,3 @@
+CANCELLED_STALE_SNAPSHOT
+The worker-owned bg_10503 library test binary was compiled before readiness wrapper/CC runtime source edits and before the audited Casita source-port combined graph. At user direction, its managed job was stopped before completion to release CPU; the captured .stdout.txt and .stderr.txt are partial interim logs, not a PASS or FAIL. Task 5.2 remains unchecked. Run the exact command anew only after READINESS_RUNTIME_SOURCE_STABLE and PORTS_COMBINED_GRAPH_READY.
+After cancellation, a one-time `ps -p 1713442,1713445,1714416 -o pid,ppid,stat,cmd` showed no capture helper, Cargo process, or test binary; no orphan owned suite remained running. No child exit code was captured because the managed job was cancelled.

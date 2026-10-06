@@ -1,0 +1,97 @@
+warning: /home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling blake3 v1.8.2
+   Compiling num-traits v0.2.19
+   Compiling aws-lc-sys v0.44.0
+   Compiling lazy_static v1.5.0
+   Compiling turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling ed25519-dalek v2.2.0
+   Compiling nickel-lang-vector v0.2.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/third_party/nickel-lang-vector)
+   Compiling sharded-slab v0.1.7
+   Compiling bindgen v0.69.5
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/vendor/fuse-backend-rs)
+   Compiling crunch-service-readiness-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-service-readiness-core)
+   Compiling secretspec v0.17.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/third_party/secretspec)
+   Compiling nickel-lang-parser v0.3.0
+   Compiling tracing-subscriber v0.3.23
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-attestation-core)
+   Compiling nix-compat v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/vendor/nix-compat)
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling bao-tree v0.16.1 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/third_party/bao-tree)
+   Compiling crunch-repair-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-repair-core)
+   Compiling crunch-overlay-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-overlay-core)
+   Compiling crunch-gc-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-gc-core)
+   Compiling crunch-composition-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-composition-core)
+   Compiling crunch-live-state-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-live-state-core)
+   Compiling crunch-rust-cache-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-rust-cache-core)
+   Compiling crunch-hardware-simulation-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-hardware-simulation-core)
+   Compiling crunch-evaluation-stream-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-evaluation-stream-core)
+   Compiling mantle-rust-plan-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/mantle-rust-plan-core)
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-wasm-component-core)
+   Compiling crunch-action-result-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-action-result-core)
+   Compiling artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling crunch-coordination v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-coordination)
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-release-core)
+   Compiling chrono v0.4.44
+   Compiling num-integer v0.1.46
+   Compiling float-cmp v0.10.0
+   Compiling tracing-appender v0.2.5
+   Compiling num-bigint v0.4.8
+   Compiling tracing-indicatif v0.3.14
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-attestation)
+   Compiling crunch-project-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-project-core)
+   Compiling predicates v3.1.4
+   Compiling mantle-application-contract v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/mantle-application-contract)
+   Compiling bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+   Compiling crunch-kernelscript-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-kernelscript-core)
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-source-core)
+   Compiling crunch-hardware-simulation v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-hardware-simulation)
+   Compiling bigdecimal v0.4.11
+   Compiling turso_ext v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling crunch-nar v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-nar)
+   Compiling crunch-glue v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-glue)
+   Compiling assert_cmd v2.2.0
+   Compiling crunch-bootstrap-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-bootstrap-core)
+   Compiling crunch-eval-budget-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-eval-budget-core)
+   Compiling nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+   Compiling mantlepkgs-core v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/mantlepkgs-core)
+   Compiling mantle-build-contract v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/mantle-build-contract)
+   Compiling crunch-wasm-component v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-wasm-component)
+   Compiling turso_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling crunch-project v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-project)
+   Compiling aws-lc-rs v1.18.0
+   Compiling rustls v0.23.45
+   Compiling rustls-webpki v0.103.14
+   Compiling tokio-rustls v0.26.4
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling ureq v3.3.0
+   Compiling hyper-rustls v0.27.7
+   Compiling reqwest v0.13.2
+   Compiling reqwest-middleware v0.5.1
+   Compiling object_store v0.14.0
+   Compiling gix-transport v0.55.1
+   Compiling reqwest-tracing v0.6.0
+   Compiling gix-protocol v0.59.0
+   Compiling snix-tracing v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/vendor/snix-tracing)
+   Compiling gix v0.81.0
+   Compiling snix-castore v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/vendor/snix-castore)
+   Compiling snix-build v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/vendor/snix-build)
+   Compiling snix-store v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/vendor/snix-store)
+   Compiling turso_sync_engine v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling nickel-lang-core v0.18.0
+   Compiling nickel-lang v2.2.0
+   Compiling crunch-eval v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-eval)
+   Compiling turso_sync_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling turso v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling casita v0.1.0 (https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb)
+   Compiling crunch-store v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-store)
+   Compiling crunch-build v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-build)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-rustc-wrapper)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3m 20s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/android-source-target/debug/deps/mantle-1e3ab07f9f17d308)
+error: test failed, to rerun pass `-p mantle --lib`

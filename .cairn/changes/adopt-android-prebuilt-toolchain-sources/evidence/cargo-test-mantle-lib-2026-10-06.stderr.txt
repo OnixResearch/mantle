@@ -1,0 +1,7 @@
+warning: /home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-rustc-wrapper)
+   Compiling mantle v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.70s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/android-source-target/debug/deps/mantle-5cb5da2997a55f58)

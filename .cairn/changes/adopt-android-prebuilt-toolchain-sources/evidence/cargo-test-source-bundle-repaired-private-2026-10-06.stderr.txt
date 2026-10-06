@@ -1,0 +1,6 @@
+warning: /home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/android-source-clean-replay-20261006-worker/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/android-source-clean-replay-20261006-worker/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/android-source-clean-replay-20261006-worker)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 05s
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/android-source-target/debug/deps/mantle-03024758362fa1d2)

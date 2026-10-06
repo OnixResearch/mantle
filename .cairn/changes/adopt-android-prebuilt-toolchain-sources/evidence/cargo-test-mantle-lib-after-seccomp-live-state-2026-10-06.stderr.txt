@@ -1,0 +1,18 @@
+warning: /home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/Cargo.toml: file `/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling turso_sync_engine v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling turso_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling turso_sync_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling turso v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling casita v0.1.0 (https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb)
+   Compiling crunch-store v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-store)
+   Compiling crunch-build v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-build)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-rustc-wrapper)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/source)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5m 53s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/android-source-target/debug/deps/mantle-1e3ab07f9f17d308)

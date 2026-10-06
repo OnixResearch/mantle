@@ -33,7 +33,7 @@ The initial cohort is an implementation decision recorded in the manifest, not i
 
 ### Toolchain identity binding
 
-A derivation that executes a prebuilt tool MUST reference the identity record as a declared input. Lowering resolves the record to the fetch derivation output. If the resolved digest does not match the recorded digest, the build fails before any tool executes.
+The source module exposes a fail-closed helper requiring the reviewed identity, the observed archive digest, and a native sandbox derivation; it adds the fixed-output fetch derivation as an input. The downstream APK adapter MUST use this helper at its actual execution/lowering boundary. Admission does not intercept generic Nickel derivations or establish a universal enforcement claim before that consumer exists.
 
 This keeps the store as the authority for bytes. The manifest is an index, not a second store.
 
@@ -50,13 +50,13 @@ The admitted components are prebuilt third-party binaries. Admission proves cont
 - license compliance for downstream distribution;
 - any source-built or bootstrap-chain claim.
 
-Execution stays inside bwrap sandbox derivations with only declared inputs mounted. ADR 0079 records this decision and the rejected alternative (source-building OpenJDK now).
+Execution through the downstream adapter stays inside bwrap sandbox derivations with only declared inputs mounted. ADR 0089 records this decision and the rejected alternative (source-building OpenJDK now).
 
 ## Failure and abuse controls
 
 - Missing or placeholder digest: manifest contract rejects the record.
 - Digest drift between manifest and fetched bytes: fixed-output verification fails the build.
-- Undeclared tool execution: identity binding is a required derivation input; absent identity means no toolchain path.
+- Undeclared tool execution: the binding helper refuses a missing identity; universal use is an open obligation for the downstream APK adapter, not a property of arbitrary generic derivations.
 - Network dependence in proofs: unmatched override requests fail closed instead of silently fetching.
 
 ## Testing

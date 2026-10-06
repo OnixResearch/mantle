@@ -1,0 +1,7 @@
+
+running 2 tests
+test android_pinned_fetch_request_replays_only_matching_kind_and_url ... ok
+test bound_android_tool_cannot_execute_after_real_fixed_output_digest_drift ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.44s
+

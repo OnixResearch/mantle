@@ -7422,6 +7422,131 @@ mod tests {
         assert!(plan.overrides[0].source_state_blake3.len() == BLAKE3_HEX_BYTES);
     }
 
+    #[tokio::test]
+    async fn source_fetch_override_plan_routes_synthetic_file_and_blocks_tool_on_drift() {
+        use base64::Engine as _;
+        use sha2::Digest as _;
+        use snix_build::buildservice::BuildService as _;
+
+        const URL: &str = "https://example.invalid/android-synthetic-tool.tar.gz";
+        const BYTES: &[u8] = b"small deterministic synthetic tool archive\n";
+        const DRIFTED: &[u8] = b"changed synthetic tool archive\n";
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("synthetic-tool.tar.gz");
+        fs::write(&payload, BYTES).unwrap();
+        let pinned_sri =
+            format!("sha256-{}", base64::engine::general_purpose::STANDARD.encode(sha2::Sha256::digest(BYTES)));
+        let mut fetcher = fixed_fetcher("synthetic-android-tool-source", URL);
+        fetcher.fixed_output.as_mut().unwrap().hash = pinned_sri.clone();
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let roots = [("default".to_string(), root)];
+        let planned = plan_source_bundle_from_derivations(&roots, &[], "/nix/store").unwrap();
+        assert_eq!(planned.records.len(), 1);
+        assert_eq!(planned.records[0].metadata[RECORD_METADATA_URL_KEY], URL);
+        let record = materialized_record_from_payload(&planned.records[0], &payload, false);
+        let manifest = assemble_source_bundle(vec![record], "/nix/store").unwrap();
+        let state = temp.path().join("source-state");
+        import_source_bundle(&manifest, &state, true).unwrap();
+        let plan = source_fetch_override_plan_for_derivations(&roots, &state, "/nix/store").unwrap();
+        assert_eq!(plan.report.ready_class, SourceReadiness::Ready);
+        assert_eq!(plan.overrides.len(), 1);
+        assert_eq!(plan.overrides[0].url, URL);
+        assert_eq!(plan.overrides[0].kind, crunch_build::FetchSourceOverrideKind::File);
+        assert_eq!(fs::read(&plan.overrides[0].payload_path).unwrap(), BYTES);
+
+        let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig::new(
+            crunch_store::StoreBackend::Snix,
+            temp.path().join("fetch-state"),
+            temp.path().join("fetch-store"),
+            "/nix/store".to_string(),
+        ))
+        .await
+        .unwrap();
+        let service = crunch_build::FetchBuildService::new(store.into_pipeline_store_parts().build_service_store)
+            .with_source_overrides(plan.overrides.clone())
+            .with_source_policy(crunch_build::FetchSourcePolicy::RequireOverride);
+        let request = |url: &str| snix_build::buildservice::BuildRequest {
+            command_args: vec!["builtin:fetchurl".to_string()],
+            outputs: vec![PathBuf::from("nix/store/synthetic-android-source")],
+            environment_vars: vec![snix_build::buildservice::EnvVar {
+                key: "url".to_string(),
+                value: url.to_string().into(),
+            }],
+            ..snix_build::buildservice::BuildRequest::default()
+        };
+        let fetched = service.do_build(request(URL)).await.unwrap();
+        match &fetched.outputs[0].node {
+            snix_castore::Node::File { digest, size, .. } => {
+                assert_eq!(*digest, blake3::hash(BYTES).into());
+                assert_eq!(*size, BYTES.len() as u64);
+            }
+            other => panic!("pinned synthetic archive must replay as a flat file: {other:?}"),
+        }
+        let unmatched_url = file_url(&payload);
+        let unmatched = service.do_build(request(&unmatched_url)).await.unwrap_err();
+        assert!(unmatched.to_string().contains("offline source policy rejected unmatched builtin fetch"));
+        assert!(unmatched.to_string().contains(&unmatched_url));
+
+        // Corrupt only the plan's scratch payload after import, never the pinned
+        // source declaration or its original local fixture.
+        fs::write(&plan.overrides[0].payload_path, DRIFTED).unwrap();
+        let root_file = temp.path().join("synthetic-consumer.ncl");
+        fs::write(
+            &root_file,
+            format!(
+                r#"let fetch = import "fetch.ncl" in
+let Derivation = import "derivation.ncl" in
+({{name = "synthetic-android-tool-consumer",
+   builder = "/bin/sh",
+   args = ["-c", "printf TOOL_RAN > $out"],
+   inputs = [fetch.fetchurl {{url = "{URL}", hash = "{pinned_sri}", name = "synthetic-android-tool-source"}}]}} | Derivation)"#
+            ),
+        )
+        .unwrap();
+        let output = tempfile::tempdir().unwrap();
+        let build_state = tempfile::tempdir().unwrap();
+        let keypair = crunch_build::load_keypair(
+            "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==",
+        )
+        .unwrap();
+        let trusted_keys = crunch_build::build_trusted_keys(&keypair, None);
+        let config = crunch_pipeline::BuildConfig {
+            file: root_file,
+            import_paths: vec![PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()],
+            output_dir: output.path().to_path_buf(),
+            state_dir: build_state.path().to_path_buf(),
+            backend: crunch_store::StoreBackend::Snix,
+            base_state_dirs: Vec::new(),
+            store_dir: "/nix/store".to_string(),
+            verbose: false,
+            max_jobs: 2,
+            scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
+            substituter_urls: Vec::new(),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            keypair,
+            trusted_keys,
+            trust_unsigned: false,
+            root_retention_source: None,
+            root_registration: None,
+            source_fetch_overrides: plan.overrides.clone(),
+            remote_enabled: false,
+            interchange_dir: None,
+        };
+        let drifted = crunch_pipeline::build(&config).await.unwrap();
+        assert!(drifted.outcomes.is_empty(), "changed source-plan bytes must not execute a dependent tool");
+        let mismatch = drifted
+            .failed
+            .iter()
+            .find_map(|failure| crunch_pipeline::parse_fod_mismatch_error(&failure.origin_error))
+            .unwrap_or_else(|| panic!("missing fixed-output drift reason: {:?}", drifted.failed));
+        let observed_sri =
+            format!("sha256-{}", base64::engine::general_purpose::STANDARD.encode(sha2::Sha256::digest(DRIFTED)));
+        assert_eq!(mismatch.name, "synthetic-android-tool-source");
+        assert_eq!(mismatch.expected_sri, pinned_sri);
+        assert_eq!(mismatch.actual_sri, observed_sri);
+        assert!(fs::read_dir(output.path()).unwrap().next().is_none(), "tool output marker must remain absent");
+    }
+
     #[test]
     fn source_fetch_override_plan_deduplicates_identical_url_kind_payloads() {
         let temp = tempfile::tempdir().unwrap();

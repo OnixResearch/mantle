@@ -1,0 +1,16 @@
+
+running 11 tests
+test stdlib::tests::embedded_android_source_record_identities_match_canonical_blake3 ... ok
+test stdlib::tests::embedded_stdlib_matches_repo_lib_directory ... ok
+test stdlib::tests::source_stdlib_candidates_empty_without_inputs ... ok
+test stdlib::tests::source_stdlib_candidates_include_cwd_and_exe_ancestors ... ok
+test stdlib::tests::stdlib_import_path_can_force_embedded_copy ... ok
+test stdlib::tests::stdlib_import_path_returns_dir_with_lib_ncl ... ok
+test stdlib::tests::stdlib_is_importable ... ok
+test stdlib::tests::write_stdlib_content_matches_embedded ... ok
+test stdlib::tests::write_stdlib_creates_all_files ... ok
+test stdlib::tests::write_stdlib_skips_rewrite_when_unchanged ... ok
+test stdlib::tests::written_embedded_stdlib_is_importable ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 72 filtered out; finished in 0.97s
+

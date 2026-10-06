@@ -12,6 +12,8 @@ const MAX_STDLIB_SEARCH_ANCESTORS: usize = 12;
 /// The embedded stdlib files.
 const STDLIB_FILES: &[(&str, &str)] = &[
     ("lib.ncl", include_str!("../../../lib/lib.ncl")),
+    ("android.ncl", include_str!("../../../lib/android.ncl")),
+    ("android/sources.ncl", include_str!("../../../lib/android/sources.ncl")),
     ("artifact-auth-cutover-receipt.ncl", include_str!("../../../lib/artifact-auth-cutover-receipt.ncl")),
     (
         "artifact-source-migration-receipt.ncl",
@@ -64,6 +66,11 @@ pub fn write_stdlib(dir: Option<&Path>) -> Result<PathBuf, std::io::Error> {
 
     for (name, contents) in STDLIB_FILES {
         let path = target.join(name);
+        if name.contains('/') {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+        }
         // Only write if content changed (avoid unnecessary FS writes)
         let needs_write = match std::fs::read_to_string(&path) {
             Ok(existing) => existing != *contents,
@@ -212,11 +219,17 @@ mod tests {
     #[test]
     fn embedded_stdlib_matches_repo_lib_directory() {
         let repo_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib");
-        let expected: std::collections::BTreeSet<String> = std::fs::read_dir(&repo_dir)
+        let mut expected: std::collections::BTreeSet<String> = std::fs::read_dir(&repo_dir)
             .unwrap()
             .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
             .filter(|name| name.ends_with(".ncl"))
             .collect();
+        for entry in std::fs::read_dir(repo_dir.join("android")).unwrap() {
+            let name = entry.unwrap().file_name().to_string_lossy().into_owned();
+            if name.ends_with(".ncl") {
+                expected.insert(format!("android/{name}"));
+            }
+        }
         let actual: std::collections::BTreeSet<String> =
             STDLIB_FILES.iter().map(|(name, _)| (*name).to_string()).collect();
 
@@ -259,5 +272,50 @@ mod tests {
 
         assert_ne!(path, repo_dir);
         assert!(path.join("fetch.ncl").exists());
+        assert!(path.join("android/sources.ncl").exists());
+        let paths = vec![path.into_os_string()];
+        let source: crunch_glue::CrunchDerivation = crate::evaluate_str(
+            r#"let mantle = import "lib.ncl" in
+               let [jdk, _, _, _] = mantle.AndroidSources.cohort in
+               mantle.AndroidSources.source jdk"#,
+            &paths,
+        )
+        .unwrap()
+        .to_serde()
+        .unwrap();
+        assert_eq!(source.builder, "builtin:fetchurl");
+        assert_eq!(
+            source.env.get("url").unwrap(),
+            "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.17%2B10/OpenJDK17U-jdk_x64_linux_hotspot_17.0.17_10.tar.gz"
+        );
+        assert_eq!(source.fixed_output.unwrap().hash, "sha256-mS+W55lQdax2NrsajeUrDGHXHtMTf6/JeauWtKt43XU=");
+    }
+
+    #[test]
+    fn embedded_android_source_record_identities_match_canonical_blake3() {
+        let dir = tempfile::tempdir().unwrap();
+        let stdlib_dir = write_stdlib(Some(dir.path())).unwrap();
+        let records = crate::evaluate_str(
+            r#"let android = import "android.ncl" in
+               android.cohort |> std.array.map (fun source => {
+                 component = source.component,
+                 normalized = android.normalized source,
+                 identity = source.record_blake3,
+               })"#,
+            &[stdlib_dir.into_os_string()],
+        )
+        .unwrap();
+        let pins: Vec<serde_json::Value> = records.to_serde().unwrap();
+        assert_eq!(pins.len(), 4);
+        for pin in pins {
+            let normalized = pin["normalized"].as_str().unwrap();
+            let declared = pin["identity"].as_str().unwrap();
+            assert_eq!(
+                blake3::hash(normalized.as_bytes()).to_hex().as_str(),
+                declared,
+                "pinned BLAKE3 must match normalized {}",
+                pin["component"]
+            );
+        }
     }
 }

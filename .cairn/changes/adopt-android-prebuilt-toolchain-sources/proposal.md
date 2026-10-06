@@ -12,8 +12,8 @@ This change admits those sources with explicit identity binding and explicit non
 
 - Add a typed Nickel source manifest for prebuilt Android toolchain components (JDK, SDK command-line tools, build-tools, platform `android.jar`).
 - Pin every component by upstream URL, SHA-256, and BLAKE3 record identity.
-- Bind every derivation that executes a prebuilt tool to an explicit toolchain identity record. Digest drift fails closed before execution.
-- Record the trust decision in `adr/0079-admit-prebuilt-android-toolchain-through-fixed-output-sources.md`.
+- Provide a fail-closed binding helper that requires identity and digest checks before the downstream APK adapter executes a tool; admission alone does not guard arbitrary derivations.
+- Record the trust decision in `adr/0089-admit-prebuilt-android-toolchain-through-fixed-output-sources.md`.
 - Keep offline replay working: admitted records MUST flow through the existing `SourceFetchOverridePlan` handoff so proofs need no live network after first fetch.
 - Add positive and negative contract tests for the manifest and the identity binding.
 
@@ -35,5 +35,5 @@ This change admits those sources with explicit identity binding and explicit non
 ## Impact
 
 - **Affected specs:** `android-adapter` (new)
-- **Affected code:** `lib/android/sources.ncl` (new), `lib/android.ncl` (new), `crunch-eval` embedded stdlib inclusion, contract tests, `adr/0079`
+- **Affected code:** `lib/android/sources.ncl` (new), `lib/android.ncl` (new), `lib/lib.ncl` export, `crunch-eval` embedded stdlib inclusion, contract tests, `adr/0089`
 - **Compatibility:** additive; no existing derivation or fetch behavior changes
