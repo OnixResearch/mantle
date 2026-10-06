@@ -1,0 +1,38 @@
+subject=e257faabc9b32ea70ad0835cc9ee55daa9e14440 free_bytes=18743820288 floor_bytes=12884901888 stop_bytes=13958643712
+command=nix --option min-free 0 --option max-free 0 --option eval-cache false build --offline --no-link .#checks.x86_64-linux.tigerstyle
+this derivation will be built:
+  /nix/store/w1imk9yf97636niv08fv4y3nid9hb17a-tigerstyle-consumer-check.drv
+cannot build on 'ssh-ng://root@aspen1.local': error: failed to start SSH connection to 'aspen1.local'
+building '/nix/store/w1imk9yf97636niv08fv4y3nid9hb17a-tigerstyle-consumer-check.drv'...
+error: Cannot build '/nix/store/w1imk9yf97636niv08fv4y3nid9hb17a-tigerstyle-consumer-check.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/l13bxhqv97qsd3pcxm5226y8njhzhjg1-tigerstyle-consumer-check
+       Last 25 log lines:
+       >     |
+       > 196 -         let bytes = r#"{"owner":,"kind":,"subject_prefix":}"#.len()
+       > 197 -             + field_bytes(self.owner.as_deref())
+       > 196 +         let bytes = (r#"{"owner":,"kind":,"subject_prefix":}"#.len()).saturating_add(field_bytes(self.owner.as_deref()))
+       >     |
+       >
+       > error: could not compile `crunch-live-state-core` (lib) due to 13 previous errors
+       > warning: build failed, waiting for other jobs to finish...
+       > error: boolean binding `made_progress` should have a predicate prefix
+       >    --> crates/crunch-service-readiness-core/src/lib.rs:381:17
+       >     |
+       > 381 |         let mut made_progress = false;
+       >     |                 ^^^^^^^^^^^^^
+       >     |
+       >     = help: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+       >     = note: structured suggestion applicability: MaybeIncorrect
+       >     = note: see Tiger Style guide: Positive Predicates
+       >     = note: `-D tigerstyle::bool-naming` implied by `-D bool-naming`
+       >     = help: to override `-D bool-naming` add `#[allow(tigerstyle::bool_naming)]`
+       > help: rename binding to `is_made_progress`
+       >     |
+       > 381 |         let mut is_made_progress = false;
+       >     |                 +++
+       >
+       > error: could not compile `crunch-service-readiness-core` (lib) due to 4 previous errors
+       For full logs, run:
+         nix log /nix/store/w1imk9yf97636niv08fv4y3nid9hb17a-tigerstyle-consumer-check.drv

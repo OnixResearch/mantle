@@ -1,0 +1,882 @@
+[1m[33mwarning[0m: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+[1m[92m   Compiling[0m proc-macro2 v1.0.106
+[1m[92m   Compiling[0m unicode-ident v1.0.24
+[1m[92m   Compiling[0m quote v1.0.45
+[1m[92m   Compiling[0m libc v0.2.186
+[1m[92m    Checking[0m cfg-if v1.0.4
+[1m[92m   Compiling[0m serde_core v1.0.228
+[1m[92m   Compiling[0m serde v1.0.228
+[1m[92m    Checking[0m memchr v2.8.0
+[1m[92m   Compiling[0m version_check v0.9.5
+[1m[92m    Checking[0m typenum v1.20.1
+[1m[92m    Checking[0m subtle v2.6.1
+[1m[92m   Compiling[0m shlex v1.3.0
+[1m[92m   Compiling[0m find-msvc-tools v0.1.9
+[1m[92m    Checking[0m smallvec v1.15.1
+[1m[92m    Checking[0m itoa v1.0.18
+[1m[92m   Compiling[0m crossbeam-utils v0.8.21
+[1m[92m   Compiling[0m parking_lot_core v0.9.12
+[1m[92m    Checking[0m const-oid v0.9.6
+[1m[92m    Checking[0m once_cell v1.21.4
+[1m[92m    Checking[0m bitflags v2.11.0
+[1m[92m    Checking[0m scopeguard v1.2.0
+[1m[92m    Checking[0m regex-syntax v0.8.10
+[1m[92m   Compiling[0m thiserror v2.0.18
+[1m[92m    Checking[0m equivalent v1.0.2
+[1m[92m    Checking[0m allocator-api2 v0.2.21
+[1m[92m    Checking[0m stable_deref_trait v1.2.1
+[1m[92m    Checking[0m fastrand v2.4.1
+[1m[92m    Checking[0m cpufeatures v0.2.17
+[1m[92m    Checking[0m foldhash v0.2.0
+[1m[92m    Checking[0m log v0.4.29
+[1m[92m   Compiling[0m rustix v1.1.4
+[1m[92m    Checking[0m linux-raw-sys v0.12.1
+[1m[92m   Compiling[0m zmij v1.0.21
+[1m[92m   Compiling[0m crossbeam-epoch v0.9.20
+[1m[92m    Checking[0m lock_api v0.4.14
+[1m[92m    Checking[0m arrayvec v0.7.6
+[1m[92m   Compiling[0m serde_json v1.0.149
+[1m[92m    Checking[0m pin-project-lite v0.2.17
+[1m[92m   Compiling[0m rayon-core v1.13.0
+[1m[92m   Compiling[0m crc32fast v1.5.0
+[1m[92m    Checking[0m arrayref v0.3.9
+[1m[92m    Checking[0m constant_time_eq v0.3.1
+[1m[92m    Checking[0m same-file v1.0.6
+[1m[92m    Checking[0m tinyvec_macros v0.1.1
+[1m[92m    Checking[0m byteorder v1.5.0
+[1m[92m    Checking[0m futures-core v0.3.32
+[1m[92m    Checking[0m gix-trace v0.1.18
+[1m[92m   Compiling[0m pkg-config v0.3.32
+[1m[92m    Checking[0m tinyvec v1.11.0
+[1m[92m    Checking[0m rand_core v0.10.0
+[1m[92m   Compiling[0m getrandom v0.4.2
+[1m[92m   Compiling[0m rustversion v1.0.22
+[1m[92m    Checking[0m futures-io v0.3.32
+[1m[92m    Checking[0m walkdir v2.5.0
+[1m[92m    Checking[0m bytesize v2.3.1
+[1m[92m    Checking[0m human_format v1.2.1
+[1m[92m   Compiling[0m generic-array v0.14.7
+[1m[92m    Checking[0m hashbrown v0.16.1
+[1m[92m    Checking[0m zlib-rs v0.6.3
+[1m[92m    Checking[0m futures-sink v0.3.32
+[1m[92m    Checking[0m zeroize v1.8.2
+[1m[92m    Checking[0m futures-task v0.3.32
+[1m[92m    Checking[0m aho-corasick v1.1.4
+[1m[92m    Checking[0m winnow v0.7.15
+[1m[92m    Checking[0m slab v0.4.12
+[1m[92m    Checking[0m futures-channel v0.3.32
+[1m[92m    Checking[0m tracing-core v0.1.36
+[1m[92m   Compiling[0m autocfg v1.5.0
+[1m[92m    Checking[0m writeable v0.6.3
+[1m[92m   Compiling[0m heapless v0.8.0
+[1m[92m    Checking[0m litemap v0.8.2
+[1m[92m    Checking[0m jiff v0.2.23
+[1m[92m    Checking[0m unicode-width v0.2.2
+[1m[92m    Checking[0m utf8_iter v1.0.4
+[1m[92m    Checking[0m hash32 v0.3.1
+[1m[92m   Compiling[0m icu_normalizer_data v2.2.0
+[1m[92m   Compiling[0m icu_properties_data v2.2.0
+[1m[92m    Checking[0m base64 v0.22.1
+[1m[92m    Checking[0m unicode-normalization v0.1.25
+[1m[92m   Compiling[0m fs_extra v1.3.0
+[1m[92m   Compiling[0m semver v1.0.28
+[1m[92m   Compiling[0m dunce v1.0.5
+[1m[92m    Checking[0m fnv v1.0.7
+[1m[92m    Checking[0m percent-encoding v2.3.2
+[1m[92m    Checking[0m write16 v1.0.0
+[1m[92m    Checking[0m utf16_iter v1.0.5
+[1m[92m    Checking[0m either v1.15.0
+[1m[92m   Compiling[0m cfg_aliases v0.2.1
+[1m[92m    Checking[0m crossbeam-channel v0.5.15
+[1m[92m   Compiling[0m rustc_version v0.4.1
+[1m[92m    Checking[0m ryu v1.0.23
+[1m[92m   Compiling[0m aws-lc-rs v1.18.0
+[1m[92m    Checking[0m rustls-pki-types v1.14.0
+[1m[92m    Checking[0m encoding_rs v0.8.35
+[1m[92m   Compiling[0m libm v0.2.16
+[1m[92m    Checking[0m crossbeam-deque v0.8.6
+[1m[92m   Compiling[0m heck v0.5.0
+[1m[92m   Compiling[0m syn v2.0.117
+[1m[92m   Compiling[0m syn v3.0.3
+[1m[92m    Checking[0m foldhash v0.1.5
+[1m[92m   Compiling[0m unicode-xid v0.2.6
+[1m[92m   Compiling[0m httparse v1.10.1
+[1m[92m    Checking[0m untrusted v0.9.0
+[1m[92m    Checking[0m ipnet v2.12.0
+[1m[92m    Checking[0m hashbrown v0.15.5
+[1m[92m   Compiling[0m strsim v0.11.1
+[1m[92m   Compiling[0m ident_case v1.0.1
+[1m[92m    Checking[0m simd-adler32 v0.3.9
+[1m[92m   Compiling[0m rustls v0.23.45
+[1m[92m    Checking[0m adler2 v2.0.1
+[1m[92m   Compiling[0m num-traits v0.2.19
+[1m[92m   Compiling[0m getrandom v0.3.4
+[1m[92m    Checking[0m thread_local v1.1.9
+[1m[92m   Compiling[0m zerocopy v0.8.48
+[1m[92m    Checking[0m tower-service v0.3.3
+[1m[92m    Checking[0m miniz_oxide v0.8.9
+[1m[92m    Checking[0m try-lock v0.2.5
+[1m[92m    Checking[0m atomic-waker v1.1.2
+[1m[92m   Compiling[0m signal-hook v0.4.4
+[1m[92m    Checking[0m want v0.3.1
+[1m[92m   Compiling[0m itertools v0.14.0
+[1m[92m    Checking[0m form_urlencoded v1.2.2
+[1m[92m    Checking[0m nonempty v0.12.0
+[1m[92m    Checking[0m block-buffer v0.10.4
+[1m[92m    Checking[0m faster-hex v0.10.0
+[1m[92m    Checking[0m lazy_static v1.5.0
+[1m[92m    Checking[0m hashbrown v0.14.5
+[1m[92m   Compiling[0m anyhow v1.0.102
+[1m[92m    Checking[0m static_assertions v1.1.0
+[1m[92m    Checking[0m sync_wrapper v1.0.2
+[1m[92m    Checking[0m data-encoding v2.10.0
+[1m[92m    Checking[0m tower-layer v0.3.3
+[1m[92m    Checking[0m openssl-probe v0.2.1
+[1m[92m    Checking[0m sharded-slab v0.1.7
+[1m[92m    Checking[0m tracing-log v0.2.0
+[1m[92m    Checking[0m rustls-native-certs v0.8.3
+[1m[92m    Checking[0m nu-ansi-term v0.50.3
+[1m[92m    Checking[0m colorchoice v1.0.5
+[1m[92m   Compiling[0m object v0.37.3
+[1m[92m    Checking[0m iri-string v0.7.12
+[1m[92m    Checking[0m arc-swap v1.9.1
+[1m[92m    Checking[0m gimli v0.32.3
+[1m[92m    Checking[0m mime v0.3.17
+[1m[92m    Checking[0m iana-time-zone v0.1.65
+[1m[92m   Compiling[0m glob v0.3.3
+[1m[92m   Compiling[0m owo-colors v4.3.0
+[1m[92m    Checking[0m rustc-demangle v0.1.28
+[1m[92m    Checking[0m utf8parse v0.2.2
+[1m[92m    Checking[0m unicode-bom v2.0.3
+[1m[92m   Compiling[0m unicode-segmentation v1.13.2
+[1m[92m    Checking[0m anstyle-parse v1.0.0
+[1m[92m    Checking[0m inout v0.1.4
+[1m[92m   Compiling[0m curve25519-dalek v4.1.3
+[1m[92m    Checking[0m is_terminal_polyfill v1.70.2
+[1m[92m    Checking[0m anstyle-query v1.1.5
+[1m[92m    Checking[0m unicode-linebreak v0.1.5
+[1m[92m    Checking[0m is_ci v1.2.0
+[1m[92m   Compiling[0m prettyplease v0.2.37
+[1m[92m    Checking[0m anstyle v1.0.14
+[1m[92m    Checking[0m bumpalo v3.20.2
+[1m[92m   Compiling[0m portable-atomic v1.13.1
+[1m[92m    Checking[0m rustc-hash v2.1.2
+[1m[92m   Compiling[0m icu_locale_data v2.2.0
+[1m[92m   Compiling[0m rustix v0.38.44
+[1m[92m   Compiling[0m clang-sys v1.9.1
+[1m[92m    Checking[0m supports-color v3.0.2
+[1m[92m    Checking[0m kstring v2.0.2
+[1m[92m    Checking[0m anstream v1.0.0
+[1m[92m   Compiling[0m memoffset v0.9.1
+[1m[92m   Compiling[0m convert_case v0.10.0
+[1m[92m    Checking[0m regex-automata v0.4.14
+[1m[92m    Checking[0m textwrap v0.16.2
+[1m[92m    Checking[0m clap_lex v1.1.0
+[1m[92m    Checking[0m getrandom v0.2.17
+[1m[92m    Checking[0m errno v0.3.14
+[1m[92m    Checking[0m mio v1.2.0
+[1m[92m    Checking[0m socket2 v0.6.3
+[1m[92m    Checking[0m indexmap v2.13.1
+[1m[92m    Checking[0m memmap2 v0.9.10
+[1m[92m    Checking[0m signal-hook-registry v1.4.8
+[1m[92m    Checking[0m rand_core v0.6.4
+[1m[92m    Checking[0m filetime v0.2.27
+[1m[92m    Checking[0m rand_core v0.9.5
+[1m[92m    Checking[0m parking_lot v0.12.5
+[1m[92m    Checking[0m dashmap v6.1.0
+[1m[92m    Checking[0m shell-words v1.1.1
+[1m[92m   Compiling[0m icu_collator_data v2.2.0
+[1m[92m   Compiling[0m minimal-lexical v0.2.1
+[1m[92m    Checking[0m crypto-common v0.1.7
+[1m[92m    Checking[0m opaque-debug v0.3.1
+[1m[92m    Checking[0m unicode-width v0.1.14
+[1m[92m    Checking[0m sha1_smol v1.0.1
+[1m[92m    Checking[0m signature v2.2.0
+[1m[92m    Checking[0m parking v2.2.1
+[1m[92m    Checking[0m digest v0.10.7
+[1m[92m    Checking[0m universal-hash v0.5.1
+[1m[92m    Checking[0m cipher v0.4.4
+[1m[92m    Checking[0m supports-hyperlinks v3.2.0
+[1m[92m    Checking[0m prodash v31.0.0
+[1m[92m   Compiling[0m winnow v1.0.1
+[1m[92m   Compiling[0m linux-raw-sys v0.4.15
+[1m[92m    Checking[0m supports-unicode v3.0.0
+[1m[92m    Checking[0m polyval v0.6.2
+[1m[92m    Checking[0m uuid v1.23.0
+[1m[92m   Compiling[0m nom v7.1.3
+[1m[92m    Checking[0m futures-lite v2.6.1
+[1m[92m    Checking[0m sha1 v0.10.6
+[1m[92m    Checking[0m sha2 v0.10.9
+[1m[92m    Checking[0m ed25519 v2.2.3
+[1m[92m    Checking[0m clap_builder v4.6.0
+[1m[92m   Compiling[0m crc32c v0.6.8
+[1m[92m   Compiling[0m branches v0.4.6
+[1m[92m   Compiling[0m bigdecimal v0.4.11
+[1m[92m   Compiling[0m libloading v0.8.9
+[1m[92m    Checking[0m sha1-checked v0.10.0
+[1m[92m   Compiling[0m uncased v0.9.10
+[1m[92m   Compiling[0m io-lifetimes v3.0.1
+[1m[92m   Compiling[0m zstd-safe v7.2.4
+[1m[92m   Compiling[0m home v0.5.12
+[1m[92m   Compiling[0m turso_ext v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+[1m[92m   Compiling[0m io-uring v0.7.15
+[1m[92m   Compiling[0m io-lifetimes v2.0.4
+[1m[92m   Compiling[0m bindgen v0.69.5
+[1m[92m   Compiling[0m toml_datetime v1.1.1+spec-1.1.0
+[1m[92m    Checking[0m ghash v0.5.1
+[1m[92m    Checking[0m ctr v0.9.2
+[1m[92m    Checking[0m aes v0.8.4
+[1m[92m    Checking[0m aead v0.5.2
+[1m[92m   Compiling[0m itertools v0.10.5
+[1m[92m   Compiling[0m memoffset v0.6.5
+[1m[92m   Compiling[0m nix v0.31.3
+[1m[92m   Compiling[0m turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+[1m[92m   Compiling[0m jobserver v0.1.34
+[1m[92m    Checking[0m vte v0.15.0
+[1m[92m   Compiling[0m lazycell v1.3.0
+[1m[92m    Checking[0m siphasher v1.0.2
+[1m[92m    Checking[0m softaes v0.1.7
+[1m[92m    Checking[0m powerfmt v0.2.0
+[1m[92m    Checking[0m imbl-sized-chunks v0.2.0
+[1m[92m    Checking[0m cpufeatures v0.3.0
+[1m[92m   Compiling[0m rustc-hash v1.1.0
+[1m[92m   Compiling[0m typeid v1.0.3
+[1m[92m   Compiling[0m io-extras v0.19.0
+[1m[92m    Checking[0m vt100 v0.16.2
+[1m[92m    Checking[0m fastbloom v0.14.1
+[1m[92m    Checking[0m deranged v0.5.8
+[1m[92m    Checking[0m chacha20 v0.10.0
+[1m[92m    Checking[0m num-integer v0.1.46
+[1m[92m   Compiling[0m cc v1.2.59
+[1m[92m   Compiling[0m bytemuck_derive v1.12.1
+[1m[92m    Checking[0m intrusive-collections v0.9.7
+[1m[92m    Checking[0m console v0.16.3
+[1m[92m    Checking[0m rapidhash v4.5.1
+[1m[92m   Compiling[0m n0-future v0.3.2
+[1m[92m    Checking[0m aes-gcm v0.10.3
+[1m[92m   Compiling[0m thiserror v1.0.69
+[1m[92m    Checking[0m num-bigint v0.4.8
+[1m[92m    Checking[0m spin v0.10.0
+[1m[92m   Compiling[0m erased-serde v0.4.10
+[1m[92m   Compiling[0m pastey v0.2.3
+[1m[92m    Checking[0m time-core v0.1.8
+[1m[92m    Checking[0m cordyceps v0.3.4
+[1m[92m    Checking[0m allocator-api2 v0.4.0
+[1m[92m    Checking[0m num-conv v0.2.1
+[1m[92m    Checking[0m cfg_block v0.1.1
+[1m[92m    Checking[0m fallible-iterator v0.3.0
+[1m[92m    Checking[0m unit-prefix v0.5.2
+[1m[92m    Checking[0m hex v0.4.3
+[1m[92m    Checking[0m bitflags v1.3.2
+[1m[92m    Checking[0m simdutf8 v0.1.5
+[1m[92m    Checking[0m diatomic-waker v0.2.3
+[1m[92m   Compiling[0m cap-primitives v4.0.2
+[1m[92m    Checking[0m indicatif v0.18.4
+[1m[92m   Compiling[0m phf_shared v0.11.3
+[1m[92m    Checking[0m rand v0.10.1
+[1m[92m    Checking[0m futures-buffered v0.2.13
+[1m[92m    Checking[0m md-5 v0.10.6
+[1m[92m    Checking[0m gix-sec v0.13.2
+[1m[92m    Checking[0m flate2 v1.1.9
+[1m[92m    Checking[0m hybrid-array v0.4.13
+[1m[92m    Checking[0m itertools v0.15.0
+[1m[92m    Checking[0m env_filter v2.0.0
+[1m[92m    Checking[0m nibble_vec v0.1.0
+[1m[92m    Checking[0m addr2line v0.25.1
+[1m[92m   Compiling[0m toml_parser v1.1.2+spec-1.1.0
+[1m[92m    Checking[0m ambient-authority v0.0.2
+[1m[92m   Compiling[0m fuse-backend-rs v0.12.0 (/build/source/vendor/fuse-backend-rs)
+[1m[92m    Checking[0m endian-type v0.1.2
+[1m[92m   Compiling[0m redb v3.1.3
+[1m[92m   Compiling[0m precomputed-hash v0.1.1
+[1m[92m   Compiling[0m ref-cast v1.0.25
+[1m[92m    Checking[0m genawaiter-macro v0.99.1
+[1m[92m   Compiling[0m nix-compat v0.1.0 (/build/source/vendor/nix-compat)
+[1m[92m    Checking[0m humantime v2.3.0
+[1m[92m   Compiling[0m new_debug_unreachable v1.0.6
+[1m[92m    Checking[0m symlink v0.1.0
+[1m[92m   Compiling[0m cap-std v4.0.2
+[1m[92m    Checking[0m maybe-owned v0.3.4
+[1m[92m   Compiling[0m keccak v0.1.6
+[1m[92m   Compiling[0m fixedbitset v0.5.7
+[1m[92m   Compiling[0m term v1.2.1
+[1m[92m   Compiling[0m bit-vec v0.8.0
+[1m[92m    Checking[0m matchit v0.8.4
+[1m[92m   Compiling[0m string_cache v0.8.9
+[1m[92m    Checking[0m genawaiter v0.99.1
+[1m[92m    Checking[0m radix_trie v0.2.1
+[1m[92m    Checking[0m env_logger v0.11.11
+[1m[92m    Checking[0m nix v0.24.3
+[1m[92m    Checking[0m vmm-sys-util v0.11.2
+[1m[92m    Checking[0m mio v0.8.11
+[1m[92m    Checking[0m caps v0.5.6
+[1m[92m    Checking[0m vm-memory v0.10.0
+[1m[92m   Compiling[0m bit-set v0.8.0
+[1m[92m   Compiling[0m petgraph v0.7.1
+[1m[92m    Checking[0m num_cpus v1.17.0
+[1m[92m   Compiling[0m ena v0.14.4
+[1m[92m   Compiling[0m proc-macro-error-attr2 v2.0.0
+[1m[92m   Compiling[0m ascii-canvas v4.0.0
+[1m[92m   Compiling[0m cmake v0.1.58
+[1m[92m    Checking[0m nom v8.0.0
+[1m[92m   Compiling[0m toml_edit v0.25.10+spec-1.1.0
+[1m[92m   Compiling[0m cap-fs-ext v4.0.2
+[1m[92m    Checking[0m fixedbitset v0.4.2
+[1m[92m   Compiling[0m sha3 v0.10.8
+[1m[92m   Compiling[0m malachite-nz v0.9.2
+[1m[92m   Compiling[0m snix-castore v0.1.0 (/build/source/vendor/snix-castore)
+[1m[92m    Checking[0m bytemuck v1.25.0
+[1m[92m   Compiling[0m pico-args v0.5.0
+[1m[92m    Checking[0m threadpool v1.8.1
+[1m[92m    Checking[0m petgraph v0.6.5
+[1m[92m    Checking[0m crypto-common v0.2.2
+[1m[92m    Checking[0m block-buffer v0.12.1
+[1m[92m    Checking[0m serde_bytes v0.11.19
+[1m[92m   Compiling[0m nix v0.29.0
+[1m[92m   Compiling[0m proc-macro2-diagnostics v0.10.1
+[1m[92m    Checking[0m pack1 v1.1.0
+[1m[92m    Checking[0m roaring v0.11.4
+[1m[92m   Compiling[0m cexpr v0.6.0
+[1m[92m    Checking[0m safe_arch v1.2.0
+[1m[92m    Checking[0m safe_arch v0.7.4
+[1m[92m    Checking[0m inplace-vec-builder v0.1.1
+[1m[92m    Checking[0m binary-merge v0.1.2
+[1m[92m    Checking[0m time v0.3.47
+[1m[92m    Checking[0m wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+[1m[92m    Checking[0m const-oid v0.10.2
+[1m[92m    Checking[0m rand_xoshiro v0.7.0
+[1m[92m    Checking[0m toml_datetime v0.7.5+spec-1.1.0
+[1m[92m    Checking[0m positioned-io v0.3.5
+[1m[92m   Compiling[0m which v4.4.2
+[1m[92m   Compiling[0m yansi v1.0.1
+[1m[92m    Checking[0m matchers v0.2.0
+[1m[92m   Compiling[0m blake3 v1.8.2
+[1m[92m   Compiling[0m aws-lc-sys v0.44.0
+[1m[92m   Compiling[0m ring v0.17.14
+[1m[92m    Checking[0m regex v1.12.3
+[1m[92m   Compiling[0m zstd-sys v2.0.16+zstd.1.5.7
+[1m[92m   Compiling[0m libmimalloc-sys v0.1.44
+[1m[92m   Compiling[0m simsimd v6.5.16
+[1m[92m   Compiling[0m aegis v0.9.8
+[1m[92m   Compiling[0m lzma-sys v0.1.20
+[1m[92m   Compiling[0m bzip2-sys v0.1.13+1.0.8
+[1m[92m    Checking[0m wide v1.7.0
+[1m[92m    Checking[0m wide v0.7.33
+[1m[92m   Compiling[0m proc-macro-crate v3.5.0
+[1m[92m    Checking[0m digest v0.11.3
+[1m[92m   Compiling[0m snix-build v0.1.0 (/build/source/vendor/snix-build)
+[1m[92m   Compiling[0m snix-store v0.1.0 (/build/source/vendor/snix-store)
+[1m[92m    Checking[0m toml_writer v1.1.1+spec-1.1.0
+[1m[92m    Checking[0m self_cell v1.3.0
+[1m[92m    Checking[0m archery v1.2.3
+[1m[92m    Checking[0m md-5 v0.11.0
+[1m[92m    Checking[0m lru v0.16.4
+[1m[92m    Checking[0m itertools v0.12.1
+[1m[92m   Compiling[0m heck v0.4.1
+[1m[92m    Checking[0m termcolor v1.4.1
+[1m[92m    Checking[0m count-write v0.1.0
+[1m[92m    Checking[0m serde_spanned v1.1.1
+[1m[92m    Checking[0m fs2 v0.4.3
+[1m[92m    Checking[0m imara-diff v0.2.0
+[1m[92m    Checking[0m imara-diff v0.1.8
+[1m[92m    Checking[0m hashlink v0.10.0
+[1m[92m   Compiling[0m signal-hook v0.3.18
+[1m[92m    Checking[0m aliasable v0.1.3
+[1m[92m    Checking[0m arrayvec v0.5.2
+[1m[92m    Checking[0m crunch-gc-core v0.1.0 (/build/source/crates/crunch-gc-core)
+[1m[92m    Checking[0m crunch-overlay-core v0.1.0 (/build/source/crates/crunch-overlay-core)
+[1m[92m    Checking[0m crunch-repair-core v0.1.0 (/build/source/crates/crunch-repair-core)
+[1m[92m    Checking[0m typed-arena v2.0.2
+[1m[92m    Checking[0m arraydeque v0.5.1
+[1m[92m   Compiling[0m paste v1.0.15
+[1m[92m    Checking[0m toml v0.9.12+spec-1.1.0
+[1m[92m    Checking[0m pretty v0.12.5
+[1m[92m    Checking[0m toml_edit v0.24.1+spec-1.1.0
+[1m[92m    Checking[0m backtrace v0.3.76
+[1m[92m    Checking[0m lalrpop-util v0.22.2
+[1m[92m    Checking[0m clru v0.6.3
+[1m[92m    Checking[0m vte v0.14.1
+[1m[92m    Checking[0m saphyr-parser v0.0.6
+[1m[92m    Checking[0m uluru v3.1.0
+[1m[92m    Checking[0m simple-counter v0.1.0
+[1m[92m    Checking[0m unsafe-libyaml v0.2.11
+[1m[92m    Checking[0m malachite-base v0.9.2
+[1m[92m    Checking[0m ppv-lite86 v0.2.21
+[1m[92m    Checking[0m strip-ansi-escapes v0.2.1
+[1m[92m   Compiling[0m synstructure v0.13.2
+[1m[92m   Compiling[0m darling_core v0.23.0
+[1m[92m   Compiling[0m darling_core v0.20.11
+[1m[92m    Checking[0m backtrace-ext v0.2.1
+[1m[92m   Compiling[0m proc-macro-error2 v2.0.1
+[1m[92m    Checking[0m bzip2 v0.5.2
+[1m[92m    Checking[0m sha-1 v0.10.1
+[1m[92m    Checking[0m mimalloc v0.1.48
+[1m[92m    Checking[0m io-close v0.3.7
+[1m[92m    Checking[0m json_scanner v0.1.0
+[1m[92m    Checking[0m crc-catalog v2.4.0
+[1m[92m   Compiling[0m linkme-impl v0.3.37
+[1m[92m   Compiling[0m litrs v1.0.0
+[1m[92m    Checking[0m rand_chacha v0.9.0
+[1m[92m   Compiling[0m indoc v2.0.7
+[1m[92m    Checking[0m crc v3.4.0
+[1m[92m    Checking[0m rand_chacha v0.3.1
+[1m[92m    Checking[0m signal-hook-mio v0.2.5
+[1m[92m    Checking[0m webpki-roots v1.0.6
+[1m[92m    Checking[0m utf8-zero v0.8.1
+[1m[92m   Compiling[0m linkme v0.3.37
+[1m[92m    Checking[0m rand v0.9.3
+[1m[92m    Checking[0m toml_write v0.1.2
+[1m[92m    Checking[0m lzma-rs v0.3.0
+[1m[92m    Checking[0m fuzzy-matcher v0.3.7
+[1m[92m    Checking[0m rand v0.8.6
+[1m[92m    Checking[0m imbl v7.0.2
+[1m[92m    Checking[0m bzip2-rs v0.1.2
+[1m[92m    Checking[0m bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+[1m[92m    Checking[0m dyn-clone v1.0.20
+[1m[92m    Checking[0m crunch-evaluation-stream-core v0.1.0 (/build/source/crates/crunch-evaluation-stream-core)
+[1m[92m    Checking[0m etcetera v0.11.0
+[1m[92m    Checking[0m detect-coding-agent v0.1.0
+[1m[92m    Checking[0m crunch-delta-core v0.1.0 (/build/source/crates/crunch-delta-core)
+[1m[92m    Checking[0m colored v3.1.1
+[1m[92m    Checking[0m dotenvy v0.15.7
+[1m[92m   Compiling[0m document-features v0.2.12
+[1m[92m    Checking[0m twox-hash v2.1.2
+[1m[92m   Compiling[0m serde_derive v1.0.228
+[1m[92m   Compiling[0m thiserror-impl v2.0.18
+[1m[92m   Compiling[0m tokio-macros v2.7.0
+[1m[92m   Compiling[0m zerofrom-derive v0.1.7
+[1m[92m   Compiling[0m yoke-derive v0.8.2
+[1m[92m   Compiling[0m futures-macro v0.3.32
+[1m[92m   Compiling[0m zerovec-derive v0.11.3
+[1m[92m   Compiling[0m displaydoc v0.2.5
+[1m[92m   Compiling[0m tracing-attributes v0.1.31
+[1m[92m   Compiling[0m strum_macros v0.26.4
+[1m[92m   Compiling[0m miette-derive v7.6.0
+[1m[92m   Compiling[0m curve25519-dalek-derive v0.1.1
+[1m[92m   Compiling[0m derive_more-impl v2.1.1
+[1m[92m   Compiling[0m pin-project-internal v1.1.11
+[1m[92m   Compiling[0m async-trait v0.1.89
+[1m[92m   Compiling[0m turso_macros v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+[1m[92m   Compiling[0m clap_derive v4.6.0
+[1m[92m   Compiling[0m async-stream-impl v0.3.6
+[1m[92m   Compiling[0m aristo-macros v0.4.1
+[1m[92m   Compiling[0m n0-error-macros v0.1.3
+[1m[92m   Compiling[0m thiserror-impl v1.0.69
+[1m[92m   Compiling[0m prost-derive v0.14.3
+[1m[92m    Checking[0m tempfile v3.27.0
+[1m[92m    Checking[0m terminal_size v0.4.4
+[1m[92m    Checking[0m xattr v1.6.1
+[1m[92m    Checking[0m aristo v0.4.1
+[1m[92m    Checking[0m async-stream v0.3.6
+[1m[92m    Checking[0m polling v3.11.0
+[1m[92m    Checking[0m futures-util v0.3.32
+[1m[92m    Checking[0m fs-set-times v0.20.3
+[1m[92m    Checking[0m rustix-linux-procfs v0.1.1
+[1m[92m   Compiling[0m spez v0.1.2
+[1m[92m   Compiling[0m num_enum_derive v0.7.6
+[1m[92m   Compiling[0m turso_sdk_kit_macros v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+[1m[92m   Compiling[0m auto_impl v1.3.0
+[1m[92m   Compiling[0m ref-cast-impl v1.0.25
+[1m[92m   Compiling[0m nix-compat-derive v0.1.0 (/build/source/vendor/nix-compat-derive)
+[1m[92m   Compiling[0m irpc-derive v0.10.0
+[1m[92m    Checking[0m pin-project v1.1.11
+[1m[92m    Checking[0m zerofrom v0.1.7
+[1m[92m    Checking[0m miette v7.6.0
+[1m[92m    Checking[0m yoke v0.8.2
+[1m[92m   Compiling[0m getset v0.1.6
+[1m[92m    Checking[0m tracing v0.1.44
+[1m[92m    Checking[0m cobs v0.3.0
+[1m[92m    Checking[0m zerovec v0.11.6
+[1m[92m    Checking[0m zerotrie v0.2.4
+[1m[92m    Checking[0m n0-error v0.1.3
+[1m[92m    Checking[0m tracing-subscriber v0.3.23
+[1m[92m    Checking[0m range-collections v0.4.6
+[1m[92m   Compiling[0m darling_macro v0.20.11
+[1m[92m   Compiling[0m typed-builder-macro v0.22.0
+[1m[92m    Checking[0m nix-archive v0.1.0
+[1m[92m    Checking[0m nix-archive v0.6.0
+[1m[92m    Checking[0m tar v0.4.45
+[1m[92m    Checking[0m num_enum v0.7.6
+[1m[92m   Compiling[0m logos-codegen v0.16.1
+[1m[92m   Compiling[0m darling v0.20.11
+[1m[92m   Compiling[0m darling_macro v0.23.0
+[1m[92m   Compiling[0m derive_builder_core v0.20.2
+[1m[92m    Checking[0m fs4 v1.1.0
+[1m[92m   Compiling[0m ouroboros_macro v0.18.5
+[1m[92m    Checking[0m ed25519-dalek v2.2.0
+[1m[92m   Compiling[0m maybe-async v0.2.10
+[1m[92m    Checking[0m gethostname v0.5.0
+[1m[92m    Checking[0m ruzstd v0.8.2
+[1m[92m    Checking[0m bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+[1m[92m    Checking[0m nix-derivation v0.1.0
+[1m[92m    Checking[0m durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+[1m[92m   Compiling[0m darling v0.23.0
+[1m[92m   Compiling[0m serde_with_macros v3.18.0
+[1m[92m    Checking[0m strum v0.26.3
+[1m[92m   Compiling[0m lalrpop v0.22.2
+[1m[92m    Checking[0m chapter-tgz v0.1.0
+[1m[92m    Checking[0m derive_more v2.1.1
+[1m[92m    Checking[0m crossterm v0.29.0
+[1m[92m    Checking[0m clap v4.6.0
+[1m[92m    Checking[0m clap-verbosity-flag v3.0.4
+[1m[92m    Checking[0m tinystr v0.8.3
+[1m[92m    Checking[0m potential_utf v0.1.5
+[1m[92m    Checking[0m icu_collections v2.2.0
+[1m[92m    Checking[0m turso_parser v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+[1m[92m    Checking[0m icu_locale_core v2.2.0
+[1m[92m   Compiling[0m derive_builder_macro v0.20.2
+[1m[92m    Checking[0m tracing-indicatif v0.3.14
+[1m[92m    Checking[0m tracing-appender v0.2.5
+[1m[92m    Checking[0m inquire v0.9.4
+[1m[92m    Checking[0m typed-builder v0.22.0
+[1m[92m    Checking[0m derive_builder v0.20.2
+[1m[92m    Checking[0m serde_with v3.18.0
+[1m[92m   Compiling[0m logos-derive v0.16.1
+[1m[92m    Checking[0m xz2 v0.1.7
+[1m[92m    Checking[0m ouroboros v0.18.5
+[1m[92m    Checking[0m icu_provider v2.2.0
+[1m[92m    Checking[0m logos v0.16.1
+[1m[92m    Checking[0m icu_normalizer v2.2.0
+[1m[92m    Checking[0m icu_properties v2.2.0
+[1m[92m    Checking[0m icu_locale v2.2.0
+[1m[92m    Checking[0m bytes v1.11.1
+[1m[92m    Checking[0m bstr v1.12.1
+[1m[92m    Checking[0m chrono v0.4.44
+[1m[92m    Checking[0m serde_urlencoded v0.7.1
+[1m[92m    Checking[0m quick-xml v0.40.1
+[1m[92m    Checking[0m crunch-attestation-core v0.1.0 (/build/source/crates/crunch-attestation-core)
+[1m[92m    Checking[0m postcard v1.1.3
+[1m[92m    Checking[0m serde_qs v0.12.0
+[1m[92m    Checking[0m serde_tagged v0.3.0
+[1m[92m    Checking[0m artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+[1m[92m    Checking[0m oci-spec v0.7.1
+[1m[92m    Checking[0m crunch-composition-core v0.1.0 (/build/source/crates/crunch-composition-core)
+[1m[92m    Checking[0m codespan-reporting v0.13.1
+[1m[92m    Checking[0m nickel-lang-vector v0.2.0 (/build/source/third_party/nickel-lang-vector)
+[1m[92m    Checking[0m serde_yaml v0.9.34+deprecated
+[1m[92m    Checking[0m crunch-live-state-core v0.1.0 (/build/source/crates/crunch-live-state-core)
+[1m[92m    Checking[0m serde_spanned v0.6.9
+[1m[92m    Checking[0m futures-executor v0.3.32
+[1m[92m    Checking[0m crunch-rust-cache-core v0.1.0 (/build/source/crates/crunch-rust-cache-core)
+[1m[92m    Checking[0m toml_datetime v0.6.11
+[1m[92m    Checking[0m crunch-wasm-component-core v0.1.0 (/build/source/crates/crunch-wasm-component-core)
+[1m[92m    Checking[0m mantle-rust-plan-core v0.1.0 (/build/source/crates/mantle-rust-plan-core)
+[1m[92m    Checking[0m futures v0.3.32
+[1m[92m    Checking[0m crunch-service-readiness-core v0.1.0 (/build/source/crates/crunch-service-readiness-core)
+[1m[92m    Checking[0m secrecy v0.10.3
+[1m[92m    Checking[0m crunch-shell-core v0.1.0 (/build/source/crates/crunch-shell-core)
+[1m[92m    Checking[0m crunch-eval-budget-core v0.1.0 (/build/source/crates/crunch-eval-budget-core)
+[1m[92m    Checking[0m crunch-spacewasm-core v0.1.0 (/build/source/crates/crunch-spacewasm-core)
+[1m[92m    Checking[0m crunch-hardware-simulation-core v0.1.0 (/build/source/crates/crunch-hardware-simulation-core)
+[1m[92m    Checking[0m toml_edit v0.22.27
+[1m[91merror[0m[1m: function `validate_declaration` has 0 assertion(s) in 28 lines (need 2+)[0m
+   [1m[94m--> [0mcrates/crunch-service-readiness-core/src/lib.rs:139:115
+    [1m[94m|[0m
+[1m[94m139[0m [1m[94m|[0m   fn validate_declaration(service_id: &str, custom_states: &[String], dependencies: &[String]) -> Result<(), Error> {
+    [1m[94m|[0m [1m[91m ___________________________________________________________________________________________________________________^[0m
+[1m[94m140[0m [1m[94m|[0m [1m[91m|[0m     identifier(service_id, MAX_SERVICE_ID_BYTES, "service_id")?;
+[1m[94m141[0m [1m[94m|[0m [1m[91m|[0m     if dependencies.len() > MAX_DEPENDENCIES {
+[1m[94m142[0m [1m[94m|[0m [1m[91m|[0m         return Err(Error::TooMany("dependencies"));
+[1m[94m...[0m   [1m[91m|[0m
+[1m[94m165[0m [1m[94m|[0m [1m[91m|[0m     Ok(())
+[1m[94m166[0m [1m[94m|[0m [1m[91m|[0m }
+    [1m[94m|[0m [1m[91m|_^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Assertion Density
+    [1m[94m= [0m[1mnote[0m: `-D tigerstyle::assertion-density` implied by `-D assertion-density`
+    [1m[94m= [0m[1mhelp[0m: to override `-D assertion-density` add `#[allow(tigerstyle::assertion_density)]`
+
+[1m[91merror[0m[1m: function `active_available` has 0 assertion(s) in 21 lines (need 2+)[0m
+   [1m[94m--> [0mcrates/crunch-service-readiness-core/src/lib.rs:336:11
+    [1m[94m|[0m
+[1m[94m336[0m [1m[94m|[0m   ) -> bool {
+    [1m[94m|[0m [1m[91m ___________^[0m
+[1m[94m337[0m [1m[94m|[0m [1m[91m|[0m     let Some(states) = active.get(id) else { return false };
+[1m[94m338[0m [1m[94m|[0m [1m[91m|[0m     if states.contains("failed") {
+[1m[94m339[0m [1m[94m|[0m [1m[91m|[0m         return false;
+[1m[94m...[0m   [1m[91m|[0m
+[1m[94m355[0m [1m[94m|[0m [1m[91m|[0m     is_available
+[1m[94m356[0m [1m[94m|[0m [1m[91m|[0m }
+    [1m[94m|[0m [1m[91m|_^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Assertion Density
+
+[1m[91merror[0m[1m: function `validate_dependency_graph` has 0 assertion(s) in 41 lines (need 2+)[0m
+   [1m[94m--> [0mcrates/crunch-service-readiness-core/src/lib.rs:361:24
+    [1m[94m|[0m
+[1m[94m361[0m [1m[94m|[0m   ) -> Result<(), Error> {
+    [1m[94m|[0m [1m[91m ________________________^[0m
+[1m[94m362[0m [1m[94m|[0m [1m[91m|[0m     if declarations.len() > MAX_SERVICES {
+[1m[94m363[0m [1m[94m|[0m [1m[91m|[0m         return Err(Error::TooMany("services"));
+[1m[94m...[0m   [1m[91m|[0m
+[1m[94m402[0m [1m[94m|[0m [1m[91m|[0m     Err(Error::DependencyCycle)
+[1m[94m403[0m [1m[94m|[0m [1m[91m|[0m }
+    [1m[94m|[0m [1m[91m|_^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Assertion Density
+
+[1m[91merror[0m[1m: 2 consecutive `&str` parameters are easy to swap by accident[0m
+   [1m[94m--> [0mcrates/crunch-live-state-core/src/lib.rs:95:1
+    [1m[94m|[0m
+[1m[94m 95[0m [1m[94m|[0m [1m[91m/[0m fn check_text(value: &str, field: &'static str, bound: usize, too_large: Error) -> Result<(), Error> {
+[1m[94m 96[0m [1m[94m|[0m [1m[91m|[0m     if value.is_empty() {
+[1m[94m 97[0m [1m[94m|[0m [1m[91m|[0m         return Err(Error::EmptyField(field));
+[1m[94m...[0m   [1m[91m|[0m
+[1m[94m105[0m [1m[94m|[0m [1m[91m|[0m     Ok(())
+[1m[94m106[0m [1m[94m|[0m [1m[91m|[0m }
+    [1m[94m|[0m [1m[91m|_^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Explicit Interfaces
+    [1m[94m= [0m[1mnote[0m: `-D tigerstyle::ambiguous-params` implied by `-D ambiguous-params`
+    [1m[94m= [0m[1mhelp[0m: to override `-D ambiguous-params` add `#[allow(tigerstyle::ambiguous_params)]`
+
+[1m[91merror[0m[1m: unprotected unsigned addition may overflow[0m
+   [1m[94m--> [0mcrates/crunch-live-state-core/src/lib.rs:110:5
+    [1m[94m|[0m
+[1m[94m110[0m [1m[94m|[0m     value.len() + value.as_bytes().iter().filter(|&&byte| byte == b'"' || byte == b'\\').count()
+    [1m[94m|[0m     [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Overflow Protection): use checked or saturating arithmetic when overflow would change behavior Example: let total = a.checked_add(b)?;
+    [1m[94m= [0m[1mnote[0m: structured suggestion applicability: MaybeIncorrect
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Overflow Protection
+    [1m[94m= [0m[1mnote[0m: `-D tigerstyle::raw-arithmetic-overflow` implied by `-D raw-arithmetic-overflow`
+    [1m[94m= [0m[1mhelp[0m: to override `-D raw-arithmetic-overflow` add `#[allow(tigerstyle::raw_arithmetic_overflow)]`
+[1m[96mhelp[0m: replace with saturating addition
+    [1m[94m|[0m
+[1m[94m110[0m [91m- [0m    [91mvalue.len() + value.as_bytes().iter().filter(|&&byte| byte == b'"' || byte == b'\\').count()[0m
+[1m[94m110[0m [92m+ [0m    [92m(value.len()).saturating_add(value.as_bytes().iter().filter(|&&byte| byte == b'"' || byte == b'\\').count())[0m
+    [1m[94m|[0m
+
+[1m[91merror[0m[1m: 2 consecutive `&str` parameters are easy to swap by accident[0m
+   [1m[94m--> [0mcrates/crunch-live-state-core/src/lib.rs:113:1
+    [1m[94m|[0m
+[1m[94m113[0m [1m[94m|[0m [1m[91m/[0m fn fact_wire_bytes(owner: &str, kind: FactKind, subject: &str, state: &str) -> usize {
+[1m[94m114[0m [1m[94m|[0m [1m[91m|[0m     // Exact JSON envelope, with its one version digit and 64 hexadecimal ID bytes.
+[1m[94m115[0m [1m[94m|[0m [1m[91m|[0m     r#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len()
+[1m[94m116[0m [1m[94m|[0m [1m[91m|[0m         + 1
+[1m[94m...[0m   [1m[91m|[0m
+[1m[94m121[0m [1m[94m|[0m [1m[91m|[0m         + json_text_bytes(state)
+[1m[94m122[0m [1m[94m|[0m [1m[91m|[0m }
+    [1m[94m|[0m [1m[91m|_^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Explicit Interfaces
+
+[1m[91merror[0m[1m: unprotected unsigned addition may overflow[0m
+   [1m[94m--> [0mcrates/crunch-live-state-core/src/lib.rs:115:5
+    [1m[94m|[0m
+[1m[94m115[0m [1m[94m|[0m [1m[91m/[0m     r#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len()
+[1m[94m116[0m [1m[94m|[0m [1m[91m|[0m         + 1
+[1m[94m117[0m [1m[94m|[0m [1m[91m|[0m         + ID_BYTES
+[1m[94m118[0m [1m[94m|[0m [1m[91m|[0m         + json_text_bytes(owner)
+[1m[94m119[0m [1m[94m|[0m [1m[91m|[0m         + kind.as_str().len()
+[1m[94m120[0m [1m[94m|[0m [1m[91m|[0m         + json_text_bytes(subject)
+[1m[94m121[0m [1m[94m|[0m [1m[91m|[0m         + json_text_bytes(state)
+    [1m[94m|[0m [1m[91m|________________________________^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Overflow Protection): use checked or saturating arithmetic when overflow would change behavior Example: let total = a.checked_add(b)?;
+    [1m[94m= [0m[1mnote[0m: structured suggestion applicability: MaybeIncorrect
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Overflow Protection
+[1m[96mhelp[0m: replace with saturating addition
+    [1m[94m|[0m
+[1m[94m115[0m [92m~ [0m    [92m(r#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len()[0m
+[1m[94m116[0m [92m+         + 1[0m
+[1m[94m117[0m [92m+         + ID_BYTES[0m
+[1m[94m118[0m [92m+         + json_text_bytes(owner)[0m
+[1m[94m119[0m [92m+         + kind.as_str().len()[0m
+[1m[94m120[0m [92m+         + json_text_bytes(subject)).saturating_add(json_text_bytes(state))[0m
+    [1m[94m|[0m
+
+[1m[91merror[0m[1m: unprotected unsigned addition may overflow[0m
+   [1m[94m--> [0mcrates/crunch-live-state-core/src/lib.rs:115:5
+    [1m[94m|[0m
+[1m[94m115[0m [1m[94m|[0m [1m[91m/[0m     r#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len()
+[1m[94m116[0m [1m[94m|[0m [1m[91m|[0m         + 1
+[1m[94m117[0m [1m[94m|[0m [1m[91m|[0m         + ID_BYTES
+[1m[94m118[0m [1m[94m|[0m [1m[91m|[0m         + json_text_bytes(owner)
+[1m[94m119[0m [1m[94m|[0m [1m[91m|[0m         + kind.as_str().len()
+[1m[94m120[0m [1m[94m|[0m [1m[91m|[0m         + json_text_bytes(subject)
+    [1m[94m|[0m [1m[91m|__________________________________^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Overflow Protection): use checked or saturating arithmetic when overflow would change behavior Example: let total = a.checked_add(b)?;
+    [1m[94m= [0m[1mnote[0m: structured suggestion applicability: MaybeIncorrect
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Overflow Protection
+[1m[96mhelp[0m: replace with saturating addition
+    [1m[94m|[0m
+[1m[94m115[0m [92m~ [0m    [92m(r#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len()[0m
+[1m[94m116[0m [92m+         + 1[0m
+[1m[94m117[0m [92m+         + ID_BYTES[0m
+[1m[94m118[0m [92m+         + json_text_bytes(owner)[0m
+[1m[94m119[0m [92m+         + kind.as_str().len()).saturating_add(json_text_bytes(subject))[0m
+    [1m[94m|[0m
+
+[1m[91merror[0m[1m: unprotected unsigned addition may overflow[0m
+   [1m[94m--> [0mcrates/crunch-live-state-core/src/lib.rs:115:5
+    [1m[94m|[0m
+[1m[94m115[0m [1m[94m|[0m [1m[91m/[0m     r#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len()
+[1m[94m116[0m [1m[94m|[0m [1m[91m|[0m         + 1
+[1m[94m117[0m [1m[94m|[0m [1m[91m|[0m         + ID_BYTES
+[1m[94m118[0m [1m[94m|[0m [1m[91m|[0m         + json_text_bytes(owner)
+[1m[94m119[0m [1m[94m|[0m [1m[91m|[0m         + kind.as_str().len()
+    [1m[94m|[0m [1m[91m|_____________________________^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Overflow Protection): use checked or saturating arithmetic when overflow would change behavior Example: let total = a.checked_add(b)?;
+    [1m[94m= [0m[1mnote[0m: structured suggestion applicability: MaybeIncorrect
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Overflow Protection
+[1m[96mhelp[0m: replace with saturating addition
+    [1m[94m|[0m
+[1m[94m115[0m [92m~ [0m    [92m(r#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len()[0m
+[1m[94m116[0m [92m+         + 1[0m
+[1m[94m117[0m [92m+         + ID_BYTES[0m
+[1m[94m118[0m [92m+         + json_text_bytes(owner)).saturating_add(kind.as_str().len())[0m
+    [1m[94m|[0m
+
+[1m[91merror[0m[1m: unprotected unsigned addition may overflow[0m
+   [1m[94m--> [0mcrates/crunch-live-state-core/src/lib.rs:115:5
+    [1m[94m|[0m
+[1m[94m115[0m [1m[94m|[0m [1m[91m/[0m     r#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len()
+[1m[94m116[0m [1m[94m|[0m [1m[91m|[0m         + 1
+[1m[94m117[0m [1m[94m|[0m [1m[91m|[0m         + ID_BYTES
+[1m[94m118[0m [1m[94m|[0m [1m[91m|[0m         + json_text_bytes(owner)
+    [1m[94m|[0m [1m[91m|________________________________^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Overflow Protection): use checked or saturating arithmetic when overflow would change behavior Example: let total = a.checked_add(b)?;
+    [1m[94m= [0m[1mnote[0m: structured suggestion applicability: MaybeIncorrect
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Overflow Protection
+[1m[96mhelp[0m: replace with saturating addition
+    [1m[94m|[0m
+[1m[94m115[0m [92m~ [0m    [92m(r#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len()[0m
+[1m[94m116[0m [92m+         + 1[0m
+[1m[94m117[0m [92m+         + ID_BYTES).saturating_add(json_text_bytes(owner))[0m
+    [1m[94m|[0m
+
+[1m[91merror[0m[1m: unprotected unsigned addition may overflow[0m
+   [1m[94m--> [0mcrates/crunch-live-state-core/src/lib.rs:115:5
+    [1m[94m|[0m
+[1m[94m115[0m [1m[94m|[0m [1m[91m/[0m     r#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len()
+[1m[94m116[0m [1m[94m|[0m [1m[91m|[0m         + 1
+[1m[94m117[0m [1m[94m|[0m [1m[91m|[0m         + ID_BYTES
+    [1m[94m|[0m [1m[91m|__________________^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Overflow Protection): use checked or saturating arithmetic when overflow would change behavior Example: let total = a.checked_add(b)?;
+    [1m[94m= [0m[1mnote[0m: structured suggestion applicability: MaybeIncorrect
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Overflow Protection
+[1m[96mhelp[0m: replace with saturating addition
+    [1m[94m|[0m
+[1m[94m115[0m [92m~ [0m    [92m(r#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len()[0m
+[1m[94m116[0m [92m+         + 1).saturating_add(ID_BYTES)[0m
+    [1m[94m|[0m
+
+[1m[91merror[0m[1m: unprotected unsigned addition may overflow[0m
+   [1m[94m--> [0mcrates/crunch-live-state-core/src/lib.rs:115:5
+    [1m[94m|[0m
+[1m[94m115[0m [1m[94m|[0m [1m[91m/[0m     r#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len()
+[1m[94m116[0m [1m[94m|[0m [1m[91m|[0m         + 1
+    [1m[94m|[0m [1m[91m|___________^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Overflow Protection): use checked or saturating arithmetic when overflow would change behavior Example: let total = a.checked_add(b)?;
+    [1m[94m= [0m[1mnote[0m: structured suggestion applicability: MaybeIncorrect
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Overflow Protection
+[1m[96mhelp[0m: replace with saturating addition
+    [1m[94m|[0m
+[1m[94m115[0m [91m- [0m    [91mr#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len()[0m
+[1m[94m116[0m [91m-         + 1[0m
+[1m[94m115[0m [92m+ [0m    [92m(r#"{"version":,"id":"","owner":"","kind":"","subject":"","state":""}"#.len()).saturating_add(1)[0m
+    [1m[94m|[0m
+
+[1m[91merror[0m[1m: unprotected unsigned addition may overflow[0m
+   [1m[94m--> [0mcrates/crunch-live-state-core/src/lib.rs:193:27
+    [1m[94m|[0m
+[1m[94m193[0m [1m[94m|[0m             Some(text) => json_text_bytes(text) + 2,
+    [1m[94m|[0m                           [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Overflow Protection): use checked or saturating arithmetic when overflow would change behavior Example: let total = a.checked_add(b)?;
+    [1m[94m= [0m[1mnote[0m: structured suggestion applicability: MaybeIncorrect
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Overflow Protection
+[1m[96mhelp[0m: replace with saturating addition
+    [1m[94m|[0m
+[1m[94m193[0m [91m- [0m            Some(text) => [91mjson_text_bytes(text) + 2[0m,
+[1m[94m193[0m [92m+ [0m            Some(text) => [92m(json_text_bytes(text)).saturating_add(2)[0m,
+    [1m[94m|[0m
+
+[1m[91merror[0m[1m: unprotected unsigned addition may overflow[0m
+   [1m[94m--> [0mcrates/crunch-live-state-core/src/lib.rs:196:21
+    [1m[94m|[0m
+[1m[94m196[0m [1m[94m|[0m           let bytes = r#"{"owner":,"kind":,"subject_prefix":}"#.len()
+    [1m[94m|[0m [1m[91m _____________________^[0m
+[1m[94m197[0m [1m[94m|[0m [1m[91m|[0m             + field_bytes(self.owner.as_deref())
+[1m[94m198[0m [1m[94m|[0m [1m[91m|[0m             + field_bytes(self.kind.map(FactKind::as_str))
+[1m[94m199[0m [1m[94m|[0m [1m[91m|[0m             + field_bytes(self.subject_prefix.as_deref());
+    [1m[94m|[0m [1m[91m|_________________________________________________________^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Overflow Protection): use checked or saturating arithmetic when overflow would change behavior Example: let total = a.checked_add(b)?;
+    [1m[94m= [0m[1mnote[0m: structured suggestion applicability: MaybeIncorrect
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Overflow Protection
+[1m[96mhelp[0m: replace with saturating addition
+    [1m[94m|[0m
+[1m[94m196[0m [92m~ [0m        let bytes = [92m(r#"{"owner":,"kind":,"subject_prefix":}"#.len()[0m
+[1m[94m197[0m [92m+             + field_bytes(self.owner.as_deref())[0m
+[1m[94m198[0m [92m~             + field_bytes(self.kind.map(FactKind::as_str))).saturating_add(field_bytes(self.subject_prefix.as_deref()))[0m;
+    [1m[94m|[0m
+
+[1m[91merror[0m[1m: unprotected unsigned addition may overflow[0m
+   [1m[94m--> [0mcrates/crunch-live-state-core/src/lib.rs:196:21
+    [1m[94m|[0m
+[1m[94m196[0m [1m[94m|[0m           let bytes = r#"{"owner":,"kind":,"subject_prefix":}"#.len()
+    [1m[94m|[0m [1m[91m _____________________^[0m
+[1m[94m197[0m [1m[94m|[0m [1m[91m|[0m             + field_bytes(self.owner.as_deref())
+[1m[94m198[0m [1m[94m|[0m [1m[91m|[0m             + field_bytes(self.kind.map(FactKind::as_str))
+    [1m[94m|[0m [1m[91m|__________________________________________________________^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Overflow Protection): use checked or saturating arithmetic when overflow would change behavior Example: let total = a.checked_add(b)?;
+    [1m[94m= [0m[1mnote[0m: structured suggestion applicability: MaybeIncorrect
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Overflow Protection
+[1m[96mhelp[0m: replace with saturating addition
+    [1m[94m|[0m
+[1m[94m196[0m [92m~ [0m        let bytes = [92m(r#"{"owner":,"kind":,"subject_prefix":}"#.len()[0m
+[1m[94m197[0m [92m+             + field_bytes(self.owner.as_deref())).saturating_add(field_bytes(self.kind.map(FactKind::as_str)))[0m
+    [1m[94m|[0m
+
+[1m[91merror[0m[1m: unprotected unsigned addition may overflow[0m
+   [1m[94m--> [0mcrates/crunch-live-state-core/src/lib.rs:196:21
+    [1m[94m|[0m
+[1m[94m196[0m [1m[94m|[0m           let bytes = r#"{"owner":,"kind":,"subject_prefix":}"#.len()
+    [1m[94m|[0m [1m[91m _____________________^[0m
+[1m[94m197[0m [1m[94m|[0m [1m[91m|[0m             + field_bytes(self.owner.as_deref())
+    [1m[94m|[0m [1m[91m|________________________________________________^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Overflow Protection): use checked or saturating arithmetic when overflow would change behavior Example: let total = a.checked_add(b)?;
+    [1m[94m= [0m[1mnote[0m: structured suggestion applicability: MaybeIncorrect
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Overflow Protection
+[1m[96mhelp[0m: replace with saturating addition
+    [1m[94m|[0m
+[1m[94m196[0m [91m- [0m        let bytes = [91mr#"{"owner":,"kind":,"subject_prefix":}"#.len()[0m
+[1m[94m197[0m [91m-             + field_bytes(self.owner.as_deref())[0m
+[1m[94m196[0m [92m+ [0m        let bytes = [92m(r#"{"owner":,"kind":,"subject_prefix":}"#.len()).saturating_add(field_bytes(self.owner.as_deref()))[0m
+    [1m[94m|[0m
+
+[1m[91merror[0m: could not compile `crunch-live-state-core` (lib) due to 13 previous errors
+[1m[33mwarning[0m: build failed, waiting for other jobs to finish...
+[1m[91merror[0m[1m: boolean binding `made_progress` should have a predicate prefix[0m
+   [1m[94m--> [0mcrates/crunch-service-readiness-core/src/lib.rs:381:17
+    [1m[94m|[0m
+[1m[94m381[0m [1m[94m|[0m         let mut made_progress = false;
+    [1m[94m|[0m                 [1m[91m^^^^^^^^^^^^^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+    [1m[94m= [0m[1mnote[0m: structured suggestion applicability: MaybeIncorrect
+    [1m[94m= [0m[1mnote[0m: see Tiger Style guide: Positive Predicates
+    [1m[94m= [0m[1mnote[0m: `-D tigerstyle::bool-naming` implied by `-D bool-naming`
+    [1m[94m= [0m[1mhelp[0m: to override `-D bool-naming` add `#[allow(tigerstyle::bool_naming)]`
+[1m[96mhelp[0m: rename binding to `is_made_progress`
+    [1m[94m|[0m
+[1m[94m381[0m [1m[94m| [0m        let mut [92mis_[0mmade_progress = false;
+    [1m[94m|[0m                 [92m+++[0m
+
+[1m[91merror[0m: could not compile `crunch-service-readiness-core` (lib) due to 4 previous errors
