@@ -4642,11 +4642,8 @@ fn run_transcript_command(action: TranscriptAction, ctx: &RunContext) -> Result<
 }
 
 fn run_doctor_command(ctx: &RunContext, profile: DoctorProfile) -> Result<(), RunError> {
-    let readiness = service_readiness::ReadinessObserver::start(
-        "doctor",
-        crunch_service_readiness_core::RestartPolicy::Never,
-        &[],
-    );
+    let readiness =
+        service_readiness::ReadinessObserver::start("doctor", crunch_service_readiness_core::RestartPolicy::Never, &[]);
     readiness.started();
     let doctor_result = operator_diagnostics::collect_doctor_report(operator_diagnostics::DoctorRequest {
         profile,
