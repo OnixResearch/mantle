@@ -1,87 +1,156 @@
 # Design: Live build state for coordination subscribers
 
-## Goal and scope
+## Goal and existing surface
 
-One coordination daemon serves current build facts and retracts them when they
-stop being true. The building plane emits facts and keeps its determinism and
-its independence from the daemon.
+Serve a current, filtered fact set and later changes without changing batch
+build correctness, the aggregate `--json build` report, or the existing
+`--evaluation-stream` NDJSON. The latter is an event stream, not a current set:
+it cannot retract a stale fact from a subscriber's view on worker loss.
 
-## Current behavior
+[ADR 0088](../../../adr/0088-live-build-state-coordination.md) accepts the
+narrow daemon-owned provider for this local live-state surface. The change
+proposal invokes ADR 0080; its file was absent in the isolated baseline at
+review time, although it is present in the original Mantle source and was
+restored to this isolated branch separately. Its Decision specifies three
+planes and mandates Molten use for coordination; ADR 0088 preserves the planes
+but explicitly supersedes only that provider mandate for this surface. It
+does not imply native Molten compatibility.
 
-`--json build` emits one aggregate report at the end. `--evaluation-stream`
-emits selected-root events as NDJSON during evaluation and build. Neither
-supports subscription, and neither retracts a fact when a worker dies.
+## Provider review and boundary
 
-ADR 0080 assigns coordination to a separate resident daemon. Mantle already
-runs daemon-shaped processes for the Rust cache and remote serve, so the
-component boundary is familiar.
+| Alternative | Decision |
+| --- | --- |
+| Add subscribe/snapshot to one-shot build NDJSON | Reject: no independent resident current set or connection-owned cleanup. |
+| Poll the aggregate report | Reject: final-only, cannot report a live change/retraction. |
+| Run subscriptions inside a build | Reject: readers depend on the lifetime of a batch build. |
+| Directly embed Molten dataspaces | Defer: source supports observe/assert/retract but not this entire bounded socket contract. |
+| Narrow Mantle daemon over pure `crunch-live-state-core` | Select for the local-only opt-in service; no substitute store/evidence authority. |
 
-## Approach review
+Evidence in the reviewed local tree `/home/brittonr/git/OnixResearch/aspen`
+at revision `81baf80cb667a22277be22c140d34829e5c7da7f` (the path is review
+provenance, not a runtime dependency or provider configuration):
 
-| Family | Mechanism | Disposition | Required check |
-| --- | --- | --- | --- |
-| Extend the NDJSON stream | Add subscribe/snapshot records | Rejected: a stream is not a state view; retraction stays implicit | Worker-loss fixture |
-| Poll the aggregate report | Repeated `--json` runs | Rejected: expensive and stale between polls | Subscription-order fixture |
-| Fold subscriptions into the build process | Long-lived build serving consumers | Rejected by ADR 0080: consumers would depend on a resident build | Daemon-absence fixture |
-| Coordination daemon over Molten dataspaces | Build emits facts; daemon serves and retracts | Selected direction | Molten contract review plus all fixtures |
+- `src/runtime/dataspace/mod.rs:54-78,106-190` gives a snapshot of in-memory
+  assertions/observers and `LocalAdapter::observe_pattern` routing envelope
+  subjects to actors. That adapter does not serve a Unix-socket snapshot
+  stream or backpressure-bound subscribers.
+- `src/runtime/predicates/parts/mod/p000/body.rs:70-74,115-128,148-163`
+  limits `RuntimePattern` to exact or whole-value wildcard matching. A
+  conjunctive `owner`/`kind`/`subject_prefix` filter needs Mantle logic.
+- `src/runtime/dataspace/parts/state/p001/body.rs:181-240` constructs
+  initial matching observations and future explicit assertion/retraction
+  observations. `:115-139` cleans up an actor's scope and returns references,
+  but does not emit retraction observations on cleanup by itself.
+  `src/runtime/dataspace/parts/tests/p000/body.rs:76-106,220-225` checks
+  explicit retractions and cleanup separately, not socket disconnect/restart.
+- `aspen/Cargo.toml:13-17,52-101` declares `molten` 0.1.0,
+  AGPL-3.0-or-later, Preserves 5.0.0-rc.7, Syndicate 0.44.0-rc.3,
+  and independent git dependencies. Importing it requires an explicit
+  dependency/license review and an executable integration, not a name match.
 
-## Contract and component ownership
+The provider seam is the daemon-owned local publish/retract/subscribe protocol
+and its bounded `LiveSet`, **not** a promised interchangeable Molten adapter.
+Only an executable integration proving exact filters, ownership, socket
+availability, initial delivery, backpressure and restart reset could change
+that decision. No such integration is claimed here.
 
-- Building plane (pure core): fact normalization, fact identity, bounded fact
-  and event admission, and the mapping from scheduler state to emit actions.
-- Building plane (shell): emission to the daemon or to a bounded local
-  channel. Emission failure is non-fatal.
-- Coordination daemon (pure core): subscription filter validation, current
-  matching set, and retraction decisions over in-memory facts.
-- Coordination daemon (shell): surface lifecycle, subscriber handling, and
-  rendering. The daemon never blocks a build on a subscriber.
-- Provider: the Molten dataspace component when its contract fits; otherwise a
-  narrow port with the same semantics. The evaluation is task T1.3.
+## Fact and filter contract
 
-## Decisions
+`crunch-live-state-core` is `#![no_std]` with alloc. Version `1` fact:
+`{version:u32,id:String,owner:String,kind:FactKind,subject:String,state:String}`.
+Kinds serialize as `goal`, `worker`, `reservation`, `outcome`, and
+`service_readiness`. A filter has optional exact `owner`, exact `kind` and
+`subject_prefix` (all absent means all facts). `fact_id(owner,kind,subject)`
+uses domain-separated BLAKE3; state is **not** part of identity. The producer
+calculates the ID and the daemon validates it. A changed state replaces the
+same identity; removing a state retracts that ID. Snapshot matching and
+ordering are deterministic.
 
-### Decision: Emission is best-effort and never corrective
+Hard bounds: 2,048 serialized bytes per fact, 4,096 retained facts,
+256 serialized bytes per filter, 128 subscribers, 64 pending delta events for
+each subscriber, and 4,096 bytes per wire frame. Concurrent atomic snapshot
+captures share a 64 MiB byte cap (`8 * MAX_FACTS * MAX_FACT_BYTES`) and are
+rejected if it is exhausted; snapshot facts stream individually before
+`snapshot_end`. Reject invalid IDs, version, malformed/oversized facts and
+filters or exhausted fact capacity. A full subscriber delta queue or a frame
+write stalled more than five seconds drops the subscriber, never a build.
+The **publisher socket connection** owns every fact published over it, regardless
+of the `owner` field; on loss of that connection the daemon retracts its facts.
+Worker loss while the publisher remains connected must be observed by the
+producer and explicitly retract the worker and affected in-flight goal facts.
+Do not mistake a descriptive owner field for a liveness oracle.
 
-**Choice:** A build emits facts when it can. A missing or failed daemon
-endpoint changes nothing about the build.
+## Shell, lifecycle and wire
 
-**Rationale:** ADR 0080 keeps correctness in the building plane. Observation
-must never become a precondition.
+The daemon `mantle-coordination serve --socket PATH` listens on a local Unix
+socket; it has no store capability and writes no evidence or receipts.
+`MANTLE_COORDINATION_SOCKET=PATH mantle build ...` opts a build into bounded
+best-effort, nonblocking, change-driven publication. Missing/failed/slow
+daemon publication degrades observation only, never admission, scheduling,
+output identity, or evidence; no socket setting is needed for a normal build.
+No heartbeat and no ambient persisted fact store.
+An observed publisher failure attempts one deduplicated JSON event on build
+stderr, for example
+`{"schema":"mantle-live-observation-v1","status":"degraded","reason":"endpoint_unavailable"}`.
+One process-owned diagnostic writer has one pending slot; a permanently full
+stderr pipe can stall that worker but cannot stall builds or create a thread
+per later failure. Discarded notices increment the saturating process-local
+`crunch_build::live_observation_diagnostic_drops()` count. This observation
+state is not part of build reports or receipts and cannot affect decisions.
+Missing stderr output is not proof of daemon success or diagnostic delivery.
 
-### Decision: Facts publish on change, not on a timer
+For doctor/diagnostic calls only, `crunch_coordination::BlockingPublisherSession`
+opens one synchronous session and waits for each ACK; never use it in a
+scheduling, remote-service, or cache critical path. The synchronous
+`BestEffortPublisher::new(socket)` places the socket session on one background
+thread; `try_publish(Fact)` and `try_retract(id)` enqueue without waiting for
+the daemon and degrade observation when the 64-command queue fills or fails.
+Its `finish(deadline)` caps the caller's final wait at 100 ms. The build's
+Tokio publisher separately caps its final flush to 100 ms after scheduling.
+These bounds do not establish build-output or receipt parity until an actual
+CLI run compares emission with daemon present and absent.
 
-**Choice:** Publish a fact when it becomes true and retract it when it stops
-being true. No heartbeat.
+Each connection first receives `{"op":"reset","generation":"<daemon-id>"}`.
+Requests are newline-delimited JSON:
 
-**Rationale:** A clock-based liveness model makes failure a timeout. The
-reviewed model ties fact lifetime to owner lifetime, so worker loss is a
-retraction.
+```text
+{"op":"subscribe","filter":{"owner":null,"kind":null,"subject_prefix":null}}
+{"op":"publish","fact":FACT}
+{"op":"retract","id":"ID"}
+```
 
-### Decision: Daemon restart retracts all facts
+`FACT` and `ID` above are placeholders. Subscribe returns matching
+`{"op":"snapshot","fact":FACT}` entries in deterministic order, then
+`{"op":"snapshot_end"}`, followed by change-driven
+`{"op":"publish","fact":FACT}` and `{"op":"retract","id":"ID"}`.
+Successful publisher operations may return `{"op":"ack"}`; bad input returns
+an `error` with a string message. See `docs/live-build-state.md` for an
+operator example.
 
-**Choice:** Daemon restart drops every published fact and publishes the
-retraction.
+On daemon restart the in-memory set disappears. The dead daemon cannot send
+per-ID retractions to sockets it already lost. Raw-wire clients discard their
+old set on disconnect or new-generation `reset` and subscribe again. The
+stateful `crunch_coordination::SubscriptionClient` tracks that set:
+`disconnected()` on EOF returns sorted per-ID `SubscriptionEvent::Retract`s;
+`receive()` on a new `reset` retracts every retained ID before returning
+`SubscriptionEvent::Reset`. This client-side conversion yields explicit
+retractions before a new snapshot, not events emitted by the dead daemon.
+Prior publishers must reconnect and republish; no facts are replayed from
+disk. Within one generation explicit removal and publisher loss deliver
+per-ID retraction on the wire to live subscribers. A `service_readiness`
+fact's state must parse as a versioned `ServiceAssertion` from
+`crunch-service-readiness-core`; admission rejects unknown/missing policy,
+unknown state, malformed subject, fabricated ready without same-owner active
+started, and unmet dependencies. The daemon's own started fact precedes any
+accepted request; ready is a distinct concurrently valid fact only after a
+real accepted subscription. Neither fact is authority to prove service health
+or release evidence.
 
-**Rationale:** Coordination has no durable state. A restart means every fact
-is unknown until re-emitted, and a subscriber must see that.
+## Limits and evidence
 
-### Decision: Live facts are not evidence
-
-**Choice:** The daemon authors no receipts, and its facts are rejected by
-evidence validators.
-
-**Rationale:** An assertion's meaning depends on its lifetime. Evidence must
-be reproducible from stored facts.
-
-## Risks / Trade-offs
-
-- Two components must agree on fact identity. The building plane owns the
-  identity, and the daemon validates it.
-- A daemon adds a process to operate. It stays optional, with a bounded local
-  fallback for development.
-- Remote observability is deferred; a later change can replicate facts.
-
-## Non-Claims
-
-- A live fact proves current coordination belief only.
-- Terminal live facts are not build receipts, and they do not prove success.
+Live facts represent a volatile coordination belief only. They must not be
+consumed as PathInfo, report, attestation, receipt or release evidence.
+Fixtures and end-to-end checks must separately demonstrate ordering,
+owner-loss/restart invalidation, bounded filtering/backpressure, worker-loss
+retraction, and build identity with and without the daemon; this design and
+the Aspen source review do **not** claim those proofs have passed.

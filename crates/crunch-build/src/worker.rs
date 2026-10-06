@@ -79,6 +79,7 @@ use crate::goal::Goal;
 use crate::goal::GoalRegistry;
 use crate::goal::GoalState;
 use crate::goal::MAX_GOALS;
+use crate::live_state::LivePublisher;
 use crate::orchestrate::BuildOutcome;
 use crate::orchestrate::Builder;
 use crate::orchestrate::BuilderSourceSlice;
@@ -247,6 +248,7 @@ pub struct EvalMessage {
 /// Maximum supported concurrent in-flight build budget. The constructor,
 /// dispatch shell, and semaphore all enforce this bound.
 const MAX_IN_FLIGHT: u32 = 64;
+const MAX_LIVE_TRANSITIONS: usize = (MAX_GOALS as usize) * 4;
 const BLAKE3_HEX_CHARS_PER_BYTE: usize = 2;
 const BLAKE3_HEX_LENGTH: usize = blake3::OUT_LEN.saturating_mul(BLAKE3_HEX_CHARS_PER_BYTE);
 const MAX_FAILED_BUILD_LOG_BYTES: usize = 1_048_576;
@@ -1256,6 +1258,7 @@ struct WorkerLoopState<'a> {
     all_outcomes: &'a mut Vec<BuildOutcome>,
     failed: &'a mut Vec<FailedGoal>,
     native_dynamic_plans: &'a mut Vec<NativeDynamicPlanReport>,
+    live: Option<LivePublisher>,
     completed_count: u32,
 }
 
@@ -1274,6 +1277,9 @@ pub struct Worker {
     pressure_cache: BTreeMap<String, KnownGraphPressure>,
     pressure_dirty_goals: BTreeSet<String>,
     priority_decisions: Vec<PriorityDecisionEvidence>,
+    live_events: Vec<(String, GoalState)>,
+    live_observing: bool,
+    live_overflow: bool,
     max_jobs: u32,
 }
 
@@ -1313,6 +1319,9 @@ impl Worker {
             pressure_cache: BTreeMap::new(),
             pressure_dirty_goals: BTreeSet::new(),
             priority_decisions: Vec::new(),
+            live_events: Vec::new(),
+            live_observing: false,
+            live_overflow: false,
             max_jobs,
         })
     }
@@ -1351,6 +1360,30 @@ impl Worker {
         Ok(())
     }
 
+    fn record_live_event(&mut self, key: &str, state: GoalState) {
+        if !self.live_observing || self.live_overflow {
+            return;
+        }
+        if self.live_events.len() >= MAX_LIVE_TRANSITIONS {
+            self.live_overflow = true;
+            self.live_events.clear();
+            return;
+        }
+        self.live_events.push((key.to_owned(), state));
+    }
+
+    fn emit_live_events(&mut self, state: &mut WorkerLoopState<'_>) {
+        let Some(live) = state.live.as_mut() else { return };
+        if self.live_overflow {
+            live.degrade("transition_limit");
+            self.live_events.clear();
+            return;
+        }
+        for (key, phase) in self.live_events.drain(..) {
+            live.observe_transition(&key, &phase);
+        }
+    }
+
     fn enqueue_ready_goal(&mut self, goal_key: &str) -> Result<(), Error> {
         if self.ready_goals.contains_key(goal_key) {
             return Ok(());
@@ -1375,6 +1408,7 @@ impl Worker {
         ready.operator_policy_class = operator_policy_class;
         ready.preference = preference;
         self.ready_goals.insert(goal_key.to_string(), ready);
+        self.record_live_event(goal_key, GoalState::Ready);
         debug_assert!(self.ready_goals.contains_key(goal_key));
         debug_assert!(u32::try_from(self.ready_goals.len()).is_ok_and(|count| count <= MAX_GOALS));
         Ok(())
@@ -1553,6 +1587,7 @@ impl Worker {
                 Goal::new(sp, derivation)
             };
             self.registry.insert(key.clone(), goal)?;
+            self.record_live_event(&key, GoalState::Pending);
             self.pressure_dirty_goals.insert(key.clone());
 
             // Enqueue deps for creation.
@@ -1591,10 +1626,18 @@ impl Worker {
             .get_mut(key)
             .ok_or_else(|| Error::Store(format!("worker: goal not found in registry: {key}")))?;
         let state = goal.inspect(unbuilt_dep_keys)?;
+        let inspected = if self.live_observing && *state != GoalState::Ready {
+            Some(state.clone())
+        } else {
+            None
+        };
 
         let is_ready_after_inspection = *state == GoalState::Ready;
         if is_ready_after_inspection {
             self.enqueue_ready_goal(key)?;
+        }
+        if let Some(inspected) = inspected {
+            self.record_live_event(key, inspected);
         }
 
         debug_assert_eq!(is_ready_after_inspection, self.ready_goals.contains_key(key));
@@ -1635,6 +1678,7 @@ impl Worker {
             all_outcomes: &mut all_outcomes,
             failed: &mut failed,
             native_dynamic_plans: &mut native_dynamic_plans,
+            live: None,
             completed_count: 0,
         };
         let iteration_count_max: u32 = total_goals.saturating_mul(4).max(16);
@@ -1708,21 +1752,51 @@ impl Worker {
             all_outcomes: &mut all_outcomes,
             failed: &mut failed,
             native_dynamic_plans: &mut native_dynamic_plans,
+            live: LivePublisher::from_env(),
             completed_count: 0,
         };
+        self.live_observing = state.live.is_some();
+        self.live_overflow = false;
+        self.live_events.clear();
         let mut is_eval_done = false;
         let iteration_count_max: u32 = MAX_GOALS.saturating_mul(4);
 
         info!(jobs = self.max_jobs, "worker streaming started");
 
+        let result = self
+            .run_streaming_loop(builder, known_paths, rx, &mut state, &mut is_eval_done, iteration_count_max)
+            .await;
+        self.emit_live_events(&mut state);
+        self.live_observing = false;
+        if let Some(live) = state.live.take() {
+            live.finish().await;
+        }
+        result
+    }
+
+    // r[impl mantle.build_interchange.live_state_emission]
+    // The observer sees registry transitions, but cannot affect the build result.
+    async fn run_streaming_loop<BServ>(
+        &mut self,
+        builder: &mut Builder<BServ>,
+        known_paths: &mut DerivationRegistry,
+        rx: &mut mpsc::Receiver<EvalMessage>,
+        state: &mut WorkerLoopState<'_>,
+        is_eval_done: &mut bool,
+        iteration_count_max: u32,
+    ) -> Result<WorkerResult, Error>
+    where
+        BServ: BuildService + 'static,
+    {
         for _ in 0..iteration_count_max {
-            if !is_eval_done {
-                self.drain_eval_messages(rx, known_paths, &mut is_eval_done)?;
+            if !*is_eval_done {
+                self.drain_eval_messages(rx, known_paths, is_eval_done)?;
+                self.emit_live_events(state);
             }
 
-            self.dispatch_ready(builder, known_paths, &mut state).await?;
+            self.dispatch_ready(builder, known_paths, state).await?;
 
-            if is_eval_done && self.registry.all_roots_terminal() {
+            if *is_eval_done && self.registry.all_roots_terminal() {
                 info!(
                     completed = state.completed_count,
                     succeeded = state.outcomes.len(),
@@ -1732,15 +1806,16 @@ impl Worker {
                 );
                 let priority_decisions = std::mem::take(&mut self.priority_decisions);
                 return Ok(finish_worker_result(
-                    outcomes,
-                    all_outcomes,
-                    failed,
-                    native_dynamic_plans,
+                    std::mem::take(&mut *state.outcomes),
+                    std::mem::take(&mut *state.all_outcomes),
+                    std::mem::take(&mut *state.failed),
+                    std::mem::take(&mut *state.native_dynamic_plans),
                     priority_decisions,
                 ));
             }
 
-            self.wait_for_event(&mut is_eval_done, rx, builder, known_paths, &mut state).await?;
+            self.wait_for_event(is_eval_done, rx, builder, known_paths, state).await?;
+            self.emit_live_events(state);
         }
         Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_count_max})")))
     }
@@ -2495,6 +2570,7 @@ impl Worker {
                     if let Some(entry) = known_paths.get_by_drv_path(&dep_abs) {
                         let dep_goal = crate::goal::Goal::new(dep_sp.clone(), entry.derivation.clone());
                         self.registry.insert(dep_key.clone(), dep_goal)?;
+                        self.record_live_event(&dep_key, GoalState::Pending);
                         self.pressure_dirty_goals.insert(dep_key.clone());
                     }
                 }
@@ -2547,6 +2623,7 @@ impl Worker {
             let (drv_path, is_root, derivation) = self.ready_goal_inputs(&drv_key)?;
             let prepare_result = builder.prepare_build(&drv_path, derivation, known_paths, is_root).await;
             let is_spawned = self.handle_prepare_result(&drv_key, prepare_result, builder, known_paths, state).await?;
+            self.emit_live_events(state);
             if is_spawned {
                 available_build_slots = available_build_slots
                     .checked_sub(1)
@@ -2625,6 +2702,7 @@ impl Worker {
             .get_mut(drv_key)
             .ok_or_else(|| Error::Store(format!("worker: goal vanished during dispatch: {drv_key}")))?;
         goal.mark_building()?;
+        self.record_live_event(drv_key, GoalState::Building);
 
         let replaced = state.pending_meta.insert(drv_key.to_string(), prepared);
         debug_assert!(replaced.is_none(), "pending_meta already had entry for {drv_key}");
@@ -2676,6 +2754,7 @@ impl Worker {
 
         let is_root = goal.is_root;
         let waiters = std::mem::take(&mut goal.waiters);
+        self.record_live_event(drv_key, GoalState::Done);
 
         all_outcomes.push(outcome.clone());
         if is_root {
@@ -2722,6 +2801,7 @@ impl Worker {
         let is_root = goal.is_root;
         let waiters = std::mem::take(&mut goal.waiters);
         let drv_name = goal.drv_path.name().to_string();
+        self.record_live_event(drv_key, GoalState::Failed);
 
         if is_root {
             failed.push(FailedGoal {
@@ -2773,6 +2853,7 @@ impl Worker {
         let is_root = goal.is_root;
         let waiters = std::mem::take(&mut goal.waiters);
         let drv_name = goal.drv_path.name().to_string();
+        self.record_live_event(drv_key, GoalState::Failed);
 
         if is_root {
             failed.push(FailedGoal {
@@ -3710,6 +3791,7 @@ mod tests {
             all_outcomes: &mut all_outcomes,
             failed: &mut failed,
             native_dynamic_plans: &mut native_dynamic_plans,
+            live: None,
             completed_count: 0,
         };
 
@@ -3746,6 +3828,7 @@ mod tests {
             all_outcomes: &mut all_outcomes,
             failed: &mut failed,
             native_dynamic_plans: &mut native_dynamic_plans,
+            live: None,
             completed_count: 0,
         };
         for _ in 0..TEST_RUNNING_OVER_BUDGET {

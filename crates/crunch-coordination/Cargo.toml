@@ -1,0 +1,21 @@
+[package]
+name = "crunch-coordination"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+crunch-live-state-core = { path = "../crunch-live-state-core" }
+crunch-service-readiness-core = { path = "../crunch-service-readiness-core" }
+libc = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[[bin]]
+name = "mantle-coordination"
+path = "src/main.rs"
