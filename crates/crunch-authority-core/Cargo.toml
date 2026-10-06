@@ -1,0 +1,15 @@
+[package]
+name = "crunch-authority-core"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+
+[workspace]
+
+[dev-dependencies]
+ucan = { git = "https://github.com/OnixResearch/ucan.git", rev = "6f888f6c91a4ea26f0bd52b6486e6643c8f6d271" }
+basalt = { git = "https://github.com/OnixResearch/basalt.git", rev = "89675cd4f585f837323c049e4a25f7b94c903038" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+blake3 = "1.8"
+tempfile = "3"

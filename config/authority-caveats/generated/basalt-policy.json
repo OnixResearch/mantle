@@ -1,0 +1,42 @@
+{
+  "backends": {
+    "nickel": {
+      "description": "Nickel-authored exact Mantle authority policy",
+      "id": "nickel",
+      "supports_higher_order": false
+    }
+  },
+  "contracts": {
+    "mantle-project-goal": {
+      "abilities": [
+        "project/declare"
+      ],
+      "description": "A signed resource and ability for a receiver-checked project declaration",
+      "id": "mantle-project-goal",
+      "resource_prefixes": [
+        "mantle://project-goal/"
+      ]
+    },
+    "mantle-remote-build": {
+      "abilities": [
+        "remote/build"
+      ],
+      "description": "A signed resource and ability for one receiver-checked remote build grant",
+      "id": "mantle-remote-build",
+      "resource_prefixes": [
+        "mantle://remote-build/"
+      ]
+    },
+    "mantle-store-view": {
+      "abilities": [
+        "store/read"
+      ],
+      "description": "A signed resource and ability for a receiver-checked logical store view",
+      "id": "mantle-store-view",
+      "resource_prefixes": [
+        "mantle://store-view/"
+      ]
+    }
+  },
+  "schema_version": "ucan-nickel-contracts.policy.v1"
+}

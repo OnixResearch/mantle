@@ -1,18 +1,18 @@
 # Tasks: Attenuate build authority with pattern caveats
 
-All tasks remain open. Creating this proposal is not producer acceptance.
+Checked tasks below have source and scoped observations; T1.1 provenance and all production grant-site gates remain open.
 
 ## Phase 1: Baseline and stack evaluation
 
 - [ ] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record the current ticket, store-view, and project-scope admission paths, including one restriction observation per site. r[mantle.authority_attenuation.caveat_filter_semantics]
-- [ ] [serial] T1.2 Evaluate UCAN and Basalt for pattern caveats: filter expressiveness, composition, revocation, and proof-chain transport. Record the decision in an ADR. r[mantle.authority_attenuation.stack_authority_reuse]
-- [ ] [serial] T1.3 Define the accepted caveat set, chain-length bound, pattern-size bound, and fail-closed parsing rules. r[mantle.authority_attenuation.caveat_filter_semantics]
+- [x] [serial] T1.2 Evaluate UCAN and Basalt for pattern caveats: filter expressiveness, composition, revocation, and proof-chain transport. ADR 0085 records pinned UCAN signed proof/holder support, the absent Basalt closed-action mappings and the separate proposed generic policy contract. r[mantle.authority_attenuation.stack_authority_reuse]
+- [x] [serial] T1.3 Define the accepted caveat set, chain-length bound, pattern-size bound, and fail-closed parsing rules in `config/authority-caveats/{contracts,default}.ncl`; both authority Nickel policy sources exported successfully (`evidence/isolated-authority-2026-10-04.md`). r[mantle.authority_attenuation.caveat_filter_semantics]
 
 ## Phase 2: Core filter language
 
-- [ ] [serial] T2.1 Implement pure pattern matching with bindings, template instantiation, rewrite, reject, alternative lists, and unknown-rejects-everything. r[mantle.authority_attenuation.caveat_filter_semantics]
-- [ ] [serial] T2.2 Implement right-to-left composition and prove that composing chains cannot widen a grant. r[mantle.authority_attenuation.composition_order]
-- [ ] [parallel] T2.3 Add filter fixtures: rewrite with bindings, reject, alternatives, unknown caveat, oversized pattern, and malformed caveat. r[mantle.authority_attenuation.caveat_filter_semantics]
+- [x] [serial] T2.1 Implement pure pattern matching with bindings, template instantiation, rewrite, reject, alternative lists, and unknown-rejects-everything in standalone `crates/crunch-authority-core`; direct `rustc --test` passed 11/11 (`evidence/isolated-authority-2026-10-04.md`). r[mantle.authority_attenuation.caveat_filter_semantics]
+- [x] [serial] T2.2 Implement right-to-left composition and recheck each parent on the same original value; finite parent/child matrix and parent-policy regression passed in scoped core tests. r[mantle.authority_attenuation.composition_order]
+- [x] [parallel] T2.3 Add pure filter fixtures for bindings, rejects, alternatives, unknown, malformed/oversized input, strict ordinal chain and canonical path escape; scoped core tests passed 11/11. r[mantle.authority_attenuation.caveat_filter_semantics]
 
 ## Phase 3: Grant sites
 

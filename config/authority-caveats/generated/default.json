@@ -1,0 +1,28 @@
+{
+  "accepted_kinds": [
+    "rewrite",
+    "reject",
+    "alternatives",
+    "unknown-deny-all"
+  ],
+  "caveat_domain": "mantle",
+  "caveat_type": "filter-v1",
+  "limits": {
+    "max_alternatives": 8,
+    "max_caveat_bytes": 8192,
+    "max_chain": 8,
+    "max_declared_jobs": 32,
+    "max_pattern_bytes": 256,
+    "max_segments": 16,
+    "max_value_bytes": 512
+  },
+  "non_claims": [
+    "UCAN authenticates signed grant and proof; this policy does not",
+    "Basalt generic authority consumes verified facts; this policy does not verify them",
+    "site policy and effect ordering stay with the local receiver"
+  ],
+  "order": "newest-first-right-to-left",
+  "recheck_original_and_parent_prefixes": true,
+  "rejection": "silent-discard",
+  "schema": "mantle-authority-caveats-v1"
+}
