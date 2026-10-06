@@ -1,0 +1,93 @@
+{
+  "daemon": {
+    "framing": "8-byte-length-prefixed-bounded-json",
+    "operations": [
+      "manifest",
+      "read",
+      "publish"
+    ],
+    "peer_authority": "same-user-uid",
+    "state": "private-rust-unit-cache",
+    "storage": "local-content-addressed-object-file",
+    "transport": "per-user-unix-socket"
+  },
+  "driver": {
+    "admitted_compiler_families": [
+      "x86_64-linux-musl-*",
+      "stage-tinycc",
+      "stage-gcc"
+    ],
+    "ambient_path_mutation": false,
+    "compiler_digest_blake3": "",
+    "compiler_path": "",
+    "daemon_unavailable": "forward-exact-arguments",
+    "driver_digest_blake3": "",
+    "driver_path": "",
+    "mode": "off",
+    "platform_digest": "",
+    "receipt_path": "",
+    "socket_path": "",
+    "unclassified": "forward-exact-arguments"
+  },
+  "identity": {
+    "arguments": "normalized-no-store-paths",
+    "dependencies": "depfile-root-relative-label-and-content-digest",
+    "hash_algorithm": "BLAKE3",
+    "platform": "explicit-platform-digest",
+    "probe_script": "canonical-regular-script-content-digest",
+    "roots": "whole-root-tree-digest",
+    "source": "source-content-digest",
+    "tool": "executable-content-digest",
+    "unknown_manifest": "miss-no-replay"
+  },
+  "limits": {
+    "max_arguments": 4096,
+    "max_dependencies": 8192,
+    "max_frame_bytes": 8388608,
+    "max_object_bytes": 4194304,
+    "max_roots": 128
+  },
+  "probe": {
+    "dependency_identity": "complete-depfile-and-root-tree",
+    "environment": "LC_ALL=C-only",
+    "failure_replay": "complete-manifest-bounded-diagnostics-only",
+    "flags_identity": "normalized-semantic-arguments",
+    "invocation": "explicit-probe-script-classified-compiler",
+    "max_diagnostic_bytes": 262144,
+    "platform_identity": "explicit-platform-digest",
+    "script_identity": "canonical-regular-script-content-digest",
+    "toolchain_identity": "compiler-executable-content-digest"
+  },
+  "proof": {
+    "non_claims": [
+      "cache-hit-is-not-correctness-evidence",
+      "content-hash-is-not-writer-trust",
+      "cache-receipt-is-not-proof-evidence",
+      "no-byte-parity-or-fixed-point-proof-yet",
+      "bootstrap-inventory-admission-not-wired"
+    ],
+    "strict_lane_cache": "off-or-independent-content-verification",
+    "transcript_cache_mode_required": true
+  },
+  "receipts": {
+    "dispositions": [
+      "hit",
+      "published",
+      "compiler-only",
+      "compiler-failure",
+      "fallback",
+      "rejected",
+      "probe-failure-hit",
+      "probe-failure-published",
+      "probe-compiler-failure"
+    ],
+    "probe_read_dispositions": [
+      "hit",
+      "miss",
+      "invalid",
+      "unavailable"
+    ],
+    "proof_evidence": false
+  },
+  "schema": "mantle-cc-cache-policy-v2"
+}

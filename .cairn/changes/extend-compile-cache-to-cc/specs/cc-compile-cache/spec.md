@@ -14,6 +14,12 @@ install must remain inside the declared executable inventory and audit
 decisions. The driver MUST forward invocations it cannot classify to the real
 compiler unchanged.
 
+The policy MUST default to `off` until inventory and strict proof admission
+are wired. An enabled mode MUST supply absolute driver, compiler, socket,
+and receipt paths and lowercase 64-hex BLAKE3 driver, compiler, and platform
+digests. Before enabling C wire, the daemon MUST check the actual driver
+and real compiler executable bytes against their declared digests.
+
 #### Scenario: Unclassifiable invocation forwards unchanged
 
 - GIVEN a driver invocation with arguments outside its classification
@@ -31,13 +37,15 @@ compiler unchanged.
 ### Requirement: Content-keyed identity
 
 r[mantle.cc_compile_cache.content_keyed_identity] Cache keys MUST be computed
-over content identity only: source bytes, normalized arguments, tool identity,
-and the learned set of dependency file identities.
+over content identity only: tool and source bytes, explicit platform digest,
+normalized arguments without store paths, and whole-tree digests of declared
+source/include roots. Reuse MUST additionally verify the learned depfile manifest.
 
 Store paths MUST NOT enter a key; a dependency rebuilt to identical content
-under a new path MUST still hit. Dependency sets MUST be learned from compiler
-dependency files on first miss and stored as manifests; a manifest whose input
-identity changes MUST miss.
+under a new path MUST still hit. Dependency entries MUST be learned from compiler
+dependency files on first miss and stored in encounter order as root-relative
+labels and content digests; a missing, incomplete, or changed manifest MUST
+miss rather than admit reuse.
 
 #### Scenario: Rebuilt-identical dependency still hits
 
@@ -110,6 +118,15 @@ flags.
 A wrong-key hit MUST be impossible for differing probe inputs; failure replay
 MUST only occur when every input identity is known. Every probe-cache read
 MUST record a disposition.
+
+The `mantle-cc-cache-policy-v2` contract permits only explicitly classified
+GNU C/C++ compile probes selected with a canonical `--probe-script`, `LC_ALL=C`,
+and stable diagnostic flags. The driver binds the script and compiler content,
+source, platform, semantic flags, and complete roots into distinct success and
+failure keys. It replays a failure only with a complete current depfile manifest,
+bounded diagnostic streams, and a verified failure marker; otherwise it runs the
+real compiler. Unclassified configure commands and non-probe failures still
+forward or compile normally. No cached result or receipt is strict proof evidence.
 
 #### Scenario: Probe inputs change
 

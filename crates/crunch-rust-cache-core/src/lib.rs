@@ -4,6 +4,7 @@
 //!
 //! This crate does not read files, inspect the environment, spawn processes,
 //! or access castore. Shell code supplies normalized and verified facts.
+pub mod cc;
 pub mod error;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;

@@ -49,6 +49,7 @@ use snix_castore::import::fs::ingest_path;
 use tempfile::Builder;
 use thiserror::Error;
 
+pub mod cc;
 pub mod shared;
 
 pub const RUST_UNIT_EXECUTION_RECEIPT_FILE: &str = ".mantle-rust-unit-execution.json";
@@ -284,7 +285,9 @@ impl RustCache {
         let indexes_dir = cache_dir.join(INDEX_DIRECTORY);
         let results_dir = cache_dir.join(RESULT_DIRECTORY);
         let staging_dir = cache_dir.join(STAGING_DIRECTORY);
-        for directory in [&cache_dir, &indexes_dir, &results_dir, &staging_dir] {
+        let cc_objects_dir = cache_dir.join(cc::CC_OBJECT_DIRECTORY);
+        let cc_manifests_dir = cache_dir.join(cc::CC_MANIFEST_DIRECTORY);
+        for directory in [&cache_dir, &indexes_dir, &results_dir, &staging_dir, &cc_objects_dir, &cc_manifests_dir] {
             create_private_directory(directory)?;
         }
         assert!(cache_dir.starts_with(&state_dir));
