@@ -48,6 +48,13 @@ seccomp setup, unsupported audit architecture, missing listener inheritance,
 relative or unreadable exec paths, undeclared executables, digest mismatch, or
 forbidden host helper names fail closed before execution.
 
+The Linux seccomp deep-descendant unit fixture uses a separately inventoried,
+digest-checked canonical small shell for the orphan's executable. It verifies
+two allowed exec events from distinct PIDs and one adopted child successfully
+reaped. This keeps hashing the large debug test binary out of the unchanged
+30-second descendant-reaper bound. This is test-scoped evidence, not a broader
+StageX bootstrap proof or a weaker production timeout.
+
 The concrete no-host-tools inventory is a Nickel file using the schema in
 `bootstrap/stage0-inventory.ncl`. The checked-in file is the typed empty schema;
 real proof runs pass a generated or operator-supplied concrete inventory with
