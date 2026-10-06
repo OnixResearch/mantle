@@ -896,13 +896,13 @@ fn unix_address(socket: &Path) -> io::Result<(libc::sockaddr_un, libc::socklen_t
         .checked_add(path_bytes.len())
         .and_then(|count| count.checked_add(1))
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "socket address length overflow"))?;
-    let length = libc::socklen_t::try_from(length_bytes)
+    let address_len_bytes = libc::socklen_t::try_from(length_bytes)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "socket address too long"))?;
-    Ok((address, length))
+    Ok((address, address_len_bytes))
 }
 
 fn blocking_connect(socket: &Path) -> io::Result<StdUnixStream> {
-    let (address, length) = unix_address(socket)?;
+    let (address, address_len_bytes) = unix_address(socket)?;
     let fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC, 0) };
     if fd < 0 {
         return Err(io::Error::last_os_error());
@@ -910,7 +910,8 @@ fn blocking_connect(socket: &Path) -> io::Result<StdUnixStream> {
     // SAFETY: socket returned a newly owned descriptor, now guarded through every error path.
     let owned = unsafe { OwnedFd::from_raw_fd(fd) };
     debug_assert!(owned.as_raw_fd() >= 0);
-    let result = unsafe { libc::connect(owned.as_raw_fd(), (&raw const address).cast::<libc::sockaddr>(), length) };
+    let result =
+        unsafe { libc::connect(owned.as_raw_fd(), (&raw const address).cast::<libc::sockaddr>(), address_len_bytes) };
     if result < 0 {
         let error = io::Error::last_os_error();
         if !matches!(error.raw_os_error(), Some(libc::EINPROGRESS | libc::EINTR | libc::EALREADY)) {
