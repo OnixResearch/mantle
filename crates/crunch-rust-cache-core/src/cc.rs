@@ -3,7 +3,8 @@
 
 use std::collections::HashSet;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::RustCacheError;
 
@@ -226,8 +227,11 @@ pub fn decode_cc_probe_result(result: &CcProbeResult) -> Result<(Vec<u8>, Vec<u8
 }
 
 fn validate_probe_path(path: &str) -> Result<(), RustCacheError> {
-    if path.len() <= 1 || path.len() > MAX_STRING_BYTES || !path.starts_with('/')
-        || path.contains('\\') || path.bytes().any(|byte| byte.is_ascii_control())
+    if path.len() <= 1
+        || path.len() > MAX_STRING_BYTES
+        || !path.starts_with('/')
+        || path.contains('\\')
+        || path.bytes().any(|byte| byte.is_ascii_control())
         || path[1..].split('/').any(|component| component.is_empty() || component == "." || component == "..")
     {
         return Err(reject("cc-probe-path-invalid"));
@@ -240,7 +244,8 @@ fn decode_probe_diagnostic(encoded: &str) -> Result<Vec<u8>, RustCacheError> {
     if encoded.len() > max_encoded {
         return Err(reject("cc-probe-diagnostic-limit"));
     }
-    let bytes = data_encoding::BASE64.decode(encoded.as_bytes())
+    let bytes = data_encoding::BASE64
+        .decode(encoded.as_bytes())
         .map_err(|_| reject("cc-probe-diagnostic-base64-invalid"))?;
     if bytes.len() > MAX_CC_PROBE_DIAGNOSTIC_BYTES {
         return Err(reject("cc-probe-diagnostic-limit"));
@@ -249,7 +254,9 @@ fn decode_probe_diagnostic(encoded: &str) -> Result<Vec<u8>, RustCacheError> {
 }
 
 fn validate_digest(digest: &str) -> Result<(), RustCacheError> {
-    if digest.len() != DIGEST_HEX_BYTES || !digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
+    if digest.len() != DIGEST_HEX_BYTES
+        || !digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
         return Err(reject("cc-digest-invalid"));
     }
     Ok(())
@@ -265,7 +272,10 @@ fn validate_dependencies(dependencies: &[CcDependency], roots_count: usize) -> R
             return Err(reject("cc-dependency-root-invalid"));
         }
         let path = dependency.relative_path.as_str();
-        if path.is_empty() || path.len() > MAX_STRING_BYTES || path.contains('\\') || path.contains('\0')
+        if path.is_empty()
+            || path.len() > MAX_STRING_BYTES
+            || path.contains('\\')
+            || path.contains('\0')
             || path.split('/').any(|component| component.is_empty() || component == "." || component == "..")
             || path.starts_with('/')
             || (path.as_bytes().get(1) == Some(&b':') && path.as_bytes().get(2) == Some(&b'/'))
@@ -281,7 +291,11 @@ fn validate_dependencies(dependencies: &[CcDependency], roots_count: usize) -> R
 }
 
 fn has_raw_absolute_path(argument: &str) -> bool {
-    if argument.contains('\0') || argument.contains('\\') || argument.contains("/nix/store") || argument.contains("/mantle/store") {
+    if argument.contains('\0')
+        || argument.contains('\\')
+        || argument.contains("/nix/store")
+        || argument.contains("/mantle/store")
+    {
         return true;
     }
     let bytes = argument.as_bytes();
@@ -294,9 +308,24 @@ fn has_raw_absolute_path(argument: &str) -> bool {
         }
         // A path glued to one of the compiler's path-taking switches.
         [
-            "-I", "-L", "-F", "-B", "-o", "-MF", "-MT", "-MQ", "-isystem", "-isysroot",
-            "-iquote", "-idirafter", "-include", "-imacros", "-iframework", "--sysroot",
-            "--gcc-toolchain", "-resource-dir",
+            "-I",
+            "-L",
+            "-F",
+            "-B",
+            "-o",
+            "-MF",
+            "-MT",
+            "-MQ",
+            "-isystem",
+            "-isysroot",
+            "-iquote",
+            "-idirafter",
+            "-include",
+            "-imacros",
+            "-iframework",
+            "--sysroot",
+            "--gcc-toolchain",
+            "-resource-dir",
         ]
         .iter()
         .any(|switch| argument[..index].ends_with(switch))
@@ -344,7 +373,11 @@ mod tests {
     }
 
     fn dependency(path: &str, digest: &str) -> CcDependency {
-        CcDependency { root_index: 0, relative_path: path.into(), digest_blake3: digest.into() }
+        CcDependency {
+            root_index: 0,
+            relative_path: path.into(),
+            digest_blake3: digest.into(),
+        }
     }
 
     fn record(dependencies: Vec<CcDependency>) -> CcObjectRecord {
@@ -403,7 +436,16 @@ mod tests {
 
     #[test]
     fn absolute_paths_and_invalid_digests_cannot_enter_key() {
-        for arg in ["/tmp/a.cc", "-I/nix/store/header", "--sysroot=/opt/sdk", "-Wl,-rpath,/opt/lib", "@/tmp/args", "-I/mantle/store/inc", "-MF/tmp/deps.d", "C:\\sdk\\header"] {
+        for arg in [
+            "/tmp/a.cc",
+            "-I/nix/store/header",
+            "--sysroot=/opt/sdk",
+            "-Wl,-rpath,/opt/lib",
+            "@/tmp/args",
+            "-I/mantle/store/inc",
+            "-MF/tmp/deps.d",
+            "C:\\sdk\\header",
+        ] {
             let mut input = action();
             input.normalized_arguments.push(arg.into());
             assert!(cc_action_key(&input).is_err(), "{arg}");
@@ -441,12 +483,24 @@ mod tests {
         assert_eq!(admit_cc_reuse(&stored, &[dependency("include/renamed.h", A)], 1), Ok(false));
         assert_eq!(admit_cc_reuse(&stored, &[], 1), Ok(false));
         assert_eq!(admit_cc_reuse(&record(vec![]), &[], 1), Ok(false));
-        assert_eq!(admit_cc_reuse(&stored, &[dependency("include/a.h", A), dependency("include/new.h", B)], 1), Ok(false));
+        assert_eq!(
+            admit_cc_reuse(&stored, &[dependency("include/a.h", A), dependency("include/new.h", B)], 1),
+            Ok(false)
+        );
     }
 
     #[test]
     fn invalid_manifest_never_turns_into_a_cache_miss() {
-        for path in ["", "/etc/passwd", "C:/sdk/header.h", "a/../b", "a/./b", "a//b", "a\\b", "a\0b"] {
+        for path in [
+            "",
+            "/etc/passwd",
+            "C:/sdk/header.h",
+            "a/../b",
+            "a/./b",
+            "a//b",
+            "a\\b",
+            "a\0b",
+        ] {
             assert!(validate_cc_record(&record(vec![dependency(path, A)]), 1).is_err(), "{path:?}");
         }
         let duplicate = record(vec![dependency("a.h", A), dependency("b.h", A), dependency("a.h", B)]);
@@ -531,10 +585,7 @@ mod tests {
     #[test]
     fn probe_failure_validates_marker_digests_exit_and_json_shape() {
         let valid = probe_result();
-        assert_eq!(
-            decode_cc_probe_result(&valid),
-            Ok((b"compiler stdout\n".to_vec(), b"compiler stderr\n".to_vec())),
-        );
+        assert_eq!(decode_cc_probe_result(&valid), Ok((b"compiler stdout\n".to_vec(), b"compiler stderr\n".to_vec())),);
         let mut changed = valid.clone();
         changed.schema = "mantle-cc-probe-failure-v2".into();
         assert!(decode_cc_probe_result(&changed).is_err());
@@ -561,8 +612,18 @@ mod tests {
     fn probe_failure_rejects_unsafe_paths_and_oversize_or_invalid_diagnostics() {
         let valid = probe_result();
         let oversize_path = format!("/src/{}", "x".repeat(MAX_STRING_BYTES));
-        for path in ["", "/", "relative/file.c", "/src/../file.c", "/src/./file.c", "/src//file.c",
-            "/src\\file.c", "/src/file\n.c", "/src/file\0.c", &oversize_path] {
+        for path in [
+            "",
+            "/",
+            "relative/file.c",
+            "/src/../file.c",
+            "/src/./file.c",
+            "/src//file.c",
+            "/src\\file.c",
+            "/src/file\n.c",
+            "/src/file\0.c",
+            &oversize_path,
+        ] {
             for field in 0..3 {
                 let mut changed = valid.clone();
                 match field {
