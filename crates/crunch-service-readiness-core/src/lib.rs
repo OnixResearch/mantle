@@ -25,6 +25,8 @@ pub const MAX_CUSTOM_STATE_BYTES: usize = 48;
 pub const MAX_DEPENDENCIES: usize = 8;
 pub const MAX_CUSTOM_STATES: usize = 8;
 pub const MAX_SERVICES: usize = 64;
+// A depth-first pending stack can hold at most every edge of the bounded graph.
+const MAX_GRAPH_EDGES: usize = MAX_SERVICES.saturating_mul(MAX_DEPENDENCIES);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -212,8 +214,12 @@ impl ServiceAssertion {
         }
         // Identifiers admit no JSON escaping. This is the exact compact JSON byte
         // count for this struct's serde representation (including option/null).
-        let array_bytes =
-            |items: &[String]| items.iter().map(|item| item.len() + 2).sum::<usize>() + items.len().saturating_sub(1);
+        let array_bytes = |items: &[String]| {
+            items
+                .iter()
+                .fold(0usize, |bytes, item| bytes.saturating_add(item.len().saturating_add(2)))
+                .saturating_add(items.len().saturating_sub(1))
+        };
         let base = r#"{"schema":"","service_id":"","state":"","custom_states":[],"dependencies":[],"restart_policy":"","blocked_by":null,"coordination_state":true}"#.len();
         let policy_len = match self.restart_policy {
             RestartPolicy::Always => 6,
@@ -221,14 +227,18 @@ impl ServiceAssertion {
             RestartPolicy::All => 3,
             RestartPolicy::Never => 5,
         };
-        let bytes = base - 4
-            + SCHEMA.len()
-            + self.service_id.len()
-            + self.state.as_str().len()
-            + array_bytes(&self.custom_states)
-            + array_bytes(&self.dependencies)
-            + policy_len
-            + self.blocked_by.as_ref().map_or(4, |blocker| blocker.len() + 2);
+        let blocker_len = self.blocked_by.as_ref().map_or(4, |blocker| blocker.len().saturating_add(2));
+        let bytes = [
+            SCHEMA.len(),
+            self.service_id.len(),
+            self.state.as_str().len(),
+            array_bytes(&self.custom_states),
+            array_bytes(&self.dependencies),
+            policy_len,
+            blocker_len,
+        ]
+        .into_iter()
+        .fold(base.saturating_sub(4), usize::saturating_add);
         if bytes > MAX_ASSERTION_BYTES {
             return Err(Error::AssertionTooLarge);
         }
@@ -337,12 +347,12 @@ fn active_available<'a>(
     if !states.contains("started") || !states.contains("ready") || !visiting.insert(canonical_id) {
         return false;
     }
-    let available = declaration
+    let is_available = declaration
         .dependencies
         .iter()
         .all(|dependency| active_available(dependency, active, declarations, visiting));
     visiting.remove(canonical_id.as_str());
-    available
+    is_available
 }
 
 fn validate_dependency_graph(
@@ -361,33 +371,35 @@ fn validate_dependency_graph(
             }
         }
     }
-    fn visit<'a>(
-        id: &'a str,
-        declarations: &'a BTreeMap<String, ServiceDeclaration>,
-        visiting: &mut BTreeSet<&'a str>,
-        visited: &mut BTreeSet<&'a str>,
-    ) -> Result<(), Error> {
-        if visited.contains(id) {
-            return Ok(());
-        }
-        if !visiting.insert(id) {
-            return Err(Error::DependencyCycle);
-        }
-        for dependency in &declarations[id].dependencies {
-            if declarations.contains_key(dependency) {
-                visit(dependency, declarations, visiting, visited)?;
+    if declarations.is_empty() {
+        return Ok(());
+    }
+    // A maximum of MAX_SERVICES passes settles every acyclic graph. A missing
+    // dependency is permitted only when a previously declared service departed.
+    let mut settled = BTreeSet::new();
+    for _ in 0..declarations.len() {
+        let mut made_progress = false;
+        for (id, declaration) in declarations {
+            if settled.contains(id.as_str()) {
+                continue;
+            }
+            if declaration
+                .dependencies
+                .iter()
+                .all(|dependency| !declarations.contains_key(dependency) || settled.contains(dependency.as_str()))
+            {
+                settled.insert(id.as_str());
+                made_progress = true;
             }
         }
-        visiting.remove(id);
-        visited.insert(id);
-        Ok(())
+        if settled.len() == declarations.len() {
+            return Ok(());
+        }
+        if !made_progress {
+            return Err(Error::DependencyCycle);
+        }
     }
-    let mut visiting = BTreeSet::new();
-    let mut visited = BTreeSet::new();
-    for id in declarations.keys() {
-        visit(id, declarations, &mut visiting, &mut visited)?;
-    }
-    Ok(())
+    Err(Error::DependencyCycle)
 }
 
 pub struct ServiceGraph {
@@ -415,19 +427,37 @@ impl ServiceGraph {
         })
     }
 
+    fn dependency_ready(&self, id: &str) -> Result<bool, Error> {
+        let mut pending: [Option<&str>; MAX_GRAPH_EDGES] = [None; MAX_GRAPH_EDGES];
+        pending[0] = Some(id);
+        let mut pending_count = 1usize;
+        while pending_count > 0 {
+            pending_count = pending_count.saturating_sub(1);
+            let current = pending[pending_count].take().ok_or(Error::TooMany("dependencies"))?;
+            let state = self.runtime.get(current).ok_or_else(|| Error::UnknownService(current.into()))?;
+            if state.terminal == Some(TerminalState::Complete) {
+                continue;
+            }
+            if !state.started || !state.signalled_ready || state.terminal.is_some() {
+                return Ok(false);
+            }
+            let declaration = self.declarations.get(current).ok_or_else(|| Error::UnknownService(current.into()))?;
+            for dependency in &declaration.dependencies {
+                *pending.get_mut(pending_count).ok_or(Error::TooMany("dependencies"))? = Some(dependency);
+                pending_count = pending_count.saturating_add(1);
+            }
+        }
+        Ok(true)
+    }
+
     fn blocker(&self, id: &str) -> Result<Option<String>, Error> {
         let declaration = self.declarations.get(id).ok_or_else(|| Error::UnknownService(id.into()))?;
-        Ok(declaration
-            .dependencies
-            .iter()
-            .find(|dependency| {
-                let dependency_state = &self.runtime[*dependency];
-                dependency_state.terminal != Some(TerminalState::Complete)
-                    && !(dependency_state.started
-                        && dependency_state.signalled_ready
-                        && self.blocker(dependency).expect("validated acyclic graph").is_none())
-            })
-            .cloned())
+        for dependency in &declaration.dependencies {
+            if !self.dependency_ready(dependency)? {
+                return Ok(Some(dependency.clone()));
+            }
+        }
+        Ok(None)
     }
 
     pub fn snapshot(&self, id: &str) -> Result<ServiceSnapshot, Error> {
@@ -488,7 +518,7 @@ impl ServiceGraph {
         let declaration = self.declarations.get(id).ok_or_else(|| Error::UnknownService(id.into()))?;
         let before = self.snapshot(id)?;
         let mut restart = RestartDecision::None;
-        let state = self.runtime.get_mut(id).expect("declaration has runtime");
+        let state = self.runtime.get_mut(id).ok_or_else(|| Error::UnknownService(id.into()))?;
         match event {
             ServiceEvent::Started if !state.started && (state.terminal.is_none() || state.restart_pending) => {
                 state.terminal = None;
@@ -580,11 +610,11 @@ impl ServiceGraph {
                 return Err(Error::Duplicate("active assertion"));
             }
         }
-        let previously_declared = insert_declaration(&mut declarations, incoming)?;
+        let is_previously_declared = insert_declaration(&mut declarations, incoming)?;
         // An existing service remains declared when one of its dependency's
         // last facts disappears. New services must reference known services;
         // otherwise an unregistered name could masquerade as a blocker.
-        if !previously_declared {
+        if !is_previously_declared {
             for dependency in &incoming.dependencies {
                 if !declarations.contains_key(dependency) {
                     return Err(Error::UnknownDependency(dependency.clone()));
@@ -646,7 +676,7 @@ impl ServiceGraph {
                 return Err(Error::Duplicate("active assertion"));
             }
         }
-        let mut invalid = Vec::new();
+        let mut invalid = Vec::with_capacity(existing.len());
         for assertion in existing.iter().filter(|a| a.state == ServiceState::Ready) {
             let local = &active[&assertion.service_id];
             if local.contains("complete")
@@ -902,5 +932,35 @@ mod tests {
         failed.blocked_by = None;
         assert_eq!(ServiceGraph::admit_active(&[], &api), Err(Error::UnknownDependency("db".into())),);
         ServiceGraph::admit_active(&[api], &failed).unwrap();
+    }
+
+    #[test]
+    fn empty_graph_and_maximum_depth_dependency_chain_keep_boundary_behavior() {
+        let empty = ServiceGraph::new(vec![]).unwrap();
+        assert_eq!(empty.snapshot("absent"), Err(Error::UnknownService("absent".into())));
+
+        let declarations = (0..MAX_SERVICES)
+            .map(|index| {
+                let id = alloc::format!("s{index:02}");
+                let previous = index.checked_sub(1).map(|previous| alloc::format!("s{previous:02}"));
+                ServiceDeclaration {
+                    service_id: id,
+                    custom_states: vec![],
+                    dependencies: previous.into_iter().collect(),
+                    restart_policy: RestartPolicy::Always,
+                }
+            })
+            .collect();
+        let mut graph = ServiceGraph::new(declarations).unwrap();
+        graph.apply("s63", ServiceEvent::Started).unwrap();
+        assert_eq!(graph.snapshot("s63").unwrap().blocked_by.as_deref(), Some("s62"));
+        for index in 0..MAX_SERVICES {
+            let id = alloc::format!("s{index:02}");
+            if id != "s63" {
+                graph.apply(&id, ServiceEvent::Started).unwrap();
+            }
+            graph.apply(&id, ServiceEvent::Ready).unwrap();
+        }
+        assert!(graph.snapshot("s63").unwrap().ready);
     }
 }
