@@ -5115,25 +5115,8 @@ fn export_from_cli_inputs(
     if fetch_missing && !cached_fetches.is_empty() {
         return Err(RunError::Internal("--cached-fetch cannot be combined with --fetch-missing".to_string()));
     }
-    let mut cached = BTreeMap::<String, PathBuf>::new();
-    for mapping in cached_fetches {
-        let (url, filename) = mapping.split_once('=').ok_or_else(|| {
-            RunError::Internal(format!("invalid --cached-fetch mapping (expected URL=ABSOLUTE_FILE): {mapping}"))
-        })?;
-        let parsed = Url::parse(url)
-            .map_err(|error| RunError::Internal(format!("invalid cached fetch URL {url}: {error}")))?;
-        let path = PathBuf::from(filename);
-        if parsed.scheme() != "https" || !path.is_absolute() || filename.is_empty() {
-            return Err(RunError::Internal(format!(
-                "cached fetch requires a pinned HTTPS URL and an absolute local file: {mapping}"
-            )));
-        }
-        if cached.insert(url.to_string(), path).is_some() {
-            return Err(RunError::Internal(format!("duplicate cached fetch URL: {url}")));
-        }
-    }
     if build_roots.is_empty() {
-        if !cached.is_empty() {
+        if !cached_fetches.is_empty() {
             return Err(RunError::Internal("--cached-fetch requires --build-root with pinned fetch records".to_string()));
         }
         return plan_source_bundle(&specs, store_prefix);
@@ -5143,6 +5126,27 @@ fn export_from_cli_inputs(
     let mut available_sources = read_imported_source_records(state_dir)?;
     let mut records = canonicalize_source_specs(&specs, store_prefix)?;
     let expected = normalize_source_records(derived_records)?;
+    let mut cached = BTreeMap::<String, PathBuf>::new();
+    if !cached_fetches.is_empty() {
+        let expected_urls = expected
+            .iter()
+            .filter(|record| record.kind == SourceRecordKind::FixedUrl)
+            .filter_map(|record| record.metadata.get(RECORD_METADATA_URL_KEY).map(String::as_str))
+            .collect::<BTreeSet<_>>();
+        for mapping in cached_fetches {
+            let (url, filename) = resolve_cached_fetch_mapping(mapping, &expected_urls)?;
+            let parsed = Url::parse(url)
+                .map_err(|error| RunError::Internal(format!("invalid cached fetch URL {url}: {error}")))?;
+            if parsed.scheme() != "https" {
+                return Err(RunError::Internal(format!(
+                    "cached fetch requires a pinned HTTPS URL and an absolute local file: {mapping}"
+                )));
+            }
+            if cached.insert(url.to_string(), PathBuf::from(filename)).is_some() {
+                return Err(RunError::Internal(format!("duplicate cached fetch URL: {url}")));
+            }
+        }
+    }
     let mut used_cached = BTreeSet::<String>::new();
     for record in &expected {
         let Some(url) = record.metadata.get(RECORD_METADATA_URL_KEY) else {
@@ -5172,6 +5176,42 @@ fn export_from_cli_inputs(
         records.extend(materialize_export_records(&expected, &available_sources)?);
     }
     assemble_source_bundle(records, store_prefix)
+}
+
+fn resolve_cached_fetch_mapping<'a>(
+    mapping: &'a str,
+    expected_urls: &BTreeSet<&str>,
+) -> Result<(&'a str, &'a str), RunError> {
+    let mut matched = None;
+    let mut invalid_path = false;
+    for (separator, _) in mapping.match_indices('=') {
+        let url = &mapping[..separator];
+        if !expected_urls.contains(url) {
+            continue;
+        }
+        let filename = &mapping[separator + 1..];
+        if filename.is_empty() || !Path::new(filename).is_absolute() {
+            invalid_path = true;
+            continue;
+        }
+        if matched.is_some() {
+            return Err(RunError::Internal(format!("ambiguous --cached-fetch mapping: {mapping}")));
+        }
+        matched = Some((url, filename));
+    }
+    matched.ok_or_else(|| {
+        if invalid_path {
+            RunError::Internal(format!(
+                "cached fetch requires a pinned HTTPS URL and an absolute local file: {mapping}"
+            ))
+        } else if !mapping.contains('=') {
+            RunError::Internal(format!("invalid --cached-fetch mapping (expected URL=ABSOLUTE_FILE): {mapping}"))
+        } else {
+            RunError::Internal(format!(
+                "cached fetch URL does not match a pinned fixed-output source in --build-root: {mapping}"
+            ))
+        }
+    })
 }
 
 fn materialize_cached_fetch_record(record: &SourceRecord, path: &Path) -> Result<SourceRecord, RunError> {

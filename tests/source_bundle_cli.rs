@@ -69,7 +69,7 @@ mantle.fetchurl {{
     std::fs::write(root, source).expect("write fetchurl build root");
 }
 
-fn write_cached_https_build_root(root: &Path) -> String {
+fn write_cached_https_build_root(root: &Path, url: &str) -> String {
     use base64::Engine as _;
     use sha2::Digest as _;
 
@@ -81,7 +81,7 @@ fn write_cached_https_build_root(root: &Path) -> String {
         r#"let mantle = import "lib.ncl" in
 
 mantle.fetchurl {{
-  url = "{TEST_CACHED_HTTPS_URL}",
+  url = "{url}",
   hash = "{hash}",
   name = "pinned-android-tool",
 }}
@@ -405,7 +405,7 @@ fn source_bundle_cli_caches_pinned_https_archive_for_offline_import_and_prefligh
     let archive = temp.path().join("android-tool.zip");
     let state_dir = temp.path().join("state");
     let bundle_path = temp.path().join("android-tool.bundle.json");
-    let hash = write_cached_https_build_root(&root);
+    let hash = write_cached_https_build_root(&root, TEST_CACHED_HTTPS_URL);
     std::fs::write(&archive, TEST_CACHED_HTTPS_BYTES).expect("write local pinned archive");
     let mapping = format!("{TEST_CACHED_HTTPS_URL}={}", archive.display());
 
@@ -462,13 +462,58 @@ fn source_bundle_cli_caches_pinned_https_archive_for_offline_import_and_prefligh
 }
 
 #[test]
+fn source_bundle_cli_preserves_pinned_query_url_and_archive_path_containing_equals() {
+    const QUERY_URL: &str = "https://example.invalid/pinned-android-tool.zip?channel=stable";
+    let temp = tempfile::tempdir().expect("tempdir");
+    let root = temp.path().join("android-tool-query.ncl");
+    let archive = temp.path().join("android=tool.zip");
+    let state_dir = temp.path().join("state");
+    let bundle_path = temp.path().join("android-tool-query.bundle.json");
+    let rejected_path = temp.path().join("wrong-url.bundle.json");
+    let expected_hash = write_cached_https_build_root(&root, QUERY_URL);
+    std::fs::write(&archive, TEST_CACHED_HTTPS_BYTES).expect("write pinned local archive");
+
+    let wrong_url = format!("https://example.invalid/pinned-android-tool.zip?channel=other={}", archive.display());
+    let wrong = cached_https_export_command(&state_dir, &root)
+        .arg("--cached-fetch")
+        .arg(&wrong_url)
+        .arg("--to")
+        .arg(&rejected_path)
+        .output()
+        .expect("reject an unpinned query URL");
+    let diagnostic = String::from_utf8_lossy(&wrong.stderr);
+    assert!(!wrong.status.success(), "wrong pinned URL must fail closed");
+    assert!(diagnostic.contains("does not match a pinned fixed-output source"), "{diagnostic}");
+    assert!(!rejected_path.exists(), "unmatched URL must not publish a bundle");
+
+    let mapping = format!("{QUERY_URL}={}", archive.display());
+    let export = read_json_stdout(
+        cached_https_export_command(&state_dir, &root)
+            .arg("--cached-fetch")
+            .arg(&mapping)
+            .arg("--to")
+            .arg(&bundle_path)
+            .output()
+            .expect("export pinned query URL using equals-bearing local archive path"),
+    );
+    assert_eq!(export["ready_class"], "ready");
+    let bundle: Value =
+        serde_json::from_slice(&std::fs::read(&bundle_path).expect("read exported bundle")).expect("parse bundle");
+    let record = &bundle["records"][0];
+    assert_eq!(record["metadata"]["url"], QUERY_URL);
+    assert_eq!(record["metadata"]["hash"], expected_hash);
+    assert_eq!(record["payload_bytes"].as_u64(), Some(TEST_CACHED_HTTPS_BYTES.len() as u64));
+    assert_eq!(record["files"][0]["content_hex"], data_encoding::HEXLOWER.encode(TEST_CACHED_HTTPS_BYTES));
+}
+
+#[test]
 fn source_bundle_cli_rejects_wrong_duplicate_and_drifted_cached_https_archives() {
     let temp = tempfile::tempdir().expect("tempdir");
     let root = temp.path().join("android-tool.ncl");
     let archive = temp.path().join("android-tool.zip");
     let state_dir = temp.path().join("state");
     let bundle_path = temp.path().join("rejected.bundle.json");
-    write_cached_https_build_root(&root);
+    write_cached_https_build_root(&root, TEST_CACHED_HTTPS_URL);
     std::fs::write(&archive, TEST_CACHED_HTTPS_BYTES).expect("write local pinned archive");
     let mapping = format!("{TEST_CACHED_HTTPS_URL}={}", archive.display());
     let wrong_mapping = format!("https://example.invalid/other-android-tool.zip={}", archive.display());
