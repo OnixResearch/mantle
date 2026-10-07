@@ -184,7 +184,7 @@ fn stage_script(kind: StepKind, plan: &ApkPlan, source: &str, paths: &BTreeMap<S
         }
         StepKind::Aapt2Link => {
             script.push_str("/bin/busybox mkdir -p \"$out/java\"\nset --\n");
-            script.push_str(&format!("/bin/busybox find {} -type f -name '*.flat' -print | /bin/busybox sort > \"$TMPDIR/android-flats\"\nwhile IFS= read -r path; do set -- \"$@\" -R \"$path\"; done < \"$TMPDIR/android-flats\"\n",
+            script.push_str(&format!("/bin/busybox find {} -type f -name '*.flat' -print | /bin/busybox sort > \"$TMPDIR/android-flats\"\nwhile IFS= read -r path; do set -- \"$@\" \"$path\"; done < \"$TMPDIR/android-flats\"\n",
                 q(output("compile")?)?));
             script.push_str(&format!("{run} {} link -o \"$out/base.apk\" --manifest {} -I {} --java \"$out/java\" --custom-package {} --rename-manifest-package {} --version-code {} --version-name {} \"$@\"\n",
                 q(&format!("{tools}/aapt2"))?, q(&format!("{source}/{}", plan.manifest))?, q(&format!("{platform}/android.jar"))?,
@@ -283,7 +283,7 @@ fn prepare_with_records(plan: &ApkPlan, inputs: &ApkInputs, prefix: &str, cohort
             Some(FixedOutput { hash: record.sha256.clone(), algo: "sha256".to_owned(), mode: "flat".to_owned() }));
         let archive_path = output_path(&fetched, &mut cache, prefix)?;
         let mut env = HashMap::from([("SOURCE_DATE_EPOCH".to_owned(), plan.reproducibility.entry_timestamp_epoch.to_string()),
-            ("LC_ALL".to_owned(), "C".to_owned()), ("TZ".to_owned(), "UTC".to_owned())]);
+            ("TZ".to_owned(), "UTC".to_owned())]);
         env.insert("MANTLE_ANDROID_TOOLCHAIN_SHA256".to_owned(), record.sha256.clone());
         env.insert("MANTLE_ANDROID_TOOLCHAIN_RECORD_BLAKE3".to_owned(), record.record_blake3.clone());
         env.insert("MANTLE_ANDROID_TOOLCHAIN_COMPONENT".to_owned(), component.to_owned());
@@ -332,7 +332,7 @@ fn prepare_with_records(plan: &ApkPlan, inputs: &ApkInputs, prefix: &str, cohort
         let script = stage_script(step.kind, plan, &inputs.source_root, &stage_paths, &prior,
             &inputs.runtime_loader, &libraries)?;
         let mut env = HashMap::from([("SOURCE_DATE_EPOCH".to_owned(), plan.reproducibility.entry_timestamp_epoch.to_string()),
-            ("LC_ALL".to_owned(), "C".to_owned()), ("TZ".to_owned(), "UTC".to_owned())]);
+            ("TZ".to_owned(), "UTC".to_owned())]);
         if let Some(jdk) = stage_paths.get("jdk") { env.insert("JAVA_HOME".to_owned(), jdk.clone()); }
         for component in step.required_toolchains {
             let record = tool_record(&records, component);
@@ -465,6 +465,36 @@ mod tests {
         assert!(prepare_with_records(&plan, &inputs, PREFIX, &records).is_err());
         inputs.native_libgcc_root = "/usr/lib/libgcc".into();
         assert!(prepare_with_records(&plan, &inputs, PREFIX, &records).is_err());
+    }
+
+    #[test]
+    fn signed_apk_graph_is_accepted_by_strict_build_environment() {
+        fn check(derivation: &CrunchDerivation) {
+            for key in derivation.env.keys() {
+                assert!(crunch_build::classify_denied_environment_variable(key).is_none(),
+                    "{} cannot build in strict mode because of {key}", derivation.name);
+            }
+            for input in &derivation.inputs {
+                match input {
+                    Input::Derivation(child) => check(child),
+                    Input::OutputSelection(output) => check(&output.drv),
+                    _ => {}
+                }
+            }
+        }
+
+        let locale = crunch_build::classify_denied_environment_variable("LC_ALL").unwrap();
+        assert_eq!(locale.class, crunch_build::ENV_REJECTION_LOCALE);
+        let (_dir, mut plan, inputs, records) = fixture();
+        plan.signing = Some(SigningConfig {
+            keystore: format!("{SIGNING}/release.jks"),
+            store_password_file: format!("{SIGNING}/store.pass"),
+            key_password_file: format!("{SIGNING}/key.pass"),
+            alias: "release".into(),
+            schemes: vec!["v1".into(), "v2".into(), "v3".into()],
+        });
+        let graph = prepare_with_records(&plan, &inputs, PREFIX, &records).unwrap();
+        check(&graph.final_derivation);
     }
 
     #[test]

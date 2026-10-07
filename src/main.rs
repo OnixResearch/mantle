@@ -1,4 +1,7 @@
 #![feature(register_tool)]
+// Both CLI binaries share this root; the exhaustive async attestation dispatcher
+// needs deeper rustc query layout than the default on nightly 1.99.
+#![recursion_limit = "256"]
 // machine-artifact-public: eval.raw-json-output
 #![register_tool(tigerstyle)]
 mod artifact_cmd;
