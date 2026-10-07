@@ -344,6 +344,24 @@ local toolchain archives against its pinned SHA-256 records, and creates a new
 and final store path do **not** establish a signed APK, imported sources, or
 release eligibility.
 
+### Bounded signed APK A/B observation (2026-10-07)
+
+On Leviathan, the pinned Android SDK graph ran with offline source preflight,
+`--no-substitute`, and strict sandbox policy in two independently prepared
+state/store pairs. Each produced the same 12,695-byte **test-signed** APK:
+SHA-256 `aee268f6c7f37746c46999d8fa3f060d12360174578e486195569b18844b652d`;
+BLAKE3 `35930d2eb5e2b57e4b583e5faa26685680b018260c3f365d62b2360b17c6675b`.
+The pinned SDK's `apksigner verify --verbose --print-certs` reported v1, v2,
+and v3 true in both states; a one-byte change in the ZIP central directory
+made the same verifier reject each scratch copy with an integrity digest
+mismatch. Byte comparison, DEX, compiled manifest, packaged application-label
+resource, and APK Signing Block checks passed. The [bounded evidence and failed
+guard history](.cairn/changes/prove-apk-adapter-real-build/evidence/real-apk-2026-10-07.txt)
+name the inputs and receipts. This is **not** a checked-in repeatable proof
+rail or completion of that Cairn change; it establishes neither device
+install/launch/runtime behavior, third-party source provenance, production
+signing trust, nor release eligibility.
+
 ## Mantlepkgs catalogs
 
 Mantlepkgs generates a bounded package catalog from locked, concrete Nixpkgs
