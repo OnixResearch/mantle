@@ -4791,7 +4791,15 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
             cached_fetches,
             to,
             fetch_missing,
-        } => cmd_export_source_bundle(&sources, &build_roots, &import_paths, &cached_fetches, &to, fetch_missing, context),
+        } => cmd_export_source_bundle(
+            &sources,
+            &build_roots,
+            &import_paths,
+            &cached_fetches,
+            &to,
+            fetch_missing,
+            context,
+        ),
         crate::SourceBundleAction::BootstrapProfile {
             mode,
             provider_archive,
@@ -5117,7 +5125,9 @@ fn export_from_cli_inputs(
     }
     if build_roots.is_empty() {
         if !cached_fetches.is_empty() {
-            return Err(RunError::Internal("--cached-fetch requires --build-root with pinned fetch records".to_string()));
+            return Err(RunError::Internal(
+                "--cached-fetch requires --build-root with pinned fetch records".to_string(),
+            ));
         }
         return plan_source_bundle(&specs, store_prefix);
     }

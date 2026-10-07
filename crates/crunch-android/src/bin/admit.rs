@@ -3,26 +3,41 @@
 
 use std::error::Error;
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::Component;
+use std::path::Path;
+use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::Args;
+use clap::Parser;
+use clap::Subcommand;
 use crunch_android::ApkInputs;
-use crunch_android_core::{ApkPlan, validate_and_lower};
-use crunch_nar::{CaseHackPolicy, FilesystemNarRequest, observe_path_blocking};
-use crunch_store::{StoreBackend, StoreConfig, StoreHandle, VerifiedSourceIngestRequest};
+use crunch_android_core::ApkPlan;
+use crunch_android_core::validate_and_lower;
+use crunch_nar::CaseHackPolicy;
+use crunch_nar::FilesystemNarRequest;
+use crunch_nar::observe_path_blocking;
+use crunch_store::StoreBackend;
+use crunch_store::StoreConfig;
+use crunch_store::StoreHandle;
+use crunch_store::VerifiedSourceIngestRequest;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::nixhash::HashAlgo;
 use nix_compat::store_path::StorePath;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 const NAR_BYTES_MAX: u64 = 1_073_741_824;
 const INPUT_COUNT: usize = 4;
-const NON_CLAIM: &str = "test-only signer and prebuilt inputs; no APK, SDK provenance, source-built toolchain, or release claim";
+const NON_CLAIM: &str =
+    "test-only signer and prebuilt inputs; no APK, SDK provenance, source-built toolchain, or release claim";
 
 type AdmissionResult<T> = Result<T, Box<dyn Error>>;
 
 #[derive(Parser)]
-#[command(name = "crunch-android-admit", about = "Observe or admit exactly four signed APK input trees")]
+#[command(
+    name = "crunch-android-admit",
+    about = "Observe or admit exactly four signed APK input trees"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -119,7 +134,9 @@ struct AdmissionReceipt {
 }
 
 fn local_member<'a>(full: &'a str, root: &str) -> AdmissionResult<&'a str> {
-    let relative = full.strip_prefix(root).and_then(|rest| rest.strip_prefix('/'))
+    let relative = full
+        .strip_prefix(root)
+        .and_then(|rest| rest.strip_prefix('/'))
         .ok_or("APK member is outside its declared logical source object")?;
     if relative.is_empty() || !Path::new(relative).components().all(|part| matches!(part, Component::Normal(_))) {
         return Err(format!("APK member is not a normalized path within {root}: {full}").into());
@@ -127,11 +144,18 @@ fn local_member<'a>(full: &'a str, root: &str) -> AdmissionResult<&'a str> {
     Ok(relative)
 }
 
-fn check_local_member(root: &Path, relative: &str, file_required: bool, allow_relative_symlinks: bool) -> AdmissionResult<()> {
+fn check_local_member(
+    root: &Path,
+    relative: &str,
+    file_required: bool,
+    allow_relative_symlinks: bool,
+) -> AdmissionResult<()> {
     let canonical_root = fs::canonicalize(root)?;
     let mut member = canonical_root.clone();
     for part in Path::new(relative).components() {
-        let Component::Normal(name) = part else { return Err("APK local member path is not normalized".into()); };
+        let Component::Normal(name) = part else {
+            return Err("APK local member path is not normalized".into());
+        };
         member.push(name);
         let metadata = fs::symlink_metadata(&member)?;
         if metadata.file_type().is_symlink() {
@@ -162,8 +186,8 @@ fn validate_native_runtime(inputs: &ApkInputs, glibc: &LocalInput, libgcc: &Loca
         return Err("APK runtime requires exactly one glibc and one libgcc library directory".into());
     }
     for (entry, required_library) in [(glibc, "libc.so.6"), (libgcc, "libgcc_s.so.1")] {
-        let mut matches = inputs.runtime_library_paths.iter()
-            .filter_map(|path| local_member(path, &entry.store_path).ok());
+        let mut matches =
+            inputs.runtime_library_paths.iter().filter_map(|path| local_member(path, &entry.store_path).ok());
         let relative = matches.next().ok_or("APK runtime missing declared library directory")?;
         if matches.next().is_some() {
             return Err(format!("APK runtime library directory is ambiguous under {}", entry.store_path).into());
@@ -177,14 +201,27 @@ fn validate_native_runtime(inputs: &ApkInputs, glibc: &LocalInput, libgcc: &Loca
     Ok(())
 }
 
-fn validate_bindings(plan: &ApkPlan, inputs: &ApkInputs, manifest: Manifest, prefix: &str) -> AdmissionResult<Vec<LocalInput>> {
+fn validate_bindings(
+    plan: &ApkPlan,
+    inputs: &ApkInputs,
+    manifest: Manifest,
+    prefix: &str,
+) -> AdmissionResult<Vec<LocalInput>> {
     validate_and_lower(plan).map_err(|error| format!("invalid APK plan: {error:?}"))?;
     let signing = plan.signing.as_ref().ok_or("Android local admission requires the signed test plan")?;
     let mut entries = manifest.entries.into_iter().collect::<Vec<_>>();
     entries.sort_by_key(|entry| entry.role);
-    let [app, glibc, libgcc, signing_root] = entries.as_slice() else { unreachable!("four required roles") };
+    let [app, glibc, libgcc, signing_root] = entries.as_slice() else {
+        unreachable!("four required roles")
+    };
     if [app.role, glibc.role, libgcc.role, signing_root.role]
-        != [Role::AppSource, Role::NativeGlibc, Role::NativeLibgcc, Role::TestSigning] {
+        != [
+            Role::AppSource,
+            Role::NativeGlibc,
+            Role::NativeLibgcc,
+            Role::TestSigning,
+        ]
+    {
         return Err("expected exactly one app-source, native-glibc, native-libgcc and test-signing input".into());
     }
     let mut physical_roots: [Option<PathBuf>; INPUT_COUNT] = std::array::from_fn(|_| None);
@@ -192,10 +229,13 @@ fn validate_bindings(plan: &ApkPlan, inputs: &ApkInputs, manifest: Manifest, pre
         let parsed: StorePath<String> = StorePath::from_absolute_path_with_prefix(entry.store_path.as_bytes(), prefix)
             .map_err(|error| format!("invalid APK logical source path {}: {error}", entry.store_path))?;
         if parsed.to_absolute_path_with_prefix(prefix) != entry.store_path
-            || entries[..index].iter().any(|prior| prior.store_path == entry.store_path) {
+            || entries[..index].iter().any(|prior| prior.store_path == entry.store_path)
+        {
             return Err("APK source bindings require four distinct complete store objects".into());
         }
-        if !entry.source_path.is_absolute() { return Err("APK local source paths must be absolute".into()); }
+        if !entry.source_path.is_absolute() {
+            return Err("APK local source paths must be absolute".into());
+        }
         let metadata = fs::symlink_metadata(&entry.source_path)
             .map_err(|error| format!("missing APK local source {}: {error}", entry.source_path.display()))?;
         if !metadata.is_dir() || metadata.file_type().is_symlink() {
@@ -216,7 +256,11 @@ fn validate_bindings(plan: &ApkPlan, inputs: &ApkInputs, manifest: Manifest, pre
         check_local_member(&app.source_path, member, true, true)?;
     }
     validate_native_runtime(inputs, glibc, libgcc)?;
-    for member in [&signing.keystore, &signing.store_password_file, &signing.key_password_file] {
+    for member in [
+        &signing.keystore,
+        &signing.store_password_file,
+        &signing.key_password_file,
+    ] {
         let member = local_member(member, &signing_root.store_path)?;
         check_local_member(&signing_root.source_path, member, true, false)?;
     }
@@ -225,18 +269,28 @@ fn validate_bindings(plan: &ApkPlan, inputs: &ApkInputs, manifest: Manifest, pre
 
 async fn observe_nar(path: &Path) -> AdmissionResult<NarFacts> {
     let metadata = fs::symlink_metadata(path)?;
-    if metadata.file_type().is_symlink() { return Err(format!("refusing symlink NAR root: {}", path.display()).into()); }
-    let sha = observe_path_blocking(path.to_path_buf(), FilesystemNarRequest::new(
-        HashAlgo::Sha256, CaseHackPolicy::native(), NAR_BYTES_MAX,
-    )).await?;
-    let blake = observe_path_blocking(path.to_path_buf(), FilesystemNarRequest::new(
-        HashAlgo::Blake3, CaseHackPolicy::native(), NAR_BYTES_MAX,
-    )).await?;
-    let confirmed = observe_path_blocking(path.to_path_buf(), FilesystemNarRequest::new(
-        HashAlgo::Sha256, CaseHackPolicy::native(), NAR_BYTES_MAX,
-    )).await?;
-    if sha.nar_size != blake.nar_size || sha.nar_size != confirmed.nar_size
-        || sha.digest.digest_as_bytes() != confirmed.digest.digest_as_bytes() {
+    if metadata.file_type().is_symlink() {
+        return Err(format!("refusing symlink NAR root: {}", path.display()).into());
+    }
+    let sha = observe_path_blocking(
+        path.to_path_buf(),
+        FilesystemNarRequest::new(HashAlgo::Sha256, CaseHackPolicy::native(), NAR_BYTES_MAX),
+    )
+    .await?;
+    let blake = observe_path_blocking(
+        path.to_path_buf(),
+        FilesystemNarRequest::new(HashAlgo::Blake3, CaseHackPolicy::native(), NAR_BYTES_MAX),
+    )
+    .await?;
+    let confirmed = observe_path_blocking(
+        path.to_path_buf(),
+        FilesystemNarRequest::new(HashAlgo::Sha256, CaseHackPolicy::native(), NAR_BYTES_MAX),
+    )
+    .await?;
+    if sha.nar_size != blake.nar_size
+        || sha.nar_size != confirmed.nar_size
+        || sha.digest.digest_as_bytes() != confirmed.digest.digest_as_bytes()
+    {
         return Err("APK source changed during NAR observations".into());
     }
     Ok(NarFacts {
@@ -256,13 +310,23 @@ fn check_expected(entry: &LocalInput, observed: &NarFacts) -> AdmissionResult<()
     Ok(())
 }
 
-fn check_signed(info: &snix_store::pathinfoservice::PathInfo, logical: &str, prefix: &str, trusted: &VerifyingKey) -> AdmissionResult<()> {
+fn check_signed(
+    info: &snix_store::pathinfoservice::PathInfo,
+    logical: &str,
+    prefix: &str,
+    trusted: &VerifyingKey,
+) -> AdmissionResult<()> {
     if info.store_path.to_absolute_path_with_prefix(prefix) != logical {
         return Err(format!("APK source PathInfo has a different logical path: {logical}").into());
     }
-    if info.ca.is_some() { return Err(format!("APK local source must have signer-bound, non-CA PathInfo: {logical}").into()); }
-    let verified = crunch_build::signing::verify_pathinfo_signatures_with_store_dir(info, std::slice::from_ref(trusted), prefix);
-    if verified.trusted_count < 1 { return Err(format!("APK source signer is not trusted: {logical}").into()); }
+    if info.ca.is_some() {
+        return Err(format!("APK local source must have signer-bound, non-CA PathInfo: {logical}").into());
+    }
+    let verified =
+        crunch_build::signing::verify_pathinfo_signatures_with_store_dir(info, std::slice::from_ref(trusted), prefix);
+    if verified.trusted_count < 1 {
+        return Err(format!("APK source signer is not trusted: {logical}").into());
+    }
     Ok(())
 }
 
@@ -272,7 +336,9 @@ async fn prepare(common: &Common) -> AdmissionResult<(Vec<LocalInput>, Vec<NarFa
     let manifest: Manifest = serde_json::from_slice(&fs::read(&common.manifest)?)?;
     let entries = validate_bindings(&plan, &inputs, manifest, &common.store_prefix)?;
     let mut facts = Vec::with_capacity(INPUT_COUNT);
-    for entry in &entries { facts.push(observe_nar(&entry.source_path).await?); }
+    for entry in &entries {
+        facts.push(observe_nar(&entry.source_path).await?);
+    }
     Ok((entries, facts))
 }
 
@@ -291,73 +357,118 @@ async fn preflight_inputs(
 ) -> AdmissionResult<()> {
     // A cached PathInfo alone never establishes physical source readiness.
     for (entry, expected) in entries.iter().zip(facts) {
-        let path: StorePath<String> = StorePath::from_absolute_path_with_prefix(entry.store_path.as_bytes(), &args.common.store_prefix)?;
+        let path: StorePath<String> =
+            StorePath::from_absolute_path_with_prefix(entry.store_path.as_bytes(), &args.common.store_prefix)?;
         let actual_path = args.store.join(path.to_string());
-        if let Some(existing) = handle.pathinfo_service().get(*path.digest()).await
-            .map_err(std::io::Error::other)? {
+        if let Some(existing) = handle.pathinfo_service().get(*path.digest()).await.map_err(std::io::Error::other)? {
             check_signed(&existing, &entry.store_path, &args.common.store_prefix, public_key)?;
             if observe_nar(&actual_path).await? != *expected {
                 return Err(format!("cached APK source physical NAR differs: {}", entry.store_path).into());
             }
-            handle.adopt_verified_local_output(&entry.store_path, path.name(), &keypair.signing_key, None).await?;
+            handle
+                .adopt_verified_local_output(&entry.store_path, path.name(), &keypair.signing_key, None)
+                .await?;
         } else {
             match fs::symlink_metadata(&actual_path) {
-                Ok(_) => return Err(format!("APK source physical object lacks a signed PathInfo: {}", entry.store_path).into()),
+                Ok(_) => {
+                    return Err(
+                        format!("APK source physical object lacks a signed PathInfo: {}", entry.store_path).into()
+                    );
+                }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(format!("inspecting APK source physical object {}: {error}", actual_path.display()).into()),
+                Err(error) => {
+                    return Err(
+                        format!("inspecting APK source physical object {}: {error}", actual_path.display()).into()
+                    );
+                }
             }
         }
-        let candidate = handle.preflight_verified_source(VerifiedSourceIngestRequest {
-            source_path: &entry.source_path, logical_store_path: &entry.store_path,
-            source_name: path.name(), signing_key: &keypair.signing_key,
-        }).await?;
+        let candidate = handle
+            .preflight_verified_source(VerifiedSourceIngestRequest {
+                source_path: &entry.source_path,
+                logical_store_path: &entry.store_path,
+                source_name: path.name(),
+                signing_key: &keypair.signing_key,
+            })
+            .await?;
         check_signed(&candidate, &entry.store_path, &args.common.store_prefix, public_key)?;
         if candidate.nar_size != expected.nar_size
-            || data_encoding::HEXLOWER.encode(&candidate.nar_sha256) != expected.nar_sha256 {
+            || data_encoding::HEXLOWER.encode(&candidate.nar_sha256) != expected.nar_sha256
+        {
             return Err(format!("APK source candidate NAR differs: {}", entry.store_path).into());
         }
     }
     Ok(())
 }
 
-async fn admit_prepared(args: AdmitArgs, entries: Vec<LocalInput>, facts: Vec<NarFacts>) -> AdmissionResult<AdmissionReceipt> {
-    for (entry, observed) in entries.iter().zip(&facts) { check_expected(entry, observed)?; }
+async fn admit_prepared(
+    args: AdmitArgs,
+    entries: Vec<LocalInput>,
+    facts: Vec<NarFacts>,
+) -> AdmissionResult<AdmissionReceipt> {
+    for (entry, observed) in entries.iter().zip(&facts) {
+        check_expected(entry, observed)?;
+    }
     let keypair = crunch_build::signing::load_keypair(&fs::read_to_string(&args.signing_key)?)
         .map_err(|error| format!("existing Mantle signer invalid: {error}"))?;
     let public_key = VerifyingKey::parse(fs::read_to_string(&args.trusted_public_key)?.trim())
         .map_err(|error| format!("trusted Mantle public key invalid: {error}"))?;
-    if keypair.verifying_key != public_key { return Err("Mantle signer is not the exact trusted public key".into()); }
+    if keypair.verifying_key != public_key {
+        return Err("Mantle signer is not the exact trusted public key".into());
+    }
     if !args.store.is_absolute() || !args.state_dir.is_absolute() || args.store == args.state_dir {
         return Err("APK physical store and state must be different absolute paths".into());
     }
-    let mut handle = StoreHandle::open(StoreConfig::new(StoreBackend::Snix, args.state_dir.clone(),
-        args.store.clone(), args.common.store_prefix.clone())).await?;
+    let mut handle = StoreHandle::open(StoreConfig::new(
+        StoreBackend::Snix,
+        args.state_dir.clone(),
+        args.store.clone(),
+        args.common.store_prefix.clone(),
+    ))
+    .await?;
     // Preflight all four before publishing any signed PathInfo.
     preflight_inputs(&mut handle, &args, &entries, &facts, &keypair, &public_key).await?;
     let mut records = Vec::with_capacity(INPUT_COUNT);
     for (entry, expected) in entries.iter().zip(&facts) {
-        let path: StorePath<String> = StorePath::from_absolute_path_with_prefix(entry.store_path.as_bytes(), &args.common.store_prefix)?;
+        let path: StorePath<String> =
+            StorePath::from_absolute_path_with_prefix(entry.store_path.as_bytes(), &args.common.store_prefix)?;
         let request = VerifiedSourceIngestRequest {
-            source_path: &entry.source_path, logical_store_path: &entry.store_path,
-            source_name: path.name(), signing_key: &keypair.signing_key,
+            source_path: &entry.source_path,
+            logical_store_path: &entry.store_path,
+            source_name: path.name(),
+            signing_key: &keypair.signing_key,
         };
         let info = handle.ingest_verified_source(request).await?;
         check_signed(&info, &entry.store_path, &args.common.store_prefix, &public_key)?;
-        let exported = handle.export_cached_path_info(&path).await?
+        let exported = handle
+            .export_cached_path_info(&path)
+            .await?
             .ok_or("APK source PathInfo lacks complete castore content")?;
-        if exported != info { return Err("APK source PathInfo changed during physical export".into()); }
+        if exported != info {
+            return Err("APK source PathInfo changed during physical export".into());
+        }
         // This adoption MUST only read back an already-present PathInfo. Its
         // absent-PathInfo branch signs a new one, so never use it as a probe.
-        let persisted = handle.pathinfo_service().get(*path.digest()).await
+        let persisted = handle
+            .pathinfo_service()
+            .get(*path.digest())
+            .await
             .map_err(std::io::Error::other)?
             .ok_or("APK source PathInfo missing after ingest")?;
-        if persisted != info { return Err("APK source persisted PathInfo differs from ingested PathInfo".into()); }
-        let observed = handle.adopt_verified_local_output(&entry.store_path, path.name(), &keypair.signing_key, None).await?;
-        if observed != persisted { return Err("APK source physical NAR or node differs from signed PathInfo".into()); }
+        if persisted != info {
+            return Err("APK source persisted PathInfo differs from ingested PathInfo".into());
+        }
+        let observed = handle
+            .adopt_verified_local_output(&entry.store_path, path.name(), &keypair.signing_key, None)
+            .await?;
+        if observed != persisted {
+            return Err("APK source physical NAR or node differs from signed PathInfo".into());
+        }
         let slice = handle.observe_source_slice(&observed.node, "").await?;
         if slice.nar_size() != expected.nar_size
             || data_encoding::HEXLOWER.encode(&slice.nar_sha256()) != expected.nar_sha256
-            || data_encoding::HEXLOWER.encode(&slice.nar_blake3()) != expected.nar_blake3 {
+            || data_encoding::HEXLOWER.encode(&slice.nar_blake3()) != expected.nar_blake3
+        {
             return Err("APK source castore NAR differs from preflighted source bytes".into());
         }
         let actual_path = args.store.join(path.to_string());
@@ -365,11 +476,20 @@ async fn admit_prepared(args: AdmitArgs, entries: Vec<LocalInput>, facts: Vec<Na
             return Err(format!("APK source physical NAR differs after export: {}", entry.store_path).into());
         }
         check_signed(&observed, &entry.store_path, &args.common.store_prefix, &public_key)?;
-        records.push(InputReceipt { role: entry.role, store_path: entry.store_path.clone(),
-            nar: expected.clone(), signer: Some(public_key.to_string()), physical_path: Some(actual_path) });
+        records.push(InputReceipt {
+            role: entry.role,
+            store_path: entry.store_path.clone(),
+            nar: expected.clone(),
+            signer: Some(public_key.to_string()),
+            physical_path: Some(actual_path),
+        });
     }
-    Ok(AdmissionReceipt { schema: "mantle-android-local-input-admission-v1", ready_class: "signed-physical",
-        records, non_claim: NON_CLAIM })
+    Ok(AdmissionReceipt {
+        schema: "mantle-android-local-input-admission-v1",
+        ready_class: "signed-physical",
+        records,
+        non_claim: NON_CLAIM,
+    })
 }
 
 #[tokio::main]
@@ -377,10 +497,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let report = match Cli::parse().command {
         Command::Observe(common) => {
             let (entries, facts) = prepare(&common).await?;
-            AdmissionReceipt { schema: "mantle-android-local-input-admission-v1", ready_class: "observed-only",
-                records: entries.into_iter().zip(facts).map(|(entry, nar)| InputReceipt {
-                    role: entry.role, store_path: entry.store_path, nar, signer: None, physical_path: None,
-                }).collect(), non_claim: NON_CLAIM }
+            AdmissionReceipt {
+                schema: "mantle-android-local-input-admission-v1",
+                ready_class: "observed-only",
+                records: entries
+                    .into_iter()
+                    .zip(facts)
+                    .map(|(entry, nar)| InputReceipt {
+                        role: entry.role,
+                        store_path: entry.store_path,
+                        nar,
+                        signer: None,
+                        physical_path: None,
+                    })
+                    .collect(),
+                non_claim: NON_CLAIM,
+            }
         }
         Command::Admit(args) => admit(args).await?,
     };
@@ -390,15 +522,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
+    use crunch_android_core::ReproducibilityPolicy;
+    use crunch_android_core::SigningConfig;
+    use crunch_android_core::ToolchainIdentity;
+    use crunch_android_core::ToolchainRefs;
+
     use super::*;
-    use crunch_android_core::{ReproducibilityPolicy, SigningConfig, ToolchainIdentity, ToolchainRefs};
 
     const PREFIX: &str = "/mantle/store";
     const APP: &str = "/mantle/store/0123456789abcdfghijklmnpqrsvwxyz-android-app";
     const GLIBC: &str = "/mantle/store/1123456789abcdfghijklmnpqrsvwxyz-android-glibc";
     const LIBGCC: &str = "/mantle/store/3123456789abcdfghijklmnpqrsvwxyz-android-libgcc";
     const SIGNING: &str = "/mantle/store/2123456789abcdfghijklmnpqrsvwxyz-android-test-signing";
-    const TEST_SIGNER: &str = "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
+    const TEST_SIGNER: &str =
+        "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
 
     struct FixtureRoot(Option<tempfile::TempDir>);
 
@@ -410,7 +547,9 @@ mod tests {
 
     impl Drop for FixtureRoot {
         fn drop(&mut self) {
-            let Some(root) = self.0.take() else { return; };
+            let Some(root) = self.0.take() else {
+                return;
+            };
             let path = root.path().to_path_buf();
             if let Err(error) = prepare_fixture_cleanup(&path).and_then(|()| root.close()) {
                 if std::thread::panicking() {
@@ -423,7 +562,8 @@ mod tests {
     }
 
     fn prepare_fixture_cleanup(root: &Path) -> std::io::Result<()> {
-        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        use std::os::unix::fs::MetadataExt;
+        use std::os::unix::fs::PermissionsExt;
 
         let owner = fs::symlink_metadata(root)?;
         let mut pending = vec![root.to_path_buf()];
@@ -465,56 +605,98 @@ mod tests {
         write_file(&signing.join("release.jks"), b"test-only keystore fixture, never a signing authority");
         write_file(&signing.join("store.pass"), b"test-only-store-pass");
         write_file(&signing.join("key.pass"), b"test-only-key-pass");
-        let toolchain = |name: &str| ToolchainIdentity { component: name.into(),
+        let toolchain = |name: &str| ToolchainIdentity {
+            component: name.into(),
             record_blake3: "a".repeat(64),
-            sha256: "sha256-mS+W55lQdax2NrsajeUrDGHXHtMTf6/JeauWtKt43XU=".into() };
+            sha256: "sha256-mS+W55lQdax2NrsajeUrDGHXHtMTf6/JeauWtKt43XU=".into(),
+        };
         let plan = ApkPlan {
-            module: "test".into(), application_id: "org.example.test".into(),
-            version_code: 1, version_name: "1.0".into(),
+            module: "test".into(),
+            application_id: "org.example.test".into(),
+            version_code: 1,
+            version_name: "1.0".into(),
             manifest: "AndroidManifest.xml".into(),
             resources: vec!["res/values/strings.xml".into()],
             java_sources: vec!["java/Main.java".into()],
-            toolchains: ToolchainRefs { jdk: toolchain("jdk"),
-                build_tools: toolchain("build-tools"), platform: toolchain("platform-android-jar") },
+            toolchains: ToolchainRefs {
+                jdk: toolchain("jdk"),
+                build_tools: toolchain("build-tools"),
+                platform: toolchain("platform-android-jar"),
+            },
             signing: Some(SigningConfig {
                 keystore: format!("{SIGNING}/release.jks"),
                 store_password_file: format!("{SIGNING}/store.pass"),
                 key_password_file: format!("{SIGNING}/key.pass"),
-                alias: "test".into(), schemes: vec!["v2".into()],
+                alias: "test".into(),
+                schemes: vec!["v2".into()],
             }),
             reproducibility: ReproducibilityPolicy {
-                entry_timestamp_epoch: 315_532_800, locale: "C".into(), timezone: "UTC".into(),
+                entry_timestamp_epoch: 315_532_800,
+                locale: "C".into(),
+                timezone: "UTC".into(),
             },
         };
         let inputs = ApkInputs {
-            source_root: APP.into(), archives: Vec::new(),
+            source_root: APP.into(),
+            archives: Vec::new(),
             runtime_loader: format!("{GLIBC}/lib/ld-linux.so"),
             native_libgcc_root: LIBGCC.into(),
             runtime_library_paths: vec![format!("{GLIBC}/lib"), format!("{LIBGCC}/lib")],
         };
-        let manifest = Manifest { entries: [
-            LocalInput { role: Role::TestSigning, source_path: signing, store_path: SIGNING.into(),
-                expected_nar_sha256: None, expected_nar_blake3: None, expected_nar_size: None },
-            LocalInput { role: Role::AppSource, source_path: app, store_path: APP.into(),
-                expected_nar_sha256: None, expected_nar_blake3: None, expected_nar_size: None },
-            LocalInput { role: Role::NativeGlibc, source_path: glibc, store_path: GLIBC.into(),
-                expected_nar_sha256: None, expected_nar_blake3: None, expected_nar_size: None },
-            LocalInput { role: Role::NativeLibgcc, source_path: libgcc, store_path: LIBGCC.into(),
-                expected_nar_sha256: None, expected_nar_blake3: None, expected_nar_size: None },
-        ] };
+        let manifest = Manifest {
+            entries: [
+                LocalInput {
+                    role: Role::TestSigning,
+                    source_path: signing,
+                    store_path: SIGNING.into(),
+                    expected_nar_sha256: None,
+                    expected_nar_blake3: None,
+                    expected_nar_size: None,
+                },
+                LocalInput {
+                    role: Role::AppSource,
+                    source_path: app,
+                    store_path: APP.into(),
+                    expected_nar_sha256: None,
+                    expected_nar_blake3: None,
+                    expected_nar_size: None,
+                },
+                LocalInput {
+                    role: Role::NativeGlibc,
+                    source_path: glibc,
+                    store_path: GLIBC.into(),
+                    expected_nar_sha256: None,
+                    expected_nar_blake3: None,
+                    expected_nar_size: None,
+                },
+                LocalInput {
+                    role: Role::NativeLibgcc,
+                    source_path: libgcc,
+                    store_path: LIBGCC.into(),
+                    expected_nar_sha256: None,
+                    expected_nar_blake3: None,
+                    expected_nar_size: None,
+                },
+            ],
+        };
         let entries = validate_bindings(&plan, &inputs, manifest, PREFIX).unwrap();
         let keypair = crunch_build::load_keypair(TEST_SIGNER).unwrap();
         let signer_file = root.path().join("mantle-signer.key");
         let trusted_file = root.path().join("mantle-trusted.pub");
         write_file(&signer_file, TEST_SIGNER.as_bytes());
         write_file(&trusted_file, keypair.verifying_key.to_string().as_bytes());
-        let args = AdmitArgs { common: Common {
-            plan: root.path().join("unused-test-plan.ncl"),
-            inputs: root.path().join("unused-test-inputs.json"),
-            manifest: root.path().join("unused-test-manifest.json"),
-            store_prefix: PREFIX.into(),
-        }, store: root.path().join("store"), state_dir: root.path().join("state"),
-            signing_key: signer_file, trusted_public_key: trusted_file };
+        let args = AdmitArgs {
+            common: Common {
+                plan: root.path().join("unused-test-plan.ncl"),
+                inputs: root.path().join("unused-test-inputs.json"),
+                manifest: root.path().join("unused-test-manifest.json"),
+                store_prefix: PREFIX.into(),
+            },
+            store: root.path().join("store"),
+            state_dir: root.path().join("state"),
+            signing_key: signer_file,
+            trusted_public_key: trusted_file,
+        };
         (root, args, entries, plan, inputs)
     }
 
@@ -529,9 +711,15 @@ mod tests {
         }
         (entries, facts)
     }
-    fn validate_fixture(plan: &ApkPlan, inputs: &ApkInputs, entries: &[LocalInput]) -> AdmissionResult<Vec<LocalInput>> {
+    fn validate_fixture(
+        plan: &ApkPlan,
+        inputs: &ApkInputs,
+        entries: &[LocalInput],
+    ) -> AdmissionResult<Vec<LocalInput>> {
         assert_eq!(entries.len(), INPUT_COUNT);
-        let manifest = Manifest { entries: std::array::from_fn(|index| entries[index].clone()) };
+        let manifest = Manifest {
+            entries: std::array::from_fn(|index| entries[index].clone()),
+        };
         validate_bindings(plan, inputs, manifest, PREFIX)
     }
 
@@ -603,10 +791,17 @@ mod tests {
         assert_eq!(report.ready_class, "signed-physical");
         assert_eq!(report.records.len(), INPUT_COUNT);
         let keypair = crunch_build::load_keypair(TEST_SIGNER).unwrap();
-        let handle = StoreHandle::open(StoreConfig::new(StoreBackend::Snix,
-            args.state_dir.clone(), args.store.clone(), PREFIX.into())).await.unwrap();
+        let handle = StoreHandle::open(StoreConfig::new(
+            StoreBackend::Snix,
+            args.state_dir.clone(),
+            args.store.clone(),
+            PREFIX.into(),
+        ))
+        .await
+        .unwrap();
         for (entry, expected) in entries.iter().zip(&facts) {
-            let path: StorePath<String> = StorePath::from_absolute_path_with_prefix(entry.store_path.as_bytes(), PREFIX).unwrap();
+            let path: StorePath<String> =
+                StorePath::from_absolute_path_with_prefix(entry.store_path.as_bytes(), PREFIX).unwrap();
             let persisted = handle.pathinfo_service().get(*path.digest()).await.unwrap().unwrap();
             check_signed(&persisted, &entry.store_path, PREFIX, &keypair.verifying_key).unwrap();
             assert_eq!(persisted.nar_size, expected.nar_size);
@@ -614,8 +809,13 @@ mod tests {
             assert_eq!(observe_nar(&args.store.join(path.to_string())).await.unwrap(), *expected);
         }
         drop(handle);
-        assert_eq!(fs::read(args.store.join(APP.trim_start_matches(PREFIX).trim_start_matches('/'))
-            .join("AndroidManifest.xml")).unwrap(), b"<manifest package=\"org.example.test\"/>");
+        assert_eq!(
+            fs::read(
+                args.store.join(APP.trim_start_matches(PREFIX).trim_start_matches('/')).join("AndroidManifest.xml")
+            )
+            .unwrap(),
+            b"<manifest package=\"org.example.test\"/>"
+        );
         let replay = admit_prepared(args, entries, facts).await.unwrap();
         assert_eq!(serde_json::to_value(report).unwrap(), serde_json::to_value(replay).unwrap());
     }
@@ -643,8 +843,14 @@ mod tests {
         let (entries, facts) = observed(entries).await;
         admit_prepared(args.clone(), entries.clone(), facts.clone()).await.unwrap();
         let path: StorePath<String> = StorePath::from_absolute_path_with_prefix(APP.as_bytes(), PREFIX).unwrap();
-        let handle = StoreHandle::open(StoreConfig::new(StoreBackend::Snix,
-            args.state_dir.clone(), args.store.clone(), PREFIX.into())).await.unwrap();
+        let handle = StoreHandle::open(StoreConfig::new(
+            StoreBackend::Snix,
+            args.state_dir.clone(),
+            args.store.clone(),
+            PREFIX.into(),
+        ))
+        .await
+        .unwrap();
         let initial = handle.pathinfo_service().get(*path.digest()).await.unwrap().unwrap();
         drop(handle);
         let physical = args.store.join(path.to_string());
@@ -673,8 +879,9 @@ mod tests {
         wrong.trusted_public_key = other_public;
         assert!(admit_prepared(wrong, entries, facts).await.is_err());
         check_signed(&initial, APP, PREFIX, &other.verifying_key).unwrap_err();
-        let handle = StoreHandle::open(StoreConfig::new(StoreBackend::Snix,
-            args.state_dir, args.store, PREFIX.into())).await.unwrap();
+        let handle = StoreHandle::open(StoreConfig::new(StoreBackend::Snix, args.state_dir, args.store, PREFIX.into()))
+            .await
+            .unwrap();
         assert_eq!(handle.pathinfo_service().get(*path.digest()).await.unwrap().unwrap(), initial);
         drop(handle);
     }
@@ -685,8 +892,9 @@ mod tests {
         let (entries, facts) = observed(entries).await;
         fs::remove_dir_all(&entries[3].source_path).unwrap();
         assert!(admit_prepared(args.clone(), entries, facts).await.is_err());
-        let handle = StoreHandle::open(StoreConfig::new(StoreBackend::Snix,
-            args.state_dir, args.store, PREFIX.into())).await.unwrap();
+        let handle = StoreHandle::open(StoreConfig::new(StoreBackend::Snix, args.state_dir, args.store, PREFIX.into()))
+            .await
+            .unwrap();
         let path: StorePath<String> = StorePath::from_absolute_path_with_prefix(APP.as_bytes(), PREFIX).unwrap();
         assert!(handle.pathinfo_service().get(*path.digest()).await.unwrap().is_none());
     }
@@ -699,8 +907,9 @@ mod tests {
         args.state_dir = root.path().join("fresh-empty-state");
         assert!(admit_prepared(args.clone(), entries, facts).await.is_err());
         let path: StorePath<String> = StorePath::from_absolute_path_with_prefix(APP.as_bytes(), PREFIX).unwrap();
-        let handle = StoreHandle::open(StoreConfig::new(StoreBackend::Snix,
-            args.state_dir, args.store, PREFIX.into())).await.unwrap();
+        let handle = StoreHandle::open(StoreConfig::new(StoreBackend::Snix, args.state_dir, args.store, PREFIX.into()))
+            .await
+            .unwrap();
         assert!(handle.pathinfo_service().get(*path.digest()).await.unwrap().is_none());
     }
 }

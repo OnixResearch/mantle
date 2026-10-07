@@ -9,7 +9,9 @@ extern crate alloc;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
-use serde::{Deserialize, Serialize};
+
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Serializable authoring contract. `manifest`, `resources`, and
 /// `java_sources` are declared source-tree members, not host filesystem paths.
@@ -117,7 +119,8 @@ pub enum PlanRejection {
 }
 
 fn valid_record_blake3(value: &str) -> bool {
-    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    value.len() == 64
+        && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
         && value.bytes().any(|byte| byte != b'0')
 }
 
@@ -134,9 +137,7 @@ fn valid_sha256(value: &str) -> bool {
 }
 
 fn bound_record(identity: &ToolchainIdentity, component: &str) -> bool {
-    identity.component == component
-        && valid_record_blake3(&identity.record_blake3)
-        && valid_sha256(&identity.sha256)
+    identity.component == component && valid_record_blake3(&identity.record_blake3) && valid_sha256(&identity.sha256)
 }
 
 // Require a normalized, relative source member. Neither lexical `..` nor an
@@ -226,8 +227,7 @@ pub fn validate_and_lower(plan: &ApkPlan) -> Result<Vec<StepPlan>, PlanRejection
         if signing.alias.is_empty()
             || signing.schemes.is_empty()
             || signing.schemes.iter().enumerate().any(|(index, scheme)| {
-                !matches!(scheme.as_str(), "v1" | "v2" | "v3")
-                    || signing.schemes[..index].contains(scheme)
+                !matches!(scheme.as_str(), "v1" | "v2" | "v3") || signing.schemes[..index].contains(scheme)
             })
         {
             return Err(PlanRejection::UnknownSignatureScheme);
@@ -259,14 +259,22 @@ pub fn validate_and_lower(plan: &ApkPlan) -> Result<Vec<StepPlan>, PlanRejection
         StepPlan {
             kind: StepKind::D8,
             source_inputs: vec![],
-            required_toolchains: vec![ToolchainComponent::BuildTools, ToolchainComponent::Jdk, ToolchainComponent::Platform],
+            required_toolchains: vec![
+                ToolchainComponent::BuildTools,
+                ToolchainComponent::Jdk,
+                ToolchainComponent::Platform,
+            ],
             prior_outputs: vec![StepOutput::JavaClasses],
             outputs: vec![StepOutput::Dex],
         },
         StepPlan {
             kind: StepKind::Zipalign,
             source_inputs: vec![],
-            required_toolchains: vec![ToolchainComponent::BuildTools, ToolchainComponent::Jdk, ToolchainComponent::Platform],
+            required_toolchains: vec![
+                ToolchainComponent::BuildTools,
+                ToolchainComponent::Jdk,
+                ToolchainComponent::Platform,
+            ],
             prior_outputs: vec![StepOutput::LinkedApk, StepOutput::Dex],
             outputs: vec![StepOutput::AlignedApk],
         },
@@ -289,8 +297,9 @@ pub fn validate_and_lower(plan: &ApkPlan) -> Result<Vec<StepPlan>, PlanRejection
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use alloc::string::ToString;
+
+    use super::*;
 
     fn toolchain(component: &str) -> ToolchainIdentity {
         ToolchainIdentity {
@@ -338,7 +347,11 @@ mod tests {
         let plan = fixture();
         let steps = validate_and_lower(&plan).unwrap();
         assert_eq!(steps.iter().map(|step| step.kind).collect::<Vec<_>>(), vec![
-            StepKind::Aapt2Compile, StepKind::Aapt2Link, StepKind::Javac, StepKind::D8, StepKind::Zipalign,
+            StepKind::Aapt2Compile,
+            StepKind::Aapt2Link,
+            StepKind::Javac,
+            StepKind::D8,
+            StepKind::Zipalign,
         ]);
         assert_eq!(steps[1].prior_outputs, vec![StepOutput::CompiledResources]);
         assert_eq!(steps[2].prior_outputs, vec![StepOutput::GeneratedJava]);
@@ -347,7 +360,9 @@ mod tests {
         assert_eq!(steps[4].outputs, vec![StepOutput::AlignedApk]);
         for step in &steps[3..=4] {
             assert_eq!(step.required_toolchains, vec![
-                ToolchainComponent::BuildTools, ToolchainComponent::Jdk, ToolchainComponent::Platform,
+                ToolchainComponent::BuildTools,
+                ToolchainComponent::Jdk,
+                ToolchainComponent::Platform,
             ]);
         }
     }
@@ -358,8 +373,12 @@ mod tests {
         plan.signing = Some(signing());
         let steps = validate_and_lower(&plan).unwrap();
         assert_eq!(steps.iter().map(|step| step.kind).collect::<Vec<_>>(), vec![
-            StepKind::Aapt2Compile, StepKind::Aapt2Link, StepKind::Javac,
-            StepKind::D8, StepKind::Zipalign, StepKind::Apksigner,
+            StepKind::Aapt2Compile,
+            StepKind::Aapt2Link,
+            StepKind::Javac,
+            StepKind::D8,
+            StepKind::Zipalign,
+            StepKind::Apksigner,
         ]);
         assert_eq!(steps[5].prior_outputs, vec![StepOutput::AlignedApk]);
         assert_eq!(steps[5].outputs, vec![StepOutput::SignedApk]);
@@ -380,7 +399,12 @@ mod tests {
 
     #[test]
     fn missing_or_unsafe_manifest_is_rejected() {
-        for bad in ["", "/tmp/AndroidManifest.xml", "../AndroidManifest.xml", "app//AndroidManifest.xml"] {
+        for bad in [
+            "",
+            "/tmp/AndroidManifest.xml",
+            "../AndroidManifest.xml",
+            "app//AndroidManifest.xml",
+        ] {
             let mut plan = fixture();
             plan.manifest = bad.to_string();
             assert_eq!(validate_and_lower(&plan), Err(PlanRejection::MissingManifestMember));
@@ -438,7 +462,22 @@ mod tests {
 
     #[test]
     fn every_signing_file_must_be_store_shaped_and_confined() {
-        for bad in ["../release.jks", "/etc/keys.jks", "/run/keys.jks", "/etc/0123456789abcdfghijklmnpqrsvwxyz-signing/key.jks", "/run/secrets/0123456789abcdfghijklmnpqrsvwxyz-signing/key.jks", "file:///nix/store/keys", "C:/keys.jks", "secrets\\keys.jks", "secrets//key.jks", "/nix/store/short-signing/key.jks", "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/../key.jks", "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/./key.jks", "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/~/key.jks", "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/"] {
+        for bad in [
+            "../release.jks",
+            "/etc/keys.jks",
+            "/run/keys.jks",
+            "/etc/0123456789abcdfghijklmnpqrsvwxyz-signing/key.jks",
+            "/run/secrets/0123456789abcdfghijklmnpqrsvwxyz-signing/key.jks",
+            "file:///nix/store/keys",
+            "C:/keys.jks",
+            "secrets\\keys.jks",
+            "secrets//key.jks",
+            "/nix/store/short-signing/key.jks",
+            "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/../key.jks",
+            "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/./key.jks",
+            "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/~/key.jks",
+            "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/",
+        ] {
             for field in 0..3 {
                 let mut plan = fixture();
                 let mut config = signing();

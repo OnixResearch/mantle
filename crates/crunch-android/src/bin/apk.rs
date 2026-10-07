@@ -19,12 +19,16 @@ use crunch_android_core::ApkPlan;
 use serde::Serialize;
 
 #[derive(Parser)]
-#[command(name = "crunch-android-apk", about = "Render a pinned Android APK plan as a Mantle derivation graph")]
+#[command(
+    name = "crunch-android-apk",
+    about = "Render a pinned Android APK plan as a Mantle derivation graph"
+)]
 struct Args {
     /// Nickel expression evaluating to android.mkApk's typed plan record.
     #[arg(long)]
     plan: PathBuf,
-    /// JSON bindings for declared app input, locally checked archive bytes, and explicit runtime libraries.
+    /// JSON bindings for declared app input, locally checked archive bytes, and explicit runtime
+    /// libraries.
     #[arg(long)]
     inputs: PathBuf,
     /// The absolute store root used by Mantle for every declared input.
