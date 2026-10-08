@@ -199,7 +199,7 @@ let Registry = {
         "contract_blake3"= "440f27f17e164a74c1c7983ace734f7cd26298c910d36c8d0cdf3059786bb3c4",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "335d0fb384cefd4fb92e0894a7a3346265730cfec73cf4ca91a8d1e4423e57d0",
-        "producer_identity_blake3"= "41bb1cf8c13a9b232b37feb0379fab70c82f9e4264523e94846dc8d34f4ea66a",
+        "producer_identity_blake3"= "f395d70d5c94cdf2a2b8fb4944ff328272abb29d11315ee783fdb199749710de",
         "consumer_policy_blake3"= "d4d7d58e21738c707f6071b435807382c28939a76da4cbb88e9c32c6b80af72b"
       },
       "non_claims"= [
@@ -253,7 +253,7 @@ let Registry = {
         "contract_blake3"= "16ccc6644e6a2b74b1b4db20014818bb73028343e9c3da8a92a0711ed520d434",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "576b0cc4dbed5d3c850a408c032411c180e9a0446507ec333606c25c4b15f719",
-        "producer_identity_blake3"= "c95518f892cd738b2188ac99dfe8f65f81c9131855e1ea2263c05bcb88c29173",
+        "producer_identity_blake3"= "9bc498aec46f8308848b04278e09e33478bac6c8ee7226c7afd83ad190a12116",
         "consumer_policy_blake3"= "d9c1ccf9e8d250b9ce0b12e6b0b73a2e13db503096b5d725ac3a16e9d65061ed"
       },
       "non_claims"= [
@@ -307,7 +307,7 @@ let Registry = {
         "contract_blake3"= "e2edd1851549b62bd82a7da7048d1510a1850d756d2a5a5b732d27d603023b9a",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "df3e2f92ce6755726b74253e72c45001d8b7452062a03f2a9f38ada5986088d9",
-        "producer_identity_blake3"= "397fb64d01cd5b36803a04eef8793c4c5666899d551052f7d52461b607b10dd2",
+        "producer_identity_blake3"= "f8e3f5fd7185b36a798b104f31d098ea28923f790c2b8ceb0c51ef05852a2adb",
         "consumer_policy_blake3"= "7660bcc9154bd8b4e2e5f317f88b8a276523f64e31aad9c2fef0bb68d5f89dc1"
       },
       "non_claims"= [
@@ -522,7 +522,7 @@ let Registry = {
         "contract_blake3"= "d3b07cd0d3396e6798ec94d68d37cf06a5ee35f81866016fbf1f18e0f401c7ae",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "996d0ea5521663d8180e90e955fcba9c92b4570b8935e13b2e57af45c81260e2",
-        "producer_identity_blake3"= "cd7674a038e98a00bc905f04a07229e6787599e8385b3045613e28cd2dcdc3ea",
+        "producer_identity_blake3"= "647177bd01d3141c6f5ac8f2d641e77e35b91e43b3d7550a34813c2d5646b9d9",
         "consumer_policy_blake3"= "b41da07fbbd17d793f07c51876465ca6e73d83db0dc79b9beb02c8a8110b59d1"
       },
       "non_claims"= [
@@ -579,7 +579,7 @@ let Registry = {
         "contract_blake3"= "55dde53621cfcf481e393c93abdd99b7ff4569e733e6e8c317dd4b6664dacbde",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "7dc86ee24710dcc021b8d8e8cc88deb74268613117babb592a67ed021bede57e",
-        "producer_identity_blake3"= "b330e3fe5812d6e05b679d2fd52de0ebe7c5f757cf9d5411e89a6bea8747b8f7",
+        "producer_identity_blake3"= "4c77dc3606adb496e58faca976b410cce66dd02b5226e30520f98a6d1ea1a024",
         "consumer_policy_blake3"= "62cd42cf2466602f7f77b1fed066358b8b3e9021f3bcbb12e6c9474a234581fc"
       },
       "non_claims"= [
@@ -633,7 +633,7 @@ let Registry = {
         "contract_blake3"= "1c816681434e8114cd6c4bab4a48fd5c5f86ce7c9f33c187ab609ec73f814fd8",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "1ad119357b7d7217396fe2f47598b14cb8d87bc105982a428e3924e7c3213c11",
-        "producer_identity_blake3"= "bf78b188cb412b56a4ca2674f300407c5194e55f9835fdfc00850396e21bb58a",
+        "producer_identity_blake3"= "ccc1a97bea9c08642622a88d6d5a5956dd872ad0fc8fc30ed575f2a4928192ee",
         "consumer_policy_blake3"= "edc96af15dd9073d7cd0178ed0d617acd41c8cf91c6719a674dd1422a7e285e4"
       },
       "non_claims"= [
@@ -687,7 +687,7 @@ let Registry = {
         "contract_blake3"= "953be8500e8110bc2682b8d4aa14136c274f675dc951126f0b6a165f062c5bd3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "cad5f96d2366110d1a790d5ab644163380b9af4f0a5b2be947ceaa39ee03fbd6",
-        "producer_identity_blake3"= "873d1f16c383e96a96a79b275478a314dc1cb71c109b04a87d348c67cb34ce2e",
+        "producer_identity_blake3"= "7c3656a87bc824d641b30ccb75c7bdc38d8422329ad8b6cc5b647d8bfde684ee",
         "consumer_policy_blake3"= "8af50ac86145048afc879ae1b6722e155ee6960c6261186014bb505db83b6cb8"
       },
       "non_claims"= [
@@ -744,7 +744,7 @@ let Registry = {
         "contract_blake3"= "dca78b427a831e803eac4c9d94f2f209ad93cedf041941e2cd688cf1ac8c34f2",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "18dbdaece5c99497cbd663230682e0b5bce9bf0fcb22a0e2a0664377c445ff0f",
-        "producer_identity_blake3"= "73708d68a5f3b9c18d555ae984c7cffce4c815d4fbb4d7e27ea871000ae84116",
+        "producer_identity_blake3"= "8ed8cb6222580f77427d685e9042da3cdb588be5ad8d635023f4084c1a8c1a9a",
         "consumer_policy_blake3"= "aa2b9979ef6f03d98bbe0861e19fd9ab0c88af64d6b803fce04789e58904e123"
       },
       "non_claims"= [
@@ -856,7 +856,7 @@ let Registry = {
         "contract_blake3"= "d7b30efe0e40442383eb7c654a3bb0c88b508f059b88008085fd59f0a88b0f23",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "74b65baffbfcfb59d5557a99ea0ed63c02711ee4c865c5f7be1eb14ad57071c8",
-        "producer_identity_blake3"= "24d63f119a619b2d6e0fea67580546ff014d76fc0be4e4cac9d29e4c7674cfac",
+        "producer_identity_blake3"= "d1834b8ac973a12d011a6be42aa6f3a13f9877056071056d69862ed77d195a1e",
         "consumer_policy_blake3"= "2604bdd4cb6aa3824e00fa515e64f68a01ab5df84d2f2342ee0f1e7029f91f07"
       },
       "non_claims"= [
@@ -1021,7 +1021,7 @@ let Registry = {
         "contract_blake3"= "45a5be6ff94dc2b3fe1ae248e6074bce475bdcc72cf42951d6b8d89936fd5431",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "67d9e9232706f73f157c68abea93383ffa5af8ef83a924ecc2fb8fadce10a357",
-        "producer_identity_blake3"= "d47e15722e63e6aa9ba5c3d617d61f55577a259329725d4ab753d80732034e24",
+        "producer_identity_blake3"= "dde37e41abfedf90a61030180ebea29ec7415228a938341f6815336c189d011b",
         "consumer_policy_blake3"= "fce9cfc511ed3931f6804f5e99cd0ae3d6d325a2a6e47899b8f027ccaa6787ec"
       },
       "non_claims"= [
@@ -1214,7 +1214,7 @@ let Registry = {
         "contract_blake3"= "d158d85e21edcccbf6d6ae7bc6d3d59aea4acb8f1dc8a52438be38567d4c50f2",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "230228d02be1df38f427caa0f6ca4cd7c1ec8666c2350508d409aef177ccd494",
-        "producer_identity_blake3"= "db09e84bb3b5c262dcbcb7bd280dc34c42606638391bb3aae7fe05bd21a32197",
+        "producer_identity_blake3"= "35bed6c82be4122d29b19b0787d7925ce3376e6451b3b1c5cd3e7f1969ced618",
         "consumer_policy_blake3"= "c81ddbc9befcf012a5b42b3f44c2f17fe44f890ce0dfcc228b2cfefd5eb30dd4"
       },
       "non_claims"= [
@@ -1275,7 +1275,7 @@ let Registry = {
         "contract_blake3"= "723027e965189230cabb05b8ba069effec984e9bd527625a4320c8bd3cbe1af3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "9acb57b93f3b9150f79d59ff8a46ca3b5c2e5b98e83320b0308d57334a13d4a3",
-        "producer_identity_blake3"= "95ffab4c300069180a120046f4f5b065d3330e0e049bd97033b5c0cc41b8a953",
+        "producer_identity_blake3"= "f44e97f6dc92509f1fa7f1810898b211f105f42ea06e30034a502915e4f180fe",
         "consumer_policy_blake3"= "e81324a18c19a70aaa2bec634d4a0b7dccceede6f048bbd332b432a9938adefe"
       },
       "non_claims"= [
@@ -1338,7 +1338,7 @@ let Registry = {
         "contract_blake3"= "ca290b374f6b2987e6bd56f541a4ac2539df2fcc55878eb9572e25734783f16f",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "3d447dccbcf05cc8bdf1875896266084327a7ae352416e319d7408125dd9cd41",
-        "producer_identity_blake3"= "460bef109dec73285ee72c6fddac635c5fb9682ea9e6a6b8e8424cc7bf6aac11",
+        "producer_identity_blake3"= "0884d3f2a5841dea30b1ecc4382626d2973d0cf5961a71df26337f8e89628477",
         "consumer_policy_blake3"= "f1fe25ad7bf31510a0d970cabe8f0eea37b17342b7743bcd39c3858a4e5adb0a"
       },
       "non_claims"= [
@@ -1403,7 +1403,8 @@ let Registry = {
         "marker"= "mantlepkgs.catalog-domain-reports",
         "source_paths"= [
           "src/mantlepkgs_adapter.rs",
-          "src/mantlepkgs_cmd.rs"
+          "src/mantlepkgs_cmd.rs",
+          "src/mantlepkgs_version_cmd.rs"
         ]
       },
       "consumers"= [
@@ -1428,7 +1429,8 @@ let Registry = {
       },
       "validation_commands"= [
         "cargo test -p mantlepkgs-core",
-        "cargo test --bin mantle mantlepkgs_cmd::tests"
+        "cargo test --bin mantle mantlepkgs_cmd::tests",
+        "cargo test -p mantle --bin mantle mantlepkgs_version_cmd::"
       ],
       "fixture_coverage"= [
         "version",
@@ -1499,7 +1501,7 @@ let Registry = {
         "contract_blake3"= "7cd1d3ffbfe1324271c5531447350406ae29898b845e4aea58102e9bfc23e0d8",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "1602d93a04a749077c6f0150e3e8c32ce41fc295585396e6e71f45938101fd0a",
-        "producer_identity_blake3"= "1e28cc6b142988fe4baf2c6e832e5213f05a52e59849b1c20ffd5dc04ae12fcc",
+        "producer_identity_blake3"= "07660e3c4b0d22d554e79d47deb77eaae1ae32340b15e306615a0ab3abc041f4",
         "consumer_policy_blake3"= "094ac32746282ab41656266b861ea5b70bc9f4c54f3b9a3aedf1680c6695d49b"
       },
       "non_claims"= [
@@ -1557,7 +1559,7 @@ let Registry = {
         "contract_blake3"= "a3125cbf30f9cc54e2e9f372e58002415bee51e25fa539fc25a29210de8af948",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "144796c61a4d4ab37f35cf525e3947021ca18ada50293a777fdd644697847598",
-        "producer_identity_blake3"= "5aa31575c10e1ad2b5a303ce8eddc320e6a4edf4d193095bfa3891ccfbb74bae",
+        "producer_identity_blake3"= "bcc7421b9436bc9b4e7700f8825924f86df156c2359e766603e14685f6376fdd",
         "consumer_policy_blake3"= "be8086e77584c68066c9042b83c5eff2df1d1f31680dec677d4cd4f3cd764a0f"
       },
       "non_claims"= [
@@ -1784,7 +1786,8 @@ let Registry = {
         "command_or_api"= "semantic graph APIs and CLI",
         "marker"= "semantic-graph.command-reports",
         "source_paths"= [
-          "src/semantic_graph.rs"
+          "src/semantic_graph.rs",
+          "src/presentation/semantic_graph.rs"
         ]
       },
       "consumers"= [
@@ -1934,7 +1937,9 @@ let Registry = {
           "src/release_nix_witness.rs",
           "src/release_source.rs",
           "src/cairn_release_handoff.rs",
-          "src/release_publication.rs"
+          "src/release_publication.rs",
+          "src/content_bound_requirement_evidence.rs",
+          "src/release_chapter_transport.rs"
         ]
       },
       "consumers"= [
@@ -2124,7 +2129,7 @@ let Registry = {
       "class"= "internal",
       "rust_owner"= "src/bootstrap_validate.rs::public_json_family",
       "producer"= {
-        "command_or_api"= "mantle bootstrap validation",
+        "command_or_api"= "mantle bootstrap validation, StageX stage materialization, and source-built fixed-point proof evidence",
         "marker"= "bootstrap.validation-reports",
         "source_paths"= [
           "src/bootstrap.rs",
@@ -2136,11 +2141,51 @@ let Registry = {
           "src/rust_bootstrap_patch_plan.rs",
           "src/source_toolchain_closure.rs",
           "src/native_toolchain_closure.rs",
-          "src/vendor_source_manifest.rs"
+          "src/vendor_source_manifest.rs",
+          "src/source_root_manifest.rs",
+          "src/full_source_rust_binding.rs",
+          "src/full_source_rust_binding_shell.rs",
+          "src/source_built_fixed_point.rs",
+          "src/source_built_fixed_point_receipt.rs",
+          "src/source_built_fixed_point_shell.rs",
+          "src/stagex_bash.rs",
+          "src/stagex_bash_full.rs",
+          "src/stagex_binutils.rs",
+          "src/stagex_bison.rs",
+          "src/stagex_bzip2.rs",
+          "src/stagex_coreutils.rs",
+          "src/stagex_diffutils.rs",
+          "src/stagex_flex.rs",
+          "src/stagex_gawk.rs",
+          "src/stagex_gnu_patch.rs",
+          "src/stagex_grep.rs",
+          "src/stagex_gzip.rs",
+          "src/stagex_m4.rs",
+          "src/stagex_make.rs",
+          "src/stagex_mes.rs",
+          "src/stagex_mes_lib.rs",
+          "src/stagex_mes_sources.rs",
+          "src/stagex_musl.rs",
+          "src/stagex_musl_native.rs",
+          "src/stagex_oyacc.rs",
+          "src/stagex_provider.rs",
+          "src/stagex_sed.rs",
+          "src/stagex_sources.rs",
+          "src/stagex_stage0.rs",
+          "src/stagex_stage0_full.rs",
+          "src/stagex_tar.rs",
+          "src/stagex_tcc_musl.rs",
+          "src/stagex_tcc_musl_prep.rs",
+          "src/stagex_tcc_musl_v2.rs",
+          "src/stagex_tcc_selfhost.rs",
+          "src/stagex_tinycc.rs",
+          "src/stagex_tinycc27.rs",
+          "src/stagex_transition.rs"
         ]
       },
       "consumers"= [
-        "bootstrap implementation"
+        "bootstrap implementation",
+        "StageX lineage and source-built fixed-point proof manifests"
       ],
       "artifacts"= {
         "schema"= "",
@@ -2156,7 +2201,10 @@ let Registry = {
         "compatibility_fixtures"= []
       },
       "validation_commands"= [
-        "cargo test -p mantle bootstrap"
+        "cargo test -p mantle bootstrap",
+        "cargo test -p mantle --bin mantle stagex_",
+        "cargo test -p mantle --bin mantle full_source_rust_binding",
+        "cargo test -p mantle --bin mantle source_built_fixed_point"
       ],
       "fixture_coverage"= [
         "classification"
@@ -2171,9 +2219,10 @@ let Registry = {
         "consumer_policy_blake3"= ""
       },
       "non_claims"= [
-        "internal validation DTOs are not a public schema"
+        "internal validation DTOs are not a public schema",
+        "StageX stage inventories, full-source binding receipts, and source-built fixed-point reports are proof-local evidence, not a public schema"
       ],
-      "rationale"= "Bootstrap evidence is governed by proof manifests rather than this first cohort."
+      "rationale"= "Bootstrap, StageX stage, full-source Rust binding, and source-built fixed-point evidence is governed by proof manifests and canonical digests rather than this first cohort."
     },
     {
       "id"= "bootstrap.parity-reports",
@@ -2376,7 +2425,8 @@ let Registry = {
         "command_or_api"= "mantle rust-plan --json",
         "marker"= "rust-plan.receipts",
         "source_paths"= [
-          "src/rust_plan.rs"
+          "src/rust_plan.rs",
+          "src/trusted_keys.rs"
         ]
       },
       "consumers"= [
@@ -2427,7 +2477,10 @@ let Registry = {
           "src/remote_build/tests/external_batch_hardware_tests.rs",
           "src/remote_failure_debug.rs",
           "src/external_batch_dispatch.rs",
-          "src/remote_farm_config.rs"
+          "src/remote_farm_config.rs",
+          "src/remote_credentials.rs",
+          "src/presentation/remote_client.rs",
+          "src/presentation/reports.rs"
         ]
       },
       "consumers"= [
@@ -2451,7 +2504,8 @@ let Registry = {
         "cargo test -p mantle remote_build::tests",
         "cargo test -p mantle remote_failure_debug::tests",
         "cargo test -p mantle external_batch_dispatch::tests",
-        "cargo test -p mantle remote_farm_config::tests"
+        "cargo test -p mantle remote_farm_config::tests",
+        "cargo test -p mantle --bin mantle presentation::"
       ],
       "fixture_coverage"= [
         "classification"
@@ -2775,7 +2829,8 @@ let Registry = {
         "command_or_api"= "source bundle export/import files",
         "marker"= "source-bundle.manifest-artifacts",
         "source_paths"= [
-          "src/source_bundle.rs"
+          "src/source_bundle.rs",
+          "src/source_observation.rs"
         ]
       },
       "consumers"= [
@@ -2823,7 +2878,8 @@ let Registry = {
         "marker"= "structured-refactor.command-reports",
         "source_paths"= [
           "src/structured_refactor.rs",
-          "src/main.rs"
+          "src/main.rs",
+          "src/presentation/refactor.rs"
         ]
       },
       "consumers"= [
@@ -3010,6 +3066,178 @@ let Registry = {
         "stream shape does not prove evaluation or build correctness"
       ],
       "rationale"= "The public stream is versioned and checked by the NDJSON-specific contract rail; the document-JSON registry cannot render multi-record framing."
+    },
+    {
+      "id"= "evaluation.budget-reports",
+      "class"= "compatibility",
+      "rust_owner"= "crates/crunch-eval-budget-core/src/lib.rs::EvaluationBudgetReport",
+      "producer"= {
+        "command_or_api"= "bounded evaluator report files and worker protocol",
+        "marker"= "evaluation.budget-reports",
+        "source_paths"= [
+          "crates/crunch-eval-budget-core/src/lib.rs",
+          "src/evaluator_budget.rs"
+        ]
+      },
+      "consumers"= [
+        "evaluation operators",
+        "resource-policy diagnostics",
+        "CI evidence"
+      ],
+      "artifacts"= {
+        "schema"= "",
+        "generated_contract"= "",
+        "positive_fixtures"= [],
+        "negative_fixture_set"= ""
+      },
+      "version_policy"= {
+        "current"= "mantle-evaluation-budget-report-v1",
+        "supported"= [
+          "mantle-evaluation-budget-report-v1"
+        ],
+        "unknown_version_behavior"= "reject before interpreting budget or teardown facts",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "cargo test -p crunch-eval-budget-core",
+        "cargo test -p mantle --bin mantle evaluator_budget::",
+        "cargo test -p mantle --test evaluator_budget_cli"
+      ],
+      "fixture_coverage"= [
+        "positive bounded completion",
+        "invalid policy",
+        "resource limit",
+        "timeout and teardown"
+      ],
+      "freshness_strategy"= "The no-std budget core owns the closed report DTO and the std shell owns bounded process observations",
+      "freshness"= {
+        "schema_blake3"= "",
+        "contract_blake3"= "",
+        "prelude_blake3"= "",
+        "fixture_set_blake3"= "",
+        "producer_identity_blake3"= "",
+        "consumer_policy_blake3"= ""
+      },
+      "non_claims"= [
+        "budget report conformance does not prove evaluator correctness, semantic equivalence, sandboxing, or release eligibility"
+      ],
+      "rationale"= "The budget report is versioned and public, but its dedicated core tests remain authoritative until a generated document-JSON contract is adopted; the evaluated root value itself stays user-defined under eval.raw-json-output."
+    },
+    {
+      "id"= "build.interchange-records",
+      "class"= "compatibility",
+      "rust_owner"= "crates/mantle-build-contract/src/model.rs::BuildRequest,BuildObservation",
+      "producer"= {
+        "command_or_api"= "mantle build --interchange-dir <dir>",
+        "marker"= "build.interchange-records",
+        "source_paths"= [
+          "crates/mantle-build-contract/src/model.rs",
+          "crates/mantle-build-contract/src/admission.rs",
+          "crates/mantle-build-contract/src/identity.rs",
+          "src/build_interchange.rs",
+          "src/build_cmd.rs"
+        ]
+      },
+      "consumers"= [
+        "external CI consumers",
+        "build interchange admission"
+      ],
+      "artifacts"= {
+        "schema"= "",
+        "generated_contract"= "",
+        "positive_fixtures"= [],
+        "negative_fixture_set"= ""
+      },
+      "version_policy"= {
+        "current"= "mantle.build-request.v1+mantle.build-observation.v1",
+        "supported"= [
+          "mantle.build-request.v1",
+          "mantle.build-observation.v1"
+        ],
+        "unknown_version_behavior"= "reject before admitting request or observation records",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "cargo test -p mantle-build-contract",
+        "cargo test -p mantle --bin mantle build_interchange::"
+      ],
+      "fixture_coverage"= [
+        "classification"
+      ],
+      "freshness_strategy"= "classification only; the no_std mantle-build-contract crate owns bounded wire values, identities, admission, and producer fixtures",
+      "freshness"= {
+        "schema_blake3"= "",
+        "contract_blake3"= "",
+        "prelude_blake3"= "",
+        "fixture_set_blake3"= "",
+        "producer_identity_blake3"= "",
+        "consumer_policy_blake3"= ""
+      },
+      "non_claims"= [
+        "interchange records do not prove execution authority, custody, cache trust, promotion, or release eligibility"
+      ],
+      "rationale"= "Owner-emitted request and observation records are versioned for external CI consumers and validated by their own contract crate until a generated document-JSON contract is adopted."
+    },
+    {
+      "id"= "operator.command-contract-reports",
+      "class"= "compatibility",
+      "rust_owner"= "src/operator_contract.rs::OperatorInventory,CommandCatalog,RemediationRecord",
+      "producer"= {
+        "command_or_api"= "operator contract generation and remediation JSON",
+        "marker"= "operator.command-contract-reports",
+        "source_paths"= [
+          "src/operator_contract.rs",
+          "tools/generate_operator_command_contract.rs",
+          "src/presentation/reports.rs"
+        ]
+      },
+      "consumers"= [
+        "operator documentation generation",
+        "CLI remediation",
+        "support automation"
+      ],
+      "artifacts"= {
+        "schema"= "",
+        "generated_contract"= "",
+        "positive_fixtures"= [],
+        "negative_fixture_set"= ""
+      },
+      "version_policy"= {
+        "current"= "mantle-operator-contract-v1-family",
+        "supported"= [
+          "mantle-operator-surface-inventory-v1",
+          "mantle-operator-command-catalog-v1",
+          "mantle-remediation-v1"
+        ],
+        "unknown_version_behavior"= "reject before generating command guidance or remediation",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "./scripts/check-operator-command-contract.sh",
+        "cargo test -p mantle --bin mantle operator_contract::"
+      ],
+      "fixture_coverage"= [
+        "inventory admission",
+        "command catalog",
+        "negative stale surface",
+        "bounded remediation"
+      ],
+      "freshness_strategy"= "The repository-owned operator contract checker binds generated docs and command descriptors",
+      "freshness"= {
+        "schema_blake3"= "",
+        "contract_blake3"= "",
+        "prelude_blake3"= "",
+        "fixture_set_blake3"= "",
+        "producer_identity_blake3"= "",
+        "consumer_policy_blake3"= ""
+      },
+      "non_claims"= [
+        "operator contract shape does not prove command success, host readiness, authorization, or release eligibility"
+      ],
+      "rationale"= "The operator family has an independent generation checker and remains a compatibility family until each document-JSON projection is contracted separately."
     }
   ]
 }

@@ -1,3 +1,4 @@
+// machine-artifact-public: build.interchange-records
 //! Owner-emitted build interchange records for one completed build.
 //!
 //! The pure mapping takes explicit facts and returns the contract's own request
