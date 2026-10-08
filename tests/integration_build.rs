@@ -726,7 +726,8 @@ fn eval_hello_world_with_seed() {
             Input::Derivation(_)
             | Input::DerivationFile(_)
             | Input::ResolvedDerivation(_)
-            | Input::OutputSelection(_) => {
+            | Input::OutputSelection(_)
+            | Input::PlanOutput(_) => {
                 panic!("hello-world should only have source inputs from seed");
             }
         }

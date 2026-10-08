@@ -87,7 +87,9 @@ compatibility surface, crate name, or historical decision.
 | [0078](0078-explore-distributed-evaluation.md) | Explore distributed evaluation feasibility | Accepted |
 | [0079](0079-spacewasm-stable-evidence-libtest-json.md) | Stable SpaceWasm evidence uses the libtest JSON harness grammar | Accepted |
 | [0080](0080-separate-coordination-from-batch-building.md) | Separate build coordination from batch building | Accepted |
+| [0081](0081-build-cargo-units-as-native-dynamic-plan-derivations.md) | Build Cargo units as native dynamic-plan derivations | Proposed |
 | [0082](0082-select-store-backends-explicitly-and-admit-casita.md) | Select store backends explicitly and admit Casita as a pinned backend | Proposed |
 | [0084](0084-dynamic-plan-source-slices.md) | Version dynamic plans for output-owned source slices | Proposed |
 | [0089](0089-admit-prebuilt-android-toolchain-through-fixed-output-sources.md) | Admit prebuilt Android tools through pinned fixed-output sources | Proposed |
+| [0103](0103-bind-static-inputs-to-dynamic-plan-roots.md) | Bind static inputs to dynamic-plan roots by request identity | Proposed |
 | [0109](0109-reject-package-layer-design-priors-without-a-consumer.md) | Reject package-layer design priors that have no consumer | Accepted |

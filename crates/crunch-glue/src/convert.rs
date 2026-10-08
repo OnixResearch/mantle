@@ -11,6 +11,9 @@ use nix_compat::nixhash::CAHash;
 use nix_compat::nixhash::HashAlgo;
 use nix_compat::nixhash::NixHash;
 use nix_compat::store_path::StorePath;
+use nix_compat::store_path::hash_placeholder;
+use serde::Serialize;
+use serde::ser::SerializeSeq;
 
 use crate::conversion_cache::ConversionCache;
 use crate::conversion_cache::InsertCaEntry;
@@ -18,7 +21,11 @@ use crate::error::Error;
 use crate::types::CrunchDerivation;
 use crate::types::FixedOutput;
 use crate::types::Input;
+use crate::types::MAX_PLAN_OUTPUT_REFERENCES;
+use crate::types::PLAN_OUTPUT_BINDINGS_ENV_KEY;
+use crate::types::PlanOutputRef;
 use crate::types::validate_dynamic_plan_outputs;
+use crate::types::validate_plan_output_inputs;
 
 /// Maximum derivation dependency depth before we bail out.
 /// Prevents stack overflow from pathological or accidental deep graphs.
@@ -38,7 +45,27 @@ pub struct ResolvedDerivationRequest<'a> {
 
 type InputDerivationMap = BTreeMap<StorePath<String>, BTreeSet<String>>;
 type InputSourceSet = BTreeSet<StorePath<String>>;
-type ResolvedInputs = (InputDerivationMap, InputSourceSet);
+type ResolvedInputs = (InputDerivationMap, InputSourceSet, BTreeMap<String, PlanOutputBindingRecord>);
+#[derive(Serialize)]
+struct PlanOutputBindingRecord {
+    name: String,
+    producer_drv_path: String,
+    plan_output: String,
+    root: String,
+    unit_output: String,
+    placeholder: String,
+}
+struct SortedPlanOutputBindings<'a>(&'a BTreeMap<String, PlanOutputBindingRecord>);
+
+impl Serialize for SortedPlanOutputBindings<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
+        for binding in self.0.values() {
+            sequence.serialize_element(binding)?;
+        }
+        sequence.end()
+    }
+}
 
 struct StorePathText<'a> {
     path_text: &'a str,
@@ -164,6 +191,12 @@ fn convert_with_depth(
     debug_assert!(!drv.builder.is_empty(), "derivation builder must not be empty");
     debug_assert!(!drv.outputs.is_empty(), "derivation must have at least one output");
     validate_dynamic_plan_outputs(&drv.outputs, &drv.dynamic_plan_outputs).map_err(Error::InvalidDynamicPlanOutputs)?;
+    validate_plan_output_inputs(&drv.inputs).map_err(Error::InvalidPlanOutputBinding)?;
+    if drv.env.contains_key(PLAN_OUTPUT_BINDINGS_ENV_KEY) {
+        return Err(Error::InvalidPlanOutputBinding(
+            "reserved plan-output bindings environment key is set".to_string(),
+        ));
+    }
 
     let identity = derivation_identity(drv);
 
@@ -204,11 +237,12 @@ fn convert_inner(
     let store_dir = known_paths.store_dir().to_string();
 
     // 1. Resolve inputs (recursive for derivation deps).
-    let (input_derivations, input_sources) = resolve_inputs(&drv.inputs, known_paths, depth, &store_dir)?;
+    let (input_derivations, input_sources, bindings) = resolve_inputs(&drv.inputs, known_paths, depth, &store_dir)?;
 
     // 2. Build the nix_compat::Derivation struct.
     let ca_hash = drv.fixed_output.as_ref().map(parse_fixed_output).transpose()?;
     let mut nix_drv = build_nix_derivation(drv, input_derivations, input_sources, ca_hash);
+    apply_plan_output_bindings(drv, &mut nix_drv, bindings)?;
 
     // 3. Finalize: compute HDM, output paths, drv path, register.
     finalize_and_register(drv, &mut nix_drv, known_paths, &store_dir)
@@ -226,6 +260,7 @@ fn resolve_inputs(
     assert!(store_dir.starts_with('/'), "store_dir must be absolute");
     let mut input_derivations: InputDerivationMap = BTreeMap::new();
     let mut input_sources: InputSourceSet = BTreeSet::new();
+    let mut bindings = BTreeMap::new();
 
     for input in inputs {
         match input {
@@ -270,6 +305,16 @@ fn resolve_inputs(
                 // Coalesce: merge into existing entry if same drv appears twice.
                 input_derivations.entry(nested_drv_path).or_default().insert(output_ref.output.clone());
             }
+            Input::PlanOutput(reference) => {
+                if bindings.len() >= MAX_PLAN_OUTPUT_REFERENCES {
+                    return Err(Error::InvalidPlanOutputBinding(format!(
+                        "plan-output references exceed limit of {MAX_PLAN_OUTPUT_REFERENCES}"
+                    )));
+                }
+                let (producer_path, record) = resolve_plan_output_input(reference, known_paths, depth, store_dir)?;
+                input_derivations.entry(producer_path).or_default().insert(reference.plan_output.clone());
+                bindings.insert(record.name.clone(), record);
+            }
             Input::Derivation(nested_drv) => {
                 let (nested_drv_path, _nested_nix_drv) =
                     convert_with_depth(nested_drv, known_paths, depth.saturating_add(1))?;
@@ -279,7 +324,112 @@ fn resolve_inputs(
         }
     }
 
-    Ok((input_derivations, input_sources))
+    Ok((input_derivations, input_sources, bindings))
+}
+
+/// Convert the inline producer and build the canonical request record for
+/// one late-bound plan-root reference. Only the producer edge and this record
+/// enter the consumer identity; no plan or unit output is consulted.
+// r[impl mantle.dynamic_plan_output_inputs.request_identity]
+fn resolve_plan_output_input(
+    reference: &PlanOutputRef,
+    known_paths: &mut ConversionCache,
+    depth: u32,
+    store_dir: &str,
+) -> Result<(StorePath<String>, PlanOutputBindingRecord), Error> {
+    assert!(depth < MAX_RECURSION_DEPTH, "plan-output producer depth must stay within limit");
+    if !reference.producer.dynamic_plan_outputs.contains(&reference.plan_output) {
+        return Err(Error::InvalidPlanOutputBinding(format!(
+            "plan-output '{}' is not declared dynamic_plan_outputs of producer '{}'",
+            reference.plan_output, reference.producer.name
+        )));
+    }
+    let (producer_path, _) = convert_with_depth(&reference.producer, known_paths, depth.saturating_add(1))?;
+    let record = PlanOutputBindingRecord {
+        placeholder: hash_placeholder(&format!("mantle-plan-output:{}", reference.name)),
+        name: reference.name.clone(),
+        producer_drv_path: producer_path.to_absolute_path_with_prefix(store_dir),
+        plan_output: reference.plan_output.clone(),
+        root: reference.root.clone(),
+        unit_output: reference.unit_output.clone(),
+    };
+    debug_assert!(record.producer_drv_path.ends_with(".drv"));
+    Ok((producer_path, record))
+}
+
+const PLAN_OUTPUT_MARKER: &str = "{{mantle-plan-output";
+
+fn substitute_plan_output_markers(
+    value: &str,
+    bindings: &BTreeMap<String, PlanOutputBindingRecord>,
+) -> Result<String, Error> {
+    assert!(!value.is_empty(), "only values containing a marker are substituted");
+    let mut result = String::new();
+    result
+        .try_reserve(value.len())
+        .map_err(|error| Error::InvalidPlanOutputBinding(format!("reserving substituted value: {error}")))?;
+    let mut remainder = value;
+    // Every iteration consumes at least one marker, so the value length bounds the loop.
+    for _ in 0..value.len() {
+        let Some(start) = remainder.find(PLAN_OUTPUT_MARKER) else {
+            result.push_str(remainder);
+            debug_assert!(!result.contains(PLAN_OUTPUT_MARKER));
+            return Ok(result);
+        };
+        result.push_str(&remainder[..start]);
+        let following = remainder[start..]
+            .strip_prefix(PLAN_OUTPUT_MARKER)
+            .and_then(|tail| tail.strip_prefix(':'))
+            .ok_or_else(|| Error::InvalidPlanOutputBinding("malformed plan-output marker".to_string()))?;
+        let (name, tail) = following
+            .split_once("}}")
+            .ok_or_else(|| Error::InvalidPlanOutputBinding("unterminated plan-output marker".to_string()))?;
+        let binding = bindings
+            .get(name)
+            .ok_or_else(|| Error::InvalidPlanOutputBinding(format!("unknown plan-output marker '{name}'")))?;
+        result.push_str(&binding.placeholder);
+        remainder = tail;
+    }
+    Err(Error::InvalidPlanOutputBinding("plan-output marker substitution exceeded its bound".to_string()))
+}
+
+fn apply_plan_output_bindings(
+    drv: &CrunchDerivation,
+    nix_drv: &mut Derivation,
+    bindings: BTreeMap<String, PlanOutputBindingRecord>,
+) -> Result<(), Error> {
+    assert!(bindings.len() <= MAX_PLAN_OUTPUT_REFERENCES, "binding count was validated at conversion");
+    debug_assert!(bindings.iter().all(|(name, record)| name == &record.name));
+    // The legacy derivation builder overwrites these keys. Do not silently
+    // discard a binding marker supplied in one of their original values.
+    for (key, value) in &drv.env {
+        if value.contains(PLAN_OUTPUT_MARKER)
+            && (matches!(key.as_str(), "system" | "builder" | "name" | "outputs") || drv.outputs.contains(key))
+        {
+            return Err(Error::InvalidPlanOutputBinding(format!(
+                "plan-output marker in overwritten environment key '{key}'"
+            )));
+        }
+    }
+    // Output placeholders are computed by existing finalization after marker substitution.
+    for argument in &mut nix_drv.arguments {
+        if argument.contains(PLAN_OUTPUT_MARKER) {
+            *argument = substitute_plan_output_markers(argument, &bindings)?;
+        }
+    }
+    for value in nix_drv.environment.values_mut() {
+        if let Ok(text) = std::str::from_utf8(value.as_ref())
+            && text.contains(PLAN_OUTPUT_MARKER)
+        {
+            *value = substitute_plan_output_markers(text, &bindings)?.into_bytes().into();
+        }
+    }
+    if !bindings.is_empty() {
+        let json = serde_json::to_string(&SortedPlanOutputBindings(&bindings))
+            .map_err(|error| Error::InvalidPlanOutputBinding(error.to_string()))?;
+        nix_drv.environment.insert(PLAN_OUTPUT_BINDINGS_ENV_KEY.to_string(), json.into_bytes().into());
+    }
+    Ok(())
 }
 
 /// Construct a `nix_compat::Derivation` from the CrunchDerivation fields.

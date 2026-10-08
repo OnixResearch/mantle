@@ -4467,6 +4467,7 @@ fn queue_derivation_inputs<'a>(
                 )));
             }
             crunch_glue::Input::OutputSelection(output) => DerivationSourceWalkItem::Derivation(&output.drv),
+            crunch_glue::Input::PlanOutput(reference) => DerivationSourceWalkItem::Derivation(&reference.producer),
             crunch_glue::Input::Derivation(input_derivation) => DerivationSourceWalkItem::Derivation(input_derivation),
         };
         pending.push(item);
@@ -5342,6 +5343,9 @@ impl<'a> DerivationFileSourceWalker<'a> {
             ))),
             crunch_glue::Input::OutputSelection(output) => {
                 self.walk_derivation(root_dir, owner_file, &output.drv, depth)
+            }
+            crunch_glue::Input::PlanOutput(reference) => {
+                self.walk_derivation(root_dir, owner_file, &reference.producer, depth)
             }
             crunch_glue::Input::Derivation(derivation) => self.walk_derivation(root_dir, owner_file, derivation, depth),
         }

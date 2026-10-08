@@ -52,6 +52,7 @@ use crate::environment_policy;
 use crate::execution_profile::NIX_FOREIGN_PROFILE_ID;
 use crate::network_policy::CompatibilityNetworkPolicy;
 use crate::network_policy::plan_network_policy;
+use crate::plan_output_binding::PLAN_OUTPUT_BINDINGS_ENV_KEY;
 use crate::registry::DerivationRegistry;
 use crate::validate_execution_profile;
 use crate::verify_execution_profile_binding;
@@ -243,11 +244,12 @@ fn normalized_environment_for_profile(
     }
     let declared_environment =
         declared_profile_environment(derivation, execution_profile).map_err(execution_profile_error)?;
-    let environment_vars = if execution_profile.profile_id == NIX_FOREIGN_PROFILE_ID {
+    let mut environment_vars = if execution_profile.profile_id == NIX_FOREIGN_PROFILE_ID {
         nix_protocol_environment(declared_environment, store_dir)
     } else {
         declared_environment
     };
+    environment_vars.remove(PLAN_OUTPUT_BINDINGS_ENV_KEY);
     let action_name = environment_policy::action_name_from_environment(&derivation.environment);
     let report = environment_policy::success_report(action_name, &environment_vars);
     Ok(NormalizedBuildEnvironment {
@@ -468,6 +470,41 @@ pub(crate) fn build_request_from_environment(
         refscan_needles,
         workspace: None,
     })
+}
+
+/// Substitute accepted root paths only after the worker has observed every
+/// selected root as complete. The record itself never reaches the sandbox.
+// r[impl mantle.dynamic_plan_output_inputs.dispatch_binding]
+pub(crate) fn bind_plan_output_request(
+    request: &mut BuildRequest,
+    bindings: &[(String, StorePath<String>)],
+    store_dir: &str,
+) -> Result<(), crate::Error> {
+    use bstr::ByteSlice;
+
+    for (placeholder, output_path) in bindings {
+        let actual_path = output_path.to_absolute_path_with_prefix(store_dir);
+        let mut replaced = false;
+        for argument in request.command_args.iter_mut().skip(1) {
+            if argument.contains(placeholder) {
+                *argument = argument.replace(placeholder, &actual_path);
+                replaced = true;
+            }
+        }
+        for variable in &mut request.environment_vars {
+            if variable.value.as_ref().find(placeholder.as_bytes()).is_some() {
+                variable.value =
+                    Bytes::from(variable.value.as_ref().replace(placeholder.as_bytes(), actual_path.as_bytes()));
+                replaced = true;
+            }
+        }
+        if !replaced {
+            return Err(crate::Error::Store(format!(
+                "plan-output-unbound: accepted root path for placeholder {placeholder} is not used in the build request"
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn replace_environment_placeholders(
@@ -815,7 +852,7 @@ fn overlay_derivation_environment(
     assert!(!environment_vars.is_empty(), "sandbox env must be pre-populated");
     let mut audit_events = Vec::with_capacity(derivation.environment.len());
     for (key, value) in &derivation.environment {
-        if key == WORKSPACE_POLICY_ENV || key == WORKSPACE_LEASE_ENV {
+        if key == WORKSPACE_POLICY_ENV || key == WORKSPACE_LEASE_ENV || key == PLAN_OUTPUT_BINDINGS_ENV_KEY {
             continue;
         }
         reject_denied_strict_environment_key(derivation, hermeticity_mode, environment_vars.len(), key)?;

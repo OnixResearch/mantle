@@ -160,6 +160,7 @@ fn doctor_and_build_reports_serialize_to_registered_positive_fixtures() {
             non_claims: vec!["index-presence-is-not-output-trust".to_string()],
         }],
         native_dynamic_plans: Vec::new(),
+        plan_output_bindings: Vec::new(),
         scheduler_priority_decisions: vec![scheduler_fixture_decision()],
         overlay_base_generations: Vec::new(),
         overlay_plan_blake3: None,

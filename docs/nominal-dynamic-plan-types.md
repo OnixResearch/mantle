@@ -114,3 +114,77 @@ an unrelated concurrent signer may overwrite a preflighted digest before
 commit. This contract does not promise physical cleanup or cross-process
 no-clobber. Neither the pure planner nor signed source publication proves
 source trust, producer correctness, build success, or release eligibility.
+
+## Static derivation inputs bound to plan roots
+
+A static Nickel derivation can consume an exported root from a native
+`mantle-plan-v1` or `mantle-plan-v2` without a second evaluation:
+
+```nickel
+let mantle = import "lib.ncl" in
+let producer = import "producer.ncl" in
+{
+  name = "consumer",
+  builder = "/bin/sh",
+  addressing_mode = 'input-addressed,
+  inputs = [{
+    name = "root_input",
+    producer = producer,
+    plan_output = "plan",
+    root = "unit.root",
+    unit_output = "out",
+  }],
+  env = { ROOT = "{{mantle-plan-output:root_input}}" },
+  args = ["-c", "read payload < \"$ROOT\" && echo \"$payload\" > \"$out\""],
+} | mantle.Derivation
+```
+
+`producer` must be an inline derivation and `plan_output` one of its declared
+`dynamic_plan_outputs`. `root` is an exported plan root unit id, not an
+internal unit; `unit_output` must be declared among that unit derivation's
+outputs. At most 16 differently named references are allowed per consumer.
+The exact `{{mantle-plan-output:<name>}}` marker can occur in argument and
+environment values. A marker naming no input, or a malformed or unterminated
+marker, fails conversion.
+Markers in environment keys overwritten by derivation registration are
+rejected rather than silently lost. The reserved
+`__MANTLE_PLAN_OUTPUT_BINDINGS` environment value is compact JSON ordered by
+input name: each record contains `name`, `producer_drv_path`, `plan_output`,
+`root`, `unit_output`, and a deterministic `placeholder`. The selected
+producer plan output is also a normal derivation input edge. These stable
+request facts determine the consumer's derivation and input-addressed output
+paths before the plan runs; no output path from a content-addressed root is
+needed during evaluation. Derivations without these inputs keep their
+existing identities.
+
+After the producer succeeds, the worker accepts and validates its plan,
+resolves exported root membership and output membership, waits for the root
+goal, then substitutes the *realized* root output path into the consumer's
+arguments and environment at dispatch. Bound root output paths enter the
+sandbox with their closures and participate in reference scanning. No
+unresolved reference can dispatch. Failure reasons in the build report are
+`plan-output-invalid`, `plan-output-bounded`,
+`plan-output-producer-failed`, `plan-output-plan-rejected`,
+`plan-output-undeclared`, `plan-output-root-missing`,
+`plan-output-output-missing`, `plan-output-root-failed`, and
+`plan-output-unbound`; a failed bound consumer has no successful output.
+One failing reference is selected in input-name order. The build JSON
+`plan_output_bindings` rows expose each reference's declared request,
+accepted plan digest and resolved root/output where available, status, and
+failure reason. An empty binding list is omitted.
+
+Successful consumer outputs also retain the *worker-observed* association in
+their canonical persisted artifact provenance. The existing
+`Claims.extra["mantle.plan_output_bindings"]` value is a JSON array sorted
+by `name`, with `producer_drv_path`, `plan_output`, `plan_digest`, `root`,
+`unit_output`, `root_drv_path`, and `output_path` for each bound reference.
+Other provenance claims are retained; a pre-existing claim under this
+reserved key fails the bound consumer rather than replacing observed facts.
+The `BuildInput` provenance graph edges include the bound root artifacts,
+and signed store PathInfo reference scanning can record the root path when
+it appears in output bytes. The artifact provenance JSON has a canonical
+BLAKE3 digest checked by `mantle attest verify artifact`, but is **not
+cryptographically signed**; the PathInfo signature does **not** bind that
+attestation digest. Neither the request identity nor the observation
+establishes producer determinism, root content correctness, successful
+consumer semantics, source trust, or release eligibility.

@@ -84,6 +84,13 @@ use crate::orchestrate::Builder;
 use crate::orchestrate::BuilderSourceSlice;
 use crate::orchestrate::PrepareResult;
 use crate::orchestrate::PreparedBuild;
+use crate::plan_output_binding::BoundPlanRoot;
+use crate::plan_output_binding::PLAN_OUTPUT_BINDINGS_ENV_KEY;
+use crate::plan_output_binding::PLAN_OUTPUT_PROVENANCE_CLAIM_KEY;
+use crate::plan_output_binding::PlanOutputBindingFailureKind;
+use crate::plan_output_binding::PlanOutputBindingRecord;
+use crate::plan_output_binding::bind_accepted_plan_root;
+use crate::plan_output_binding::decode_binding_records;
 use crate::registry::DerivationRegistry;
 use crate::registry::MAX_ENTRIES;
 use crate::scheduling::EligiblePreferenceFacts;
@@ -277,8 +284,97 @@ pub struct WorkerResult {
     pub failed: Vec<FailedGoal>,
     /// Native dynamic-plan accepted/rejected rows discovered during the run.
     pub native_dynamic_plans: Vec<NativeDynamicPlanReport>,
+    /// Accepted and rejected late-bound static input rows.
+    pub plan_output_bindings: Vec<NativePlanOutputBindingReport>,
     /// Bounded, redacted evidence for each selected ready goal.
     pub priority_decisions: Vec<PriorityDecisionEvidence>,
+}
+
+/// Observed late binding for one statically evaluated consumer input.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativePlanOutputBindingReport {
+    pub consumer_drv_key: String,
+    pub name: String,
+    pub producer_drv_path: StorePath<String>,
+    pub plan_output: String,
+    pub root: String,
+    pub unit_output: String,
+    pub plan_digest: Option<String>,
+    pub root_drv_path: Option<StorePath<String>>,
+    pub output_path: Option<StorePath<String>>,
+    pub status: String,
+    pub failure_reason: Option<String>,
+}
+
+#[derive(Debug)]
+struct PlanOutputBindingState {
+    record: PlanOutputBindingRecord,
+    root: Option<BoundPlanRoot>,
+    plan_digest: Option<String>,
+    realized_path: Option<StorePath<String>>,
+    failure: Option<PlanOutputBindingFailureKind>,
+}
+
+// Stored in canonical artifact provenance only after an accepted plan and
+// realized root have been observed. The reference name is the canonical sort key.
+#[derive(serde::Serialize)]
+struct BoundPlanOutputProvenance<'a> {
+    name: &'a str,
+    producer_drv_path: String,
+    plan_output: &'a str,
+    plan_digest: &'a str,
+    root: &'a str,
+    unit_output: &'a str,
+    root_drv_path: String,
+    output_path: String,
+}
+
+fn attach_observed_binding_claim(
+    claims: &mut Option<crunch_attestation::Claims>,
+    consumer_drv_key: &str,
+    claim: String,
+) -> Result<(), Error> {
+    let claims = claims.get_or_insert_with(Default::default);
+    if claims.extra.contains_key(PLAN_OUTPUT_PROVENANCE_CLAIM_KEY) {
+        return Err(Error::Store(format!("reserved plan output provenance claim already set: {consumer_drv_key}")));
+    }
+    claims.extra.insert(PLAN_OUTPUT_PROVENANCE_CLAIM_KEY.to_string(), claim);
+    Ok(())
+}
+
+// Accepted plans are the common case; boxing one would allocate on every producer.
+#[allow(clippy::large_enum_variant)]
+enum NativePlanBindingFact {
+    Accepted {
+        plan: CanonicalNativePlan,
+        registered_units: BTreeMap<UnitId, StorePath<String>>,
+    },
+    Rejected,
+}
+
+impl PlanOutputBindingState {
+    fn report(&self, consumer_drv_key: &str) -> NativePlanOutputBindingReport {
+        NativePlanOutputBindingReport {
+            consumer_drv_key: consumer_drv_key.to_owned(),
+            name: self.record.name.clone(),
+            producer_drv_path: self.record.producer_drv_path.clone(),
+            plan_output: self.record.plan_output.as_str().to_owned(),
+            root: self.record.root.as_str().to_owned(),
+            unit_output: self.record.unit_output.as_str().to_owned(),
+            plan_digest: self.plan_digest.clone(),
+            root_drv_path: self.root.as_ref().map(|root| root.drv_path.clone()),
+            output_path: self.realized_path.clone(),
+            status: if self.failure.is_some() {
+                "rejected"
+            } else if self.realized_path.is_some() {
+                "bound"
+            } else {
+                "pending"
+            }
+            .to_owned(),
+            failure_reason: self.failure.map(|failure| failure.as_str().to_owned()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -417,6 +513,13 @@ impl V2Registration<'_> {
                         .ok_or_else(|| Error::DerivationNotFound { path: path.clone() })?
                         .derivation
                 };
+                if let Some(bindings) = derivation.environment.get(PLAN_OUTPUT_BINDINGS_ENV_KEY) {
+                    let records = decode_binding_records(bindings.as_ref(), self.live.store_dir())
+                        .map_err(|kind| Error::Store(format!("{}: invalid static input in {key}", kind.as_str())))?;
+                    if records.is_empty() {
+                        return Err(Error::Store(format!("plan-output-invalid: empty binding list in {key}")));
+                    }
+                }
                 let Some(remaining) = MAX_GOALS.checked_sub(worker.registry.len()) else {
                     return Err(Error::Store(format!("goal registry at capacity ({MAX_GOALS})")));
                 };
@@ -579,11 +682,24 @@ fn bounded_failed_build_log(log: Option<&str>) -> Option<String> {
 fn finish_worker_result(
     outcomes: Vec<BuildOutcome>,
     all_outcomes: Vec<BuildOutcome>,
-    failed: Vec<FailedGoal>,
+    mut failed: Vec<FailedGoal>,
     mut native_dynamic_plans: Vec<NativeDynamicPlanReport>,
+    plan_output_bindings: Vec<NativePlanOutputBindingReport>,
     priority_decisions: Vec<PriorityDecisionEvidence>,
 ) -> WorkerResult {
     sort_native_dynamic_plan_reports(&mut native_dynamic_plans);
+    for row in &mut failed {
+        if let Some(binding) = plan_output_bindings
+            .iter()
+            .find(|binding| binding.consumer_drv_key == row.drv_key && binding.failure_reason.is_some())
+            && let Some(reason) = binding.failure_reason.as_ref()
+        {
+            row.error = reason.clone();
+            row.origin_error = reason.clone();
+            row.origin_drv_key = row.drv_key.clone();
+            row.build_log = None;
+        }
+    }
     debug_assert!(u32::try_from(priority_decisions.len()).is_ok_and(|count| count <= MAX_PRIORITY_DECISIONS));
     debug_assert!(
         priority_decisions
@@ -595,6 +711,7 @@ fn finish_worker_result(
         all_outcomes,
         failed,
         native_dynamic_plans,
+        plan_output_bindings,
         priority_decisions,
     }
 }
@@ -1274,6 +1391,8 @@ pub struct Worker {
     pressure_cache: BTreeMap<String, KnownGraphPressure>,
     pressure_dirty_goals: BTreeSet<String>,
     priority_decisions: Vec<PriorityDecisionEvidence>,
+    plan_output_bindings: BTreeMap<String, Vec<PlanOutputBindingState>>,
+    native_plan_binding_facts: BTreeMap<(String, String), NativePlanBindingFact>,
     max_jobs: u32,
 }
 
@@ -1313,6 +1432,8 @@ impl Worker {
             pressure_cache: BTreeMap::new(),
             pressure_dirty_goals: BTreeSet::new(),
             priority_decisions: Vec::new(),
+            plan_output_bindings: BTreeMap::new(),
+            native_plan_binding_facts: BTreeMap::new(),
             max_jobs,
         })
     }
@@ -1500,6 +1621,7 @@ impl Worker {
         // Pass 2: Wire deps and inspect, in creation order (leaves
         // first since BFS processes deps before dependents).
         for (key, dep_drv_paths) in &created {
+            self.resolve_binding_states(key, known_paths);
             self.wire_deps_and_inspect(key, dep_drv_paths)?;
         }
 
@@ -1546,6 +1668,36 @@ impl Worker {
                 .ok_or_else(|| Error::DerivationNotFound { path: sp.clone() })?;
             let derivation = entry.derivation.clone();
             let dep_drv_paths: Vec<StorePath<String>> = derivation.input_derivations.keys().cloned().collect();
+            if let Some(raw_bindings) = derivation.environment.get(PLAN_OUTPUT_BINDINGS_ENV_KEY) {
+                let records = decode_binding_records(raw_bindings.as_ref(), known_paths.store_dir())
+                    .map_err(|kind| Error::Store(format!("{}: invalid static input in {key}", kind.as_str())))?;
+                if records.is_empty() {
+                    return Err(Error::Store(format!("plan-output-invalid: empty binding list in {key}")));
+                }
+                let bindings = records
+                    .into_iter()
+                    .map(|record| {
+                        let has_declared_edge = derivation
+                            .input_derivations
+                            .get(&record.producer_drv_path)
+                            .is_some_and(|outputs| outputs.contains(record.plan_output.as_str()));
+                        let producer_abs =
+                            record.producer_drv_path.to_absolute_path_with_prefix(known_paths.store_dir());
+                        let has_declared_plan = known_paths.get_by_drv_path(&producer_abs).is_some_and(|producer| {
+                            producer.dynamic_plan_outputs.iter().any(|output| output == record.plan_output.as_str())
+                        });
+                        PlanOutputBindingState {
+                            record,
+                            root: None,
+                            plan_digest: None,
+                            realized_path: None,
+                            failure: (!has_declared_edge || !has_declared_plan)
+                                .then_some(PlanOutputBindingFailureKind::Undeclared),
+                        }
+                    })
+                    .collect();
+                self.plan_output_bindings.insert(key.clone(), bindings);
+            }
 
             let goal = if root {
                 Goal::new_root(sp.clone(), derivation)
@@ -1569,14 +1721,186 @@ impl Worker {
         Ok(created)
     }
 
+    // r[impl mantle.dynamic_plan_output_inputs.binding_failures]
+    fn resolve_binding_states(&mut self, key: &str, known_paths: &DerivationRegistry) {
+        let Some(bindings) = self.plan_output_bindings.get_mut(key) else {
+            return;
+        };
+        for binding in bindings {
+            if binding.failure.is_some() || binding.realized_path.is_some() {
+                continue;
+            }
+            if binding.root.is_none() {
+                let producer_key = binding.record.producer_drv_path.to_absolute_path();
+                match self
+                    .native_plan_binding_facts
+                    .get(&(producer_key.clone(), binding.record.plan_output.as_str().to_owned()))
+                {
+                    Some(NativePlanBindingFact::Accepted { plan, registered_units }) => {
+                        binding.plan_digest = Some(plan.digest().to_owned());
+                        match bind_accepted_plan_root(&binding.record, plan, registered_units) {
+                            Ok(root) => binding.root = Some(root),
+                            Err(failure) => binding.failure = Some(failure),
+                        }
+                    }
+                    Some(NativePlanBindingFact::Rejected) => {
+                        binding.failure = Some(PlanOutputBindingFailureKind::PlanRejected);
+                    }
+                    None if self.registry.get(&producer_key).is_some_and(|goal| goal.state == GoalState::Failed) => {
+                        binding.failure = Some(PlanOutputBindingFailureKind::ProducerFailed);
+                    }
+                    None => continue,
+                }
+            }
+            if let Some(root) = &binding.root {
+                let root_key = root.drv_path.to_absolute_path();
+                if root_key == key {
+                    binding.failure = Some(PlanOutputBindingFailureKind::RootFailed);
+                    continue;
+                }
+                match self.registry.get(&root_key).map(|goal| &goal.state) {
+                    Some(GoalState::Done) => {
+                        binding.realized_path = known_paths.get_output_path(
+                            &root.drv_path.to_absolute_path_with_prefix(known_paths.store_dir()),
+                            root.output.as_str(),
+                        );
+                        if binding.realized_path.is_none() {
+                            binding.failure = Some(PlanOutputBindingFailureKind::RootFailed);
+                        }
+                    }
+                    Some(GoalState::Failed) | None => binding.failure = Some(PlanOutputBindingFailureKind::RootFailed),
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    fn binding_failure(&self, key: &str) -> Option<PlanOutputBindingFailureKind> {
+        self.plan_output_bindings.get(key)?.iter().find_map(|binding| binding.failure)
+    }
+
+    fn binding_root_keys(&self, key: &str) -> Vec<String> {
+        self.plan_output_bindings
+            .get(key)
+            .into_iter()
+            .flat_map(|bindings| bindings.iter())
+            .filter(|binding| binding.failure.is_none() && binding.realized_path.is_none())
+            .filter_map(|binding| binding.root.as_ref().map(|root| root.drv_path.to_absolute_path()))
+            .collect()
+    }
+
+    fn attach_binding_roots(&mut self, key: &str) -> Result<(), Error> {
+        for root_key in self.binding_root_keys(key) {
+            let Some(root_goal) = self.registry.get(&root_key) else {
+                return Err(Error::Store(format!("registered plan root goal missing: {root_key}")));
+            };
+            if root_goal.state == GoalState::Done
+                || self.registry.get(key).is_some_and(|goal| goal.waitees.contains(&root_key))
+            {
+                continue;
+            }
+            let goal =
+                self.registry.get_mut(key).ok_or_else(|| Error::Store(format!("binding consumer missing: {key}")))?;
+            if let GoalState::Waiting { remaining_deps } = &mut goal.state {
+                *remaining_deps = remaining_deps
+                    .checked_add(1)
+                    .ok_or_else(|| Error::Store("binding dependency count overflow".to_owned()))?;
+                goal.waitees.push(root_key.clone());
+                self.registry
+                    .get_mut(&root_key)
+                    .ok_or_else(|| Error::Store(format!("registered plan root goal missing: {root_key}")))?
+                    .waiters
+                    .push(key.to_owned());
+                self.pressure_dirty_goals.insert(key.to_owned());
+                self.pressure_dirty_goals.insert(root_key);
+            }
+        }
+        Ok(())
+    }
+
+    fn binding_reports(&self) -> Vec<NativePlanOutputBindingReport> {
+        self.plan_output_bindings
+            .iter()
+            .flat_map(|(key, bindings)| bindings.iter().map(move |binding| binding.report(key)))
+            .collect()
+    }
+
+    // r[impl mantle.dynamic_plan_output_inputs.provenance]
+    fn bound_binding_claim(&self, key: &str, store_dir: &str) -> Result<Option<String>, Error> {
+        let Some(bindings) = self.plan_output_bindings.get(key) else {
+            return Ok(None);
+        };
+        let mut facts = Vec::with_capacity(bindings.len());
+        for binding in bindings {
+            let plan_digest = binding.plan_digest.as_deref().ok_or_else(|| {
+                Error::Store(format!("plan output {} has no accepted plan digest at dispatch", binding.record.name))
+            })?;
+            let root = binding.root.as_ref().ok_or_else(|| {
+                Error::Store(format!("plan output {} has no bound root at dispatch", binding.record.name))
+            })?;
+            let output = binding.realized_path.as_ref().ok_or_else(|| {
+                Error::Store(format!("plan output {} has no realized root output at dispatch", binding.record.name))
+            })?;
+            if binding.failure.is_some() {
+                return Err(Error::Store(format!(
+                    "failed plan output {} cannot publish provenance",
+                    binding.record.name
+                )));
+            }
+            facts.push(BoundPlanOutputProvenance {
+                name: &binding.record.name,
+                producer_drv_path: binding.record.producer_drv_path.to_absolute_path_with_prefix(store_dir),
+                plan_output: binding.record.plan_output.as_str(),
+                plan_digest,
+                root: binding.record.root.as_str(),
+                unit_output: binding.record.unit_output.as_str(),
+                root_drv_path: root.drv_path.to_absolute_path_with_prefix(store_dir),
+                output_path: output.to_absolute_path_with_prefix(store_dir),
+            });
+        }
+        facts.sort_unstable_by(|left, right| left.name.cmp(right.name));
+        let claim = serde_json::to_string(&facts)
+            .map_err(|error| Error::Store(format!("serializing observed plan output provenance: {error}")))?;
+        Ok(Some(claim))
+    }
+
+    fn final_binding_reports(&mut self, known_paths: &DerivationRegistry) -> Vec<NativePlanOutputBindingReport> {
+        if self.plan_output_bindings.is_empty() {
+            return Vec::new();
+        }
+        let consumers: Vec<String> = self.plan_output_bindings.keys().cloned().collect();
+        for consumer in consumers {
+            self.resolve_binding_states(&consumer, known_paths);
+        }
+        self.binding_reports()
+    }
+
     /// Wire waiter edges for a goal's deps and inspect (Pending →
     /// Waiting/Ready). All deps must already exist in the registry.
     fn wire_deps_and_inspect(&mut self, key: &str, dep_drv_paths: &[StorePath<String>]) -> Result<(), Error> {
-        let unbuilt_dep_keys: Vec<String> = dep_drv_paths
+        // A streaming consumer may arrive after its producer (and even its root)
+        // has completed. Retained plan facts make that ordering indistinguishable.
+        // The old static edge stays part of the derivation identity.
+        // Resolution is repeated at dispatch to cover roots completed meanwhile.
+        let mut unbuilt_dep_keys: Vec<String> = dep_drv_paths
             .iter()
             .map(|sp| sp.to_absolute_path())
-            .filter(|dep_key| self.registry.get(dep_key).map(|g| g.state != GoalState::Done).unwrap_or(false))
+            .filter(|dep_key| {
+                self.registry.get(dep_key).is_some_and(|goal| {
+                    goal.state != GoalState::Done
+                        && (goal.state != GoalState::Failed || self.binding_failure(key).is_none())
+                })
+            })
             .collect();
+        if self.plan_output_bindings.contains_key(key) {
+            for root_key in self.binding_root_keys(key) {
+                if !unbuilt_dep_keys.contains(&root_key)
+                    && self.registry.get(&root_key).is_some_and(|goal| goal.state != GoalState::Done)
+                {
+                    unbuilt_dep_keys.push(root_key);
+                }
+            }
+        }
 
         for dep_key in &unbuilt_dep_keys {
             if let Some(dep_goal) = self.registry.get_mut(dep_key) {
@@ -1650,11 +1974,13 @@ impl Worker {
                     "worker finished"
                 );
                 let priority_decisions = std::mem::take(&mut self.priority_decisions);
+                let binding_rows = self.final_binding_reports(known_paths);
                 return Ok(finish_worker_result(
                     outcomes,
                     all_outcomes,
                     failed,
                     native_dynamic_plans,
+                    binding_rows,
                     priority_decisions,
                 ));
             }
@@ -1731,11 +2057,13 @@ impl Worker {
                     "worker streaming finished"
                 );
                 let priority_decisions = std::mem::take(&mut self.priority_decisions);
+                let binding_rows = self.final_binding_reports(known_paths);
                 return Ok(finish_worker_result(
                     outcomes,
                     all_outcomes,
                     failed,
                     native_dynamic_plans,
+                    binding_rows,
                     priority_decisions,
                 ));
             }
@@ -1930,11 +2258,35 @@ impl Worker {
         }
         self.log_native_dynamic_plan_scan(&native_scan);
         state.native_dynamic_plans.extend(native_plan_reports_from_scan(&native_scan));
+        for rejected in native_scan.rejected {
+            self.native_plan_binding_facts
+                .insert((rejected.producer_key, rejected.output_name), NativePlanBindingFact::Rejected);
+        }
+        // The producer is still Building: install root waits before notifying
+        // its static consumers, including when the plan came from cache.
+        let consumers: Vec<String> = self
+            .plan_output_bindings
+            .iter()
+            .filter(|(_, bindings)| {
+                bindings.iter().any(|binding| binding.record.producer_drv_path.to_absolute_path() == drv_key)
+            })
+            .map(|(key, _)| key.clone())
+            .collect();
+        for consumer in &consumers {
+            self.resolve_binding_states(consumer, known_paths);
+            self.attach_binding_roots(consumer)?;
+        }
 
         self.detect_dynamic_derivations(drv_key, &outcome, builder, known_paths, &declared_native_outputs)
             .await?;
 
-        self.complete_goal(drv_key, outcome, state.outcomes, state.all_outcomes, state.failed)
+        self.complete_goal(drv_key, outcome, state.outcomes, state.all_outcomes, state.failed)?;
+        for consumer in consumers {
+            if let Some(failure) = self.binding_failure(&consumer) {
+                self.fail_binding_consumer(&consumer, failure, state.failed)?;
+            }
+        }
+        Ok(())
     }
 
     fn declared_native_dynamic_outputs(
@@ -2376,6 +2728,13 @@ impl Worker {
             self.want(root_drv_path, known_paths, true)?;
         }
         debug_assert!(registered.unit_drv_paths.len() >= accepted.plan.roots().len());
+        self.native_plan_binding_facts.insert(
+            (accepted.producer_key, accepted.output_name),
+            NativePlanBindingFact::Accepted {
+                plan: accepted.plan,
+                registered_units: registered.unit_drv_paths,
+            },
+        );
         Ok(())
     }
 
@@ -2544,8 +2903,48 @@ impl Worker {
             let Some(drv_key) = self.select_next_ready_goal()? else {
                 break;
             };
+            self.resolve_binding_states(&drv_key, known_paths);
+            let mut bound_paths = Vec::new();
+            if let Some(bindings) = self.plan_output_bindings.get(&drv_key) {
+                if let Some(failure) = bindings.iter().find_map(|binding| binding.failure) {
+                    self.fail_binding_consumer(&drv_key, failure, state.failed)?;
+                    dispatched =
+                        dispatched.checked_add(1).ok_or_else(|| Error::Store("dispatch count overflow".to_string()))?;
+                    continue;
+                }
+                if bindings.iter().any(|binding| binding.realized_path.is_none()) {
+                    if let Some(binding) = self
+                        .plan_output_bindings
+                        .get_mut(&drv_key)
+                        .and_then(|bindings| bindings.iter_mut().find(|binding| binding.realized_path.is_none()))
+                    {
+                        binding.failure = Some(PlanOutputBindingFailureKind::Unbound);
+                    }
+                    self.fail_binding_consumer(&drv_key, PlanOutputBindingFailureKind::Unbound, state.failed)?;
+                    dispatched =
+                        dispatched.checked_add(1).ok_or_else(|| Error::Store("dispatch count overflow".to_string()))?;
+                    continue;
+                }
+                bound_paths.extend(bindings.iter().filter_map(|binding| {
+                    binding.realized_path.as_ref().map(|path| (binding.record.placeholder.clone(), path.clone()))
+                }));
+                debug_assert_eq!(bound_paths.len(), bindings.len(), "every binding was checked as realized");
+            }
+            if let Some(claim) = self.bound_binding_claim(&drv_key, builder.store_dir())? {
+                // Goal keys use the default prefix; the registry is keyed under
+                // the active logical store directory.
+                let registry_key = self
+                    .registry
+                    .get(&drv_key)
+                    .map(|goal| goal.drv_path.to_absolute_path_with_prefix(known_paths.store_dir()))
+                    .ok_or_else(|| Error::Store(format!("bound consumer goal vanished: {drv_key}")))?;
+                let entry = known_paths
+                    .get_by_drv_path_mut(&registry_key)
+                    .ok_or_else(|| Error::Store(format!("bound consumer registry entry vanished: {registry_key}")))?;
+                attach_observed_binding_claim(&mut entry.provenance_claims, &drv_key, claim)?;
+            }
             let (drv_path, is_root, derivation) = self.ready_goal_inputs(&drv_key)?;
-            let prepare_result = builder.prepare_build(&drv_path, derivation, known_paths, is_root).await;
+            let prepare_result = builder.prepare_build(&drv_path, derivation, known_paths, is_root, &bound_paths).await;
             let is_spawned = self.handle_prepare_result(&drv_key, prepare_result, builder, known_paths, state).await?;
             if is_spawned {
                 available_build_slots = available_build_slots
@@ -2701,6 +3100,65 @@ impl Worker {
         Ok(())
     }
 
+    /// Reject a bound consumer before dispatch, regardless of which other
+    /// static dependencies have already completed.
+    fn fail_binding_consumer(
+        &mut self,
+        key: &str,
+        failure: PlanOutputBindingFailureKind,
+        failed: &mut Vec<FailedGoal>,
+    ) -> Result<(), Error> {
+        let goal =
+            self.registry.get_mut(key).ok_or_else(|| Error::Store(format!("binding consumer missing: {key}")))?;
+        if goal.state == GoalState::Failed {
+            return Ok(());
+        }
+        match goal.state {
+            GoalState::Waiting { .. } => goal.notify_dep_failed()?,
+            GoalState::Ready => goal.mark_build_failed()?,
+            _ => return Err(Error::Store(format!("binding consumer {key} cannot fail in {:?} state", goal.state))),
+        }
+        let is_root = goal.is_root;
+        let waiters = std::mem::take(&mut goal.waiters);
+        let name = goal.drv_path.name().to_owned();
+        self.ready_goals.remove(key);
+        let reason = failure.as_str();
+        if is_root {
+            failed.push(FailedGoal {
+                drv_key: key.to_owned(),
+                origin_drv_key: key.to_owned(),
+                error: reason.to_owned(),
+                origin_error: reason.to_owned(),
+                build_log: None,
+            });
+        }
+        for waiter in waiters {
+            self.propagate_failure(&waiter, key, &name, reason, None, failed)?;
+        }
+        Ok(())
+    }
+
+    fn mark_failed_binding_dependencies(&mut self, key: &str) {
+        let Some(bindings) = self.plan_output_bindings.get_mut(key) else {
+            return;
+        };
+        for binding in bindings {
+            if binding.failure.is_some() || binding.realized_path.is_some() {
+                continue;
+            }
+            let producer_key = binding.record.producer_drv_path.to_absolute_path();
+            if self.registry.get(&producer_key).is_some_and(|goal| goal.state == GoalState::Failed) {
+                binding.failure = Some(PlanOutputBindingFailureKind::ProducerFailed);
+            } else if binding.root.as_ref().is_some_and(|root| {
+                self.registry
+                    .get(&root.drv_path.to_absolute_path())
+                    .is_some_and(|goal| goal.state == GoalState::Failed)
+            }) {
+                binding.failure = Some(PlanOutputBindingFailureKind::RootFailed);
+            }
+        }
+    }
+
     /// Mark a goal as failed and propagate failure to all waiters.
     ///
     /// The error message is stored in `FailedGoal` for root goals.
@@ -2722,6 +3180,12 @@ impl Worker {
         let is_root = goal.is_root;
         let waiters = std::mem::take(&mut goal.waiters);
         let drv_name = goal.drv_path.name().to_string();
+        if !self.plan_output_bindings.is_empty() {
+            let consumers: Vec<String> = self.plan_output_bindings.keys().cloned().collect();
+            for consumer in consumers {
+                self.mark_failed_binding_dependencies(&consumer);
+            }
+        }
 
         if is_root {
             failed.push(FailedGoal {
@@ -2758,6 +3222,7 @@ impl Worker {
         build_log: Option<&str>,
         failed: &mut Vec<FailedGoal>,
     ) -> Result<(), Error> {
+        self.mark_failed_binding_dependencies(drv_key);
         let goal = self
             .registry
             .get_mut(drv_key)
@@ -2818,6 +3283,23 @@ mod tests {
         assert_eq!(retained.as_deref(), Some("bounded"));
         assert!(bounded_failed_build_log(Some(&oversized)).is_none());
         assert!(bounded_failed_build_log(None).is_none());
+    }
+
+    #[test]
+    // r[verify mantle.dynamic_plan_output_inputs.provenance]
+    fn observed_binding_claim_preserves_other_claims_and_rejects_collision() {
+        let mut claims = Some(crunch_attestation::Claims {
+            supplier: Some("Independent Supplier".to_owned()),
+            extra: BTreeMap::from([("operator.note".to_owned(), "keep".to_owned())]),
+            ..Default::default()
+        });
+        attach_observed_binding_claim(&mut claims, "consumer.drv", "observed".to_owned()).unwrap();
+        let retained = claims.clone();
+        assert_eq!(claims.as_ref().unwrap().supplier.as_deref(), Some("Independent Supplier"));
+        assert_eq!(claims.as_ref().unwrap().extra["operator.note"], "keep");
+        let error = attach_observed_binding_claim(&mut claims, "consumer.drv", "forged".to_owned()).unwrap_err();
+        assert!(error.to_string().contains("reserved plan output provenance claim"));
+        assert_eq!(claims, retained, "a conflicting claim must not overwrite prior provenance");
     }
 
     fn make_drv() -> Derivation {
@@ -3651,6 +4133,162 @@ mod tests {
         let abs = sp.to_absolute_path_with_prefix(kp.store_dir());
         let entry = kp.get_by_drv_path_mut(&abs).unwrap();
         entry.dynamic_plan_outputs = vec![output_name.to_string()];
+    }
+
+    fn register_bound_consumer(
+        kp: &mut DerivationRegistry,
+        producer: &StorePath<String>,
+    ) -> (StorePath<String>, String) {
+        let (_, mut drv) = build_and_register_multi("native-static-base", &["out"], &[(producer.clone(), "plan")], kp);
+        // The helper returns an already-finalized IA derivation. Recalculate
+        // this distinct consumer from an unpopulated output and environment.
+        drv.outputs.get_mut("out").unwrap().path = None;
+        drv.environment.insert("out".to_owned(), BString::from(""));
+        let name = "app";
+        let placeholder = nix_compat::store_path::hash_placeholder(&format!("mantle-plan-output:{name}"));
+        let records = serde_json::json!([{
+            "name": name,
+            "producer_drv_path": producer.to_absolute_path(),
+            "plan_output": "plan",
+            "root": "unit.main",
+            "unit_output": "out",
+            "placeholder": placeholder.clone(),
+        }]);
+        drv.environment
+            .insert(PLAN_OUTPUT_BINDINGS_ENV_KEY.to_owned(), BString::from(serde_json::to_vec(&records).unwrap()));
+        drv.arguments.push(format!("--bound={placeholder}"));
+        drv.environment.insert("name".to_owned(), BString::from("native-static-consumer"));
+        let hdm = drv.hash_derivation_modulo(|parent| kp.get_hdm_by_drv_path(&parent.to_absolute_path()).unwrap());
+        drv.calculate_output_paths("native-static-consumer", &hdm).unwrap();
+        let path = drv.calculate_derivation_path("native-static-consumer").unwrap();
+        kp.insert(path.clone(), hdm, drv, false, None);
+        (path, placeholder)
+    }
+    #[test]
+    fn bound_consumer_waits_on_registered_root_and_reports_root_failure() {
+        let mut kp = DerivationRegistry::default();
+        let (producer, _) = build_and_register_multi("binding-producer", &["out", "plan"], &[], &mut kp);
+        declare_native_plan_output(&mut kp, &producer, "plan");
+        let (consumer, _) = register_bound_consumer(&mut kp, &producer);
+        let root = register_drv(&mut kp, "binding-root.drv", &make_drv());
+        let mut worker = Worker::new(1);
+        worker.want(&consumer, &kp, true).unwrap();
+        worker.want(&root, &kp, true).unwrap();
+        let consumer_key = consumer.to_absolute_path();
+        let producer_key = producer.to_absolute_path();
+        let root_key = root.to_absolute_path();
+        worker.native_plan_binding_facts.insert(
+            (producer_key.clone(), "plan".to_owned()),
+            NativePlanBindingFact::Accepted {
+                plan: CanonicalNativePlan::V1(
+                    decode_validated_plan_v1(&valid_native_plan_bytes(), kp.store_dir()).unwrap(),
+                ),
+                registered_units: BTreeMap::from([(UnitId::new("unit.main").unwrap(), root.clone())]),
+            },
+        );
+        worker.resolve_binding_states(&consumer_key, &kp);
+        worker.attach_binding_roots(&consumer_key).unwrap();
+        assert_eq!(worker.registry.get(&consumer_key).unwrap().state, GoalState::Waiting { remaining_deps: 2 });
+        assert!(worker.registry.get(&consumer_key).unwrap().waitees.contains(&root_key));
+        assert!(worker.pressure_dirty_goals.contains(&root_key));
+        worker.ready_goals.remove(&producer_key);
+        worker.registry.get_mut(&producer_key).unwrap().mark_building().unwrap();
+        let mut outcomes = Vec::new();
+        let mut all_outcomes = Vec::new();
+        let mut failed = Vec::new();
+        worker
+            .complete_goal(
+                &producer_key,
+                BuildOutcome {
+                    drv_path: producer,
+                    outputs: BTreeMap::new(),
+                    substitutions: BTreeMap::new(),
+                    cached: false,
+                    log: None,
+                },
+                &mut outcomes,
+                &mut all_outcomes,
+                &mut failed,
+            )
+            .unwrap();
+        assert_eq!(worker.registry.get(&consumer_key).unwrap().state, GoalState::Waiting { remaining_deps: 1 });
+        assert!(!worker.ready_goals.contains_key(&consumer_key));
+        worker.ready_goals.remove(&root_key);
+        worker.registry.get_mut(&root_key).unwrap().mark_building().unwrap();
+        worker.fail_goal(&root_key, "root build denied", None, &mut failed).unwrap();
+        assert_eq!(worker.registry.get(&consumer_key).unwrap().state, GoalState::Failed);
+        let row = &worker.binding_reports()[0];
+        assert_eq!(row.failure_reason.as_deref(), Some("plan-output-root-failed"));
+        assert_eq!(row.status, "rejected");
+    }
+
+    #[test]
+    fn failed_producer_marks_static_binding_before_consumer_dispatch() {
+        let mut kp = DerivationRegistry::default();
+        let (producer, _) = build_and_register_multi("binding-failed-producer", &["out", "plan"], &[], &mut kp);
+        declare_native_plan_output(&mut kp, &producer, "plan");
+        let (consumer, _) = register_bound_consumer(&mut kp, &producer);
+        let mut worker = Worker::new(1);
+        worker.want(&consumer, &kp, true).unwrap();
+        let producer_key = producer.to_absolute_path();
+        worker.ready_goals.remove(&producer_key);
+        worker.registry.get_mut(&producer_key).unwrap().mark_building().unwrap();
+        let mut failed = Vec::new();
+        worker.fail_goal(&producer_key, "producer failed", None, &mut failed).unwrap();
+        assert_eq!(worker.registry.get(&consumer.to_absolute_path()).unwrap().state, GoalState::Failed);
+        assert_eq!(worker.binding_reports()[0].failure_reason.as_deref(), Some("plan-output-producer-failed"));
+    }
+
+    #[test]
+    fn consumer_arriving_after_failed_producer_is_ready_to_reject_not_stuck_waiting() {
+        let mut kp = DerivationRegistry::default();
+        let (producer, _) = build_and_register_multi("binding-earlier-failure", &["out", "plan"], &[], &mut kp);
+        declare_native_plan_output(&mut kp, &producer, "plan");
+        let (consumer, _) = register_bound_consumer(&mut kp, &producer);
+        let mut worker = Worker::new(1);
+        worker.want(&producer, &kp, true).unwrap();
+        let producer_key = producer.to_absolute_path();
+        worker.ready_goals.remove(&producer_key);
+        worker.registry.get_mut(&producer_key).unwrap().mark_building().unwrap();
+        worker.fail_goal(&producer_key, "producer failed", None, &mut Vec::new()).unwrap();
+        worker.want(&consumer, &kp, true).unwrap();
+        let consumer_key = consumer.to_absolute_path();
+        assert_eq!(worker.registry.get(&consumer_key).unwrap().state, GoalState::Ready);
+        assert!(worker.ready_goals.contains_key(&consumer_key));
+        assert_eq!(worker.binding_reports()[0].failure_reason.as_deref(), Some("plan-output-producer-failed"));
+    }
+
+    #[test]
+    fn native_binding_distinguishes_missing_root_from_missing_unit_output() {
+        for (root_name, output_name, expected) in [
+            ("unit.absent", "absent", "plan-output-root-missing"),
+            ("unit.main", "absent", "plan-output-output-missing"),
+        ] {
+            let mut kp = DerivationRegistry::default();
+            let (producer, _) = build_and_register_multi("binding-missing", &["out", "plan"], &[], &mut kp);
+            declare_native_plan_output(&mut kp, &producer, "plan");
+            let (consumer, _) = register_bound_consumer(&mut kp, &producer);
+            let mut worker = Worker::new(1);
+            worker.want(&consumer, &kp, true).unwrap();
+            let consumer_key = consumer.to_absolute_path();
+            let binding = &mut worker.plan_output_bindings.get_mut(&consumer_key).unwrap()[0];
+            binding.record.root = UnitId::new(root_name).unwrap();
+            binding.record.unit_output = OutputName::new(output_name).unwrap();
+            worker.native_plan_binding_facts.insert(
+                (producer.to_absolute_path(), "plan".to_owned()),
+                NativePlanBindingFact::Accepted {
+                    plan: CanonicalNativePlan::V1(
+                        decode_validated_plan_v1(&valid_native_plan_bytes(), kp.store_dir()).unwrap(),
+                    ),
+                    registered_units: BTreeMap::new(),
+                },
+            );
+            worker.resolve_binding_states(&consumer_key, &kp);
+            let row = &worker.binding_reports()[0];
+            assert_eq!(row.failure_reason.as_deref(), Some(expected));
+            assert!(row.root_drv_path.is_none());
+            assert!(row.output_path.is_none());
+        }
     }
 
     #[test]
@@ -5298,6 +5936,7 @@ mod tests {
                 native_report_row("/store/a.drv", "plan-a"),
             ],
             Vec::new(),
+            Vec::new(),
         );
 
         assert_eq!(result.native_dynamic_plans[0].producer_key, "/store/a.drv");
@@ -5383,6 +6022,165 @@ mod tests {
         assert!(result.native_dynamic_plans[0].rejection_reason.as_deref().unwrap_or("").contains("invalid-plan"));
         assert_eq!(recorded.len(), 1, "rejected native plan must not schedule units: {recorded:?}");
         assert!(recorded[0].iter().any(|arg| arg.contains("native-rejected")));
+    }
+
+    #[tokio::test]
+    // r[verify mantle.dynamic_plan_output_inputs.dispatch_binding]
+    async fn static_consumer_waits_for_native_ca_root_and_uses_realized_output() {
+        let bs = MemoryBlobService::default();
+        let (mock, calls) = DrvProducingMockBuildService::new(
+            bs.clone(),
+            StdHashMap::from([("native-bound-plan".to_owned(), valid_native_plan_bytes())]),
+        );
+        let mut builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut kp = DerivationRegistry::default();
+        let (producer, _) = build_and_register_multi("native-bound-plan", &["out", "plan"], &[], &mut kp);
+        declare_native_plan_output(&mut kp, &producer, "plan");
+        let (consumer, placeholder) = register_bound_consumer(&mut kp, &producer);
+        let mut worker = Worker::new(1);
+        worker.want(&consumer, &kp, true).unwrap();
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+        assert!(result.failed.is_empty());
+        let row = &result.plan_output_bindings[0];
+        assert_eq!(row.status, "bound");
+        assert_eq!(row.consumer_drv_key, consumer.to_absolute_path());
+        let root = row.root_drv_path.as_ref().unwrap();
+        let actual = row.output_path.as_ref().unwrap();
+        assert_eq!(
+            kp.get_output_path(&root.to_absolute_path_with_prefix(kp.store_dir()), "out").as_ref(),
+            Some(actual),
+            "content-addressed root must resolve through the registry, not a predicted output"
+        );
+        let calls = calls.lock().expect("mock call log lock");
+        assert_eq!(calls.len(), 3, "producer, root, then static consumer");
+        assert!(calls[1].iter().any(|arg| arg == "--build"));
+        assert!(calls[2].iter().any(|arg| arg == &format!("--bound={}", actual.to_absolute_path())));
+        assert!(!calls[2].iter().any(|arg| arg.contains(&placeholder)));
+    }
+
+    #[tokio::test]
+    async fn rejected_native_plan_fails_static_consumer_without_dispatch() {
+        let bs = MemoryBlobService::default();
+        let (mock, calls) = DrvProducingMockBuildService::new(
+            bs.clone(),
+            StdHashMap::from([("native-invalid-plan".to_owned(), b"{bad-plan".to_vec())]),
+        );
+        let mut builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut kp = DerivationRegistry::default();
+        let (producer, _) = build_and_register_multi("native-invalid-plan", &["out", "plan"], &[], &mut kp);
+        declare_native_plan_output(&mut kp, &producer, "plan");
+        let (consumer, _) = register_bound_consumer(&mut kp, &producer);
+        let mut worker = Worker::new(1);
+        worker.want(&consumer, &kp, true).unwrap();
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+        assert_eq!(result.failed.len(), 1);
+        assert_eq!(result.failed[0].drv_key, consumer.to_absolute_path());
+        assert_eq!(result.failed[0].error, "plan-output-plan-rejected");
+        assert_eq!(result.plan_output_bindings[0].status, "rejected");
+        assert_eq!(result.plan_output_bindings[0].failure_reason.as_deref(), Some("plan-output-plan-rejected"));
+        assert_eq!(calls.lock().expect("mock call log lock").len(), 1, "static consumer must not run");
+    }
+
+    #[tokio::test]
+    async fn late_consumer_after_native_root_completed_binds_from_retained_plan() {
+        let bs = MemoryBlobService::default();
+        let (mock, calls) = DrvProducingMockBuildService::new(
+            bs.clone(),
+            StdHashMap::from([("native-late-plan".to_owned(), valid_native_plan_bytes())]),
+        );
+        let mut builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut kp = DerivationRegistry::default();
+        let (producer, _) = build_and_register_multi("native-late-plan", &["out", "plan"], &[], &mut kp);
+        declare_native_plan_output(&mut kp, &producer, "plan");
+        let (consumer, _) = register_bound_consumer(&mut kp, &producer);
+        let mut worker = Worker::new(1);
+        worker.want(&producer, &kp, true).unwrap();
+        let first = worker.run(&mut builder, &mut kp).await.unwrap();
+        assert!(first.failed.is_empty());
+        // The consumer reaches the worker only after the producer run has
+        // completed, so binding must come from the retained plan fact.
+        worker.want(&consumer, &kp, true).unwrap();
+        let consumer_key = consumer.to_absolute_path();
+        assert_eq!(worker.registry.get(&consumer_key).unwrap().state, GoalState::Ready);
+        let row = &worker.binding_reports()[0];
+        assert_eq!(row.status, "bound");
+        let root = row.root_drv_path.as_ref().unwrap();
+        assert_eq!(
+            kp.get_output_path(&root.to_absolute_path_with_prefix(kp.store_dir()), "out").as_ref(),
+            row.output_path.as_ref(),
+        );
+        assert_eq!(calls.lock().expect("mock call log lock").len(), 2, "producer and root only");
+    }
+
+    #[tokio::test]
+    async fn late_consumer_after_plan_rejection_fails_without_deadlock() {
+        let bs = MemoryBlobService::default();
+        let (mock, calls) = DrvProducingMockBuildService::new(
+            bs.clone(),
+            StdHashMap::from([("native-late-invalid".to_owned(), b"{invalid".to_vec())]),
+        );
+        let mut builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut kp = DerivationRegistry::default();
+        let (producer, _) = build_and_register_multi("native-late-invalid", &["out", "plan"], &[], &mut kp);
+        declare_native_plan_output(&mut kp, &producer, "plan");
+        let (consumer, _) = register_bound_consumer(&mut kp, &producer);
+        let mut worker = Worker::new(1);
+        worker.want(&producer, &kp, true).unwrap();
+        let first = worker.run(&mut builder, &mut kp).await.unwrap();
+        assert!(first.failed.is_empty());
+        // The consumer reaches the worker only after the producer run has
+        // completed: it must be ready to reject, not wait on an unknown root.
+        worker.want(&consumer, &kp, true).unwrap();
+        let consumer_key = consumer.to_absolute_path();
+        assert_eq!(worker.registry.get(&consumer_key).unwrap().state, GoalState::Ready);
+        let row = &worker.binding_reports()[0];
+        assert_eq!(row.status, "rejected");
+        assert_eq!(row.failure_reason.as_deref(), Some("plan-output-plan-rejected"));
+        assert_eq!(calls.lock().expect("mock call log lock").len(), 1, "only the producer ran");
     }
 
     #[tokio::test]

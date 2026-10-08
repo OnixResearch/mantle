@@ -51,6 +51,7 @@ pub use crunch_build::HermeticityMode;
 use crunch_build::KeyPair;
 use crunch_build::LocalBuildServiceRealizer;
 use crunch_build::NativeDynamicPlanReport;
+use crunch_build::NativePlanOutputBindingReport;
 pub use crunch_build::PriorityCandidateEvidence;
 pub use crunch_build::PriorityDecisionEvidence;
 use crunch_build::RemoteBuildFallbackPolicy;
@@ -126,6 +127,7 @@ pub struct PipelineResult {
     pub workspace_reports: Vec<crunch_build::WorkspaceExecutionReport>,
     pub action_result_reports: Vec<crunch_build::ActionResultRuntimeReport>,
     pub native_dynamic_plans: Vec<NativeDynamicPlanReport>,
+    pub plan_output_bindings: Vec<NativePlanOutputBindingReport>,
     pub priority_decisions: Vec<PriorityDecisionEvidence>,
     pub overlay_report: Option<crunch_store::StoreOverlayReport>,
     pub store_layer_selections: Vec<crunch_store::layer::StoreLayerSelection>,
@@ -741,6 +743,11 @@ fn finish_pipeline_result(
         });
     }
     normalize_failed_goal_keys(&mut worker_result.failed, store_dir);
+    for binding in &mut worker_result.plan_output_bindings {
+        if parse_drv_key(store_dir, &binding.consumer_drv_key).is_none() {
+            binding.consumer_drv_key = normalized_failed_drv_key(&binding.consumer_drv_key, store_dir);
+        }
+    }
     let mut root_labels = build_root_labels(&eval_stream.root_drv_paths, store_dir);
     for eval_failure in &eval_failures {
         root_labels.insert(eval_failure_key(&eval_failure.label), eval_failure.label.clone());
@@ -758,6 +765,7 @@ fn finish_pipeline_result(
         workspace_reports: evidence.workspace_rows,
         action_result_reports: evidence.action_result_rows,
         native_dynamic_plans: worker_result.native_dynamic_plans,
+        plan_output_bindings: worker_result.plan_output_bindings,
         priority_decisions: worker_result.priority_decisions,
         overlay_report: evidence.overlay_report,
         store_layer_selections: evidence.store_layer_selections,
@@ -883,6 +891,7 @@ fn build_preflight_failure(
         workspace_reports: Vec::new(),
         action_result_reports: Vec::new(),
         native_dynamic_plans: Vec::new(),
+        plan_output_bindings: Vec::new(),
         priority_decisions: Vec::new(),
         overlay_report: None,
         store_layer_selections: Vec::new(),

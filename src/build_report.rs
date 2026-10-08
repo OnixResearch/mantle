@@ -43,6 +43,8 @@ pub struct BuildJsonReport {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub action_result_reports: Vec<crunch_build::ActionResultRuntimeReport>,
     pub native_dynamic_plans: Vec<BuildJsonNativeDynamicPlan>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub plan_output_bindings: Vec<BuildJsonPlanOutputBinding>,
     pub scheduler_priority_decisions: Vec<crunch_pipeline::PriorityDecisionEvidence>,
     pub overlay_base_generations: Vec<BuildJsonOverlayBaseGeneration>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -208,6 +210,21 @@ pub struct BuildJsonNativeDynamicPlan {
     pub source_slices: Vec<BuildJsonNativeSourceSlice>,
     pub rejection_reason: Option<String>,
     pub scheduler_action: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonPlanOutputBinding {
+    pub consumer_drv_key: String,
+    pub name: String,
+    pub producer_drv_path: String,
+    pub plan_output: String,
+    pub root: String,
+    pub unit_output: String,
+    pub plan_digest: Option<String>,
+    pub root_drv_path: Option<String>,
+    pub output_path: Option<String>,
+    pub status: String,
+    pub failure_reason: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -431,6 +448,7 @@ fn build_json_report(
     let workspace_rows = result.workspace_reports.clone();
     let action_result_rows = result.action_result_reports.clone();
     let native_dynamic_plans = build_native_dynamic_plan_reports(result, &config.store_dir);
+    let plan_output_bindings = build_plan_output_binding_reports(result, &config.store_dir);
     let scheduler_priority_decisions = result.priority_decisions.clone();
     let overlay_plan_blake3 = result.overlay_report.as_ref().map(|report| report.plan_blake3.clone());
     let overlay_base_generations = result.overlay_report.as_ref().map_or_else(Vec::new, |report| {
@@ -485,6 +503,7 @@ fn build_json_report(
         workspace_reports: workspace_rows,
         action_result_reports: action_result_rows,
         native_dynamic_plans,
+        plan_output_bindings,
         scheduler_priority_decisions,
         overlay_base_generations,
         overlay_plan_blake3,
@@ -629,6 +648,36 @@ fn build_native_dynamic_plan_reports(result: &PipelineResult, store_dir: &str) -
             scheduler_action: row.scheduler_action.clone(),
         })
         .collect()
+}
+
+// r[impl mantle.dynamic_plan_output_inputs.provenance]
+fn build_plan_output_binding_reports(result: &PipelineResult, store_dir: &str) -> Vec<BuildJsonPlanOutputBinding> {
+    let mut rows: Vec<_> = result
+        .plan_output_bindings
+        .iter()
+        .map(|row| BuildJsonPlanOutputBinding {
+            consumer_drv_key: row.consumer_drv_key.clone(),
+            name: row.name.clone(),
+            producer_drv_path: row.producer_drv_path.to_absolute_path_with_prefix(store_dir),
+            plan_output: row.plan_output.clone(),
+            root: row.root.clone(),
+            unit_output: row.unit_output.clone(),
+            plan_digest: row.plan_digest.clone(),
+            root_drv_path: row.root_drv_path.as_ref().map(|path| path.to_absolute_path_with_prefix(store_dir)),
+            output_path: row.output_path.as_ref().map(|path| path.to_absolute_path_with_prefix(store_dir)),
+            status: row.status.clone(),
+            failure_reason: row.failure_reason.clone(),
+        })
+        .collect();
+    rows.sort_by(|left, right| {
+        (&left.name, &left.consumer_drv_key, &left.producer_drv_path, &left.plan_output).cmp(&(
+            &right.name,
+            &right.consumer_drv_key,
+            &right.producer_drv_path,
+            &right.plan_output,
+        ))
+    });
+    rows
 }
 
 fn build_counts(outcomes: &[BuildJsonOutcome], failed: &[BuildFailureEnvelope]) -> BuildJsonCounts {
@@ -1210,6 +1259,7 @@ mod tests {
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),
@@ -1282,6 +1332,7 @@ mod tests {
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),
@@ -1490,6 +1541,34 @@ mod tests {
                     scheduler_action: "rejected".to_string(),
                 },
             ],
+            plan_output_bindings: vec![
+                crunch_build::NativePlanOutputBindingReport {
+                    consumer_drv_key: drv_key_for(&config.store_dir, &drv_path),
+                    name: "z.rejected".to_string(),
+                    producer_drv_path: drv_path.clone(),
+                    plan_output: "rejected-plan".to_string(),
+                    root: "unit.rejected".to_string(),
+                    unit_output: "out".to_string(),
+                    plan_digest: None,
+                    root_drv_path: None,
+                    output_path: None,
+                    status: "rejected".to_string(),
+                    failure_reason: Some("plan-output-plan-rejected".to_string()),
+                },
+                crunch_build::NativePlanOutputBindingReport {
+                    consumer_drv_key: drv_key_for(&config.store_dir, &drv_path),
+                    name: "a.bound".to_string(),
+                    producer_drv_path: drv_path.clone(),
+                    plan_output: "plan".to_string(),
+                    root: "unit.build".to_string(),
+                    unit_output: "out".to_string(),
+                    plan_digest: Some("canonical-digest".to_string()),
+                    root_drv_path: Some(drv_path.clone()),
+                    output_path: Some(output_path.clone()),
+                    status: "bound".to_string(),
+                    failure_reason: None,
+                },
+            ],
             priority_decisions: vec![sample_priority_decision()],
             overlay_report: Some(crunch_store::StoreOverlayReport {
                 schema: crunch_store::STORE_OVERLAY_REPORT_SCHEMA.to_string(),
@@ -1582,6 +1661,37 @@ mod tests {
         assert_eq!(rejected["source_slices"][0]["disposition"], "slice-absent");
         assert_eq!(rejected["source_slices"][0]["subpath"], "packages/missing");
         assert!(rejected["source_slices"][0]["admitted_store_path"].is_null());
+        assert_eq!(
+            report_json["plan_output_bindings"],
+            serde_json::json!([
+                {
+                    "consumer_drv_key": drv_key_for(&config.store_dir, &drv_path),
+                    "name": "a.bound",
+                    "producer_drv_path": drv_key_for(&config.store_dir, &drv_path),
+                    "plan_output": "plan",
+                    "root": "unit.build",
+                    "unit_output": "out",
+                    "plan_digest": "canonical-digest",
+                    "root_drv_path": drv_key_for(&config.store_dir, &drv_path),
+                    "output_path": output_path.to_absolute_path_with_prefix(&config.store_dir),
+                    "status": "bound",
+                    "failure_reason": null
+                },
+                {
+                    "consumer_drv_key": drv_key_for(&config.store_dir, &drv_path),
+                    "name": "z.rejected",
+                    "producer_drv_path": drv_key_for(&config.store_dir, &drv_path),
+                    "plan_output": "rejected-plan",
+                    "root": "unit.rejected",
+                    "unit_output": "out",
+                    "plan_digest": null,
+                    "root_drv_path": null,
+                    "output_path": null,
+                    "status": "rejected",
+                    "failure_reason": "plan-output-plan-rejected"
+                }
+            ])
+        );
         assert_eq!(report.scheduler_priority_decisions.len(), 1);
         assert_eq!(report.overlay_plan_blake3, Some("b".repeat(TEST_WORKSPACE_DIGEST_HEX_LENGTH)));
         assert_eq!(report.overlay_base_generations[0].layer_index, 1);
@@ -1703,6 +1813,7 @@ mod tests {
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),
@@ -2111,6 +2222,7 @@ mod tests {
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),
@@ -2257,6 +2369,7 @@ mod tests {
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),

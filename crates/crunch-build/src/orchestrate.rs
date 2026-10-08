@@ -46,6 +46,7 @@ use crate::action_result::policy_refs_for_derivation;
 use crate::action_result::publication_runtime_report;
 use crate::action_result::signed_record_for_outputs;
 use crate::action_result::trust_policy_for_action;
+use crate::build_request::bind_plan_output_request;
 use crate::build_request::collect_input_paths;
 use crate::build_request::derivation_to_build_request;
 use crate::fod::verify_fod_hash;
@@ -245,6 +246,9 @@ pub(crate) struct PreparedBuild {
     pub(crate) drv_path: StorePath<String>,
     pub(crate) drv_name: String,
     pub(crate) derivation: Arc<Derivation>,
+    /// Realized plan-root outputs are build inputs, but not part of the
+    /// evaluated derivation's input_sources or derivation identity.
+    pub(crate) bound_input_paths: Vec<StorePath<String>>,
     pub(crate) refscan_needles: Vec<String>,
     pub(crate) sandbox_inputs: BTreeMap<StorePath<String>, Node>,
     pub(crate) input_rewrites: Vec<(String, String)>,
@@ -560,6 +564,7 @@ where BServ: BuildService + 'static
                 all_outcomes: Vec::new(),
                 failed: Vec::new(),
                 native_dynamic_plans: Vec::new(),
+                plan_output_bindings: Vec::new(),
                 priority_decisions: Vec::new(),
             });
         }
@@ -580,6 +585,7 @@ where BServ: BuildService + 'static
         derivation: Arc<Derivation>,
         known_paths: &mut DerivationRegistry,
         is_root: bool,
+        bound_plan_outputs: &[(String, StorePath<String>)],
     ) -> Result<PrepareResult, Error> {
         let drv_name = drv_path.name().to_string();
         let derivation_ref = derivation.as_ref();
@@ -620,6 +626,18 @@ where BServ: BuildService + 'static
             }));
         }
 
+        // The evaluated derivation is the request identity. The accepted root
+        // paths exist only at dispatch, so attach them to an execution-only
+        // copy after cache admission instead of changing its .drv or cache key.
+        let execution_derivation = if bound_plan_outputs.is_empty() {
+            None
+        } else {
+            let mut execution = derivation_ref.clone();
+            execution.input_sources.extend(bound_plan_outputs.iter().map(|(_, path)| path.clone()));
+            Some(execution)
+        };
+        let execution_derivation_ref = execution_derivation.as_ref().unwrap_or(derivation_ref);
+
         // 3. Ensure input derivation outputs are in castore.
         for input_drv_path in derivation_ref.input_derivations.keys() {
             let input_abs = input_drv_path.to_absolute_path_with_prefix(self.store.store_dir());
@@ -629,10 +647,11 @@ where BServ: BuildService + 'static
         }
 
         // 4. Resolve source inputs + closures.
-        let all_source_paths = self.resolve_and_ingest_sources(derivation_ref).await?;
+        let all_source_paths = self.resolve_and_ingest_sources(execution_derivation_ref).await?;
 
         // 5. Collect sandbox inputs.
-        let sandbox_inputs = self.collect_sandbox_inputs(derivation_ref, known_paths, &all_source_paths).await?;
+        let sandbox_inputs =
+            self.collect_sandbox_inputs(execution_derivation_ref, known_paths, &all_source_paths).await?;
 
         // 6. Create build request from the registry-bound execution profile.
         let drv_absolute = drv_path.to_absolute_path_with_prefix(self.store.store_dir());
@@ -640,8 +659,8 @@ where BServ: BuildService + 'static
             .get_by_drv_path(&drv_absolute)
             .map(|entry| entry.execution_profile.clone())
             .ok_or_else(|| Error::DerivationNotFound { path: drv_path.clone() })?;
-        let request_envelope = match derivation_to_build_request(
-            derivation_ref,
+        let mut request_envelope = match derivation_to_build_request(
+            execution_derivation_ref,
             &sandbox_inputs,
             self.store.store_dir(),
             &execution_profile,
@@ -661,6 +680,7 @@ where BServ: BuildService + 'static
                 return Err(error);
             }
         };
+        bind_plan_output_request(&mut request_envelope.build_request, bound_plan_outputs, self.store.store_dir())?;
         self.hermeticity_audit_events.extend(request_envelope.audit_events.iter().cloned());
         self.build_environment_reports.push(request_envelope.build_environment_report.clone());
         self.network_policy_reports.push(request_envelope.network_policy_report.clone());
@@ -685,6 +705,7 @@ where BServ: BuildService + 'static
                 drv_path: drv_path.clone(),
                 drv_name,
                 derivation,
+                bound_input_paths: bound_plan_outputs.iter().map(|(_, path)| path.clone()).collect(),
                 refscan_needles,
                 sandbox_inputs,
                 input_rewrites,
@@ -710,7 +731,8 @@ where BServ: BuildService + 'static
         let mut output_infos: BTreeMap<String, PathInfo> = BTreeMap::new();
         let output_names: Vec<String> = prepared.derivation.outputs.keys().cloned().collect();
         let is_multi_ca = prepared.is_ca && prepared.derivation.outputs.len() > 1;
-        let artifact_provenance = self.build_artifact_provenance(&prepared.derivation, known_paths)?;
+        let artifact_provenance =
+            self.build_artifact_provenance(&prepared.derivation, &prepared.bound_input_paths, known_paths)?;
 
         if is_multi_ca {
             output_infos =
@@ -1641,6 +1663,7 @@ where BServ: BuildService + 'static
     fn build_artifact_provenance(
         &self,
         derivation: &Derivation,
+        bound_input_paths: &[StorePath<String>],
         known_paths: &DerivationRegistry,
     ) -> Result<ArtifactProvenance, Error> {
         let declared_inputs = collect_input_paths(derivation, known_paths)?;
@@ -1655,6 +1678,11 @@ where BServ: BuildService + 'static
                 continue;
             }
             input_artifacts.push(input_path);
+        }
+        if !bound_input_paths.is_empty() {
+            input_artifacts.extend_from_slice(bound_input_paths);
+            input_artifacts.sort_unstable();
+            input_artifacts.dedup();
         }
 
         Ok(ArtifactProvenance {
@@ -2206,6 +2234,35 @@ mod tests {
         kp.insert(drv_path.clone(), hdm, drv.clone(), false, None);
 
         (drv_path, drv)
+    }
+
+    // r[verify mantle.dynamic_plan_output_inputs.provenance]
+    #[test]
+    fn realized_plan_root_is_artifact_provenance_not_source_provenance() {
+        let blobs = MemoryBlobService::default();
+        let (service, _calls) = MockBuildService::new(blobs.clone());
+        let store = tempfile::tempdir().unwrap();
+        let builder = Builder::new(
+            blobs,
+            tmp_ds(),
+            service,
+            CountingPathInfoService::default(),
+            store.path().to_path_buf(),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut known_paths = DerivationRegistry::default();
+        let (_, consumer) = build_and_register("bound-root-provenance", &[], &mut known_paths);
+        let root_output = make_source_path("realized-plan-root", 62);
+
+        let provenance = builder
+            .build_artifact_provenance(&consumer, std::slice::from_ref(&root_output), &known_paths)
+            .unwrap();
+        assert_eq!(provenance.input_artifacts, vec![root_output]);
+        assert!(provenance.input_sources.is_empty());
     }
 
     #[tokio::test]
