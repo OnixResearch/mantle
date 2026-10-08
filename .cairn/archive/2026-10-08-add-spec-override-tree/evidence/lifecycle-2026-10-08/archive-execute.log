@@ -1,0 +1,422 @@
+$ /home/brittonr/mantle-cairn-finish/cairn-result/bin/cairn archive add-spec-override-tree --root . --execute   (CAIRN_ARCHIVE_DATE=2026-10-08)
+{
+  "acceptance_ids": [
+    "spec-override-tree.admission-review",
+    "spec-override-tree.closure",
+    "spec-override-tree.decision-record",
+    "spec-override-tree.no-accepted-requirement",
+    "spec-override-tree.original-scope"
+  ],
+  "actions": [
+    {
+      "description": "move active change to archive: add-spec-override-tree",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-10-08-add-spec-override-tree"
+    }
+  ],
+  "blocked": false,
+  "change": "add-spec-override-tree",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "6b06f59372ec519ebba3005aa937167462a1e3f5a33c0dede16add8e84da9738",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "3a27234c8ac73ea06062faf893d2154dd865d21273069037f1c8b69fdcc51f4a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/acceptance.md"
+        },
+        {
+          "content_hash": "1124532fc155b50d7cd26010af16034bc9ce5cf91258000ab6bc2814dfbfd616",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/design.md"
+        },
+        {
+          "content_hash": "213d420df130a55ac1557499a799d295681809d3dfd4a82b74a77164d65ed33f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/admission-review-2026-10-07.md"
+        },
+        {
+          "content_hash": "3bf2a22b484c865b4c3930fc1eabefa61098d0b6869fbf5f505b4767f2d0e3e0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/closure-2026-10-08.md"
+        },
+        {
+          "content_hash": "74d47c0ce1daed590ccc83b7105e0649f5ec82ac26192c0502d8bfc813d0b012",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/gates-2026-09-10.md"
+        },
+        {
+          "content_hash": "325fb6198d70fa2820c101710c1d5359c4428b1a53ae955dbf57cb22915c8369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/archive-dry.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/archive-dry.status"
+        },
+        {
+          "content_hash": "c3731ec4876b313e3ec573b5b3be5b501edeebc0b5c296ca5de1f39a3c6f7b1d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/diff-check.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/diff-check.status"
+        },
+        {
+          "content_hash": "012c6e1958506775a9d773eae11e65866a91848f7f89b5685c2ed5b19d6086a0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/gate-design.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/gate-design.status"
+        },
+        {
+          "content_hash": "e6c789919b01b7b1bb342399e7ff3758c4da20b63799b4b529f253c037fd603f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/gate-proposal.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/gate-proposal.status"
+        },
+        {
+          "content_hash": "77b8ba18ef6d690a32dca44be3bb263835b86e1a035c55065575e625ecd25bd5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/gate-tasks.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/gate-tasks.status"
+        },
+        {
+          "content_hash": "2a2441842ead9d2760fa6458c9d782c2d0a09baf06d45b5730cb39167205bdad",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/sync-dry.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/sync-dry.status"
+        },
+        {
+          "content_hash": "963b359945d65f119ca77a4657d0cddfd9c451dea1726417618e82621560c4d4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/sync-execute.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/sync-execute.status"
+        },
+        {
+          "content_hash": "a977466d3c103af499b391f360ad5c81978f24ec4a23366a844a403a0382294b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/validate.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/validate.status"
+        },
+        {
+          "content_hash": "70c5018fbc335a0b9b84476c32488b97fa1a436188c8e50acda54cee0b86f152",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/workflow-status.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/lifecycle-2026-10-08/workflow-status.status"
+        },
+        {
+          "content_hash": "1d45a2700820ba0e4741051a3bc8987423c8b90eb65d31367e0a188ef9c00529",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/original-scope/SOURCE.md"
+        },
+        {
+          "content_hash": "d96142073334ba264476c60b4654898fc2cd4f2ea9163753ccddeb3a265f4f52",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/original-scope/design.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/original-scope/metadata.json"
+        },
+        {
+          "content_hash": "4ce88206835388c890cf2687fb1ca022a441d748a8b4d9101f6cb83fc2dec8db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/original-scope/proposal.md"
+        },
+        {
+          "content_hash": "51cbc725dbfc8cf7a1e93876a434ee187c537a9246d383c51c6893f8750a0cde",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/original-scope/specs/spec-override-tree/spec.md"
+        },
+        {
+          "content_hash": "71f322aa0d635c4a12b109f83cd70c898105f3f06f9e4a95f94f9cb8d42307ed",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/original-scope/tasks.md"
+        },
+        {
+          "content_hash": "4a882a9fab37b43e83c8c7555b5758bf7f2006db2717913d99b6d770a3294276",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/evidence/repkgs-review.md"
+        },
+        {
+          "content_hash": "69d026e21cfc7ca169496dc8b6c9c01e5a04cf46e8a4ca8fcab0195a72b0261b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/metadata.json"
+        },
+        {
+          "content_hash": "d4f15cdd1e1e4c9490df37c37fc0121ab6a81a49bf03fb3a930f7bfe5751d5d4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/proposal.md"
+        },
+        {
+          "content_hash": "1748848b1bdabd1e6909fdb9db4bab9ce21948805dee6948f2e00cdcdd3331eb",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "a3c0f121d787f22258f0d53fd39494040c4d29ec0bc5e69618c44d36b5813a83",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-add-spec-override-tree/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/add-spec-override-tree"
+        }
+      ],
+      "manifest_hash": "a8e0daa2d2e56cd2a6d082dc25d02e8f0c05c215bc15c00317b808cac8759f67"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "3a27234c8ac73ea06062faf893d2154dd865d21273069037f1c8b69fdcc51f4a",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/acceptance.md"
+        },
+        {
+          "content_hash": "1124532fc155b50d7cd26010af16034bc9ce5cf91258000ab6bc2814dfbfd616",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/design.md"
+        },
+        {
+          "content_hash": "213d420df130a55ac1557499a799d295681809d3dfd4a82b74a77164d65ed33f",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/admission-review-2026-10-07.md"
+        },
+        {
+          "content_hash": "3bf2a22b484c865b4c3930fc1eabefa61098d0b6869fbf5f505b4767f2d0e3e0",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/closure-2026-10-08.md"
+        },
+        {
+          "content_hash": "74d47c0ce1daed590ccc83b7105e0649f5ec82ac26192c0502d8bfc813d0b012",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/gates-2026-09-10.md"
+        },
+        {
+          "content_hash": "325fb6198d70fa2820c101710c1d5359c4428b1a53ae955dbf57cb22915c8369",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/archive-dry.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/archive-dry.status"
+        },
+        {
+          "content_hash": "c3731ec4876b313e3ec573b5b3be5b501edeebc0b5c296ca5de1f39a3c6f7b1d",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/diff-check.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/diff-check.status"
+        },
+        {
+          "content_hash": "012c6e1958506775a9d773eae11e65866a91848f7f89b5685c2ed5b19d6086a0",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/gate-design.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/gate-design.status"
+        },
+        {
+          "content_hash": "e6c789919b01b7b1bb342399e7ff3758c4da20b63799b4b529f253c037fd603f",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/gate-proposal.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/gate-proposal.status"
+        },
+        {
+          "content_hash": "77b8ba18ef6d690a32dca44be3bb263835b86e1a035c55065575e625ecd25bd5",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/gate-tasks.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/gate-tasks.status"
+        },
+        {
+          "content_hash": "2a2441842ead9d2760fa6458c9d782c2d0a09baf06d45b5730cb39167205bdad",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/sync-dry.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/sync-dry.status"
+        },
+        {
+          "content_hash": "963b359945d65f119ca77a4657d0cddfd9c451dea1726417618e82621560c4d4",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/sync-execute.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/sync-execute.status"
+        },
+        {
+          "content_hash": "a977466d3c103af499b391f360ad5c81978f24ec4a23366a844a403a0382294b",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/validate.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/validate.status"
+        },
+        {
+          "content_hash": "70c5018fbc335a0b9b84476c32488b97fa1a436188c8e50acda54cee0b86f152",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/workflow-status.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/lifecycle-2026-10-08/workflow-status.status"
+        },
+        {
+          "content_hash": "1d45a2700820ba0e4741051a3bc8987423c8b90eb65d31367e0a188ef9c00529",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/original-scope/SOURCE.md"
+        },
+        {
+          "content_hash": "d96142073334ba264476c60b4654898fc2cd4f2ea9163753ccddeb3a265f4f52",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/original-scope/design.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/original-scope/metadata.json"
+        },
+        {
+          "content_hash": "4ce88206835388c890cf2687fb1ca022a441d748a8b4d9101f6cb83fc2dec8db",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/original-scope/proposal.md"
+        },
+        {
+          "content_hash": "51cbc725dbfc8cf7a1e93876a434ee187c537a9246d383c51c6893f8750a0cde",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/original-scope/specs/spec-override-tree/spec.md"
+        },
+        {
+          "content_hash": "71f322aa0d635c4a12b109f83cd70c898105f3f06f9e4a95f94f9cb8d42307ed",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/original-scope/tasks.md"
+        },
+        {
+          "content_hash": "4a882a9fab37b43e83c8c7555b5758bf7f2006db2717913d99b6d770a3294276",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/evidence/repkgs-review.md"
+        },
+        {
+          "content_hash": "69d026e21cfc7ca169496dc8b6c9c01e5a04cf46e8a4ca8fcab0195a72b0261b",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/metadata.json"
+        },
+        {
+          "content_hash": "d4f15cdd1e1e4c9490df37c37fc0121ab6a81a49bf03fb3a930f7bfe5751d5d4",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/proposal.md"
+        },
+        {
+          "content_hash": "1748848b1bdabd1e6909fdb9db4bab9ce21948805dee6948f2e00cdcdd3331eb",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "a3c0f121d787f22258f0d53fd39494040c4d29ec0bc5e69618c44d36b5813a83",
+          "exists": true,
+          "path": "./.cairn/changes/add-spec-override-tree/tasks.md"
+        }
+      ],
+      "manifest_hash": "d90de41b1da12740081534c9d981ef97afb73cac635b701e3599b217f44e6f8b"
+    },
+    "kind": "archive",
+    "manifest_hash": "029fc1b7285efddf09a4e4ba69ee4c3473892c5a134d5839282e3431a3fbc984"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "02bda1959edd37072c8815b7a9f9b809d63622f1786feede75a3acaa604b22c1",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "profile_identity_hash": "dcbb9375bdf42c56932270c963685d42cdbde1df234bb689de1aa66096faa3f0",
+  "reasons": [],
+  "receipt_hash": "2915091b7abaaec37690c108d644f6ebdd9e41a0a7e730c8a3865615f7a3ec50",
+  "review_receipt_hashes": [
+    "3a1284d638e3262228b2a337ef053660267232ff2aeed810136dccfb6d31803f"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
