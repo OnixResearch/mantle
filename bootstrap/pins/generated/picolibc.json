@@ -1,0 +1,25 @@
+{
+  "schema": "mantle-bootstrap-pin-v1",
+  "source": "picolibc",
+  "package_url": "pkg:github/picolibc/picolibc",
+  "version": "1.8.12",
+  "release_date": "2026-08-01",
+  "artifacts": {
+    "source": {
+      "url_template": "https://github.com/picolibc/picolibc/releases/download/{version}/picolibc-{version}.tar.xz",
+      "url": "https://github.com/picolibc/picolibc/releases/download/1.8.12/picolibc-1.8.12.tar.xz",
+      "hash_kind": "tree",
+      "hash": "sha256-a2XLUN2U49Lpsyizzb2cQpMbww0cmOUUKdgIj6OHhpQ="
+    }
+  },
+  "resolve": {
+    "kind": "json",
+    "url": "https://api.github.com/repos/picolibc/picolibc/releases/latest",
+    "version_field": "tag_name",
+    "date_field": "published_at"
+  },
+  "recipes": [
+    "picolibc-1.8.12-src.ncl",
+    "picolibc-1.8.12-diagnostic.ncl"
+  ]
+}

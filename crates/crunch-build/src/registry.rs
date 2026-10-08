@@ -13,6 +13,7 @@
 //! This module has no dependency on crunch-glue. The build engine
 //! only needs `nix_compat::Derivation` and associated store paths.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -26,8 +27,8 @@ use crate::dynamic::RegistryReadyDynamicDerivation;
 use crate::validate_execution_profile;
 use crate::verify_execution_profile_binding;
 
-/// Maximum registry entries. Matches `goal::MAX_GOALS`.
-const MAX_ENTRIES: u32 = 16_384;
+/// Maximum registered derivation metadata entries before watch admission.
+pub(crate) const MAX_ENTRIES: u32 = 16_384;
 
 /// A derivation registered for building.
 pub struct RegistryEntry {
@@ -47,6 +48,10 @@ pub struct RegistryEntry {
     /// `resolve_output()` after the build completes.
     /// Key: output name, Value: final store path.
     pub resolved_outputs: HashMap<String, StorePath<String>>,
+    /// Exact action form admitted for this goal after CA prerequisites complete.
+    /// The original entry and key remain the scheduler's identity.
+    pub resolved_derivation: Option<Arc<Derivation>>,
+    pub resolved_drv_path: Option<StorePath<String>>,
 }
 
 struct RegistryInsert {
@@ -125,25 +130,39 @@ impl DerivationRegistry {
         });
     }
 
-    /// Apply one fully admitted dynamic registration plan.
+    /// The native plan owns this fully admitted derivation; move it into the
+    /// registry rather than copying every argument, environment and input.
     pub(crate) fn insert_registry_ready_dynamic(
+        &mut self,
+        ready: RegistryReadyDynamicDerivation,
+        dynamic_plan_outputs: Vec<String>,
+    ) -> Result<(), crate::Error> {
+        if !self.registry_ready_is_new(&ready, &dynamic_plan_outputs)? {
+            return Ok(());
+        }
+        let (drv_path, hash_derivation_modulo, derivation, content_addressed, full_identity) =
+            ready.into_registration();
+        self.insert_registration(RegistryInsert {
+            drv_path,
+            hash_derivation_modulo,
+            derivation: Arc::new(derivation),
+            content_addressed,
+            dynamic_plan_outputs,
+            provenance_claims: None,
+            execution_profile: ExecutionProfile::native_compatibility(),
+            dynamic_admission_identity: Some(full_identity),
+        });
+        Ok(())
+    }
+
+    /// Traditional `.drv` discovery also retains the owned derivation for the
+    /// scheduler, so only this path must copy it into the registry.
+    pub(crate) fn insert_registry_ready_discovered(
         &mut self,
         ready: &RegistryReadyDynamicDerivation,
     ) -> Result<(), crate::Error> {
-        let absolute = ready.drv_path().to_absolute_path_with_prefix(&self.store_dir);
-        if ready.decision() == DynamicRegistrationDecision::AlreadyPresent {
-            let existing = self.entries.get(&absolute).ok_or_else(|| {
-                crate::Error::Store(format!("dynamic duplicate `{absolute}` is absent from the registry"))
-            })?;
-            if existing.dynamic_admission_identity != Some(ready.full_identity()) {
-                return Err(crate::Error::Store(format!("dynamic duplicate `{absolute}` changed admitted identity")));
-            }
+        if !self.registry_ready_is_new(ready, &[])? {
             return Ok(());
-        }
-        if self.entries.contains_key(&absolute) {
-            return Err(crate::Error::Store(format!(
-                "dynamic insertion `{absolute}` collides with an existing registry entry"
-            )));
         }
         self.insert_registration(RegistryInsert {
             drv_path: ready.drv_path().clone(),
@@ -158,11 +177,36 @@ impl DerivationRegistry {
         Ok(())
     }
 
-    /// Register a derivation with native dynamic-plan output metadata.
-    ///
-    /// This compatibility-shaped method remains for the worker lane; the
-    /// implementation routes through the typed internal registration request.
-    #[allow(tigerstyle::too_many_parameters)] // Stable worker boundary; migration requires the sibling-owned worker lane.
+    fn registry_ready_is_new(
+        &self,
+        ready: &RegistryReadyDynamicDerivation,
+        dynamic_plan_outputs: &[String],
+    ) -> Result<bool, crate::Error> {
+        let absolute = ready.drv_path().to_absolute_path_with_prefix(&self.store_dir);
+        if ready.decision() == DynamicRegistrationDecision::AlreadyPresent {
+            let existing = self.entries.get(&absolute).ok_or_else(|| {
+                crate::Error::Store(format!("dynamic duplicate `{absolute}` is absent from the registry"))
+            })?;
+            if existing.dynamic_admission_identity != Some(ready.full_identity()) {
+                return Err(crate::Error::Store(format!("dynamic duplicate `{absolute}` changed admitted identity")));
+            }
+            if existing.dynamic_plan_outputs.as_slice() != dynamic_plan_outputs {
+                return Err(crate::Error::Store(format!("dynamic duplicate `{absolute}` changed plan outputs")));
+            }
+            return Ok(false);
+        }
+        if self.entries.contains_key(&absolute) {
+            return Err(crate::Error::Store(format!(
+                "dynamic insertion `{absolute}` collides with an existing registry entry"
+            )));
+        }
+        Ok(true)
+    }
+
+    /// Register an already admitted static/evaluation derivation carrying plan outputs.
+    /// Native dynamic-plan units instead enter through `insert_registry_ready_dynamic`,
+    /// which retains their complete staged identity and refuses collisions.
+    #[allow(tigerstyle::too_many_parameters)] // Stable evaluation registration boundary.
     pub fn insert_with_dynamic_plan_outputs(
         &mut self,
         drv_path: StorePath<String>,
@@ -245,6 +289,8 @@ impl DerivationRegistry {
             execution_profile,
             dynamic_admission_identity,
             resolved_outputs: HashMap::new(),
+            resolved_derivation: None,
+            resolved_drv_path: None,
         });
     }
 
@@ -266,17 +312,63 @@ impl DerivationRegistry {
         self.hdm_by_drv_path.get(drv_abs).copied()
     }
 
+    /// Prune a settled watch generation without orphaning a retained
+    /// derivation or its resolved CA identity. The caller includes every
+    /// admitted root dependency, pending teardown fence, and dynamic unit.
+    pub fn retain_watch_derivations(&mut self, live: &BTreeSet<String>) -> Result<(), crate::Error> {
+        for path in live {
+            let entry = self
+                .entries
+                .get(path)
+                .ok_or_else(|| crate::Error::Store(format!("watch retained derivation not registered: {path}")))?;
+            for derivation in std::iter::once(entry.derivation.as_ref()).chain(entry.resolved_derivation.as_deref()) {
+                for input in derivation.input_derivations.keys() {
+                    let dependency = input.to_absolute_path_with_prefix(&self.store_dir);
+                    if self.entries.contains_key(&dependency) && !live.contains(&dependency) {
+                        return Err(crate::Error::Store(format!(
+                            "watch cannot prune retained derivation input {dependency} referenced by {path}",
+                        )));
+                    }
+                }
+            }
+        }
+        self.entries.retain(|path, _| live.contains(path));
+        self.hdm_by_drv_path.retain(|path, _| live.contains(path));
+        Ok(())
+    }
+
+    pub fn record_resolved_derivation(
+        &mut self,
+        drv_abs: &str,
+        resolved: Arc<Derivation>,
+        resolved_path: StorePath<String>,
+    ) -> Result<(), crate::Error> {
+        let entry = self
+            .entries
+            .get_mut(drv_abs)
+            .ok_or_else(|| crate::Error::Store(format!("ca-input-unrealized: derivation not registered: {drv_abs}")))?;
+        entry.resolved_derivation = Some(resolved);
+        entry.resolved_drv_path = Some(resolved_path);
+        Ok(())
+    }
+
     /// Get the resolved output path for a derivation.
     ///
-    /// For input-addressed derivations, returns the pre-computed path
-    /// from `derivation.outputs`. For CA derivations, returns the
-    /// resolved path set by `resolve_output()`.
+    /// For input-addressed derivations, returns the prepared resolved output
+    /// when CA prerequisites changed the action identity, otherwise the
+    /// precomputed output. CA derivations use `resolve_output()`.
     pub fn get_output_path(&self, drv_abs: &str, output_name: &str) -> Option<StorePath<String>> {
         let entry = self.entries.get(drv_abs)?;
         if entry.content_addressed {
             entry.resolved_outputs.get(output_name).cloned()
         } else {
-            entry.derivation.outputs.get(output_name).and_then(|o| o.path.clone())
+            entry
+                .resolved_derivation
+                .as_deref()
+                .unwrap_or(entry.derivation.as_ref())
+                .outputs
+                .get(output_name)
+                .and_then(|output| output.path.clone())
         }
     }
 
@@ -470,6 +562,37 @@ mod tests {
         assert_eq!(reg.get_output_path(&abs, "dev"), None);
     }
 
+    // r[verify mantle.ca_input_resolution.resolved_identity]
+    #[test]
+    fn ca_resolved_input_addressed_output_path_uses_completed_derivation() {
+        let mut registry = DerivationRegistry::default();
+        let original_path = fake_sp("ca-dependent-ia.drv");
+        let original_output = fake_sp("provisional-ia-output");
+        let resolved_output = fake_sp("realized-ia-output");
+        let mut original = dummy_derivation();
+        original.outputs.get_mut("out").unwrap().path = Some(original_output.clone());
+        registry.insert(original_path.clone(), [5u8; 32], original, false, None);
+
+        let original_abs = original_path.to_absolute_path();
+        assert_eq!(registry.get_output_path(&original_abs, "out"), Some(original_output.clone()));
+        let mut resolved = dummy_derivation();
+        resolved.outputs.get_mut("out").unwrap().path = Some(resolved_output.clone());
+        registry
+            .record_resolved_derivation(&original_abs, Arc::new(resolved), fake_sp("ca-dependent-ia-resolved.drv"))
+            .unwrap();
+
+        assert_eq!(
+            registry.get_output_path(&original_abs, "out"),
+            Some(resolved_output),
+            "plan placeholders and dependents must see the CA-resolved IA output",
+        );
+        assert_eq!(
+            registry.get_by_drv_path(&original_abs).unwrap().derivation.outputs["out"].path,
+            Some(original_output),
+            "the scheduler retains the unresolved derivation separately",
+        );
+    }
+
     #[test]
     fn resolve_output_ca() {
         let mut reg = DerivationRegistry::default();
@@ -599,5 +722,49 @@ mod tests {
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("non-CA"), "error should say 'non-CA': {msg}");
+    }
+
+    #[test]
+    fn watch_prune_preserves_referenced_parent_ca_output_and_rejects_orphaning() {
+        let mut registry = DerivationRegistry::default();
+        let parent = fake_sp("watch-parent.drv");
+        let child = fake_sp("watch-child.drv");
+        let stale = fake_sp("watch-stale.drv");
+        registry.insert(parent.clone(), [1; 32], dummy_derivation(), true, None);
+        let resolved = fake_sp("watch-resolved");
+        registry.resolve_output(&parent.to_absolute_path(), "out", resolved.clone()).unwrap();
+        let mut dependent = dummy_derivation();
+        dependent.input_derivations.insert(parent.clone(), BTreeSet::from(["out".to_string()]));
+        registry.insert(child.clone(), [2; 32], dependent, false, None);
+        registry.insert(stale.clone(), [3; 32], dummy_derivation(), false, None);
+
+        let child_only = BTreeSet::from([child.to_absolute_path()]);
+        assert!(registry.retain_watch_derivations(&child_only).is_err());
+        assert_eq!(registry.len(), 3, "rejected prune must not mutate either index");
+        let live = BTreeSet::from([parent.to_absolute_path(), child.to_absolute_path()]);
+        registry.retain_watch_derivations(&live).unwrap();
+        assert_eq!(registry.len(), 2);
+        assert_eq!(registry.get_output_path(&parent.to_absolute_path(), "out"), Some(resolved));
+        assert_eq!(registry.get_hdm_by_drv_path(&parent.to_absolute_path()), Some([1; 32]));
+        assert_eq!(registry.get_hdm_by_drv_path(&stale.to_absolute_path()), None);
+        registry.retain_watch_derivations(&BTreeSet::new()).unwrap();
+        assert!(registry.is_empty());
+        assert_eq!(registry.get_hdm_by_drv_path(&child.to_absolute_path()), None);
+    }
+
+    #[test]
+    fn watch_prune_bounds_registry_through_more_than_max_entries_of_edits() {
+        let mut registry = DerivationRegistry::default();
+        let mut previous = None;
+        for generation in 0..=MAX_ENTRIES {
+            let path = fake_sp(&format!("watch-{generation:05}.drv"));
+            registry.insert(path.clone(), [generation as u8; 32], dummy_derivation(), false, None);
+            registry.retain_watch_derivations(&BTreeSet::from([path.to_absolute_path()])).unwrap();
+            assert_eq!(registry.len(), 1);
+            if let Some(previous) = previous.replace(path) {
+                assert!(registry.get_by_drv_path(&previous.to_absolute_path()).is_none());
+                assert!(registry.get_hdm_by_drv_path(&previous.to_absolute_path()).is_none());
+            }
+        }
     }
 }

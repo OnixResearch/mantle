@@ -3,6 +3,8 @@
 # This is a bounded evidence inventory, not a full Cargo compatibility claim.
 # Tests in tests/rust_compatibility_rail.rs consume these stable ids and docs
 # cite this file when describing frontier movement.
+# The unit_plan lane is an opt-in signed two-package fixture, not a claim that
+# Mantle's measured 925-unit/711-source workspace fits the 256-slice bound.
 
 let LaneStatus = [| 'supported, 'blocked, 'out_of_scope |] in
 let Lane = {
@@ -16,6 +18,7 @@ let Surface = {
   title | String,
   offline_cargo | Lane,
   native_rust_plan | Lane,
+  unit_plan | Lane,
   non_claims | Array String,
 } in
 
@@ -39,6 +42,12 @@ let Surface = {
         fixtures = ["native_path_only_surface_reports_matrix_binding_without_cargo_fallback"],
         blockers = [],
       },
+      unit_plan = {
+        status = 'supported,
+        evidence_class = "cargo-unit-graph-dynamic-plan",
+        fixtures = ["examples/cargo_unit_plan.ncl"],
+        blockers = [],
+      },
       non_claims = ["not-full-cargo-compatibility", "not-compiler-correctness"],
     },
     {
@@ -54,6 +63,12 @@ let Surface = {
         status = 'supported,
         evidence_class = "cargo-free-bounded-topology",
         fixtures = ["native_path_only_surface_reports_matrix_binding_without_cargo_fallback"],
+        blockers = [],
+      },
+      unit_plan = {
+        status = 'supported,
+        evidence_class = "cargo-unit-graph-dynamic-plan",
+        fixtures = ["examples/cargo_unit_plan.ncl"],
         blockers = [],
       },
       non_claims = ["not-full-cargo-feature-resolution", "not-full-cargo-compatibility"],
@@ -73,6 +88,12 @@ let Surface = {
         fixtures = ["representative_negative_fixtures_report_stable_blockers"],
         blockers = ["missing-vendored-registry-source", "native-registry-source-planning-blocked"],
       },
+      unit_plan = {
+        status = 'out_of_scope,
+        evidence_class = "unexercised-cargo-unit-surface",
+        fixtures = [],
+        blockers = [],
+      },
       non_claims = ["not-network-or-ambient-cargo-source-resolution", "not-full-cargo-compatibility"],
     },
     {
@@ -89,6 +110,12 @@ let Surface = {
         evidence_class = "blocked-unsupported-surface",
         fixtures = ["representative_negative_fixtures_report_stable_blockers"],
         blockers = ["missing-proc-macro-host-artifact"],
+      },
+      unit_plan = {
+        status = 'out_of_scope,
+        evidence_class = "unexercised-cargo-unit-surface",
+        fixtures = [],
+        blockers = [],
       },
       non_claims = ["not-full-host-scheduling-or-execution", "not-full-cargo-compatibility"],
     },
@@ -107,6 +134,12 @@ let Surface = {
         fixtures = ["representative_negative_fixtures_report_stable_blockers"],
         blockers = ["malformed-build-script-metadata", "native-host-unit-graph-planning-blocked"],
       },
+      unit_plan = {
+        status = 'blocked,
+        evidence_class = "blocked-unsupported-surface",
+        fixtures = ["unsupported_execution_modes_and_unbound_paths_fail_closed"],
+        blockers = ["unit-plan-build-script-run-unsupported"],
+      },
       non_claims = ["not-full-host-scheduling-or-execution", "not-full-cargo-compatibility"],
     },
     {
@@ -123,6 +156,12 @@ let Surface = {
         evidence_class = "blocked-unsupported-surface",
         fixtures = ["representative_negative_fixtures_report_stable_blockers"],
         blockers = ["missing-feature-surface", "native-unit-graph-planning-blocked"],
+      },
+      unit_plan = {
+        status = 'out_of_scope,
+        evidence_class = "unexercised-cargo-unit-surface",
+        fixtures = [],
+        blockers = [],
       },
       non_claims = ["not-full-cargo-feature-resolution", "not-full-cargo-compatibility"],
     },
@@ -141,6 +180,12 @@ let Surface = {
         fixtures = ["representative_negative_fixtures_report_stable_blockers"],
         blockers = ["missing-target-cfg-surface", "native-package-target-planning-blocked"],
       },
+      unit_plan = {
+        status = 'out_of_scope,
+        evidence_class = "unexercised-cargo-unit-surface",
+        fixtures = [],
+        blockers = [],
+      },
       non_claims = ["not-full-cargo-feature-resolution", "not-full-cargo-compatibility"],
     },
     {
@@ -156,6 +201,12 @@ let Surface = {
         status = 'supported,
         evidence_class = "cargo-free-bounded-topology",
         fixtures = ["native_path_only_surface_reports_matrix_binding_without_cargo_fallback"],
+        blockers = [],
+      },
+      unit_plan = {
+        status = 'out_of_scope,
+        evidence_class = "unexercised-cargo-unit-surface",
+        fixtures = [],
         blockers = [],
       },
       non_claims = ["not-full-cargo-compatibility"],
@@ -175,6 +226,12 @@ let Surface = {
         fixtures = ["representative_negative_fixtures_report_stable_blockers"],
         blockers = ["missing-multi-package-binary-surface"],
       },
+      unit_plan = {
+        status = 'supported,
+        evidence_class = "cargo-unit-graph-dynamic-plan",
+        fixtures = ["examples/cargo_unit_plan.ncl"],
+        blockers = [],
+      },
       non_claims = ["not-general-rust-scheduler", "not-full-cargo-compatibility"],
     },
     {
@@ -192,6 +249,12 @@ let Surface = {
         fixtures = ["representative_negative_fixtures_report_stable_blockers"],
         blockers = ["unsupported-vendored-git-source", "native-git-source-planning-blocked"],
       },
+      unit_plan = {
+        status = 'blocked,
+        evidence_class = "blocked-unsupported-surface",
+        fixtures = ["proc_macro_host_unit_and_git_source_boundary"],
+        blockers = ["unit-plan-source-unsupported"],
+      },
       non_claims = ["not-network-or-ambient-cargo-source-resolution", "not-full-cargo-compatibility"],
     },
     {
@@ -208,6 +271,12 @@ let Surface = {
         evidence_class = "blocked-unsupported-surface",
         fixtures = ["representative_negative_fixtures_report_stable_blockers"],
         blockers = ["unsupported-native-link-metadata", "unsupported-rustc-link-metadata", "unsupported-pkg-config", "unsupported-native-c-compile"],
+      },
+      unit_plan = {
+        status = 'out_of_scope,
+        evidence_class = "unexercised-cargo-unit-surface",
+        fixtures = [],
+        blockers = [],
       },
       non_claims = ["not-native-link-probing-correctness", "not-full-cargo-compatibility"],
     },

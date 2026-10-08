@@ -84,6 +84,28 @@ fn ticket_creation_delivers_only_to_fd_and_persists_verifier_only_state() {
 }
 
 #[test]
+fn ticket_creation_with_relative_state_dir_reaches_secret_worker_in_same_state() {
+    let root = tempfile::tempdir().unwrap();
+    let credentials_dir = write_systemd_credentials(root.path(), TICKET_KEY_ONE);
+    let (mut command, mut delivery_file) =
+        base_create_command(Path::new("relative-state"), SYSTEMD_PROVIDER, "production");
+    let output = command.current_dir(root.path()).env("CREDENTIALS_DIRECTORY", &credentials_dir).output().unwrap();
+
+    assert!(output.status.success(), "stderr={}", String::from_utf8_lossy(&output.stderr));
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let ticket_id = report["ticket"]["id"].as_str().unwrap();
+    let credential = read_delivery(&mut delivery_file);
+    let token = credential.split_once(':').unwrap().1;
+    assert!(credential.starts_with(&format!("{ticket_id}:")));
+    let state_path = root.path().join("relative-state/remote-builders/tickets.json");
+    let verifier_state = fs::read_to_string(&state_path).unwrap();
+    assert!(!String::from_utf8_lossy(&output.stdout).contains(token));
+    assert!(!String::from_utf8_lossy(&output.stderr).contains(token));
+    assert!(!verifier_state.contains(token));
+    assert!(!root.path().join("remote-builders").exists());
+}
+
+#[test]
 fn build_ticket_fd_accepts_valid_input_and_rejects_invalid_oversized_and_terminal_inputs() {
     let valid_credential = format!("ticket-1:{}\n", "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI");
     let mut valid_file = tempfile::tempfile().unwrap();

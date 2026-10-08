@@ -19,8 +19,11 @@
 # Usage:
 #   crunch build bootstrap/crunch.ncl -I lib --store /tmp/crunch-store
 #
-# Generating the source tarball:
-#   cd crunch && cargo vendor --locked vendor-deps
+# Generate the ignored checkout-local closure with the reviewed exact-pin
+# Casita patch before packing the source archive. Never replace an existing
+# closure: use `check` for a checkout that already contains vendor-deps/.
+#   cd mantle && python3 scripts/vendor-deps.py generate
+#   cd mantle && python3 scripts/vendor-deps.py check
 #   git archive --prefix=crunch-src/ HEAD -o /tmp/crunch-src.tar
 #   tar rf /tmp/crunch-src.tar --transform='s,^vendor-deps/,crunch-src/vendor-deps/,' vendor-deps/
 #   xz -T0 /tmp/crunch-src.tar
@@ -58,7 +61,7 @@ let crunch_src = crunch.fetchTarball {
       for cmd in cat mkdir cp chmod ln ls echo rm mv sed grep awk \
                  tr head tail sort wc expr test basename dirname \
                  install find xargs readlink touch true false tee \
-                 du cut uname id whoami env printenv; do
+                 du cut sha256sum uname id whoami env printenv; do
         $BB ln -sf $BB /tmp/tools/$cmd
       done
 
@@ -145,27 +148,24 @@ let crunch_src = crunch.fetchTarball {
       chmod -R u+w /tmp/build/crunch
       cd /tmp/build/crunch
 
-      # Write .cargo/config.toml for self-build:
-      # - Use gcc instead of clang
-      # - Use system ld instead of mold
-      # - Point to vendored deps
-      # Determine library search path for libgcc_s.so.
+      # Keep the checked-in source replacement map: it includes Casita,
+      # turso and the other pinned git sources. The source archive must also
+      # contain the generated, patched vendor-deps closure.
+      # Append only the self-build target/linker settings.
       GCC_LIB=""
       if [ -n "$MUSL_GCC" ]; then GCC_LIB="$MUSL_GCC"
       elif [ -f "$GCC/lib/libgcc_s.so" ]; then GCC_LIB="$GCC/lib"
       fi
 
       $BB mkdir -p .cargo
-      cat > .cargo/config.toml << CARGOEOF
-[source.crates-io]
-replace-with = "vendored-sources"
-
-[source."git+https://github.com/tvlfyi/wu-manber.git"]
-git = "https://github.com/tvlfyi/wu-manber.git"
-replace-with = "vendored-sources"
-
-[source.vendored-sources]
-directory = "vendor-deps"
+      test -f .cargo/vendor-config.toml || exit 1
+      test -f vendor-deps/casita/src/nar.rs || exit 1
+      # Fail before Cargo can compile an unpatched checkout or a modified
+      # vendor snapshot. This is the exact patched nar.rs at the reviewed pin.
+      test "$(sha256sum vendor-deps/casita/src/nar.rs | cut -d ' ' -f 1)" = \
+        "e88c332c3bb0605e5684e303c17e755adc66d2d525b80672dd7e16015f1be0b1" || exit 1
+      cp .cargo/vendor-config.toml .cargo/config.toml
+      cat >> .cargo/config.toml << CARGOEOF
 
 [build]
 target = "x86_64-unknown-linux-musl"

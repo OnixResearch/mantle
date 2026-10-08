@@ -231,6 +231,7 @@ mod tests {
                 chunk_count: None,
                 blake3: TEST_BLAKE3.to_string(),
             }],
+            store_path_attestation: None,
         }
     }
 

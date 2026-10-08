@@ -8,6 +8,7 @@
 
 let { Name, System, Input, Sandbox, .. } = import "contracts.ncl" in
 let { FixedOutput } = import "fixed_output.ncl" in
+let Gate = (import "finish_gates.ncl").Gate in
 let PositiveNumber = std.contract.from_validator (fun value =>
   if std.is_number value && value > 0 then 'Ok
   else 'Error { message = "expected a positive bounded workspace number" }
@@ -51,6 +52,19 @@ let Workspace = {
     require_declared_inputs | Bool | default = true,
   } | default = {},
 } in
+let PlanInputs = std.contract.from_validator (fun value =>
+  let checked = value | Array Input in
+  let names = checked
+    |> std.array.filter (fun input => std.is_record input && std.record.has_field "producer" input)
+    |> std.array.map (fun input => input.name) in
+  let unique = std.array.fold_left (fun seen name =>
+    if std.array.elem name seen then seen else seen @ [name]
+  ) [] names in
+  if std.array.length names <= 16 && std.array.length unique == std.array.length names
+  then 'Ok
+  else 'Error { message = "plan-output input names must be unique and at most 16 references are allowed" }
+) in
+
 
 {
   name | Name
@@ -72,15 +86,19 @@ let Workspace = {
     | default = ["out"],
 
   dynamic_plan_outputs | Array String
-    | doc "Output names that may contain native mantle-plan-v1 dynamic build plans. Each name must also appear in outputs."
+    | doc "Output names that may contain native mantle-plan-v1 or mantle-plan-v2 dynamic build plans. Each name must also appear in outputs."
     | default = [],
+
+  finish_gates | Gate
+    | doc "Optional explicit adoption of versioned post-install gates. Existing derivations without this field keep their legacy behavior."
+    | optional,
 
   env | { _ : String }
     | doc "Environment variables set during the build. Output paths and system are auto-populated by the glue layer."
     | default = {},
 
-  inputs | Array Input
-    | doc "Build inputs. Strings are pre-existing store paths (source inputs). Records are derivations built first."
+  inputs | PlanInputs
+    | doc "Build inputs. Strings are pre-existing store paths; records may be derivations, selected outputs, or a named late-bound plan root `{ name, producer, plan_output, root, unit_output }`. Each plan-root name is unique (at most 16); use `{{mantle-plan-output:<name>}}` only in args/env."
     | default = [],
 
   fixed_output | FixedOutput

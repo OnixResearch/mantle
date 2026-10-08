@@ -377,7 +377,7 @@ fn snix_to_casita_cli_migration_pins_root_without_modifying_source() {
     assert!(info_output.status.success(), "{}", String::from_utf8_lossy(&info_output.stderr));
     let info: Value = serde_json::from_slice(&info_output.stdout).unwrap();
     assert_eq!(info["backend"], "casita");
-    assert_eq!(info["backend_capabilities"]["rust_unit_cache"], false);
+    assert_eq!(info["backend_capabilities"]["rust_unit_cache"], true);
     assert_eq!(info["backend_capabilities"]["unsigned_admission"], false);
     assert_eq!(info["backend_capabilities"]["max_root_changes"], 1024);
     assert_eq!(
@@ -392,7 +392,7 @@ fn snix_to_casita_cli_migration_pins_root_without_modifying_source() {
         .args(["store", "info", selector])
         .assert()
         .success()
-        .stdout(predicate::str::contains("rust-unit-cache: false"))
+        .stdout(predicate::str::contains("rust-unit-cache: true"))
         .stdout(predicate::str::contains("unsigned-admission: false"))
         .stdout(predicate::str::contains("max-root-changes: 1024"));
     mantle_cmd()
@@ -491,34 +491,6 @@ fn snix_to_casita_cli_migration_pins_root_without_modifying_source() {
         .success();
     assert!(!fence_path.exists(), "guarded usage must recover a pending GC fence");
     assert_eq!(pinned_plan["candidate_path_count"], 0);
-    let cache_dir = target_state.join(crunch_rust_cache::RUST_CACHE_STATE_DIRECTORY);
-    std::fs::create_dir(&cache_dir).unwrap();
-    let retained = crunch_rust_cache::RustCacheRetention {
-        schema: crunch_rust_cache::RUST_CACHE_RETENTION_SCHEMA.to_string(),
-        retained_results: std::collections::BTreeMap::from([(
-            format!("mantle-rust-result://blake3/{}", blake3::hash(b"retained-result").to_hex()),
-            crunch_rust_cache_core::CastoreNodeIdentity {
-                kind: crunch_rust_cache_core::CastoreNodeKind::File,
-                digest_blake3: blake3::hash(b"durable casita").to_hex().to_string(),
-                size_bytes: b"durable casita".len() as u64,
-            },
-        )]),
-    };
-    std::fs::write(cache_dir.join("retention.json"), serde_json::to_vec(&retained).unwrap()).unwrap();
-    let before_refusal = state_files(&target_state);
-    for action in ["usage", "gc"] {
-        mantle_cmd()
-            .args(["--store-backend", "casita", "--state-dir"])
-            .arg(&target_state)
-            .arg("--store")
-            .arg(&target_store)
-            .args(["store", action])
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains("casita-rust-cache-unsupported"));
-    }
-    assert_eq!(state_files(&target_state), before_refusal);
-    std::fs::remove_dir_all(cache_dir).unwrap();
     mantle_cmd()
         .args(["--store-backend", "casita", "--state-dir"])
         .arg(&target_state)
@@ -557,7 +529,10 @@ fn snix_to_casita_cli_migration_pins_root_without_modifying_source() {
         .args(["store", "pin", &logical_path])
         .assert()
         .success();
-    let root_registry_before_stale_execution = std::fs::read(target_state.join("gc-roots.json")).unwrap();
+    let root_registry_before_stale_execution = state_files(&target_state)
+        .into_iter()
+        .filter(|(path, _)| path.starts_with("retention-interests"))
+        .collect::<std::collections::BTreeMap<_, _>>();
     mantle_cmd()
         .args(["--store-backend", "casita", "--state-dir"])
         .arg(&target_state)
@@ -573,7 +548,11 @@ fn snix_to_casita_cli_migration_pins_root_without_modifying_source() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("gc-plan-stale"));
-    assert_eq!(std::fs::read(target_state.join("gc-roots.json")).unwrap(), root_registry_before_stale_execution);
+    let root_registry_after_stale_execution = state_files(&target_state)
+        .into_iter()
+        .filter(|(path, _)| path.starts_with("retention-interests"))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    assert_eq!(root_registry_after_stale_execution, root_registry_before_stale_execution);
     assert!(!fence_path.exists(), "stale GC plan must not start a deletion fence");
     assert!(
         !target_state.join("casita-gc-fence.progress").exists(),

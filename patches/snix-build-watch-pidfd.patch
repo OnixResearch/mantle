@@ -1,0 +1,1353 @@
+diff --git a/vendor/snix-build/Cargo.toml b/vendor/snix-build/Cargo.toml
+index 8f4fe3139..bfd31072d 100644
+--- a/vendor/snix-build/Cargo.toml
++++ b/vendor/snix-build/Cargo.toml
+@@ -14,7 +14,7 @@ postcard = { version = "1", default-features = false, features = ["use-std"] }
+ serde = { version = "1", features = ["derive"] }
+ serde_bytes = "0.11"
+ thiserror = "2.0"
+-tokio = { version = "1.39.3", features = ["process"] }
++tokio = { version = "1.39.3", features = ["process", "time", "sync", "rt", "macros"] }
+ snix-castore = { path = "../snix-castore", features = ["fuse"] }
+ tracing = "0.1.40"
+ url = "2.5.2"
+diff --git a/vendor/snix-build/src/buildservice/bwrap.rs b/vendor/snix-build/src/buildservice/bwrap.rs
+index 89027b5c4..7b8c38349 100644
+--- a/vendor/snix-build/src/buildservice/bwrap.rs
++++ b/vendor/snix-build/src/buildservice/bwrap.rs
+@@ -19,6 +19,7 @@ use tracing::debug;
+ use tracing::info;
+ use tracing::instrument;
+ use tracing::warn;
++use tokio::sync::watch;
+ use uuid::Uuid;
+ 
+ use super::BuildService;
+@@ -28,6 +29,8 @@ use crate::buildservice::BuildOutput;
+ use crate::buildservice::BuildRequest;
+ use crate::buildservice::BuildResult;
+ use crate::bwrap::Bwrap;
++#[cfg(test)]
++use crate::bwrap::watch_cancel::WatchFault;
+ use crate::sandbox::SandboxMount;
+ use crate::sandbox::SandboxSpec;
+ /// Compile-time default for the sandbox shell.
+@@ -284,6 +287,37 @@ where
+     worker.join().map_err(|_| std::io::Error::other(MATERIALIZATION_WORKER_PANIC))?
+ }
+ 
++/// Watch supervisors share this guard until their child is stopped; one-shot
++/// builds retain the original, unshared temporary directory ownership.
++enum SandboxWorkspace {
++    OneShot(tempfile::TempDir),
++    Watch(std::sync::Arc<crate::bwrap::watch_cancel::WatchWorkspace>),
++}
++
++impl SandboxWorkspace {
++    fn path(&self) -> &Path {
++        match self {
++            Self::OneShot(dir) => dir.path(),
++            Self::Watch(dir) => dir.path(),
++        }
++    }
++
++    fn watch_guard(&self) -> Option<std::sync::Arc<crate::bwrap::watch_cancel::WatchWorkspace>> {
++        match self {
++            Self::OneShot(_) => None,
++            Self::Watch(dir) => Some(std::sync::Arc::clone(dir)),
++        }
++    }
++
++    fn into_tempdir(self) -> tempfile::TempDir {
++        match self {
++            Self::OneShot(dir) => dir,
++            Self::Watch(dir) => std::sync::Arc::try_unwrap(dir)
++                .expect("watch supervisor finished before retaining failed workspace").into_tempdir(),
++        }
++    }
++}
++
+ pub struct BubblewrapBuildService<BS, DS> {
+     /// Root path in which all builds run
+     workdir: PathBuf,
+@@ -299,7 +333,9 @@ pub struct BubblewrapBuildService<BS, DS> {
+ 
+     // semaphore to track number of concurrently running builds.
+     // this is necessary, as otherwise we very quickly run out of open file handles.
+-    concurrent_builds: tokio::sync::Semaphore,
++    concurrent_builds: std::sync::Arc<tokio::sync::Semaphore>,
++    #[cfg(test)]
++    watch_fault: Option<WatchFault>,
+ }
+ impl<BS, DS> BubblewrapBuildService<BS, DS> {
+     pub fn new(workdir: PathBuf, blob_service: BS, directory_service: DS) -> Self {
+@@ -312,7 +348,9 @@ impl<BS, DS> BubblewrapBuildService<BS, DS> {
+             blob_service,
+             directory_service,
+             failure_workspace_root: None,
+-            concurrent_builds: tokio::sync::Semaphore::new(2),
++            concurrent_builds: std::sync::Arc::new(tokio::sync::Semaphore::new(2)),
++            #[cfg(test)]
++            watch_fault: None,
+         }
+     }
+ 
+@@ -322,21 +360,36 @@ impl<BS, DS> BubblewrapBuildService<BS, DS> {
+     }
+ }
+ 
+-#[async_trait]
+-impl<BS, DS> BuildService for BubblewrapBuildService<BS, DS>
++impl<BS, DS> BubblewrapBuildService<BS, DS>
+ where
+     BS: BlobService + Clone + 'static,
+     DS: DirectoryService + Clone + 'static,
+ {
+     #[instrument(skip_all, err)]
+-    async fn do_build(&self, request: BuildRequest) -> std::io::Result<BuildResult> {
+-        let _permit = self.concurrent_builds.acquire().await.unwrap();
++    async fn do_build_inner(&self, request: BuildRequest, cancellation: Option<watch::Receiver<bool>>) -> std::io::Result<BuildResult> {
++        if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err()) {
++            return Err(watch_cancelled());
++        }
++        let _one_shot_permit = if cancellation.is_none() { Some(self.concurrent_builds.acquire().await.unwrap()) } else { None };
++        let mut watch_permit = if cancellation.is_some() {
++            Some(std::sync::Arc::clone(&self.concurrent_builds).acquire_owned().await.unwrap())
++        } else {
++            None
++        };
++        if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err()) {
++            return Err(watch_cancelled());
++        }
+ 
+         let build_name = Uuid::new_v4();
+         let build_name_str = build_name.to_string();
+         let debug_failure_workspace_root = std::env::var_os("CRUNCH_DEBUG_FAILURE_WORKSPACE_ROOT").map(PathBuf::from);
+         let failure_workspace_root = self.failure_workspace_root.as_deref().or(debug_failure_workspace_root.as_deref());
+         let sandbox_dir = create_ephemeral_dir(&self.workdir, &format!("{build_name_str}-"))?;
++        let sandbox_dir = if cancellation.is_some() {
++            SandboxWorkspace::Watch(std::sync::Arc::new(crate::bwrap::watch_cancel::WatchWorkspace::new(sandbox_dir)))
++        } else {
++            SandboxWorkspace::OneShot(sandbox_dir)
++        };
+         info!(build_name = %build_name_str, sandbox_path = %sandbox_dir.path().display(), "Starting bwrap build");
+ 
+         let span = Span::current();
+@@ -394,7 +447,22 @@ where
+             )
+             .build();
+ 
+-        let outcome = Bwrap::initialize(spec)?.run().await?;
++        let sandbox = Bwrap::initialize(spec)?;
++        #[cfg(test)]
++        let sandbox = sandbox.with_test_watch_fault(self.watch_fault);
++        let outcome = match cancellation.as_ref() {
++            Some(receiver) => {
++                let lease = crate::bwrap::watch_cancel::WatchLease::new(
++                    watch_permit.take().expect("admitted watch build retains its permit"),
++                    sandbox_dir.watch_guard().expect("watch build owns a workspace"),
++                );
++                sandbox.run_cancellable(receiver.clone(), lease).await?
++            }
++            None => sandbox.run().await?,
++        };
++        if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err()) {
++            return Err(watch_cancelled());
++        }
+ 
+         if !outcome.output().status.success() {
+             let stdout = BStr::new(&outcome.output().stdout);
+@@ -419,14 +487,14 @@ where
+             } else {
+                 format!("nonzero exit code: {}\n{}", outcome.output().status, log)
+             };
+-            retain_failed_sandbox(sandbox_dir, failure_workspace_root, &build_name_str);
++            retain_failed_sandbox(sandbox_dir.into_tempdir(), failure_workspace_root, &build_name_str);
+             return Err(std::io::Error::other(msg));
+         }
+ 
+         let outputs: Vec<_> = request.outputs.iter().filter_map(|o| outcome.find_path(o)).collect();
+         if outputs.len() != request.outputs.len() {
+             warn!("Not all outputs produced");
+-            retain_failed_sandbox(sandbox_dir, failure_workspace_root, &build_name_str);
++            retain_failed_sandbox(sandbox_dir.into_tempdir(), failure_workspace_root, &build_name_str);
+             return Err(std::io::Error::other("Not all outputs produced".to_string()));
+         }
+         let patterns = ReferencePattern::new(request.refscan_needles);
+@@ -457,6 +525,9 @@ where
+             }
+         }))
+         .await?;
++        if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow()) {
++            return Err(watch_cancelled());
++        }
+         // Capture stdout+stderr for the log (even on success)
+         let mut log = String::new();
+         if !outcome.output().stdout.is_empty() {
+@@ -469,6 +540,9 @@ where
+             log.push_str(&String::from_utf8_lossy(&outcome.output().stderr));
+         }
+ 
++        if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow()) {
++            return Err(watch_cancelled());
++        }
+         Ok(BuildResult {
+             outputs,
+             log: if log.is_empty() { None } else { Some(log) },
+@@ -476,6 +550,29 @@ where
+     }
+ }
+ 
++fn watch_cancelled() -> std::io::Error {
++    std::io::Error::new(ErrorKind::Interrupted, "watch build cancelled before output admission")
++}
++
++#[async_trait]
++impl<BS, DS> BuildService for BubblewrapBuildService<BS, DS>
++where
++    BS: BlobService + Clone + 'static,
++    DS: DirectoryService + Clone + 'static,
++{
++    async fn do_build(&self, request: BuildRequest) -> std::io::Result<BuildResult> {
++        self.do_build_inner(request, None).await
++    }
++
++    async fn do_build_cancellable(
++        &self,
++        request: BuildRequest,
++        cancellation: watch::Receiver<bool>,
++    ) -> std::io::Result<BuildResult> {
++        self.do_build_inner(request, Some(cancellation)).await
++    }
++}
++
+ fn retain_failed_sandbox(sandbox_dir: tempfile::TempDir, root: Option<&Path>, build_name: &str) {
+     let Some(root) = root else {
+         return;
+@@ -720,4 +817,266 @@ mod tests {
+             assert_ne!(mode & 0o111, 0, "materialized executable should keep x bit");
+         }
+     }
++
++    fn watch_build_request(marker_host: &Path) -> BuildRequest {
++        let mut request = BuildRequest::default();
++        request.working_dir = PathBuf::from("build");
++        request.scratch_paths = vec![PathBuf::from("build"), PathBuf::from("nix/store")];
++        request.inputs_dir = PathBuf::from("nix/store");
++        request.outputs = vec![PathBuf::from("nix/store/watch-result")];
++        request.constraints.insert(BuildConstraints::ProvideBinSh);
++        request.command_args = vec![
++            "/bin/sh".to_string(),
++            "-c".to_string(),
++            "/bin/busybox setsid /bin/sh -c '/bin/busybox echo escaped > /build/markers/escaped; /bin/busybox sleep 2; /bin/busybox echo late > /build/markers/late' & /bin/busybox echo started > /build/markers/started; wait; /bin/busybox echo done > /nix/store/watch-result".to_string(),
++        ];
++        let mut workspace = workspace_request(crate::buildservice::StatefulWorkspaceMode::MutableSession);
++        workspace.guest_path = PathBuf::from("/build/markers");
++        workspace.runtime_host_path = Some(marker_host.to_path_buf());
++        request.workspace = Some(workspace);
++        request
++    }
++
++    async fn await_watch_start(marker_host: &Path) {
++        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
++        while !marker_host.join("started").is_file() || !marker_host.join("escaped").is_file() {
++            assert!(tokio::time::Instant::now() < deadline, "real BuildService sandbox did not start");
++            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
++        }
++    }
++
++    #[tokio::test]
++    async fn real_buildservice_watch_cancellation_reaps_pid1_and_blocks_late_output() {
++        assert!(Path::new(&sandbox_shell()).is_file(), "real BuildService needs a static shell");
++        let root = tempfile::tempdir().unwrap();
++        let markers = tempfile::tempdir().unwrap();
++        let service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
++        let request = watch_build_request(markers.path());
++        let (cancel_tx, cancel_rx) = watch::channel(false);
++        let build = tokio::spawn(async move { service.do_build_cancellable(request, cancel_rx).await });
++        await_watch_start(markers.path()).await;
++        cancel_tx.send(true).unwrap();
++        let error = build.await.unwrap().unwrap_err();
++        assert_eq!(error.kind(), ErrorKind::Interrupted, "only observed teardown is cancellable: {error}");
++        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
++        assert!(!markers.path().join("late").exists(), "BuildService cancellation allowed late descendant output");
++    }
++
++    #[tokio::test]
++    async fn queued_watch_cancellation_never_starts_a_sandbox() {
++        let root = tempfile::tempdir().unwrap();
++        let markers = tempfile::tempdir().unwrap();
++        let mut service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
++        service.concurrent_builds = std::sync::Arc::new(tokio::sync::Semaphore::new(0));
++        let service = std::sync::Arc::new(service);
++        let admitted = std::sync::Arc::clone(&service);
++        let request = watch_build_request(markers.path());
++        let (cancel_tx, cancel_rx) = watch::channel(false);
++        let waiting = tokio::spawn(async move { admitted.do_build_cancellable(request, cancel_rx).await });
++        tokio::task::yield_now().await;
++        cancel_tx.send(true).unwrap();
++        service.concurrent_builds.add_permits(1);
++        let error = tokio::time::timeout(std::time::Duration::from_secs(5), waiting).await.unwrap().unwrap().unwrap_err();
++        assert_eq!(error.kind(), ErrorKind::Interrupted);
++        assert!(!markers.path().join("started").exists(), "queued cancellation spawned a builder");
++        assert!(std::fs::read_dir(root.path()).unwrap().next().is_none(), "queued cancellation allocated a sandbox");
++    }
++
++    #[tokio::test]
++    async fn pidfd_preflight_failure_does_not_spawn_a_builder() {
++        let root = tempfile::tempdir().unwrap();
++        let markers = tempfile::tempdir().unwrap();
++        let mut service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
++        service.watch_fault = Some(WatchFault::PidfdUnavailable);
++        let (_keep_sender, cancel_rx) = watch::channel(false);
++        let error = service.do_build_cancellable(watch_build_request(markers.path()), cancel_rx).await.unwrap_err();
++        assert_eq!(error.kind(), ErrorKind::Unsupported);
++        assert!(!markers.path().join("started").exists(), "unavailable pidfd started a builder");
++        assert!(!markers.path().join("late").exists(), "unavailable pidfd left a writer");
++    }
++
++    #[tokio::test]
++    async fn real_bwrap_early_failure_is_terminal_before_pid1_without_leaking_admission() {
++        assert!(Path::new(&sandbox_shell()).is_file(), "real BuildService needs a static shell");
++        let root = tempfile::tempdir().unwrap();
++        let markers = tempfile::tempdir().unwrap();
++        let mut service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
++        service.watch_fault = Some(WatchFault::ExitBeforePid1);
++        let (_keep_sender, cancel_rx) = watch::channel(false);
++        let result = tokio::time::timeout(
++            std::time::Duration::from_secs(5),
++            service.do_build_cancellable(watch_build_request(markers.path()), cancel_rx),
++        ).await.unwrap();
++        let error = result.unwrap_err();
++        assert!(error.to_string().contains("exited before watch PID1 ownership"), "early failure was not classified: {error}");
++        assert!(error.to_string().contains("Unknown option --invalid-bwrap-watch-early-exit"), "real bwrap parse failure was lost: {error}");
++        assert_eq!(service.concurrent_builds.available_permits(), 2, "terminal startup held admission");
++        assert!(std::fs::read_dir(root.path()).unwrap().next().is_none(), "terminal startup leaked workspace");
++        assert!(!markers.path().join("started").exists(), "invalid bubblewrap started a builder");
++        assert!(!markers.path().join("late").exists(), "invalid bubblewrap left a late builder");
++    }
++
++    #[tokio::test]
++    async fn supervisor_panic_after_pid1_stops_gated_builder_before_returning_error() {
++        assert!(Path::new(&sandbox_shell()).is_file(), "real BuildService needs a static shell");
++        let root = tempfile::tempdir().unwrap();
++        let markers = tempfile::tempdir().unwrap();
++        let mut service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
++        service.watch_fault = Some(WatchFault::PanicAfterPid1);
++        let (_keep_sender, cancel_rx) = watch::channel(false);
++        let error = tokio::time::timeout(
++            std::time::Duration::from_secs(5),
++            service.do_build_cancellable(watch_build_request(markers.path()), cancel_rx),
++        ).await.unwrap().unwrap_err();
++        assert!(error.to_string().contains("supervisor failed after owned teardown"), "panic escaped teardown: {error}");
++        assert_eq!(service.concurrent_builds.available_permits(), 2, "supervisor panic retained admission");
++        assert!(std::fs::read_dir(root.path()).unwrap().next().is_none(), "supervisor panic leaked workspace");
++        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
++        assert!(!markers.path().join("started").exists(), "gate EOF started payload after supervisor panic");
++        assert!(!markers.path().join("late").exists(), "supervisor panic left a late builder");
++    }
++
++    #[tokio::test]
++    async fn aborting_caller_then_panicking_supervisor_retains_owned_teardown() {
++        assert!(Path::new(&sandbox_shell()).is_file(), "real BuildService needs a static shell");
++        let root = tempfile::tempdir().unwrap();
++        let markers = tempfile::tempdir().unwrap();
++        let mut service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
++        service.watch_fault = Some(WatchFault::PanicAfterAbort);
++        let service = std::sync::Arc::new(service);
++        let observing = std::sync::Arc::clone(&service);
++        let (_keep_sender, cancel_rx) = watch::channel(false);
++        let request = watch_build_request(markers.path());
++        let build = tokio::spawn(async move { service.do_build_cancellable(request, cancel_rx).await });
++        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
++        loop {
++            let owned = std::fs::read_dir(root.path()).unwrap()
++                .filter_map(Result::ok)
++                .any(|entry| entry.path().join("watch-pid1-owned").is_file());
++            if owned {
++                break;
++            }
++            assert!(tokio::time::Instant::now() < deadline, "supervisor did not own PID1 before abort");
++            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
++        }
++        assert_eq!(observing.concurrent_builds.available_permits(), 1, "fault never admitted a sandbox");
++        build.abort();
++        assert!(build.await.unwrap_err().is_cancelled());
++        let _permit = tokio::time::timeout(
++            std::time::Duration::from_secs(5),
++            observing.concurrent_builds.acquire_many(2),
++        ).await.unwrap().unwrap();
++        assert!(std::fs::read_dir(root.path()).unwrap().next().is_none(), "aborted panic leaked workspace");
++        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
++        assert!(!markers.path().join("started").exists(), "aborted supervisor panic released gate EOF");
++        assert!(!markers.path().join("late").exists(), "aborted supervisor panic left a writer");
++    }
++
++    #[tokio::test]
++    async fn delayed_pid1_discovery_keeps_payload_gated_and_cancels_before_start() {
++        assert!(Path::new(&sandbox_shell()).is_file(), "real BuildService needs a static shell");
++        let root = tempfile::tempdir().unwrap();
++        let markers = tempfile::tempdir().unwrap();
++        let blobs = MemoryBlobService::default();
++        let mut service = BubblewrapBuildService::new(root.path().to_path_buf(), blobs.clone(), tmp_ds());
++        service.watch_fault = Some(WatchFault::DelayPid1Discovery);
++        service.concurrent_builds = std::sync::Arc::new(tokio::sync::Semaphore::new(1));
++        let service = std::sync::Arc::new(service);
++        let observing = std::sync::Arc::clone(&service);
++        let (cancel_tx, cancel_rx) = watch::channel(false);
++        let request = watch_build_request(markers.path());
++        let build = tokio::spawn(async move { service.do_build_cancellable(request, cancel_rx).await });
++        let sibling_markers = tempfile::tempdir().unwrap();
++        let sibling_request = watch_build_request(sibling_markers.path());
++        let sibling_service = std::sync::Arc::clone(&observing);
++        let sibling = tokio::spawn(async move { sibling_service.do_build(sibling_request).await });
++        tokio::time::sleep(std::time::Duration::from_millis(5200)).await;
++        assert!(!markers.path().join("started").exists(), "payload ran without owned PID1");
++        assert!(!markers.path().join("late").exists(), "postspawn discovery failure lost the start gate");
++        assert!(!sibling_markers.path().join("started").exists(), "sibling started while PID1 ownership was unknown");
++        cancel_tx.send(true).unwrap();
++        assert_eq!(observing.concurrent_builds.available_permits(), 0, "unobserved PID1 teardown released admission");
++        assert!(std::fs::read_dir(root.path()).unwrap().next().is_some(), "unobserved teardown removed the workspace");
++        let error = tokio::time::timeout(std::time::Duration::from_secs(5), build).await.unwrap().unwrap().unwrap_err();
++        assert_eq!(error.kind(), ErrorKind::Interrupted, "delayed discovery released a retryable failure: {error}");
++        let sibling_result = tokio::time::timeout(std::time::Duration::from_secs(5), sibling).await.unwrap().unwrap().unwrap();
++        let Node::File { digest, .. } = &sibling_result.outputs[0].node else {
++            panic!("sibling did not publish completed output");
++        };
++        let mut output = Vec::new();
++        blobs.open_read(digest).await.unwrap().unwrap().read_to_end(&mut output).await.unwrap();
++        assert_eq!(output, b"done\n", "sibling output was admitted before teardown");
++        assert_eq!(observing.concurrent_builds.available_permits(), 1, "observed teardown held admission");
++        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
++        assert!(sibling_markers.path().join("started").exists(), "sibling never started after observed teardown");
++        assert!(!markers.path().join("late").exists(), "cancelled gated builder ran later");
++    }
++
++    #[tokio::test]
++    async fn dropping_cancellable_build_future_reaps_escaped_child() {
++        assert!(Path::new(&sandbox_shell()).is_file(), "real BuildService needs a static shell");
++        let root = tempfile::tempdir().unwrap();
++        let markers = tempfile::tempdir().unwrap();
++        let service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
++        let (_keep_sender, cancel_rx) = watch::channel(false);
++        let request = watch_build_request(markers.path());
++        let build = tokio::spawn(async move { service.do_build_cancellable(request, cancel_rx).await });
++        await_watch_start(markers.path()).await;
++        build.abort();
++        assert!(build.await.unwrap_err().is_cancelled());
++        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
++        assert!(!markers.path().join("late").exists(), "dropped cancellable future allowed escaped builder output");
++    }
++
++    #[tokio::test]
++    async fn successful_watch_build_ingests_exact_output_bytes() {
++        assert!(Path::new(&sandbox_shell()).is_file(), "real BuildService needs a static shell");
++        let root = tempfile::tempdir().unwrap();
++        let markers = tempfile::tempdir().unwrap();
++        let blobs = MemoryBlobService::default();
++        let service = BubblewrapBuildService::new(root.path().to_path_buf(), blobs.clone(), tmp_ds());
++        let (_keep_sender, cancel_rx) = watch::channel(false);
++        let result = service.do_build_cancellable(watch_build_request(markers.path()), cancel_rx).await.unwrap();
++        let Node::File { digest, .. } = &result.outputs[0].node else {
++            panic!("watch build did not publish a file");
++        };
++        let mut output = Vec::new();
++        blobs.open_read(digest).await.unwrap().unwrap().read_to_end(&mut output).await.unwrap();
++        assert_eq!(output, b"done\n");
++        assert_eq!(std::fs::read(markers.path().join("late")).unwrap(), b"late\n");
++    }
++
++    #[tokio::test]
++    async fn closing_cancellation_sender_reaps_escaped_child() {
++        assert!(Path::new(&sandbox_shell()).is_file(), "real BuildService needs a static shell");
++        let root = tempfile::tempdir().unwrap();
++        let markers = tempfile::tempdir().unwrap();
++        let service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
++        let (sender, cancel_rx) = watch::channel(false);
++        let request = watch_build_request(markers.path());
++        let build = tokio::spawn(async move { service.do_build_cancellable(request, cancel_rx).await });
++        await_watch_start(markers.path()).await;
++        drop(sender);
++        let error = tokio::time::timeout(std::time::Duration::from_secs(5), build).await.unwrap().unwrap().unwrap_err();
++        assert_eq!(error.kind(), ErrorKind::Interrupted, "lost cancellation owner permitted output: {error}");
++        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
++        assert!(!markers.path().join("late").exists(), "lost cancellation owner allowed escaped builder output");
++    }
++
++    #[tokio::test]
++    async fn unchanged_buildservice_path_still_ingests_completed_sandbox_output() {
++        assert!(Path::new(&sandbox_shell()).is_file(), "real BuildService needs a static shell");
++        let root = tempfile::tempdir().unwrap();
++        let markers = tempfile::tempdir().unwrap();
++        let blobs = MemoryBlobService::default();
++        let service = BubblewrapBuildService::new(root.path().to_path_buf(), blobs.clone(), tmp_ds());
++        let result = service.do_build(watch_build_request(markers.path())).await.unwrap();
++        let Node::File { digest, .. } = &result.outputs[0].node else {
++            panic!("real completed sandbox did not publish a file");
++        };
++        let mut output = Vec::new();
++        blobs.open_read(digest).await.unwrap().unwrap().read_to_end(&mut output).await.unwrap();
++        assert_eq!(output, b"done\n");
++        assert_eq!(std::fs::read(markers.path().join("late")).unwrap(), b"late\n");
++    }
+ }
+diff --git a/vendor/snix-build/src/buildservice/mod.rs b/vendor/snix-build/src/buildservice/mod.rs
+index 35f97c3f7..6f92b5026 100644
+--- a/vendor/snix-build/src/buildservice/mod.rs
++++ b/vendor/snix-build/src/buildservice/mod.rs
+@@ -1,4 +1,5 @@
+ use async_trait::async_trait;
++use tokio::sync::watch;
+ 
+ pub mod build_request;
+ pub use crate::buildservice::build_request::*;
+@@ -14,6 +15,8 @@ mod bwrap;
+ 
+ #[cfg(target_os = "linux")]
+ pub use bwrap::BubblewrapBuildService;
++#[cfg(target_os = "linux")]
++pub use crate::bwrap::watch_cancel::UnobservedWatchSandbox;
+ pub use dummy::DummyBuildService;
+ pub use from_addr::from_addr;
+ 
+@@ -21,4 +24,17 @@ pub use from_addr::from_addr;
+ pub trait BuildService: Send + Sync {
+     /// TODO: document
+     async fn do_build(&self, request: BuildRequest) -> std::io::Result<BuildResult>;
++
++    /// Watch-only local cancellation, never an implicit abort of `do_build`.
++    /// Unsupported services fail closed instead of pretending process teardown.
++    async fn do_build_cancellable(
++        &self,
++        _request: BuildRequest,
++        _cancellation: watch::Receiver<bool>,
++    ) -> std::io::Result<BuildResult> {
++        Err(std::io::Error::new(
++            std::io::ErrorKind::Unsupported,
++            "build service cannot prove watch sandbox teardown",
++        ))
++    }
+ }
+diff --git a/vendor/snix-build/src/bwrap/mod.rs b/vendor/snix-build/src/bwrap/mod.rs
+index dff424c69..3c0a1d4e6 100644
+--- a/vendor/snix-build/src/bwrap/mod.rs
++++ b/vendor/snix-build/src/bwrap/mod.rs
+@@ -8,9 +8,12 @@ use std::process::Output;
+ use std::process::Stdio;
+ 
+ use tokio::process::Command;
++use tokio::sync::watch;
+ 
+ use crate::sandbox::InputsProvider;
+ use crate::sandbox::SandboxSpec;
++#[cfg(target_os = "linux")]
++pub(crate) mod watch_cancel;
+ 
+ const BWRAP_PROGRAM: &str = "bwrap";
+ const BWRAP_PATH_ENV: &str = "SNIX_BUILD_BWRAP";
+@@ -194,6 +197,8 @@ pub struct Bwrap {
+     host_workdir: PathBuf,
+     args: Vec<OsString>,
+     inputs_provider: InputsProvider,
++    #[cfg(test)]
++    watch_fault: Option<watch_cancel::WatchFault>,
+ }
+ 
+ /// The result of running the sandbox.
+@@ -297,19 +302,73 @@ fn append_prevalidated_mount_args<'a>(
+     Ok(())
+ }
+ 
++
+ impl Bwrap {
+-    // TODO(#132): support streaming std{err,out}
+-    /// Run the sandbox and return the result.
+-    pub async fn run(mut self) -> std::io::Result<SandboxOutcome> {
++    #[cfg(test)]
++    pub(crate) fn with_test_watch_fault(mut self, fault: Option<watch_cancel::WatchFault>) -> Self {
++        self.watch_fault = fault;
++        self
++    }
++
++    pub async fn run(self) -> std::io::Result<SandboxOutcome> {
++        self.run_inner(None, None).await
++    }
++
++    /// Run a watch-owned sandbox until its dedicated supervisor confirms
++    /// completion or pidfd-backed cancellation. Dropping this future requests
++    /// teardown; it cannot drop the owned PID1 gate or child process.
++    pub(crate) async fn run_cancellable(
++        self,
++        cancellation: watch::Receiver<bool>,
++        lease: watch_cancel::WatchLease,
++    ) -> std::io::Result<SandboxOutcome> {
++        self.run_inner(Some(cancellation), Some(lease)).await
++    }
++
++    async fn run_inner(
++        mut self,
++        cancellation: Option<watch::Receiver<bool>>,
++        lease: Option<watch_cancel::WatchLease>,
++    ) -> std::io::Result<SandboxOutcome> {
++        if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err()) {
++            return Err(std::io::Error::new(ErrorKind::Interrupted, "watch build cancelled before sandbox start"));
++        }
++        #[cfg(test)]
++        if matches!(self.watch_fault, Some(watch_cancel::WatchFault::PidfdUnavailable)) && cancellation.is_some() {
++            return Err(std::io::Error::new(ErrorKind::Unsupported, "injected preflight pidfd unavailability"));
++        }
++        if cancellation.is_some() {
++            watch_cancel::require_pidfd_support()?;
++        }
+         let _guard = self.inputs_provider.provide_inputs(self.host_workdir.join("host_inputs_dir"))?;
+ 
+         let program = bwrap_program();
++        let gate = cancellation.as_ref().map(|_| watch_cancel::WatchStartGate::new()).transpose()?;
+         let mut command = Command::new(&program);
++        if let Some(gate) = &gate {
++            gate.configure(&mut command);
++        }
++        #[cfg(test)]
++        if matches!(self.watch_fault, Some(watch_cancel::WatchFault::ExitBeforePid1)) {
++            command.arg("--invalid-bwrap-watch-early-exit");
++        }
+         command.args(self.args);
+-        // Make sure we've closed stdin otherwise builds can hang forever blocked on std io.
+         command.stdin(Stdio::null());
+         set_sandbox_umask(&mut command);
+-        let output = command.output().await.map_err(|error| annotate_bwrap_spawn_error(&program, error))?;
++        let output = match (cancellation, gate, lease) {
++            (None, None, None) => command.output().await.map_err(|error| annotate_bwrap_spawn_error(&program, error))?,
++            (Some(receiver), Some(gate), Some(lease)) => {
++                #[cfg(test)]
++                {
++                    watch_cancel::run_child(command, &program, receiver, gate, lease, self.watch_fault).await?
++                }
++                #[cfg(not(test))]
++                {
++                    watch_cancel::run_child(command, &program, receiver, gate, lease).await?
++                }
++            }
++            _ => unreachable!("watch gate and cancellation are constructed together"),
++        };
+ 
+         Ok(SandboxOutcome {
+             output,
+@@ -441,6 +500,8 @@ impl Bwrap {
+             host_workdir: spec.host_workdir().into(),
+             args,
+             inputs_provider: spec.into(),
++            #[cfg(test)]
++            watch_fault: None,
+         })
+     }
+ }
+diff --git a/vendor/snix-build/src/bwrap/watch_cancel.rs b/vendor/snix-build/src/bwrap/watch_cancel.rs
+new file mode 100644
+index 000000000..69d086a5d
+--- /dev/null
++++ b/vendor/snix-build/src/bwrap/watch_cancel.rs
+@@ -0,0 +1,703 @@
++//! Proposed Mantle-local watch cancellation hook for an already-owned sandbox.
++//!
++//! Opening a pidfd for the *inner namespace PID1*, not the outer bwrap PID,
++//! binds the process identity before requesting teardown. A discovery deadline
++//! is diagnostic; unresolved ownership remains gated or quarantined.
++
++use std::ffi::OsString;
++use std::fs;
++use std::io;
++use std::io::ErrorKind;
++use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
++use std::os::unix::fs::PermissionsExt;
++use std::path::Path;
++use std::process::Stdio;
++use std::sync::{Arc, Mutex};
++use std::time::{Duration, Instant};
++
++use nix::libc;
++use tokio::process::{Child, Command};
++use tokio::sync::{oneshot, watch};
++use tokio::time::{sleep, Instant as TokioInstant};
++
++const PID1_DISCOVERY_REPORT_DEADLINE: Duration = Duration::from_secs(5);
++const PID1_DISCOVERY_POLL: Duration = Duration::from_millis(10);
++const TEARDOWN_WAIT: Duration = Duration::from_secs(5);
++
++#[cfg(test)]
++#[derive(Clone, Copy)]
++pub(crate) enum WatchFault {
++    PidfdUnavailable,
++    DelayPid1Discovery,
++    PanicAfterPid1,
++    PanicAfterAbort,
++    ExitBeforePid1,
++}
++
++/// The last watch owner restores sandbox-created 0000 directories before
++/// TempDir cleanup. Do not follow symlinks out of this temporary workspace.
++#[derive(Debug)]
++pub(crate) struct WatchWorkspace {
++    dir: Option<tempfile::TempDir>,
++}
++
++impl WatchWorkspace {
++    pub(crate) fn new(dir: tempfile::TempDir) -> Self {
++        Self { dir: Some(dir) }
++    }
++
++    pub(crate) fn path(&self) -> &Path {
++        self.dir.as_ref().expect("watch workspace not retained yet").path()
++    }
++
++    pub(crate) fn into_tempdir(mut self) -> tempfile::TempDir {
++        self.dir.take().expect("watch workspace not retained twice")
++    }
++}
++
++impl Drop for WatchWorkspace {
++    fn drop(&mut self) {
++        if let Some(dir) = &self.dir {
++            if let Err(error) = restore_directory_access(dir.path()) {
++                tracing::warn!(?error, sandbox_path = %dir.path().display(), "watch sandbox cleanup access not restored");
++            }
++        }
++    }
++}
++
++fn restore_directory_access(path: &Path) -> io::Result<()> {
++    let metadata = fs::symlink_metadata(path)?;
++    if !metadata.file_type().is_dir() {
++        return Ok(());
++    }
++    let mut permissions = metadata.permissions();
++    let mode = permissions.mode();
++    if mode & 0o700 != 0o700 {
++        permissions.set_mode(mode | 0o700);
++        fs::set_permissions(path, permissions)?;
++    }
++    for entry in fs::read_dir(path)? {
++        let entry = entry?;
++        if entry.file_type()?.is_dir() {
++            restore_directory_access(&entry.path())?;
++        }
++    }
++    Ok(())
++}
++
++/// Admission and workspace cleanup cannot outlive this spawned sandbox.
++/// The BuildService caller may be aborted while teardown is in progress.
++pub(crate) struct WatchLease {
++    _permit: tokio::sync::OwnedSemaphorePermit,
++    _workspace: Arc<WatchWorkspace>,
++}
++
++impl WatchLease {
++    pub(crate) fn new(permit: tokio::sync::OwnedSemaphorePermit, workspace: Arc<WatchWorkspace>) -> Self {
++        Self { _permit: permit, _workspace: workspace }
++    }
++}
++
++/// An outer bwrap process identity pinned *before* inspecting `/proc` children.
++pub(crate) struct OwnedOuterBwrap {
++    pid: u32,
++    pidfd: OwnedFd,
++}
++
++/// Reject a watch build *before spawning* if the kernel cannot create pidfds.
++/// A successful self-pidfd does not grant cancellation authority over other
++/// processes; it only establishes this kernel capability for the later owned
++/// bwrap/namespace PID1 descriptors.
++pub(crate) fn require_pidfd_support() -> io::Result<()> {
++    // SAFETY: getpid supplies this process identity; pidfd_open returns a new
++    // owned descriptor on success, closed before any sandbox is started.
++    let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, std::process::id(), 0) };
++    if raw < 0 {
++        return Err(io::Error::last_os_error());
++    }
++    // SAFETY: successful pidfd_open returned a unique owned descriptor.
++    drop(unsafe { OwnedFd::from_raw_fd(raw as i32) });
++    Ok(())
++}
++
++impl OwnedOuterBwrap {
++    pub(crate) fn open_for_spawned_child(pid: u32) -> io::Result<Self> {
++        // SAFETY: Tokio retains its Child handle and does not reap it before
++        // this call. A zombie cannot have its numeric PID reused meanwhile.
++        let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
++        if raw < 0 {
++            return Err(io::Error::last_os_error());
++        }
++        // SAFETY: pidfd_open returned an independently owned descriptor.
++        Ok(Self { pid, pidfd: unsafe { OwnedFd::from_raw_fd(raw as i32) } })
++    }
++
++    fn is_exited(&self) -> io::Result<bool> {
++        let mut watched = libc::pollfd { fd: self.pidfd.as_raw_fd(), events: libc::POLLIN, revents: 0 };
++        // SAFETY: watched is one valid pollfd and self owns its fd.
++        let status = unsafe { libc::poll(&mut watched, 1, 0) };
++        if status < 0 {
++            return Err(io::Error::last_os_error());
++        }
++        if status > 0 && watched.revents & libc::POLLERR != 0 {
++            return Err(io::Error::other("outer bwrap pidfd poll failed"));
++        }
++        Ok(status > 0 && watched.revents & libc::POLLIN != 0)
++    }
++}
++
++pub(crate) struct OwnedPidNamespaceLeader {
++    pidfd: OwnedFd,
++}
++
++impl OwnedPidNamespaceLeader {
++    /// Discover only the namespace PID1 owned by a *pinned, live* outer
++    /// bwrap. A missing child is retryable while that outer process is alive.
++    pub(crate) fn open_from_outer(outer: &OwnedOuterBwrap) -> io::Result<Self> {
++        if outer.is_exited()? {
++            return Err(io::Error::new(ErrorKind::WouldBlock, "outer bwrap exited before PID1 ownership"));
++        }
++        let outer_pid = outer.pid;
++        let children = fs::read_to_string(format!("/proc/{outer_pid}/task/{outer_pid}/children"))?;
++        for child in children.split_whitespace().take(32) {
++            let child_pid = child.parse::<u32>().map_err(|_| io::Error::other("invalid bwrap child pid"))?;
++            if !owned_namespace_leader(outer_pid, child_pid)? {
++                continue;
++            }
++            // SAFETY: pidfd_open is a Linux syscall returning a new owned file
++            // descriptor on success. No process identity is recovered from a
++            // stale numeric PID after this point.
++            let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, child_pid, 0) };
++            if raw < 0 {
++                return Err(io::Error::last_os_error());
++            }
++            // SAFETY: a successful pidfd_open returns a unique owned fd.
++            let pidfd = unsafe { OwnedFd::from_raw_fd(raw as i32) };
++            // Close an fd opened during parentage/PID namespace turnover rather
++            // than misidentifying an unrelated process.
++            if !outer.is_exited()? && owned_namespace_leader(outer_pid, child_pid)? {
++                return Ok(Self { pidfd });
++            }
++            return Err(io::Error::new(ErrorKind::WouldBlock, "namespace leader changed during ownership check"));
++        }
++        Err(io::Error::new(ErrorKind::WouldBlock, "outer bwrap has no observed namespace PID1"))
++    }
++
++    /// SIGKILL the owned PID namespace leader and observe its actual exit.
++    /// Linux kills all members of that PID namespace when its init exits,
++    /// including children that escaped the original process group via setsid.
++    pub(crate) fn terminate_and_wait(&self, deadline: Duration) -> io::Result<()> {
++        // SAFETY: pidfd_send_signal targets this previously opened owned fd,
++        // not a reused numeric PID. A zero siginfo pointer is supported.
++        let sent = unsafe {
++            libc::syscall(libc::SYS_pidfd_send_signal, self.pidfd.as_raw_fd(), libc::SIGKILL, 0, 0)
++        };
++        if sent < 0 && io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH) {
++            return Err(io::Error::last_os_error());
++        }
++        let until = Instant::now() + deadline;
++        loop {
++            let mut watched = libc::pollfd { fd: self.pidfd.as_raw_fd(), events: libc::POLLIN, revents: 0 };
++            let remaining = until.saturating_duration_since(Instant::now());
++            if remaining.is_zero() {
++                return Err(io::Error::new(ErrorKind::TimedOut, "sandbox PID1 teardown unobserved"));
++            }
++            let timeout = i32::try_from(remaining.as_millis()).unwrap_or(i32::MAX).max(1);
++            // SAFETY: watched points to one live stack pollfd and the pidfd
++            // remains owned by self for the entire call.
++            let result = unsafe { libc::poll(&mut watched, 1, timeout) };
++            if result > 0 && watched.revents & libc::POLLIN != 0 {
++                return Ok(());
++            }
++            if result < 0 {
++                let error = io::Error::last_os_error();
++                if error.kind() != ErrorKind::Interrupted {
++                    return Err(error);
++                }
++            } else if result > 0 && watched.revents & libc::POLLERR != 0 {
++                return Err(io::Error::other("pidfd poll failed before namespace teardown"));
++            }
++        }
++    }
++}
++
++fn owned_namespace_leader(outer_pid: u32, child_pid: u32) -> io::Result<bool> {
++    let status = fs::read_to_string(format!("/proc/{child_pid}/status"))?;
++    let parent = status.lines().find_map(|line| line.strip_prefix("PPid:")).and_then(|text| text.trim().parse::<u32>().ok());
++    let innermost_pid = status
++        .lines()
++        .find_map(|line| line.strip_prefix("NSpid:"))
++        .and_then(|text| text.split_whitespace().next_back())
++        .and_then(|text| text.parse::<u32>().ok());
++    Ok(parent == Some(outer_pid) && innermost_pid == Some(1))
++}
++
++/// The builder cannot exec while this owned write end remains unreleased.
++/// Bubblewrap `--block-fd` already forked its namespace PID1 at this point;
++/// the control pipe's EOF also releases the builder, so never drop this gate
++/// until PID1 is bound or observed stopped.
++pub(crate) struct WatchStartGate {
++    reader: Option<OwnedFd>,
++    writer: OwnedFd,
++}
++
++impl WatchStartGate {
++    pub(crate) fn new() -> io::Result<Self> {
++        let mut fds = [-1_i32; 2];
++        // SAFETY: pipe2 fills exactly two caller-owned fds or fails without
++        // transferring ownership. Both endpoints start close-on-exec.
++        if unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) } < 0 {
++            return Err(io::Error::last_os_error());
++        }
++        // SAFETY: a successful pipe2 returned two independent owned fds.
++        Ok(Self {
++            reader: Some(unsafe { OwnedFd::from_raw_fd(fds[0]) }),
++            writer: unsafe { OwnedFd::from_raw_fd(fds[1]) },
++        })
++    }
++
++    pub(crate) fn configure(&self, command: &mut Command) {
++        let fd = self.reader.as_ref().expect("gate reader is configured before spawn").as_raw_fd();
++        command.arg("--block-fd").arg(fd.to_string());
++        // SAFETY: pre_exec runs in the forked child immediately before exec.
++        // fcntl is async-signal-safe and touches only this already-open fd.
++        unsafe {
++            command.pre_exec(move || {
++                let flags = libc::fcntl(fd, libc::F_GETFD);
++                if flags < 0 || libc::fcntl(fd, libc::F_SETFD, flags & !libc::FD_CLOEXEC) < 0 {
++                    return Err(io::Error::last_os_error());
++                }
++                Ok(())
++            });
++        }
++    }
++
++    /// The parent's duplicate otherwise makes reader-exit detection impossible.
++    fn close_parent_reader(&mut self) {
++        self.reader.take();
++    }
++
++    /// No reader can receive this writer's eventual byte or EOF.
++    fn no_readers(&self) -> io::Result<bool> {
++        writer_no_readers(&self.writer)
++    }
++
++    fn release(&self) -> io::Result<()> {
++        let byte = [1_u8];
++        // SAFETY: writer remains owned while this one-byte write executes.
++        // Retain the writer on failure: closing it produces EOF, which also
++        // releases bubblewrap's blocked payload.
++        let written = unsafe { libc::write(self.writer.as_raw_fd(), byte.as_ptr().cast(), byte.len()) };
++        if written == 1 {
++            Ok(())
++        } else if written < 0 {
++            Err(io::Error::last_os_error())
++        } else {
++            Err(io::Error::other("bubblewrap watch start gate accepted no byte"))
++        }
++    }
++}
++
++fn writer_no_readers(writer: &OwnedFd) -> io::Result<bool> {
++    let mut watched = libc::pollfd { fd: writer.as_raw_fd(), events: libc::POLLOUT, revents: 0 };
++    // SAFETY: writer is owned for this entire poll.
++    let status = unsafe { libc::poll(&mut watched, 1, 0) };
++    if status < 0 {
++        return Err(io::Error::last_os_error());
++    }
++    Ok(status > 0 && watched.revents & libc::POLLERR != 0)
++}
++
++struct AbortOnDrop(Option<oneshot::Sender<()>>);
++
++impl Drop for AbortOnDrop {
++    fn drop(&mut self) {
++        if let Some(sender) = self.0.take() {
++            let _ = sender.send(());
++        }
++    }
++}
++
++#[derive(Default)]
++struct SupervisorIdentities {
++    outer: Option<Arc<OwnedOuterBwrap>>,
++    pid1: Option<Arc<OwnedPidNamespaceLeader>>,
++}
++
++/// The supervisor, not the awaiting BuildService future, owns the child and
++/// startup gate. Dropping the future requests cancellation without closing
++/// the gate or losing the PID1/outer reaping obligation.
++pub(crate) async fn run_child(
++    mut command: Command,
++    program: &OsString,
++    cancellation: watch::Receiver<bool>,
++    mut gate: WatchStartGate,
++    lease: WatchLease,
++    #[cfg(test)] fault: Option<WatchFault>,
++) -> io::Result<std::process::Output> {
++    command.stdout(Stdio::piped()).stderr(Stdio::piped());
++    // Make the emergency writer while no child exists; a failed dup must not
++    // strand a spawned sandbox. A supervisor panic cannot create gate EOF.
++    let panic_writer = gate.writer.try_clone()?;
++    let child = command.spawn().map_err(|error| super::annotate_bwrap_spawn_error(program, error))?;
++    gate.close_parent_reader();
++    let lease = Arc::new(lease);
++    let identities = Arc::new(Mutex::new(SupervisorIdentities::default()));
++    let (abort_tx, abort_rx) = oneshot::channel();
++    let worker = tokio::spawn(supervise_child(
++        child, gate, cancellation, abort_rx, Arc::clone(&lease), Arc::clone(&identities), #[cfg(test)] fault,
++    ));
++    // This watchdog, not the abortable caller, owns the emergency writer and
++    // admission lease until even a panicking sandbox supervisor is resolved.
++    let watchdog = tokio::spawn(async move {
++        match worker.await {
++            Ok(result) => result,
++            Err(error) => {
++                let (pid1, outer) = {
++                    let owned = identities.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++                    (owned.pid1.clone(), owned.outer.clone())
++                };
++                if let (Some(pid1), Some(outer)) = (pid1, outer.as_ref()) {
++                    terminate_until_observed(&pid1).await;
++                    wait_outer_exit(outer).await;
++                    return Err(io::Error::other(format!("watch supervisor failed after owned teardown: {error}")));
++                }
++                if let Some(outer) = outer.as_ref() {
++                    let until = TokioInstant::now() + PID1_DISCOVERY_REPORT_DEADLINE;
++                    loop {
++                        if let Ok(pid1) = OwnedPidNamespaceLeader::open_from_outer(outer) {
++                            terminate_until_observed(&Arc::new(pid1)).await;
++                            wait_outer_exit(outer).await;
++                            return Err(io::Error::other(format!("watch supervisor failed; recovered PID1 teardown: {error}")));
++                        }
++                        if outer.is_exited().unwrap_or(false) {
++                            if writer_no_readers(&panic_writer).unwrap_or(false) {
++                                return Err(io::Error::other(format!("watch supervisor failed after terminal bwrap exit: {error}")));
++                            }
++                            break;
++                        }
++                        if TokioInstant::now() >= until {
++                            break;
++                        }
++                        sleep(PID1_DISCOVERY_POLL).await;
++                    }
++                } else if writer_no_readers(&panic_writer).unwrap_or(false) {
++                    return Err(io::Error::other(format!("watch supervisor failed without an inherited gate reader: {error}")));
++                }
++                tokio::spawn(async move {
++                    loop {
++                        let outer_exited = outer.as_ref().is_none_or(|outer| outer.is_exited().unwrap_or(false));
++                        if outer_exited && writer_no_readers(&panic_writer).unwrap_or(false) {
++                            break;
++                        }
++                        sleep(PID1_DISCOVERY_POLL).await;
++                    }
++                    drop(lease);
++                });
++                Err(io::Error::new(
++                    ErrorKind::Other,
++                    UnobservedWatchSandbox("supervisor failed before owned PID1 teardown"),
++                ))
++            }
++        }
++    });
++    let mut abort_guard = AbortOnDrop(Some(abort_tx));
++    let result = watchdog.await.map_err(|error| io::Error::new(
++        ErrorKind::Other,
++        UnobservedWatchSandbox(if error.is_panic() { "watchdog panicked" } else { "watchdog stopped" }),
++    ))?;
++    abort_guard.0.take();
++    result
++}
++
++async fn terminate_until_observed(pid1: &Arc<OwnedPidNamespaceLeader>) {
++    loop {
++        let held = Arc::clone(pid1);
++        match tokio::task::spawn_blocking(move || held.terminate_and_wait(TEARDOWN_WAIT)).await {
++            Ok(Ok(())) => return,
++            Ok(Err(error)) => tracing::warn!(?error, "watch PID1 teardown still unobserved; reservation remains held"),
++            Err(error) => tracing::warn!(?error, "watch PID1 teardown task failed; reservation remains held"),
++        }
++        sleep(PID1_DISCOVERY_POLL).await;
++    }
++}
++
++async fn wait_outer_exit(outer: &OwnedOuterBwrap) {
++    loop {
++        match outer.is_exited() {
++            Ok(true) => return,
++            Ok(false) => {}
++            Err(error) => tracing::warn!(?error, "watch outer bwrap exit unobserved; reservation remains held"),
++        }
++        sleep(PID1_DISCOVERY_POLL).await;
++    }
++}
++
++/// An unbound sandbox cannot be declared stopped: its inherited gate reader
++/// might still belong to an orphan. Callers must not retry while quarantine
++/// retains admission, workspace, and the gate writer.
++#[derive(Debug)]
++pub struct UnobservedWatchSandbox(&'static str);
++
++impl std::fmt::Display for UnobservedWatchSandbox {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        write!(f, "watch sandbox quarantined; do not retry: {}", self.0)
++    }
++}
++
++impl std::error::Error for UnobservedWatchSandbox {}
++
++async fn classify_unbound_child(
++    mut child: Child,
++    gate: WatchStartGate,
++    lease: Arc<WatchLease>,
++    outer: Option<Arc<OwnedOuterBwrap>>,
++    reason: &'static str,
++) -> io::Result<std::process::Output> {
++    let readers_closed = gate.no_readers().unwrap_or(false);
++    let outer_exited = if let Some(outer) = &outer {
++        outer.is_exited().unwrap_or(false)
++    } else {
++        child.try_wait().ok().flatten().is_some()
++    };
++    if readers_closed && outer_exited {
++        let output = child.wait_with_output().await?;
++        return Err(io::Error::other(format!(
++            "bubblewrap exited before watch PID1 ownership ({reason}): status={} stderr={}",
++            output.status,
++            String::from_utf8_lossy(&output.stderr),
++        )));
++    }
++
++    tokio::spawn(async move {
++        // Closing the writer while an orphan still owns a reader would start
++        // its blocked payload. Keep the permit and workspace quarantined until
++        // both the outer child exits and every inherited reader is gone.
++        loop {
++            let outer_exited = if let Some(outer) = &outer {
++                outer.is_exited().unwrap_or(false)
++            } else {
++                child.try_wait().ok().flatten().is_some()
++            };
++            if outer_exited && gate.no_readers().unwrap_or(false) {
++                let _ = child.wait_with_output().await;
++                break;
++            }
++            sleep(PID1_DISCOVERY_POLL).await;
++        }
++        drop(lease);
++    });
++    Err(io::Error::new(ErrorKind::Other, UnobservedWatchSandbox(reason)))
++}
++
++async fn supervise_child(
++    child: Child,
++    gate: WatchStartGate,
++    mut cancellation: watch::Receiver<bool>,
++    mut abort: oneshot::Receiver<()>,
++    lease: Arc<WatchLease>,
++    identities: Arc<Mutex<SupervisorIdentities>>,
++    #[cfg(test)] fault: Option<WatchFault>,
++) -> io::Result<std::process::Output> {
++    let Some(outer_pid) = child.id() else {
++        return classify_unbound_child(child, gate, lease, None, "spawned child has no PID").await;
++    };
++    let outer_deadline = TokioInstant::now() + PID1_DISCOVERY_REPORT_DEADLINE;
++    let outer = loop {
++        match OwnedOuterBwrap::open_for_spawned_child(outer_pid) {
++            Ok(owner) => {
++                let owner = Arc::new(owner);
++                identities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).outer = Some(Arc::clone(&owner));
++                break owner;
++            }
++            Err(error) => {
++                if TokioInstant::now() >= outer_deadline {
++                    tracing::error!(?error, "watch outer pidfd unavailable after spawn; classifying gated child");
++                    return classify_unbound_child(child, gate, lease, None, "outer pidfd unavailable").await;
++                }
++                sleep(PID1_DISCOVERY_POLL).await;
++            }
++        }
++    };
++    let mut reported_discovery_failure = false;
++    #[cfg(test)]
++    let delayed_until = matches!(fault, Some(WatchFault::DelayPid1Discovery))
++        .then(|| TokioInstant::now() + Duration::from_secs(6));
++    let report_after = TokioInstant::now() + PID1_DISCOVERY_REPORT_DEADLINE;
++    let pid1 = loop {
++        #[cfg(test)]
++        if delayed_until.is_some_and(|deadline| TokioInstant::now() < deadline) {
++            if !reported_discovery_failure && TokioInstant::now() >= report_after {
++                tracing::error!("watch namespace PID1 discovery deadline exceeded; start gate and reservation remain held");
++                reported_discovery_failure = true;
++            }
++            sleep(PID1_DISCOVERY_POLL).await;
++            continue;
++        }
++        match OwnedPidNamespaceLeader::open_from_outer(&outer) {
++            Ok(owner) => {
++                let owner = Arc::new(owner);
++                identities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).pid1 = Some(Arc::clone(&owner));
++                break owner;
++            }
++            Err(error) => {
++                if outer.is_exited().unwrap_or(false) {
++                    return classify_unbound_child(child, gate, lease, Some(outer), "outer exited before namespace PID1").await;
++                }
++                if !reported_discovery_failure && TokioInstant::now() >= report_after {
++                    tracing::error!(?error, "watch namespace PID1 unobserved; start gate and reservation remain held");
++                    reported_discovery_failure = true;
++                }
++                sleep(PID1_DISCOVERY_POLL).await;
++            }
++        }
++    };
++    #[cfg(test)]
++    if matches!(fault, Some(WatchFault::PanicAfterPid1)) {
++        panic!("injected supervisor failure after owned PID1 before payload release");
++    }
++    #[cfg(test)]
++    if matches!(fault, Some(WatchFault::PanicAfterAbort)) {
++        fs::write(lease._workspace.path().join("watch-pid1-owned"), b"owned")
++            .expect("fault fixture must publish post-PID1 readiness");
++        let _ = (&mut abort).await;
++        panic!("injected supervisor failure after caller abort before payload release");
++    }
++
++    let wait_future = child.wait_with_output();
++    tokio::pin!(wait_future);
++    if *cancellation.borrow() || cancellation.has_changed().is_err() || abort.try_recv().is_ok() {
++        terminate_until_observed(&pid1).await;
++        match wait_future.await {
++            Ok(_) => {}
++            Err(error) => {
++                wait_outer_exit(&outer).await;
++                return Err(error);
++            }
++        }
++        return Err(io::Error::new(ErrorKind::Interrupted, "watch sandbox stopped before builder start"));
++    }
++    if let Err(error) = gate.release() {
++        terminate_until_observed(&pid1).await;
++        if wait_future.await.is_err() {
++            wait_outer_exit(&outer).await;
++        }
++        return Err(error);
++    }
++    loop {
++        tokio::select! {
++            biased;
++            _ = &mut abort => {
++                terminate_until_observed(&pid1).await;
++                match wait_future.await {
++                    Ok(_) => {}
++                    Err(error) => {
++                        wait_outer_exit(&outer).await;
++                        return Err(error);
++                    }
++                }
++                return Err(io::Error::new(ErrorKind::Interrupted, "dropped watch build stopped by supervisor"));
++            }
++            change = cancellation.changed() => {
++                if change.is_err() || *cancellation.borrow_and_update() {
++                    terminate_until_observed(&pid1).await;
++                    match wait_future.await {
++                        Ok(_) => {}
++                        Err(error) => {
++                            wait_outer_exit(&outer).await;
++                            return Err(error);
++                        }
++                    }
++                    return Err(io::Error::new(ErrorKind::Interrupted, "watch sandbox stopped after cancellation"));
++                }
++            }
++            result = &mut wait_future => {
++                if *cancellation.borrow() || cancellation.has_changed().is_err() || abort.try_recv().is_ok() {
++                    terminate_until_observed(&pid1).await;
++                    if result.is_err() {
++                        wait_outer_exit(&outer).await;
++                    }
++                    return Err(io::Error::new(ErrorKind::Interrupted, "watch sandbox stopped after cancellation"));
++                }
++                match result {
++                    Ok(output) => return Ok(output),
++                    Err(error) => {
++                        terminate_until_observed(&pid1).await;
++                        wait_outer_exit(&outer).await;
++                        return Err(error);
++                    }
++                }
++            }
++        }
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use std::path::Path;
++    use std::process::Stdio;
++    use tokio::process::Child;
++    use tokio::process::Command;
++
++    async fn spawn_escaped_descendant(dir: &Path) -> io::Result<Child> {
++        let marker = dir.join("started");
++        let late = dir.join("late");
++        let shell = format!(
++            "setsid /bin/sh -c 'sleep 2; printf late > {}' & printf started > {}; wait",
++            late.display(), marker.display(),
++        );
++        Command::new(super::super::bwrap_program())
++            .args(["--unshare-user", "--unshare-pid", "--new-session", "--ro-bind", "/", "/", "--bind"])
++            .arg(dir)
++            .arg(dir)
++            .args(["--proc", "/proc", "--", "/bin/sh", "-c"])
++            .arg(shell)
++            .stdin(Stdio::null())
++            .stdout(Stdio::null())
++            .stderr(Stdio::null())
++            .spawn()
++    }
++
++    async fn wait_for_started(dir: &Path) {
++        let until = tokio::time::Instant::now() + Duration::from_secs(5);
++        while !dir.join("started").is_file() {
++            assert!(tokio::time::Instant::now() < until, "bwrap builder never started");
++            tokio::time::sleep(Duration::from_millis(20)).await;
++        }
++    }
++
++    #[test]
++    fn gated_early_exit_requires_last_inherited_reader_to_close() {
++        let mut gate = WatchStartGate::new().unwrap();
++        let inherited_reader = gate.reader.as_ref().unwrap().try_clone().unwrap();
++        gate.close_parent_reader();
++        assert!(!gate.no_readers().unwrap(), "live inherited reader was misclassified as terminal");
++        drop(inherited_reader);
++        assert!(gate.no_readers().unwrap(), "last reader exit did not allow terminal classification");
++    }
++
++    #[tokio::test]
++    async fn killing_outer_bwrap_alone_leaves_escaped_descendant() {
++        let dir = tempfile::tempdir().unwrap();
++        let mut outer = spawn_escaped_descendant(dir.path()).await.unwrap();
++        wait_for_started(dir.path()).await;
++        outer.start_kill().unwrap();
++        outer.wait().await.unwrap();
++        tokio::time::sleep(Duration::from_secs(3)).await;
++        assert_eq!(fs::read(dir.path().join("late")).unwrap(), b"late");
++    }
++
++    #[tokio::test]
++    async fn owned_namespace_pidfd_stops_escaped_descendant_before_release() {
++        let dir = tempfile::tempdir().unwrap();
++        let mut outer = spawn_escaped_descendant(dir.path()).await.unwrap();
++        wait_for_started(dir.path()).await;
++        let outer_owner = OwnedOuterBwrap::open_for_spawned_child(outer.id().unwrap()).unwrap();
++        let owner = OwnedPidNamespaceLeader::open_from_outer(&outer_owner).unwrap();
++        owner.terminate_and_wait(Duration::from_secs(5)).unwrap();
++        outer.wait().await.unwrap();
++        tokio::time::sleep(Duration::from_secs(3)).await;
++        assert!(!dir.path().join("late").exists(), "retracted sandbox published a late effect");
++    }
++}

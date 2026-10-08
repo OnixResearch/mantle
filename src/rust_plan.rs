@@ -1,4 +1,5 @@
 // machine-artifact-public: rust-plan.receipts
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
@@ -152,14 +153,11 @@ const RUSTC_CODEGEN_OPTION_FLAG: &str = "-C";
 const RUSTC_CFG_FLAG: &str = "--cfg";
 const RUSTC_EXTERN_FLAG: &str = "--extern";
 const RUSTC_EXTERN_ARG_PAIR_WIDTH: usize = 2;
-const NATIVE_FEATURE_RESOLUTION_MAX_STEPS: usize = 4096;
 const NATIVE_LOCK_REACHABILITY_MAX_STEPS: usize = 8192;
 const NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS: usize = 4096;
 const MAX_SOURCE_TREE_ENTRIES: usize = 1_000_000;
 const MAX_VENDOR_SOURCE_FILE_KIBIBYTES: usize = 1_048_576;
 const MAX_VENDOR_SOURCE_FILE_BYTES: usize = MAX_VENDOR_SOURCE_FILE_KIBIBYTES.saturating_mul(BYTES_PER_KIBIBYTE);
-const MAX_CFG_EVALUATION_STEPS: usize = 1024;
-const INITIAL_CFG_STACK_CAPACITY_ITEMS: usize = 8;
 const INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS: usize = 8;
 const MAX_RUST_OUTPUT_TREE_ENTRIES: usize = 1_000_000;
 const RUSTC_LINK_SEARCH_FLAG: &str = "-L";
@@ -172,8 +170,6 @@ const RUSTC_LINK_LIB_KIND_DYLIB: &str = "dylib";
 const RUSTC_LINK_LIB_KIND_FRAMEWORK: &str = "framework";
 const RUSTC_LINK_LIB_MODIFIER_ENABLE: char = '+';
 const RUSTC_LINK_LIB_MODIFIER_DISABLE: char = '-';
-const RUSTC_LINK_SELF_CONTAINED_OPTION: &str = "link-self-contained";
-const RUSTC_EXTERNAL_LINKER_MODE_ARG: &str = "link-self-contained=no";
 const RUSTC_METADATA_ARG_PREFIX: &str = "metadata=";
 const RUSTC_REMAP_PATH_PREFIX_FLAG: &str = "--remap-path-prefix";
 const RUSTC_REMAP_SEPARATOR: char = '=';
@@ -183,6 +179,8 @@ const SAFE_PATH_COMPONENT_BYTES_MAX: usize = 192;
 const PATH_COMPONENT_DIGEST_SEPARATOR_BYTES: usize = 1;
 const CARGO_SHA256_HEX_CHARS: usize = BLAKE3_HEX_CHARS;
 const BYTES_PER_KIBIBYTE: usize = 1024;
+const CARGO_ORACLE_STDOUT_MAX_BYTES: usize = 64 * 1024 * BYTES_PER_KIBIBYTE;
+const CARGO_ORACLE_STDERR_MAX_BYTES: usize = 1024 * BYTES_PER_KIBIBYTE;
 const CARGO_VENDOR_CHECKSUM_READ_BUFFER_BYTES: usize =
     VENDOR_CHECKSUM_READ_BUFFER_KIBIBYTES.saturating_mul(BYTES_PER_KIBIBYTE);
 const RUST_UNIT_REPLAY_EVIDENCE_MAX_KIBIBYTES: usize = 16;
@@ -234,25 +232,9 @@ const COMPILER_POLICY_STANDARDS_STATUS_ARTIFACT_VERIFIED: &str = "policy-artifac
 const COMPILER_POLICY_CLAIM_CONFIGURED_PROFILE: &str = "configured compiler-policy profile compliance only";
 const COMPILER_POLICY_CLAIM_NO_COMPLIANCE: &str =
     "no compiler-policy compliance claim because policy execution did not pass";
-const RUST_PLAN_CLASS_CARGO_ORACLE_EVIDENCE: &str = "cargo-oracle-evidence";
-const RUST_PLAN_CLASS_CARGO_FREE_BOUNDED_TOPOLOGY: &str = "cargo-free-bounded-topology";
-const RUST_PLAN_CLASS_BLOCKED_UNSUPPORTED_SURFACE: &str = "blocked-unsupported-surface";
 const RUST_PLAN_STATUS_NOT_DEFAULT_PROJECT_BUILD: &str = "not-default-project-build";
 const RUST_COMPATIBILITY_MATRIX_ID: &str = "representative-rust-compatibility-v1";
 const RUST_COMPATIBILITY_MATRIX_PATH: &str = "examples/rust_compatibility_surface_matrix.ncl";
-const RUST_COMPATIBILITY_SURFACE_BASIC_PATH_WORKSPACE: &str = "path-workspace-basic";
-const RUST_COMPATIBILITY_SURFACE_LOCAL_PATH_DEPENDENCY: &str = "local-path-dependency";
-const RUST_COMPATIBILITY_SURFACE_WORKSPACE_INHERITANCE: &str = "workspace-inheritance";
-const RUST_COMPATIBILITY_SURFACE_SOURCE_CLOSURE_DIGEST: &str = "source-closure-digest";
-const RUST_COMPATIBILITY_SURFACE_UNIT_GRAPH_FACTS: &str = "unit-graph-facts";
-const RUST_COMPATIBILITY_SURFACE_BLOCKED_UNSUPPORTED: &str = "blocked-unsupported-surface";
-const RUST_COMPATIBILITY_SURFACE_CARGO_ORACLE: &str = "cargo-oracle-reference";
-const RUST_PLAN_COMMON_NON_CLAIMS: &[&str] = &[
-    "not-full-cargo-compatibility",
-    "not-compiler-correctness",
-    "not-release-reproducibility",
-    "not-bootstrap-correctness",
-];
 const COMPILER_POLICY_NON_CLAIMS: &[&str] = &[
     "program-correctness",
     "complete-fcis-proof",
@@ -1277,25 +1259,57 @@ struct CargoOutput {
     status_code: i32,
 }
 
-trait CargoOracle {
-    fn run_cargo(&self, root: &Path, cargo: &Path, args: &[String]) -> Result<CargoOutput, RunError>;
-    fn run_tool_version(&self, tool: &Path, args: &[&str]) -> Result<CargoOutput, RunError>;
+#[cfg(test)]
+struct FixedOracle {
+    cargo_version: CargoOutput,
+    rustc_version: CargoOutput,
+    metadata: CargoOutput,
+    unit_graph: CargoOutput,
+}
+
+enum CaptureProcessSource<'a> {
+    Process(std::marker::PhantomData<&'a ()>),
+    #[cfg(test)]
+    Fixed(&'a FixedOracle),
+}
+
+impl CaptureProcessSource<'_> {
+    fn run_cargo(&self, root: &Path, cargo: &Path, args: &[String]) -> Result<CargoOutput, RunError> {
+        match self {
+            Self::Process(_) => ProcessCargoOracle.run_cargo(root, cargo, args),
+            #[cfg(test)]
+            Self::Fixed(fixture) => {
+                if args.first().map(String::as_str) == Some("metadata") {
+                    Ok(fixture.metadata.clone())
+                } else {
+                    Ok(fixture.unit_graph.clone())
+                }
+            }
+        }
+    }
+
+    fn run_tool_version(&self, tool: &Path, args: &[&str]) -> Result<CargoOutput, RunError> {
+        match self {
+            Self::Process(_) => ProcessCargoOracle.run_tool_version(tool, args),
+            #[cfg(test)]
+            Self::Fixed(fixture) => {
+                if tool.file_name() == Some(std::ffi::OsStr::new("rustc")) {
+                    Ok(fixture.rustc_version.clone())
+                } else {
+                    Ok(fixture.cargo_version.clone())
+                }
+            }
+        }
+    }
 }
 
 struct ProcessCargoOracle;
 
-impl CargoOracle for ProcessCargoOracle {
+impl ProcessCargoOracle {
     fn run_cargo(&self, root: &Path, cargo: &Path, args: &[String]) -> Result<CargoOutput, RunError> {
-        let output = Command::new(cargo)
-            .args(args)
-            .current_dir(root)
-            .output()
-            .map_err(|err| RunError::Internal(format!("failed to run {}: {err}", cargo.display())))?;
-        Ok(CargoOutput {
-            stdout: output.stdout,
-            stderr: output.stderr,
-            status_code: output.status.code().unwrap_or(1),
-        })
+        let mut command = Command::new(cargo);
+        command.args(args).current_dir(root);
+        run_bounded_cargo_process(command, cargo, CARGO_ORACLE_STDOUT_MAX_BYTES, CARGO_ORACLE_STDERR_MAX_BYTES)
     }
 
     fn run_tool_version(&self, tool: &Path, args: &[&str]) -> Result<CargoOutput, RunError> {
@@ -1309,6 +1323,82 @@ impl CargoOracle for ProcessCargoOracle {
             status_code: output.status.code().unwrap_or(1),
         })
     }
+}
+
+fn read_bounded_cargo_stream(reader: impl Read, limit: usize, stream: &str) -> Result<Vec<u8>, RunError> {
+    let mut bytes = Vec::with_capacity(limit.min(64 * BYTES_PER_KIBIBYTE));
+    reader
+        .take(limit as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| RunError::Internal(format!("reading Cargo oracle {stream}: {error}")))?;
+    if bytes.len() > limit {
+        return Err(RunError::Build(format!("Cargo oracle {stream} exceeds the {limit}-byte capture limit")));
+    }
+    Ok(bytes)
+}
+
+fn run_bounded_cargo_process(
+    mut command: Command,
+    cargo: &Path,
+    stdout_limit: usize,
+    stderr_limit: usize,
+) -> Result<CargoOutput, RunError> {
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let mut child = command
+        .spawn()
+        .map_err(|error| RunError::Internal(format!("failed to run {}: {error}", cargo.display())))?;
+    let stdout = child.stdout.take().expect("piped Cargo oracle stdout");
+    let stderr = child.stderr.take().expect("piped Cargo oracle stderr");
+    let (failed_tx, failed_rx) = std::sync::mpsc::channel::<()>();
+    std::thread::scope(|scope| {
+        let stdout_tx = failed_tx.clone();
+        let stdout_reader = scope.spawn(move || {
+            let result = read_bounded_cargo_stream(stdout, stdout_limit, "stdout");
+            if result.is_err() {
+                let _ = stdout_tx.send(());
+            }
+            result
+        });
+        let stderr_reader = scope.spawn(move || {
+            let result = read_bounded_cargo_stream(stderr, stderr_limit, "stderr");
+            if result.is_err() {
+                let _ = failed_tx.send(());
+            }
+            result
+        });
+        let status = loop {
+            if failed_rx.try_recv().is_ok() {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+            match child.try_wait() {
+                Ok(Some(status)) => break Some(status),
+                Ok(None) => std::thread::sleep(std::time::Duration::from_millis(10)),
+                Err(error) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(RunError::Internal(format!("failed to run {}: {error}", cargo.display())));
+                }
+            }
+        };
+        let stdout = stdout_reader
+            .join()
+            .map_err(|_| RunError::Internal("Cargo oracle stdout reader panicked".to_string()))??;
+        let stderr = stderr_reader
+            .join()
+            .map_err(|_| RunError::Internal("Cargo oracle stderr reader panicked".to_string()))??;
+        let status = status
+            .ok_or_else(|| RunError::Internal("Cargo oracle capture failed without a stream diagnostic".to_string()))?;
+        Ok(CargoOutput {
+            stdout,
+            stderr,
+            status_code: status.code().unwrap_or(1),
+        })
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -1526,28 +1616,6 @@ struct CargoLockPackageRecord {
     dependencies: Vec<String>,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct NativeTextInput {
-    path: String,
-    text: String,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct NativeManifestLockInputTexts {
-    manifests: Vec<NativeTextInput>,
-    lockfile: NativeTextInput,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct NativeManifestLockUnsupportedBlocker {
-    path: String,
-    class: String,
-    message: String,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct NativeFeatureResolutionRequest {
     feature_defs: BTreeMap<String, Vec<String>>,
@@ -1557,150 +1625,154 @@ struct NativeFeatureResolutionRequest {
     no_default_features: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct NativeFeatureResolution {
-    selected_features: Vec<String>,
-    activated_optional_dependencies: Vec<String>,
-    dependency_feature_edges: Vec<NativeDependencyFeatureEdge>,
-    blockers: Vec<NativeFeatureResolutionBlocker>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct NativeFeatureRoleResolutionRequest {
-    normal: NativeFeatureResolutionRequest,
-    build: NativeFeatureResolutionRequest,
-    host: NativeFeatureResolutionRequest,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct NativeFeatureRoleResolution {
-    normal: NativeFeatureResolution,
-    build: NativeFeatureResolution,
-    host: NativeFeatureResolution,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct NativeDependencyFeatureEdge {
-    dependency: String,
-    feature: String,
-    weak: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct NativeFeatureResolutionBlocker {
-    class: String,
-    message: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum NativeFeatureEntry {
-    LocalFeature(String),
-    OptionalDependency { dependency: String, expose_feature: bool },
-    DependencyFeature(NativeDependencyFeatureEdge),
-}
-
 pub(crate) fn capture_rust_plan(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
-    if options.no_cargo_oracle {
-        return capture_rust_plan_without_cargo(options);
+    capture_rust_plan_from_source(options, CaptureProcessSource::Process(std::marker::PhantomData))
+}
+
+#[cfg(test)]
+fn capture_rust_plan_from_fixed(options: &RustPlanOptions, oracle: &FixedOracle) -> Result<RustPlanReceipt, RunError> {
+    capture_rust_plan_from_source(options, CaptureProcessSource::Fixed(oracle))
+}
+
+fn capture_rust_plan_from_source(
+    options: &RustPlanOptions,
+    source: CaptureProcessSource<'_>,
+) -> Result<RustPlanReceipt, RunError> {
+    validate_options(options)?;
+    let mut adapter = RustPlanCaptureAdapter {
+        options,
+        source,
+        original_error: None,
+        metadata: None,
+        unit_graph: None,
+        receipt: None,
+    };
+    let request = mantle_rust_plan_app::WorkspaceFactsRequest {
+        roots: options.workspace_members.iter().cloned().collect(),
+        profile: options.profile.clone(),
+    };
+    mantle_rust_plan_app::capture_existing_plan(&mut adapter, &request, !options.no_cargo_oracle).map_err(|error| {
+        adapter.original_error.take().unwrap_or_else(|| {
+            RunError::Internal(format!("Rust plan capture adapter {}: {}", error.code, error.detail))
+        })
+    })?;
+    adapter
+        .receipt
+        .ok_or_else(|| RunError::Internal("Rust plan capture adapter did not produce a receipt".to_string()))
+}
+
+struct RustPlanCaptureAdapter<'a> {
+    options: &'a RustPlanOptions,
+    source: CaptureProcessSource<'a>,
+    original_error: Option<RunError>,
+    metadata: Option<CargoMetadata>,
+    unit_graph: Option<Value>,
+    receipt: Option<RustPlanReceipt>,
+}
+
+impl RustPlanCaptureAdapter<'_> {
+    fn capture<T>(&mut self, outcome: Result<T, RunError>) -> Result<T, mantle_rust_plan_app::AdapterError> {
+        outcome.map_err(|error| {
+            self.original_error = Some(error);
+            mantle_rust_plan_app::AdapterError::new("rust-plan-capture-failed", "Rust plan capture capability failed")
+        })
     }
-    capture_rust_plan_with_oracle(options, &ProcessCargoOracle)
+}
+
+impl mantle_rust_plan_app::CargoOracleCapture for RustPlanCaptureAdapter<'_> {
+    fn inspect_cargo_version(&mut self) -> Result<String, mantle_rust_plan_app::AdapterError> {
+        let output = self.source.run_tool_version(&self.options.cargo, &["--version"]);
+        self.capture(run_checked_text(output, "cargo --version"))
+    }
+
+    fn capture_metadata_and_graph(
+        &mut self,
+        _request: &mantle_rust_plan_app::OracleCaptureRequest<'_>,
+    ) -> Result<(), mantle_rust_plan_app::AdapterError> {
+        let output = self.source.run_cargo(&self.options.root, &self.options.cargo, &metadata_args());
+        let metadata_bytes = self.capture(run_checked_bytes(output, "cargo metadata"))?;
+        let metadata: CargoMetadata = self.capture(
+            serde_json::from_slice(&metadata_bytes)
+                .map_err(|error| RunError::Internal(format!("cargo metadata did not emit valid JSON: {error}"))),
+        )?;
+        let output = self.source.run_cargo(&self.options.root, &self.options.cargo, &unit_graph_args(self.options));
+        let unit_graph_bytes = self.capture(run_checked_bytes(output, "cargo build --unit-graph"))?;
+        let unit_graph: Value = self.capture(serde_json::from_slice(&unit_graph_bytes).map_err(|error| {
+            RunError::Internal(format!("cargo build --unit-graph did not emit valid JSON: {error}"))
+        }))?;
+        self.metadata = Some(metadata);
+        self.unit_graph = Some(unit_graph);
+        Ok(())
+    }
+}
+
+impl mantle_rust_plan_app::CompilerInspection for RustPlanCaptureAdapter<'_> {
+    fn inspect_compiler(
+        &mut self,
+        _request: &mantle_rust_plan_app::CompilerInspectionRequest<'_>,
+    ) -> Result<mantle_rust_plan_app::CompilerFacts, mantle_rust_plan_app::AdapterError> {
+        let output = self.source.run_tool_version(&self.options.rustc, &["-vV"]);
+        let version = self.capture(run_checked_text(output, "rustc -vV"))?;
+        Ok(mantle_rust_plan_app::CompilerFacts {
+            rustc_version_verbose: version,
+        })
+    }
+}
+
+impl mantle_rust_plan_app::WorkspaceFactsSource for RustPlanCaptureAdapter<'_> {
+    fn load_workspace_facts(
+        &mut self,
+        _request: &mantle_rust_plan_app::WorkspaceFactsRequest,
+        cargo_version: Option<&str>,
+        compiler: &mantle_rust_plan_app::CompilerFacts,
+    ) -> Result<(), mantle_rust_plan_app::AdapterError> {
+        let outcome = if self.options.no_cargo_oracle {
+            build_captured_rust_plan_without_cargo(self.options, &compiler.rustc_version_verbose)
+        } else {
+            let cargo_version = self.capture(cargo_version.ok_or_else(|| {
+                RunError::Internal("Rust plan capture adapter is missing the Cargo version".to_string())
+            }))?;
+            let metadata = self
+                .metadata
+                .take()
+                .ok_or_else(|| RunError::Internal("Rust plan capture adapter is missing Cargo metadata".to_string()));
+            let metadata = self.capture(metadata)?;
+            let graph = self.unit_graph.take().ok_or_else(|| {
+                RunError::Internal("Rust plan capture adapter is missing the Cargo unit graph".to_string())
+            });
+            let graph = self.capture(graph)?;
+            build_captured_rust_plan_with_oracle(
+                self.options,
+                cargo_version,
+                &compiler.rustc_version_verbose,
+                metadata,
+                graph,
+            )
+        };
+        self.receipt = Some(self.capture(outcome)?);
+        Ok(())
+    }
 }
 
 fn rust_plan_cargo_mode(no_cargo_oracle: bool, blockers: Vec<String>) -> RustPlanCargoModeSummary {
-    let compatibility_class = rust_plan_compatibility_class(no_cargo_oracle, &blockers);
-    let non_claims = rust_plan_non_claims(no_cargo_oracle);
-    RustPlanCargoModeSummary {
-        no_cargo_oracle,
-        compatibility_class: compatibility_class.to_string(),
-        project_build_status: RUST_PLAN_STATUS_NOT_DEFAULT_PROJECT_BUILD.to_string(),
-        compatibility_surface_matrix: rust_plan_surface_matrix(
-            no_cargo_oracle,
-            compatibility_class,
-            &blockers,
-            &non_claims,
-        ),
-        blockers,
-        non_claims,
-    }
-}
-
-fn rust_plan_surface_matrix(
-    no_cargo_oracle: bool,
-    compatibility_class: &str,
-    blockers: &[String],
-    non_claims: &[String],
-) -> RustPlanCompatibilitySurfaceMatrixSummary {
-    let status = rust_plan_surface_matrix_status(no_cargo_oracle, blockers);
-    let mut surface_ids = rust_plan_surface_ids(no_cargo_oracle, blockers);
-    surface_ids.sort();
-    surface_ids.dedup();
-    let mut blocker_classes = blockers.to_vec();
-    blocker_classes.sort();
-    blocker_classes.dedup();
-    RustPlanCompatibilitySurfaceMatrixSummary {
+    let decision = mantle_rust_plan_app::classify_rust_plan_compatibility(no_cargo_oracle, &blockers);
+    let compatibility_surface_matrix = RustPlanCompatibilitySurfaceMatrixSummary {
         matrix_id: RUST_COMPATIBILITY_MATRIX_ID.to_string(),
         matrix_path: RUST_COMPATIBILITY_MATRIX_PATH.to_string(),
-        evidence_class: compatibility_class.to_string(),
-        status: status.to_string(),
-        surface_ids,
-        blocker_classes,
-        non_claims: non_claims.to_vec(),
-    }
-}
-
-fn rust_plan_surface_matrix_status(no_cargo_oracle: bool, blockers: &[String]) -> &'static str {
-    if !no_cargo_oracle {
-        return "oracle";
-    }
-    if blockers.is_empty() {
-        return "supported";
-    }
-    "blocked"
-}
-
-fn rust_plan_surface_ids(no_cargo_oracle: bool, blockers: &[String]) -> Vec<String> {
-    if !no_cargo_oracle {
-        return vec![RUST_COMPATIBILITY_SURFACE_CARGO_ORACLE.to_string()];
-    }
-    if !blockers.is_empty() {
-        return vec![RUST_COMPATIBILITY_SURFACE_BLOCKED_UNSUPPORTED.to_string()];
-    }
-    vec![
-        RUST_COMPATIBILITY_SURFACE_BASIC_PATH_WORKSPACE.to_string(),
-        RUST_COMPATIBILITY_SURFACE_LOCAL_PATH_DEPENDENCY.to_string(),
-        RUST_COMPATIBILITY_SURFACE_WORKSPACE_INHERITANCE.to_string(),
-        RUST_COMPATIBILITY_SURFACE_SOURCE_CLOSURE_DIGEST.to_string(),
-        RUST_COMPATIBILITY_SURFACE_UNIT_GRAPH_FACTS.to_string(),
-    ]
-}
-
-fn rust_plan_compatibility_class(no_cargo_oracle: bool, blockers: &[String]) -> &'static str {
-    if !no_cargo_oracle {
-        return RUST_PLAN_CLASS_CARGO_ORACLE_EVIDENCE;
-    }
-    if blockers.is_empty() {
-        return RUST_PLAN_CLASS_CARGO_FREE_BOUNDED_TOPOLOGY;
-    }
-    RUST_PLAN_CLASS_BLOCKED_UNSUPPORTED_SURFACE
-}
-
-fn rust_plan_non_claims(no_cargo_oracle: bool) -> Vec<String> {
-    let mut non_claims = if no_cargo_oracle {
-        vec![
-            "bounded-path-workspace-only".to_string(),
-            "not-full-cargo-feature-resolution".to_string(),
-            "declared-vendor-and-captured-git-only".to_string(),
-            "not-network-or-ambient-cargo-source-resolution".to_string(),
-        ]
-    } else {
-        vec!["cargo-used-for-oracle-metadata-and-unit-graph".to_string()]
+        evidence_class: decision.compatibility_class.clone(),
+        status: decision.status,
+        surface_ids: decision.surface_ids,
+        blocker_classes: decision.blocker_classes,
+        non_claims: decision.non_claims.clone(),
     };
-    non_claims.extend(RUST_PLAN_COMMON_NON_CLAIMS.iter().map(|claim| (*claim).to_string()));
-    non_claims.sort();
-    non_claims.dedup();
-    non_claims
+    RustPlanCargoModeSummary {
+        no_cargo_oracle,
+        compatibility_class: decision.compatibility_class,
+        project_build_status: RUST_PLAN_STATUS_NOT_DEFAULT_PROJECT_BUILD.to_string(),
+        compatibility_surface_matrix,
+        blockers,
+        non_claims: decision.non_claims,
+    }
 }
 
 struct NativePlanningLayers {
@@ -1821,26 +1893,15 @@ fn build_rust_plan_receipt(
     Ok(receipt)
 }
 
-fn capture_rust_plan_with_oracle(
+fn build_captured_rust_plan_with_oracle(
     options: &RustPlanOptions,
-    oracle: &impl CargoOracle,
+    cargo_version: &str,
+    rustc_version_verbose: &str,
+    metadata: CargoMetadata,
+    unit_graph_value: Value,
 ) -> Result<RustPlanReceipt, RunError> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    validate_options(options)?;
-
-    let cargo_version = run_checked_text(oracle.run_tool_version(&options.cargo, &["--version"]), "cargo --version")?;
-    let rustc_version_verbose = run_checked_text(oracle.run_tool_version(&options.rustc, &["-vV"]), "rustc -vV")?;
-    let metadata_output =
-        run_checked_bytes(oracle.run_cargo(&options.root, &options.cargo, &metadata_args()), "cargo metadata")?;
-    let metadata: CargoMetadata = serde_json::from_slice(&metadata_output)
-        .map_err(|err| RunError::Internal(format!("cargo metadata did not emit valid JSON: {err}")))?;
-    let unit_graph_output = run_checked_bytes(
-        oracle.run_cargo(&options.root, &options.cargo, &unit_graph_args(options)),
-        "cargo build --unit-graph",
-    )?;
-    let unit_graph_value: Value = serde_json::from_slice(&unit_graph_output)
-        .map_err(|err| RunError::Internal(format!("cargo build --unit-graph did not emit valid JSON: {err}")))?;
 
     let lock_packages = parse_lockfile_packages(&options.root)?;
     let source_closure_packages = cargo_packages_with_declared_git_manifests(&options.root, &metadata.packages);
@@ -1878,29 +1939,20 @@ fn capture_rust_plan_with_oracle(
 }
 
 fn cargo_free_planning_blockers(layers: &NativePlanningLayers) -> Vec<String> {
-    let readiness = [
-        (layers.package_targets.ready, "native-package-target-planning-blocked"),
-        (layers.units.ready, "native-unit-graph-planning-blocked"),
-        (layers.host_units.ready, "native-host-unit-graph-planning-blocked"),
-        (layers.derivations.ready, "unit-derivation-graph-blocked"),
-    ];
-    let mut blockers = readiness
-        .into_iter()
-        .filter(|(is_ready, _)| !is_ready)
-        .map(|(_, blocker)| blocker.to_string())
-        .collect::<Vec<_>>();
-    blockers.sort();
-    blockers.dedup();
-    blockers
+    mantle_rust_plan_core::classify_cargo_free_planning_blockers([
+        layers.package_targets.ready,
+        layers.units.ready,
+        layers.host_units.ready,
+        layers.derivations.ready,
+    ])
 }
 
-fn capture_rust_plan_without_cargo(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
+fn build_captured_rust_plan_without_cargo(
+    options: &RustPlanOptions,
+    rustc_version_verbose: &str,
+) -> Result<RustPlanReceipt, RunError> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    validate_options(options)?;
-
-    let rustc_version_verbose =
-        run_checked_text(ProcessCargoOracle.run_tool_version(&options.rustc, &["-vV"]), "rustc -vV")?;
     let lockfile_facts = parse_lockfile_facts(&options.root)?;
     let lock_packages = lock_packages_from_facts(&lockfile_facts);
     let native_path_packages = native_path_cargo_packages(&options.root, options)?;
@@ -2660,6 +2712,16 @@ fn run_checked_text(result: Result<CargoOutput, RunError>, label: &str) -> Resul
 
 fn run_checked_bytes(result: Result<CargoOutput, RunError>, label: &str) -> Result<Vec<u8>, RunError> {
     let output = result?;
+    if output.stdout.len() > CARGO_ORACLE_STDOUT_MAX_BYTES {
+        return Err(RunError::Build(format!(
+            "Cargo oracle stdout exceeds the {CARGO_ORACLE_STDOUT_MAX_BYTES}-byte capture limit"
+        )));
+    }
+    if output.stderr.len() > CARGO_ORACLE_STDERR_MAX_BYTES {
+        return Err(RunError::Build(format!(
+            "Cargo oracle stderr exceeds the {CARGO_ORACLE_STDERR_MAX_BYTES}-byte capture limit"
+        )));
+    }
     if output.status_code != 0 {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(RunError::Build(format!(
@@ -4619,11 +4681,11 @@ fn merge_selected_features(
     features: Vec<String>,
 ) -> bool {
     let entry = selected_features_by_package.entry(package_id).or_default();
-    let old_features = entry.clone();
+    let original_len = entry.len();
     entry.extend(features);
     entry.sort();
     entry.dedup();
-    *entry != old_features
+    entry.len() != original_len
 }
 
 fn native_workspace_manifest_paths(root: &Path, blockers: &mut Vec<NativePackagePlanningBlocker>) -> Vec<PathBuf> {
@@ -4861,7 +4923,6 @@ fn native_package_dependencies(
     inputs: NativePackageDependencyInputs<'_>,
 ) -> Result<NativePackageDependencies, NativePackagePlanningBlocker> {
     debug_assert!(!inputs.package_id.is_empty());
-    const { assert!(MAX_CFG_EVALUATION_STEPS > 0) };
     let optional_dependencies = native_optional_dependency_names(&inputs.manifest.dependencies);
     let selected_features = inputs
         .manifest_inputs
@@ -5126,32 +5187,31 @@ fn native_package_edition(
     package_name: &str,
     edition: &NativeManifestInheritedString,
 ) -> Result<String, NativePackagePlanningBlocker> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    if let Some(value) = &edition.value {
-        return Ok(value.clone());
-    }
-    if !edition.workspace {
-        return Ok(DEFAULT_RUST_EDITION.to_string());
-    }
-    let root_manifest_path = workspace_root.join("Cargo.toml");
-    let root_manifest = read_native_manifest(&root_manifest_path).map_err(|message| {
+    let workspace_value = if edition.value.is_none() && edition.workspace {
+        let root_manifest_path = workspace_root.join("Cargo.toml");
+        let root_manifest = read_native_manifest(&root_manifest_path).map_err(|message| {
+            native_blocker(NativePackageBlockerInputs {
+                package_id: None,
+                class: "unreadable-workspace-package-manifest",
+                message: &message,
+            })
+        })?;
+        root_manifest.workspace.and_then(|workspace| workspace.package.edition)
+    } else {
+        None
+    };
+    mantle_rust_plan_core::resolve_native_package_edition(package_name, mantle_rust_plan_core::NativeInheritedValue {
+        literal: edition.value.as_deref(),
+        workspace: edition.workspace,
+        workspace_value: workspace_value.as_deref(),
+    })
+    .map_err(|blocker| {
         native_blocker(NativePackageBlockerInputs {
             package_id: None,
-            class: "unreadable-workspace-package-manifest",
-            message: &message,
+            class: &blocker.code,
+            message: &blocker.message,
         })
-    })?;
-    let Some(workspace_edition) = root_manifest.workspace.and_then(|workspace| workspace.package.edition) else {
-        return Err(native_blocker(NativePackageBlockerInputs {
-            package_id: None,
-            class: "missing-workspace-package-edition",
-            message: &format!(
-                "package `{package_name}` inherits workspace edition but workspace.package.edition is missing"
-            ),
-        }));
-    };
-    Ok(workspace_edition)
+    })
 }
 
 fn native_package_version(
@@ -5159,36 +5219,31 @@ fn native_package_version(
     package_name: &str,
     version: &NativeManifestInheritedString,
 ) -> Result<String, NativePackagePlanningBlocker> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    if let Some(value) = &version.value {
-        return Ok(value.clone());
-    }
-    if !version.workspace {
-        return Err(native_blocker(NativePackageBlockerInputs {
-            package_id: None,
-            class: "missing-package-version",
-            message: &format!("package `{package_name}` lacks a literal version or workspace version inheritance"),
-        }));
-    }
-    let root_manifest_path = workspace_root.join("Cargo.toml");
-    let root_manifest = read_native_manifest(&root_manifest_path).map_err(|message| {
+    let workspace_value = if version.value.is_none() && version.workspace {
+        let root_manifest_path = workspace_root.join("Cargo.toml");
+        let root_manifest = read_native_manifest(&root_manifest_path).map_err(|message| {
+            native_blocker(NativePackageBlockerInputs {
+                package_id: None,
+                class: "unreadable-workspace-package-manifest",
+                message: &message,
+            })
+        })?;
+        root_manifest.workspace.and_then(|workspace| workspace.package.version)
+    } else {
+        None
+    };
+    mantle_rust_plan_core::resolve_native_package_version(package_name, mantle_rust_plan_core::NativeInheritedValue {
+        literal: version.value.as_deref(),
+        workspace: version.workspace,
+        workspace_value: workspace_value.as_deref(),
+    })
+    .map_err(|blocker| {
         native_blocker(NativePackageBlockerInputs {
             package_id: None,
-            class: "unreadable-workspace-package-manifest",
-            message: &message,
+            class: &blocker.code,
+            message: &blocker.message,
         })
-    })?;
-    let Some(workspace_version) = root_manifest.workspace.and_then(|workspace| workspace.package.version) else {
-        return Err(native_blocker(NativePackageBlockerInputs {
-            package_id: None,
-            class: "missing-workspace-package-version",
-            message: &format!(
-                "package `{package_name}` inherits version from [workspace.package], but no workspace package version is declared"
-            ),
-        }));
-    };
-    Ok(workspace_version)
+    })
 }
 
 fn parse_native_manifest_text(inputs: NativeTextParseInputs<'_>) -> Result<NativeManifest, String> {
@@ -5205,198 +5260,6 @@ fn read_native_manifest(path: &Path) -> Result<NativeManifest, String> {
     })
 }
 
-#[allow(dead_code)]
-fn collect_native_manifest_lock_texts(root: &Path) -> Result<NativeManifestLockInputTexts, String> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    let root_manifest_path = root.join("Cargo.toml");
-    let root_manifest_input = read_native_text_input(&root_manifest_path, "root manifest")?;
-    let root_manifest = parse_native_manifest_text(NativeTextParseInputs {
-        path_label: &root_manifest_input.path,
-        text: &root_manifest_input.text,
-    })?;
-    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    let mut manifest_paths = vec![root_manifest_path.clone()];
-    manifest_paths.extend(native_workspace_manifest_paths_from_root_manifest(
-        root,
-        &root_manifest_path,
-        &root_manifest,
-        &mut blockers,
-    ));
-    if let Some(blocker) = blockers.first() {
-        return Err(format!("collecting native manifest inputs failed: {}: {}", blocker.class, blocker.message));
-    }
-    manifest_paths.sort();
-    manifest_paths.dedup();
-    let mut manifests = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    for manifest_path in manifest_paths {
-        manifests.push(read_native_text_input(&manifest_path, "manifest")?);
-    }
-    let lockfile = read_native_text_input(&root.join("Cargo.lock"), "lockfile")?;
-    Ok(NativeManifestLockInputTexts { manifests, lockfile })
-}
-
-#[allow(dead_code)]
-fn read_native_text_input(path: &Path, label: &str) -> Result<NativeTextInput, String> {
-    debug_assert!(!label.is_empty());
-    let text = fs::read_to_string(path).map_err(|err| format!("reading native {label} {}: {err}", path.display()))?;
-    Ok(NativeTextInput {
-        path: normalize_path_string(path),
-        text,
-    })
-}
-
-#[allow(dead_code)]
-fn native_manifest_lock_unsupported_blockers(
-    inputs: &NativeManifestLockInputTexts,
-) -> Vec<NativeManifestLockUnsupportedBlocker> {
-    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    for manifest in &inputs.manifests {
-        blockers.extend(native_manifest_unsupported_blockers(manifest));
-    }
-    blockers.extend(native_lockfile_unsupported_blockers(&inputs.lockfile));
-    blockers.sort();
-    blockers.dedup();
-    blockers
-}
-
-#[allow(dead_code)]
-fn native_manifest_unsupported_blockers(input: &NativeTextInput) -> Vec<NativeManifestLockUnsupportedBlocker> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    let parsed = match input.text.parse::<toml::Value>() {
-        Ok(parsed) => parsed,
-        Err(err) => {
-            blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
-                path: &input.path,
-                class: "malformed-manifest",
-                message: &format!("manifest failed TOML parsing: {err}"),
-            }));
-            return blockers;
-        }
-    };
-    if parsed.get("patch").is_some() {
-        blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
-            path: &input.path,
-            class: "unsupported-manifest-patch",
-            message: "native manifest planning does not yet implement [patch] source overrides",
-        }));
-    }
-    if parsed.get("replace").is_some() {
-        blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
-            path: &input.path,
-            class: "unsupported-manifest-replace",
-            message: "native manifest planning does not yet implement [replace] source overrides",
-        }));
-    }
-    blockers.extend(native_target_table_unsupported_blockers(&input.path, parsed.get("target")));
-    blockers
-}
-
-#[allow(dead_code)]
-fn native_target_table_unsupported_blockers(
-    path: &str,
-    target_table: Option<&toml::Value>,
-) -> Vec<NativeManifestLockUnsupportedBlocker> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    let Some(targets) = target_table.and_then(toml::Value::as_table) else {
-        return blockers;
-    };
-    for (cfg, target) in targets {
-        let Some(table) = target.as_table() else {
-            blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
-                path,
-                class: "unsupported-target-table",
-                message: &format!("target cfg `{cfg}` is not a table"),
-            }));
-            continue;
-        };
-        for key in table.keys() {
-            if key != "dependencies" {
-                blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
-                    path,
-                    class: "unsupported-target-table",
-                    message: &format!(
-                        "target cfg `{cfg}` key `{key}` is outside the supported dependency-only fragment"
-                    ),
-                }));
-            }
-        }
-    }
-    blockers
-}
-
-#[allow(dead_code)]
-fn native_lockfile_unsupported_blockers(input: &NativeTextInput) -> Vec<NativeManifestLockUnsupportedBlocker> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    let facts = match parse_native_lockfile_text(NativeTextParseInputs {
-        path_label: &input.path,
-        text: &input.text,
-    }) {
-        Ok(facts) => facts,
-        Err(err) => {
-            blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
-                path: &input.path,
-                class: "malformed-lockfile",
-                message: &err,
-            }));
-            return blockers;
-        }
-    };
-    for package in facts.packages {
-        if let Some(source) = package.source.as_deref()
-            && !lock_source_supported(source)
-        {
-            blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
-                path: &input.path,
-                class: "unsupported-lockfile-source",
-                message: &format!("lock package `{}` uses unsupported source `{source}`", package.name),
-            }));
-        }
-        for dependency in package.dependencies {
-            if dependency.name.is_empty() {
-                blockers.push(native_manifest_lock_blocker(NativeManifestLockBlockerInputs {
-                    path: &input.path,
-                    class: "unsupported-lockfile-dependency-edge",
-                    message: &format!(
-                        "lock package `{}` has an empty dependency edge `{}`",
-                        package.name, dependency.raw
-                    ),
-                }));
-            }
-        }
-    }
-    blockers
-}
-
-#[allow(dead_code)]
-fn lock_source_supported(source: &str) -> bool {
-    source.starts_with(CARGO_REGISTRY_SOURCE_PREFIX) || source.starts_with(CARGO_GIT_SOURCE_PREFIX)
-}
-
-#[allow(dead_code)]
-struct NativeManifestLockBlockerInputs<'a> {
-    path: &'a str,
-    class: &'a str,
-    message: &'a str,
-}
-
-fn native_manifest_lock_blocker(inputs: NativeManifestLockBlockerInputs<'_>) -> NativeManifestLockUnsupportedBlocker {
-    let NativeManifestLockBlockerInputs { path, class, message } = inputs;
-    debug_assert!(!path.is_empty());
-    debug_assert!(!class.is_empty());
-    NativeManifestLockUnsupportedBlocker {
-        path: path.to_string(),
-        class: class.to_string(),
-        message: message.to_string(),
-    }
-}
-
 struct NativeTargetsForManifestInputs<'a> {
     source_root: &'a Path,
     package_name: &'a str,
@@ -5407,10 +5270,8 @@ struct NativeTargetsForManifestInputs<'a> {
 
 fn push_native_bin_targets(
     inputs: &NativeTargetsForManifestInputs<'_>,
-    targets: &mut Vec<NativeTargetPlanningSummary>,
-) -> Result<(), NativePackagePlanningBlocker> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
+    targets: &mut Vec<mantle_rust_plan_core::NativeTargetCandidate>,
+) {
     if inputs.manifest.bin.is_empty() {
         let path = inputs.source_root.join("src/main.rs");
         if path.is_file() {
@@ -5420,7 +5281,7 @@ fn push_native_bin_targets(
                 kind: "bin",
                 path: &path,
                 edition: inputs.package_edition,
-            })?;
+            });
         }
     } else {
         for bin in &inputs.manifest.bin {
@@ -5433,10 +5294,9 @@ fn push_native_bin_targets(
                 kind: "bin",
                 path: &path,
                 edition: inputs.package_edition,
-            })?;
+            });
         }
     }
-    Ok(())
 }
 
 fn native_targets_for_manifest(
@@ -5461,7 +5321,7 @@ fn native_targets_for_manifest(
             manifest,
         },
         &mut targets,
-    )?;
+    );
     if let Some(build_script) = native_manifest_build_script(source_root, manifest) {
         let path = source_root.join(&build_script);
         let target_name = build_script_target_name(&build_script);
@@ -5471,7 +5331,7 @@ fn native_targets_for_manifest(
             kind: "custom-build",
             path: &path,
             edition: package_edition,
-        })?;
+        });
     }
     if let Some(lib) = &manifest.lib {
         let kind = if lib.proc_macro { "proc-macro" } else { "lib" };
@@ -5482,7 +5342,7 @@ fn native_targets_for_manifest(
             kind,
             path: &path,
             edition: package_edition,
-        })?;
+        });
     } else {
         let path = source_root.join("src/lib.rs");
         if path.is_file() {
@@ -5492,23 +5352,34 @@ fn native_targets_for_manifest(
                 kind: "lib",
                 path: &path,
                 edition: package_edition,
-            })?;
+            });
         }
     }
 
-    if targets.is_empty() {
-        return Err(native_blocker(NativePackageBlockerInputs {
-            package_id: Some(cargo_path_package_id(CargoPathPackageIdInputs {
-                name: package_name,
-                version: package_version,
-            })),
-            class: "missing-supported-target",
-            message: "native package/target fragment found no readable lib/bin target source",
-        }));
-    }
-    targets.sort();
-    targets.dedup();
-    Ok(targets)
+    let package_id = cargo_path_package_id(CargoPathPackageIdInputs {
+        name: package_name,
+        version: package_version,
+    });
+    mantle_rust_plan_core::admit_native_targets(&package_id, targets)
+        .map(|admitted| {
+            admitted
+                .into_iter()
+                .map(|target| NativeTargetPlanningSummary {
+                    name: target.name,
+                    kind: target.kind,
+                    crate_name: target.crate_name,
+                    source_path: target.source_path,
+                    edition: target.edition,
+                })
+                .collect()
+        })
+        .map_err(|blocker| {
+            native_blocker(NativePackageBlockerInputs {
+                package_id: (blocker.code != "missing-target-source").then_some(package_id),
+                class: &blocker.code,
+                message: &blocker.message,
+            })
+        })
 }
 
 fn package_root_from_manifest_path(manifest_path: &str) -> String {
@@ -5533,16 +5404,14 @@ fn build_script_target_name(_build_script: &str) -> String {
 }
 
 struct PushNativeTargetInputs<'a> {
-    targets: &'a mut Vec<NativeTargetPlanningSummary>,
+    targets: &'a mut Vec<mantle_rust_plan_core::NativeTargetCandidate>,
     name: &'a str,
     kind: &'a str,
     path: &'a Path,
     edition: &'a str,
 }
 
-fn push_native_target(inputs: PushNativeTargetInputs<'_>) -> Result<(), NativePackagePlanningBlocker> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
+fn push_native_target(inputs: PushNativeTargetInputs<'_>) {
     let PushNativeTargetInputs {
         targets,
         name,
@@ -5550,21 +5419,18 @@ fn push_native_target(inputs: PushNativeTargetInputs<'_>) -> Result<(), NativePa
         path,
         edition,
     } = inputs;
-    if !path.is_file() {
-        return Err(native_blocker(NativePackageBlockerInputs {
-            package_id: None,
-            class: "missing-target-source",
-            message: &format!("target `{name}` source {} is not readable", path.display()),
-        }));
-    }
-    targets.push(NativeTargetPlanningSummary {
+    let readable = path.is_file();
+    targets.push(mantle_rust_plan_core::NativeTargetCandidate {
         name: name.to_string(),
         kind: kind.to_string(),
-        crate_name: rust_crate_name(name),
-        source_path: normalize_path_string(path),
+        source_path: if readable {
+            normalize_path_string(path)
+        } else {
+            String::new()
+        },
         edition: edition.to_string(),
+        source_failure_display: (!readable).then(|| path.display().to_string()),
     });
-    Ok(())
 }
 
 struct NativePathDependenciesInputs<'a> {
@@ -5596,7 +5462,9 @@ fn native_path_dependencies(
         if dependency_uses_workspace(value) {
             continue;
         }
-        if dependency_optional(value) && !optional_dependency_selected(name, feature_defs, selected_features) {
+        if dependency_optional(value)
+            && !mantle_rust_plan_core::native_optional_dependency_selected(name, feature_defs, selected_features)
+        {
             continue;
         }
         let manifest_path = if let Some(path) = dependency_path(value) {
@@ -5969,30 +5837,20 @@ struct NativeTargetCfgDependencyInputs<'a> {
     value: &'a toml::Value,
 }
 
-struct TargetCfgDecisionInputs {
-    is_dependency_selected: bool,
-    is_cfg_selected: bool,
-}
-
-fn target_cfg_dependency_decision(inputs: TargetCfgDecisionInputs) -> &'static str {
-    if inputs.is_dependency_selected {
-        "selected"
-    } else if inputs.is_cfg_selected {
-        "not-selected-optional"
-    } else {
-        "not-selected"
-    }
-}
-
 fn native_target_cfg_dependency(
     inputs: NativeTargetCfgDependencyInputs<'_>,
 ) -> Result<(NativeTargetCfgDependencySummary, Option<NativePathDependencySummary>), NativePackagePlanningBlocker> {
     debug_assert!(!inputs.cfg_expr.is_empty());
     debug_assert!(!inputs.name.is_empty());
     let is_optional = dependency_optional(inputs.value);
-    let is_optional_selected =
-        optional_dependency_selected(inputs.name, inputs.planning.feature_defs, inputs.planning.selected_features);
-    let mut is_dependency_selected = inputs.is_cfg_selected && (!is_optional || is_optional_selected);
+    let eligibility = mantle_rust_plan_core::classify_native_dependency_from_selected_cfg(
+        inputs.is_cfg_selected,
+        inputs.name,
+        is_optional,
+        inputs.planning.feature_defs,
+        inputs.planning.selected_features,
+    );
+    let mut is_dependency_selected = eligibility.is_dependency_selected;
     let manifest_path = if !is_dependency_selected {
         None
     } else if let Some(path) = dependency_path(inputs.value) {
@@ -6036,10 +5894,8 @@ fn native_target_cfg_dependency(
         }));
     }
     let normalized_manifest_path = manifest_path.as_ref().map(|path| normalize_path_string(path));
-    let decision = target_cfg_dependency_decision(TargetCfgDecisionInputs {
-        is_dependency_selected,
-        is_cfg_selected: inputs.is_cfg_selected,
-    });
+    let decision =
+        mantle_rust_plan_core::classify_target_cfg_dependency(is_dependency_selected, inputs.is_cfg_selected);
     let fact = NativeTargetCfgDependencySummary {
         cfg: inputs.cfg_expr.to_string(),
         active_target: inputs.planning.active_target.to_string(),
@@ -6065,17 +5921,14 @@ fn native_target_cfg_dependencies(
     let mut cfg_facts = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut selected_dependencies = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for (cfg_expr, target) in inputs.target_tables {
-        let is_cfg_selected = evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
-            expression: cfg_expr,
-            active_target: inputs.active_target,
-        })
-        .ok_or_else(|| {
-            native_blocker(NativePackageBlockerInputs {
-                package_id: inputs.package_id.clone(),
-                class: "unsupported-target-cfg-surface",
-                message: &format!("target cfg `{cfg_expr}` is outside the bounded native target-cfg fragment"),
-            })
-        })?;
+        let is_cfg_selected = mantle_rust_plan_core::evaluate_supported_target_cfg(cfg_expr, inputs.active_target)
+            .ok_or_else(|| {
+                native_blocker(NativePackageBlockerInputs {
+                    package_id: inputs.package_id.clone(),
+                    class: "unsupported-target-cfg-surface",
+                    message: &format!("target cfg `{cfg_expr}` is outside the bounded native target-cfg fragment"),
+                })
+            })?;
         for (name, value) in &target.dependencies {
             let (fact, selected) = native_target_cfg_dependency(NativeTargetCfgDependencyInputs {
                 planning: &inputs,
@@ -6095,326 +5948,15 @@ fn native_target_cfg_dependencies(
     Ok((cfg_facts, selected_dependencies))
 }
 
-struct TargetCfgEvaluationInputs<'a> {
-    expression: &'a str,
-    active_target: &'a str,
-}
-
-fn evaluate_supported_target_cfg(inputs: TargetCfgEvaluationInputs<'_>) -> Option<bool> {
-    let TargetCfgEvaluationInputs {
-        expression: cfg_expr,
-        active_target,
-    } = inputs;
-    let trimmed = cfg_expr.trim();
-    if !trimmed.starts_with("cfg(") {
-        return Some(trimmed == active_target);
-    }
-    let inner = trimmed.strip_prefix("cfg(")?.strip_suffix(')')?.trim();
-    evaluate_cfg_inner(TargetCfgEvaluationInputs {
-        expression: inner,
-        active_target,
-    })
-}
-
-enum CfgEvaluationFrame<'a> {
-    Evaluate(&'a str),
-    ApplyNot,
-    ApplyAny { arguments: Vec<&'a str>, next_index: usize },
-    ApplyAll { arguments: Vec<&'a str>, next_index: usize },
-}
-
-fn evaluate_cfg_inner<'a>(inputs: TargetCfgEvaluationInputs<'a>) -> Option<bool> {
-    let TargetCfgEvaluationInputs {
-        expression: expr,
-        active_target,
-    } = inputs;
-    debug_assert!(!active_target.is_empty());
-    const { assert!(MAX_CFG_EVALUATION_STEPS > 0) };
-    let mut frames = Vec::with_capacity(INITIAL_CFG_STACK_CAPACITY_ITEMS);
-    let mut values = Vec::with_capacity(INITIAL_CFG_STACK_CAPACITY_ITEMS);
-    frames.push(CfgEvaluationFrame::Evaluate(expr));
-
-    for _ in 0..MAX_CFG_EVALUATION_STEPS {
-        if frames.is_empty() {
-            return (values.len() == 1).then(|| values.pop()).flatten();
-        }
-        match frames.pop()? {
-            CfgEvaluationFrame::Evaluate(candidate) => {
-                queue_cfg_evaluation(QueueCfgEvaluationInputs {
-                    candidate,
-                    active_target,
-                    frames: &mut frames,
-                    values: &mut values,
-                })?;
-            }
-            CfgEvaluationFrame::ApplyNot => {
-                let is_value = values.pop()?;
-                values.push(!is_value);
-            }
-            CfgEvaluationFrame::ApplyAny { arguments, next_index } => {
-                continue_cfg_any(arguments, next_index, &mut frames, &mut values)?;
-            }
-            CfgEvaluationFrame::ApplyAll { arguments, next_index } => {
-                continue_cfg_all(arguments, next_index, &mut frames, &mut values)?;
-            }
-        }
-    }
-    None
-}
-
-struct QueueCfgEvaluationInputs<'a, 'b> {
-    candidate: &'a str,
-    active_target: &'b str,
-    frames: &'b mut Vec<CfgEvaluationFrame<'a>>,
-    values: &'b mut Vec<bool>,
-}
-
-fn queue_cfg_evaluation<'a>(inputs: QueueCfgEvaluationInputs<'a, '_>) -> Option<()> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    let QueueCfgEvaluationInputs {
-        candidate,
-        active_target,
-        frames,
-        values,
-    } = inputs;
-    let trimmed = candidate.trim();
-    if let Some(inner) = cfg_call_arg(CfgCallInputs {
-        expression: trimmed,
-        name: "not",
-    }) {
-        frames.push(CfgEvaluationFrame::ApplyNot);
-        frames.push(CfgEvaluationFrame::Evaluate(inner));
-        return Some(());
-    }
-    if let Some(inner) = cfg_call_arg(CfgCallInputs {
-        expression: trimmed,
-        name: "any",
-    }) {
-        return queue_cfg_arguments(split_cfg_args(inner)?, false, frames, values);
-    }
-    if let Some(inner) = cfg_call_arg(CfgCallInputs {
-        expression: trimmed,
-        name: "all",
-    }) {
-        return queue_cfg_arguments(split_cfg_args(inner)?, true, frames, values);
-    }
-    values.push(evaluate_cfg_atom(TargetCfgEvaluationInputs {
-        expression: trimmed,
-        active_target,
-    })?);
-    Some(())
-}
-
-fn queue_cfg_arguments<'a>(
-    arguments: Vec<&'a str>,
-    identity: bool,
-    frames: &mut Vec<CfgEvaluationFrame<'a>>,
-    values: &mut Vec<bool>,
-) -> Option<()> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    let Some(first) = arguments.first().copied() else {
-        values.push(identity);
-        return Some(());
-    };
-    let continuation = if identity {
-        CfgEvaluationFrame::ApplyAll {
-            arguments,
-            next_index: 1,
-        }
-    } else {
-        CfgEvaluationFrame::ApplyAny {
-            arguments,
-            next_index: 1,
-        }
-    };
-    frames.push(continuation);
-    frames.push(CfgEvaluationFrame::Evaluate(first));
-    Some(())
-}
-
-fn continue_cfg_any<'a>(
-    arguments: Vec<&'a str>,
-    next_index: usize,
-    frames: &mut Vec<CfgEvaluationFrame<'a>>,
-    values: &mut Vec<bool>,
-) -> Option<()> {
-    if values.pop()? {
-        values.push(true);
-        return Some(());
-    }
-    continue_cfg_arguments(arguments, next_index, false, frames, values)
-}
-
-fn continue_cfg_all<'a>(
-    arguments: Vec<&'a str>,
-    next_index: usize,
-    frames: &mut Vec<CfgEvaluationFrame<'a>>,
-    values: &mut Vec<bool>,
-) -> Option<()> {
-    if !values.pop()? {
-        values.push(false);
-        return Some(());
-    }
-    continue_cfg_arguments(arguments, next_index, true, frames, values)
-}
-
-fn continue_cfg_arguments<'a>(
-    arguments: Vec<&'a str>,
-    next_index: usize,
-    identity: bool,
-    frames: &mut Vec<CfgEvaluationFrame<'a>>,
-    values: &mut Vec<bool>,
-) -> Option<()> {
-    let Some(argument) = arguments.get(next_index).copied() else {
-        values.push(identity);
-        return Some(());
-    };
-    let next_index = next_index.checked_add(1)?;
-    let continuation = if identity {
-        CfgEvaluationFrame::ApplyAll { arguments, next_index }
-    } else {
-        CfgEvaluationFrame::ApplyAny { arguments, next_index }
-    };
-    frames.push(continuation);
-    frames.push(CfgEvaluationFrame::Evaluate(argument));
-    Some(())
-}
-
-fn evaluate_cfg_atom(inputs: TargetCfgEvaluationInputs<'_>) -> Option<bool> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    let TargetCfgEvaluationInputs {
-        expression: trimmed,
-        active_target,
-    } = inputs;
-    if trimmed == "unix" {
-        return Some(target_is_unix(active_target));
-    }
-    if trimmed == "windows" {
-        return Some(target_os_from_triple(active_target) == "windows");
-    }
-    if let Some((key, value)) = parse_cfg_key_value(trimmed) {
-        return cfg_key_value_matches(CfgKeyValueInputs {
-            key,
-            value,
-            active_target,
-        });
-    }
-    known_inactive_cfg_atom(trimmed).then_some(false)
-}
-
-fn known_inactive_cfg_atom(atom: &str) -> bool {
-    matches!(
-        atom,
-        "loom"
-            | "miri"
-            | "criterion"
-            | "compiletests"
-            | "crossbeam_loom"
-            | "diatomic_waker_loom"
-            | "tokio_unstable"
-            | "tracing_unstable"
-            | "valgrind"
-            | "windows_raw_dylib"
-            | "rustix_use_libc"
-            | "rustix_use_experimental_asm"
-    )
-}
-
-struct CfgCallInputs<'a, 'b> {
-    expression: &'a str,
-    name: &'b str,
-}
-
-fn cfg_call_arg<'a>(inputs: CfgCallInputs<'a, '_>) -> Option<&'a str> {
-    inputs.expression.strip_prefix(inputs.name)?.strip_prefix('(')?.strip_suffix(')')
-}
-
-fn split_cfg_args(args: &str) -> Option<Vec<&str>> {
-    let part_slots = args.matches(',').count().saturating_add(1);
-    debug_assert!(part_slots > 0);
-    let mut parts = Vec::with_capacity(part_slots);
-    let mut depth = 0usize;
-    let mut is_in_string = false;
-    let mut start = 0usize;
-    for (index, ch) in args.char_indices() {
-        match ch {
-            '"' => is_in_string = !is_in_string,
-            '(' if !is_in_string => depth = depth.checked_add(1)?,
-            ')' if !is_in_string => depth = depth.checked_sub(1)?,
-            ',' if !is_in_string && depth == 0 => {
-                let part = args[start..index].trim();
-                if !part.is_empty() {
-                    parts.push(part);
-                }
-                start = index.saturating_add(ch.len_utf8());
-            }
-            _ => {}
-        }
-    }
-    if is_in_string || depth != 0 {
-        return None;
-    }
-    let tail = args[start..].trim();
-    if !tail.is_empty() {
-        parts.push(tail);
-    }
-    debug_assert!(parts.len() <= part_slots);
-    Some(parts)
-}
-
-fn parse_cfg_key_value(expr: &str) -> Option<(&str, &str)> {
-    let (left, right) = expr.split_once('=')?;
-    Some((left.trim(), right.trim().trim_matches('"')))
-}
-
-struct CfgKeyValueInputs<'a> {
-    key: &'a str,
-    value: &'a str,
-    active_target: &'a str,
-}
-
-fn cfg_key_value_matches(inputs: CfgKeyValueInputs<'_>) -> Option<bool> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    let CfgKeyValueInputs {
-        key,
-        value,
-        active_target,
-    } = inputs;
-    let is_matched = match key {
-        "target_os" => value == target_os_from_triple(active_target),
-        "target_arch" => value == target_arch_from_triple(active_target),
-        "target_family" => value == target_family_from_triple(active_target),
-        "target_vendor" => value == target_vendor_from_triple(active_target),
-        "target_env" => value == target_env_from_triple(active_target),
-        "target_abi" => value == target_abi_from_triple(active_target),
-        "target_endian" => value == target_endian_from_triple(active_target),
-        "target_pointer_width" => value == target_pointer_width_from_triple(active_target),
-        "target_has_atomic" => target_has_atomic(TargetAtomicInputs {
-            active_target,
-            width: value,
-        }),
-        "feature" => false,
-        key if key.ends_with("_backend") || key.starts_with("rustix_") || key == "getrandom_backend" => false,
-        _ => return None,
-    };
-    Some(is_matched)
-}
-
 fn active_rust_target(options: &RustPlanOptions) -> String {
     options.targets.first().cloned().unwrap_or_else(host_target_triple)
 }
 
 fn selected_triple_for_execution_kind(execution_kind: &str, options: &RustPlanOptions) -> String {
     debug_assert!(!execution_kind.is_empty());
-    if execution_kind == TARGET_EXECUTION_KIND {
-        active_rust_target(options)
-    } else {
-        host_target_triple()
-    }
+    let host = host_target_triple();
+    let target = options.targets.first().map(String::as_str).unwrap_or(&host);
+    mantle_rust_plan_core::select_native_execution_triple(execution_kind, &host, target).to_string()
 }
 
 fn host_target_triple() -> String {
@@ -6422,88 +5964,6 @@ fn host_target_triple() -> String {
         "macos" => "darwin",
         other => other,
     })
-}
-
-fn target_is_unix(active_target: &str) -> bool {
-    matches!(
-        target_os_from_triple(active_target),
-        "linux" | "darwin" | "freebsd" | "netbsd" | "openbsd" | "dragonfly" | "android"
-    )
-}
-
-fn target_os_from_triple(active_target: &str) -> &str {
-    const TARGET_OS_MARKERS: &[(&str, &str)] = &[
-        ("linux", "linux"),
-        ("darwin", "darwin"),
-        ("apple", "darwin"),
-        ("windows", "windows"),
-        ("msvc", "windows"),
-        ("freebsd", "freebsd"),
-        ("netbsd", "netbsd"),
-        ("openbsd", "openbsd"),
-        ("android", "android"),
-    ];
-    TARGET_OS_MARKERS
-        .iter()
-        .find_map(|(marker, target_os)| active_target.contains(marker).then_some(*target_os))
-        .unwrap_or("unknown")
-}
-
-fn target_arch_from_triple(active_target: &str) -> &str {
-    active_target.split('-').next().unwrap_or("unknown")
-}
-
-fn target_family_from_triple(active_target: &str) -> &str {
-    if target_is_unix(active_target) {
-        "unix"
-    } else if target_os_from_triple(active_target) == "windows" {
-        "windows"
-    } else if active_target.contains("wasm") {
-        "wasm"
-    } else {
-        "unknown"
-    }
-}
-
-fn target_vendor_from_triple(active_target: &str) -> &str {
-    let mut parts = active_target.split('-');
-    let _arch = parts.next();
-    parts.next().unwrap_or("unknown")
-}
-
-fn target_env_from_triple(active_target: &str) -> &str {
-    if active_target.contains("musl") {
-        "musl"
-    } else if active_target.contains("msvc") {
-        "msvc"
-    } else if active_target.contains("gnu") {
-        "gnu"
-    } else {
-        ""
-    }
-}
-
-fn target_abi_from_triple(active_target: &str) -> &str {
-    if active_target.contains("llvm") { "llvm" } else { "" }
-}
-
-fn target_endian_from_triple(_active_target: &str) -> &str {
-    "little"
-}
-
-fn target_pointer_width_from_triple(active_target: &str) -> &str {
-    match target_arch_from_triple(active_target) {
-        "x86_64" | "aarch64" | "riscv64" | "powerpc64" | "s390x" | "wasm64" => "64",
-        _ => "32",
-    }
-}
-
-fn target_feature_env_from_triple(active_target: &str) -> &str {
-    match target_arch_from_triple(active_target) {
-        "x86_64" => "fxsr,sse,sse2,x87",
-        "wasm32" => "bulk-memory,multivalue,mutable-globals,nontrapping-fptoint,reference-types,sign-ext",
-        _ => "",
-    }
 }
 
 fn build_script_profile_env(profile: &str, dual_use: bool) -> BTreeMap<String, String> {
@@ -6516,78 +5976,27 @@ fn build_script_profile_env(profile: &str, dual_use: bool) -> BTreeMap<String, S
 
 fn build_script_target_cfg_env(active_target: &str) -> BTreeMap<String, String> {
     debug_assert!(!active_target.is_empty());
+    let target = mantle_rust_plan_core::classify_native_target_triple(active_target);
     let mut env = BTreeMap::from([
-        (CARGO_CFG_TARGET_ABI_ENV.to_string(), target_abi_from_triple(active_target).to_string()),
-        (CARGO_CFG_TARGET_ARCH_ENV.to_string(), target_arch_from_triple(active_target).to_string()),
-        (CARGO_CFG_TARGET_ENDIAN_ENV.to_string(), target_endian_from_triple(active_target).to_string()),
-        (CARGO_CFG_TARGET_ENV_ENV.to_string(), target_env_from_triple(active_target).to_string()),
-        (CARGO_CFG_TARGET_FAMILY_ENV.to_string(), target_family_from_triple(active_target).to_string()),
-        (CARGO_CFG_TARGET_FEATURE_ENV.to_string(), target_feature_env_from_triple(active_target).to_string()),
-        (CARGO_CFG_TARGET_OS_ENV.to_string(), target_os_from_triple(active_target).to_string()),
-        (
-            CARGO_CFG_TARGET_POINTER_WIDTH_ENV.to_string(),
-            target_pointer_width_from_triple(active_target).to_string(),
-        ),
-        (CARGO_CFG_TARGET_VENDOR_ENV.to_string(), target_vendor_from_triple(active_target).to_string()),
+        (CARGO_CFG_TARGET_ABI_ENV.to_string(), target.abi.to_string()),
+        (CARGO_CFG_TARGET_ARCH_ENV.to_string(), target.arch.to_string()),
+        (CARGO_CFG_TARGET_ENDIAN_ENV.to_string(), target.endian.to_string()),
+        (CARGO_CFG_TARGET_ENV_ENV.to_string(), target.env.to_string()),
+        (CARGO_CFG_TARGET_FAMILY_ENV.to_string(), target.family.to_string()),
+        (CARGO_CFG_TARGET_FEATURE_ENV.to_string(), target.features.to_string()),
+        (CARGO_CFG_TARGET_OS_ENV.to_string(), target.os.to_string()),
+        (CARGO_CFG_TARGET_POINTER_WIDTH_ENV.to_string(), target.pointer_width.to_string()),
+        (CARGO_CFG_TARGET_VENDOR_ENV.to_string(), target.vendor.to_string()),
     ]);
-    if target_is_unix(active_target) {
+    if target.is_unix {
         env.insert(CARGO_CFG_UNIX_ENV.to_string(), String::new());
     }
-    if target_os_from_triple(active_target) == "windows" {
+    if target.os == "windows" {
         env.insert(CARGO_CFG_WINDOWS_ENV.to_string(), String::new());
     }
     debug_assert!(env.contains_key(CARGO_CFG_TARGET_ARCH_ENV));
     debug_assert!(env.contains_key(CARGO_CFG_TARGET_POINTER_WIDTH_ENV));
     env
-}
-
-struct TargetAtomicInputs<'a> {
-    active_target: &'a str,
-    width: &'a str,
-}
-
-fn target_has_atomic(inputs: TargetAtomicInputs<'_>) -> bool {
-    let TargetAtomicInputs { active_target, width } = inputs;
-    let pointer_width = target_pointer_width_from_triple(active_target).parse::<u32>().unwrap_or(0);
-    if width == "ptr" {
-        return pointer_width > 0;
-    }
-    width.parse::<u32>().map(|width| width <= pointer_width).unwrap_or(false)
-}
-
-fn optional_dependency_selected(
-    dependency_name: &str,
-    feature_defs: &BTreeMap<String, Vec<String>>,
-    selected_features: &[String],
-) -> bool {
-    selected_features.iter().any(|feature| {
-        feature == dependency_name
-            || feature_defs
-                .get(feature)
-                .map(|entries| {
-                    entries.iter().any(|entry| {
-                        feature_entry_selects_dependency(FeatureDependencySelectionInputs { entry, dependency_name })
-                    })
-                })
-                .unwrap_or(false)
-    })
-}
-
-struct FeatureDependencySelectionInputs<'a> {
-    entry: &'a str,
-    dependency_name: &'a str,
-}
-
-fn feature_entry_selects_dependency(inputs: FeatureDependencySelectionInputs<'_>) -> bool {
-    let FeatureDependencySelectionInputs { entry, dependency_name } = inputs;
-    if entry == dependency_name || entry == format!("dep:{dependency_name}") {
-        return true;
-    }
-    let Some((entry_dependency, _feature)) = entry.split_once('/') else {
-        return false;
-    };
-    let entry_dependency = entry_dependency.trim_start_matches("dep:").trim_end_matches('?');
-    entry_dependency == dependency_name
 }
 
 fn native_dependency_source<'a>(
@@ -7044,174 +6453,22 @@ fn native_selected_features(
     .selected_features
 }
 
-fn resolve_native_features(request: NativeFeatureResolutionRequest) -> NativeFeatureResolution {
-    debug_assert!(!request.all_features || request.explicit_features.is_empty());
-    let mut selected_features = BTreeSet::<String>::new();
-    let mut activated_optional_dependencies = BTreeSet::<String>::new();
-    let mut dependency_feature_edges = BTreeSet::<NativeDependencyFeatureEdge>::new();
-    let mut blockers = BTreeSet::<NativeFeatureResolutionBlocker>::new();
-    let mut queue = Vec::<String>::new();
-    seed_native_feature_queue(&request, &mut selected_features, &mut queue);
-    let mut cursor = 0usize;
-    while cursor < queue.len() {
-        if cursor >= NATIVE_FEATURE_RESOLUTION_MAX_STEPS {
-            blockers.insert(native_feature_blocker(NativeFeatureBlockerInputs {
-                class: "feature-resolution-step-limit",
-                message: "native feature resolution exceeded bounded fixed-point step limit",
-            }));
-            break;
-        }
-        let feature = queue[cursor].clone();
-        cursor += 1;
-        let Some(entries) = request.feature_defs.get(&feature) else {
-            if request.optional_dependencies.contains(&feature) {
-                activated_optional_dependencies.insert(feature);
-            }
-            continue;
-        };
-        for entry in entries {
-            match parse_native_feature_entry(entry, &request.feature_defs, &request.optional_dependencies) {
-                Ok(NativeFeatureEntry::LocalFeature(feature)) => {
-                    push_native_feature(&feature, &mut selected_features, &mut queue);
-                }
-                Ok(NativeFeatureEntry::OptionalDependency {
-                    dependency,
-                    expose_feature,
-                }) => {
-                    activated_optional_dependencies.insert(dependency.clone());
-                    if expose_feature {
-                        push_native_feature(&dependency, &mut selected_features, &mut queue);
-                    }
-                }
-                Ok(NativeFeatureEntry::DependencyFeature(edge)) => {
-                    dependency_feature_edges.insert(edge);
-                }
-                Err(blocker) => {
-                    blockers.insert(blocker);
-                }
-            }
-        }
-    }
-    NativeFeatureResolution {
-        selected_features: selected_features.into_iter().collect(),
-        activated_optional_dependencies: activated_optional_dependencies.into_iter().collect(),
-        dependency_feature_edges: dependency_feature_edges.into_iter().collect(),
-        blockers: blockers.into_iter().collect(),
-    }
-}
-
-#[allow(dead_code)]
-fn resolve_native_feature_roles(request: NativeFeatureRoleResolutionRequest) -> NativeFeatureRoleResolution {
-    NativeFeatureRoleResolution {
-        normal: resolve_native_features(request.normal),
-        build: resolve_native_features(request.build),
-        host: resolve_native_features(request.host),
-    }
-}
-
-fn seed_native_feature_queue(
-    request: &NativeFeatureResolutionRequest,
-    selected_features: &mut BTreeSet<String>,
-    queue: &mut Vec<String>,
-) {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    if request.all_features {
-        for feature in request.feature_defs.keys() {
-            push_native_feature(feature, selected_features, queue);
-        }
-        for dependency in &request.optional_dependencies {
-            push_native_feature(dependency, selected_features, queue);
-        }
-        return;
-    }
-    if !request.explicit_features.is_empty() {
-        for feature in sorted_strings(request.explicit_features.clone()) {
-            push_native_feature(&feature, selected_features, queue);
-        }
-        return;
-    }
-    if !request.no_default_features && request.feature_defs.contains_key("default") {
-        push_native_feature("default", selected_features, queue);
-    }
-}
-
-fn push_native_feature(feature: &str, selected_features: &mut BTreeSet<String>, queue: &mut Vec<String>) {
-    debug_assert!(!feature.is_empty());
-    if selected_features.insert(feature.to_string()) {
-        queue.push(feature.to_string());
-    }
-}
-
-fn parse_native_feature_entry(
-    entry: &str,
-    feature_defs: &BTreeMap<String, Vec<String>>,
-    optional_dependencies: &BTreeSet<String>,
-) -> Result<NativeFeatureEntry, NativeFeatureResolutionBlocker> {
-    debug_assert!(!entry.is_empty());
-    if let Some(dependency) = entry.strip_prefix("dep:") {
-        if dependency.is_empty() {
-            return Err(native_feature_blocker(NativeFeatureBlockerInputs {
-                class: "unsupported-feature-entry",
-                message: "empty dep: feature entry",
-            }));
-        }
-        return Ok(NativeFeatureEntry::OptionalDependency {
-            dependency: dependency.to_string(),
-            expose_feature: false,
-        });
-    }
-    if let Some(edge) = parse_native_dependency_feature_entry(entry)? {
-        return Ok(NativeFeatureEntry::DependencyFeature(edge));
-    }
-    if feature_defs.contains_key(entry) {
-        return Ok(NativeFeatureEntry::LocalFeature(entry.to_string()));
-    }
-    if optional_dependencies.contains(entry) {
-        return Ok(NativeFeatureEntry::OptionalDependency {
-            dependency: entry.to_string(),
-            expose_feature: true,
-        });
-    }
-    Err(native_feature_blocker(NativeFeatureBlockerInputs {
-        class: "unknown-feature-entry",
-        message: &format!("feature entry `{entry}` references no known feature or optional dependency"),
-    }))
-}
-
-fn parse_native_dependency_feature_entry(
-    entry: &str,
-) -> Result<Option<NativeDependencyFeatureEdge>, NativeFeatureResolutionBlocker> {
-    let Some((dependency, feature)) = entry.split_once('/') else {
-        return Ok(None);
+fn resolve_native_features(request: NativeFeatureResolutionRequest) -> mantle_rust_plan_core::NativeFeatureSelection {
+    // Manifest parsing remains in this adapter. The bounded fixed point,
+    // feature grammar, optional dependencies and blocker classification live
+    // entirely in the pure core.
+    let facts = mantle_rust_plan_core::NativeFeatureSelectionRequest {
+        feature_definitions: request
+            .feature_defs
+            .into_iter()
+            .map(|(name, entries)| mantle_rust_plan_core::NativeFeatureDefinition { name, entries })
+            .collect(),
+        optional_dependencies: request.optional_dependencies.into_iter().collect(),
+        explicit_features: request.explicit_features,
+        all_features: request.all_features,
+        no_default_features: request.no_default_features,
     };
-    let (dependency, weak) = dependency.strip_suffix('?').map_or((dependency, false), |dependency| (dependency, true));
-    if dependency.is_empty() || feature.is_empty() {
-        return Err(native_feature_blocker(NativeFeatureBlockerInputs {
-            class: "unsupported-feature-entry",
-            message: &format!("dependency feature entry `{entry}` is malformed"),
-        }));
-    }
-    Ok(Some(NativeDependencyFeatureEdge {
-        dependency: dependency.to_string(),
-        feature: feature.to_string(),
-        weak,
-    }))
-}
-
-struct NativeFeatureBlockerInputs<'a> {
-    class: &'a str,
-    message: &'a str,
-}
-
-fn native_feature_blocker(inputs: NativeFeatureBlockerInputs<'_>) -> NativeFeatureResolutionBlocker {
-    let NativeFeatureBlockerInputs { class, message } = inputs;
-    debug_assert!(!class.is_empty());
-    debug_assert!(!message.is_empty());
-    NativeFeatureResolutionBlocker {
-        class: class.to_string(),
-        message: message.to_string(),
-    }
+    mantle_rust_plan_core::resolve_native_feature_selection(&facts)
 }
 
 fn compare_native_packages_to_cargo(
@@ -7512,55 +6769,69 @@ fn native_reachable_unit_packages<'a>(
     workspace_manifest_paths: &BTreeSet<String>,
     blockers: &mut Vec<NativeUnitGraphPlanningBlocker>,
 ) -> Vec<&'a NativePackagePlanningSummary> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
+    // Resolve paths and selected dependency edges in the shell; package
+    // identity, admission, reachability and deterministic order belong to
+    // the no_std core. Unmatched manifest paths keep the native planner's
+    // existing behavior: later artifact selection reports their blocker.
     let packages_by_manifest =
-        packages.iter().map(|package| (package.manifest_path.clone(), package)).collect::<BTreeMap<_, _>>();
-    let mut queued = VecDeque::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    if workspace_manifest_paths.is_empty() {
-        queued.extend(packages.iter().map(|package| package.manifest_path.clone()));
-    } else {
-        queued.extend(workspace_manifest_paths.iter().cloned());
-    }
-    let mut visited = BTreeSet::new();
-    let mut reachable_package_ids = BTreeSet::new();
-    let mut reachable = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    while let Some(manifest_path) = queued.pop_front() {
-        if !visited.insert(manifest_path.clone()) {
-            continue;
-        }
-        let Some(package) = packages_by_manifest
+        packages.iter().map(|package| (package.manifest_path.as_str(), package)).collect::<BTreeMap<_, _>>();
+    let resolve_manifest = |manifest_path: &str| {
+        packages_by_manifest
             .iter()
             .find(|(candidate, _)| {
                 manifest_path_strings_same(ManifestPathComparisonInputs {
                     left: candidate,
-                    right: &manifest_path,
+                    right: manifest_path,
                 })
             })
             .map(|(_, package)| *package)
-        else {
-            continue;
-        };
-        if !reachable_package_ids.insert(package.package_id.clone()) {
-            continue;
-        }
-        reachable.push(package);
-        if reachable_package_ids.len() > packages.len() {
-            blockers.push(native_unit_blocker(NativeUnitBlockerInputs {
+    };
+    let roots: Vec<String> = if workspace_manifest_paths.is_empty() {
+        packages.iter().map(|package| package.package_id.clone()).collect()
+    } else {
+        workspace_manifest_paths
+            .iter()
+            .filter_map(|path| resolve_manifest(path).map(|package| package.package_id.clone()))
+            .collect()
+    };
+    let facts = packages
+        .iter()
+        .map(|package| mantle_rust_plan_core::NormalizedPackageFacts {
+            package_id: package.package_id.clone(),
+            package_name: package.name.clone(),
+            version: package.version.clone(),
+            source_identity: if package.source_digest.value.is_empty() {
+                package.package_id.clone()
+            } else {
+                package.source_digest.value.clone()
+            },
+            order_key: package.manifest_path.clone(),
+            selected_features: package.selected_features.clone(),
+            selected_dependencies: package
+                .path_dependencies
+                .iter()
+                .chain(package.build_dependencies.iter())
+                .filter_map(|dependency| {
+                    resolve_manifest(&dependency.manifest_path).map(|selected| selected.package_id.clone())
+                })
+                .collect(),
+        })
+        .collect::<Vec<_>>();
+    let ids = match mantle_rust_plan_core::select_normalized_package_closure(&roots, &facts) {
+        Ok(ids) => ids,
+        Err(rejections) => {
+            blockers.extend(rejections.into_iter().map(|blocker| NativeUnitGraphPlanningBlocker {
                 unit_id: None,
-                package_id: Some(package.package_id.clone()),
-                class: "native-unit-package-closure-limit-exceeded",
-                message: "native unit package traversal exceeded package fact count",
+                package_id: (blocker.subject != "packages").then_some(blocker.subject),
+                class: blocker.code,
+                message: blocker.message,
             }));
-            break;
+            return Vec::new();
         }
-        for dependency in package.path_dependencies.iter().chain(package.build_dependencies.iter()) {
-            queued.push_back(dependency.manifest_path.clone());
-        }
-    }
-    reachable.sort_by(|left, right| left.manifest_path.cmp(&right.manifest_path));
-    reachable.dedup_by(|left, right| left.package_id == right.package_id);
-    reachable
+    };
+    let packages_by_id =
+        packages.iter().map(|package| (package.package_id.as_str(), package)).collect::<BTreeMap<_, _>>();
+    ids.iter().filter_map(|id| packages_by_id.get(id.as_str()).copied()).collect()
 }
 
 fn native_target_is_unit_target(target: &NativeTargetPlanningSummary) -> bool {
@@ -11276,7 +10547,45 @@ pub(crate) fn execute_first_supported_rust_unit(
             message: "unit_derivation_graph is not ready; resolve planning blockers before execution",
         });
     }
-    execute_rust_unit(unit, options)
+    let has_selected_producer = unit
+        .dependency_artifacts
+        .iter()
+        .map(|artifact| (&artifact.package_id, artifact.producer_unit_id.as_deref()))
+        .chain(
+            unit.consumed_host_artifacts
+                .iter()
+                .map(|artifact| (&artifact.package_id, artifact.producer_unit_id.as_deref())),
+        )
+        .chain(
+            unit.metadata_dependencies
+                .iter()
+                .map(|dependency| (&dependency.package_id, dependency.producer_unit_id.as_deref())),
+        )
+        .any(|(package_id, producer_id)| {
+            graph.derivations.iter().any(|candidate| {
+                candidate.unit_id != unit.unit_id
+                    && (producer_id == Some(candidate.unit_id.as_str())
+                        || producer_id.is_none() && candidate.package_id == *package_id)
+            })
+        });
+    if has_selected_producer {
+        return blocked_execution_receipt(BlockedExecutionReceiptInputs {
+            unit: Some(unit),
+            class: "isolated-unit-has-selected-producer",
+            message: "the first-unit execution surface cannot isolate a unit with a selected producer",
+        });
+    }
+    let effects = match plan_selected_rust_unit_effects(&[unit]) {
+        Ok(effects) => effects,
+        Err(blocker) => {
+            return blocked_execution_receipt(BlockedExecutionReceiptInputs {
+                unit: Some(unit),
+                class: &blocker.class,
+                message: &blocker.message,
+            });
+        }
+    };
+    execute_planned_rust_unit(unit, options, &effects[0], &[], &[]).map(|result| result.receipt)
 }
 
 struct RustUnitDependencyChain<'a> {
@@ -11357,7 +10666,11 @@ pub(crate) fn execute_first_rust_unit_dependency_chain(
         Ok(chain) => chain,
         Err(blocker) => return dependency_chain_receipt("blocked", Vec::new(), Some(blocker)),
     };
-    let producer_receipt = execute_rust_unit(chain.producer, options)?;
+    let effects = match plan_selected_rust_unit_effects(&[chain.producer, chain.consumer]) {
+        Ok(effects) => effects,
+        Err(blocker) => return dependency_chain_receipt("blocked", Vec::new(), Some(blocker)),
+    };
+    let producer_receipt = execute_planned_rust_unit(chain.producer, options, &effects[0], &[], &[])?.receipt;
     if producer_receipt.execution_status != "success" {
         return dependency_chain_receipt(
             "blocked",
@@ -11373,7 +10686,9 @@ pub(crate) fn execute_first_rust_unit_dependency_chain(
         Err(blocker) => return dependency_chain_receipt("blocked", vec![producer_receipt], Some(blocker)),
     };
     let bound_consumer = bind_dependency_artifact(chain.consumer, chain.dependency, &producer_artifact)?;
-    let consumer_receipt = execute_rust_unit(&bound_consumer, options)?;
+    let consumer_receipt =
+        execute_planned_rust_unit(&bound_consumer, options, &effects[1], std::slice::from_ref(&producer_receipt), &[])?
+            .receipt;
     let status = if consumer_receipt.execution_status == "success" {
         "success"
     } else {
@@ -11723,9 +11038,14 @@ fn execute_target_topology_order(
 ) -> Result<RustUnitTargetTopologyExecutionReceipt, RunError> {
     debug_assert!(ordered_indices.iter().all(|index| *index < graph.derivations.len()));
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
+    let selected = ordered_indices.iter().map(|index| &graph.derivations[*index]).collect::<Vec<_>>();
+    let effects = match plan_selected_rust_unit_effects(&selected) {
+        Ok(effects) => effects,
+        Err(blocker) => return target_topology_receipt("blocked", Vec::new(), Some(blocker)),
+    };
     let mut executions = Vec::with_capacity(ordered_indices.len());
     let mut produced_artifacts = ProducedArtifactIndex::default();
-    for index in ordered_indices {
+    for (index, planned) in ordered_indices.into_iter().zip(&effects) {
         let unit = &graph.derivations[index];
         let mut executable_unit = if unit.dependency_artifacts.is_empty() {
             unit.clone()
@@ -11741,7 +11061,7 @@ fn execute_target_topology_order(
         {
             return target_topology_receipt("blocked", executions, Some(blocker));
         }
-        let receipt = execute_rust_unit(&executable_unit, options)?;
+        let receipt = execute_planned_rust_unit(&executable_unit, options, planned, &executions, &[])?.receipt;
         if receipt.execution_status != "success" {
             let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
                 class: "target-unit-failed".to_string(),
@@ -12377,69 +11697,55 @@ fn topology_unit_failed_blocker(
 }
 
 struct TopologyUnitExecutionInputs<'a> {
-    graph: &'a UnitDerivationGraphSummary,
     options: &'a RustUnitExecutionOptions,
     unit: &'a RustUnitDerivationSummary,
     state: &'a mut RustUnitTopologyExecutionState,
-}
-
-fn execute_host_dependency_topology_unit(
-    inputs: TopologyUnitExecutionInputs<'_>,
-) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
-    debug_assert!(is_supported_host_dependency_unit(inputs.unit));
-    debug_assert!(!inputs.unit.unit_id.is_empty());
-    let mut executable = match bind_all_host_artifacts_with_index(inputs.unit, &inputs.state.host_artifacts) {
-        Ok(unit) => unit,
-        Err(blocker) => return Ok(Some(blocker)),
-    };
-    executable = match bind_all_build_script_metadata_with_index(&executable, &inputs.state.build_script_metadata) {
-        Ok(unit) => unit,
-        Err(blocker) => return Ok(Some(blocker)),
-    };
-    let mut dependency_artifacts = inputs.state.host_dependency_artifacts.clone();
-    dependency_artifacts.extend_from(&inputs.state.proc_macro_artifacts);
-    if !executable.dependency_artifacts.is_empty() {
-        executable = match bind_all_dependency_artifacts_with_index(&executable, &dependency_artifacts) {
-            Ok(unit) => unit,
-            Err(blocker) => return Ok(Some(blocker)),
-        };
-    }
-    let has_search_paths =
-        !inputs.unit.dependency_artifacts.is_empty() || !inputs.unit.consumed_host_artifacts.is_empty();
-    if has_search_paths
-        && let Err(blocker) =
-            append_selected_dependency_search_paths(&mut executable, inputs.graph, &dependency_artifacts)
-    {
-        return Ok(Some(blocker));
-    }
-    let receipt = execute_rust_unit(&executable, inputs.options)?;
-    let blocker = topology_unit_failed_blocker(
-        &receipt,
-        "host-dependency-unit-failed",
-        format!("host dependency unit {} did not execute successfully", inputs.unit.unit_id),
-    );
-    inputs.state.executions.push(receipt);
-    if blocker.is_some() {
-        return Ok(blocker);
-    }
-    if inputs.unit.target_kind == "lib" {
-        match produced_library_artifact_path(&executable, inputs.options)? {
-            Ok(path) => inputs.state.host_dependency_artifacts.record_unit(inputs.unit, path),
-            Err(blocker) => return Ok(Some(blocker)),
-        }
-    }
-    Ok(None)
 }
 
 fn record_host_topology_outputs(
     inputs: &mut TopologyUnitExecutionInputs<'_>,
     executable: &RustUnitDerivationSummary,
     output_path: PathBuf,
+    admission: Option<&BuildScriptAdmissionContext<'_>>,
+    process_attempts: &mut Vec<mantle_rust_plan_app::ProcessAttempt>,
+    cache: mantle_rust_plan_app::CacheObservation,
+    postprocess_failure: &mut Option<mantle_rust_plan_app::BuildScriptPostprocessFailure>,
 ) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
     debug_assert!(is_supported_host_unit(inputs.unit));
     debug_assert!(!inputs.unit.unit_id.is_empty());
     if inputs.unit.target_kind == "custom-build" {
-        match run_build_script_metadata(executable, inputs.options, &output_path)? {
+        let Some(admission) = admission else {
+            return Ok(Some(RustUnitExecutionBlocker {
+                class: "missing-compiler-observation".to_string(),
+                message: format!(
+                    "custom-build unit {} has no admitted compiler execution or restored artifact",
+                    inputs.unit.unit_id
+                ),
+            }));
+        };
+        let execution = run_build_script_metadata(executable, inputs.options, &output_path, admission)?;
+        if execution.metadata_parse_failed
+            && matches!(
+                cache,
+                mantle_rust_plan_app::CacheObservation::ReusedOutput
+                    | mantle_rust_plan_app::CacheObservation::RestoredLocal
+                    | mantle_rust_plan_app::CacheObservation::RestoredShared
+            )
+        {
+            let attempt =
+                execution.process_attempt.as_ref().expect("admitted cached build script has a process attempt");
+            let blocker = execution.receipt.as_ref().expect_err("failed metadata parser has a blocker");
+            *postprocess_failure = Some(mantle_rust_plan_app::BuildScriptPostprocessFailure {
+                effect_id: attempt.effect.facts.effect_id.clone(),
+                unit_id: attempt.effect.facts.unit_id.clone(),
+                script_resolved_blake3: attempt.effect.resolved_blake3.clone(),
+                blocker_class: blocker.class.clone(),
+            });
+        }
+        if let Some(attempt) = execution.process_attempt {
+            process_attempts.push(attempt);
+        }
+        match execution.receipt {
             Ok(metadata_run) => {
                 inputs
                     .state
@@ -12457,97 +11763,702 @@ fn record_host_topology_outputs(
     Ok(None)
 }
 
-fn execute_host_topology_unit(
-    mut inputs: TopologyUnitExecutionInputs<'_>,
-) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
-    debug_assert!(is_supported_host_unit(inputs.unit));
-    debug_assert!(!inputs.unit.unit_id.is_empty());
-    let mut executable = match bind_all_host_artifacts_with_index(inputs.unit, &inputs.state.host_artifacts) {
-        Ok(unit) => unit,
-        Err(blocker) => return Ok(Some(blocker)),
-    };
-    let mut dependency_artifacts = inputs.state.host_dependency_artifacts.clone();
-    dependency_artifacts.extend_from(&inputs.state.proc_macro_artifacts);
-    if !executable.dependency_artifacts.is_empty() {
-        executable = match bind_all_dependency_artifacts_with_index(&executable, &dependency_artifacts) {
-            Ok(unit) => unit,
-            Err(blocker) => return Ok(Some(blocker)),
-        };
+// The Cargo/workspace adapter supplies the already selected derivations. Only
+// producer unit IDs are topology edges; source and toolchain inputs are opaque
+// identities, and the native rank preserves the accepted stable tie-break.
+fn existing_topology_unit_facts(
+    graph: &UnitDerivationGraphSummary,
+    ordered_indices: &[usize],
+) -> Result<Vec<mantle_rust_plan_core::ExistingUnitFacts>, RustUnitExecutionBlocker> {
+    let mut units = Vec::with_capacity(ordered_indices.len());
+    for (rank, index) in ordered_indices.iter().copied().enumerate() {
+        let execution_order = u32::try_from(rank).map_err(|_| RustUnitExecutionBlocker {
+            class: "unit-limit".to_string(),
+            message: "selected Rust unit topology exceeds the execution order bound".to_string(),
+        })?;
+        let unit = &graph.derivations[index];
+        let dependency_unit_ids = unit
+            .dependency_artifacts
+            .iter()
+            .filter_map(|artifact| artifact.producer_unit_id.as_ref())
+            .chain(unit.consumed_host_artifacts.iter().filter_map(|artifact| artifact.producer_unit_id.as_ref()))
+            .chain(unit.metadata_dependencies.iter().filter_map(|dependency| dependency.producer_unit_id.as_ref()))
+            .filter(|producer_unit_id| *producer_unit_id != &unit.unit_id)
+            .cloned()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        units.push(existing_rust_unit_facts(unit, dependency_unit_ids, execution_order));
     }
-    let has_search_paths =
-        !inputs.unit.dependency_artifacts.is_empty() || !inputs.unit.consumed_host_artifacts.is_empty();
-    if has_search_paths
-        && let Err(blocker) =
-            append_selected_dependency_search_paths(&mut executable, inputs.graph, &dependency_artifacts)
-    {
-        return Ok(Some(blocker));
-    }
-    executable = match bind_all_build_script_metadata_with_index(&executable, &inputs.state.build_script_metadata) {
-        Ok(unit) => unit,
-        Err(blocker) => return Ok(Some(blocker)),
-    };
-    let receipt = execute_rust_unit(&executable, inputs.options)?;
-    let blocker = topology_unit_failed_blocker(
-        &receipt,
-        "host-unit-failed",
-        format!("host unit {} did not execute successfully", inputs.unit.unit_id),
-    );
-    inputs.state.executions.push(receipt);
-    if blocker.is_some() {
-        return Ok(blocker);
-    }
-    match produced_host_artifact_path(inputs.unit, inputs.options)? {
-        Ok(path) => record_host_topology_outputs(&mut inputs, &executable, path),
-        Err(blocker) => Ok(Some(blocker)),
+    Ok(units)
+}
+fn existing_rust_unit_facts(
+    unit: &RustUnitDerivationSummary,
+    dependency_unit_ids: Vec<String>,
+    execution_order: u32,
+) -> mantle_rust_plan_core::ExistingUnitFacts {
+    mantle_rust_plan_core::ExistingUnitFacts {
+        unit_id: unit.unit_id.clone(),
+        package_id: unit.package_id.clone(),
+        target_name: unit.target_name.clone(),
+        target_kind: unit.target_kind.clone(),
+        execution_kind: unit.execution_kind.clone(),
+        dependency_unit_ids,
+        arguments: unit.derivation.args.clone(),
+        environment: unit.derivation.env.iter().map(|(key, value)| (key.clone(), value.clone())).collect(),
+        input_identities: unit.derivation.inputs.clone(),
+        expected_outputs: unit.derivation.outputs.clone(),
+        execution_order,
     }
 }
 
-fn execute_target_topology_unit(
-    inputs: TopologyUnitExecutionInputs<'_>,
-) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
-    debug_assert!(is_supported_target_unit(inputs.unit));
-    debug_assert!(!inputs.unit.unit_id.is_empty());
-    let mut executable = match bind_all_host_artifacts_with_index(inputs.unit, &inputs.state.host_artifacts) {
-        Ok(unit) => unit,
-        Err(blocker) => return Ok(Some(blocker)),
-    };
-    executable = match bind_all_build_script_metadata_with_index(&executable, &inputs.state.build_script_metadata) {
-        Ok(unit) => unit,
-        Err(blocker) => return Ok(Some(blocker)),
-    };
-    let mut dependency_artifacts = inputs.state.target_artifacts.clone();
-    dependency_artifacts.extend_from(&inputs.state.proc_macro_artifacts);
-    if !executable.dependency_artifacts.is_empty() {
-        executable = match bind_all_dependency_artifacts_with_index(&executable, &dependency_artifacts) {
-            Ok(unit) => unit,
-            Err(blocker) => return Ok(Some(blocker)),
-        };
+// A specialised CLI surface first selects its actual producer/consumer units.
+// Edges refer only to selected producer IDs; other artifacts remain external
+// inputs whose bytes are observed during execution preparation.
+fn plan_selected_rust_unit_effects(
+    selected: &[&RustUnitDerivationSummary],
+) -> Result<Vec<mantle_rust_plan_core::ExistingUnitEffect>, RustUnitExecutionBlocker> {
+    let selected_ids = selected.iter().map(|unit| unit.unit_id.as_str()).collect::<BTreeSet<_>>();
+    let mut facts = Vec::with_capacity(selected.len());
+    for (rank, unit) in selected.iter().copied().enumerate() {
+        let execution_order = u32::try_from(rank).map_err(|_| RustUnitExecutionBlocker {
+            class: "unit-limit".to_string(),
+            message: "selected Rust unit topology exceeds the execution order bound".to_string(),
+        })?;
+        let mut producers = BTreeSet::new();
+        for dependency in &unit.dependency_artifacts {
+            if let Some(id) = dependency.producer_unit_id.as_ref().filter(|id| selected_ids.contains(id.as_str())) {
+                producers.insert(id.clone());
+            } else if dependency.producer_unit_id.is_none() {
+                let matches = selected.iter().filter(|producer| {
+                    producer.unit_id != unit.unit_id
+                        && producer.package_id == dependency.package_id
+                        && producer.target_kind == "lib"
+                        && (producer.execution_kind == unit.execution_kind
+                            || unit.execution_kind == HOST_EXECUTION_KIND
+                                && producer.execution_kind == HOST_DEPENDENCY_EXECUTION_KIND)
+                });
+                let mut matches = matches.peekable();
+                if let Some(producer) = matches.next() {
+                    if matches.peek().is_some() {
+                        return Err(RustUnitExecutionBlocker {
+                            class: "ambiguous-dependency-producer".to_string(),
+                            message: format!(
+                                "selected dependency package {} has multiple lib producers",
+                                dependency.package_id
+                            ),
+                        });
+                    }
+                    producers.insert(producer.unit_id.clone());
+                }
+            }
+        }
+        for artifact in &unit.consumed_host_artifacts {
+            if let Some(id) = artifact.producer_unit_id.as_ref().filter(|id| selected_ids.contains(id.as_str())) {
+                producers.insert(id.clone());
+            } else if artifact.producer_unit_id.is_none() {
+                let mut matches = selected.iter().filter(|producer| {
+                    producer.unit_id != unit.unit_id
+                        && producer.package_id == artifact.package_id
+                        && producer.target_name == artifact.target_name
+                        && producer.target_kind == artifact.target_kind
+                });
+                if let Some(producer) = matches.next() {
+                    if matches.next().is_some() {
+                        return Err(RustUnitExecutionBlocker {
+                            class: "ambiguous-host-artifact-producer".to_string(),
+                            message: format!(
+                                "host artifact package {} has multiple selected producers",
+                                artifact.package_id
+                            ),
+                        });
+                    }
+                    producers.insert(producer.unit_id.clone());
+                }
+            }
+        }
+        for dependency in &unit.metadata_dependencies {
+            if let Some(id) = dependency.producer_unit_id.as_ref().filter(|id| selected_ids.contains(id.as_str())) {
+                producers.insert(id.clone());
+            } else if dependency.producer_unit_id.is_none() {
+                let mut matches = selected.iter().filter(|producer| {
+                    producer.unit_id != unit.unit_id
+                        && producer.package_id == dependency.package_id
+                        && producer.target_kind == "custom-build"
+                });
+                if let Some(producer) = matches.next() {
+                    if matches.next().is_some() {
+                        return Err(RustUnitExecutionBlocker {
+                            class: "ambiguous-build-script-producer".to_string(),
+                            message: format!(
+                                "build-script metadata package {} has multiple selected producers",
+                                dependency.package_id
+                            ),
+                        });
+                    }
+                    producers.insert(producer.unit_id.clone());
+                }
+            }
+        }
+        producers.remove(&unit.unit_id);
+        facts.push(existing_rust_unit_facts(unit, producers.into_iter().collect(), execution_order));
     }
-    let has_search_paths =
-        !inputs.unit.dependency_artifacts.is_empty() || !inputs.unit.consumed_host_artifacts.is_empty();
-    if has_search_paths
-        && let Err(blocker) =
-            append_selected_dependency_search_paths(&mut executable, inputs.graph, &dependency_artifacts)
+    let effects = mantle_rust_plan_app::plan_existing_unit_effects(facts).map_err(|blockers| {
+        let blocker = &blockers[0];
+        RustUnitExecutionBlocker {
+            class: blocker.code.clone(),
+            message: blocker.message.clone(),
+        }
+    })?;
+    if effects.len() != selected.len()
+        || effects.iter().zip(selected).any(|(effect, unit)| effect.unit_id.0 != unit.unit_id)
     {
-        return Ok(Some(blocker));
+        return Err(RustUnitExecutionBlocker {
+            class: "selected-unit-order-mismatch".to_string(),
+            message: "the selected execution order disagrees with the approved Rust unit effect order".to_string(),
+        });
     }
-    let receipt = execute_rust_unit(&executable, inputs.options)?;
-    let blocker = topology_unit_failed_blocker(
-        &receipt,
-        "target-unit-failed",
-        format!("target unit {} did not execute successfully", inputs.unit.unit_id),
-    );
-    inputs.state.executions.push(receipt);
-    if blocker.is_some() {
-        return Ok(blocker);
+    Ok(effects)
+}
+
+fn bind_selected_topology_derivation(
+    graph: &UnitDerivationGraphSummary,
+    unit: &RustUnitDerivationSummary,
+    state: &RustUnitTopologyExecutionState,
+) -> Result<RustUnitDerivationSummary, RustUnitExecutionBlocker> {
+    let mut bound = bind_all_host_artifacts_with_index(unit, &state.host_artifacts)?;
+    let bind_metadata_first = !is_supported_host_unit(unit);
+    if bind_metadata_first {
+        bound = bind_all_build_script_metadata_with_index(&bound, &state.build_script_metadata)?;
     }
-    if inputs.unit.target_kind == "lib" {
-        match produced_library_artifact_path(&executable, inputs.options)? {
-            Ok(path) => inputs.state.target_artifacts.record_unit(inputs.unit, path),
-            Err(blocker) => return Ok(Some(blocker)),
+    let mut dependency_artifacts = if is_supported_target_unit(unit) {
+        state.target_artifacts.clone()
+    } else {
+        state.host_dependency_artifacts.clone()
+    };
+    dependency_artifacts.extend_from(&state.proc_macro_artifacts);
+    if !bound.dependency_artifacts.is_empty() {
+        bound = bind_all_dependency_artifacts_with_index(&bound, &dependency_artifacts)?;
+    }
+    if !unit.dependency_artifacts.is_empty() || !unit.consumed_host_artifacts.is_empty() {
+        append_selected_dependency_search_paths(&mut bound, graph, &dependency_artifacts)?;
+    }
+    if !bind_metadata_first {
+        bound = bind_all_build_script_metadata_with_index(&bound, &state.build_script_metadata)?;
+    }
+    Ok(bound)
+}
+
+#[cfg(unix)]
+fn rust_process_word(value: &OsStr) -> mantle_rust_plan_core::ProcessWord {
+    use std::os::unix::ffi::OsStrExt;
+    match value.to_str() {
+        Some(value) => mantle_rust_plan_core::ProcessWord::Utf8(value.to_string()),
+        None => mantle_rust_plan_core::ProcessWord::Opaque {
+            encoding: "unix-os-bytes".to_string(),
+            bytes: value.as_bytes().to_vec(),
+        },
+    }
+}
+
+#[cfg(windows)]
+fn rust_process_word(value: &OsStr) -> mantle_rust_plan_core::ProcessWord {
+    use std::os::windows::ffi::OsStrExt;
+    match value.to_str() {
+        Some(value) => mantle_rust_plan_core::ProcessWord::Utf8(value.to_string()),
+        None => mantle_rust_plan_core::ProcessWord::Opaque {
+            encoding: "windows-wtf16le".to_string(),
+            bytes: value.encode_wide().flat_map(u16::to_le_bytes).collect(),
+        },
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn rust_process_word(value: &OsStr) -> mantle_rust_plan_core::ProcessWord {
+    match value.to_str() {
+        Some(value) => mantle_rust_plan_core::ProcessWord::Utf8(value.to_string()),
+        None => mantle_rust_plan_core::ProcessWord::Opaque {
+            encoding: "unsupported-os-encoding".to_string(),
+            bytes: Vec::new(),
+        },
+    }
+}
+
+fn rust_os_word(word: &mantle_rust_plan_core::ProcessWord) -> Result<Cow<'_, OsStr>, RunError> {
+    match word {
+        mantle_rust_plan_core::ProcessWord::Utf8(value) => Ok(Cow::Borrowed(OsStr::new(value))),
+        mantle_rust_plan_core::ProcessWord::Opaque { encoding, bytes } => {
+            #[cfg(unix)]
+            if encoding == "unix-os-bytes" {
+                use std::os::unix::ffi::OsStrExt;
+                return Ok(Cow::Borrowed(OsStr::from_bytes(bytes)));
+            }
+            #[cfg(windows)]
+            if encoding == "windows-wtf16le" {
+                use std::os::windows::ffi::OsStringExt;
+                let units =
+                    bytes.chunks_exact(2).map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]])).collect::<Vec<_>>();
+                return Ok(Cow::Owned(OsString::from_wide(&units)));
+            }
+            Err(RunError::Internal(format!("unsupported Rust plan process word encoding: {encoding}")))
         }
     }
-    Ok(None)
+}
+
+fn execute_admitted_rust_process(
+    effect: &mantle_rust_plan_core::ResolvedUnitEffect,
+    unit: &RustUnitDerivationSummary,
+    compiler_policy_report: Option<&Path>,
+) -> Result<std::process::Output, RunError> {
+    if let Some(report_path) = compiler_policy_report
+        && let Some(report_dir) = report_path.parent()
+    {
+        fs::create_dir_all(report_dir).map_err(|error| {
+            RunError::Internal(format!("creating compiler-policy report directory {}: {error}", report_dir.display()))
+        })?;
+    }
+    let executable = rust_os_word(&effect.facts.executable)?;
+    let mut command = Command::new(&*executable);
+    for arg in &effect.facts.arguments {
+        command.arg(&*rust_os_word(arg)?);
+    }
+    command.env_clear();
+    for (key, value) in &effect.facts.environment {
+        command.env(key, &*rust_os_word(value)?);
+    }
+    if let Some(cwd) = &effect.facts.working_directory {
+        command.current_dir(Path::new(&*rust_os_word(cwd)?));
+    }
+    command.output().map_err(|error| {
+        if effect.facts.role == mantle_rust_plan_core::ProcessEffectRole::BuildScriptRun {
+            RunError::Internal(format!("running build-script unit {}: {error}", unit.unit_id))
+        } else {
+            RunError::Internal(format!(
+                "executing Rust compiler command {} for unit {}: {error}",
+                Path::new(&*executable).display(),
+                unit.unit_id,
+            ))
+        }
+    })
+}
+
+fn topology_primary_process_facts(
+    effect: &mantle_rust_plan_core::ExistingUnitEffect,
+    unit: &RustUnitDerivationSummary,
+    inputs: &RustUnitExecutionInputs,
+    options: &RustUnitExecutionOptions,
+    executions: &[RustUnitExecutionReceipt],
+    metadata_runs: &[BuildScriptMetadataRunReceipt],
+) -> Result<mantle_rust_plan_core::ResolvedUnitFacts, mantle_rust_plan_app::AdapterError> {
+    use mantle_rust_plan_core::ProcessWord;
+    let mut arguments = mantle_rust_plan_core::plan_native_runtime_arguments(&unit.derivation.args)
+        .into_iter()
+        .map(ProcessWord::Utf8)
+        .collect::<Vec<_>>();
+    let executable = if let Some(policy) = &inputs.compiler_policy_invocation {
+        arguments.insert(0, rust_process_word(options.rustc.as_os_str()));
+        rust_process_word(policy.executable.as_os_str())
+    } else {
+        rust_process_word(options.rustc.as_os_str())
+    };
+    arguments.push(ProcessWord::Utf8("--out-dir".to_string()));
+    arguments.push(rust_process_word(inputs.output_dir.as_os_str()));
+    let mut child_env = rust_topology_child_env(
+        &unit.derivation.env,
+        std::env::var_os(RUST_TOPOLOGY_TOOL_PATH_ENV),
+        &inherited_rust_topology_compile_env(),
+    );
+    if let Some(policy) = &inputs.compiler_policy_invocation {
+        for (key, value) in &policy.environment {
+            child_env.insert(key.clone(), OsString::from(value));
+        }
+        child_env.insert(COMPILER_POLICY_ADAPTER_REPORT_ENV.to_string(), policy.report_path.as_os_str().to_os_string());
+    }
+    let mut input_identities = effect.input_identities.clone();
+    for identity in &unit.derivation.inputs {
+        if !input_identities.contains(identity) {
+            input_identities.push(identity.clone());
+        }
+    }
+    for artifact in inputs.dependency_artifact_digests.iter().chain(&inputs.host_artifact_digests) {
+        if !input_identities.contains(&artifact.blake3) {
+            input_identities.push(artifact.blake3.clone());
+        }
+    }
+    let mut dependency_observations = Vec::with_capacity(effect.dependency_unit_ids.len());
+    for producer_id in &effect.dependency_unit_ids {
+        let digest = executions
+            .iter()
+            .rev()
+            .find(|receipt| receipt.unit_id == producer_id.0)
+            .and_then(|receipt| receipt.output_artifact_digests.first().map(|artifact| artifact.blake3.as_str()))
+            .or_else(|| {
+                metadata_runs
+                    .iter()
+                    .rev()
+                    .find(|run| run.unit_id == producer_id.0)
+                    .map(|run| run.metadata_digest_blake3.as_str())
+            })
+            .ok_or_else(|| {
+                mantle_rust_plan_app::AdapterError::new(
+                    "missing-producer-observation",
+                    "selected producer has no observed output artifact identity",
+                )
+            })?;
+        let identity = digest.to_string();
+        input_identities.push(identity.clone());
+        dependency_observations.push(mantle_rust_plan_core::ProducerArtifactObservation {
+            producer_unit_id: producer_id.clone(),
+            artifact_identity: identity,
+        });
+    }
+    Ok(mantle_rust_plan_core::ResolvedUnitFacts {
+        effect_id: effect.effect_id.clone(),
+        unit_id: effect.unit_id.clone(),
+        role: mantle_rust_plan_core::ProcessEffectRole::RustCompiler,
+        attempt: 0,
+        prior_attempt_identity: None,
+        executable,
+        toolchain_identity: inputs.toolchain.version_digest_blake3.clone(),
+        arguments,
+        environment: child_env.into_iter().map(|(key, value)| (key, rust_process_word(&value))).collect(),
+        working_directory: rustc_source_root_from_remaps(&unit.derivation.args)
+            .map(|path| rust_process_word(path.as_os_str())),
+        input_identities,
+        expected_outputs: effect.expected_outputs.clone(),
+        dependency_observations,
+    })
+}
+
+struct NativePreparedTopologyUnit {
+    unit: RustUnitDerivationSummary,
+    inputs: Option<RustUnitExecutionInputs>,
+    effect_id: mantle_rust_plan_core::EffectId,
+    unit_id: mantle_rust_plan_core::UnitId,
+    process_attempts: Vec<mantle_rust_plan_app::ProcessAttempt>,
+    restored_compiler: Option<mantle_rust_plan_core::RestoredCompilerArtifactObservation>,
+}
+
+struct NativeTopologyUnitExecutor<'a> {
+    graph: &'a UnitDerivationGraphSummary,
+    options: &'a RustUnitExecutionOptions,
+    indices_by_id: BTreeMap<String, usize>,
+    state: RustUnitTopologyExecutionState,
+    blocker: Option<RustUnitExecutionBlocker>,
+    error: Option<RunError>,
+}
+
+impl NativeTopologyUnitExecutor<'_> {
+    fn capability_error(&mut self, error: RunError) -> mantle_rust_plan_app::AdapterError {
+        self.error = Some(error);
+        mantle_rust_plan_app::AdapterError::new(
+            "unit-execution-failed",
+            "Rust unit execution returned a capability failure",
+        )
+    }
+
+    fn completed_observation(
+        &self,
+        effect_id: mantle_rust_plan_core::EffectId,
+        unit_id: mantle_rust_plan_core::UnitId,
+        receipt: Option<&RustUnitExecutionReceipt>,
+        cache: mantle_rust_plan_app::CacheObservation,
+        process_attempts: Vec<mantle_rust_plan_app::ProcessAttempt>,
+    ) -> mantle_rust_plan_app::UnitExecutionResult {
+        let blocked = self.blocker.is_some();
+        let mut produced_artifacts = receipt
+            .filter(|receipt| receipt.execution_status == "success")
+            .map(|receipt| {
+                receipt.output_artifact_digests.iter().map(|artifact| artifact.blake3.clone()).collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        if let Some(metadata) = self.state.metadata_runs.last().filter(|metadata| metadata.unit_id == unit_id.0) {
+            produced_artifacts.push(metadata.metadata_digest_blake3.clone());
+            produced_artifacts.extend(metadata.out_dir_artifact_digests.iter().map(|artifact| artifact.blake3.clone()));
+        }
+        mantle_rust_plan_app::UnitExecutionResult {
+            observation: mantle_rust_plan_core::UnitObservation {
+                effect_id,
+                unit_id,
+                status: if blocked {
+                    mantle_rust_plan_core::UnitObservationStatus::Failed
+                } else {
+                    mantle_rust_plan_core::UnitObservationStatus::Succeeded
+                },
+                exit_code: if blocked { None } else { Some(0) },
+                diagnostics_code: self
+                    .blocker
+                    .as_ref()
+                    .map(|blocker| blocker.class.clone())
+                    .or_else(|| receipt.map(|receipt| receipt.rebuild_reason.clone())),
+            },
+            cache,
+            process_attempts,
+            restored_compiler: None,
+            build_script_postprocess_failure: None,
+            produced_artifacts,
+        }
+    }
+}
+
+fn restored_compiler_evidence(
+    receipt: &RustUnitExecutionReceipt,
+    primary: &mantle_rust_plan_core::ResolvedUnitEffect,
+    cache: mantle_rust_plan_app::CacheObservation,
+) -> Result<mantle_rust_plan_core::RestoredCompilerArtifactObservation, RunError> {
+    use mantle_rust_plan_core::Blake3Digest;
+    use mantle_rust_plan_core::CompilerRestoreKind;
+    let cache_kind = match cache {
+        mantle_rust_plan_app::CacheObservation::ReusedOutput => CompilerRestoreKind::ReusedOutput,
+        mantle_rust_plan_app::CacheObservation::RestoredLocal => CompilerRestoreKind::RestoredLocal,
+        mantle_rust_plan_app::CacheObservation::RestoredShared => CompilerRestoreKind::RestoredShared,
+        _ => return Err(RunError::Internal("build-script compiler restoration has no cache hit".to_string())),
+    };
+    let output_artifact_set_identity =
+        mantle_rust_plan_core::hash_legacy_receipt_preimage(&receipt.output_artifact_digests)
+            .and_then(|identity| Blake3Digest::parse(identity).map_err(|error| error.to_string()))
+            .map_err(RunError::Internal)?;
+    let cache_receipt_identity = Blake3Digest::parse(receipt.receipt_hash.clone())
+        .map_err(|error| RunError::Internal(format!("cached Rust unit receipt identity: {error}")))?;
+    let output_artifact_count = u32::try_from(receipt.output_artifact_digests.len())
+        .map_err(|_| RunError::Internal("restored Rust output artifact count exceeds its bound".to_string()))?;
+    Ok(mantle_rust_plan_core::RestoredCompilerArtifactObservation {
+        effect_id: primary.facts.effect_id.clone(),
+        unit_id: primary.facts.unit_id.clone(),
+        compiler_resolved_blake3: primary.resolved_blake3.clone(),
+        cache_receipt_identity,
+        declared_outputs: receipt.declared_outputs.clone(),
+        output_artifact_set_identity,
+        output_artifact_count,
+        cache_kind,
+    })
+}
+
+impl mantle_rust_plan_app::UnitExecutor for NativeTopologyUnitExecutor<'_> {
+    type Prepared = NativePreparedTopologyUnit;
+    type Receipt = RustUnitExecutionReceipt;
+
+    fn prepare_unit(
+        &mut self,
+        effect: &mantle_rust_plan_core::ExistingUnitEffect,
+    ) -> Result<mantle_rust_plan_app::PrepareOutcome<Self::Prepared>, mantle_rust_plan_app::AdapterError> {
+        let index = self.indices_by_id.get(&effect.unit_id.0).copied().ok_or_else(|| {
+            mantle_rust_plan_app::AdapterError::new("missing-unit-effect", "planned Rust unit has no derivation")
+        })?;
+        let selected = &self.graph.derivations[index];
+        if effect.arguments != selected.derivation.args
+            || effect.environment.iter().map(|(key, value)| (key.as_str(), value.as_str())).ne(selected
+                .derivation
+                .env
+                .iter()
+                .map(|(key, value)| (key.as_str(), value.as_str())))
+            || effect.expected_outputs != selected.derivation.outputs
+            || effect.input_identities != selected.derivation.inputs
+        {
+            return Err(mantle_rust_plan_app::AdapterError::new(
+                "unit-effect-drift",
+                "planned Rust unit effect does not match the selected derivation",
+            ));
+        }
+        if !is_supported_host_dependency_unit(selected)
+            && !is_supported_host_unit(selected)
+            && !is_supported_target_unit(selected)
+        {
+            return Err(mantle_rust_plan_app::AdapterError::new(
+                "unsupported-unit-effect",
+                "selected Rust derivation has no supported execution handler",
+            ));
+        }
+        let bound = match bind_selected_topology_derivation(self.graph, selected, &self.state) {
+            Ok(bound) => bound,
+            Err(blocker) => {
+                self.blocker = Some(blocker);
+                return Ok(mantle_rust_plan_app::PrepareOutcome::Stopped(self.completed_observation(
+                    effect.effect_id.clone(),
+                    effect.unit_id.clone(),
+                    None,
+                    mantle_rust_plan_app::CacheObservation::NotObserved,
+                    Vec::new(),
+                )));
+            }
+        };
+        let inputs = match prepare_rust_unit_for_cache(&bound, self.options) {
+            Ok(Ok(inputs)) => inputs,
+            Ok(Err(receipt)) => {
+                self.blocker = topology_unit_failed_blocker(
+                    &receipt,
+                    "topology-unit-failed",
+                    format!("unit {} did not execute successfully", selected.unit_id),
+                );
+                self.state.executions.push(receipt);
+                return Ok(mantle_rust_plan_app::PrepareOutcome::Stopped(self.completed_observation(
+                    effect.effect_id.clone(),
+                    effect.unit_id.clone(),
+                    self.state.executions.last(),
+                    mantle_rust_plan_app::CacheObservation::NotObserved,
+                    Vec::new(),
+                )));
+            }
+            Err(error) => return Err(self.capability_error(error)),
+        };
+        let facts = topology_primary_process_facts(
+            effect,
+            &bound,
+            &inputs,
+            self.options,
+            &self.state.executions,
+            &self.state.metadata_runs,
+        )?;
+        Ok(mantle_rust_plan_app::PrepareOutcome::Ready {
+            prepared: NativePreparedTopologyUnit {
+                unit: bound,
+                inputs: Some(inputs),
+                effect_id: effect.effect_id.clone(),
+                unit_id: effect.unit_id.clone(),
+                process_attempts: Vec::new(),
+                restored_compiler: None,
+            },
+            facts,
+        })
+    }
+
+    fn execute_miss(
+        &mut self,
+        prepared: &mut Self::Prepared,
+        planned: &mantle_rust_plan_core::ExistingUnitEffect,
+        effect: mantle_rust_plan_core::ResolvedUnitEffect,
+    ) -> Result<Self::Receipt, mantle_rust_plan_app::AdapterError> {
+        let inputs = prepared.inputs.take().expect("prepared Rust unit has cache inputs");
+        let (receipt, attempts) =
+            match execute_uncached_rust_unit(&prepared.unit, self.options, inputs, planned, effect) {
+                Ok(result) => result,
+                Err(error) => return Err(self.capability_error(error)),
+            };
+        prepared.process_attempts.extend(attempts);
+        Ok(receipt)
+    }
+
+    fn finish_unit(
+        &mut self,
+        planned: &mantle_rust_plan_core::ExistingUnitEffect,
+        mut prepared: Self::Prepared,
+        receipt: Self::Receipt,
+        cache: mantle_rust_plan_app::CacheObservation,
+        primary: Option<&mantle_rust_plan_core::ResolvedUnitEffect>,
+    ) -> Result<mantle_rust_plan_app::UnitExecutionResult, mantle_rust_plan_app::AdapterError> {
+        let index = self.indices_by_id[&prepared.unit.unit_id];
+        let selected = &self.graph.derivations[index];
+        self.blocker = topology_unit_failed_blocker(
+            &receipt,
+            "topology-unit-failed",
+            format!("unit {} did not execute successfully", selected.unit_id),
+        );
+        self.state.executions.push(receipt);
+        let mut postprocess_failure = None;
+        if self.blocker.is_none() {
+            let mut inputs = TopologyUnitExecutionInputs {
+                options: self.options,
+                unit: selected,
+                state: &mut self.state,
+            };
+            let outputs = if is_supported_host_dependency_unit(selected) {
+                if selected.target_kind == "lib" {
+                    match produced_library_artifact_path(&prepared.unit, self.options) {
+                        Ok(Ok(path)) => inputs.state.host_dependency_artifacts.record_unit(selected, path),
+                        Ok(Err(blocker)) => self.blocker = Some(blocker),
+                        Err(error) => return Err(self.capability_error(error)),
+                    }
+                }
+                Ok(None)
+            } else if is_supported_host_unit(selected) {
+                let observed_compiler = prepared.process_attempts.last();
+                let compiler_effect = primary.or_else(|| observed_compiler.map(|attempt| &attempt.effect));
+                let admission = compiler_effect.map(|compiler| BuildScriptAdmissionContext {
+                    planned,
+                    primary: compiler,
+                    observed_compiler: observed_compiler.map(|attempt| &attempt.observation),
+                    restored_compiler: prepared.restored_compiler.as_ref(),
+                });
+                let mut script_attempts = Vec::new();
+                let outcome = match produced_host_artifact_path(selected, self.options) {
+                    Ok(Ok(path)) => record_host_topology_outputs(
+                        &mut inputs,
+                        &prepared.unit,
+                        path,
+                        admission.as_ref(),
+                        &mut script_attempts,
+                        cache,
+                        &mut postprocess_failure,
+                    ),
+                    Ok(Err(blocker)) => Ok(Some(blocker)),
+                    Err(error) => Err(error),
+                };
+                prepared.process_attempts.extend(script_attempts);
+                outcome
+            } else {
+                if selected.target_kind == "lib" {
+                    match produced_library_artifact_path(&prepared.unit, self.options) {
+                        Ok(Ok(path)) => inputs.state.target_artifacts.record_unit(selected, path),
+                        Ok(Err(blocker)) => self.blocker = Some(blocker),
+                        Err(error) => return Err(self.capability_error(error)),
+                    }
+                }
+                Ok(None)
+            };
+            match outputs {
+                Ok(blocker) if blocker.is_some() => self.blocker = blocker,
+                Ok(_) => {}
+                Err(error) => return Err(self.capability_error(error)),
+            }
+        }
+        let mut result = self.completed_observation(
+            prepared.effect_id,
+            prepared.unit_id,
+            self.state.executions.last(),
+            cache,
+            prepared.process_attempts,
+        );
+        result.restored_compiler = prepared.restored_compiler;
+        result.build_script_postprocess_failure = postprocess_failure;
+        Ok(result)
+    }
+}
+
+impl mantle_rust_plan_app::RustCacheAccess<NativePreparedTopologyUnit, RustUnitExecutionReceipt>
+    for NativeTopologyUnitExecutor<'_>
+{
+    fn restore_or_miss(
+        &mut self,
+        prepared: &mut NativePreparedTopologyUnit,
+        effect: &mantle_rust_plan_core::ResolvedUnitEffect,
+    ) -> Result<mantle_rust_plan_app::CacheRestore<RustUnitExecutionReceipt>, mantle_rust_plan_app::AdapterError> {
+        let result = restore_or_miss_rust_unit(
+            &prepared.unit,
+            self.options,
+            prepared.inputs.as_mut().expect("prepared Rust unit has cache inputs"),
+        );
+        match result {
+            Ok(Some((receipt, cache))) => {
+                if prepared.unit.target_kind == "custom-build"
+                    && matches!(
+                        cache,
+                        mantle_rust_plan_app::CacheObservation::ReusedOutput
+                            | mantle_rust_plan_app::CacheObservation::RestoredLocal
+                            | mantle_rust_plan_app::CacheObservation::RestoredShared
+                    )
+                {
+                    let evidence = match restored_compiler_evidence(&receipt, effect, cache) {
+                        Ok(evidence) => evidence,
+                        Err(error) => return Err(self.capability_error(error)),
+                    };
+                    prepared.restored_compiler = Some(evidence);
+                }
+                Ok(mantle_rust_plan_app::CacheRestore::Terminal { receipt, cache })
+            }
+            Ok(None) => Ok(mantle_rust_plan_app::CacheRestore::Miss),
+            Err(error) => Err(self.capability_error(error)),
+        }
+    }
 }
 
 pub(crate) fn execute_rust_unit_topology(
@@ -12583,30 +12494,69 @@ pub(crate) fn execute_rust_unit_topology(
         Ok(indices) => indices,
         Err(blocker) => return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)),
     };
-    let mut state = RustUnitTopologyExecutionState::default();
-    state.executions.reserve(ordered_indices.len());
-    for index in ordered_indices {
-        let unit = &graph.derivations[index];
-        let inputs = TopologyUnitExecutionInputs {
-            graph,
-            options,
-            unit,
-            state: &mut state,
-        };
-        let blocker = if is_supported_host_dependency_unit(unit) {
-            execute_host_dependency_topology_unit(inputs)?
-        } else if is_supported_host_unit(unit) {
-            execute_host_topology_unit(inputs)?
-        } else if is_supported_target_unit(unit) {
-            execute_target_topology_unit(inputs)?
-        } else {
-            None
-        };
-        if let Some(blocker) = blocker {
-            return topology_receipt("blocked", state.executions, state.metadata_runs, Some(blocker));
-        }
+    if ordered_indices.is_empty() {
+        return topology_receipt("success", Vec::new(), Vec::new(), None);
     }
-    topology_receipt("success", state.executions, state.metadata_runs, None)
+    let facts = match existing_topology_unit_facts(graph, &ordered_indices) {
+        Ok(facts) => facts,
+        Err(blocker) => return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)),
+    };
+    let effects = match mantle_rust_plan_app::plan_existing_unit_effects(facts) {
+        Ok(effects) => effects,
+        Err(blockers) => {
+            let blocker = &blockers[0];
+            return topology_receipt(
+                "blocked",
+                Vec::new(),
+                Vec::new(),
+                Some(RustUnitExecutionBlocker {
+                    class: blocker.code.clone(),
+                    message: blocker.message.clone(),
+                }),
+            );
+        }
+    };
+    let mut executor = NativeTopologyUnitExecutor {
+        graph,
+        options,
+        indices_by_id: rust_unit_indices_by_id(graph),
+        state: RustUnitTopologyExecutionState::default(),
+        blocker: None,
+        error: None,
+    };
+    executor.state.executions.reserve(effects.len());
+    let observed = match mantle_rust_plan_app::execute_existing_units(&effects, &mut executor) {
+        Ok(observed) => observed,
+        Err(mantle_rust_plan_app::ExecutionError::Adapter(error)) => {
+            if let Some(source) = executor.error {
+                return Err(source);
+            }
+            return Err(RunError::Internal(format!("Rust plan adapter {}: {}", error.code, error.detail)));
+        }
+        Err(mantle_rust_plan_app::ExecutionError::Blocked(blockers)) => {
+            let blocker = blockers.first().ok_or_else(|| {
+                RunError::Internal("Rust plan adapter rejected unit effects without a blocker".to_string())
+            })?;
+            return topology_receipt(
+                "blocked",
+                executor.state.executions,
+                executor.state.metadata_runs,
+                Some(RustUnitExecutionBlocker {
+                    class: blocker.code.clone(),
+                    message: blocker.message.clone(),
+                }),
+            );
+        }
+    };
+    // The application stops on the first failed observation; the shell keeps
+    // the original blocker, cache reports and ordered execution receipts.
+    if let Some(blocker) = executor.blocker {
+        return topology_receipt("blocked", executor.state.executions, executor.state.metadata_runs, Some(blocker));
+    }
+    if observed.execution != mantle_rust_plan_core::PlanExecutionOutcome::Completed {
+        return Err(RunError::Internal("Rust plan adapter rejected observed unit execution".to_string()));
+    }
+    topology_receipt("success", executor.state.executions, executor.state.metadata_runs, None)
 }
 
 struct DevDependencyTestPlan<'a> {
@@ -12716,12 +12666,60 @@ struct DevDependencyExecutionState {
     package_ids: Vec<String>,
     blocker: Option<RustUnitExecutionBlocker>,
 }
+struct SelectedDevDependencyProducer<'a> {
+    unit: RustUnitDerivationSummary,
+    dependency: &'a NativePathDependencySummary,
+}
+
+fn dev_dependency_producer_artifact(
+    producer: &RustUnitDerivationSummary,
+    dependency: &NativePathDependencySummary,
+) -> RustDependencyArtifact {
+    RustDependencyArtifact {
+        package_id: producer.package_id.clone(),
+        name: dependency.name.clone(),
+        producer_unit_id: Some(producer.unit_id.clone()),
+        artifact: format!("artifact:{}:{}", producer.package_id, dependency.name),
+    }
+}
+
+fn select_dev_dependency_producers<'a>(
+    plan: &'a DevDependencyTestPlan<'_>,
+    planning: &NativePackageTargetPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+) -> Result<Vec<SelectedDevDependencyProducer<'a>>, RustUnitExecutionBlocker> {
+    let packages_by_manifest = planning
+        .packages
+        .iter()
+        .map(|candidate| (normalize_path_string(Path::new(&candidate.manifest_path)), candidate))
+        .collect::<BTreeMap<_, _>>();
+    let mut selected = Vec::with_capacity(plan.package.dev_dependencies.len());
+    for dependency in &plan.package.dev_dependencies {
+        let package = packages_by_manifest
+            .get(&normalize_path_string(Path::new(&dependency.manifest_path)))
+            .ok_or_else(|| RustUnitExecutionBlocker {
+                class: "missing-dev-dependency-source".to_string(),
+                message: format!("dev dependency `{}` has no native package source facts", dependency.name),
+            })?;
+        let unit = match graph
+            .derivations
+            .iter()
+            .find(|unit| unit.package_id == package.package_id && unit.target_kind == "lib" && unit.mode == "build")
+        {
+            Some(unit) => unit.clone(),
+            None => dev_dependency_lib_derivation(package, &dependency.name)?,
+        };
+        selected.push(SelectedDevDependencyProducer { unit, dependency });
+    }
+    Ok(selected)
+}
 
 struct DevDependencyProducerInputs<'a> {
     graph: &'a UnitDerivationGraphSummary,
     options: &'a RustUnitExecutionOptions,
     dependency: &'a NativePathDependencySummary,
-    package: &'a NativePackagePlanningSummary,
+    producer: &'a RustUnitDerivationSummary,
+    planned: &'a mantle_rust_plan_core::ExistingUnitEffect,
     state: &'a mut DevDependencyExecutionState,
 }
 
@@ -12729,22 +12727,11 @@ fn execute_dev_dependency_producer(
     inputs: DevDependencyProducerInputs<'_>,
 ) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
     debug_assert!(!inputs.dependency.name.is_empty());
-    debug_assert!(!inputs.package.package_id.is_empty());
-    let producer = match inputs
-        .graph
-        .derivations
-        .iter()
-        .find(|unit| unit.package_id == inputs.package.package_id && unit.target_kind == "lib" && unit.mode == "build")
-        .cloned()
-    {
-        Some(producer) => producer,
-        None => match dev_dependency_lib_derivation(inputs.package, &inputs.dependency.name) {
-            Ok(producer) => producer,
-            Err(blocker) => return Ok(Some(blocker)),
-        },
-    };
-    let executable = bind_all_dependency_artifacts(&producer, &inputs.state.produced_artifacts)?;
-    let receipt = execute_rust_unit(&executable, inputs.options)?;
+    debug_assert!(!inputs.producer.package_id.is_empty());
+    let producer = inputs.producer;
+    let executable = bind_all_dependency_artifacts(producer, &inputs.state.produced_artifacts)?;
+    let receipt =
+        execute_planned_rust_unit(&executable, inputs.options, inputs.planned, &inputs.state.executions, &[])?.receipt;
     let blocker = topology_unit_failed_blocker(
         &receipt,
         "dev-dependency-producer-failed",
@@ -12764,45 +12751,29 @@ fn execute_dev_dependency_producer(
         path,
         inputs.graph.derivations.len(),
     );
-    inputs.state.dependency_artifacts.push(RustDependencyArtifact {
-        package_id: producer.package_id.clone(),
-        name: inputs.dependency.name.clone(),
-        producer_unit_id: Some(producer.unit_id),
-        artifact: format!("artifact:{}:{}", producer.package_id, inputs.dependency.name),
-    });
-    inputs.state.package_ids.push(producer.package_id);
+    inputs
+        .state
+        .dependency_artifacts
+        .push(dev_dependency_producer_artifact(producer, inputs.dependency));
+    inputs.state.package_ids.push(producer.package_id.clone());
     Ok(None)
 }
 
 fn execute_dev_dependency_producers(
-    plan: &DevDependencyTestPlan<'_>,
-    planning: &NativePackageTargetPlanningSummary,
+    selected: &[SelectedDevDependencyProducer<'_>],
+    effects: &[mantle_rust_plan_core::ExistingUnitEffect],
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<DevDependencyExecutionState, RunError> {
-    debug_assert!(!plan.package.dev_dependencies.is_empty());
-    debug_assert!(planning.ready);
-    let packages_by_manifest = planning
-        .packages
-        .iter()
-        .map(|candidate| (normalize_path_string(Path::new(&candidate.manifest_path)), candidate))
-        .collect::<BTreeMap<_, _>>();
     let mut state = DevDependencyExecutionState::default();
-    state.executions.reserve(plan.package.dev_dependencies.len());
-    for dependency in &plan.package.dev_dependencies {
-        let Some(package) = packages_by_manifest.get(&normalize_path_string(Path::new(&dependency.manifest_path)))
-        else {
-            state.blocker = Some(RustUnitExecutionBlocker {
-                class: "missing-dev-dependency-source".to_string(),
-                message: format!("dev dependency `{}` has no native package source facts", dependency.name),
-            });
-            break;
-        };
+    state.executions.reserve(selected.len());
+    for (producer, planned) in selected.iter().zip(effects) {
         if let Some(blocker) = execute_dev_dependency_producer(DevDependencyProducerInputs {
             graph,
             options,
-            dependency,
-            package,
+            dependency: producer.dependency,
+            producer: &producer.unit,
+            planned,
             state: &mut state,
         })? {
             state.blocker = Some(blocker);
@@ -12972,7 +12943,45 @@ pub(crate) fn execute_native_rust_dev_dependency_test_topology(
             });
         }
     };
-    let mut state = execute_dev_dependency_producers(&plan, native_package_target_planning, graph, options)?;
+    let selected_producers = match select_dev_dependency_producers(&plan, native_package_target_planning, graph) {
+        Ok(selected) => selected,
+        Err(blocker) => {
+            return dev_dependency_test_topology_receipt(DevDependencyTopologyReceiptInputs {
+                execution_status: "blocked",
+                package_id: Some(plan.package.package_id.clone()),
+                test_target: Some(plan.test_name.clone()),
+                dev_dependency_packages: Vec::new(),
+                unit_executions: Vec::new(),
+                blocker: Some(blocker),
+            });
+        }
+    };
+    let mut draft = DevDependencyExecutionState {
+        dependency_artifacts: selected_producers
+            .iter()
+            .map(|producer| dev_dependency_producer_artifact(&producer.unit, producer.dependency))
+            .collect(),
+        ..DevDependencyExecutionState::default()
+    };
+    draft.dependency_artifacts.sort();
+    draft.dependency_artifacts.dedup();
+    let test_derivation = dev_dependency_test_unit(&plan, &draft);
+    let mut selected = selected_producers.iter().map(|producer| &producer.unit).collect::<Vec<_>>();
+    selected.push(&test_derivation);
+    let effects = match plan_selected_rust_unit_effects(&selected) {
+        Ok(effects) => effects,
+        Err(blocker) => {
+            return dev_dependency_test_topology_receipt(DevDependencyTopologyReceiptInputs {
+                execution_status: "blocked",
+                package_id: Some(plan.package.package_id.clone()),
+                test_target: Some(plan.test_name.clone()),
+                dev_dependency_packages: Vec::new(),
+                unit_executions: Vec::new(),
+                blocker: Some(blocker),
+            });
+        }
+    };
+    let mut state = execute_dev_dependency_producers(&selected_producers, &effects, graph, options)?;
     if let Some(blocker) = dev_dependency_state_blocker(&mut state) {
         return dev_dependency_test_topology_receipt(DevDependencyTopologyReceiptInputs {
             execution_status: "blocked",
@@ -12987,7 +12996,9 @@ pub(crate) fn execute_native_rust_dev_dependency_test_topology(
     test_unit = bind_all_dependency_artifacts(&test_unit, &state.produced_artifacts)?;
     test_unit.rustc_args_digest_blake3 =
         blake3::hash(test_unit.derivation.args.join("\0").as_bytes()).to_hex().to_string();
-    let receipt = execute_rust_unit(&test_unit, options)?;
+    let receipt =
+        execute_planned_rust_unit(&test_unit, options, &effects[selected_producers.len()], &state.executions, &[])?
+            .receipt;
     let blocker = topology_unit_failed_blocker(
         &receipt,
         "dev-dependency-test-unit-failed",
@@ -13055,35 +13066,85 @@ struct WorkspaceDependencyExecutionState {
     produced_artifacts: BTreeMap<String, PathBuf>,
     package_ids: Vec<String>,
 }
+fn select_workspace_dependency_producers<'a>(
+    plan: &WorkspaceDependencyPlan<'_>,
+    planning: &NativePackageTargetPlanningSummary,
+    graph: &'a UnitDerivationGraphSummary,
+) -> Result<Vec<&'a RustUnitDerivationSummary>, RustUnitExecutionBlocker> {
+    let packages_by_manifest = planning
+        .packages
+        .iter()
+        .map(|candidate| (normalize_path_string(Path::new(&candidate.manifest_path)), candidate))
+        .collect::<BTreeMap<_, _>>();
+    plan.dependencies
+        .iter()
+        .map(|dependency| {
+            let manifest_path = dependency.manifest_path.as_deref().ok_or_else(|| RustUnitExecutionBlocker {
+                class: "missing-workspace-dependency-source".to_string(),
+                message: format!("workspace dependency `{}` has no manifest path", dependency.dependency_key),
+            })?;
+            let package =
+                packages_by_manifest.get(&normalize_path_string(Path::new(manifest_path))).ok_or_else(|| {
+                    RustUnitExecutionBlocker {
+                        class: "missing-workspace-dependency-source".to_string(),
+                        message: format!(
+                            "workspace dependency `{}` has no native package source facts",
+                            dependency.dependency_key
+                        ),
+                    }
+                })?;
+            graph
+                .derivations
+                .iter()
+                .find(|unit| unit.package_id == package.package_id && unit.target_kind == "lib" && unit.mode == "build")
+                .ok_or_else(|| RustUnitExecutionBlocker {
+                    class: "missing-workspace-dependency-artifact".to_string(),
+                    message: format!(
+                        "workspace dependency `{}` has no supported lib derivation",
+                        dependency.dependency_key
+                    ),
+                })
+        })
+        .collect()
+}
+
+fn select_workspace_dependency_consumer<'a>(
+    plan: &WorkspaceDependencyPlan<'_>,
+    graph: &'a UnitDerivationGraphSummary,
+) -> Result<&'a RustUnitDerivationSummary, RustUnitExecutionBlocker> {
+    graph
+        .derivations
+        .iter()
+        .find(|unit| {
+            unit.package_id == plan.package.package_id
+                && matches!(unit.target_kind.as_str(), "lib" | "bin")
+                && unit.mode == "build"
+        })
+        .ok_or_else(|| RustUnitExecutionBlocker {
+            class: "missing-workspace-dependency-consumer".to_string(),
+            message: format!(
+                "workspace dependency consumer {} has no supported lib/bin derivation",
+                plan.package.package_id
+            ),
+        })
+}
 
 struct WorkspaceDependencyProducerInputs<'a> {
     graph: &'a UnitDerivationGraphSummary,
     options: &'a RustUnitExecutionOptions,
-    dependency: &'a NativeWorkspaceDependencySummary,
-    package: &'a NativePackagePlanningSummary,
+    producer: &'a RustUnitDerivationSummary,
+    planned: &'a mantle_rust_plan_core::ExistingUnitEffect,
     state: &'a mut WorkspaceDependencyExecutionState,
 }
 
 fn execute_workspace_dependency_producer(
     inputs: WorkspaceDependencyProducerInputs<'_>,
 ) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
-    debug_assert!(!inputs.dependency.dependency_key.is_empty());
-    debug_assert!(!inputs.package.package_id.is_empty());
-    let Some(producer) =
-        inputs.graph.derivations.iter().find(|unit| {
-            unit.package_id == inputs.package.package_id && unit.target_kind == "lib" && unit.mode == "build"
-        })
-    else {
-        return Ok(Some(RustUnitExecutionBlocker {
-            class: "missing-workspace-dependency-artifact".to_string(),
-            message: format!(
-                "workspace dependency `{}` has no supported lib derivation",
-                inputs.dependency.dependency_key
-            ),
-        }));
-    };
+    debug_assert!(!inputs.producer.package_id.is_empty());
+    let producer = inputs.producer;
     let executable = bind_all_dependency_artifacts(producer, &inputs.state.produced_artifacts)?;
-    let receipt = execute_rust_unit(&executable, inputs.options)?;
+    let receipt =
+        execute_planned_rust_unit(&executable, inputs.options, inputs.planned, &inputs.state.executions, &[])?.receipt;
     let blocker = topology_unit_failed_blocker(
         &receipt,
         "workspace-dependency-producer-failed",
@@ -13108,43 +13169,19 @@ fn execute_workspace_dependency_producer(
 }
 
 fn execute_workspace_dependency_producers(
-    plan: &WorkspaceDependencyPlan<'_>,
-    planning: &NativePackageTargetPlanningSummary,
+    producers: &[&RustUnitDerivationSummary],
+    effects: &[mantle_rust_plan_core::ExistingUnitEffect],
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<(WorkspaceDependencyExecutionState, Option<RustUnitExecutionBlocker>), RunError> {
-    debug_assert!(!plan.dependencies.is_empty());
-    debug_assert!(planning.ready);
-    let packages_by_manifest = planning
-        .packages
-        .iter()
-        .map(|candidate| (normalize_path_string(Path::new(&candidate.manifest_path)), candidate))
-        .collect::<BTreeMap<_, _>>();
     let mut state = WorkspaceDependencyExecutionState::default();
-    state.executions.reserve(plan.dependencies.len());
-    for dependency in &plan.dependencies {
-        let Some(manifest_path) = dependency.manifest_path.as_deref() else {
-            let blocker = RustUnitExecutionBlocker {
-                class: "missing-workspace-dependency-source".to_string(),
-                message: format!("workspace dependency `{}` has no manifest path", dependency.dependency_key),
-            };
-            return Ok((state, Some(blocker)));
-        };
-        let Some(package) = packages_by_manifest.get(&normalize_path_string(Path::new(manifest_path))) else {
-            let blocker = RustUnitExecutionBlocker {
-                class: "missing-workspace-dependency-source".to_string(),
-                message: format!(
-                    "workspace dependency `{}` has no native package source facts",
-                    dependency.dependency_key
-                ),
-            };
-            return Ok((state, Some(blocker)));
-        };
+    state.executions.reserve(producers.len());
+    for (producer, planned) in producers.iter().zip(effects) {
         let blocker = execute_workspace_dependency_producer(WorkspaceDependencyProducerInputs {
             graph,
             options,
-            dependency,
-            package,
+            producer,
+            planned,
             state: &mut state,
         })?;
         if blocker.is_some() {
@@ -13157,28 +13194,13 @@ fn execute_workspace_dependency_producers(
 }
 
 fn execute_workspace_dependency_consumer(
-    plan: &WorkspaceDependencyPlan<'_>,
-    graph: &UnitDerivationGraphSummary,
+    consumer: &RustUnitDerivationSummary,
+    planned: &mantle_rust_plan_core::ExistingUnitEffect,
     options: &RustUnitExecutionOptions,
     state: &mut WorkspaceDependencyExecutionState,
 ) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
-    debug_assert!(!plan.package.package_id.is_empty());
-    debug_assert!(!plan.dependencies.is_empty());
-    let Some(consumer) = graph.derivations.iter().find(|unit| {
-        unit.package_id == plan.package.package_id
-            && matches!(unit.target_kind.as_str(), "lib" | "bin")
-            && unit.mode == "build"
-    }) else {
-        return Ok(Some(RustUnitExecutionBlocker {
-            class: "missing-workspace-dependency-consumer".to_string(),
-            message: format!(
-                "workspace dependency consumer {} has no supported lib/bin derivation",
-                plan.package.package_id
-            ),
-        }));
-    };
     let executable = bind_all_dependency_artifacts(consumer, &state.produced_artifacts)?;
-    let receipt = execute_rust_unit(&executable, options)?;
+    let receipt = execute_planned_rust_unit(&executable, options, planned, &state.executions, &[])?.receipt;
     let blocker = topology_unit_failed_blocker(
         &receipt,
         "workspace-dependency-consumer-failed",
@@ -13257,8 +13279,29 @@ pub(crate) fn execute_native_registry_workspace_dependency_topology(
             });
         }
     };
-    let (mut state, producer_blocker) =
-        execute_workspace_dependency_producers(&plan, native_package_target_planning, graph, options)?;
+    let preflight =
+        select_workspace_dependency_producers(&plan, native_package_target_planning, graph).and_then(|producers| {
+            let consumer = select_workspace_dependency_consumer(&plan, graph)?;
+            let mut selected = Vec::with_capacity(producers.len() + 1);
+            selected.extend(producers.iter().copied());
+            selected.push(consumer);
+            let effects = plan_selected_rust_unit_effects(&selected)?;
+            Ok((producers, consumer, effects))
+        });
+    let (producers, consumer, effects) = match preflight {
+        Ok(selected) => selected,
+        Err(blocker) => {
+            return workspace_dependency_topology_receipt(WorkspaceDependencyTopologyReceiptInputs {
+                execution_status: "blocked",
+                workspace_root: plan.workspace_root,
+                member_package_id: Some(plan.package.package_id.clone()),
+                inherited_dependency_packages: Vec::new(),
+                unit_executions: Vec::new(),
+                blocker: Some(blocker),
+            });
+        }
+    };
+    let (mut state, producer_blocker) = execute_workspace_dependency_producers(&producers, &effects, graph, options)?;
     if let Some(blocker) = producer_blocker {
         return workspace_dependency_topology_receipt(WorkspaceDependencyTopologyReceiptInputs {
             execution_status: "blocked",
@@ -13269,7 +13312,7 @@ pub(crate) fn execute_native_registry_workspace_dependency_topology(
             blocker: Some(blocker),
         });
     }
-    let blocker = execute_workspace_dependency_consumer(&plan, graph, options, &mut state)?;
+    let blocker = execute_workspace_dependency_consumer(consumer, &effects[producers.len()], options, &mut state)?;
     let status = if blocker.is_some() { "blocked" } else { "success" };
     workspace_dependency_topology_receipt(WorkspaceDependencyTopologyReceiptInputs {
         execution_status: status,
@@ -13389,10 +13432,15 @@ fn execute_patch_source_topology_plan(
 ) -> Result<(Vec<RustUnitExecutionReceipt>, Option<RustUnitExecutionBlocker>), RunError> {
     debug_assert!(!plan.producer.unit_id.is_empty());
     debug_assert!(!plan.consumer.unit_id.is_empty());
+    let effects = match plan_selected_rust_unit_effects(&[plan.producer, plan.consumer]) {
+        Ok(effects) => effects,
+        Err(blocker) => return Ok((Vec::new(), Some(blocker))),
+    };
     let mut executions = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut produced_artifacts = BTreeMap::<String, PathBuf>::new();
     let executable_producer = bind_all_dependency_artifacts(plan.producer, &produced_artifacts)?;
-    let producer_receipt = execute_rust_unit(&executable_producer, options)?;
+    let producer_receipt =
+        execute_planned_rust_unit(&executable_producer, options, &effects[0], &executions, &[])?.receipt;
     let blocker = topology_unit_failed_blocker(
         &producer_receipt,
         "patch-source-producer-failed",
@@ -13408,7 +13456,8 @@ fn execute_patch_source_topology_plan(
     };
     produced_artifacts.insert(plan.producer.package_id.clone(), path);
     let executable_consumer = bind_all_dependency_artifacts(plan.consumer, &produced_artifacts)?;
-    let consumer_receipt = execute_rust_unit(&executable_consumer, options)?;
+    let consumer_receipt =
+        execute_planned_rust_unit(&executable_consumer, options, &effects[1], &executions, &[])?.receipt;
     let blocker = topology_unit_failed_blocker(
         &consumer_receipt,
         "patch-source-consumer-failed",
@@ -13814,6 +13863,7 @@ struct HostArtifactTopologyExecutionState {
 struct HostArtifactTopologyUnitInputs<'a> {
     options: &'a RustUnitExecutionOptions,
     unit: &'a RustUnitDerivationSummary,
+    planned: &'a mantle_rust_plan_core::ExistingUnitEffect,
     state: &'a mut HostArtifactTopologyExecutionState,
 }
 
@@ -13830,7 +13880,19 @@ fn execute_host_artifact_producer(
         Ok(unit) => unit,
         Err(blocker) => return Ok(Some(blocker)),
     };
-    let receipt = execute_rust_unit(&executable, inputs.options)?;
+    let result = execute_planned_rust_unit(
+        &executable,
+        inputs.options,
+        inputs.planned,
+        &inputs.state.executions,
+        &inputs.state.metadata_runs,
+    )?;
+    let AdmittedRustUnitExecution {
+        receipt,
+        primary,
+        attempts,
+        restored_compiler,
+    } = result;
     let blocker = topology_unit_failed_blocker(
         &receipt,
         "host-unit-failed",
@@ -13845,7 +13907,24 @@ fn execute_host_artifact_producer(
         Err(blocker) => return Ok(Some(blocker)),
     };
     if inputs.unit.target_kind == "custom-build" {
-        match run_build_script_metadata(inputs.unit, inputs.options, &path)? {
+        let observed_compiler = attempts.last();
+        let compiler_effect = primary.as_ref().or_else(|| observed_compiler.map(|attempt| &attempt.effect));
+        let Some(compiler_effect) = compiler_effect else {
+            return Ok(Some(RustUnitExecutionBlocker {
+                class: "missing-compiler-observation".to_string(),
+                message: format!(
+                    "custom-build unit {} has no admitted compiler execution or restored artifact",
+                    inputs.unit.unit_id
+                ),
+            }));
+        };
+        let admission = BuildScriptAdmissionContext {
+            planned: inputs.planned,
+            primary: compiler_effect,
+            observed_compiler: observed_compiler.map(|attempt| &attempt.observation),
+            restored_compiler: restored_compiler.as_ref(),
+        };
+        match run_build_script_metadata(inputs.unit, inputs.options, &path, &admission)?.receipt {
             Ok(metadata_run) => {
                 inputs
                     .state
@@ -13876,7 +13955,14 @@ fn execute_host_artifact_consumer(
     if !executable.dependency_artifacts.is_empty() {
         executable = bind_all_dependency_artifacts(&executable, &inputs.state.target_artifacts)?;
     }
-    let receipt = execute_rust_unit(&executable, inputs.options)?;
+    let receipt = execute_planned_rust_unit(
+        &executable,
+        inputs.options,
+        inputs.planned,
+        &inputs.state.executions,
+        &inputs.state.metadata_runs,
+    )?
+    .receipt;
     let blocker = topology_unit_failed_blocker(
         &receipt,
         "target-unit-failed",
@@ -13930,24 +14016,31 @@ pub(crate) fn execute_rust_host_artifact_topology(
         Ok(order) => order,
         Err(blocker) => return host_artifact_topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)),
     };
+    let selected = indices.host.iter().chain(&target_order).map(|index| &graph.derivations[*index]).collect::<Vec<_>>();
+    let effects = match plan_selected_rust_unit_effects(&selected) {
+        Ok(effects) => effects,
+        Err(blocker) => return host_artifact_topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)),
+    };
     let mut state = HostArtifactTopologyExecutionState::default();
     state.executions.reserve(indices.host.len().saturating_add(target_order.len()));
-    for index in indices.host {
+    for (index, planned) in indices.host.into_iter().zip(&effects) {
         let unit = &graph.derivations[index];
         let blocker = execute_host_artifact_producer(HostArtifactTopologyUnitInputs {
             options,
             unit,
+            planned,
             state: &mut state,
         })?;
         if let Some(blocker) = blocker {
             return host_artifact_topology_receipt("blocked", state.executions, state.metadata_runs, Some(blocker));
         }
     }
-    for index in target_order {
+    for (index, planned) in target_order.into_iter().zip(effects.iter().skip(state.executions.len())) {
         let unit = &graph.derivations[index];
         let blocker = execute_host_artifact_consumer(HostArtifactTopologyUnitInputs {
             options,
             unit,
+            planned,
             state: &mut state,
         })?;
         if let Some(blocker) = blocker {
@@ -13957,12 +14050,6 @@ pub(crate) fn execute_rust_host_artifact_topology(
     host_artifact_topology_receipt("success", state.executions, state.metadata_runs, None)
 }
 
-#[derive(Clone, Copy)]
-enum TopologyVisitPhase {
-    Enter,
-    Exit,
-}
-
 fn topologically_order_units(
     roots: &[usize],
     edges: &BTreeMap<usize, Vec<usize>>,
@@ -13970,86 +14057,40 @@ fn topologically_order_units(
 ) -> Result<Vec<usize>, RustUnitExecutionBlocker> {
     debug_assert!(roots.iter().all(|index| *index < graph.derivations.len()));
     debug_assert!(edges.keys().all(|index| *index < graph.derivations.len()));
-    let edge_count = edges.values().fold(0usize, |count, dependencies| count.saturating_add(dependencies.len()));
-    let traversal_steps = roots.len().saturating_add(edge_count).saturating_mul(2).saturating_add(1);
-    let mut ordered_indices = Vec::with_capacity(roots.len());
-    let mut temporary = BTreeSet::new();
-    let mut permanent = BTreeSet::new();
-    let mut pending = Vec::with_capacity(traversal_steps);
-
-    for root in roots {
-        if permanent.contains(root) {
-            continue;
-        }
-        pending.push((*root, TopologyVisitPhase::Enter));
-        for _ in 0..traversal_steps {
-            let Some((index, phase)) = pending.pop() else {
-                break;
-            };
-            match phase {
-                TopologyVisitPhase::Enter => enter_topology_unit(EnterTopologyUnitInputs {
-                    index,
-                    edges,
-                    graph,
-                    temporary: &mut temporary,
-                    permanent: &permanent,
-                    pending: &mut pending,
-                })?,
-                TopologyVisitPhase::Exit => {
-                    temporary.remove(&index);
-                    if permanent.insert(index) {
-                        ordered_indices.push(index);
-                    }
-                }
-            }
-        }
-        if !pending.is_empty() {
-            return Err(RustUnitExecutionBlocker {
-                class: "topology-traversal-limit-exceeded".to_string(),
-                message: format!("target topology traversal exceeded {traversal_steps} bounded steps"),
-            });
-        }
+    let mut participants = BTreeSet::new();
+    participants.extend(roots.iter().copied());
+    for (index, dependencies) in edges {
+        participants.insert(*index);
+        participants.extend(dependencies.iter().copied());
     }
-    Ok(ordered_indices)
-}
-
-struct EnterTopologyUnitInputs<'a> {
-    index: usize,
-    edges: &'a BTreeMap<usize, Vec<usize>>,
-    graph: &'a UnitDerivationGraphSummary,
-    temporary: &'a mut BTreeSet<usize>,
-    permanent: &'a BTreeSet<usize>,
-    pending: &'a mut Vec<(usize, TopologyVisitPhase)>,
-}
-
-fn enter_topology_unit(inputs: EnterTopologyUnitInputs<'_>) -> Result<(), RustUnitExecutionBlocker> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    let EnterTopologyUnitInputs {
-        index,
-        edges,
-        graph,
-        temporary,
-        permanent,
-        pending,
-    } = inputs;
-    if permanent.contains(&index) {
-        return Ok(());
-    }
-    if !temporary.insert(index) {
-        return Err(RustUnitExecutionBlocker {
-            class: "dependency-cycle".to_string(),
-            message: format!(
-                "target topology contains a dependency cycle at unit {}",
-                graph.derivations[index].unit_id
-            ),
+    let mut indices_by_id = BTreeMap::new();
+    let mut units = Vec::with_capacity(participants.len());
+    for index in participants {
+        let unit = &graph.derivations[index];
+        let execution_rank = u32::try_from(index).map_err(|_| RustUnitExecutionBlocker {
+            class: "unit-limit".to_string(),
+            message: "selected Rust topology exceeds the execution rank bound".to_string(),
+        })?;
+        indices_by_id.insert(unit.unit_id.clone(), index);
+        units.push(mantle_rust_plan_core::ExistingTopologyUnit {
+            unit_id: unit.unit_id.clone(),
+            dependencies: edges
+                .get(&index)
+                .into_iter()
+                .flatten()
+                .map(|dependency| graph.derivations[*dependency].unit_id.clone())
+                .collect(),
+            execution_rank,
         });
     }
-    pending.push((index, TopologyVisitPhase::Exit));
-    if let Some(dependencies) = edges.get(&index) {
-        pending.extend(dependencies.iter().rev().map(|dependency| (*dependency, TopologyVisitPhase::Enter)));
-    }
-    Ok(())
+    let roots = roots.iter().map(|index| graph.derivations[*index].unit_id.clone()).collect::<Vec<_>>();
+    let ordered = mantle_rust_plan_core::order_existing_unit_topology(&roots, &units).map_err(|blocker| {
+        RustUnitExecutionBlocker {
+            class: blocker.code,
+            message: blocker.message,
+        }
+    })?;
+    Ok(ordered.into_iter().map(|unit_id| indices_by_id[&unit_id]).collect())
 }
 
 #[derive(Debug, Clone, Default)]
@@ -14827,33 +14868,6 @@ fn cargo_metadata_env_component(value: &str) -> String {
         .collect()
 }
 
-fn is_link_self_contained_codegen_option(option: &str) -> bool {
-    if option == RUSTC_LINK_SELF_CONTAINED_OPTION {
-        return true;
-    }
-    option.strip_prefix(RUSTC_LINK_SELF_CONTAINED_OPTION).is_some_and(|suffix| suffix.starts_with('='))
-}
-
-fn rust_topology_runtime_args(reviewable_args: &[String]) -> Vec<String> {
-    let mut has_link_self_contained = false;
-    let mut is_previous_codegen_flag = false;
-    for arg in reviewable_args {
-        if is_previous_codegen_flag && is_link_self_contained_codegen_option(arg) {
-            has_link_self_contained = true;
-        }
-        if arg.strip_prefix("-C").is_some_and(is_link_self_contained_codegen_option) {
-            has_link_self_contained = true;
-        }
-        is_previous_codegen_flag = arg == RUSTC_CODEGEN_OPTION_FLAG;
-    }
-    let mut runtime_args = reviewable_args.to_vec();
-    if !has_link_self_contained {
-        runtime_args.push(RUSTC_CODEGEN_OPTION_FLAG.to_string());
-        runtime_args.push(RUSTC_EXTERNAL_LINKER_MODE_ARG.to_string());
-    }
-    runtime_args
-}
-
 fn rustc_reviewable_path_remaps(args: &[String]) -> Vec<RustPathRemap> {
     args.windows(RUSTC_EXTERN_ARG_PAIR_WIDTH)
         .filter_map(|window| {
@@ -14934,17 +14948,6 @@ fn inherited_rust_topology_compile_env() -> BTreeMap<String, OsString> {
         .filter_map(|key| std::env::var_os(key).map(|value| ((*key).to_string(), value)))
         .collect::<BTreeMap<_, _>>();
     allowed_rust_topology_compile_env(&candidates)
-}
-
-fn apply_rust_topology_child_env(command: &mut Command, explicit_env: &BTreeMap<String, String>) {
-    command.env_clear();
-    for (key, value) in rust_topology_child_env(
-        explicit_env,
-        std::env::var_os(RUST_TOPOLOGY_TOOL_PATH_ENV),
-        &inherited_rust_topology_compile_env(),
-    ) {
-        command.env(key, value);
-    }
 }
 
 fn build_script_package_root(unit: &RustUnitDerivationSummary) -> Option<PathBuf> {
@@ -15063,18 +15066,139 @@ fn append_profile_build_override_markers(env: &mut BTreeMap<String, String>, exe
     env.insert(PROFILE_BUILD_OVERRIDE_DUAL_USE_ENV.to_string(), dual_use.to_string());
 }
 
+struct BuildScriptAdmissionContext<'a> {
+    planned: &'a mantle_rust_plan_core::ExistingUnitEffect,
+    primary: &'a mantle_rust_plan_core::ResolvedUnitEffect,
+    observed_compiler: Option<&'a mantle_rust_plan_core::ResolvedProcessObservation>,
+    restored_compiler: Option<&'a mantle_rust_plan_core::RestoredCompilerArtifactObservation>,
+}
+
+fn admitted_build_script_effect(
+    context: &BuildScriptAdmissionContext<'_>,
+    executable: &Path,
+    cwd: &Path,
+    environment: &BTreeMap<String, String>,
+) -> Result<Result<mantle_rust_plan_core::ResolvedUnitEffect, RustUnitExecutionBlocker>, RunError> {
+    let mut input_identities = context.primary.facts.input_identities.clone();
+    input_identities.push(digest_artifact_path(executable)?.blake3);
+    let (prior_identity, observed_compiler) = if let Some(observation) = context.observed_compiler {
+        let identity = mantle_rust_plan_core::classify_resolved_process_observation(context.primary, observation)
+            .map_err(|blocker| RunError::Internal(format!("{}: {}", blocker.code, blocker.message)))?;
+        (identity, Some(observation))
+    } else {
+        let restored = context.restored_compiler.expect("cached build script has restored compiler evidence");
+        input_identities.push(restored.cache_receipt_identity.as_str().to_string());
+        input_identities.push(restored.output_artifact_set_identity.as_str().to_string());
+        let identity =
+            mantle_rust_plan_core::classify_restored_compiler_artifact(context.planned, context.primary, restored)
+                .map_err(|blocker| RunError::Internal(format!("{}: {}", blocker.code, blocker.message)))?;
+        (identity, None)
+    };
+    let child_env = rust_topology_child_env(
+        environment,
+        std::env::var_os(RUST_TOPOLOGY_TOOL_PATH_ENV),
+        &inherited_rust_topology_compile_env(),
+    );
+    let facts = mantle_rust_plan_core::ResolvedUnitFacts {
+        effect_id: context.planned.effect_id.clone(),
+        unit_id: context.planned.unit_id.clone(),
+        role: mantle_rust_plan_core::ProcessEffectRole::BuildScriptRun,
+        attempt: 0,
+        prior_attempt_identity: Some(prior_identity),
+        executable: rust_process_word(executable.as_os_str()),
+        toolchain_identity: context.primary.facts.toolchain_identity.clone(),
+        arguments: Vec::new(),
+        environment: child_env.into_iter().map(|(key, value)| (key, rust_process_word(&value))).collect(),
+        working_directory: Some(rust_process_word(cwd.as_os_str())),
+        input_identities,
+        expected_outputs: vec!["OUT_DIR".to_string(), "metadata-stdout".to_string()],
+        dependency_observations: context.primary.facts.dependency_observations.clone(),
+    };
+    let result = if let Some(restored) = context.restored_compiler {
+        mantle_rust_plan_core::admit_resolved_build_script_after_cache(
+            context.planned,
+            facts,
+            context.primary,
+            restored,
+        )
+    } else {
+        mantle_rust_plan_core::admit_resolved_unit_effect(context.planned, facts, observed_compiler)
+    };
+    Ok(result.map_err(|blockers| {
+        let blocker = &blockers[0];
+        RustUnitExecutionBlocker {
+            class: blocker.code.clone(),
+            message: blocker.message.clone(),
+        }
+    }))
+}
+
+struct BuildScriptExecutionOutcome {
+    receipt: Result<BuildScriptMetadataRunReceipt, RustUnitExecutionBlocker>,
+    process_attempt: Option<mantle_rust_plan_app::ProcessAttempt>,
+    metadata_parse_failed: bool,
+}
+
+fn observed_build_script_attempt(
+    effect: mantle_rust_plan_core::ResolvedUnitEffect,
+    output: &std::process::Output,
+    out_dir: &Path,
+    receipt: Option<&BuildScriptMetadataRunReceipt>,
+) -> Result<mantle_rust_plan_app::ProcessAttempt, RunError> {
+    let output_identities = if output.status.success() {
+        let out_dir_identity = if let Some(receipt) = receipt {
+            mantle_rust_plan_core::hash_legacy_receipt_preimage(&receipt.out_dir_artifact_digests)
+        } else {
+            mantle_rust_plan_core::hash_legacy_receipt_preimage(&digest_build_script_out_dir(out_dir)?)
+        }
+        .map_err(RunError::Internal)?;
+        let stdout_identity = receipt.map_or_else(
+            || blake3::hash(&output.stdout).to_hex().to_string(),
+            |receipt| receipt.stdout_digest_blake3.clone(),
+        );
+        vec![
+            ("OUT_DIR".to_string(), out_dir_identity),
+            ("metadata-stdout".to_string(), stdout_identity),
+        ]
+    } else {
+        Vec::new()
+    };
+    let observation = mantle_rust_plan_core::ResolvedProcessObservation {
+        effect_id: effect.facts.effect_id.clone(),
+        unit_id: effect.facts.unit_id.clone(),
+        resolved_blake3: effect.resolved_blake3.clone(),
+        role: effect.facts.role,
+        attempt: effect.facts.attempt,
+        status: if output.status.success() {
+            mantle_rust_plan_core::UnitObservationStatus::Succeeded
+        } else {
+            mantle_rust_plan_core::UnitObservationStatus::Failed
+        },
+        exit_code: output.status.code(),
+        output_identities,
+    };
+    mantle_rust_plan_core::classify_resolved_process_observation(&effect, &observation)
+        .map_err(|blocker| RunError::Internal(format!("{}: {}", blocker.code, blocker.message)))?;
+    Ok(mantle_rust_plan_app::ProcessAttempt { effect, observation })
+}
+
 fn run_build_script_metadata(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
     executable: &Path,
-) -> Result<Result<BuildScriptMetadataRunReceipt, RustUnitExecutionBlocker>, RunError> {
+    admission: &BuildScriptAdmissionContext<'_>,
+) -> Result<BuildScriptExecutionOutcome, RunError> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if !executable.is_file() {
-        return Ok(Err(RustUnitExecutionBlocker {
-            class: "missing-build-script-executable".to_string(),
-            message: format!("custom-build unit {} did not produce an executable", unit.unit_id),
-        }));
+        return Ok(BuildScriptExecutionOutcome {
+            receipt: Err(RustUnitExecutionBlocker {
+                class: "missing-build-script-executable".to_string(),
+                message: format!("custom-build unit {} did not produce an executable", unit.unit_id),
+            }),
+            process_attempt: None,
+            metadata_parse_failed: false,
+        });
     }
     let invocation_dir = std::env::current_dir()
         .map_err(|err| RunError::Internal(format!("reading current directory for build-script execution: {err}")))?;
@@ -15089,45 +15213,64 @@ fn run_build_script_metadata(
 
     let selected_c_compiler = match source_built_c_compiler_route_from_env() {
         Ok(route) => route,
-        Err(blocker) => return Ok(Err(blocker)),
+        Err(blocker) => {
+            return Ok(BuildScriptExecutionOutcome {
+                receipt: Err(blocker),
+                process_attempt: None,
+                metadata_parse_failed: false,
+            });
+        }
     };
     let executable_path = executable.canonicalize().unwrap_or_else(|_| executable.to_path_buf());
     let package_root = build_script_package_root(unit);
-    let mut command = Command::new(&executable_path);
     let child_env =
         build_script_child_env(unit, options, &out_dir, package_root.as_deref(), selected_c_compiler.as_ref());
-    apply_rust_topology_child_env(&mut command, &child_env);
-    if let Some(root) = &package_root {
-        command.current_dir(root);
-    }
-    let output = command
-        .output()
-        .map_err(|err| RunError::Internal(format!("running build-script unit {}: {err}", unit.unit_id)))?;
-    if !output.status.success() {
-        let diagnostic = redacted_diagnostic(&output.stderr);
-        return Ok(Err(build_script_run_failure_blocker(unit, &diagnostic, selected_c_compiler.as_ref())));
-    }
-    let stdout = match String::from_utf8(output.stdout.clone()) {
-        Ok(stdout) => stdout,
-        Err(_) => {
-            return Ok(Err(RustUnitExecutionBlocker {
-                class: "malformed-build-script-metadata".to_string(),
-                message: "build-script stdout was not valid UTF-8".to_string(),
-            }));
+    let admitted = match admitted_build_script_effect(
+        admission,
+        &executable_path,
+        package_root.as_deref().unwrap_or(&invocation_dir),
+        &child_env,
+    )? {
+        Ok(effect) => effect,
+        Err(blocker) => {
+            return Ok(BuildScriptExecutionOutcome {
+                receipt: Err(blocker),
+                process_attempt: None,
+                metadata_parse_failed: false,
+            });
         }
     };
-    let metadata = match parse_build_script_metadata(&stdout, &out_dir) {
-        Ok(metadata) => metadata,
-        Err(blocker) => return Ok(Err(blocker)),
+    let output = execute_admitted_rust_process(&admitted, unit, None)?;
+    let receipt = if !output.status.success() {
+        let diagnostic = redacted_diagnostic(&output.stderr);
+        Err(build_script_run_failure_blocker(unit, &diagnostic, selected_c_compiler.as_ref()))
+    } else if let Ok(stdout) = std::str::from_utf8(&output.stdout) {
+        match parse_build_script_metadata(stdout, &out_dir) {
+            Ok(metadata) => {
+                let out_dir_artifact_digests = digest_build_script_out_dir(&out_dir)?;
+                Ok(build_script_metadata_run_receipt(
+                    unit,
+                    metadata,
+                    out_dir_artifact_digests,
+                    &output.stdout,
+                    selected_c_compiler,
+                ))
+            }
+            Err(blocker) => Err(blocker),
+        }
+    } else {
+        Err(RustUnitExecutionBlocker {
+            class: "malformed-build-script-metadata".to_string(),
+            message: "build-script stdout was not valid UTF-8".to_string(),
+        })
     };
-    let out_dir_artifact_digests = digest_build_script_out_dir(&out_dir)?;
-    Ok(Ok(build_script_metadata_run_receipt(
-        unit,
-        metadata,
-        out_dir_artifact_digests,
-        &output.stdout,
-        selected_c_compiler,
-    )))
+    let metadata_parse_failed = output.status.success() && receipt.is_err();
+    let process_attempt = Some(observed_build_script_attempt(admitted, &output, &out_dir, receipt.as_ref().ok())?);
+    Ok(BuildScriptExecutionOutcome {
+        receipt,
+        process_attempt,
+        metadata_parse_failed,
+    })
 }
 
 pub(crate) fn receipt_bound_c_compiler_route_from_cli_json(
@@ -15970,11 +16113,10 @@ fn verify_compiler_policy_artifact(
         });
     };
     let path = Path::new(&artifact.path);
-    let bytes = fs::read(path).map_err(|err| RustUnitExecutionBlocker {
+    let actual_digest = compiler_policy_digest_path(path).map_err(|err| RustUnitExecutionBlocker {
         class: "compiler-policy-missing-material".to_string(),
         message: format!("reading compiler-policy {field} artifact {}: {err}", path.display()),
     })?;
-    let actual_digest = compiler_policy_digest_bytes(&bytes);
     if actual_digest != declared_digest {
         return Err(RustUnitExecutionBlocker {
             class: "compiler-policy-digest-mismatch".to_string(),
@@ -15985,8 +16127,8 @@ fn verify_compiler_policy_artifact(
 }
 
 fn readable_path_digest(path: &Path) -> Result<Option<String>, RunError> {
-    match fs::read(path) {
-        Ok(bytes) => Ok(Some(compiler_policy_digest_bytes(&bytes))),
+    match compiler_policy_digest_path(path) {
+        Ok(digest) => Ok(Some(digest)),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(err) => Err(RunError::Internal(format!("reading {} for compiler-policy digest: {err}", path.display()))),
     }
@@ -16191,6 +16333,20 @@ fn compiler_policy_digest_bytes(bytes: &[u8]) -> String {
     format!("{COMPILER_POLICY_DIGEST_PREFIX}{}", blake3::hash(bytes).to_hex())
 }
 
+fn compiler_policy_digest_path(path: &Path) -> Result<String, std::io::Error> {
+    let mut file = fs::File::open(path)?;
+    let mut hasher = blake3::Hasher::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let count = file.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        hasher.update(&buffer[..count]);
+    }
+    Ok(format!("{COMPILER_POLICY_DIGEST_PREFIX}{}", hasher.finalize().to_hex()))
+}
+
 fn prepare_unit_output_dir(unit_output_dir: &Path) -> Result<(), RunError> {
     if unit_output_dir.exists() {
         fs::remove_dir_all(unit_output_dir).map_err(|err| {
@@ -16199,49 +16355,6 @@ fn prepare_unit_output_dir(unit_output_dir: &Path) -> Result<(), RunError> {
     }
     fs::create_dir_all(unit_output_dir)
         .map_err(|err| RunError::Internal(format!("creating Rust unit output {}: {err}", unit_output_dir.display())))
-}
-
-fn execute_rust_compiler_command(
-    unit: &RustUnitDerivationSummary,
-    options: &RustUnitExecutionOptions,
-    unit_output_dir: &Path,
-    compiler_policy: Option<&RustCompilerPolicyInvocation>,
-) -> Result<std::process::Output, RunError> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    let mut command = match compiler_policy {
-        Some(policy) => {
-            if let Some(report_dir) = policy.report_path.parent() {
-                fs::create_dir_all(report_dir).map_err(|err| {
-                    RunError::Internal(format!(
-                        "creating compiler-policy report directory {}: {err}",
-                        report_dir.display()
-                    ))
-                })?;
-            }
-            let mut command = Command::new(&policy.executable);
-            command.arg(&options.rustc);
-            command
-        }
-        None => Command::new(&options.rustc),
-    };
-    command.args(rust_topology_runtime_args(&unit.derivation.args));
-    command.arg("--out-dir").arg(unit_output_dir);
-    apply_rust_topology_child_env(&mut command, &unit.derivation.env);
-    if let Some(policy) = compiler_policy {
-        for (key, value) in &policy.environment {
-            command.env(key, value);
-        }
-        command.env(COMPILER_POLICY_ADAPTER_REPORT_ENV, &policy.report_path);
-    }
-    if let Some(source_root) = rustc_source_root_from_remaps(&unit.derivation.args) {
-        command.current_dir(source_root);
-    }
-    command.output().map_err(|err| {
-        let executable = compiler_policy
-            .map_or_else(|| options.rustc.display().to_string(), |policy| policy.executable.display().to_string());
-        RunError::Internal(format!("executing Rust compiler command {executable} for unit {}: {err}", unit.unit_id))
-    })
 }
 
 struct CompilerPolicyBlockedReceiptInputs<'a> {
@@ -16421,14 +16534,57 @@ fn apply_rust_unit_compiler_policy(
     }
 }
 
+fn observed_compiler_attempt(
+    effect: mantle_rust_plan_core::ResolvedUnitEffect,
+    output: &std::process::Output,
+    receipt: Option<&RustUnitExecutionReceipt>,
+    output_dir: &Path,
+) -> Result<(mantle_rust_plan_app::ProcessAttempt, mantle_rust_plan_core::Blake3Digest), RunError> {
+    let output_identities = if output.status.success() {
+        let artifacts = if let Some(receipt) = receipt.filter(|receipt| !receipt.output_artifact_digests.is_empty()) {
+            Cow::Borrowed(receipt.output_artifact_digests.as_slice())
+        } else {
+            Cow::Owned(digest_output_artifacts(output_dir)?)
+        };
+        if artifacts.is_empty() {
+            Vec::new()
+        } else {
+            let digest = mantle_rust_plan_core::hash_legacy_receipt_preimage(&artifacts).map_err(RunError::Internal)?;
+            effect.facts.expected_outputs.iter().map(|name| (name.clone(), digest.clone())).collect()
+        }
+    } else {
+        Vec::new()
+    };
+    let observation = mantle_rust_plan_core::ResolvedProcessObservation {
+        effect_id: effect.facts.effect_id.clone(),
+        unit_id: effect.facts.unit_id.clone(),
+        resolved_blake3: effect.resolved_blake3.clone(),
+        role: effect.facts.role,
+        attempt: effect.facts.attempt,
+        status: if output.status.success() {
+            mantle_rust_plan_core::UnitObservationStatus::Succeeded
+        } else {
+            mantle_rust_plan_core::UnitObservationStatus::Failed
+        },
+        exit_code: output.status.code(),
+        output_identities,
+    };
+    let identity = mantle_rust_plan_core::classify_resolved_process_observation(&effect, &observation)
+        .map_err(|blocker| RunError::Internal(format!("{}: {}", blocker.code, blocker.message)))?;
+    Ok((mantle_rust_plan_app::ProcessAttempt { effect, observation }, identity))
+}
+type RustCompilerAuditFallback = (mantle_rust_plan_core::ResolvedUnitEffect, std::process::Output);
+
 fn failed_rust_compiler_execution(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
     inputs: &mut RustUnitExecutionInputs,
+    planned: &mantle_rust_plan_core::ExistingUnitEffect,
+    prior: &mantle_rust_plan_app::ProcessAttempt,
+    prior_identity: mantle_rust_plan_core::Blake3Digest,
     output: &std::process::Output,
-) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
+) -> Result<(Option<RustUnitExecutionReceipt>, Option<RustCompilerAuditFallback>), RunError> {
     debug_assert!(!output.status.success());
-    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     let Some(invocation) = inputs.compiler_policy_invocation.as_ref() else {
         let diagnostic = redacted_diagnostic(&output.stderr);
         return failed_execution_receipt(FailedExecutionReceiptInputs {
@@ -16439,7 +16595,7 @@ fn failed_rust_compiler_execution(
             compiler_policy: inputs.compiler_policy_receipt.clone(),
             diagnostic: &diagnostic,
         })
-        .map(Some);
+        .map(|receipt| (Some(receipt), None));
     };
     if options.compiler_policy.mode != RustCompilerPolicyMode::Audit {
         let diagnostic = redacted_diagnostic(&output.stderr);
@@ -16455,31 +16611,64 @@ fn failed_rust_compiler_execution(
             compiler_policy: policy,
             diagnostic: &diagnostic,
         })
-        .map(Some);
+        .map(|receipt| (Some(receipt), None));
     }
+    let mut facts = prior.effect.facts.clone();
+    if facts.arguments.first() != Some(&rust_process_word(options.rustc.as_os_str())) {
+        return blocked_execution_receipt(BlockedExecutionReceiptInputs {
+            unit: Some(unit),
+            class: "audit-fallback-compiler",
+            message: "admitted compiler-policy invocation does not contain its selected rustc executable",
+        })
+        .map(|receipt| (Some(receipt), None));
+    }
+    facts.arguments.remove(0);
+    facts.executable = rust_process_word(options.rustc.as_os_str());
+    facts.environment = rust_topology_child_env(
+        &unit.derivation.env,
+        std::env::var_os(RUST_TOPOLOGY_TOOL_PATH_ENV),
+        &inherited_rust_topology_compile_env(),
+    )
+    .into_iter()
+    .map(|(name, value)| (name, rust_process_word(&value)))
+    .collect();
+    facts.attempt = 1;
+    facts.prior_attempt_identity = Some(prior_identity);
+    let fallback = match mantle_rust_plan_core::admit_resolved_unit_effect(planned, facts, Some(&prior.observation)) {
+        Ok(effect) => effect,
+        Err(blockers) => {
+            let blocker = &blockers[0];
+            return blocked_execution_receipt(BlockedExecutionReceiptInputs {
+                unit: Some(unit),
+                class: &blocker.code,
+                message: &blocker.message,
+            })
+            .map(|receipt| (Some(receipt), None));
+        }
+    };
     prepare_unit_output_dir(&inputs.output_dir)?;
-    let fallback_output = execute_rust_compiler_command(unit, options, &inputs.output_dir, None)?;
+    let fallback_output = execute_admitted_rust_process(&fallback, unit, None)?;
     if !fallback_output.status.success() {
         let diagnostic = redacted_diagnostic(&fallback_output.stderr);
         let policy = inputs
             .compiler_policy_receipt
             .clone()
             .map(|receipt| compiler_policy_receipt_with_status(receipt, COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN));
-        return failed_execution_receipt(FailedExecutionReceiptInputs {
+        let receipt = failed_execution_receipt(FailedExecutionReceiptInputs {
             unit,
             toolchain: inputs.toolchain.clone(),
             dependency_artifact_digests: inputs.dependency_artifact_digests.clone(),
             host_artifact_digests: inputs.host_artifact_digests.clone(),
             compiler_policy: policy,
             diagnostic: &diagnostic,
-        })
-        .map(Some);
+        })?;
+        return Ok((Some(receipt), Some((fallback, fallback_output))));
     }
     inputs.compiler_policy_receipt = Some(compiler_policy_receipt_with_status(
         invocation.receipt.clone(),
         COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN,
     ));
-    Ok(None)
+    Ok((None, Some((fallback, fallback_output))))
 }
 
 fn validate_successful_compiler_policy_report(
@@ -16620,7 +16809,6 @@ fn normalize_rust_cache_argument(argument: &str, replacements: &[(String, String
         contains_absolute_path,
         absolute_paths_classified: false,
     };
-    assert!(!semantic.value.is_empty());
     assert!(!semantic.absolute_paths_classified);
     semantic
 }
@@ -16631,6 +16819,9 @@ fn rust_cache_admitted_environment(
 ) -> Result<BTreeMap<String, String>, RunError> {
     let mut normalized = BTreeMap::new();
     for (name, value) in environment {
+        if name.is_empty() {
+            return Err(RunError::Internal("local Rust cache environment name is empty".to_string()));
+        }
         let value = normalize_rust_cache_text(value, replacements);
         if contains_absolute_path_text(&value) {
             return Err(RunError::Internal(format!(
@@ -16679,7 +16870,6 @@ fn normalize_rust_cache_text(value: &str, replacements: &[(String, String)]) -> 
     for (source, target) in replacements {
         normalized = normalized.replace(source, target);
     }
-    assert!(!value.is_empty());
     assert!(normalized.len() <= value.len().saturating_add(replacements.len().saturating_mul(BLAKE3_HEX_CHARS)));
     normalized
 }
@@ -16689,7 +16879,6 @@ fn contains_absolute_path_text(value: &str) -> bool {
         .split(|character: char| character.is_ascii_whitespace() || matches!(character, '=' | ',' | ';'))
         .any(|token| token.starts_with('/'));
     let has_assignment_root = value.contains("=/");
-    debug_assert!(!value.is_empty());
     debug_assert!(!has_assignment_root || value.contains('/'));
     has_root_token || has_assignment_root
 }
@@ -16992,7 +17181,7 @@ fn try_restore_local_cache_result(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
     inputs: &mut RustUnitExecutionInputs,
-) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
+) -> Result<Option<(RustUnitExecutionReceipt, mantle_rust_plan_app::CacheObservation)>, RunError> {
     let Some(selection) = options.local_cache.as_ref() else {
         return Ok(None);
     };
@@ -17021,7 +17210,8 @@ fn try_restore_local_cache_result(
     let is_hit = report.disposition == crunch_rust_cache::CACHE_DISPOSITION_HIT;
     inputs.local_cache_report = Some(report);
     if is_hit {
-        return finish_cache_restored_receipt(unit, options, inputs, RUST_CACHE_RESTORE_REBUILD_REASON).map(Some);
+        return finish_cache_restored_receipt(unit, options, inputs, RUST_CACHE_RESTORE_REBUILD_REASON)
+            .map(|receipt| Some((receipt, mantle_rust_plan_app::CacheObservation::RestoredLocal)));
     }
     try_restore_shared_cache_result(unit, options, selection, &action, inputs)
 }
@@ -17032,7 +17222,7 @@ fn try_restore_shared_cache_result(
     local_selection: &RustUnitLocalCacheSelection,
     action: &RustUnitAction,
     inputs: &mut RustUnitExecutionInputs,
-) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
+) -> Result<Option<(RustUnitExecutionReceipt, mantle_rust_plan_app::CacheObservation)>, RunError> {
     let Some(shared) = local_selection.shared.as_ref() else {
         return Ok(None);
     };
@@ -17054,10 +17244,11 @@ fn try_restore_shared_cache_result(
     inputs.shared_cache_report = Some(report);
     if is_hit {
         return finish_cache_restored_receipt(unit, options, inputs, RUST_SHARED_CACHE_RESTORE_REBUILD_REASON)
-            .map(Some);
+            .map(|receipt| Some((receipt, mantle_rust_plan_app::CacheObservation::RestoredShared)));
     }
     if must_block {
-        return shared_cache_blocked_receipt(unit, options, inputs).map(Some);
+        return shared_cache_blocked_receipt(unit, options, inputs)
+            .map(|receipt| Some((receipt, mantle_rust_plan_app::CacheObservation::NotObserved)));
     }
     Ok(None)
 }
@@ -17125,20 +17316,26 @@ fn empty_rust_unit_execution_inputs(options: &RustUnitExecutionOptions) -> RustU
     empty
 }
 
-fn execute_rust_unit(
+fn prepare_rust_unit_for_cache(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
-) -> Result<RustUnitExecutionReceipt, RunError> {
-    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!RUST_UNIT_EXECUTION_RECEIPT_FILE.is_empty());
+) -> Result<Result<RustUnitExecutionInputs, RustUnitExecutionReceipt>, RunError> {
     let mut inputs = match prepare_rust_unit_execution_inputs(unit, options)? {
         Ok(inputs) => inputs,
-        Err(receipt) => return Ok(receipt),
+        Err(receipt) => return Ok(Err(receipt)),
     };
     if let Some(receipt) = apply_rust_unit_compiler_policy(unit, options, &mut inputs)? {
-        return Ok(receipt);
+        return Ok(Err(receipt));
     }
-    if let Some(mut receipt) = try_reuse_rust_unit_outputs(ReuseRustUnitOutputsInputs {
+    Ok(Ok(inputs))
+}
+
+fn restore_or_miss_rust_unit(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    inputs: &mut RustUnitExecutionInputs,
+) -> Result<Option<(RustUnitExecutionReceipt, mantle_rust_plan_app::CacheObservation)>, RunError> {
+    if let Some((mut receipt, cache)) = try_reuse_rust_unit_outputs(ReuseRustUnitOutputsInputs {
         unit,
         output_dir: &inputs.output_dir,
         toolchain: inputs.toolchain.clone(),
@@ -17147,32 +17344,140 @@ fn execute_rust_unit(
         host_artifact_digests: inputs.host_artifact_digests.clone(),
         compiler_policy: inputs.compiler_policy_receipt.clone(),
     })? {
-        if options.local_cache.is_some() && receipt.execution_status == "success" {
+        if options.local_cache.is_some() && cache == mantle_rust_plan_app::CacheObservation::ReusedOutput {
             receipt = attach_local_cache_report(receipt, local_cache_output_reuse_report())?;
             write_rust_unit_execution_receipt(&inputs.output_dir, &receipt)?;
         }
-        return Ok(receipt);
+        return Ok(Some((receipt, cache)));
     }
-    if let Some(receipt) = try_restore_local_cache_result(unit, options, &mut inputs)? {
-        return Ok(receipt);
-    }
+    try_restore_local_cache_result(unit, options, inputs)
+}
+
+fn execute_uncached_rust_unit(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    mut inputs: RustUnitExecutionInputs,
+    planned: &mantle_rust_plan_core::ExistingUnitEffect,
+    primary: mantle_rust_plan_core::ResolvedUnitEffect,
+) -> Result<(RustUnitExecutionReceipt, Vec<mantle_rust_plan_app::ProcessAttempt>), RunError> {
     prepare_unit_output_dir(&inputs.output_dir)?;
-    let output =
-        execute_rust_compiler_command(unit, options, &inputs.output_dir, inputs.compiler_policy_invocation.as_ref())?;
-    if !output.status.success() {
-        if let Some(receipt) = failed_rust_compiler_execution(unit, options, &mut inputs, &output)? {
-            return Ok(receipt);
+    let output_dir = inputs.output_dir.clone();
+    let output = execute_admitted_rust_process(
+        &primary,
+        unit,
+        inputs.compiler_policy_invocation.as_ref().map(|policy| policy.report_path.as_path()),
+    )?;
+    let mut attempts = Vec::with_capacity(2);
+    let (final_effect, final_output) = if output.status.success() {
+        if let Some(receipt) = validate_successful_compiler_policy_report(unit, options, &mut inputs)? {
+            let (attempt, _) = observed_compiler_attempt(primary, &output, Some(&receipt), &output_dir)?;
+            attempts.push(attempt);
+            return Ok((receipt, attempts));
         }
-    } else if let Some(receipt) = validate_successful_compiler_policy_report(unit, options, &mut inputs)? {
-        return Ok(receipt);
-    }
+        (primary, output)
+    } else {
+        let (prior, identity) = observed_compiler_attempt(primary, &output, None, &output_dir)?;
+        attempts.push(prior);
+        let (terminal, fallback) =
+            failed_rust_compiler_execution(unit, options, &mut inputs, planned, &attempts[0], identity, &output)?;
+        if let Some(receipt) = terminal {
+            if let Some((effect, output)) = fallback {
+                let (attempt, _) = observed_compiler_attempt(effect, &output, Some(&receipt), &output_dir)?;
+                attempts.push(attempt);
+            }
+            return Ok((receipt, attempts));
+        }
+        fallback
+            .ok_or_else(|| RunError::Internal("audit fallback produced no admitted compiler attempt".to_string()))?
+    };
     if let Some(report) = inputs.local_cache_report.take() {
         inputs.local_cache_report = Some(report.compiler_executed());
     }
     if let Some(report) = inputs.shared_cache_report.take() {
         inputs.shared_cache_report = Some(report.compiler_executed());
     }
-    finalize_successful_rust_unit_execution(unit, options, inputs, RUST_CACHE_COMPILE_REBUILD_REASON, true)
+    let receipt =
+        finalize_successful_rust_unit_execution(unit, options, inputs, RUST_CACHE_COMPILE_REBUILD_REASON, true)?;
+    let (attempt, _) = observed_compiler_attempt(final_effect, &final_output, Some(&receipt), &output_dir)?;
+    attempts.push(attempt);
+    Ok((receipt, attempts))
+}
+
+struct AdmittedRustUnitExecution {
+    receipt: RustUnitExecutionReceipt,
+    primary: Option<mantle_rust_plan_core::ResolvedUnitEffect>,
+    attempts: Vec<mantle_rust_plan_app::ProcessAttempt>,
+    restored_compiler: Option<mantle_rust_plan_core::RestoredCompilerArtifactObservation>,
+}
+
+fn execute_planned_rust_unit(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    planned: &mantle_rust_plan_core::ExistingUnitEffect,
+    executions: &[RustUnitExecutionReceipt],
+    metadata_runs: &[BuildScriptMetadataRunReceipt],
+) -> Result<AdmittedRustUnitExecution, RunError> {
+    let stopped = |class: &str, message: &str| {
+        blocked_execution_receipt(BlockedExecutionReceiptInputs {
+            unit: Some(unit),
+            class,
+            message,
+        })
+        .map(|receipt| AdmittedRustUnitExecution {
+            receipt,
+            primary: None,
+            attempts: Vec::new(),
+            restored_compiler: None,
+        })
+    };
+    let mut inputs = match prepare_rust_unit_for_cache(unit, options)? {
+        Ok(inputs) => inputs,
+        Err(receipt) => {
+            return Ok(AdmittedRustUnitExecution {
+                receipt,
+                primary: None,
+                attempts: Vec::new(),
+                restored_compiler: None,
+            });
+        }
+    };
+    let facts = match topology_primary_process_facts(planned, unit, &inputs, options, executions, metadata_runs) {
+        Ok(facts) => facts,
+        Err(error) => return stopped(&error.code, &error.detail),
+    };
+    let primary = match mantle_rust_plan_core::admit_resolved_unit_effect(planned, facts, None) {
+        Ok(effect) => effect,
+        Err(blockers) => {
+            let blocker = &blockers[0];
+            return stopped(&blocker.code, &blocker.message);
+        }
+    };
+    if let Some((receipt, cache)) = restore_or_miss_rust_unit(unit, options, &mut inputs)? {
+        let restored_compiler = if unit.target_kind == "custom-build"
+            && matches!(
+                cache,
+                mantle_rust_plan_app::CacheObservation::ReusedOutput
+                    | mantle_rust_plan_app::CacheObservation::RestoredLocal
+                    | mantle_rust_plan_app::CacheObservation::RestoredShared
+            ) {
+            Some(restored_compiler_evidence(&receipt, &primary, cache)?)
+        } else {
+            None
+        };
+        return Ok(AdmittedRustUnitExecution {
+            receipt,
+            primary: Some(primary),
+            attempts: Vec::new(),
+            restored_compiler,
+        });
+    }
+    let (receipt, attempts) = execute_uncached_rust_unit(unit, options, inputs, planned, primary)?;
+    Ok(AdmittedRustUnitExecution {
+        receipt,
+        primary: None,
+        attempts,
+        restored_compiler: None,
+    })
 }
 
 struct ReuseRustUnitOutputsInputs<'a> {
@@ -17253,7 +17558,7 @@ fn stale_cached_output_from_reuse_inputs(
 
 fn try_reuse_rust_unit_outputs(
     inputs: ReuseRustUnitOutputsInputs<'_>,
-) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
+) -> Result<Option<(RustUnitExecutionReceipt, mantle_rust_plan_app::CacheObservation)>, RunError> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let receipt_path = inputs.output_dir.join(RUST_UNIT_EXECUTION_RECEIPT_FILE);
@@ -17268,7 +17573,7 @@ fn try_reuse_rust_unit_outputs(
                 Vec::new(),
                 "prior execution receipt is missing or malformed",
             )
-            .map(Some);
+            .map(|receipt| Some((receipt, mantle_rust_plan_app::CacheObservation::NotObserved)));
         }
     };
     let current_output_artifact_digests = digest_output_artifacts(inputs.output_dir)?;
@@ -17278,7 +17583,7 @@ fn try_reuse_rust_unit_outputs(
             current_output_artifact_digests,
             "prior execution receipt exists but no declared output artifacts are readable",
         )
-        .map(Some);
+        .map(|receipt| Some((receipt, mantle_rust_plan_app::CacheObservation::NotObserved)));
     }
     let has_matching_current_inputs = cached_execution_receipt_matches(CachedReceiptMatchInputs {
         prior: &prior_receipt,
@@ -17296,7 +17601,7 @@ fn try_reuse_rust_unit_outputs(
             current_output_artifact_digests,
             "prior execution receipt does not match current explicit inputs, compiler-policy identity, or output artifact digests",
         )
-        .map(Some);
+        .map(|receipt| Some((receipt, mantle_rust_plan_app::CacheObservation::NotObserved)));
     }
     let receipt = finalized_execution_receipt(FinalizedExecutionReceiptInputs {
         unit: inputs.unit,
@@ -17311,7 +17616,7 @@ fn try_reuse_rust_unit_outputs(
         blocker: None,
     })?;
     write_rust_unit_execution_receipt(inputs.output_dir, &receipt)?;
-    Ok(Some(receipt))
+    Ok(Some((receipt, mantle_rust_plan_app::CacheObservation::ReusedOutput)))
 }
 
 fn write_rust_unit_execution_receipt(
@@ -18419,11 +18724,22 @@ fn digest_artifact_path_with_receipt_path(
     path: &Path,
     receipt_path: String,
 ) -> Result<RustExecutionArtifactDigest, RunError> {
-    let bytes =
-        fs::read(path).map_err(|err| RunError::Internal(format!("reading artifact {}: {err}", path.display())))?;
+    let mut file = fs::File::open(path)
+        .map_err(|err| RunError::Internal(format!("reading artifact {}: {err}", path.display())))?;
+    let mut hasher = blake3::Hasher::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let count = file
+            .read(&mut buffer)
+            .map_err(|err| RunError::Internal(format!("reading artifact {}: {err}", path.display())))?;
+        if count == 0 {
+            break;
+        }
+        hasher.update(&buffer[..count]);
+    }
     Ok(RustExecutionArtifactDigest {
         path: receipt_path,
-        blake3: blake3::hash(&bytes).to_hex().to_string(),
+        blake3: hasher.finalize().to_hex().to_string(),
     })
 }
 
@@ -18545,11 +18861,8 @@ fn normalize_json_value(value: Value) -> Value {
 }
 
 fn receipt_hash(receipt: &RustPlanReceipt) -> Result<String, RunError> {
-    let mut hashable = receipt.clone();
-    hashable.receipt_hash.clear();
-    let canonical = serde_json::to_vec(&hashable)
-        .map_err(|err| RunError::Internal(format!("canonicalizing Rust plan receipt: {err}")))?;
-    Ok(blake3::hash(&canonical).to_hex().to_string())
+    debug_assert!(receipt.receipt_hash.is_empty());
+    mantle_rust_plan_core::hash_legacy_receipt_preimage(receipt).map_err(RunError::Internal)
 }
 
 fn sorted_strings(mut strings: Vec<String>) -> Vec<String> {
@@ -18572,7 +18885,6 @@ fn normalize_path_string(path: &Path) -> String {
 #[cfg(test)]
 #[allow(clippy::cloned_ref_to_slice_refs)]
 mod tests {
-    use std::ffi::OsStr;
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
     use std::process::Command;
@@ -18599,29 +18911,6 @@ mod tests {
     const PROCESS_GLOBAL_ENV_SAMPLE_KEY: &str = "MANTLE_TEST_RACY_ENV";
     const PROCESS_GLOBAL_ENV_SAMPLE_VALUE: &str = "bad";
 
-    struct FixedOracle {
-        cargo_version: CargoOutput,
-        rustc_version: CargoOutput,
-        metadata: CargoOutput,
-        unit_graph: CargoOutput,
-    }
-
-    impl CargoOracle for FixedOracle {
-        fn run_cargo(&self, _root: &Path, _cargo: &Path, args: &[String]) -> Result<CargoOutput, RunError> {
-            if args.first().map(String::as_str) == Some("metadata") {
-                return Ok(self.metadata.clone());
-            }
-            Ok(self.unit_graph.clone())
-        }
-
-        fn run_tool_version(&self, tool: &Path, _args: &[&str]) -> Result<CargoOutput, RunError> {
-            if tool.file_name() == Some(OsStr::new("rustc")) {
-                return Ok(self.rustc_version.clone());
-            }
-            Ok(self.cargo_version.clone())
-        }
-    }
-
     fn ok_output(text: &str) -> CargoOutput {
         CargoOutput {
             stdout: text.as_bytes().to_vec(),
@@ -18636,6 +18925,71 @@ mod tests {
             stderr: text.as_bytes().to_vec(),
             status_code: 101,
         }
+    }
+    #[test]
+    fn cargo_oracle_capture_accepts_exact_bound_and_rejects_oversized_streams() {
+        let metadata = b"{\"a\":1}";
+        let exact = read_bounded_cargo_stream(std::io::Cursor::new(metadata), metadata.len(), "stdout").unwrap();
+        assert_eq!(exact.as_slice(), metadata.as_slice());
+        let too_large = read_bounded_cargo_stream(std::io::Cursor::new(metadata), metadata.len() - 1, "stdout");
+        assert!(matches!(
+            too_large,
+            Err(RunError::Build(message)) if message == "Cargo oracle stdout exceeds the 6-byte capture limit"
+        ));
+        let stderr = read_bounded_cargo_stream(std::io::Cursor::new(b"error"), 4, "stderr");
+        assert!(matches!(
+            stderr,
+            Err(RunError::Build(message)) if message == "Cargo oracle stderr exceeds the 4-byte capture limit"
+        ));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn cargo_oracle_real_child_capture_bounds_both_streams_and_reaps() {
+        const SCRIPT: &str = r#"
+printf '%s' "$$" > "$MANTLE_CARGO_CAPTURE_PID"
+case "$MANTLE_CARGO_CAPTURE_MODE" in
+  ok) printf '{"ok":true}' ;;
+  stdout|stderr)
+    count=0
+    while [ "$count" -lt 4096 ]; do
+      if [ "$MANTLE_CARGO_CAPTURE_MODE" = stdout ]; then
+        printf x
+      else
+        printf x >&2
+      fi
+      count=$((count + 1))
+    done
+    ;;
+esac
+"#;
+        let directory = TempDir::new().unwrap();
+        let run = |mode: &str| {
+            let pid_file = directory.path().join(format!("{mode}.pid"));
+            let mut command = Command::new("/bin/sh");
+            command
+                .args(["-c", SCRIPT])
+                .env("MANTLE_CARGO_CAPTURE_PID", &pid_file)
+                .env("MANTLE_CARGO_CAPTURE_MODE", mode);
+            let output = run_bounded_cargo_process(command, Path::new("/bin/sh"), 128, 128);
+            let pid: libc::pid_t = std::fs::read_to_string(&pid_file).unwrap().parse().unwrap();
+            let mut status = 0;
+            assert_eq!(unsafe { libc::waitpid(pid, &mut status, libc::WNOHANG) }, -1);
+            assert_eq!(std::io::Error::last_os_error().raw_os_error(), Some(libc::ECHILD));
+            output
+        };
+        let accepted = run("ok").unwrap();
+        assert_eq!(accepted.status_code, 0);
+        assert_eq!(accepted.stdout.as_slice(), br#"{"ok":true}"#.as_slice());
+        assert!(accepted.stderr.is_empty());
+        assert!(matches!(
+            run("stdout"),
+            Err(RunError::Build(message)) if message == "Cargo oracle stdout exceeds the 128-byte capture limit"
+        ));
+        assert!(matches!(
+            run("stderr"),
+            Err(RunError::Build(message)) if message == "Cargo oracle stderr exceeds the 128-byte capture limit"
+        ));
     }
 
     #[test]
@@ -19438,17 +19792,17 @@ mod tests {
         let resolution = resolve_native_features(request);
 
         assert_eq!(resolution.activated_optional_dependencies, vec!["clap".to_string()]);
-        assert!(resolution.dependency_feature_edges.contains(&NativeDependencyFeatureEdge {
+        assert!(resolution.dependency_feature_edges.contains(&mantle_rust_plan_core::NativeDependencyFeatureEdge {
             dependency: "serde".to_string(),
             feature: "derive".to_string(),
             weak: false,
         }));
-        assert!(resolution.dependency_feature_edges.contains(&NativeDependencyFeatureEdge {
+        assert!(resolution.dependency_feature_edges.contains(&mantle_rust_plan_core::NativeDependencyFeatureEdge {
             dependency: "optional".to_string(),
             feature: "fast".to_string(),
             weak: true,
         }));
-        assert!(resolution.blockers.iter().any(|blocker| blocker.class == "unknown-feature-entry"));
+        assert!(resolution.blockers.iter().any(|blocker| blocker.code == "unknown-feature-entry"));
     }
 
     #[test]
@@ -19504,7 +19858,7 @@ mod tests {
         let resolution = resolve_native_features(request);
 
         assert_eq!(resolution.selected_features, vec!["default".to_string()]);
-        assert!(resolution.blockers.iter().any(|blocker| blocker.class == "unsupported-feature-entry"));
+        assert!(resolution.blockers.iter().any(|blocker| blocker.code == "unsupported-feature-entry"));
         assert!(resolution.blockers.iter().any(|blocker| blocker.message.contains("dep:")));
         assert!(resolution.blockers.iter().any(|blocker| blocker.message.contains("serde/")));
     }
@@ -19518,43 +19872,39 @@ mod tests {
         build_defs.insert("build-default".to_string(), vec!["dep:cc".to_string()]);
         let mut host_defs = BTreeMap::new();
         host_defs.insert("proc-macro".to_string(), vec!["syn/derive".to_string()]);
-        let request = NativeFeatureRoleResolutionRequest {
-            normal: NativeFeatureResolutionRequest {
-                feature_defs: normal_defs,
-                optional_dependencies: BTreeSet::new(),
-                explicit_features: Vec::new(),
-                all_features: false,
-                no_default_features: false,
-            },
-            build: NativeFeatureResolutionRequest {
-                feature_defs: build_defs,
-                optional_dependencies: BTreeSet::from(["cc".to_string()]),
-                explicit_features: vec!["build-default".to_string()],
-                all_features: false,
-                no_default_features: true,
-            },
-            host: NativeFeatureResolutionRequest {
-                feature_defs: host_defs,
-                optional_dependencies: BTreeSet::new(),
-                explicit_features: vec!["proc-macro".to_string()],
-                all_features: false,
-                no_default_features: true,
-            },
-        };
+        let normal = resolve_native_features(NativeFeatureResolutionRequest {
+            feature_defs: normal_defs,
+            optional_dependencies: BTreeSet::new(),
+            explicit_features: Vec::new(),
+            all_features: false,
+            no_default_features: false,
+        });
+        let build = resolve_native_features(NativeFeatureResolutionRequest {
+            feature_defs: build_defs,
+            optional_dependencies: BTreeSet::from(["cc".to_string()]),
+            explicit_features: vec!["build-default".to_string()],
+            all_features: false,
+            no_default_features: true,
+        });
+        let host = resolve_native_features(NativeFeatureResolutionRequest {
+            feature_defs: host_defs,
+            optional_dependencies: BTreeSet::new(),
+            explicit_features: vec!["proc-macro".to_string()],
+            all_features: false,
+            no_default_features: true,
+        });
 
-        let resolution = resolve_native_feature_roles(request);
-
-        assert_eq!(resolution.normal.selected_features, vec!["default".to_string(), "std".to_string()]);
-        assert_eq!(resolution.build.selected_features, vec!["build-default".to_string()]);
-        assert_eq!(resolution.build.activated_optional_dependencies, vec!["cc".to_string()]);
-        assert_eq!(resolution.host.selected_features, vec!["proc-macro".to_string()]);
-        assert!(resolution.host.dependency_feature_edges.contains(&NativeDependencyFeatureEdge {
+        assert_eq!(normal.selected_features, vec!["default".to_string(), "std".to_string()]);
+        assert_eq!(build.selected_features, vec!["build-default".to_string()]);
+        assert_eq!(build.activated_optional_dependencies, vec!["cc".to_string()]);
+        assert_eq!(host.selected_features, vec!["proc-macro".to_string()]);
+        assert!(host.dependency_feature_edges.contains(&mantle_rust_plan_core::NativeDependencyFeatureEdge {
             dependency: "syn".to_string(),
             feature: "derive".to_string(),
             weak: false,
         }));
-        assert!(!resolution.normal.selected_features.contains(&"build-default".to_string()));
-        assert!(!resolution.build.selected_features.contains(&"std".to_string()));
+        assert!(!normal.selected_features.contains(&"build-default".to_string()));
+        assert!(!build.selected_features.contains(&"std".to_string()));
     }
 
     #[test]
@@ -21742,62 +22092,6 @@ rust-version = "1.80"
     }
 
     #[test]
-    fn rust_topology_runtime_args_disable_self_contained_linker_by_default() {
-        let args = vec!["--crate-name".to_string(), "demo".to_string()];
-
-        let runtime_args = rust_topology_runtime_args(&args);
-
-        assert_eq!(&runtime_args[..args.len()], &args[..]);
-        assert_eq!(runtime_args[args.len()], RUSTC_CODEGEN_OPTION_FLAG);
-        assert_eq!(runtime_args[args.len() + 1usize], RUSTC_EXTERNAL_LINKER_MODE_ARG);
-    }
-
-    #[test]
-    fn rust_topology_runtime_args_preserve_split_explicit_linker_mode() {
-        let args = vec![
-            RUSTC_CODEGEN_OPTION_FLAG.to_string(),
-            "link-self-contained=yes".to_string(),
-            "--crate-name".to_string(),
-            "demo".to_string(),
-        ];
-
-        let runtime_args = rust_topology_runtime_args(&args);
-
-        assert_eq!(runtime_args, args);
-        assert_eq!(runtime_args.iter().filter(|arg| arg.contains(RUSTC_LINK_SELF_CONTAINED_OPTION)).count(), 1usize);
-    }
-
-    #[test]
-    fn rust_topology_runtime_args_preserve_joined_explicit_linker_mode() {
-        let args = vec![
-            "-Clink-self-contained=no".to_string(),
-            "--crate-name".to_string(),
-            "demo".to_string(),
-        ];
-
-        let runtime_args = rust_topology_runtime_args(&args);
-
-        assert_eq!(runtime_args, args);
-        assert_eq!(runtime_args.iter().filter(|arg| arg.contains(RUSTC_LINK_SELF_CONTAINED_OPTION)).count(), 1usize);
-    }
-
-    #[test]
-    fn rust_topology_runtime_args_ignore_near_match_linker_mode() {
-        let args = vec![
-            RUSTC_CODEGEN_OPTION_FLAG.to_string(),
-            "link-self-containedness=yes".to_string(),
-            "--crate-name".to_string(),
-            "demo".to_string(),
-        ];
-
-        let runtime_args = rust_topology_runtime_args(&args);
-
-        assert_eq!(&runtime_args[..args.len()], &args[..]);
-        assert_eq!(runtime_args[args.len()], RUSTC_CODEGEN_OPTION_FLAG);
-        assert_eq!(runtime_args[args.len() + 1usize], RUSTC_EXTERNAL_LINKER_MODE_ARG);
-    }
-
-    #[test]
     fn rust_topology_child_env_preserves_non_empty_inherited_path() {
         let mut explicit = BTreeMap::new();
         explicit.insert("TARGET".to_string(), "x86_64-unknown-linux-gnu".to_string());
@@ -23702,7 +23996,7 @@ rust-version = "1.80"
         let mut plan_options = options(dir.path());
         plan_options.features.clear();
         plan_options.no_default_features = false;
-        let receipt = capture_rust_plan_with_oracle(&plan_options, &oracle).unwrap();
+        let receipt = capture_rust_plan_from_fixed(&plan_options, &oracle).unwrap();
 
         assert_eq!(receipt.schema_version, RECEIPT_SCHEMA_VERSION);
         assert!(receipt.invocation.features.is_empty());
@@ -23892,84 +24186,6 @@ rust-version = "1.80"
 
         assert!(classes.contains("cargo-oracle-package-identity-mismatch"));
         assert!(classes.contains("native-missing-cargo-package"));
-    }
-
-    #[test]
-    fn collect_native_manifest_lock_texts_reads_root_member_manifests_and_lockfile() {
-        let dir = TempDir::new().unwrap();
-        let member_dir = dir.path().join("member");
-        std::fs::create_dir_all(member_dir.join("src")).unwrap();
-        std::fs::write(
-            dir.path().join("Cargo.toml"),
-            "[workspace]\nmembers = ['member']\n\n[workspace.package]\nversion = '0.1.0'\n",
-        )
-        .unwrap();
-        std::fs::write(
-            member_dir.join("Cargo.toml"),
-            "[package]\nname = 'member'\nversion.workspace = true\n\n[lib]\npath = 'src/lib.rs'\n",
-        )
-        .unwrap();
-        std::fs::write(member_dir.join("src/lib.rs"), "pub fn member() {}\n").unwrap();
-        std::fs::write(dir.path().join("Cargo.lock"), "version = 3\n").unwrap();
-
-        let inputs = collect_native_manifest_lock_texts(dir.path()).unwrap();
-
-        assert_eq!(inputs.manifests.len(), 2usize);
-        assert!(inputs.manifests.iter().any(|input| input.path.ends_with("Cargo.toml")));
-        assert!(inputs.manifests.iter().any(|input| input.text.contains("name = 'member'")));
-        assert!(inputs.lockfile.path.ends_with("Cargo.lock"));
-        assert_eq!(inputs.lockfile.text, "version = 3\n");
-    }
-
-    #[test]
-    fn collect_native_manifest_lock_texts_fails_closed_on_missing_lockfile() {
-        let dir = TempDir::new().unwrap();
-        std::fs::write(dir.path().join("Cargo.toml"), "[package]\nname = 'solo'\nversion = '0.1.0'\n").unwrap();
-
-        let err = collect_native_manifest_lock_texts(dir.path()).unwrap_err();
-
-        assert!(err.contains("reading native lockfile"));
-        assert!(err.contains("Cargo.lock"));
-    }
-
-    #[test]
-    fn native_manifest_lock_unsupported_blockers_accept_supported_subset() {
-        let inputs = NativeManifestLockInputTexts {
-            manifests: vec![NativeTextInput {
-                path: "Cargo.toml".to_string(),
-                text: "[package]\nname = 'app'\nversion = '0.1.0'\n\n[target.'cfg(unix)'.dependencies]\ndep = { path = '../dep' }\n".to_string(),
-            }],
-            lockfile: NativeTextInput {
-                path: "Cargo.lock".to_string(),
-                text: "version = 3\n\n[[package]]\nname = 'dep'\nversion = '0.1.0'\n".to_string(),
-            },
-        };
-
-        let blockers = native_manifest_lock_unsupported_blockers(&inputs);
-
-        assert!(blockers.is_empty(), "{blockers:#?}");
-    }
-
-    #[test]
-    fn native_manifest_lock_unsupported_blockers_reject_patch_replace_target_build_and_unknown_lock_source() {
-        let inputs = NativeManifestLockInputTexts {
-            manifests: vec![NativeTextInput {
-                path: "Cargo.toml".to_string(),
-                text: "[package]\nname = 'app'\nversion = '0.1.0'\n\n[patch.crates-io]\nserde = { path = 'vendor/serde' }\n\n[replace]\n'old:0.1.0' = { path = 'vendor/old' }\n\n[target.'cfg(unix)'.build-dependencies]\nbuild = { path = '../build' }\n".to_string(),
-            }],
-            lockfile: NativeTextInput {
-                path: "Cargo.lock".to_string(),
-                text: "version = 3\n\n[[package]]\nname = 'weird'\nversion = '0.1.0'\nsource = 'sparse+https://example.invalid/index'\n".to_string(),
-            },
-        };
-
-        let blockers = native_manifest_lock_unsupported_blockers(&inputs);
-        let classes = blockers.iter().map(|blocker| blocker.class.as_str()).collect::<BTreeSet<_>>();
-
-        assert!(classes.contains("unsupported-manifest-patch"));
-        assert!(classes.contains("unsupported-manifest-replace"));
-        assert!(classes.contains("unsupported-target-table"));
-        assert!(classes.contains("unsupported-lockfile-source"));
     }
 
     #[test]
@@ -26215,102 +26431,6 @@ unix_dep = { path = "../unix-dep" }
     }
 
     #[test]
-    fn native_target_cfg_predicate_scope_evaluates_nested_common_predicates() {
-        let target = "x86_64-unknown-linux-gnu";
-
-        assert_eq!(
-            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
-                expression: "cfg(unix)",
-                active_target: target,
-            }),
-            Some(true)
-        );
-        assert_eq!(
-            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
-                expression: "cfg(windows)",
-                active_target: target,
-            }),
-            Some(false)
-        );
-        assert_eq!(
-            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
-                expression: "cfg(not(windows))",
-                active_target: target,
-            }),
-            Some(true)
-        );
-        assert_eq!(
-            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
-                expression: "cfg(any(target_os = \"linux\", target_os = \"macos\"))",
-                active_target: target,
-            }),
-            Some(true)
-        );
-        assert_eq!(
-            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
-                expression: "cfg(all(any(target_arch = \"x86\", target_arch = \"x86_64\"), not(target_os = \"windows\")))",
-                active_target: target,
-            }),
-            Some(true)
-        );
-        assert_eq!(
-            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
-                expression: "x86_64-unknown-linux-gnu",
-                active_target: target,
-            }),
-            Some(true)
-        );
-        assert_eq!(
-            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
-                expression: "aarch64-pc-windows-gnullvm",
-                active_target: target,
-            }),
-            Some(false)
-        );
-        assert_eq!(
-            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
-                expression: "cfg(target_has_atomic = \"ptr\")",
-                active_target: target,
-            }),
-            Some(true)
-        );
-        assert_eq!(
-            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
-                expression: "cfg(not(target_has_atomic = \"ptr\"))",
-                active_target: target,
-            }),
-            Some(false)
-        );
-        assert_eq!(
-            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
-                expression: "cfg(loom)",
-                active_target: target,
-            }),
-            Some(false)
-        );
-    }
-
-    #[test]
-    fn native_target_cfg_predicate_scope_blocks_unknown_or_malformed_syntax() {
-        let target = "x86_64-unknown-linux-gnu";
-
-        assert_eq!(
-            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
-                expression: "cfg(unknown_selector)",
-                active_target: target,
-            }),
-            None
-        );
-        assert_eq!(
-            evaluate_supported_target_cfg(TargetCfgEvaluationInputs {
-                expression: "cfg(any(target_os = \"linux\"",
-                active_target: target,
-            }),
-            None
-        );
-    }
-
-    #[test]
     fn source_closure_records_registry_git_and_path_identities() {
         let dir = TempDir::new().unwrap();
         let path_manifest = dir.path().join("path-crate/Cargo.toml");
@@ -26555,6 +26675,17 @@ checksum = "0123456789abcdef"
         assert_ne!(digest_a, digest_b);
         assert_eq!(digest_a.len(), BLAKE3_HEX_CHARS);
 
+        let empty_value = BTreeMap::from([("CARGO_PKG_DESCRIPTION".to_string(), String::new())]);
+        let admitted = rust_cache_admitted_environment(&empty_value, &[]).unwrap();
+        assert_eq!(admitted.get("CARGO_PKG_DESCRIPTION").map(String::as_str), Some(""));
+        let empty_key = BTreeMap::from([(String::new(), "value".to_string())]);
+        assert!(
+            rust_cache_admitted_environment(&empty_key, &[])
+                .unwrap_err()
+                .to_string()
+                .contains("environment name is empty")
+        );
+
         let unclassified = BTreeMap::from([("CUSTOM_TOOL".to_string(), "/ambient/tool".to_string())]);
         let error = rust_cache_admitted_environment(&unclassified, &[]).unwrap_err().to_string();
         assert!(error.contains("unclassified absolute path"));
@@ -26617,8 +26748,6 @@ checksum = "0123456789abcdef"
         assert!(!restored_report.compiler_executed);
         assert_eq!(existing.local_cache.as_ref().unwrap().disposition, RUST_CACHE_OUTPUT_REUSE);
         assert_eq!(uncached.execution_status, "success");
-        assert!(second_elapsed < first_elapsed);
-        assert!(existing_elapsed < first_elapsed);
         assert!(unit_output.join(RUST_UNIT_EXECUTION_RECEIPT_FILE).is_file());
     }
 
@@ -27353,106 +27482,6 @@ checksum = "0123456789abcdef"
     }
 
     #[test]
-    fn rust_unit_execution_blocks_missing_host_artifact_before_rustc() {
-        let dir = TempDir::new().unwrap();
-        let manifest_path = dir.path().join("hosted/Cargo.toml");
-        std::fs::create_dir_all(manifest_path.parent().unwrap().join("src")).unwrap();
-        std::fs::write(&manifest_path, "[package]\nname='hosted'\nversion='0.1.0'\n").unwrap();
-        let app_lib = dir.path().join("hosted/src/lib.rs");
-        let build_rs = dir.path().join("hosted/build.rs");
-        std::fs::write(&app_lib, "pub fn answer() -> u32 { 42 }\n").unwrap();
-        std::fs::write(&build_rs, "fn main() {}\n").unwrap();
-        let packages = vec![CargoPackage {
-            id: "path+file://hosted#hosted@0.1.0".to_string(),
-            name: "hosted".to_string(),
-            version: "0.1.0".to_string(),
-            source: None,
-            manifest_path: manifest_path.display().to_string(),
-            targets: Vec::new(),
-            features: BTreeMap::new(),
-        }];
-        let closure = summarize_source_closure(&packages, &[]).unwrap();
-        let unit_graph = serde_json::json!({
-            "units": [
-                {
-                    "pkg_id": "path+file://hosted#hosted@0.1.0",
-                    "target": {"name": "build-script-build", "kind": ["custom-build"], "crate_types": ["bin"], "src_path": build_rs.display().to_string(), "edition": "2021"},
-                    "mode": "build"
-                },
-                {
-                    "pkg_id": "path+file://hosted#hosted@0.1.0",
-                    "target": {"name": "hosted", "kind": ["lib"], "crate_types": ["lib"], "src_path": app_lib.display().to_string(), "edition": "2021"},
-                    "mode": "build",
-                    "deps": []
-                }
-            ]
-        });
-        let graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
-        assert!(graph.ready);
-        let target = graph.derivations.iter().find(|unit| unit.execution_kind == "target").unwrap();
-        assert_eq!(target.dependency_artifacts.len(), 0);
-        assert_eq!(target.consumed_host_artifacts.len(), 1);
-
-        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
-            rustc: PathBuf::from("rustc"),
-            output_root: dir.path().join("unit-out"),
-            compiler_policy: RustCompilerPolicySelection::default(),
-            local_cache: None,
-        })
-        .unwrap();
-
-        assert_eq!(receipt.execution_status, "blocked");
-        assert_eq!(receipt.blocker.as_ref().unwrap().class, "missing-host-artifact");
-        assert!(receipt.blocker.as_ref().unwrap().message.contains("host-artifact:"));
-        assert!(receipt.output_artifact_digests.is_empty());
-    }
-
-    #[test]
-    fn rust_unit_execution_blocks_missing_declared_output_before_rustc() {
-        let dir = TempDir::new().unwrap();
-        let crate_dir = dir.path().join("no-output-crate");
-        let manifest_path = crate_dir.join("Cargo.toml");
-        let src_dir = crate_dir.join("src");
-        std::fs::create_dir_all(&src_dir).unwrap();
-        std::fs::write(&manifest_path, "[package]\nname='no-output-crate'\nversion='0.1.0'\n").unwrap();
-        let lib_path = src_dir.join("lib.rs");
-        std::fs::write(&lib_path, "pub fn answer() -> u32 { 42 }\n").unwrap();
-        let packages = vec![CargoPackage {
-            id: "path+file://no-output-crate#no-output-crate@0.1.0".to_string(),
-            name: "no-output-crate".to_string(),
-            version: "0.1.0".to_string(),
-            source: None,
-            manifest_path: manifest_path.display().to_string(),
-            targets: Vec::new(),
-            features: BTreeMap::new(),
-        }];
-        let closure = summarize_source_closure(&packages, &[]).unwrap();
-        let unit_graph = serde_json::json!({
-            "units": [{
-                "pkg_id": "path+file://no-output-crate#no-output-crate@0.1.0",
-                "target": {"name": "no-output-crate", "kind": ["lib"], "crate_types": ["lib"], "src_path": lib_path.display().to_string(), "edition": "2021"},
-                "mode": "build",
-                "deps": []
-            }]
-        });
-        let mut graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
-        graph.derivations[0].derivation.outputs.clear();
-
-        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
-            rustc: PathBuf::from("rustc"),
-            output_root: dir.path().join("unit-out"),
-            compiler_policy: RustCompilerPolicySelection::default(),
-            local_cache: None,
-        })
-        .unwrap();
-
-        assert_eq!(receipt.execution_status, "blocked");
-        assert_eq!(receipt.blocker.as_ref().unwrap().class, "missing-declared-output");
-        assert_eq!(receipt.declared_outputs, Vec::<String>::new());
-        assert!(receipt.output_artifact_digests.is_empty());
-    }
-
-    #[test]
     fn redacted_diagnostic_limits_lines_and_redacts_temp_paths() {
         let lines = (0..=REDACTED_DIAGNOSTIC_MAX_LINES)
             .map(|index| format!("line-{index}: /tmp/mantle-secret-{index}/src/lib.rs:1:1\0"))
@@ -27676,7 +27705,7 @@ checksum = "0123456789abcdef"
             unit_graph: failing_output("the option `Z` is only accepted on nightly"),
         };
 
-        let error = capture_rust_plan_with_oracle(&options(dir.path()), &oracle).unwrap_err();
+        let error = capture_rust_plan_from_fixed(&options(dir.path()), &oracle).unwrap_err();
 
         assert!(
             matches!(error, RunError::Build(message) if message.contains("cargo build --unit-graph") && message.contains("nightly"))

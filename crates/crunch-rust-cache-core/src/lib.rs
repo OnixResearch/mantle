@@ -475,14 +475,16 @@ fn validate_action_collections(input: &RustUnitActionInput) -> Result<(), RustCa
 }
 
 fn validate_semantic_argument(argument: &RustSemanticArgument) -> Result<(), RustCacheError> {
-    validate_string(&argument.value, ValidationCode("rust-action-argument-invalid"))?;
+    validate_bounded_text(&argument.value, ValidationCode("rust-action-argument-invalid"))?;
+    if argument.value.is_empty() && argument.contains_absolute_path {
+        return Err(RustCacheError::new("rust-action-spurious-path-classification".to_string()));
+    }
     if argument.contains_absolute_path && !argument.absolute_paths_classified {
         return Err(RustCacheError::new("rust-action-unclassified-absolute-path".to_string()));
     }
     if !argument.contains_absolute_path && argument.absolute_paths_classified {
         return Err(RustCacheError::new("rust-action-spurious-path-classification".to_string()));
     }
-    assert!(!argument.value.is_empty());
     assert_eq!(argument.contains_absolute_path, argument.absolute_paths_classified);
     Ok(())
 }
@@ -493,7 +495,7 @@ fn validate_environment(environment: &BTreeMap<String, String>) -> Result<(), Ru
     }
     for (name, value) in environment {
         validate_identifier(name, ValidationCode("rust-action-environment-name-invalid"))?;
-        validate_string(value, ValidationCode("rust-action-environment-value-invalid"))?;
+        validate_bounded_text(value, ValidationCode("rust-action-environment-value-invalid"))?;
     }
     assert!(environment.len() <= MAX_ENVIRONMENT_ENTRIES);
     assert!(environment.keys().all(|name| !name.is_empty()));
@@ -732,11 +734,17 @@ fn validate_identifier(value: &str, code: ValidationCode<'_>) -> Result<(), Rust
 }
 
 fn validate_string(value: &str, code: ValidationCode<'_>) -> Result<(), RustCacheError> {
-    if value.is_empty() || value.len() > MAX_STRING_BYTES {
+    validate_bounded_text(value, code)?;
+    if value.is_empty() {
         return Err(RustCacheError::new(code.0.to_string()));
     }
-    assert!(!value.is_empty());
-    assert!(value.len() <= MAX_STRING_BYTES);
+    Ok(())
+}
+
+fn validate_bounded_text(value: &str, code: ValidationCode<'_>) -> Result<(), RustCacheError> {
+    if value.len() > MAX_STRING_BYTES {
+        return Err(RustCacheError::new(code.0.to_string()));
+    }
     Ok(())
 }
 
@@ -964,6 +972,51 @@ mod tests {
 
         assert_eq!(canonical_rust_action(absolute).unwrap_err().code(), "rust-action-unclassified-absolute-path");
         assert_eq!(canonical_rust_action(bad_digest).unwrap_err().code(), "rust-action-compiler-digest-invalid");
+    }
+
+    #[test]
+    fn empty_argument_and_child_environment_values_remain_distinct_and_bounded() {
+        let mut empty = action_input();
+        empty.semantic_arguments.push(argument(""));
+        empty.admitted_environment.insert("CARGO_PKG_DESCRIPTION".to_string(), String::new());
+        let admitted = canonical_rust_action(empty.clone()).expect("empty argv and child env values are valid");
+
+        let mut omitted_argument = empty.clone();
+        omitted_argument.semantic_arguments.pop();
+        assert_ne!(admitted.action_ref, canonical_rust_action(omitted_argument).unwrap().action_ref);
+        let mut nonempty_environment = empty;
+        nonempty_environment
+            .admitted_environment
+            .insert("CARGO_PKG_DESCRIPTION".to_string(), "described".to_string());
+        assert_ne!(admitted.action_ref, canonical_rust_action(nonempty_environment).unwrap().action_ref);
+        let mut false_path_claim = action_input();
+        false_path_claim.semantic_arguments.push(RustSemanticArgument {
+            value: String::new(),
+            contains_absolute_path: true,
+            absolute_paths_classified: true,
+        });
+        assert_eq!(
+            canonical_rust_action(false_path_claim).unwrap_err().code(),
+            "rust-action-spurious-path-classification"
+        );
+
+        let mut unnamed_environment = action_input();
+        unnamed_environment.admitted_environment.insert(String::new(), String::new());
+        assert_eq!(
+            canonical_rust_action(unnamed_environment).unwrap_err().code(),
+            "rust-action-environment-name-invalid"
+        );
+        let mut oversized_argument = action_input();
+        oversized_argument.semantic_arguments.push(argument(&"x".repeat(MAX_STRING_BYTES + 1)));
+        assert_eq!(canonical_rust_action(oversized_argument).unwrap_err().code(), "rust-action-argument-invalid");
+        let mut oversized_environment = action_input();
+        oversized_environment
+            .admitted_environment
+            .insert("CARGO_PKG_DESCRIPTION".to_string(), "x".repeat(MAX_STRING_BYTES + 1));
+        assert_eq!(
+            canonical_rust_action(oversized_environment).unwrap_err().code(),
+            "rust-action-environment-value-invalid"
+        );
     }
 
     #[test]

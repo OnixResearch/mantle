@@ -52,16 +52,16 @@ pub const FUNCTION_ADDRESS_DISPOSITION_PRESENT: &str = "present";
 pub const FUNCTION_ADDRESS_DISPOSITION_INVALID: &str = "invalid";
 pub const FUNCTION_ADDRESS_OPAQUE_BOUNDARY: &str = "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics";
 
-pub const TRELLIS_PROOF_PROFILE_VERSION: &str = "kamacite.trellis-proof-evidence-profile.v1";
+pub const TRELLIS_PROOF_PROFILE_VERSION: &str = "kamacite.trellis-proof-evidence-profile.v2";
 const TRELLIS_PROOF_PROFILE_FAMILY_PREFIX: &str = "kamacite.trellis-proof-evidence-profile.";
 pub const TRELLIS_PROOF_CLAIM_SCOPE: &str = "trellis-proof-identity-linkage-only";
 pub const KAMACITE_TRELLIS_PROOF_PRESERVES_ROLE: &str = "kamacite-trellis-proof-preserves-envelope";
-pub const KAMACITE_TRELLIS_PROOF_PRESERVES_SCHEMA: &str = "kamacite.trellis-proof-evidence-profile.v1";
+pub const KAMACITE_TRELLIS_PROOF_PRESERVES_SCHEMA: &str = TRELLIS_PROOF_PROFILE_VERSION;
 pub const VALENCE_TRELLIS_PROOF_VALIDATION_ROLE: &str = "valence-trellis-proof-evidence-profile";
 pub const VALENCE_TRELLIS_PROOF_VALIDATION_SCHEMA: &str = "trellis.proof-evidence";
 pub const KAMACITE_TRELLIS_PROOF_JSON_PROJECTION_ROLE: &str = "kamacite-trellis-proof-json-projection";
 pub const KAMACITE_TRELLIS_PROOF_JSON_PROJECTION_SCHEMA: &str =
-    "kamacite.trellis-proof-evidence-profile.v1.compat-json";
+    "kamacite.trellis-proof-evidence-profile.v2.compat-json";
 pub const TRELLIS_PROOF_KAMACITE_ROLE_RECORDED_ONLY: &str = "recorded-only";
 pub const TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE: &str = "formal-proof-candidate";
 pub const TRELLIS_PROOF_VALENCE_ROLE_PROPERTY: &str = "property";
@@ -86,6 +86,9 @@ const REQUIRED_POLICY_KINDS: &[&str] = &[
 const TRELLIS_PROOF_REQUIRED_NON_CLAIMS: &[&str] = &[
     TRELLIS_PROOF_REFERENCE_ONLY_NON_CLAIM,
     TRELLIS_PROOF_AUTHORITY_NON_CLAIM,
+    "not release eligibility",
+    "not verifier soundness",
+    "not downstream correctness",
 ];
 const OPAQUE_EVIDENCE_OVERCLAIM_FRAGMENTS: &[&str] = &[
     "mantle verifies payload semantics",
@@ -739,7 +742,7 @@ fn expected_claim_scope(binding: &OpaqueEvidenceSidecarBinding) -> &'static str 
     OPAQUE_EVIDENCE_GENERIC_CLAIM_SCOPE
 }
 
-fn is_trellis_proof_profile(binding: &OpaqueEvidenceSidecarBinding) -> bool {
+pub(crate) fn is_trellis_proof_profile(binding: &OpaqueEvidenceSidecarBinding) -> bool {
     let is_proof = binding.evidence_kind == OPAQUE_EVIDENCE_KIND_PROOF;
     let is_trellis_family = binding.profile_version.starts_with(TRELLIS_PROOF_PROFILE_FAMILY_PREFIX);
     is_proof && is_trellis_family

@@ -28,4 +28,6 @@ tokio-util = { version = "0.7", features = ["io"] }
 url = "2"
 
 [dev-dependencies]
+crunch-action-result-core = { path = "../crunch-action-result-core" }
+nix-compat = { path = "../../vendor/nix-compat", features = ["serde"] }
 pretty_assertions = "1.0"

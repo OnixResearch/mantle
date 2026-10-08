@@ -1,19 +1,19 @@
 # Tasks: Add lock-driven vendor fetches
 
-All implementation and acceptance tasks remain open. Proposal creation is not
-producer acceptance.
+Pure planning and its bounded negative controls are implemented; actual build
+admission, vendor-tree hydration, profile parity, and acceptance remain open.
 
 ## Phase 1: Baseline and contract
 
-- [ ] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record the vendored-tree payload size in the current profiles, the checked vendor-input validation, the dynamic-derivation admission surface, and focused baseline test output. r[mantle.lock_vendor_fetch.bundle_payload_reduction]
-- [ ] [serial] T1.2 Define the producer contract: bounds, lock grammar subset, artifact admission, assembler layout grammar, and typed denial catalog. r[mantle.lock_vendor_fetch.producer_derivation]
-- [ ] [serial] T1.3 Record the lock-hashes-only and Cargo-first decisions in an ADR, including the offline override interaction. r[mantle.lock_vendor_fetch.lock_hash_reuse]
+- [x] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record the vendored-tree payload size in the current profiles, the checked vendor-input validation, the dynamic-derivation admission surface, and focused baseline test output. The isolated fresh-clone-inputs manifest records `vendored-cargo-inputs.payload_bytes=896632634`; see `evidence/baseline-2026-10-01.json` and `evidence/isolated-vendor-2026-10-01.json` for exact commands and limits (no reduction claim). r[mantle.lock_vendor_fetch.bundle_payload_reduction]
+- [x] [serial] T1.2 Define the producer contract: bounds, lock grammar subset, artifact admission, assembler layout grammar, and typed denial catalog. r[mantle.lock_vendor_fetch.producer_derivation]
+- [x] [serial] T1.3 Record the lock-hashes-only and Cargo-first decisions in an ADR, including the offline override interaction. r[mantle.lock_vendor_fetch.lock_hash_reuse]
 
 ## Phase 2: Core producer
 
-- [ ] [serial] T2.1 Implement pure lock parsing, artifact admission, and layout planning with typed denials. r[mantle.lock_vendor_fetch.producer_derivation]
+- [x] [serial] T2.1 Implement pure lock parsing, artifact admission, and layout planning with typed denials. r[mantle.lock_vendor_fetch.producer_derivation]
 - [ ] [parallel] T2.2 Add positive fixtures: valid Cargo lock to N fetch derivations, assembler layout equality with the vendored tree. r[mantle.lock_vendor_fetch.producer_derivation] r[mantle.lock_vendor_fetch.bundle_payload_reduction]
-- [ ] [parallel] T2.3 Add negative fixtures: oversized lock, over-bound artifact count, hash-less dependency without a table, path escape, duplicate identity, contradictory entries. r[mantle.lock_vendor_fetch.producer_derivation] r[mantle.lock_vendor_fetch.negative_controls]
+- [x] [parallel] T2.3 Add negative fixtures: oversized lock, over-bound artifact count, hash-less dependency without a table, path escape, duplicate identity, contradictory entries. r[mantle.lock_vendor_fetch.producer_derivation] r[mantle.lock_vendor_fetch.negative_controls]
 
 ## Phase 3: Build and bundle integration
 

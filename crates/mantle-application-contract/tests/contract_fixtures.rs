@@ -6,8 +6,15 @@ use mantle_application_contract::ApplicationOutcome;
 use mantle_application_contract::CapabilityError;
 use mantle_application_contract::CommandFamily;
 use mantle_application_contract::EffectId;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::EffectPlan;
+use mantle_application_contract::EffectSpec;
+use mantle_application_contract::ExpectedOutput;
 use mantle_application_contract::Observation;
 use mantle_application_contract::ObservationStatus;
+use mantle_application_contract::PlanError;
 use mantle_application_contract::RealizationBlocker;
 use mantle_application_contract::RealizeCommand;
 use mantle_application_contract::RealizeOutcome;
@@ -92,49 +99,125 @@ fn unclassified_roots_are_rejected() {
     assert_eq!(CommandFamily::all().len(), 11);
 }
 
-#[test]
-fn effect_plans_are_bounded_and_typed() {
-    let plan = plan_effects(CommandFamily::Realization, &["read-files", "run-process"]).expect("plan builds");
-    assert_eq!(plan.effects.len(), 2);
-    assert_eq!(plan.effects[0].family, CommandFamily::Realization);
-
-    let over_bound: Vec<&str> = std::iter::repeat_n("read-files", 4_097).collect();
-    assert!(plan_effects(CommandFamily::Realization, &over_bound).is_none());
+fn spec<'a>(id: &'a str, output: &'a str) -> EffectSpec<'a> {
+    EffectSpec {
+        effect_id: id,
+        kind: EffectKind::ReadFiles,
+        limit: EffectMeasure::Items(2),
+        expected_output: ExpectedOutput::Identity(output),
+    }
 }
 
 #[test]
-fn observation_classification_is_exact() {
-    let plan = plan_effects(CommandFamily::Realization, &["read-files", "write-files"]).expect("plan builds");
-    let succeeded = |id: &str| Observation {
-        effect_id: EffectId(String::from(id)),
+fn effect_declarations_require_independent_id_kind_and_nonzero_limit() {
+    let plan =
+        plan_effects(CommandFamily::Realization, &[spec("verify-paths", "verified"), spec("read-graph", "graph")])
+            .expect("two read effects have unique identities");
+    assert_eq!(plan.effects[0].kind, EffectKind::ReadFiles);
+    assert_eq!(plan.effects[1].kind, EffectKind::ReadFiles);
+    assert_eq!(plan.effects[0].family, CommandFamily::Realization);
+    assert_eq!(plan_effects(CommandFamily::Realization, &[]), Err(PlanError::EmptyPlan));
+    assert_eq!(
+        plan_effects(CommandFamily::Realization, &[spec("duplicate", "first"), spec("duplicate", "second")]),
+        Err(PlanError::DuplicateEffectId { index: 1 })
+    );
+    assert_eq!(
+        plan_effects(CommandFamily::Realization, &[spec("", "output")]),
+        Err(PlanError::EmptyEffectId { index: 0 })
+    );
+    assert_eq!(
+        plan_effects(CommandFamily::Realization, &[spec("read-graph", "")]),
+        Err(PlanError::EmptyExpectedOutput { index: 0 })
+    );
+    let zero = EffectSpec {
+        limit: EffectMeasure::Calls(0),
+        ..spec("zero", "output")
+    };
+    assert_eq!(plan_effects(CommandFamily::Realization, &[zero]), Err(PlanError::ZeroLimit { index: 0 }));
+    let over_bound = vec![spec("same", "output"); 4_097];
+    assert_eq!(plan_effects(CommandFamily::Realization, &over_bound), Err(PlanError::TooManyEffects));
+}
+
+#[test]
+fn reconstructed_plans_cannot_vacuously_complete() {
+    assert_eq!(classify_observations(&EffectPlan { effects: Vec::new() }, &[]), ApplicationOutcome::Contradicted {
+        effect_count: 1
+    });
+    let planned =
+        plan_effects(CommandFamily::Realization, &[spec("verify-paths", "verified")]).expect("valid declaration");
+    let actual = [Observation {
+        effect_id: EffectId(String::from("verify-paths")),
+        kind: EffectKind::ReadFiles,
         status: ObservationStatus::Succeeded,
+        output: EffectOutput::Identity(String::from("verified")),
+        usage: EffectMeasure::Items(1),
+        diagnostics_code: None,
+    }];
+    let mut zero_limit = planned.clone();
+    zero_limit.effects[0].limit = EffectMeasure::Items(0);
+    assert_eq!(classify_observations(&zero_limit, &actual), ApplicationOutcome::Contradicted { effect_count: 1 });
+    let mut mixed_families = planned;
+    mixed_families.effects.push(mixed_families.effects[0].clone());
+    mixed_families.effects[1].effect_id = EffectId(String::from("read-graph"));
+    mixed_families.effects[1].family = CommandFamily::Planning;
+    assert_eq!(classify_observations(&mixed_families, &actual), ApplicationOutcome::Contradicted {
+        effect_count: 1
+    });
+}
+
+#[test]
+fn observation_classification_checks_actual_authority_output_and_usage() {
+    let plan =
+        plan_effects(CommandFamily::Realization, &[spec("verify-paths", "verified"), spec("read-graph", "graph")])
+            .expect("plan builds");
+    let succeeded = |id: &str, output: &str| Observation {
+        effect_id: EffectId(String::from(id)),
+        kind: EffectKind::ReadFiles,
+        status: ObservationStatus::Succeeded,
+        output: EffectOutput::Identity(String::from(output)),
+        usage: EffectMeasure::Items(2),
         diagnostics_code: None,
     };
-    let completed = vec![succeeded("read-files"), succeeded("write-files")];
+    let completed = vec![succeeded("verify-paths", "verified"), succeeded("read-graph", "graph")];
     assert_eq!(classify_observations(&plan, &completed), ApplicationOutcome::Completed);
-
     let mut failed = completed.clone();
     failed[0].status = ObservationStatus::Failed;
+    failed[0].output = EffectOutput::None;
+    failed[0].usage = EffectMeasure::Items(0);
     assert_eq!(classify_observations(&plan, &failed), ApplicationOutcome::Failed { failed_effect_count: 1 });
-
+    failed[0].output = EffectOutput::Identity(String::from("unrequested"));
+    assert_eq!(classify_observations(&plan, &failed), ApplicationOutcome::Contradicted { effect_count: 1 });
     let mut skipped = completed.clone();
     skipped[1].status = ObservationStatus::Skipped;
+    skipped[1].output = EffectOutput::None;
+    skipped[1].usage = EffectMeasure::Items(0);
     assert_eq!(classify_observations(&plan, &skipped), ApplicationOutcome::Failed { failed_effect_count: 1 });
 
+    let mut wrong_kind = completed.clone();
+    wrong_kind[0].kind = EffectKind::ReadRandom;
+    assert_eq!(classify_observations(&plan, &wrong_kind), ApplicationOutcome::Contradicted { effect_count: 1 });
+    let mut wrong_output = completed.clone();
+    wrong_output[1].output = EffectOutput::Identity(String::from("unrequested"));
+    assert_eq!(classify_observations(&plan, &wrong_output), ApplicationOutcome::Contradicted { effect_count: 1 });
+    let mut overlimit = completed.clone();
+    overlimit[0].usage = EffectMeasure::Items(3);
+    assert_eq!(classify_observations(&plan, &overlimit), ApplicationOutcome::Contradicted { effect_count: 1 });
+    let mut wrong_dimension = completed.clone();
+    wrong_dimension[0].usage = EffectMeasure::Calls(1);
+    assert_eq!(classify_observations(&plan, &wrong_dimension), ApplicationOutcome::Contradicted { effect_count: 1 });
+
     let mut unknown = completed.clone();
-    unknown.push(succeeded("unplanned"));
+    unknown.push(succeeded("unplanned", "none"));
     assert_eq!(classify_observations(&plan, &unknown), ApplicationOutcome::Rejected {
         unknown_effect_count: 1,
         missing_effect_count: 0
     });
-
     let mut duplicated = completed.clone();
-    duplicated.push(succeeded("read-files"));
+    duplicated.push(succeeded("verify-paths", "verified"));
     assert_eq!(classify_observations(&plan, &duplicated), ApplicationOutcome::Rejected {
         unknown_effect_count: 1,
         missing_effect_count: 0
     });
-
     let mut missing = completed.clone();
     missing.pop();
     assert_eq!(classify_observations(&plan, &missing), ApplicationOutcome::Rejected {
@@ -191,7 +274,6 @@ impl RealizePort for FakeRealizePort {
             executed_units: 2,
             cache_hits: 0,
             output_identities: Vec::new(),
-            receipt_preimage: None,
         }))
     }
 }

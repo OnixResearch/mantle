@@ -1,0 +1,24 @@
+{
+  "schema": "mantle-bootstrap-pin-v1",
+  "source": "cmake",
+  "package_url": "pkg:github/Kitware/CMake",
+  "version": "3.31.8",
+  "release_date": "2025-06-12",
+  "artifacts": {
+    "source": {
+      "url_template": "https://github.com/Kitware/CMake/releases/download/v{version}/cmake-{version}.tar.gz",
+      "url": "https://github.com/Kitware/CMake/releases/download/v3.31.8/cmake-3.31.8.tar.gz",
+      "hash_kind": "tree",
+      "hash": "sha256-1sQqWhxydhTeQ0PUpW/wToX/u4kVmd6YE97O40G2sV8="
+    }
+  },
+  "resolve": {
+    "kind": "json",
+    "url": "https://api.github.com/repos/Kitware/CMake/releases/latest",
+    "version_field": "tag_name",
+    "date_field": "published_at"
+  },
+  "recipes": [
+    "cmake-3.31.8-gcc10.ncl"
+  ]
+}

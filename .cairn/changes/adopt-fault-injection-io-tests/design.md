@@ -8,7 +8,7 @@
 
 The `fallible!` macro decrements the process-global `FAULT_INJECT_COUNTER` atomic at each wrapped call site and returns an annotated `io::Error` when it reaches zero. The counter defaults to `u64::MAX`.
 
-Wrapped sites cover the store boundary: store path reads, NAR serialization writes, build-commit fsync, and cache writes. The pure cores keep planning and classifying from supplied facts and are not touched.
+Wrapped sites cover castore blob reads, NAR stream writes, post-build action-result cache-record writes, and that record's pre-link fsync. These are existing I/O calls; the physical output exporter has no direct fsync to wrap. Ordinary completed builds record publication faults as diagnostics; floating CA and CA-resolved IA intermediates require signed publication and fail as `ca-realisation-untrusted` before dependent consumption. The pure cores keep planning and classifying from supplied facts and are not touched.
 
 ## Determinism controls
 
@@ -23,8 +23,8 @@ Dev-dependency of the shell test target only. The dependency catalog records tra
 
 ## Verification
 
-Positive coverage: default counter completes a build and cache cycle unchanged.
+Positive coverage: the default counter leaves the store/NAR/cache fixture unchanged; the existing smoke scenario separately proves an actual build and cache cycle.
 
-Negative coverage: injected failures at store read, NAR write, commit fsync, and cache write, each asserting the declared bounded build-fact classification.
+Negative coverage: injected store-read and NAR-write failures retain their error classes; post-build cache-record write and pre-link fsync failures retain their publication diagnostics at the adapter boundary. Orchestration preserves the ordinary diagnostic and CA-required fail-closed rules separately.
 
-Boundary coverage: annotation carries the expected crate, file, and line; parallel fixtures never observe a foreign counter; no fixture enables `SLEEPINESS`.
+Boundary coverage: annotation carries the expected crate, file, and line; a fixture lock serializes ownership of the shared counter; no fixture enables `SLEEPINESS`.

@@ -3,6 +3,10 @@ use std::ffi::OsString;
 use std::future::Future;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use crunch_build::signing;
 use crunch_evaluation_stream_core::ProcessMode;
@@ -12,6 +16,7 @@ use crunch_evaluation_stream_core::SignalCancellationAction;
 use crunch_evaluation_stream_core::process_status;
 use crunch_evaluation_stream_core::signal_cancellation_action;
 use crunch_pipeline::BuildConfig;
+use crunch_pipeline::CausalTraceObservation;
 use crunch_pipeline::HermeticityAuditEvent;
 use crunch_pipeline::HermeticityMode;
 use crunch_pipeline::PipelineResult;
@@ -19,6 +24,7 @@ use crunch_pipeline::drv_key_for;
 use crunch_pipeline::label_for_key;
 use crunch_pipeline::parse_drv_key;
 use crunch_store::GcRootSource;
+use mantle_application_contract::EffectKind;
 use nix_compat::store_path::StorePath;
 
 use crate::build_failure::build_failure_envelopes;
@@ -32,6 +38,15 @@ use crate::errors::RunError;
 use crate::evaluation_stream_output::EvaluationStreamOutputError;
 use crate::evaluation_stream_output::EvaluationStreamWriter;
 use crate::evaluation_stream_output::STREAM_EVENT_CHANNEL_CAPACITY;
+use crate::remote_build::live_state::LiveBuildEmitAction;
+use crate::remote_build::live_state::LiveBuildSnapshot;
+use crate::remote_build::live_state::LiveStreamFactProjector;
+use crate::remote_build::live_state::LiveStreamFactTransition;
+use crate::remote_build::live_state::normalize_local_worker_live_facts;
+use crate::remote_build::live_state::plan_remote_live_fact_changes;
+use crate::remote_build::live_state::producer::BestEffortLivePublisher;
+use crate::remote_build::live_state::producer::LivePublisherObservation;
+use crate::remote_build::live_state::producer::LivePublisherStatus;
 use crate::signing_key::load_configured_trusted_public_keys;
 use crate::signing_key::load_or_generate_signing_keypair;
 
@@ -132,6 +147,7 @@ pub fn cmd_build(
     import_paths: &[OsString],
     output_dir: &Path,
     state_dir: &Path,
+    logs_dir: &Path,
     store_dir: &str,
     backend: crunch_store::StoreBackend,
     verbose: bool,
@@ -144,12 +160,14 @@ pub fn cmd_build(
     hermeticity_mode: HermeticityMode,
     output_mode: BuildOutputMode,
     interchange_dir: Option<&Path>,
+    causal_trace: bool,
 ) -> Result<(), RunError> {
     cmd_build_with_source_fetch_overrides(
         file,
         import_paths,
         output_dir,
         state_dir,
+        logs_dir,
         store_dir,
         backend,
         verbose,
@@ -162,6 +180,7 @@ pub fn cmd_build(
         hermeticity_mode,
         output_mode,
         interchange_dir,
+        causal_trace,
         Vec::new(),
         Vec::new(),
         None,
@@ -180,6 +199,7 @@ pub fn cmd_build_with_source_fetch_overrides(
     import_paths: &[OsString],
     output_dir: &Path,
     state_dir: &Path,
+    logs_dir: &Path,
     store_dir: &str,
     backend: crunch_store::StoreBackend,
     verbose: bool,
@@ -192,10 +212,96 @@ pub fn cmd_build_with_source_fetch_overrides(
     hermeticity_mode: HermeticityMode,
     output_mode: BuildOutputMode,
     interchange_dir: Option<&Path>,
+    causal_trace: bool,
     source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
     base_state_dirs: Vec<PathBuf>,
     root_registration: Option<crunch_store::RootRegistration>,
 ) -> Result<(), RunError> {
+    let config = prepare_local_build_config(
+        LocalBuildCommandConfig {
+            file,
+            import_paths,
+            output_dir,
+            state_dir,
+            store_dir,
+            backend,
+            verbose,
+            max_jobs,
+            substituter_urls,
+            signing_key_path,
+            trusted_public_keys,
+            trust_unsigned,
+            hermeticity_mode,
+            base_state_dirs,
+        },
+        output_mode,
+        interchange_dir,
+        source_fetch_overrides,
+        root_registration,
+    )?;
+    if output_mode.is_evaluation_stream() {
+        let completion = run_build_with_evaluation_stream(&config)?;
+        report_build_result(&config, &completion.result, fix, output_mode, logs_dir)?;
+        return evaluation_stream_process_result(&completion);
+    }
+    if causal_trace {
+        let (result, observation) = run_build_with_causal_trace(&config)?;
+        match observation {
+            CausalTraceObservation::Recorded(trace) => {
+                crate::causal_trace_diagnostic::write_trace(state_dir, &trace).map_err(RunError::Internal)?;
+            }
+            CausalTraceObservation::WorkerNotStarted => {
+                eprintln!("causal trace unavailable: worker not started (store preflight failed)");
+            }
+        }
+        return report_build_result(&config, &result, fix, output_mode, logs_dir);
+    }
+    let result = run_build(&config)?;
+    report_build_result(&config, &result, fix, output_mode, logs_dir)
+}
+
+/// The common local file build configuration. Watch and one-shot use the
+/// same signing, scheduling, source, and store policy.
+pub struct LocalBuildCommandConfig<'a> {
+    pub file: &'a Path,
+    pub import_paths: &'a [OsString],
+    pub output_dir: &'a Path,
+    pub state_dir: &'a Path,
+    pub store_dir: &'a str,
+    pub backend: crunch_store::StoreBackend,
+    pub verbose: bool,
+    pub max_jobs: u32,
+    pub substituter_urls: &'a [String],
+    pub signing_key_path: Option<&'a Path>,
+    pub trusted_public_keys: Option<&'a [nix_compat::narinfo::VerifyingKey]>,
+    pub trust_unsigned: bool,
+    pub hermeticity_mode: HermeticityMode,
+    pub base_state_dirs: Vec<PathBuf>,
+}
+
+fn prepare_local_build_config(
+    input: LocalBuildCommandConfig<'_>,
+    output_mode: BuildOutputMode,
+    interchange_dir: Option<&Path>,
+    source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
+    root_registration: Option<crunch_store::RootRegistration>,
+) -> Result<BuildConfig, RunError> {
+    let LocalBuildCommandConfig {
+        file,
+        import_paths,
+        output_dir,
+        state_dir,
+        store_dir,
+        backend,
+        verbose,
+        max_jobs,
+        substituter_urls,
+        signing_key_path,
+        trusted_public_keys,
+        trust_unsigned,
+        hermeticity_mode,
+        base_state_dirs,
+    } = input;
     crunch_store::StoreConfig::preflight_backend_identity_for(backend, state_dir, store_dir, &base_state_dirs)
         .map_err(|error| RunError::Internal(format!("opening store: {error}")))?;
     let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, output_mode.is_human())?;
@@ -237,18 +343,342 @@ pub fn cmd_build_with_source_fetch_overrides(
 
     debug_assert_eq!(config.file.as_path(), file);
     debug_assert_eq!(config.hermeticity_mode, hermeticity_mode);
-    if output_mode.is_evaluation_stream() {
-        let completion = run_build_with_evaluation_stream(&config)?;
-        report_build_result(&config, &completion.result, fix, output_mode)?;
-        return evaluation_stream_process_result(&completion);
+    Ok(config)
+}
+
+fn print_watch_notice(config: &BuildConfig, notice: crunch_pipeline::WatchNotice) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let stdout = std::io::stdout();
+    let mut output = stdout.lock();
+    match notice {
+        crunch_pipeline::WatchNotice::Goals { generation, diff } => {
+            writeln!(output, "watch generation {generation}: {} admitted goal event(s)", diff.events.len())?;
+            for event in diff.events.iter().take(32) {
+                writeln!(output, "  {} {}", event.kind.as_str(), event.goal_identity.as_deref().unwrap_or(""))?;
+            }
+            if diff.events.len() > 32 {
+                writeln!(output, "  ... {} more goal event(s)", diff.events.len() - 32)?;
+            }
+        }
+        crunch_pipeline::WatchNotice::Rejected { diff } => {
+            let diagnostic = diff
+                .events
+                .iter()
+                .find_map(|event| event.diagnostic.as_deref())
+                .unwrap_or("watched source edit rejected");
+            writeln!(output, "watch edit rejected: {diagnostic}; previous goals remain admitted")?;
+        }
+        crunch_pipeline::WatchNotice::PendingCancellation { generation, stale } => {
+            writeln!(
+                output,
+                "watch generation {generation}: cancellation pending for {} goal(s); waiting for teardown",
+                stale.len()
+            )?;
+        }
+        crunch_pipeline::WatchNotice::Settled {
+            generation,
+            outcomes,
+            failed,
+        } => {
+            writeln!(
+                output,
+                "watch generation {generation}: settled {} successful, {} failed root(s)",
+                outcomes.len(),
+                failed.len()
+            )?;
+            let output_dir = config.output_dir.to_str().unwrap_or(&config.store_dir);
+            for outcome in &outcomes {
+                let is_multi = outcome.outputs.len() > 1;
+                for (name, path_info) in &outcome.outputs {
+                    let path = path_info.store_path.to_absolute_path_with_prefix(output_dir);
+                    writeln!(output, "{path}{}", format_output_suffix(outcome, name, is_multi))?;
+                }
+            }
+            for failure in &failed {
+                writeln!(output, "  failed {}: {}", failure.drv_key, failure.error)?;
+            }
+        }
     }
-    let result = run_build(&config)?;
-    report_build_result(&config, &result, fix, output_mode)
+    output.flush()
+}
+
+/// Run the persistent local Worker until a signal has requested and completed
+/// owned teardown. A second signal never drops a still-running sandbox future.
+pub fn cmd_build_watch(input: LocalBuildCommandConfig<'_>) -> Result<(), RunError> {
+    let config = prepare_local_build_config(input, BuildOutputMode::Human, None, Vec::new(), None)?;
+    let started = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| RunError::Internal(format!("watch run clock: {error}")))?;
+    let run_identity = format!("watch-{}-{}", std::process::id(), started.as_nanos());
+    let runtime =
+        tokio::runtime::Runtime::new().map_err(|error| RunError::Internal(format!("watch runtime: {error}")))?;
+    runtime.block_on(async {
+        let mut signals = OperatorSignalMonitor::new()?;
+        let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(false);
+        let (notice_tx, mut notice_rx) = tokio::sync::mpsc::channel(16);
+        let watch = crunch_pipeline::watch_build(&config, run_identity, &mut shutdown_rx, &notice_tx);
+        tokio::pin!(watch);
+        let mut requested_shutdown = false;
+        let mut receiving_notices = true;
+        let mut output_error = None;
+        let result = loop {
+            tokio::select! {
+                biased;
+                signal = signals.receive(), if !requested_shutdown => {
+                    requested_shutdown = true;
+                    match signal {
+                        Ok(signal) => eprintln!("received {}; waiting for watched builds to stop", signal.name()),
+                        Err(error) => output_error = Some(error),
+                    }
+                    let _ = shutdown_tx.send(true);
+                }
+                notice = notice_rx.recv(), if receiving_notices => {
+                    match notice {
+                        Some(notice) if output_error.is_none() => {
+                            if let Err(error) = print_watch_notice(&config, notice) {
+                                output_error = Some(RunError::Internal(format!("writing watch notice: {error}")));
+                                requested_shutdown = true;
+                                let _ = shutdown_tx.send(true);
+                            }
+                        }
+                        Some(_) => {}
+                        None => {
+                            receiving_notices = false;
+                            output_error = Some(RunError::Internal("watch notice stream closed".to_string()));
+                            requested_shutdown = true;
+                            let _ = shutdown_tx.send(true);
+                        }
+                    }
+                }
+                finished = &mut watch => break finished,
+            }
+        };
+        if output_error.is_none() {
+            while let Ok(notice) = notice_rx.try_recv() {
+                if let Err(error) = print_watch_notice(&config, notice) {
+                    output_error = Some(RunError::Internal(format!("writing watch notice: {error}")));
+                    break;
+                }
+            }
+        }
+        if let Some(error) = output_error {
+            return Err(error);
+        }
+        result.map_err(Into::into)
+    })
 }
 
 pub fn run_build(config: &BuildConfig) -> Result<PipelineResult, RunError> {
     let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
+    if let Some(socket_path) = configured_live_socket() {
+        return rt.block_on(run_build_with_live_observation(config, &socket_path, false)).map(|(result, _)| result);
+    }
     rt.block_on(crunch_pipeline::build(config)).map_err(Into::into)
+}
+
+fn run_build_with_causal_trace(config: &BuildConfig) -> Result<(PipelineResult, CausalTraceObservation), RunError> {
+    let rt = tokio::runtime::Runtime::new().map_err(|error| RunError::Internal(format!("tokio runtime: {error}")))?;
+    if let Some(socket_path) = configured_live_socket() {
+        let (result, observation) = rt.block_on(run_build_with_live_observation(config, &socket_path, true))?;
+        let observation = observation.ok_or_else(|| RunError::Internal("causal trace was not captured".to_string()))?;
+        return Ok((result, observation));
+    }
+    rt.block_on(crunch_pipeline::build_with_causal_trace(config)).map_err(Into::into)
+}
+
+pub(crate) fn configured_live_socket() -> Option<PathBuf> {
+    std::env::var_os("MANTLE_LIVE_STATE_SOCKET").filter(|value| !value.is_empty()).map(PathBuf::from)
+}
+
+/// An evaluation run id is content-addressed; daemon ownership must instead
+/// distinguish concurrent invocations of the same source and root selection.
+fn next_live_owner_id(stream_run_id: &str) -> Option<String> {
+    static NEXT_INVOCATION: AtomicU64 = AtomicU64::new(0);
+    let invocation = NEXT_INVOCATION
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| current.checked_add(1))
+        .ok()?;
+    Some(format!("live-{stream_run_id}-{}-{invocation}", std::process::id()))
+}
+
+struct LiveStreamObserver {
+    projection: LiveStreamFactProjector,
+    worker_snapshot: LiveBuildSnapshot,
+    publisher: BestEffortLivePublisher,
+    degraded_reported: bool,
+}
+
+fn observe_live_stream_record(
+    observer: &mut Option<LiveStreamObserver>,
+    socket_path: Option<&Path>,
+    record: &crunch_evaluation_stream_core::StreamRecordValue,
+) {
+    if observer.is_none() {
+        let (Some(socket_path), crunch_evaluation_stream_core::StreamRecordValue::RunStart(start)) =
+            (socket_path, record)
+        else {
+            return;
+        };
+        let run_id = start.run_id();
+        let Some(owner_run_id) = next_live_owner_id(&run_id) else {
+            eprintln!("live build observation degraded: owner invocation exhausted");
+            return;
+        };
+        let Ok(projection) = LiveStreamFactProjector::new(&owner_run_id, &run_id) else {
+            eprintln!("live build observation degraded: invalid run identity");
+            return;
+        };
+        let Ok(publisher) = BestEffortLivePublisher::new_empty(socket_path, owner_run_id.as_str()) else {
+            eprintln!("live build observation degraded: cannot admit owner");
+            return;
+        };
+        *observer = Some(LiveStreamObserver {
+            projection,
+            publisher,
+            worker_snapshot: LiveBuildSnapshot::empty(owner_run_id).expect("admitted live owner"),
+            degraded_reported: false,
+        });
+    }
+    let Some(active) = observer.as_mut() else { return };
+    let transition = match active.projection.observe(record) {
+        Ok(transition) => transition,
+        Err(error) => {
+            eprintln!("live build observation degraded: {error:?}");
+            *observer = None;
+            return;
+        }
+    };
+    let emit = match transition {
+        LiveStreamFactTransition::Unchanged => return,
+        LiveStreamFactTransition::Discovered { fact_id, fact } => {
+            active.publisher.enqueue(LiveBuildEmitAction::Publish {
+                fact_id: &fact_id,
+                fact: &fact,
+            })
+        }
+        LiveStreamFactTransition::Terminal { retract, fact_id, fact } => {
+            if let Some(retracted_id) = retract {
+                let _ = active.publisher.enqueue(LiveBuildEmitAction::Retract { fact_id: &retracted_id });
+            }
+            active.publisher.enqueue(LiveBuildEmitAction::Publish {
+                fact_id: &fact_id,
+                fact: &fact,
+            })
+        }
+    };
+    if !active.degraded_reported {
+        match emit {
+            Ok(LivePublisherObservation::Degraded(reason)) => {
+                eprintln!("live build observation degraded: {reason:?}");
+                active.degraded_reported = true;
+            }
+            Err(error) => {
+                eprintln!("live build observation degraded: {error:?}");
+                active.degraded_reported = true;
+            }
+            _ => {}
+        }
+    }
+}
+
+fn observe_live_worker_snapshot(
+    observer: &mut Option<LiveStreamObserver>,
+    snapshot: &crunch_pipeline::WorkerLiveSnapshot,
+) {
+    let Some(active) = observer.as_mut() else { return };
+    let next = match normalize_local_worker_live_facts(active.worker_snapshot.owner_run_id(), snapshot) {
+        Ok(next) => next,
+        Err(error) => {
+            if !active.degraded_reported {
+                eprintln!("live build observation degraded: worker snapshot {error:?}");
+                active.degraded_reported = true;
+            }
+            return;
+        }
+    };
+    let actions = plan_remote_live_fact_changes(&active.worker_snapshot, &next).expect("worker snapshot retains owner");
+    for action in actions {
+        let observation = active.publisher.enqueue(action);
+        if !active.degraded_reported {
+            match observation {
+                Ok(LivePublisherObservation::Degraded(reason)) => {
+                    eprintln!("live build observation degraded: {reason:?}");
+                    active.degraded_reported = true;
+                }
+                Err(error) => {
+                    eprintln!("live build observation degraded: {error:?}");
+                    active.degraded_reported = true;
+                }
+                _ => {}
+            }
+        }
+    }
+    active.worker_snapshot = next;
+}
+
+fn report_live_worker_degradation(observer: &mut Option<LiveStreamObserver>, degraded: &AtomicBool) {
+    if degraded.load(Ordering::Acquire) && !observer.as_ref().is_some_and(|active| active.degraded_reported) {
+        eprintln!("live build observation degraded: worker observation queue full");
+        if let Some(active) = observer.as_mut() {
+            active.degraded_reported = true;
+        }
+    }
+}
+
+fn report_live_publisher_degradation(observer: &mut Option<LiveStreamObserver>) {
+    let Some(active) = observer.as_mut() else { return };
+    if active.degraded_reported {
+        return;
+    }
+    if let LivePublisherStatus::Degraded(reason) = active.publisher.status() {
+        eprintln!("live build observation degraded: {reason:?}");
+        active.degraded_reported = true;
+    }
+}
+
+async fn run_build_with_live_observation(
+    config: &BuildConfig,
+    socket_path: &Path,
+    causal_trace: bool,
+) -> Result<(PipelineResult, Option<CausalTraceObservation>), RunError> {
+    let (stream_tx, mut stream_rx) = tokio::sync::mpsc::channel(STREAM_EVENT_CHANNEL_CAPACITY);
+    let (worker_tx, mut worker_rx) = tokio::sync::mpsc::channel(16);
+    let worker_degraded = Arc::new(AtomicBool::new(false));
+    let cancellation = crunch_pipeline::EvaluationCancellation::new();
+    let worker_observation = crunch_pipeline::WorkerLiveObservation::new(worker_tx, Arc::clone(&worker_degraded));
+    let build_future = async {
+        if causal_trace {
+            crunch_pipeline::build_with_causal_trace_live(config, cancellation, stream_tx, worker_observation)
+                .await
+                .map(|(result, trace)| (result, Some(trace)))
+        } else {
+            crunch_pipeline::build_with_live_observation(config, cancellation, stream_tx, worker_observation)
+                .await
+                .map(|result| (result, None))
+        }
+    };
+    tokio::pin!(build_future);
+    let mut result = None;
+    let mut stream_open = true;
+    let mut worker_open = true;
+    let mut observer = None;
+    while stream_open || worker_open || result.is_none() {
+        tokio::select! {
+            biased;
+            record = stream_rx.recv(), if stream_open => match record {
+                Some(record) => observe_live_stream_record(&mut observer, Some(socket_path), &record),
+                None => stream_open = false,
+            },
+            snapshot = worker_rx.recv(), if worker_open => match snapshot {
+                Some(snapshot) => observe_live_worker_snapshot(&mut observer, &snapshot),
+                None => worker_open = false,
+            },
+            completed = &mut build_future, if result.is_none() => result = Some(completed),
+        }
+    }
+    report_live_worker_degradation(&mut observer, &worker_degraded);
+    report_live_publisher_degradation(&mut observer);
+    result.expect("build future always completed").map_err(Into::into)
 }
 
 struct EvaluationStreamBuildCompletion {
@@ -271,19 +701,56 @@ async fn run_build_with_stream_output<W: std::io::Write>(
     let mut signal_monitor = OperatorSignalMonitor::new()?;
     let (stream_tx, mut stream_rx) = tokio::sync::mpsc::channel(STREAM_EVENT_CHANNEL_CAPACITY);
     let cancellation = crunch_pipeline::EvaluationCancellation::new();
-    let build_future = crunch_pipeline::build_with_evaluation_stream(config, cancellation.clone(), stream_tx);
+    let socket_path = configured_live_socket();
+    let mut worker_rx = None;
+    let worker_degraded = socket_path.as_ref().map(|_| Arc::new(AtomicBool::new(false)));
+    let worker_observation = worker_degraded.as_ref().map(|degraded| {
+        let (worker_tx, receiver) = tokio::sync::mpsc::channel(16);
+        worker_rx = Some(receiver);
+        crunch_pipeline::WorkerLiveObservation::new(worker_tx, Arc::clone(degraded))
+    });
+    let build_future = async {
+        match worker_observation {
+            Some(observation) => {
+                crunch_pipeline::build_with_live_observation(config, cancellation.clone(), stream_tx, observation).await
+            }
+            None => crunch_pipeline::build_with_evaluation_stream(config, cancellation.clone(), stream_tx).await,
+        }
+    };
     let mut writer = EvaluationStreamWriter::new(output);
-    let build_result =
-        drive_stream_with_signals(&mut writer, &mut stream_rx, &cancellation, &mut signal_monitor, build_future)
-            .await?;
+    let mut observer = None;
+    let build_result = drive_stream_with_signals(
+        &mut writer,
+        &mut stream_rx,
+        LiveStreamDrive {
+            worker_rx: worker_rx.as_mut(),
+            observer: &mut observer,
+            socket_path: socket_path.as_deref(),
+        },
+        &cancellation,
+        &mut signal_monitor,
+        build_future,
+    )
+    .await?;
+    if let Some(degraded) = &worker_degraded {
+        report_live_worker_degradation(&mut observer, degraded);
+    }
+    report_live_publisher_degradation(&mut observer);
     let disposition = writer.finish().map_err(stream_output_failure)?;
     let result = build_result.map_err(RunError::from)?;
     Ok(EvaluationStreamBuildCompletion { result, disposition })
 }
 
+struct LiveStreamDrive<'a> {
+    worker_rx: Option<&'a mut tokio::sync::mpsc::Receiver<Arc<crunch_pipeline::WorkerLiveSnapshot>>>,
+    observer: &'a mut Option<LiveStreamObserver>,
+    socket_path: Option<&'a Path>,
+}
+
 async fn drive_stream_with_signals<W, F>(
     writer: &mut EvaluationStreamWriter<W>,
     stream_rx: &mut tokio::sync::mpsc::Receiver<crunch_evaluation_stream_core::StreamRecordValue>,
+    live: LiveStreamDrive<'_>,
     cancellation: &crunch_pipeline::EvaluationCancellation,
     signal_monitor: &mut OperatorSignalMonitor,
     build_future: F,
@@ -292,11 +759,17 @@ where
     W: std::io::Write,
     F: Future<Output = Result<PipelineResult, crunch_pipeline::Error>>,
 {
-    let mut build_future = Box::pin(build_future);
+    tokio::pin!(build_future);
     let mut build_result = None;
     let mut is_stream_open = true;
     let mut observed_signal_count = 0_u32;
-    while is_stream_open || build_result.is_none() {
+    let LiveStreamDrive {
+        mut worker_rx,
+        observer,
+        socket_path,
+    } = live;
+    let mut is_worker_open = worker_rx.is_some();
+    while is_stream_open || is_worker_open || build_result.is_none() {
         tokio::select! {
             biased;
             signal = signal_monitor.receive() => {
@@ -310,8 +783,22 @@ where
             }
             record = stream_rx.recv(), if is_stream_open => {
                 match record {
-                    Some(record) => write_stream_record(writer, &record, cancellation)?,
+                    Some(record) => {
+                        write_stream_record(writer, &record, cancellation)?;
+                        observe_live_stream_record(observer, socket_path, &record);
+                    }
                     None => is_stream_open = false,
+                }
+            }
+            snapshot = async {
+                match worker_rx.as_mut() {
+                    Some(receiver) => receiver.recv().await,
+                    None => None,
+                }
+            }, if is_worker_open => {
+                match snapshot {
+                    Some(snapshot) => observe_live_worker_snapshot(observer, &snapshot),
+                    None => is_worker_open = false,
                 }
             }
             result = &mut build_future, if build_result.is_none() => {
@@ -381,13 +868,13 @@ pub fn report_build_result(
     result: &PipelineResult,
     fix: bool,
     output_mode: BuildOutputMode,
+    logs_dir: &Path,
 ) -> Result<(), RunError> {
-    let logs_dir = log_dir();
     debug_assert!(!(output_mode.is_json() && output_mode.is_human()));
     debug_assert!(output_mode.is_human() || output_mode.is_json() || output_mode.is_evaluation_stream());
     debug_assert!(!config.store_dir.is_empty());
     let mut diagnostic_persistence_failures = Vec::new();
-    let is_log_dir_ready = match prepare_logs_dir(&logs_dir) {
+    let is_log_dir_ready = match prepare_logs_dir(logs_dir) {
         Ok(()) => true,
         Err(failure) => {
             diagnostic_persistence_failures.push(failure);
@@ -396,7 +883,7 @@ pub fn report_build_result(
     };
 
     if is_log_dir_ready {
-        diagnostic_persistence_failures.extend(write_success_logs(config, result, &logs_dir, output_mode));
+        diagnostic_persistence_failures.extend(write_success_logs(config, result, logs_dir, output_mode));
     }
     if output_mode.is_human() {
         print_hermeticity_summary(result);
@@ -412,19 +899,19 @@ pub fn report_build_result(
             print_diagnostic_persistence_failures(&diagnostic_persistence_failures);
         }
         if output_mode.is_json() {
-            print_json_report(config, result, &logs_dir, &diagnostic_persistence_failures)?;
+            print_json_report(config, result, logs_dir, &diagnostic_persistence_failures)?;
         }
-        emit_interchange(config, result, &logs_dir)?;
+        emit_interchange(config, result, logs_dir)?;
         return Ok(());
     }
 
     if is_log_dir_ready {
-        diagnostic_persistence_failures.extend(write_failure_logs(config, result, &logs_dir));
+        diagnostic_persistence_failures.extend(write_failure_logs(config, result, logs_dir));
     }
     if output_mode.is_json() {
-        print_json_report(config, result, &logs_dir, &diagnostic_persistence_failures)?;
+        print_json_report(config, result, logs_dir, &diagnostic_persistence_failures)?;
     }
-    emit_interchange(config, result, &logs_dir)?;
+    emit_interchange(config, result, logs_dir)?;
     if output_mode.is_evaluation_stream() {
         print_diagnostic_persistence_failures(&diagnostic_persistence_failures);
         return Ok(());
@@ -435,7 +922,7 @@ pub fn report_build_result(
     }
 
     if output_mode.is_human() {
-        print_failed_builds(result, &config.store_dir, &logs_dir);
+        print_failed_builds(result, &config.store_dir, logs_dir);
         print_diagnostic_persistence_failures(&diagnostic_persistence_failures);
     }
 
@@ -768,18 +1255,140 @@ pub fn write_log(
         .map_err(|error| DiagnosticPersistenceFailure::write_build_log(label, &attempted_path, &error))
 }
 
-pub fn state_dir() -> PathBuf {
-    std::env::var("CRUNCH_STATE_DIR").map(PathBuf::from).unwrap_or_else(|_| {
-        let state = std::env::var("XDG_STATE_HOME").map(PathBuf::from).unwrap_or_else(|_| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-            PathBuf::from(home).join(".local/state")
-        });
-        state.join("crunch")
+/// An empty selected state directory or a relative environment directory fails
+/// admission before filesystem access. Explicit CLI overrides may be relative.
+/// Unselected fallback variables are not consulted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StateDirAdmissionError {
+    EmptyOverride,
+    EmptyEnvironment(&'static str),
+    RelativeEnvironment(&'static str),
+}
+
+impl std::fmt::Display for StateDirAdmissionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EmptyOverride => write!(f, "empty-state-dir: --state-dir must not be empty"),
+            Self::EmptyEnvironment(name) => write!(f, "empty-state-dir-env: {name} must not be empty"),
+            Self::RelativeEnvironment(name) => write!(f, "relative-state-dir-env: {name} must be absolute"),
+        }
+    }
+}
+
+/// The selected path and authority/count actually observed by the environment
+/// reader. An empty selected value remains an admission failure.
+#[derive(Debug)]
+pub struct ObservedStateDirAdmission {
+    pub resolved: Result<PathBuf, StateDirAdmissionError>,
+    pub environment_kind: Option<EffectKind>,
+    pub environment_reads: u32,
+}
+
+/// Resolve the selected state directory before exporting an override or performing
+/// any filesystem/store operation, recording each actual environment read.
+pub fn admit_state_dir_with_observation(override_path: Option<&Path>) -> ObservedStateDirAdmission {
+    admit_state_dir_with_reader(override_path, |name| std::env::var_os(name))
+}
+
+fn admitted_state_environment_path(
+    name: &'static str,
+    value: OsString,
+    suffix: Option<&'static str>,
+) -> Result<PathBuf, StateDirAdmissionError> {
+    if value.is_empty() {
+        return Err(StateDirAdmissionError::EmptyEnvironment(name));
+    }
+    let base = PathBuf::from(value);
+    if !base.is_absolute() {
+        return Err(StateDirAdmissionError::RelativeEnvironment(name));
+    }
+    Ok(match suffix {
+        Some(suffix) => base.join(suffix),
+        None => base,
     })
 }
 
-pub fn log_dir() -> PathBuf {
-    std::env::var("CRUNCH_LOG_DIR").map(PathBuf::from).unwrap_or_else(|_| state_dir().join("logs"))
+fn admit_state_dir_with_reader(
+    override_path: Option<&Path>,
+    mut read: impl FnMut(&str) -> Option<OsString>,
+) -> ObservedStateDirAdmission {
+    if let Some(path) = override_path {
+        return ObservedStateDirAdmission {
+            resolved: if path.as_os_str().is_empty() {
+                Err(StateDirAdmissionError::EmptyOverride)
+            } else {
+                Ok(path.to_path_buf())
+            },
+            environment_kind: None,
+            environment_reads: 0,
+        };
+    }
+    let mut environment_kind = None;
+    let mut environment_reads = 0;
+    if let Some(value) =
+        observe_state_environment("CRUNCH_STATE_DIR", &mut environment_kind, &mut environment_reads, &mut read)
+    {
+        return ObservedStateDirAdmission {
+            resolved: admitted_state_environment_path("CRUNCH_STATE_DIR", value, None),
+            environment_kind,
+            environment_reads,
+        };
+    }
+    if let Some(value) =
+        observe_state_environment("XDG_STATE_HOME", &mut environment_kind, &mut environment_reads, &mut read)
+    {
+        return ObservedStateDirAdmission {
+            resolved: admitted_state_environment_path("XDG_STATE_HOME", value, Some("crunch")),
+            environment_kind,
+            environment_reads,
+        };
+    }
+    if let Some(value) = observe_state_environment("HOME", &mut environment_kind, &mut environment_reads, &mut read) {
+        return ObservedStateDirAdmission {
+            resolved: admitted_state_environment_path("HOME", value, Some(".local/state/crunch")),
+            environment_kind,
+            environment_reads,
+        };
+    }
+    ObservedStateDirAdmission {
+        resolved: Ok(PathBuf::from("/tmp/.local/state/crunch")),
+        environment_kind,
+        environment_reads,
+    }
+}
+
+fn observe_state_environment(
+    name: &str,
+    kind: &mut Option<EffectKind>,
+    environment_reads: &mut u32,
+    read: &mut impl FnMut(&str) -> Option<OsString>,
+) -> Option<OsString> {
+    *kind = Some(EffectKind::ReadEnvironment);
+    *environment_reads += 1;
+    read(name)
+}
+
+/// The build-log directory selected at startup, including the observed
+/// environment read. A selected empty override is never interpreted as CWD.
+#[derive(Debug)]
+pub struct ObservedLogDirAdmission {
+    pub resolved: Result<PathBuf, StateDirAdmissionError>,
+    pub environment_kind: Option<EffectKind>,
+    pub environment_reads: u32,
+}
+
+pub fn admit_log_dir_with_observation(state_dir: &Path) -> ObservedLogDirAdmission {
+    let selected = std::env::var_os("CRUNCH_LOG_DIR");
+    let resolved = match selected {
+        Some(value) if value.is_empty() => Err(StateDirAdmissionError::EmptyEnvironment("CRUNCH_LOG_DIR")),
+        Some(value) => Ok(PathBuf::from(value)),
+        None => Ok(state_dir.join("logs")),
+    };
+    ObservedLogDirAdmission {
+        resolved,
+        environment_kind: Some(EffectKind::ReadEnvironment),
+        environment_reads: 1,
+    }
 }
 
 pub fn build_import_paths(extra: &[PathBuf]) -> Result<Vec<OsString>, RunError> {
@@ -806,6 +1415,84 @@ mod tests {
     const REPEATED_OBSERVED_SIGNAL_COUNT: u32 = 2;
 
     #[test]
+    fn state_directory_selection_counts_only_actual_environment_reads() {
+        let overridden = admit_state_dir_with_reader(Some(Path::new("relative/state")), |_| {
+            panic!("an explicit override must not read the environment")
+        });
+        assert_eq!(overridden.resolved.unwrap(), PathBuf::from("relative/state"));
+        assert_eq!(overridden.environment_reads, 0);
+        assert_eq!(overridden.environment_kind, None);
+
+        for (values, selected, count) in [
+            ([Some("/crunch"), Some("/xdg"), Some("/home")], Some("/crunch"), 1),
+            ([None, Some("/xdg"), Some("/home")], Some("/xdg/crunch"), 2),
+            ([None, None, Some("/home")], Some("/home/.local/state/crunch"), 3),
+            ([None, None, None], Some("/tmp/.local/state/crunch"), 3),
+            ([Some(""), Some("/xdg"), Some("/home")], None, 1),
+        ] {
+            let mut names = Vec::new();
+            let admission = admit_state_dir_with_reader(None, |name| {
+                names.push(name.to_string());
+                let selected = match name {
+                    "CRUNCH_STATE_DIR" => values[0],
+                    "XDG_STATE_HOME" => values[1],
+                    "HOME" => values[2],
+                    other => panic!("unexpected environment read: {other}"),
+                };
+                selected.map(OsString::from)
+            });
+            assert_eq!(admission.environment_reads, count);
+            assert_eq!(admission.environment_kind, Some(EffectKind::ReadEnvironment));
+            assert_eq!(names.len(), count as usize);
+            match selected {
+                Some(path) => assert_eq!(admission.resolved.unwrap(), PathBuf::from(path)),
+                None => assert_eq!(
+                    admission.resolved.unwrap_err(),
+                    StateDirAdmissionError::EmptyEnvironment("CRUNCH_STATE_DIR")
+                ),
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn selected_non_utf8_state_environment_requires_absolute_path_at_each_priority() {
+        use std::os::unix::ffi::OsStringExt;
+
+        for (selected_name, reads, suffix) in [
+            ("CRUNCH_STATE_DIR", 1, None),
+            ("XDG_STATE_HOME", 2, Some("crunch")),
+            ("HOME", 3, Some(".local/state/crunch")),
+        ] {
+            for (selected, is_absolute) in [
+                (OsString::from_vec(b"/selected-\xff-state".to_vec()), true),
+                (OsString::from_vec(b"relative-\xff-state".to_vec()), false),
+            ] {
+                let mut names = Vec::new();
+                let observed = admit_state_dir_with_reader(None, |name| {
+                    names.push(name.to_string());
+                    (name == selected_name).then(|| selected.clone())
+                });
+                if is_absolute {
+                    let expected = match suffix {
+                        Some(suffix) => PathBuf::from(selected).join(suffix),
+                        None => PathBuf::from(selected),
+                    };
+                    assert_eq!(observed.resolved.unwrap(), expected);
+                } else {
+                    assert_eq!(
+                        observed.resolved.unwrap_err(),
+                        StateDirAdmissionError::RelativeEnvironment(selected_name)
+                    );
+                }
+                assert_eq!(observed.environment_reads, reads);
+                assert_eq!(names.len(), reads as usize);
+                assert_eq!(names.last().map(String::as_str), Some(selected_name));
+            }
+        }
+    }
+
+    #[test]
     fn operator_signal_handler_requests_then_forces_cancellation() {
         let cancellation = crunch_pipeline::EvaluationCancellation::new();
         let mut observed_signal_count = 0_u32;
@@ -828,6 +1515,9 @@ mod tests {
             schema: "mantle-action-result-runtime-report-v1".to_string(),
             phase: "discovery".to_string(),
             action_ref: "action-b3:demo".to_string(),
+            unresolved_derivation: None,
+            resolved_derivation: None,
+            resolved_identity: None,
             disposition: disposition.to_string(),
             selected_result_ref: Some("result-b3:demo".to_string()),
             selected_source_id: Some("cache.example.invalid".to_string()),

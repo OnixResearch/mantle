@@ -12,7 +12,7 @@ Robotnix provides the closest prior art in the Nix family. It builds Android app
 ApkPlan authored in Nickel (lib/android.ncl, mkApk contract)
   -> pure plan core (crunch-android-core): validate + lower to typed step plan
   -> std adapter (crunch-android): bind toolchain identities and store paths
-  -> five derivations (aapt2 compile/link, javac, d8, zipalign, apksigner)
+  -> five unsigned derivations (aapt2 compile/link, javac, d8, zipalign), optional sixth apksigner
   -> sandboxed execution through existing Builder and FetchBuildService
 ```
 

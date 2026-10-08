@@ -3,11 +3,21 @@ use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fs::File;
 use std::io::Read;
+#[cfg(target_os = "linux")]
+use std::os::fd::AsRawFd;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::path::PathBuf;
+#[cfg(target_os = "linux")]
+use std::process::Child;
 use std::process::Command as ProcessCommand;
+#[cfg(target_os = "linux")]
+use std::process::Stdio;
+#[cfg(target_os = "linux")]
+use std::time::Duration;
+#[cfg(target_os = "linux")]
+use std::time::Instant;
 
 use crunch_release_core::BUILD_EFFECT_POLICY_VERSION;
 use crunch_release_core::BundledArtifact;
@@ -70,6 +80,18 @@ const DETERMINISTIC_SANDBOX_EVIDENCE_BUNDLE_RELATIVE_PATH: &str =
 const HASH_BUFFER_BYTES: usize = 8_192;
 const HASH_BUFFER_BYTES_U64: u64 = 8_192;
 const MAX_REBUILD_OUTPUT_ENTRIES: u32 = 4096;
+#[cfg(target_os = "linux")]
+const REBUILD_STREAM_LIMIT_BYTES: usize = 16_777_216;
+#[cfg(target_os = "linux")]
+const REBUILD_DIAGNOSTIC_PREFIX_BYTES: usize = 512;
+#[cfg(target_os = "linux")]
+const REBUILD_DEADLINE: Duration = Duration::from_secs(86_400);
+#[cfg(target_os = "linux")]
+const REBUILD_PIPE_EOF_GRACE: Duration = Duration::from_secs(5);
+#[cfg(target_os = "linux")]
+const REBUILD_TEARDOWN_GRACE: Duration = Duration::from_secs(5);
+#[cfg(target_os = "linux")]
+const REBUILD_POLL_INTERVAL_MS: i32 = 50;
 const PROOF_SANDBOX_BWRAP_ENV: &str = "MANTLE_DETERMINISTIC_PROOF_BWRAP";
 const PROOF_SANDBOX_PROFILE_PREFIX: &str = "mantle-proof-sandbox-v1";
 const PROOF_SANDBOX_PATH: &str = "/nonexistent";
@@ -501,21 +523,265 @@ fn run_rebuild_command(invocation: RebuildCommandInvocation<'_>) -> Result<(), R
             _clock_filter: None,
         }
     };
-    let output = prepared_command.command.output().map_err(|err| {
-        RunError::Internal(format!(
-            "running release reproducibility command {}: {err}",
-            request.rebuild_command.display()
-        ))
-    })?;
-    if output.status.success() {
-        return Ok(());
+    #[cfg(not(target_os = "linux"))]
+    return Err(RunError::Internal(
+        "bounded release reproducibility process supervision requires Linux".to_string(),
+    ));
+    #[cfg(target_os = "linux")]
+    {
+        let (status, stdout, stderr) = run_bounded_rebuild_child(
+            &mut prepared_command.command,
+            &request.rebuild_command,
+            REBUILD_STREAM_LIMIT_BYTES,
+            REBUILD_DEADLINE,
+            REBUILD_PIPE_EOF_GRACE,
+        )?;
+        if status.success() {
+            return Ok(());
+        }
+        Err(RunError::Internal(format!(
+            "release reproducibility command failed with status {status}: stdout={} stderr={}",
+            stdout.diagnostic(),
+            stderr.diagnostic(),
+        )))
     }
-    Err(RunError::Internal(format!(
-        "release reproducibility command failed with status {}: stdout={} stderr={}",
-        output.status,
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    )))
+}
+
+#[cfg(target_os = "linux")]
+struct RebuildStreamCapture {
+    total: usize,
+    prefix_len: usize,
+    prefix: [u8; REBUILD_DIAGNOSTIC_PREFIX_BYTES],
+}
+
+#[cfg(target_os = "linux")]
+impl RebuildStreamCapture {
+    fn new() -> Self {
+        Self {
+            total: 0,
+            prefix_len: 0,
+            prefix: [0; REBUILD_DIAGNOSTIC_PREFIX_BYTES],
+        }
+    }
+
+    fn diagnostic(&self) -> String {
+        let mut text = String::from_utf8_lossy(&self.prefix[..self.prefix_len]).into_owned();
+        if self.total > self.prefix_len {
+            text.push_str(" [diagnostic truncated]");
+        }
+        text
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn run_bounded_rebuild_child(
+    command: &mut ProcessCommand,
+    executable: &Path,
+    stream_limit: usize,
+    deadline: Duration,
+    pipe_eof_grace: Duration,
+) -> Result<(std::process::ExitStatus, RebuildStreamCapture, RebuildStreamCapture), RunError> {
+    command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).process_group(0);
+    let mut child = command.spawn().map_err(|err| {
+        RunError::Internal(format!("running release reproducibility command {}: {err}", executable.display()))
+    })?;
+    let stdout = child.stdout.take().expect("rebuild stdout was piped");
+    let stderr = child.stderr.take().expect("rebuild stderr was piped");
+    let captured = capture_rebuild_streams(&child, stdout, stderr, stream_limit, deadline, pipe_eof_grace);
+    // The unreaped leader still owns this PGID. Kill it even after a clean
+    // exit: a same-group descendant may have closed both pipes yet still be
+    // mutating the output tree. bwrap's separate session needs its own proof.
+    terminate_rebuild_process_group(&child)?;
+    let teardown_started = Instant::now();
+    loop {
+        match rebuild_leader_exited_without_reaping(&child) {
+            Ok(true) => break,
+            Ok(false) if teardown_started.elapsed() < REBUILD_TEARDOWN_GRACE => {
+                std::thread::sleep(Duration::from_millis(REBUILD_POLL_INTERVAL_MS as u64));
+            }
+            Ok(false) => {
+                return Err(RunError::Internal(
+                    "release rebuild teardown-uncertain: leader did not exit within 5 seconds after group kill"
+                        .to_string(),
+                ));
+            }
+            Err(err) => {
+                return Err(RunError::Internal(format!(
+                    "release rebuild teardown-uncertain: cannot observe leader exit after group kill: {err}"
+                )));
+            }
+        }
+    }
+    // WNOWAIT confirmed a zombie; only now may wait() reap without blocking
+    // indefinitely on an uninterruptible leader.
+    let status = child
+        .wait()
+        .map_err(|err| RunError::Internal(format!("release rebuild teardown-uncertain: reaping leader: {err}")))?;
+    let (stdout, stderr) = captured?;
+    Ok((status, stdout, stderr))
+}
+
+#[cfg(target_os = "linux")]
+fn capture_rebuild_streams(
+    child: &Child,
+    mut stdout: std::process::ChildStdout,
+    mut stderr: std::process::ChildStderr,
+    stream_limit: usize,
+    deadline: Duration,
+    pipe_eof_grace: Duration,
+) -> Result<(RebuildStreamCapture, RebuildStreamCapture), RunError> {
+    set_rebuild_pipe_nonblocking(stdout.as_raw_fd(), "stdout")?;
+    set_rebuild_pipe_nonblocking(stderr.as_raw_fd(), "stderr")?;
+    let started = Instant::now();
+    let mut stdout_capture = RebuildStreamCapture::new();
+    let mut stderr_capture = RebuildStreamCapture::new();
+    let mut stdout_open = true;
+    let mut stderr_open = true;
+    let mut exited_at = None;
+    loop {
+        let now = Instant::now();
+        if now.duration_since(started) >= deadline {
+            return Err(RunError::Internal(format!(
+                "release reproducibility command exceeded its {}-second deadline",
+                deadline.as_secs(),
+            )));
+        }
+        if exited_at.is_none() && rebuild_leader_exited_without_reaping(child)? {
+            exited_at = Some(now);
+        }
+        if !stdout_open && !stderr_open && exited_at.is_some() {
+            return Ok((stdout_capture, stderr_capture));
+        }
+        if exited_at.is_some_and(|exited| now.duration_since(exited) >= pipe_eof_grace) {
+            return Err(RunError::Internal(format!(
+                "release reproducibility command pipes remained open after the {}-second leader-exit grace",
+                pipe_eof_grace.as_secs(),
+            )));
+        }
+        let mut pipes = [
+            libc::pollfd {
+                fd: if stdout_open { stdout.as_raw_fd() } else { -1 },
+                events: libc::POLLIN,
+                revents: 0,
+            },
+            libc::pollfd {
+                fd: if stderr_open { stderr.as_raw_fd() } else { -1 },
+                events: libc::POLLIN,
+                revents: 0,
+            },
+        ];
+        // A zero-ready poll also bounds the wait when both streams reach EOF
+        // before the leader exits. No pipe read or process wait blocks here.
+        let ready = unsafe { libc::poll(pipes.as_mut_ptr(), pipes.len() as libc::nfds_t, REBUILD_POLL_INTERVAL_MS) };
+        if ready < 0 {
+            let err = std::io::Error::last_os_error();
+            if err.kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(RunError::Internal(format!("polling release rebuild pipes: {err}")));
+        }
+        if pipes.iter().any(|pipe| pipe.revents & libc::POLLNVAL != 0) {
+            return Err(RunError::Internal("polling release rebuild pipes: invalid pipe descriptor".to_string()));
+        }
+        if pipes.iter().any(|pipe| pipe.revents & libc::POLLERR != 0) {
+            return Err(RunError::Internal("polling release rebuild pipes: pipe error".to_string()));
+        }
+        if stdout_open && pipes[0].revents != 0 {
+            stdout_open = !drain_rebuild_stream(&mut stdout, &mut stdout_capture, "stdout", stream_limit)?;
+        }
+        if stderr_open && pipes[1].revents != 0 {
+            stderr_open = !drain_rebuild_stream(&mut stderr, &mut stderr_capture, "stderr", stream_limit)?;
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn set_rebuild_pipe_nonblocking(fd: std::os::fd::RawFd, stream: &str) -> Result<(), RunError> {
+    let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+    if flags < 0 || unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } < 0 {
+        return Err(RunError::Internal(format!(
+            "configuring release rebuild {stream} pipe: {}",
+            std::io::Error::last_os_error(),
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn drain_rebuild_stream(
+    pipe: &mut impl Read,
+    captured: &mut RebuildStreamCapture,
+    stream: &str,
+    stream_limit: usize,
+) -> Result<bool, RunError> {
+    let mut buffer = [0_u8; 8_192];
+    loop {
+        match pipe.read(&mut buffer) {
+            Ok(0) => return Ok(true),
+            Ok(count) => {
+                captured.total = captured
+                    .total
+                    .checked_add(count)
+                    .ok_or_else(|| RunError::Internal(format!("release rebuild {stream} byte count overflowed")))?;
+                if captured.total > stream_limit {
+                    return Err(RunError::Internal(format!(
+                        "release reproducibility command {stream} exceeded the {stream_limit}-byte capture limit"
+                    )));
+                }
+                let retained = count.min(REBUILD_DIAGNOSTIC_PREFIX_BYTES - captured.prefix_len);
+                captured.prefix[captured.prefix_len..captured.prefix_len + retained]
+                    .copy_from_slice(&buffer[..retained]);
+                captured.prefix_len += retained;
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => return Ok(false),
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(err) => return Err(RunError::Internal(format!("reading release rebuild {stream}: {err}"))),
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn rebuild_leader_exited_without_reaping(child: &Child) -> Result<bool, RunError> {
+    // WNOWAIT preserves the zombie leader's PGID until group termination.
+    let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+    let result =
+        unsafe { libc::waitid(libc::P_PID, child.id(), &mut info, libc::WEXITED | libc::WNOHANG | libc::WNOWAIT) };
+    if result < 0 {
+        return Err(RunError::Internal(format!(
+            "observing release rebuild leader: {}",
+            std::io::Error::last_os_error(),
+        )));
+    }
+    Ok(info.si_signo == libc::SIGCHLD)
+}
+
+#[cfg(target_os = "linux")]
+fn terminate_rebuild_process_group(child: &Child) -> Result<(), RunError> {
+    let pgid = i32::try_from(child.id()).map_err(|_| {
+        RunError::Internal("release rebuild teardown-uncertain: PID exceeded process-group ID range".to_string())
+    })?;
+    if unsafe { libc::kill(-pgid, libc::SIGKILL) } < 0 {
+        let err = std::io::Error::last_os_error();
+        if err.raw_os_error() == Some(libc::ESRCH) {
+            // A WNOWAIT zombie with no signalable group members can yield
+            // ESRCH. The leader must already be exited before treating this
+            // as an empty owned group; it still must be explicitly reaped.
+            return match rebuild_leader_exited_without_reaping(child) {
+                Ok(true) => Ok(()),
+                Ok(false) => Err(RunError::Internal(
+                    "release rebuild teardown-uncertain: owned process group disappeared while leader was alive"
+                        .to_string(),
+                )),
+                Err(observe) => Err(RunError::Internal(format!(
+                    "release rebuild teardown-uncertain: cannot observe leader after empty group: {observe}"
+                ))),
+            };
+        }
+        return Err(RunError::Internal(format!(
+            "release rebuild teardown-uncertain: killing owned process group: {err}"
+        )));
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1423,7 +1689,7 @@ fn write_report(path: &Path, report: ReleaseReproducibilityReport) -> Result<(),
     std::fs::write(path, bytes).map_err(|err| RunError::Internal(format!("writing {}: {err}", path.display())))
 }
 
-fn resolve_report_path(bundle_dir: &Path, report_path: Option<&Path>) -> PathBuf {
+pub(crate) fn resolve_report_path(bundle_dir: &Path, report_path: Option<&Path>) -> PathBuf {
     report_path
         .map(Path::to_path_buf)
         .unwrap_or_else(|| default_reproducibility_report_path(bundle_dir))
@@ -1614,6 +1880,130 @@ mod tests {
             size_bytes: EXPECTED_SIZE_BYTES,
             digest_blake3: sample_digest(1),
         }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn rebuild_with_exited_leader_and_open_descendant_pipes_fails_before_deadline() {
+        #[derive(Clone, Copy)]
+        struct Identity {
+            pid: i32,
+            pgid: i32,
+            starttime: u64,
+            zombie: bool,
+        }
+
+        struct OwnedGroupGuard(PathBuf);
+
+        impl OwnedGroupGuard {
+            fn identity(path: &Path) -> Option<Identity> {
+                let stat = std::fs::read_to_string(path).ok()?;
+                let (name, fields) = stat.rsplit_once(") ")?;
+                let pid = name.split_once(" (")?.0.parse().ok()?;
+                let fields: Vec<_> = fields.split_whitespace().collect();
+                Some(Identity {
+                    pid,
+                    pgid: fields.get(2)?.parse().ok()?,
+                    starttime: fields.get(19)?.parse().ok()?,
+                    zombie: *fields.first()? == "Z",
+                })
+            }
+
+            fn still_live(identity: Identity) -> bool {
+                Self::identity(Path::new(&format!("/proc/{}/stat", identity.pid)))
+                    .is_some_and(|current| current.starttime == identity.starttime && !current.zombie)
+            }
+        }
+
+        impl Drop for OwnedGroupGuard {
+            fn drop(&mut self) {
+                // The script records the leader before spawning its descendant. On
+                // assertion failure, never signal a recycled PID or an unrelated PGID.
+                for _ in 0..200 {
+                    if let Some(leader) = Self::identity(&self.0.join("leader.stat")) {
+                        let child = Self::identity(&self.0.join("child.stat"));
+                        let group_is_owned = [Some(leader), child].into_iter().flatten().any(|record| {
+                            record.pgid == leader.pid
+                                && Self::identity(Path::new(&format!("/proc/{}/stat", record.pid))).is_some_and(
+                                    |current| {
+                                        current.starttime == record.starttime
+                                            && current.pgid == leader.pid
+                                            && !current.zombie
+                                    },
+                                )
+                        });
+                        if group_is_owned {
+                            unsafe { libc::kill(-leader.pid, libc::SIGKILL) };
+                        }
+                        return;
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+        }
+
+        let temp = tempfile::tempdir().unwrap();
+        let guard = OwnedGroupGuard(temp.path().to_path_buf());
+        let script = r#"
+set -eu
+IFS= read -r stat < "/proc/$$/stat"
+printf '%s\n' "$stat" > "$1/leader.stat"
+/bin/sh -c '
+    set -eu
+    IFS= read -r stat < "/proc/$$/stat"
+    printf "%s\n" "$stat" > "$1/child.stat"
+    exec sleep 8
+' sh "$1" &
+count=0
+while [ ! -e "$1/go" ] && [ "$count" -lt 200 ]; do
+    count=$((count + 1))
+    sleep .01
+done
+"#;
+        let observer_root = temp.path().to_path_buf();
+        let observer = std::thread::spawn(move || {
+            for _ in 0..200 {
+                if let (Some(leader), Some(child)) = (
+                    OwnedGroupGuard::identity(&observer_root.join("leader.stat")),
+                    OwnedGroupGuard::identity(&observer_root.join("child.stat")),
+                ) {
+                    assert_eq!(leader.pid, leader.pgid);
+                    assert!(OwnedGroupGuard::still_live(leader));
+                    assert_eq!(child.pgid, leader.pid);
+                    assert_ne!(child.pid, leader.pid);
+                    assert!(OwnedGroupGuard::still_live(child));
+                    std::fs::write(observer_root.join("go"), b"").unwrap();
+                    return child;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            panic!("rebuild descendant did not record its owned process group");
+        });
+
+        let mut command = ProcessCommand::new("/bin/sh");
+        command.arg("-c").arg(script).arg("sh").arg(temp.path());
+        let deadline = Duration::from_secs(5);
+        let started = Instant::now();
+        let result = run_bounded_rebuild_child(
+            &mut command,
+            Path::new("/bin/sh"),
+            REBUILD_STREAM_LIMIT_BYTES,
+            deadline,
+            Duration::from_millis(150),
+        );
+        let elapsed = started.elapsed();
+        let child = observer.join().unwrap();
+
+        assert!(result.is_err());
+        assert!(elapsed < deadline);
+        for _ in 0..200 {
+            if !OwnedGroupGuard::still_live(child) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(!OwnedGroupGuard::still_live(child));
+        drop(guard);
     }
 
     #[test]

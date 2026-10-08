@@ -50,8 +50,11 @@ let store_path_regex = "^(/[A-Za-z0-9._+-]+)+/[a-z0-9]{32}-.+$" in
   Input
     | doc m%"
       A build input: a StorePath string, a Derivation record (all outputs),
-      a lazy derivation-file record `{ derivation_file }`, or an output
-      selection record `{ drv, output }` (single output).
+      a lazy derivation-file record `{ derivation_file }`, an output selection
+      `{ drv, output }`, or a late-bound dynamic-plan root
+      `{ name, producer, plan_output, root, unit_output }`.
+      Use `{{mantle-plan-output:<name>}}` in consumer args or env values;
+      the producer must declare plan_output in dynamic_plan_outputs.
     "%
     = std.contract.from_validator (fun value =>
       if std.is_string value then
@@ -59,6 +62,40 @@ let store_path_regex = "^(/[A-Za-z0-9._+-]+)+/[a-z0-9]{32}-.+$" in
         then 'Ok
         else 'Error { message = "input string must be a valid absolute store path, got: %{value}" }
       else if std.is_record value then
+        if std.record.has_field "producer" value
+          || std.record.has_field "plan_output" value
+          || std.record.has_field "root" value
+          || std.record.has_field "unit_output" value then
+          if std.array.length (std.record.fields value) == 5
+            && std.record.has_field "name" value
+            && std.record.has_field "producer" value
+            && std.record.has_field "plan_output" value
+            && std.record.has_field "root" value
+            && std.record.has_field "unit_output" value
+            && std.is_string value.name
+            && std.string.length value.name <= 64
+            && std.string.is_match "^[a-z][a-z0-9_.-]*$" value.name
+            && std.is_string value.root
+            && std.string.length value.root <= 128
+            && std.string.is_match "^[a-z][a-z0-9_.-]*$" value.root
+            && std.is_string value.plan_output
+            && std.string.length value.plan_output <= 64
+            && std.string.is_match "^[a-z][a-z0-9_+-]*$" value.plan_output
+            && std.is_string value.unit_output
+            && std.string.length value.unit_output <= 64
+            && std.string.is_match "^[a-z][a-z0-9_+-]*$" value.unit_output
+            && std.is_record value.producer
+            && std.record.has_field "name" value.producer
+            && std.record.has_field "builder" value.producer
+            && std.record.has_field "outputs" value.producer
+            && std.record.has_field "dynamic_plan_outputs" value.producer
+            && std.is_array value.producer.outputs
+            && std.is_array value.producer.dynamic_plan_outputs
+            && std.array.elem value.plan_output value.producer.outputs
+            && std.array.elem value.plan_output value.producer.dynamic_plan_outputs
+          then 'Ok
+          else 'Error { message = "plan-output input requires exactly name, producer, plan_output, root, unit_output; valid names and a declared producer dynamic-plan output" }
+        else
         if std.record.has_field "derivation_file" value then
           if std.is_string value.derivation_file
             && (!std.record.has_field "output" value || std.is_string value.output)
@@ -78,6 +115,6 @@ let store_path_regex = "^(/[A-Za-z0-9._+-]+)+/[a-z0-9]{32}-.+$" in
         else
           'Ok  # Bare derivation record
       else
-        'Error { message = "input must be a Derivation record, derivation-file record, output selection { drv, output }, or a StorePath string" }
+        'Error { message = "input must be a Derivation record, derivation-file record, output selection, plan-output reference, or StorePath string" }
     ),
 }

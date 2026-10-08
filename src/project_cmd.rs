@@ -6,6 +6,7 @@
 //! and output formatting — nothing else.
 
 use std::io::ErrorKind;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -38,6 +39,17 @@ use crunch_project::plan_retention_roots;
 use crunch_project::project_soundness_parse_error;
 use crunch_project::refresh_inputs_with_options;
 use crunch_project::upgrade_lockfile;
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::ProjectAuthority;
+use mantle_application_contract::ProjectEffect;
+use mantle_application_contract::ProjectEffectObservation;
+use mantle_application_contract::ProjectEffectPlan;
+use mantle_application_contract::ProjectEffectPort;
+use mantle_application_contract::ProjectEffectStatus;
+use mantle_application_contract::ProjectObservationKind;
+use mantle_application_contract::ProjectOperation;
+use mantle_application_contract::classify_project_effects;
+use mantle_application_contract::project_effect_plan;
 
 use crate::errors::RunError;
 use crate::project_resolve::LiveResolver;
@@ -62,23 +74,7 @@ pub enum ProjectCheckOutput {
     Human,
     Json,
 }
-
-/// `crunch init` — scaffold a new project.
-pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
-    reject_conflicting_legacy_project_files(dir)?;
-    let manifest_path = dir.join(MANIFEST_FILE);
-    let lock_path = dir.join(LOCK_FILE);
-    let inputs_dir = dir.join(INPUTS_DIR);
-    let inputs_path = dir.join(INPUTS_FILE);
-    assert_ne!(manifest_path, lock_path, "project manifest and lockfile paths must differ");
-    assert!(inputs_path.starts_with(dir), "generated inputs must remain below the project root");
-
-    if manifest_path.exists() {
-        return Err(RunError::Internal(format!("{MANIFEST_FILE} already exists in {}", dir.display())));
-    }
-
-    // Write manifest template
-    let manifest_template = r#"# Mantle project manifest.
+const MANIFEST_TEMPLATE: &str = r#"# Mantle project manifest.
 # See: lib/project.ncl for the contract definition.
 {
   version = "1.0.0",
@@ -86,41 +82,299 @@ pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
   patches = [],
 }
 "#;
-    std::fs::write(&manifest_path, manifest_template)
-        .map_err(|e| RunError::Internal(format!("writing {MANIFEST_FILE}: {e}")))?;
 
-    // Write empty lockfile
-    let lock = Lockfile::new();
-    let lock_json = lock.clone().to_json().map_err(|e| RunError::Internal(format!("serializing lock: {e}")))?;
-    std::fs::write(&lock_path, &lock_json).map_err(|e| RunError::Internal(format!("writing {LOCK_FILE}: {e}")))?;
+struct ProjectFiles<'a> {
+    dir: &'a Path,
+    selected: &'a [String],
+    no_network: bool,
+}
 
-    // Create .mantle/ and generate empty inputs
-    std::fs::create_dir_all(&inputs_dir).map_err(|e| RunError::Internal(format!("creating {INPUTS_DIR}/: {e}")))?;
-    let inputs_ncl = generate_inputs_ncl(lock);
-    std::fs::write(&inputs_path, &inputs_ncl).map_err(|e| RunError::Internal(format!("writing {INPUTS_FILE}: {e}")))?;
-    write_retention_state_records(dir, Vec::new())?;
+impl ProjectEffectPort for ProjectFiles<'_> {
+    type Manifest = ProjectManifest;
+    type Lock = Lockfile;
+    type Applied = crunch_project::ApplyResult;
+    type Refresh = Vec<RefreshOutcome>;
+    type Stale = crunch_project::StaleReport;
+    type Retention = RetentionShellState;
+    type Error = RunError;
 
-    // Add .mantle/ to .gitignore if not already there
-    add_gitignore_entry(dir)?;
+    fn inspect_legacy(&mut self) -> Result<(), RunError> {
+        reject_conflicting_legacy_project_files(self.dir)
+    }
 
+    fn inspect_init(&mut self) -> Result<(), RunError> {
+        reject_conflicting_legacy_project_files(self.dir)?;
+        if self.dir.join(MANIFEST_FILE).exists() {
+            return Err(RunError::Internal(format!("{MANIFEST_FILE} already exists in {}", self.dir.display())));
+        }
+        Ok(())
+    }
+    fn inspect_manifest(&mut self) -> Result<ProjectManifest, RunError> {
+        load_manifest(self.dir)
+    }
+
+    fn inspect_lock(&mut self) -> Result<Lockfile, RunError> {
+        load_lockfile(self.dir)
+    }
+
+    fn inspect(&mut self) -> Result<(ProjectManifest, Lockfile), RunError> {
+        reject_conflicting_legacy_project_files(self.dir)?;
+        Ok((load_manifest(self.dir)?, load_lockfile(self.dir)?))
+    }
+
+    fn generated_inputs(&mut self) -> Option<String> {
+        std::fs::read_to_string(self.dir.join(INPUTS_FILE)).ok()
+    }
+
+    fn retention(&mut self) -> RetentionShellState {
+        load_retention_shell_state(self.dir)
+    }
+
+    fn write_manifest(&mut self) -> Result<(), RunError> {
+        std::fs::write(self.dir.join(MANIFEST_FILE), MANIFEST_TEMPLATE)
+            .map_err(|e| RunError::Internal(format!("writing {MANIFEST_FILE}: {e}")))
+    }
+
+    fn write_init_lock(&mut self) -> Result<(), RunError> {
+        let lock_json = Lockfile::new().to_json().map_err(|e| RunError::Internal(format!("serializing lock: {e}")))?;
+        std::fs::write(self.dir.join(LOCK_FILE), lock_json)
+            .map_err(|e| RunError::Internal(format!("writing {LOCK_FILE}: {e}")))
+    }
+
+    fn write_init_inputs(&mut self) -> Result<(), RunError> {
+        std::fs::create_dir_all(self.dir.join(INPUTS_DIR))
+            .map_err(|e| RunError::Internal(format!("creating {INPUTS_DIR}/: {e}")))?;
+        std::fs::write(self.dir.join(INPUTS_FILE), generate_inputs_ncl(Lockfile::new()))
+            .map_err(|e| RunError::Internal(format!("writing {INPUTS_FILE}: {e}")))
+    }
+
+    fn write_init_retention(&mut self) -> Result<(), RunError> {
+        write_retention_state_records(self.dir, Vec::new())
+    }
+
+    fn gitignore(&mut self) -> Result<(), RunError> {
+        add_gitignore_entry(self.dir)
+    }
+
+    fn readback(&mut self) -> Result<bool, RunError> {
+        let expected_lock =
+            Lockfile::new().to_json().map_err(|e| RunError::Internal(format!("serializing lock: {e}")))?;
+        let expected_inputs = generate_inputs_ncl(Lockfile::new());
+        let expected_retention = ProjectRetentionState {
+            schema: crunch_project::RETENTION_STATE_SCHEMA.into(),
+            records: Vec::new(),
+        };
+        let read = |name| std::fs::read_to_string(self.dir.join(name)).ok();
+        let gitignore = read(".gitignore").unwrap_or_default();
+        Ok(read(MANIFEST_FILE).as_deref() == Some(MANIFEST_TEMPLATE)
+            && read(LOCK_FILE).as_deref() == Some(expected_lock.as_str())
+            && read(INPUTS_FILE).as_deref() == Some(expected_inputs.as_str())
+            && read(RETENTION_STATE_FILE)
+                .and_then(|text| serde_json::from_str::<ProjectRetentionState>(&text).ok())
+                .as_ref()
+                == Some(&expected_retention)
+            && gitignore.lines().any(|line| line.trim() == GITIGNORE_ENTRY))
+    }
+    fn apply_refresh(
+        &mut self,
+        manifest: &ProjectManifest,
+        lock: &Lockfile,
+        outcomes: &Vec<RefreshOutcome>,
+    ) -> crunch_project::ApplyResult {
+        let resolver = LiveResolver::new(self.dir);
+        apply_outcomes(manifest, lock, outcomes, &resolver)
+    }
+
+    fn refresh(&mut self, manifest: &ProjectManifest, lock: &Lockfile) -> Vec<RefreshOutcome> {
+        let resolver = LiveResolver::new(self.dir);
+        refresh_inputs_with_options(manifest, lock, self.selected, &resolver, self.no_network)
+    }
+
+    fn stale(&mut self, manifest: &ProjectManifest, lock: &Lockfile) -> crunch_project::StaleReport {
+        let resolver = LiveResolver::new(self.dir);
+        list_stale_with_options(manifest, lock, &resolver, self.no_network)
+    }
+
+    fn write_lock(&mut self, lock: &Lockfile) -> Result<(), RunError> {
+        write_lockfile(self.dir, lock)
+    }
+
+    fn write_inputs(&mut self, lock: &Lockfile) -> Result<(), RunError> {
+        write_inputs_ncl(self.dir, lock)
+    }
+
+    fn write_retention(&mut self, manifest: &ProjectManifest, lock: &Lockfile) -> Result<(), RunError> {
+        write_retention_plan(self.dir, manifest, lock)
+    }
+}
+
+struct ProjectRun {
+    plan: ProjectEffectPlan,
+    observed: Vec<ProjectEffectObservation>,
+}
+
+impl ProjectRun {
+    fn new(operation: ProjectOperation, network_allowed: bool, process_allowed: bool) -> Self {
+        let plan = project_effect_plan(operation, network_allowed, process_allowed);
+        let observed = Vec::with_capacity(plan.steps.len());
+        Self { plan, observed }
+    }
+    fn check_next(
+        &self,
+        effect: ProjectEffect,
+        authority: ProjectAuthority,
+        kind: ProjectObservationKind,
+    ) -> Result<(), RunError> {
+        let step = self
+            .plan
+            .steps
+            .get(self.observed.len())
+            .ok_or_else(|| RunError::Internal("project effect exceeded planned calls".into()))?;
+        if (step.effect, step.authority, step.expected_observation) != (effect, authority, kind) {
+            return Err(RunError::Internal(format!("project effect was not authorized: {effect:?}")));
+        }
+        Ok(())
+    }
+
+    fn record(
+        &mut self,
+        effect: ProjectEffect,
+        authority: ProjectAuthority,
+        kind: ProjectObservationKind,
+        status: ProjectEffectStatus,
+    ) -> Result<(), RunError> {
+        self.record_items(effect, authority, kind, status, u32::from(status != ProjectEffectStatus::Skipped))
+    }
+
+    fn record_items(
+        &mut self,
+        effect: ProjectEffect,
+        authority: ProjectAuthority,
+        kind: ProjectObservationKind,
+        status: ProjectEffectStatus,
+        items: u32,
+    ) -> Result<(), RunError> {
+        self.check_next(effect, authority, kind)?;
+        self.observed.push(ProjectEffectObservation {
+            effect,
+            authority,
+            kind,
+            items,
+            readback_matches: None,
+            calls: u8::from(status != ProjectEffectStatus::Skipped),
+            target: effect.target(),
+            status,
+        });
+        Ok(())
+    }
+
+    fn call<T>(
+        &mut self,
+        effect: ProjectEffect,
+        authority: ProjectAuthority,
+        kind: ProjectObservationKind,
+        action: impl FnOnce() -> Result<T, RunError>,
+    ) -> Result<T, RunError> {
+        self.check_next(effect, authority, kind)?;
+        let result = action();
+        let status = if result.is_ok() {
+            ProjectEffectStatus::Succeeded
+        } else {
+            ProjectEffectStatus::Failed
+        };
+        self.record(effect, authority, kind, status)?;
+        if result.is_err() {
+            let _ = self.classify()?;
+        }
+        result
+    }
+
+    fn classify(&mut self) -> Result<ApplicationOutcome, RunError> {
+        while let Some(step) = self.plan.steps.get(self.observed.len()) {
+            self.record(step.effect, step.authority, step.expected_observation, ProjectEffectStatus::Skipped)?;
+        }
+        match classify_project_effects(&self.plan, &self.observed) {
+            outcome @ (ApplicationOutcome::Completed | ApplicationOutcome::Failed { .. }) => Ok(outcome),
+            other => Err(RunError::Internal(format!("project effect observations were inconsistent: {other:?}"))),
+        }
+    }
+}
+
+fn admit_project_resolution(run: &mut ProjectRun, requested_count: usize, command: &str) -> Result<(), RunError> {
+    let Ok(requested_count) = u32::try_from(requested_count) else {
+        let _ = run.classify()?;
+        return Err(RunError::Internal(format!("{command} input count overflowed u32")));
+    };
+    if let Err(blocker) = run.plan.admit_resolution_count(requested_count) {
+        let _ = run.classify()?;
+        return Err(RunError::Internal(format!(
+            "{command} requested {requested_count} inputs beyond the {}-input limit ({blocker:?})",
+            mantle_application_contract::MAX_PROJECT_LIFECYCLE_DECLARED_ENTRIES,
+        )));
+    }
+    Ok(())
+}
+
+/// `mantle init` — scaffold a new project.
+pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
+    let mut port = ProjectFiles {
+        dir,
+        selected: &[],
+        no_network: true,
+    };
+    let mut run = ProjectRun::new(ProjectOperation::Init, false, false);
+    run.call(ProjectEffect::Inspect, ProjectAuthority::ReadFiles, ProjectObservationKind::CallResult, || {
+        port.inspect_init()
+    })?;
+    run.call(
+        ProjectEffect::ManifestWrite,
+        ProjectAuthority::WriteFiles,
+        ProjectObservationKind::CallResult,
+        || port.write_manifest(),
+    )?;
+    run.call(
+        ProjectEffect::InitLockWrite,
+        ProjectAuthority::WriteFiles,
+        ProjectObservationKind::CallResult,
+        || port.write_init_lock(),
+    )?;
+    run.call(
+        ProjectEffect::InitInputsWrite,
+        ProjectAuthority::WriteFiles,
+        ProjectObservationKind::CallResult,
+        || port.write_init_inputs(),
+    )?;
+    run.call(
+        ProjectEffect::InitRetentionWrite,
+        ProjectAuthority::WriteFiles,
+        ProjectObservationKind::CallResult,
+        || port.write_init_retention(),
+    )?;
+    run.call(ProjectEffect::Gitignore, ProjectAuthority::WriteFiles, ProjectObservationKind::CallResult, || {
+        port.gitignore()
+    })?;
+    run.check_next(ProjectEffect::Readback, ProjectAuthority::ReadFiles, ProjectObservationKind::FileReadback)?;
+    let readback = port.readback();
+    let status = if matches!(readback, Ok(true)) {
+        ProjectEffectStatus::Succeeded
+    } else {
+        ProjectEffectStatus::Failed
+    };
+    run.record(ProjectEffect::Readback, ProjectAuthority::ReadFiles, ProjectObservationKind::FileReadback, status)?;
+    run.observed.last_mut().expect("readback observation recorded").readback_matches = readback.as_ref().ok().copied();
+    let _ = run.classify()?;
+    readback?;
+    if status == ProjectEffectStatus::Failed {
+        return Err(RunError::Internal(format!("project scaffold incomplete under {}", dir.display())));
+    }
     eprintln!("Initialized Mantle project:");
     eprintln!("  {MANIFEST_FILE}  (edit this)");
     eprintln!("  {LOCK_FILE}      (machine-managed)");
     eprintln!("  {INPUTS_FILE}    (generated)");
-    let scaffold_complete = manifest_path.is_file()
-        && lock_path.is_file()
-        && inputs_path.is_file()
-        && dir.join(RETENTION_STATE_FILE).is_file();
-    let failure = (!scaffold_complete).then(|| {
-        (
-            PROJECT_INIT_SCAFFOLD_MISMATCH_CODE,
-            RunError::Internal(format!("project scaffold incomplete under {}", dir.display())),
-        )
-    });
-    classify_project_effect(PROJECT_INIT_EFFECT, failure)
+    Ok(())
 }
 
-/// `crunch check` — validate project state.
+/// `mantle check` — validate project state.
 pub fn cmd_check<Probes, Trust>(
     dir: &Path,
     output: ProjectCheckOutput,
@@ -133,13 +387,37 @@ where
 {
     let should_run_probes = probes.into();
     let should_validate_trust = trust.into();
+    let mut run =
+        ProjectRun::new(ProjectOperation::Check, should_run_probes || should_validate_trust, should_run_probes);
+    let mut port = ProjectFiles {
+        dir,
+        selected: &[],
+        no_network: !(should_run_probes || should_validate_trust),
+    };
     assert_ne!(MANIFEST_FILE, LOCK_FILE, "project manifest and lockfile names must differ");
     assert_ne!(INPUTS_FILE, RETENTION_STATE_FILE, "generated inputs and retention state names must differ");
-    reject_conflicting_legacy_project_files(dir)?;
-    let manifest = match load_manifest(dir) {
+    // Legacy conflicts remain a hard blocker rather than a soundness report.
+    if let Err(error) = port.inspect_legacy() {
+        run.record(
+            ProjectEffect::Inspect,
+            ProjectAuthority::ReadFiles,
+            ProjectObservationKind::CallResult,
+            ProjectEffectStatus::Failed,
+        )?;
+        let _ = run.classify()?;
+        return Err(error);
+    }
+    let manifest = match port.inspect_manifest() {
         Ok(manifest) => manifest,
         Err(error) => {
+            run.record(
+                ProjectEffect::Inspect,
+                ProjectAuthority::ReadFiles,
+                ProjectObservationKind::CallResult,
+                ProjectEffectStatus::Failed,
+            )?;
             return finish_check_report(
+                &mut run,
                 project_soundness_parse_error(
                     ProjectSoundnessClass::ManifestParseError,
                     ProjectSoundnessSubject::file(MANIFEST_FILE),
@@ -149,10 +427,17 @@ where
             );
         }
     };
-    let lock = match load_lockfile(dir) {
+    let lock = match port.inspect_lock() {
         Ok(lock) => lock,
         Err(error) => {
+            run.record(
+                ProjectEffect::Inspect,
+                ProjectAuthority::ReadFiles,
+                ProjectObservationKind::CallResult,
+                ProjectEffectStatus::Failed,
+            )?;
             return finish_check_report(
+                &mut run,
                 project_soundness_parse_error(
                     ProjectSoundnessClass::LockfileParseError,
                     ProjectSoundnessSubject::file(LOCK_FILE),
@@ -162,10 +447,14 @@ where
             );
         }
     };
-
-    let inputs_path = dir.join(INPUTS_FILE);
-    let generated_inputs = std::fs::read_to_string(&inputs_path).ok();
-    let retention_state = load_retention_shell_state(dir);
+    let generated_inputs = port.generated_inputs();
+    let retention_state = port.retention();
+    run.record(
+        ProjectEffect::Inspect,
+        ProjectAuthority::ReadFiles,
+        ProjectObservationKind::CallResult,
+        ProjectEffectStatus::Succeeded,
+    )?;
     let retention_plan = plan_retention_roots(RetentionPlanRequest {
         manifest: manifest.clone(),
         lock: lock.clone(),
@@ -180,27 +469,33 @@ where
         supplemental_facts,
         mode: ProjectSoundnessMode::from_dynamic_requests(should_run_probes, should_validate_trust),
     });
-    finish_check_report(soundness, output)
+    finish_check_report(&mut run, soundness, output)
 }
-fn finish_check_report(report: ProjectSoundnessReport, output: ProjectCheckOutput) -> Result<(), RunError> {
+
+fn finish_check_report(
+    run: &mut ProjectRun,
+    report: ProjectSoundnessReport,
+    output: ProjectCheckOutput,
+) -> Result<(), RunError> {
+    let _observed_outcome = run.classify()?;
     match output {
         ProjectCheckOutput::Human => render_check_report_human(&report),
         ProjectCheckOutput::Json => render_check_report_json(&report)?,
     }
-    if report.valid {
-        return classify_project_effect(PROJECT_CHECK_EFFECT, None);
+    if !report.valid {
+        return Err(RunError::Reported(PROJECT_CHECK_FAILURE_EXIT_CODE));
     }
-    classify_project_effect(
-        PROJECT_CHECK_EFFECT,
-        Some((PROJECT_CHECK_UNSOUND_CODE, RunError::Reported(PROJECT_CHECK_FAILURE_EXIT_CODE))),
-    )
+    Ok(())
 }
 
 fn render_check_report_json(report: &ProjectSoundnessReport) -> Result<(), RunError> {
+    render_check_report_json_to(report, &mut std::io::stdout().lock())
+}
+
+fn render_check_report_json_to(report: &ProjectSoundnessReport, output: &mut impl Write) -> Result<(), RunError> {
     let rendered = serde_json::to_string_pretty(report)
         .map_err(|err| RunError::Internal(format!("rendering project soundness JSON: {err}")))?;
-    println!("{rendered}");
-    Ok(())
+    writeln!(output, "{rendered}").map_err(|err| RunError::Internal(format!("writing project soundness JSON: {err}")))
 }
 
 fn render_check_report_human(report: &ProjectSoundnessReport) {
@@ -228,26 +523,33 @@ fn render_check_issue_human(issue: &ProjectSoundnessIssue) {
     }
 }
 
-/// `crunch show` — render resolved input state.
+/// `mantle show` — render resolved input state.
 pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
+    let mut port = ProjectFiles {
+        dir,
+        selected: &[],
+        no_network: true,
+    };
+    let mut run = ProjectRun::new(ProjectOperation::Show, false, false);
     assert_ne!(MANIFEST_FILE, LOCK_FILE, "project manifest and lockfile names must differ");
     assert_ne!(INPUTS_FILE, RETENTION_STATE_FILE, "generated inputs and retention state names must differ");
-    reject_conflicting_legacy_project_files(dir)?;
-    let manifest = load_manifest(dir)?;
-    let lock = load_lockfile(dir)?;
-    let retention_state = load_retention_shell_state(dir);
+    let (manifest, lock) =
+        run.call(ProjectEffect::Inspect, ProjectAuthority::ReadFiles, ProjectObservationKind::CallResult, || {
+            port.inspect()
+        })?;
+    let retention_state = port.retention();
     let retention_plan = plan_retention_roots(RetentionPlanRequest {
         manifest: manifest.clone(),
         lock: lock.clone(),
         existing_roots: retention_state.facts,
     });
-
+    let _ = run.classify()?;
     println!("Project: {} (schema {})", MANIFEST_FILE, manifest.version);
     println!();
 
     if lock.inputs.is_empty() {
         println!("No locked inputs.");
-        return classify_project_effect(PROJECT_SHOW_EFFECT, None);
+        return Ok(());
     }
 
     for (name, entry) in &lock.inputs {
@@ -273,7 +575,7 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
         println!();
     }
 
-    classify_project_effect(PROJECT_SHOW_EFFECT, None)
+    Ok(())
 }
 
 fn locked_kind_text(kind: &crunch_project::LockedKind) -> String {
@@ -317,151 +619,172 @@ fn locked_kind_text(kind: &crunch_project::LockedKind) -> String {
     text
 }
 
-/// `crunch refresh [names...]` — update inputs.
+/// `mantle refresh [names...]` — update inputs.
 pub fn cmd_refresh(dir: &Path, selected: &[String], no_network: bool) -> Result<(), RunError> {
+    let mut port = ProjectFiles {
+        dir,
+        selected,
+        no_network,
+    };
+    let mut run = ProjectRun::new(ProjectOperation::Refresh, !no_network, true);
     assert_ne!(MANIFEST_FILE, LOCK_FILE, "project manifest and lockfile names must differ");
     assert_ne!(INPUTS_FILE, RETENTION_STATE_FILE, "generated inputs and retention state names must differ");
-    reject_conflicting_legacy_project_files(dir)?;
-    let manifest = load_manifest(dir)?;
-    let lock = load_lockfile(dir)?;
-    let resolver = LiveResolver::new(dir);
-    let outcomes = refresh_inputs_with_options(&manifest, &lock, selected, &resolver, no_network);
-    print_refresh_outcomes(&outcomes);
-
-    let result = apply_outcomes(&manifest, &lock, &outcomes, &resolver);
+    let (manifest, lock) =
+        run.call(ProjectEffect::Inspect, ProjectAuthority::ReadFiles, ProjectObservationKind::CallResult, || {
+            port.inspect()
+        })?;
+    let requested_count = if selected.is_empty() {
+        manifest.inputs.len()
+    } else {
+        selected.len()
+    };
+    admit_project_resolution(&mut run, requested_count, "refresh")?;
+    let resolve_authority = ProjectAuthority::Resolve {
+        network_allowed: !no_network,
+        process_allowed: true,
+    };
+    run.check_next(ProjectEffect::Resolve, resolve_authority, ProjectObservationKind::CallResult)?;
+    let outcomes = port.refresh(&manifest, &lock);
+    let result = port.apply_refresh(&manifest, &lock, &outcomes);
     let input_failures = collect_outcome_failures(&outcomes);
-    print_patch_failures(&result.failures);
-
+    let Some(failure_count) = input_failures.len().checked_add(result.failures.len()) else {
+        run.record(
+            ProjectEffect::Resolve,
+            resolve_authority,
+            ProjectObservationKind::CallResult,
+            ProjectEffectStatus::Failed,
+        )?;
+        let _ = run.classify()?;
+        return Err(RunError::Internal("refresh failure count overflowed usize".to_string()));
+    };
+    let Ok(resolved_items) = u32::try_from(outcomes.len()) else {
+        run.record(
+            ProjectEffect::Resolve,
+            resolve_authority,
+            ProjectObservationKind::CallResult,
+            ProjectEffectStatus::Failed,
+        )?;
+        let _ = run.classify()?;
+        return Err(RunError::Internal("refresh outcome count overflowed u32".to_string()));
+    };
+    run.record_items(
+        ProjectEffect::Resolve,
+        resolve_authority,
+        ProjectObservationKind::CallResult,
+        if failure_count == 0 {
+            ProjectEffectStatus::Succeeded
+        } else {
+            ProjectEffectStatus::Failed
+        },
+        resolved_items,
+    )?;
+    if resolved_items > mantle_application_contract::MAX_PROJECT_LIFECYCLE_DECLARED_ENTRIES {
+        let _ = run.classify()?;
+        return Err(RunError::Internal(format!("refresh observed {resolved_items} inputs beyond its plan limit")));
+    }
+    let problems = if result.has_changes {
+        result.lock.clone().validate()
+    } else {
+        Vec::new()
+    };
     if result.has_changes {
-        let problems = result.lock.clone().validate();
-        if !problems.is_empty() {
-            for problem in &problems {
-                eprintln!("lockfile warning: {problem}");
-            }
-        }
-        write_lockfile(dir, &result.lock)?;
-        write_inputs_ncl(dir, &result.lock)?;
-        write_retention_plan(dir, &manifest, &result.lock)?;
+        run.call(ProjectEffect::LockWrite, ProjectAuthority::WriteFiles, ProjectObservationKind::CallResult, || {
+            port.write_lock(&result.lock)
+        })?;
+        run.call(ProjectEffect::InputsWrite, ProjectAuthority::WriteFiles, ProjectObservationKind::CallResult, || {
+            port.write_inputs(&result.lock)
+        })?;
+        run.call(
+            ProjectEffect::RetentionWrite,
+            ProjectAuthority::WriteFiles,
+            ProjectObservationKind::CallResult,
+            || port.write_retention(&manifest, &result.lock),
+        )?;
+    }
+    let _ = run.classify()?;
+    print_refresh_outcomes(&outcomes);
+    print_patch_failures(&result.failures);
+    for problem in &problems {
+        eprintln!("lockfile warning: {problem}");
+    }
+    if result.has_changes {
         if result.inputs_changed > 0 {
             eprintln!("{} input(s) updated", result.inputs_changed);
         }
         if result.patches_changed {
             eprintln!("patch lock data updated");
         }
-    } else if input_failures.is_empty() && result.failures.is_empty() {
+    } else if failure_count == 0 {
         eprintln!("all inputs up to date");
     }
-
-    let failure_count = input_failures
-        .len()
-        .checked_add(result.failures.len())
-        .ok_or_else(|| RunError::Internal("refresh failure count overflowed usize".to_string()))?;
-    classify_project_refresh(failure_count)
-}
-
-/// Effect kind the refresh reports for the resolution it performs.
-const PROJECT_REFRESH_EFFECT: &str = "use-network";
-/// Diagnostic code for a refresh that left items unresolved.
-const PROJECT_REFRESH_INCOMPLETE_CODE: &str = "project-refresh-incomplete";
-
-/// Classify the refresh before reporting it.
-///
-/// Every requested input must resolve, by a fresh lock entry or by an unchanged
-/// one. A failure count above zero means the refresh left work behind, and the
-/// contract decides whether the command may report success.
-fn classify_project_refresh(failure_count: usize) -> Result<(), RunError> {
-    let plan = mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::Project, &[
-        PROJECT_REFRESH_EFFECT,
-    ])
-    .ok_or_else(|| RunError::Internal("project refresh effect plan exceeds its bound".to_string()))?;
-    let is_resolved = failure_count == 0;
-    let observation = mantle_application_contract::Observation {
-        effect_id: mantle_application_contract::EffectId(String::from(PROJECT_REFRESH_EFFECT)),
-        status: if is_resolved {
-            mantle_application_contract::ObservationStatus::Succeeded
-        } else {
-            mantle_application_contract::ObservationStatus::Failed
-        },
-        diagnostics_code: if is_resolved {
-            None
-        } else {
-            Some(String::from(PROJECT_REFRESH_INCOMPLETE_CODE))
-        },
-    };
-    match mantle_application_contract::classify_observations(&plan, &[observation]) {
-        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
-        mantle_application_contract::ApplicationOutcome::Failed { .. } => {
-            Err(RunError::Internal(format!("refresh failed for {failure_count} item(s)")))
-        }
-        other => Err(RunError::Internal(format!("project refresh observations were inconsistent: {other:?}"))),
+    if failure_count > 0 {
+        return Err(RunError::Internal(format!("refresh failed for {failure_count} item(s)")));
     }
+    Ok(())
 }
 
-/// Effect identity of the project scaffold write.
-const PROJECT_INIT_EFFECT: &str = "write-files";
-
-/// Diagnostic code reported when the scaffold does not read back.
-const PROJECT_INIT_SCAFFOLD_MISMATCH_CODE: &str = "project-init-scaffold-mismatch";
-
-/// Effect identity of the project soundness read.
-const PROJECT_CHECK_EFFECT: &str = "read-files";
-
-/// Diagnostic code reported when the soundness report is invalid.
-const PROJECT_CHECK_UNSOUND_CODE: &str = "project-check-unsound";
-
-/// Effect identity of the project state read.
-const PROJECT_SHOW_EFFECT: &str = "read-files";
-
-/// Effect identity of the stale check.
-const PROJECT_STALE_EFFECT: &str = "use-network";
-
-/// Diagnostic code reported when the stale check has blockers.
-const PROJECT_STALE_BLOCKERS_CODE: &str = "project-stale-blockers";
-
-/// Effect identity of the upgrade version read (already current).
-const PROJECT_UPGRADE_CURRENT_EFFECT: &str = "read-files";
-
-/// Effect identity of the upgrade write.
-const PROJECT_UPGRADE_WRITE_EFFECT: &str = "write-files";
-
-/// Classify one finished project lifecycle effect before success is reported.
-///
-/// Same shape as the store family: one planned effect, one observation, and
-/// the exact failure the command already used when the classification rejects.
-fn classify_project_effect(effect: &str, failure: Option<(&str, RunError)>) -> Result<(), RunError> {
-    let plan =
-        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::Project, &[effect])
-            .ok_or_else(|| RunError::Internal(format!("project {effect} effect plan exceeds its bound")))?;
-    let observation = mantle_application_contract::Observation {
-        effect_id: mantle_application_contract::EffectId(String::from(effect)),
-        status: if failure.is_some() {
-            mantle_application_contract::ObservationStatus::Failed
-        } else {
-            mantle_application_contract::ObservationStatus::Succeeded
-        },
-        diagnostics_code: failure.as_ref().map(|(code, _)| String::from(*code)),
-    };
-    match mantle_application_contract::classify_observations(&plan, &[observation]) {
-        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
-        mantle_application_contract::ApplicationOutcome::Failed { .. } => match failure {
-            Some((_, error)) => Err(error),
-            None => {
-                Err(RunError::Internal(format!("project {effect} classification failed without a recorded failure")))
-            }
-        },
-        other => Err(RunError::Internal(format!("project {effect} observations were inconsistent: {other:?}"))),
-    }
-}
-/// `crunch list-stale` — show which inputs would change.
+/// `mantle list-stale` — show which inputs would change.
 pub fn cmd_list_stale(dir: &Path, no_network: bool) -> Result<(), RunError> {
+    let mut port = ProjectFiles {
+        dir,
+        selected: &[],
+        no_network,
+    };
+    let mut run = ProjectRun::new(ProjectOperation::ListStale, !no_network, true);
     assert_ne!(MANIFEST_FILE, LOCK_FILE, "project manifest and lockfile names must differ");
     assert_ne!(INPUTS_FILE, RETENTION_STATE_FILE, "generated inputs and retention state names must differ");
-    reject_conflicting_legacy_project_files(dir)?;
-    let manifest = load_manifest(dir)?;
-    let lock = load_lockfile(dir)?;
-    let resolver = LiveResolver::new(dir);
-    let outcome = list_stale_with_options(&manifest, &lock, &resolver, no_network);
-
+    let (manifest, lock) =
+        run.call(ProjectEffect::Inspect, ProjectAuthority::ReadFiles, ProjectObservationKind::CallResult, || {
+            port.inspect()
+        })?;
+    admit_project_resolution(&mut run, manifest.inputs.len(), "list-stale")?;
+    let resolve_authority = ProjectAuthority::Resolve {
+        network_allowed: !no_network,
+        process_allowed: true,
+    };
+    run.check_next(ProjectEffect::Resolve, resolve_authority, ProjectObservationKind::CallResult)?;
+    let outcome = port.stale(&manifest, &lock);
+    let Some(blocker_count) = outcome.failed.len().checked_add(outcome.network_required.len()) else {
+        run.record(
+            ProjectEffect::Resolve,
+            resolve_authority,
+            ProjectObservationKind::CallResult,
+            ProjectEffectStatus::Failed,
+        )?;
+        let _ = run.classify()?;
+        return Err(RunError::Internal("stale-check blocker count overflowed usize".to_string()));
+    };
+    let observed_items = [
+        outcome.stale.len(),
+        outcome.unchanged.len(),
+        outcome.skipped.len(),
+        outcome.network_required.len(),
+        outcome.failed.len(),
+    ]
+    .into_iter()
+    .try_fold(0_u32, |count, len| u32::try_from(len).ok().and_then(|items| count.checked_add(items)));
+    let Some(observed_items) = observed_items else {
+        run.record(
+            ProjectEffect::Resolve,
+            resolve_authority,
+            ProjectObservationKind::CallResult,
+            ProjectEffectStatus::Failed,
+        )?;
+        let _ = run.classify()?;
+        return Err(RunError::Internal("stale-check observation count overflowed u32".to_string()));
+    };
+    run.record_items(
+        ProjectEffect::Resolve,
+        resolve_authority,
+        ProjectObservationKind::CallResult,
+        if blocker_count == 0 {
+            ProjectEffectStatus::Succeeded
+        } else {
+            ProjectEffectStatus::Failed
+        },
+        observed_items,
+    )?;
+    let _ = run.classify()?;
     for name in &outcome.stale {
         println!("{name}");
     }
@@ -482,43 +805,54 @@ pub fn cmd_list_stale(dir: &Path, no_network: bool) -> Result<(), RunError> {
     if is_current_state_clean && is_deferred_state_clean {
         println!("all inputs up to date");
     }
-    let blocker_count = outcome
-        .failed
-        .len()
-        .checked_add(outcome.network_required.len())
-        .ok_or_else(|| RunError::Internal("stale-check blocker count overflowed usize".to_string()))?;
     if blocker_count > 0 {
-        return classify_project_effect(
-            PROJECT_STALE_EFFECT,
-            Some((
-                PROJECT_STALE_BLOCKERS_CODE,
-                RunError::Internal(format!("stale check failed for {blocker_count} item(s)")),
-            )),
-        );
+        return Err(RunError::Internal(format!("stale check failed for {blocker_count} item(s)")));
     }
-
-    classify_project_effect(PROJECT_STALE_EFFECT, None)
+    Ok(())
 }
 
-/// `crunch upgrade` — migrate project files to current schema.
+/// `mantle upgrade` — migrate project files to current schema.
 pub fn cmd_upgrade(dir: &Path) -> Result<(), RunError> {
-    reject_conflicting_legacy_project_files(dir)?;
-    let lock = load_lockfile(dir)?;
-
+    let mut port = ProjectFiles {
+        dir,
+        selected: &[],
+        no_network: true,
+    };
+    let mut run = ProjectRun::new(ProjectOperation::Upgrade, false, false);
+    let (lock, manifest) =
+        run.call(ProjectEffect::Inspect, ProjectAuthority::ReadFiles, ProjectObservationKind::CallResult, || {
+            port.inspect_legacy()?;
+            let lock = port.inspect_lock()?;
+            let manifest = if lock.version == SchemaVersion::CURRENT {
+                None
+            } else {
+                Some(port.inspect_manifest()?)
+            };
+            Ok((lock, manifest))
+        })?;
     if lock.version == SchemaVersion::CURRENT {
+        let _ = run.classify()?;
         eprintln!("project files already at current version ({})", SchemaVersion::CURRENT);
-        return classify_project_effect(PROJECT_UPGRADE_CURRENT_EFFECT, None);
+        return Ok(());
     }
-
+    let upgraded = upgrade_lockfile(lock.clone()).map_err(|e| RunError::Internal(format!("upgrade: {e}")))?;
+    let manifest = manifest.expect("an outdated lock requires the manifest read");
+    run.call(ProjectEffect::LockWrite, ProjectAuthority::WriteFiles, ProjectObservationKind::CallResult, || {
+        port.write_lock(&upgraded)
+    })?;
+    run.call(ProjectEffect::InputsWrite, ProjectAuthority::WriteFiles, ProjectObservationKind::CallResult, || {
+        port.write_inputs(&upgraded)
+    })?;
+    run.call(
+        ProjectEffect::RetentionWrite,
+        ProjectAuthority::WriteFiles,
+        ProjectObservationKind::CallResult,
+        || port.write_retention(&manifest, &upgraded),
+    )?;
+    let _ = run.classify()?;
     eprintln!("upgrading lockfile from {} to {}", lock.version, SchemaVersion::CURRENT);
-    let upgraded = upgrade_lockfile(lock).map_err(|e| RunError::Internal(format!("upgrade: {e}")))?;
-
-    let manifest = load_manifest(dir)?;
-    write_lockfile(dir, &upgraded)?;
-    write_inputs_ncl(dir, &upgraded)?;
-    write_retention_plan(dir, &manifest, &upgraded)?;
     eprintln!("upgrade complete");
-    classify_project_effect(PROJECT_UPGRADE_WRITE_EFFECT, None)
+    Ok(())
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -836,48 +1170,82 @@ fn print_patch_failures(failures: &[RefreshFailure]) {
 }
 
 #[cfg(test)]
-mod refresh_classification_tests {
+mod lifecycle_effect_tests {
     use super::*;
 
     #[test]
-    fn a_refresh_without_failures_is_completed() {
-        assert!(classify_project_refresh(0).is_ok());
+    fn readback_rejects_mutated_scaffold_content_not_just_file_existence() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut port = ProjectFiles {
+            dir: dir.path(),
+            selected: &[],
+            no_network: true,
+        };
+        port.inspect_init().unwrap();
+        port.write_manifest().unwrap();
+        port.write_init_lock().unwrap();
+        port.write_init_inputs().unwrap();
+        port.write_init_retention().unwrap();
+        port.gitignore().unwrap();
+        assert!(port.readback().unwrap());
+        std::fs::write(dir.path().join(INPUTS_FILE), "wrong inputs").unwrap();
+        assert!(!port.readback().unwrap());
     }
 
     #[test]
-    fn a_refresh_with_failures_is_rejected_with_the_same_message() {
-        let error = classify_project_refresh(3).expect_err("three failures must fail closed");
-        assert!(error.to_string().contains("refresh failed for 3 item(s)"), "{error}");
-    }
-}
-
-#[cfg(test)]
-mod operation_classification_tests {
-    use super::*;
-
-    #[test]
-    fn a_succeeded_project_effect_classifies_as_completed() {
-        assert!(classify_project_effect(PROJECT_SHOW_EFFECT, None).is_ok());
-        assert!(classify_project_effect(PROJECT_UPGRADE_WRITE_EFFECT, None).is_ok());
+    fn init_io_fault_never_reports_completion_after_partial_scaffold() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".gitignore")).unwrap();
+        let error = cmd_init(dir.path()).expect_err("gitignore read must reject a directory");
+        assert!(error.to_string().contains(".gitignore"), "{error}");
+        assert!(dir.path().join(MANIFEST_FILE).is_file());
+        assert!(dir.path().join(LOCK_FILE).is_file());
     }
 
     #[test]
-    fn a_failed_project_effect_returns_its_recorded_failure() {
-        let error = classify_project_effect(
-            PROJECT_STALE_EFFECT,
-            Some((PROJECT_STALE_BLOCKERS_CODE, RunError::Internal("stale check failed for 2 item(s)".to_string()))),
-        )
-        .expect_err("a failed observation rejects the report");
-        assert!(error.to_string().contains("stale check failed for 2 item(s)"), "{error}");
+    fn existing_manifest_blocks_init_before_mutating_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(MANIFEST_FILE), "operator manifest").unwrap();
+        let error = cmd_init(dir.path()).expect_err("existing project is a blocker");
+        assert!(error.to_string().contains("already exists"), "{error}");
+        assert!(!dir.path().join(LOCK_FILE).exists());
+        assert_eq!(std::fs::read_to_string(dir.path().join(MANIFEST_FILE)).unwrap(), "operator manifest");
     }
 
     #[test]
-    fn an_unsound_check_keeps_its_reported_exit_class() {
-        let error = classify_project_effect(
-            PROJECT_CHECK_EFFECT,
-            Some((PROJECT_CHECK_UNSOUND_CODE, RunError::Reported(PROJECT_CHECK_FAILURE_EXIT_CODE))),
-        )
-        .expect_err("an invalid soundness report rejects success");
-        assert!(matches!(error, RunError::Reported(PROJECT_CHECK_FAILURE_EXIT_CODE)));
+    fn wrong_authority_is_rejected_before_port_mutates_the_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("should-not-exist");
+        let mut run = ProjectRun::new(ProjectOperation::Init, false, false);
+        let error = run
+            .call(ProjectEffect::Inspect, ProjectAuthority::WriteFiles, ProjectObservationKind::CallResult, || {
+                std::fs::write(&target, "unexpected write")
+                    .map_err(|err| RunError::Internal(format!("writing sentinel: {err}")))
+            })
+            .expect_err("read authority cannot authorize a write");
+        assert!(error.to_string().contains("not authorized"), "{error}");
+        assert!(!target.exists());
+    }
+
+    struct FailingWriter;
+    impl Write for FailingWriter {
+        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::new(ErrorKind::BrokenPipe, "injected renderer failure"))
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn rendering_failure_is_not_a_successful_project_report() {
+        let report = project_soundness_parse_error(
+            ProjectSoundnessClass::ManifestParseError,
+            ProjectSoundnessSubject::file(MANIFEST_FILE),
+            "bad manifest".to_string(),
+        );
+        let error =
+            render_check_report_json_to(&report, &mut FailingWriter).expect_err("failed output must not be reported");
+        assert!(error.to_string().contains("injected renderer failure"), "{error}");
     }
 }

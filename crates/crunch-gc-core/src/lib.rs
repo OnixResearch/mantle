@@ -9,6 +9,7 @@
 
 extern crate alloc;
 
+pub mod interest;
 pub mod retention;
 
 use alloc::collections::BTreeMap;

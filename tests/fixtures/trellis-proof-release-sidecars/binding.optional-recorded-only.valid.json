@@ -1,14 +1,14 @@
 {
   "schema": "mantle-opaque-evidence-sidecar-binding-v1",
   "evidence_kind": "proof",
-  "profile_version": "kamacite.trellis-proof-evidence-profile.v1",
+  "profile_version": "kamacite.trellis-proof-evidence-profile.v2",
   "profile_roles": {
     "producer_role": "recorded-only",
     "validation_role": "recorded_only"
   },
   "canonical_envelope": {
     "role": "kamacite-trellis-proof-preserves-envelope",
-    "schema": "kamacite.trellis-proof-evidence-profile.v1",
+    "schema": "kamacite.trellis-proof-evidence-profile.v2",
     "relative_path": "external-evidence/trellis-proof-envelope.preserves",
     "digest_blake3": "8888888888888888888888888888888888888888888888888888888888888888",
     "size_bytes": 1
@@ -42,7 +42,7 @@
   "compatibility_projections": [
     {
       "role": "kamacite-trellis-proof-json-projection",
-      "schema": "kamacite.trellis-proof-evidence-profile.v1.compat-json",
+      "schema": "kamacite.trellis-proof-evidence-profile.v2.compat-json",
       "relative_path": "external-evidence/trellis-proof-envelope.compat.json",
       "digest_blake3": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
       "canonical_envelope_digest_blake3": "8888888888888888888888888888888888888888888888888888888888888888"
@@ -51,6 +51,9 @@
   "non_claims": [
     "Mantle does not claim verifier soundness, proof truth, semantic equivalence, whole-program correctness, or downstream certification",
     "Mantle validates opaque evidence metadata and typed BLAKE3 links only; upstream producers own payload semantics",
-    "Trellis proof evidence is reference input only and does not establish Mantle release eligibility"
+    "Trellis proof evidence is reference input only and does not establish Mantle release eligibility",
+    "not release eligibility",
+    "not verifier soundness",
+    "not downstream correctness"
   ]
 }

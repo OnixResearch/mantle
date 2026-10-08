@@ -4,6 +4,12 @@ Mantlepkgs generates a bounded Mantle package catalog from concrete Nixpkgs deri
 
 Nix runs only in the explicit producer command. Catalog verification, package selection, planning, and building do not run Nix.
 
+Before reading inputs or invoking a producer, each command admits a bounded, typed effect plan
+for its file, process, network, or clock capabilities. The adapter records what ran and
+independently reads published files back before classifying the observations and printing a
+terminal result. A blocked generation still publishes and verifies its failure report, not a
+success catalog; recorded unavailable or failed update observations retain their failure status.
+
 ## Files
 
 - `contracts.ncl` defines the typed Nickel manifest contract.

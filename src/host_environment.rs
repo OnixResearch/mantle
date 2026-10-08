@@ -11,16 +11,26 @@ use crate::RunError;
 /// Variable a child process reads to learn the resolved state directory.
 pub(crate) const STATE_DIR_ENV: &str = "CRUNCH_STATE_DIR";
 
-/// Export the resolved state directory for child processes.
+/// Export the state directory for child processes.
 ///
-/// The write is the ambient-state boundary: the shell exports one resolved value
-/// so a child binary observes the same state directory as its parent.
-pub(crate) fn export_state_dir(state_dir: &Path) {
+/// A relative operator override remains relative in the parent but must be
+/// anchored to its working directory before a child inherits it as ambient state.
+pub(crate) fn export_state_dir(state_dir: &Path) -> Result<(), RunError> {
     debug_assert!(!state_dir.as_os_str().is_empty());
+    let anchored_state_dir;
+    let exported_state_dir = if state_dir.is_absolute() {
+        state_dir
+    } else {
+        anchored_state_dir = std::env::current_dir()
+            .map_err(|err| RunError::Internal(format!("resolving relative --state-dir for children: {err}")))?
+            .join(state_dir);
+        anchored_state_dir.as_path()
+    };
     // SAFETY: the CLI exports one state directory before it spawns any child, so
     // no other thread in this process reads the environment concurrently.
-    unsafe { std::env::set_var(STATE_DIR_ENV, state_dir) };
-    debug_assert!(state_dir.is_absolute() || !state_dir.as_os_str().is_empty());
+    unsafe { std::env::set_var(STATE_DIR_ENV, exported_state_dir) };
+    debug_assert!(exported_state_dir.is_absolute());
+    Ok(())
 }
 
 /// Resolve the running executable.

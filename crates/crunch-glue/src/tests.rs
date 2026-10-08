@@ -177,9 +177,211 @@ fn dynamic_plan_outputs_do_not_change_derivation_hash_by_default() {
 
     assert_eq!(plain_path, declared_path, "dynamic plan metadata should not change drv path by default");
     assert_eq!(plain_drv, declared_drv, "dynamic plan metadata should not affect nix derivation hashing inputs");
+    assert!(!plain_drv.environment.contains_key(PLAN_OUTPUT_BINDINGS_ENV_KEY));
+    assert!(!declared_drv.environment.contains_key(PLAN_OUTPUT_BINDINGS_ENV_KEY));
     assert!(plain.dynamic_plan_outputs.is_empty());
     let entry = declared_cache.get_by_drv_path(&declared_path.to_absolute_path()).unwrap();
     assert_eq!(entry.dynamic_plan_outputs, vec!["plan".to_string()]);
+}
+
+fn plan_producer() -> CrunchDerivation {
+    let mut producer = minimal_drv("plan-producer", "/bin/sh");
+    producer.outputs = vec!["out".to_string(), "plan".to_string(), "other".to_string()];
+    producer.dynamic_plan_outputs = vec!["plan".to_string(), "other".to_string()];
+    producer
+}
+
+fn plan_reference(name: &str) -> PlanOutputRef {
+    PlanOutputRef {
+        name: name.to_string(),
+        producer: plan_producer(),
+        plan_output: "plan".to_string(),
+        root: "unit.app".to_string(),
+        unit_output: "out".to_string(),
+    }
+}
+
+fn plan_consumer(reference: PlanOutputRef) -> CrunchDerivation {
+    let marker = format!("{{{{mantle-plan-output:{}}}}}", reference.name);
+    let mut consumer = minimal_drv("plan-consumer", "/bin/sh");
+    consumer.args = vec![format!("build {marker}/bin/app")];
+    consumer.env.insert("APP_PATH".to_string(), format!("{marker}/bin/app"));
+    consumer.inputs = vec![Input::PlanOutput(Box::new(reference))];
+    consumer
+}
+
+#[test]
+fn plan_output_input_deserializes_as_closed_validated_record() {
+    let input = Input::PlanOutput(Box::new(plan_reference("app")));
+    let encoded = serde_json::to_value(&input).unwrap();
+    assert_eq!(encoded.as_object().unwrap().len(), 5);
+    let decoded: Input = serde_json::from_value(encoded.clone()).unwrap();
+    assert!(matches!(decoded, Input::PlanOutput(reference) if reference.name == "app"));
+
+    let mut invalid = encoded.clone();
+    invalid["unexpected"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<Input>(invalid).unwrap_err().to_string().contains("outside"));
+    let mut invalid = encoded.clone();
+    invalid["name"] = serde_json::json!("Bad");
+    assert!(serde_json::from_value::<Input>(invalid).unwrap_err().to_string().contains("name"));
+    let mut invalid = encoded.clone();
+    invalid["root"] = serde_json::json!("Unit.App");
+    assert!(serde_json::from_value::<Input>(invalid).unwrap_err().to_string().contains("root"));
+    let mut invalid = encoded.clone();
+    invalid["unit_output"] = serde_json::json!("bad.name");
+    assert!(serde_json::from_value::<Input>(invalid).unwrap_err().to_string().contains("output name"));
+    let mut invalid = encoded;
+    invalid["producer"]["dynamic_plan_outputs"] = serde_json::json!([]);
+    assert!(
+        serde_json::from_value::<Input>(invalid)
+            .unwrap_err()
+            .to_string()
+            .contains("declared dynamic_plan_outputs")
+    );
+}
+
+#[test]
+fn plan_output_conversion_binds_selected_edge_and_canonical_markers() {
+    let mut consumer = plan_consumer(plan_reference("zeta"));
+    consumer.inputs.push(Input::PlanOutput(Box::new(plan_reference("alpha"))));
+    let mut cache = ConversionCache::default();
+    let (_, converted) = convert(&consumer, &mut cache).unwrap();
+    let records: serde_json::Value =
+        serde_json::from_slice(converted.environment[PLAN_OUTPUT_BINDINGS_ENV_KEY].as_ref()).unwrap();
+    let records = records.as_array().unwrap();
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0]["name"], "alpha");
+    assert_eq!(records[1]["name"], "zeta");
+    let producer_path = records[0]["producer_drv_path"].as_str().unwrap();
+    assert!(producer_path.starts_with("/nix/store/"));
+    assert_eq!(records[1]["producer_drv_path"], producer_path);
+    assert_eq!(records[0]["plan_output"], "plan");
+    assert_eq!(records[0]["root"], "unit.app");
+    assert_eq!(records[0]["unit_output"], "out");
+    assert_eq!(records[0].as_object().unwrap().len(), 6);
+    let placeholder = nix_compat::store_path::hash_placeholder("mantle-plan-output:zeta");
+    assert_eq!(records[1]["placeholder"], placeholder);
+    assert_eq!(converted.arguments, vec![format!("build {placeholder}/bin/app")]);
+    let env_path: &[u8] = converted.environment["APP_PATH"].as_ref();
+    assert_eq!(env_path, format!("{placeholder}/bin/app").as_bytes());
+    let (_, outputs) = converted.input_derivations.iter().next().unwrap();
+    assert_eq!(converted.input_derivations.len(), 1);
+    assert_eq!(outputs.iter().map(String::as_str).collect::<Vec<_>>(), ["plan"]);
+    let mut reversed = consumer.clone();
+    reversed.inputs.reverse();
+    let (first, _) = convert(&consumer, &mut ConversionCache::default()).unwrap();
+    let (second, _) = convert(&reversed, &mut ConversionCache::default()).unwrap();
+    assert_eq!(first, second);
+    let (_, under_other_prefix) = convert(&consumer, &mut ConversionCache::new("/opt/crunch")).unwrap();
+    let bindings: serde_json::Value =
+        serde_json::from_slice(under_other_prefix.environment[PLAN_OUTPUT_BINDINGS_ENV_KEY].as_ref()).unwrap();
+    assert!(bindings[0]["producer_drv_path"].as_str().unwrap().starts_with("/opt/crunch/"));
+}
+
+#[test]
+fn plan_output_identity_depends_on_each_binding_component() {
+    let base = plan_consumer(plan_reference("app"));
+    let (base_path, base_nix) = convert(&base, &mut ConversionCache::default()).unwrap();
+    assert!(base_nix.outputs["out"].path.is_some());
+    let mut variants = Vec::new();
+    let mut altered = base.clone();
+    if let Input::PlanOutput(reference) = &mut altered.inputs[0] {
+        reference.producer.args.push("changed".to_string());
+    }
+    variants.push(altered);
+    let mut altered = base.clone();
+    if let Input::PlanOutput(reference) = &mut altered.inputs[0] {
+        reference.plan_output = "other".to_string();
+    }
+    variants.push(altered);
+    let mut altered = base.clone();
+    if let Input::PlanOutput(reference) = &mut altered.inputs[0] {
+        reference.root = "unit.other".to_string();
+    }
+    variants.push(altered);
+    let mut altered = base.clone();
+    if let Input::PlanOutput(reference) = &mut altered.inputs[0] {
+        reference.unit_output = "dev".to_string();
+    }
+    variants.push(altered);
+    for altered in variants {
+        let (path, converted) = convert(&altered, &mut ConversionCache::default()).unwrap();
+        assert_ne!(path, base_path);
+        assert_ne!(converted.outputs["out"].path, base_nix.outputs["out"].path);
+    }
+}
+
+#[test]
+fn plan_output_rejects_unknown_unterminated_duplicate_and_over_limit() {
+    let mut consumer = plan_consumer(plan_reference("app"));
+    consumer.args[0] = "{{mantle-plan-output:missing}}".to_string();
+    assert!(
+        convert(&consumer, &mut ConversionCache::default())
+            .unwrap_err()
+            .to_string()
+            .contains("unknown plan-output marker")
+    );
+    let mut unbound = minimal_drv("unbound", "/bin/sh");
+    unbound.env.insert("TOKEN".to_string(), "{{mantle-plan-output:missing}}".to_string());
+    assert!(
+        convert(&unbound, &mut ConversionCache::default())
+            .unwrap_err()
+            .to_string()
+            .contains("unknown plan-output marker")
+    );
+    consumer.env.insert("out".to_string(), "{{mantle-plan-output:missing}}".to_string());
+    assert!(
+        convert(&consumer, &mut ConversionCache::default())
+            .unwrap_err()
+            .to_string()
+            .contains("overwritten environment key")
+    );
+    consumer.env.remove("out");
+    consumer.args[0] = "{{mantle-plan-output:app".to_string();
+    assert!(
+        convert(&consumer, &mut ConversionCache::default())
+            .unwrap_err()
+            .to_string()
+            .contains("unterminated plan-output marker")
+    );
+    consumer = plan_consumer(plan_reference("app"));
+    consumer.inputs.push(Input::PlanOutput(Box::new(plan_reference("app"))));
+    assert!(
+        convert(&consumer, &mut ConversionCache::default())
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate plan-output")
+    );
+    consumer.inputs =
+        (0..17).map(|index| Input::PlanOutput(Box::new(plan_reference(&format!("app{index}"))))).collect();
+    assert!(
+        convert(&consumer, &mut ConversionCache::default())
+            .unwrap_err()
+            .to_string()
+            .contains("exceed limit of 16")
+    );
+    let over_limit_json = serde_json::to_string(&consumer).unwrap();
+    assert!(
+        serde_json::from_str::<CrunchDerivation>(&over_limit_json)
+            .unwrap_err()
+            .to_string()
+            .contains("exceed limit of 16")
+    );
+    consumer = plan_consumer(plan_reference("app"));
+    consumer.env.insert(PLAN_OUTPUT_BINDINGS_ENV_KEY.to_string(), String::new());
+    assert!(
+        convert(&consumer, &mut ConversionCache::default())
+            .unwrap_err()
+            .to_string()
+            .contains("reserved plan-output")
+    );
+    let reserved_json = serde_json::to_string(&consumer).unwrap();
+    assert!(
+        serde_json::from_str::<CrunchDerivation>(&reserved_json)
+            .unwrap_err()
+            .to_string()
+            .contains("reserved plan-output")
+    );
 }
 
 #[test]

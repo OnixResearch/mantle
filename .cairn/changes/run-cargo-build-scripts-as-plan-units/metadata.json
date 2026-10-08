@@ -1,0 +1,10 @@
+{
+  "depends_on": [
+    "build-cargo-units-as-dynamic-plans"
+  ],
+  "workflow_profile": {
+    "id": "spec-driven",
+    "source": "change_create",
+    "version": 1
+  }
+}

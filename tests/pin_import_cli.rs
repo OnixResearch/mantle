@@ -147,6 +147,30 @@ fn pins_import_apply_writes_only_planned_mantle_files() {
     mantle().arg("check").current_dir(dir.path()).assert().success();
 }
 
+#[test]
+fn pins_import_apply_matches_reviewed_plan_bytes_and_is_repeatable() {
+    let dir = TempDir::new().unwrap();
+    write_supported_nixtamal_fixture(&dir);
+    let plan = mantle()
+        .arg("--json")
+        .arg("import")
+        .arg("pins")
+        .arg("plan")
+        .current_dir(dir.path())
+        .assert()
+        .success();
+    let plan: Value = serde_json::from_slice(&plan.get_output().stdout).unwrap();
+
+    for _ in 0..2 {
+        mantle().arg("import").arg("pins").arg("apply").current_dir(dir.path()).assert().success();
+        for operation in plan["file_operations"].as_array().unwrap() {
+            let path = operation["path"].as_str().unwrap();
+            let expected = operation["content"].as_str().unwrap();
+            assert_eq!(std::fs::read(dir.path().join(path)).unwrap(), expected.as_bytes(), "{path}");
+        }
+    }
+}
+
 // r[verify project_workflows.nixtamal_importer]
 #[test]
 fn pins_import_apply_fails_before_writing_on_blockers_or_conflicts() {
@@ -160,14 +184,55 @@ fn pins_import_apply_fails_before_writing_on_blockers_or_conflicts() {
         .arg("apply")
         .current_dir(dir.path())
         .assert()
-        .failure()
+        .code(3)
         .stdout(predicate::str::contains("unsupported-source-kind"))
         .stdout(predicate::str::contains("unsupported-hash-algorithm"))
         .stdout(predicate::str::contains("unknown-patch"))
-        .stderr(predicate::str::contains("refusing to apply pin import plan"));
+        .stderr(predicate::str::is_empty());
 
     let lock_text = std::fs::read_to_string(dir.path().join("mantle.lock")).unwrap();
     assert_eq!(lock_text, "user lock\n");
     assert!(!dir.path().join("mantle-project.ncl").exists());
     assert!(!dir.path().join(".mantle/inputs.ncl").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn pins_import_rejects_symlink_output_parent_before_any_write() {
+    let dir = TempDir::new().unwrap();
+    write_supported_nixtamal_fixture(&dir);
+    let external = TempDir::new().unwrap();
+    std::os::unix::fs::symlink(external.path(), dir.path().join(".mantle")).unwrap();
+
+    mantle()
+        .arg("import")
+        .arg("pins")
+        .arg("apply")
+        .current_dir(dir.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("symlink import output"));
+
+    assert!(!dir.path().join("mantle-project.ncl").exists());
+    assert!(!dir.path().join("mantle.lock").exists());
+    assert!(!external.path().join("inputs.ncl").exists());
+}
+
+#[test]
+fn pins_import_rejects_overlapping_output_targets_before_writing() {
+    let dir = TempDir::new().unwrap();
+    write_supported_nixtamal_fixture(&dir);
+
+    mantle()
+        .arg("import")
+        .arg("pins")
+        .arg("apply")
+        .args(["--project-file", ".mantle"])
+        .current_dir(dir.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("output targets overlap"));
+
+    assert!(!dir.path().join("mantle.lock").exists());
+    assert!(!dir.path().join(".mantle").exists());
 }

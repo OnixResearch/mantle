@@ -448,6 +448,16 @@ impl<S> StatefulWorkspaceBuildService<S> {
     }
 }
 
+fn require_watch_workspace_active(cancellation: &tokio::sync::watch::Receiver<bool>) -> std::io::Result<()> {
+    if *cancellation.borrow() || cancellation.has_changed().is_err() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Interrupted,
+            "watch workspace cancelled before teardown and cleanup",
+        ));
+    }
+    Ok(())
+}
+
 #[async_trait]
 impl<S> BuildService for StatefulWorkspaceBuildService<S>
 where S: BuildService + Send + Sync
@@ -513,6 +523,83 @@ where S: BuildService + Send + Sync
                 debug_assert!(!workspace_evidence.shared_action_publish_allowed);
                 self.reports.push(workspace_evidence);
                 result
+            }
+        }
+    }
+
+    async fn do_build_cancellable(
+        &self,
+        mut request: BuildRequest,
+        cancellation: tokio::sync::watch::Receiver<bool>,
+    ) -> std::io::Result<BuildResult> {
+        require_watch_workspace_active(&cancellation)?;
+        let Some(workspace) = request.workspace.clone() else {
+            let result = self.inner.do_build_cancellable(request, cancellation.clone()).await?;
+            require_watch_workspace_active(&cancellation)?;
+            return Ok(result);
+        };
+        match workspace.mode {
+            StatefulWorkspaceMode::None | StatefulWorkspaceMode::ImmutableSnapshot => {
+                if workspace.mode == StatefulWorkspaceMode::ImmutableSnapshot {
+                    validate_snapshot_input(&request, &workspace).map_err(std::io::Error::other)?;
+                }
+                let result = self.inner.do_build_cancellable(request, cancellation.clone()).await?;
+                require_watch_workspace_active(&cancellation)?;
+                self.reports.push(workspace_report(
+                    &workspace,
+                    false,
+                    WorkspaceCleanupDisposition::NotRequired,
+                    WorkspaceReasonCode::Accepted,
+                    workspace.snapshot_input_name.as_ref().map(|path| path.display().to_string()),
+                ));
+                Ok(result)
+            }
+            StatefulWorkspaceMode::MutableSession => {
+                let active = self.store.prepare(&workspace).map_err(std::io::Error::other)?;
+                require_watch_workspace_active(&cancellation)?;
+                let mut clean_request = request.clone();
+                clean_request.workspace = None;
+                let workspace_request = request
+                    .workspace
+                    .as_mut()
+                    .ok_or_else(|| std::io::Error::other("mutable workspace request disappeared"))?;
+                workspace_request.runtime_host_path = Some(active.host_path().to_path_buf());
+                let result = self.inner.do_build_cancellable(request, cancellation.clone()).await?;
+                // Dropping ActiveWorkspace quarantines its content and writes
+                // the lease record; neither a clean retry nor a warm result
+                // can escape after cancellation.
+                require_watch_workspace_active(&cancellation)?;
+                let clean_result = if workspace.clean_rebuild_enabled {
+                    Some(self.inner.do_build_cancellable(clean_request, cancellation.clone()).await)
+                } else {
+                    None
+                };
+                require_watch_workspace_active(&cancellation)?;
+                if matches!(&clean_result, Some(Err(error)) if error.kind() == std::io::ErrorKind::Interrupted) {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Interrupted,
+                        "watch clean comparison cancelled before workspace release",
+                    ));
+                }
+                // Cleanup commits synchronously after this cancellation
+                // check; the Worker still discards a concurrently superseded
+                // result instead of publishing stale PathInfo.
+                let mut workspace_evidence = active.finish();
+                workspace_evidence.clean_comparison_performed = clean_result.is_some();
+                workspace_evidence.clean_comparison_matched =
+                    matches!(&clean_result, Some(Ok(clean)) if result.outputs == clean.outputs);
+                workspace_evidence.warm_output_set_digest_blake3 =
+                    Some(output_set_digest(&result).map_err(std::io::Error::other)?);
+                workspace_evidence.clean_output_set_digest_blake3 = clean_result
+                    .as_ref()
+                    .and_then(|clean| clean.as_ref().ok())
+                    .map(output_set_digest)
+                    .transpose()
+                    .map_err(std::io::Error::other)?;
+                debug_assert!(!workspace_evidence.original_execution_hermetic);
+                debug_assert!(!workspace_evidence.shared_action_publish_allowed);
+                self.reports.push(workspace_evidence);
+                Ok(result)
             }
         }
     }
@@ -1081,6 +1168,7 @@ mod tests {
     use std::sync::atomic::AtomicU32;
     use std::sync::atomic::Ordering;
 
+    use snix_build::buildservice::BuildConstraints;
     use snix_build::buildservice::BuildOutput;
     use snix_build::buildservice::StatefulWorkspaceLeaseBinding;
     use snix_castore::SymlinkTarget;
@@ -1389,5 +1477,155 @@ mod tests {
         .unwrap();
         assert!(!serialized.contains(temp.path().to_string_lossy().as_ref()));
         assert!(serialized.contains("practical-mutable-history"));
+    }
+
+    #[tokio::test]
+    async fn production_workspace_local_dispatch_stack_reaches_owned_watch_cancel() {
+        use crate::dispatch_build_service::DispatchBuildService;
+        use crate::fetch_build_service::FetchBuildService;
+
+        let state = tempfile::tempdir().unwrap();
+        let parts =
+            crate::test_support::pipeline_store_parts(MemoryBlobService::default(), crate::test_support::tmp_ds());
+        let store = parts.build_service_store;
+        let fetch = FetchBuildService::new(store.clone());
+        let local = store.bubblewrap_build_service(state.path().join("local"), None);
+        let dispatch = DispatchBuildService::new(fetch, local);
+        let service = StatefulWorkspaceBuildService::new(dispatch, state.path(), WorkspaceReportCollector::default());
+        let mut build = BuildRequest {
+            working_dir: PathBuf::from("build"),
+            scratch_paths: vec![PathBuf::from("build"), PathBuf::from("nix/store")],
+            inputs_dir: PathBuf::from("nix/store"),
+            outputs: vec![PathBuf::from("nix/store/watch-result")],
+            ..BuildRequest::default()
+        };
+        build.constraints.insert(BuildConstraints::ProvideBinSh);
+        build.command_args = vec![
+            "/bin/sh".to_string(),
+            "-c".to_string(),
+            "/bin/busybox echo started > /build/markers/started; /bin/busybox sleep 2; /bin/busybox echo late > /build/markers/late; /bin/busybox echo done > /nix/store/watch-result".to_string(),
+        ];
+        let mut workspace = request();
+        workspace.guest_path = PathBuf::from("/build/markers");
+        workspace.clean_rebuild_enabled = true;
+        build.workspace = Some(workspace);
+        let (sender, cancellation) = tokio::sync::watch::channel(false);
+        let run = tokio::spawn(async move { service.do_build_cancellable(build, cancellation).await });
+        let workspace_store = WorkspaceStore::new(state.path());
+        let content = workspace_store.content_path("cargo-cache").unwrap();
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !content.join("started").is_file() {
+            assert!(tokio::time::Instant::now() < deadline, "watch sandbox did not start");
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        sender.send(true).unwrap();
+        let error = tokio::time::timeout(std::time::Duration::from_secs(10), run).await.unwrap().unwrap().unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::Interrupted);
+        assert_eq!(
+            workspace_store.load_record("cargo-cache").unwrap().unwrap().state,
+            WorkspaceLeaseState::Quarantined,
+        );
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        assert!(!content.join("late").exists());
+    }
+
+    struct WatchComparisonService {
+        calls: Arc<AtomicU32>,
+        cancel_after_warm: Option<tokio::sync::watch::Sender<bool>>,
+    }
+
+    #[async_trait]
+    impl BuildService for WatchComparisonService {
+        async fn do_build(&self, _request: BuildRequest) -> std::io::Result<BuildResult> {
+            Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "watch-only fixture"))
+        }
+
+        async fn do_build_cancellable(
+            &self,
+            _request: BuildRequest,
+            _cancellation: tokio::sync::watch::Receiver<bool>,
+        ) -> std::io::Result<BuildResult> {
+            if self.calls.fetch_add(1, Ordering::SeqCst) == 0
+                && let Some(sender) = self.cancel_after_warm.as_ref()
+            {
+                sender.send(true).unwrap();
+            }
+            Ok(BuildResult {
+                outputs: Vec::new(),
+                log: None,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn cancelled_mutable_watch_quarantines_without_clean_retry_or_success_report() {
+        let state = tempfile::tempdir().unwrap();
+        let (sender, cancellation) = tokio::sync::watch::channel(false);
+        let calls = Arc::new(AtomicU32::new(0));
+        let reports = WorkspaceReportCollector::default();
+        let service = StatefulWorkspaceBuildService::new(
+            WatchComparisonService {
+                calls: Arc::clone(&calls),
+                cancel_after_warm: Some(sender),
+            },
+            state.path(),
+            reports.clone(),
+        );
+        let mut workspace = request();
+        workspace.clean_rebuild_enabled = true;
+        let error = service
+            .do_build_cancellable(
+                BuildRequest {
+                    workspace: Some(workspace),
+                    ..Default::default()
+                },
+                cancellation,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::Interrupted);
+        assert_eq!(calls.load(Ordering::SeqCst), 1, "clean retry started after cancellation");
+        assert!(reports.take().is_empty(), "cancelled warm execution published a success report");
+        assert_eq!(
+            WorkspaceStore::new(state.path()).load_record("cargo-cache").unwrap().unwrap().state,
+            WorkspaceLeaseState::Quarantined,
+        );
+    }
+
+    #[tokio::test]
+    async fn completed_mutable_watch_compares_clean_output_and_releases_workspace() {
+        let state = tempfile::tempdir().unwrap();
+        let (_sender, cancellation) = tokio::sync::watch::channel(false);
+        let calls = Arc::new(AtomicU32::new(0));
+        let reports = WorkspaceReportCollector::default();
+        let service = StatefulWorkspaceBuildService::new(
+            WatchComparisonService {
+                calls: Arc::clone(&calls),
+                cancel_after_warm: None,
+            },
+            state.path(),
+            reports.clone(),
+        );
+        let mut workspace = request();
+        workspace.clean_rebuild_enabled = true;
+        service
+            .do_build_cancellable(
+                BuildRequest {
+                    workspace: Some(workspace),
+                    ..Default::default()
+                },
+                cancellation,
+            )
+            .await
+            .unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 2, "watch clean comparison was skipped");
+        let report = reports.take().pop().unwrap();
+        assert!(report.clean_comparison_performed);
+        assert!(report.clean_comparison_matched);
+        assert_eq!(report.cleanup, WorkspaceCleanupDisposition::Released);
+        assert_eq!(
+            WorkspaceStore::new(state.path()).load_record("cargo-cache").unwrap().unwrap().state,
+            WorkspaceLeaseState::Idle,
+        );
     }
 }

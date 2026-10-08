@@ -1,0 +1,52 @@
+[package]
+name = "remote-architecture-fixture"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+members = ["host-filesystem", "host-process", "host-network"]
+resolver = "2"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+crunch-remote-core = { path = "../../..", default-features = false }
+crunch-remote-app = { path = "../../../../crunch-remote-app", default-features = false }
+nix-compat = { path = "../../../../../vendor/nix-compat", optional = true }
+crunch-store = { path = "../../../../crunch-store", optional = true }
+tokio = { version = "=1.51.0", default-features = false, optional = true }
+cap-std = { version = "=4.0.2", optional = true }
+async-process = { version = "=2.5.0", optional = true }
+dotenvy = { version = "=0.15.7", optional = true }
+chrono = { version = "=0.4.44", optional = true }
+rand = { version = "=0.9.3", optional = true }
+ureq = { version = "=3.3.0", optional = true }
+secrecy = { version = "=0.10.3", optional = true }
+clap = { version = "=4.6.0", optional = true }
+serde_json = { version = "=1.0.149", optional = true }
+host-filesystem = { path = "host-filesystem", optional = true }
+host-process = { path = "host-process", optional = true }
+host-network = { path = "host-network", optional = true }
+
+[features]
+host-api = []
+snix = ["dep:nix-compat"]
+store = ["dep:crunch-store"]
+async-runtime = ["dep:tokio"]
+filesystem = ["dep:cap-std"]
+process = ["dep:async-process"]
+environment = ["dep:dotenvy"]
+clock = ["dep:chrono"]
+random = ["dep:rand"]
+network = ["dep:ureq"]
+credential = ["dep:secrecy"]
+cli = ["dep:clap"]
+rendering = ["dep:serde_json"]
+wrapped-filesystem = ["dep:host-filesystem"]
+wrapped-process = ["dep:host-process"]
+wrapped-network = ["dep:host-network"]
+
+[patch.crates-io]
+fuse-backend-rs = { path = "../../../../../vendor/fuse-backend-rs" }

@@ -910,7 +910,9 @@ impl PlanTrust {
         if self.trust_unsigned {
             return true;
         }
-        signing::verify_pathinfo_signatures_with_store_dir(path_info, &self.trusted_keys, &self.store_dir).is_trusted()
+        !self.trusted_keys.is_empty()
+            && signing::verify_pathinfo_signatures_with_store_dir(path_info, &self.trusted_keys, &self.store_dir)
+                .is_trusted()
     }
 }
 
@@ -963,6 +965,9 @@ mod tests {
             schema: "mantle-action-result-runtime-report-v1".to_string(),
             phase: "discovery".to_string(),
             action_ref: "action-b3:demo".to_string(),
+            unresolved_derivation: None,
+            resolved_derivation: None,
+            resolved_identity: None,
             disposition: "conflict".to_string(),
             selected_result_ref: None,
             selected_source_id: None,
@@ -997,6 +1002,32 @@ mod tests {
 
         std::fs::write(empty.join("pathinfo.redb"), b"fixture").unwrap();
         assert!(!state_dir_is_empty(&empty).unwrap());
+    }
+
+    #[test]
+    fn build_plan_without_trusted_keys_rejects_signed_cache_entry_without_panicking() {
+        let (keypair, _) = crunch_build::generate_keypair();
+        let mut path_info = PathInfo {
+            store_path: StorePath::from_name_and_digest_fixed("plan-signed", [29_u8; 20]).unwrap(),
+            node: snix_castore::Node::Symlink {
+                target: snix_castore::SymlinkTarget::try_from("offline-fixture").unwrap(),
+            },
+            references: Vec::new(),
+            nar_size: 1,
+            nar_sha256: [3_u8; 32],
+            signatures: Vec::new(),
+            deriver: None,
+            ca: None,
+        };
+        crunch_build::signing::sign_pathinfo_with_store_dir(&mut path_info, &keypair.signing_key, "/mantle/store");
+        let mut trust = PlanTrust {
+            trust_unsigned: false,
+            trusted_keys: Vec::new(),
+            store_dir: "/mantle/store".to_string(),
+        };
+        assert!(!trust.pathinfo_is_accepted(&path_info));
+        trust.trusted_keys.push(keypair.verifying_key);
+        assert!(trust.pathinfo_is_accepted(&path_info));
     }
 
     #[test]

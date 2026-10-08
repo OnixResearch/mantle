@@ -731,6 +731,7 @@ mod tests {
                 chunk_count: None,
                 blake3: blake3::hash(b"x").to_hex().to_string(),
             }],
+            store_path_attestation: None,
         }
     }
 

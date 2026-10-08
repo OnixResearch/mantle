@@ -1,6 +1,6 @@
 # Research-only Picolibc x86_64 Linux static diagnostic.
 #
-# This derivation builds the pinned Picolibc 1.8.12 x86_64-linux-gnu static
+# This derivation builds the pinned Picolibc x86_64-linux-gnu static
 # profile with the upstream Meson cross file. It is a diagnostic for the
 # `evaluate-picolibc-stagex-runtime` comparison only. It is not part of the
 # StageX lineage, the normalized provider graph, or any parity row. Meson and
@@ -15,12 +15,13 @@
 # bytes, and BLAKE3 identities in $out/share/picolibc-diagnostic/manifest.txt.
 
 let crunch = import "../lib/lib.ncl" in
+let pin = import "pins/generated/picolibc.json" in
 let src = import "picolibc-1.8.12-src.ncl" in
 let tc = import "picolibc-diagnostic-tools.ncl" in
 
 {
   picolibc-diagnostic = {
-    name = "picolibc-1.8.12-x86_64-linux-diagnostic",
+    name = "picolibc-" ++ pin.version ++ "-x86_64-linux-diagnostic",
     builder = "/bin/sh",
     system = 'x86_64-linux,
     args = [
@@ -29,7 +30,7 @@ let tc = import "picolibc-diagnostic-tools.ncl" in
         set -eu
         BB=/bin/busybox
 
-        SRC=$(echo $NIX_STORE/*-picolibc-1.8.12-src)
+        SRC=$(echo $NIX_STORE/*-picolibc-%{pin.version}-src)
         $BB mkdir -p work shims
         $BB cp -r "$SRC" work/src
         $BB chmod -R u+w work/src
@@ -83,7 +84,7 @@ let tc = import "picolibc-diagnostic-tools.ncl" in
 
         # Deterministic fact manifest for the comparison core.
         {
-          echo "picolibc_version=1.8.12"
+          echo "picolibc_version=%{pin.version}"
           echo "profile=x86_64-linux-gnu-static"
           echo "cross_file=scripts/cross-x86_64-linux-gnu.txt"
           echo "meson=$(%{tc.meson}/bin/meson --version)"

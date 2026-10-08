@@ -705,6 +705,88 @@ fn reviewed_file_generation_applies_current_plan_and_tracks_state() {
 }
 
 #[test]
+fn reviewed_file_generation_rejects_plan_publication_failure() {
+    let fixture = tempfile::tempdir().unwrap();
+    copy_reviewed_filegen_project(fixture.path());
+    let plan_path = fixture.path().join("reviewed-plan.json");
+    std::fs::create_dir(&plan_path).unwrap();
+    let failed_plan =
+        run_project_command(fixture.path(), &["--json", "filegen", "plan", "--plan-out", plan_path.to_str().unwrap()]);
+    assert_eq!(failed_plan.status.code(), Some(3));
+    assert!(failed_plan.stdout.is_empty(), "failed plan publication must not report success");
+    let failure: serde_json::Value = serde_json::from_slice(&failed_plan.stderr).unwrap();
+    assert_eq!(failure["code"], 3);
+    assert_eq!(failure["kind"], "internal");
+    assert!(plan_path.is_dir(), "failed publication must not replace the destination");
+}
+
+#[test]
+fn reviewed_file_generation_rejects_unsupported_schema_before_applying() {
+    let fixture = tempfile::tempdir().unwrap();
+    copy_reviewed_filegen_project(fixture.path());
+    let reviewed = fixture.path().join("reviewed-plan.json");
+    let mut plan = parse_successful_json(
+        run_project_command(fixture.path(), &["--json", "filegen", "plan", "--plan-out", reviewed.to_str().unwrap()]),
+        "filegen plan",
+    );
+    assert_eq!(plan["schema"], "mantle-project-filegen-plan-v1");
+    assert!(!fixture.path().join("generated").exists());
+    assert!(!fixture.path().join(".mantle/filegen-state.json").exists());
+
+    plan["schema"] = serde_json::Value::String("mantle-project-filegen-plan-v999".to_string());
+    let unsupported = fixture.path().join("unsupported-plan.json");
+    std::fs::write(&unsupported, serde_json::to_vec_pretty(&plan).unwrap()).unwrap();
+    let failed = run_project_command(
+        fixture.path(),
+        &["--json", "filegen", "apply", "--plan", unsupported.to_str().unwrap()],
+    );
+    assert_eq!(failed.status.code(), Some(3));
+    assert!(failed.stderr.is_empty(), "rejected reviewed plan must return a blocker, not panic");
+    let blockers: serde_json::Value = serde_json::from_slice(&failed.stdout).unwrap();
+    let blockers = blockers.as_array().unwrap();
+    assert_eq!(blockers.len(), 1);
+    assert_eq!(blockers[0]["code"], "unsupported-reviewed-plan-schema");
+    assert_eq!(blockers[0]["target"], "<plan>");
+    let message = blockers[0]["message"].as_str().unwrap();
+    assert!(message.contains("mantle-project-filegen-plan-v999"), "{message}");
+    assert!(message.contains("mantle-project-filegen-plan-v1"), "{message}");
+    assert!(!fixture.path().join("generated").exists());
+    assert!(!fixture.path().join(".mantle/filegen-state.json").exists());
+}
+
+#[test]
+fn reviewed_file_generation_classifies_a_partial_state_before_plan_reporting() {
+    let fixture = tempfile::tempdir().unwrap();
+    copy_reviewed_filegen_project(fixture.path());
+    let reviewed = fixture.path().join("reviewed-plan.json");
+    parse_successful_json(
+        run_project_command(fixture.path(), &["--json", "filegen", "plan", "--plan-out", reviewed.to_str().unwrap()]),
+        "initial filegen plan",
+    );
+    parse_successful_json(
+        run_project_command(fixture.path(), &["--json", "filegen", "apply", "--plan", reviewed.to_str().unwrap()]),
+        "initial filegen apply",
+    );
+    let state_path = fixture.path().join(".mantle/filegen-state.json");
+    let mut state: serde_json::Value = serde_json::from_slice(&std::fs::read(&state_path).unwrap()).unwrap();
+    state["files"].as_object_mut().unwrap().remove("generated/app-config.json").unwrap();
+    std::fs::write(&state_path, serde_json::to_vec_pretty(&state).unwrap()).unwrap();
+    std::fs::write(fixture.path().join("generated/app-config.json"), b"locally edited\n").unwrap();
+    let conflicted = parse_failed_json(
+        run_project_command(fixture.path(), &["--json", "filegen", "plan"]),
+        "partial-state filegen plan",
+    );
+    assert!(conflicted["blockers"].as_array().unwrap().iter().any(|blocker| {
+        blocker["code"] == "existing-file-conflict" && blocker["target"] == "generated/app-config.json"
+    }));
+    assert_eq!(std::fs::read(fixture.path().join("generated/app-config.json")).unwrap(), b"locally edited\n");
+    assert_eq!(
+        std::fs::read_to_string(fixture.path().join("generated/README.txt")).unwrap(),
+        "generated only after a reviewed Mantle plan\n"
+    );
+}
+
+#[test]
 fn reviewed_file_generation_rejects_drift_conflict_and_escape() {
     let drift_fixture = tempfile::tempdir().unwrap();
     copy_reviewed_filegen_project(drift_fixture.path());
@@ -741,10 +823,19 @@ fn reviewed_file_generation_rejects_drift_conflict_and_escape() {
     copy_reviewed_filegen_project(conflict_fixture.path());
     std::fs::create_dir_all(conflict_fixture.path().join("generated")).unwrap();
     std::fs::write(conflict_fixture.path().join("generated/app-config.json"), b"unmanaged\n").unwrap();
+    let conflict_path = conflict_fixture.path().join("conflict-plan.json");
     let conflict = parse_failed_json(
-        run_project_command(conflict_fixture.path(), &["--json", "filegen", "plan"]),
+        run_project_command(conflict_fixture.path(), &[
+            "--json",
+            "filegen",
+            "plan",
+            "--plan-out",
+            conflict_path.to_str().unwrap(),
+        ]),
         "filegen conflict plan",
     );
+    let saved_conflict: serde_json::Value = serde_json::from_slice(&std::fs::read(&conflict_path).unwrap()).unwrap();
+    assert_eq!(saved_conflict, conflict, "blocked plans must still publish the reviewed artifact");
     assert!(
         conflict["blockers"]
             .as_array()

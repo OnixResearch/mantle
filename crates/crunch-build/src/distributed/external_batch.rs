@@ -1,35 +1,35 @@
-//! Pure protocol and reconciliation core for external batch dispatchers.
+//! Serde protocol adapter for external batch dispatchers.
 //!
-//! The coordinator shell owns process execution, clocks, persistence, worker
-//! registration, and output admission. This module only normalizes bounded
-//! requests, derives BLAKE3 identities, validates responses, and decides how a
-//! current fenced allocation should reconcile.
+//! The no_std core derives identities and makes bounded, fenced decisions.
+//! This adapter keeps the accepted v1 JSON resource projection and wire types;
+//! the coordinator shell owns subprocesses, clocks, persistence, worker
+//! registration, and output admission.
 //!
 //! r[impl external_batch_dispatchers.protocol]
 //! r[impl external_batch_dispatchers.canonical_identity]
 //! r[impl external_batch_dispatchers.resources]
 //! r[impl external_batch_dispatchers.fenced_lifecycle]
 
+use crunch_remote_core::external_batch as core_batch;
+use crunch_remote_core::attempt::RemoteAttemptId;
+use crunch_remote_core::attempt::RemoteFenceGeneration;
+use crunch_remote_core::attempt::RemoteJobId;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::RemoteAttemptId;
-use super::RemoteFenceGeneration;
-use super::RemoteJobId;
 use super::RemoteNamedResourceQuantity;
 use super::RemoteResourceRequirements;
 use super::canonical_remote_resource_requirements;
 
-pub const EXTERNAL_BATCH_PROTOCOL_SCHEMA: &str = "mantle-batch-dispatch-adapter-v1";
-pub const EXTERNAL_BATCH_DISPATCH_DOMAIN: &str = "mantle-external-batch-dispatch-v1";
-pub const EXTERNAL_BATCH_OPERATION_DOMAIN: &str = "mantle-external-batch-operation-v1";
-pub const EXTERNAL_BATCH_CLAIM_SCOPE: &str = "external-allocation-control-only";
-pub const EXTERNAL_BATCH_NON_CLAIM: &str = "external scheduler identity and state do not authorize workers, transfer output trust, prove execution success, or admit outputs";
+pub const EXTERNAL_BATCH_PROTOCOL_SCHEMA: &str = core_batch::PROTOCOL_SCHEMA;
+pub const EXTERNAL_BATCH_DISPATCH_DOMAIN: &str = core_batch::DISPATCH_DOMAIN;
+pub const EXTERNAL_BATCH_OPERATION_DOMAIN: &str = core_batch::OPERATION_DOMAIN;
+pub const EXTERNAL_BATCH_CLAIM_SCOPE: &str = core_batch::CLAIM_SCOPE;
+pub const EXTERNAL_BATCH_NON_CLAIM: &str = core_batch::NON_CLAIM;
 pub const MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES: usize = 256;
 pub const MAX_EXTERNAL_BATCH_REASON_BYTES: usize = 128;
 pub const MAX_EXTERNAL_BATCH_TIMEOUT_SECS: u64 = 604_800;
 pub const MAX_EXTERNAL_BATCH_RECONCILE_ATTEMPTS: u32 = 1_024;
-const BLAKE3_HEX_LENGTH: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -42,12 +42,7 @@ pub enum ExternalBatchOperationKind {
 
 impl ExternalBatchOperationKind {
     pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Submit => "submit",
-            Self::Observe => "observe",
-            Self::Cancel => "cancel",
-            Self::Reconcile => "reconcile",
-        }
+        core_batch_kind(self).as_str()
     }
 }
 
@@ -65,7 +60,28 @@ pub enum ExternalBatchJobState {
 
 impl ExternalBatchJobState {
     pub const fn is_terminal(self) -> bool {
-        matches!(self, Self::Succeeded | Self::Failed | Self::Cancelled)
+        core_batch_state(self).is_terminal()
+    }
+}
+
+const fn core_batch_kind(kind: ExternalBatchOperationKind) -> core_batch::BatchKind {
+    match kind {
+        ExternalBatchOperationKind::Submit => core_batch::BatchKind::Submit,
+        ExternalBatchOperationKind::Observe => core_batch::BatchKind::Observe,
+        ExternalBatchOperationKind::Cancel => core_batch::BatchKind::Cancel,
+        ExternalBatchOperationKind::Reconcile => core_batch::BatchKind::Reconcile,
+    }
+}
+
+const fn core_batch_state(state: ExternalBatchJobState) -> core_batch::BatchState {
+    match state {
+        ExternalBatchJobState::Submitted => core_batch::BatchState::Submitted,
+        ExternalBatchJobState::Pending => core_batch::BatchState::Pending,
+        ExternalBatchJobState::Running => core_batch::BatchState::Running,
+        ExternalBatchJobState::Succeeded => core_batch::BatchState::Succeeded,
+        ExternalBatchJobState::Failed => core_batch::BatchState::Failed,
+        ExternalBatchJobState::Cancelled => core_batch::BatchState::Cancelled,
+        ExternalBatchJobState::Unknown => core_batch::BatchState::Unknown,
     }
 }
 
@@ -173,6 +189,63 @@ pub enum ExternalBatchReconcileDecision {
     MarkLost,
 }
 
+const fn core_batch_limits(limits: ExternalBatchLimits) -> core_batch::BatchLimits {
+    core_batch::BatchLimits {
+        startup_timeout_secs: limits.startup_timeout_secs,
+        terminal_timeout_secs: limits.terminal_timeout_secs,
+        max_reconcile_attempts: limits.max_reconcile_attempts,
+    }
+}
+
+fn core_operation_facts(operation: &ExternalBatchOperation) -> core_batch::BatchOperationFacts<'_> {
+    core_batch::BatchOperationFacts {
+        schema: &operation.schema,
+        kind: core_batch_kind(operation.operation),
+        operation_id_blake3: &operation.operation_id_blake3,
+        dispatch_id_blake3: &operation.dispatch_id_blake3,
+        normalized_build_key: &operation.normalized_build_key,
+        dispatcher_profile_ref_blake3: &operation.dispatcher_profile_ref_blake3,
+        worker_bootstrap_ref_blake3: &operation.worker_bootstrap_ref_blake3,
+        adapter_instance_id: &operation.adapter_instance_id,
+        dispatcher_generation: operation.dispatcher_generation,
+        job_id: operation.job_id.as_str(),
+        attempt_id: operation.attempt_id.as_str(),
+        fence_generation: operation.fence_generation.get(),
+        external_job_id: operation.external_job_id.as_deref(),
+        claim_scope: &operation.claim_scope,
+        non_claim: &operation.non_claim,
+        limits: core_batch_limits(operation.limits),
+    }
+}
+
+fn core_response_facts(response: &ExternalBatchOperationResponse) -> core_batch::BatchResponseFacts<'_> {
+    core_batch::BatchResponseFacts {
+        schema: &response.schema,
+        kind: core_batch_kind(response.operation),
+        operation_id_blake3: &response.operation_id_blake3,
+        dispatch_id_blake3: &response.dispatch_id_blake3,
+        adapter_instance_id: &response.adapter_instance_id,
+        dispatcher_generation: response.dispatcher_generation,
+        job_id: response.job_id.as_str(),
+        attempt_id: response.attempt_id.as_str(),
+        fence_generation: response.fence_generation.get(),
+        state: core_batch_state(response.state),
+        external_job_id: response.external_job_id.as_deref(),
+        reason_code: &response.reason_code,
+        non_claim: &response.non_claim,
+    }
+}
+
+fn host_reconcile_decision(decision: core_batch::BatchDecision) -> ExternalBatchReconcileDecision {
+    match decision {
+        core_batch::BatchDecision::Reattach => ExternalBatchReconcileDecision::Reattach,
+        core_batch::BatchDecision::AwaitWorkerRegistration => ExternalBatchReconcileDecision::AwaitWorkerRegistration,
+        core_batch::BatchDecision::PreserveUnknown => ExternalBatchReconcileDecision::PreserveUnknown,
+        core_batch::BatchDecision::Resubmit => ExternalBatchReconcileDecision::Resubmit,
+        core_batch::BatchDecision::MarkLost => ExternalBatchReconcileDecision::MarkLost,
+    }
+}
+
 pub fn project_external_batch_resources(
     requirements: &RemoteResourceRequirements,
 ) -> Result<ExternalBatchResourceProjection, String> {
@@ -218,32 +291,28 @@ pub fn plan_external_batch_operation(input: ExternalBatchOperationInput) -> Resu
         claim_scope: EXTERNAL_BATCH_CLAIM_SCOPE.to_string(),
         non_claim: EXTERNAL_BATCH_NON_CLAIM.to_string(),
     };
-    assert!(is_blake3_hex_digest(&operation.operation_id_blake3));
-    assert!(is_blake3_hex_digest(&operation.dispatch_id_blake3));
+    assert!(crunch_remote_core::output::is_blake3_hex_digest(&operation.operation_id_blake3));
+    assert!(crunch_remote_core::output::is_blake3_hex_digest(&operation.dispatch_id_blake3));
     Ok(operation)
 }
 
 pub fn plan_external_batch_followup(
     submit: &ExternalBatchOperation,
     kind: ExternalBatchOperationKind,
-    external_job_id: String,
+    external_job_id: Option<String>,
 ) -> Result<ExternalBatchOperation, String> {
     validate_operation(submit)?;
-    if submit.operation != ExternalBatchOperationKind::Submit || submit.external_job_id.is_some() {
-        return Err("external-batch-followup-submit-basis-invalid".to_string());
-    }
-    if kind == ExternalBatchOperationKind::Submit {
-        return Err("external-batch-followup-kind-submit".to_string());
-    }
-    validate_bounded_identifier(BoundedIdentifier {
-        error_label: "external-batch-external-job-id",
-        value: &external_job_id,
-        max_bytes: MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES,
-    })?;
+    core_batch::validate_followup(
+        core_operation_facts(submit),
+        core_batch_kind(kind),
+        external_job_id.as_deref(),
+        MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES,
+    )
+    .map_err(core_batch::BatchError::diagnostic)?;
     let mut followup = submit.clone();
     followup.operation = kind;
     followup.operation_id_blake3 = derive_operation_id(kind, &submit.dispatch_id_blake3)?;
-    followup.external_job_id = Some(external_job_id);
+    followup.external_job_id = external_job_id;
     assert_eq!(followup.dispatch_id_blake3, submit.dispatch_id_blake3);
     assert_ne!(followup.operation_id_blake3, submit.operation_id_blake3);
     Ok(followup)
@@ -254,48 +323,15 @@ pub fn validate_external_batch_response(
     response: &ExternalBatchOperationResponse,
 ) -> Result<(), String> {
     validate_operation(request)?;
-    if response.schema != EXTERNAL_BATCH_PROTOCOL_SCHEMA {
-        return Err("external-batch-response-schema-unsupported".to_string());
-    }
-    if response.operation != request.operation || response.operation_id_blake3 != request.operation_id_blake3 {
-        return Err("external-batch-response-operation-mismatch".to_string());
-    }
-    if response.dispatch_id_blake3 != request.dispatch_id_blake3 {
-        return Err("external-batch-response-dispatch-mismatch".to_string());
-    }
-    if response.adapter_instance_id != request.adapter_instance_id
-        || response.dispatcher_generation != request.dispatcher_generation
-    {
-        return Err("external-batch-response-adapter-fence-mismatch".to_string());
-    }
-    if response.job_id != request.job_id
-        || response.attempt_id != request.attempt_id
-        || response.fence_generation != request.fence_generation
-    {
-        return Err("external-batch-response-attempt-fence-mismatch".to_string());
-    }
-    validate_bounded_identifier(BoundedIdentifier {
-        error_label: "external-batch-response-reason",
-        value: &response.reason_code,
-        max_bytes: MAX_EXTERNAL_BATCH_REASON_BYTES,
-    })?;
-    if response.non_claim != EXTERNAL_BATCH_NON_CLAIM {
-        return Err("external-batch-response-non-claim-invalid".to_string());
-    }
-    validate_external_job_id(response.state, response.external_job_id.as_deref())?;
-    validate_response_external_job_id(request.external_job_id.as_deref(), response.external_job_id.as_deref())?;
+    core_batch::validate_response(
+        core_operation_facts(request),
+        core_response_facts(response),
+        MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES,
+        MAX_EXTERNAL_BATCH_REASON_BYTES,
+    )
+    .map_err(core_batch::BatchError::diagnostic)?;
     assert!(response.observed_unix_s > 0);
     assert_eq!(response.dispatch_id_blake3, request.dispatch_id_blake3);
-    Ok(())
-}
-
-fn validate_response_external_job_id(expected: Option<&str>, observed: Option<&str>) -> Result<(), String> {
-    let Some(expected) = expected else {
-        return Ok(());
-    };
-    if observed != Some(expected) {
-        return Err("external-batch-response-job-id-conflict".to_string());
-    }
     Ok(())
 }
 
@@ -303,27 +339,8 @@ pub fn validate_external_batch_state_transition(
     previous: ExternalBatchJobState,
     next: ExternalBatchJobState,
 ) -> Result<(), String> {
-    if previous == ExternalBatchJobState::Unknown || previous == next {
-        return Ok(());
-    }
-    if previous.is_terminal() {
-        return Err("external-batch-state-transition-terminal-conflict".to_string());
-    }
-    debug_assert_ne!(previous, ExternalBatchJobState::Unknown);
-    debug_assert_ne!(previous, next);
-    match (previous, next) {
-        (ExternalBatchJobState::Submitted, _)
-        | (ExternalBatchJobState::Pending, ExternalBatchJobState::Running)
-        | (ExternalBatchJobState::Pending, ExternalBatchJobState::Succeeded)
-        | (ExternalBatchJobState::Pending, ExternalBatchJobState::Failed)
-        | (ExternalBatchJobState::Pending, ExternalBatchJobState::Cancelled)
-        | (ExternalBatchJobState::Pending, ExternalBatchJobState::Unknown)
-        | (ExternalBatchJobState::Running, ExternalBatchJobState::Succeeded)
-        | (ExternalBatchJobState::Running, ExternalBatchJobState::Failed)
-        | (ExternalBatchJobState::Running, ExternalBatchJobState::Cancelled)
-        | (ExternalBatchJobState::Running, ExternalBatchJobState::Unknown) => Ok(()),
-        _ => Err("external-batch-state-transition-invalid".to_string()),
-    }
+    core_batch::validate_state_transition(core_batch_state(previous), core_batch_state(next))
+        .map_err(core_batch::BatchError::diagnostic)
 }
 
 pub fn decide_external_batch_reconciliation(
@@ -332,133 +349,46 @@ pub fn decide_external_batch_reconciliation(
     facts: ExternalBatchReconcileFacts,
 ) -> Result<ExternalBatchReconcileDecision, String> {
     validate_external_batch_response(request, response)?;
-    if facts.reconcile_attempt > request.limits.max_reconcile_attempts {
-        return Err("external-batch-reconcile-attempt-limit-exceeded".to_string());
-    }
-    if facts.worker_registered {
-        return Ok(ExternalBatchReconcileDecision::Reattach);
-    }
-    if facts.overall_deadline_exceeded {
-        return Ok(ExternalBatchReconcileDecision::MarkLost);
-    }
-    let has_reconcile_attempts_remaining = facts.reconcile_attempt < request.limits.max_reconcile_attempts;
-    let decision = match response.state {
-        ExternalBatchJobState::Submitted | ExternalBatchJobState::Pending | ExternalBatchJobState::Running => {
-            ExternalBatchReconcileDecision::AwaitWorkerRegistration
-        }
-        ExternalBatchJobState::Unknown => ExternalBatchReconcileDecision::PreserveUnknown,
-        ExternalBatchJobState::Succeeded | ExternalBatchJobState::Failed | ExternalBatchJobState::Cancelled => {
-            if has_reconcile_attempts_remaining {
-                ExternalBatchReconcileDecision::Resubmit
-            } else {
-                ExternalBatchReconcileDecision::MarkLost
-            }
-        }
-    };
-    assert!(!facts.worker_registered);
-    assert!(facts.reconcile_attempt <= request.limits.max_reconcile_attempts);
-    Ok(decision)
+    core_batch::decide_reconciliation(
+        core_batch_state(response.state),
+        facts.worker_registered,
+        facts.reconcile_attempt,
+        request.limits.max_reconcile_attempts,
+        facts.overall_deadline_exceeded,
+    )
+    .map(host_reconcile_decision)
+    .map_err(core_batch::BatchError::diagnostic)
 }
 
 fn validate_operation_input(input: &ExternalBatchOperationInput) -> Result<(), String> {
-    validate_bounded_identifier(BoundedIdentifier {
-        error_label: "external-batch-adapter-instance",
-        value: &input.adapter_instance_id,
-        max_bytes: MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES,
-    })?;
-    validate_bounded_identifier(BoundedIdentifier {
-        error_label: "external-batch-worker-endpoint",
-        value: &input.expected_worker_endpoint_id,
-        max_bytes: MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES,
-    })?;
-    validate_bounded_identifier(BoundedIdentifier {
-        error_label: "external-batch-provider-class",
-        value: &input.provider_class,
-        max_bytes: MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES,
-    })?;
-    validate_bounded_identifier(BoundedIdentifier {
-        error_label: "external-batch-semantic-capability-class",
-        value: &input.semantic_capability_class,
-        max_bytes: MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES,
-    })?;
-    if !is_blake3_hex_digest(&input.dispatcher_profile_ref_blake3)
-        || !is_blake3_hex_digest(&input.worker_bootstrap_ref_blake3)
-    {
-        return Err("external-batch-profile-or-bootstrap-ref-invalid".to_string());
-    }
-    if input.dispatcher_generation == 0 {
-        return Err("external-batch-dispatcher-generation-zero".to_string());
-    }
-    if !is_blake3_hex_digest(&input.normalized_build_key) {
-        return Err("external-batch-normalized-build-key-invalid".to_string());
-    }
-    validate_external_batch_limits(input.limits)?;
-    match (input.kind, input.external_job_id.as_deref()) {
-        (ExternalBatchOperationKind::Submit, None) => {}
-        (ExternalBatchOperationKind::Submit, Some(_)) => {
-            return Err("external-batch-submit-external-job-id-present".to_string());
-        }
-        (_, Some(external_job_id)) => validate_bounded_identifier(BoundedIdentifier {
-            error_label: "external-batch-external-job-id",
-            value: external_job_id,
-            max_bytes: MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES,
-        })?,
-        (_, None) => return Err("external-batch-external-job-id-missing".to_string()),
-    }
-    debug_assert!(input.dispatcher_generation > 0);
-    debug_assert!(is_blake3_hex_digest(&input.normalized_build_key));
-    Ok(())
+    core_batch::validate_input(
+        core_batch::BatchInputFacts {
+            kind: core_batch_kind(input.kind),
+            adapter_instance_id: &input.adapter_instance_id,
+            dispatcher_profile_ref_blake3: &input.dispatcher_profile_ref_blake3,
+            provider_class: &input.provider_class,
+            worker_bootstrap_ref_blake3: &input.worker_bootstrap_ref_blake3,
+            semantic_capability_class: &input.semantic_capability_class,
+            dispatcher_generation: input.dispatcher_generation,
+            normalized_build_key: &input.normalized_build_key,
+            expected_worker_endpoint_id: &input.expected_worker_endpoint_id,
+            limits: core_batch_limits(input.limits),
+            external_job_id: input.external_job_id.as_deref(),
+        },
+        MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES,
+        MAX_EXTERNAL_BATCH_TIMEOUT_SECS,
+        MAX_EXTERNAL_BATCH_RECONCILE_ATTEMPTS,
+    )
+    .map_err(core_batch::BatchError::diagnostic)
 }
 
 fn validate_operation(operation: &ExternalBatchOperation) -> Result<(), String> {
-    if operation.schema != EXTERNAL_BATCH_PROTOCOL_SCHEMA {
-        return Err("external-batch-operation-schema-unsupported".to_string());
-    }
-    let operation_digests = [
-        operation.operation_id_blake3.as_str(),
-        operation.dispatch_id_blake3.as_str(),
-        operation.normalized_build_key.as_str(),
-        operation.dispatcher_profile_ref_blake3.as_str(),
-        operation.worker_bootstrap_ref_blake3.as_str(),
-    ];
-    let has_invalid_digest = operation_digests.iter().any(|digest| !is_blake3_hex_digest(digest));
-    if has_invalid_digest {
-        return Err("external-batch-operation-digest-invalid".to_string());
-    }
-    if operation.claim_scope != EXTERNAL_BATCH_CLAIM_SCOPE || operation.non_claim != EXTERNAL_BATCH_NON_CLAIM {
-        return Err("external-batch-operation-claim-boundary-invalid".to_string());
-    }
-    validate_external_batch_limits(operation.limits)?;
-    debug_assert!(operation_digests.iter().all(|digest| is_blake3_hex_digest(digest)));
-    debug_assert_eq!(operation.claim_scope, EXTERNAL_BATCH_CLAIM_SCOPE);
-    Ok(())
-}
-
-fn validate_external_batch_limits(limits: ExternalBatchLimits) -> Result<(), String> {
-    if limits.startup_timeout_secs == 0 || limits.startup_timeout_secs > MAX_EXTERNAL_BATCH_TIMEOUT_SECS {
-        return Err("external-batch-startup-timeout-invalid".to_string());
-    }
-    if limits.terminal_timeout_secs == 0 || limits.terminal_timeout_secs > MAX_EXTERNAL_BATCH_TIMEOUT_SECS {
-        return Err("external-batch-terminal-timeout-invalid".to_string());
-    }
-    if limits.max_reconcile_attempts == 0 || limits.max_reconcile_attempts > MAX_EXTERNAL_BATCH_RECONCILE_ATTEMPTS {
-        return Err("external-batch-reconcile-attempt-limit-invalid".to_string());
-    }
-    Ok(())
-}
-
-fn validate_external_job_id(state: ExternalBatchJobState, external_job_id: Option<&str>) -> Result<(), String> {
-    if external_job_id.is_none() && state != ExternalBatchJobState::Unknown {
-        return Err("external-batch-response-job-id-missing".to_string());
-    }
-    if let Some(external_job_id) = external_job_id {
-        validate_bounded_identifier(BoundedIdentifier {
-            error_label: "external-batch-response-job-id",
-            value: external_job_id,
-            max_bytes: MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES,
-        })?;
-    }
-    Ok(())
+    core_batch::validate_operation(
+        core_operation_facts(operation),
+        MAX_EXTERNAL_BATCH_TIMEOUT_SECS,
+        MAX_EXTERNAL_BATCH_RECONCILE_ATTEMPTS,
+    )
+    .map_err(core_batch::BatchError::diagnostic)
 }
 
 fn derive_dispatch_id(
@@ -467,61 +397,25 @@ fn derive_dispatch_id(
 ) -> Result<String, String> {
     let resource_json = serde_json::to_vec(resources)
         .map_err(|error| format!("external-batch-resource-projection-serialize-failed: {error}"))?;
-    let mut hasher = blake3::Hasher::new();
-    hash_field(&mut hasher, "domain", EXTERNAL_BATCH_DISPATCH_DOMAIN.as_bytes())?;
-    hash_field(&mut hasher, "adapter-instance", input.adapter_instance_id.as_bytes())?;
-    hash_field(&mut hasher, "dispatcher-profile", input.dispatcher_profile_ref_blake3.as_bytes())?;
-    hash_field(&mut hasher, "provider-class", input.provider_class.as_bytes())?;
-    hash_field(&mut hasher, "worker-bootstrap", input.worker_bootstrap_ref_blake3.as_bytes())?;
-    hash_field(&mut hasher, "semantic-capability", input.semantic_capability_class.as_bytes())?;
-    hash_field(&mut hasher, "dispatcher-generation", &input.dispatcher_generation.to_le_bytes())?;
-    hash_field(&mut hasher, "normalized-build-key", input.normalized_build_key.as_bytes())?;
-    hash_field(&mut hasher, "job-id", input.job_id.as_str().as_bytes())?;
-    hash_field(&mut hasher, "attempt-id", input.attempt_id.as_str().as_bytes())?;
-    hash_field(&mut hasher, "fence-generation", &input.fence_generation.get().to_le_bytes())?;
-    hash_field(&mut hasher, "worker-endpoint", input.expected_worker_endpoint_id.as_bytes())?;
-    hash_field(&mut hasher, "resources", &resource_json)?;
-    Ok(hasher.finalize().to_hex().to_string())
+    core_batch::derive_dispatch_id(core_batch::BatchDispatchFacts {
+        adapter_instance_id: &input.adapter_instance_id,
+        dispatcher_profile_ref_blake3: &input.dispatcher_profile_ref_blake3,
+        provider_class: &input.provider_class,
+        worker_bootstrap_ref_blake3: &input.worker_bootstrap_ref_blake3,
+        semantic_capability_class: &input.semantic_capability_class,
+        dispatcher_generation: input.dispatcher_generation,
+        normalized_build_key: &input.normalized_build_key,
+        job_id: input.job_id.as_str(),
+        attempt_id: input.attempt_id.as_str(),
+        fence_generation: input.fence_generation.get(),
+        expected_worker_endpoint_id: &input.expected_worker_endpoint_id,
+        resource_projection_json: &resource_json,
+    })
+    .map_err(core_batch::BatchError::diagnostic)
 }
 
 fn derive_operation_id(kind: ExternalBatchOperationKind, dispatch_id_blake3: &str) -> Result<String, String> {
-    let mut hasher = blake3::Hasher::new();
-    hash_field(&mut hasher, "domain", EXTERNAL_BATCH_OPERATION_DOMAIN.as_bytes())?;
-    hash_field(&mut hasher, "operation", kind.as_str().as_bytes())?;
-    hash_field(&mut hasher, "dispatch", dispatch_id_blake3.as_bytes())?;
-    Ok(hasher.finalize().to_hex().to_string())
-}
-
-fn hash_field(hasher: &mut blake3::Hasher, label: &str, value: &[u8]) -> Result<(), String> {
-    let label_length_bytes =
-        u64::try_from(label.len()).map_err(|_| "external-batch-hash-label-length-overflow".to_string())?;
-    let value_length_bytes =
-        u64::try_from(value.len()).map_err(|_| "external-batch-hash-value-length-overflow".to_string())?;
-    hasher.update(&label_length_bytes.to_le_bytes());
-    hasher.update(label.as_bytes());
-    hasher.update(&value_length_bytes.to_le_bytes());
-    hasher.update(value);
-    Ok(())
-}
-
-struct BoundedIdentifier<'a> {
-    error_label: &'static str,
-    value: &'a str,
-    max_bytes: usize,
-}
-
-fn validate_bounded_identifier(input: BoundedIdentifier<'_>) -> Result<(), String> {
-    if input.value.is_empty() || input.value.len() > input.max_bytes {
-        return Err(format!("{}-length-invalid", input.error_label));
-    }
-    if input.value.chars().any(char::is_control) {
-        return Err(format!("{}-control-character", input.error_label));
-    }
-    Ok(())
-}
-
-fn is_blake3_hex_digest(value: &str) -> bool {
-    value.len() == BLAKE3_HEX_LENGTH && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    core_batch::derive_operation_id(core_batch_kind(kind), dispatch_id_blake3).map_err(core_batch::BatchError::diagnostic)
 }
 
 #[cfg(test)]
@@ -645,18 +539,25 @@ mod tests {
     }
 
     #[test]
-    fn followup_preserves_dispatch_identity_and_requires_scheduler_identity() {
+    fn followup_preserves_dispatch_identity_and_requires_scheduler_identity_except_reconcile() {
         let submit = plan_external_batch_operation(fixture_input(ExternalBatchOperationKind::Submit, None))
             .expect("submit plans");
         let observe =
-            plan_external_batch_followup(&submit, ExternalBatchOperationKind::Observe, "slurm-42".to_string())
+            plan_external_batch_followup(&submit, ExternalBatchOperationKind::Observe, Some("slurm-42".to_string()))
                 .expect("followup plans");
-        let missing = plan_external_batch_followup(&submit, ExternalBatchOperationKind::Cancel, String::new())
+        let reconcile = plan_external_batch_followup(&submit, ExternalBatchOperationKind::Reconcile, None)
+            .expect("reconcile by stable dispatch identity plans");
+        let missing = plan_external_batch_followup(&submit, ExternalBatchOperationKind::Cancel, None)
+            .expect_err("cancel without verified scheduler identity rejected");
+        let empty = plan_external_batch_followup(&submit, ExternalBatchOperationKind::Observe, Some(String::new()))
             .expect_err("empty scheduler identity rejected");
 
         assert_eq!(observe.dispatch_id_blake3, submit.dispatch_id_blake3);
-        assert_ne!(observe.operation_id_blake3, submit.operation_id_blake3);
-        assert_eq!(missing, "external-batch-external-job-id-length-invalid");
+        assert_eq!(reconcile.dispatch_id_blake3, submit.dispatch_id_blake3);
+        assert_eq!(reconcile.external_job_id, None);
+        assert_ne!(reconcile.operation_id_blake3, submit.operation_id_blake3);
+        assert_eq!(missing, "external-batch-external-job-id-missing");
+        assert_eq!(empty, "external-batch-external-job-id-length-invalid");
     }
 
     #[test]

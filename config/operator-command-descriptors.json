@@ -726,6 +726,72 @@
     "supports_json": true
   },
   {
+    "path": "bootstrap-pin",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Check or apply reviewable bootstrap source pin updates",
+    "supports_json": true
+  },
+  {
+    "path": "bootstrap-pin apply",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--plan",
+      "--reviewed",
+      "--root",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Verify and apply a reviewed plan to TOML pins and derived Nickel readers",
+    "supports_json": true
+  },
+  {
+    "path": "bootstrap-pin check",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--cache-dir",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--plan",
+      "--root",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Poll all declared upstream releases and save a preimage-bound plan",
+    "supports_json": true
+  },
+  {
     "path": "build",
     "aliases": [],
     "flags": [
@@ -2946,6 +3012,71 @@
       "-v"
     ],
     "help": "Validate and render a side-effect-free replay plan",
+    "supports_json": true
+  },
+  {
+    "path": "remote live",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Serve or follow transient build facts outside build and store authority",
+    "supports_json": true
+  },
+  {
+    "path": "remote live serve",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--socket",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Serve bounded live build facts over a local Unix socket",
+    "supports_json": true
+  },
+  {
+    "path": "remote live subscribe",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--job",
+      "--json",
+      "--kind",
+      "--log-level",
+      "--nix-compat",
+      "--owner",
+      "--socket",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Subscribe to the current matching set and later changes as NDJSON",
     "supports_json": true
   },
   {

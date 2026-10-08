@@ -4,6 +4,23 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use clap::Subcommand;
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::CapabilityError;
+use mantle_application_contract::EffectPlan;
+use mantle_application_contract::NIX_FREE_DEMO_BUNDLE_DOCUMENT_COUNT;
+use mantle_application_contract::NixFreeDemoBundleFacts;
+use mantle_application_contract::NixFreeDemoBundlePort;
+use mantle_application_contract::NixFreeDemoBundleWrite;
+use mantle_application_contract::NixFreeDemoInputFacts;
+use mantle_application_contract::NixFreeDemoOutputState;
+use mantle_application_contract::NixFreeDemoSummaryPort;
+use mantle_application_contract::NixFreeDemoTranscriptCopy;
+use mantle_application_contract::NixFreeDemoTranscriptRead;
+use mantle_application_contract::classify_nix_free_demo_generate;
+use mantle_application_contract::classify_nix_free_demo_rejection;
+use mantle_application_contract::classify_nix_free_demo_summary_read;
+use mantle_application_contract::nix_free_demo_generate_effect_plan;
+use mantle_application_contract::nix_free_demo_summary_effect_plan;
 use serde::Serialize;
 
 use crate::errors::RunError;
@@ -39,6 +56,8 @@ const GUARD_PART_COUNT: usize = 3;
 
 const _: () = assert!(DIGEST_PART_COUNT > 0);
 
+// CLI variants retain their complete clap payloads to preserve flag and help compatibility.
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand, Debug, Clone)]
 pub(crate) enum NixFreeDemoAction {
     /// Validate a Nix-free demo bundle machine summary JSON file
@@ -148,14 +167,34 @@ struct GenerateOptions<'a> {
 #[derive(Debug)]
 struct PreparedGeneratedBundle {
     bundle: NixFreeDemoGeneratedBundle,
-    transcript_copies: Vec<TranscriptCopy>,
+    transcript_copies: Vec<NixFreeDemoTranscriptCopy>,
     files: Vec<String>,
 }
 
+/// Transcript evidence admitted from the declared transcripts in declaration order.
 #[derive(Debug)]
-struct TranscriptCopy {
-    source: PathBuf,
-    bundle_path: String,
+struct AdmittedTranscripts {
+    refs: Vec<NixFreeDemoEvidenceRef>,
+    copies: Vec<NixFreeDemoTranscriptCopy>,
+}
+
+/// Bundle documents serialized before the write effect runs.
+#[derive(Debug)]
+struct BundleDocuments {
+    summary: Vec<u8>,
+    manifest: Vec<u8>,
+    validation: Vec<u8>,
+}
+
+/// Diagnostic code of a bundle write the filesystem refused.
+const BUNDLE_WRITE_FAILED_CODE: &str = "nix-free-demo-bundle-write-failed";
+
+/// Filesystem adapter scoped to one generate request's declared paths.
+///
+/// It reaches only the named output directory and the declared transcripts.
+struct GenerateBundleFiles<'a> {
+    out: &'a Path,
+    transcripts: &'a [PathBuf],
 }
 
 pub(crate) fn cmd_nix_free_demo(action: NixFreeDemoAction, json: bool) -> Result<(), RunError> {
@@ -222,21 +261,116 @@ fn run_readme(summary_path: &Path, _json: bool) -> Result<(), RunError> {
     }
 }
 
+/// Plan the generation, then run its read and write through the bundle port.
+///
+/// The plan exists before the port is first called. The read records what it
+/// observed as it runs. A rejected request stops before the write: its read is
+/// classified with the write skipped, then it reports as it always did. An
+/// admitted bundle is classified from the executed write before anything is
+/// reported.
 fn run_generate(options: GenerateOptions<'_>, json: bool) -> Result<(), RunError> {
-    let command_output = match prepare_generate_bundle(&options) {
-        Ok(prepared) => {
-            write_generated_bundle(options.out, &prepared)?;
-            generated_report(options.out, &prepared)
-        }
-        Err(diagnostic) => rejected_generate_report(options.out, diagnostic),
+    let plan = nix_free_demo_generate_effect_plan().map_err(capability_failure)?;
+    let mut port = GenerateBundleFiles {
+        out: options.out,
+        transcripts: &options.transcripts,
     };
-    emit_generate_report(command_output, json)
+    let mut inputs = NixFreeDemoInputFacts::default();
+    let prepared = match prepare_generate_bundle(&options, &mut port, &mut inputs) {
+        Ok(prepared) => prepared,
+        Err(diagnostic) => {
+            return emit_rejected_generation(&plan, &inputs, rejected_generate_report(options.out, diagnostic), json);
+        }
+    };
+    debug_assert!(inputs.output_free && !inputs.input_unavailable);
+    debug_assert_eq!(prepared.transcript_copies.len(), options.transcripts.len());
+    let documents = render_bundle_documents(&prepared.bundle)?;
+    let bundle = NixFreeDemoBundleWrite {
+        transcripts: &prepared.transcript_copies,
+        summary_json: &documents.summary,
+        manifest_json: &documents.manifest,
+        validation_json: &documents.validation,
+        readme: &prepared.bundle.readme,
+    };
+    let written = port.write_bundle(&bundle);
+    match classify_nix_free_demo_generate(&plan, &inputs, &bundle, &written) {
+        ApplicationOutcome::Completed => emit_generate_report(generated_report(options.out, &prepared), json),
+        ApplicationOutcome::Failed { .. } => Err(generate_failure(&inputs, &bundle, written)),
+        other => Err(RunError::Internal(format!("Nix-free demo generate observations were inconsistent: {other:?}"))),
+    }
 }
 
+/// Report a rejected generation once its observations classify it as incomplete.
+fn emit_rejected_generation(
+    plan: &EffectPlan,
+    inputs: &NixFreeDemoInputFacts,
+    report: NixFreeDemoGenerateReport,
+    json: bool,
+) -> Result<(), RunError> {
+    debug_assert!(!report.generated);
+    debug_assert!(report.files.is_empty());
+    match classify_nix_free_demo_rejection(plan, inputs) {
+        ApplicationOutcome::Failed { .. } => emit_generate_report(report, json),
+        other => Err(RunError::Internal(format!(
+            "Nix-free demo generate rejection observations were inconsistent: {other:?}"
+        ))),
+    }
+}
+
+/// The exact error a failed generation reports; a refused write keeps its own message.
+fn generate_failure(
+    inputs: &NixFreeDemoInputFacts,
+    bundle: &NixFreeDemoBundleWrite<'_>,
+    written: Result<NixFreeDemoBundleFacts, CapabilityError>,
+) -> RunError {
+    match written {
+        Err(error) => RunError::Internal(error.detail),
+        Ok(facts) => RunError::Internal(format!(
+            "Nix-free demo bundle write did not match its admitted inputs: read {} and copied {} of {} planned \
+             transcript(s), wrote {} of {NIX_FREE_DEMO_BUNDLE_DOCUMENT_COUNT} document(s)",
+            inputs.transcripts_read,
+            facts.transcripts_copied,
+            bundle.transcripts.len(),
+            facts.documents_written,
+        )),
+    }
+}
+
+fn capability_failure(error: CapabilityError) -> RunError {
+    RunError::Internal(format!("{}: {}", error.code, error.detail))
+}
+
+/// Plan the summary read, run it through the summary port, and classify it.
+///
+/// `validate` and `readme` report only after this returns: a read the port
+/// refused fails with its own message before anything is printed.
 fn read_summary(summary_path: &Path) -> Result<String, RunError> {
-    fs::read_to_string(summary_path).map_err(|error| {
-        RunError::Internal(format!("reading Nix-free demo summary {}: {error}", summary_path.display()))
-    })
+    let plan = nix_free_demo_summary_effect_plan().map_err(capability_failure)?;
+    let read = SummaryFile { path: summary_path }.read_summary();
+    match (classify_nix_free_demo_summary_read(&plan, &read), read) {
+        (ApplicationOutcome::Completed, Ok(contents)) => Ok(contents),
+        (ApplicationOutcome::Failed { .. }, Err(error)) => Err(RunError::Internal(error.detail)),
+        (other, _) => {
+            Err(RunError::Internal(format!("Nix-free demo summary observations were inconsistent: {other:?}")))
+        }
+    }
+}
+
+/// Diagnostic code of a summary read the filesystem refused.
+const SUMMARY_READ_FAILED_CODE: &str = "nix-free-demo-summary-read-failed";
+
+/// Filesystem adapter scoped to the one summary path the operator named.
+struct SummaryFile<'a> {
+    path: &'a Path,
+}
+
+impl NixFreeDemoSummaryPort for SummaryFile<'_> {
+    fn read_summary(&mut self) -> Result<String, CapabilityError> {
+        debug_assert!(!SUMMARY_READ_FAILED_CODE.is_empty());
+        fs::read_to_string(self.path).map_err(|error| CapabilityError {
+            code: SUMMARY_READ_FAILED_CODE.to_string(),
+            detail: format!("reading Nix-free demo summary {}: {error}", self.path.display()),
+        })
+    }
 }
 
 fn parse_and_validate_summary(
@@ -251,11 +385,22 @@ fn parse_and_validate_summary(
     }
 }
 
-fn prepare_generate_bundle(options: &GenerateOptions<'_>) -> Result<PreparedGeneratedBundle, NixFreeDemoDiagnostic> {
+/// Read the declared inputs through the port and admit the request.
+///
+/// `inputs` records what the read observed as it runs, so a rejection can be
+/// classified from the read that actually happened.
+fn prepare_generate_bundle(
+    options: &GenerateOptions<'_>,
+    port: &mut impl NixFreeDemoBundlePort,
+    inputs: &mut NixFreeDemoInputFacts,
+) -> Result<PreparedGeneratedBundle, NixFreeDemoDiagnostic> {
     debug_assert!(!SUMMARY_FILE_NAME.is_empty());
     debug_assert!(!MANIFEST_FILE_NAME.is_empty());
-    ensure_output_available(options.out)?;
-    let (transcripts, transcript_copies) = transcript_evidence(&options.transcripts)?;
+    let output = port.probe_output();
+    inputs.output_free = output.is_free();
+    inputs.input_unavailable = matches!(output, NixFreeDemoOutputState::Unreadable { .. });
+    admit_output(&output)?;
+    let transcripts = transcript_evidence(&options.transcripts, port, inputs)?;
     let input = NixFreeDemoManifestInput {
         proof_status: options.proof_status.clone(),
         stage1_binary_blake3: options.stage1_binary_blake3.clone(),
@@ -266,7 +411,7 @@ fn prepare_generate_bundle(options: &GenerateOptions<'_>) -> Result<PreparedGene
         guards: parse_guards(&options.guards)?,
         replay_hints: options.replay_hints.clone(),
         non_claims: options.non_claims.clone(),
-        transcripts,
+        transcripts: transcripts.refs,
         receipt_digests: parse_named_digests(&options.receipt_digests, "receipt-digest")?,
         artifact_digests: parse_named_digests(&options.artifact_digests, "artifact-digest")?,
         synthetic: options.synthetic,
@@ -275,32 +420,44 @@ fn prepare_generate_bundle(options: &GenerateOptions<'_>) -> Result<PreparedGene
     let files = generated_files(&bundle);
     Ok(PreparedGeneratedBundle {
         bundle,
-        transcript_copies,
+        transcript_copies: transcripts.copies,
         files,
     })
 }
 
-fn ensure_output_available(out: &Path) -> Result<(), NixFreeDemoDiagnostic> {
-    if !out.exists() {
-        return Ok(());
+/// Admit the observed output directory: only an absent or empty one may receive a bundle.
+fn admit_output(output: &NixFreeDemoOutputState) -> Result<(), NixFreeDemoDiagnostic> {
+    match output {
+        NixFreeDemoOutputState::Absent | NixFreeDemoOutputState::Empty => Ok(()),
+        NixFreeDemoOutputState::Occupied => Err(diagnostic("output-conflict", "output directory is not empty")),
+        NixFreeDemoOutputState::Unreadable { detail } => {
+            Err(diagnostic("output-conflict", format!("read output dir: {detail}")))
+        }
     }
-    let mut entries =
-        fs::read_dir(out).map_err(|error| diagnostic("output-conflict", format!("read output dir: {error}")))?;
-    if entries.next().is_some() {
-        return Err(diagnostic("output-conflict", "output directory is not empty"));
-    }
-    Ok(())
 }
 
+/// Read the declared transcripts in declaration order and admit their evidence.
+///
+/// The first transcript that cannot be read or has no UTF-8 file name rejects
+/// the request, and no later transcript is read. Every read is recorded in
+/// `inputs` as it happens.
 fn transcript_evidence(
     paths: &[PathBuf],
-) -> Result<(Vec<NixFreeDemoEvidenceRef>, Vec<TranscriptCopy>), NixFreeDemoDiagnostic> {
+    port: &mut impl NixFreeDemoBundlePort,
+    inputs: &mut NixFreeDemoInputFacts,
+) -> Result<AdmittedTranscripts, NixFreeDemoDiagnostic> {
     debug_assert!(!TRANSCRIPTS_DIR.is_empty());
     let mut refs = Vec::with_capacity(paths.len());
     let mut copies = Vec::with_capacity(paths.len());
-    for source in paths {
-        let bytes = fs::read(source)
-            .map_err(|error| diagnostic("missing-transcript", format!("{}: {error}", source.display())))?;
+    for (source, transcript_index) in paths.iter().zip(0_u32..) {
+        let bytes = match port.read_transcript(transcript_index) {
+            NixFreeDemoTranscriptRead::Read(bytes) => bytes,
+            NixFreeDemoTranscriptRead::Unavailable { detail } => {
+                inputs.input_unavailable = true;
+                return Err(diagnostic("missing-transcript", format!("{}: {detail}", source.display())));
+            }
+        };
+        inputs.transcripts_read = inputs.transcripts_read.saturating_add(1);
         let file_name = source
             .file_name()
             .and_then(|name| name.to_str())
@@ -311,14 +468,14 @@ fn transcript_evidence(
             digest_blake3: blake3::hash(&bytes).to_hex().to_string(),
             bundle_path: bundle_path.clone(),
         });
-        copies.push(TranscriptCopy {
-            source: source.clone(),
+        copies.push(NixFreeDemoTranscriptCopy {
+            transcript_index,
             bundle_path,
         });
     }
     debug_assert_eq!(refs.len(), paths.len());
     debug_assert_eq!(copies.len(), paths.len());
-    Ok((refs, copies))
+    Ok(AdmittedTranscripts { refs, copies })
 }
 
 fn parse_named_digests(values: &[String], code: &str) -> Result<Vec<NixFreeDemoNamedDigest>, NixFreeDemoDiagnostic> {
@@ -353,25 +510,106 @@ fn parse_guard(value: &str) -> Result<NixFreeDemoGuardEvidence, NixFreeDemoDiagn
     })
 }
 
-fn write_generated_bundle(out: &Path, prepared: &PreparedGeneratedBundle) -> Result<(), RunError> {
-    fs::create_dir_all(out).map_err(|error| RunError::Internal(format!("creating {}: {error}", out.display())))?;
-    fs::create_dir_all(out.join(TRANSCRIPTS_DIR))
-        .map_err(|error| RunError::Internal(format!("creating transcript dir: {error}")))?;
-    for copy in &prepared.transcript_copies {
-        fs::copy(&copy.source, out.join(&copy.bundle_path))
-            .map_err(|error| RunError::Internal(format!("copying transcript {}: {error}", copy.source.display())))?;
-    }
-    write_json(out.join(SUMMARY_FILE_NAME), &prepared.bundle.summary)?;
-    write_json(out.join(MANIFEST_FILE_NAME), &prepared.bundle.manifest)?;
-    write_json(out.join(VALIDATION_FILE_NAME), &prepared.bundle.validation)?;
-    fs::write(out.join(README_FILE_NAME), &prepared.bundle.readme)
-        .map_err(|error| RunError::Internal(format!("writing generated README: {error}")))
+/// Serialize the bundle documents before the write effect, so a write never starts half-rendered.
+fn render_bundle_documents(bundle: &NixFreeDemoGeneratedBundle) -> Result<BundleDocuments, RunError> {
+    let documents = BundleDocuments {
+        summary: json_document(&bundle.summary)?,
+        manifest: json_document(&bundle.manifest)?,
+        validation: json_document(&bundle.validation)?,
+    };
+    debug_assert!(!documents.summary.is_empty() && !documents.manifest.is_empty());
+    debug_assert!(!documents.validation.is_empty());
+    Ok(documents)
 }
 
-fn write_json(path: PathBuf, value: &impl Serialize) -> Result<(), RunError> {
-    let bytes = serde_json::to_vec_pretty(value)
-        .map_err(|error| RunError::Internal(format!("{JSON_SERIALIZATION_CONTEXT}: {error}")))?;
-    fs::write(&path, bytes).map_err(|error| RunError::Internal(format!("writing {}: {error}", path.display())))
+fn json_document(value: &impl Serialize) -> Result<Vec<u8>, RunError> {
+    serde_json::to_vec_pretty(value)
+        .map_err(|error| RunError::Internal(format!("{JSON_SERIALIZATION_CONTEXT}: {error}")))
+}
+
+impl GenerateBundleFiles<'_> {
+    /// The declared transcript at `transcript_index`, if the operator declared one there.
+    fn transcript(&self, transcript_index: u32) -> Option<&Path> {
+        let index = usize::try_from(transcript_index).ok()?;
+        self.transcripts.get(index).map(PathBuf::as_path)
+    }
+}
+
+impl NixFreeDemoBundlePort for GenerateBundleFiles<'_> {
+    fn probe_output(&mut self) -> NixFreeDemoOutputState {
+        if !self.out.exists() {
+            return NixFreeDemoOutputState::Absent;
+        }
+        match fs::read_dir(self.out) {
+            Ok(mut entries) => {
+                if entries.next().is_some() {
+                    NixFreeDemoOutputState::Occupied
+                } else {
+                    NixFreeDemoOutputState::Empty
+                }
+            }
+            Err(error) => NixFreeDemoOutputState::Unreadable {
+                detail: error.to_string(),
+            },
+        }
+    }
+
+    fn read_transcript(&mut self, transcript_index: u32) -> NixFreeDemoTranscriptRead {
+        let Some(source) = self.transcript(transcript_index) else {
+            return NixFreeDemoTranscriptRead::Unavailable {
+                detail: format!("transcript {transcript_index} was not declared"),
+            };
+        };
+        match fs::read(source) {
+            Ok(bytes) => NixFreeDemoTranscriptRead::Read(bytes),
+            Err(error) => NixFreeDemoTranscriptRead::Unavailable {
+                detail: error.to_string(),
+            },
+        }
+    }
+
+    fn write_bundle(&mut self, bundle: &NixFreeDemoBundleWrite<'_>) -> Result<NixFreeDemoBundleFacts, CapabilityError> {
+        let out = self.out;
+        fs::create_dir_all(out).map_err(|error| write_refused(format!("creating {}: {error}", out.display())))?;
+        fs::create_dir_all(out.join(TRANSCRIPTS_DIR))
+            .map_err(|error| write_refused(format!("creating transcript dir: {error}")))?;
+        let mut facts = NixFreeDemoBundleFacts {
+            transcripts_copied: 0,
+            documents_written: 0,
+        };
+        for copy in bundle.transcripts {
+            let source = self
+                .transcript(copy.transcript_index)
+                .ok_or_else(|| write_refused(format!("transcript {} was not declared", copy.transcript_index)))?;
+            fs::copy(source, out.join(&copy.bundle_path))
+                .map_err(|error| write_refused(format!("copying transcript {}: {error}", source.display())))?;
+            facts.transcripts_copied = facts.transcripts_copied.saturating_add(1);
+        }
+        for (file_name, bytes) in [
+            (SUMMARY_FILE_NAME, bundle.summary_json),
+            (MANIFEST_FILE_NAME, bundle.manifest_json),
+            (VALIDATION_FILE_NAME, bundle.validation_json),
+        ] {
+            let path = out.join(file_name);
+            fs::write(&path, bytes).map_err(|error| write_refused(format!("writing {}: {error}", path.display())))?;
+            facts.documents_written = facts.documents_written.saturating_add(1);
+        }
+        fs::write(out.join(README_FILE_NAME), bundle.readme)
+            .map_err(|error| write_refused(format!("writing generated README: {error}")))?;
+        facts.documents_written = facts.documents_written.saturating_add(1);
+        debug_assert_eq!(facts.documents_written, NIX_FREE_DEMO_BUNDLE_DOCUMENT_COUNT);
+        debug_assert!(usize::try_from(facts.transcripts_copied).is_ok_and(|copied| copied == bundle.transcripts.len()));
+        Ok(facts)
+    }
+}
+
+fn write_refused(detail: String) -> CapabilityError {
+    debug_assert!(!detail.is_empty());
+    debug_assert!(!BUNDLE_WRITE_FAILED_CODE.is_empty());
+    CapabilityError {
+        code: BUNDLE_WRITE_FAILED_CODE.to_string(),
+        detail,
+    }
 }
 
 fn generated_files(bundle: &NixFreeDemoGeneratedBundle) -> Vec<String> {

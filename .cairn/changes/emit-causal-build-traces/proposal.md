@@ -10,9 +10,11 @@ requirement to the failing leaf.
 The Synit manual records one trace entry per actor activation with an explicit
 `cause` field and a bounded action taxonomy
 (`~/.local/share/mantle-references/synit-book/pages/42-protocols__syndicate__trace.md`,
-reviewed in `docs/synit-application-notes.md`). Mantle already has the event
-sources: goal transitions, dispatch decisions, cache decisions, retries, and
-cancellations.
+reviewed in `docs/synit-application-notes.md`). Mantle already has local
+goal transitions, dispatch, and cache decisions to observe. Ordinary local
+`mantle build --causal-trace` has no scheduler retry or cancellation transition;
+watch-mode cancellation is a separate, untraced flow. Diagnostic emission must
+not invent either event.
 
 A causal trace is a diagnostic artifact. It does not replace receipts and does
 not become build evidence.
