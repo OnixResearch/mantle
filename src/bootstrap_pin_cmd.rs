@@ -65,7 +65,11 @@ pub fn check(root: &Path, cache_dir: &Path, plan_path: &Path) -> Result<bool, St
     let mut entries = Vec::with_capacity(pins.len());
     for (source, (pin, preimage)) in &pins {
         let result = resolve_release(pin, cache_dir, &agent, &mut host_counts).and_then(|(version, release_date)| {
-            if !crunch_project_core::bootstrap_pins::compare_versions(&pin.version, &version).is_lt() {
+            let pair = crunch_project_core::bootstrap_pins::VersionPair {
+                current: &pin.version,
+                candidate: &version,
+            };
+            if !crunch_project_core::bootstrap_pins::compare_versions(pair).is_lt() {
                 return Ok(PinCandidate {
                     version,
                     release_date,

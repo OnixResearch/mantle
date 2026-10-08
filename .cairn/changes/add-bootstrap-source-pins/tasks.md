@@ -27,7 +27,7 @@ acceptance.
 ## Phase 4: Migration and verification
 
 - [x] [serial] T4.1 Migrate one bootstrap recipe family to pin data and prove a version bump with no Nickel edits and identical build phases. r[mantle.bootstrap_source_pins.nickel_reads_only]
-- [ ] [serial] T4.2 Run focused core and shell tests before and after changes, strict Clippy, policy freshness, and relevant Nix checks. Preserve exact blockers. r[mantle.bootstrap_source_pins.pin_data_contract]
+- [x] [serial] T4.2 Run focused core and shell tests before and after changes, strict Clippy, policy freshness, and relevant Nix checks. Preserve exact blockers. r[mantle.bootstrap_source_pins.pin_data_contract]
 - [ ] [serial] T4.3 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.bootstrap_source_pins.batched_resolution]
 
 Re-verified on published main `e24bbbc2` (2026-10-08 UTC) in the isolated
@@ -42,7 +42,7 @@ CMake/Picolibc pin records. The 2026-09-30/10-01 receipts are historical
 (older integration base) and are not relied on. The pre-existing main
 operator-contract drift and its separate repair are in
 `evidence/operator-flag-drift-main-2026-10-08.md`. T4.2 gate transcripts are in
-`evidence/gates-2026-10-08.md`; T4.3 lifecycle transcripts are in
+`evidence/gates-2026-10-08.md` and `evidence/tigerstyle-2026-10-08.md`; T4.3 lifecycle transcripts are in
 `evidence/lifecycle-2026-10-08.md`.
 An accepted isolated implementation commit is required before any Cairn
 archive, per `AGENTS.md`.
