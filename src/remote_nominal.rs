@@ -43,7 +43,7 @@ fn admit_remote_id(value: String) -> Result<String, RemoteNominalError> {
 }
 
 macro_rules! remote_id {
-    ($name:ident) => {
+    ($name:ident $(, $getter:ident)?) => {
         #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $name(String);
 
@@ -52,17 +52,19 @@ macro_rules! remote_id {
                 admit_remote_id(value.into()).map(Self)
             }
 
-            pub fn as_str(&self) -> &str {
-                &self.0
-            }
+            $(
+                pub fn $getter(&self) -> &str {
+                    &self.0
+                }
+            )?
         }
     };
 }
 
 remote_id!(RemoteRequestId);
 remote_id!(RemoteProtocolSessionId);
-remote_id!(RemoteEndpointId);
-remote_id!(RemoteOutputId);
+remote_id!(RemoteEndpointId, as_str);
+remote_id!(RemoteOutputId, as_str);
 
 #[cfg(test)]
 mod tests {
@@ -72,13 +74,11 @@ mod tests {
 
     #[test]
     fn remote_roles_admit_valid_values_and_reject_malformed_values() {
-        let request = RemoteRequestId::new(VALID_ID).unwrap();
-        let session = RemoteProtocolSessionId::new(VALID_ID).unwrap();
+        let _request = RemoteRequestId::new(VALID_ID).unwrap();
+        let _session = RemoteProtocolSessionId::new(VALID_ID).unwrap();
         let endpoint = RemoteEndpointId::new(VALID_ID).unwrap();
         let oversized = "a".repeat(MAX_REMOTE_PROTOCOL_ID_BYTES.saturating_add(1));
 
-        assert_eq!(request.as_str(), VALID_ID);
-        assert_eq!(session.as_str(), VALID_ID);
         assert_eq!(endpoint.as_str(), VALID_ID);
         assert_eq!(RemoteRequestId::new(""), Err(RemoteNominalError::Empty));
         assert_eq!(RemoteEndpointId::new("bad\nendpoint"), Err(RemoteNominalError::ControlCharacter));

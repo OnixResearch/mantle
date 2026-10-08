@@ -8,9 +8,12 @@ use std::process::Output;
 use std::process::Stdio;
 
 use tokio::process::Command;
+use tokio::sync::watch;
 
 use crate::sandbox::InputsProvider;
 use crate::sandbox::SandboxSpec;
+#[cfg(target_os = "linux")]
+pub(crate) mod watch_cancel;
 
 const BWRAP_PROGRAM: &str = "bwrap";
 const BWRAP_PATH_ENV: &str = "SNIX_BUILD_BWRAP";
@@ -194,6 +197,8 @@ pub struct Bwrap {
     host_workdir: PathBuf,
     args: Vec<OsString>,
     inputs_provider: InputsProvider,
+    #[cfg(test)]
+    watch_fault: Option<watch_cancel::WatchFault>,
 }
 
 /// The result of running the sandbox.
@@ -297,19 +302,73 @@ fn append_prevalidated_mount_args<'a>(
     Ok(())
 }
 
+
 impl Bwrap {
-    // TODO(#132): support streaming std{err,out}
-    /// Run the sandbox and return the result.
-    pub async fn run(mut self) -> std::io::Result<SandboxOutcome> {
+    #[cfg(test)]
+    pub(crate) fn with_test_watch_fault(mut self, fault: Option<watch_cancel::WatchFault>) -> Self {
+        self.watch_fault = fault;
+        self
+    }
+
+    pub async fn run(self) -> std::io::Result<SandboxOutcome> {
+        self.run_inner(None, None).await
+    }
+
+    /// Run a watch-owned sandbox until its dedicated supervisor confirms
+    /// completion or pidfd-backed cancellation. Dropping this future requests
+    /// teardown; it cannot drop the owned PID1 gate or child process.
+    pub(crate) async fn run_cancellable(
+        self,
+        cancellation: watch::Receiver<bool>,
+        lease: watch_cancel::WatchLease,
+    ) -> std::io::Result<SandboxOutcome> {
+        self.run_inner(Some(cancellation), Some(lease)).await
+    }
+
+    async fn run_inner(
+        mut self,
+        cancellation: Option<watch::Receiver<bool>>,
+        lease: Option<watch_cancel::WatchLease>,
+    ) -> std::io::Result<SandboxOutcome> {
+        if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err()) {
+            return Err(std::io::Error::new(ErrorKind::Interrupted, "watch build cancelled before sandbox start"));
+        }
+        #[cfg(test)]
+        if matches!(self.watch_fault, Some(watch_cancel::WatchFault::PidfdUnavailable)) && cancellation.is_some() {
+            return Err(std::io::Error::new(ErrorKind::Unsupported, "injected preflight pidfd unavailability"));
+        }
+        if cancellation.is_some() {
+            watch_cancel::require_pidfd_support()?;
+        }
         let _guard = self.inputs_provider.provide_inputs(self.host_workdir.join("host_inputs_dir"))?;
 
         let program = bwrap_program();
+        let gate = cancellation.as_ref().map(|_| watch_cancel::WatchStartGate::new()).transpose()?;
         let mut command = Command::new(&program);
+        if let Some(gate) = &gate {
+            gate.configure(&mut command);
+        }
+        #[cfg(test)]
+        if matches!(self.watch_fault, Some(watch_cancel::WatchFault::ExitBeforePid1)) {
+            command.arg("--invalid-bwrap-watch-early-exit");
+        }
         command.args(self.args);
-        // Make sure we've closed stdin otherwise builds can hang forever blocked on std io.
         command.stdin(Stdio::null());
         set_sandbox_umask(&mut command);
-        let output = command.output().await.map_err(|error| annotate_bwrap_spawn_error(&program, error))?;
+        let output = match (cancellation, gate, lease) {
+            (None, None, None) => command.output().await.map_err(|error| annotate_bwrap_spawn_error(&program, error))?,
+            (Some(receiver), Some(gate), Some(lease)) => {
+                #[cfg(test)]
+                {
+                    watch_cancel::run_child(command, &program, receiver, gate, lease, self.watch_fault).await?
+                }
+                #[cfg(not(test))]
+                {
+                    watch_cancel::run_child(command, &program, receiver, gate, lease).await?
+                }
+            }
+            _ => unreachable!("watch gate and cancellation are constructed together"),
+        };
 
         Ok(SandboxOutcome {
             output,
@@ -441,6 +500,8 @@ impl Bwrap {
             host_workdir: spec.host_workdir().into(),
             args,
             inputs_provider: spec.into(),
+            #[cfg(test)]
+            watch_fault: None,
         })
     }
 }

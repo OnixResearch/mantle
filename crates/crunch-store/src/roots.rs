@@ -90,7 +90,8 @@ impl std::fmt::Display for GcRootSource {
 }
 
 // r[impl store_lifecycle.root_provenance]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GcRootRecord {
     pub schema_version: u32,
     pub logical_path: String,
@@ -141,15 +142,193 @@ struct RawGcRootRecord {
     removal_requested: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GcInterestFact {
+    pub owner: String,
+    pub reason: String,
+    pub record_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GcPathInterests {
+    pub logical_path: String,
+    pub record_count: u32,
+    pub legacy_unmanaged: bool,
+    pub interests: Vec<GcInterestFact>,
+}
+
+pub fn list_interest_reports(state_dir: &Path) -> Result<Vec<GcPathInterests>, Error> {
+    let legacy = load_registry(state_dir)?;
+    let mut by_path = BTreeMap::<String, GcPathInterests>::new();
+    for (path, root) in legacy {
+        by_path.insert(path.clone(), GcPathInterests {
+            logical_path: path,
+            record_count: 0,
+            legacy_unmanaged: root.root_class == GcRootClass::LegacyUnmanaged,
+            interests: vec![GcInterestFact {
+                owner: root.owner_scope,
+                reason: root.last_transition_reason,
+                record_id: None,
+            }],
+        });
+    }
+    for (id, record) in crate::interest_store::load(state_dir)? {
+        let entry = by_path.entry(record.logical_path.clone()).or_insert_with(|| GcPathInterests {
+            logical_path: record.logical_path.clone(),
+            record_count: 0,
+            legacy_unmanaged: false,
+            interests: Vec::new(),
+        });
+        entry.record_count = entry
+            .record_count
+            .checked_add(1)
+            .ok_or_else(|| Error::RootRegistry("interest count overflow".to_string()))?;
+        entry.interests.push(GcInterestFact {
+            owner: record.owner,
+            reason: record.reason,
+            record_id: Some(id),
+        });
+    }
+    for entry in by_path.values_mut() {
+        entry
+            .interests
+            .sort_by(|a, b| (&a.owner, &a.reason, &a.record_id).cmp(&(&b.owner, &b.reason, &b.record_id)));
+    }
+    Ok(by_path.into_values().collect())
+}
+
+// r[impl mantle.store_lifecycle.retention_interest_records]
 pub fn list_roots(state_dir: &Path) -> Result<Vec<GcRootRecord>, Error> {
-    let registry = load_registry(state_dir)?;
+    let mut registry = load_registry(state_dir)?;
+    let loaded = crate::interest_store::load(state_dir)?;
+    merge_loaded_roots(&mut registry, &loaded)?;
     Ok(registry.into_values().collect())
 }
 
+fn merge_loaded_roots(
+    registry: &mut BTreeMap<String, GcRootRecord>,
+    loaded: &[(String, crate::interest_store::InterestRecord)],
+) -> Result<(), Error> {
+    let mut groups = BTreeMap::<&str, Vec<(&str, &crate::interest_store::InterestRecord)>>::new();
+    for (id, record) in loaded {
+        groups.entry(record.logical_path.as_str()).or_default().push((id.as_str(), record));
+    }
+    let needs_policy_selection =
+        groups.values().any(|interests| interests.len() > 1) || groups.keys().any(|path| registry.contains_key(*path));
+    let retained = if needs_policy_selection {
+        retained_interest_ids(registry, loaded)?
+    } else {
+        BTreeMap::new()
+    };
+    for (path, interests) in groups {
+        let selected = interests
+            .iter()
+            .min_by_key(|(id, record)| {
+                (
+                    !retained.get(*id).copied().unwrap_or(true),
+                    root_priority(record.declaration.root_class),
+                    record.owner.as_str(),
+                    record.reason.as_str(),
+                    *id,
+                )
+            })
+            .ok_or_else(|| Error::RootRegistry("empty retention interest group".to_string()))?;
+        if let Some(legacy) = registry.get(path) {
+            let legacy_kept = retained.get(path).copied().unwrap_or(true);
+            let selected_kept = retained.get(selected.0).copied().unwrap_or(true);
+            if (legacy_kept && !selected_kept)
+                || (legacy_kept == selected_kept
+                    && root_priority(legacy.root_class) <= root_priority(selected.1.declaration.root_class))
+            {
+                continue;
+            }
+        }
+        registry.insert(path.to_owned(), selected.1.declaration.clone());
+    }
+    if registry.len() > store_retention_runtime_policy().limits.max_roots {
+        return Err(Error::RootRegistry("merged root count exceeds policy limit".to_string()));
+    }
+    Ok(())
+}
+
+fn retained_interest_ids(
+    legacy: &BTreeMap<String, GcRootRecord>,
+    interests: &[(String, crate::interest_store::InterestRecord)],
+) -> Result<BTreeMap<String, bool>, Error> {
+    let declarations = legacy
+        .values()
+        .cloned()
+        .chain(interests.iter().map(|(_, record)| record.declaration.clone()))
+        .collect::<Vec<_>>();
+    let mut facts = crate::retention::records_to_core(&declarations)?;
+    for (fact, (id, _)) in facts.iter_mut().skip(legacy.len()).zip(interests) {
+        fact.path_id = format!("/retention-interest/{id}");
+    }
+    let plan = crunch_gc_core::retention::plan_retention(&core_retention_policy(), current_unix_seconds()?, facts)
+        .map_err(|error| Error::RootRegistry(format!("merging retention interest decisions: {error:?}")))?;
+    Ok(plan
+        .decisions
+        .into_iter()
+        .map(|decision| {
+            let id = decision
+                .path_id
+                .strip_prefix("/retention-interest/")
+                .unwrap_or(decision.path_id.as_str())
+                .to_owned();
+            (id, decision.disposition.retains_path())
+        })
+        .collect())
+}
+
+fn root_priority(class: GcRootClass) -> u8 {
+    match class {
+        GcRootClass::LegacyUnmanaged => 0,
+        GcRootClass::ExplicitPin => 1,
+        GcRootClass::Bootstrap => 2,
+        GcRootClass::SelfBuild => 3,
+        GcRootClass::RemoteResult => 4,
+        GcRootClass::ProjectOutputGeneration => 5,
+        GcRootClass::ProjectSourceGeneration => 6,
+        GcRootClass::ActiveShellLease => 7,
+    }
+}
+
+// A partially replaced owner can have multiple transition reasons. Resolve
+// renewal against its newest declaration, with a stable identity tie-break.
+fn root_revision_rank(record: &GcRootRecord) -> (i64, u32, u64, &str) {
+    (
+        record.created_unix_s,
+        record.lease.as_ref().map_or(0, |lease| lease.renewal_count),
+        record.generation.unwrap_or(0),
+        &record.last_transition_id,
+    )
+}
+
 pub fn migrate_legacy_registry(state_dir: &Path) -> Result<Vec<GcRootRecord>, Error> {
+    ensure_root_mutation_allowed(state_dir)?;
     let registry = load_registry(state_dir)?;
-    save_registry(state_dir, &registry)?;
-    Ok(registry.into_values().collect())
+    let path = roots_path(state_dir);
+    let archive = state_dir.join("gc-roots.migrated.json");
+    if path.exists() {
+        match std::fs::symlink_metadata(&archive) {
+            Ok(_) => {
+                return Err(Error::RootRegistry(format!("legacy root archive already exists: {}", archive.display())));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(Error::RootRegistry(format!("observing {}: {error}", archive.display()))),
+        }
+    }
+    for record in registry.values() {
+        crate::interest_store::publish(state_dir, &crate::interest_store::InterestRecord::new(record.clone()))?;
+    }
+    if path.exists() {
+        std::fs::rename(&path, &archive)
+            .map_err(|error| Error::RootRegistry(format!("archiving {}: {error}", path.display())))?;
+        std::fs::File::open(state_dir)
+            .and_then(|dir| dir.sync_all())
+            .map_err(|error| Error::RootRegistry(format!("syncing {}: {error}", state_dir.display())))?;
+    }
+    list_roots(state_dir)
 }
 
 pub async fn register_root(
@@ -203,16 +382,32 @@ pub(crate) async fn register_root_batch_with_registration(
     }
 
     let created_unix_s = current_unix_seconds()?;
-    let mut registry = load_registry(state_dir)?;
+    let legacy = load_registry(state_dir)?;
+    let interests = crate::interest_store::load(state_dir)?;
+    let mut by_owner = BTreeMap::<(&str, &str), &GcRootRecord>::new();
+    for record in legacy.values().chain(interests.iter().map(|(_, interest)| &interest.declaration)) {
+        by_owner
+            .entry((record.logical_path.as_str(), record.owner_scope.as_str()))
+            .and_modify(|prior| {
+                if root_revision_rank(record) > root_revision_rank(prior) {
+                    *prior = record;
+                }
+            })
+            .or_insert(record);
+    }
+    // Keep the unmerged legacy facts available for owner-specific renewal.
+    let mut registry = legacy.clone();
+    merge_loaded_roots(&mut registry, &interests)?;
     let mut records = Vec::with_capacity(registrations.len());
     for (store_path, source, registration) in registrations {
         let logical_path = store_path.to_absolute_path_with_prefix(store_dir);
         if records.iter().any(|record: &GcRootRecord| record.logical_path == logical_path) {
             return Err(Error::RootRegistry(format!("duplicate path in root registration batch: {logical_path}")));
         }
-        let registration = resolve_project_generation(&registry, registration)?;
-        let registration = resolve_shell_lease_renewal(&registry, &logical_path, registration)?;
-        let transition_reason = registration_transition_reason(&registry, &logical_path, &registration);
+        let prior = by_owner.get(&(logical_path.as_str(), registration.owner_scope.as_str())).copied();
+        let registration = resolve_project_generation(by_owner.values().copied().chain(records.iter()), registration)?;
+        let registration = resolve_shell_lease_renewal(prior, registration)?;
+        let transition_reason = registration_transition_reason(prior, &registration);
         let record = new_record(logical_path.clone(), source, registration, created_unix_s, transition_reason);
         validate_record(&record)?;
         registry.insert(logical_path, record.clone());
@@ -221,29 +416,72 @@ pub(crate) async fn register_root_batch_with_registration(
     if registry.len() > max_roots {
         return Err(Error::RootRegistry(format!("root registry exceeds policy limit {max_roots}")));
     }
-    save_registry(state_dir, &registry)?;
+    for record in &records {
+        let interest = crate::interest_store::InterestRecord::new(record.clone());
+        if record.root_class == GcRootClass::ExplicitPin {
+            crate::interest_store::publish(state_dir, &interest)?;
+        } else {
+            crate::interest_store::publish_replacing_owner(state_dir, &interest)?;
+        }
+    }
     Ok(records)
 }
 
-pub async fn pin_root(
+/// Operator labels are local declarations, not authenticated credentials.
+pub fn operator_owner(label: &str) -> Result<String, Error> {
+    if label == OPERATOR_OWNER_SCOPE {
+        return Ok(OPERATOR_OWNER_SCOPE.to_string());
+    }
+    if label.is_empty()
+        || label.len() > 64
+        || !label.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+    {
+        return Err(Error::RootRegistry("operator owner label is invalid or exceeds 64 bytes".to_string()));
+    }
+    Ok(format!("operator:{label}"))
+}
+
+pub async fn pin_root_for_owner(
     state_dir: &Path,
     store_dir: &str,
     pathinfo: &dyn PathInfoService,
     logical_path: &str,
+    owner_label: &str,
+    reason: &str,
 ) -> Result<GcRootRecord, Error> {
+    if reason.is_empty() || reason.len() > 256 || reason.chars().any(char::is_control) {
+        return Err(Error::RootRegistry("pin reason is empty, invalid, or exceeds 256 bytes".to_string()));
+    }
+    let owner = operator_owner(owner_label)?;
     let store_path = parse_logical_store_path(LogicalStorePathRef {
         logical_path,
         store_dir,
     })?;
-    register_root(state_dir, store_dir, pathinfo, &store_path, GcRootSource::Pin).await
+    ensure_pathinfo_exists(pathinfo, &store_path).await?;
+    let timestamp = current_unix_seconds()?;
+    let registration = RootRegistration {
+        owner_scope: owner,
+        ..registration_for_source(GcRootSource::Pin)
+    };
+    let root = new_record(
+        store_path.to_absolute_path_with_prefix(store_dir),
+        GcRootSource::Pin,
+        registration,
+        timestamp,
+        reason,
+    );
+    crate::interest_store::publish(state_dir, &crate::interest_store::InterestRecord::new(root.clone()))?;
+    Ok(root)
 }
 
-pub fn unpin_root(state_dir: &Path, path: LogicalStorePathRef<'_>) -> Result<Option<GcRootRecord>, Error> {
+pub fn unpin_root_for_owner_reason(
+    state_dir: &Path,
+    path: LogicalStorePathRef<'_>,
+    owner: &str,
+    reason: Option<&str>,
+) -> Result<Option<GcRootRecord>, Error> {
     let normalized_path = normalize_logical_path(path)?;
-    let mut registry = load_registry(state_dir)?;
-    let removed = registry.remove(&normalized_path);
-    save_registry(state_dir, &registry)?;
-    Ok(removed)
+    crate::interest_store::release(state_dir, owner, &normalized_path, reason)
 }
 
 pub(crate) fn load_registry(state_dir: &Path) -> Result<BTreeMap<String, GcRootRecord>, Error> {
@@ -286,8 +524,8 @@ fn normalize_logical_path(path: LogicalStorePathRef<'_>) -> Result<String, Error
     Ok(store_path.to_absolute_path_with_prefix(path.store_dir))
 }
 
-fn resolve_project_generation(
-    registry: &BTreeMap<String, GcRootRecord>,
+fn resolve_project_generation<'a>(
+    records: impl Iterator<Item = &'a GcRootRecord> + Clone,
     mut registration: RootRegistration,
 ) -> Result<RootRegistration, Error> {
     if !matches!(registration.class, GcRootClass::ProjectOutputGeneration | GcRootClass::ProjectSourceGeneration)
@@ -304,8 +542,9 @@ fn resolve_project_generation(
             "project registration requires project, selector, and generation identities".to_string(),
         ));
     };
-    if let Some(existing) = registry.values().find(|record| {
-        record.root_class == registration.class
+    if let Some(existing) = records.clone().find(|record| {
+        record.owner_scope == registration.owner_scope
+            && record.root_class == registration.class
             && record.project_identity.as_deref() == Some(project_identity)
             && record.selector.as_deref() == Some(selector)
             && record.generation_identity.as_deref() == Some(generation_identity)
@@ -313,10 +552,10 @@ fn resolve_project_generation(
         registration.generation = existing.generation;
         return Ok(registration);
     }
-    let latest_generation = registry
-        .values()
+    let latest_generation = records
         .filter(|record| {
-            record.root_class == registration.class
+            record.owner_scope == registration.owner_scope
+                && record.root_class == registration.class
                 && record.project_identity.as_deref() == Some(project_identity)
                 && record.selector.as_deref() == Some(selector)
         })
@@ -332,8 +571,7 @@ fn resolve_project_generation(
 }
 
 fn resolve_shell_lease_renewal(
-    registry: &BTreeMap<String, GcRootRecord>,
-    logical_path: &str,
+    existing: Option<&GcRootRecord>,
     mut registration: RootRegistration,
 ) -> Result<RootRegistration, Error> {
     if registration.class != GcRootClass::ActiveShellLease {
@@ -342,7 +580,7 @@ fn resolve_shell_lease_renewal(
     let Some(lease) = registration.lease.as_mut() else {
         return Err(Error::RootRegistry("active shell registration requires lease facts".to_string()));
     };
-    let Some(existing) = registry.get(logical_path) else {
+    let Some(existing) = existing else {
         return Ok(registration);
     };
     if existing.root_class != GcRootClass::ActiveShellLease
@@ -368,12 +606,8 @@ fn resolve_shell_lease_renewal(
     Ok(registration)
 }
 
-fn registration_transition_reason(
-    registry: &BTreeMap<String, GcRootRecord>,
-    logical_path: &str,
-    registration: &RootRegistration,
-) -> &'static str {
-    let Some(existing) = registry.get(logical_path) else {
+fn registration_transition_reason(existing: Option<&GcRootRecord>, registration: &RootRegistration) -> &'static str {
+    let Some(existing) = existing else {
         return match registration.class {
             GcRootClass::ProjectOutputGeneration => "project-output-generation-registered",
             GcRootClass::ProjectSourceGeneration => "project-source-generation-registered",
@@ -589,24 +823,12 @@ async fn ensure_pathinfo_exists(pathinfo: &dyn PathInfoService, store_path: &Sto
     Ok(())
 }
 
-fn save_registry(state_dir: &Path, registry: &BTreeMap<String, GcRootRecord>) -> Result<(), Error> {
+pub(crate) fn ensure_root_mutation_allowed(state_dir: &Path) -> Result<(), Error> {
     if selected_backend_requires_casita_fence(state_dir)? && crate::gc::casita_gc_fence_pending(state_dir)? {
         return Err(Error::Gc(
             "gc-recovery-required: recover fenced Casita GC before changing retained roots".to_string(),
         ));
     }
-    validate_registry(registry)?;
-    std::fs::create_dir_all(state_dir)
-        .map_err(|error| Error::RootRegistry(format!("creating {}: {error}", state_dir.display())))?;
-    let path = roots_path(state_dir);
-    let tmp_path = state_dir.join(format!("{ROOTS_FILE_NAME}.tmp"));
-    let bytes = serde_json::to_vec_pretty(registry)
-        .map_err(|error| Error::RootRegistry(format!("serializing {}: {error}", path.display())))?;
-    std::fs::write(&tmp_path, bytes)
-        .map_err(|error| Error::RootRegistry(format!("writing {}: {error}", tmp_path.display())))?;
-    std::fs::rename(&tmp_path, &path).map_err(|error| {
-        Error::RootRegistry(format!("renaming {} -> {}: {error}", tmp_path.display(), path.display()))
-    })?;
     Ok(())
 }
 
@@ -669,7 +891,7 @@ fn validate_registry(registry: &BTreeMap<String, GcRootRecord>) -> Result<(), Er
     Ok(())
 }
 
-fn validate_record(record: &GcRootRecord) -> Result<(), Error> {
+pub(crate) fn validate_record(record: &GcRootRecord) -> Result<(), Error> {
     if record.schema_version != ROOT_RECORD_SCHEMA_VERSION {
         return Err(Error::RootRegistry(format!(
             "root record {} has unsupported schema {}",
@@ -887,15 +1109,29 @@ mod tests {
         let state_dir = tempfile::tempdir().expect("temporary state");
         let pathinfo = pathinfo_service();
         let missing = store_path("missing", 9).to_absolute_path();
-        let missing_error = pin_root(state_dir.path(), "/nix/store", pathinfo.as_ref(), &missing)
-            .await
-            .expect_err("missing path must fail");
+        let missing_error = pin_root_for_owner(
+            state_dir.path(),
+            "/nix/store",
+            pathinfo.as_ref(),
+            &missing,
+            "operator",
+            "explicit-pin-registered",
+        )
+        .await
+        .expect_err("missing path must fail");
         assert!(matches!(missing_error, Error::RootRegistry(message) if message.contains("nonexistent")));
 
         let unreadable = store_path("broken", 10).to_absolute_path();
-        let unreadable_error = pin_root(state_dir.path(), "/nix/store", &FailingPathInfoService, &unreadable)
-            .await
-            .expect_err("unreadable PathInfo must fail");
+        let unreadable_error = pin_root_for_owner(
+            state_dir.path(),
+            "/nix/store",
+            &FailingPathInfoService,
+            &unreadable,
+            "operator",
+            "explicit-pin-registered",
+        )
+        .await
+        .expect_err("unreadable PathInfo must fail");
         assert!(matches!(unreadable_error, Error::RootRegistry(message) if message.contains("unreadable metadata")));
     }
 
@@ -920,11 +1156,18 @@ mod tests {
         assert!(!loaded[0].removal_requested);
 
         migrate_legacy_registry(state_dir.path()).expect("persist migrated registry");
-        let persisted: serde_json::Value =
-            serde_json::from_slice(&std::fs::read(roots_path(state_dir.path())).expect("read registry"))
-                .expect("parse registry");
-        assert_eq!(persisted[&path]["schema_version"], ROOT_RECORD_SCHEMA_VERSION);
-        assert_eq!(persisted[&path]["root_class"], "legacy-unmanaged");
+        assert!(!roots_path(state_dir.path()).exists());
+        let archived: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(state_dir.path().join("gc-roots.migrated.json")).expect("read archived registry"),
+        )
+        .expect("parse archived registry");
+        assert_eq!(archived[&path]["source"], "build");
+        let interests = crate::interest_store::per_path(state_dir.path()).expect("read migrated interests");
+        assert_eq!(interests[&path][0].owner, LEGACY_OWNER_SCOPE);
+        assert_eq!(
+            list_roots(state_dir.path()).expect("read migrated roots")[0].root_class,
+            GcRootClass::LegacyUnmanaged
+        );
     }
 
     #[test]
@@ -976,7 +1219,7 @@ mod tests {
             lease: None,
             removal_requested: false,
         };
-        let first = resolve_project_generation(&BTreeMap::new(), registration.clone()).expect("first generation");
+        let first = resolve_project_generation(std::iter::empty(), registration.clone()).expect("first generation");
         assert_eq!(first.generation, Some(FIRST_GENERATION));
 
         let first_record = new_record(
@@ -987,13 +1230,14 @@ mod tests {
             "project-generation-registered",
         );
         let registry = BTreeMap::from([(logical_path.clone(), first_record)]);
-        let reused =
-            resolve_project_generation(&registry, registration.clone()).expect("same identity reuses generation");
+        let reused = resolve_project_generation(registry.values(), registration.clone())
+            .expect("same identity reuses generation");
         assert_eq!(reused.generation, Some(FIRST_GENERATION));
 
         let mut next_registration = registration;
         next_registration.generation_identity = Some("b3:lock-b".to_string());
-        let next = resolve_project_generation(&registry, next_registration).expect("new identity advances generation");
+        let next =
+            resolve_project_generation(registry.values(), next_registration).expect("new identity advances generation");
         assert_eq!(next.generation, Some(SECOND_GENERATION));
     }
 
@@ -1036,7 +1280,7 @@ mod tests {
             "shell-lease-registered",
         );
         let registry = BTreeMap::from([(logical_path.clone(), existing)]);
-        let renewed = resolve_shell_lease_renewal(&registry, &logical_path, registration.clone())
+        let renewed = resolve_shell_lease_renewal(registry.get(&logical_path), registration.clone())
             .expect("matching shell lease renews");
         let renewed_lease = renewed.lease.expect("renewed lease facts");
         assert_eq!(renewed_lease.lease_id, "b3:lease-existing");
@@ -1046,7 +1290,7 @@ mod tests {
         let exhausted_record = exhausted_registry.get_mut(&logical_path).expect("existing lease record");
         exhausted_record.lease.as_mut().expect("existing lease facts").renewal_count =
             store_retention_runtime_policy().limits.max_lease_renewals;
-        let exhausted_error = resolve_shell_lease_renewal(&exhausted_registry, &logical_path, registration)
+        let exhausted_error = resolve_shell_lease_renewal(exhausted_registry.get(&logical_path), registration)
             .expect_err("lease renewal beyond the policy limit must fail");
         assert!(matches!(exhausted_error, Error::RootRegistry(message) if message.contains("exceeds policy limit")));
 
@@ -1060,9 +1304,185 @@ mod tests {
             lease: None,
             removal_requested: false,
         };
-        let error = resolve_shell_lease_renewal(&registry, &logical_path, missing_lease)
+        let error = resolve_shell_lease_renewal(registry.get(&logical_path), missing_lease)
             .expect_err("shell registration without lease must fail");
         assert!(matches!(error, Error::RootRegistry(message) if message.contains("requires lease facts")));
+    }
+
+    #[tokio::test]
+    async fn renewed_shell_interest_replaces_its_owner_without_erasing_another_or_pending_file() {
+        let state = tempfile::tempdir().unwrap();
+        let pathinfo = pathinfo_service();
+        let path = store_path("renewed-shell", 62);
+        pathinfo.put(unsigned_pathinfo(path.clone())).await.unwrap();
+        let logical_path = path.to_absolute_path();
+        let now = current_unix_seconds().unwrap();
+        let registration = |owner: &str| RootRegistration {
+            class: GcRootClass::ActiveShellLease,
+            owner_scope: format!("project:b3:{owner}"),
+            project_identity: Some(format!("b3:{owner}")),
+            selector: Some("shell:default".to_string()),
+            generation: None,
+            generation_identity: None,
+            lease: Some(GcRootLease {
+                lease_id: format!("b3:lease-{owner}"),
+                expires_unix_s: now + 3_600,
+                last_observed_unix_s: now,
+                renewal_count: 0,
+            }),
+            removal_requested: false,
+        };
+        for owner in ["zeta", "alpha"] {
+            register_root_with_registration(
+                state.path(),
+                "/nix/store",
+                pathinfo.as_ref(),
+                &path,
+                GcRootSource::Build,
+                registration(owner),
+            )
+            .await
+            .unwrap();
+        }
+        let pending = state.path().join("retention-interests").join(".pending-interrupted");
+        std::fs::write(&pending, b"incomplete publication").unwrap();
+        for count in 1..=2 {
+            let renewed = register_root_with_registration(
+                state.path(),
+                "/nix/store",
+                pathinfo.as_ref(),
+                &path,
+                GcRootSource::Build,
+                registration("zeta"),
+            )
+            .await
+            .unwrap();
+            assert_eq!(renewed.last_transition_reason, "shell-lease-renewed");
+            assert_eq!(renewed.lease.as_ref().unwrap().renewal_count, count);
+        }
+        let records = crate::interest_store::per_path(state.path()).unwrap();
+        assert_eq!(records[&logical_path].len(), 2);
+        assert!(records[&logical_path].iter().any(|record| record.owner == "project:b3:alpha"
+            && record.declaration.lease.as_ref().unwrap().renewal_count == 0));
+        assert!(
+            records[&logical_path].iter().any(|record| record.owner == "project:b3:zeta"
+                && record.declaration.lease.as_ref().unwrap().renewal_count == 2)
+        );
+        assert_eq!(std::fs::read(pending).unwrap(), b"incomplete publication");
+    }
+
+    #[tokio::test]
+    async fn renewed_shell_interest_rejects_limit_without_mutating_records() {
+        let state = tempfile::tempdir().unwrap();
+        let pathinfo = pathinfo_service();
+        let path = store_path("bounded-shell", 63);
+        pathinfo.put(unsigned_pathinfo(path.clone())).await.unwrap();
+        let now = current_unix_seconds().unwrap();
+        let max = store_retention_runtime_policy().limits.max_lease_renewals;
+        let registration = || RootRegistration {
+            class: GcRootClass::ActiveShellLease,
+            owner_scope: "project:b3:bounded".to_string(),
+            project_identity: Some("b3:bounded".to_string()),
+            selector: Some("shell:default".to_string()),
+            generation: None,
+            generation_identity: None,
+            lease: Some(GcRootLease {
+                lease_id: "b3:bounded-lease".to_string(),
+                expires_unix_s: now + 3_600,
+                last_observed_unix_s: now,
+                renewal_count: max - 1,
+            }),
+            removal_requested: false,
+        };
+        let prior =
+            new_record(path.to_absolute_path(), GcRootSource::Build, registration(), now, "shell-lease-registered");
+        crate::interest_store::publish(state.path(), &crate::interest_store::InterestRecord::new(prior)).unwrap();
+        let last_allowed = register_root_with_registration(
+            state.path(),
+            "/nix/store",
+            pathinfo.as_ref(),
+            &path,
+            GcRootSource::Build,
+            registration(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(last_allowed.lease.unwrap().renewal_count, max);
+        let before = crate::interest_store::load(state.path()).unwrap();
+        let before_files = std::fs::read_dir(state.path().join("retention-interests"))
+            .unwrap()
+            .map(|entry| {
+                let entry = entry.unwrap();
+                (entry.file_name(), std::fs::read(entry.path()).unwrap())
+            })
+            .collect::<BTreeMap<_, _>>();
+        let denied = register_root_with_registration(
+            state.path(),
+            "/nix/store",
+            pathinfo.as_ref(),
+            &path,
+            GcRootSource::Build,
+            registration(),
+        )
+        .await
+        .unwrap_err();
+        assert!(denied.to_string().contains("renewal exceeds policy limit"));
+        assert_eq!(crate::interest_store::load(state.path()).unwrap(), before);
+        let after_files = std::fs::read_dir(state.path().join("retention-interests"))
+            .unwrap()
+            .map(|entry| {
+                let entry = entry.unwrap();
+                (entry.file_name(), std::fs::read(entry.path()).unwrap())
+            })
+            .collect::<BTreeMap<_, _>>();
+        assert_eq!(after_files, before_files);
+    }
+
+    #[tokio::test]
+    async fn operator_pin_reasons_survive_automatic_explicit_pin_registration() {
+        let state = tempfile::tempdir().unwrap();
+        let pathinfo = pathinfo_service();
+        let path = store_path("distinct-pin-reasons", 64);
+        pathinfo.put(unsigned_pathinfo(path.clone())).await.unwrap();
+        let logical_path = path.to_absolute_path();
+        for reason in ["ci", "interactive"] {
+            pin_root_for_owner(state.path(), "/nix/store", pathinfo.as_ref(), &logical_path, "operator", reason)
+                .await
+                .unwrap();
+        }
+        assert_eq!(crate::interest_store::per_path(state.path()).unwrap()[&logical_path].len(), 2);
+        register_root(state.path(), "/nix/store", pathinfo.as_ref(), &path, GcRootSource::Pin)
+            .await
+            .unwrap();
+        let records = crate::interest_store::per_path(state.path()).unwrap();
+        assert_eq!(records[&logical_path].len(), 3);
+        assert!(records[&logical_path].iter().any(|record| record.reason == "ci"));
+        assert!(records[&logical_path].iter().any(|record| record.reason == "interactive"));
+        let ambiguous = unpin_root_for_owner_reason(
+            state.path(),
+            LogicalStorePathRef {
+                logical_path: &logical_path,
+                store_dir: "/nix/store",
+            },
+            OPERATOR_OWNER_SCOPE,
+            None,
+        )
+        .unwrap_err();
+        assert!(ambiguous.to_string().contains("ambiguous release"));
+        unpin_root_for_owner_reason(
+            state.path(),
+            LogicalStorePathRef {
+                logical_path: &logical_path,
+                store_dir: "/nix/store",
+            },
+            OPERATOR_OWNER_SCOPE,
+            Some("ci"),
+        )
+        .unwrap()
+        .unwrap();
+        let after = crate::interest_store::per_path(state.path()).unwrap();
+        assert_eq!(after[&logical_path].len(), 2);
+        assert!(after[&logical_path].iter().any(|record| record.reason == "interactive"));
     }
 
     #[test]
@@ -1076,14 +1496,18 @@ mod tests {
             CREATED_UNIX_S,
             "explicit-pin-registered",
         );
-        let mut registry = BTreeMap::new();
-        registry.insert(path.clone(), record);
-        save_registry(state_dir.path(), &registry).expect("save root registry");
+        crate::interest_store::publish(state_dir.path(), &crate::interest_store::InterestRecord::new(record))
+            .expect("publish root interest");
 
-        let removed = unpin_root(state_dir.path(), LogicalStorePathRef {
-            logical_path: &path,
-            store_dir: "/nix/store",
-        })
+        let removed = unpin_root_for_owner_reason(
+            state_dir.path(),
+            LogicalStorePathRef {
+                logical_path: &path,
+                store_dir: "/nix/store",
+            },
+            OPERATOR_OWNER_SCOPE,
+            None,
+        )
         .expect("unpin root");
 
         assert!(removed.is_some());
@@ -1100,12 +1524,26 @@ mod tests {
         let fence = state_dir.path().join("casita-gc-fence.json");
         std::fs::write(&fence, b"foreign Casita fence").unwrap();
 
-        let pinned = pin_root(state_dir.path(), "/nix/store", pathinfo.as_ref(), &logical_path).await.unwrap();
+        let pinned = pin_root_for_owner(
+            state_dir.path(),
+            "/nix/store",
+            pathinfo.as_ref(),
+            &logical_path,
+            "operator",
+            "explicit-pin-registered",
+        )
+        .await
+        .unwrap();
         assert_eq!(pinned.logical_path, logical_path);
-        let removed = unpin_root(state_dir.path(), LogicalStorePathRef {
-            logical_path: &logical_path,
-            store_dir: "/nix/store",
-        })
+        let removed = unpin_root_for_owner_reason(
+            state_dir.path(),
+            LogicalStorePathRef {
+                logical_path: &logical_path,
+                store_dir: "/nix/store",
+            },
+            OPERATOR_OWNER_SCOPE,
+            None,
+        )
         .unwrap();
         assert_eq!(removed, Some(pinned));
         assert!(list_roots(state_dir.path()).unwrap().is_empty());
@@ -1120,21 +1558,330 @@ mod tests {
         let path = store_path("casita-fenced", 45);
         pathinfo.put(unsigned_pathinfo(path.clone())).await.unwrap();
         let logical_path = path.to_absolute_path();
-        pin_root(state_dir.path(), "/nix/store", pathinfo.as_ref(), &logical_path).await.unwrap();
-        let registry_before = std::fs::read(roots_path(state_dir.path())).unwrap();
+        pin_root_for_owner(
+            state_dir.path(),
+            "/nix/store",
+            pathinfo.as_ref(),
+            &logical_path,
+            "operator",
+            "explicit-pin-registered",
+        )
+        .await
+        .unwrap();
+        let registry_before = crate::interest_store::load(state_dir.path()).unwrap();
         let fence = state_dir.path().join("casita-gc-fence.json");
         std::fs::write(&fence, b"pending Casita fence").unwrap();
 
-        let denied_pin = pin_root(state_dir.path(), "/nix/store", pathinfo.as_ref(), &logical_path).await.unwrap_err();
+        let denied_pin = pin_root_for_owner(
+            state_dir.path(),
+            "/nix/store",
+            pathinfo.as_ref(),
+            &logical_path,
+            "operator",
+            "explicit-pin-registered",
+        )
+        .await
+        .unwrap_err();
         assert!(denied_pin.to_string().contains("gc-recovery-required"));
-        let denied_unpin = unpin_root(state_dir.path(), LogicalStorePathRef {
-            logical_path: &logical_path,
-            store_dir: "/nix/store",
-        })
+        let denied_unpin = unpin_root_for_owner_reason(
+            state_dir.path(),
+            LogicalStorePathRef {
+                logical_path: &logical_path,
+                store_dir: "/nix/store",
+            },
+            OPERATOR_OWNER_SCOPE,
+            None,
+        )
         .unwrap_err();
         assert!(denied_unpin.to_string().contains("gc-recovery-required"));
         assert!(migrate_legacy_registry(state_dir.path()).unwrap_err().to_string().contains("gc-recovery-required"));
-        assert_eq!(std::fs::read(roots_path(state_dir.path())).unwrap(), registry_before);
+        assert_eq!(crate::interest_store::load(state_dir.path()).unwrap(), registry_before);
         assert_eq!(std::fs::read(fence).unwrap(), b"pending Casita fence");
+    }
+
+    // r[verify mantle.store_lifecycle.retention_interest_records]
+    #[tokio::test]
+    async fn concurrent_owners_keep_both_records_and_release_one() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let pathinfo = pathinfo_service();
+        let path = store_path("shared", 51);
+        pathinfo.put(unsigned_pathinfo(path.clone())).await.unwrap();
+        let registration = |owner: &str| RootRegistration {
+            owner_scope: format!("operator:{owner}"),
+            ..registration_for_source(GcRootSource::Pin)
+        };
+        let (first, second) = tokio::join!(
+            register_root_with_registration(
+                state_dir.path(),
+                "/nix/store",
+                pathinfo.as_ref(),
+                &path,
+                GcRootSource::Pin,
+                registration("a")
+            ),
+            register_root_with_registration(
+                state_dir.path(),
+                "/nix/store",
+                pathinfo.as_ref(),
+                &path,
+                GcRootSource::Pin,
+                registration("b")
+            ),
+        );
+        first.unwrap();
+        second.unwrap();
+        let logical_path = path.to_absolute_path();
+        let owners = crate::interest_store::per_path(state_dir.path()).unwrap();
+        assert_eq!(owners[&logical_path].len(), 2);
+        assert_eq!(list_roots(state_dir.path()).unwrap().len(), 1);
+        let foreign = unpin_root_for_owner_reason(
+            state_dir.path(),
+            LogicalStorePathRef {
+                logical_path: &logical_path,
+                store_dir: "/nix/store",
+            },
+            "operator:c",
+            None,
+        )
+        .unwrap_err();
+        assert!(foreign.to_string().contains("foreign-owner"));
+        assert!(
+            unpin_root_for_owner_reason(
+                state_dir.path(),
+                LogicalStorePathRef {
+                    logical_path: &logical_path,
+                    store_dir: "/nix/store"
+                },
+                "operator:a",
+                None,
+            )
+            .unwrap()
+            .is_some()
+        );
+        let remaining = crate::interest_store::per_path(state_dir.path()).unwrap();
+        assert_eq!(remaining[&logical_path].len(), 1);
+        assert_eq!(remaining[&logical_path][0].owner, "operator:b");
+        assert_eq!(list_roots(state_dir.path()).unwrap().len(), 1);
+    }
+
+    // r[verify mantle.store_lifecycle.retention_interest_records]
+    #[test]
+    fn invalid_interest_bytes_version_identity_and_duplicates_fail_closed() {
+        let state = tempfile::tempdir().unwrap();
+        let path = store_path("interest", 52).to_absolute_path();
+        let declaration = new_record(
+            path.clone(),
+            GcRootSource::Pin,
+            registration_for_source(GcRootSource::Pin),
+            CREATED_UNIX_S,
+            "explicit-pin-registered",
+        );
+        let record = crate::interest_store::InterestRecord::new(declaration.clone());
+        crate::interest_store::publish(state.path(), &record).unwrap();
+        let dir = state.path().join("retention-interests");
+        let original = std::fs::read_dir(&dir).unwrap().next().unwrap().unwrap().path();
+        let bytes = std::fs::read(&original).unwrap();
+        std::fs::write(&original, b"not json").unwrap();
+        assert!(list_roots(state.path()).unwrap_err().to_string().contains("parsing"));
+        std::fs::write(&original, &bytes).unwrap();
+        let mut wrong_version = serde_json::to_value(&record).unwrap();
+        wrong_version["schema_version"] = serde_json::json!(99);
+        let wrong_bytes = serde_json::to_vec(&wrong_version).unwrap();
+        let wrong_id = HEXLOWER.encode(&crunch_gc_core::interest::identity(&wrong_bytes));
+        let wrong_path = dir.join(format!("{wrong_id}.json"));
+        std::fs::write(&wrong_path, &wrong_bytes).unwrap();
+        assert!(list_roots(state.path()).unwrap_err().to_string().contains("version"));
+        std::fs::remove_file(&wrong_path).unwrap();
+        let invalid_name = dir.join("0000000000000000000000000000000000000000000000000000000000000000.json");
+        std::fs::write(&invalid_name, &bytes).unwrap();
+        assert!(list_roots(state.path()).unwrap_err().to_string().contains("identity mismatch"));
+        std::fs::remove_file(&invalid_name).unwrap();
+        let duplicate_declaration = new_record(
+            path,
+            GcRootSource::Pin,
+            registration_for_source(GcRootSource::Pin),
+            CREATED_UNIX_S + 1,
+            "explicit-pin-registered",
+        );
+        let duplicate_bytes =
+            serde_json::to_vec(&crate::interest_store::InterestRecord::new(duplicate_declaration)).unwrap();
+        let duplicate_id = HEXLOWER.encode(&crunch_gc_core::interest::identity(&duplicate_bytes));
+        let duplicate_path = dir.join(format!("{duplicate_id}.json"));
+        std::fs::write(&duplicate_path, &duplicate_bytes).unwrap();
+        assert!(list_roots(state.path()).unwrap_err().to_string().contains("duplicate retention interest"));
+        std::fs::remove_file(&duplicate_path).unwrap();
+        std::fs::write(&original, vec![b'x'; crunch_gc_core::interest::MAX_INTEREST_BYTES + 1]).unwrap();
+        assert!(list_roots(state.path()).unwrap_err().to_string().contains("oversized"));
+        let oversized_state = tempfile::tempdir().unwrap();
+        let mut oversized_declaration = declaration;
+        oversized_declaration.project_identity = Some("x".repeat(crunch_gc_core::interest::MAX_INTEREST_BYTES));
+        assert!(
+            crate::interest_store::publish(
+                oversized_state.path(),
+                &crate::interest_store::InterestRecord::new(oversized_declaration)
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("size limit")
+        );
+        assert!(crate::interest_store::load(oversized_state.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn migration_refuses_to_overwrite_an_existing_legacy_archive() {
+        let state = tempfile::tempdir().unwrap();
+        let path = store_path("archived-root", 59).to_absolute_path();
+        let legacy_bytes = serde_json::to_vec(&serde_json::json!({
+            path.clone(): {"logical_path": path, "source": "build", "created_unix_s": CREATED_UNIX_S}
+        }))
+        .unwrap();
+        let legacy_path = roots_path(state.path());
+        let archive_path = state.path().join("gc-roots.migrated.json");
+        std::fs::write(&legacy_path, &legacy_bytes).unwrap();
+        std::fs::write(&archive_path, b"prior archive").unwrap();
+
+        let error = migrate_legacy_registry(state.path()).unwrap_err();
+        assert!(error.to_string().contains("archive already exists"));
+        assert_eq!(std::fs::read(&legacy_path).unwrap(), legacy_bytes);
+        assert_eq!(std::fs::read(&archive_path).unwrap(), b"prior archive");
+        assert!(crate::interest_store::load(state.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn migrated_interest_set_preserves_gc_candidate_order() {
+        use crunch_gc_core::GcEntry;
+        use crunch_gc_core::GcExecutionMode;
+        use crunch_gc_core::GcOwnership;
+        use crunch_gc_core::GcPlanRequest;
+
+        let state = tempfile::tempdir().unwrap();
+        let keep = store_path("keep", 53).to_absolute_path();
+        let drop_a = store_path("drop-a", 54).to_absolute_path();
+        let drop_b = store_path("drop-b", 55).to_absolute_path();
+        let legacy = serde_json::json!({
+            keep.clone(): {"logical_path": keep.clone(), "source": "build", "created_unix_s": CREATED_UNIX_S}
+        });
+        std::fs::write(roots_path(state.path()), serde_json::to_vec(&legacy).unwrap()).unwrap();
+        let plan_for_roots = |roots: Vec<GcRootRecord>| {
+            crunch_gc_core::plan_gc(GcPlanRequest {
+                roots: roots.into_iter().map(|root| root.logical_path).collect(),
+                entries: [&keep, &drop_a, &drop_b]
+                    .into_iter()
+                    .map(|path| GcEntry {
+                        path_id: path.clone(),
+                        references: Vec::new(),
+                        declared_nar_bytes: 1,
+                        ownership: GcOwnership::Overlay,
+                    })
+                    .collect(),
+                execution_mode: GcExecutionMode::DryRun,
+            })
+            .unwrap()
+        };
+        let before = plan_for_roots(list_roots(state.path()).unwrap());
+        migrate_legacy_registry(state.path()).unwrap();
+        let after = plan_for_roots(list_roots(state.path()).unwrap());
+        assert_eq!(before.candidate_path_ids, after.candidate_path_ids);
+        assert_eq!(before.plan_id, after.plan_id);
+        assert_eq!(after.candidate_path_ids.len(), 2);
+    }
+
+    #[test]
+    fn active_second_owner_lease_keeps_shared_path() {
+        let state = tempfile::tempdir().unwrap();
+        let logical_path = store_path("lease-shared", 58).to_absolute_path();
+        let current_unix_s = current_unix_seconds().unwrap();
+        let lease_record = |owner: &str, expires_unix_s: i64| {
+            new_record(
+                logical_path.clone(),
+                GcRootSource::Build,
+                RootRegistration {
+                    class: GcRootClass::ActiveShellLease,
+                    owner_scope: format!("operator:{owner}"),
+                    project_identity: None,
+                    selector: None,
+                    generation: None,
+                    generation_identity: None,
+                    lease: Some(GcRootLease {
+                        lease_id: format!("{owner}-lease"),
+                        expires_unix_s,
+                        last_observed_unix_s: current_unix_s - 60,
+                        renewal_count: 0,
+                    }),
+                    removal_requested: false,
+                },
+                current_unix_s - 60,
+                "shell-lease-registered",
+            )
+        };
+        crate::interest_store::publish(
+            state.path(),
+            &crate::interest_store::InterestRecord::new(lease_record("a", current_unix_s - 1)),
+        )
+        .unwrap();
+        crate::interest_store::publish(
+            state.path(),
+            &crate::interest_store::InterestRecord::new(lease_record("b", current_unix_s + 3600)),
+        )
+        .unwrap();
+        let merged = list_roots(state.path()).unwrap();
+        assert_eq!(merged.len(), 1);
+        let plan = crunch_gc_core::retention::plan_retention(
+            &core_retention_policy(),
+            current_unix_s,
+            crate::retention::records_to_core(&merged).unwrap(),
+        )
+        .unwrap();
+        assert!(plan.decisions[0].disposition.retains_path(), "owner b has an active lease");
+    }
+
+    #[test]
+    fn unmigrated_legacy_pin_survives_expired_new_owner_lease() {
+        let state = tempfile::tempdir().unwrap();
+        let logical_path = store_path("legacy-shared", 60).to_absolute_path();
+        let current_unix_s = current_unix_seconds().unwrap();
+        let legacy = new_record(
+            logical_path.clone(),
+            GcRootSource::Pin,
+            registration_for_source(GcRootSource::Pin),
+            current_unix_s - 60,
+            "explicit-pin-registered",
+        );
+        std::fs::write(
+            roots_path(state.path()),
+            serde_json::to_vec(&BTreeMap::from([(logical_path.clone(), legacy)])).unwrap(),
+        )
+        .unwrap();
+        let new_lease = new_record(
+            logical_path,
+            GcRootSource::Build,
+            RootRegistration {
+                class: GcRootClass::ActiveShellLease,
+                owner_scope: "operator:new".to_string(),
+                project_identity: None,
+                selector: None,
+                generation: None,
+                generation_identity: None,
+                lease: Some(GcRootLease {
+                    lease_id: "new-lease".to_string(),
+                    expires_unix_s: current_unix_s - 1,
+                    last_observed_unix_s: current_unix_s - 60,
+                    renewal_count: 0,
+                }),
+                removal_requested: false,
+            },
+            current_unix_s - 60,
+            "shell-lease-registered",
+        );
+        crate::interest_store::publish(state.path(), &crate::interest_store::InterestRecord::new(new_lease)).unwrap();
+        let merged = list_roots(state.path()).unwrap();
+        assert_eq!(merged.len(), 1);
+        let plan = crunch_gc_core::retention::plan_retention(
+            &core_retention_policy(),
+            current_unix_s,
+            crate::retention::records_to_core(&merged).unwrap(),
+        )
+        .unwrap();
+        assert!(plan.decisions[0].disposition.retains_path(), "unmigrated legacy pin must remain protective");
     }
 }

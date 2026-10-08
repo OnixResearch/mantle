@@ -12,13 +12,14 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use crunch_remote_core::attempt::RemoteAttemptId;
+use crunch_remote_core::attempt::RemoteAttemptPhase;
+use crunch_remote_core::attempt::RemoteFenceGeneration;
+use crunch_remote_core::attempt::RemoteJobId;
+use crunch_remote_core::resource as resource_core;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::remote_attempt::RemoteAttemptId;
-use super::remote_attempt::RemoteAttemptPhase;
-use super::remote_attempt::RemoteFenceGeneration;
-use super::remote_attempt::RemoteJobId;
 use super::remote_transfer::CanonicalRemoteTransferManifest;
 use super::remote_transfer::RemoteTransferReceiverFacts;
 use super::remote_transfer::plan_remote_transfer_demand;
@@ -330,21 +331,6 @@ struct ResourceTotals {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct LocalityQuantities {
-    present_object_count: u32,
-    missing_object_count: u32,
-    present_bytes: u64,
-    missing_bytes: u64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct LocalityClassification {
-    content_locality: ContentLocalityClass,
-    transfer_cost: TransferCostClass,
-    reason_code: RemoteLocalityReasonCode,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct PositiveU32Bound {
     value: u32,
     maximum: u32,
@@ -458,24 +444,27 @@ pub fn authorize_remote_resource_lease_mutation(
 ) -> Result<(), RemoteResourceReasonCode> {
     validate_resource_lease(lease)?;
     validate_lease_scope(scope)?;
-    if lease.scope.worker_endpoint_id != scope.worker_endpoint_id {
-        return Err(RemoteResourceReasonCode::LeaseWorkerMismatch);
-    }
-    if lease.scope.job_id != scope.job_id {
-        return Err(RemoteResourceReasonCode::LeaseJobMismatch);
-    }
-    if scope.fence_generation < lease.scope.fence_generation {
-        return Err(RemoteResourceReasonCode::LeaseStaleFence);
-    }
-    if scope.fence_generation > lease.scope.fence_generation {
-        return Err(RemoteResourceReasonCode::LeaseUnknownFence);
-    }
-    if lease.scope.attempt_id != scope.attempt_id {
-        return Err(RemoteResourceReasonCode::LeaseAttemptMismatch);
-    }
+    resource_core::authorize_lease_scope(borrowed_lease_scope(&lease.scope), borrowed_lease_scope(scope)).map_err(
+        |reason| match reason {
+            resource_core::LeaseMismatch::Worker => RemoteResourceReasonCode::LeaseWorkerMismatch,
+            resource_core::LeaseMismatch::Job => RemoteResourceReasonCode::LeaseJobMismatch,
+            resource_core::LeaseMismatch::StaleFence => RemoteResourceReasonCode::LeaseStaleFence,
+            resource_core::LeaseMismatch::UnknownFence => RemoteResourceReasonCode::LeaseUnknownFence,
+            resource_core::LeaseMismatch::Attempt => RemoteResourceReasonCode::LeaseAttemptMismatch,
+        },
+    )?;
     debug_assert_eq!(lease.scope.fence_generation, scope.fence_generation);
     debug_assert_eq!(lease.scope.attempt_id, scope.attempt_id);
     Ok(())
+}
+fn borrowed_lease_scope(scope: &RemoteResourceLeaseScope) -> resource_core::LeaseScope<'_> {
+    resource_core::LeaseScope {
+        worker_endpoint_id: &scope.worker_endpoint_id,
+        worker_generation: scope.worker_generation,
+        job_id: scope.job_id.as_str(),
+        attempt_id: scope.attempt_id.as_str(),
+        fence_generation: scope.fence_generation.get(),
+    }
 }
 
 pub fn plan_remote_resource_lease_release(
@@ -563,27 +552,21 @@ pub fn normalize_remote_verified_locality(
     observation: &RemoteLocalityProbeObservation,
 ) -> Result<RemoteVerifiedLocalitySummary, RemoteLocalityReasonCode> {
     validate_locality_binding(expected_worker_endpoint_id, expected_worker_generation, manifest, observation)?;
-    if !observation.receiver_probe_verified {
-        return conservative_unverified_locality(manifest, observation);
-    }
-    let demand = plan_remote_transfer_demand(manifest, &observation.receiver_facts)
-        .map_err(|_| RemoteLocalityReasonCode::TransferFactsInvalid)?;
-    let missing_object_count =
-        u32::try_from(demand.missing_chunks.len()).map_err(|_| RemoteLocalityReasonCode::ArithmeticOverflow)?;
-    let verified_present_object_count = manifest
-        .chunk_count
-        .checked_sub(missing_object_count)
-        .ok_or(RemoteLocalityReasonCode::ArithmeticOverflow)?;
-    let quantities = LocalityQuantities {
-        present_object_count: verified_present_object_count,
-        missing_object_count,
-        present_bytes: demand.reused_bytes,
-        missing_bytes: demand.missing_bytes,
+    let verified = if observation.receiver_probe_verified {
+        let demand = plan_remote_transfer_demand(manifest, &observation.receiver_facts)
+            .map_err(|_| RemoteLocalityReasonCode::TransferFactsInvalid)?;
+        Some(resource_core::ReceiverDemand {
+            missing_object_count: u32::try_from(demand.missing_chunks.len())
+                .map_err(|_| RemoteLocalityReasonCode::ArithmeticOverflow)?,
+            reused_bytes: demand.reused_bytes,
+            missing_bytes: demand.missing_bytes,
+        })
+    } else {
+        None
     };
-    let classification = locality_classes(quantities);
-    debug_assert_eq!(verified_present_object_count.checked_add(missing_object_count), Some(manifest.chunk_count));
-    debug_assert!(demand.reused_bytes <= manifest.total_bytes);
-    Ok(locality_summary(manifest, observation, quantities, classification))
+    let decision = resource_core::classify_receiver_locality(manifest.chunk_count, manifest.total_bytes, verified)
+        .ok_or(RemoteLocalityReasonCode::TransferFactsInvalid)?;
+    Ok(locality_summary(manifest, observation, decision))
 }
 
 pub fn rank_remote_worker_placement_candidates(
@@ -798,18 +781,12 @@ fn subtract_requested(
     available: &ResourceTotals,
     requested: &ResourceTotals,
 ) -> Result<ResourceTotals, RemoteResourceReasonCode> {
-    let cpu_units = available
-        .cpu_units
-        .checked_sub(requested.cpu_units)
-        .ok_or(RemoteResourceReasonCode::CpuUnavailable)?;
-    let memory_bytes = available
-        .memory_bytes
-        .checked_sub(requested.memory_bytes)
-        .ok_or(RemoteResourceReasonCode::MemoryUnavailable)?;
-    let scratch_bytes = available
-        .scratch_bytes
-        .checked_sub(requested.scratch_bytes)
-        .ok_or(RemoteResourceReasonCode::ScratchUnavailable)?;
+    let remaining = resource_core::reserve_capacity(capacity_from_totals(available), capacity_from_totals(requested))
+        .map_err(|reason| match reason {
+        resource_core::CapacityShortfall::Cpu => RemoteResourceReasonCode::CpuUnavailable,
+        resource_core::CapacityShortfall::Memory => RemoteResourceReasonCode::MemoryUnavailable,
+        resource_core::CapacityShortfall::Scratch => RemoteResourceReasonCode::ScratchUnavailable,
+    })?;
     let accelerators = subtract_named(
         &available.accelerators,
         &requested.accelerators,
@@ -820,12 +797,12 @@ fn subtract_requested(
         &requested.named_tokens,
         RemoteResourceReasonCode::NamedTokenUnavailable,
     )?;
-    debug_assert!(cpu_units <= available.cpu_units);
-    debug_assert!(memory_bytes <= available.memory_bytes);
+    debug_assert!(remaining.cpu_units <= available.cpu_units);
+    debug_assert!(remaining.memory_bytes <= available.memory_bytes);
     Ok(ResourceTotals {
-        cpu_units,
-        memory_bytes,
-        scratch_bytes,
+        cpu_units: remaining.cpu_units,
+        memory_bytes: remaining.memory_bytes,
+        scratch_bytes: remaining.scratch_bytes,
         accelerators,
         named_tokens,
     })
@@ -836,17 +813,16 @@ fn subtract_totals(
     used: &ResourceTotals,
     reason: RemoteResourceReasonCode,
 ) -> Result<ResourceTotals, RemoteResourceReasonCode> {
-    let cpu_units = available.cpu_units.checked_sub(used.cpu_units).ok_or(reason)?;
-    let memory_bytes = available.memory_bytes.checked_sub(used.memory_bytes).ok_or(reason)?;
-    let scratch_bytes = available.scratch_bytes.checked_sub(used.scratch_bytes).ok_or(reason)?;
+    let remaining =
+        resource_core::remaining_capacity(capacity_from_totals(available), capacity_from_totals(used)).ok_or(reason)?;
     let accelerators = subtract_named(&available.accelerators, &used.accelerators, reason)?;
     let named_tokens = subtract_named(&available.named_tokens, &used.named_tokens, reason)?;
-    debug_assert!(cpu_units <= available.cpu_units);
-    debug_assert!(scratch_bytes <= available.scratch_bytes);
+    debug_assert!(remaining.cpu_units <= available.cpu_units);
+    debug_assert!(remaining.scratch_bytes <= available.scratch_bytes);
     Ok(ResourceTotals {
-        cpu_units,
-        memory_bytes,
-        scratch_bytes,
+        cpu_units: remaining.cpu_units,
+        memory_bytes: remaining.memory_bytes,
+        scratch_bytes: remaining.scratch_bytes,
         accelerators,
         named_tokens,
     })
@@ -872,35 +848,37 @@ fn subtract_named(
     Ok(remaining)
 }
 
-fn resource_fit_class(remaining: &ResourceTotals, requested: &ResourceTotals) -> ResourceFitClass {
-    if totals_are_zero(remaining) {
-        return ResourceFitClass::Exact;
+fn capacity_from_totals(totals: &ResourceTotals) -> resource_core::Capacity {
+    resource_core::Capacity {
+        cpu_units: totals.cpu_units,
+        memory_bytes: totals.memory_bytes,
+        scratch_bytes: totals.scratch_bytes,
     }
-    let is_resource_constrained = remaining.cpu_units < requested.cpu_units
-        || remaining.memory_bytes < requested.memory_bytes
-        || remaining.scratch_bytes < requested.scratch_bytes
-        || named_remaining_is_constrained(&remaining.accelerators, &requested.accelerators)
-        || named_remaining_is_constrained(&remaining.named_tokens, &requested.named_tokens);
-    let class = if is_resource_constrained {
-        ResourceFitClass::Constrained
-    } else {
-        ResourceFitClass::Compatible
-    };
-    debug_assert_ne!(class, ResourceFitClass::Unknown);
-    debug_assert!(!totals_are_zero(remaining));
-    class
+}
+
+fn resource_fit_class(remaining: &ResourceTotals, requested: &ResourceTotals) -> ResourceFitClass {
+    let named_empty = remaining.accelerators.is_empty() && remaining.named_tokens.is_empty();
+    let named_constrained =
+        if remaining.cpu_units == 0 && remaining.memory_bytes == 0 && remaining.scratch_bytes == 0 && named_empty {
+            false
+        } else {
+            named_remaining_is_constrained(&remaining.accelerators, &requested.accelerators)
+                || named_remaining_is_constrained(&remaining.named_tokens, &requested.named_tokens)
+        };
+    match resource_core::classify_fit(
+        capacity_from_totals(remaining),
+        capacity_from_totals(requested),
+        named_empty,
+        named_constrained,
+    ) {
+        resource_core::Fit::Exact => ResourceFitClass::Exact,
+        resource_core::Fit::Compatible => ResourceFitClass::Compatible,
+        resource_core::Fit::Constrained => ResourceFitClass::Constrained,
+    }
 }
 
 fn named_remaining_is_constrained(remaining: &BTreeMap<String, u32>, requested: &BTreeMap<String, u32>) -> bool {
     requested.iter().any(|(name, quantity)| remaining.get(name).copied().unwrap_or(0) < *quantity)
-}
-
-fn totals_are_zero(totals: &ResourceTotals) -> bool {
-    totals.cpu_units == 0
-        && totals.memory_bytes == 0
-        && totals.scratch_bytes == 0
-        && totals.accelerators.is_empty()
-        && totals.named_tokens.is_empty()
 }
 
 fn remaining_within_total(remaining: &ResourceTotals, total: &ResourceTotals) -> bool {
@@ -1096,77 +1074,45 @@ fn validate_locality_binding(
     Ok(())
 }
 
-fn conservative_unverified_locality(
-    manifest: &CanonicalRemoteTransferManifest,
-    observation: &RemoteLocalityProbeObservation,
-) -> Result<RemoteVerifiedLocalitySummary, RemoteLocalityReasonCode> {
-    let missing_object_count = manifest.chunk_count;
-    let missing_bytes = manifest.total_bytes;
-    debug_assert!(!observation.receiver_probe_verified);
-    debug_assert!(missing_bytes > 0);
-    let quantities = LocalityQuantities {
-        present_object_count: 0,
-        missing_object_count,
-        present_bytes: 0,
-        missing_bytes,
-    };
-    let classification = LocalityClassification {
-        content_locality: ContentLocalityClass::NoVerifiedContent,
-        transfer_cost: TransferCostClass::Large,
-        reason_code: RemoteLocalityReasonCode::UnverifiedHintDowngraded,
-    };
-    Ok(locality_summary(manifest, observation, quantities, classification))
-}
-
-fn locality_classes(quantities: LocalityQuantities) -> LocalityClassification {
-    if quantities.missing_object_count == 0 && quantities.missing_bytes == 0 {
-        return LocalityClassification {
-            content_locality: ContentLocalityClass::FullyPresent,
-            transfer_cost: TransferCostClass::None,
-            reason_code: RemoteLocalityReasonCode::VerifiedFullyPresent,
-        };
-    }
-    if quantities.present_object_count == 0 && quantities.present_bytes == 0 {
-        return LocalityClassification {
-            content_locality: ContentLocalityClass::NoVerifiedContent,
-            transfer_cost: TransferCostClass::Large,
-            reason_code: RemoteLocalityReasonCode::VerifiedNoContent,
-        };
-    }
-    let transfer_cost = match quantities.missing_bytes.cmp(&quantities.present_bytes) {
-        Ordering::Less => TransferCostClass::Small,
-        Ordering::Equal => TransferCostClass::Medium,
-        Ordering::Greater => TransferCostClass::Large,
-    };
-    debug_assert!(quantities.missing_object_count > 0);
-    debug_assert!(quantities.present_object_count > 0 || quantities.present_bytes > 0);
-    LocalityClassification {
-        content_locality: ContentLocalityClass::PartiallyPresent,
-        transfer_cost,
-        reason_code: RemoteLocalityReasonCode::VerifiedPartiallyPresent,
-    }
-}
-
 fn locality_summary(
     manifest: &CanonicalRemoteTransferManifest,
     observation: &RemoteLocalityProbeObservation,
-    quantities: LocalityQuantities,
-    classification: LocalityClassification,
+    decision: resource_core::LocalityDecision,
 ) -> RemoteVerifiedLocalitySummary {
+    let (content_locality, reason_code) = match decision.locality {
+        resource_core::LocalityClass::FullyPresent => {
+            (ContentLocalityClass::FullyPresent, RemoteLocalityReasonCode::VerifiedFullyPresent)
+        }
+        resource_core::LocalityClass::PartiallyPresent => {
+            (ContentLocalityClass::PartiallyPresent, RemoteLocalityReasonCode::VerifiedPartiallyPresent)
+        }
+        resource_core::LocalityClass::NoVerifiedContent => {
+            (ContentLocalityClass::NoVerifiedContent, RemoteLocalityReasonCode::VerifiedNoContent)
+        }
+        resource_core::LocalityClass::Unverified => {
+            (ContentLocalityClass::NoVerifiedContent, RemoteLocalityReasonCode::UnverifiedHintDowngraded)
+        }
+    };
+    let transfer_cost = match decision.transfer {
+        resource_core::TransferClass::None => TransferCostClass::None,
+        resource_core::TransferClass::Small => TransferCostClass::Small,
+        resource_core::TransferClass::Medium => TransferCostClass::Medium,
+        resource_core::TransferClass::Large => TransferCostClass::Large,
+    };
     let summary = RemoteVerifiedLocalitySummary {
         schema: REMOTE_LOCALITY_SUMMARY_SCHEMA.to_string(),
         worker_endpoint_id: observation.worker_endpoint_id.clone(),
         worker_generation: observation.worker_generation,
         scope: observation.scope.clone(),
         demanded_object_count: manifest.chunk_count,
-        verified_present_object_count: quantities.present_object_count,
-        missing_object_count: quantities.missing_object_count,
+        verified_present_object_count: decision.present_object_count,
+        missing_object_count: decision.missing_object_count,
         demanded_bytes: manifest.total_bytes,
-        verified_present_bytes: quantities.present_bytes,
-        missing_bytes: quantities.missing_bytes,
-        content_locality: classification.content_locality,
-        transfer_cost: classification.transfer_cost,
-        reason_code: classification.reason_code,
+        verified_present_bytes: decision.present_bytes,
+        missing_bytes: decision.missing_bytes,
+        content_locality,
+        transfer_cost,
+        reason_code,
         claim_scope: REMOTE_LOCALITY_CLAIM_SCOPE.to_string(),
         non_claims: REMOTE_LOCALITY_NON_CLAIMS.iter().map(|value| (*value).to_string()).collect(),
     };
@@ -1180,20 +1126,25 @@ fn compare_worker_placement(
     left: &RemoteWorkerPlacementFacts,
     right: &RemoteWorkerPlacementFacts,
 ) -> Ordering {
-    for field in &policy.preference_order {
-        let ordering = match field {
-            PreferenceField::KnownGraph => Ordering::Equal,
-            PreferenceField::ResourceFit => right.resource_fit.cmp(&left.resource_fit),
-            PreferenceField::LocalityTransfer => right
-                .content_locality
-                .cmp(&left.content_locality)
-                .then_with(|| right.transfer_cost.cmp(&left.transfer_cost)),
-        };
-        if ordering != Ordering::Equal {
-            return ordering;
-        }
-    }
-    left.worker_endpoint_id.cmp(&right.worker_endpoint_id)
+    resource_core::compare_placement(
+        policy.preference_order.iter().map(|field| match field {
+            PreferenceField::KnownGraph => resource_core::PlacementPreference::KnownGraph,
+            PreferenceField::ResourceFit => resource_core::PlacementPreference::ResourceFit,
+            PreferenceField::LocalityTransfer => resource_core::PlacementPreference::LocalityTransfer,
+        }),
+        resource_core::PlacementFacts {
+            worker_endpoint_id: &left.worker_endpoint_id,
+            resource_fit: left.resource_fit as u8,
+            content_locality: left.content_locality as u8,
+            transfer_cost: left.transfer_cost as u8,
+        },
+        resource_core::PlacementFacts {
+            worker_endpoint_id: &right.worker_endpoint_id,
+            resource_fit: right.resource_fit as u8,
+            content_locality: right.content_locality as u8,
+            transfer_cost: right.transfer_cost as u8,
+        },
+    )
 }
 
 #[cfg(test)]
@@ -1431,6 +1382,10 @@ mod tests {
             attempt_id: RemoteAttemptId::new("different-attempt").unwrap(),
             ..plan.lease.scope.clone()
         };
+        let restarted_worker = RemoteResourceLeaseScope {
+            worker_generation: TEST_WORKER_GENERATION + 1,
+            ..plan.lease.scope.clone()
+        };
 
         for kind in [
             RemoteResourceLeaseMutationKind::Renew,
@@ -1448,6 +1403,10 @@ mod tests {
             assert_eq!(
                 authorize_remote_resource_lease_mutation(&plan.lease, &wrong_attempt, kind),
                 Err(RemoteResourceReasonCode::LeaseAttemptMismatch)
+            );
+            assert_eq!(
+                authorize_remote_resource_lease_mutation(&plan.lease, &restarted_worker, kind),
+                Err(RemoteResourceReasonCode::LeaseWorkerMismatch)
             );
         }
         assert_eq!(plan.lease.scope.fence_generation.get(), 2);
@@ -1470,10 +1429,21 @@ mod tests {
         )
         .unwrap();
         let superseded = plan_remote_resource_lease_recovery(&plan.lease, Some(&scope("restart", 3)), None).unwrap();
+        let restarted_worker = RemoteResourceLeaseScope {
+            worker_generation: TEST_WORKER_GENERATION + 1,
+            ..plan.lease.scope.clone()
+        };
+        let restart = plan_remote_resource_lease_recovery(
+            &plan.lease,
+            Some(&restarted_worker),
+            Some(RemoteAttemptPhase::Running),
+        )
+        .unwrap();
 
         assert_eq!(current.disposition, RemoteResourceRecoveryDisposition::Preserve);
         assert_eq!(terminal.disposition, RemoteResourceRecoveryDisposition::Release);
         assert_eq!(superseded.disposition, RemoteResourceRecoveryDisposition::Release);
+        assert_eq!(restart.disposition, RemoteResourceRecoveryDisposition::Release);
         assert_eq!(current.reason_code, RemoteResourceReasonCode::LeasePreservedOnRecovery);
     }
 

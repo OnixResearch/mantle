@@ -4,9 +4,12 @@
 
 Proposed (2026-09-30)
 
-Implementation is partial, and this record is not Accepted. In
-`adopt-casita-store-backend`, T2.5, T2.10, T2.13, T2.15, T3.3, T3.4, T3.5,
-and T3.6 are checked from recorded runs; 28 tasks remain open. In
+Implementation is partial, and this record is not Accepted. The isolated
+`adopt-casita-store-backend` evidence records individually checked trust,
+publication, cache, and GC tasks from separate remote-main and local-worktree
+source snapshots. Their overlapping run numbers are not interchangeable;
+the active tasks and their retained receipts define each claim, while
+merged-source conformance, final quality, and dependency audit remain open. In
 `add-store-backend-selection`, T1.1–T1.4, T2.1–T2.7, T3.1–T3.4,
 and T4.1–T4.4 are checked from preserved pre-selection goldens,
 the scoped canonical consumer-fact rail with its unchanged unequal
@@ -151,7 +154,7 @@ carry this decision.
 | Backend | `overlay-composition` | `atomic-batch-import` | `unsigned-admission` | `rust-unit-cache` |
 | --- | --- | --- | --- | --- |
 | `snix` (CLI default) | Declared | Declared (`put_batch_atomic`), no backend bound | Declared | Declared |
-| `casita` | Not declared; `casita-overlay-unsupported` | Declared, at most 1,024 PathInfo records per batch; Nario v2 counts only paths it finds absent (`casita-batch-limit`) | Not declared; `casita-trust-unsigned-unsupported` | Declared unsupported while the interim guards persist; `casita-rust-cache-unsupported` |
+| `casita` | Not declared; `casita-overlay-unsupported` | Declared, at most 1,024 PathInfo records per batch; Nario v2 counts only paths it finds absent (`casita-batch-limit`) | Not declared; `casita-trust-unsigned-unsupported` | Declared; retained castore payload roots are verified on reopen and before GC |
 
 ### Casita backend
 
@@ -517,16 +520,37 @@ releases only roots marked evictable, and Mantle never marks one.
   `bao-tree`, `iroh-io`, and a git-pinned `turso`. `astral-tokio-tar` moves
   from 0.6.3 to exactly 0.6.4. `blake3` must stay at `=1.8.2`, which Casita's
   `1.8` requirement allows.
-- The vendor rail reports that `deny.toml` now admits the Casita and `turso`
-  git sources, and that its `cargo deny check` still fails advisories and
-  sources. In the lock, only `proc-macro-error 0.4.12` (unmaintained, not a
-  security advisory) is new, and it comes only from Casita's graph through
-  `genawaiter 0.99.1`. The `h2 0.4.13` and `rustls 0.23.37` advisories are
-  unchanged from HEAD and also reachable from `casita` through
-  `object_store 0.14.0`. `bitmaps 3.2.1`, `imbl-sized-chunks 0.1.3`, and
-  `rsa 0.9.10` are unchanged and off the Casita path, and four missing
-  `allow-git` sources predate this change. The dependency gate stays open,
-  with no waivers.
+- An initial full `cargo-deny 0.19.0 check --config deny.toml` after the
+  APK lock handoff exited 9: bans and licenses passed, advisories and sources
+  failed. Neither Casita nor Turso failed source admission. The Casita-only
+  `proc-macro-error 0.4.12` finding is unmaintained, not a security
+  vulnerability, and comes through `genawaiter 0.99.1` in both `bao-tree`
+  and Turso's sync SDK. Its RustSec advisory lists no safe upgrade; a
+  lockfile-only bump cannot fix the two pinned upstream dependencies.
+  `h2 0.4.13` and `rustls 0.23.37` also affect the Casita `object_store`
+  path and have compatible fixed releases. Existing off-Casita advisories
+  affect Nickel's `bitmaps` and `imbl-sized-chunks` and Secretspec's `rsa`.
+  Four unrelated Git repositories are not admitted by the source policy;
+  their individually pinned revisions and independent checks are listed in
+  `docs/dependency-audit.md`. T1.3 and T4.7 stay open: no new waiver,
+  broad Git admission, passing audit, or release claim.
+- Cargo-resolved compatible lock updates moved `h2` to 0.4.16 and `rustls`
+  to 0.23.45 without moving `blake3` off 1.8.2. A second full configured
+  audit of that lock removed those two advisory errors but still exited 9
+  on the four remaining advisories and the four unrelated Git sources.
+  That audit used Cargo's registry index because the previous Nix vendor
+  closure still contained the older HTTP/TLS packages; a coherent vendored
+  compile is separate evidence, not a consequence of metadata resolution.
+- The subsequent Nix vendor closure for the updated lock built at
+  `/nix/store/z4pv4a36rgdq95l35wxzgx3xqgr7gdw4-vendor-cargo-deps`.
+  Repository-owned `vendor-deps/` regeneration and check matched 53,596
+  entries; default-shell locked offline metadata passed. Repeating the full
+  configured audit in that vendor shell still exited 9 on the same four
+  advisories and four unrelated Git repositories, with bans and licenses
+  passing. After regeneration, default-shell
+  `cargo check --locked --offline -p crunch-store --lib` also passed, checking
+  `h2 0.4.16`, `rustls 0.23.45`, pinned Turso/Casita, and `crunch-store`.
+  This scoped compile is not a clean-checkout Nix build or a passing audit.
 - Every read is a full content audit: it checks the envelope out, re-ingests
   `content`, and measures the NAR again, so read cost grows with output size.
 - Operators must provision `casita-trusted-public-keys` before a migration.
@@ -611,19 +635,18 @@ releases only roots marked evictable, and Mantle never marks one.
   `--execute`), and the unchanged `snix` repair in Run 46.
 - `ActionResultPort` outputs backed by PathInfo stay core: they are admitted as
   output roots and rehydrated by a fresh process. Standalone Rust unit cache
-  nodes (ADR 0035) are castore-only and are not equivalent. While the interim
-  guards persist, `rust-unit-cache` is declared unsupported and Rust cache use
-  fails with `casita-rust-cache-unsupported` before any effect. `store gc`
-  stays operable for output roots when no Rust cache state exists and fails
-  closed before any fence when it does; core output GC is not claimed until the
-  no-cache scenario passes. Casita Runs 48 and 49 pass it through the CLI: with
-  no Rust unit cache state, `store gc` plans and executes, removes the
-  unretained output, and leaves the retained one verifiable; with a
-  `rust-unit-cache` entry, planning and execution fail with
-  `casita-rust-cache-unsupported` before any fence and change nothing. `casita`
-  claims no Rust cache parity or full swap with `snix`. When the proposed
-  `mantle/castore/<hex>` roots are wired and a fresh-process reuse test passes,
-  the guards are removed and the capability becomes supported.
+  nodes (ADR 0035) are castore-only, so Casita publishes retained nodes under
+  `mantle/castore/<hex>` roots whose `node.postcard` and `content` are verified
+  before fresh-process reuse. A missing or repointed retained root fails with
+  `casita-root-missing` or `casita-envelope-invalid`, including at verified GC
+  retention planning before root removal. The real Rust compiler wrapper
+  rejects a missing retained root even in FailOpen mode without executing
+  the compiler (Casita Run 82). Earlier Runs 48 and 49 proved only the
+  temporary unsupported gate: output GC without cache state succeeded, and
+  cache-state GC was refused. That gate has been removed in the same cutover
+  as the public Rust cache profile. CLI GC with existing cache state and
+  literal interrupted-fence recovery still await the coherent updated binary;
+  neither earlier run is evidence that those changed paths now pass.
 - The pinned revision does not compile unmodified in Mantle's graph:
   `crates/casita/src/nar.rs:88` resolves `hash.finalize()` to
   `sha2::Digest::finalize`. One tracked, repository-owned patch changes the
@@ -664,13 +687,20 @@ releases only roots marked evictable, and Mantle never marks one.
 - `turso` is `=0.8.0-pre.7` from `https://github.com/cachix/turso.git` at
   `dca55133caa690f90dcdd58d3c4329fb0703659c`, an integration revision that
   carries WAL fixes not yet available upstream.
+  Its Cargo package declarations are `MIT`; Casita declares `Apache-2.0`.
+  The checked-in `deny.toml` admits only these two repositories for this
+  decision, not arbitrary Git sources. The Cargo and Nix pins independently
+  constrain the exact revisions because repository admission does not.
 - A bump must recheck, at the new revision, everything this ADR relies on:
   the listed signatures; all-or-none conditional publication with
   first-mismatch reporting and bounded retry of unrelated revision races;
   unrooted-session protection and later collectability; the
   `max_root_changes` default; permanent-by-default roots and the
   pressure-pass rules; the envelope key identity used for idempotent
-  admission; and format migrations on open.
+  admission; and format migrations on open. Re-review Git source identities,
+  declared and transitive licenses, advisories, the exact experimental-API
+  inventory, and both vendor closures; rerun the full configured dependency
+  audit without treating a repository allow-list entry as an immutable pin.
 
 ## Evidence scope
 
@@ -705,9 +735,10 @@ Evidence that exists on 2026-09-30:
   unsigned record, the Casita repair refusals in the CLI and the library, later
   with full state and output comparisons, the unchanged `snix` repair, the
   adapter tests again at the current source after the repair cut, including a
-  GC inventory of more roots than one atomic mutation allows, the `store gc`
-  CLI with and without Rust unit cache state, the CLI archive migration and
-  import tests and the CLI cache regression test again at the current source,
+  GC inventory of more roots than one atomic mutation allows; the old
+  `store gc` CLI checks both without cache state and with its temporary
+  unsupported-state gate (not current Casita parity evidence); CLI archive
+  migration and import and the CLI cache regression on that source;
   the `bootstrap --fetch` regression test with the durable signer,
   `cargo check` and `cargo build` of `crunch-store` in the default dev shell
   without `--config`, and a fresh-process `mantle build` cache hit under both
@@ -717,12 +748,29 @@ Evidence that exists on 2026-09-30:
   build, both from `examples/hello.ncl`, plus one-off smokes of a sandboxed
   build with a generated signer and no policy file and of `bootstrap --fetch`
   with the durable signer. Tasks T3.4 (retention fixtures), T2.15 (profile
-  rejections), T3.3 (GC fixtures), T2.13 (read-side fixtures), T3.6 (`store gc`
-  reachability), T3.5 (migration fixtures), and T2.10 (replacement and
-  repair-refusal fixtures) are checked from those runs, and T2.5 (`store sign`
+  rejections), T3.3 (GC fixtures), T2.13 (read-side fixtures), T3.5
+  (migration fixtures), and T2.10 (replacement and repair-refusal fixtures)
+  are checked from those earlier runs, and T2.5 (`store sign`
   replacement and the repair refusal) from those runs and a recorded code
-  review. Every other task stays open, and the file names each task's remaining
-  gap.
+  review. Run 57 reorders the new-process PathInfo-backed action-result probe
+  to precede any other PathInfo read and checks no castore-only root is needed;
+  T2.16 is also checked. Run 58 completes the operator documentation while
+  recording that castore-only payload roots were not yet implemented in its
+  earlier source; the current docs supersede that temporary gate and T4.4
+  remains checked. Run 59 reviews the durable-format and blocker definitions
+  as of that earlier source; T1.4 remains checked. Run 60 verifies that
+  Casita persists only its repository, not Snix blob or redb state, and
+  reuses the sandboxed build and fresh-process rehydration evidence; T2.2
+  remains checked. Run 61 verifies that identical output admission leaves
+  the Casita root target and revision unchanged; T2.4 remains checked.
+  Later Runs 82–86 record current public Casita cache fresh-process and
+  real wrapper parity, scoped interrupted-GC recovery, a guarded interim
+  vendor closure check, literal first-binary CLI missing-root rejection
+  and guarded interrupted-output recovery, and direct signed no-cache
+  output GC execution. T2.7, T2.12, and T3.7 are checked from their
+  public and CLI fixtures. T3.6 and T4.8 remain open pending integrated
+  existing-cache and no-cache signed-output GC *test fixtures*; other
+  unchecked tasks retain their individual gaps in the evidence transcript.
 - `evidence/test-runs-2026-09-30.md` in `add-store-backend-selection` copies
   its runs the same way: the library backend-mismatch test, the root-registry
   tests with a foreign Casita fence (and their first, non-compiling attempt),
@@ -749,6 +797,20 @@ Evidence that exists on 2026-09-30:
   locked offline metadata, again at 19:12 UTC. The Nix build read the dirty
   working tree (the untracked patch became visible to it only after
   `git add -N`), so it is not the clean-checkout proof that T1.2 asks for.
+- A separate full `cargo-deny 0.19.0 check --config deny.toml` exited 9:
+  advisories and sources failed, bans and licenses passed; the source
+  failures were only the four unrelated repositories. The configured audit
+  could not query the registry index for yanked-crate status. It is a failed
+  gate, not completion evidence for T1.3 or T4.7.
+- For the updated lock, the Nix vendor closure built at
+  `/nix/store/z4pv4a36rgdq95l35wxzgx3xqgr7gdw4-vendor-cargo-deps`;
+  repository-owned `vendor-deps.py check` matched 53,596 entries and 766
+  locked external package names. Default-shell locked offline metadata and
+  `cargo check --locked --offline -p crunch-store --lib` passed against it.
+  Two later full configured audits of the updated lock, once with Cargo's
+  registry index and once in the default vendor shell, both still exited 9
+  on four advisory findings and four unrelated Git source repositories.
+  This is neither a clean-checkout Nix compile nor T1.3/T4.7 completion.
 
 Evidence added on 2026-10-04 in the now archived
 `add-store-backend-selection` change:
@@ -804,12 +866,12 @@ and trust-policy fixtures for the separate Casita change;
 castore payload-root fixtures; for T1.2, a vendor build
 from a clean checkout and the confirmation that every toolchain, including
 self-build source-bundle profiles, meets Casita's `rust-version`; for T4.6,
-`cargo check` with the tracked Casita patch in the Nix build and with the
-`vendor-deps/` closure, and the patch drift checks; and a passing `cargo deny`
-result for the new dependency closure. The vendor rail's run failed advisories
-and sources, as recorded under Consequences. At the pin, `casita` itself
-declares Apache-2.0, which `deny.toml` allows. The advisory review belongs in
-[`docs/dependency-audit.md`](../docs/dependency-audit.md).
+`cargo check` with the tracked Casita patch in the Nix build, and the patch
+drift checks; and a passing `cargo deny` result for the new dependency
+closure. All recorded full configured audits failed advisories and sources,
+as recorded under Consequences. At the pin, `casita` declares Apache-2.0
+and Turso declares MIT, both already allowed by `deny.toml`. The advisory
+review belongs in [`docs/dependency-audit.md`](../docs/dependency-audit.md).
 
 When complete, the evidence will cover only the tested behavior for the pinned
 revision, feature set, and declared profiles. It will not prove that a state
@@ -832,8 +894,9 @@ release eligibility.
   `Cargo.lock`, and the Nix assertion. Build from clean source with the Crane
   vendor closure. Regenerate and check `vendor-deps/` with the
   repository-owned path and locked offline Cargo metadata. Run
-  `cargo deny check`, the conformance rail on `snix` and `casita`, and the
-  Casita fixtures. Keep exact transcripts in each Cairn change's `evidence/`.
+  `cargo deny check --config deny.toml`, the conformance rail on `snix` and
+  `casita`, and the Casita fixtures. Keep exact transcripts in each Cairn
+  change's `evidence/`.
 - **Bump.** A new revision or feature set needs its own reviewed Cairn
   change. That change re-reviews the upstream source at the new revision
   against the list above, updates this ADR's API table and

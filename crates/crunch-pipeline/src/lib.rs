@@ -18,11 +18,15 @@
 mod derivation_file;
 mod evaluation_stream;
 mod jobs_policy;
+mod watch;
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 pub use crunch_build::BUILD_ENVIRONMENT_DIGEST_ALGORITHM;
 pub use crunch_build::BuildDeterminismControl;
@@ -60,6 +64,7 @@ pub use crunch_build::SEARCH_PATH_DIGEST_ALGORITHM;
 pub use crunch_build::SchedulingPolicy;
 use crunch_build::Worker;
 use crunch_build::WorkerResult;
+use crunch_build::causal_trace::Trace;
 use crunch_eval::session::RootForceExecutionPolicy;
 use crunch_glue::ConversionCache;
 use crunch_glue::CrunchDerivation;
@@ -73,8 +78,36 @@ use evaluation_stream::stream_roots_into_worker;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
 use tokio::sync::mpsc;
+pub use watch::WatchNotice;
+pub use watch::watch_build;
 
 const EVAL_MESSAGE_CHANNEL_CAPACITY: usize = 16;
+/// Live observation is bounded separately from the build scheduler's goal cap.
+pub const MAX_LIVE_WORKER_GOALS: usize = 4_095;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkerLiveGoal {
+    pub drv_key: String,
+    pub state: crunch_build::GoalState,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkerLiveSnapshot {
+    pub goals: Vec<WorkerLiveGoal>,
+}
+
+/// A dropped/full observation queue degrades only the optional live view.
+pub struct WorkerLiveObservation {
+    sender: mpsc::Sender<Arc<WorkerLiveSnapshot>>,
+    degraded: Arc<AtomicBool>,
+}
+
+impl WorkerLiveObservation {
+    pub fn new(sender: mpsc::Sender<Arc<WorkerLiveSnapshot>>, degraded: Arc<AtomicBool>) -> Self {
+        Self { sender, degraded }
+    }
+}
+
 #[cfg(test)]
 const EVAL_POLICY_TEST_MAX_JOBS: u32 = 4;
 
@@ -123,6 +156,7 @@ pub struct PipelineResult {
     pub hermeticity_mode: HermeticityMode,
     pub hermeticity_audit_events: Vec<HermeticityAuditEvent>,
     pub build_environment_reports: Vec<BuildEnvironmentReport>,
+    pub finish_gate_reports: Vec<crunch_build::FinishGateReport>,
     pub network_policy_reports: Vec<BuildNetworkPolicyReport>,
     pub workspace_reports: Vec<crunch_build::WorkspaceExecutionReport>,
     pub action_result_reports: Vec<crunch_build::ActionResultRuntimeReport>,
@@ -162,6 +196,7 @@ pub struct RegisteredBuildResult {
     pub outputs: Vec<RegisteredOutputResult>,
     pub hermeticity_audit_events: Vec<HermeticityAuditEvent>,
     pub build_environment_reports: Vec<BuildEnvironmentReport>,
+    pub finish_gate_reports: Vec<crunch_build::FinishGateReport>,
     pub network_policy_reports: Vec<BuildNetworkPolicyReport>,
     pub workspace_reports: Vec<crunch_build::WorkspaceExecutionReport>,
     pub action_result_reports: Vec<crunch_build::ActionResultRuntimeReport>,
@@ -184,6 +219,8 @@ pub enum Error {
     Convert(String),
     #[error("{0}")]
     Build(String),
+    #[error("watch mode requires local cancellable sandbox builds; remote watch execution is not supported")]
+    WatchRemoteUnsupported,
     #[error("{0}")]
     Internal(String),
 }
@@ -238,15 +275,48 @@ fn map_eval_error(err: crunch_eval::Error) -> Error {
     Error::Eval(err.to_string())
 }
 
+/// A preflight result can exist before a worker goal is observable.
+pub enum CausalTraceObservation {
+    Recorded(Trace),
+    WorkerNotStarted,
+}
+
+/// Build with an opt-in scheduler diagnostic, separate from report and receipts.
+pub async fn build_with_causal_trace(config: &BuildConfig) -> Result<(PipelineResult, CausalTraceObservation), Error> {
+    let mut observation = None;
+    let result =
+        build_with_stream_sender(config, EvaluationCancellation::new(), None, None, Some(&mut observation)).await?;
+    Ok((result, observation.ok_or_else(|| Error::Internal("causal trace was not captured".to_string()))?))
+}
+
+/// Keep the live stream and worker snapshots active during a traced build.
+pub async fn build_with_causal_trace_live(
+    config: &BuildConfig,
+    cancellation: EvaluationCancellation,
+    stream_tx: mpsc::Sender<crunch_evaluation_stream_core::StreamRecordValue>,
+    worker_observation: WorkerLiveObservation,
+) -> Result<(PipelineResult, CausalTraceObservation), Error> {
+    let mut observation = None;
+    let result = build_with_stream_sender(
+        config,
+        cancellation,
+        Some(stream_tx),
+        Some(worker_observation),
+        Some(&mut observation),
+    )
+    .await?;
+    Ok((result, observation.ok_or_else(|| Error::Internal("causal trace was not captured".to_string()))?))
+}
+
 pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
-    build_with_stream_sender(config, EvaluationCancellation::new(), None).await
+    build_with_stream_sender(config, EvaluationCancellation::new(), None, None, None).await
 }
 
 pub async fn build_with_evaluation_cancellation(
     config: &BuildConfig,
     cancellation: EvaluationCancellation,
 ) -> Result<PipelineResult, Error> {
-    build_with_stream_sender(config, cancellation, None).await
+    build_with_stream_sender(config, cancellation, None, None, None).await
 }
 
 pub async fn build_with_evaluation_stream(
@@ -254,13 +324,24 @@ pub async fn build_with_evaluation_stream(
     cancellation: EvaluationCancellation,
     stream_tx: mpsc::Sender<crunch_evaluation_stream_core::StreamRecordValue>,
 ) -> Result<PipelineResult, Error> {
-    build_with_stream_sender(config, cancellation, Some(stream_tx)).await
+    build_with_stream_sender(config, cancellation, Some(stream_tx), None, None).await
+}
+
+pub async fn build_with_live_observation(
+    config: &BuildConfig,
+    cancellation: EvaluationCancellation,
+    stream_tx: mpsc::Sender<crunch_evaluation_stream_core::StreamRecordValue>,
+    worker_observation: WorkerLiveObservation,
+) -> Result<PipelineResult, Error> {
+    build_with_stream_sender(config, cancellation, Some(stream_tx), Some(worker_observation), None).await
 }
 
 async fn build_with_stream_sender(
     config: &BuildConfig,
     cancellation: EvaluationCancellation,
     stream_tx: Option<mpsc::Sender<crunch_evaluation_stream_core::StreamRecordValue>>,
+    worker_observation: Option<WorkerLiveObservation>,
+    causal_trace_slot: Option<&mut Option<CausalTraceObservation>>,
 ) -> Result<PipelineResult, Error> {
     validate_build_config(config)?;
     let store_config = crunch_store::StoreConfig {
@@ -292,7 +373,11 @@ async fn build_with_stream_sender(
         Err(err @ crunch_store::Error::PathInfoFallbackRejected { .. }) => {
             let derivations = session.force_all_roots::<CrunchDerivation>().map_err(map_eval_error)?;
             debug_assert!(!derivations.is_empty(), "must have at least one derivation");
-            return build_preflight_failure(config, &derivations, err.to_string());
+            let result = build_preflight_failure(config, &derivations, err.to_string())?;
+            if let Some(slot) = causal_trace_slot {
+                *slot = Some(CausalTraceObservation::WorkerNotStarted);
+            }
+            return Ok(result);
         }
         Err(error) => {
             let store_kind = if has_base_stores { "overlay store" } else { "store" };
@@ -317,13 +402,15 @@ async fn build_with_stream_sender(
             hermeticity_audit_events,
             cancellation,
             stream_tx,
+            worker_observation,
+            causal_trace_slot,
         })
         .await;
     }
 
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = (store, cancellation, stream_tx);
+        let _ = (store, cancellation, stream_tx, worker_observation, causal_trace_slot);
         Err(Error::Build("building is only supported on Linux (requires bwrap)".to_string()))
     }
 }
@@ -344,6 +431,20 @@ struct LinuxBuildRequest<'a> {
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
     cancellation: EvaluationCancellation,
     stream_tx: Option<mpsc::Sender<crunch_evaluation_stream_core::StreamRecordValue>>,
+    worker_observation: Option<WorkerLiveObservation>,
+    causal_trace_slot: Option<&'a mut Option<CausalTraceObservation>>,
+}
+
+#[cfg(target_os = "linux")]
+fn capture_causal_trace(worker: &mut Worker, slot: Option<&mut Option<CausalTraceObservation>>) -> Result<(), Error> {
+    if let Some(slot) = slot {
+        let trace = worker
+            .take_causal_trace()
+            .map_err(|error| Error::Internal(format!("causal trace: {error}")))?
+            .ok_or_else(|| Error::Internal("causal trace was not enabled".to_string()))?;
+        *slot = Some(CausalTraceObservation::Recorded(trace));
+    }
+    Ok(())
 }
 
 #[cfg(target_os = "linux")]
@@ -362,7 +463,50 @@ async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, E
     let mut known_paths = DerivationRegistry::new(&config.store_dir);
     let mut worker = Worker::with_scheduling_policy(config.max_jobs, config.scheduling_policy.clone())
         .map_err(|error| Error::Build(format!("scheduler policy: {error}")))?;
-    let worker_run = worker.run_streaming(&mut builder, &mut known_paths, &mut rx);
+    if request.causal_trace_slot.is_some() {
+        worker.enable_causal_trace(&config.store_dir);
+    }
+    let mut worker_observation = request.worker_observation.map(|observation| {
+        let mut previous: Option<Arc<WorkerLiveSnapshot>> = None;
+        move |registry: &crunch_build::GoalRegistry| {
+            if observation.degraded.load(Ordering::Acquire) {
+                return;
+            }
+            if registry.len() as usize > MAX_LIVE_WORKER_GOALS {
+                observation.degraded.store(true, Ordering::Release);
+                return;
+            }
+            if previous.as_ref().is_some_and(|last| {
+                last.goals.len() == registry.len() as usize
+                    && registry.iter().all(|(drv_key, goal)| {
+                        last.goals
+                            .binary_search_by(|row| row.drv_key.as_str().cmp(drv_key))
+                            .is_ok_and(|index| last.goals[index].state == goal.state)
+                    })
+            }) {
+                return;
+            }
+            let mut goals: Vec<_> = registry
+                .iter()
+                .map(|(drv_key, goal)| WorkerLiveGoal {
+                    drv_key: drv_key.to_owned(),
+                    state: goal.state.clone(),
+                })
+                .collect();
+            goals.sort_unstable_by(|left, right| left.drv_key.cmp(&right.drv_key));
+            let snapshot = Arc::new(WorkerLiveSnapshot { goals });
+            previous = Some(Arc::clone(&snapshot));
+            if observation.sender.try_send(snapshot).is_err() {
+                observation.degraded.store(true, Ordering::Release);
+            }
+        }
+    });
+    let worker_run = worker.run_streaming_observed(
+        &mut builder,
+        &mut known_paths,
+        &mut rx,
+        worker_observation.as_mut().map(|observe| observe as &mut dyn FnMut(&crunch_build::GoalRegistry)),
+    );
     let eval_stream = stream_roots_into_worker(EvalStreamRequest {
         max_jobs: config.max_jobs,
         store_dir: &config.store_dir,
@@ -381,6 +525,7 @@ async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, E
         Err(err) => return Err(Error::Build(format!("{err}"))),
     };
     let eval_stream = eval_stream?;
+    capture_causal_trace(&mut worker, request.causal_trace_slot)?;
     let source_generation_paths = builder.source_generation_paths();
     let overlay_evidence = builder
         .overlay_report()
@@ -391,6 +536,7 @@ async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, E
     let pipeline_evidence = PipelineRunEvidence {
         hermeticity_audit_events,
         build_environment_rows: builder.take_build_environment_reports(),
+        finish_gate_rows: builder.take_finish_gate_reports(),
         network_policy_rows: builder.take_network_policy_reports(),
         workspace_rows: workspace_evidence_sink.take(),
         action_result_rows: builder.take_action_result_reports(),
@@ -567,6 +713,7 @@ async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'sta
         outputs,
         hermeticity_audit_events: builder.take_hermeticity_audit_events(),
         build_environment_reports: builder.take_build_environment_reports(),
+        finish_gate_reports: builder.take_finish_gate_reports(),
         network_policy_reports: builder.take_network_policy_reports(),
         workspace_reports: workspace_evidence_sink.take(),
         action_result_reports: builder.take_action_result_reports(),
@@ -610,16 +757,20 @@ fn create_cache_only_observer(
 }
 
 #[cfg(target_os = "linux")]
+fn source_policy_for_config(config: &BuildConfig) -> FetchSourcePolicy {
+    if config.source_fetch_overrides.is_empty() {
+        FetchSourcePolicy::AllowNetwork
+    } else {
+        FetchSourcePolicy::RequireOverride
+    }
+}
+
+#[cfg(target_os = "linux")]
 fn create_pipeline_builder(
     config: &BuildConfig,
     store: crunch_store::StoreHandle,
 ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
-    let source_policy = if config.source_fetch_overrides.is_empty() {
-        FetchSourcePolicy::AllowNetwork
-    } else {
-        FetchSourcePolicy::RequireOverride
-    };
-    create_pipeline_builder_with_source_policy(config, store, source_policy)
+    create_pipeline_builder_with_source_policy(config, store, source_policy_for_config(config))
 }
 
 #[cfg(target_os = "linux")]
@@ -628,6 +779,53 @@ fn create_pipeline_builder_with_source_policy(
     store: crunch_store::StoreHandle,
     source_policy: FetchSourcePolicy,
 ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
+    create_pipeline_builder_with_sandbox(config, store, source_policy, |build_service_store| {
+        let workdir = std::env::temp_dir().join("crunch-builds");
+        std::fs::create_dir_all(&workdir).map_err(|error| Error::Internal(format!("create workdir: {error}")))?;
+        // Keep remote dispatch inside the lazy scheduler so dedupe, waiter
+        // notification, job bounds, fallback, and terminal propagation stay shared.
+        // r[impl remote_builds.production_scheduler_realization]
+        let profile = crunch_build::RealizerProfileFacts {
+            name: "local-sandbox".to_string(),
+            version: 1,
+            capabilities: Vec::new(),
+            parameters: std::collections::BTreeMap::new(),
+        };
+        let local_bwrap =
+            build_service_store.bubblewrap_build_service(std::env::temp_dir().join("crunch-builds-local"), None);
+        let remote_bwrap = build_service_store.bubblewrap_build_service(workdir, None);
+        let remote_realizer = LocalBuildServiceRealizer::new(remote_bwrap, profile);
+        Ok(RemoteFirstBuildService::new(
+            remote_realizer,
+            local_bwrap,
+            RemoteBuildFallbackPolicy::OnRemoteFailure,
+        ))
+    })
+}
+
+/// Watch admission uses only the local sandbox with proven owned teardown.
+/// The one-shot builder retains its remote-first fallback unchanged.
+#[cfg(target_os = "linux")]
+fn create_watch_pipeline_builder(
+    config: &BuildConfig,
+    store: crunch_store::StoreHandle,
+) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
+    create_pipeline_builder_with_sandbox(config, store, source_policy_for_config(config), |build_service_store| {
+        Ok(build_service_store.bubblewrap_build_service(std::env::temp_dir().join("crunch-builds-local"), None))
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn create_pipeline_builder_with_sandbox<S, F>(
+    config: &BuildConfig,
+    store: crunch_store::StoreHandle,
+    source_policy: FetchSourcePolicy,
+    make_sandbox: F,
+) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<S, F>>, Error>
+where
+    S: snix_build::buildservice::BuildService + 'static,
+    F: FnOnce(&crunch_store::BuildServiceStore) -> Result<S, Error>,
+{
     debug_assert!(!config.store_dir.is_empty(), "store prefix must not be empty");
     debug_assert!(config.max_jobs >= 1, "builder requires at least one job");
 
@@ -640,27 +838,10 @@ fn create_pipeline_builder_with_source_policy(
         root_registry,
     } = store.into_pipeline_store_parts();
     let state_dir = build_store.state_dir().to_path_buf();
-    let workdir = std::env::temp_dir().join("crunch-builds");
-    std::fs::create_dir_all(&workdir).map_err(|error| Error::Internal(format!("create workdir: {error}")))?;
     let fetch_service = FetchBuildService::new(build_service_store.clone())
         .with_source_overrides(config.source_fetch_overrides.clone())
         .with_source_policy(source_policy);
-
-    // Keep remote dispatch inside the lazy scheduler so dedupe, waiter
-    // notification, job bounds, fallback, and terminal propagation stay shared.
-    // r[impl remote_builds.production_scheduler_realization]
-    let profile = crunch_build::RealizerProfileFacts {
-        name: "local-sandbox".to_string(),
-        version: 1,
-        capabilities: Vec::new(),
-        parameters: std::collections::BTreeMap::new(),
-    };
-    let local_bwrap =
-        build_service_store.bubblewrap_build_service(std::env::temp_dir().join("crunch-builds-local"), None);
-    let remote_bwrap = build_service_store.bubblewrap_build_service(workdir, None);
-    let remote_realizer = LocalBuildServiceRealizer::new(remote_bwrap, profile);
-    let sandbox_service =
-        RemoteFirstBuildService::new(remote_realizer, local_bwrap, RemoteBuildFallbackPolicy::OnRemoteFailure);
+    let sandbox_service = make_sandbox(&build_service_store)?;
     let dispatch = DispatchBuildService::new(fetch_service, sandbox_service);
     let workspace_evidence_sink = empty_workspace_report_collector();
     let build_service =
@@ -696,6 +877,7 @@ fn create_pipeline_builder_with_source_policy(
 struct PipelineRunEvidence {
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
     build_environment_rows: Vec<BuildEnvironmentReport>,
+    finish_gate_rows: Vec<crunch_build::FinishGateReport>,
     network_policy_rows: Vec<BuildNetworkPolicyReport>,
     workspace_rows: Vec<crunch_build::WorkspaceExecutionReport>,
     action_result_rows: Vec<crunch_build::ActionResultRuntimeReport>,
@@ -761,6 +943,7 @@ fn finish_pipeline_result(
         hermeticity_mode,
         hermeticity_audit_events: evidence.hermeticity_audit_events,
         build_environment_reports: evidence.build_environment_rows,
+        finish_gate_reports: evidence.finish_gate_rows,
         network_policy_reports: evidence.network_policy_rows,
         workspace_reports: evidence.workspace_rows,
         action_result_reports: evidence.action_result_rows,
@@ -887,6 +1070,7 @@ fn build_preflight_failure(
         hermeticity_mode: config.hermeticity_mode,
         hermeticity_audit_events: Vec::new(),
         build_environment_reports: Vec::new(),
+        finish_gate_reports: Vec::new(),
         network_policy_reports: Vec::new(),
         workspace_reports: Vec::new(),
         action_result_reports: Vec::new(),

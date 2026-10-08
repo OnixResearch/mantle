@@ -1,15 +1,22 @@
 [workspace]
 resolver = "2"
 members = [
-  "crates/crunch-action-result-core",
   "crates/crunch-android-core",
   "crates/crunch-android",
+  "crates/crunch-action-result-core",
+  "crates/crunch-service-readiness-core",
+  "crates/crunch-remote-core",
+  "crates/crunch-remote-app",
+  "crates/mantle-causal-trace-core",
   "crates/crunch-composition-core",
   "crates/crunch-nar",
   "crates/crunch-rust-cache-core",
   "crates/crunch-rust-cache",
   "crates/crunch-rustc-wrapper",
   "crates/mantlepkgs-core",
+  "crates/mantle-cargo-unit-plan",
+  "crates/mantle-lock-vendor-core",
+  "crates/mantle-lock-vendor-producer",
   "crates/mantle-rust-plan-core",
   "crates/mantle-rust-plan-app",
   "crates/mantle-application-contract",
@@ -73,11 +80,14 @@ default_scope = [
   "-p", "mantlepkgs-core",
   "-p", "mantle-rust-plan-core",
   "-p", "mantle-rust-plan-app",
+  "-p", "mantle-cargo-unit-plan",
+  "-p", "mantle-causal-trace-core",
   "-p", "mantle-application-contract",
   "-p", "mantle-portable-client-core",
   "-p", "mantle-build-contract",
   "-p", "crunch-attestation",
   "-p", "crunch-attestation-core",
+  "-p", "crunch-service-readiness-core",
   "-p", "crunch-build",
   "-p", "crunch-delta",
   "-p", "crunch-delta-core",
@@ -97,11 +107,14 @@ default_scope = [
   "-p", "crunch-pipeline",
   "-p", "crunch-project",
   "-p", "crunch-project-core",
+  "-p", "crunch-remote-core",
+  "-p", "crunch-remote-app",
   "-p", "crunch-release-core",
   "-p", "crunch-repair-core",
   "-p", "crunch-rust-cache-core",
   "-p", "crunch-rust-cache",
   "-p", "crunch-rustc-wrapper",
+  "-p", "crunch-watch-core",
   "-p", "crunch-shell",
   "-p", "crunch-shell-core",
   "-p", "crunch-store",
@@ -186,6 +199,12 @@ path = "examples/projects/shared-action-result-roundtrip/publish.rs"
 crunch-nar = { path = "crates/crunch-nar" }
 mantle-build-contract = { path = "crates/mantle-build-contract" }
 mantle-application-contract = { path = "crates/mantle-application-contract" }
+mantle-rust-plan-core = { path = "crates/mantle-rust-plan-core" }
+mantle-rust-plan-app = { path = "crates/mantle-rust-plan-app" }
+mantle-lock-vendor-core = { path = "crates/mantle-lock-vendor-core" }
+mantle-causal-trace-core = { path = "crates/mantle-causal-trace-core" }
+crunch-remote-core = { path = "crates/crunch-remote-core", features = ["serde"] }
+crunch-remote-app = { path = "crates/crunch-remote-app" }
 crunch-pipeline = { path = "crates/crunch-pipeline" }
 crunch-eval = { path = "crates/crunch-eval" }
 crunch-eval-budget-core = { path = "crates/crunch-eval-budget-core" }
@@ -193,6 +212,7 @@ crunch-evaluation-stream-core = { path = "crates/crunch-evaluation-stream-core" 
 nickel-export-core = { git = "https://github.com/OnixResearch/nickel-export", rev = "257fafc1c746f1faf156207043a4c826bfb16d49" }
 crunch-glue = { path = "crates/crunch-glue" }
 crunch-action-result-core = { path = "crates/crunch-action-result-core" }
+crunch-service-readiness-core = { path = "crates/crunch-service-readiness-core" }
 crunch-composition-core = { path = "crates/crunch-composition-core" }
 crunch-rust-cache-core = { path = "crates/crunch-rust-cache-core" }
 crunch-rust-cache = { path = "crates/crunch-rust-cache" }
@@ -254,6 +274,7 @@ fuse-backend-rs = { path = "vendor/fuse-backend-rs" }
 
 [dev-dependencies]
 casita = { git = "https://github.com/cachix/casita", rev = "90404fcb1cfb3d83f2233715448dfefe913f5fd1", default-features = false, features = ["native", "experimental"] }
+crunch-android-core = { path = "crates/crunch-android-core" }
 crunch-hardware-simulation-core = { path = "crates/crunch-hardware-simulation-core" }
 crunch-gc-core = { path = "crates/crunch-gc-core" }
 crunch-hardware-simulation = { path = "crates/crunch-hardware-simulation" }

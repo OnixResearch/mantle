@@ -1,0 +1,95 @@
+Live build-state process evidence (actual shared checkout before scheduler callback)
+
+Binary: /home/brittonr/scratch/mantle-live-state-current-target/debug/mantle
+Build command:
+  env CARGO_TARGET_DIR=/home/brittonr/scratch/mantle-live-state-current-target TMPDIR=/home/brittonr/scratch nix develop --offline -c cargo build -p mantle --bin mantle
+Observed: exit 0.
+
+All builds used TMPDIR=/home/brittonr/scratch, CRUNCH_CONFIG_DIR=/home/brittonr/scratch/mantle-live-shared-config and nix develop --offline -c, providing bwrap. Fixture: tests/fixtures/multi.ncl.
+
+No endpoint:
+  <binary> --json --store /home/brittonr/scratch/mantle-live-before-nix-store --state-dir /home/brittonr/scratch/mantle-live-before-nix-state build --no-substitute tests/fixtures/multi.ncl
+Observed: exit 0; crunch-build-report-v1; 2 succeeded, 2 built, 0 failed, 0 cached.
+
+Missing endpoint:
+  MANTLE_LIVE_STATE_SOCKET=/home/brittonr/scratch/mantle-live-runtime/unserved.sock <binary> --json --store /home/brittonr/scratch/mantle-live-missing-nix-store --state-dir /home/brittonr/scratch/mantle-live-missing-nix-state build --no-substitute tests/fixtures/multi.ncl
+Observed: exit 0; same counts; stderr `live build observation degraded: EndpointMissing`.
+
+Refused previously bound endpoint (UnixListener bound then closed, separately owned stale socket):
+  MANTLE_LIVE_STATE_SOCKET=/home/brittonr/scratch/mantle-live-runtime/refused.sock <binary> --json --store /home/brittonr/scratch/mantle-live-refused-nix-store --state-dir /home/brittonr/scratch/mantle-live-refused-nix-state build --no-substitute tests/fixtures/multi.ncl
+Observed: exit 0; same counts; stderr `live build observation degraded: EndpointFailed`; unrelated transient Nix evaluation-cache busy warning also appeared. Owned stale socket removed after run.
+
+Managed endpoint:
+  <binary> remote live serve --socket /home/brittonr/scratch/mantle-live-runtime/managed.sock
+  <binary> remote live subscribe --socket /home/brittonr/scratch/mantle-live-runtime/managed.sock
+  MANTLE_LIVE_STATE_SOCKET=/home/brittonr/scratch/mantle-live-runtime/managed.sock <binary> --json --store /home/brittonr/scratch/mantle-live-after-managed-store --state-dir /home/brittonr/scratch/mantle-live-after-managed-state build --no-substitute tests/fixtures/multi.ncl
+Observed: daemon socket owned by operator, mode 0600. Subscriber received snapshot-start, snapshot-end, two goal/discovered publishes, a retraction immediately before each terminal-outcome/succeeded publish (conversion phase), and owner-stop terminal retractions. Build exit 0 and same counts. New subscriber received only snapshot-start/end; bounded `timeout 3` subscriber probes exited 124 due to timeout. SIGINT daemon shutdown exit 0, subscriber exit 0, socket removed.
+
+All three successful no/missing/managed runs had identical derivation keys, logical outputs, physical output bytes and raw artifact-attestation receipt bytes. Alpha drv /mantle/store/rqhxykvrfm3s0hq5vywxgn34li9szbiw-alpha.drv -> /mantle/store/pcz8l4c901g9qhlnxjs6z1yj8ny96qkq-alpha; beta drv /mantle/store/f78wf9zjsidv8ffxxwk6a91rzl99hh63-beta.drv -> /mantle/store/mp9sh5dg3jlg92a3f4rccrkhzclxcr3d-beta. Physical output bytes alpha\n and beta\n. Raw receipt SHA-256 alpha 5f434a4324f750e28b05866c7450ed2b4b6f1fa08de0df2687ea17a3d507b5e4; beta 037e91030329d2daa85f743834111251087c5f974e8d1027f78427c892d7c438. Byte equality was checked across separate stores/state directories, not just reported paths.
+
+Boundary observations:
+  <binary> remote live subscribe --kind unreviewed -> exit 3, `invalid live-build filter`.
+  A real live fact read from the daemon's raw snapshot was passed as stdin to `<binary> receipt bundle list --from /dev/stdin` -> exit 3, `parsing receipt bundle /dev/stdin: missing field format at line 1 column 343`.
+  Raw Unix request `{"schema":...,"op":"store-mutate",...}` -> EOF, no reply. Real pathinfo.redb SHA-256 c11a02d7b76f44203b628e6bf3253becc7d47c7549a0ab8aab80424e before/after.
+
+Crash/restart (separate restart.sock): published owner crash-owner/job crash-job fact, subscriber saw publish. SIGKILL daemon PID 3038905 -> subscriber EOF/exit 0; stale socket remained 0600. New daemon bound same refused stale path, filtered subscriber saw only snapshot-start/end. SIGINT exit 0 and socket removed. Crashed daemon cannot emit retract frames: disconnect invalidates the old snapshot; restart begins empty.
+
+Historical baseline: detached origin/main da00f584 worktree /home/brittonr/scratch/mantle-live-state-baseline-da00f5, binary /home/brittonr/scratch/mantle-live-state-target-da00f5/debug/crunch. `remote live --help` was unrecognized (exit 2). Baseline aggregate/stream and worker-loss/resource-release fixtures were separately observed before these additions.
+
+FIRST coherent integrated binary process proof (scheduler callback active; separate from historical transcript above):
+  Binary: /home/brittonr/scratch/rust-plan-integrated-target/current-tree-stable/debug/mantle
+  Binary SHA-256: 9bff7a785ac1e74bff7966cf95e8f1501daed8ce39095e16c407b14949409eb0
+  Integrator's full-source build bg_2178: exit 0. The exact binary SHA was independently verified before process execution.
+  Reproducible two-root source: /home/brittonr/scratch/mantle-live-concurrent-slow.ncl, SHA-256 613d2465ad383c2e8d9ed14bce69508cda144ffe743da71c90865a44dc118bf0.
+  Source content:
+    let crunch = import "lib.ncl" in
+    {
+      alpha = {
+        name = "alpha",
+        builder = "/bin/sh",
+        args = ["-c", "i=0; while [ $i -lt 500000 ]; do i=$((i+1)); done; echo alpha > $out"],
+        inputs = [],
+      } | crunch.Derivation,
+      beta = {
+        name = "beta",
+        builder = "/bin/sh",
+        args = ["-c", "i=0; while [ $i -lt 500000 ]; do i=$((i+1)); done; echo beta > $out"],
+        inputs = [],
+      } | crunch.Derivation,
+    }
+  The stream-mode invocations below used TMPDIR=/home/brittonr/scratch, CRUNCH_CONFIG_DIR=/home/brittonr/scratch/mantle-live-final-config, fresh separately created physical --store and --state-dir paths, and `nix develop --offline --no-write-lock-file -c <first binary> ... build --no-substitute --evaluation-stream <source>`.
+  No-socket baseline (tag baseline-bash): exit 0, run-summary success with exactly two selected roots, two succeeded, zero failed. Its raw store contains exactly two physical outputs and two artifact-attestation JSON receipts.
+
+  Two actual simultaneous CLI/socket builds: `artifact://9056` is the complete process stdout JSON from bounded throwaway script /home/brittonr/scratch/mantle-live-two-concurrent-proof.py. One daemon served one mode-0600 Unix socket. Process A and process B evaluated the identical source file with identical root selection, each in a distinct private physical store/state directory and the same signing key. Both emitted a real local-worker `.drv` goal/dispatched frame; A's process group was SIGSTOPed while B was started, B was SIGSTOPed while both owners were still publishing. A fresh daemon subscription at that instant contained four facts for each owner, including actual Building goals. A and B had distinct owner IDs live-fa12b9045cf5e2fcf0a5ff568bfb529437239374de0b2b33d72f0182786df8ac-2741664-0 and live-fa12b9045cf5e2fcf0a5ff568bfb529437239374de0b2b33d72f0182786df8ac-2742337-0, with disjoint fact IDs, but the same NDJSON content-addressed run_id fa12b9045cf5e2fcf0a5ff568bfb529437239374de0b2b33d72f0182786df8ac.
+  On SIGCONT B finished exit 0; fresh subscription retained exactly A's four facts. On SIGCONT A finished exit 0; fresh subscription was empty. The live subscriber received 46 frames, including both owners' genuine worker presence, alpha/beta `.drv` dispatched then two `.drv` terminal-outcome/succeeded facts per owner, and retractions of every dispatched fact. Neither healthy process reported live degradation; no synthetic remote reservation/attempt/fence was published.
+  Alpha physical output SHA-256 b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060; beta f2c82decdd7181cf98945929a62598db7e6b477e11f6e0eb0ae97020eff151ad. Raw artifact receipt SHA-256 bf57ad5b73cd309adf6531178312ec52dc4c47fe60559599a87d804a5f4df835 and 6aaf685ed64f7951cc49fec260170c0a921ab60c4597ec133a4a89b0b94aa698. Byte-for-byte physical outputs and raw signed receipt bytes matched across no-socket baseline, A, and B, not just report metadata.
+  A setup-only diagnostic ordinary build initially exited 3 with `mantle.store.missing-directory` because the throwaway harness had omitted the required precreated physical `--store`; after correction the real no-socket build succeeded. A first A/B harness iteration did reach the independent snapshots and byte-equal completed builds but left its subscriber unread while blocking on process completion; its bounded socket subscriber disconnected. The final `artifact://9056` run continuously drained that subscriber and passed all terminal/retraction assertions. These were harness corrections, not source changes. After this genuine first-binary proof, source leases were released for the user-priority S0 state-dir fix and second-stage remote/watch/service cutovers; root owns the second binary and project-wide quality gates.
+
+Pinned-first-binary no/missing/live plane-boundary and real in-flight crash/restart rails:
+  A separate stream build with MANTLE_LIVE_STATE_SOCKET=<never-served scratch socket> (tag missing-boundary-bash) exited 0, reported `live build observation degraded: EndpointMissing`, and ended in run-summary success with the same content run_id. Its two physical outputs and raw artifact receipts were byte-for-byte equal to the no-socket baseline.
+  Ordinary `--json` builds (tags report-no-socket-bash and report-live-bash) both exited 0. Their full JSON objects differ, as expected, in distinct physical output_dir/state_dir, log/attestation paths, and parallel scheduler/telemetry row order. A normalized comparison of consumer-visible report schema crunch-build-report-v1, counts {succeeded_total:2,built_total:2,cached_total:0,failed_total:0}, alpha/beta labels and logical derivation/output paths, and per-action environment/network policy rows was exactly equal. All four raw physical outputs and raw signed receipts in missing/no-socket/live report cases match the baseline bytes and the A/B SHA-256 hashes above. The full actual report values underlying this comparison are in `artifact://9217`; its first throwaway script exited nonzero only because it incorrectly demanded byte-for-byte equality of expected distinct physical paths and race-ordered scheduler rows, not because either build failed. The normalized checks and raw-byte checks were then exercised on the actual returned reports/store files.
+  `artifact://9343` is the complete later bounded real-owner boundary/restart JSON. A genuine published `.drv` local-worker dispatch fact from an actual in-flight CLI build was given to `<first binary> receipt bundle list --from /dev/stdin`: exit 3, `missing field format`, so live facts are not accepted as receipts. Raw unknown `store-mutate` Unix operation returned EOF without a response, and the actual report-live pathinfo.redb SHA-256 stayed 67cce7ac202cbb91ee8412f66f690f76df28fb899ff220e69a08fe9c84761508 before and after.
+  The crash owner live-fa12b9045cf5e2fcf0a5ff568bfb529437239374de0b2b33d72f0182786df8ac-3089289-0 was paused after a genuine `.drv` dispatched fact; a new subscriber's snapshot held that actual goal. SIGKILL killed the daemon (exit -9); the existing subscriber saw EOF and invalidated its snapshot; a same-UID manual relaunch on the same stale 0600 socket path produced only snapshot-start/snapshot-end. Resuming the still-in-flight build exited 0 with the original NDJSON run_id and baseline-identical physical output/receipt bytes; the new daemon's snapshot stayed empty (no silent reassertion). Final SIGINT cleanup exited 0 and unlinked its socket. This demonstrates manual restart behavior, not an unimplemented process supervisor or a fictitious crash-time retract frame.
+  `artifact://9384` separately exercised ordinary `--json` live observation rather than only evaluation-stream mode: exit 0, crunch-build-report-v1 with two built/succeeded, zero failed/cached; the real daemon subscriber received 24 frames for one owner, including both `.drv` Goal/dispatched, local-worker presence, both `.drv` build terminal outcomes and dispatched retractions. A fresh subscriber after owner exit saw no retained facts. Its two physical outputs and raw artifact receipts matched the no-socket baseline byte-for-byte and retained the same SHA-256 values above; no healthy-endpoint degradation was reported.
+
+Post-first-binary piped stdout bug-fix smoke (diagnostic moving-source build;
+NOT the final committed SECOND executable):
+  Binary /home/brittonr/scratch/mantle-live-pipe-probe-target/debug/mantle,
+  SHA-256 e982b43c48e16c4a7d6e5d3123af4e292c08b91285e05c472e371cc01c9b5e58.
+  User's real CLI failing-before observation was piped `remote live subscribe`
+  withholding all snapshot stdout until the daemon closed, despite socket
+  writes. After the bounded flush fix, a separate real-process smoke launched
+  `remote live serve`, then the REAL `remote live subscribe` process with
+  stdout=PIPE: snapshot-start and snapshot-end arrived while BOTH processes
+  were alive, before any daemon close. An actual `nix develop --offline
+  --no-write-lock-file -c <binary> --store <private-store> --state-dir
+  <private-state> build --no-substitute --evaluation-stream
+  tests/fixtures/simple.ncl` with MANTLE_LIVE_STATE_SOCKET set then exited 0;
+  the same still-running subscriber received its real goal/discovered publish
+  under owner `live-58e16975a3e5065b339388def9773665612f4781e63088f58f3ce5cfe498503a-2019610-0`
+  while daemon and subscriber were both still alive (`artifact://13946`).
+  A preliminary direct executable build without the Nix dev shell had
+  produced that actual goal but exited 1; its environment did not provide
+  the successful Nix runtime and is NOT counted as a successful build.
+  This smoke verifies prompt CLI PIPE delivery on the scoped current source,
+  not the eventual final committed integration snapshot or T4.4 archive.

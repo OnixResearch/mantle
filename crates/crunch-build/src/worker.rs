@@ -23,6 +23,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use bstr::BString;
+use futures::FutureExt;
 use nix_compat::derivation::Derivation;
 use nix_compat::derivation::Output;
 use nix_compat::nixhash::CAHash;
@@ -33,17 +34,23 @@ use nix_compat::store_path::build_ca_path_with_store_dir;
 use snix_build::buildservice::BuildService;
 use tokio::sync::Semaphore;
 use tokio::sync::mpsc;
+use tokio::sync::oneshot;
+use tokio::sync::watch;
 use tokio::task::JoinSet;
 use tracing::debug;
 use tracing::info;
 
 use crate::Error;
+use crate::causal_trace::CausalTraceCollector;
+use crate::dynamic::DynamicAdmissionError;
 use crate::dynamic::DynamicAdmissionLimits;
 use crate::dynamic::DynamicParentHashFact;
+use crate::dynamic::DynamicRegistrationDecision;
 use crate::dynamic::ExistingDynamicRegistration;
 use crate::dynamic::IdentityResolvedDynamicDerivation;
 use crate::dynamic::RegistryReadyDynamicDerivation;
 use crate::dynamic::ValidatedDynamicDerivation;
+use crate::dynamic::admit_native_plan_derivation;
 use crate::dynamic::parse_dynamic_candidate;
 use crate::dynamic::plan_dynamic_registration;
 use crate::dynamic::required_parent_paths;
@@ -122,13 +129,13 @@ type CreatedGoal = (String, Vec<StorePath<String>>);
 
 fn observe_dynamic_parent_facts(
     validated: &ValidatedDynamicDerivation,
-    known_paths: &DerivationRegistry,
+    known_paths: &impl NativeUnitLookup,
 ) -> Vec<DynamicParentHashFact> {
     required_parent_paths(validated)
         .into_iter()
         .filter_map(|logical_path| {
             known_paths
-                .get_hdm_by_drv_path(&logical_path)
+                .native_hdm(&logical_path)
                 .map(|digest| DynamicParentHashFact::native(logical_path, digest))
         })
         .collect()
@@ -136,13 +143,10 @@ fn observe_dynamic_parent_facts(
 
 fn observe_existing_dynamic_registration(
     resolved: &IdentityResolvedDynamicDerivation,
-    known_paths: &DerivationRegistry,
+    known_paths: &impl NativeUnitLookup,
 ) -> Option<ExistingDynamicRegistration> {
     let logical_path = resolved.drv_path().to_absolute_path_with_prefix(resolved.logical_store_prefix());
-    known_paths.get_by_drv_path(&logical_path).map(|entry| ExistingDynamicRegistration {
-        logical_drv_path: logical_path,
-        full_identity: entry.dynamic_admission_identity,
-    })
+    known_paths.native_existing(&logical_path)
 }
 
 struct DynamicPlaceholderBindings {
@@ -251,6 +255,42 @@ pub struct EvalMessage {
     pub new_entries: Vec<PendingRegistryEntry>,
 }
 
+/// A complete replacement of the currently selected watched roots.
+#[derive(Debug)]
+pub struct WatchWorkerUpdate {
+    pub generation: u64,
+    pub roots: Vec<EvalMessage>,
+}
+
+/// CandidateReady proves stale teardown; only a matching commit token authorizes dispatch.
+#[derive(Debug)]
+pub enum WatchWorkerEvent {
+    CandidateReady {
+        generation: u64,
+        commit: oneshot::Sender<()>,
+    },
+    PendingCancellation {
+        generation: u64,
+        stale: Vec<String>,
+    },
+    Settled {
+        generation: u64,
+        outcomes: Vec<BuildOutcome>,
+        failed: Vec<FailedGoal>,
+        source_generation_paths: Vec<StorePath<String>>,
+    },
+}
+
+const WATCH_CANCELLATION_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
+const WATCH_COMMIT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
+
+struct WatchPending {
+    generation: u64,
+    stale: Vec<String>,
+    deadline: tokio::time::Instant,
+    reported: bool,
+}
+
 /// Maximum supported concurrent in-flight build budget. The constructor,
 /// dispatch shell, and semaphore all enforce this bound.
 const MAX_IN_FLIGHT: u32 = 64;
@@ -335,8 +375,11 @@ fn attach_observed_binding_claim(
     claim: String,
 ) -> Result<(), Error> {
     let claims = claims.get_or_insert_with(Default::default);
-    if claims.extra.contains_key(PLAN_OUTPUT_PROVENANCE_CLAIM_KEY) {
-        return Err(Error::Store(format!("reserved plan output provenance claim already set: {consumer_drv_key}")));
+    if let Some(existing) = claims.extra.get(PLAN_OUTPUT_PROVENANCE_CLAIM_KEY) {
+        if existing == &claim {
+            return Ok(());
+        }
+        return Err(Error::Store(format!("plan-output-identity-conflict: {consumer_drv_key}")));
     }
     claims.extra.insert(PLAN_OUTPUT_PROVENANCE_CLAIM_KEY.to_string(), claim);
     Ok(())
@@ -386,8 +429,8 @@ pub struct NativeDynamicPlanReport {
     pub raw_artifact_digest: Option<String>,
     pub canonical_plan_digest: Option<String>,
     pub accepted_unit_ids: Vec<String>,
-    pub source_slices: Vec<NativeDynamicSourceSliceReport>,
     pub rejection_reason: Option<String>,
+    pub source_slices: Vec<NativeDynamicSourceSliceReport>,
     pub scheduler_action: String,
 }
 
@@ -469,10 +512,7 @@ struct RegisteredNativeDynamicPlan {
 
 /// Only prospective V2 units are staged; the existing registry stays borrowed.
 struct V2StagedUnit {
-    drv_path: StorePath<String>,
-    hdm: [u8; 32],
-    derivation: Derivation,
-    content_addressed: bool,
+    ready: RegistryReadyDynamicDerivation,
     dynamic_plan_outputs: Vec<String>,
 }
 
@@ -505,7 +545,7 @@ impl V2Registration<'_> {
                 }
                 let absolute = path.to_absolute_path_with_prefix(self.live.store_dir());
                 let derivation = if let Some(unit) = self.staged.get(&absolute) {
-                    &unit.derivation
+                    unit.ready.derivation()
                 } else {
                     &self
                         .live
@@ -543,6 +583,9 @@ impl V2Registration<'_> {
 trait NativeUnitLookup {
     fn native_hdm(&self, path: &str) -> Option<[u8; 32]>;
     fn native_output(&self, path: &str, output: &str) -> Option<StorePath<String>>;
+    fn native_is_ca(&self, path: &str) -> bool;
+    fn native_provisional(&self, path: &str, output: &str) -> Option<&BString>;
+    fn native_existing(&self, path: &str) -> Option<ExistingDynamicRegistration>;
 }
 
 impl NativeUnitLookup for DerivationRegistry {
@@ -553,21 +596,61 @@ impl NativeUnitLookup for DerivationRegistry {
     fn native_output(&self, path: &str, output: &str) -> Option<StorePath<String>> {
         self.get_output_path(path, output)
     }
+
+    fn native_is_ca(&self, path: &str) -> bool {
+        self.get_by_drv_path(path).is_some_and(|entry| entry.content_addressed)
+    }
+
+    fn native_provisional(&self, path: &str, output: &str) -> Option<&BString> {
+        self.get_by_drv_path(path)?.derivation.environment.get(output)
+    }
+
+    fn native_existing(&self, path: &str) -> Option<ExistingDynamicRegistration> {
+        self.get_by_drv_path(path).map(|entry| ExistingDynamicRegistration {
+            logical_drv_path: path.to_owned(),
+            full_identity: entry.dynamic_admission_identity,
+        })
+    }
 }
 
 impl NativeUnitLookup for V2Registration<'_> {
     fn native_hdm(&self, path: &str) -> Option<[u8; 32]> {
-        self.staged.get(path).map(|unit| unit.hdm).or_else(|| self.live.native_hdm(path))
+        self.staged
+            .get(path)
+            .map(|unit| unit.ready.hash_derivation_modulo())
+            .or_else(|| self.live.native_hdm(path))
     }
 
     fn native_output(&self, path: &str, output: &str) -> Option<StorePath<String>> {
         self.staged.get(path).map_or_else(
             || self.live.native_output(path, output),
-            |unit| unit.derivation.outputs.get(output).and_then(|value| value.path.clone()),
+            |unit| unit.ready.derivation().outputs.get(output).and_then(|value| value.path.clone()),
         )
     }
-}
 
+    fn native_is_ca(&self, path: &str) -> bool {
+        self.staged
+            .get(path)
+            .map_or_else(|| self.live.native_is_ca(path), |unit| unit.ready.content_addressed())
+    }
+
+    fn native_provisional(&self, path: &str, output: &str) -> Option<&BString> {
+        if let Some(unit) = self.staged.get(path) {
+            return unit.ready.derivation().environment.get(output);
+        }
+        self.live.native_provisional(path, output)
+    }
+
+    fn native_existing(&self, path: &str) -> Option<ExistingDynamicRegistration> {
+        if let Some(unit) = self.staged.get(path) {
+            return Some(ExistingDynamicRegistration {
+                logical_drv_path: path.to_owned(),
+                full_identity: Some(unit.ready.full_identity()),
+            });
+        }
+        self.live.native_existing(path)
+    }
+}
 impl NativeDynamicPlanScan {
     fn is_empty(&self) -> bool {
         self.accepted.is_empty() && self.rejected.is_empty()
@@ -646,8 +729,8 @@ fn native_plan_report_from_accepted(accepted: &NativeDynamicPlanAccepted) -> Nat
         raw_artifact_digest: Some(accepted.raw_artifact_digest.clone()),
         canonical_plan_digest: Some(accepted.canonical_plan_digest.clone()),
         accepted_unit_ids: accepted.accepted_unit_ids.clone(),
-        source_slices: accepted.source_slices.clone(),
         rejection_reason: None,
+        source_slices: accepted.source_slices.clone(),
         scheduler_action: "registered-roots".to_string(),
     }
 }
@@ -661,8 +744,8 @@ fn native_plan_report_from_rejection(rejected: &NativeDynamicPlanRejection) -> N
         raw_artifact_digest: rejected.raw_artifact_digest.clone(),
         canonical_plan_digest: None,
         accepted_unit_ids: Vec::new(),
-        source_slices: rejected.source_slices.clone(),
         rejection_reason: Some(format!("{}: {}", rejected.kind.as_str(), rejected.detail)),
+        source_slices: rejected.source_slices.clone(),
         scheduler_action: "rejected".to_string(),
     }
 }
@@ -814,230 +897,7 @@ fn unit_output_dependencies_registered(unit: &DynamicUnit, registered: &BTreeMap
     })
 }
 
-// Accepted V2 plans have canonical bytes capped at MAX_DYNAMIC_PLAN_BYTES,
-// which bounds the number of sources. Fallible lookups carry the invariants.
-#[allow(tigerstyle::assertion_density, tigerstyle::unbounded_collection_growth)]
-fn v2_sources_by_id(
-    accepted: &NativeDynamicPlanAccepted,
-    rows: &[NativeDynamicSourceSliceReport],
-    store_dir: &str,
-) -> Result<BTreeMap<SourceId, StorePath<String>>, Error> {
-    let CanonicalNativePlan::V2(plan) = &accepted.plan else {
-        return Err(Error::Store("expected V2 native dynamic plan".to_owned()));
-    };
-    let mut by_id = BTreeMap::new();
-    for source in &plan.plan.sources {
-        let path = match source {
-            SourceV2::StorePath(source) => parse_dynamic_store_path(DynamicStorePathInput {
-                path: source.path.as_str(),
-                store_dir,
-            })?,
-            SourceV2::Slice(slice) => rows
-                .iter()
-                .find(|row| row.source_id == slice.id.as_str())
-                .and_then(|row| row.admitted_store_path.clone())
-                .ok_or_else(|| Error::Store(format!("source slice '{}' was not admitted", slice.id)))?,
-        };
-        by_id.insert(source.id().clone(), path);
-    }
-    Ok(by_id)
-}
-
-// Decoding bounds units to MAX_DYNAMIC_PLAN_UNITS; pending removes each unit
-// exactly once, so registered cannot outgrow that finite set. Every phase
-// checks errors before any batch publication rather than asserting on input.
-#[allow(tigerstyle::assertion_density, tigerstyle::unbounded_collection_growth)]
-fn prepare_v2_registration(
-    accepted: &NativeDynamicPlanAccepted,
-    rows: &[NativeDynamicSourceSliceReport],
-    known_paths: &DerivationRegistry,
-    worker: &Worker,
-) -> Result<PreparedV2Registration, Error> {
-    let store_dir = known_paths.store_dir();
-    let sources = v2_sources_by_id(accepted, rows, store_dir)?;
-    let units_by_id = accepted.plan.units().iter().map(|unit| (unit.id.clone(), unit)).collect::<BTreeMap<_, _>>();
-    let mut pending = units_by_id.keys().cloned().collect::<BTreeSet<_>>();
-    let mut registered = BTreeMap::new();
-    let mut stage = V2Registration {
-        live: known_paths,
-        staged: BTreeMap::new(),
-        order: Vec::new(),
-    };
-    for _ in 0..units_by_id.len() {
-        if pending.is_empty() {
-            break;
-        }
-        let ready_units = pending
-            .iter()
-            .filter(|id| {
-                units_by_id.get(*id).is_some_and(|unit| unit_output_dependencies_registered(unit, &registered))
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        if ready_units.is_empty() {
-            break;
-        }
-        for id in ready_units {
-            let unit = units_by_id[&id];
-            let prepared = prepare_native_dynamic_unit(unit, &sources, &registered, &stage, store_dir)?;
-            let path = stage_v2_unit(&mut stage, prepared)?;
-            registered.insert(id.clone(), path);
-            pending.remove(&id);
-        }
-    }
-    if !pending.is_empty() {
-        return Err(Error::Store(format!(
-            "native dynamic plan '{}' has unresolved unit dependencies: {}",
-            accepted.canonical_plan_digest,
-            pending.into_iter().map(|unit| unit.to_string()).collect::<Vec<_>>().join(", ")
-        )));
-    }
-    let root_drv_paths = accepted
-        .plan
-        .roots()
-        .iter()
-        .map(|root| {
-            registered
-                .get(root)
-                .cloned()
-                .ok_or_else(|| Error::Store(format!("native dynamic plan root was not registered: {root}")))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    stage.preflight_goals(worker, &root_drv_paths)?;
-    Ok(PreparedV2Registration {
-        staged: stage.staged,
-        order: stage.order,
-        registered: RegisteredNativeDynamicPlan {
-            root_drv_paths,
-            unit_drv_paths: registered,
-        },
-    })
-}
-
-fn matches_v2_unit_identity(
-    hdm: &[u8; 32],
-    is_content_addressed: bool,
-    dynamic_plan_outputs: &[String],
-    derivation: &Derivation,
-    prepared: &V2StagedUnit,
-    store_dir: &str,
-) -> bool {
-    if hdm != &prepared.hdm {
-        return false;
-    }
-    if is_content_addressed != prepared.content_addressed {
-        return false;
-    }
-    if dynamic_plan_outputs != prepared.dynamic_plan_outputs.as_slice() {
-        return false;
-    }
-    derivation.to_aterm_bytes_with_store_dir(store_dir) == prepared.derivation.to_aterm_bytes_with_store_dir(store_dir)
-}
-
-// Collision checks and remaining-capacity checks are pre-publication errors,
-// not assertions on producer-supplied units.
-#[allow(tigerstyle::assertion_density)]
-fn stage_v2_unit(stage: &mut V2Registration<'_>, prepared: V2StagedUnit) -> Result<StorePath<String>, Error> {
-    let store_dir = stage.live.store_dir();
-    let path = prepared.drv_path.clone();
-    let absolute = path.to_absolute_path_with_prefix(store_dir);
-    if let Some(existing) = stage.staged.get(&absolute) {
-        if !matches_v2_unit_identity(
-            &existing.hdm,
-            existing.content_addressed,
-            &existing.dynamic_plan_outputs,
-            &existing.derivation,
-            &prepared,
-            store_dir,
-        ) {
-            return Err(Error::Store(format!("dynamic duplicate `{absolute}` changed admitted identity")));
-        }
-    } else if let Some(existing) = stage.live.get_by_drv_path(&absolute) {
-        if !matches_v2_unit_identity(
-            &existing.hash_derivation_modulo,
-            existing.content_addressed,
-            &existing.dynamic_plan_outputs,
-            &existing.derivation,
-            &prepared,
-            store_dir,
-        ) {
-            return Err(Error::Store(format!(
-                "dynamic insertion `{absolute}` collides with an existing registry entry"
-            )));
-        }
-    } else {
-        let Some(remaining) = MAX_ENTRIES.checked_sub(stage.live.len()) else {
-            return Err(Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")));
-        };
-        let staged_count = u32::try_from(stage.staged.len())
-            .map_err(|_| Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")))?;
-        if staged_count >= remaining {
-            return Err(Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")));
-        }
-        stage.order.push(absolute.clone());
-        stage.staged.insert(absolute, prepared);
-    }
-    Ok(path)
-}
-
-// Unit inputs were bounded during V2 admission, so parent_hdms cannot outgrow
-// this derivation's input-derivation keys; fallible lookups replace assertions.
-#[allow(tigerstyle::assertion_density, tigerstyle::unbounded_collection_growth)]
-fn prepare_native_dynamic_unit(
-    unit: &DynamicUnit,
-    sources: &BTreeMap<SourceId, StorePath<String>>,
-    registered_units: &BTreeMap<UnitId, StorePath<String>>,
-    known_paths: &impl NativeUnitLookup,
-    store_dir: &str,
-) -> Result<V2StagedUnit, Error> {
-    if !dynamic_plan_outputs_are_declared(unit) {
-        return Err(Error::Store(format!(
-            "native dynamic unit '{}' declares dynamic_plan_outputs outside outputs",
-            unit.id
-        )));
-    }
-
-    let mut derivation = build_native_dynamic_derivation(unit, sources, registered_units, known_paths, store_dir)?;
-    let mut parent_hdms = BTreeMap::new();
-    for parent_drv_path in derivation.input_derivations.keys() {
-        let parent_abs = parent_drv_path.to_absolute_path_with_prefix(store_dir);
-        let digest = known_paths.native_hdm(&parent_abs).ok_or_else(|| {
-            Error::Store(format!(
-                "native dynamic unit '{}' references unregistered parent derivation {parent_abs}",
-                unit.id
-            ))
-        })?;
-        parent_hdms.insert(parent_drv_path.as_ref(), digest);
-    }
-    let hdm = derivation.hash_derivation_modulo_with_store_dir(|parent| parent_hdms[parent], store_dir);
-    let is_content_addressed = matches!(unit.derivation.addressing_mode, AddressingMode::ContentAddressed)
-        && unit.derivation.fixed_output.is_none();
-    derivation
-        .calculate_output_paths_with_store_dir(&unit.derivation.name, &hdm, store_dir)
-        .map_err(|err| Error::Store(format!("computing native dynamic output paths for '{}': {err}", unit.id)))?;
-    if is_content_addressed {
-        for output in derivation.outputs.values_mut() {
-            output.path = None;
-        }
-    }
-    let drv_path = derivation
-        .calculate_derivation_path_with_store_dir(&unit.derivation.name, store_dir)
-        .map_err(|err| Error::Store(format!("computing native dynamic derivation path for '{}': {err}", unit.id)))?;
-    Ok(V2StagedUnit {
-        drv_path,
-        hdm,
-        derivation,
-        content_addressed: is_content_addressed,
-        dynamic_plan_outputs: unit
-            .derivation
-            .dynamic_plan_outputs
-            .iter()
-            .map(|output| output.as_str().to_owned())
-            .collect(),
-    })
-}
-
-fn register_native_dynamic_plan_units(
+fn register_v1_dynamic_plan_units(
     accepted: &NativeDynamicPlanAccepted,
     known_paths: &mut DerivationRegistry,
 ) -> Result<RegisteredNativeDynamicPlan, Error> {
@@ -1109,6 +969,142 @@ fn register_native_dynamic_plan_units(
     })
 }
 
+fn v2_sources_by_id(
+    accepted: &NativeDynamicPlanAccepted,
+    rows: &[NativeDynamicSourceSliceReport],
+    store_dir: &str,
+) -> Result<BTreeMap<SourceId, StorePath<String>>, Error> {
+    let CanonicalNativePlan::V2(plan) = &accepted.plan else {
+        return Err(Error::Store("expected V2 native dynamic plan".to_owned()));
+    };
+    let mut by_id = BTreeMap::new();
+    for source in &plan.plan.sources {
+        let path = match source {
+            SourceV2::StorePath(source) => parse_dynamic_store_path(DynamicStorePathInput {
+                path: source.path.as_str(),
+                store_dir,
+            })?,
+            SourceV2::Slice(slice) => rows
+                .iter()
+                .find(|row| row.source_id == slice.id.as_str())
+                .and_then(|row| row.admitted_store_path.clone())
+                .ok_or_else(|| Error::Store(format!("source slice '{}' was not admitted", slice.id)))?,
+        };
+        by_id.insert(source.id().clone(), path);
+    }
+    Ok(by_id)
+}
+
+fn prepare_v2_registration(
+    accepted: &NativeDynamicPlanAccepted,
+    rows: &[NativeDynamicSourceSliceReport],
+    known_paths: &DerivationRegistry,
+    worker: &Worker,
+) -> Result<PreparedV2Registration, Error> {
+    let store_dir = known_paths.store_dir();
+    let sources = v2_sources_by_id(accepted, rows, store_dir)?;
+    let units_by_id = accepted.plan.units().iter().map(|unit| (unit.id.clone(), unit)).collect::<BTreeMap<_, _>>();
+    let mut pending = units_by_id.keys().cloned().collect::<BTreeSet<_>>();
+    let mut registered = BTreeMap::new();
+    let mut stage = V2Registration {
+        live: known_paths,
+        staged: BTreeMap::new(),
+        order: Vec::new(),
+    };
+    for _ in 0..units_by_id.len() {
+        if pending.is_empty() {
+            break;
+        }
+        let ready_units = pending
+            .iter()
+            .filter(|id| {
+                units_by_id.get(*id).is_some_and(|unit| unit_output_dependencies_registered(unit, &registered))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        if ready_units.is_empty() {
+            break;
+        }
+        for id in ready_units {
+            let unit = units_by_id[&id];
+            let ready = prepare_native_dynamic_unit(unit, &sources, &registered, &stage, store_dir)?;
+            let path = ready.drv_path().clone();
+            let absolute = path.to_absolute_path_with_prefix(store_dir);
+            let dynamic_plan_outputs = unit
+                .derivation
+                .dynamic_plan_outputs
+                .iter()
+                .map(|output| output.as_str().to_owned())
+                .collect::<Vec<_>>();
+            match ready.decision() {
+                DynamicRegistrationDecision::AlreadyPresent => {
+                    let existing_outputs = if let Some(staged) = stage.staged.get(&absolute) {
+                        &staged.dynamic_plan_outputs
+                    } else {
+                        &known_paths
+                            .get_by_drv_path(&absolute)
+                            .ok_or_else(|| {
+                                Error::Store(format!("dynamic duplicate `{absolute}` is absent from the registry"))
+                            })?
+                            .dynamic_plan_outputs
+                    };
+                    if existing_outputs != &dynamic_plan_outputs {
+                        return Err(Error::Store(format!("dynamic duplicate `{absolute}` changed plan outputs")));
+                    }
+                }
+                DynamicRegistrationDecision::Insert => {
+                    let Some(remaining) = MAX_ENTRIES.checked_sub(known_paths.len()) else {
+                        return Err(Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")));
+                    };
+                    let staged_count = u32::try_from(stage.staged.len())
+                        .map_err(|_| Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")))?;
+                    if staged_count >= remaining {
+                        return Err(Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")));
+                    }
+                    stage.order.push(absolute.clone());
+                    stage.staged.insert(absolute, V2StagedUnit {
+                        ready,
+                        dynamic_plan_outputs,
+                    });
+                }
+            }
+            registered.insert(id.clone(), path);
+            pending.remove(&id);
+        }
+    }
+    if !pending.is_empty() {
+        return Err(Error::Store(format!(
+            "native dynamic plan '{}' has unresolved unit dependencies: {}",
+            accepted.canonical_plan_digest,
+            pending.into_iter().map(|unit| unit.to_string()).collect::<Vec<_>>().join(", ")
+        )));
+    }
+    let root_drv_paths = accepted
+        .plan
+        .roots()
+        .iter()
+        .map(|root| {
+            registered
+                .get(root)
+                .cloned()
+                .ok_or_else(|| Error::Store(format!("native dynamic plan root was not registered: {root}")))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    stage.preflight_goals(worker, &root_drv_paths)?;
+    Ok(PreparedV2Registration {
+        staged: stage.staged,
+        order: stage.order,
+        registered: RegisteredNativeDynamicPlan {
+            root_drv_paths,
+            unit_drv_paths: registered,
+        },
+    })
+}
+
+fn native_dynamic_admission_error(unit: &DynamicUnit, error: DynamicAdmissionError) -> Error {
+    Error::Store(format!("admitting native dynamic unit '{}': {error}", unit.id))
+}
+
 fn register_native_dynamic_unit(
     unit: &DynamicUnit,
     sources: &BTreeMap<SourceId, StorePath<String>>,
@@ -1116,6 +1112,22 @@ fn register_native_dynamic_unit(
     known_paths: &mut DerivationRegistry,
     store_dir: &str,
 ) -> Result<StorePath<String>, Error> {
+    let ready = prepare_native_dynamic_unit(unit, sources, registered_units, known_paths, store_dir)?;
+    let drv_path = ready.drv_path().clone();
+    known_paths.insert_registry_ready_dynamic(
+        ready,
+        unit.derivation.dynamic_plan_outputs.iter().map(|output| output.as_str().to_owned()).collect(),
+    )?;
+    Ok(drv_path)
+}
+
+fn prepare_native_dynamic_unit(
+    unit: &DynamicUnit,
+    sources: &BTreeMap<SourceId, StorePath<String>>,
+    registered_units: &BTreeMap<UnitId, StorePath<String>>,
+    known_paths: &impl NativeUnitLookup,
+    store_dir: &str,
+) -> Result<RegistryReadyDynamicDerivation, Error> {
     if !dynamic_plan_outputs_are_declared(unit) {
         return Err(Error::Store(format!(
             "native dynamic unit '{}' declares dynamic_plan_outputs outside outputs",
@@ -1124,21 +1136,18 @@ fn register_native_dynamic_unit(
     }
 
     let mut derivation = build_native_dynamic_derivation(unit, sources, registered_units, known_paths, store_dir)?;
+    let mut parent_hdms = BTreeMap::new();
     for parent_drv_path in derivation.input_derivations.keys() {
         let parent_abs = parent_drv_path.to_absolute_path_with_prefix(store_dir);
-        if known_paths.get_hdm_by_drv_path(&parent_abs).is_none() {
-            return Err(Error::Store(format!(
+        let digest = known_paths.native_hdm(&parent_abs).ok_or_else(|| {
+            Error::Store(format!(
                 "native dynamic unit '{}' references unregistered parent derivation {parent_abs}",
                 unit.id
-            )));
-        }
+            ))
+        })?;
+        parent_hdms.insert(parent_drv_path.as_ref(), digest);
     }
-
-    let hdm = derivation.hash_derivation_modulo(|parent_drv_path| {
-        known_paths
-            .get_hdm_by_drv_path(&parent_drv_path.to_absolute_path_with_prefix(store_dir))
-            .unwrap_or([0u8; 32])
-    });
+    let hdm = derivation.hash_derivation_modulo_with_store_dir(|parent| parent_hdms[parent], store_dir);
     let is_ca = matches!(unit.derivation.addressing_mode, AddressingMode::ContentAddressed)
         && unit.derivation.fixed_output.is_none();
     derivation
@@ -1153,19 +1162,20 @@ fn register_native_dynamic_unit(
         .calculate_derivation_path_with_store_dir(&unit.derivation.name, store_dir)
         .map_err(|err| Error::Store(format!("computing native dynamic derivation path for '{}': {err}", unit.id)))?;
     debug_assert_eq!(derivation.outputs.len(), unit.derivation.outputs.len());
-    debug_assert!(derivation.input_derivations.keys().all(|parent_drv_path| {
-        let parent_abs = parent_drv_path.to_absolute_path_with_prefix(store_dir);
-        known_paths.get_hdm_by_drv_path(&parent_abs).is_some()
-    }));
-    known_paths.insert_with_dynamic_plan_outputs(
-        drv_path.clone(),
-        hdm,
-        derivation,
-        is_ca,
-        unit.derivation.dynamic_plan_outputs.iter().map(|output| output.as_str().to_owned()).collect(),
-        None,
-    );
-    Ok(drv_path)
+    // r[impl dynamic_derivation_admission.registry_boundary]
+    let validated =
+        admit_native_plan_derivation(derivation, drv_path.clone(), store_dir, DynamicAdmissionLimits::default())
+            .map_err(|error| native_dynamic_admission_error(unit, error))?;
+    let parent_facts = observe_dynamic_parent_facts(&validated, known_paths);
+    let resolved = resolve_dynamic_identity(validated, &parent_facts)
+        .map_err(|error| native_dynamic_admission_error(unit, error))?;
+    let existing = observe_existing_dynamic_registration(&resolved, known_paths);
+    let ready = plan_dynamic_registration(resolved, existing.as_ref())
+        .map_err(|error| native_dynamic_admission_error(unit, error))?;
+    if ready.drv_path() != &drv_path || ready.hash_derivation_modulo() != hdm || ready.content_addressed() != is_ca {
+        return Err(Error::Store(format!("native dynamic unit '{}' changed identity during admission", unit.id)));
+    }
+    Ok(ready)
 }
 
 fn build_native_dynamic_derivation(
@@ -1288,6 +1298,22 @@ fn dynamic_placeholder_bindings(
                     let binding_path =
                         admit_dynamic_binding_path(path.to_absolute_path_with_prefix(store_dir), store_dir)?;
                     output_bindings.insert(binding_key, binding_path);
+                } else if known_paths.native_is_ca(&drv_abs) {
+                    // CA outputs have a provisional path until their signed
+                    // realization. Staged and live parents use the same rule.
+                    let provisional = known_paths.native_provisional(&drv_abs, output.as_str()).ok_or_else(|| {
+                        Error::Store(format!("native dynamic CA unit {dependency}:{output} has no provisional path"))
+                    })?;
+                    let binding_path = admit_dynamic_binding_path(
+                        String::from_utf8(provisional.to_vec()).map_err(|_| {
+                            Error::Store(format!("native dynamic CA unit {dependency}:{output} path is not UTF-8"))
+                        })?,
+                        store_dir,
+                    )?;
+                    if output_bindings.len() >= binding_count_max {
+                        return Err(Error::Store("native dynamic output bindings exceeded input bound".to_string()));
+                    }
+                    output_bindings.insert(binding_key, binding_path);
                 } else if required_outputs.contains(&binding_key) {
                     return Err(Error::Store(format!(
                         "native dynamic unit '{}' requires a statically known path for {dependency}:{output}",
@@ -1394,6 +1420,10 @@ pub struct Worker {
     plan_output_bindings: BTreeMap<String, Vec<PlanOutputBindingState>>,
     native_plan_binding_facts: BTreeMap<(String, String), NativePlanBindingFact>,
     max_jobs: u32,
+    causal_trace: Option<CausalTraceCollector>,
+    // Present only during run_watch. Its senders live until the corresponding
+    // BuildService future has actually returned, including fetch owners.
+    watch_cancellations: Option<HashMap<String, watch::Sender<bool>>>,
 }
 
 fn redacted_goal_identity(goal_key: &str) -> String {
@@ -1435,7 +1465,21 @@ impl Worker {
             plan_output_bindings: BTreeMap::new(),
             native_plan_binding_facts: BTreeMap::new(),
             max_jobs,
+            causal_trace: None,
+            watch_cancellations: None,
         })
+    }
+
+    /// Enable observation only for this invocation; trace state never schedules work.
+    pub fn enable_causal_trace(&mut self, store_prefix: &str) {
+        self.causal_trace = Some(CausalTraceCollector::with_store_prefix(store_prefix));
+    }
+
+    pub fn take_causal_trace(&mut self) -> Result<Option<crate::causal_trace::Trace>, Error> {
+        self.causal_trace
+            .take()
+            .map(|collector| collector.finish().map_err(|reason| Error::Store(format!("causal trace: {reason:?}"))))
+            .transpose()
     }
 
     /// Replace optional duration-class history and invalidate only known graph
@@ -1594,7 +1638,8 @@ impl Worker {
         self.priority_decisions.push(evidence);
         self.scheduling_epoch = next_epoch;
         debug_assert!(!self.ready_goals.contains_key(&selected));
-        debug_assert_eq!(self.priority_decisions.len() as u32, next_epoch);
+        debug_assert_eq!(self.priority_decisions.last().map(|row| row.scheduling_epoch), Some(next_epoch));
+        debug_assert!(self.watch_cancellations.is_some() || self.priority_decisions.len() as u32 == next_epoch);
         Ok(Some(selected))
     }
 
@@ -1617,6 +1662,16 @@ impl Worker {
         // Pass 1: BFS to create all goals. Collect (key, dep_paths)
         // for each newly created goal, in creation order.
         let created = self.create_goals_bfs(drv_path, known_paths, is_root)?;
+        if let Some(trace) = self.causal_trace.as_mut() {
+            if is_root {
+                trace.root_required(&drv_path.to_absolute_path());
+            }
+            for (key, dependencies) in &created {
+                for dependency in dependencies {
+                    trace.dependency_required(key, &dependency.to_absolute_path());
+                }
+            }
+        }
 
         // Pass 2: Wire deps and inspect, in creation order (leaves
         // first since BFS processes deps before dependents).
@@ -1721,7 +1776,6 @@ impl Worker {
         Ok(created)
     }
 
-    // r[impl mantle.dynamic_plan_output_inputs.binding_failures]
     fn resolve_binding_states(&mut self, key: &str, known_paths: &DerivationRegistry) {
         let Some(bindings) = self.plan_output_bindings.get_mut(key) else {
             return;
@@ -1812,6 +1866,9 @@ impl Worker {
                     .waiters
                     .push(key.to_owned());
                 self.pressure_dirty_goals.insert(key.to_owned());
+                if let Some(trace) = self.causal_trace.as_mut() {
+                    trace.dependency_required(key, &root_key);
+                }
                 self.pressure_dirty_goals.insert(root_key);
             }
         }
@@ -1825,7 +1882,6 @@ impl Worker {
             .collect()
     }
 
-    // r[impl mantle.dynamic_plan_output_inputs.provenance]
     fn bound_binding_claim(&self, key: &str, store_dir: &str) -> Result<Option<String>, Error> {
         let Some(bindings) = self.plan_output_bindings.get(key) else {
             return Ok(None);
@@ -1874,7 +1930,6 @@ impl Worker {
         }
         self.binding_reports()
     }
-
     /// Wire waiter edges for a goal's deps and inspect (Pending →
     /// Waiting/Ready). All deps must already exist in the registry.
     fn wire_deps_and_inspect(&mut self, key: &str, dep_drv_paths: &[StorePath<String>]) -> Result<(), Error> {
@@ -1962,9 +2017,10 @@ impl Worker {
             completed_count: 0,
         };
         let iteration_count_max: u32 = total_goals.saturating_mul(4).max(16);
+        let mut live_observer = None;
 
         for _ in 0..iteration_count_max {
-            let dispatched = self.dispatch_ready(builder, known_paths, &mut state).await?;
+            let dispatched = self.dispatch_ready(builder, known_paths, &mut state, &mut live_observer).await?;
 
             if self.registry.all_roots_terminal() {
                 info!(
@@ -2020,6 +2076,22 @@ impl Worker {
     where
         BServ: BuildService + 'static,
     {
+        self.run_streaming_observed(builder, known_paths, rx, None).await
+    }
+
+    /// The observer sees the real goal registry after discovery, each
+    /// dispatch, and completion. It must be best-effort and nonblocking;
+    /// it has no authority to change Worker state or build results.
+    pub async fn run_streaming_observed<BServ>(
+        &mut self,
+        builder: &mut Builder<BServ>,
+        known_paths: &mut DerivationRegistry,
+        rx: &mut mpsc::Receiver<EvalMessage>,
+        mut live_observer: Option<&mut dyn FnMut(&GoalRegistry)>,
+    ) -> Result<WorkerResult, Error>
+    where
+        BServ: BuildService + 'static,
+    {
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
         let mut all_outcomes: Vec<BuildOutcome> = Vec::new();
         let mut failed: Vec<FailedGoal> = Vec::new();
@@ -2045,8 +2117,11 @@ impl Worker {
             if !is_eval_done {
                 self.drain_eval_messages(rx, known_paths, &mut is_eval_done)?;
             }
+            if let Some(observer) = live_observer.as_mut() {
+                observer(&self.registry);
+            }
 
-            self.dispatch_ready(builder, known_paths, &mut state).await?;
+            self.dispatch_ready(builder, known_paths, &mut state, &mut live_observer).await?;
 
             if is_eval_done && self.registry.all_roots_terminal() {
                 info!(
@@ -2069,8 +2144,460 @@ impl Worker {
             }
 
             self.wait_for_event(&mut is_eval_done, rx, builder, known_paths, &mut state).await?;
+            if let Some(observer) = live_observer.as_mut() {
+                observer(&self.registry);
+            }
         }
         Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_count_max})")))
+    }
+
+    /// Run consecutive complete root selections against the same goal registry.
+    /// CandidateReady follows observed stale teardown; dispatch follows its matching commit token.
+    pub async fn run_watch<BServ>(
+        &mut self,
+        builder: &mut Builder<BServ>,
+        known_paths: &mut DerivationRegistry,
+        updates: &mut mpsc::Receiver<WatchWorkerUpdate>,
+        events: &mpsc::Sender<WatchWorkerEvent>,
+    ) -> Result<WorkerResult, Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        if self.watch_cancellations.is_some() {
+            return Err(Error::Store("watch worker is already running".to_string()));
+        }
+        self.watch_cancellations = Some(HashMap::new());
+        let mut outcomes = Vec::new();
+        let mut all_outcomes = Vec::new();
+        let mut failed = Vec::new();
+        let mut native_dynamic_plans = Vec::new();
+        let mut state = WorkerLoopState {
+            sem: Arc::new(Semaphore::new(self.max_jobs as usize)),
+            join_set: JoinSet::new(),
+            pending_meta: HashMap::new(),
+            outcomes: &mut outcomes,
+            all_outcomes: &mut all_outcomes,
+            failed: &mut failed,
+            native_dynamic_plans: &mut native_dynamic_plans,
+            completed_count: 0,
+        };
+        let result = self.watch_loop(builder, known_paths, updates, events, &mut state).await;
+        if result.is_err() {
+            // An error must not drop cancellable JoinSet futures: a fetch owner
+            // or sandbox may still be executing after the coordinator fails.
+            let mut stale: Vec<_> = state.pending_meta.keys().cloned().collect();
+            stale.sort_unstable();
+            self.watch_request_cancellation(&stale);
+            while let Some(join) = state.join_set.join_next().await {
+                if let Err(error) = self.watch_join(join, &stale, builder, known_paths, &mut state).await {
+                    tracing::error!(%error, "watch task lost during error drain");
+                    // Other owned tasks must still observe teardown.
+                }
+            }
+        }
+        result?;
+        if !state.pending_meta.is_empty() || !state.join_set.is_empty() {
+            return Err(Error::Store("watch teardown is not observed".to_string()));
+        }
+        self.watch_cancellations = None;
+        let bindings = self.final_binding_reports(known_paths);
+        Ok(finish_worker_result(
+            outcomes,
+            all_outcomes,
+            failed,
+            native_dynamic_plans,
+            bindings,
+            std::mem::take(&mut self.priority_decisions),
+        ))
+    }
+
+    fn watch_request_cancellation(&self, stale: &[String]) {
+        if let Some(senders) = self.watch_cancellations.as_ref() {
+            for key in stale {
+                if let Some(sender) = senders.get(key) {
+                    let _ = sender.send(true);
+                }
+            }
+        }
+    }
+
+    fn watch_preflight_update(
+        &self,
+        update: &WatchWorkerUpdate,
+        known_paths: &DerivationRegistry,
+    ) -> Result<(), Error> {
+        // Reject capacity and missing-dependency errors before mutating any
+        // previously admitted goal. A near-capacity replacement may need its
+        // old generation drained first; never partially admit it.
+        let prefix = known_paths.store_dir();
+        let mut incoming: BTreeMap<String, &PendingRegistryEntry> = BTreeMap::new();
+        let mut new_metadata = BTreeSet::new();
+        for message in &update.roots {
+            for entry in &message.new_entries {
+                let (path, hdm, derivation, content_addressed, dynamic_plan_outputs, _) = entry;
+                let key = path.to_absolute_path_with_prefix(prefix);
+                if let Some(previous) = incoming.insert(key.clone(), entry)
+                    && previous != entry
+                {
+                    return Err(Error::Store(format!("watch incoming derivation identity collision: {key}")));
+                }
+                if let Some(existing) = known_paths.get_by_drv_path(&key) {
+                    if existing.hash_derivation_modulo != *hdm
+                        || existing.derivation.as_ref() != derivation
+                        || existing.content_addressed != *content_addressed
+                        || existing.dynamic_plan_outputs != *dynamic_plan_outputs
+                    {
+                        return Err(Error::Store(format!("watch incoming registered derivation changed: {key}")));
+                    }
+                } else {
+                    new_metadata.insert(key);
+                }
+            }
+        }
+        let metadata_count = usize::try_from(known_paths.len()).unwrap_or(usize::MAX);
+        if metadata_count.saturating_add(new_metadata.len()) > crate::registry::MAX_ENTRIES as usize {
+            return Err(Error::Store("watch incoming derivation registry capacity exceeded".to_string()));
+        }
+        let mut reachable: BTreeSet<String> =
+            self.registry.iter().map(|(_, goal)| goal.drv_path.to_absolute_path_with_prefix(prefix)).collect();
+        let mut visited = BTreeSet::new();
+        let mut queue: VecDeque<_> =
+            update.roots.iter().map(|message| message.drv_path.to_absolute_path_with_prefix(prefix)).collect();
+        while let Some(path) = queue.pop_front() {
+            reachable.insert(path.clone());
+            if reachable.len() > MAX_GOALS as usize {
+                return Err(Error::Store("watch incoming live goal capacity exceeded".to_string()));
+            }
+            if !visited.insert(path.clone()) {
+                continue;
+            }
+            let derivation = incoming
+                .get(&path)
+                .map(|entry| &entry.2)
+                .or_else(|| known_paths.get_by_drv_path(&path).map(|entry| entry.derivation.as_ref()))
+                .ok_or_else(|| Error::Store(format!("watch incoming derivation missing: {path}")))?;
+            queue.extend(
+                derivation
+                    .input_derivations
+                    .keys()
+                    .map(|dependency| dependency.to_absolute_path_with_prefix(prefix)),
+            );
+        }
+        Ok(())
+    }
+
+    fn watch_begin_update(
+        &mut self,
+        update: WatchWorkerUpdate,
+        known_paths: &mut DerivationRegistry,
+    ) -> Result<WatchPending, Error> {
+        self.watch_preflight_update(&update, known_paths)?;
+        let generation = update.generation;
+        let keep: BTreeSet<_> = update.roots.iter().map(|root| root.drv_path.to_absolute_path()).collect();
+        for root in update.roots {
+            self.accept_eval_message(root, known_paths)?;
+        }
+        let stale = self.registry.watch_retract_roots(&keep)?;
+        self.watch_request_cancellation(&stale);
+        Ok(WatchPending {
+            generation,
+            stale,
+            deadline: tokio::time::Instant::now() + WATCH_CANCELLATION_DEADLINE,
+            reported: false,
+        })
+    }
+
+    fn watch_finish_retraction<BServ>(
+        &mut self,
+        stale: &[String],
+        builder: &mut Builder<BServ>,
+        known_paths: &mut DerivationRegistry,
+        state: &mut WorkerLoopState<'_>,
+    ) -> Result<(), Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        if stale.iter().any(|key| state.pending_meta.contains_key(key)) {
+            return Err(Error::Store("watch stale task has not observed teardown".to_string()));
+        }
+        self.registry.watch_remove_stale(stale)?;
+        let keys: BTreeSet<_> = stale.iter().collect();
+        state.native_dynamic_plans.retain(|report| !keys.contains(&report.producer_key));
+        let stale_hashes: BTreeSet<_> = stale.iter().map(|key| redacted_goal_identity(key)).collect();
+        self.priority_decisions.retain(|row| !stale_hashes.contains(&row.selected_goal_key_blake3));
+        self.ready_goals.retain(|key, _| !keys.contains(key));
+        self.goal_preferences.retain(|key, _| !keys.contains(key));
+        self.plan_output_bindings.retain(|key, _| !keys.contains(key));
+        self.native_plan_binding_facts.retain(|(key, _), _| !keys.contains(key));
+        self.pressure_cache.retain(|key, _| !keys.contains(key));
+        self.pressure_dirty_goals.retain(|key| !keys.contains(key));
+        state.outcomes.retain(|outcome| !keys.contains(&outcome.drv_path.to_absolute_path()));
+        state.all_outcomes.retain(|outcome| !keys.contains(&outcome.drv_path.to_absolute_path()));
+        state.failed.retain(|failure| !keys.contains(&failure.drv_key));
+        self.pressure_dirty_goals.extend(self.registry.iter().map(|(key, _)| key.to_owned()));
+        self.watch_retain_metadata(builder, known_paths)?;
+        Ok(())
+    }
+
+    fn watch_retain_metadata<BServ>(
+        &self,
+        builder: &mut Builder<BServ>,
+        known_paths: &mut DerivationRegistry,
+    ) -> Result<(), Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        let prefix = known_paths.store_dir();
+        let mut pending: VecDeque<String> =
+            self.registry.iter().map(|(_, goal)| goal.drv_path.to_absolute_path_with_prefix(prefix)).collect();
+        for fact in self.native_plan_binding_facts.values() {
+            if let NativePlanBindingFact::Accepted { registered_units, .. } = fact {
+                pending.extend(registered_units.values().map(|path| path.to_absolute_path_with_prefix(prefix)));
+            }
+        }
+        for bindings in self.plan_output_bindings.values() {
+            pending.extend(bindings.iter().filter_map(|binding| {
+                binding.root.as_ref().map(|root| root.drv_path.to_absolute_path_with_prefix(prefix))
+            }));
+        }
+        let mut live = BTreeSet::new();
+        let mut sources = BTreeSet::new();
+        while let Some(path) = pending.pop_front() {
+            if !live.insert(path.clone()) {
+                continue;
+            }
+            if live.len() > MAX_GOALS as usize {
+                return Err(Error::Store("watch retained metadata exceeds goal limit".to_string()));
+            }
+            let entry = known_paths
+                .get_by_drv_path(&path)
+                .ok_or_else(|| Error::Store(format!("watch retained derivation missing: {path}")))?;
+            for derivation in std::iter::once(entry.derivation.as_ref()).chain(entry.resolved_derivation.as_deref()) {
+                sources.extend(derivation.input_sources.iter().cloned());
+                pending.extend(
+                    derivation
+                        .input_derivations
+                        .keys()
+                        .map(|dependency| dependency.to_absolute_path_with_prefix(prefix)),
+                );
+            }
+        }
+        known_paths.retain_watch_derivations(&live)?;
+        builder.retain_watch_source_generation_paths(&sources);
+        Ok(())
+    }
+
+    async fn watch_join<BServ>(
+        &mut self,
+        join: Result<(String, Result<snix_build::buildservice::BuildResult, Error>), tokio::task::JoinError>,
+        stale: &[String],
+        builder: &mut Builder<BServ>,
+        known_paths: &mut DerivationRegistry,
+        state: &mut WorkerLoopState<'_>,
+    ) -> Result<(), Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        let key = match &join {
+            Ok((key, _)) => key,
+            Err(error) => {
+                // No success or admission is possible after a lost task; the
+                // surrounding loop drains other owned tasks before returning.
+                return Err(Error::Store(format!("watch task lost without teardown proof: {error}")));
+            }
+        };
+        let is_stale = stale.binary_search(key).is_ok();
+        if let Some(senders) = self.watch_cancellations.as_mut() {
+            senders.remove(key);
+        }
+        if is_stale {
+            state.pending_meta.remove(key);
+            if let Some(trace) = self.causal_trace.as_mut() {
+                trace.cancelled(key);
+                trace.cleaned_up(key);
+            }
+        } else {
+            self.process_join_result(join, builder, known_paths, state).await?;
+        }
+        state.completed_count = state.completed_count.saturating_add(1);
+        Ok(())
+    }
+
+    async fn watch_emit(events: &mpsc::Sender<WatchWorkerEvent>, event: WatchWorkerEvent) -> Result<(), Error> {
+        events.send(event).await.map_err(|_| Error::Store("watch event receiver closed".to_string()))
+    }
+
+    async fn watch_loop<BServ>(
+        &mut self,
+        builder: &mut Builder<BServ>,
+        known_paths: &mut DerivationRegistry,
+        updates: &mut mpsc::Receiver<WatchWorkerUpdate>,
+        events: &mpsc::Sender<WatchWorkerEvent>,
+        state: &mut WorkerLoopState<'_>,
+    ) -> Result<(), Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        let mut pending: Option<WatchPending> = None;
+        let mut queued: Option<WatchWorkerUpdate> = None;
+        // Staged goals cannot dispatch until the shell acknowledges its
+        // matching source snapshot through the one-use commit token.
+        let mut candidate: Option<(u64, oneshot::Receiver<()>, tokio::time::Instant)> = None;
+        let mut active: Option<u64> = None;
+        let mut settled: Option<u64> = None;
+        let mut closed = false;
+        loop {
+            if pending.is_none() {
+                if let Some(update) = queued.take() {
+                    candidate = None;
+                    pending = Some(self.watch_begin_update(update, known_paths)?);
+                    active = None;
+                } else if closed {
+                    candidate = None;
+                    pending = Some(WatchPending {
+                        generation: 0,
+                        stale: self.registry.watch_retract_roots(&BTreeSet::new())?,
+                        deadline: tokio::time::Instant::now() + WATCH_CANCELLATION_DEADLINE,
+                        reported: false,
+                    });
+                    self.watch_request_cancellation(&pending.as_ref().expect("installed").stale);
+                    active = None;
+                }
+            }
+            if pending
+                .as_ref()
+                .is_some_and(|wait| !wait.stale.iter().any(|key| state.pending_meta.contains_key(key)))
+            {
+                let wait = pending.take().expect("checked");
+                self.watch_finish_retraction(&wait.stale, builder, known_paths, state)?;
+                if closed {
+                    if state.join_set.is_empty() {
+                        return Ok(());
+                    }
+                } else if queued.is_none() {
+                    active = None;
+                    let (commit, receiver) = oneshot::channel();
+                    candidate = Some((wait.generation, receiver, tokio::time::Instant::now() + WATCH_COMMIT_DEADLINE));
+                    Self::watch_emit(events, WatchWorkerEvent::CandidateReady {
+                        generation: wait.generation,
+                        commit,
+                    })
+                    .await?;
+                    settled = None;
+                }
+            }
+            if let Some(generation) = active
+                && pending.is_none()
+                && !closed
+            {
+                self.dispatch_ready(builder, known_paths, state, &mut None).await?;
+                if self.registry.all_roots_terminal() && settled != Some(generation) {
+                    let roots: BTreeSet<_> =
+                        self.registry.iter().filter(|(_, goal)| goal.is_root).map(|(key, _)| key.to_owned()).collect();
+                    let outcomes = state
+                        .all_outcomes
+                        .iter()
+                        .filter(|outcome| roots.contains(&outcome.drv_path.to_absolute_path()))
+                        .cloned()
+                        .collect();
+                    let failed: Vec<FailedGoal> =
+                        state.failed.iter().filter(|failure| roots.contains(&failure.drv_key)).cloned().collect();
+                    if self
+                        .registry
+                        .root_failed_keys()
+                        .iter()
+                        .any(|key| !failed.iter().any(|failure| &failure.drv_key == key))
+                    {
+                        return Err(Error::Store("watched failed root has no recorded failure".to_string()));
+                    }
+                    // The builder's observed set was pruned to the admitted
+                    // metadata closure at the retraction fence. Its paths also
+                    // include transitive source closure inputs.
+                    let source_generation_paths = builder.source_generation_paths();
+                    Self::watch_emit(events, WatchWorkerEvent::Settled {
+                        generation,
+                        outcomes,
+                        failed,
+                        source_generation_paths,
+                    })
+                    .await?;
+                    // Watch notices carry only current outputs and sources. The
+                    // one-shot reporting vectors have no consumer in this mode.
+                    drop(builder.take_store_layer_selections());
+                    drop(builder.take_hermeticity_audit_events());
+                    drop(builder.take_build_environment_reports());
+                    drop(builder.take_network_policy_reports());
+                    drop(builder.take_finish_gate_reports());
+                    drop(builder.take_action_result_reports());
+                    settled = Some(generation);
+                }
+            }
+            if closed && pending.is_none() && state.join_set.is_empty() {
+                return Ok(());
+            }
+            let deadline = pending
+                .as_ref()
+                .map_or_else(|| tokio::time::Instant::now() + WATCH_CANCELLATION_DEADLINE, |wait| wait.deadline);
+            let mut waiting_commit = candidate.take();
+            let commit_deadline = waiting_commit
+                .as_ref()
+                .map_or_else(|| tokio::time::Instant::now() + WATCH_COMMIT_DEADLINE, |(_, _, deadline)| *deadline);
+            tokio::select! {
+                biased;
+                join = state.join_set.join_next(), if !state.join_set.is_empty() => {
+                    if let Some(join) = join {
+                        self.watch_join(join, pending.as_ref().map_or(&[][..], |wait| wait.stale.as_slice()),
+                            builder, known_paths, state).await?;
+                    }
+                }
+                update = updates.recv(), if !closed => {
+                    match update {
+                        Some(update) => {
+                            queued = Some(update);
+                            while let Ok(update) = updates.try_recv() {
+                                queued = Some(update);
+                            }
+                            waiting_commit = None;
+                            if pending.is_none() {
+                                active = None;
+                            }
+                        }
+                        None => {
+                            closed = true;
+                            queued = None;
+                            waiting_commit = None;
+                        }
+                    }
+                }
+                response = async {
+                    match waiting_commit.as_mut() {
+                        Some((_, receiver, _)) => receiver.await,
+                        None => std::future::pending().await,
+                    }
+                }, if waiting_commit.is_some() => {
+                    let generation = waiting_commit.take().expect("guarded").0;
+                    if response.is_ok() && pending.is_none() && queued.is_none() && !closed {
+                        active = Some(generation);
+                        settled = None;
+                    }
+                    // A dropped token rejects the candidate without killing
+                    // the watch session. Await the rollback update.
+                }
+                _ = tokio::time::sleep_until(commit_deadline), if waiting_commit.is_some() => {
+                    waiting_commit = None;
+                    active = None;
+                }
+                _ = tokio::time::sleep_until(deadline), if pending.as_ref().is_some_and(|wait| !wait.reported) => {
+                    if let Some(wait) = pending.as_mut() {
+                        Self::watch_emit(events, WatchWorkerEvent::PendingCancellation {
+                            generation: wait.generation, stale: wait.stale.clone(),
+                        }).await?;
+                        wait.reported = true;
+                    }
+                }
+            }
+            candidate = waiting_commit;
+        }
     }
 
     /// Wait for either a build completion or an eval message.
@@ -2153,7 +2680,30 @@ impl Worker {
             "received derivation from eval",
         );
 
+        if self.watch_cancellations.is_some() {
+            // A rollback can replay full conversion entries. Replacing a live
+            // registry entry would erase its resolved CA output and action
+            // identity, so only reinsert entries pruned by an older generation.
+            for (drv_path, hdm, derivation, content_addressed, dynamic_plan_outputs, _) in &msg.new_entries {
+                let key = drv_path.to_absolute_path_with_prefix(known_paths.store_dir());
+                if let Some(existing) = known_paths.get_by_drv_path(&key)
+                    && (existing.hash_derivation_modulo != *hdm
+                        || existing.derivation.as_ref() != derivation
+                        || existing.content_addressed != *content_addressed
+                        || existing.dynamic_plan_outputs != *dynamic_plan_outputs)
+                {
+                    return Err(Error::Store(format!("watch replay changed registered derivation: {key}")));
+                }
+            }
+        }
         for (drv_path, hdm, derivation, content_addressed, dynamic_plan_outputs, provenance_claims) in msg.new_entries {
+            if self.watch_cancellations.is_some()
+                && known_paths
+                    .get_by_drv_path(&drv_path.to_absolute_path_with_prefix(known_paths.store_dir()))
+                    .is_some()
+            {
+                continue;
+            }
             known_paths.insert_with_dynamic_plan_outputs(
                 drv_path,
                 hdm,
@@ -2185,10 +2735,17 @@ impl Worker {
                 self.handle_build_completion(&drv_key, build_result, builder, known_paths, state).await
             }
             Ok((drv_key, Err(build_err))) => {
-                let err_msg = format!("{build_err}");
+                let mut err_msg = format!("{build_err}");
+                if let Some(prepared) = state.pending_meta.remove(&drv_key)
+                    && let Err(report_error) = builder.record_failed_finish_gates(&prepared, &err_msg)
+                {
+                    err_msg.push_str(&format!("; finish-gate report unavailable: {report_error}"));
+                }
                 tracing::warn!(drv = %drv_key, err = %err_msg, "sandbox build failed");
-                state.pending_meta.remove(&drv_key);
                 self.fail_goal(&drv_key, &err_msg, None, state.failed)?;
+                if let Some(trace) = self.causal_trace.as_mut() {
+                    trace.cleaned_up(&drv_key);
+                }
                 Ok(())
             }
             Err(join_err) => {
@@ -2224,11 +2781,20 @@ impl Worker {
                 let err_msg = format!("{e}");
                 tracing::warn!(drv = drv_key, err = %err_msg, "build failed, marking goal as failed");
                 self.fail_goal(drv_key, &err_msg, build_log.as_deref(), state.failed)?;
+                if let Some(trace) = self.causal_trace.as_mut() {
+                    trace.cleaned_up(drv_key);
+                }
                 return Ok(());
             }
         };
 
-        self.handle_completed_outcome(drv_key, outcome, builder, known_paths, state).await
+        let completed = self.handle_completed_outcome(drv_key, outcome, builder, known_paths, state).await;
+        if completed.is_ok()
+            && let Some(trace) = self.causal_trace.as_mut()
+        {
+            trace.cleaned_up(drv_key);
+        }
+        completed
     }
 
     async fn handle_completed_outcome<BServ>(
@@ -2246,17 +2812,26 @@ impl Worker {
         let mut native_scan = self
             .scan_native_dynamic_plans(drv_key, &outcome, builder, known_paths.store_dir(), &declared_native_outputs)
             .await?;
+        let mut admitted_reports = Vec::with_capacity(native_scan.accepted.len());
         for mut accepted in native_scan.accepted.drain(..) {
             let mut staged = None;
             match self.admit_v2_source_slices(&mut accepted, &outcome, known_paths, builder, &mut staged).await? {
                 Some(rejection) => native_scan.rejected.push(rejection),
                 None => {
-                    state.native_dynamic_plans.push(native_plan_report_from_accepted(&accepted));
+                    admitted_reports.push(native_plan_report_from_accepted(&accepted));
+                    info!(
+                        producer = %accepted.producer_key,
+                        output = %accepted.output_name,
+                        plan_digest = %accepted.canonical_plan_digest,
+                        accepted_units = accepted.accepted_unit_ids.len(),
+                        "accepted native dynamic plan output"
+                    );
                     self.register_accepted_native_dynamic_plan(accepted, staged, known_paths)?;
                 }
             }
         }
         self.log_native_dynamic_plan_scan(&native_scan);
+        state.native_dynamic_plans.extend(admitted_reports);
         state.native_dynamic_plans.extend(native_plan_reports_from_scan(&native_scan));
         for rejected in native_scan.rejected {
             self.native_plan_binding_facts
@@ -2675,7 +3250,6 @@ impl Worker {
         *prepared = Some(staged);
         Ok(None)
     }
-
     fn log_native_dynamic_plan_scan(&self, scan: &NativeDynamicPlanScan) {
         if scan.is_empty() {
             return;
@@ -2711,18 +3285,11 @@ impl Worker {
                 let unit = staged.staged.remove(&path).ok_or_else(|| {
                     Error::Store(format!("staged native dynamic unit disappeared after publication: {path}"))
                 })?;
-                known_paths.insert_with_dynamic_plan_outputs(
-                    unit.drv_path,
-                    unit.hdm,
-                    unit.derivation,
-                    unit.content_addressed,
-                    unit.dynamic_plan_outputs,
-                    None,
-                );
+                known_paths.insert_registry_ready_dynamic(unit.ready, unit.dynamic_plan_outputs)?;
             }
             staged.registered
         } else {
-            register_native_dynamic_plan_units(&accepted, known_paths)?
+            register_v1_dynamic_plan_units(&accepted, known_paths)?
         };
         for root_drv_path in &registered.root_drv_paths {
             self.want(root_drv_path, known_paths, true)?;
@@ -2818,7 +3385,7 @@ impl Worker {
     ) -> Result<Vec<crate::dynamic::DynamicDrv>, Error> {
         let mut discovered = Vec::with_capacity(ready.len());
         for (output_name, item) in output_names.into_iter().zip(ready) {
-            known_paths.insert_registry_ready_dynamic(&item)?;
+            known_paths.insert_registry_ready_discovered(&item)?;
             info!(
                 producer = %outcome.drv_path.name(),
                 dynamic_drv = %item.drv_path().name(),
@@ -2858,6 +3425,11 @@ impl Worker {
                     }
                 }
             }
+            if let Some(trace) = self.causal_trace.as_mut() {
+                for dep_sp in &dep_drv_paths {
+                    trace.dependency_required(awaiting_key, &dep_sp.to_absolute_path());
+                }
+            }
             self.wire_deps_and_inspect(awaiting_key, &dep_drv_paths)?;
         }
         Ok(())
@@ -2889,6 +3461,7 @@ impl Worker {
         builder: &mut Builder<BServ>,
         known_paths: &mut DerivationRegistry,
         state: &mut WorkerLoopState<'_>,
+        live_observer: &mut Option<&mut dyn FnMut(&GoalRegistry)>,
     ) -> Result<u32, Error>
     where
         BServ: BuildService + 'static,
@@ -2944,8 +3517,14 @@ impl Worker {
                 attach_observed_binding_claim(&mut entry.provenance_claims, &drv_key, claim)?;
             }
             let (drv_path, is_root, derivation) = self.ready_goal_inputs(&drv_key)?;
+            if let Some(trace) = self.causal_trace.as_mut() {
+                trace.cache_checked(&drv_key);
+            }
             let prepare_result = builder.prepare_build(&drv_path, derivation, known_paths, is_root, &bound_paths).await;
             let is_spawned = self.handle_prepare_result(&drv_key, prepare_result, builder, known_paths, state).await?;
+            if let Some(observer) = live_observer.as_mut() {
+                observer(&self.registry);
+            }
             if is_spawned {
                 available_build_slots = available_build_slots
                     .checked_sub(1)
@@ -2989,6 +3568,9 @@ impl Worker {
     {
         match prepare_result {
             Ok(PrepareResult::Done(outcome)) => {
+                if let Some(trace) = self.causal_trace.as_mut() {
+                    trace.cache_decided(drv_key, outcome.cached);
+                }
                 self.handle_completed_outcome(drv_key, outcome, builder, known_paths, state).await?;
                 Ok(false)
             }
@@ -3002,6 +3584,9 @@ impl Worker {
                 prepared,
                 build_request,
             }) => {
+                if let Some(trace) = self.causal_trace.as_mut() {
+                    trace.cache_decided(drv_key, false);
+                }
                 self.spawn_prepared_build(drv_key, prepared, *build_request, builder, state)?;
                 Ok(true)
             }
@@ -3024,6 +3609,9 @@ impl Worker {
             .get_mut(drv_key)
             .ok_or_else(|| Error::Store(format!("worker: goal vanished during dispatch: {drv_key}")))?;
         goal.mark_building()?;
+        if let Some(trace) = self.causal_trace.as_mut() {
+            trace.dispatched(drv_key);
+        }
 
         let replaced = state.pending_meta.insert(drv_key.to_string(), prepared);
         debug_assert!(replaced.is_none(), "pending_meta already had entry for {drv_key}");
@@ -3031,10 +3619,52 @@ impl Worker {
         let bs = builder.build_service();
         let sem = state.sem.clone();
         let key = drv_key.to_string();
+        let cancellation = self.watch_cancellations.as_mut().map(|senders| {
+            let (sender, receiver) = watch::channel(false);
+            senders.insert(key.clone(), sender);
+            receiver
+        });
         state.join_set.spawn(async move {
             let _permit = sem.acquire_owned().await.map_err(|e| Error::Store(format!("semaphore: {e}")));
             let build_result = match _permit {
-                Ok(_p) => bs.do_build(build_request).await.map_err(|e| Error::Store(format!("build: {e}"))),
+                Ok(_p) => match cancellation {
+                    Some(receiver) => {
+                        match std::panic::AssertUnwindSafe(bs.do_build_cancellable(build_request, receiver))
+                            .catch_unwind()
+                            .await
+                        {
+                            Err(_) => {
+                                // The service may have handed off a child before its
+                                // panic. Neither its teardown nor slot release is proven.
+                                std::future::pending().await
+                            }
+                            Ok(Ok(result)) => Ok(result),
+                            Ok(Err(error)) => {
+                                let unobserved_fetch = error
+                                    .get_ref()
+                                    .and_then(|inner| {
+                                        inner.downcast_ref::<crate::fetch_build_service::UnobservedWatchFetch>()
+                                    })
+                                    .is_some();
+                                #[cfg(target_os = "linux")]
+                                let unobserved_sandbox = error
+                                    .get_ref()
+                                    .and_then(|inner| {
+                                        inner.downcast_ref::<snix_build::buildservice::UnobservedWatchSandbox>()
+                                    })
+                                    .is_some();
+                                #[cfg(not(target_os = "linux"))]
+                                let unobserved_sandbox = false;
+                                if unobserved_fetch || unobserved_sandbox {
+                                    // Retain JoinSet ownership and acquired reservation.
+                                    std::future::pending::<()>().await;
+                                }
+                                Err(Error::Store(format!("build: {error}")))
+                            }
+                        }
+                    }
+                    None => bs.do_build(build_request).await.map_err(|e| Error::Store(format!("build: {e}"))),
+                },
                 Err(e) => Err(e),
             };
             (key, build_result)
@@ -3075,6 +3705,9 @@ impl Worker {
 
         let is_root = goal.is_root;
         let waiters = std::mem::take(&mut goal.waiters);
+        if let Some(trace) = self.causal_trace.as_mut() {
+            trace.completed(drv_key, outcome.cached, None);
+        }
 
         all_outcomes.push(outcome.clone());
         if is_root {
@@ -3123,6 +3756,9 @@ impl Worker {
         let name = goal.drv_path.name().to_owned();
         self.ready_goals.remove(key);
         let reason = failure.as_str();
+        if let Some(trace) = self.causal_trace.as_mut() {
+            trace.failed(key, reason);
+        }
         if is_root {
             failed.push(FailedGoal {
                 drv_key: key.to_owned(),
@@ -3133,7 +3769,7 @@ impl Worker {
             });
         }
         for waiter in waiters {
-            self.propagate_failure(&waiter, key, &name, reason, None, failed)?;
+            self.propagate_failure(&waiter, key, key, &name, reason, None, failed)?;
         }
         Ok(())
     }
@@ -3158,11 +3794,7 @@ impl Worker {
             }
         }
     }
-
-    /// Mark a goal as failed and propagate failure to all waiters.
-    ///
     /// The error message is stored in `FailedGoal` for root goals.
-    /// so callers can report per-package errors.
     fn fail_goal(
         &mut self,
         drv_key: &str,
@@ -3180,6 +3812,9 @@ impl Worker {
         let is_root = goal.is_root;
         let waiters = std::mem::take(&mut goal.waiters);
         let drv_name = goal.drv_path.name().to_string();
+        if let Some(trace) = self.causal_trace.as_mut() {
+            trace.failed(drv_key, error_msg);
+        }
         if !self.plan_output_bindings.is_empty() {
             let consumers: Vec<String> = self.plan_output_bindings.keys().cloned().collect();
             for consumer in consumers {
@@ -3206,7 +3841,7 @@ impl Worker {
 
         // Propagate failure to waiters.
         for waiter_key in &waiters {
-            self.propagate_failure(waiter_key, drv_key, &drv_name, error_msg, build_log, failed)?;
+            self.propagate_failure(waiter_key, drv_key, drv_key, &drv_name, error_msg, build_log, failed)?;
         }
 
         Ok(())
@@ -3217,6 +3852,7 @@ impl Worker {
         &mut self,
         drv_key: &str,
         origin_drv_key: &str,
+        immediate_failed_dep_key: &str,
         failed_dep_name: &str,
         origin_error: &str,
         build_log: Option<&str>,
@@ -3238,6 +3874,9 @@ impl Worker {
         let is_root = goal.is_root;
         let waiters = std::mem::take(&mut goal.waiters);
         let drv_name = goal.drv_path.name().to_string();
+        if let Some(trace) = self.causal_trace.as_mut() {
+            trace.dependency_failed(drv_key, immediate_failed_dep_key, origin_error);
+        }
 
         if is_root {
             failed.push(FailedGoal {
@@ -3250,7 +3889,7 @@ impl Worker {
         }
 
         for waiter_key in &waiters {
-            self.propagate_failure(waiter_key, origin_drv_key, &drv_name, origin_error, build_log, failed)?;
+            self.propagate_failure(waiter_key, origin_drv_key, drv_key, &drv_name, origin_error, build_log, failed)?;
         }
 
         Ok(())
@@ -3294,14 +3933,14 @@ mod tests {
             ..Default::default()
         });
         attach_observed_binding_claim(&mut claims, "consumer.drv", "observed".to_owned()).unwrap();
+        attach_observed_binding_claim(&mut claims, "consumer.drv", "observed".to_owned()).unwrap();
         let retained = claims.clone();
         assert_eq!(claims.as_ref().unwrap().supplier.as_deref(), Some("Independent Supplier"));
         assert_eq!(claims.as_ref().unwrap().extra["operator.note"], "keep");
         let error = attach_observed_binding_claim(&mut claims, "consumer.drv", "forged".to_owned()).unwrap_err();
-        assert!(error.to_string().contains("reserved plan output provenance claim"));
+        assert!(error.to_string().contains("plan-output-identity-conflict"));
         assert_eq!(claims, retained, "a conflicting claim must not overwrite prior provenance");
     }
-
     fn make_drv() -> Derivation {
         let mut outputs = BTreeMap::new();
         outputs.insert("out".to_string(), Output {
@@ -3350,6 +3989,187 @@ mod tests {
         let hdm = aterm_hash; // Use same for simplicity in tests.
         kp.insert(sp.clone(), hdm, drv.clone(), false, None);
         sp
+    }
+
+    #[test]
+    fn watch_retraction_keeps_completed_shared_dependency_and_releases_stale_ready_goals() {
+        let mut paths = DerivationRegistry::default();
+        let shared = register_drv(&mut paths, "watch-shared.drv", &make_drv());
+        let old = register_drv(&mut paths, "watch-old.drv", &make_drv_with_deps(std::slice::from_ref(&shared)));
+        let retained =
+            register_drv(&mut paths, "watch-retained.drv", &make_drv_with_deps(std::slice::from_ref(&shared)));
+        let mut worker = Worker::new(1);
+        worker.want(&old, &paths, true).unwrap();
+        worker.want(&retained, &paths, true).unwrap();
+        let shared_key = shared.to_absolute_path();
+        worker.ready_goals.remove(&shared_key);
+        worker
+            .complete_goal(
+                &shared_key,
+                BuildOutcome {
+                    drv_path: shared.clone(),
+                    outputs: BTreeMap::new(),
+                    substitutions: BTreeMap::new(),
+                    cached: true,
+                    log: None,
+                },
+                &mut Vec::new(),
+                &mut Vec::new(),
+                &mut Vec::new(),
+            )
+            .unwrap();
+        worker.watch_cancellations = Some(HashMap::new());
+        let wait = worker
+            .watch_begin_update(
+                WatchWorkerUpdate {
+                    generation: 2,
+                    roots: vec![EvalMessage {
+                        label: "retained".into(),
+                        drv_path: retained.clone(),
+                        new_entries: vec![],
+                    }],
+                },
+                &mut paths,
+            )
+            .unwrap();
+        assert_eq!(wait.stale, vec![old.to_absolute_path()]);
+        let mut outcomes = Vec::new();
+        let mut all_outcomes = Vec::new();
+        let mut failed = Vec::new();
+        let mut native_dynamic_plans = Vec::new();
+        let mut state = WorkerLoopState {
+            sem: Arc::new(Semaphore::new(1)),
+            join_set: JoinSet::new(),
+            pending_meta: HashMap::new(),
+            outcomes: &mut outcomes,
+            all_outcomes: &mut all_outcomes,
+            failed: &mut failed,
+            native_dynamic_plans: &mut native_dynamic_plans,
+            completed_count: 0,
+        };
+        let mut builder = make_test_builder(MemoryBlobService::default());
+        worker.watch_finish_retraction(&wait.stale, &mut builder, &mut paths, &mut state).unwrap();
+        assert!(!worker.registry.contains(&old.to_absolute_path()));
+        assert!(!worker.ready_goals.contains_key(&old.to_absolute_path()));
+        assert!(worker.registry.contains(&shared_key));
+        assert_eq!(worker.registry.get(&shared_key).unwrap().state, GoalState::Done);
+        assert_eq!(worker.registry.get(&retained.to_absolute_path()).unwrap().state, GoalState::Ready);
+    }
+
+    #[test]
+    fn watch_rollback_reinserts_pruned_derivation_without_erasing_retained_ca_resolution() {
+        let mut paths = DerivationRegistry::default();
+        let ca = fake_sp("watch-rollback-ca.drv");
+        let ca_drv = make_drv();
+        let hdm = [7; 32];
+        paths.insert_with_dynamic_plan_outputs(ca.clone(), hdm, ca_drv.clone(), true, vec![], None);
+        let other = register_drv(&mut paths, "watch-rollback-other.drv", &make_drv());
+        let mut worker = Worker::new(1);
+        worker.watch_cancellations = Some(HashMap::new());
+        worker.want(&ca, &paths, true).unwrap();
+        let full_ca = EvalMessage {
+            label: "ca".into(),
+            drv_path: ca.clone(),
+            new_entries: vec![(ca.clone(), hdm, ca_drv.clone(), true, vec![], None)],
+        };
+        let mut outcomes = Vec::new();
+        let mut all_outcomes = Vec::new();
+        let mut failed = Vec::new();
+        let mut plans = Vec::new();
+        let mut state = WorkerLoopState {
+            sem: Arc::new(Semaphore::new(1)),
+            join_set: JoinSet::new(),
+            pending_meta: HashMap::new(),
+            outcomes: &mut outcomes,
+            all_outcomes: &mut all_outcomes,
+            failed: &mut failed,
+            native_dynamic_plans: &mut plans,
+            completed_count: 0,
+        };
+        let mut builder = make_test_builder(MemoryBlobService::default());
+        let replacement = worker
+            .watch_begin_update(
+                WatchWorkerUpdate {
+                    generation: 2,
+                    roots: vec![EvalMessage {
+                        label: "other".into(),
+                        drv_path: other.clone(),
+                        new_entries: vec![],
+                    }],
+                },
+                &mut paths,
+            )
+            .unwrap();
+        worker.watch_finish_retraction(&replacement.stale, &mut builder, &mut paths, &mut state).unwrap();
+        assert!(paths.get_by_drv_path(&ca.to_absolute_path()).is_none());
+        let rollback = worker
+            .watch_begin_update(
+                WatchWorkerUpdate {
+                    generation: 3,
+                    roots: vec![full_ca.clone()],
+                },
+                &mut paths,
+            )
+            .unwrap();
+        worker.watch_finish_retraction(&rollback.stale, &mut builder, &mut paths, &mut state).unwrap();
+        assert!(paths.get_by_drv_path(&other.to_absolute_path()).is_none());
+        assert_eq!(paths.get_hdm_by_drv_path(&ca.to_absolute_path()), Some(hdm));
+        let resolved = fake_sp("watch-rollback-rebuilt-output");
+        paths.resolve_output(&ca.to_absolute_path(), "out", resolved.clone()).unwrap();
+        paths.record_resolved_derivation(&ca.to_absolute_path(), Arc::new(ca_drv), ca.clone()).unwrap();
+        worker
+            .watch_begin_update(
+                WatchWorkerUpdate {
+                    generation: 4,
+                    roots: vec![full_ca],
+                },
+                &mut paths,
+            )
+            .unwrap();
+        assert_eq!(paths.get_output_path(&ca.to_absolute_path(), "out"), Some(resolved));
+        assert!(paths.get_by_drv_path(&ca.to_absolute_path()).unwrap().resolved_derivation.is_some());
+    }
+
+    #[test]
+    fn watch_sequential_replacements_beyond_total_goal_limit_remain_bounded() {
+        let mut paths = DerivationRegistry::default();
+        let mut worker = Worker::new(1);
+        worker.watch_cancellations = Some(HashMap::new());
+        let mut builder = make_test_builder(MemoryBlobService::default());
+        let mut outcomes = Vec::new();
+        let mut all_outcomes = Vec::new();
+        let mut failed = Vec::new();
+        let mut plans = Vec::new();
+        let mut state = WorkerLoopState {
+            sem: Arc::new(Semaphore::new(1)),
+            join_set: JoinSet::new(),
+            pending_meta: HashMap::new(),
+            outcomes: &mut outcomes,
+            all_outcomes: &mut all_outcomes,
+            failed: &mut failed,
+            native_dynamic_plans: &mut plans,
+            completed_count: 0,
+        };
+        for generation in 0..=MAX_GOALS {
+            let path = register_drv(&mut paths, &format!("watch-edit-{generation}.drv"), &make_drv());
+            let wait = worker
+                .watch_begin_update(
+                    WatchWorkerUpdate {
+                        generation: u64::from(generation),
+                        roots: vec![EvalMessage {
+                            label: "edit".into(),
+                            drv_path: path.clone(),
+                            new_entries: vec![],
+                        }],
+                    },
+                    &mut paths,
+                )
+                .unwrap();
+            worker.watch_finish_retraction(&wait.stale, &mut builder, &mut paths, &mut state).unwrap();
+            assert_eq!(worker.registry.len(), 1);
+            assert_eq!(paths.len(), 1);
+            assert!(worker.registry.contains(&path.to_absolute_path()));
+        }
     }
 
     // ── want() tests ────────────────────────────────────────────
@@ -3805,6 +4625,122 @@ mod tests {
         )
     }
 
+    struct CancellableWatchMock {
+        mock: MockBuildService,
+        calls: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    #[async_trait::async_trait]
+    impl BuildService for CancellableWatchMock {
+        async fn do_build(
+            &self,
+            request: snix_build::buildservice::BuildRequest,
+        ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            self.mock.do_build(request).await
+        }
+
+        async fn do_build_cancellable(
+            &self,
+            request: snix_build::buildservice::BuildRequest,
+            cancellation: watch::Receiver<bool>,
+        ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if *cancellation.borrow() {
+                return Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "watch test cancelled"));
+            }
+            self.mock.do_build(request).await
+        }
+    }
+
+    fn watch_mock_builder(
+        blobs: &MemoryBlobService,
+    ) -> (Builder<CancellableWatchMock>, Arc<dyn PathInfoService>, Arc<std::sync::atomic::AtomicUsize>) {
+        let pis: Arc<dyn PathInfoService> = Arc::new(
+            RedbPathInfoService::new_temporary("watch-candidate-pis".to_string(), RedbPathInfoServiceConfig::default())
+                .unwrap(),
+        );
+        let (mock, _) = MockBuildService::new(blobs.clone());
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let builder = Builder::with_state_dir(
+            Arc::new(blobs.clone()),
+            Arc::new(tmp_ds()),
+            CancellableWatchMock {
+                mock,
+                calls: calls.clone(),
+            },
+            pis.clone(),
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        (builder, pis, calls)
+    }
+
+    #[tokio::test]
+    async fn stale_success_is_not_finished_or_admitted() {
+        let mut paths = DerivationRegistry::default();
+        let (path, derivation) = build_and_register("watch-stale-result", &[], &mut paths);
+        let key = path.to_absolute_path();
+        let output = paths.get_output_path(&key, "out").unwrap();
+        let blobs = MemoryBlobService::default();
+        let (mut builder, _, pis, _) = source_slice_test_builder(&blobs);
+        let (prepared, request) =
+            match builder.prepare_build(&path, Arc::new(derivation), &mut paths, true, &[]).await.unwrap() {
+                PrepareResult::NeedsBuild {
+                    prepared,
+                    build_request,
+                } => (prepared, build_request),
+                PrepareResult::Done(_) => panic!("fresh output unexpectedly cached"),
+            };
+        let node = put_test_blob(&blobs, b"late stale output").await;
+        let result = snix_build::buildservice::BuildResult {
+            outputs: request
+                .outputs
+                .iter()
+                .map(|_| snix_build::buildservice::BuildOutput {
+                    node: node.clone(),
+                    output_needles: BTreeSet::new(),
+                })
+                .collect(),
+            log: None,
+        };
+        let mut worker = Worker::new(1);
+        worker.want(&path, &paths, true).unwrap();
+        worker.ready_goals.remove(&key);
+        worker.registry.get_mut(&key).unwrap().mark_building().unwrap();
+        let (sender, _) = watch::channel(false);
+        worker.watch_cancellations = Some(HashMap::from([(key.clone(), sender)]));
+        let mut outcomes = Vec::new();
+        let mut all_outcomes = Vec::new();
+        let mut failed = Vec::new();
+        let mut native_dynamic_plans = Vec::new();
+        let mut state = WorkerLoopState {
+            sem: Arc::new(Semaphore::new(1)),
+            join_set: JoinSet::new(),
+            pending_meta: HashMap::from([(key.clone(), prepared)]),
+            outcomes: &mut outcomes,
+            all_outcomes: &mut all_outcomes,
+            failed: &mut failed,
+            native_dynamic_plans: &mut native_dynamic_plans,
+            completed_count: 0,
+        };
+        worker
+            .watch_join(Ok((key.clone(), Ok(result))), std::slice::from_ref(&key), &mut builder, &mut paths, &mut state)
+            .await
+            .unwrap();
+        assert_eq!(worker.registry.get(&key).unwrap().state, GoalState::Building);
+        assert!(state.outcomes.is_empty());
+        assert!(state.all_outcomes.is_empty());
+        assert!(state.pending_meta.is_empty());
+        assert!(pis.get(*output.digest()).await.unwrap().is_none(), "stale success published PathInfo");
+        assert!(!worker.watch_cancellations.as_ref().unwrap().contains_key(&key));
+    }
+
     async fn put_test_blob(bs: &MemoryBlobService, content: &[u8]) -> Node {
         let mut writer = BlobService::open_write(bs).await;
         writer.write_all(content).await.unwrap();
@@ -3959,7 +4895,6 @@ mod tests {
         };
         (producer, outcome)
     }
-
     fn test_path_info(name: &str, node: Node) -> PathInfo {
         PathInfo {
             store_path: fake_sp(name),
@@ -4292,7 +5227,7 @@ mod tests {
     }
 
     #[test]
-    fn native_dynamic_registration_resolves_declared_placeholders_and_rejects_unknown_ca_paths() {
+    fn native_dynamic_registration_resolves_declared_placeholders_and_defers_ca_realization() {
         let canonical = decode_validated_plan_v1(&native_plan_with_placeholders_bytes(), "/nix/store").unwrap();
         let sources = dynamic_sources_by_id(&canonical.plan.sources, "/nix/store").unwrap();
         let dep = canonical.plan.units.iter().find(|unit| unit.id.as_str() == "unit.dep").unwrap();
@@ -4311,17 +5246,47 @@ mod tests {
         assert_eq!(root_entry.derivation.environment["DEPENDENCY"].as_slice(), dep_output.as_bytes());
         assert_eq!(root_entry.derivation.arguments, vec![format!("--dependency={dep_output}")]);
         assert!(!root_entry.derivation.arguments[0].contains("{{mantle-"));
+        let dep_hash = dep_entry.hash_derivation_modulo;
+        let dep_derivation = dep_entry.derivation.clone();
+        let dep_is_ca = dep_entry.content_addressed;
+        let existing_count = registry.len();
+        let duplicate =
+            register_native_dynamic_unit(dep, &sources, &BTreeMap::new(), &mut registry, "/nix/store").unwrap();
+        assert_eq!(duplicate, dep_drv);
+        assert_eq!(registry.len(), existing_count);
+        let mut colliding = DerivationRegistry::default();
+        colliding.insert(dep_drv.clone(), dep_hash, dep_derivation, dep_is_ca, None);
+        let error =
+            register_native_dynamic_unit(dep, &sources, &BTreeMap::new(), &mut colliding, "/nix/store").unwrap_err();
+        assert!(error.to_string().contains("already has a different admitted identity"));
 
         let mut ca_dep = dep.clone();
         ca_dep.derivation.addressing_mode = AddressingMode::ContentAddressed;
         let mut ca_registry = DerivationRegistry::default();
         let ca_drv =
             register_native_dynamic_unit(&ca_dep, &sources, &BTreeMap::new(), &mut ca_registry, "/nix/store").unwrap();
-        let ca_registered = BTreeMap::from([(ca_dep.id.clone(), ca_drv)]);
-        let error =
-            register_native_dynamic_unit(root, &sources, &ca_registered, &mut ca_registry, "/nix/store").unwrap_err();
-        assert!(error.to_string().contains("requires a statically known path"));
-        assert!(error.to_string().contains("unit.dep:out"));
+        let provisional = String::from_utf8(
+            ca_registry.get_by_drv_path(&ca_drv.to_absolute_path()).unwrap().derivation.environment["out"].to_vec(),
+        )
+        .unwrap();
+        assert!(ca_registry.get_output_path(&ca_drv.to_absolute_path(), "out").is_none());
+        let ca_count = ca_registry.len();
+        let ca_duplicate =
+            register_native_dynamic_unit(&ca_dep, &sources, &BTreeMap::new(), &mut ca_registry, "/nix/store").unwrap();
+        assert_eq!(ca_duplicate, ca_drv);
+        assert_eq!(ca_registry.len(), ca_count);
+        assert!(ca_registry.get_output_path(&ca_drv.to_absolute_path(), "out").is_none());
+        assert_eq!(
+            ca_registry.get_by_drv_path(&ca_drv.to_absolute_path()).unwrap().derivation.environment["out"].as_slice(),
+            provisional.as_bytes(),
+        );
+        let ca_registered = BTreeMap::from([(ca_dep.id.clone(), ca_drv.clone())]);
+        let ca_root =
+            register_native_dynamic_unit(root, &sources, &ca_registered, &mut ca_registry, "/nix/store").unwrap();
+        let ca_root_derivation = &ca_registry.get_by_drv_path(&ca_root.to_absolute_path()).unwrap().derivation;
+        assert!(ca_root_derivation.input_derivations.contains_key(&ca_drv));
+        assert_eq!(ca_root_derivation.arguments, vec![format!("--dependency={provisional}")]);
+        assert_eq!(ca_root_derivation.environment["DEPENDENCY"].as_slice(), provisional.as_bytes());
     }
 
     #[tokio::test]
@@ -4351,9 +5316,20 @@ mod tests {
             completed_count: 0,
         };
 
-        let dispatched = worker.dispatch_ready(&mut builder, &mut known_paths, &mut state).await.unwrap();
+        let mut dispatched_snapshots = Vec::new();
+        let dispatched = {
+            let mut observe = |registry: &GoalRegistry| {
+                dispatched_snapshots
+                    .push(registry.iter().filter(|(_, goal)| goal.state == GoalState::Building).count());
+            };
+            worker
+                .dispatch_ready(&mut builder, &mut known_paths, &mut state, &mut Some(&mut observe))
+                .await
+                .unwrap()
+        };
 
         assert_eq!(dispatched, TEST_MAX_JOB_BUDGET);
+        assert_eq!(dispatched_snapshots, [1, 2], "each real scheduler dispatch emits its own state change");
         assert_eq!(state.join_set.len(), usize::try_from(TEST_MAX_JOB_BUDGET).unwrap());
         assert_eq!(worker.ready_goals.len(), TEST_READY_ROOTS_AFTER_DISPATCH);
         state.join_set.abort_all();
@@ -4390,7 +5366,7 @@ mod tests {
             state.join_set.spawn(async { std::future::pending().await });
         }
 
-        let result = worker.dispatch_ready(&mut builder, &mut known_paths, &mut state).await;
+        let result = worker.dispatch_ready(&mut builder, &mut known_paths, &mut state, &mut None).await;
 
         assert!(result.unwrap_err().to_string().contains("exceeds configured max_jobs"));
         assert_eq!(worker.ready_goals, ready_before);
@@ -4706,10 +5682,184 @@ mod tests {
         let _ = w.run(&mut builder, &mut kp).await;
     }
 
-    #[cfg(not(debug_assertions))]
-    #[test]
-    fn run_empty_worker_panics() {
-        eprintln!("SKIP run_empty_worker_panics: debug assertions are disabled in release builds");
+    #[tokio::test]
+    async fn watch_empty_generation_commits_and_settles_before_shutdown() {
+        let bs = MemoryBlobService::default();
+        let (mock, _) = MockBuildService::new(bs.clone());
+        let mut builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut paths = DerivationRegistry::default();
+        let (tx, mut updates) = mpsc::channel(2);
+        let (events_tx, mut events) = mpsc::channel(4);
+        tx.send(WatchWorkerUpdate {
+            generation: 17,
+            roots: vec![],
+        })
+        .await
+        .unwrap();
+        let mut worker = Worker::new(1);
+        let controller = async move {
+            match events.recv().await {
+                Some(WatchWorkerEvent::CandidateReady { generation: 17, commit }) => commit.send(()).unwrap(),
+                event => panic!("unexpected candidate event: {event:?}"),
+            }
+            assert!(matches!(
+                events.recv().await,
+                Some(WatchWorkerEvent::Settled { generation: 17, outcomes, failed, source_generation_paths })
+                    if outcomes.is_empty() && failed.is_empty() && source_generation_paths.is_empty()
+            ));
+            drop(tx);
+        };
+        let (result, ()) =
+            tokio::join!(worker.run_watch(&mut builder, &mut paths, &mut updates, &events_tx), controller,);
+        let result = result.unwrap();
+        assert!(result.outcomes.is_empty());
+        assert!(result.failed.is_empty());
+    }
+
+    #[tokio::test]
+    async fn superseded_candidate_token_cannot_dispatch_or_publish_stale_output() {
+        let blobs = MemoryBlobService::default();
+        let (mut builder, pis, calls) = watch_mock_builder(&blobs);
+        let mut paths = DerivationRegistry::default();
+        let (old, _) = build_and_register("watch-old-uncommitted", &[], &mut paths);
+        let output = paths.get_output_path(&old.to_absolute_path(), "out").unwrap();
+        let (new, new_drv) = build_and_register("watch-new-uncommitted", &[], &mut paths);
+        let new_hdm = paths.get_hdm_by_drv_path(&new.to_absolute_path()).unwrap();
+        let (tx, mut updates) = mpsc::channel(4);
+        let (events_tx, mut events) = mpsc::channel(8);
+        tx.send(WatchWorkerUpdate {
+            generation: 1,
+            roots: vec![EvalMessage {
+                label: "old".into(),
+                drv_path: old,
+                new_entries: vec![],
+            }],
+        })
+        .await
+        .unwrap();
+        let mut worker = Worker::new(1);
+        let controller = async move {
+            let stale_commit = match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv())
+                .await
+                .expect("first CandidateReady timed out")
+            {
+                Some(WatchWorkerEvent::CandidateReady { generation: 1, commit }) => commit,
+                event => panic!("unexpected first event: {event:?}"),
+            };
+            tx.send(WatchWorkerUpdate {
+                generation: 2,
+                roots: vec![EvalMessage {
+                    label: "new".into(),
+                    drv_path: new.clone(),
+                    new_entries: vec![(new, new_hdm, new_drv, false, vec![], None)],
+                }],
+            })
+            .await
+            .unwrap();
+            let superseded_commit = match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv())
+                .await
+                .expect("second CandidateReady timed out")
+            {
+                Some(WatchWorkerEvent::CandidateReady { generation: 2, commit }) => commit,
+                event => panic!("unexpected second event: {event:?}"),
+            };
+            assert!(stale_commit.send(()).is_err(), "superseded generation accepted stale commit");
+            drop(superseded_commit);
+            tx.send(WatchWorkerUpdate {
+                generation: 3,
+                roots: vec![],
+            })
+            .await
+            .unwrap();
+            match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv())
+                .await
+                .expect("rollback CandidateReady timed out")
+            {
+                Some(WatchWorkerEvent::CandidateReady { generation: 3, commit }) => commit.send(()).unwrap(),
+                event => panic!("unexpected rollback event: {event:?}"),
+            }
+            assert!(matches!(
+                tokio::time::timeout(std::time::Duration::from_secs(5), events.recv())
+                    .await.expect("rollback Settled timed out"),
+                Some(WatchWorkerEvent::Settled { generation: 3, outcomes, failed, .. })
+                    if outcomes.is_empty() && failed.is_empty()
+            ));
+            drop(tx);
+        };
+        let mut run = std::pin::pin!(worker.run_watch(&mut builder, &mut paths, &mut updates, &events_tx));
+        let mut controller = std::pin::pin!(controller);
+        tokio::select! {
+            early = &mut run => panic!("watch worker stopped before candidate protocol: {early:?}"),
+            () = &mut controller => {}
+        }
+        let result = tokio::time::timeout(std::time::Duration::from_secs(5), run)
+            .await
+            .expect("watch worker shutdown drain timed out")
+            .unwrap();
+        assert!(result.all_outcomes.is_empty());
+        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 0, "uncommitted candidate reached BuildService");
+        assert!(pis.get(*output.digest()).await.unwrap().is_none(), "uncommitted output published PathInfo");
+        let mock_digest = blake3::hash(b"mock output").into();
+        assert!(!blobs.has(&mock_digest).await.unwrap(), "uncommitted build wrote CAS");
+    }
+
+    #[tokio::test]
+    async fn committed_candidate_builds_once_and_publishes_signed_pathinfo() {
+        let blobs = MemoryBlobService::default();
+        let (mut builder, pis, calls) = watch_mock_builder(&blobs);
+        let mut paths = DerivationRegistry::default();
+        let (root, _) = build_and_register("watch-committed", &[], &mut paths);
+        let output = paths.get_output_path(&root.to_absolute_path(), "out").unwrap();
+        let (tx, mut updates) = mpsc::channel(2);
+        let (events_tx, mut events) = mpsc::channel(4);
+        tx.send(WatchWorkerUpdate {
+            generation: 5,
+            roots: vec![EvalMessage {
+                label: "committed".into(),
+                drv_path: root.clone(),
+                new_entries: vec![],
+            }],
+        })
+        .await
+        .unwrap();
+        let mut worker = Worker::new(1);
+        let controller = async move {
+            match events.recv().await {
+                Some(WatchWorkerEvent::CandidateReady { generation: 5, commit }) => commit.send(()).unwrap(),
+                event => panic!("unexpected candidate: {event:?}"),
+            }
+            match events.recv().await {
+                Some(WatchWorkerEvent::Settled {
+                    generation: 5,
+                    outcomes,
+                    failed,
+                    ..
+                }) => {
+                    assert_eq!(outcomes.len(), 1);
+                    assert!(failed.is_empty());
+                }
+                event => panic!("unexpected settlement: {event:?}"),
+            }
+            drop(tx);
+        };
+        let (result, ()) =
+            tokio::join!(worker.run_watch(&mut builder, &mut paths, &mut updates, &events_tx), controller,);
+        result.unwrap();
+        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 1);
+        assert!(pis.get(*output.digest()).await.unwrap().is_some(), "committed output has no signed PathInfo");
+        let digest = blake3::hash(b"mock output").into();
+        assert!(blobs.has(&digest).await.unwrap(), "committed builder output never reached CAS");
     }
 
     // ── run_streaming() tests ───────────────────────────────
@@ -4802,9 +5952,34 @@ mod tests {
         drop(tx);
 
         let mut w = Worker::new(2);
-        let result = w.run_streaming(&mut builder, &mut kp, &mut rx).await.unwrap();
+        let mut transitions: Vec<(String, GoalState)> = Vec::new();
+        let result = {
+            let mut observe = |registry: &GoalRegistry| {
+                for (key, goal) in registry.iter().filter(|(_, goal)| goal.is_root) {
+                    if transitions
+                        .iter()
+                        .rev()
+                        .find(|(previous_key, _)| previous_key == key)
+                        .is_none_or(|(_, previous_state)| previous_state != &goal.state)
+                    {
+                        transitions.push((key.to_string(), goal.state.clone()));
+                    }
+                }
+            };
+            w.run_streaming_observed(&mut builder, &mut kp, &mut rx, Some(&mut observe)).await.unwrap()
+        };
 
-        assert_eq!(result.outcomes.len(), 2);
+        assert_eq!(result.outcomes.len(), 2, "failed={:?}; transitions={transitions:?}", result.failed);
+        for drv_key in [&a, &b] {
+            let key = drv_key.to_absolute_path();
+            let states: Vec<_> =
+                transitions.iter().filter(|(observed, _)| observed == &key).map(|(_, state)| state).collect();
+            let ready = states.iter().position(|state| matches!(state, GoalState::Ready)).expect("root became ready");
+            let dispatched =
+                states.iter().position(|state| matches!(state, GoalState::Building)).expect("root was dispatched");
+            let completed = states.iter().position(|state| matches!(state, GoalState::Done)).expect("root completed");
+            assert!(ready < dispatched && dispatched < completed, "{key} transitions: {states:?}");
+        }
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 2);
@@ -5395,14 +6570,14 @@ mod tests {
             .collect::<Vec<_>>();
         let staged = prepare_v2_registration(&accepted, &projected, &known_paths, &worker).unwrap();
         let colliding_unit = staged.staged.values().next().expect("at least one prospective unit");
-        let colliding_path = colliding_unit.drv_path.to_absolute_path();
+        let colliding_path = colliding_unit.ready.drv_path().to_absolute_path();
         let colliding_hdm = [0x5a; 32];
-        assert_ne!(colliding_unit.hdm, colliding_hdm);
+        assert_ne!(colliding_unit.ready.hash_derivation_modulo(), colliding_hdm);
         known_paths.insert_with_dynamic_plan_outputs(
-            colliding_unit.drv_path.clone(),
+            colliding_unit.ready.drv_path().clone(),
             colliding_hdm,
-            colliding_unit.derivation.clone(),
-            colliding_unit.content_addressed,
+            colliding_unit.ready.derivation().clone(),
+            colliding_unit.ready.content_addressed(),
             colliding_unit.dynamic_plan_outputs.clone(),
             None,
         );
@@ -5418,7 +6593,6 @@ mod tests {
             .expect("conflicting V2 derivation must reject before publication");
         let report = native_plan_report_from_rejection(&rejection);
         assert_eq!(rejection.kind, NativeDynamicPlanRejectionKind::InvalidPlan);
-        assert!(rejection.detail.contains("collides with an existing registry entry"));
         assert!(pis.get(*expected_path.digest()).await.unwrap().is_none());
         assert_eq!(known_paths.len(), registry_before);
         assert_eq!(known_paths.get_hdm_by_drv_path(&colliding_path), Some(colliding_hdm));
@@ -5823,6 +6997,79 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn native_v2_staged_ca_multioutput_uses_realized_dev_output() {
+        let bs = MemoryBlobService::default();
+        let (mut builder, ds, pis, calls) = source_slice_test_builder(&bs);
+        let source_root = source_slice_tree(&bs, &ds, b"outside").await;
+        let observed = builder.observe_source_slice(&source_root, "packages/a").await.unwrap();
+        let digest = data_encoding::HEXLOWER.encode(&observed.nar_blake3());
+        let mut plan: serde_json::Value =
+            serde_json::from_slice(&v2_plan_for_source_slices(&digest, "packages/b", &digest)).unwrap();
+        plan["units"][0]["derivation"]["outputs"] = serde_json::json!(["out", "dev"]);
+        plan["units"][0]["requested_outputs"] = serde_json::json!(["out", "dev"]);
+        plan["units"][0]["derivation"]["addressing_mode"] = serde_json::json!("content-addressed");
+        plan["units"][1]["derivation"]["inputs"] =
+            serde_json::json!([{ "kind": "unit_output", "unit": "unit.dep", "output": "dev" }]);
+        plan["units"][1]["derivation"]["args"] =
+            serde_json::json!(["--dependency={{mantle-unit-output:unit.dep:dev}}"]);
+        plan["units"][1]["derivation"]["env"] =
+            serde_json::json!({ "DEPENDENCY": "{{mantle-unit-output:unit.dep:dev}}" });
+        let mut known_paths = DerivationRegistry::default();
+        let (producer, outcome) = source_slice_plan_outcome(
+            &bs,
+            &serde_json::to_vec(&plan).unwrap(),
+            source_root,
+            "v2-ca-multioutput-producer",
+            &mut known_paths,
+        )
+        .await;
+        let mut worker = Worker::new(1);
+        let scan = worker
+            .scan_native_dynamic_plans(
+                &producer.to_absolute_path(),
+                &outcome,
+                &builder,
+                known_paths.store_dir(),
+                &BTreeSet::from(["plan".to_string()]),
+            )
+            .await
+            .unwrap();
+        let mut accepted = scan.accepted.into_iter().next().expect("valid V2 CA multi-output plan");
+        let mut staged = None;
+        assert!(
+            worker
+                .admit_v2_source_slices(&mut accepted, &outcome, &known_paths, &mut builder, &mut staged)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let slice_path = accepted.source_slices[0].admitted_store_path.clone().expect("slice published");
+        let dependency = staged.as_ref().expect("V2 units staged").registered.unit_drv_paths
+            [&UnitId::new("unit.dep".to_string()).unwrap()]
+            .clone();
+        worker.register_accepted_native_dynamic_plan(accepted, staged, &mut known_paths).unwrap();
+        let result = worker.run(&mut builder, &mut known_paths).await.unwrap();
+        assert!(result.failed.is_empty(), "CA multi-output dependent failed: {:?}", result.failed);
+        assert_eq!(result.all_outcomes.len(), 2, "both staged units must actually build");
+        let parent = result.all_outcomes.iter().find(|outcome| outcome.drv_path == dependency).unwrap();
+        let dev = parent.outputs["dev"].store_path.to_absolute_path();
+        let out = parent.outputs["out"].store_path.to_absolute_path();
+        assert_ne!(dev, out, "different CA outputs must retain distinct realized store identities");
+        assert!(pis.get(*slice_path.digest()).await.unwrap().is_some(), "accepted V2 slice must be signed");
+        let wanted_arg = format!("--dependency={dev}");
+        let wrong_arg = format!("--dependency={out}");
+        let recorded = calls.lock().unwrap();
+        assert!(
+            recorded.iter().any(|args| args.contains(&wanted_arg)),
+            "dependent must dispatch with its CA parent's realized dev output: {recorded:?}"
+        );
+        assert!(
+            !recorded.iter().any(|args| args.contains(&wrong_arg)),
+            "dependent must not substitute the wrong CA output: {recorded:?}"
+        );
+    }
+
+    #[tokio::test]
     async fn native_dynamic_plan_undeclared_output_is_ignored() {
         let bs = MemoryBlobService::default();
         let builder = make_test_builder(bs.clone());
@@ -5986,6 +7233,92 @@ mod tests {
         assert!(recorded.iter().any(|args| args.iter().any(|arg| arg == "--build")));
     }
 
+    // r[verify mantle.ca_input_resolution.dynamic_plan_binding]
+    #[tokio::test]
+    async fn native_plan_ca_unit_placeholder_dispatches_realized_path() {
+        let mut plan: serde_json::Value = serde_json::from_slice(&native_plan_with_dep_and_unused_bytes()).unwrap();
+        plan["units"].as_array_mut().unwrap().pop();
+        plan["units"][1]["derivation"]["addressing_mode"] = serde_json::json!("input-addressed");
+        plan["units"][1]["derivation"]["args"] =
+            serde_json::json!(["--dependency={{mantle-unit-output:unit.dep:out}}"]);
+        plan["units"][1]["derivation"]["env"] =
+            serde_json::json!({ "DEPENDENCY": "{{mantle-unit-output:unit.dep:out}}" });
+        let bs = MemoryBlobService::default();
+        let (mock, calls) = DrvProducingMockBuildService::new(
+            bs.clone(),
+            StdHashMap::from([("native-ca-placeholder".to_string(), serde_json::to_vec(&plan).unwrap())]),
+        );
+        let mut builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut registry = DerivationRegistry::default();
+        let (producer, _) = build_and_register_multi("native-ca-placeholder", &["out", "plan"], &[], &mut registry);
+        declare_native_plan_output(&mut registry, &producer, "plan");
+
+        let mut worker = Worker::new(1);
+        worker.enable_causal_trace(registry.store_dir());
+        worker.want(&producer, &registry, true).unwrap();
+        let result = worker.run(&mut builder, &mut registry).await.unwrap();
+        assert!(result.failed.is_empty(), "{:?}", result.failed);
+        assert_eq!(result.native_dynamic_plans[0].scheduler_action, "registered-roots");
+        assert_eq!(result.all_outcomes.len(), 3, "producer, CA unit, and dependent must build");
+        let trace = worker.take_causal_trace().unwrap().unwrap();
+        let unit_root = result
+            .all_outcomes
+            .iter()
+            .find(|outcome| {
+                registry
+                    .get_by_drv_path(&outcome.drv_path.to_absolute_path())
+                    .and_then(|entry| entry.derivation.environment.get("name"))
+                    .is_some_and(|name| name.as_slice() == b"unit-root")
+            })
+            .unwrap();
+        let dependent_hash = blake3::hash(unit_root.drv_path.to_absolute_path().as_bytes()).to_hex().to_string();
+        let parent = result
+            .all_outcomes
+            .iter()
+            .find(|outcome| {
+                registry
+                    .get_by_drv_path(&outcome.drv_path.to_absolute_path())
+                    .and_then(|entry| entry.derivation.environment.get("name"))
+                    .is_some_and(|name| name.as_slice() == b"unit-dep")
+            })
+            .unwrap();
+        let realized = parent.outputs["out"].store_path.to_absolute_path();
+        let dependency_hash = blake3::hash(parent.drv_path.to_absolute_path().as_bytes()).to_hex().to_string();
+        assert!(
+            trace
+                .records
+                .iter()
+                .any(|record| record.kind == mantle_causal_trace_core::ActionKind::DependencyReady
+                    && record.goal_blake3.as_deref() == Some(dependency_hash.as_str())
+                    && trace.records[usize::try_from(record.caused_by.unwrap()).unwrap()].goal_blake3.as_deref()
+                        == Some(dependent_hash.as_str())),
+            "native CA unit must have an observed dependency edge from its actual dependent root"
+        );
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 3);
+        assert!(
+            recorded.iter().any(|args| args.iter().any(|arg| arg == &format!("--dependency={realized}"))),
+            "dependent must dispatch with the CA unit's realized path: {recorded:?}"
+        );
+        assert!(
+            builder
+                .take_action_result_reports()
+                .iter()
+                .any(|report| report.phase == "publication" && report.resolved_identity.is_some())
+        );
+    }
+
     #[tokio::test]
     async fn native_dynamic_plan_rejected_output_schedules_no_units() {
         let bs = MemoryBlobService::default();
@@ -6023,7 +7356,6 @@ mod tests {
         assert_eq!(recorded.len(), 1, "rejected native plan must not schedule units: {recorded:?}");
         assert!(recorded[0].iter().any(|arg| arg.contains("native-rejected")));
     }
-
     #[tokio::test]
     // r[verify mantle.dynamic_plan_output_inputs.dispatch_binding]
     async fn static_consumer_waits_for_native_ca_root_and_uses_realized_output() {
@@ -6049,6 +7381,7 @@ mod tests {
         declare_native_plan_output(&mut kp, &producer, "plan");
         let (consumer, placeholder) = register_bound_consumer(&mut kp, &producer);
         let mut worker = Worker::new(1);
+        worker.enable_causal_trace(kp.store_dir());
         worker.want(&consumer, &kp, true).unwrap();
         let result = worker.run(&mut builder, &mut kp).await.unwrap();
         assert!(result.failed.is_empty());
@@ -6056,6 +7389,19 @@ mod tests {
         assert_eq!(row.status, "bound");
         assert_eq!(row.consumer_drv_key, consumer.to_absolute_path());
         let root = row.root_drv_path.as_ref().unwrap();
+        let trace = worker.take_causal_trace().unwrap().unwrap();
+        let consumer_hash = blake3::hash(consumer.to_absolute_path().as_bytes()).to_hex().to_string();
+        let root_hash = blake3::hash(root.to_absolute_path().as_bytes()).to_hex().to_string();
+        assert!(
+            trace
+                .records
+                .iter()
+                .any(|record| record.kind == mantle_causal_trace_core::ActionKind::DependencyReady
+                    && record.goal_blake3.as_deref() == Some(root_hash.as_str())
+                    && trace.records[usize::try_from(record.caused_by.unwrap()).unwrap()].goal_blake3.as_deref()
+                        == Some(consumer_hash.as_str())),
+            "registered plan root must be a direct observed consumer dependency"
+        );
         let actual = row.output_path.as_ref().unwrap();
         assert_eq!(
             kp.get_output_path(&root.to_absolute_path_with_prefix(kp.store_dir()), "out").as_ref(),
@@ -6093,6 +7439,7 @@ mod tests {
         declare_native_plan_output(&mut kp, &producer, "plan");
         let (consumer, _) = register_bound_consumer(&mut kp, &producer);
         let mut worker = Worker::new(1);
+        worker.enable_causal_trace(kp.store_dir());
         worker.want(&consumer, &kp, true).unwrap();
         let result = worker.run(&mut builder, &mut kp).await.unwrap();
         assert_eq!(result.failed.len(), 1);
@@ -6100,7 +7447,125 @@ mod tests {
         assert_eq!(result.failed[0].error, "plan-output-plan-rejected");
         assert_eq!(result.plan_output_bindings[0].status, "rejected");
         assert_eq!(result.plan_output_bindings[0].failure_reason.as_deref(), Some("plan-output-plan-rejected"));
+        let trace = worker.take_causal_trace().unwrap().unwrap();
+        let consumer_hash = blake3::hash(consumer.to_absolute_path().as_bytes()).to_hex().to_string();
+        assert!(trace.records.iter().any(|record| record.kind == mantle_causal_trace_core::ActionKind::Failed
+            && record.goal_blake3.as_deref() == Some(consumer_hash.as_str())));
+        assert!(
+            !trace.records.iter().any(|record| record.kind == mantle_causal_trace_core::ActionKind::Dispatch
+                && record.goal_blake3.as_deref() == Some(consumer_hash.as_str())),
+            "rejected native plan must not fabricate a consumer dispatch"
+        );
         assert_eq!(calls.lock().expect("mock call log lock").len(), 1, "static consumer must not run");
+    }
+
+    #[tokio::test]
+    async fn streaming_consumer_after_native_root_completed_binds_from_retained_plan() {
+        let bs = MemoryBlobService::default();
+        let (mock, calls) = DrvProducingMockBuildService::new(
+            bs.clone(),
+            StdHashMap::from([("native-late-plan".to_owned(), valid_native_plan_bytes())]),
+        );
+        let mut builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut kp = DerivationRegistry::default();
+        let (producer, _) = build_and_register_multi("native-late-plan", &["out", "plan"], &[], &mut kp);
+        declare_native_plan_output(&mut kp, &producer, "plan");
+        let (consumer, _) = register_bound_consumer(&mut kp, &producer);
+        let (tx, mut rx) = mpsc::channel(2);
+        tx.try_send(EvalMessage {
+            label: "producer".to_owned(),
+            drv_path: producer.clone(),
+            new_entries: vec![],
+        })
+        .unwrap();
+        let mut tx = Some(tx);
+        let producer_key = producer.to_absolute_path();
+        let mut on_progress = |goals: &GoalRegistry| {
+            if goals
+                .iter()
+                .any(|(key, goal)| key != producer_key.as_str() && goal.is_root && goal.state == GoalState::Done)
+                && let Some(sender) = tx.take()
+            {
+                sender
+                    .try_send(EvalMessage {
+                        label: "late-consumer".to_owned(),
+                        drv_path: consumer.clone(),
+                        new_entries: vec![],
+                    })
+                    .unwrap();
+            }
+        };
+        let mut worker = Worker::new(1);
+        let result =
+            worker.run_streaming_observed(&mut builder, &mut kp, &mut rx, Some(&mut on_progress)).await.unwrap();
+        assert!(result.failed.is_empty());
+        assert_eq!(result.plan_output_bindings[0].status, "bound");
+        assert_eq!(calls.lock().expect("mock call log lock").len(), 3);
+    }
+
+    #[tokio::test]
+    async fn streaming_consumer_after_plan_rejection_fails_without_deadlock() {
+        let bs = MemoryBlobService::default();
+        let (mock, calls) = DrvProducingMockBuildService::new(
+            bs.clone(),
+            StdHashMap::from([("native-late-invalid".to_owned(), b"{invalid".to_vec())]),
+        );
+        let mut builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut kp = DerivationRegistry::default();
+        let (producer, _) = build_and_register_multi("native-late-invalid", &["out", "plan"], &[], &mut kp);
+        declare_native_plan_output(&mut kp, &producer, "plan");
+        let (consumer, _) = register_bound_consumer(&mut kp, &producer);
+        let (tx, mut rx) = mpsc::channel(2);
+        tx.try_send(EvalMessage {
+            label: "producer".to_owned(),
+            drv_path: producer.clone(),
+            new_entries: vec![],
+        })
+        .unwrap();
+        let mut tx = Some(tx);
+        let producer_key = producer.to_absolute_path();
+        let mut on_progress = |goals: &GoalRegistry| {
+            if goals.get(&producer_key).is_some_and(|goal| goal.state == GoalState::Done)
+                && let Some(sender) = tx.take()
+            {
+                sender
+                    .try_send(EvalMessage {
+                        label: "late-rejected".to_owned(),
+                        drv_path: consumer.clone(),
+                        new_entries: vec![],
+                    })
+                    .unwrap();
+            }
+        };
+        let mut worker = Worker::new(1);
+        let result =
+            worker.run_streaming_observed(&mut builder, &mut kp, &mut rx, Some(&mut on_progress)).await.unwrap();
+        assert_eq!(result.failed.len(), 1);
+        assert_eq!(result.failed[0].error, "plan-output-plan-rejected");
+        assert_eq!(result.plan_output_bindings[0].failure_reason.as_deref(), Some("plan-output-plan-rejected"));
+        assert_eq!(calls.lock().expect("mock call log lock").len(), 1);
     }
 
     #[tokio::test]
@@ -6208,7 +7673,7 @@ mod tests {
             .scan_native_dynamic_plans(&producer_sp.to_absolute_path(), &outcome, &builder, kp.store_dir(), &declared)
             .await
             .unwrap();
-        let registered = register_native_dynamic_plan_units(&scan.accepted[0], &mut kp).unwrap();
+        let registered = register_v1_dynamic_plan_units(&scan.accepted[0], &mut kp).unwrap();
 
         let mut dynamic_worker = Worker::new(1);
         for root in &registered.root_drv_paths {

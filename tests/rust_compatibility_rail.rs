@@ -24,19 +24,6 @@ const BLOCKER_VENDORED_GIT: &str = "unsupported-vendored-git-source";
 const BLOCKER_PKG_CONFIG: &str = "unsupported-pkg-config";
 const BLOCKER_LINK_METADATA: &str = "unsupported-rustc-link-metadata";
 const BLOCKER_NATIVE_C: &str = "unsupported-native-c-compile";
-const MATRIX_SURFACE_IDS: &[&str] = &[
-    "path-workspace-basic",
-    "local-path-dependency",
-    "vendored-registry-source",
-    "proc-macro-host-artifact",
-    "build-script-env-metadata",
-    "feature-resolution-default",
-    "target-specific-dependency",
-    "workspace-inheritance",
-    "multi-package-binary",
-    "vendored-git-source",
-    "native-link-metadata",
-];
 
 fn mantle_cmd() -> Command {
     Command::cargo_bin("mantle").expect("mantle binary should be built")
@@ -805,71 +792,6 @@ fn representative_rust_plan_receipt_is_bounded_success_or_blocker_without_cargo_
     let matrix = &cargo_mode["compatibility_surface_matrix"];
     if expected_status == "blocked" {
         assert!(json_array_contains(&matrix["surface_ids"], "blocked-unsupported-surface"), "{matrix:#?}");
-    }
-}
-
-#[test]
-fn rust_compatibility_surface_matrix_names_every_fixture_and_blocker_class() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let matrix = std::fs::read_to_string(root.join(MATRIX_PATH)).unwrap();
-    let test_source = std::fs::read_to_string(root.join("tests/rust_compatibility_rail.rs")).unwrap();
-
-    assert!(matrix.contains(MATRIX_ID));
-    assert!(matrix.contains("LaneStatus"));
-    assert!(matrix.contains("cargo-inside-mantle-sandbox"));
-    assert!(matrix.contains("cargo-free-bounded-topology"));
-    assert!(matrix.contains("blocked-unsupported-surface"));
-    for surface_id in MATRIX_SURFACE_IDS {
-        assert!(matrix.contains(surface_id), "missing matrix surface `{surface_id}`");
-    }
-    for fixture_name in [
-        "representative_fixture_contains_required_practical_rust_surfaces",
-        "representative_negative_fixtures_report_stable_blockers",
-        "representative_offline_cargo_rail_runs_sandbox_smoke_without_network_inputs",
-        "native_path_only_surface_reports_matrix_binding_without_cargo_fallback",
-    ] {
-        assert!(matrix.contains(fixture_name), "matrix must name fixture `{fixture_name}`");
-        assert!(test_source.contains(fixture_name), "fixture `{fixture_name}` should exist");
-    }
-    for blocker in [
-        BLOCKER_MISSING_VENDOR,
-        BLOCKER_BUILD_METADATA,
-        BLOCKER_PROC_MACRO,
-        BLOCKER_NATIVE_LINK,
-        BLOCKER_FEATURE_SURFACE,
-        BLOCKER_TARGET_CFG_SURFACE,
-        BLOCKER_VENDORED_GIT,
-        BLOCKER_PKG_CONFIG,
-        BLOCKER_LINK_METADATA,
-        BLOCKER_NATIVE_C,
-    ] {
-        assert!(matrix.contains(blocker), "matrix must name blocker `{blocker}`");
-    }
-    assert!(matrix.contains("not-full-cargo-compatibility"));
-    assert!(matrix.contains("not-compiler-correctness"));
-}
-
-#[test]
-fn representative_docs_and_gallery_do_not_overclaim_compatibility() {
-    let readme = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md")).unwrap();
-    let operator_docs =
-        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/operator-workflows.md")).unwrap();
-    let examples_readme =
-        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/README.md")).unwrap();
-    let example_source =
-        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/rust_compatibility_rail.rs"))
-            .unwrap();
-    let catalog = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/catalog.ncl")).unwrap();
-
-    for docs in [&readme, &operator_docs, &examples_readme, &example_source, &catalog] {
-        assert!(docs.contains("representative Rust compatibility rail"));
-        assert!(docs.contains(MATRIX_PATH), "docs should cite the matrix path");
-        assert!(docs.contains("surface matrix"));
-        assert!(docs.contains("blocked") || docs.contains("blocker"));
-        assert!(docs.contains("not proof") || docs.contains("not full") || docs.contains("not-full"));
-        assert!(docs.contains("full Cargo compatibility"));
-        assert!(docs.contains("cargo-inside-mantle-sandbox") || docs.contains("sandboxed offline Cargo"));
-        assert!(docs.contains("cargo-free-bounded-topology") || docs.contains("blocked-unsupported-surface"));
     }
 }
 

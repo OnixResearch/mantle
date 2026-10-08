@@ -2,29 +2,26 @@
 
 ## Context
 
-The adapter's offline tests use stub tools. The real question is whether the five derivations, driven by the admitted prebuilt toolchain, produce a structurally valid APK with reproducible bytes. That question is answered only by executing the real path once and recording what happened.
+The adapter's offline tests use stub tools. The real question is whether three authenticated extraction derivations and six SDK stages, driven by the admitted prebuilt toolchain and a signed native runtime cohort, produce a structurally valid signed APK with reproducible bytes. That question is answered only by executing the real path and recording what happened.
 
 The repo already has the pattern for this: execution-gated proof changes that record environment prerequisites, run detached with pueue, and never quote results from memory.
 
 ## Architecture
 
 ```text
-$APK_PROOF/apk-stage/signed-plan.ncl
-  -> adapter lowering (six signed SDK stages)
-  -> admitted toolchain components (fixed-output fetch, or prefetched bundle)
-  -> aapt2 compile/link, javac, d8, zipalign, apksigner
-  -> APK output
-  -> structural verification + digest receipt
-  -> second clean rebuild in a fresh store
-  -> determinism comparison
+examples/android-minimal.ncl (one Java source, manifest, resource, test-only signing)
+  -> original-HTTPS fixed-output source bundle; pinned offline SourceFetchOverridePlan
+  -> signed glibc/libgcc NAR cohort plus declared static BusyBox shell/utility
+  -> three same-run authenticated extraction derivations
+  -> six sandboxed SDK stages via the declared glibc loader
+  -> signed APK with independently checked ZIP, binary XML, DEX, APK Signing Block, apksigner
+  -> second clean signed rebuild in a fresh store/state and changed-Java control
+  -> matching clean BLAKE3 digests, different changed-Java digest, tamper rejection
 ```
 
 ### Example application
 
-The staged signed APK plan is deliberately small: one activity, its manifest,
-one Java source, and a string resource compiled by `aapt2` before manifest
-linking. It selects all six ordered SDK stages without claiming that any APK
-stage has executed. Application id and version are fixed in the plan.
+`examples/android-minimal.ncl` is deliberately small: one activity, the manifest, one Java source, and one XML string resource to exercise `aapt2 compile` and `aapt2 link`. It exercises every SDK boundary without depending on Gradle or Kotlin. Application id and version are fixed in the example; the keystore/password are separate test-only signing inputs.
 
 ### Evidence rail
 
@@ -54,6 +51,14 @@ can establish `signed-physical`; an observed-only receipt is not an APK build,
 a source-bundle admission, or a signed-ready claim. Disjoint fresh state/store
 roots are required for subsequent A/B replays.
 
+The reviewed Google `aapt2` requests an ELF interpreter at `/lib64`, absent
+from the Bubblewrap tmpfs root. The adapter must instead declare the exact
+native glibc/libgcc source trees as derivation inputs to every SDK stage and
+invoke the declared glibc loader with an explicit library path; a host `/lib64`
+or ambient `/nix/store` bind does not establish this proof. The proof compiler
+must use an isolated, content-bound source snapshot rather than a mutable
+shared workspace. These are requirements, not evidence that any APK stage
+has executed.
 ### Determinism proof
 
 Two clean rebuilds in fresh store and state directories must produce the same output BLAKE3. A negative control perturbs the Java source and asserts the digest changes. This catches accidental ambient state in any of the six signed stages, the same class of drift the busybox kbuild pinning exposed in the self-hosting proof.
@@ -73,7 +78,7 @@ The tamper negative control proves the verifier observes content, not just shape
 ## Failure and abuse controls
 
 - Missing network or missing prefetch bundle: the rail fails closed with a blocker record, not a silent skip.
-- Determinism mismatch: the rail reports the first differing digest pair and the step that produced it.
+- Determinism mismatch: the rail writes a blocker identifying the mismatched digest comparison and retains the complete per-step builder observations in scratch.
 - Toolchain digest drift: identity binding fails before execution, per the admission change.
 
 ## Testing

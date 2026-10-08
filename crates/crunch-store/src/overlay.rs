@@ -1114,8 +1114,8 @@ mod tests {
         assert!(error.to_string().contains("store-identity-mismatch"));
     }
 
-    #[test]
-    fn legacy_v1_identity_remains_snix_only_without_backend_field() {
+    #[tokio::test]
+    async fn legacy_v1_identity_remains_snix_only_without_backend_field() {
         let state = tempfile::tempdir().unwrap();
         let policy = store_overlay_runtime_policy().unwrap();
         let legacy = serde_json::json!({
@@ -1123,7 +1123,9 @@ mod tests {
             "logical_prefix": "/nix/store",
             "trust_policy_id": policy.trust.policy_id,
         });
-        std::fs::write(state.path().join(STORE_IDENTITY_FILE_NAME), serde_json::to_vec(&legacy).unwrap()).unwrap();
+        let identity_path = state.path().join(STORE_IDENTITY_FILE_NAME);
+        let original = serde_json::to_vec(&legacy).unwrap();
+        std::fs::write(&identity_path, &original).unwrap();
         preflight_store_identity(state.path(), "/nix/store", StoreBackend::Snix, StoreBackend::Snix.profile(), false)
             .unwrap();
         assert!(
@@ -1138,6 +1140,12 @@ mod tests {
             .to_string()
             .contains("store-backend-mismatch")
         );
+        let output = state.path().join("physical-store");
+        let config =
+            crate::StoreConfig::new(StoreBackend::Snix, state.path().to_path_buf(), output, "/nix/store".to_string());
+        let reopened = crate::StoreHandle::open(config).await.unwrap();
+        assert_eq!(reopened.backend(), StoreBackend::Snix);
+        assert_eq!(std::fs::read(identity_path).unwrap(), original, "legacy identity was rewritten on open");
     }
 
     #[test]
@@ -1172,6 +1180,12 @@ mod tests {
             || crate::StoreConfig::new(StoreBackend::Snix, state.clone(), output.clone(), "/nix/store".to_string());
         let first = crate::StoreHandle::open(config()).await.unwrap();
         assert_eq!(first.backend(), StoreBackend::Snix);
+        let new_identity: StoreIdentityRecord =
+            serde_json::from_slice(&std::fs::read(state.join(STORE_IDENTITY_FILE_NAME)).unwrap()).unwrap();
+        assert_eq!(new_identity.schema, STORE_BACKEND_STATE_SCHEMA);
+        assert_eq!(new_identity.logical_prefix, "/nix/store");
+        assert_eq!(new_identity.trust_policy_id, store_overlay_runtime_policy().unwrap().trust.policy_id);
+        assert_eq!(new_identity.backend.as_deref(), Some("snix"));
         assert!(state.join("pathinfo.redb").is_file());
         assert!(state.join("directories.redb").is_file());
         assert!(state.join("blobs").is_dir());
@@ -1228,6 +1242,18 @@ mod tests {
         assert_eq!(reopened_identity.schema, STORE_BACKEND_STATE_SCHEMA);
         assert_eq!(reopened_identity.backend.as_deref(), Some("snix"));
         assert_eq!(std::fs::read(legacy_file).unwrap(), legacy_bytes);
+        let after_reopen = snapshot_state_tree(&state);
+        for (path, contents) in &before {
+            if path.extension().is_some_and(|extension| extension == "redb" || extension == "lock") {
+                continue;
+            }
+            assert_eq!(
+                after_reopen.get(path),
+                Some(contents),
+                "reopening Snix changed a non-database state member: {}",
+                path.display()
+            );
+        }
         assert_eq!(
             reopened.pathinfo_service().get(*path_info.store_path.digest()).await.unwrap(),
             Some(path_info),
@@ -1274,6 +1300,51 @@ mod tests {
         assert!(error.to_string().contains("store-backend-mismatch"), "{error}");
         assert_eq!(snapshot_state_tree(&state), before, "Casita changed unclaimed state");
         assert!(!output.exists(), "Casita created output state");
+    }
+
+    #[test]
+    fn undeclared_overlay_rejects_before_touching_either_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let writable = root.path().join("unopened-state");
+        let base = root.path().join("unopened-base");
+        let error = crate::StoreConfig::preflight_backend_identity_for(
+            StoreBackend::Casita,
+            &writable,
+            "/nix/store",
+            std::slice::from_ref(&base),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("casita-overlay-unsupported"), "{error}");
+        assert!(!writable.exists());
+        assert!(!base.exists());
+    }
+
+    #[tokio::test]
+    async fn mixed_backend_base_rejects_before_opening_any_layer() {
+        let root = tempfile::tempdir().unwrap();
+        let writable = root.path().join("writable");
+        let first_base = root.path().join("first-base");
+        std::fs::create_dir(&first_base).unwrap();
+        ensure_store_identity(&first_base, "/nix/store", StoreBackend::Snix).unwrap();
+        // The missing trust policy would fail if the first base were opened before all identities were
+        // decided.
+        let first_before = snapshot_state_tree(&first_base);
+        let base = root.path().join("second-base");
+        std::fs::create_dir(&base).unwrap();
+        ensure_store_identity(&base, "/nix/store", StoreBackend::Casita).unwrap();
+        std::fs::write(base.join("casita-marker"), b"base must stay unchanged").unwrap();
+        let before = snapshot_state_tree(&base);
+        let output = root.path().join("exports");
+        let config = crate::StoreConfig::new(StoreBackend::Snix, writable.clone(), output.clone(), "/nix/store".into())
+            .add_base_state_dir(first_base.clone())
+            .add_base_state_dir(base.clone());
+
+        let error = crate::StoreHandle::open(config).await.err().expect("foreign backend base must reject");
+        assert!(error.to_string().contains("store-backend-mismatch"), "{error}");
+        assert!(!writable.exists(), "writable state was created before checking base identity");
+        assert!(!output.exists(), "physical export was created before checking base identity");
+        assert_eq!(snapshot_state_tree(&base), before, "foreign base changed during rejection");
+        assert_eq!(snapshot_state_tree(&first_base), first_before, "first base changed during rejection");
     }
 
     #[test]

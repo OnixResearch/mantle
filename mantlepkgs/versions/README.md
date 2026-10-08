@@ -4,6 +4,11 @@ This producer workflow resolves reported package versions to exact Nixpkgs revis
 
 The no-Nix consumer path does not use these commands. Consumers use the generated Mantlepkgs catalogs and receipts.
 
+Index, resolve, and recheck plan bounded input, producer, publication, and read-back effects
+before their first capability call. The producer and publication adapters report their actual
+result; each command independently re-reads its published artifacts and classifies the effect
+observations before printing a success or blocked receipt.
+
 ## Files
 
 - `contracts.ncl` defines the typed review contracts.

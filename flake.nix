@@ -955,7 +955,6 @@
           doInstallCargoArtifacts = false;
           SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
         };
-
         # Build the actual package
         crunch = craneLib.buildPackage {
           inherit
@@ -973,6 +972,7 @@
           MANTLE_TEST_SCRIPT_SHELL = "${pkgs.bash}/bin/bash";
           MANTLE_WASM_COMPONENT_TOOLCHAIN = "${wasmComponentToolchain}";
           CRUNCH_NO_FUSE = "1";
+          SLEEPINESS = "0";
           MANTLE_TEST_OFFLINE = "1";
           nativeCheckInputs = [ pkgs.git ];
         };
@@ -1756,6 +1756,7 @@
             MANTLE_TEST_SCRIPT_SHELL = "${pkgs.bash}/bin/bash";
             MANTLE_WASM_COMPONENT_TOOLCHAIN = "${wasmComponentToolchain}";
             CRUNCH_NO_FUSE = "1";
+            SLEEPINESS = "0";
             MANTLE_TEST_OFFLINE = "1";
           };
 

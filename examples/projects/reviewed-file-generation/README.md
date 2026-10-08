@@ -1,6 +1,7 @@
 # Reviewed file generation
 
-This project declares two generated files in Nickel. Planning does not mutate files.
+This project declares two generated files in Nickel. Planning does not mutate
+generated files; `--plan-out` publishes the reviewed plan artifact.
 
 Apply only the exact current reviewed plan. Mantle records managed identities in `.mantle/filegen-state.json`.
 
@@ -28,5 +29,7 @@ Negative paths:
 - Place unrelated content at `generated/app-config.json` before the first plan. Mantle reports an unmanaged conflict.
 - Run `mantle filegen plan --manifest fixtures/missing-required-field.ncl`. The JSON contract rejects content without `mode`.
 - Run `mantle filegen plan --manifest fixtures/target-escape.ncl`. The `../escaped-config.json` target is rejected before any out-of-root write.
+- A `--plan-out` publication failure reports an error without printing a successful plan.
+- If a file or state write fails during apply, files written earlier in that apply may remain; re-plan and review the resulting state before retrying. Successful apply requires both the state and all managed generated files to read back as planned.
 
 The plan and state establish bounded generated-content identity and ownership. They do not prove the generated configuration is deployable, semantically correct, or accepted by a downstream service.

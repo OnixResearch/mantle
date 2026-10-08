@@ -1,17 +1,18 @@
 # Tasks: One readiness vocabulary for long-lived Mantle services
 
-All tasks remain open. Creating this proposal is not producer acceptance.
+Contract decisions are recorded; this does not establish producer acceptance,
+consumer readiness, passing gates, or archive eligibility.
 
 ## Phase 1: Contract
 
-- [ ] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record the current readiness behavior of the Rust cache daemon, remote serve, and proof stages, including one blocked-dependency observation. r[mantle.service_readiness.readiness_vocabulary]
-- [ ] [serial] T1.2 Define the state vocabulary, dependency declaration shape, and restart policy matrix as a versioned schema. r[mantle.service_readiness.readiness_vocabulary]
-- [ ] [serial] T1.3 Record the `ready`-additional, declared-dependency, and closed-matrix decisions in an ADR. r[mantle.service_readiness.restart_policy_matrix]
+- [x] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record the current readiness behavior of the Rust cache daemon, remote serve, and proof stages, including one blocked-dependency observation (`evidence/baseline-2026-09-30.md`; no new readiness producer acceptance). r[mantle.service_readiness.readiness_vocabulary]
+- [x] [serial] T1.2 Define the state vocabulary, dependency declaration shape, and restart policy matrix as a versioned schema (`specs/service-readiness/schema.json`, design contract; producer acceptance remains open). r[mantle.service_readiness.readiness_vocabulary]
+- [x] [serial] T1.3 Record the `ready`-additional, declared-dependency, and closed-matrix decisions in Proposed ADR 0091 and its index row (implementation remains open). r[mantle.service_readiness.restart_policy_matrix]
 
 ## Phase 2: Core
 
-- [ ] [serial] T2.1 Implement pure vocabulary validation, dependency graph evaluation, restart policy normalization, and derived state computation. r[mantle.service_readiness.declared_dependencies]
-- [ ] [serial] T2.2 Add the readiness reporting boundary and the blocked-dependency result. r[mantle.service_readiness.declared_dependencies]
+- [x] [serial] T2.1 Implement pure vocabulary validation, dependency graph evaluation, restart policy normalization, and derived state computation in `crates/crunch-service-readiness-core` (source-only production crate; root manifest registration and T3 consumer acceptance pending; scoped proof `evidence/t2-core-2026-10-01.md`). r[mantle.service_readiness.declared_dependencies]
+- [x] [serial] T2.2 Add the bounded non-evidence readiness reporting boundary and direct blocked-dependency result (`evidence/t2-core-2026-10-01.md`; no real daemon acknowledgment claimed). r[mantle.service_readiness.declared_dependencies]
 
 ## Phase 3: Consumers
 

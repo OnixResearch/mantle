@@ -82,6 +82,9 @@ fn copy_final_row_fixture() -> TempDir {
         assert!(destination.is_file());
         assert!(fs::metadata(&destination).unwrap().len() > 0);
     }
+    refresh_source_digest(fixture.path(), "bootstrap/gcc-10-final.ncl", FINAL_RECEIPT_PATH);
+    let baseline = parity_report(fixture.path());
+    assert_eq!(row_by_id(&baseline, "full-musl-binutils")["status"], "complete");
     fixture
 }
 
@@ -144,6 +147,52 @@ fn bootstrap_parity_report_emits_json_gap_report() {
     assert!(report["rows"].as_array().unwrap().len() >= 20);
     assert_eq!(report["axes"][0]["axis"], "live-bootstrap");
     assert_eq!(report["axes"][0]["complete"], false);
+}
+
+#[test]
+fn bootstrap_parity_report_preserves_absolute_missing_derivation_paths() {
+    let root = TempDir::new().unwrap();
+    let report = parity_report(root.path());
+    let seed = row_by_id(&report, "seed.hex0");
+    let expected_path = root.path().join("bootstrap/stage0-posix.ncl");
+
+    assert_eq!(seed["status"], "not-started");
+    assert!(
+        seed["notes"].as_str().unwrap().contains(&format!("missing derivation {}", expected_path.display())),
+        "the root's current-directory read must remain inside the planned parity port without changing report paths",
+    );
+}
+
+#[test]
+fn bootstrap_capabilities_report_missing_host_tools_without_process_path() {
+    let root = TempDir::new().unwrap();
+    let output = crunch().env("PATH", root.path()).args(["--json", "bootstrap", "capabilities"]).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["observations"]["host_make_available"], false);
+    assert_eq!(report["observations"]["host_tar_available"], false);
+    let bootstrap = report["operations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["operation"] == "bootstrap-source-root-materialization")
+        .unwrap();
+    assert_eq!(bootstrap["status"], "unsupported");
+    assert!(bootstrap["command"].is_null());
+    assert!(
+        bootstrap["blockers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item.as_str() == Some("host make is unavailable"))
+    );
+    assert!(
+        bootstrap["blockers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item.as_str() == Some("host tar is unavailable"))
+    );
 }
 
 #[test]
@@ -315,7 +364,7 @@ fn bootstrap_parity_report_rejects_missing_final_runtime_member() {
     let report = parity_report(fixture.path());
     let row = row_by_id(&report, "full-musl-binutils");
     assert_eq!(row["status"], "partial");
-    assert!(row["notes"].as_str().unwrap().contains("observed fallback scan"));
+    assert_eq!(row["provider_kind"], "unknown");
 }
 
 #[test]
@@ -429,20 +478,36 @@ fn bootstrap_parity_report_rejects_legacy_self_build_proof_without_unblocking_ax
 }
 
 #[test]
-fn bootstrap_parity_report_accepts_independently_receipted_final_native_rows() {
-    let report = parity_report(Path::new(env!("CARGO_MANIFEST_DIR")));
-    for row_id in ["gcc.4.7", "gcc.10", "full-musl-binutils"] {
+fn bootstrap_parity_report_keeps_stale_final_native_evidence_partial() {
+    let repository = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let receipt: Value = serde_json::from_slice(&fs::read(repository.join(FINAL_RECEIPT_PATH)).unwrap()).unwrap();
+    let source_record = receipt["source_records"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|record| record["path"] == "bootstrap/gcc-10-final.ncl")
+        .unwrap();
+    let current_source = fs::read(repository.join("bootstrap/gcc-10-final.ncl")).unwrap();
+    assert_ne!(source_record["blake3"], blake3::hash(&current_source).to_hex().as_str());
+
+    let report = parity_report(repository);
+    for row_id in ["gcc.4.7", "gcc.10"] {
         let row = row_by_id(&report, row_id);
         assert_eq!(row["status"], "complete", "row {row_id} did not complete");
         assert_eq!(row["provider_kind"], "source-root");
-        assert!(!row["notes"].as_str().unwrap().contains("evidence check failed"));
     }
 
-    let live = report["axes"].as_array().unwrap().iter().find(|axis| axis["axis"] == "live-bootstrap").unwrap();
-    let guix = report["axes"].as_array().unwrap().iter().find(|axis| axis["axis"] == "guix").unwrap();
-    assert_eq!(live["complete"], true);
-    assert!(live["blocking_rows"].as_array().unwrap().is_empty());
-    assert_eq!(guix["complete"], false);
-    assert!(!live["blocking_rows"].as_array().unwrap().contains(&Value::String("full-musl-binutils".to_string())));
-    assert!(!guix["blocking_rows"].as_array().unwrap().contains(&Value::String("full-musl-binutils".to_string())));
+    let final_row = row_by_id(&report, "full-musl-binutils");
+    assert_eq!(final_row["status"], "partial");
+    assert_eq!(final_row["provider_kind"], "unknown");
+    for axis in ["live-bootstrap", "guix"] {
+        let axis_report = report["axes"].as_array().unwrap().iter().find(|entry| entry["axis"] == axis).unwrap();
+        assert_eq!(axis_report["complete"], false);
+        assert!(
+            axis_report["blocking_rows"]
+                .as_array()
+                .unwrap()
+                .contains(&Value::String("full-musl-binutils".to_string()))
+        );
+    }
 }

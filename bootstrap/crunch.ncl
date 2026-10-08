@@ -65,7 +65,7 @@ let crunch_src = crunch.fetchTarball {
       for cmd in cat mkdir cp chmod ln ls echo rm mv sed grep awk \
                  tr head tail sort wc expr test basename dirname \
                  install find xargs readlink touch true false tee \
-                 du cut uname id whoami env printenv; do
+                 du cut sha256sum uname id whoami env printenv; do
         $BB ln -sf $BB /tmp/tools/$cmd
       done
 
@@ -161,6 +161,13 @@ let crunch_src = crunch.fetchTarball {
       elif [ -f "$GCC/lib/libgcc_s.so" ]; then GCC_LIB="$GCC/lib"
       fi
 
+      $BB mkdir -p .cargo
+      test -f .cargo/vendor-config.toml || exit 1
+      test -f vendor-deps/casita/src/nar.rs || exit 1
+      # Fail before Cargo can compile an unpatched checkout or a modified
+      # vendor snapshot. This is the exact patched nar.rs at the reviewed pin.
+      test "$(sha256sum vendor-deps/casita/src/nar.rs | cut -d ' ' -f 1)" = \
+        "e88c332c3bb0605e5684e303c17e755adc66d2d525b80672dd7e16015f1be0b1" || exit 1
       cp .cargo/vendor-config.toml .cargo/config.toml
       cat >> .cargo/config.toml << CARGOEOF
 

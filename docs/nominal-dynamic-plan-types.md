@@ -102,6 +102,10 @@ rejects the plan with no admitted source paths. A publication-uncertain result o
 post-commit invariant failure aborts the worker instead of claiming a clean
 rejection; the V1 registration path remains separate.
 
+Content-addressed units with multiple outputs retain their distinct named
+outputs: a dependent v2 unit's placeholder for `dev`, for example, resolves
+to the parent's realized `dev` path at dispatch, not its `out` path.
+
 Native-plan report `source_slices` rows are ordered by source id. Each row
 records `source_id`, `producer_output`, `subpath`, `declared_nar_blake3`,
 `observed_nar_blake3` (when observed), `admitted_store_path` (only after batch

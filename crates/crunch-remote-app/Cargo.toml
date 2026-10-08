@@ -1,0 +1,11 @@
+[package]
+name = "crunch-remote-app"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+crunch-remote-core = { path = "../crunch-remote-core" }

@@ -1374,13 +1374,13 @@ mod tests {
     use std::os::unix::fs::symlink;
 
     use crunch_build::distributed::REMOTE_FAILURE_DEBUG_NON_CLAIM;
-    use crunch_build::distributed::RemoteAttemptId;
     use crunch_build::distributed::RemoteAttemptLogDigest;
     use crunch_build::distributed::RemoteAttemptLogScope;
     use crunch_build::distributed::RemoteFailureCapturePolicy;
     use crunch_build::distributed::RemoteFailureCaptureSensitivity;
-    use crunch_build::distributed::RemoteFenceGeneration;
-    use crunch_build::distributed::RemoteJobId;
+    use crunch_remote_core::attempt::RemoteAttemptId;
+    use crunch_remote_core::attempt::RemoteFenceGeneration;
+    use crunch_remote_core::attempt::RemoteJobId;
 
     use super::*;
 

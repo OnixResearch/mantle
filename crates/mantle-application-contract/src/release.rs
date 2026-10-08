@@ -1,8 +1,10 @@
 //! Release command family.
 //!
 //! Release creation, verification, attestation, and witness flows share one
-//! typed request, blocker set, port, and result. Proof kinds are a closed set
-//! so an unknown proof cannot be counted as evidence.
+//! typed request, blocker set, port, and result. Concrete CLI operations also
+//! declare bounded effects before calling their ports, then classify observed
+//! authority, destination, and usage before publishing results. Proof kinds
+//! are a closed set so unknown proofs cannot be counted as evidence.
 
 use alloc::string::String;
 use alloc::vec;
@@ -185,6 +187,134 @@ pub fn validate_release_command(command: &ReleaseCommand) -> Vec<ReleaseBlocker>
     blockers
 }
 
+/// The CLI's concrete release operations, including transport, evidence, and
+/// the witness check that deliberately does not run a rebuild.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReleaseEffectOperation {
+    Create,
+    Verify,
+    TransportPack,
+    TransportInspect,
+    TransportUnpack,
+    Reproduce,
+    FunctionAddressBind,
+    GlobalReproducibility,
+    GlobalReproducibilityWithReport,
+    GlobalReproducibilityEvidence,
+    GauntletCanonicalize,
+    GauntletCanonicalizeToFile,
+    GauntletContinuous,
+    GauntletStrictRegression,
+    AttestRead,
+    NixWitness,
+    Attest,
+    WitnessExportRead,
+    WitnessExport,
+    WitnessRebuildRead,
+    WitnessRebuildCheck,
+    WitnessRebuild,
+}
+
+impl ReleaseEffectOperation {
+    /// Unique effect identity, never shared between separate release actions.
+    pub const fn identity(self) -> &'static str {
+        match self {
+            Self::Create => "release-create",
+            Self::Verify => "release-verify",
+            Self::TransportPack => "release-transport-pack",
+            Self::TransportInspect => "release-transport-inspect",
+            Self::TransportUnpack => "release-transport-unpack",
+            Self::Reproduce => "release-reproduce",
+            Self::FunctionAddressBind => "release-function-address-bind",
+            Self::GlobalReproducibility => "release-global-reproducibility",
+            Self::GlobalReproducibilityWithReport => "release-global-reproducibility-report",
+            Self::GlobalReproducibilityEvidence => "release-global-reproducibility-evidence",
+            Self::GauntletCanonicalize => "release-gauntlet-canonicalize",
+            Self::GauntletCanonicalizeToFile => "release-gauntlet-canonicalize-file",
+            Self::GauntletContinuous => "release-gauntlet-continuous",
+            Self::GauntletStrictRegression => "release-gauntlet-strict-regression",
+            Self::NixWitness => "release-nix-witness",
+            Self::AttestRead => "release-attest-bundle-read",
+            Self::Attest => "release-attest",
+            Self::WitnessExport => "release-witness-export",
+            Self::WitnessExportRead => "release-witness-export-bundle-read",
+            Self::WitnessRebuildCheck => "release-witness-rebuild-check",
+            Self::WitnessRebuildRead => "release-witness-rebuild-read",
+            Self::WitnessRebuild => "release-witness-rebuild",
+        }
+    }
+
+    /// Authority for one composite call. A failed call can have made partial
+    /// changes; the observation must not claim that the call was atomic.
+    pub const fn authority(self) -> crate::envelope::EffectKind {
+        use crate::envelope::EffectKind;
+        match self {
+            Self::Verify
+            | Self::AttestRead
+            | Self::WitnessExportRead
+            | Self::TransportInspect
+            | Self::GlobalReproducibility
+            | Self::WitnessRebuildRead
+            | Self::WitnessRebuildCheck
+            | Self::GauntletCanonicalize => EffectKind::ReadFiles,
+            Self::Reproduce | Self::WitnessRebuild => EffectKind::RunProcess,
+            Self::Create
+            | Self::TransportPack
+            | Self::TransportUnpack
+            | Self::FunctionAddressBind
+            | Self::GlobalReproducibilityWithReport
+            | Self::GlobalReproducibilityEvidence
+            | Self::GauntletContinuous
+            | Self::GauntletCanonicalizeToFile
+            | Self::GauntletStrictRegression
+            | Self::NixWitness
+            | Self::Attest
+            | Self::WitnessExport => EffectKind::WriteFiles,
+        }
+    }
+}
+
+/// A pre-effect release decision. The selected destination, authority, and
+/// maximum observation are owned by this plan, not by the port's return value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseEffectPlan {
+    pub operation: ReleaseEffectOperation,
+    pub effects: crate::envelope::EffectPlan,
+}
+
+/// The operation calls a capability-scoped adapter. A port error is typed;
+/// the outer CLI boundary retains its original diagnostic and exit class.
+pub trait ReleaseEffectPort {
+    type Output;
+
+    fn execute(&mut self) -> Result<Self::Output, CapabilityError>;
+}
+
+/// Authorize one bounded release operation before its port is invoked.
+pub fn plan_release_operation(
+    operation: ReleaseEffectOperation,
+    output: crate::envelope::ExpectedOutput<'_>,
+    limit: crate::envelope::EffectMeasure,
+) -> Result<ReleaseEffectPlan, crate::envelope::PlanError> {
+    let effects =
+        crate::envelope::plan_effects(crate::family::CommandFamily::Release, &[crate::envelope::EffectSpec {
+            effect_id: operation.identity(),
+            kind: operation.authority(),
+            limit,
+            expected_output: output,
+        }])?;
+    debug_assert_eq!(effects.effects.len(), 1);
+    Ok(ReleaseEffectPlan { operation, effects })
+}
+
+/// Classify independently observed facts before publishing a release result.
+pub fn classify_release_operation(
+    plan: &ReleaseEffectPlan,
+    observations: &[crate::envelope::Observation],
+) -> crate::envelope::ApplicationOutcome {
+    crate::envelope::classify_observations(&plan.effects, observations)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -233,5 +363,75 @@ mod tests {
         assert_eq!(ReleaseProofKind::parse(""), None);
         assert_eq!(ReleaseProofKind::all().len(), 4);
         assert_eq!(ReleaseOperation::all().len(), 6);
+    }
+
+    #[test]
+    fn release_output_must_match_selected_destination_authority_and_byte_bound() {
+        use crate::envelope::ApplicationOutcome;
+        use crate::envelope::EffectId;
+        use crate::envelope::EffectKind;
+        use crate::envelope::EffectMeasure;
+        use crate::envelope::EffectOutput;
+        use crate::envelope::ExpectedOutput;
+        use crate::envelope::Observation;
+        use crate::envelope::ObservationStatus;
+
+        let plan = plan_release_operation(
+            ReleaseEffectOperation::FunctionAddressBind,
+            ExpectedOutput::Identity("receipts/function-address.json"),
+            EffectMeasure::Bytes(128),
+        )
+        .unwrap();
+        let mut observed = Observation {
+            effect_id: EffectId(String::from(ReleaseEffectOperation::FunctionAddressBind.identity())),
+            kind: EffectKind::WriteFiles,
+            status: ObservationStatus::Succeeded,
+            output: EffectOutput::Identity(String::from("receipts/function-address.json")),
+            usage: EffectMeasure::Bytes(64),
+            diagnostics_code: None,
+        };
+        assert_eq!(classify_release_operation(&plan, &[observed.clone()]), ApplicationOutcome::Completed);
+
+        observed.kind = EffectKind::ReadFiles;
+        assert_eq!(classify_release_operation(&plan, &[observed.clone()]), ApplicationOutcome::Contradicted {
+            effect_count: 1
+        });
+        observed.kind = EffectKind::WriteFiles;
+        observed.output = EffectOutput::Identity(String::from("receipts/other.json"));
+        assert_eq!(classify_release_operation(&plan, &[observed.clone()]), ApplicationOutcome::Contradicted {
+            effect_count: 1
+        });
+        observed.output = EffectOutput::Identity(String::from("receipts/function-address.json"));
+        observed.usage = EffectMeasure::Bytes(129);
+        assert_eq!(classify_release_operation(&plan, &[observed]), ApplicationOutcome::Contradicted {
+            effect_count: 1
+        });
+    }
+
+    #[test]
+    fn a_failed_release_write_can_have_partial_effects_without_claiming_success() {
+        use crate::envelope::ApplicationOutcome;
+        use crate::envelope::EffectId;
+        use crate::envelope::EffectMeasure;
+        use crate::envelope::EffectOutput;
+        use crate::envelope::ExpectedOutput;
+        use crate::envelope::Observation;
+        use crate::envelope::ObservationStatus;
+
+        let plan = plan_release_operation(
+            ReleaseEffectOperation::TransportPack,
+            ExpectedOutput::Identity("target/transport"),
+            EffectMeasure::Calls(1),
+        )
+        .unwrap();
+        let failed = Observation {
+            effect_id: EffectId(String::from(ReleaseEffectOperation::TransportPack.identity())),
+            kind: ReleaseEffectOperation::TransportPack.authority(),
+            status: ObservationStatus::Failed,
+            output: EffectOutput::Identity(String::from("target/transport")),
+            usage: EffectMeasure::Calls(1),
+            diagnostics_code: Some(String::from("transport-write-failed")),
+        };
+        assert_eq!(classify_release_operation(&plan, &[failed]), ApplicationOutcome::Failed { failed_effect_count: 1 });
     }
 }

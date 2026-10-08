@@ -494,6 +494,8 @@ Stable blockers:
   keeps its existing `stale-gc-plan` blocker for the same condition
   (`crates/crunch-store/src/gc.rs`), so the conformance rail's stale-plan
   fixture expects each backend's own blocker.
+- `casita-envelope-invalid` or `casita-root-missing`: a retained Rust cache
+  payload root or envelope changed or vanished; neither reuse nor GC proceeds.
 - `casita-gc-guard-required`: Casita GC planning, a dry run, or execution
   without `StoreMutationGuard`.
 - `gc-recovery-required`: an operation found an incomplete fence record
@@ -519,9 +521,10 @@ action results. They are behavior tests, not source-text checks.
   repairs; a batch of exactly 1,024 absent paths publishes in one revision at
   the pinned defaults; a PathInfo-backed action-result output is rehydrated by
   a fresh process; `store gc` without Rust unit cache state removes only
-  unretained output roots; once `rust-unit-cache` is declared, a Rust unit
-  payload is reused without recompiling and GC also releases unretained payload
-  roots; collection keeps retained content; migration with a written policy
+  unretained output roots without creating cache state; with declared
+  `rust-unit-cache`, a Rust unit payload is reused without recompiling and GC
+  releases unretained payload roots while preserving retained ones; collection
+  keeps retained content; migration with a written policy
   verifies in a fresh process; guarded `store gc` recovers an interrupted fence
   before planning and removes no root; an output whose signed PathInfo carries
   a content address round-trips through `pathinfo.json` with equal bytes.
@@ -578,16 +581,16 @@ action results. They are behavior tests, not source-text checks.
   checks and skips paths it finds present, so only absent paths count. Snix
   mode has no backend bound; the Nario v2 reader's 100,000 record limit
   applies to both backends.
-- Once `rust-unit-cache` is declared, each retained castore payload adds one
-  root. Until then Casita mode has no Rust unit cache and is not fully
-  interchangeable with `snix`.
+- Each retained castore payload adds one root under the declared
+  `rust-unit-cache` capability. Casita remains interchangeable with `snix`
+  only within their declared capabilities.
 - Operators must add cache keys and any `--signing-key` other than the local
   key to the policy before those outputs can be published in Casita mode.
 - Removing a key makes retained outputs signed only by that key unreadable and
   blocks GC planning until the key is restored or those roots are released.
 - Verification on every read costs time. `store verify` forces a full audit.
-- Overlay composition, unsigned admission, and, while the parity gate
-  applies, the Rust unit cache are not available in Casita mode.
+- Overlay composition and unsigned admission are not available in Casita
+  mode; the Rust unit cache uses verified durable castore payload roots.
 - After an interrupted GC, Casita reads and admission fail with
   `gc-recovery-required` until the operator runs `store gc`, which recovers
   the fence before it plans.
@@ -633,8 +636,9 @@ tested interruptions, output correctness, sandboxing, or release eligibility.
 - **Dependency advisories.** The vendor rail's `cargo deny check` failed
   advisories and sources. Only `proc-macro-error 0.4.12` (unmaintained) is
   new in the lock, from Casita's graph through `genawaiter 0.99.1`. The
-  `h2 0.4.13` and `rustls 0.23.37` advisories are unchanged from HEAD and
-  also reachable from `casita` through `object_store 0.14.0`.
+  `h2 0.4.13` and `rustls 0.23.37` were vulnerable in HEAD and reachable
+  from Casita through `object_store 0.14.0`; the current lock has compatible
+  patched `h2 0.4.16` and `rustls 0.23.45` instead.
   `bitmaps 3.2.1`, `imbl-sized-chunks 0.1.3`, and `rsa 0.9.10` are unchanged
   and off the Casita path. Four missing `allow-git` sources predate this
   change. The gate stays open, with no waivers.

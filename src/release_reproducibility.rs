@@ -1687,7 +1687,7 @@ fn write_report(path: &Path, report: ReleaseReproducibilityReport) -> Result<(),
     std::fs::write(path, bytes).map_err(|err| RunError::Internal(format!("writing {}: {err}", path.display())))
 }
 
-fn resolve_report_path(bundle_dir: &Path, report_path: Option<&Path>) -> PathBuf {
+pub(crate) fn resolve_report_path(bundle_dir: &Path, report_path: Option<&Path>) -> PathBuf {
     report_path
         .map(Path::to_path_buf)
         .unwrap_or_else(|| default_reproducibility_report_path(bundle_dir))

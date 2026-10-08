@@ -1,0 +1,11 @@
+2026-10-03 UTC — prove-apk-adapter-real-build lifecycle dependency enforcement
+
+Read-only initial observation: proposal.md:25-28 requires `add-apk-build-adapter` to archive first, this active change had NO metadata.json, and `cairn change depend list prove-apk-adapter-real-build --root .` returned `dependencies: []`. Existing Cairn convention (`cairn/README.md`, Change dependencies and review receipts) declares local prerequisites in metadata.json; active dependencies block sync and archive. Added ONLY `.cairn/changes/prove-apk-adapter-real-build/metadata.json` with `depends_on: ["add-apk-build-adapter"]`. No existing metadata or dependency was replaced.
+
+Exact read-only commands, complete output and exit codes are in adjacent files ending `-dependency-2026-10-03.txt`, invoked with the pre-existing `/nix/store/j3ni3lj66ylskpcg78ip531s9lz4z4av-cairn-0.1.0/bin/cairn` from Mantle repo root:
+- `cairn validate --root .`: exit 0; no issues/change_issues/findings.
+- `cairn gate proposal|design|tasks prove-apk-adapter-real-build --root .`: each PASS, exit 0. Tasks gate counts 5 done and 8 todo of 13; NO checkbox was changed.
+- `cairn change depend list prove-apk-adapter-real-build --root .`: valid, exit 0, exactly `add-apk-build-adapter`.
+- `cairn readiness prove-apk-adapter-real-build --root . --format json`: read-only report exit 0, NOT permission to proceed. Sync and archive stages are blocked with `change_dependency.unsatisfied_dependency: dependency add-apk-build-adapter is not archived`; archive also separately reports `tasks not archive-ready (todo: 8, in_progress: 0, unmarked: 0)`. `mutation_authorized=false`.
+
+The adapter itself requires `adopt-android-prebuilt-toolchain-sources` to archive first, giving the intended upstream -> adapter -> real-build archive chain. Structural Cairn gates are NOT signed APK execution, signature verification, a success receipt, deployment, or an Android runtime claim. No APK proof task, product source, Git index, protected binary, Nix/Cargo product build, archive, or external process was modified here.

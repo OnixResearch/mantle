@@ -69,6 +69,16 @@ Admitted sources and lock updates:
 
 The [complete admission lock inventory](../.cairn/changes/adopt-casita-store-backend/evidence/dependency-admission-2026-10-04.md#complete-original-casita-lock-admission-inventory) compares the pre-admission lock to the unchanged current lock: ten git and 89 registry identities added (including `astral-tokio-tar 0.6.4`), `astral-tokio-tar 0.6.3` removed, and dependency lists modified on 50 previously present identities. It records every new locked git identity and every changed lock-record identity; none is a passing clean-source closure or audit claim.
 
+At the pinned revision, `casita` declares `Apache-2.0` and the `turso`
+packages declare `MIT`; both licenses are already admitted in `deny.toml`.
+The transitive `cfg_block 0.1.1` declares a `license-file` rather than an SPDX
+field; its vendored `LICENSE` contains Apache-2.0 text. The configured audit
+reports this as a warning, not a passing review of all downstream legal
+obligations. Retain the pin and experimental API inventory in ADR 0082; a
+revision or feature bump must re-review those APIs, source identities,
+licenses, and advisories and rerun the complete audit before updating this
+record. Repository admission alone does not authorize a floating revision.
+
 Commands:
 
 ```sh
@@ -81,16 +91,84 @@ nix develop --offline --no-write-lock-file --command \
 
 Results:
 
-- the Nix check built `/nix/store/skq3d11jy1b67by802kq0d5mmkdhzkmi-vendor-cargo-deps` from clean source
+- the Nix check built `/nix/store/skq3d11jy1b67by802kq0d5mmkdhzkmi-vendor-cargo-deps` from the dirty working tree; it is not T1.2 clean-checkout proof
 - `generate` wrote `vendor-deps/` without replacing existing data; `check` regenerated the closure, matched every file (53,491 entries), and resolved 766 external package names from locked offline metadata
 - the patched `nar.rs` bytes are identical in the Nix closure and in `vendor-deps/`
 - `cargo-deny` exited 9: advisories and sources failed; bans and licenses passed; the command omitted `--config deny.toml`, and its source errors name exactly the git sources that `deny.toml` does not admit
 
+A separate full configured run after the APK lock handoff used:
+
+```sh
+SNIX_BUILD_SANDBOX_SHELL=/bin/sh nix develop --offline --no-write-lock-file --command \
+  /nix/store/xqnwl8qppzhr3dq5nzw2ly6yx4lz9xyr-cargo-deny-0.19.0/bin/cargo-deny \
+  check --config deny.toml
+```
+
+It exited **9**: advisories and sources failed, bans and licenses passed. The
+only source errors were the six locked packages from the four unrelated Git
+repositories below; neither Casita nor Turso raised a source-policy error.
+The advisory errors were the six IDs in the table below. An additional
+`cfg_block` missing-SPDX-field license warning and registry-index lookup
+warnings (yanked-crate status could not be checked) prevent a stronger
+completeness claim. This is not passing audit evidence.
+
+After a coordinated APK lock handoff, Cargo's offline registry resolver (not
+the dev shell's then-stale fixed vendor index) updated `h2 0.4.13` to
+`0.4.16` and `rustls 0.23.37` to `0.23.45`, with their compatible
+`aws-lc-rs 1.18.1`, `aws-lc-sys 0.45.0`, and `rustls-webpki 0.103.15`
+dependencies. Locked offline metadata passed against the registry index;
+`blake3` remained `1.8.2`. A second full
+`cargo-deny 0.19.0 check --config deny.toml --hide-inclusion-graph`, using
+the original Cargo registry to resolve that lock, also exited **9**.
+RUSTSEC-2026-0258 (`h2`) and RUSTSEC-2026-0285 (`rustls`) no longer appear.
+The remaining four advisory errors are `RUSTSEC-2024-0370`,
+`RUSTSEC-2026-0247`, `RUSTSEC-2026-0292`, and `RUSTSEC-2023-0071`.
+Sources still fail on the same four unrelated repositories; bans and licenses
+pass. This run queried the registry index and warned that the locked
+`chacha20 0.10.0` and `spin 0.10.0` are yanked; both versions already
+occurred in the pre-update HEAD lock. At the time of this run the Nix vendor
+closure still held the older TLS/HTTP packages. Audit success and a coherent
+vendor build cannot be inferred from the lock update or this failed audit.
+
+After the vendor owner regenerated the same locked sources, the Nix
+`casita-vendor-closure` check produced
+`/nix/store/z4pv4a36rgdq95l35wxzgx3xqgr7gdw4-vendor-cargo-deps`.
+The repository-owned `generate` and `check` paths reported 766 external
+package names in locked offline metadata and 53,596 matching vendor entries.
+In the default Nix shell, `cargo metadata --locked --offline --no-deps`
+passed. A full `cargo-deny check --config deny.toml` with inclusion-graph
+output hidden still exited **9** with those same four advisory
+errors and six source errors; bans and licenses passed. That shell's fixed
+vendor Cargo home lacks a registry index and therefore reported warnings
+that yanked status could not be checked. The original-registry audit above
+did query it and identified the two preexisting yanked versions. These
+checks do not turn the failed dependency gate into a pass.
+
+With that refreshed closure, the default Nix shell also completed a scoped
+real compilation: `cargo check --locked --offline -p crunch-store --lib`
+exited **0** after checking `h2 0.4.16`, `rustls 0.23.45`, pinned Turso and
+Casita, and `crunch-store`. This validates those resolved dependencies on
+that toolchain; it does not resolve the failed advisory/source gate or prove
+the clean-checkout Nix build required separately by T1.2.
+
+The checkout-local `vendor-deps` comparison now reads uncached, bounded 64-KiB
+byte chunks: its isolated Python regression passed (1 passed, 0 failed) after
+rejecting a same-size, preserved-mtime `nar.rs` edit. The checked source
+SHA-256s are `scripts/vendor-deps.py`
+`7f9945d6e13869d12286549238b6deb786be9156365388f129543c940612793b`
+and `tests/test_vendor_deps.py`
+`ea6b45c0f6ee5e1cfd61284b406a51153dc5d0357616cac1405aea14231f1e8f`.
+In disposable scratch, the tracked patch applied to the exact upstream hunk
+(exit 0) and rejected changed context (exit 1); the dev-shell source-map
+checker admitted patched `nar.rs` and rejected original and edited bytes.
+These local checks are not clean-checkout Nix/Cargo or configured `cargo deny`
+proof: T1.2, T4.6, and T4.7 remain unchecked.
+
 | Finding | Crate | Relation to Casita | Current action |
 |---|---|---|---|
-| RUSTSEC-2024-0370 (unmaintained) | `proc-macro-error 0.4.12` | new in the lock; reached only from `casita` through `genawaiter 0.99.1` (via `bao-tree` and the `turso` sync crates) | open; no waiver |
-| RUSTSEC-2026-0258 (vulnerability) | `h2 0.4.13` | in the HEAD lock; also reached from `casita` through `object_store 0.14.0` | open; no waiver |
-| RUSTSEC-2026-0285 (vulnerability) | `rustls 0.23.37` | in the HEAD lock; also reached from `casita` through `object_store 0.14.0` | open; no waiver |
+| RUSTSEC-2024-0370 (unmaintained) | `proc-macro-error 0.4.12` | introduced by the Casita graph through `genawaiter 0.99.1` (both `bao-tree` and the `turso` sync crates); now present in the HEAD lock | open; no safe package upgrade or waiver |
+| RUSTSEC-2026-0258 (vulnerability) | `h2 0.4.13` in HEAD | also reached from `casita` through `object_store 0.14.0` | lock updated to patched `0.4.16`; absent from configured audits of new lock; refreshed-vendor scoped store compile passed |
+| RUSTSEC-2026-0285 (vulnerability) | `rustls 0.23.37` in HEAD | also reached from `casita` through `object_store 0.14.0` | lock updated to patched `0.23.45`; absent from configured audits of new lock; refreshed-vendor scoped store compile passed |
 | RUSTSEC-2026-0247 (unmaintained) | `bitmaps 3.2.1` | in the HEAD lock; not reached from `casita` | open; no waiver |
 | RUSTSEC-2026-0292 (vulnerability) | `imbl-sized-chunks 0.1.3` | in the HEAD lock; not reached from `casita` | open; no waiver |
 | RUSTSEC-2023-0071 (vulnerability) | `rsa 0.9.10` | in the HEAD lock; not reached from `casita` | open; no waiver |
@@ -113,6 +191,15 @@ The four now allowlisted sources are:
 Each origin has an independent exact-revision manifest/lock/input assertion in
 `flake.nix`; `deny.toml` lists each URL individually with
 `unknown-git = "deny"` and no wildcard.
+
+The pinned Casita revision's `native` feature reaches both `turso` and
+`bao-tree`; Turso's `turso_sync_sdk_kit` and bao-tree's default validation
+feature reach `genawaiter 0.99.1` and `proc-macro-error 0.4.12`.
+A lockfile-only patch bump cannot remove both upstream paths. Existing
+`bitmaps` and `imbl-sized-chunks` findings run through `nickel-lang-vector`,
+while `rsa 0.9.10` runs through `secretspec`; these are independent of
+Casita. Exact-URL admission of the four unrelated git sources above does
+not clear these advisories or constitute a passing configured audit.
 
 The dependency gate stays open. This change adds no waiver. This record does not claim a clean `cargo-deny` result, Casita correctness, experimental API stability, or release eligibility.
 
@@ -210,6 +297,25 @@ validation-preserving `genawaiter` `default-features = false` fix and release,
 followed by a Casita-maintainer-reviewed precise revision. Disabling
 validation is not a resolution.
 
+## Validation dependency catalog
+
+| Dependency | Pinned revision | Transport | Plane | License choice | Scope |
+|---|---|---|---|---|---|
+| [`fault-injection`](https://github.com/komora-io/fault-injection) | crates.io `=1.0.10` | `crates.io` | `validation` | Apache-2.0 (upstream also offers MIT) | `crunch-store` dev-dependency only; test-build store-shell I/O fixtures |
+
+The process-global counter starts at `u64::MAX`; each serial fault fixture sets
+an explicit counter and restores that default, with `SLEEPINESS=0`. Run the
+injection fixtures with `cargo test -p crunch-store --lib io_fault_ -- --test-threads=1`.
+Injection covers only the named I/O paths. It does not
+establish sandbox hermeticity, store correctness, or release eligibility.
+
+Store blob-read faults retain `Error::Store` classification; NAR stream faults
+retain `Error::Export`. Post-build action-result cache-record writes and
+fsync faults retain the existing `action-result-publication-write-temp` and
+`action-result-publication-sync-temp` diagnostics. Publication failure remains
+diagnostic for ordinary completed builds. Floating CA and CA-resolved IA
+intermediates instead require signed action-result publication before dependent
+consumption; failure is `ca-realisation-untrusted`. Injection changes neither rule.
 ## Remaining waiver inventory
 
 | Finding | Affected crate | Scope | Rationale | Review trigger |

@@ -17,6 +17,21 @@ use crunch_project::GeneratedFileDeclaration;
 use crunch_project::GeneratedFileMaterialization;
 use crunch_project::plan_file_generation;
 use crunch_project::verify_filegen_apply_plan;
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::CapabilityError;
+use mantle_application_contract::CommandFamily;
+use mantle_application_contract::EffectId;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::EffectPlan;
+use mantle_application_contract::EffectSpec;
+use mantle_application_contract::ExpectedOutput;
+use mantle_application_contract::Observation;
+use mantle_application_contract::ObservationStatus;
+use mantle_application_contract::PlanError;
+use mantle_application_contract::classify_observations;
+use mantle_application_contract::plan_effects;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -66,41 +81,320 @@ struct FilegenState {
     files: BTreeMap<String, String>,
 }
 
-pub fn cmd_filegen_plan(options: FilegenPlanOptions<'_>) -> Result<(), RunError> {
-    let declarations = load_filegen_declarations(options.root, options.manifest)?;
-    let state = load_filegen_state(options.root)?;
-    let facts = current_file_facts(options.root, &declarations, &state)?;
-    let plan = plan_file_generation(FilegenPlanRequest {
-        declarations,
-        current_files: facts,
-    });
-    if let Some(plan_out) = options.plan_out {
-        write_json_file(plan_out, &plan, "filegen plan")?;
+const INPUT_READ: &str = "filegen-input-read";
+const REVIEWED_READ: &str = "reviewed-plan-read";
+const PLAN_WRITE: &str = "filegen-plan-write";
+const PLAN_READBACK: &str = "filegen-plan-readback";
+const APPLY_WRITE: &str = "filegen-apply-write";
+const APPLY_READBACK: &str = "filegen-apply-readback";
+
+struct FilegenInputs {
+    declarations: Vec<GeneratedFileDeclaration>,
+    facts: Vec<CurrentFileFact>,
+}
+
+/// Input authority shared by the two operation-specific ports.
+trait FilegenInputPort {
+    fn read_inputs(&self, root: &Path, manifest: &Path) -> Result<PortFact<FilegenInputs>, FilegenPortError>;
+}
+
+/// The planning port publishes reviewed plans, not generated-file apply operations.
+trait FilegenPlanPort: FilegenInputPort {
+    fn write_plan(&self, path: &Path, plan: &FilegenPlan) -> Result<PortFact<()>, FilegenPortError>;
+    fn read_back_plan(&self, path: &Path, plan: &FilegenPlan) -> Result<PortFact<()>, FilegenPortError>;
+}
+
+/// Apply reads the reviewed plan, writes generated files and checks read-back.
+trait FilegenApplyPort: FilegenInputPort {
+    fn read_plan(&self, path: &Path) -> Result<PortFact<FilegenPlan>, FilegenPortError>;
+    fn apply(&self, root: &Path, plan: &FilegenPlan) -> Result<PortFact<()>, FilegenPortError>;
+    fn read_back(&self, root: &Path, plan: &FilegenPlan) -> Result<PortFact<()>, FilegenPortError>;
+}
+
+struct PortFact<T> {
+    value: T,
+    observation: Observation,
+}
+
+impl<T> PortFact<T> {
+    fn succeeded(value: T, effect_id: &str, kind: EffectKind, output: EffectOutput) -> Self {
+        Self {
+            value,
+            observation: Observation {
+                effect_id: EffectId(effect_id.to_string()),
+                kind,
+                status: ObservationStatus::Succeeded,
+                output,
+                usage: EffectMeasure::Calls(1),
+                diagnostics_code: None,
+            },
+        }
     }
+}
+
+#[derive(Debug)]
+struct FilegenPortError {
+    capability: CapabilityError,
+    effect_id: &'static str,
+    kind: EffectKind,
+    eval: bool,
+}
+
+impl FilegenPortError {
+    fn from_run(effect_id: &'static str, kind: EffectKind, code: &str, error: RunError) -> Self {
+        let eval = matches!(error, RunError::Eval(_));
+        Self {
+            capability: CapabilityError::new(code, error.message()),
+            effect_id,
+            kind,
+            eval,
+        }
+    }
+
+    fn into_parts(self) -> (Observation, RunError) {
+        let Self {
+            capability,
+            effect_id,
+            kind,
+            eval,
+        } = self;
+        let CapabilityError { code, detail } = capability;
+        let observation = Observation {
+            effect_id: EffectId(effect_id.to_string()),
+            kind,
+            status: ObservationStatus::Failed,
+            output: EffectOutput::None,
+            usage: EffectMeasure::Calls(1),
+            diagnostics_code: Some(code),
+        };
+        let error = if eval {
+            RunError::Eval(detail)
+        } else {
+            RunError::Internal(detail)
+        };
+        (observation, error)
+    }
+}
+
+struct FsFilegenPort;
+
+impl FilegenInputPort for FsFilegenPort {
+    fn read_inputs(&self, root: &Path, manifest: &Path) -> Result<PortFact<FilegenInputs>, FilegenPortError> {
+        let declarations = load_filegen_declarations(root, manifest).map_err(|err| {
+            FilegenPortError::from_run(INPUT_READ, EffectKind::ReadFiles, "filegen-manifest-read", err)
+        })?;
+        let state = load_filegen_state(root)
+            .map_err(|err| FilegenPortError::from_run(INPUT_READ, EffectKind::ReadFiles, "filegen-state-read", err))?;
+        let facts = current_file_facts(root, &declarations, &state)
+            .map_err(|err| FilegenPortError::from_run(INPUT_READ, EffectKind::ReadFiles, "filegen-facts-read", err))?;
+        Ok(PortFact::succeeded(
+            FilegenInputs { declarations, facts },
+            INPUT_READ,
+            EffectKind::ReadFiles,
+            EffectOutput::None,
+        ))
+    }
+}
+
+impl FilegenPlanPort for FsFilegenPort {
+    fn write_plan(&self, path: &Path, plan: &FilegenPlan) -> Result<PortFact<()>, FilegenPortError> {
+        write_json_file(path, plan, "filegen plan")
+            .map_err(|err| FilegenPortError::from_run(PLAN_WRITE, EffectKind::WriteFiles, "filegen-plan-write", err))?;
+        Ok(PortFact::succeeded((), PLAN_WRITE, EffectKind::WriteFiles, EffectOutput::None))
+    }
+
+    fn read_back_plan(&self, path: &Path, plan: &FilegenPlan) -> Result<PortFact<()>, FilegenPortError> {
+        let observed: FilegenPlan = read_json_file(path, "filegen plan").map_err(|err| {
+            FilegenPortError::from_run(PLAN_READBACK, EffectKind::ReadFiles, "filegen-plan-readback", err)
+        })?;
+        if observed != *plan {
+            let mismatch =
+                RunError::Internal(format!("filegen plan {} did not read back as published", path.display()));
+            return Err(FilegenPortError::from_run(
+                PLAN_READBACK,
+                EffectKind::ReadFiles,
+                "filegen-plan-readback-mismatch",
+                mismatch,
+            ));
+        }
+        Ok(PortFact::succeeded((), PLAN_READBACK, EffectKind::ReadFiles, EffectOutput::None))
+    }
+}
+
+impl FilegenApplyPort for FsFilegenPort {
+    fn read_plan(&self, path: &Path) -> Result<PortFact<FilegenPlan>, FilegenPortError> {
+        let plan = read_json_file(path, "reviewed filegen plan").map_err(|err| {
+            FilegenPortError::from_run(REVIEWED_READ, EffectKind::ReadFiles, "reviewed-plan-read", err)
+        })?;
+        Ok(PortFact::succeeded(plan, REVIEWED_READ, EffectKind::ReadFiles, EffectOutput::None))
+    }
+
+    fn apply(&self, root: &Path, plan: &FilegenPlan) -> Result<PortFact<()>, FilegenPortError> {
+        apply_filegen_operations(root, &plan.operations).map_err(|err| {
+            FilegenPortError::from_run(APPLY_WRITE, EffectKind::WriteFiles, "filegen-files-write", err)
+        })?;
+        write_filegen_state(root, plan).map_err(|err| {
+            FilegenPortError::from_run(APPLY_WRITE, EffectKind::WriteFiles, "filegen-state-write", err)
+        })?;
+        Ok(PortFact::succeeded((), APPLY_WRITE, EffectKind::WriteFiles, EffectOutput::None))
+    }
+
+    fn read_back(&self, root: &Path, plan: &FilegenPlan) -> Result<PortFact<()>, FilegenPortError> {
+        let observed_schema = verify_filegen_readback(root, plan).map_err(|err| {
+            FilegenPortError::from_run(APPLY_READBACK, EffectKind::ReadFiles, FILEGEN_APPLY_STATE_CODE, err)
+        })?;
+        Ok(PortFact::succeeded(
+            (),
+            APPLY_READBACK,
+            EffectKind::ReadFiles,
+            EffectOutput::Identity(observed_schema),
+        ))
+    }
+}
+
+enum FilegenCommandError {
+    Plan(PlanError),
+    Run(RunError),
+}
+
+impl From<PlanError> for FilegenCommandError {
+    fn from(error: PlanError) -> Self {
+        Self::Plan(error)
+    }
+}
+
+impl From<RunError> for FilegenCommandError {
+    fn from(error: RunError) -> Self {
+        Self::Run(error)
+    }
+}
+
+impl FilegenCommandError {
+    fn into_run(self) -> RunError {
+        match self {
+            Self::Plan(error) => {
+                RunError::Internal(format!("filegen effect plan rejected ({}): {error:?}", error.code()))
+            }
+            Self::Run(error) => error,
+        }
+    }
+}
+
+fn observe_filegen<T>(
+    plan: &EffectPlan,
+    observations: &mut Vec<Observation>,
+    result: Result<PortFact<T>, FilegenPortError>,
+) -> Result<T, RunError> {
+    match result {
+        Ok(fact) => {
+            observations.push(fact.observation);
+            Ok(fact.value)
+        }
+        Err(error) => {
+            let (observation, error) = error.into_parts();
+            observations.push(observation);
+            for remaining in plan.effects.iter().skip(observations.len()) {
+                observations.push(Observation {
+                    effect_id: remaining.effect_id.clone(),
+                    kind: remaining.kind,
+                    status: ObservationStatus::Skipped,
+                    output: EffectOutput::None,
+                    usage: EffectMeasure::Calls(0),
+                    diagnostics_code: Some("prior-effect-failed".to_string()),
+                });
+            }
+            match classify_observations(plan, observations) {
+                ApplicationOutcome::Failed { .. } => Err(error),
+                other => Err(RunError::Internal(format!("filegen observations were inconsistent: {other:?}"))),
+            }
+        }
+    }
+}
+
+fn complete_filegen(plan: &EffectPlan, observations: &[Observation]) -> Result<(), RunError> {
+    match classify_observations(plan, observations) {
+        ApplicationOutcome::Completed => Ok(()),
+        other => Err(RunError::Internal(format!("filegen observations were inconsistent: {other:?}"))),
+    }
+}
+
+fn spec<'a>(effect_id: &'a str, kind: EffectKind, expected_output: ExpectedOutput<'a>) -> EffectSpec<'a> {
+    EffectSpec {
+        effect_id,
+        kind,
+        limit: EffectMeasure::Calls(1),
+        expected_output,
+    }
+}
+
+pub fn cmd_filegen_plan(options: FilegenPlanOptions<'_>) -> Result<(), RunError> {
+    run_filegen_plan(&FsFilegenPort, options).map_err(FilegenCommandError::into_run)
+}
+
+fn run_filegen_plan(port: &impl FilegenPlanPort, options: FilegenPlanOptions<'_>) -> Result<(), FilegenCommandError> {
+    let effects = if options.plan_out.is_some() {
+        plan_effects(CommandFamily::Realization, &[
+            spec(INPUT_READ, EffectKind::ReadFiles, ExpectedOutput::None),
+            spec(PLAN_WRITE, EffectKind::WriteFiles, ExpectedOutput::None),
+            spec(PLAN_READBACK, EffectKind::ReadFiles, ExpectedOutput::None),
+        ])?
+    } else {
+        plan_effects(CommandFamily::Realization, &[spec(INPUT_READ, EffectKind::ReadFiles, ExpectedOutput::None)])?
+    };
+    let mut observations = Vec::with_capacity(effects.effects.len());
+    let inputs = observe_filegen(&effects, &mut observations, port.read_inputs(options.root, options.manifest))?;
+    let plan = plan_file_generation(FilegenPlanRequest {
+        declarations: inputs.declarations,
+        current_files: inputs.facts,
+    });
+    if let Some(path) = options.plan_out {
+        observe_filegen(&effects, &mut observations, port.write_plan(path, &plan))?;
+        observe_filegen(&effects, &mut observations, port.read_back_plan(path, &plan))?;
+    }
+    complete_filegen(&effects, &observations)?;
     render_filegen_plan(&plan, options.json)?;
     if plan.has_blockers() {
-        return classify_filegen_plan(Some(FILEGEN_PLAN_BLOCKERS_CODE));
+        Err(RunError::Reported(APPLY_FAILURE_EXIT_CODE).into())
+    } else {
+        Ok(())
     }
-    classify_filegen_plan(None)
 }
 
 pub fn cmd_filegen_apply(options: FilegenApplyOptions<'_>) -> Result<(), RunError> {
-    let reviewed_plan = read_json_file::<FilegenPlan>(options.reviewed_plan, "reviewed filegen plan")?;
-    let declarations = load_filegen_declarations(options.root, options.manifest)?;
-    let state = load_filegen_state(options.root)?;
-    let facts = current_file_facts(options.root, &declarations, &state)?;
+    run_filegen_apply(&FsFilegenPort, options).map_err(FilegenCommandError::into_run)
+}
+
+fn run_filegen_apply(
+    port: &impl FilegenApplyPort,
+    options: FilegenApplyOptions<'_>,
+) -> Result<(), FilegenCommandError> {
+    // Both phases are admitted before reading the reviewed plan or project.
+    let reads = plan_effects(CommandFamily::Realization, &[
+        spec(REVIEWED_READ, EffectKind::ReadFiles, ExpectedOutput::None),
+        spec(INPUT_READ, EffectKind::ReadFiles, ExpectedOutput::None),
+    ])?;
+    let writes = plan_effects(CommandFamily::Realization, &[
+        spec(APPLY_WRITE, EffectKind::WriteFiles, ExpectedOutput::None),
+        spec(APPLY_READBACK, EffectKind::ReadFiles, ExpectedOutput::Identity(FILEGEN_STATE_SCHEMA)),
+    ])?;
+    let mut read_observations = Vec::with_capacity(reads.effects.len());
+    let reviewed_plan = observe_filegen(&reads, &mut read_observations, port.read_plan(options.reviewed_plan))?;
+    let inputs = observe_filegen(&reads, &mut read_observations, port.read_inputs(options.root, options.manifest))?;
+    complete_filegen(&reads, &read_observations)?;
     let current_plan = plan_file_generation(FilegenPlanRequest {
-        declarations,
-        current_files: facts,
+        declarations: inputs.declarations,
+        current_files: inputs.facts,
     });
     if let Err(blockers) = verify_filegen_apply_plan(&reviewed_plan, &current_plan) {
         render_filegen_blockers(&blockers, options.json)?;
-        return Err(RunError::Reported(APPLY_FAILURE_EXIT_CODE));
+        return Err(RunError::Reported(APPLY_FAILURE_EXIT_CODE).into());
     }
-    apply_filegen_operations(options.root, &current_plan.operations)?;
-    write_filegen_state(options.root, &current_plan)?;
-    classify_filegen_apply(options.root, &current_plan)?;
-    render_filegen_plan(&current_plan, options.json)
+    let mut write_observations = Vec::with_capacity(writes.effects.len());
+    observe_filegen(&writes, &mut write_observations, port.apply(options.root, &current_plan))?;
+    observe_filegen(&writes, &mut write_observations, port.read_back(options.root, &current_plan))?;
+    complete_filegen(&writes, &write_observations)?;
+    render_filegen_plan(&current_plan, options.json)?;
+    Ok(())
 }
 
 fn load_filegen_declarations(root: &Path, manifest: &Path) -> Result<Vec<GeneratedFileDeclaration>, RunError> {
@@ -294,80 +588,37 @@ fn filegen_state_files_for_plan(plan: &FilegenPlan) -> BTreeMap<String, String> 
     files
 }
 
-/// Effect kind the apply reports for the files and state it writes.
-const FILEGEN_APPLY_EFFECT: &str = "write-files";
-/// Diagnostic code for a state file that does not read back as the plan.
+/// Diagnostic code for state or generated files that contradict the applied plan.
 const FILEGEN_APPLY_STATE_CODE: &str = "filegen-apply-state-mismatch";
 
-/// Classify the applied state before reporting the apply.
-///
-/// Writing the state returning success is not the fact that matters: the next
-/// run reads that file to decide what is already generated, so the fact is
-/// whether it reads back as the plan that was just applied.
-fn classify_filegen_apply(root: &Path, plan: &FilegenPlan) -> Result<(), RunError> {
-    let effect_plan =
-        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::Realization, &[
-            FILEGEN_APPLY_EFFECT,
-        ])
-        .ok_or_else(|| RunError::Internal("filegen apply effect plan exceeds its bound".to_string()))?;
-    let expected = filegen_state_files_for_plan(plan);
-    let is_matching = load_filegen_state(root).is_ok_and(|state| state.files == expected);
-    let observation = mantle_application_contract::Observation {
-        effect_id: mantle_application_contract::EffectId(String::from(FILEGEN_APPLY_EFFECT)),
-        status: if is_matching {
-            mantle_application_contract::ObservationStatus::Succeeded
-        } else {
-            mantle_application_contract::ObservationStatus::Failed
-        },
-        diagnostics_code: if is_matching {
-            None
-        } else {
-            Some(String::from(FILEGEN_APPLY_STATE_CODE))
-        },
-    };
-    match mantle_application_contract::classify_observations(&effect_plan, &[observation]) {
-        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
-        mantle_application_contract::ApplicationOutcome::Failed { .. } => {
-            Err(RunError::Internal("filegen state did not read back as the plan that was applied".to_string()))
+fn verify_filegen_readback(root: &Path, plan: &FilegenPlan) -> Result<String, RunError> {
+    let mismatch = || RunError::Internal("filegen state did not read back as the plan that was applied".to_string());
+    if !root.join(FILEGEN_STATE_FILE).is_file() {
+        return Err(mismatch());
+    }
+    let state = load_filegen_state(root)?;
+    if state.files != filegen_state_files_for_plan(plan) {
+        return Err(mismatch());
+    }
+    for operation in &plan.operations {
+        if !matches!(operation.action, FilegenAction::Create | FilegenAction::Update | FilegenAction::Unchanged) {
+            continue;
         }
-        other => Err(RunError::Internal(format!("filegen apply observations were inconsistent: {other:?}"))),
-    }
-}
-
-/// Effect identity of the filegen planning read.
-const FILEGEN_PLAN_EFFECT: &str = "read-files";
-
-/// Diagnostic code reported when the planned generation has blockers.
-const FILEGEN_PLAN_BLOCKERS_CODE: &str = "filegen-plan-blockers";
-
-/// Classify the plan read before its terminal report.
-///
-/// A plan with blockers keeps the exact `Reported` exit it already had; the
-/// decision moves into the observation instead of a bare error return.
-fn classify_filegen_plan(blocker_code: Option<&str>) -> Result<(), RunError> {
-    let plan = mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::Realization, &[
-        FILEGEN_PLAN_EFFECT,
-    ])
-    .ok_or_else(|| RunError::Internal("filegen plan effect plan exceeds its bound".to_string()))?;
-    let observation = mantle_application_contract::Observation {
-        effect_id: mantle_application_contract::EffectId(String::from(FILEGEN_PLAN_EFFECT)),
-        status: if blocker_code.is_some() {
-            mantle_application_contract::ObservationStatus::Failed
-        } else {
-            mantle_application_contract::ObservationStatus::Succeeded
-        },
-        diagnostics_code: blocker_code.map(String::from),
-    };
-    match mantle_application_contract::classify_observations(&plan, &[observation]) {
-        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
-        mantle_application_contract::ApplicationOutcome::Failed { .. } => match blocker_code {
-            Some(_) => Err(RunError::Reported(APPLY_FAILURE_EXIT_CODE)),
-            None => {
-                Err(RunError::Internal("filegen plan classification failed without a recorded failure".to_string()))
+        let fact = current_file_fact(root, &operation.target, &state)?;
+        let matches_plan = match (operation.materialization, fact.state) {
+            (GeneratedFileMaterialization::Copy, CurrentFileState::Managed { digest_blake3 }) => {
+                digest_blake3 == operation.desired_digest_blake3
             }
-        },
-        other => Err(RunError::Internal(format!("filegen plan observations were inconsistent: {other:?}"))),
+            (GeneratedFileMaterialization::Symlink, CurrentFileState::Symlink { target, managed }) => {
+                managed && target == operation.content
+            }
+            _ => false,
+        };
+        if !matches_plan {
+            return Err(mismatch());
+        }
     }
+    Ok(state.schema)
 }
 
 fn write_filegen_state(root: &Path, plan: &FilegenPlan) -> Result<(), RunError> {
@@ -548,16 +799,11 @@ mod tests {
     }
 
     #[test]
-    fn action_and_materialization_labels_are_stable() {
-        assert_eq!(action_label(FilegenAction::Create), "create");
-        assert_eq!(action_label(FilegenAction::Conflict), "conflict");
-        assert_eq!(materialization_label(GeneratedFileMaterialization::Copy), "copy");
-        assert_eq!(materialization_label(GeneratedFileMaterialization::Symlink), "symlink");
-    }
-
-    #[test]
     fn unsafe_targets_do_not_probe_outside_project_root() {
         let tmp = tempfile::tempdir().unwrap();
+        let project_root = tmp.path().join("project");
+        fs::create_dir(&project_root).unwrap();
+        fs::write(tmp.path().join("outside"), b"not part of project").unwrap();
         let state = FilegenState::default();
         let declarations = vec![GeneratedFileDeclaration {
             name: "escape".to_string(),
@@ -567,7 +813,7 @@ mod tests {
             contract: None,
         }];
 
-        let facts = current_file_facts(tmp.path(), &declarations, &state).unwrap();
+        let facts = current_file_facts(&project_root, &declarations, &state).unwrap();
 
         assert_eq!(facts[0].target, "../outside");
         assert_eq!(facts[0].state, CurrentFileState::Missing);
@@ -619,28 +865,154 @@ mod apply_state_classification_tests {
     }
 
     #[test]
-    fn an_applied_plan_that_reads_back_is_completed() {
+    fn applied_files_and_state_must_both_read_back() {
         let temp = tempfile::tempdir().unwrap();
-        let applied = plan(vec![operation("created.ncl", FilegenAction::Create, "aa")]);
+        let digest = blake3_hex(b"generated");
+        let applied = plan(vec![
+            operation("created.ncl", FilegenAction::Create, &digest),
+            operation("updated.ncl", FilegenAction::Update, &digest),
+        ]);
+        apply_filegen_operations(temp.path(), &applied.operations).unwrap();
         write_filegen_state(temp.path(), &applied).unwrap();
-        assert!(classify_filegen_apply(temp.path(), &applied).is_ok());
+        verify_filegen_readback(temp.path(), &applied).unwrap();
+
+        fs::write(temp.path().join("updated.ncl"), b"wrong bytes").unwrap();
+        assert!(verify_filegen_readback(temp.path(), &applied).is_err());
+        fs::write(temp.path().join("updated.ncl"), b"generated").unwrap();
+        fs::remove_file(temp.path().join("created.ncl")).unwrap();
+        assert!(verify_filegen_readback(temp.path(), &applied).is_err());
+        fs::write(temp.path().join("created.ncl"), b"generated").unwrap();
+        fs::remove_file(temp.path().join(FILEGEN_STATE_FILE)).unwrap();
+        assert!(verify_filegen_readback(temp.path(), &applied).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn changed_symlink_target_fails_applied_plan_readback() {
+        let temp = tempfile::tempdir().unwrap();
+        let target = "target-file";
+        let digest = blake3_hex(target.as_bytes());
+        let mut linked = operation("linked.ncl", FilegenAction::Create, &digest);
+        linked.materialization = GeneratedFileMaterialization::Symlink;
+        linked.content = target.to_string();
+        let applied = plan(vec![linked]);
+        FsFilegenPort.apply(temp.path(), &applied).unwrap();
+        verify_filegen_readback(temp.path(), &applied).unwrap();
+
+        let link = temp.path().join("linked.ncl");
+        fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink("other-target", &link).unwrap();
+        assert!(verify_filegen_readback(temp.path(), &applied).is_err());
     }
 
     #[test]
-    fn a_plan_without_written_state_is_rejected() {
+    fn other_state_and_partial_state_fail_closed() {
         let temp = tempfile::tempdir().unwrap();
-        let applied = plan(vec![operation("created.ncl", FilegenAction::Create, "aa")]);
-        let error = classify_filegen_apply(temp.path(), &applied).expect_err("missing state must fail closed");
-        assert!(error.to_string().contains("did not read back"), "{error}");
-    }
-
-    #[test]
-    fn state_written_for_another_plan_is_rejected() {
-        let temp = tempfile::tempdir().unwrap();
-        let written = plan(vec![operation("created.ncl", FilegenAction::Create, "aa")]);
-        let other = plan(vec![operation("created.ncl", FilegenAction::Create, "zz")]);
+        let digest = blake3_hex(b"generated");
+        let written = plan(vec![operation("created.ncl", FilegenAction::Create, &digest)]);
+        let other = plan(vec![operation("different.ncl", FilegenAction::Create, &digest)]);
+        apply_filegen_operations(temp.path(), &written.operations).unwrap();
         write_filegen_state(temp.path(), &written).unwrap();
-        assert!(classify_filegen_apply(temp.path(), &other).is_err());
-        assert!(classify_filegen_apply(temp.path(), &written).is_ok());
+        assert!(verify_filegen_readback(temp.path(), &other).is_err());
+        let partial = plan(vec![
+            operation("created.ncl", FilegenAction::Create, &digest),
+            operation("missing.ncl", FilegenAction::Create, &digest),
+        ]);
+        assert!(verify_filegen_readback(temp.path(), &partial).is_err());
+        verify_filegen_readback(temp.path(), &written).unwrap();
+    }
+
+    #[test]
+    fn actual_readback_rejects_wrong_identity_authority_output_and_limit() {
+        let temp = tempfile::tempdir().unwrap();
+        let digest = blake3_hex(b"generated");
+        let applied = plan(vec![operation("created.ncl", FilegenAction::Create, &digest)]);
+        FsFilegenPort.apply(temp.path(), &applied).unwrap();
+        let observed = FsFilegenPort.read_back(temp.path(), &applied).unwrap().observation;
+        let effects = plan_effects(CommandFamily::Realization, &[spec(
+            APPLY_READBACK,
+            EffectKind::ReadFiles,
+            ExpectedOutput::Identity(FILEGEN_STATE_SCHEMA),
+        )])
+        .unwrap();
+        assert!(matches!(
+            classify_observations(&effects, std::slice::from_ref(&observed)),
+            ApplicationOutcome::Completed
+        ));
+
+        let mut wrong = observed.clone();
+        wrong.effect_id = EffectId("different-effect".to_string());
+        assert!(matches!(classify_observations(&effects, &[wrong]), ApplicationOutcome::Rejected { .. }));
+        let mut wrong = observed.clone();
+        wrong.kind = EffectKind::WriteFiles;
+        assert!(matches!(classify_observations(&effects, &[wrong]), ApplicationOutcome::Contradicted { .. }));
+        let mut wrong = observed.clone();
+        wrong.output = EffectOutput::Identity("different-state".to_string());
+        assert!(matches!(classify_observations(&effects, &[wrong]), ApplicationOutcome::Contradicted { .. }));
+        let mut wrong = observed;
+        wrong.usage = EffectMeasure::Calls(2);
+        assert!(matches!(classify_observations(&effects, &[wrong]), ApplicationOutcome::Contradicted { .. }));
+    }
+
+    #[test]
+    fn plan_write_failure_is_classified_before_reporting() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("plan.json");
+        fs::create_dir(&path).unwrap();
+        let effects =
+            plan_effects(CommandFamily::Realization, &[spec(PLAN_WRITE, EffectKind::WriteFiles, ExpectedOutput::None)])
+                .unwrap();
+        let mut observations = Vec::new();
+        let error = observe_filegen(&effects, &mut observations, FsFilegenPort.write_plan(&path, &plan(vec![])))
+            .expect_err("failed publication cannot report a successful plan");
+        assert_eq!(error.kind(), "internal");
+        assert_eq!(observations[0].diagnostics_code.as_deref(), Some("filegen-plan-write"));
+        assert!(matches!(classify_observations(&effects, &observations), ApplicationOutcome::Failed { .. }));
+    }
+
+    #[test]
+    fn tampered_published_plan_fails_real_readback() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("plan.json");
+        let written = plan(vec![operation("created.ncl", FilegenAction::Create, "aa")]);
+        let changed = plan(vec![operation("created.ncl", FilegenAction::Create, "bb")]);
+        FsFilegenPort.write_plan(&path, &written).unwrap();
+        write_json_file(&path, &changed, "filegen plan").unwrap();
+        let effects = plan_effects(CommandFamily::Realization, &[spec(
+            PLAN_READBACK,
+            EffectKind::ReadFiles,
+            ExpectedOutput::None,
+        )])
+        .unwrap();
+        let mut observations = Vec::new();
+        observe_filegen(&effects, &mut observations, FsFilegenPort.read_back_plan(&path, &written))
+            .expect_err("a substituted plan cannot be reported as published");
+        assert_eq!(observations[0].diagnostics_code.as_deref(), Some("filegen-plan-readback-mismatch"));
+        assert!(matches!(classify_observations(&effects, &observations), ApplicationOutcome::Failed { .. }));
+    }
+
+    #[test]
+    fn partial_apply_write_is_observed_as_failure() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join("blocked"), b"not a directory").unwrap();
+        let digest = blake3_hex(b"generated");
+        let partial = plan(vec![
+            operation("first.ncl", FilegenAction::Create, &digest),
+            operation("blocked/second.ncl", FilegenAction::Create, &digest),
+        ]);
+        let effects = plan_effects(CommandFamily::Realization, &[spec(
+            APPLY_WRITE,
+            EffectKind::WriteFiles,
+            ExpectedOutput::None,
+        )])
+        .unwrap();
+        let mut observations = Vec::new();
+        let error = observe_filegen(&effects, &mut observations, FsFilegenPort.apply(temp.path(), &partial))
+            .expect_err("partial write cannot report success");
+        assert_eq!(error.kind(), "internal");
+        assert_eq!(observations[0].diagnostics_code.as_deref(), Some("filegen-files-write"));
+        assert_eq!(fs::read(temp.path().join("first.ncl")).unwrap(), b"generated");
+        assert!(!temp.path().join(FILEGEN_STATE_FILE).exists());
+        assert!(matches!(classify_observations(&effects, &observations), ApplicationOutcome::Failed { .. }));
     }
 }

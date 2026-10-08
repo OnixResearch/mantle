@@ -244,11 +244,16 @@ impl SemanticGraph {
         Ok(())
     }
 
-    pub fn resolve_identity(&self, query: &str) -> Option<String> {
-        if self.nodes.iter().any(|node| node.id == query) {
-            return Some(query.to_string());
+    /// Resolve one query without copying its canonical node identity.
+    pub fn canonical_identity(&self, query: &str) -> Option<&str> {
+        if let Some(node) = self.nodes.iter().find(|node| node.id == query) {
+            return Some(node.id.as_str());
         }
-        self.aliases.iter().find(|alias| alias.alias == query).map(|alias| alias.target.clone())
+        self.aliases.iter().find(|alias| alias.alias == query).map(|alias| alias.target.as_str())
+    }
+
+    pub fn resolve_identity(&self, query: &str) -> Option<String> {
+        self.canonical_identity(query).map(str::to_owned)
     }
 
     pub fn graph_for_root(&self, query: &str) -> Result<GraphQueryResult<'_>, SemanticGraphError> {

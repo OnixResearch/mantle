@@ -863,9 +863,7 @@ mod tests {
         write_file(&physical.join("AndroidManifest.xml"), b"mutated after successful admission");
         assert!(admit_prepared(args.clone(), entries.clone(), facts.clone()).await.is_err());
         assert_eq!(fs::read(physical.join("AndroidManifest.xml")).unwrap(), b"mutated after successful admission");
-        let mut temporary_permissions = fs::metadata(&args.store).unwrap().permissions();
-        temporary_permissions.set_readonly(false);
-        fs::set_permissions(&args.store, temporary_permissions).unwrap();
+        prepare_fixture_cleanup(&args.store).unwrap();
         fs::remove_dir_all(&args.store).unwrap();
         fs::rename(&quarantined, &args.store).unwrap();
         assert_eq!(observe_nar(&physical).await.unwrap(), facts[0]);

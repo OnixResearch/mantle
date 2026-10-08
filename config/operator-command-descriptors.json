@@ -562,6 +562,29 @@
     "supports_json": true
   },
   {
+    "path": "bootstrap elf-relocate",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--depth",
+      "--help",
+      "--json",
+      "--log-level",
+      "--needed",
+      "--nix-compat",
+      "--runpath",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Rewrite declared dynamic ELF references before a build output is published",
+    "supports_json": true
+  },
+  {
     "path": "bootstrap full-source-provider-admit",
     "aliases": [],
     "flags": [
@@ -799,6 +822,7 @@
       "--builder",
       "--builder-arg",
       "--builder-program",
+      "--causal-trace",
       "--evaluation-stream",
       "--fix",
       "--help",
@@ -810,6 +834,8 @@
       "--log-level",
       "--nix-compat",
       "--no-substitute",
+      "--offline-source-manifest",
+      "--offline-source-manifest-blake3",
       "--offline-source-preflight",
       "--plan",
       "--remote-build-time-secs",
@@ -830,6 +856,7 @@
       "--trusted-builder-key",
       "--trusted-public-keys",
       "--verbose",
+      "--watch",
       "-I",
       "-h",
       "-j",
@@ -918,6 +945,7 @@
       "--log-level",
       "--nix-compat",
       "--profile",
+      "--readiness-socket",
       "--state-dir",
       "--store",
       "--store-backend",
@@ -3015,6 +3043,71 @@
     "supports_json": true
   },
   {
+    "path": "remote live",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Serve or follow transient build facts outside build and store authority",
+    "supports_json": true
+  },
+  {
+    "path": "remote live serve",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--socket",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Serve bounded live build facts over a local Unix socket",
+    "supports_json": true
+  },
+  {
+    "path": "remote live subscribe",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--job",
+      "--json",
+      "--kind",
+      "--log-level",
+      "--nix-compat",
+      "--owner",
+      "--socket",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Subscribe to the current matching set and later changes as NDJSON",
+    "supports_json": true
+  },
+  {
     "path": "remote serve",
     "aliases": [],
     "flags": [
@@ -3492,9 +3585,13 @@
     "flags": [
       "--base-store",
       "--bootstrap-source",
+      "--excluded-vendor-deps",
       "--help",
       "--include-bundle",
       "--json",
+      "--lock-vendor-output",
+      "--lock-vendor-producer",
+      "--lock-vendor-selected-table",
       "--log-level",
       "--mantle-source",
       "--mode",
@@ -3555,6 +3652,7 @@
       "--from",
       "--help",
       "--json",
+      "--lock-vendor-output",
       "--log-level",
       "--nix-compat",
       "--state-dir",
@@ -3588,6 +3686,30 @@
       "-v"
     ],
     "help": "Import a source bundle into Mantle source state",
+    "supports_json": true
+  },
+  {
+    "path": "source bundle import-store-path",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--logical",
+      "--nix-compat",
+      "--physical",
+      "--pin",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--trusted-public-keys",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Attest a pre-existing physical output using its signed PathInfo and actual NAR before pinning source state",
     "supports_json": true
   },
   {
@@ -3650,6 +3772,7 @@
       "--store",
       "--store-backend",
       "--store-prefix",
+      "--trusted-public-keys",
       "--verbose",
       "-I",
       "-h",
@@ -3971,6 +4094,8 @@
       "--json",
       "--log-level",
       "--nix-compat",
+      "--owner",
+      "--reason",
       "--state-dir",
       "--store",
       "--store-backend",
@@ -4105,6 +4230,8 @@
       "--json",
       "--log-level",
       "--nix-compat",
+      "--owner",
+      "--reason",
       "--state-dir",
       "--store",
       "--store-backend",

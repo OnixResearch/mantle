@@ -12,6 +12,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -20,6 +21,7 @@ use snix_build::buildservice::BuildOutput;
 use snix_build::buildservice::BuildRequest;
 use snix_build::buildservice::BuildResult;
 use snix_build::buildservice::BuildService;
+use tokio::sync::watch;
 use tracing::info;
 use url::Url;
 
@@ -411,6 +413,12 @@ fn set_executable_mode(_path: &Path) -> Result<(), FetchError> {
     Ok(())
 }
 
+/// A panicked fetch owner may have left a blocking download running. This
+/// receipt forbids treating cancellation as observed or reusing its slot.
+#[derive(Debug, thiserror::Error)]
+#[error("watch fetch owner stopped before blocking teardown was observed: {0}")]
+pub struct UnobservedWatchFetch(pub String);
+
 // ── FetchBuildService ─────────────────────────────────────────────────
 
 /// `BuildService` implementation for fetcher derivations.
@@ -423,9 +431,10 @@ fn set_executable_mode(_path: &Path) -> Result<(), FetchError> {
 ///
 /// Non-fetch requests are rejected with an error — use
 /// `DispatchBuildService` to route between fetch and sandbox services.
+#[derive(Clone)]
 pub struct FetchBuildService {
     store: crunch_store::BuildServiceStore,
-    source_overrides: Vec<FetchSourceOverride>,
+    source_overrides: Arc<[FetchSourceOverride]>,
     source_policy: FetchSourcePolicy,
 }
 
@@ -434,14 +443,14 @@ impl FetchBuildService {
     pub fn new(store: crunch_store::BuildServiceStore) -> Self {
         Self {
             store,
-            source_overrides: Vec::new(),
+            source_overrides: Arc::from([]),
             source_policy: FetchSourcePolicy::AllowNetwork,
         }
     }
 
     pub fn with_source_overrides(mut self, source_overrides: Vec<FetchSourceOverride>) -> Self {
         assert!(source_overrides.len() <= MAX_SOURCE_OVERRIDES, "source override list exceeds fixed bound");
-        self.source_overrides = source_overrides;
+        self.source_overrides = source_overrides.into();
         self
     }
 
@@ -449,11 +458,14 @@ impl FetchBuildService {
         self.source_policy = source_policy;
         self
     }
-}
-
-#[async_trait]
-impl BuildService for FetchBuildService {
-    async fn do_build(&self, request: BuildRequest) -> io::Result<BuildResult> {
+    async fn do_fetch(
+        &self,
+        request: BuildRequest,
+        cancellation: Option<&watch::Receiver<bool>>,
+    ) -> io::Result<BuildResult> {
+        if cancellation.is_some_and(fetch_watch_cancelled) {
+            return Err(cancelled_fetch());
+        }
         // Tiger Style: assert the request has at least one output.
         debug_assert!(!request.outputs.is_empty(), "fetch request must have at least one output");
 
@@ -469,6 +481,9 @@ impl BuildService for FetchBuildService {
         let mut selected_kind = None;
         let mut last_unavailable_error = None;
         for (index, kind) in ordered_kinds.iter().enumerate() {
+            if cancellation.is_some_and(fetch_watch_cancelled) {
+                return Err(cancelled_fetch());
+            }
             remove_fetch_output(&out_path).map_err(io::Error::other)?;
             let candidate = kind.candidate().to_string();
             if let Some(source_override) = source_override_for_kind(kind, &self.source_overrides) {
@@ -520,6 +535,9 @@ impl BuildService for FetchBuildService {
                 }
                 Err(error) => return Err(io::Error::other(error)),
             }
+            if cancellation.is_some_and(fetch_watch_cancelled) {
+                return Err(cancelled_fetch());
+            }
         }
         let kind = selected_kind.ok_or_else(|| match last_unavailable_error {
             Some(error) => io::Error::other(error),
@@ -532,6 +550,9 @@ impl BuildService for FetchBuildService {
                 primary_kind.source_identity()
             )),
         })?;
+        if cancellation.is_some_and(fetch_watch_cancelled) {
+            return Err(cancelled_fetch());
+        }
 
         // Verify output was produced.
         if !out_path.exists() {
@@ -544,6 +565,9 @@ impl BuildService for FetchBuildService {
             .ingest_host_path(&out_path)
             .await
             .map_err(|error| io::Error::other(format!("ingesting fetch output: {error}")))?;
+        if cancellation.is_some_and(fetch_watch_cancelled) {
+            return Err(cancelled_fetch());
+        }
 
         // One BuildOutput per requested output.
         // Fetcher outputs have no self-references → empty needles.
@@ -568,7 +592,38 @@ impl BuildService for FetchBuildService {
         } else {
             None
         };
+        if cancellation.is_some_and(fetch_watch_cancelled) {
+            return Err(cancelled_fetch());
+        }
         Ok(BuildResult { outputs, log })
+    }
+}
+
+fn fetch_watch_cancelled(receiver: &watch::Receiver<bool>) -> bool {
+    *receiver.borrow() || receiver.has_changed().is_err()
+}
+
+fn cancelled_fetch() -> io::Error {
+    io::Error::new(io::ErrorKind::Interrupted, "watch fetch cancelled before output admission")
+}
+
+#[async_trait]
+impl BuildService for FetchBuildService {
+    async fn do_build(&self, request: BuildRequest) -> io::Result<BuildResult> {
+        self.do_fetch(request, None).await
+    }
+
+    async fn do_build_cancellable(
+        &self,
+        request: BuildRequest,
+        cancellation: watch::Receiver<bool>,
+    ) -> io::Result<BuildResult> {
+        // The owner outlives an aborted awaiting Worker task. In particular,
+        // dropping a spawn_blocking JoinHandle does NOT stop its fetch.
+        let owner = self.clone();
+        tokio::spawn(async move { owner.do_fetch(request, Some(&cancellation)).await })
+            .await
+            .map_err(|error| io::Error::other(UnobservedWatchFetch(error.to_string())))?
     }
 }
 
@@ -986,5 +1041,64 @@ mod tests {
         } else {
             panic!("expected File node");
         }
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cancelled_watch_fetch_drains_blocking_download_before_reporting_without_cas() {
+        use std::io::Read;
+        use std::io::Write;
+        use std::time::Duration;
+
+        use snix_castore::blobservice::BlobService;
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/payload", listener.local_addr().unwrap());
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let server = std::thread::spawn(move || {
+            let (mut connection, _) = listener.accept().unwrap();
+            let mut request = [0_u8; b"GET /payload ".len()];
+            connection.read_exact(&mut request).unwrap();
+            assert_eq!(request.as_slice(), b"GET /payload ");
+            started_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+            connection
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 7\r\nConnection: close\r\n\r\npayload")
+                .unwrap();
+        });
+
+        let blobs = MemoryBlobService::default();
+        let fetch = test_fetch_service(blobs.clone(), tmp_ds());
+        let request = fetch_request(vec![env("url", &url)]);
+        let (cancel_tx, receiver) = watch::channel(false);
+        let mut pending = tokio::spawn(async move { fetch.do_build_cancellable(request, receiver).await });
+        tokio::time::timeout(Duration::from_secs(5), started_rx).await.unwrap().unwrap();
+        cancel_tx.send(true).unwrap();
+        assert!(tokio::time::timeout(Duration::from_millis(200), &mut pending).await.is_err());
+        let digest = blake3::hash(b"payload").into();
+        assert!(!blobs.has(&digest).await.unwrap(), "cancelled in-flight fetch wrote CAS early");
+        release_tx.send(()).unwrap();
+        let error = tokio::time::timeout(Duration::from_secs(5), pending).await.unwrap().unwrap().unwrap_err();
+        server.join().unwrap();
+        assert_eq!(error.kind(), io::ErrorKind::Interrupted);
+        assert!(!blobs.has(&digest).await.unwrap(), "cancelled fetch admitted late CAS content");
+    }
+
+    #[tokio::test]
+    async fn successful_watch_fetch_returns_ingested_content() {
+        use snix_castore::blobservice::BlobService;
+
+        let blobs = MemoryBlobService::default();
+        let fetch = test_fetch_service(blobs.clone(), tmp_ds());
+        let source = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(source.path(), b"watch-fetch-complete").unwrap();
+        let url = format!("file://{}", source.path().display());
+        let request = fetch_request(vec![env("url", &url)]);
+        let (_sender, receiver) = watch::channel(false);
+        let result = fetch.do_build_cancellable(request, receiver).await.unwrap();
+        let Node::File { digest, size, .. } = &result.outputs[0].node else {
+            panic!("watch fetch did not return the file it ingested");
+        };
+        assert_eq!(*size, b"watch-fetch-complete".len() as u64);
+        assert!(blobs.has(digest).await.unwrap());
     }
 }

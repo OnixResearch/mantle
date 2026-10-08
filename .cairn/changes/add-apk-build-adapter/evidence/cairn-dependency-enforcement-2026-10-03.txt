@@ -1,0 +1,11 @@
+2026-10-03 UTC — add-apk-build-adapter dependency enforcement correction
+
+The earlier cairn-gate-boundary-2026-10-03.txt records the pre-metadata state: `cairn change depend list` returned [] even though proposal.md:31-34 required `adopt-android-prebuilt-toolchain-sources` to archive first. That earlier observation remains historical, not the current dependency state. Cairn's README change-dependencies section says local dependencies belong in metadata.json; archived dependencies are satisfied, active dependencies block sync and archive. The repository already uses `depends_on` metadata for other changes, including adopt-casita-store-backend.
+
+Added only `.cairn/changes/add-apk-build-adapter/metadata.json` with `depends_on: ["adopt-android-prebuilt-toolchain-sources"]`. No workflow profile or policy changes. Full read-only Cairn CLI command/output/exit transcripts generated against the new metadata (adjacent files, suffix `-dependency-2026-10-03.txt`):
+- `cairn validate --root .`: exit 0; issues/change_issues/findings all empty.
+- `cairn gate proposal|design|tasks add-apk-build-adapter --root .`: each verdict PASS and exit 0; tasks stage counts 23 done, 0 todo, preserving checked 5.5.
+- `cairn change depend list add-apk-build-adapter --root .`: dependency exactly `adopt-android-prebuilt-toolchain-sources`, valid true, exit 0.
+- `cairn readiness add-apk-build-adapter --root . --format json`: read-only command exit 0 means the report was produced, NOT ready. Stages proposal/design/tasks are ready; sync and archive states are BLOCKED. The archive-stage reason is `add-apk-build-adapter: change_dependency.unsatisfied_dependency: dependency adopt-android-prebuilt-toolchain-sources is not archived`, with `mutation_authorized=false`. This is the exact missing enforcement, and permits structural task gates while requiring upstream archive before parent sync/archive.
+
+No `cairn archive`, `--execute`, Cargo/Nix product build, source edit, Git index mutation, Android signed-APK proof, install, or runtime claim was performed. The upstream change remains active; the independent `prove-apk-adapter-real-build` actual signed APK tasks remain open. Do not describe these structural gates as a product build or the adapter as archived.

@@ -132,6 +132,7 @@ mod tests {
                 chunk_count: None,
                 blake3: "b".repeat(64),
             }],
+            store_path_attestation: None,
         }
     }
 

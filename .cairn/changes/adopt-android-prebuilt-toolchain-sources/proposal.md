@@ -13,7 +13,7 @@ This change admits those sources with explicit identity binding and explicit non
 - Add a typed Nickel source manifest for prebuilt Android toolchain components (JDK, SDK command-line tools, build-tools, platform `android.jar`).
 - Pin every component by upstream URL, SHA-256, and BLAKE3 record identity.
 - Bind every derivation that executes a prebuilt tool to an explicit toolchain identity record. Digest drift fails closed before execution.
-- Record the trust decision in `adr/0079-admit-prebuilt-android-toolchain-through-fixed-output-sources.md`.
+- Keep the published source-v1 trust decision in `adr/0089-admit-prebuilt-android-toolchain-through-fixed-output-sources.md` intact. Proposed `adr/0110-separate-reviewed-android-metadata-from-source-identity.md` records this change's separate reviewed prebuilt-record-v1 metadata preimage; neither identity substitutes for the other. ADR 0110 and the corresponding lifecycle task remain open pending merged-boundary proof.
 - Keep offline replay working: admitted records MUST flow through the existing `SourceFetchOverridePlan` handoff so proofs need no live network after first fetch.
 - Add positive and negative contract tests for the manifest and the identity binding.
 
@@ -35,5 +35,5 @@ This change admits those sources with explicit identity binding and explicit non
 ## Impact
 
 - **Affected specs:** `android-adapter` (new)
-- **Affected code:** `lib/android/sources.ncl` (new), `lib/android.ncl` (new), `crunch-eval` embedded stdlib inclusion, contract tests, `adr/0079`
+- **Affected code:** `lib/android/sources.ncl` (reviewed namespace), `lib/android.ncl`, `crunch-eval` embedded stdlib inclusion, contract/offline fixture tests; proposed `adr/0110` covers the reviewed identity, while published `adr/0089` remains source-v1 authority
 - **Compatibility:** additive; no existing derivation or fetch behavior changes

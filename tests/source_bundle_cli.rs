@@ -103,6 +103,36 @@ fn cached_https_export_command(state_dir: &Path, root: &Path) -> Command {
     command
 }
 
+fn write_dynamic_plan_output_build_root(root: &Path, payload: &Path) {
+    let payload_url = format!("file://{}", payload.display());
+    let source = format!(
+        r#"let mantle = import "lib.ncl" in
+let source = mantle.fetchurl {{
+  url = "{payload_url}",
+  hash = "{TEST_FIXED_OUTPUT_HASH}",
+  name = "{TEST_FETCH_NAME}",
+}} in
+{{
+  name = "consumer",
+  builder = "/bin/sh",
+  inputs = [{{
+    name = "app",
+    producer = {{
+      name = "producer",
+      builder = "/bin/sh",
+      outputs = ["out", "plan"],
+      dynamic_plan_outputs = ["plan"],
+      inputs = [source],
+    }},
+    plan_output = "plan",
+    root = "unit.app",
+    unit_output = "out",
+  }}],
+}}
+"#
+    );
+    std::fs::write(root, source).expect("write dynamic plan-output build root");
+}
 fn first_state_record_path(state_dir: &Path) -> PathBuf {
     let records_dir = state_records_dir(state_dir);
     std::fs::read_dir(records_dir)
@@ -192,6 +222,21 @@ fn source_bundle_cli_round_trips_imported_source_state() {
     );
     assert_eq!(import["imported_count"].as_u64(), Some(EXPECTED_RECORD_COUNT));
     assert_eq!(import["pinned"], true);
+
+    let replay = read_json_stdout(
+        crunch_cmd()
+            .arg("--json")
+            .arg("--state-dir")
+            .arg(&state_dir)
+            .args(["source", "bundle", "import", "--from"])
+            .arg(&bundle_path)
+            .arg("--pin")
+            .output()
+            .expect("replay source bundle import"),
+    );
+    assert_eq!(replay["imported_count"].as_u64(), Some(0));
+    assert_eq!(replay["skipped_present_count"].as_u64(), Some(EXPECTED_RECORD_COUNT));
+    assert_eq!(replay["manifest_blake3"], import["manifest_blake3"]);
 
     let ready = read_json_stdout(
         crunch_cmd()
@@ -354,6 +399,72 @@ fn source_bundle_cli_preflight_reports_network_required_before_build() {
             .expect("next-action command hint")
             .contains("--offline-source-preflight")
     );
+}
+
+#[test]
+fn source_bundle_cli_preflights_dynamic_producer_sources_before_and_after_import() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let payload = temp.path().join("payload.txt");
+    let root = temp.path().join("root.ncl");
+    let state_dir = temp.path().join("state");
+    let bundle_path = temp.path().join("bundle.json");
+    std::fs::write(&payload, TEST_SOURCE_BYTES).expect("write source payload");
+    write_dynamic_plan_output_build_root(&root, &payload);
+
+    let missing = read_json_stdout_from_failure(
+        crunch_cmd()
+            .arg("--json")
+            .arg("--state-dir")
+            .arg(&state_dir)
+            .args(["source", "bundle", "preflight", "--build-root"])
+            .arg(&root)
+            .args(["--import-path", "lib"])
+            .output()
+            .expect("preflight dynamic source before import"),
+    );
+    assert_eq!(missing["ready_class"], "missing");
+    assert_eq!(missing["missing_records"].as_array().expect("missing source records").len(), 1);
+
+    let exported = read_json_stdout(
+        crunch_cmd()
+            .arg("--json")
+            .arg("--state-dir")
+            .arg(&state_dir)
+            .args(["source", "bundle", "export", "--build-root"])
+            .arg(&root)
+            .args(["--import-path", "lib", "--to"])
+            .arg(&bundle_path)
+            .output()
+            .expect("export dynamic producer source"),
+    );
+    assert_eq!(exported["record_count"], EXPECTED_RECORD_COUNT);
+    let imported = read_json_stdout(
+        crunch_cmd()
+            .arg("--json")
+            .arg("--state-dir")
+            .arg(&state_dir)
+            .args(["source", "bundle", "import", "--from"])
+            .arg(&bundle_path)
+            .arg("--pin")
+            .output()
+            .expect("pin dynamic producer source"),
+    );
+    assert_eq!(imported["imported_count"], EXPECTED_RECORD_COUNT);
+
+    let ready = read_json_stdout(
+        crunch_cmd()
+            .arg("--json")
+            .arg("--state-dir")
+            .arg(&state_dir)
+            .args(["source", "bundle", "preflight", "--build-root"])
+            .arg(&root)
+            .args(["--import-path", "lib"])
+            .output()
+            .expect("preflight dynamic source after import"),
+    );
+    assert_eq!(ready["ready_class"], "ready");
+    assert_eq!(ready["record_count"], exported["record_count"]);
+    assert!(ready["missing_records"].as_array().expect("ready source records").is_empty());
 }
 
 #[test]

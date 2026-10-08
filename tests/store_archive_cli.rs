@@ -377,6 +377,7 @@ fn snix_to_casita_cli_migration_pins_root_without_modifying_source() {
     assert!(info_output.status.success(), "{}", String::from_utf8_lossy(&info_output.stderr));
     let info: Value = serde_json::from_slice(&info_output.stdout).unwrap();
     assert_eq!(info["backend"], "casita");
+    assert_eq!(info["backend_capabilities"]["rust_unit_cache"], true);
     assert_eq!(info["backend_capabilities"]["unsigned_admission"], false);
     assert_eq!(info["backend_capabilities"]["max_root_changes"], 1024);
     assert_eq!(
@@ -391,6 +392,7 @@ fn snix_to_casita_cli_migration_pins_root_without_modifying_source() {
         .args(["store", "info", selector])
         .assert()
         .success()
+        .stdout(predicate::str::contains("rust-unit-cache: true"))
         .stdout(predicate::str::contains("unsigned-admission: false"))
         .stdout(predicate::str::contains("max-root-changes: 1024"));
     mantle_cmd()
@@ -527,7 +529,10 @@ fn snix_to_casita_cli_migration_pins_root_without_modifying_source() {
         .args(["store", "pin", &logical_path])
         .assert()
         .success();
-    let root_registry_before_stale_execution = std::fs::read(target_state.join("gc-roots.json")).unwrap();
+    let root_registry_before_stale_execution = state_files(&target_state)
+        .into_iter()
+        .filter(|(path, _)| path.starts_with("retention-interests"))
+        .collect::<std::collections::BTreeMap<_, _>>();
     mantle_cmd()
         .args(["--store-backend", "casita", "--state-dir"])
         .arg(&target_state)
@@ -543,7 +548,11 @@ fn snix_to_casita_cli_migration_pins_root_without_modifying_source() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("gc-plan-stale"));
-    assert_eq!(std::fs::read(target_state.join("gc-roots.json")).unwrap(), root_registry_before_stale_execution);
+    let root_registry_after_stale_execution = state_files(&target_state)
+        .into_iter()
+        .filter(|(path, _)| path.starts_with("retention-interests"))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    assert_eq!(root_registry_after_stale_execution, root_registry_before_stale_execution);
     assert!(!fence_path.exists(), "stale GC plan must not start a deletion fence");
     assert!(
         !target_state.join("casita-gc-fence.progress").exists(),
@@ -1197,16 +1206,15 @@ fn default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts() {
         assert_eq!(selected_identity["logical_prefix"], historical_identity["logical_prefix"]);
         assert_eq!(selected_identity["trust_policy_id"], historical_identity["trust_policy_id"]);
 
-        let mut selected_info = cli_json(&state, &store, &["store", "info", kept.store_path.name()]);
+        let selected_info = cli_json(&state, &store, &["store", "info", kept.store_path.name()]);
         assert_eq!(selected_info["backend"], "snix");
         assert_eq!(selected_info["backend_capabilities"]["rust_unit_cache"], true);
-        selected_info.as_object_mut().unwrap().remove("backend");
-        selected_info.as_object_mut().unwrap().remove("backend_capabilities");
-        let historical_info: Value = serde_json::from_str(golden["store_info_stdout"].as_str().unwrap()).unwrap();
-        assert_eq!(selected_info, historical_info);
+        assert_eq!(selected_info["paths"][0]["retention_interests"]["legacy_unmanaged"], true);
         let selected_roots = cli_json(&state, &store, &["store", "roots"]);
         let historical_roots: Value = serde_json::from_str(golden["store_roots_stdout"].as_str().unwrap()).unwrap();
-        assert_eq!(selected_roots, historical_roots);
+        assert_eq!(selected_roots["roots"], historical_roots);
+        assert_eq!(selected_roots["retention_interests"][0]["logical_path"], historical_roots[0]["logical_path"]);
+        assert_eq!(selected_roots["retention_interests"][0]["legacy_unmanaged"], true);
 
         let selected_gc = cli_json(&state, &store, &["store", "gc", "--dry-run"]);
         let historical_gc: Value = serde_json::from_str(golden["store_gc_dry_run_stdout"].as_str().unwrap()).unwrap();

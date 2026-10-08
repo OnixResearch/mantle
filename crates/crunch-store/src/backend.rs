@@ -114,3 +114,45 @@ impl FromStr for StoreBackend {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::StoreBackend;
+    use crate::StoreConfig;
+
+    #[test]
+    fn undeclared_overlay_rejects_before_accessing_writable_or_base_state() {
+        let root = tempfile::tempdir().unwrap();
+        let writable = root.path().join("not-a-state-directory");
+        let base = root.path().join("unopened-base");
+        std::fs::write(&writable, b"original").unwrap();
+        let mut profile = StoreBackend::Snix.profile();
+        profile.overlay_composition = false;
+
+        let error = StoreConfig::preflight_backend_identity_with_profile(
+            StoreBackend::Snix,
+            profile,
+            &writable,
+            "/nix/store",
+            std::slice::from_ref(&base),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("snix-overlay-unsupported"), "{error}");
+        assert_eq!(std::fs::read(&writable).unwrap(), b"original");
+        assert!(!base.exists());
+
+        // This unusable state would fail the identity read if the capability
+        // gate were moved behind even the first layer's preflight.
+        profile.overlay_composition = true;
+        let error = StoreConfig::preflight_backend_identity_with_profile(
+            StoreBackend::Snix,
+            profile,
+            &writable,
+            "/nix/store",
+            std::slice::from_ref(&base),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("reading state directory"), "{error}");
+        assert!(!base.exists());
+    }
+}

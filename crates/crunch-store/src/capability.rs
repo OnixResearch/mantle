@@ -351,7 +351,6 @@ impl StoreHandle {
             pathinfo_service: self.pathinfo_service(),
         }
     }
-
     #[must_use]
     pub fn into_pipeline_store_parts(mut self) -> PipelineStoreParts {
         let (ca_mappings, base_ca_mappings) = self.ca_mapping_snapshots();
@@ -459,6 +458,14 @@ impl BuildStore {
 
     pub async fn read_file_node(&self, node: &Node, max_bytes: u64) -> Result<Vec<u8>, Error> {
         crate::build_io::read_file_node(self.handle.blob_service().as_ref(), node, max_bytes).await
+    }
+    /// Inspect output CAS bytes without rewriting or publishing them.
+    pub async fn scan_output_references(
+        &self,
+        node: &Node,
+        candidates: &[String],
+    ) -> Result<Vec<crate::ContextualReferenceHit>, Error> {
+        crate::reference_scan::scan_output_references(&self.handle, node, candidates).await
     }
 
     pub async fn rewrite_node(&self, node: &Node, old_bytes: &[u8], new_bytes: &[u8]) -> Result<(Node, bool), Error> {
@@ -1052,7 +1059,6 @@ impl SliceAdmission {
         Ok(results)
     }
 }
-
 impl StoreAdmin<'_> {
     pub fn list_retained_roots(&self) -> Result<Vec<GcRootRecord>, Error> {
         self.handle.list_retained_roots()

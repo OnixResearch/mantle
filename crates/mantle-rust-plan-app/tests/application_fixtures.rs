@@ -1,382 +1,592 @@
-//! Application fixtures with in-memory port fakes.
+//! Application fixtures over real, bounded unit facts and in-memory ports.
 
 use mantle_rust_plan_app::AdapterError;
-use mantle_rust_plan_app::ApplicationOutcome;
+use mantle_rust_plan_app::BuildScriptPostprocessFailure;
 use mantle_rust_plan_app::CacheDisposition;
-use mantle_rust_plan_app::CacheLookup;
-use mantle_rust_plan_app::CacheLookupRequest;
-use mantle_rust_plan_app::CargoOracleCapture;
-use mantle_rust_plan_app::CompilerFacts;
-use mantle_rust_plan_app::CompilerInspection;
-use mantle_rust_plan_app::CompilerInspectionRequest;
-use mantle_rust_plan_app::OracleCaptureRequest;
-use mantle_rust_plan_app::OracleFacts;
+use mantle_rust_plan_app::CacheObservation;
+use mantle_rust_plan_app::CacheRestore;
+use mantle_rust_plan_app::ExecutionError;
+use mantle_rust_plan_app::PrepareOutcome;
+use mantle_rust_plan_app::ProcessAttempt;
 use mantle_rust_plan_app::RustCacheAccess;
-use mantle_rust_plan_app::RustPlanApplication;
-use mantle_rust_plan_app::UnitDisposition;
+use mantle_rust_plan_app::UnitExecutionResult;
 use mantle_rust_plan_app::UnitExecutor;
-use mantle_rust_plan_app::WorkspaceFactsRequest;
-use mantle_rust_plan_app::WorkspaceFactsSource;
-use mantle_rust_plan_app::WorkspaceFactsView;
-use mantle_rust_plan_core::BuildProfile;
-use mantle_rust_plan_core::PackageFacts;
-use mantle_rust_plan_core::PackageSource;
-use mantle_rust_plan_core::PackageSourceKind;
+use mantle_rust_plan_app::execute_existing_units;
+use mantle_rust_plan_app::plan_existing_unit_effects;
+use mantle_rust_plan_core::Blake3Digest;
+use mantle_rust_plan_core::CompilerRestoreKind;
+use mantle_rust_plan_core::EffectId;
+use mantle_rust_plan_core::ExistingUnitEffect;
+use mantle_rust_plan_core::ExistingUnitFacts;
 use mantle_rust_plan_core::PlanExecutionOutcome;
-use mantle_rust_plan_core::TargetFacts;
-use mantle_rust_plan_core::TargetKind;
-use mantle_rust_plan_core::UnitEffect;
+use mantle_rust_plan_core::ProcessEffectRole;
+use mantle_rust_plan_core::ProcessWord;
+use mantle_rust_plan_core::ProducerArtifactObservation;
+use mantle_rust_plan_core::ResolvedProcessObservation;
+use mantle_rust_plan_core::ResolvedUnitEffect;
+use mantle_rust_plan_core::ResolvedUnitFacts;
+use mantle_rust_plan_core::RestoredCompilerArtifactObservation;
 use mantle_rust_plan_core::UnitObservation;
 use mantle_rust_plan_core::UnitObservationStatus;
+use mantle_rust_plan_core::admit_resolved_build_script_after_cache;
+use mantle_rust_plan_core::classify_restored_compiler_artifact;
 
-fn lib_target(name: &str) -> TargetFacts {
-    TargetFacts {
-        name: String::from(name),
-        kind: TargetKind::Lib,
-        crate_types: vec![String::from("rlib")],
-        required_features: Vec::new(),
+fn unit(id: &str, order: u32, dependencies: &[&str]) -> ExistingUnitFacts {
+    ExistingUnitFacts {
+        unit_id: id.into(),
+        package_id: "real-package@0.1.0".into(),
+        target_name: "real_target".into(),
+        target_kind: "lib".into(),
+        execution_kind: "target".into(),
+        dependency_unit_ids: dependencies.iter().map(|value| (*value).into()).collect(),
+        arguments: vec!["--crate-name".into(), "real_target".into(), "--emit=link".into()],
+        environment: vec![("CARGO_PKG_VERSION".into(), "0.1.0".into())],
+        input_identities: vec!["source:real-target".into()],
+        expected_outputs: vec!["artifact:real-target".into()],
+        execution_order: order,
     }
 }
 
-fn package(name: &str) -> PackageFacts {
-    PackageFacts {
-        name: String::from(name),
-        version: String::from("0.1.0"),
-        source: PackageSource {
-            kind: PackageSourceKind::WorkspaceMember,
-            identity: String::from("workspace"),
-        },
-        targets: vec![lib_target(name)],
-        dependencies: Vec::new(),
-        features: Vec::new(),
-        links: None,
+fn effects() -> Vec<ExistingUnitEffect> {
+    plan_existing_unit_effects(vec![unit("consumer", 1, &["producer"]), unit("producer", 0, &[])])
+        .expect("valid selected topology")
+}
+
+fn observation(effect: &ExistingUnitEffect) -> UnitObservation {
+    UnitObservation {
+        effect_id: effect.effect_id.clone(),
+        unit_id: effect.unit_id.clone(),
+        status: UnitObservationStatus::Succeeded,
+        exit_code: Some(0),
+        diagnostics_code: None,
     }
 }
 
-/// Workspace facts fake.
-struct FakeWorkspace {
-    fail: bool,
+#[derive(Clone, Copy)]
+enum ExecutorMode {
+    Failed,
+    WrongIdentity,
+    ContradictorySuccess,
+    HitThenMiss,
+    WrongHitIdentity,
+    CacheUnavailable,
+    MissingProcess,
+    FalseSuccessAfterFailedCompiler,
+    WrongProcess,
+    WrongProducer,
+}
+
+struct Executor {
+    mode: ExecutorMode,
     calls: usize,
+    compiler_calls: usize,
 }
 
-impl WorkspaceFactsSource for FakeWorkspace {
-    fn load_workspace_facts(&mut self, _request: &WorkspaceFactsRequest) -> Result<WorkspaceFactsView, AdapterError> {
-        self.calls = self.calls.saturating_add(1);
-        if self.fail {
-            return Err(AdapterError::new("workspace-facts-unavailable", "fixture failure"));
+struct Receipt {
+    observation: UnitObservation,
+    process_attempts: Vec<ProcessAttempt>,
+    produced_artifacts: Vec<String>,
+}
+
+fn resolved_facts(effect: &ExistingUnitEffect) -> ResolvedUnitFacts {
+    let dependency_observations: Vec<_> = effect
+        .dependency_unit_ids
+        .iter()
+        .map(|producer_unit_id| ProducerArtifactObservation {
+            producer_unit_id: producer_unit_id.clone(),
+            artifact_identity: "verified:artifact:real-target".into(),
+        })
+        .collect();
+    let mut input_identities = effect.input_identities.clone();
+    if !dependency_observations.is_empty() {
+        input_identities.push("verified:artifact:real-target".into());
+    }
+    ResolvedUnitFacts {
+        effect_id: effect.effect_id.clone(),
+        unit_id: effect.unit_id.clone(),
+        role: ProcessEffectRole::RustCompiler,
+        attempt: 0,
+        prior_attempt_identity: None,
+        executable: ProcessWord::Utf8("rustc".into()),
+        toolchain_identity: "recorded-toolchain".into(),
+        arguments: effect.arguments.iter().cloned().map(ProcessWord::Utf8).collect(),
+        environment: effect
+            .environment
+            .iter()
+            .map(|(name, value)| (name.clone(), ProcessWord::Utf8(value.clone())))
+            .collect(),
+        working_directory: None,
+        input_identities,
+        expected_outputs: effect.expected_outputs.clone(),
+        dependency_observations,
+    }
+}
+
+impl UnitExecutor for Executor {
+    type Prepared = ExistingUnitEffect;
+    type Receipt = Receipt;
+
+    fn prepare_unit(&mut self, effect: &ExistingUnitEffect) -> Result<PrepareOutcome<Self::Prepared>, AdapterError> {
+        self.calls += 1;
+        let mut facts = resolved_facts(effect);
+        if matches!(self.mode, ExecutorMode::WrongProducer)
+            && let Some(producer) = facts.dependency_observations.first_mut()
+        {
+            producer.artifact_identity = "unobserved:wrong".into();
+            facts.input_identities.push("unobserved:wrong".into());
         }
-        Ok(WorkspaceFactsView {
-            packages: vec![package("app"), package("core")],
-            feature_requests: Vec::new(),
+        Ok(PrepareOutcome::Ready {
+            prepared: effect.clone(),
+            facts,
+        })
+    }
+
+    fn execute_miss(
+        &mut self,
+        prepared: &mut Self::Prepared,
+        _planned: &ExistingUnitEffect,
+        effect: ResolvedUnitEffect,
+    ) -> Result<Self::Receipt, AdapterError> {
+        self.compiler_calls += 1;
+        let mut observed = observation(prepared);
+        if matches!(self.mode, ExecutorMode::Failed) {
+            observed.status = UnitObservationStatus::Failed;
+            observed.exit_code = Some(101);
+        }
+        let mut process_observation = ResolvedProcessObservation {
+            effect_id: effect.facts.effect_id.clone(),
+            unit_id: effect.facts.unit_id.clone(),
+            resolved_blake3: effect.resolved_blake3.clone(),
+            role: effect.facts.role,
+            attempt: effect.facts.attempt,
+            status: observed.status,
+            exit_code: observed.exit_code,
+            output_identities: if observed.status == UnitObservationStatus::Succeeded {
+                effect
+                    .facts
+                    .expected_outputs
+                    .iter()
+                    .map(|output| (output.clone(), format!("verified:{output}")))
+                    .collect()
+            } else {
+                Vec::new()
+            },
+        };
+        if matches!(self.mode, ExecutorMode::FalseSuccessAfterFailedCompiler) {
+            process_observation.status = UnitObservationStatus::Failed;
+            process_observation.exit_code = Some(101);
+            process_observation.output_identities.clear();
+        }
+        if matches!(self.mode, ExecutorMode::WrongProcess) {
+            process_observation.effect_id = EffectId("effect:other".into());
+        }
+        let produced_artifacts =
+            process_observation.output_identities.iter().map(|(_, digest)| digest.clone()).collect();
+        let process_attempts = if matches!(self.mode, ExecutorMode::MissingProcess) {
+            Vec::new()
+        } else {
+            vec![ProcessAttempt {
+                effect,
+                observation: process_observation,
+            }]
+        };
+        Ok(Receipt {
+            observation: observed,
+            process_attempts,
+            produced_artifacts,
+        })
+    }
+
+    fn finish_unit(
+        &mut self,
+        _planned: &ExistingUnitEffect,
+        _prepared: Self::Prepared,
+        mut receipt: Self::Receipt,
+        cache: CacheObservation,
+        _primary: Option<&ResolvedUnitEffect>,
+    ) -> Result<UnitExecutionResult, AdapterError> {
+        if matches!(self.mode, ExecutorMode::WrongHitIdentity) {
+            receipt.observation.unit_id.0 = "other-unit".into();
+        }
+        if matches!(self.mode, ExecutorMode::WrongIdentity) {
+            receipt.observation.effect_id = EffectId("effect:other".into());
+        }
+        if matches!(self.mode, ExecutorMode::ContradictorySuccess) {
+            receipt.observation.exit_code = Some(101);
+        }
+        let cache = if receipt.observation.status == UnitObservationStatus::Failed {
+            CacheObservation::NotObserved
+        } else {
+            cache
+        };
+        Ok(UnitExecutionResult {
+            observation: receipt.observation,
+            cache,
+            process_attempts: receipt.process_attempts,
+            restored_compiler: None,
+            build_script_postprocess_failure: None,
+            produced_artifacts: receipt.produced_artifacts,
         })
     }
 }
 
-/// Oracle fake.
-struct FakeOracle {
-    calls: usize,
-}
-
-impl CargoOracleCapture for FakeOracle {
-    fn capture_oracle(&mut self, _request: &OracleCaptureRequest) -> Result<OracleFacts, AdapterError> {
-        self.calls = self.calls.saturating_add(1);
-        Ok(OracleFacts {
-            oracle_identity: String::from("fixture-oracle"),
-            selected_packages: vec![String::from("app@0.1.0")],
-        })
-    }
-}
-
-/// Compiler inspection fake.
-struct FakeCompiler {
-    calls: usize,
-}
-
-impl CompilerInspection for FakeCompiler {
-    fn inspect_compiler(&mut self, _request: &CompilerInspectionRequest) -> Result<CompilerFacts, AdapterError> {
-        self.calls = self.calls.saturating_add(1);
-        Ok(CompilerFacts {
-            compiler_identity: String::from("fixture-rustc"),
-            target_triple: String::from("x86_64-unknown-linux-gnu"),
-        })
-    }
-}
-
-/// Cache fake with a configurable hit set.
-struct FakeCache {
-    hits: u32,
-    remaining_hits: u32,
-    fail: bool,
-    calls: usize,
-}
-
-impl RustCacheAccess for FakeCache {
-    fn lookup_unit(&mut self, _request: &CacheLookupRequest) -> Result<CacheLookup, AdapterError> {
-        self.calls = self.calls.saturating_add(1);
-        if self.fail {
+impl RustCacheAccess<ExistingUnitEffect, Receipt> for Executor {
+    fn restore_or_miss(
+        &mut self,
+        prepared: &mut ExistingUnitEffect,
+        _effect: &ResolvedUnitEffect,
+    ) -> Result<CacheRestore<Receipt>, AdapterError> {
+        if matches!(self.mode, ExecutorMode::CacheUnavailable) {
             return Err(AdapterError::new("cache-unavailable", "fixture cache failure"));
         }
-        if self.remaining_hits > 0 {
-            self.remaining_hits = self.remaining_hits.saturating_sub(1);
-            self.hits = self.hits.saturating_add(1);
-            return Ok(CacheLookup::Cached {
-                output_identity: String::from("fixture-output"),
+        if matches!(self.mode, ExecutorMode::WrongHitIdentity)
+            || (matches!(self.mode, ExecutorMode::HitThenMiss) && self.calls == 1)
+        {
+            let cache = if matches!(self.mode, ExecutorMode::WrongHitIdentity) {
+                CacheObservation::ReusedOutput
+            } else {
+                CacheObservation::RestoredShared
+            };
+            return Ok(CacheRestore::Terminal {
+                receipt: Receipt {
+                    observation: observation(prepared),
+                    process_attempts: Vec::new(),
+                    produced_artifacts: vec!["verified:artifact:real-target".into()],
+                },
+                cache,
             });
         }
-        Ok(CacheLookup::NotCached)
+        Ok(CacheRestore::Miss)
     }
 }
 
-/// Executor fake with configurable observation behavior.
-struct FakeExecutor {
-    calls: usize,
-    fail: bool,
-    fail_first_observation: bool,
-    substitute_unknown_effect: bool,
+#[test]
+fn cache_hit_and_miss_are_observed_without_a_second_lookup() {
+    let effects = effects();
+    let mut executor = Executor {
+        mode: ExecutorMode::HitThenMiss,
+        calls: 0,
+        compiler_calls: 0,
+    };
+    let executed = execute_existing_units(&effects, &mut executor).expect("executor observed both effects");
+    assert_eq!(executed.execution, PlanExecutionOutcome::Completed);
+    assert_eq!(executed.cache, CacheDisposition::PartiallyHit);
+    assert_eq!(executed.cache_observations, [CacheObservation::RestoredShared, CacheObservation::Miss]);
+    assert_eq!(executor.calls, 2);
+    assert_eq!(executor.compiler_calls, 1, "verified cache hit must not invoke compiler");
+    assert_eq!(executed.process_attempts.len(), 1);
+    assert_eq!(executed.observations[0].effect_id, effects[0].effect_id);
 }
 
-impl UnitExecutor for FakeExecutor {
-    fn execute_unit(&mut self, effect: &UnitEffect) -> Result<UnitObservation, AdapterError> {
-        self.calls = self.calls.saturating_add(1);
-        if self.fail {
-            return Err(AdapterError::new("unit-execution-unavailable", "fixture executor failure"));
-        }
-        let is_first = self.calls == 1;
-        let status = if self.fail_first_observation && is_first {
-            UnitObservationStatus::Failed
-        } else {
-            UnitObservationStatus::Succeeded
+#[test]
+fn wrong_cache_observation_and_cache_fault_never_complete_a_plan() {
+    let effects = effects();
+    let mut executor = Executor {
+        mode: ExecutorMode::WrongHitIdentity,
+        calls: 0,
+        compiler_calls: 0,
+    };
+    let err = execute_existing_units(&effects, &mut executor)
+        .expect_err("a reused artifact for another unit cannot attest this effect");
+    assert!(matches!(err, ExecutionError::Adapter(error) if error.code == "cache-observation-mismatch"));
+    assert_eq!(executor.calls, 1);
+
+    let mut executor = Executor {
+        mode: ExecutorMode::CacheUnavailable,
+        calls: 0,
+        compiler_calls: 0,
+    };
+    let err = execute_existing_units(&effects, &mut executor)
+        .expect_err("a cache capability fault is never treated as a miss");
+    assert!(matches!(err, ExecutionError::Adapter(error) if error.code == "cache-unavailable"));
+    assert_eq!(executor.calls, 1);
+}
+
+#[test]
+fn wrong_execution_observations_cannot_complete_the_plan() {
+    let effects = effects();
+    for mode in [ExecutorMode::WrongIdentity, ExecutorMode::ContradictorySuccess] {
+        let mut executor = Executor {
+            mode,
+            calls: 0,
+            compiler_calls: 0,
         };
-        let effect_id = if self.substitute_unknown_effect {
-            mantle_rust_plan_core::EffectId(String::from("effect:unknown"))
-        } else {
-            effect.effect_id.clone()
+        let observed = execute_existing_units(&effects, &mut executor).expect("executor responded");
+        assert!(matches!(observed.execution, PlanExecutionOutcome::Rejected { .. }));
+        assert_eq!(executor.calls, 1, "subsequent units must not run on a wrong observation");
+        assert_eq!(observed.observations.len(), 1);
+    }
+}
+
+#[test]
+fn stopped_execution_does_not_claim_success_for_unobserved_consumers() {
+    let effects = effects();
+    let mut executor = Executor {
+        mode: ExecutorMode::Failed,
+        calls: 0,
+        compiler_calls: 0,
+    };
+    let observed = execute_existing_units(&effects, &mut executor).expect("failure was observed");
+    assert_eq!(executor.calls, 1);
+    assert_eq!(observed.observations.len(), 1);
+    assert_eq!(observed.cache, CacheDisposition::NotObserved);
+    assert_eq!(observed.cache_observations, [CacheObservation::NotObserved]);
+    assert!(matches!(observed.execution, PlanExecutionOutcome::Rejected {
+        missing_effect_count: 1,
+        ..
+    }));
+}
+
+#[test]
+fn missing_or_substituted_process_attempt_is_rejected_after_compiler_miss() {
+    let effects = effects();
+    for mode in [ExecutorMode::MissingProcess, ExecutorMode::WrongProcess] {
+        let mut executor = Executor {
+            mode,
+            calls: 0,
+            compiler_calls: 0,
         };
-        Ok(UnitObservation {
-            effect_id,
-            unit_id: effect.unit_id.clone(),
-            status,
-            exit_code: Some(if status == UnitObservationStatus::Succeeded {
-                0
-            } else {
-                101
-            }),
-            diagnostics_code: None,
+        let error = execute_existing_units(&effects, &mut executor)
+            .expect_err("actual process attempt must be bound to admitted effect");
+        assert!(match (mode, error) {
+            (ExecutorMode::MissingProcess, ExecutionError::Adapter(error)) =>
+                error.code == "missing-process-observation",
+            (ExecutorMode::WrongProcess, ExecutionError::Blocked(blockers)) =>
+                blockers.iter().any(|blocker| blocker.code == "wrong-resolved-observation"),
+            _ => false,
+        });
+        assert_eq!(executor.calls, 1);
+        assert_eq!(executor.compiler_calls, 1);
+    }
+}
+
+#[test]
+fn failed_policy_compiler_cannot_attest_a_successful_unit() {
+    let effects = effects();
+    let mut executor = Executor {
+        mode: ExecutorMode::FalseSuccessAfterFailedCompiler,
+        calls: 0,
+        compiler_calls: 0,
+    };
+    let error = execute_existing_units(&effects, &mut executor)
+        .expect_err("a failed compiler without its successful audit fallback cannot complete a unit");
+    assert!(matches!(error, ExecutionError::Adapter(error) if error.code == "unproven-unit-success"));
+    assert_eq!(executor.calls, 1);
+    assert_eq!(executor.compiler_calls, 1);
+}
+
+#[test]
+fn consumer_cannot_claim_an_unproduced_dependency_digest() {
+    let effects = effects();
+    let mut executor = Executor {
+        mode: ExecutorMode::WrongProducer,
+        calls: 0,
+        compiler_calls: 0,
+    };
+    let error = execute_existing_units(&effects, &mut executor)
+        .expect_err("consumer may only bind artifacts observed from its producer");
+    assert!(matches!(error, ExecutionError::Adapter(error) if error.code == "wrong-producer-observation"));
+    assert_eq!(executor.calls, 2);
+    assert_eq!(executor.compiler_calls, 1, "consumer compiler must not run after wrong producer evidence");
+}
+
+/// A cached build-script compiler still requires a real script process.
+#[derive(Clone, Copy)]
+enum CachedScriptResult {
+    ProcessFailed,
+    PostprocessFailed,
+    WrongScriptEvidence,
+    WrongBlockerEvidence,
+}
+
+struct CachedScriptExecutor {
+    script_calls: usize,
+    result: CachedScriptResult,
+}
+
+impl UnitExecutor for CachedScriptExecutor {
+    type Prepared = ExistingUnitEffect;
+    type Receipt = Receipt;
+
+    fn prepare_unit(&mut self, planned: &ExistingUnitEffect) -> Result<PrepareOutcome<Self::Prepared>, AdapterError> {
+        Ok(PrepareOutcome::Ready {
+            prepared: planned.clone(),
+            facts: resolved_facts(planned),
+        })
+    }
+
+    fn execute_miss(
+        &mut self,
+        _: &mut Self::Prepared,
+        _: &ExistingUnitEffect,
+        _: ResolvedUnitEffect,
+    ) -> Result<Self::Receipt, AdapterError> {
+        Err(AdapterError::new("unexpected-compiler", "restored compiler must not run again"))
+    }
+
+    fn finish_unit(
+        &mut self,
+        planned: &ExistingUnitEffect,
+        _: Self::Prepared,
+        mut receipt: Self::Receipt,
+        cache: CacheObservation,
+        primary: Option<&ResolvedUnitEffect>,
+    ) -> Result<UnitExecutionResult, AdapterError> {
+        let primary = primary.expect("cache terminal retains the admitted compiler");
+        let restored = RestoredCompilerArtifactObservation {
+            effect_id: planned.effect_id.clone(),
+            unit_id: planned.unit_id.clone(),
+            compiler_resolved_blake3: primary.resolved_blake3.clone(),
+            cache_receipt_identity: Blake3Digest::from_slice(b"fixture-restored-compiler-receipt"),
+            declared_outputs: planned.expected_outputs.clone(),
+            output_artifact_set_identity: Blake3Digest::from_slice(b"fixture-restored-artifacts"),
+            output_artifact_count: 1,
+            cache_kind: CompilerRestoreKind::RestoredLocal,
+        };
+        let predecessor =
+            classify_restored_compiler_artifact(planned, primary, &restored).expect("valid cache evidence");
+        let mut script_facts = resolved_facts(planned);
+        script_facts.role = ProcessEffectRole::BuildScriptRun;
+        script_facts.prior_attempt_identity = Some(predecessor);
+        script_facts.executable = ProcessWord::Utf8("fixture-build-script".into());
+        script_facts.arguments = Vec::new();
+        script_facts.expected_outputs = vec!["OUT_DIR".into(), "metadata-stdout".into()];
+        script_facts.input_identities.push(restored.cache_receipt_identity.as_str().into());
+        script_facts.input_identities.push(restored.output_artifact_set_identity.as_str().into());
+        let script = admit_resolved_build_script_after_cache(planned, script_facts, primary, &restored)
+            .expect("restored compiler may precede its real script");
+        receipt.observation.status = UnitObservationStatus::Failed;
+        let script_succeeded = !matches!(self.result, CachedScriptResult::ProcessFailed);
+        let postprocess_failure = if script_succeeded {
+            let blocker_class = "malformed-build-script-metadata";
+            receipt.observation.exit_code = None;
+            receipt.observation.diagnostics_code = Some(blocker_class.into());
+            Some(BuildScriptPostprocessFailure {
+                effect_id: planned.effect_id.clone(),
+                unit_id: planned.unit_id.clone(),
+                script_resolved_blake3: if matches!(self.result, CachedScriptResult::WrongScriptEvidence) {
+                    Blake3Digest::from_slice(b"wrong-build-script-process")
+                } else {
+                    script.resolved_blake3.clone()
+                },
+                blocker_class: if matches!(self.result, CachedScriptResult::WrongBlockerEvidence) {
+                    "substituted-metadata-blocker".into()
+                } else {
+                    blocker_class.into()
+                },
+            })
+        } else {
+            receipt.observation.exit_code = Some(101);
+            None
+        };
+        receipt.process_attempts.push(ProcessAttempt {
+            observation: ResolvedProcessObservation {
+                effect_id: script.facts.effect_id.clone(),
+                unit_id: script.facts.unit_id.clone(),
+                resolved_blake3: script.resolved_blake3.clone(),
+                role: ProcessEffectRole::BuildScriptRun,
+                attempt: 0,
+                status: if script_succeeded {
+                    UnitObservationStatus::Succeeded
+                } else {
+                    UnitObservationStatus::Failed
+                },
+                exit_code: Some(if script_succeeded { 0 } else { 101 }),
+                output_identities: if script_succeeded {
+                    vec![
+                        ("OUT_DIR".into(), "verified:out-dir".into()),
+                        ("metadata-stdout".into(), "verified:metadata-stdout".into()),
+                    ]
+                } else {
+                    Vec::new()
+                },
+            },
+            effect: script,
+        });
+        self.script_calls += 1;
+        Ok(UnitExecutionResult {
+            observation: receipt.observation,
+            cache,
+            process_attempts: receipt.process_attempts,
+            restored_compiler: Some(restored),
+            build_script_postprocess_failure: postprocess_failure,
+            produced_artifacts: receipt.produced_artifacts,
+        })
+    }
+}
+
+impl RustCacheAccess<ExistingUnitEffect, Receipt> for CachedScriptExecutor {
+    fn restore_or_miss(
+        &mut self,
+        prepared: &mut ExistingUnitEffect,
+        _: &ResolvedUnitEffect,
+    ) -> Result<CacheRestore<Receipt>, AdapterError> {
+        Ok(CacheRestore::Terminal {
+            receipt: Receipt {
+                observation: observation(prepared),
+                process_attempts: Vec::new(),
+                produced_artifacts: vec!["verified:artifact:real-target".into()],
+            },
+            cache: CacheObservation::RestoredLocal,
         })
     }
 }
 
 #[test]
-fn successful_run_executes_every_unit_and_builds_a_receipt() {
-    let mut app = RustPlanApplication::new(
-        FakeWorkspace { fail: false, calls: 0 },
-        FakeOracle { calls: 0 },
-        FakeCompiler { calls: 0 },
-        FakeCache {
-            hits: 0,
-            remaining_hits: 0,
-            fail: false,
-            calls: 0,
-        },
-        FakeExecutor {
-            calls: 0,
-            fail: false,
-            fail_first_observation: false,
-            substitute_unknown_effect: false,
-        },
-    );
-    let outcome = app.run(vec![String::from("app")], BuildProfile::Release, true).expect("ports succeed");
-    let ApplicationOutcome::Executed(executed) = outcome else {
-        panic!("expected an executed outcome")
+fn restored_compiler_does_not_mask_a_failed_real_build_script() {
+    let mut script_unit = unit("build-script", 0, &[]);
+    script_unit.target_kind = "custom-build".into();
+    script_unit.execution_kind = "host".into();
+    let effects = plan_existing_unit_effects(vec![script_unit]).expect("build-script compiler effect admitted");
+    let mut executor = CachedScriptExecutor {
+        script_calls: 0,
+        result: CachedScriptResult::ProcessFailed,
     };
-    let receipt_preimage = executed.receipt_preimage;
-    let execution = executed.execution;
-    let cache = executed.cache;
-    let dispositions = executed.dispositions;
-    let observations = executed.observations;
-    let plan = executed.plan;
-    assert_eq!(execution, PlanExecutionOutcome::Completed);
-    assert_eq!(cache, CacheDisposition::AllMissed);
-    assert!(receipt_preimage.is_some());
-    assert_eq!(dispositions.len(), plan.effects.len());
-    assert!(observations.iter().all(|observation| observation.exit_code == Some(0)));
+    let observed = execute_existing_units(&effects, &mut executor).expect("real failed script observation classified");
+    assert_eq!(executor.script_calls, 1);
+    assert_eq!(observed.cache, CacheDisposition::AllHit);
+    assert_eq!(observed.cache_observations, [CacheObservation::RestoredLocal]);
+    assert_eq!(observed.process_attempts.len(), 1);
+    assert_eq!(observed.process_attempts[0].observation.role, ProcessEffectRole::BuildScriptRun);
+    assert_eq!(observed.execution, PlanExecutionOutcome::Failed { failed_effect_count: 1 });
 }
 
 #[test]
-fn cached_units_are_not_executed_and_are_reported() {
-    let mut app = RustPlanApplication::new(
-        FakeWorkspace { fail: false, calls: 0 },
-        FakeOracle { calls: 0 },
-        FakeCompiler { calls: 0 },
-        FakeCache {
-            hits: 0,
-            remaining_hits: 1,
-            fail: false,
-            calls: 0,
-        },
-        FakeExecutor {
-            calls: 0,
-            fail: false,
-            fail_first_observation: false,
-            substitute_unknown_effect: false,
-        },
-    );
-    let outcome = app.run(vec![String::from("app")], BuildProfile::Dev, false).expect("ports succeed");
-    let ApplicationOutcome::Executed(executed) = outcome else {
-        panic!("expected an executed outcome")
+fn cached_compiler_and_successful_script_retain_a_real_metadata_blocker() {
+    let mut script_unit = unit("build-script", 0, &[]);
+    script_unit.target_kind = "custom-build".into();
+    script_unit.execution_kind = "host".into();
+    let effects = plan_existing_unit_effects(vec![script_unit]).expect("build-script compiler effect admitted");
+    let mut executor = CachedScriptExecutor {
+        script_calls: 0,
+        result: CachedScriptResult::PostprocessFailed,
     };
-    let cache = executed.cache;
-    let dispositions = executed.dispositions;
-    let observations = executed.observations;
-    let execution = executed.execution;
-    assert_eq!(cache, CacheDisposition::PartiallyHit);
-    assert_eq!(execution, PlanExecutionOutcome::Completed);
-    assert_eq!(dispositions.iter().filter(|d| **d == UnitDisposition::CacheHit).count(), 1);
-    assert!(observations.iter().any(|observation| observation.diagnostics_code.as_deref() == Some("cache-hit")));
+    let observed = execute_existing_units(&effects, &mut executor).expect("real metadata blocker classified");
+    assert_eq!(executor.script_calls, 1);
+    assert_eq!(observed.cache, CacheDisposition::AllHit);
+    assert_eq!(observed.execution, PlanExecutionOutcome::Failed { failed_effect_count: 1 });
+    assert_eq!(observed.observations[0].diagnostics_code.as_deref(), Some("malformed-build-script-metadata"));
+    assert_eq!(observed.process_attempts[0].observation.status, UnitObservationStatus::Succeeded);
+    assert_eq!(observed.process_attempts[0].observation.exit_code, Some(0));
 }
 
 #[test]
-fn blocked_plans_perform_no_work() {
-    let mut app = RustPlanApplication::new(
-        FakeWorkspace { fail: false, calls: 0 },
-        FakeOracle { calls: 0 },
-        FakeCompiler { calls: 0 },
-        FakeCache {
-            hits: 0,
-            remaining_hits: 0,
-            fail: false,
-            calls: 0,
-        },
-        FakeExecutor {
-            calls: 0,
-            fail: false,
-            fail_first_observation: false,
-            substitute_unknown_effect: false,
-        },
-    );
-    let outcome = app.run(Vec::new(), BuildProfile::Dev, false).expect("ports succeed");
-    let ApplicationOutcome::Blocked { blockers } = outcome else {
-        panic!("expected a blocked outcome")
-    };
-    assert!(blockers.iter().any(|blocker| blocker.code == "missing-roots"));
-}
-
-#[test]
-fn adapter_failures_propagate_as_typed_errors() {
-    let mut app = RustPlanApplication::new(
-        FakeWorkspace { fail: true, calls: 0 },
-        FakeOracle { calls: 0 },
-        FakeCompiler { calls: 0 },
-        FakeCache {
-            hits: 0,
-            remaining_hits: 0,
-            fail: false,
-            calls: 0,
-        },
-        FakeExecutor {
-            calls: 0,
-            fail: false,
-            fail_first_observation: false,
-            substitute_unknown_effect: false,
-        },
-    );
-    let error = app
-        .run(vec![String::from("app")], BuildProfile::Dev, false)
-        .expect_err("workspace failure must propagate");
-    assert_eq!(error.code, "workspace-facts-unavailable");
-
-    let mut app = RustPlanApplication::new(
-        FakeWorkspace { fail: false, calls: 0 },
-        FakeOracle { calls: 0 },
-        FakeCompiler { calls: 0 },
-        FakeCache {
-            hits: 0,
-            remaining_hits: 0,
-            fail: true,
-            calls: 0,
-        },
-        FakeExecutor {
-            calls: 0,
-            fail: false,
-            fail_first_observation: false,
-            substitute_unknown_effect: false,
-        },
-    );
-    let error = app
-        .run(vec![String::from("app")], BuildProfile::Dev, false)
-        .expect_err("cache failure must propagate");
-    assert_eq!(error.code, "cache-unavailable");
-
-    let mut app = RustPlanApplication::new(
-        FakeWorkspace { fail: false, calls: 0 },
-        FakeOracle { calls: 0 },
-        FakeCompiler { calls: 0 },
-        FakeCache {
-            hits: 0,
-            remaining_hits: 0,
-            fail: false,
-            calls: 0,
-        },
-        FakeExecutor {
-            calls: 0,
-            fail: true,
-            fail_first_observation: false,
-            substitute_unknown_effect: false,
-        },
-    );
-    let error = app
-        .run(vec![String::from("app")], BuildProfile::Dev, false)
-        .expect_err("executor failure must propagate");
-    assert_eq!(error.code, "unit-execution-unavailable");
-}
-
-#[test]
-fn failed_and_substituted_observations_classify_exactly() {
-    let mut failing = RustPlanApplication::new(
-        FakeWorkspace { fail: false, calls: 0 },
-        FakeOracle { calls: 0 },
-        FakeCompiler { calls: 0 },
-        FakeCache {
-            hits: 0,
-            remaining_hits: 0,
-            fail: false,
-            calls: 0,
-        },
-        FakeExecutor {
-            calls: 0,
-            fail: false,
-            fail_first_observation: true,
-            substitute_unknown_effect: false,
-        },
-    );
-    let outcome = failing.run(vec![String::from("app")], BuildProfile::Dev, false).expect("ports succeed");
-    let ApplicationOutcome::Executed(executed) = outcome else {
-        panic!("expected an executed outcome")
-    };
-    let execution = executed.execution;
-    assert_eq!(execution, PlanExecutionOutcome::Failed { failed_effect_count: 1 });
-
-    let mut substituted = RustPlanApplication::new(
-        FakeWorkspace { fail: false, calls: 0 },
-        FakeOracle { calls: 0 },
-        FakeCompiler { calls: 0 },
-        FakeCache {
-            hits: 0,
-            remaining_hits: 0,
-            fail: false,
-            calls: 0,
-        },
-        FakeExecutor {
-            calls: 0,
-            fail: false,
-            fail_first_observation: false,
-            substitute_unknown_effect: true,
-        },
-    );
-    let outcome = substituted.run(vec![String::from("app")], BuildProfile::Dev, false).expect("ports succeed");
-    let ApplicationOutcome::Executed(executed) = outcome else {
-        panic!("expected an executed outcome")
-    };
-    let execution = executed.execution;
-    assert!(matches!(execution, PlanExecutionOutcome::Rejected { .. }));
+fn cached_script_metadata_blocker_requires_matching_real_process_and_diagnostic() {
+    let mut script_unit = unit("build-script", 0, &[]);
+    script_unit.target_kind = "custom-build".into();
+    script_unit.execution_kind = "host".into();
+    let effects = plan_existing_unit_effects(vec![script_unit]).expect("build-script compiler effect admitted");
+    for result in [
+        CachedScriptResult::WrongScriptEvidence,
+        CachedScriptResult::WrongBlockerEvidence,
+    ] {
+        let mut executor = CachedScriptExecutor {
+            script_calls: 0,
+            result,
+        };
+        let error = execute_existing_units(&effects, &mut executor)
+            .expect_err("fabricated metadata blocker cannot turn a cache hit into proven failure");
+        assert!(matches!(error, ExecutionError::Adapter(error) if error.code == "wrong-build-script-postprocess"));
+        assert_eq!(executor.script_calls, 1);
+    }
 }

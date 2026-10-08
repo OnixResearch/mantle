@@ -4,11 +4,24 @@ use std::fs;
 use std::path::Path;
 
 use clap::ValueEnum;
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::CommandFamily;
+use mantle_application_contract::EffectId;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::EffectSpec;
+use mantle_application_contract::ExpectedOutput;
+use mantle_application_contract::Observation;
+use mantle_application_contract::ObservationStatus;
+use mantle_application_contract::classify_observations;
+use mantle_application_contract::plan_effects;
 use serde::Serialize;
 
 use crate::errors::RunError;
 
 const REPORT_SCHEMA: &str = "crunch-bootstrap-parity-gap-report-v1";
+const PARITY_READ_EFFECT: &str = "bootstrap-parity-evidence-read";
 const BOOTSTRAP_DIR: &str = "bootstrap";
 const PLACEHOLDER_MARKERS: &[&str] = &[
     "placeholder",
@@ -194,6 +207,32 @@ enum EvidenceCheck {
     Gcc10ProviderContract,
     #[cfg_attr(not(test), allow(dead_code))]
     FullMuslBinutilsProviderContract,
+}
+
+/// One bounded parity inventory read; missing evidence remains a domain fact
+/// in the report, not an invented successful source receipt.
+trait ParityReportReadPort {
+    fn collect(&mut self) -> Result<BootstrapParityReport, RunError>;
+}
+
+struct LocalParityReport<'a> {
+    root: &'a Path,
+}
+
+impl ParityReportReadPort for LocalParityReport<'_> {
+    fn collect(&mut self) -> Result<BootstrapParityReport, RunError> {
+        // The root passes "." so the environment read happens only after
+        // the effect plan exists. Preserve the former absolute report paths.
+        let current_dir;
+        let root = if self.root == Path::new(".") {
+            current_dir =
+                std::env::current_dir().map_err(|error| RunError::Internal(format!("current_dir: {error}")))?;
+            current_dir.as_path()
+        } else {
+            self.root
+        };
+        Ok(collect_bootstrap_parity_report(root))
+    }
 }
 
 #[cfg(test)]
@@ -478,9 +517,42 @@ const GCC40_ARITHMETIC_SMOKE_SPECS: &[Gcc40SmokeSpec] = &[
 ];
 
 pub fn cmd_bootstrap_parity_report(project_root: &Path, require: &[ParityAxis], json: bool) -> Result<(), RunError> {
-    let parity_document = collect_bootstrap_parity_report(project_root);
-    assert_eq!(parity_document.schema, REPORT_SCHEMA);
-    assert_eq!(parity_document.rows.len(), parity_stage_specs().count());
+    let planned_rows = parity_stage_specs().count();
+    let plan = plan_effects(CommandFamily::Bootstrap, &[EffectSpec {
+        effect_id: PARITY_READ_EFFECT,
+        kind: EffectKind::ReadFiles,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::Identity(REPORT_SCHEMA),
+    }])
+    .map_err(|error| RunError::Internal(format!("planning bootstrap parity read: {}", error.code())))?;
+    let collected = LocalParityReport { root: project_root }.collect();
+    let observation = Observation {
+        effect_id: EffectId(PARITY_READ_EFFECT.to_string()),
+        kind: EffectKind::ReadFiles,
+        status: if collected.is_ok() {
+            ObservationStatus::Succeeded
+        } else {
+            ObservationStatus::Failed
+        },
+        output: collected
+            .as_ref()
+            .map_or(EffectOutput::None, |report| EffectOutput::Identity(report.schema.to_string())),
+        usage: EffectMeasure::Calls(1),
+        diagnostics_code: collected.is_err().then(|| "bootstrap-parity-evidence-read-failed".to_string()),
+    };
+    let outcome = classify_observations(&plan, &[observation]);
+    let parity_document = match (outcome, collected) {
+        (ApplicationOutcome::Completed, Ok(report)) if report.rows.len() == planned_rows => report,
+        (ApplicationOutcome::Failed { .. }, Err(error)) => return Err(error),
+        (other, _) => {
+            return Err(RunError::Internal(format!("bootstrap parity read observations inconsistent: {other:?}")));
+        }
+    };
+    let failed_requirements: Vec<String> = require
+        .iter()
+        .filter(|axis| !axis_complete(&parity_document, **axis))
+        .map(ToString::to_string)
+        .collect();
     if json {
         let rendered = serde_json::to_string_pretty(&parity_document)
             .map_err(|err| RunError::Internal(format!("serializing bootstrap parity report: {err}")))?;
@@ -489,11 +561,6 @@ pub fn cmd_bootstrap_parity_report(project_root: &Path, require: &[ParityAxis], 
         println!("{}", render_bootstrap_parity_report(&parity_document));
     }
 
-    let failed_requirements: Vec<String> = require
-        .iter()
-        .filter(|axis| !axis_complete(&parity_document, **axis))
-        .map(ToString::to_string)
-        .collect();
     if failed_requirements.is_empty() {
         Ok(())
     } else {

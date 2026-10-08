@@ -2564,7 +2564,7 @@ fn run_nix_witness_args(
     bundle_dir: &Path,
     nix_output_dir: &Path,
     deterministic_proof: &Path,
-    receipt_path: &Path,
+    receipt_path: Option<&Path>,
 ) -> Command {
     let mut cmd = crunch();
     cmd.arg("--json")
@@ -2575,8 +2575,6 @@ fn run_nix_witness_args(
         .arg(nix_output_dir)
         .arg("--deterministic-proof")
         .arg(deterministic_proof)
-        .arg("--receipt-path")
-        .arg(receipt_path)
         .arg("--rust-toolchain-identity")
         .arg("rust-nightly-1.91.1")
         .arg("--target-triple")
@@ -2593,6 +2591,9 @@ fn run_nix_witness_args(
         .arg("/nix/store/demo-mantle.drv")
         .arg("--nix-output-identity")
         .arg("/nix/store/demo-mantle");
+    if let Some(path) = receipt_path {
+        cmd.arg("--receipt-path").arg(path);
+    }
     cmd
 }
 
@@ -2611,7 +2612,7 @@ fn release_nix_witness_writes_match_receipt_from_located_nix_artifacts() {
     let receipt_path = temp.path().join("nix-witness.json");
     populate_nix_output_from_bundle(&bundle_dir, &manifest, &nix_output_dir);
 
-    let assert = run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, &receipt_path)
+    let assert = run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, Some(&receipt_path))
         .current_dir(temp.path())
         .assert()
         .success();
@@ -2634,6 +2635,25 @@ fn release_nix_witness_writes_match_receipt_from_located_nix_artifacts() {
 }
 
 #[test]
+fn release_nix_witness_defaults_receipt_into_bundle_without_an_explicit_destination() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let (proof_path, _, _, _) = write_deterministic_verify_artifacts(&temp.path().join("proof"), &manifest);
+    let nix_output_dir = temp.path().join("nix-output");
+    let receipt_path = bundle_dir.join("witness/nix-cross-builder-witness.json");
+    populate_nix_output_from_bundle(&bundle_dir, &manifest, &nix_output_dir);
+
+    let asserted = run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, None)
+        .current_dir(temp.path())
+        .assert()
+        .success();
+    let reported: serde_json::Value = serde_json::from_slice(&asserted.get_output().stdout).unwrap();
+    let written: serde_json::Value = serde_json::from_slice(&std::fs::read(&receipt_path).unwrap()).unwrap();
+    assert_eq!(reported["receipt_path"], receipt_path.display().to_string());
+    assert_eq!(reported["comparison_verdict"], "nix-witness-match");
+    assert_eq!(written["comparison_verdict"], "nix-witness-match");
+}
+
+#[test]
 fn release_nix_witness_writes_mismatch_receipt_without_promoting_proof_class() {
     let (temp, bundle_dir, manifest) = make_valid_bundle();
     let (proof_path, _, _, _) = write_deterministic_verify_artifacts(&temp.path().join("proof"), &manifest);
@@ -2642,7 +2662,7 @@ fn release_nix_witness_writes_mismatch_receipt_without_promoting_proof_class() {
     populate_nix_output_from_bundle(&bundle_dir, &manifest, &nix_output_dir);
     write_file(&nix_output_dir.join(&manifest.binaries[0].relative_path), b"nix-drift");
 
-    let assert = run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, &receipt_path)
+    let assert = run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, Some(&receipt_path))
         .current_dir(temp.path())
         .assert()
         .success();
@@ -2664,7 +2684,7 @@ fn release_nix_witness_require_match_fails_closed_on_digest_mismatch() {
     populate_nix_output_from_bundle(&bundle_dir, &manifest, &nix_output_dir);
     write_file(&nix_output_dir.join(&manifest.binaries[0].relative_path), b"nix-drift");
 
-    run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, &receipt_path)
+    run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, Some(&receipt_path))
         .arg("--require-match")
         .current_dir(temp.path())
         .assert()
@@ -2706,7 +2726,7 @@ fn release_nix_witness_rejects_deterministic_proof_source_drift() {
     let proof_bytes = deterministic_build_proof_receipt_canonical_bytes(proof).unwrap();
     write_file(&proof_path, &proof_bytes);
 
-    run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, &receipt_path)
+    run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, Some(&receipt_path))
         .current_dir(temp.path())
         .assert()
         .failure()
@@ -2740,7 +2760,7 @@ fn release_nix_witness_keeps_legacy_path_bound_receipt_non_promoting() {
     }
     write_file(&proof_path, &deterministic_build_proof_receipt_canonical_bytes(legacy).unwrap());
 
-    run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, &receipt_path)
+    run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, Some(&receipt_path))
         .current_dir(temp.path())
         .assert()
         .failure()
@@ -2755,7 +2775,7 @@ fn release_nix_witness_rejects_missing_mantle_deterministic_proof() {
     let receipt_path = temp.path().join("nix-witness-missing-proof.json");
     populate_nix_output_from_bundle(&bundle_dir, &manifest, &nix_output_dir);
 
-    run_nix_witness_args(&bundle_dir, &nix_output_dir, &temp.path().join("missing-proof.json"), &receipt_path)
+    run_nix_witness_args(&bundle_dir, &nix_output_dir, &temp.path().join("missing-proof.json"), Some(&receipt_path))
         .current_dir(temp.path())
         .assert()
         .failure()
@@ -3358,6 +3378,56 @@ fn release_reproduce_writes_matched_report_from_isolated_rebuild_output() {
 
 #[cfg(unix)]
 #[test]
+fn release_reproduce_rejects_matched_rebuild_with_oversized_output() {
+    const REBUILD_STREAM_LIMIT_BYTES: u64 = 16_777_216;
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let head = release_fixture_tool("head");
+
+    for stream in ["stdout", "stderr"] {
+        let rebuild_script = temp.path().join(format!("oversized-{stream}-rebuild.sh"));
+        let rebuild_output_dir = temp.path().join(format!("oversized-{stream}-output"));
+        let report_path = temp.path().join(format!("oversized-{stream}-report.json"));
+        let redirect = if stream == "stderr" { ">&2" } else { "" };
+        write_rebuild_copy_script(&rebuild_script, &manifest.binaries[0].relative_path);
+        let mut script = std::fs::OpenOptions::new().append(true).open(&rebuild_script).unwrap();
+        std::io::Write::write_all(
+            &mut script,
+            format!("\"{}\" -c {} /dev/zero {redirect}\n", head.display(), REBUILD_STREAM_LIMIT_BYTES + 1).as_bytes(),
+        )
+        .unwrap();
+        drop(script);
+
+        let output = crunch()
+            .current_dir(temp.path())
+            .arg("--json")
+            .arg("release")
+            .arg("reproduce")
+            .arg(&bundle_dir)
+            .arg("--rebuild-output-dir")
+            .arg(&rebuild_output_dir)
+            .arg("--rebuild-command")
+            .arg(&rebuild_script)
+            .arg("--report-path")
+            .arg(&report_path)
+            .output()
+            .unwrap();
+
+        assert!(
+            !output.status.success(),
+            "oversized {stream} rebuild returned success: cli={} report={}",
+            String::from_utf8_lossy(&output.stdout),
+            std::fs::read_to_string(&report_path).unwrap_or_else(|_| "<absent>".to_string()),
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(stream) && stderr.contains("limit"), "unexpected {stream} diagnostic: {stderr}");
+        assert!(output.stderr.len() <= 2_048, "oversized {stream} diagnostic was unbounded");
+        assert!(output.stdout.is_empty(), "oversized {stream} rebuild claimed a result on stdout");
+        assert!(!report_path.exists(), "oversized {stream} rebuild published a matched report");
+    }
+}
+
+#[cfg(unix)]
+#[test]
 fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
     let (temp, bundle_dir, mut manifest) = make_valid_bundle();
     retarget_release_binary_to_source_size(&bundle_dir, &mut manifest);
@@ -3509,55 +3579,6 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
     assert!(transcript.contains(&proof_dir.join("run-000/store").display().to_string()));
     assert!(transcript.contains(&proof_dir.join("run-001/output").display().to_string()));
     assert!(transcript.contains(&proof_dir.join("run-001/store").display().to_string()));
-}
-#[cfg(unix)]
-#[test]
-fn release_reproduce_rejects_matched_rebuild_with_oversized_output() {
-    const REBUILD_STREAM_LIMIT_BYTES: u64 = 16_777_216;
-    let (temp, bundle_dir, manifest) = make_valid_bundle();
-    let head = release_fixture_tool("head");
-
-    for stream in ["stdout", "stderr"] {
-        let rebuild_script = temp.path().join(format!("oversized-{stream}-rebuild.sh"));
-        let rebuild_output_dir = temp.path().join(format!("oversized-{stream}-output"));
-        let report_path = temp.path().join(format!("oversized-{stream}-report.json"));
-        let redirect = if stream == "stderr" { ">&2" } else { "" };
-        write_rebuild_copy_script(&rebuild_script, &manifest.binaries[0].relative_path);
-        let mut script = std::fs::OpenOptions::new().append(true).open(&rebuild_script).unwrap();
-        std::io::Write::write_all(
-            &mut script,
-            format!("\"{}\" -c {} /dev/zero {redirect}\n", head.display(), REBUILD_STREAM_LIMIT_BYTES + 1).as_bytes(),
-        )
-        .unwrap();
-        drop(script);
-
-        let output = crunch()
-            .current_dir(temp.path())
-            .arg("--json")
-            .arg("release")
-            .arg("reproduce")
-            .arg(&bundle_dir)
-            .arg("--rebuild-output-dir")
-            .arg(&rebuild_output_dir)
-            .arg("--rebuild-command")
-            .arg(&rebuild_script)
-            .arg("--report-path")
-            .arg(&report_path)
-            .output()
-            .unwrap();
-
-        assert!(
-            !output.status.success(),
-            "oversized {stream} rebuild returned success: cli={} report={}",
-            String::from_utf8_lossy(&output.stdout),
-            std::fs::read_to_string(&report_path).unwrap_or_else(|_| "<absent>".to_string()),
-        );
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(stderr.contains(stream) && stderr.contains("limit"), "unexpected {stream} diagnostic: {stderr}");
-        assert!(output.stderr.len() <= 2_048, "oversized {stream} diagnostic was unbounded");
-        assert!(output.stdout.is_empty(), "oversized {stream} rebuild claimed a result on stdout");
-        assert!(!report_path.exists(), "oversized {stream} rebuild published a matched report");
-    }
 }
 
 // r[verify mantle.build_correctness.release_determinism.fixtures.negative.target_copy]

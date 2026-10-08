@@ -844,7 +844,7 @@ fn fenced_root_was_removed(entry: &CasitaFenceEntry, observed: Option<&ObjectKey
         .parse::<ObjectKey>()
         .map_err(|error| Error::Gc(format!("invalid Casita GC fenced target: {error}")))?;
     match observed {
-        Some(actual) if actual == &expected => Ok(false),
+        Some(actual) if actual == &expected && !entry.removed => Ok(false),
         Some(_) => Err(Error::Gc(format!("casita-root-conflict: {}", entry.path))),
         None => Ok(true),
     }
@@ -911,6 +911,10 @@ async fn execute_casita_gc(
         match store.repository.remove_root_if_matches(&name, &target).await {
             Ok(Some(_)) => {
                 fence.entries[index].removed = true;
+                #[cfg(test)]
+                if index == 0 && ctx.state_dir.join(".casita-test-interrupt-after-root-removal").exists() {
+                    return Err(Error::Gc("casita-test-interrupted-after-root-removal".to_string()));
+                }
                 append_casita_fence_outcome(ctx.state_dir, index, false)?;
                 report.operations.push(GcOperationKind::CasitaRootRemoval);
                 if let Err(error) = cleanup_casita_removed(
@@ -1038,6 +1042,8 @@ pub(crate) async fn recover_casita_gc(
         .map_err(|error| Error::Gc(format!("reading Casita GC recovery roots: {error}")))?;
     let mut removed = BTreeSet::new();
     let mut root_observations = Vec::with_capacity(fence.entries.len());
+    // Validate the entire fence before deleting any exported bytes or indexes.
+    // A conflicting later entry must not cause cleanup of an earlier one.
     for entry in &fence.entries {
         let (path, name, _) = fence_entry_identity(entry, paths.store_dir)?;
         let observed =
@@ -2508,7 +2514,10 @@ mod tests {
 
         let plan = store.garbage_collect(None).await.unwrap();
         assert_eq!(plan.candidate_paths, vec![candidate_path.to_absolute_path()]);
-        store.pin_retained_root(&candidate_path.to_absolute_path()).await.unwrap();
+        store
+            .pin_retained_root(&candidate_path.to_absolute_path(), "operator", "explicit-pin-registered")
+            .await
+            .unwrap();
 
         let error = store.garbage_collect(Some(&plan.plan_id)).await.expect_err("changed root must stale the plan");
         assert!(matches!(error, Error::Gc(message) if message.contains("stale-gc-plan")));
@@ -3167,7 +3176,12 @@ mod tests {
                 .contains("casita-root-conflict")
         );
         entry.removed = true;
-        assert!(!fenced_root_was_removed(&entry, Some(&expected)).unwrap());
+        assert!(
+            fenced_root_was_removed(&entry, Some(&expected))
+                .unwrap_err()
+                .to_string()
+                .contains("casita-root-conflict")
+        );
         assert!(fenced_root_was_removed(&entry, None).unwrap());
     }
     #[test]
@@ -3572,6 +3586,89 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn casita_recovery_rejects_republished_fenced_root_without_erasing_it() {
+        let state = tempfile::tempdir().unwrap();
+        let exports = tempfile::tempdir().unwrap();
+        let guard = crate::StoreMutationGuard::acquire_wait(state.path()).unwrap();
+        let store = CasitaStore::open(state.path(), "/nix/store").await.unwrap();
+        let node = Node::Symlink {
+            target: SymlinkTarget::try_from("republished-candidate").unwrap(),
+        };
+        store.admit_castore_payload_root(&node).await.unwrap();
+        let name = CasitaStore::castore_root_name(&node).unwrap();
+        let before = store.repository.metadata().snapshot().await.unwrap();
+        let target = before.root(&name).await.unwrap().unwrap();
+        let earlier = store_path("earlier-removed", 50);
+        let earlier_export = PathBuf::from(earlier.to_absolute_path_with_prefix(exports.path().to_str().unwrap()));
+        std::fs::write(&earlier_export, b"do not clean before preflight").unwrap();
+        let earlier_entry = casita_fence_entry(&earlier, &casita_test_key(50));
+        let entry = CasitaFenceEntry {
+            kind: CasitaFenceKind::Castore,
+            path: casita_castore_path_id(&name),
+            root_name: name.to_string(),
+            expected_target: target.to_string(),
+            removed: false,
+            cleaned: false,
+        };
+        persist_casita_fence(state.path(), &CasitaGcFence {
+            plan_id: "fenced-candidate".to_string(),
+            entries: vec![earlier_entry, entry],
+        })
+        .unwrap();
+        assert!(store.repository.remove_root_if_matches(&name, &target).await.unwrap().is_some());
+        append_casita_fence_outcome(state.path(), 1, false).unwrap();
+        let outsider = crate::casita::LocalRepository::local(state.path().join("casita")).await.unwrap();
+        let session = outsider.mutation_session().await.unwrap();
+        assert!(matches!(
+            session
+                .publish_if_roots_match(
+                    Vec::new(),
+                    vec![casita::experimental::RootExpectation {
+                        name: name.clone(),
+                        target: None,
+                    }],
+                    vec![casita::experimental::RootChange::Set {
+                        name: name.clone(),
+                        target: target.clone(),
+                    }],
+                )
+                .await
+                .unwrap(),
+            casita::experimental::ConditionalPublishResult::Committed(_)
+        ));
+        let revision = outsider.metadata().snapshot().await.unwrap().revision();
+        let reopened = CasitaStore::open(state.path(), "/nix/store").await.unwrap();
+        let mut mappings = CaMappings::load(state.path());
+        let error = recover_casita_gc(
+            state.path(),
+            CasitaGcPaths {
+                output_dir_str: exports.path().to_str().unwrap(),
+                store_dir: "/nix/store",
+            },
+            &reopened,
+            &mut mappings,
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("casita-root-conflict"), "{error}");
+        let after = outsider.metadata().snapshot().await.unwrap();
+        assert_eq!(after.revision(), revision);
+        assert_eq!(after.root(&name).await.unwrap(), Some(target));
+        assert_eq!(std::fs::read(&earlier_export).unwrap(), b"do not clean before preflight");
+        assert!(!load_casita_fence(state.path()).unwrap().unwrap().entries[0].cleaned);
+        assert!(casita_gc_fence_pending(state.path()).unwrap());
+        assert!(
+            reopened
+                .rehydrate_castore_payload_root(&node)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("gc-recovery-required")
+        );
+        drop(guard);
+    }
+
+    #[tokio::test]
     async fn casita_recovery_replays_real_partial_root_removal_without_new_deletions() {
         let state = tempfile::tempdir().unwrap();
         let exports = tempfile::tempdir().unwrap();
@@ -3866,6 +3963,51 @@ mod tests {
     #[tokio::test]
     async fn casita_output_fence_recovery_preserves_unremoved_and_cleans_only_removed_metadata() {
         use crate::ActionResultStore;
+        if let Some(state) = std::env::var_os("MANTLE_CASITA_FENCED_CHILD_STATE") {
+            let state = PathBuf::from(state);
+            let exports = PathBuf::from(std::env::var_os("MANTLE_CASITA_FENCED_CHILD_EXPORTS").unwrap());
+            let info: PathInfo =
+                serde_json::from_slice(&std::fs::read(state.join("fenced-child-info.json")).unwrap()).unwrap();
+            let mut handle = StoreHandle::open(StoreConfig::new(
+                crate::StoreBackend::Casita,
+                state.clone(),
+                exports,
+                "/nix/store".to_string(),
+            ))
+            .await
+            .unwrap();
+            let repository = crate::casita::LocalRepository::local(state.join("casita")).await.unwrap();
+            let name = CasitaStore::root_name(&info.store_path).unwrap();
+            let before = repository.metadata().snapshot().await.unwrap();
+            let revision = before.revision();
+            let target = before.root(&name).await.unwrap();
+            drop(before);
+            let is_recovery_required = |error: String| assert!(error.contains("gc-recovery-required"), "{error}");
+            is_recovery_required(
+                handle.pathinfo_service().get(*info.store_path.digest()).await.unwrap_err().to_string(),
+            );
+            is_recovery_required(handle.pathinfo_service().list().next().await.unwrap().unwrap_err().to_string());
+            is_recovery_required(handle.export_cached_path_info(&info.store_path).await.unwrap_err().to_string());
+            is_recovery_required(
+                handle
+                    .runtime_closure_attestation(std::slice::from_ref(&info.store_path))
+                    .await
+                    .unwrap_err()
+                    .to_string(),
+            );
+            is_recovery_required(handle.pathinfo_service().put(info.clone()).await.unwrap_err().to_string());
+            is_recovery_required(
+                handle.register_retained_root(&info.store_path, GcRootSource::Build).await.unwrap_err().to_string(),
+            );
+            is_recovery_required(handle.rehydrate_castore_payload_root(&info.node).await.unwrap_err().to_string());
+            is_recovery_required(handle.admit_castore_payload_root(&info.node).await.unwrap_err().to_string());
+            let after = repository.metadata().snapshot().await.unwrap();
+            assert_eq!(after.revision(), revision);
+            assert_eq!(after.root(&name).await.unwrap(), target);
+            assert!(crate::interest_store::load(&state).unwrap().is_empty());
+            println!("fenced-child-rejected-all");
+            return;
+        }
 
         let state = tempfile::tempdir().unwrap();
         let exports = tempfile::tempdir().unwrap();
@@ -3910,8 +4052,42 @@ mod tests {
         mappings.save_checked(state.path()).unwrap();
         assert_eq!(CaMappings::load(state.path()).get(&drv_paths[0], "out"), Some(logical[0].as_str()));
         assert_eq!(CaMappings::load(state.path()).get(&drv_paths[1], "out"), Some(logical[1].as_str()));
-
+        let original_roots = store.casita_store.as_ref().unwrap().verified_gc_roots("/nix/store").await.unwrap();
+        let original_revision =
+            store.casita_store.as_ref().unwrap().repository.metadata().snapshot().await.unwrap().revision();
+        let original_export_links = exported.each_ref().map(|path| std::fs::read_link(path).unwrap());
+        let action_paths = local_action_result_gc_candidates(state.path(), &BTreeSet::new()).unwrap();
+        let action_bytes = action_paths
+            .record_paths
+            .iter()
+            .chain(&action_paths.index_marker_paths)
+            .map(|path| (path.clone(), std::fs::read(path).unwrap()))
+            .collect::<Vec<_>>();
         let plan = store.garbage_collect_under_guard(&guard, None).await.unwrap();
+        for result in [
+            store.garbage_collect(None).await,
+            store.garbage_collect_with_castore_roots(None, &[]).await,
+            store.garbage_collect(Some(&plan.plan_id)).await,
+        ] {
+            assert!(result.unwrap_err().to_string().contains("casita-gc-guard-required"));
+            assert!(!casita_gc_fence_pending(state.path()).unwrap());
+            let snapshot = store.casita_store.as_ref().unwrap().repository.metadata().snapshot().await.unwrap();
+            assert_eq!(snapshot.revision(), original_revision);
+            for (name, target, _) in &original_roots {
+                assert_eq!(snapshot.root(name).await.unwrap().as_ref(), Some(target));
+            }
+            for index in 0..outputs.len() {
+                assert_eq!(std::fs::read_link(&exported[index]).unwrap(), original_export_links[index]);
+                assert_eq!(action_store.lookup(&records[index].record.action_ref).await.unwrap().records, vec![
+                    records[index].clone()
+                ]);
+                assert_eq!(CaMappings::load(state.path()).get(&drv_paths[index], "out"), Some(logical[index].as_str()));
+            }
+            for (path, bytes) in &action_bytes {
+                assert_eq!(&std::fs::read(path).unwrap(), bytes);
+            }
+        }
+
         assert_eq!(plan.candidate_path_count, 2);
         assert_eq!(plan.candidate_exported_output_count, 2);
         assert_eq!(plan.candidate_action_result_record_count, 2);
@@ -3956,14 +4132,15 @@ mod tests {
             assert_eq!(CaMappings::load(state.path()).get(&drv_paths[index], "out"), Some(logical[index].as_str()));
         }
 
-        // A second restart after root removal but before the outcome record replays only that removal.
+        // Exercise the real GC executor: stop after its first conditional root removal,
+        // before the outcome journal or any exported metadata is touched.
         let replanned = reopened.garbage_collect_under_guard(&guard, None).await.unwrap();
         assert_eq!(replanned.candidate_paths, plan.candidate_paths);
-        persist_casita_fence(state.path(), &CasitaGcFence {
-            plan_id: replanned.plan_id,
-            entries: fence.entries.clone(),
-        })
-        .unwrap();
+        let interruption = state.path().join(".casita-test-interrupt-after-root-removal");
+        std::fs::write(&interruption, []).unwrap();
+        let error = reopened.garbage_collect_under_guard(&guard, Some(&replanned.plan_id)).await.unwrap_err();
+        assert!(error.to_string().contains("casita-test-interrupted-after-root-removal"), "{error}");
+        std::fs::remove_file(&interruption).unwrap();
         let removed = logical.iter().position(|path| path == &fence.entries[0].path).unwrap();
         let survivor = 1 - removed;
         let removable_metadata =
@@ -3983,46 +4160,108 @@ mod tests {
             .find(|path| !removable_metadata.index_marker_paths.contains(path))
             .unwrap()
             .clone();
-        let (_, name, target) = fence_entry_identity(&fence.entries[0], "/nix/store").unwrap();
-        let repository = reopened.casita_store.as_ref().unwrap().repository.clone();
-        assert!(repository.remove_root_if_matches(&name, &target).await.unwrap().is_some());
+        let (_, name, _) = fence_entry_identity(&fence.entries[0], "/nix/store").unwrap();
+        let stopped = reopened.casita_store.as_ref().unwrap().repository.metadata().snapshot().await.unwrap();
+        assert_eq!(stopped.root(&name).await.unwrap(), None);
+        drop(stopped);
+        assert!(casita_gc_fence_pending(state.path()).unwrap());
         assert!(!casita_fence_journal_path(state.path()).exists());
-        drop(repository);
         drop(reopened);
-        drop(guard);
+        let before_child = crate::casita::LocalRepository::local(state.path().join("casita")).await.unwrap();
+        let before_child_snapshot = before_child.metadata().snapshot().await.unwrap();
+        let child_revision = before_child_snapshot.revision();
+        let survivor_name = CasitaStore::root_name(&outputs[survivor].store_path).unwrap();
+        let survivor_target = before_child_snapshot.root(&survivor_name).await.unwrap();
+        drop(before_child_snapshot);
+        let fence_bytes = std::fs::read(casita_fence_path(state.path())).unwrap();
+        let export_links = exported.each_ref().map(|path| std::fs::read_link(path).unwrap());
+        let record_bytes = all_metadata
+            .record_paths
+            .iter()
+            .map(|path| (path.clone(), std::fs::read(path).unwrap()))
+            .collect::<Vec<_>>();
+        let marker_bytes = all_metadata
+            .index_marker_paths
+            .iter()
+            .map(|path| (path.clone(), std::fs::read(path).unwrap()))
+            .collect::<Vec<_>>();
+        std::fs::write(state.path().join("fenced-child-info.json"), serde_json::to_vec(&outputs[survivor]).unwrap())
+            .unwrap();
+        let child = std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("gc::tests::casita_output_fence_recovery_preserves_unremoved_and_cleans_only_removed_metadata")
+            .arg("--exact")
+            .arg("--nocapture")
+            .env("MANTLE_CASITA_FENCED_CHILD_STATE", state.path())
+            .env("MANTLE_CASITA_FENCED_CHILD_EXPORTS", exports.path())
+            .output()
+            .unwrap();
+        assert!(
+            child.status.success() && String::from_utf8_lossy(&child.stdout).contains("fenced-child-rejected-all"),
+            "child status={} stderr={} stdout={}",
+            child.status,
+            String::from_utf8_lossy(&child.stderr),
+            String::from_utf8_lossy(&child.stdout),
+        );
+        std::fs::remove_file(state.path().join("fenced-child-info.json")).unwrap();
+        let after_child = before_child.metadata().snapshot().await.unwrap();
+        assert_eq!(after_child.revision(), child_revision);
+        assert_eq!(after_child.root(&survivor_name).await.unwrap(), survivor_target);
+        assert_eq!(after_child.root(&name).await.unwrap(), None);
+        assert_eq!(std::fs::read(casita_fence_path(state.path())).unwrap(), fence_bytes);
+        assert!(!casita_fence_journal_path(state.path()).exists());
+        for (path, expected) in exported.iter().zip(&export_links) {
+            assert_eq!(&std::fs::read_link(path).unwrap(), expected);
+        }
+        for (path, bytes) in record_bytes.iter().chain(&marker_bytes) {
+            assert_eq!(&std::fs::read(path).unwrap(), bytes);
+        }
+        for index in 0..outputs.len() {
+            assert_eq!(action_store.lookup(&records[index].record.action_ref).await.unwrap().records, vec![
+                records[index].clone()
+            ]);
+            assert_eq!(CaMappings::load(state.path()).get(&drv_paths[index], "out"), Some(logical[index].as_str()));
+        }
 
-        if let Some(executable) = std::env::var_os("MANTLE_CASITA_RECOVERY_TEST_CLI") {
-            let output = std::process::Command::new(executable)
+        drop(after_child);
+        let recovered = if let Some(binary) = std::env::var_os("MANTLE_CASITA_RECOVERY_TEST_CLI") {
+            drop(guard);
+            let output = std::process::Command::new(binary)
+                .arg("--json")
                 .arg("--state-dir")
                 .arg(state.path())
                 .arg("--store")
                 .arg(exports.path())
-                .args([
-                    "--store-prefix",
-                    "/nix/store",
-                    "--store-backend",
-                    "casita",
-                    "--json",
-                    "store",
-                    "gc",
-                ])
+                .arg("--nix-compat")
+                .args(["--store-backend", "casita", "store", "gc"])
                 .output()
                 .unwrap();
-            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-            let cli_plan: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-            assert_eq!(cli_plan["is_dry_run"], true);
-            assert_eq!(cli_plan["candidate_paths"], serde_json::json!([logical[survivor]]));
-        }
-
-        let guard = crate::StoreMutationGuard::acquire_wait(state.path()).unwrap();
-        let mut recovered = StoreHandle::open(config()).await.unwrap();
-        let resumed_plan = recovered.garbage_collect_under_guard(&guard, None).await.unwrap();
-        assert!(resumed_plan.is_dry_run);
-        assert_eq!(resumed_plan.candidate_paths, vec![logical[survivor].clone()]);
+            assert!(
+                output.status.success(),
+                "GC recovery command status={} stderr={} stdout={}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr),
+                String::from_utf8_lossy(&output.stdout),
+            );
+            let plan: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+            assert_eq!(plan["is_dry_run"], true);
+            assert_eq!(plan["candidate_paths"], serde_json::json!([logical[survivor]]));
+            assert!(!casita_gc_fence_pending(state.path()).unwrap());
+            StoreHandle::open(config()).await.unwrap()
+        } else {
+            let mut handle = StoreHandle::open(config()).await.unwrap();
+            let plan = handle.garbage_collect_under_guard(&guard, None).await.unwrap();
+            assert!(plan.is_dry_run);
+            assert_eq!(plan.candidate_paths, vec![logical[survivor].clone()]);
+            handle
+        };
         assert!(!casita_gc_fence_pending(state.path()).unwrap());
         let published = recovered.casita_store.as_ref().unwrap().verified_gc_roots("/nix/store").await.unwrap();
         assert_eq!(published.len(), 1);
         assert_eq!(published[0].2.store_path, outputs[survivor].store_path);
+        assert_eq!(
+            recovered.pathinfo_service().get(*outputs[survivor].store_path.digest()).await.unwrap(),
+            Some(outputs[survivor].clone()),
+        );
         assert!(std::fs::symlink_metadata(&exported[removed]).is_err());
         assert!(std::fs::read_link(&exported[survivor]).is_ok());
         assert!(!removable_metadata.record_paths[0].exists());

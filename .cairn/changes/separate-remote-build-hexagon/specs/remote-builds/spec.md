@@ -1,5 +1,11 @@
 # Remote Builds Hexagonal Architecture Delta
 
+These are the target requirements, not a completion claim. The current
+I4/I5 local stdio effect cutover and its focused tests are recorded in
+[`evidence/focused-validation.md`](../../evidence/focused-validation.md);
+quantified resource/locality policy (I2), full provider port coverage (I3),
+and V1–V5 remain open.
+
 ## ADDED Requirements
 
 ### Requirement: Remote execution has a strict functional core

@@ -89,11 +89,38 @@ mantle build --plan examples/hello.ncl
 mantle build examples/hello.ncl --no-substitute
 ```
 
+For an interactive local build that follows edits to the file and its imported
+Nickel sources, run `mantle build --watch examples/hello.ncl --no-substitute`.
+The command prints admitted, retained, and retracted goals and their settled
+outputs; invalid edits leave the last admitted goals in place. Removing a
+running goal cancels its sandbox and waits for teardown before admitting the
+replacement set. Ctrl-C or SIGTERM also waits for active sandboxes to stop.
+Watch output is human-readable, not the stable `--json` aggregate report;
+`--watch` cannot be combined with remote builders, `--impure`, `--plan`,
+`--causal-trace`, or `--evaluation-stream`.
+
 Use `mantle --json build ...` for the stable aggregate build report. Its compatibility identifier is `crunch-build-report-v1`.
 
 External CI consumers can bind normalized requests and observations through the host-independent [`mantle-build-contract`](docs/build-interchange-contract.md) component. This contract does not import build or store authority.
 
 Use `mantle build --evaluation-stream ...` for bounded NDJSON selected-root events. Stdout contains only `mantle-evaluation-stream-v1` records. See [the evaluation stream contract](docs/evaluation-stream-contract.md) for ordering, status, cancellation, and compatibility rules.
+
+To diagnose a local build, opt in to `mantle --state-dir "$STATE_DIR" --json build
+examples/dependency-chain.ncl --causal-trace`. Mantle writes a bounded,
+redacted `mantle-build-trace-v1` JSON diagnostic to
+`$STATE_DIR/logs/build-trace-<pid>.json` (or a numbered `-<n>.json` suffix
+when that path already exists), separate from stdout, build logs, attestations,
+and receipts. The trace stays under `$STATE_DIR/logs` even when `CRUNCH_LOG_DIR`
+sends ordinary build logs elsewhere. Follow `caused_by` action IDs from a
+failure to its root requirement and external trigger; an interleaved
+independent root is not its cause. Cache hits name their admission check.
+Unknown, missing, dangling, cross-goal, oversized, or unredacted records fail
+validation. Traces describe observed scheduler actions only, not a complete
+build proof, output trust, or release eligibility. If strict store preflight
+fails before the Worker starts, the original report and exit status remain;
+stderr says the trace is unavailable and no synthetic file is written.
+`--causal-trace` cannot be combined with `--evaluation-stream`, `--plan`,
+`--fix`, `--watch`, or a remote `--builder`.
 
 ## Core workflows
 
@@ -123,10 +150,36 @@ Use `--nix-compat` when the logical prefix must be `/nix/store` for
 interoperability. The legacy `CRUNCH_STATE_DIR` spelling remains a compatibility
 surface. New operator prose and project-facing names use Mantle.
 
+An empty or relative selected `CRUNCH_STATE_DIR`, `XDG_STATE_HOME`, or `HOME`
+fails before state/store access. An explicit `--state-dir` takes precedence,
+including relative paths such as `.`. If `HOME` is unset, the fallback remains
+`/tmp/.local/state/crunch`.
+Relative `--state-dir` values are anchored to the invocation's working
+directory only when exported to child processes; the parent retains the
+operator-selected path.
+
+`CRUNCH_LOG_DIR` overrides `<state-dir>/logs` for build logs and `mantle log`;
+an empty selected log directory is rejected before command effects. Absolute
+non-UTF-8 state environment paths and non-UTF-8 log directory paths are
+preserved without fallback.
+
 Content-addressed outputs are the default. Input-addressed derivations and Nix
 hash algorithms remain available where compatibility requires them. Mantle signs
 PathInfo records with Ed25519 keys and rechecks signatures, content hashes, and
 castore completeness before admitting cached outputs.
+
+Before cache lookup or execution, a direct or transitive dependent of
+content-addressed outputs resolves completed input paths and uses the resulting
+derivation for output, cache, and shared action-result identity. Signed results
+and matching signed PathInfo under trusted full public keys authorize both
+content-addressed outputs and resolved input-addressed intermediates; a child
+can then pass its admitted output identity to its own children. A bare
+`ca_mappings.json` entry or PathInfo-only cache hit is not authority, so legacy
+mapping-only results rebuild. CA-independent subgraphs retain their identities.
+Build reports show original and resolved derivations, resolved identity, and
+reuse decisions. This bounded reuse does not prove output determinism, executor
+correctness, or release eligibility; see
+[ADR 0098](adr/0098-resolve-content-addressed-inputs-before-dispatch.md).
 
 Each state directory records its store backend.
 Mantle rejects a different `--store-backend` before it changes any file.
@@ -211,10 +264,28 @@ mantle store gc
 mantle store gc --execute --plan-id <blake3-plan-id>
 ```
 
-Migration preserves old roots as `legacy-unmanaged`. It does not infer an owner
-or authorize deletion. `store usage` reports observed, retained, reclaimable,
-quarantined, shared, and unknown bytes. Unknown closure or size facts stay
-visible. They do not become zero-byte estimates.
+Legacy `gc-roots.json` remains readable without modification until the explicit
+`store roots --migrate` command publishes per-interest records and archives the
+legacy file. Migrated roots retain `legacy-unmanaged` provenance; migration does
+not infer an owner or authorize deletion. New interests are bounded, versioned
+records under `<state-dir>/retention-interests`, named by the BLAKE3 digest of
+their canonical JSON bytes. For independently scoped local operator interests:
+
+```bash
+mantle store pin /mantle/store/<digest>-<name> --owner alice --reason ci
+mantle store pin /mantle/store/<digest>-<name> --owner bob --reason investigation
+mantle --json store roots
+mantle store unpin /mantle/store/<digest>-<name> --owner alice --reason ci
+```
+
+The first release leaves Bob's record and the retained path intact. Commands
+`store roots`, `store usage`, and `store info` report owner, reason, and physical
+record count; their JSON reports carry explicit schema versions. `--owner` is a
+local label, **not** authenticated authority: a caller with access to the
+state directory can choose another operator label. `store usage` reports
+observed, retained, reclaimable, quarantined, shared, and unknown bytes.
+Unknown closure or size facts stay visible instead of becoming zero-byte
+estimates.
 
 The first GC command only creates a plan. Execution replans from current facts
 and rejects a stale plan ID. It commits authoritative metadata before file
@@ -243,9 +314,31 @@ Mantle's project layer handles declared source inputs, lock state, generated
 Nickel bindings, package selectors, shell profiles, and reviewed file generation.
 It does not own Onix-style module evaluation or system configuration.
 
+Project commands plan their filesystem and resolution capabilities before
+execution. `refresh` and `upgrade` observe lock, generated-input, and retention
+writes separately; a failed later write can leave earlier files changed, and a
+partial refresh still exits nonzero even when successful inputs were locked.
+When a write fails, `refresh` does not render its outcome listing; inspect the
+files before retrying. `init` checks each scaffold write and reads its content
+back before announcing success. A project check reports static soundness, not
+build success, remote freshness, or trust proof.
+Refresh and stale checks reject more than 256 inputs to resolve before invoking
+the resolver; this is its existing batch limit, not proof of network completion.
+
+For reviewed generated files, run `mantle filegen plan --plan-out plan.json`,
+review the plan, then `mantle filegen apply --plan plan.json`. The plan
+publication is an observed write, not an application of generated files.
+Apply reports success only after the state file and every managed generated
+file read back consistently with the applied plan; a failed write can leave
+partial files, so re-plan before retrying.
+
 An unsupported reviewed-plan schema returns a typed blocker before generated-file
 or filegen-state writes; valid reviewed plans retain drift-checked apply behavior.
 
+`mantle log --list` fails rather than presenting an incomplete listing when a
+selected log cannot be read. Log inspection admits at most 4,096 directory
+entries and 16 MiB of log content per invocation; exceeding either bound fails
+without printing a partial listing.
 ## Offline source workflow
 
 Prepare a source bundle on a connected host, then import and pin it before an
@@ -267,6 +360,32 @@ mantle --state-dir ./offline-state build \
   --offline-source-preflight --no-substitute ./package.ncl
 ```
 
+For pre-existing `/nix/store` inputs that cannot be embedded in a source bundle,
+import each direct physical output with its signed PathInfo and an explicit
+public key. Use the same store prefix, state directory, output store, and key
+when checking or building the root:
+
+```bash
+mantle --nix-compat --store /srv/offline-store --state-dir /srv/offline-state \
+  source bundle import-store-path \
+  --logical /nix/store/<hash>-name \
+  --physical /srv/offline-store/<hash>-name \
+  --trusted-public-keys 'cache:PUBLIC_KEY' --pin
+mantle --nix-compat --store /srv/offline-store --state-dir /srv/offline-state \
+  source bundle preflight --build-root ./package.ncl \
+  --trusted-public-keys 'cache:PUBLIC_KEY'
+mantle --nix-compat --store /srv/offline-store --state-dir /srv/offline-state \
+  build --offline-source-preflight --trusted-public-keys 'cache:PUBLIC_KEY' \
+  --no-substitute ./package.ncl
+```
+
+Virtual-only pinned store paths are not ready. Import verifies the signed
+PathInfo identity, references and actual NAR; strict preflight rechecks those
+physical bytes before admitting the build.
+
+Source readiness proves declared input availability and identity only. Build
+success, output trust, compiler correctness, and release eligibility require
+separate evidence.
 Source readiness reports the declared source-bundle mappings; a virtual
 `store-path` record can report Ready without any signed PathInfo or physical
 store object. Treat it as a declaration, not proof of an admitted local input.
@@ -361,6 +480,15 @@ name the inputs and receipts. This is **not** a checked-in repeatable proof
 rail or completion of that Cairn change; it establishes neither device
 install/launch/runtime behavior, third-party source provenance, production
 signing trust, nor release eligibility.
+
+Source commands admit bounded read, optional connected-fetch, publication, and
+state-observation effects before executing them. Export, bootstrap-profile
+publication, and profile refresh read back their published bundle; import and
+hydration check durable records and pins, and hydration rechecks the published
+vendor tree. A successful write alone is not a completed source operation.
+These observations cover only the named artifacts and declared limits; they do
+not establish source authenticity beyond admitted metadata or any downstream
+build result.
 
 ## Mantlepkgs catalogs
 
@@ -693,6 +821,7 @@ notices.
 - [OnixResearch/trellis](https://github.com/OnixResearch/trellis) provides reusable verified logic and proof evidence for selected bounded models. Mantle retains runtime, adapter, and release authority.
 - [Atom Reforged](https://nrd.sh/blog/atom-reforged.html) provides architecture references for narrow store authority, source observations, monotonic ingest, and small formal protocol models. Mantle does not adopt its package registry or ownership protocol.
 - `durable-file-publication` at `rad:z3tAR4For7qw8ZirkJzoDw1VNDDLM` provides the reviewed capability-relative one-file publication mechanism.
+- [komora-io/fault-injection](https://github.com/komora-io/fault-injection) supplies pinned, test-only annotated I/O faults for Mantle's store-shell fixtures. The fixtures cover named failure paths only; they do not establish sandbox hermeticity, store correctness, or release eligibility.
 - [ekala-project/corepkgs](https://github.com/ekala-project/corepkgs) provides package-domain, explicit-variant, deterministic-index, and separate-test design references. Mantle retains package identity, build, validation, and evidence authority.
 - [ekala-project/eka-ci](https://github.com/ekala-project/eka-ci) provides base-to-head package-impact and closure-diff design references. Forge credentials and CI presentation remain outside Mantle.
 - [ekala-project/ekapkgs-update](https://github.com/ekala-project/ekapkgs-update) provides source-adapter, version-policy, OSV, and Repology design references. Mantle preserves explicit unavailable states and reimplements policy in its functional core.

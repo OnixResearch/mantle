@@ -14,7 +14,7 @@ postcard = { version = "1", default-features = false, features = ["use-std"] }
 serde = { version = "1", features = ["derive"] }
 serde_bytes = "0.11"
 thiserror = "2.0"
-tokio = { version = "1.39.3", features = ["process"] }
+tokio = { version = "1.39.3", features = ["process", "time", "sync", "rt", "macros"] }
 snix-castore = { path = "../snix-castore", features = ["fuse"] }
 tracing = "0.1.40"
 url = "2.5.2"

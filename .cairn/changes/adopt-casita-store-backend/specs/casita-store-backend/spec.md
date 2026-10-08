@@ -199,7 +199,7 @@ r[mantle.casita_store_backend.castore_payload_roots] PathInfo-backed action-resu
 - GIVEN an action result whose outputs are PathInfo-backed store paths admitted under `casita`, regardless of whether the profile declares `rust-unit-cache`
 - WHEN a fresh process resolves the action through `ActionResultPort` after the physical export and session scratch are gone
 - THEN it MUST rehydrate the outputs from their `mantle/outputs/` roots without rebuilding
-- AND it MUST NOT open the Rust unit cache or require any `mantle/castore/` root
+- AND it MUST NOT require any `mantle/castore/` root for those PathInfo-backed outputs
 
 ### Requirement: Signed PathInfo lives only in its output root
 
@@ -397,7 +397,7 @@ r[mantle.casita_store_backend.offline_boundary] The Casita dependency MUST NOT e
 
 ### Requirement: Casita stays inside the store shell and declares its profile
 
-r[mantle.casita_store_backend.capability_boundary] Casita types, including the experimental mutation-session and conditional-publication types, MUST stay inside the `crunch-store` shell. Capability views, application ports, and reports MUST NOT expose Casita repositories, sessions, keys, readers, reports, or errors. The store capability boundary checker MUST reject a Casita type or raw repository access outside the store shell. The Casita capability profile MUST declare every core capability, MUST omit `store-repair-final-nar` from its core list until a durable repair fence keeps a replaced envelope and its artifact-attestation sidecar recoverable together, MUST declare `atomic-batch-import` with the repository's `max_root_changes` bound, and MUST NOT declare `overlay-composition`, `unsigned-admission`, or, while the castore parity gate applies, `rust-unit-cache`. Before any state access, Casita mode MUST reject `--base-store` with `casita-overlay-unsupported`, and `--trust-unsigned` or `--nario-trust-unsigned` with `casita-trust-unsigned-unsupported`, because a fresh read requires a trusted signature. Casita mode MUST reject `store repair-final-nar`, as a dry run or with `--execute`, with `casita-repair-final-nar-unsupported` before it creates or opens the state directory, and the library repair calls `inspect_final_nar_repair` and `execute_final_nar_repair` MUST reject an open Casita store with the same blocker before any effect. `store repair-final-nar` under `snix` is unchanged.
+r[mantle.casita_store_backend.capability_boundary] Casita types, including the experimental mutation-session and conditional-publication types, MUST stay inside the `crunch-store` shell. Capability views, application ports, and reports MUST NOT expose Casita repositories, sessions, keys, readers, reports, or errors. The store capability boundary checker MUST reject a Casita type or raw repository access outside the store shell. The Casita capability profile MUST declare every core capability, MUST omit `store-repair-final-nar` from its core list until a durable repair fence keeps a replaced envelope and its artifact-attestation sidecar recoverable together, MUST declare `atomic-batch-import` with the repository's `max_root_changes` bound and `rust-unit-cache` with durable verified castore payload roots, and MUST NOT declare `overlay-composition` or `unsigned-admission`. Before any state access, Casita mode MUST reject `--base-store` with `casita-overlay-unsupported`, and `--trust-unsigned` or `--nario-trust-unsigned` with `casita-trust-unsigned-unsupported`, because a fresh read requires a trusted signature. Casita mode MUST reject `store repair-final-nar`, as a dry run or with `--execute`, with `casita-repair-final-nar-unsupported` before it creates or opens the state directory, and the library repair calls `inspect_final_nar_repair` and `execute_final_nar_repair` MUST reject an open Casita store with the same blocker before any effect. `store repair-final-nar` under `snix` is unchanged.
 
 #### Scenario: Casita type escapes the shell
 
@@ -429,7 +429,7 @@ r[mantle.casita_store_backend.capability_boundary] Casita types, including the e
 
 ### Requirement: Casita backend evidence keeps local claims
 
-r[mantle.casita_store_backend.claim_boundary] Casita backend evidence MUST be limited to the pinned revision and feature set, the declared capability profile and its bounds, the trust policy files and signing keys used, the tested admission, conditional publication, envelope replacement, castore payload (only while `rust-unit-cache` is declared), trust, verification, reuse, retention, GC, recovery, migration, batch, batch-limit, and rejection fixtures, and the recorded vendor closure. Reports and documentation MUST list the optional capabilities that the Casita profile does not declare, including `rust-unit-cache` while the castore parity gate applies, and the batch bound. Evidence MUST NOT claim Casita correctness, stability of the experimental API across revisions, key ownership, signer honesty, revocation freshness beyond the policy file as read for each verification, that a state directory can build and read its own outputs without a policy file when `CRUNCH_CONFIG_DIR` places the signing key outside it, durability under power loss, crash safety beyond the tested interruptions, interchangeability with `snix` beyond the declared profile, output correctness, sandboxing, or release eligibility.
+r[mantle.casita_store_backend.claim_boundary] Casita backend evidence MUST be limited to the pinned revision and feature set, the declared capability profile and its bounds, the trust policy files and signing keys used, the tested admission, conditional publication, envelope replacement, castore payload, trust, verification, reuse, retention, GC, recovery, migration, batch, batch-limit, and rejection fixtures, and the recorded vendor closure. Reports and documentation MUST list the optional capabilities that the Casita profile does not declare, including `overlay-composition` and `unsigned-admission`, and the batch bound. Evidence MUST NOT claim Casita correctness, stability of the experimental API across revisions, key ownership, signer honesty, revocation freshness beyond the policy file as read for each verification, that a state directory can build and read its own outputs without a policy file when `CRUNCH_CONFIG_DIR` places the signing key outside it, durability under power loss, crash safety beyond the tested interruptions, interchangeability with `snix` beyond the declared profile, output correctness, sandboxing, or release eligibility.
 
 #### Scenario: All Casita rails pass
 
@@ -463,15 +463,16 @@ r[mantle.casita_store_backend.pinned_patch] The pinned revision does not pass `c
 - THEN Cargo MUST resolve Casita from the patched vendor closure, and the check MUST pass
 - AND no unpatched Casita git checkout MUST be compiled
 
-### Requirement: Casita Rust cache reuse requires durable, verified payload roots
+### Requirement: Casita Rust cache reuse and GC require durable verified payload roots
 
 r[mantle.casita_store_backend.castore_parity_gate] Standalone Rust unit cache nodes are castore-only and are not equivalent to `ActionResultPort` outputs; PathInfo-backed action-result outputs stay core and use output roots. The Casita profile MUST declare `rust-unit-cache` only when retained cache payloads have permanent `mantle/castore/` roots, a fresh process restores a deleted physical unit output without another compiler invocation, and altered or missing retained roots block restore and GC planning. Cache publication MUST root a payload before publishing its result, index, or retention state. Guarded `store usage` and `store gc` MUST recover a pending Casita GC fence before opening Rust cache retention; both MUST verify the payload roots and retain live nodes in their GC plan. A missing or altered retained root MUST reject planning before a new fence or root removal. When no Rust unit cache state exists, output GC MUST remain operable without opening the Rust unit cache.
 
 #### Scenario: Retained Rust unit is restored in a fresh process
 
-- GIVEN a Casita Rust unit cache result and its verified `mantle/castore/` payload root
-- WHEN a fresh process executes the same Rust unit after its physical output is deleted
-- THEN it MUST restore the same unit artifacts without invoking the compiler
+- GIVEN a Casita Rust unit cache result with a retained payload root and a permitted local cache policy
+- WHEN a fresh wrapper process requests the same action after session scratch is gone
+- THEN it MUST verify and restore the payload without running the compiler
+- AND a guarded GC using the Rust retention live nodes MUST preserve that root
 
 #### Scenario: Output GC without Rust unit cache state
 
@@ -482,7 +483,14 @@ r[mantle.casita_store_backend.castore_parity_gate] Standalone Rust unit cache no
 
 #### Scenario: Rust retention protects roots and tampering blocks GC
 
-- GIVEN Casita Rust unit cache retention state and a retained payload root
-- WHEN `store usage` or `store gc` plans GC under the mutation guard
-- THEN the retained node MUST remain a GC root
-- AND a second client's alteration or removal of that root MUST reject planning before a new fence or root removal
+- GIVEN a Casita state directory with signed outputs and an existing Rust cache state directory with no retained nodes
+- WHEN the operator runs `store usage`, `store gc`, and an accepted `store gc --execute --plan-id <id>`
+- THEN verified retention planning MUST succeed and GC MUST remove only the unretained signed output
+- AND the Rust cache state and retained output MUST remain readable with no incomplete fence
+
+#### Scenario: Missing retained cache root blocks CLI GC
+
+- GIVEN a Casita Rust cache retention record whose durable payload root another writer removed
+- WHEN the operator runs `store gc`
+- THEN it MUST fail with `casita-root-missing` before a GC fence or other root removal
+- AND FailOpen wrapper reuse MUST reject without running the compiler

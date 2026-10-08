@@ -112,21 +112,28 @@ cargo deny check                           # reads deny.toml
 ```
 
 `scripts/quality-gate-common.sh` owns the canonical package lists:
-`FIRST_PARTY_PACKAGES` (10) and `VENDORED_WORKSPACE_EXCLUDES` (`fuse-backend-rs`,
-`nix-compat`, `nix-compat-derive`, `snix-build`, `snix-castore`, `snix-store`,
-`snix-tracing`). Plain `cargo clippy --workspace --all-targets -- -D warnings`
-and `cargo fmt --all` are **not** valid gates — vendored members fail first.
-Manual gate equivalents:
+`FIRST_PARTY_PACKAGES` selects the registered first-party packages for the fmt
+check, while `VENDORED_WORKSPACE_EXCLUDES` lists `fuse-backend-rs`, `nix-compat`,
+`nix-compat-derive`, `snix-build`, `snix-castore`, `snix-store`, and
+`snix-tracing`. For each changed first-party workspace package outside the fmt
+selection, separately run `cargo fmt --check -p <package>`; passing the selected
+fmt check alone does not verify those packages. Strict Clippy and workspace
+lib/tests still cover the workspace except the listed vendored members. Plain
+`cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --all`
+are **not** valid gates — vendored members fail first. Manual gate equivalents:
 
 ```bash
+./scripts/check-gcc40-configure-bridge.rs --self-test
+source scripts/quality-gate-common.sh
+cargo_fmt_first_party
 cargo clippy --workspace --all-targets --no-deps \
   --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive \
   --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing \
   -- -D warnings
-cargo fmt --check -p mantle -p crunch-attestation -p crunch-build -p crunch-delta \
-  -p crunch-eval -p crunch-glue -p crunch-pipeline -p crunch-project \
-  -p crunch-shell -p crunch-store
-cargo test --workspace --lib --tests <same excludes> -- --test-threads 1
+cargo test --workspace --lib --tests \
+  --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive \
+  --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing \
+  -- --test-threads 1
 ```
 
 Focused test legs (package selector is `-p mantle`; `-p crunch` is stale —

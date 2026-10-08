@@ -904,7 +904,7 @@ impl RustCache {
         }
         let staged = {
             let _store_guard = self
-                .store
+                .durable_store
                 .as_ref()
                 .map(|_| crunch_store::StoreMutationGuard::acquire_wait(&self.state_dir))
                 .transpose()
@@ -1233,7 +1233,7 @@ impl RustCache {
             .collect::<Vec<_>>();
         let plan = plan_local_reuse(&admitted[0].signed.envelope.result.input.action_ref, local_policy, facts)
             .map_err(|error| Error::Core(String::from(error.code())))?;
-        let _store_guard = if self.store.is_some() {
+        let _store_guard = if self.durable_store.is_some() {
             Some(
                 crunch_store::StoreMutationGuard::acquire_wait(&self.state_dir)
                     .map_err(|error| Error::State(format!("store-mutation-lock:{error}")))?,
@@ -1241,7 +1241,7 @@ impl RustCache {
         } else {
             None
         };
-        if let Some(store) = &self.store {
+        if let Some(store) = &self.durable_store {
             let retention = self.retention()?;
             // r[impl mantle.casita_store_backend.castore_payload_roots]
             for candidate in &admitted {
@@ -1307,7 +1307,7 @@ impl RustCache {
 
     async fn render_shared_object(&self, result: &RustUnitResult) -> Result<StagedSharedObject, Error> {
         let node = node_from_identity(&result.input.root_node)?;
-        if let Some(store) = &self.store {
+        if let Some(store) = &self.durable_store {
             store.rehydrate_castore_payload_root(&node).await.map_err(Error::Authority)?;
         }
         let is_complete =

@@ -7,10 +7,11 @@
 //! r[impl remote_builds.idempotent_attempt_reporting]
 //! r[impl remote_builds.pure_attempt_decisions]
 
-use std::collections::BTreeMap;
-
-use serde::Deserialize;
-use serde::Serialize;
+use alloc::collections::BTreeMap;
+#[cfg(test)]
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
 
 pub const MAX_REMOTE_ATTEMPT_EVENTS: usize = 1_024;
 pub const MAX_REMOTE_ATTEMPTS: u32 = 32;
@@ -27,8 +28,9 @@ const DEFAULT_REMOTE_ATTEMPT_TIMEOUT_SECS: u64 = 3_600;
 const REMOTE_ATTEMPT_ID_DOMAIN: &str = "mantle-remote-attempt-v1";
 const REMOTE_ATTEMPT_PAYLOAD_DOMAIN: &str = "mantle-remote-attempt-payload-v1";
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct RemoteJobId(String);
 
 impl RemoteJobId {
@@ -41,8 +43,9 @@ impl RemoteJobId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct RemoteAttemptId(String);
 
 impl RemoteAttemptId {
@@ -55,8 +58,9 @@ impl RemoteAttemptId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct RemoteAssignmentNonce(String);
 
 impl RemoteAssignmentNonce {
@@ -73,12 +77,14 @@ impl RemoteAssignmentNonce {
     }
 }
 
+#[cfg(feature = "serde")]
 fn legacy_missing_assignment_nonce() -> RemoteAssignmentNonce {
     RemoteAssignmentNonce(String::new())
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct RemoteEventId(String);
 
 impl RemoteEventId {
@@ -91,8 +97,9 @@ impl RemoteEventId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct RemotePayloadDigest(String);
 
 impl RemotePayloadDigest {
@@ -109,8 +116,9 @@ impl RemotePayloadDigest {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct RemoteFenceGeneration(u64);
 
 impl RemoteFenceGeneration {
@@ -135,8 +143,9 @@ impl RemoteFenceGeneration {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum RemoteAttemptPhase {
     Queued,
     Running,
@@ -157,16 +166,18 @@ impl RemoteAttemptPhase {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum RemoteAttemptFailureClass {
     Retryable,
     Terminal,
     PolicyDenied,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum RemoteAttemptReportKind {
     Start,
     Heartbeat,
@@ -177,8 +188,9 @@ pub enum RemoteAttemptReportKind {
     Completion,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", serde(tag = "kind", rename_all = "kebab-case"))]
 pub enum RemoteAttemptReportPayload {
     Start,
     Heartbeat {
@@ -227,7 +239,8 @@ impl RemoteAttemptReportPayload {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteAttemptReportIdentity {
     pub job_id: RemoteJobId,
     pub attempt_id: RemoteAttemptId,
@@ -236,7 +249,8 @@ pub struct RemoteAttemptReportIdentity {
     pub payload_digest: RemotePayloadDigest,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteAttemptReport {
     pub identity: RemoteAttemptReportIdentity,
     pub payload: RemoteAttemptReportPayload,
@@ -264,11 +278,12 @@ impl RemoteAttemptReport {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteAttemptState {
     pub job_id: RemoteJobId,
     pub attempt_id: RemoteAttemptId,
-    #[serde(default = "legacy_missing_assignment_nonce")]
+    #[cfg_attr(feature = "serde", serde(default = "legacy_missing_assignment_nonce"))]
     pub assignment_nonce: RemoteAssignmentNonce,
     pub fence_generation: RemoteFenceGeneration,
     pub phase: RemoteAttemptPhase,
@@ -282,7 +297,120 @@ pub struct RemoteAttemptState {
     pub result_digest_blake3: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CoordinatorAttemptPhase {
+    Queued,
+    Running,
+    Finished,
+    Lost,
+}
+
+impl CoordinatorAttemptPhase {
+    pub const fn is_live(self) -> bool {
+        matches!(self, Self::Queued | Self::Running)
+    }
+}
+
+pub const fn persisted_missing_coordinator_attempt_is_valid(
+    phase: CoordinatorAttemptPhase,
+    last_attempt_reason: Option<RemoteAttemptReasonCode>,
+) -> bool {
+    matches!(phase, CoordinatorAttemptPhase::Lost)
+        && matches!(
+            last_attempt_reason,
+            Some(RemoteAttemptReasonCode::LegacyStateRejected | RemoteAttemptReasonCode::DurableStateInvalid)
+        )
+}
+
+pub const fn coordinator_phase_for_attempt(phase: RemoteAttemptPhase) -> CoordinatorAttemptPhase {
+    match phase {
+        RemoteAttemptPhase::Queued => CoordinatorAttemptPhase::Queued,
+        RemoteAttemptPhase::Running | RemoteAttemptPhase::Transferring => CoordinatorAttemptPhase::Running,
+        RemoteAttemptPhase::FinishedUndelivered | RemoteAttemptPhase::Completed => CoordinatorAttemptPhase::Finished,
+        RemoteAttemptPhase::Failed | RemoteAttemptPhase::Superseded => CoordinatorAttemptPhase::Lost,
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CoordinatorAttemptProjectionFacts {
+    pub phase: CoordinatorAttemptPhase,
+    pub result_available: bool,
+    pub output_admission_completed: bool,
+    pub transfer_checkpoint: Option<u64>,
+    pub transferred_bytes: u64,
+}
+
+pub fn persisted_coordinator_attempt_projection_matches(
+    facts: CoordinatorAttemptProjectionFacts,
+    attempt: &RemoteAttemptState,
+) -> bool {
+    facts.phase == coordinator_phase_for_attempt(attempt.phase)
+        && facts.result_available == (attempt.phase == RemoteAttemptPhase::Completed)
+        && facts.output_admission_completed
+            == matches!(attempt.phase, RemoteAttemptPhase::FinishedUndelivered | RemoteAttemptPhase::Completed)
+        && facts.transfer_checkpoint == attempt.transfer_checkpoint
+        && facts.transferred_bytes == attempt.transferred_bytes
+}
+
+/// Validate a decoded durable attempt before trusting its coordinator projection.
+/// Decoding a transparent identifier bypasses its constructor, so every stored
+/// identity and the derived worker/fence binding must be checked again.
+pub fn persisted_remote_attempt_is_valid(
+    expected_job_id: &RemoteJobId,
+    worker_endpoint_id: Option<&str>,
+    attempt: &RemoteAttemptState,
+) -> bool {
+    if &attempt.job_id != expected_job_id
+        || !persisted_identity_is_valid(attempt.job_id.as_str())
+        || !persisted_identity_is_valid(attempt.attempt_id.as_str())
+        || !is_blake3_hex_digest(attempt.assignment_nonce.as_str())
+        || attempt.fence_generation.get() == 0
+        || attempt.attempts_started == 0
+        || attempt.attempts_started > MAX_REMOTE_ATTEMPTS
+    {
+        return false;
+    }
+    let Some(worker_endpoint_id) = worker_endpoint_id else {
+        return false;
+    };
+    if !derive_remote_attempt_id(
+        &attempt.job_id,
+        &attempt.assignment_nonce,
+        attempt.fence_generation,
+        worker_endpoint_id,
+    )
+    .is_ok_and(|derived| derived == attempt.attempt_id)
+    {
+        return false;
+    }
+    let result_is_valid = match attempt.phase {
+        RemoteAttemptPhase::FinishedUndelivered | RemoteAttemptPhase::Completed => {
+            attempt.result_digest_blake3.as_deref().is_some_and(is_blake3_hex_digest)
+        }
+        RemoteAttemptPhase::Queued
+        | RemoteAttemptPhase::Running
+        | RemoteAttemptPhase::Transferring
+        | RemoteAttemptPhase::Failed
+        | RemoteAttemptPhase::Superseded => attempt.result_digest_blake3.is_none(),
+    };
+    result_is_valid
+        && attempt.started_unix_s < attempt.deadline_unix_s
+        && attempt.applied_events.len() <= MAX_REMOTE_ATTEMPT_EVENTS
+        && attempt
+            .last_heartbeat_unix_s
+            .is_none_or(|observed| observed >= attempt.started_unix_s && observed <= attempt.deadline_unix_s)
+        && attempt
+            .applied_events
+            .iter()
+            .all(|(event, digest)| persisted_identity_is_valid(event.as_str()) && is_blake3_hex_digest(digest.as_str()))
+}
+
+fn persisted_identity_is_valid(value: &str) -> bool {
+    !value.is_empty() && value.len() <= MAX_REMOTE_ATTEMPT_ID_BYTES && !value.chars().any(char::is_control)
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RemoteAttemptRetryPolicy {
     pub max_attempts: u32,
     pub retry_delay_secs: u64,
@@ -314,7 +442,8 @@ impl RemoteAttemptRetryPolicy {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RemoteAttemptTimeFacts {
     pub now_unix_s: u64,
     pub failure_observed_unix_s: u64,
@@ -353,8 +482,9 @@ pub enum RemoteEventDisposition {
     Conflict,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum RemoteAttemptApplyDisposition {
     Applied,
     AlreadyApplied,
@@ -367,6 +497,8 @@ pub struct RemoteAttemptApplyPlan {
     pub reason_code: RemoteAttemptReasonCode,
     pub next_state: RemoteAttemptState,
     pub output_admission_allowed: bool,
+    /// A proposed persistence effect, never evidence that it succeeded.
+    pub pending_effect: Option<crate::effect::EffectKind>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -382,8 +514,9 @@ pub struct RemoteAttemptRetryDecision {
     pub reason_code: RemoteAttemptReasonCode,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum RemoteAttemptReasonCode {
     CurrentAttemptApplied,
     CurrentAttemptCompleted,
@@ -465,17 +598,136 @@ impl RemoteAttemptReasonCode {
 pub fn canonical_remote_attempt_payload_digest(
     payload: &RemoteAttemptReportPayload,
 ) -> Result<RemotePayloadDigest, RemoteAttemptReasonCode> {
-    let bytes = serde_json::to_vec(payload).map_err(|_| RemoteAttemptReasonCode::PayloadSerializationFailed)?;
-    if bytes.len() > MAX_REMOTE_ATTEMPT_PAYLOAD_BYTES {
-        return Err(RemoteAttemptReasonCode::PayloadTooLarge);
-    }
     let mut hasher = blake3::Hasher::new();
     hash_identity_part(&mut hasher, REMOTE_ATTEMPT_PAYLOAD_DOMAIN)?;
-    hasher.update(&bytes);
+    let mut preimage = PayloadPreimage::new(&mut hasher);
+    match payload {
+        RemoteAttemptReportPayload::Start => preimage.write(b"{\"kind\":\"start\"}")?,
+        RemoteAttemptReportPayload::Heartbeat { observed_unix_s } => {
+            preimage.write(b"{\"kind\":\"heartbeat\",\"observed_unix_s\":")?;
+            preimage.number(*observed_unix_s)?;
+            preimage.write(b"}")?;
+        }
+        RemoteAttemptReportPayload::LogAppend { cursor, bytes } => {
+            preimage.write(b"{\"kind\":\"log-append\",\"cursor\":")?;
+            preimage.number(*cursor)?;
+            preimage.write(b",\"bytes\":")?;
+            preimage.string(bytes)?;
+            preimage.write(b"}")?;
+        }
+        RemoteAttemptReportPayload::TransferCheckpoint {
+            checkpoint,
+            transferred_bytes,
+        } => {
+            preimage.write(b"{\"kind\":\"transfer-checkpoint\",\"checkpoint\":")?;
+            preimage.number(*checkpoint)?;
+            preimage.write(b",\"transferred_bytes\":")?;
+            preimage.number(*transferred_bytes)?;
+            preimage.write(b"}")?;
+        }
+        RemoteAttemptReportPayload::ResultReady { output_digest_blake3 } => {
+            preimage.write(b"{\"kind\":\"result-ready\",\"output_digest_blake3\":")?;
+            preimage.string(output_digest_blake3)?;
+            preimage.write(b"}")?;
+        }
+        RemoteAttemptReportPayload::Failure {
+            failure_class,
+            reason_code,
+        } => {
+            let class = match failure_class {
+                RemoteAttemptFailureClass::Retryable => "retryable",
+                RemoteAttemptFailureClass::Terminal => "terminal",
+                RemoteAttemptFailureClass::PolicyDenied => "policy-denied",
+            };
+            preimage.write(b"{\"kind\":\"failure\",\"failure_class\":")?;
+            preimage.string(class)?;
+            preimage.write(b",\"reason_code\":")?;
+            preimage.string(reason_code.as_str())?;
+            preimage.write(b"}")?;
+        }
+        RemoteAttemptReportPayload::Completion { output_digest_blake3 } => {
+            preimage.write(b"{\"kind\":\"completion\",\"output_digest_blake3\":")?;
+            preimage.string(output_digest_blake3)?;
+            preimage.write(b"}")?;
+        }
+    }
     let digest = hasher.finalize().to_hex().to_string();
     debug_assert_eq!(digest.len(), BLAKE3_HEX_LENGTH_CHARS);
     debug_assert!(is_blake3_hex_digest(&digest));
     RemotePayloadDigest::new(digest)
+}
+
+/// Stream exactly the version-one tagged JSON preimage, without a JSON
+/// renderer, temporary allocation, or ambient authority in the core.
+struct PayloadPreimage<'a> {
+    hasher: &'a mut blake3::Hasher,
+    bytes: usize,
+}
+
+impl<'a> PayloadPreimage<'a> {
+    fn new(hasher: &'a mut blake3::Hasher) -> Self {
+        Self { hasher, bytes: 0 }
+    }
+
+    fn write(&mut self, bytes: &[u8]) -> Result<(), RemoteAttemptReasonCode> {
+        self.bytes = self
+            .bytes
+            .checked_add(bytes.len())
+            .filter(|length| *length <= MAX_REMOTE_ATTEMPT_PAYLOAD_BYTES)
+            .ok_or(RemoteAttemptReasonCode::PayloadTooLarge)?;
+        self.hasher.update(bytes);
+        Ok(())
+    }
+
+    fn number(&mut self, mut value: u64) -> Result<(), RemoteAttemptReasonCode> {
+        let mut digits = [0_u8; 20];
+        let mut start = digits.len();
+        loop {
+            start -= 1;
+            digits[start] = b'0' + (value % 10) as u8;
+            value /= 10;
+            if value == 0 {
+                break;
+            }
+        }
+        self.write(&digits[start..])
+    }
+
+    fn string(&mut self, value: &str) -> Result<(), RemoteAttemptReasonCode> {
+        self.write(b"\"")?;
+        let bytes = value.as_bytes();
+        let mut start = 0;
+        for (index, byte) in bytes.iter().copied().enumerate() {
+            let escape: Option<&[u8]> = match byte {
+                b'"' => Some(b"\\\""),
+                b'\\' => Some(b"\\\\"),
+                8 => Some(b"\\b"),
+                12 => Some(b"\\f"),
+                b'\n' => Some(b"\\n"),
+                b'\r' => Some(b"\\r"),
+                b'\t' => Some(b"\\t"),
+                0..=31 => None,
+                _ => continue,
+            };
+            self.write(&bytes[start..index])?;
+            if let Some(escape) = escape {
+                self.write(escape)?;
+            } else {
+                const HEX: &[u8; 16] = b"0123456789abcdef";
+                self.write(&[
+                    b'\\',
+                    b'u',
+                    b'0',
+                    b'0',
+                    HEX[usize::from(byte >> 4)],
+                    HEX[usize::from(byte & 15)],
+                ])?;
+            }
+            start = index + 1;
+        }
+        self.write(&bytes[start..])?;
+        self.write(b"\"")
+    }
 }
 
 pub fn derive_remote_attempt_id(
@@ -496,28 +748,6 @@ pub fn derive_remote_attempt_id(
     debug_assert!(is_blake3_hex_digest(&value));
     debug_assert_ne!(fence_generation.get(), 0);
     RemoteAttemptId::new(value)
-}
-
-#[expect(
-    tigerstyle::too_many_parameters,
-    reason = "stable coordinator compatibility wrapper delegates immediately to the named assignment input"
-)]
-pub fn plan_remote_attempt_assignment(
-    job_id: &RemoteJobId,
-    worker_endpoint_id: &str,
-    assignment_nonce: RemoteAssignmentNonce,
-    previous: Option<&RemoteAttemptState>,
-    retry_policy: RemoteAttemptRetryPolicy,
-    time: RemoteAttemptTimeFacts,
-) -> Result<RemoteAttemptState, RemoteAttemptReasonCode> {
-    plan_remote_attempt_assignment_from_input(RemoteAttemptAssignmentInput {
-        job_id,
-        worker_endpoint_id,
-        assignment_nonce,
-        previous,
-        retry_policy,
-        time,
-    })
 }
 
 pub fn plan_remote_attempt_assignment_from_input(
@@ -859,6 +1089,7 @@ fn accepted_plan(
         reason_code,
         next_state,
         output_admission_allowed: report_requires_output_admission(&report.payload),
+        pending_effect: Some(crate::effect::EffectKind::AttemptPersist),
     }
 }
 
@@ -868,6 +1099,7 @@ fn rejected_plan(current: &RemoteAttemptState, reason_code: RemoteAttemptReasonC
         reason_code,
         next_state: current.clone(),
         output_admission_allowed: false,
+        pending_effect: None,
     }
 }
 
@@ -877,6 +1109,7 @@ fn already_applied_plan(current: &RemoteAttemptState) -> RemoteAttemptApplyPlan 
         reason_code: RemoteAttemptReasonCode::AlreadyApplied,
         next_state: current.clone(),
         output_admission_allowed: false,
+        pending_effect: None,
     }
 }
 
@@ -999,14 +1232,14 @@ mod tests {
     }
 
     fn attempt() -> RemoteAttemptState {
-        plan_remote_attempt_assignment(
-            &job_id(),
-            "worker-1",
-            assignment_nonce("attempt-1"),
-            None,
-            policy(),
-            time_facts(TEST_NOW_UNIX_S),
-        )
+        plan_remote_attempt_assignment_from_input(RemoteAttemptAssignmentInput {
+            job_id: &job_id(),
+            worker_endpoint_id: "worker-1",
+            assignment_nonce: assignment_nonce("attempt-1"),
+            previous: None,
+            retry_policy: policy(),
+            time: time_facts(TEST_NOW_UNIX_S),
+        })
         .unwrap()
     }
 
@@ -1026,6 +1259,146 @@ mod tests {
             worker_authorized: true,
             output_admission_authorized: true,
         }
+    }
+
+    #[test]
+    fn durable_attempt_rejects_replayed_worker_identity_missing_nonce_and_forged_result() {
+        let mut state = attempt();
+        assert!(persisted_remote_attempt_is_valid(&job_id(), Some("worker-1"), &state));
+        assert!(!persisted_remote_attempt_is_valid(&job_id(), Some("worker-2"), &state));
+
+        state.phase = RemoteAttemptPhase::Completed;
+        state.result_digest_blake3 = Some(TEST_OUTPUT_DIGEST.to_string());
+        assert!(persisted_remote_attempt_is_valid(&job_id(), Some("worker-1"), &state));
+        state.result_digest_blake3 = Some("not-a-digest".to_string());
+        assert!(!persisted_remote_attempt_is_valid(&job_id(), Some("worker-1"), &state));
+
+        let mut state = attempt();
+        state.assignment_nonce = RemoteAssignmentNonce(String::new());
+        assert!(!persisted_remote_attempt_is_valid(&job_id(), Some("worker-1"), &state));
+        let mut state = attempt();
+        state
+            .applied_events
+            .insert(RemoteEventId("event-1".to_string()), RemotePayloadDigest("bad".to_string()));
+        assert!(!persisted_remote_attempt_is_valid(&job_id(), Some("worker-1"), &state));
+    }
+
+    #[test]
+    fn durable_coordinator_projection_rejects_stale_transfer_and_false_result_claims() {
+        let mut state = attempt();
+        state.phase = RemoteAttemptPhase::FinishedUndelivered;
+        state.transfer_checkpoint = Some(4);
+        state.transferred_bytes = 24;
+        let expected = CoordinatorAttemptProjectionFacts {
+            phase: CoordinatorAttemptPhase::Finished,
+            result_available: false,
+            output_admission_completed: true,
+            transfer_checkpoint: Some(4),
+            transferred_bytes: 24,
+        };
+        assert!(persisted_coordinator_attempt_projection_matches(expected, &state));
+        assert!(!persisted_coordinator_attempt_projection_matches(
+            CoordinatorAttemptProjectionFacts {
+                result_available: true,
+                ..expected
+            },
+            &state
+        ));
+        assert!(!persisted_coordinator_attempt_projection_matches(
+            CoordinatorAttemptProjectionFacts {
+                transfer_checkpoint: Some(3),
+                ..expected
+            },
+            &state
+        ));
+        assert!(!persisted_coordinator_attempt_projection_matches(
+            CoordinatorAttemptProjectionFacts {
+                phase: CoordinatorAttemptPhase::Running,
+                ..expected
+            },
+            &state
+        ));
+        state.phase = RemoteAttemptPhase::Completed;
+        assert!(persisted_coordinator_attempt_projection_matches(
+            CoordinatorAttemptProjectionFacts {
+                result_available: true,
+                ..expected
+            },
+            &state
+        ));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn canonical_payload_digests_match_the_existing_v1_serde_wire_bytes() {
+        let payloads = [
+            RemoteAttemptReportPayload::Start,
+            RemoteAttemptReportPayload::Heartbeat {
+                observed_unix_s: u64::MAX,
+            },
+            RemoteAttemptReportPayload::LogAppend {
+                cursor: u64::MAX,
+                bytes: String::from("quote \" slash \\ line\nbackspace\u{0008} form\u{000c} nul\u{0000} café 🦀"),
+            },
+            RemoteAttemptReportPayload::TransferCheckpoint {
+                checkpoint: u64::MAX,
+                transferred_bytes: 0,
+            },
+            RemoteAttemptReportPayload::ResultReady {
+                output_digest_blake3: String::from("output\n\"é"),
+            },
+            RemoteAttemptReportPayload::Failure {
+                failure_class: RemoteAttemptFailureClass::Retryable,
+                reason_code: RemoteAttemptReasonCode::StaleReportRejected,
+            },
+            RemoteAttemptReportPayload::Failure {
+                failure_class: RemoteAttemptFailureClass::Terminal,
+                reason_code: RemoteAttemptReasonCode::RetryBudgetExhausted,
+            },
+            RemoteAttemptReportPayload::Failure {
+                failure_class: RemoteAttemptFailureClass::PolicyDenied,
+                reason_code: RemoteAttemptReasonCode::OutputAdmissionUnauthorized,
+            },
+            RemoteAttemptReportPayload::Completion {
+                output_digest_blake3: String::from("completed"),
+            },
+        ];
+        for payload in payloads {
+            let bytes = serde_json::to_vec(&payload).unwrap();
+            let mut reference = blake3::Hasher::new();
+            hash_identity_part(&mut reference, REMOTE_ATTEMPT_PAYLOAD_DOMAIN).unwrap();
+            reference.update(&bytes);
+            assert_eq!(
+                canonical_remote_attempt_payload_digest(&payload).unwrap().as_str(),
+                reference.finalize().to_hex().as_str(),
+                "version-one payload bytes changed: {payload:?}"
+            );
+        }
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn canonical_payload_byte_limit_includes_json_escaping_and_framing() {
+        let empty = RemoteAttemptReportPayload::LogAppend {
+            cursor: 0,
+            bytes: String::new(),
+        };
+        let framing = serde_json::to_vec(&empty).unwrap().len();
+        let within = RemoteAttemptReportPayload::LogAppend {
+            cursor: 0,
+            bytes: "a".repeat(MAX_REMOTE_ATTEMPT_PAYLOAD_BYTES - framing),
+        };
+        assert!(canonical_remote_attempt_payload_digest(&within).is_ok());
+        let over = RemoteAttemptReportPayload::LogAppend {
+            cursor: 0,
+            bytes: "a".repeat(MAX_REMOTE_ATTEMPT_PAYLOAD_BYTES - framing + 1),
+        };
+        assert_eq!(canonical_remote_attempt_payload_digest(&over), Err(RemoteAttemptReasonCode::PayloadTooLarge));
+        let escaped = RemoteAttemptReportPayload::LogAppend {
+            cursor: 0,
+            bytes: "\n".repeat((MAX_REMOTE_ATTEMPT_PAYLOAD_BYTES - framing) / 2 + 1),
+        };
+        assert_eq!(canonical_remote_attempt_payload_digest(&escaped), Err(RemoteAttemptReasonCode::PayloadTooLarge));
     }
 
     #[test]
@@ -1084,14 +1457,14 @@ mod tests {
     #[test]
     fn stale_report_is_rejected_before_output_admission() {
         let first = attempt();
-        let second = plan_remote_attempt_assignment(
-            &job_id(),
-            "worker-2",
-            assignment_nonce("attempt-2"),
-            Some(&first),
-            policy(),
-            time_facts(TEST_SECOND_ATTEMPT_NOW_UNIX_S),
-        )
+        let second = plan_remote_attempt_assignment_from_input(RemoteAttemptAssignmentInput {
+            job_id: &job_id(),
+            worker_endpoint_id: "worker-2",
+            assignment_nonce: assignment_nonce("attempt-2"),
+            previous: Some(&first),
+            retry_policy: policy(),
+            time: time_facts(TEST_SECOND_ATTEMPT_NOW_UNIX_S),
+        })
         .unwrap();
         let stale = report(&first, "event-stale", RemoteAttemptReportPayload::Completion {
             output_digest_blake3: TEST_OUTPUT_DIGEST.to_string(),
@@ -1105,23 +1478,23 @@ mod tests {
 
     #[test]
     fn assignment_nonce_prevents_identity_reuse_after_state_reset() {
-        let first = plan_remote_attempt_assignment(
-            &job_id(),
-            "worker-1",
-            assignment_nonce("coordinator-incarnation-1"),
-            None,
-            policy(),
-            time_facts(TEST_NOW_UNIX_S),
-        )
+        let first = plan_remote_attempt_assignment_from_input(RemoteAttemptAssignmentInput {
+            job_id: &job_id(),
+            worker_endpoint_id: "worker-1",
+            assignment_nonce: assignment_nonce("coordinator-incarnation-1"),
+            previous: None,
+            retry_policy: policy(),
+            time: time_facts(TEST_NOW_UNIX_S),
+        })
         .unwrap();
-        let replacement_after_reset = plan_remote_attempt_assignment(
-            &job_id(),
-            "worker-1",
-            assignment_nonce("coordinator-incarnation-2"),
-            None,
-            policy(),
-            time_facts(TEST_NOW_UNIX_S),
-        )
+        let replacement_after_reset = plan_remote_attempt_assignment_from_input(RemoteAttemptAssignmentInput {
+            job_id: &job_id(),
+            worker_endpoint_id: "worker-1",
+            assignment_nonce: assignment_nonce("coordinator-incarnation-2"),
+            previous: None,
+            retry_policy: policy(),
+            time: time_facts(TEST_NOW_UNIX_S),
+        })
         .unwrap();
         let stale = report(&first, "reset-stale", RemoteAttemptReportPayload::Start);
         let decision = plan_remote_attempt_report(&replacement_after_reset, &stale, authorized());
@@ -1144,9 +1517,8 @@ mod tests {
     fn malformed_identity_and_unknown_future_fence_fail_without_state_change() {
         let state = attempt();
         let valid = report(&state, "identity-event", RemoteAttemptReportPayload::Start);
-        let mut encoded = serde_json::to_value(&valid).unwrap();
-        encoded["identity"]["event_id"] = serde_json::Value::String(String::new());
-        let malformed: RemoteAttemptReport = serde_json::from_value(encoded).unwrap();
+        let mut malformed = valid.clone();
+        malformed.identity.event_id = RemoteEventId(String::new());
         let malformed_decision = plan_remote_attempt_report(&state, &malformed, authorized());
         let mut future = valid;
         future.identity.fence_generation = state.fence_generation.advance().unwrap();
@@ -1157,6 +1529,18 @@ mod tests {
         assert_eq!(future_decision.reason_code, RemoteAttemptReasonCode::UnknownFenceRejected);
         assert_eq!(future_decision.next_state, state);
         assert!(!future_decision.output_admission_allowed);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn deserialized_malformed_identity_is_rejected_by_the_pure_transition() {
+        let state = attempt();
+        let mut encoded = serde_json::to_value(report(&state, "event", RemoteAttemptReportPayload::Start)).unwrap();
+        encoded["identity"]["event_id"] = serde_json::Value::String(String::new());
+        let malformed: RemoteAttemptReport = serde_json::from_value(encoded).unwrap();
+        let decision = plan_remote_attempt_report(&state, &malformed, authorized());
+        assert_eq!(decision.reason_code, RemoteAttemptReasonCode::IdentityInvalid);
+        assert_eq!(decision.next_state, state);
     }
 
     #[test]
@@ -1207,24 +1591,24 @@ mod tests {
             max_attempts: TEST_FENCE_CHAIN_ATTEMPTS,
             ..policy()
         };
-        let mut current = plan_remote_attempt_assignment(
-            &job_id(),
-            "worker-chain",
-            assignment_nonce("chain-0"),
-            None,
-            chain_policy,
-            time_facts(TEST_NOW_UNIX_S),
-        )
+        let mut current = plan_remote_attempt_assignment_from_input(RemoteAttemptAssignmentInput {
+            job_id: &job_id(),
+            worker_endpoint_id: "worker-chain",
+            assignment_nonce: assignment_nonce("chain-0"),
+            previous: None,
+            retry_policy: chain_policy,
+            time: time_facts(TEST_NOW_UNIX_S),
+        })
         .unwrap();
         for attempt_index in INITIAL_REMOTE_ATTEMPT_COUNT..TEST_FENCE_CHAIN_ATTEMPTS {
-            let next = plan_remote_attempt_assignment(
-                &job_id(),
-                "worker-chain",
-                assignment_nonce(&format!("chain-{attempt_index}")),
-                Some(&current),
-                chain_policy,
-                time_facts(TEST_NOW_UNIX_S + u64::from(attempt_index)),
-            )
+            let next = plan_remote_attempt_assignment_from_input(RemoteAttemptAssignmentInput {
+                job_id: &job_id(),
+                worker_endpoint_id: "worker-chain",
+                assignment_nonce: assignment_nonce(&format!("chain-{attempt_index}")),
+                previous: Some(&current),
+                retry_policy: chain_policy,
+                time: time_facts(TEST_NOW_UNIX_S + u64::from(attempt_index)),
+            })
             .unwrap();
             assert!(next.fence_generation > current.fence_generation);
             assert_eq!(next.attempts_started, current.attempts_started + INITIAL_REMOTE_ATTEMPT_COUNT);
@@ -1374,18 +1758,18 @@ mod kani_proofs {
     fn equivalent_facts_produce_equivalent_decisions() {
         let worker_authorized: bool = kani::any();
         let job_id = RemoteJobId::new("kani-job").unwrap();
-        let state = plan_remote_attempt_assignment(
-            &job_id,
-            "kani-worker",
-            RemoteAssignmentNonce::new("a".repeat(BLAKE3_HEX_LENGTH_CHARS)).unwrap(),
-            None,
-            RemoteAttemptRetryPolicy::default(),
-            RemoteAttemptTimeFacts {
+        let state = plan_remote_attempt_assignment_from_input(RemoteAttemptAssignmentInput {
+            job_id: &job_id,
+            worker_endpoint_id: "kani-worker",
+            assignment_nonce: RemoteAssignmentNonce::new("a".repeat(BLAKE3_HEX_LENGTH_CHARS)).unwrap(),
+            previous: None,
+            retry_policy: RemoteAttemptRetryPolicy::default(),
+            time: RemoteAttemptTimeFacts {
                 now_unix_s: KANI_NOW_UNIX_S,
                 failure_observed_unix_s: KANI_NOW_UNIX_S,
                 overall_deadline_unix_s: KANI_DEADLINE_UNIX_S,
             },
-        )
+        })
         .unwrap();
         let report = RemoteAttemptReport::new(
             job_id,

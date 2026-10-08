@@ -11,6 +11,7 @@ let wasm_component = import "wasm_component.ncl" in
 let kernelscript_experiment = import "kernelscript_experiment.ncl" in
 let android = import "android.ncl" in
 let scheduling = import "scheduling.ncl" in
+let android = import "android.ncl" in
 
 {
   # The main derivation contract. Apply with: record | crunch.Derivation
@@ -70,6 +71,14 @@ let scheduling = import "scheduling.ncl" in
   schedulingPolicy = scheduling.default_policy,
   schedulingKnownGraphBounds = scheduling.default_known_graph_bounds,
   schedulingHistoryPolicy = scheduling.default_history_policy,
+
+  # Reviewed APK metadata is a distinct prebuilt-record-v1 domain, not the
+  # published Android source-v1 cohort exposed through AndroidSources above.
+  AndroidReviewedSources = android.reviewed,
+  # APK adapter plan authoring; the Rust adapter checks independently
+  # admitted bytes before any SDK tool executes.
+  ReviewedApkPlan = android.reviewed.Plan,
+  mkReviewedApk = android.reviewed.mkApk,
 
   # Lazy derivation file edge. The pipeline resolves this relative path before
   # conversion, keeping large derivation DAGs out of one Nickel value.

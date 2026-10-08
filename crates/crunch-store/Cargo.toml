@@ -51,8 +51,10 @@ zstd = "0.13"
 
 [dev-dependencies]
 bzip2 = "0.6"
+fault-injection = "=1.0.10"
 crunch-delta = { path = "../crunch-delta" }
 futures = "0.3"
+parking_lot = "0.12"
 pretty_assertions = "1.0"
 proptest = "1.11"
 tokio = { version = "1", features = ["full"] }

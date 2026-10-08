@@ -13,7 +13,7 @@ use serde::Serialize;
 
 pub const PORTABLE_CLIENT_PLAN_SCHEMA: &str = "mantle-portable-client-plan-v1";
 pub const PLATFORM_PROFILE_SCHEMA: &str = "mantle-platform-support-profile-v1";
-pub const ROOT_COMMAND_COUNT: usize = 40;
+pub const ROOT_COMMAND_COUNT: usize = 41;
 pub const PAYLOAD_KIND_COUNT_MAX: usize = 8;
 pub const STORE_PREFIX_BYTES_MAX: usize = 256;
 pub const PLATFORM_LABEL_BYTES_MAX: usize = 64;
@@ -122,6 +122,7 @@ pub const COMMAND_PROFILES: [CommandProfile; ROOT_COMMAND_COUNT] = [
     profile("source", CommandRole::PortableClient, PORTABLE_IO),
     profile("receipt", CommandRole::PortableClient, PORTABLE_IO),
     profile("remote", CommandRole::RemoteMixed, PORTABLE_IO),
+    profile("nix-gateway", CommandRole::LinuxWorkerServer, PORTABLE_IO),
     profile("__remote-secret-worker", CommandRole::LinuxWorkerServer, INTERNAL_EFFECTS),
     profile("artifact", CommandRole::PortableClient, PORTABLE_IO),
     profile("attest", CommandRole::PortableClient, PORTABLE_IO),
@@ -367,6 +368,41 @@ mod tests {
         .expect_err("local build must be rejected");
         assert_eq!(blocker.code, "portable-remote-route-required");
         assert_eq!(blocker.command_root, "build");
+    }
+
+    #[test]
+    fn private_nix_gateway_never_becomes_a_portable_remote_client() {
+        let no_remote_route = AdmissionFacts {
+            remote_route_selected: false,
+            remote_operation_is_client: false,
+        };
+        let linux = admit_command(PlatformFamily::Linux, "nix-gateway", no_remote_route)
+            .expect("private Unix listener is a Linux worker service");
+        assert!(linux.local_executor_allowed);
+        let profile = find_command_profile("nix-gateway").unwrap();
+        assert_eq!(profile.role, CommandRole::LinuxWorkerServer);
+        assert!(profile.effects.requires_trust_material);
+
+        for platform in [PlatformFamily::Darwin, PlatformFamily::Other] {
+            let blocker = admit_command(platform, "nix-gateway", AdmissionFacts {
+                remote_route_selected: true,
+                remote_operation_is_client: true,
+            })
+            .expect_err("client route flags cannot authorize a worker service");
+            assert_eq!(blocker.command_root, "nix-gateway");
+            assert!(matches!(
+                blocker.code,
+                "portable-worker-server-unsupported" | "portable-client-platform-unsupported",
+            ));
+        }
+        assert!(
+            admit_command(PlatformFamily::Darwin, "remote", AdmissionFacts {
+                remote_route_selected: false,
+                remote_operation_is_client: true,
+            })
+            .is_ok(),
+            "existing portable remote-client route must remain admitted"
+        );
     }
 
     #[test]

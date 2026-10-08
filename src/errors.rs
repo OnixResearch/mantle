@@ -140,6 +140,7 @@ impl From<crunch_pipeline::Error> for RunError {
             crunch_pipeline::Error::Deserialize(msg) => Self::Eval(msg),
             crunch_pipeline::Error::Convert(msg) => Self::Build(msg),
             crunch_pipeline::Error::Build(msg) => Self::Build(msg),
+            watch_error @ crunch_pipeline::Error::WatchRemoteUnsupported => Self::Build(watch_error.to_string()),
             crunch_pipeline::Error::Internal(msg) => Self::Internal(msg),
         }
     }

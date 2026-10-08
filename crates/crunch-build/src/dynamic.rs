@@ -231,11 +231,19 @@ pub struct DynamicDrv {
     pub derivation: Derivation,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IdentityProjection {
+    AsParsed,
+    /// Native output paths were absent when their parent-compatible hash was computed.
+    OutputsMasked,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ParsedDynamicDerivation {
     candidate_output_path: StorePath<String>,
     derivation: Derivation,
     form: CandidateForm,
+    identity_projection: IdentityProjection,
     name: String,
     source_bytes: Vec<u8>,
     parent_requests: Vec<DynamicParentRequest>,
@@ -311,6 +319,19 @@ impl RegistryReadyDynamicDerivation {
         self.resolved.content_addressed
     }
 
+    pub(crate) fn into_registration(
+        self,
+    ) -> (StorePath<String>, [u8; BLAKE3_DIGEST_BYTES], Derivation, bool, [u8; BLAKE3_DIGEST_BYTES]) {
+        let resolved = self.resolved;
+        (
+            resolved.drv_path,
+            resolved.hash_derivation_modulo,
+            resolved.validated.parsed.derivation,
+            resolved.content_addressed,
+            resolved.full_identity,
+        )
+    }
+
     pub(crate) fn into_dynamic_drv(self, output_name: String) -> DynamicDrv {
         DynamicDrv {
             output_name,
@@ -350,10 +371,50 @@ pub(crate) fn parse_dynamic_candidate(
         candidate_output_path: candidate_output_path.clone(),
         derivation,
         form,
+        identity_projection: IdentityProjection::AsParsed,
         name,
         source_bytes: content.to_vec(),
         parent_requests,
     }))
+}
+
+/// Admit a derivation constructed from the already checked native-plan wire.
+/// Content-addressed native units have no output path, so they cannot round-trip
+/// through the traditional ATerm parser, which requires a populated output path.
+/// They still pass the same collection, parent-fact, identity, and registry gates.
+pub(crate) fn admit_native_plan_derivation(
+    derivation: Derivation,
+    candidate_output_path: StorePath<String>,
+    logical_store_prefix: &str,
+    limits: DynamicAdmissionLimits,
+) -> Result<ValidatedDynamicDerivation, DynamicAdmissionError> {
+    validate_limits(limits)?;
+    validate_store_prefix(logical_store_prefix)?;
+    let name = derivation_name(&derivation, limits)?;
+    let parent_requests = derivation
+        .input_derivations
+        .iter()
+        .map(|(drv_path, outputs)| DynamicParentRequest {
+            drv_path: drv_path.clone(),
+            direct_outputs: outputs.clone(),
+            dynamic_outputs: Vec::new(),
+        })
+        .collect();
+    let source_bytes = derivation.to_aterm_bytes_with_store_dir(logical_store_prefix);
+    validate_candidate_size(&source_bytes, limits)?;
+    validate_dynamic_candidate(
+        ParsedDynamicDerivation {
+            candidate_output_path,
+            derivation,
+            form: CandidateForm::Traditional,
+            identity_projection: IdentityProjection::OutputsMasked,
+            name,
+            source_bytes,
+            parent_requests,
+        },
+        logical_store_prefix,
+        limits,
+    )
 }
 
 /// Validate semantic and collection invariants before identity work.
@@ -385,11 +446,11 @@ pub(crate) fn required_parent_paths(validated: &ValidatedDynamicDerivation) -> V
 
 /// Resolve native identity from explicit parent facts.
 pub(crate) fn resolve_dynamic_identity(
-    validated: ValidatedDynamicDerivation,
+    mut validated: ValidatedDynamicDerivation,
     parent_facts: &[DynamicParentHashFact],
 ) -> Result<IdentityResolvedDynamicDerivation, DynamicAdmissionError> {
     let fact_map = validate_parent_facts(&validated, parent_facts)?;
-    let hdm = compute_hash_derivation_modulo(&validated, &fact_map)?;
+    let hdm = compute_hash_derivation_modulo(&mut validated, &fact_map)?;
     let drv_path = compute_derivation_path(&validated)?;
     let is_content_addressed = validated
         .parsed
@@ -906,7 +967,7 @@ fn validate_one_parent_fact(
 }
 
 fn compute_hash_derivation_modulo(
-    validated: &ValidatedDynamicDerivation,
+    validated: &mut ValidatedDynamicDerivation,
     facts: &BTreeMap<StorePath<String>, [u8; BLAKE3_DIGEST_BYTES]>,
 ) -> Result<[u8; BLAKE3_DIGEST_BYTES], DynamicAdmissionError> {
     debug_assert!(
@@ -914,6 +975,9 @@ fn compute_hash_derivation_modulo(
         "validated parent requests must have complete facts"
     );
     match validated.parsed.form {
+        CandidateForm::Traditional if validated.parsed.identity_projection == IdentityProjection::OutputsMasked => {
+            hash_native_masked_outputs(&mut validated.parsed.derivation, facts, &validated.logical_store_prefix)
+        }
         CandidateForm::Traditional => Ok(validated
             .parsed
             .derivation
@@ -932,6 +996,34 @@ fn compute_hash_derivation_modulo(
             Ok(*hasher.finalize().as_bytes())
         }
     }
+}
+
+/// Hash the native unit as it existed before output path realization, without
+/// copying its derivation or discarding the finished output paths/ATerm bytes.
+fn hash_native_masked_outputs(
+    derivation: &mut Derivation,
+    facts: &BTreeMap<StorePath<String>, [u8; BLAKE3_DIGEST_BYTES]>,
+    store_prefix: &str,
+) -> Result<[u8; BLAKE3_DIGEST_BYTES], DynamicAdmissionError> {
+    if derivation.outputs.keys().any(|name| !derivation.environment.contains_key(name)) {
+        return Err(DynamicAdmissionError::Identity("native output is missing its environment binding".to_string()));
+    }
+    let mut original = Vec::with_capacity(derivation.outputs.len());
+    for (name, output) in &mut derivation.outputs {
+        let Some(value) = derivation.environment.get_mut(name) else {
+            return Err(DynamicAdmissionError::Identity("native output binding vanished before hashing".to_string()));
+        };
+        original.push((output.path.take(), std::mem::take(value)));
+    }
+    let hash = derivation.hash_derivation_modulo_with_store_dir(|path| facts[&path.to_owned()], store_prefix);
+    for ((name, output), (path, value)) in derivation.outputs.iter_mut().zip(original) {
+        output.path = path;
+        let Some(binding) = derivation.environment.get_mut(name) else {
+            return Err(DynamicAdmissionError::Identity("native output binding vanished after hashing".to_string()));
+        };
+        *binding = value;
+    }
+    Ok(hash)
 }
 
 #[allow(tigerstyle::assertion_density)] // The private validated state already carries the required invariants.
@@ -1375,6 +1467,50 @@ mod tests {
                 .unwrap();
         let validated = validate_dynamic_candidate(parsed, store_prefix, DynamicAdmissionLimits::default())?;
         resolve_dynamic_identity(validated, facts)
+    }
+
+    #[test]
+    fn native_output_mask_keeps_parent_hash_and_finished_bytes_for_both_store_prefixes() {
+        for store_prefix in [NIX_STORE, CUSTOM_STORE] {
+            for mode in ["input-addressed", "content-addressed", "fixed-output"] {
+                let mut derivation = simple_drv();
+                let parent = fake_store_path("parent.drv");
+                derivation.input_derivations.insert(parent.clone(), BTreeSet::from(["out".to_string()]));
+                if mode == "fixed-output" {
+                    derivation.outputs.get_mut("out").unwrap().ca_hash = Some(nix_compat::nixhash::CAHash::Flat(
+                        nix_compat::nixhash::NixHash::Sha256([0x42; BLAKE3_DIGEST_BYTES]),
+                    ));
+                }
+                let original_hash = derivation.hash_derivation_modulo_with_store_dir(|_| PARENT_DIGEST, store_prefix);
+                derivation.calculate_output_paths_with_store_dir("hello", &original_hash, store_prefix).unwrap();
+                let provisional =
+                    derivation.outputs["out"].path.as_ref().unwrap().to_absolute_path_with_prefix(store_prefix);
+                derivation.environment.insert("out".to_string(), provisional.into());
+                if mode == "content-addressed" {
+                    derivation.outputs.get_mut("out").unwrap().path = None;
+                }
+                let candidate = derivation.calculate_derivation_path_with_store_dir("hello", store_prefix).unwrap();
+                let finished = derivation.to_aterm_bytes_with_store_dir(store_prefix);
+                let validated = admit_native_plan_derivation(
+                    derivation,
+                    candidate.clone(),
+                    store_prefix,
+                    DynamicAdmissionLimits::default(),
+                )
+                .unwrap();
+                let fact =
+                    DynamicParentHashFact::native(parent.to_absolute_path_with_prefix(store_prefix), PARENT_DIGEST);
+                let ready = resolve_dynamic_identity(validated, &[fact]).unwrap();
+                assert_eq!(ready.hash_derivation_modulo, original_hash, "mode={mode} store={store_prefix}");
+                assert_eq!(ready.drv_path, candidate, "mode={mode} store={store_prefix}");
+                assert_eq!(ready.validated.parsed.source_bytes, finished, "mode={mode} store={store_prefix}");
+                assert_eq!(ready.validated.parsed.derivation.to_aterm_bytes_with_store_dir(store_prefix), finished);
+                assert_eq!(
+                    ready.validated.parsed.derivation.outputs["out"].path.is_none(),
+                    mode == "content-addressed"
+                );
+            }
+        }
     }
 
     fn versioned_bytes(store_prefix: &str) -> Vec<u8> {
