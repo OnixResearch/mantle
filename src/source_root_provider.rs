@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::ffi::OsString;
 use std::fs;
 use std::io::Read;
 use std::path::Path;
@@ -23,6 +24,8 @@ const FETCH_MAX_RETRIES: u32 = 3;
 const FETCH_RETRY_BASE_DELAY_MS: u64 = 2000;
 const FETCH_RETRY_EXPONENT_MAX: u32 = 4;
 const HOST_COMPILER_CANDIDATE_MAX: usize = 64;
+pub(crate) const HOST_COMPILER_PROCESS_MAX: u32 = 1 + 2 * HOST_COMPILER_CANDIDATE_MAX as u32;
+pub(crate) const HOST_COMPILER_PATH_READ_MAX: u32 = 5;
 const PROVIDER_PATH_COMPONENT_CAPACITY: usize = 8;
 const RECURSIVE_SEARCH_DEPTH_MAX: u32 = 8;
 const FILE_WALK_ENTRY_MAX: usize = 1_000_000;
@@ -500,30 +503,68 @@ fn available_parallelism() -> u32 {
         .clamp(MIN_PARALLELISM_JOBS, MAX_PARALLELISM_JOBS)
 }
 
-pub(crate) fn host_compiler_available_for_source_root() -> bool {
-    find_host_cc().is_ok()
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum HostCompilerProcessStatus {
+    IoFailure,
+    LaunchFailed,
+    WaitFailed,
+    Exited { code: Option<i32>, success: bool },
+}
+
+/// Observes the actual direct child invocations and PATH reads used by the
+/// host compiler search; selection policy and failure fallbacks remain here.
+pub(crate) trait HostCompilerProbeObserver {
+    fn path(&mut self) -> Option<OsString>;
+    fn process(&mut self, program: &Path, status: HostCompilerProcessStatus);
+}
+
+struct UnobservedHostCompilerProbes;
+
+impl HostCompilerProbeObserver for UnobservedHostCompilerProbes {
+    fn path(&mut self) -> Option<OsString> {
+        std::env::var_os("PATH")
+    }
+
+    fn process(&mut self, _program: &Path, _status: HostCompilerProcessStatus) {}
+}
+
+pub(crate) fn host_compiler_available_for_source_root(observer: &mut impl HostCompilerProbeObserver) -> bool {
+    find_host_cc_with_observer(observer).is_ok()
 }
 
 /// Discover a 64-bit host C compiler and build a clean PATH for provider
 /// builds. The caller's PATH may contain a 32-bit gcc wrapper or clang/mold
 /// that interfere with cross-compiler configure scripts.
 fn find_host_cc() -> Result<HostCompiler, MaterializationError> {
-    let candidates = host_compiler_candidates();
+    find_host_cc_with_observer(&mut UnobservedHostCompilerProbes)
+}
+
+fn find_host_cc_with_observer(
+    observer: &mut impl HostCompilerProbeObserver,
+) -> Result<HostCompiler, MaterializationError> {
+    let candidates = host_compiler_candidates(observer);
+    select_host_cc(&candidates, observer)
+}
+
+fn select_host_cc(
+    candidates: &[PathBuf],
+    observer: &mut impl HostCompilerProbeObserver,
+) -> Result<HostCompiler, MaterializationError> {
     debug_assert!(candidates.len() <= HOST_COMPILER_CANDIDATE_MAX);
     debug_assert!(candidates.iter().all(|path| !path.as_os_str().is_empty()));
-    for cc_path in &candidates {
-        if !is_x86_64_compiler(cc_path) {
+    for cc_path in candidates {
+        if !is_x86_64_compiler(cc_path, observer) {
             continue;
         }
-        if !can_link_trivial_program(cc_path) {
+        if !can_link_trivial_program(cc_path, observer) {
             continue;
         }
         let cc_dir = cc_path.parent();
-        let cxx_path = find_host_cxx(cc_dir);
+        let cxx_path = find_host_cxx(cc_dir, observer);
         return Ok(HostCompiler {
             cc: cc_path.display().to_string(),
             cxx: cxx_path.display().to_string(),
-            clean_path: build_clean_provider_path(cc_dir),
+            clean_path: build_clean_provider_path(cc_dir, observer),
         });
     }
     Err(MaterializationError::Build(
@@ -531,9 +572,11 @@ fn find_host_cc() -> Result<HostCompiler, MaterializationError> {
     ))
 }
 
-fn host_compiler_candidates() -> Vec<PathBuf> {
+fn host_compiler_candidates(observer: &mut impl HostCompilerProbeObserver) -> Vec<PathBuf> {
     let mut candidates = Vec::with_capacity(HOST_COMPILER_CANDIDATE_MAX);
-    if let Ok(output) = Command::new("nix-store").args(["-qR", "/run/current-system"]).output() {
+    let nix_store = Command::new("nix-store").args(["-qR", "/run/current-system"]).output();
+    observe_compiler_output(observer, Path::new("nix-store"), &nix_store);
+    if let Ok(output) = nix_store {
         for line in String::from_utf8_lossy(&output.stdout).lines() {
             if line.contains("gcc-wrapper") && !line.contains("-man") {
                 append_compiler_candidate(&mut candidates, PathBuf::from(line.trim()).join("bin/gcc"));
@@ -554,10 +597,10 @@ fn host_compiler_candidates() -> Vec<PathBuf> {
     for path in ["/run/current-system/sw/bin/gcc", "/usr/bin/gcc"] {
         append_compiler_candidate(&mut candidates, PathBuf::from(path));
     }
-    if let Some(path) = which_cmd("gcc") {
+    if let Some(path) = which_cmd("gcc", observer) {
         append_compiler_candidate(&mut candidates, path);
     }
-    if let Some(path) = which_cmd("cc") {
+    if let Some(path) = which_cmd("cc", observer) {
         append_compiler_candidate(&mut candidates, path);
     }
     debug_assert!(candidates.len() <= HOST_COMPILER_CANDIDATE_MAX);
@@ -574,39 +617,74 @@ fn append_compiler_candidate(candidates: &mut Vec<PathBuf>, path: PathBuf) {
     }
 }
 
-fn is_x86_64_compiler(cc_path: &Path) -> bool {
+fn observe_compiler_output(
+    observer: &mut impl HostCompilerProbeObserver,
+    program: &Path,
+    output: &std::io::Result<std::process::Output>,
+) {
+    let status = match output {
+        Ok(output) => HostCompilerProcessStatus::Exited {
+            code: output.status.code(),
+            success: output.status.success(),
+        },
+        Err(_) => HostCompilerProcessStatus::IoFailure,
+    };
+    observer.process(program, status);
+}
+
+fn observe_compiler_wait(
+    observer: &mut impl HostCompilerProbeObserver,
+    program: &Path,
+    status: &std::io::Result<std::process::ExitStatus>,
+) {
+    observer.process(program, match status {
+        Ok(status) => HostCompilerProcessStatus::Exited {
+            code: status.code(),
+            success: status.success(),
+        },
+        Err(_) => HostCompilerProcessStatus::WaitFailed,
+    });
+}
+
+fn is_x86_64_compiler(cc_path: &Path, observer: &mut impl HostCompilerProbeObserver) -> bool {
     assert!(!cc_path.as_os_str().is_empty());
     assert!(cc_path.is_file());
-    let Ok(output) = Command::new(cc_path).arg("-dumpmachine").output() else {
+    let output = Command::new(cc_path).arg("-dumpmachine").output();
+    observe_compiler_output(observer, cc_path, &output);
+    let Ok(output) = output else {
         return false;
     };
     String::from_utf8_lossy(&output.stdout).trim().contains("x86_64")
 }
 
-fn can_link_trivial_program(cc_path: &Path) -> bool {
+fn can_link_trivial_program(cc_path: &Path, observer: &mut impl HostCompilerProbeObserver) -> bool {
     use std::io::Write;
 
     assert!(!cc_path.as_os_str().is_empty());
     assert!(cc_path.is_file());
-    let Ok(mut child) = Command::new(cc_path)
+    let child = Command::new(cc_path)
         .args(["-o", "/dev/null", "-x", "c", "-"])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
-        .spawn()
-    else {
+        .spawn();
+    let Ok(mut child) = child else {
+        observer.process(cc_path, HostCompilerProcessStatus::LaunchFailed);
         return false;
     };
     let Some(mut stdin) = child.stdin.take() else {
-        return child.wait().is_ok_and(|status| status.success());
+        let status = child.wait();
+        observe_compiler_wait(observer, cc_path, &status);
+        return status.is_ok_and(|status| status.success());
     };
     let is_source_written = stdin.write_all(b"int main(){return 0;}\n").is_ok();
     drop(stdin);
-    let is_link_successful = child.wait().is_ok_and(|status| status.success());
-    is_source_written && is_link_successful
+    let status = child.wait();
+    observe_compiler_wait(observer, cc_path, &status);
+    is_source_written && status.is_ok_and(|status| status.success())
 }
 
-fn find_host_cxx(cc_dir: Option<&Path>) -> PathBuf {
+fn find_host_cxx(cc_dir: Option<&Path>, observer: &mut impl HostCompilerProbeObserver) -> PathBuf {
     for name in ["g++", "c++"] {
         if let Some(directory) = cc_dir {
             let candidate = directory.join(name);
@@ -614,7 +692,7 @@ fn find_host_cxx(cc_dir: Option<&Path>) -> PathBuf {
                 return candidate;
             }
         }
-        if let Some(candidate) = which_cmd(name) {
+        if let Some(candidate) = which_cmd(name, observer) {
             return candidate;
         }
     }
@@ -627,8 +705,8 @@ struct HostCompiler {
     clean_path: String,
 }
 
-fn which_cmd(name: &str) -> Option<PathBuf> {
-    std::env::var_os("PATH").and_then(|paths| {
+fn which_cmd(name: &str, observer: &mut impl HostCompilerProbeObserver) -> Option<PathBuf> {
+    observer.path().and_then(|paths| {
         std::env::split_paths(&paths).find_map(|dir| {
             let full = dir.join(name);
             if full.is_file() { Some(full) } else { None }
@@ -639,7 +717,7 @@ fn which_cmd(name: &str) -> Option<PathBuf> {
 /// Build a clean PATH for provider builds. Includes the compiler's directory,
 /// standard tool locations, and excludes clang/mold/rustup dirs that interfere
 /// with configure scripts.
-fn build_clean_provider_path(cc_dir: Option<&Path>) -> String {
+fn build_clean_provider_path(cc_dir: Option<&Path>, observer: &mut impl HostCompilerProbeObserver) -> String {
     let mut dirs: Vec<String> = Vec::with_capacity(PROVIDER_PATH_COMPONENT_CAPACITY);
     if let Some(d) = cc_dir {
         dirs.push(d.display().to_string());
@@ -651,7 +729,7 @@ fn build_clean_provider_path(cc_dir: Option<&Path>) -> String {
         }
     }
     // Include make if on PATH but not already included.
-    if let Some(make_path) = which_cmd("make")
+    if let Some(make_path) = which_cmd("make", observer)
         && let Some(make_dir) = make_path.parent()
     {
         let s = make_dir.display().to_string();
@@ -1636,6 +1714,87 @@ mod tests {
 
     const TEST_BLAKE3_HEX_LEN: usize = 64;
     const FIRST_PATCH_ORDER: u32 = 1;
+    struct RecordedCompilerProbes {
+        path: OsString,
+        processes: Vec<HostCompilerProcessStatus>,
+        path_reads: u32,
+    }
+
+    impl HostCompilerProbeObserver for RecordedCompilerProbes {
+        fn path(&mut self) -> Option<OsString> {
+            self.path_reads += 1;
+            Some(self.path.clone())
+        }
+
+        fn process(&mut self, _program: &Path, status: HostCompilerProcessStatus) {
+            self.processes.push(status);
+        }
+    }
+
+    fn compiler_fixture(script: &str) -> (tempfile::TempDir, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = tempfile::tempdir().unwrap();
+        let compiler = directory.path().join("gcc");
+        std::fs::write(&compiler, script).unwrap();
+        std::fs::set_permissions(&compiler, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(directory.path().join("g++"), "#!/bin/sh\nexit 0\n").unwrap();
+        (directory, compiler)
+    }
+
+    #[test]
+    fn observed_host_compiler_children_match_real_success_and_absence() {
+        let (directory, compiler) = compiler_fixture(
+            "#!/bin/sh\nif [ \"$1\" = '-dumpmachine' ]; then printf 'x86_64-linux-gnu\\n'; else while read line; do :; done; fi\n",
+        );
+        let mut probes = RecordedCompilerProbes {
+            path: directory.path().as_os_str().to_os_string(),
+            processes: Vec::new(),
+            path_reads: 0,
+        };
+        let selected = select_host_cc(&[compiler], &mut probes).unwrap();
+        assert!(selected.cc.ends_with("/gcc"));
+        assert_eq!(probes.processes, [
+            HostCompilerProcessStatus::Exited {
+                code: Some(0),
+                success: true
+            },
+            HostCompilerProcessStatus::Exited {
+                code: Some(0),
+                success: true
+            },
+        ]);
+        assert_eq!(probes.path_reads, 1);
+
+        let (directory, compiler) = compiler_fixture("#!/bin/sh\nprintf 'aarch64-unknown-linux-gnu\\n'\n");
+        let mut probes = RecordedCompilerProbes {
+            path: directory.path().as_os_str().to_os_string(),
+            processes: Vec::new(),
+            path_reads: 0,
+        };
+        assert!(select_host_cc(&[compiler], &mut probes).is_err());
+        assert_eq!(probes.processes, [HostCompilerProcessStatus::Exited {
+            code: Some(0),
+            success: true
+        }]);
+        assert_eq!(probes.path_reads, 0);
+    }
+
+    #[test]
+    fn observed_host_compiler_failed_child_is_not_selected() {
+        let (directory, compiler) = compiler_fixture("#!/bin/sh\nexit 7\n");
+        let mut probes = RecordedCompilerProbes {
+            path: directory.path().as_os_str().to_os_string(),
+            processes: Vec::new(),
+            path_reads: 0,
+        };
+        assert!(select_host_cc(&[compiler], &mut probes).is_err());
+        assert_eq!(probes.processes, [HostCompilerProcessStatus::Exited {
+            code: Some(7),
+            success: false
+        }]);
+        assert_eq!(probes.path_reads, 0);
+    }
 
     fn digest_fixture(nibble: char) -> DigestSpec {
         DigestSpec {

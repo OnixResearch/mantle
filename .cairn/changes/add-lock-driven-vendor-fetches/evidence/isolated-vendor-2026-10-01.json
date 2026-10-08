@@ -1,0 +1,13 @@
+{
+  "schema": "mantle-lock-vendor-isolated-input-v1",
+  "origin_main": "da00f58425740adea559ef926c9dfa97b2cb8240",
+  "isolated_worktree": "/home/brittonr/scratch/mantle-lock-vendor-baseline-da00f5",
+  "generated_input": "vendor-deps",
+  "generate_command": "TMPDIR=/home/brittonr/scratch CARGO_TARGET_DIR=/home/brittonr/scratch/mantle-lock-vendor-generation-target nix develop --command python3 scripts/vendor-deps.py generate",
+  "generate_result": "locked offline metadata: 766 external package names resolved; generated vendor-deps without replacing existing data",
+  "check_command": "TMPDIR=/home/brittonr/scratch CARGO_TARGET_DIR=/home/brittonr/scratch/mantle-lock-vendor-check-target nix develop --command python3 scripts/vendor-deps.py check",
+  "check_result": "locked offline metadata: 766 external package names resolved from fresh and installed closures; vendor-deps matches fresh Cargo generation (53491 entries)",
+  "generated_vendor_cache_bytes_du_sb": 896632634,
+  "generated_vendor_package_dirs": 937,
+  "cache_non_claim": "At this generated-input check, cache footprint was not yet the profile measurement; the later emitted manifest's vendored-cargo-inputs records[].payload_bytes is recorded independently in baseline-2026-10-01.json. Equal numeric values here do not establish a lock-driven reduction."
+}

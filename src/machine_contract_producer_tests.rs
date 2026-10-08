@@ -125,6 +125,7 @@ fn doctor_and_build_reports_serialize_to_registered_positive_fixtures() {
         hermeticity_mode: "strict".to_string(),
         hermeticity_audit_events: Vec::new(),
         build_environment_reports: Vec::new(),
+        finish_gates: Vec::new(),
         network_policy_reports: Vec::new(),
         workspace_reports: Vec::new(),
         action_result_reports: vec![crunch_build::ActionResultRuntimeReport {
@@ -132,6 +133,9 @@ fn doctor_and_build_reports_serialize_to_registered_positive_fixtures() {
             phase: "discovery".to_string(),
             action_ref: "mantle-action://blake3/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_string(),
+            unresolved_derivation: None,
+            resolved_derivation: None,
+            resolved_identity: None,
             disposition: "reused".to_string(),
             selected_result_ref: Some(
                 "mantle-action-result://blake3/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -160,6 +164,7 @@ fn doctor_and_build_reports_serialize_to_registered_positive_fixtures() {
             non_claims: vec!["index-presence-is-not-output-trust".to_string()],
         }],
         native_dynamic_plans: Vec::new(),
+        plan_output_bindings: Vec::new(),
         scheduler_priority_decisions: vec![scheduler_fixture_decision()],
         overlay_base_generations: Vec::new(),
         overlay_plan_blake3: None,

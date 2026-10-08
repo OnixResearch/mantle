@@ -1,0 +1,14 @@
+{
+  "schema": "mantle-apk-proof-prerequisite-v1",
+  "control": "offline build with empty source state",
+  "build_root": "examples/android-reviewed-toolchain-fetch.ncl",
+  "command": "mantle --json --state-dir <fresh-empty-state> --store <fresh-empty-store> build examples/android-reviewed-toolchain-fetch.ncl --import-path lib --offline-source-preflight --no-substitute",
+  "exit_code": 1,
+  "readiness": "network-required",
+  "blocker_class": "network-required-source",
+  "record_count": 3,
+  "network_required_count": 3,
+  "manifest_blake3": "0704358c259725b8c6281a4ad41ec223cb216ad4ba104c934eaa738d04b5313f",
+  "success_receipt_written": false,
+  "non_claim": "A missing prerequisite was refused before build; this is not a signed APK proof."
+}

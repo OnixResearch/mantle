@@ -92,6 +92,31 @@ success marker
     assert!(evidence.contains("success marker"));
 }
 
+#[test]
+fn transcript_child_uses_selected_casita_store_backend() {
+    let dir = TempDir::new().unwrap();
+    let transcript = dir.path().join("selected-backend.md");
+    let output = output_path(&dir, "selected-backend");
+    write_file(
+        &transcript,
+        r#"```mantle:error
+mantle store repair-final-nar /mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-fixture
+```
+```expect
+casita-repair-final-nar-unsupported
+```
+"#,
+    );
+
+    crunch()
+        .args(["--store-backend", "casita", "transcript", "run"])
+        .arg(&transcript)
+        .arg("--output")
+        .arg(&output)
+        .assert()
+        .success();
+}
+
 #[cfg(unix)]
 #[test]
 fn transcript_run_passes_expected_failure_when_diagnostic_matches() {
@@ -154,6 +179,29 @@ mantle fail
         .assert()
         .failure()
         .stderr(predicate::str::contains("mantle:error block must be followed"));
+}
+
+#[test]
+fn transcript_unexpected_success_preserves_partial_evidence_without_success_report() {
+    let dir = TempDir::new().unwrap();
+    let transcript = dir.path().join("unexpected-success.txt");
+    let output = output_path(&dir, "unexpected-success");
+    write_file(&transcript, "```mantle:error\nmantle --help\n```\n```expect\nUsage\n```\n");
+
+    crunch()
+        .args(["transcript", "run"])
+        .arg(&transcript)
+        .arg("--output")
+        .arg(&output)
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("unexpectedly succeeded"));
+
+    let evidence: serde_json::Value = serde_json::from_slice(&std::fs::read(&output).unwrap()).unwrap();
+    assert_eq!(evidence["schema"], "mantle-transcript-output-v1");
+    assert_eq!(evidence["visible_steps"], 0);
+    assert_eq!(evidence["runs"], serde_json::json!([]));
 }
 
 #[cfg(unix)]

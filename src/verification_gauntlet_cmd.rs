@@ -50,33 +50,64 @@ struct JsonShapeLabels<'a> {
     array: &'a str,
 }
 
+/// Facts observed by the gauntlet adapter before any terminal output.
+pub(crate) struct GauntletEffectFacts<'a> {
+    pub output_path: Option<&'a Path>,
+    pub output_bytes: u64,
+}
+
+/// Pure destination selection shared by the pre-effect plan and adapter.
+pub(crate) fn selected_gauntlet_output(action: &ReleaseGauntletAction, current_dir: &Path) -> Option<PathBuf> {
+    match action {
+        ReleaseGauntletAction::Canonicalize { output, .. } => {
+            output.as_ref().map(|path| resolve_input_path(current_dir, path.clone()))
+        }
+        ReleaseGauntletAction::Continuous { report_path, .. } => Some(
+            report_path
+                .as_ref()
+                .map(|path| resolve_input_path(current_dir, path.clone()))
+                .unwrap_or_else(|| current_dir.join(DEFAULT_CONTINUOUS_REPORT_PATH)),
+        ),
+        ReleaseGauntletAction::StrictHermeticityRegression { report_path, .. } => Some(
+            report_path
+                .as_ref()
+                .map(|path| resolve_input_path(current_dir, path.clone()))
+                .unwrap_or_else(|| current_dir.join(DEFAULT_STRICT_REGRESSION_REPORT_PATH)),
+        ),
+    }
+}
+
 pub(crate) fn cmd_release_gauntlet(
     action: ReleaseGauntletAction,
     current_dir: &Path,
     json: bool,
+    observe: impl FnOnce(GauntletEffectFacts<'_>) -> Result<(), RunError>,
 ) -> Result<(), RunError> {
     match action {
         ReleaseGauntletAction::Canonicalize { kind, input, output } => {
-            cmd_gauntlet_canonicalize(current_dir, json, kind, input, output)
+            cmd_gauntlet_canonicalize(current_dir, json, kind, input, output, observe)
         }
         ReleaseGauntletAction::Continuous {
             context,
             track,
             report_path,
-        } => cmd_gauntlet_continuous(current_dir, json, context, track, report_path),
+        } => cmd_gauntlet_continuous(current_dir, json, context, track, report_path, observe),
         ReleaseGauntletAction::StrictHermeticityRegression {
             run_id,
             plan,
             evidence,
             report_path,
-        } => cmd_strict_hermeticity_regression(StrictRegressionCommand {
-            current_dir: current_dir.to_path_buf(),
-            json,
-            run_id,
-            plan,
-            evidence_paths: evidence,
-            report_path,
-        }),
+        } => cmd_strict_hermeticity_regression(
+            StrictRegressionCommand {
+                current_dir: current_dir.to_path_buf(),
+                json,
+                run_id,
+                plan,
+                evidence_paths: evidence,
+                report_path,
+            },
+            observe,
+        ),
     }
 }
 
@@ -86,15 +117,24 @@ fn cmd_gauntlet_canonicalize(
     kind: GauntletReportKind,
     input: PathBuf,
     output: Option<PathBuf>,
+    observe: impl FnOnce(GauntletEffectFacts<'_>) -> Result<(), RunError>,
 ) -> Result<(), RunError> {
     let input_path = resolve_input_path(current_dir, input);
     let output_path = output.map(|path| resolve_input_path(current_dir, path));
     let input_bytes = read_file(&input_path)?;
     let canonical = canonicalize_report_bytes(kind, &input_bytes)?;
     let digest_blake3 = blake3::hash(&canonical).to_hex().to_string();
-    write_or_print_json(output_path.as_deref(), &canonical)?;
-    print_canonicalize_summary(json, kind, &input_path, output_path.as_deref(), &digest_blake3)?;
-    Ok(())
+    if output_path.is_some() {
+        write_or_print_json(output_path.as_deref(), &canonical)?;
+    }
+    observe(GauntletEffectFacts {
+        output_path: output_path.as_deref(),
+        output_bytes: observed_gauntlet_size(output_path.as_deref(), &canonical)?,
+    })?;
+    if output_path.is_none() {
+        write_or_print_json(None, &canonical)?;
+    }
+    print_canonicalize_summary(json, kind, &input_path, output_path.as_deref(), &digest_blake3)
 }
 
 fn cmd_gauntlet_continuous(
@@ -103,6 +143,7 @@ fn cmd_gauntlet_continuous(
     context: PathBuf,
     track_paths: Vec<PathBuf>,
     report_path: Option<PathBuf>,
+    observe: impl FnOnce(GauntletEffectFacts<'_>) -> Result<(), RunError>,
 ) -> Result<(), RunError> {
     let context_path = resolve_input_path(current_dir, context);
     let resolved_track_paths =
@@ -119,11 +160,17 @@ fn cmd_gauntlet_continuous(
     let canonical = continuous_reproducibility_gauntlet_report_canonical_bytes(outcome.clone())
         .map_err(|err| RunError::Internal(format!("serializing continuous gauntlet report: {err}")))?;
     write_or_print_json(Some(&output_path), &canonical)?;
-    print_continuous_summary(json, &outcome, &output_path, &digest_blake3)?;
-    Ok(())
+    observe(GauntletEffectFacts {
+        output_path: Some(&output_path),
+        output_bytes: observed_gauntlet_size(Some(&output_path), &canonical)?,
+    })?;
+    print_continuous_summary(json, &outcome, &output_path, &digest_blake3)
 }
 
-fn cmd_strict_hermeticity_regression(command: StrictRegressionCommand) -> Result<(), RunError> {
+fn cmd_strict_hermeticity_regression(
+    command: StrictRegressionCommand,
+    observe: impl FnOnce(GauntletEffectFacts<'_>) -> Result<(), RunError>,
+) -> Result<(), RunError> {
     assert!(!STRICT_REGRESSION_SUMMARY_KIND.is_empty(), "strict regression summary kind must not be empty");
     assert!(!DEFAULT_STRICT_REGRESSION_REPORT_PATH.is_empty(), "strict regression report path must not be empty");
     let plan_path = resolve_input_path(&command.current_dir, command.plan);
@@ -145,8 +192,11 @@ fn cmd_strict_hermeticity_regression(command: StrictRegressionCommand) -> Result
     let canonical = strict_hermeticity_regression_suite_report_canonical_bytes(outcome.clone())
         .map_err(|err| RunError::Internal(format!("serializing strict hermeticity regression report: {err}")))?;
     write_or_print_json(Some(&output_path), &canonical)?;
-    print_strict_regression_summary(command.json, &outcome, &output_path, &digest_blake3)?;
-    Ok(())
+    observe(GauntletEffectFacts {
+        output_path: Some(&output_path),
+        output_bytes: observed_gauntlet_size(Some(&output_path), &canonical)?,
+    })?;
+    print_strict_regression_summary(command.json, &outcome, &output_path, &digest_blake3)
 }
 
 fn canonicalize_report_bytes(kind: GauntletReportKind, input: &[u8]) -> Result<Vec<u8>, RunError> {
@@ -257,6 +307,16 @@ fn parse_json_slice<T: DeserializeOwned>(bytes: &[u8], label: &str) -> Result<T,
 
 fn read_file(path: &Path) -> Result<Vec<u8>, RunError> {
     std::fs::read(path).map_err(|err| RunError::Internal(format!("reading {}: {err}", path.display())))
+}
+
+fn observed_gauntlet_size(path: Option<&Path>, canonical: &[u8]) -> Result<u64, RunError> {
+    match path {
+        Some(path) => std::fs::metadata(path)
+            .map(|metadata| metadata.len())
+            .map_err(|err| RunError::Internal(format!("reading written gauntlet report {}: {err}", path.display()))),
+        None => u64::try_from(canonical.len())
+            .map_err(|_| RunError::Internal("gauntlet report exceeds observed size bound".to_string())),
+    }
 }
 
 fn write_or_print_json(path: Option<&Path>, bytes: &[u8]) -> Result<(), RunError> {
@@ -420,6 +480,11 @@ mod tests {
             },
             temp.path(),
             false,
+            |facts| {
+                assert_eq!(facts.output_path, Some(report_path.as_path()));
+                assert_eq!(facts.output_bytes, std::fs::metadata(&report_path).unwrap().len());
+                Ok(())
+            },
         )
         .unwrap();
         let report = read_json_file::<StrictHermeticityRegressionSuiteReport>(&report_path).unwrap();
@@ -428,6 +493,53 @@ mod tests {
         assert_eq!(report.cases.len(), STRICT_REGRESSION_AXIS_COUNT);
         assert!(report.blockers.is_empty());
         assert!(report.non_claims.is_empty());
+        let report_bytes = std::fs::metadata(&report_path).unwrap().len();
+        cmd_release_gauntlet(
+            ReleaseGauntletAction::Canonicalize {
+                kind: GauntletReportKind::StrictHermeticityRegression,
+                input: report_path,
+                output: None,
+            },
+            temp.path(),
+            false,
+            |facts| {
+                assert_eq!(facts.output_path, None);
+                assert_eq!(facts.output_bytes, report_bytes);
+                Ok(())
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn rejecting_a_written_report_does_not_undo_its_effect() {
+        let temp = tempfile::tempdir().unwrap();
+        let axes = strict_regression_axes();
+        let plan_path = temp.path().join("plan.json");
+        let evidence_path = temp.path().join("evidence.json");
+        let report_path = temp.path().join("report.json");
+        std::fs::write(&plan_path, serde_json::to_vec(&strict_regression_plan_json(&axes)).unwrap()).unwrap();
+        std::fs::write(&evidence_path, serde_json::to_vec(&strict_regression_evidence_json(&axes)).unwrap()).unwrap();
+        let rejected = cmd_release_gauntlet(
+            ReleaseGauntletAction::StrictHermeticityRegression {
+                run_id: "strict-regression-run".to_string(),
+                plan: plan_path,
+                evidence: vec![evidence_path],
+                report_path: Some(report_path.clone()),
+            },
+            temp.path(),
+            true,
+            |observed| {
+                assert_eq!(observed.output_path, Some(report_path.as_path()));
+                Err(RunError::Internal("report observation rejected".to_string()))
+            },
+        );
+        assert!(matches!(
+            rejected,
+            Err(RunError::Internal(message)) if message == "report observation rejected"
+        ));
+        let report = read_json_file::<StrictHermeticityRegressionSuiteReport>(&report_path).unwrap();
+        assert!(report.strict_regression_evidence_eligible);
     }
 
     fn strict_regression_plan_json(axes: &[&str]) -> serde_json::Value {

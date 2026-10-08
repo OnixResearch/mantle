@@ -105,6 +105,8 @@ const RECEIPT_SUFFIX: &str = ".json";
 const TEMP_SUFFIX: &str = ".tmp";
 const DIRECTORY_IDENTITY_DOMAIN: &[u8] = b"mantle.rustc-wrapper.directory.v1";
 const DIRECTORY_IDENTITY_SEPARATOR: u8 = 0;
+const CASITA_ENVELOPE_INVALID: &str = "casita-envelope-invalid";
+const CASITA_ROOT_MISSING: &str = "casita-root-missing";
 
 static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false);
 
@@ -156,6 +158,7 @@ struct DaemonContext {
     shared_policy: SharedRustCachePolicy,
     sources: Vec<Arc<dyn RustResultSource>>,
     receipt_dir: PathBuf,
+    response_flushed: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 #[derive(Debug)]
@@ -271,11 +274,31 @@ pub fn run_wrapper_from_environment() -> Result<i32, Error> {
 }
 
 pub fn run_daemon(options: DaemonOptions) -> Result<(), Error> {
+    run_daemon_observed(options, None, None)
+}
+
+/// Observe listener admission and only a validated Rust response successfully
+/// flushed to its client. Observers never affect the cache response frame.
+pub fn run_daemon_with_response_observer(
+    options: DaemonOptions,
+    listener_started: Arc<dyn Fn() + Send + Sync>,
+    response_flushed: Arc<dyn Fn() + Send + Sync>,
+) -> Result<(), Error> {
+    run_daemon_observed(options, Some(listener_started), Some(response_flushed))
+}
+
+fn run_daemon_observed(
+    options: DaemonOptions,
+    listener_started: Option<Arc<dyn Fn() + Send + Sync>>,
+    response_flushed: Option<Arc<dyn Fn() + Send + Sync>>,
+) -> Result<(), Error> {
     assert!(!options.policy_path.as_os_str().is_empty());
     assert!(!options.state_dir.as_os_str().is_empty());
     SHUTDOWN_REQUESTED.store(false, Ordering::SeqCst);
     install_shutdown_handlers()?;
-    let context = Arc::new(open_daemon_context(&options)?);
+    let mut context = open_daemon_context(&options)?;
+    context.response_flushed = response_flushed;
+    let context = Arc::new(context);
     let socket_path = context.policy.socket_path.clone();
     prepare_socket(&socket_path)?;
     let listener = UnixListener::bind(&socket_path).map_err(|source| Error::Io {
@@ -290,6 +313,9 @@ pub fn run_daemon(options: DaemonOptions) -> Result<(), Error> {
         context: "configure-daemon-socket".to_string(),
         source,
     })?;
+    if let Some(listener_started) = listener_started {
+        listener_started();
+    }
     let result = serve_listener(&listener, context, options.run_once);
     drop(listener);
     remove_socket(&socket_path);
@@ -297,9 +323,6 @@ pub fn run_daemon(options: DaemonOptions) -> Result<(), Error> {
 }
 
 fn open_daemon_context(options: &DaemonOptions) -> Result<DaemonContext, Error> {
-    if options.backend == crunch_store::StoreBackend::Casita {
-        return Err(Error::Process("casita-rust-cache-unsupported".to_string()));
-    }
     let policy = load_json_file::<WrapperDaemonPolicy>(&options.policy_path, MAX_POLICY_BYTES, "daemon-policy")?;
     validate_wrapper_policy(&policy).map_err(|error| Error::Policy(String::from(error.code())))?;
     assert!(!policy.policy_id.is_empty());
@@ -355,6 +378,7 @@ fn open_daemon_context(options: &DaemonOptions) -> Result<DaemonContext, Error> 
         shared_policy,
         sources,
         receipt_dir: options.receipt_dir.clone(),
+        response_flushed: None,
     })
 }
 
@@ -452,6 +476,9 @@ fn handle_connection(stream: &mut UnixStream, context: &DaemonContext) -> Result
         context: "flush-daemon-response".to_string(),
         source,
     })?;
+    if let Some(response_flushed) = &context.response_flushed {
+        response_flushed();
+    }
     assert_eq!(response.request_ref, request.request_ref);
     Ok(())
 }
@@ -548,12 +575,13 @@ fn try_local_cache(
     }
     let outcome = match context.cache.restore_blocking(&manifest.input.action, stage_root, &context.local_policy) {
         Ok(outcome) => outcome,
-        Err(_error) => {
+        Err(error) => {
+            let reason = casita_payload_integrity_code(&error).unwrap_or("local-cache-restore-failed");
             let response = runtime_failure_response(context, request, manifest, RuntimeFailureInput {
                 class: WrapperBypassClass::ProtocolFailure,
                 observed_compiler_status: 0,
                 compiler_executed: false,
-                reason: "local-cache-restore-failed",
+                reason,
             })?;
             return Ok(Some(response));
         }
@@ -1010,6 +1038,22 @@ struct RuntimeFailureInput<'a> {
     reason: &'a str,
 }
 
+fn casita_payload_integrity_code(error: &crunch_rust_cache::Error) -> Option<&'static str> {
+    match error {
+        crunch_rust_cache::Error::Castore(message) if message.contains(CASITA_ENVELOPE_INVALID) => {
+            Some(CASITA_ENVELOPE_INVALID)
+        }
+        crunch_rust_cache::Error::Castore(message) if message.contains(CASITA_ROOT_MISSING) => {
+            Some(CASITA_ROOT_MISSING)
+        }
+        _ => None,
+    }
+}
+
+fn is_casita_integrity_reason(reason: &str) -> bool {
+    matches!(reason, CASITA_ENVELOPE_INVALID | CASITA_ROOT_MISSING)
+}
+
 fn runtime_failure_response(
     context: &DaemonContext,
     request: &WrapperRequest,
@@ -1018,7 +1062,11 @@ fn runtime_failure_response(
 ) -> Result<WrapperResponse, Error> {
     assert!(!input.reason.is_empty());
     assert!(!manifest.manifest_ref.is_empty());
-    let decision = crunch_rust_cache_core::wrapper::failure_decision(context.policy.failure_mode, input.class);
+    let decision = if is_casita_integrity_reason(input.reason) {
+        WrapperDecision::Reject(input.class)
+    } else {
+        crunch_rust_cache_core::wrapper::failure_decision(context.policy.failure_mode, input.class)
+    };
     let (disposition, response_status) = match decision {
         WrapperDecision::Bypass(_) => (WrapperDisposition::Bypass, 0),
         WrapperDecision::Reject(_) => (WrapperDisposition::Rejected, EXIT_PROTOCOL_FAILURE),
@@ -1050,7 +1098,11 @@ fn runtime_failure_response(
         reason_codes: vec![input.reason.to_string()],
         compiler_status: response_status,
         stdout: Vec::new(),
-        stderr: Vec::new(),
+        stderr: if is_casita_integrity_reason(input.reason) {
+            format!("mantle-rustc-wrapper:rejected:{}\n", input.reason).into_bytes()
+        } else {
+            Vec::new()
+        },
         artifact_commit_complete: false,
         receipt_ref: Some(receipt.receipt_ref),
     })
@@ -1767,7 +1819,10 @@ fn finish_client_response(
         context: "write-wrapper-stderr".to_string(),
         source,
     })?;
-    if response.disposition == WrapperDisposition::Rejected && policy.failure_mode == WrapperFailureMode::FailOpen {
+    if response.disposition == WrapperDisposition::Rejected
+        && policy.failure_mode == WrapperFailureMode::FailOpen
+        && !response.reason_codes.iter().any(|reason| is_casita_integrity_reason(reason))
+    {
         return run_direct_compiler_strings(compiler, &request.input.arguments);
     }
     Ok(response.compiler_status)
@@ -3210,9 +3265,12 @@ mod tests {
             run_once: true,
         };
         run_test_daemon_shutdown(options.clone(), &policy);
-        run_test_daemon_truncated_connection(options.clone(), &policy);
+        run_test_daemon_rejected_connection(options.clone(), &policy, &[0_u8; 4]);
+        let mut invalid_json = (4_u64).to_be_bytes().to_vec();
+        invalid_json.extend_from_slice(b"bad!");
+        run_test_daemon_rejected_connection(options.clone(), &policy, &invalid_json);
         let startup_started = std::time::Instant::now();
-        let first = run_test_daemon_request(options.clone(), policy.clone(), request.clone());
+        let first = run_test_daemon_request_observed(options.clone(), policy.clone(), request.clone());
         let startup_elapsed = startup_started.elapsed();
         assert_eq!(first.disposition, WrapperDisposition::Compiled);
         assert_eq!(first.compiler_status, 0, "{}", String::from_utf8_lossy(&first.stderr));
@@ -3397,6 +3455,70 @@ mod tests {
             cold.median_micros.saturating_sub(pass_through.median_micros),
             cold.p95_micros.saturating_sub(pass_through.p95_micros),
         );
+        assert!(crunch_store::StoreBackend::Casita.profile().rust_unit_cache);
+        if crunch_store::StoreBackend::Casita.profile().rust_unit_cache {
+            let mut casita_policy = policy.clone();
+            casita_policy.failure_mode = WrapperFailureMode::FailOpen;
+            validate_wrapper_policy(&casita_policy).unwrap();
+            fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+            let casita_options = DaemonOptions {
+                policy_path: write_policy_fixture(root.path(), &casita_policy),
+                state_dir: root.path().join("casita-state"),
+                backend: crunch_store::StoreBackend::Casita,
+                store_output_dir: root.path().join("casita-store"),
+                receipt_dir: root.path().join("casita-receipts"),
+                run_once: true,
+            };
+            fs::remove_file(&output_path).unwrap();
+            let compiled = run_test_daemon_request(casita_options.clone(), casita_policy.clone(), request.clone());
+            assert_eq!(compiled.disposition, WrapperDisposition::Compiled);
+            assert_eq!(fs::read(&output_path).unwrap(), INPUT_BYTES);
+            fs::remove_file(&output_path).unwrap();
+            let reused = run_test_daemon_request(casita_options.clone(), casita_policy.clone(), request.clone());
+            assert_eq!(reused.disposition, WrapperDisposition::LocalHit);
+            assert_eq!(fs::read(&output_path).unwrap(), INPUT_BYTES);
+            fs::remove_file(&output_path).unwrap();
+
+            // Deliberate test-only misuse: raw guarded GC omits the Rust cache's retained payload.
+            let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+            runtime.block_on(async {
+                let guard = crunch_store::StoreMutationGuard::acquire_wait(&casita_options.state_dir).unwrap();
+                let mut store = crunch_store::StoreHandle::open(StoreConfig::new(
+                    crunch_store::StoreBackend::Casita,
+                    casita_options.state_dir.clone(),
+                    casita_options.store_output_dir.clone(),
+                    STORE_PREFIX.to_string(),
+                ))
+                .await
+                .unwrap();
+                store.recover_casita_gc_under_guard(&guard).await.unwrap();
+                let plan = store.garbage_collect_under_guard(&guard, None).await.unwrap();
+                assert!(
+                    store.garbage_collect_under_guard(&guard, Some(&plan.plan_id)).await.unwrap().execution_complete
+                );
+            });
+            let refused = run_test_daemon_request(casita_options.clone(), casita_policy.clone(), request.clone());
+            assert_eq!(refused.disposition, WrapperDisposition::Rejected);
+            assert_eq!(refused.compiler_status, EXIT_PROTOCOL_FAILURE);
+            assert_eq!(refused.reason_codes, vec![CASITA_ROOT_MISSING.to_string()]);
+            assert_eq!(refused.stderr, format!("mantle-rustc-wrapper:rejected:{CASITA_ROOT_MISSING}\n").into_bytes());
+            assert!(refused.receipt_ref.is_some());
+            let receipt_digest = refused.receipt_ref.as_deref().unwrap().rsplit('/').next().unwrap();
+            let receipt: WrapperReceipt = serde_json::from_slice(
+                &fs::read(casita_options.receipt_dir.join(format!("{receipt_digest}{RECEIPT_SUFFIX}"))).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(receipt.input.disposition, WrapperDisposition::Rejected);
+            assert_eq!(receipt.input.reason_codes, vec![CASITA_ROOT_MISSING.to_string()]);
+            assert!(!receipt.input.compiler_executed);
+            assert!(!receipt.input.artifact_commit_complete);
+            let compiler = compiler_path.into_os_string();
+            assert_eq!(
+                finish_client_response(&casita_policy, &compiler, &request, refused).unwrap(),
+                EXIT_PROTOCOL_FAILURE,
+            );
+            assert!(!output_path.exists(), "FailOpen must never execute cp after Casita payload integrity failure");
+        }
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3453,6 +3575,38 @@ mod tests {
         assert_eq!(latency_summary(&[]), None);
     }
 
+    fn run_test_daemon_request_observed(
+        options: DaemonOptions,
+        policy: WrapperDaemonPolicy,
+        request: WrapperRequest,
+    ) -> WrapperResponse {
+        let started = Arc::new(AtomicBool::new(false));
+        let flushed = Arc::new(AtomicBool::new(false));
+        let started_observer = Arc::clone(&started);
+        let flushed_observer = Arc::clone(&flushed);
+        let daemon = thread::spawn(move || {
+            run_daemon_with_response_observer(
+                options,
+                Arc::new(move || started_observer.store(true, Ordering::SeqCst)),
+                Arc::new(move || flushed_observer.store(true, Ordering::SeqCst)),
+            )
+        });
+        wait_for_test_socket(&policy.socket_path);
+        for _ in 0..100 {
+            if started.load(Ordering::SeqCst) {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert!(started.load(Ordering::SeqCst), "socket listener must actually start");
+        assert!(!flushed.load(Ordering::SeqCst), "socket startup is not a valid request/response");
+        let response = request_daemon(&policy, &request).unwrap();
+        daemon.join().unwrap().unwrap();
+        assert!(flushed.load(Ordering::SeqCst), "only a successful Rust response flush acknowledges readiness");
+        assert_eq!(response.request_ref, request.request_ref);
+        response
+    }
+
     fn run_test_daemon_request(
         options: DaemonOptions,
         policy: WrapperDaemonPolicy,
@@ -3475,14 +3629,22 @@ mod tests {
         assert!(!path_entry_exists(Path::new(&policy.socket_path)));
     }
 
-    fn run_test_daemon_truncated_connection(options: DaemonOptions, policy: &WrapperDaemonPolicy) {
-        const TRUNCATED_PREFIX_BYTES: &[u8] = &[0, 0, 0, 0];
-        let daemon = thread::spawn(move || run_daemon(options));
+    fn run_test_daemon_rejected_connection(options: DaemonOptions, policy: &WrapperDaemonPolicy, payload: &[u8]) {
+        let flushed = Arc::new(AtomicBool::new(false));
+        let flushed_observer = Arc::clone(&flushed);
+        let daemon = thread::spawn(move || {
+            run_daemon_with_response_observer(
+                options,
+                Arc::new(|| {}),
+                Arc::new(move || flushed_observer.store(true, Ordering::SeqCst)),
+            )
+        });
         wait_for_test_socket(&policy.socket_path);
         let mut stream = UnixStream::connect(&policy.socket_path).unwrap();
-        stream.write_all(TRUNCATED_PREFIX_BYTES).unwrap();
+        stream.write_all(payload).unwrap();
         stream.shutdown(Shutdown::Write).unwrap();
         daemon.join().unwrap().unwrap();
+        assert!(!flushed.load(Ordering::SeqCst), "incomplete or invalid frames cannot acknowledge readiness");
         assert!(!path_entry_exists(Path::new(&policy.socket_path)));
     }
 

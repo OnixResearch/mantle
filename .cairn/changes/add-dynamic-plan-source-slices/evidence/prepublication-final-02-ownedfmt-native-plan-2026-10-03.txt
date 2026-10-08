@@ -1,0 +1,17 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.59s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/mantle-v2-prepublication-repair-20261003/debug/deps/crunch_build-ef88f8fb519966e3)
+
+running 7 tests
+test worker::tests::native_dynamic_plan_declared_output_is_accepted ... ok
+test worker::tests::native_dynamic_plan_declared_output_rejections_are_structured ... ok
+test worker::tests::native_dynamic_plan_registers_all_units_but_wants_only_roots ... ok
+test worker::tests::native_dynamic_plan_rejected_output_schedules_no_units ... ok
+test worker::tests::native_dynamic_plan_reports_are_deterministically_sorted ... ok
+test worker::tests::native_dynamic_plan_undeclared_output_is_ignored ... ok
+test worker::tests::native_dynamic_plan_valid_output_schedules_root_unit_in_same_run ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 721 filtered out; finished in 0.18s
+

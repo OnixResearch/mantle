@@ -10,6 +10,7 @@ let offline_cargo = import "offline_cargo.ncl" in
 let wasm_component = import "wasm_component.ncl" in
 let kernelscript_experiment = import "kernelscript_experiment.ncl" in
 let scheduling = import "scheduling.ncl" in
+let android = import "android.ncl" in
 
 {
   # The main derivation contract. Apply with: record | crunch.Derivation
@@ -66,6 +67,13 @@ let scheduling = import "scheduling.ncl" in
   schedulingPolicy = scheduling.default_policy,
   schedulingKnownGraphBounds = scheduling.default_known_graph_bounds,
   schedulingHistoryPolicy = scheduling.default_history_policy,
+
+  # Reviewed prebuilt Android source records and explicit consumer binding.
+  AndroidSources = android,
+  # APK plan authoring; the Rust adapter checks independently admitted bytes
+  # and emits separately sandboxed steps before any tool executes.
+  ApkPlan = android.Plan,
+  mkApk = android.mkApk,
 
   # Lazy derivation file edge. The pipeline resolves this relative path before
   # conversion, keeping large derivation DAGs out of one Nickel value.

@@ -1,0 +1,120 @@
+$ TMPDIR=/home/brittonr/scratch NIX_CONFIG='eval-cache = false' nix run --offline path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks add-bootstrap-source-pins --root .
+
+bg_1853 [bash] — completed — env TMPDIR=/home/brittonr/scratch NIX_CONFIG='eval-cache = false' nix run --offline path:/home/brittonr/git/OnixResea...
+fatal: unable to access 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git/': The requested URL returned error: 530
+warning: could not read HEAD ref from repo at 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git', using 'master'
+{
+  "acceptance_ids": [],
+  "change": "add-bootstrap-source-pins",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "b9a4d16920e15e4be7b8b3285aa8dd68a1999446776c42021374d673a4ee8ef5",
+  "issues": [],
+  "layout": "cairn",
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "policy_selection": {
+    "blake3": "31d095609943dd430aa8ab172cd1b8f5116550d41e5b1c8463b89875017e0d12",
+    "installation_receipt": false,
+    "locator": "cairn-policy/generated/cairn-policy.json",
+    "source": "legacy_default"
+  },
+  "probe_evidence": {
+    "declarations_present": false,
+    "probes": []
+  },
+  "profile_identity_hash": "5491c8358cf97a90d3ef022bcbcde34e1eb40e42e148b8f6fe6d38a07e9c4260",
+  "receipt_hash": "6671fd0b60708d1a95d3cdac3396507ceda2bd9f4c3530f3dfd57d6a217b0e9a",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "stage": "tasks",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-bootstrap-source-pins/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 70,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-bootstrap-source-pins/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 53,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-bootstrap-source-pins/specs/bootstrap-source-pins/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 9,
+      "substantive_lines": 79,
+      "substantive_requirement_blocks": 4,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 13,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-bootstrap-source-pins/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 28,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 13,
+      "task_done": 11,
+      "task_in_progress": 0,
+      "task_todo": 2
+    }
+  ],
+  "task_ordering": {
+    "active": false,
+    "edges": [],
+    "issues": [],
+    "nodes": [],
+    "order": [],
+    "ready_tasks": [],
+    "valid": true
+  },
+  "valid": true,
+  "verdict": "PASS",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
+
+
+Wall time: 10.83 seconds

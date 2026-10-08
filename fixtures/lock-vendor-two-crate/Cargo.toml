@@ -1,0 +1,8 @@
+[package]
+name = "lock-vendor-two-crate"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+crc64 = "=2.0.0"
+memchr = "=2.8.0"

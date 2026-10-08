@@ -845,6 +845,73 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
     } else {
         None
     };
+    // A verbose coordination projection is outside the proof tree and cannot
+    // become a receipt. Without observed action reconciliation no stage
+    // completion is asserted, even if the proof shell keeps executing.
+    let stage_bindings = if options.verbose {
+        crate::source_built_fixed_point::stage_readiness_bindings(&prepared.plan)
+            .map_err(|reason| proof_error(format!("deriving stage readiness dependencies: {reason}")))?
+    } else {
+        Vec::new()
+    };
+    let stage_declarations = stage_bindings
+        .iter()
+        .map(|binding| crunch_service_readiness_core::Component {
+            id: binding.id,
+            kind: crunch_service_readiness_core::ComponentKind::ProofStage,
+            depends_on: &binding.dependencies,
+            user_states: &[],
+            restart_policy: None,
+            stage_requirements: Some(crunch_service_readiness_core::StageRequirements {
+                require_action_reconciliation: true,
+                require_v2_receipt: binding.final_receipt_required,
+            }),
+        })
+        .collect::<Vec<_>>();
+    let render_stage_readiness =
+        |observations: &[crunch_service_readiness_core::Observation<'_>]| -> Result<String, RunError> {
+            let initial = crunch_service_readiness_core::evaluate(&crunch_service_readiness_core::Snapshot {
+                schema: crunch_service_readiness_core::READINESS_SCHEMA,
+                components: &stage_declarations,
+                observations: &[],
+            })
+            .map_err(|error| proof_error(format!("admitting stage readiness graph: {error:?}")))?;
+            let report = if observations.is_empty() {
+                initial
+            } else {
+                crunch_service_readiness_core::advance(&initial, &crunch_service_readiness_core::Snapshot {
+                    schema: crunch_service_readiness_core::READINESS_SCHEMA,
+                    components: &stage_declarations,
+                    observations,
+                })
+                .map_err(|error| proof_error(format!("admitting observed stage state: {error:?}")))?
+            };
+            let components = report
+                .components
+                .iter()
+                .map(|row| {
+                    serde_json::json!({
+                        "id": row.id,
+                        "generation": row.generation,
+                        "states": row.states,
+                        "restart_policy": null,
+                        "restart_action": null,
+                        "ready": row.ready,
+                        "blocked_by": row.blocked_by,
+                    })
+                })
+                .collect::<Vec<_>>();
+            Ok(serde_json::json!({
+                "schema": report.schema,
+                "classification": report.classification,
+                "evidence_eligible": report.evidence_eligible,
+                "components": components,
+            })
+            .to_string())
+        };
+    if options.verbose {
+        eprintln!("{}", render_stage_readiness(&[])?);
+    }
     let providers = if adopt {
         let adopted = adopt_cached_provider_subtrees(options, prepared, &prepared.plan)?;
         construct_full_source_providers(
@@ -871,7 +938,23 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
             && stagex_transition_execution_dir.is_dir()
             && transition_marker_is_trusted(prepared, &transition_replay_digest)?;
         if !transition_resume {
+            let stagex_started = if options.verbose {
+                let observation = [crunch_service_readiness_core::Observation {
+                    id: "stagex-transition",
+                    generation: 1,
+                    states: &["started"],
+                    exit: None,
+                    request_acknowledged: false,
+                    proof_completion: None,
+                }];
+                Some(render_stage_readiness(&observation)?)
+            } else {
+                None
+            };
             let transition_result = run_in_isolated_exec_thread("StageX transition", || {
+                if let Some(report) = &stagex_started {
+                    eprintln!("{report}");
+                }
                 crate::stagex_transition::materialize_protected_transition(StagexTransitionRequest {
                     seed_path: &prepared.stagex_seed,
                     hex0_source_path: &prepared.source_root.join("bootstrap/seeds/AMD64/hex0_AMD64.hex0"),
@@ -881,7 +964,24 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
                     stage0_answers_path: Some(&prepared.source_root.join("bootstrap/stage0-amd64.answers")),
                     scratch_dir: &stagex_transition_execution_dir,
                 })
-            })?;
+            });
+            if options.verbose {
+                let failed = !matches!(&transition_result, Ok(Ok(report)) if report.status == PROOF_STATUS_COMPLETE);
+                if failed {
+                    let observation = [crunch_service_readiness_core::Observation {
+                        id: "stagex-transition",
+                        generation: 1,
+                        states: &["failed"],
+                        exit: None,
+                        request_acknowledged: false,
+                        proof_completion: None,
+                    }];
+                    eprintln!("{}", render_stage_readiness(&observation)?);
+                } else {
+                    eprintln!("{}", render_stage_readiness(&[])?);
+                }
+            }
+            let transition_result = transition_result?;
             let transition_report =
                 transition_result.map_err(|error| proof_error(format!("StageX transition failed: {error}")))?;
             if transition_report.status != PROOF_STATUS_COMPLETE {
@@ -2443,6 +2543,8 @@ fn proof_error(message: String) -> RunError {
 
 #[cfg(test)]
 mod tests {
+    use clap::Parser as _;
+
     use super::*;
 
     const DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -2559,7 +2661,7 @@ mod tests {
     }
 
     #[test]
-    fn native_build_command_is_strict_offline_and_substitution_free() {
+    fn native_build_child_is_strict_offline_and_rejects_backend_mismatch() {
         let temp = tempfile::tempdir().unwrap();
         let bwrap = temp.path().join("bwrap");
         let shell = temp.path().join("busybox");
@@ -2584,7 +2686,7 @@ mod tests {
             dev_resume: false,
             dev_fast_fail: false,
             verbose: false,
-            backend: crunch_store::StoreBackend::Snix,
+            backend: crunch_store::StoreBackend::Casita,
             json: false,
         };
         let prepared = PreparedAttempt {
@@ -2603,6 +2705,18 @@ mod tests {
             started_at: Instant::now(),
             plan: test_plan(),
         };
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime
+            .block_on(crunch_store::StoreHandle::open(crunch_store::StoreConfig::new(
+                crunch_store::StoreBackend::Snix,
+                prepared.native_state_dir.clone(),
+                prepared.native_store_dir.clone(),
+                LOGICAL_STORE_PREFIX.to_string(),
+            )))
+            .unwrap();
+        let identity_path = prepared.native_state_dir.join("store-identity.json");
+        let identity_before = fs::read(&identity_path).unwrap();
+        let state_count_before = fs::read_dir(&prepared.native_state_dir).unwrap().count();
         let command =
             native_build_command(&options, &prepared, Path::new("/source/bootstrap/seed-full-toolchain.ncl")).unwrap();
         let args = command.get_args().map(OsString::from).collect::<Vec<_>>();
@@ -2611,6 +2725,24 @@ mod tests {
         assert!(args.iter().any(|argument| argument == "--no-substitute"));
         assert!(args.iter().any(|argument| argument == "--strict-hermetic"));
         assert!(!args.iter().any(|argument| argument == "--impure"));
+        let argv = std::iter::once(OsString::from("mantle")).chain(args).collect::<Vec<_>>();
+        let parsed = std::thread::Builder::new()
+            .stack_size(crate::command_input::test_support::CLI_PARSE_TEST_STACK_BYTES)
+            .spawn(move || crate::Args::try_parse_from(argv))
+            .unwrap()
+            .join()
+            .unwrap()
+            .unwrap();
+        let mismatch = crunch_store::StoreConfig::preflight_backend_identity_for(
+            parsed.store_backend,
+            &prepared.native_state_dir,
+            LOGICAL_STORE_PREFIX,
+            &[],
+        )
+        .unwrap_err();
+        assert!(mismatch.to_string().contains("store-backend-mismatch: requested casita, state declares snix"));
+        assert_eq!(fs::read(&identity_path).unwrap(), identity_before);
+        assert_eq!(fs::read_dir(&prepared.native_state_dir).unwrap().count(), state_count_before);
     }
 
     #[test]

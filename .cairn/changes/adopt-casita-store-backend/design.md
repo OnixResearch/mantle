@@ -104,13 +104,13 @@ Details are in `evidence/casita-review.md` and ADR 0082. At
 | --- | --- | --- | --- |
 | Session staging and conditional publication | Unrooted import in a `MutationSession`, then `publish_if_roots_match` expecting absence | Selected | Root-race, idempotent, interrupted-staging, and batch fixtures |
 | Conditional envelope replacement | Stage a new envelope, then `RootChange::Set` expecting the current target | Selected | Replacement fixtures |
-| Mantle-owned castore payload roots | Permanent roots under `mantle/castore/` with `content` and `node.postcard` | Selected once `rust-unit-cache` is declared; planned, not implemented | Payload reuse, tamper, and GC fixtures |
+| Mantle-owned castore payload roots | Permanent roots under `mantle/castore/` with `content` and `node.postcard` | Selected with declared `rust-unit-cache` | Payload reuse, tamper, and GC fixtures |
 | Destination-owned trust policy | `casita-trusted-public-keys` when present, otherwise only the local signing key; the file is written by the operator | Selected | Missing, invalid, unauthorized, removed-key, local-signer listed and unlisted, and reopen fixtures |
 | Split an oversized batch across commits | Several conditional publications | Rejected: breaks all-or-none | Batch-limit fixtures |
 | Reject `store sign` in Casita mode | Fail the command under `casita` | Rejected: drops a core capability | Replacement fixtures |
 | Reject `store repair-final-nar` in Casita mode | Fail the command and the library repair calls under `casita` before any state access or effect | Selected on 2026-09-30 until a durable repair fence exists | Casita repair rejection and unchanged `snix` repair fixtures |
 | Make PathInfo-backed `ActionResultPort` outputs optional | Declare the port unsupported | Rejected: drops a core capability | Fresh-process action-result reuse fixture |
-| Standalone Rust unit cache in session scratch | Keep cache nodes only in per-session castore | Rejected; interim `rust-unit-cache` is declared unsupported and fails closed until castore roots are proven | Rust cache rejection and `store gc` reachability fixtures |
+| Standalone Rust unit cache in session scratch | Keep cache nodes only in per-session castore | Rejected: fresh-process reuse requires durable verified castore roots | Rust cache fresh-process and `store gc` reachability fixtures |
 | Name payload roots by content digest only | Root per castore digest without `node.postcard` | Rejected: a digest cannot recover the executable bit or symlink metadata unambiguously | Payload tamper fixtures |
 | Honor `--trust-unsigned` in Casita mode | Admit unsigned PathInfo | Rejected: every later read would reject it | Unsigned rejection fixtures |
 | Enroll import keys automatically | Add `--trusted-public-keys` keys to the policy during import | Rejected: a one-run flag would become durable trust without review | None |
@@ -139,8 +139,8 @@ Details are in `evidence/casita-review.md` and ADR 0082. At
   `pathinfo.json`, the deterministic serde JSON encoding of the signed
   PathInfo; `mantle/castore/<64 lowercase hex of the BLAKE3 digest of the
   postcard-encoded castore node>` for castore-only payloads, with an envelope
-  of exactly `content` and `node.postcard`, planned and used only once the
-  profile declares `rust-unit-cache`. Mantle manages and removes roots only in
+  of exactly `content` and `node.postcard` while the profile declares
+  `rust-unit-cache`. Mantle manages and removes roots only in
   these two namespaces. No other durable PathInfo mapping exists in Casita
   mode.
 - **Trust policy**: `casita-trusted-public-keys` in the state directory,
@@ -160,8 +160,8 @@ Details are in `evidence/casita-review.md` and ADR 0082. At
   `ActionResultPort` outputs; `store-repair-final-nar` omitted from the core
   list until a durable repair fence exists; `atomic-batch-import` bounded by
   `max_root_changes` (1,024 at the pinned defaults); `overlay-composition` and
-  `unsigned-admission` not declared; `rust-unit-cache` declared unsupported
-  while the interim guards persist.
+  `unsigned-admission` not declared; `rust-unit-cache` declared with durable,
+  verified castore roots.
 - **Session scratch**: Snix blob, directory, and PathInfo services in memory
   or under a per-session directory outside `--state-dir`, deleted at session
   end.
@@ -228,19 +228,19 @@ Until a durable repair fence can recover the root and the sidecar together, the
 parent chose on 2026-09-30 to fail closed instead of claiming a repair that a
 crash could leave inconsistent.
 
-### Decision: Castore payload roots wait for the Rust unit cache
+### Decision: Castore payload roots support the declared Rust unit cache
 
 **Choice:** PathInfo-backed action-result outputs are admitted as output roots
 and rehydrated like any output, so `ActionResultPort` stays core. The
-standalone Rust unit cache is the optional capability `rust-unit-cache`. Once
-the castore-root helper is wired and its fresh-process fixture passes, every
+standalone Rust unit cache is the optional capability `rust-unit-cache`,
+declared for Casita together with durable castore payload roots. Every
 retained castore-only payload is published under
 `mantle/castore/<64-hex BLAKE3 of the postcard-encoded node>` with `content`
 and `node.postcard`. A read re-ingests `content` and requires the reproduced
-node and name to match, and GC retains these roots from the Rust retention
-live nodes. Until then the profile declares `rust-unit-cache` unsupported, and
-`store gc` works for outputs when no Rust cache state exists and fails closed
-when it does.
+node and name to match. Guarded GC recovers a pending fence before checking
+the Rust retention live nodes; verified retained roots stay published and
+unretained roots may be collected. A missing or repointed retained root
+rejects planning before a new fence or root removal.
 
 **Rationale:** With Snix reduced to session scratch, cache nodes need a durable
 home before they can be reused. `node.postcard` keeps the executable bit and
@@ -492,8 +492,8 @@ Stable blockers:
   keeps its existing `stale-gc-plan` blocker for the same condition
   (`crates/crunch-store/src/gc.rs`), so the conformance rail's stale-plan
   fixture expects each backend's own blocker.
-- `casita-rust-cache-unsupported`: Rust unit cache use, or `store gc` with
-  Rust unit cache state, while `rust-unit-cache` is not declared.
+- `casita-envelope-invalid` or `casita-root-missing`: a retained Rust cache
+  payload root or envelope changed or vanished; neither reuse nor GC proceeds.
 - `casita-gc-guard-required`: Casita GC planning, a dry run, or execution
   without `StoreMutationGuard`.
 - `gc-recovery-required`: an operation found an incomplete fence record
@@ -519,9 +519,10 @@ action results. They are behavior tests, not source-text checks.
   repairs; a batch of exactly 1,024 absent paths publishes in one revision at
   the pinned defaults; a PathInfo-backed action-result output is rehydrated by
   a fresh process; `store gc` without Rust unit cache state removes only
-  unretained output roots; once `rust-unit-cache` is declared, a Rust unit
-  payload is reused without recompiling and GC also releases unretained payload
-  roots; collection keeps retained content; migration with a written policy
+  unretained output roots without creating cache state; with declared
+  `rust-unit-cache`, a Rust unit payload is reused without recompiling and GC
+  releases unretained payload roots while preserving retained ones; collection
+  keeps retained content; migration with a written policy
   verifies in a fresh process; guarded `store gc` recovers an interrupted fence
   before planning and removes no root; an output whose signed PathInfo carries
   a content address round-trips through `pathinfo.json` with equal bytes.
@@ -540,9 +541,9 @@ action results. They are behavior tests, not source-text checks.
   key; build signed by a key outside the trust set; substituted output signed
   only by a cache key outside the policy; key removed from the policy and
   policy file removed, then fresh-process lookup, `store verify`, and GC
-  planning; a Rust unit cache command and `store gc` with existing Rust unit
-  cache state while `rust-unit-cache` is unsupported; once it is declared, a
-  payload root repointed to different `content` or `node.postcard`, or removed;
+  planning; a retained Rust cache payload root repointed to different
+  `content` or `node.postcard`, or removed, rejects reuse and GC before any
+  new fence;
   NAR mismatch; tampered `pathinfo.json`; swapped `content`; root-name digest
   mismatch; stale plan; interruption before and after root removal; lookup,
   listing, admission, root registration, and rehydration while a fence is
@@ -578,16 +579,16 @@ action results. They are behavior tests, not source-text checks.
   checks and skips paths it finds present, so only absent paths count. Snix
   mode has no backend bound; the Nario v2 reader's 100,000 record limit
   applies to both backends.
-- Once `rust-unit-cache` is declared, each retained castore payload adds one
-  root. Until then Casita mode has no Rust unit cache and is not fully
-  interchangeable with `snix`.
+- Each retained castore payload adds one root under the declared
+  `rust-unit-cache` capability. Casita remains interchangeable with `snix`
+  only within their declared capabilities.
 - Operators must add cache keys and any `--signing-key` other than the local
   key to the policy before those outputs can be published in Casita mode.
 - Removing a key makes retained outputs signed only by that key unreadable and
   blocks GC planning until the key is restored or those roots are released.
 - Verification on every read costs time. `store verify` forces a full audit.
-- Overlay composition, unsigned admission, and, while the parity gate
-  applies, the Rust unit cache are not available in Casita mode.
+- Overlay composition and unsigned admission are not available in Casita
+  mode; the Rust unit cache uses verified durable castore payload roots.
 - After an interrupted GC, Casita reads and admission fail with
   `gc-recovery-required` until the operator runs `store gc`, which recovers
   the fence before it plans.
@@ -622,16 +623,26 @@ tested interruptions, output correctness, sandboxing, or release eligibility.
   transport owner applies the same file in the `vendor-deps/` generator. Every
   path fails on drift. No vendor snapshot is hand-edited, no fork is pinned,
   and no evidence claims an unmodified upstream build.
-- **Castore parity gate.** Castore roots are planned, not implemented. While
-  the interim guards persist, `rust-unit-cache` is declared unsupported, Rust
-  cache use fails with `casita-rust-cache-unsupported`, `store gc` works for
-  outputs without Rust cache state and fails closed with it, and `casita`
-  claims no full interchangeability.
+- **Castore parity gate resolved in the store and cache path, with CLI
+  reachability still in progress.** Castore roots are published with declared
+  `rust-unit-cache`; public cache reuse and the real wrapper checked fresh
+  process restoration, retained GC execution, and FailOpen missing-root
+  rejection in Casita Run 82. Run 85 exercised literal selected-Casita CLI
+  GC rejection of a missing retained payload and guarded recovery of an
+  interrupted output GC using the first coherent binary. Run 86 also
+  planned and executed signed output GC without Rust cache state, after
+  explicitly releasing the unpinned build's legacy-unmanaged root.
+  Run 87 passed the signed no-cache selected-Casita CLI GC fixture under
+  the initial frozen root-test snapshot. The existing-cache fixture has
+  since been migrated to per-interest retention records; its focused CLI
+  run and final merged-source verification remain open before claiming
+  a completed backend conformance rail.
 - **Dependency advisories.** The vendor rail's `cargo deny check` failed
   advisories and sources. Only `proc-macro-error 0.4.12` (unmaintained) is
   new in the lock, from Casita's graph through `genawaiter 0.99.1`. The
-  `h2 0.4.13` and `rustls 0.23.37` advisories are unchanged from HEAD and
-  also reachable from `casita` through `object_store 0.14.0`.
+  `h2 0.4.13` and `rustls 0.23.37` were vulnerable in HEAD and reachable
+  from Casita through `object_store 0.14.0`; the current lock has compatible
+  patched `h2 0.4.16` and `rustls 0.23.45` instead.
   `bitmaps 3.2.1`, `imbl-sized-chunks 0.1.3`, and `rsa 0.9.10` are unchanged
   and off the Casita path. Four missing `allow-git` sources predate this
   change. The gate stays open, with no waivers.

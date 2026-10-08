@@ -198,6 +198,11 @@ An artifact attestation remains subject to its separate policy when a consumer r
 Failed cache verification leaves the import receipt valid as admission evidence.
 It does not create output trust.
 
+For remote output consumers, a transfer checkpoint or acknowledgement cannot
+introduce a session or replace signed PathInfo/content verification. The
+[transient-handle admission rule](remote-transfer.md#transient-handle-admission)
+names the establishing declaration and the checked fixtures for each boundary.
+
 `preserve-cache-paths-v1` permits exact path identity only with one unchanged store prefix.
 It selects the distinct `cache-only-preserve-v1` route.
 This route requires online substitution, an empty source bundle, and one selected output root.
@@ -389,6 +394,23 @@ prefix. Mantle validates the receipt schema, status, identity, and root before
 store mutation. A successful pull proves cache admission under the configured
 trust policy. It does not prove package correctness, local rebuild
 compatibility, evaluator parity, reproducibility, or release eligibility.
+
+## CLI observation boundary
+
+The `foreign-import` `validate`, `plan`, `prepare-sources`, `realize`, and
+`audit` operations declare their bounded file and store effects before their
+host ports execute. Accepted plan and source outputs, realization receipts, and
+audit receipts are read back from their committed paths and classified before
+the command reports success. When Nario archives are used, source preparation
+also checks the independently recorded imported archive count. Rejected
+inputs and partial realization or audit outcomes retain their failure exit
+instead of turning an observation failure into a successful report.
+
+An embedded `mantlepkgs build` caller may inspect the persisted foreign
+realization receipt through a pre-report callback; the direct `foreign-import`
+CLI still renders the receipt once. This ordering permits the caller to
+classify its own observed result before reporting it, without claiming that
+the foreign frontend, package, or resulting output is correct.
 
 ## Claim-safe reporting checklist
 

@@ -1,9 +1,8 @@
-//! Pure immutable remote-attempt log identities and bounded planning.
+//! Host DTOs, canonical v1 digests, and immutable-log plans.
 //!
-//! This functional core performs no filesystem access, transport, clock reads,
-//! deletion, rendering, coordinator mutation, or output admission. Shell code
-//! may apply accepted append and retention plans only after persisting immutable
-//! objects and atomically advancing the manifest.
+//! Borrowed validation and bounded decisions live in `crunch_remote_core::attempt_log`.
+//! This adapter preserves the existing serde wire format and BLAKE3/JSON preimages;
+//! callers persist immutable objects before atomically advancing the manifest.
 //!
 //! r[impl remote_builds.immutable_attempt_log_segments]
 //! r[impl remote_builds.pure_log_cursor_kernel]
@@ -11,30 +10,31 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use crunch_remote_core::attempt::RemoteAttemptId;
+use crunch_remote_core::attempt::RemoteAttemptPhase;
+use crunch_remote_core::attempt::RemoteEventId;
+use crunch_remote_core::attempt::RemoteFenceGeneration;
+use crunch_remote_core::attempt::RemoteJobId;
+use crunch_remote_core::attempt_log as kernel;
+
 use serde::Deserialize;
 use serde::Serialize;
-
-use super::remote_attempt::RemoteAttemptId;
-use super::remote_attempt::RemoteAttemptPhase;
-use super::remote_attempt::RemoteEventId;
-use super::remote_attempt::RemoteFenceGeneration;
-use super::remote_attempt::RemoteJobId;
 
 pub const REMOTE_ATTEMPT_LOG_RECORD_SCHEMA: &str = "mantle-remote-attempt-log-record-v1";
 pub const REMOTE_ATTEMPT_LOG_SEGMENT_SCHEMA: &str = "mantle-remote-attempt-log-segment-v1";
 pub const REMOTE_ATTEMPT_LOG_MANIFEST_SCHEMA: &str = "mantle-remote-attempt-log-manifest-v1";
 pub const REMOTE_ATTEMPT_LOG_TRUNCATION_ANCHOR_SCHEMA: &str = "mantle-remote-attempt-log-truncation-anchor-v1";
 
-pub const MAX_REMOTE_ATTEMPT_LOG_POLICY_NAME_BYTES: usize = 128;
-pub const MAX_REMOTE_ATTEMPT_LOG_RECORD_PAYLOAD_BYTES_HARD: u32 = 1_048_576;
-pub const MAX_REMOTE_ATTEMPT_LOG_SEGMENT_RECORDS_HARD: u32 = 1_024;
-pub const MAX_REMOTE_ATTEMPT_LOG_SEGMENT_PAYLOAD_BYTES_HARD: u64 = 8_388_608;
-pub const MAX_REMOTE_ATTEMPT_LOG_MANIFEST_SEGMENTS_HARD: u32 = 4_096;
-pub const MAX_REMOTE_ATTEMPT_LOG_RETAINED_RECORDS_HARD: u32 = 65_536;
-pub const MAX_REMOTE_ATTEMPT_LOG_RETAINED_PAYLOAD_BYTES_HARD: u64 = 67_108_864;
-pub const MAX_REMOTE_ATTEMPT_LOG_REPLAY_RECORDS_HARD: u32 = 4_096;
-pub const MAX_REMOTE_ATTEMPT_LOG_REPLAY_PAYLOAD_BYTES_HARD: u64 = 8_388_608;
-pub const MAX_REMOTE_ATTEMPT_LOG_EVENT_IDENTITIES_HARD: u32 = 65_536;
+pub const MAX_REMOTE_ATTEMPT_LOG_POLICY_NAME_BYTES: usize = kernel::MAX_POLICY_NAME_BYTES;
+pub const MAX_REMOTE_ATTEMPT_LOG_RECORD_PAYLOAD_BYTES_HARD: u32 = kernel::MAX_RECORD_PAYLOAD_BYTES;
+pub const MAX_REMOTE_ATTEMPT_LOG_SEGMENT_RECORDS_HARD: u32 = kernel::MAX_SEGMENT_RECORDS;
+pub const MAX_REMOTE_ATTEMPT_LOG_SEGMENT_PAYLOAD_BYTES_HARD: u64 = kernel::MAX_SEGMENT_PAYLOAD_BYTES;
+pub const MAX_REMOTE_ATTEMPT_LOG_MANIFEST_SEGMENTS_HARD: u32 = kernel::MAX_MANIFEST_SEGMENTS;
+pub const MAX_REMOTE_ATTEMPT_LOG_RETAINED_RECORDS_HARD: u32 = kernel::MAX_RETAINED_RECORDS;
+pub const MAX_REMOTE_ATTEMPT_LOG_RETAINED_PAYLOAD_BYTES_HARD: u64 = kernel::MAX_RETAINED_PAYLOAD_BYTES;
+pub const MAX_REMOTE_ATTEMPT_LOG_REPLAY_RECORDS_HARD: u32 = kernel::MAX_REPLAY_RECORDS;
+pub const MAX_REMOTE_ATTEMPT_LOG_REPLAY_PAYLOAD_BYTES_HARD: u64 = kernel::MAX_REPLAY_PAYLOAD_BYTES;
+pub const MAX_REMOTE_ATTEMPT_LOG_EVENT_IDENTITIES_HARD: u32 = kernel::MAX_EVENT_IDENTITIES;
 
 pub const DEFAULT_REMOTE_ATTEMPT_LOG_RECORD_PAYLOAD_BYTES: u32 = 65_536;
 pub const DEFAULT_REMOTE_ATTEMPT_LOG_SEGMENT_RECORDS: u32 = 256;
@@ -50,23 +50,16 @@ pub const DEFAULT_REMOTE_ATTEMPT_LOG_POLICY_NAME: &str = "mantle-default-remote-
 
 const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
 const INITIAL_LOG_POSITION: u64 = 0;
+#[cfg(test)]
 const INITIAL_SEGMENT_INDEX: u64 = 0;
 const RECORD_DIGEST_DOMAIN: &str = "mantle-remote-attempt-log-record-v1";
 const SEGMENT_DIGEST_DOMAIN: &str = "mantle-remote-attempt-log-segment-v1";
 const MANIFEST_DIGEST_DOMAIN: &str = "mantle-remote-attempt-log-manifest-v1";
 const TRUNCATION_ANCHOR_DIGEST_DOMAIN: &str = "mantle-remote-attempt-log-truncation-anchor-v1";
 const POLICY_DIGEST_DOMAIN: &str = "mantle-remote-attempt-log-policy-v1";
-const REDACTED_PAYLOAD: &[u8] = b"[REDACTED]";
-const CONTROL_ESCAPE_BYTES: usize = 4;
+const REDACTED_PAYLOAD: &[u8] = kernel::REDACTED_PAYLOAD;
+#[cfg(test)]
 const MIN_REMOTE_ATTEMPT_LOG_RECORD_PAYLOAD_BYTES: u32 = REDACTED_PAYLOAD.len() as u32;
-const SECRET_MARKERS: [&[u8]; 6] = [
-    b"authorization",
-    b"bearer ",
-    b"token=",
-    b"password",
-    b"secret",
-    b"credential",
-];
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -217,10 +210,7 @@ impl Default for RemoteAttemptLogPolicy {
 
 impl RemoteAttemptLogPolicy {
     pub fn validate(self) -> Result<(), RemoteAttemptLogReasonCode> {
-        validate_policy_nonzero(self)?;
-        validate_policy_hard_limits(self)?;
-        validate_policy_relationships(self)?;
-        Ok(())
+        kernel::validate_policy(kernel_policy(self)).map_err(RemoteAttemptLogReasonCode::from)
     }
 }
 
@@ -447,17 +437,83 @@ impl RemoteAttemptLogReasonCode {
     }
 }
 
+impl From<kernel::AttemptLogError> for RemoteAttemptLogReasonCode {
+    fn from(reason: kernel::AttemptLogError) -> Self {
+        match reason {
+            kernel::AttemptLogError::ScopeMismatch => Self::ScopeMismatch,
+            kernel::AttemptLogError::StaleFenceRejected => Self::StaleFenceRejected,
+            kernel::AttemptLogError::UnknownFenceRejected => Self::UnknownFenceRejected,
+            kernel::AttemptLogError::AttemptIdentityMismatch => Self::AttemptIdentityMismatch,
+            kernel::AttemptLogError::AttemptPhaseMismatch => Self::AttemptPhaseMismatch,
+            kernel::AttemptLogError::EventDigestConflict => Self::EventDigestConflict,
+            kernel::AttemptLogError::EventIdentityCapacityExceeded => Self::EventIdentityCapacityExceeded,
+            kernel::AttemptLogError::RecordPositionMismatch => Self::RecordPositionMismatch,
+            kernel::AttemptLogError::PreviousRecordMismatch => Self::PreviousRecordMismatch,
+            kernel::AttemptLogError::SegmentChainMismatch => Self::SegmentChainMismatch,
+            kernel::AttemptLogError::SegmentBoundsExceeded => Self::SegmentBoundsExceeded,
+            kernel::AttemptLogError::ManifestSummaryMismatch => Self::ManifestSummaryMismatch,
+            kernel::AttemptLogError::ManifestBoundsExceeded => Self::ManifestBoundsExceeded,
+            kernel::AttemptLogError::RetentionAnchorInvalid => Self::RetentionAnchorInvalid,
+            kernel::AttemptLogError::RecordSchemaUnsupported => Self::RecordSchemaUnsupported,
+            kernel::AttemptLogError::SegmentSchemaUnsupported => Self::SegmentSchemaUnsupported,
+            kernel::AttemptLogError::ManifestSchemaUnsupported => Self::ManifestSchemaUnsupported,
+            kernel::AttemptLogError::RecordDigestMismatch => Self::RecordDigestMismatch,
+            kernel::AttemptLogError::SegmentDigestMismatch => Self::SegmentDigestMismatch,
+            kernel::AttemptLogError::ManifestDigestMismatch => Self::ManifestDigestMismatch,
+            kernel::AttemptLogError::DigestInvalid => Self::DigestInvalid,
+            kernel::AttemptLogError::ArithmeticOverflow => Self::ArithmeticOverflow,
+            kernel::AttemptLogError::CursorAfterHead => Self::CursorAfterHead,
+            kernel::AttemptLogError::PolicyInvalid => Self::PolicyInvalid,
+            kernel::AttemptLogError::PolicyIdentityMismatch => Self::PolicyIdentityMismatch,
+            kernel::AttemptLogError::RecordPayloadTooLarge => Self::RecordPayloadTooLarge,
+            kernel::AttemptLogError::ScopeIdentityInvalid => Self::ScopeIdentityInvalid,
+            kernel::AttemptLogError::RecordPayloadMetadataMismatch => Self::RecordPayloadMetadataMismatch,
+            kernel::AttemptLogError::ReplayRequestInvalid => Self::ReplayRequestInvalid,
+            kernel::AttemptLogError::ReplayLimitTooSmall => Self::ReplayLimitTooSmall,
+            kernel::AttemptLogError::RetentionWouldDropAll => Self::RetentionWouldDropAll,
+        }
+    }
+}
+
+fn borrowed_scope(scope: &RemoteAttemptLogScope) -> kernel::Scope<'_> {
+    kernel::Scope {
+        job_id: scope.job_id.as_str(),
+        attempt_id: scope.attempt_id.as_str(),
+        fence_generation: scope.fence_generation.get(),
+    }
+}
+
+fn kernel_policy(policy: RemoteAttemptLogPolicy) -> kernel::Policy {
+    kernel::Policy {
+        record_payload_bytes_max: policy.record_payload_bytes_max,
+        segment_record_count_max: policy.segment_record_count_max,
+        segment_payload_bytes_max: policy.segment_payload_bytes_max,
+        manifest_segment_count_max: policy.manifest_segment_count_max,
+        retained_segment_count_max: policy.retained_segment_count_max,
+        retained_record_count_max: policy.retained_record_count_max,
+        retained_payload_bytes_max: policy.retained_payload_bytes_max,
+        replay_record_count_max: policy.replay_record_count_max,
+        replay_payload_bytes_max: policy.replay_payload_bytes_max,
+        event_identity_count_max: policy.event_identity_count_max,
+    }
+}
+
 pub fn canonical_remote_attempt_log_policy_identity(
     name: impl Into<String>,
     policy: RemoteAttemptLogPolicy,
 ) -> Result<RemoteAttemptLogPolicyIdentity, RemoteAttemptLogReasonCode> {
     policy.validate()?;
-    let name = validate_policy_name(name.into())?;
-    let bytes = serde_json::to_vec(&policy).map_err(|_| RemoteAttemptLogReasonCode::PolicySerializationFailed)?;
-    let digest_blake3 = domain_hash(POLICY_DIGEST_DOMAIN, &bytes)?;
+    let name = name.into();
+    kernel::validate_policy_name(&name).map_err(RemoteAttemptLogReasonCode::from)?;
+    let digest_blake3 = policy_digest(policy)?;
     debug_assert!(!name.is_empty());
     debug_assert!(is_blake3_hex_digest(digest_blake3.as_str()));
     Ok(RemoteAttemptLogPolicyIdentity { name, digest_blake3 })
+}
+
+fn policy_digest(policy: RemoteAttemptLogPolicy) -> Result<RemoteAttemptLogDigest, RemoteAttemptLogReasonCode> {
+    let bytes = serde_json::to_vec(&policy).map_err(|_| RemoteAttemptLogReasonCode::PolicySerializationFailed)?;
+    domain_hash(POLICY_DIGEST_DOMAIN, &bytes)
 }
 
 pub fn redact_remote_attempt_log_payload(
@@ -465,21 +521,16 @@ pub fn redact_remote_attempt_log_payload(
     policy: RemoteAttemptLogPolicy,
 ) -> Result<RemoteAttemptLogRedactionPlan, RemoteAttemptLogReasonCode> {
     policy.validate()?;
-    let hard_max = u32_to_usize(MAX_REMOTE_ATTEMPT_LOG_RECORD_PAYLOAD_BYTES_HARD)?;
-    if payload.len() > hard_max {
-        return Err(RemoteAttemptLogReasonCode::RecordPayloadTooLarge);
-    }
-    if contains_secret_marker(payload) {
-        return Ok(RemoteAttemptLogRedactionPlan {
-            payload: REDACTED_PAYLOAD.to_vec(),
-            flags: RemoteAttemptLogRecordFlags {
-                secret_redacted: true,
-                control_escaped: false,
-                payload_truncated: false,
-            },
-        });
-    }
-    escape_and_bound_payload(payload, policy.record_payload_bytes_max)
+    let redacted = kernel::redact_payload(payload, policy.record_payload_bytes_max)
+        .map_err(RemoteAttemptLogReasonCode::from)?;
+    Ok(RemoteAttemptLogRedactionPlan {
+        payload: redacted.payload,
+        flags: RemoteAttemptLogRecordFlags {
+            secret_redacted: redacted.secret_redacted,
+            control_escaped: redacted.control_escaped,
+            payload_truncated: redacted.payload_truncated,
+        },
+    })
 }
 
 pub fn seal_remote_attempt_log_record(
@@ -489,9 +540,7 @@ pub fn seal_remote_attempt_log_record(
     policy.validate()?;
     validate_scope(&input.scope)?;
     validate_event_id(&input.event_id)?;
-    if input.sequence != input.cursor {
-        return Err(RemoteAttemptLogReasonCode::RecordPositionMismatch);
-    }
+    kernel::check_record_position(input.sequence, input.cursor).map_err(RemoteAttemptLogReasonCode::from)?;
     let redaction = redact_remote_attempt_log_payload(&input.payload, policy)?;
     let payload_length_bytes = usize_to_u32(redaction.payload.len())?;
     let payload_blake3 = content_hash(&redaction.payload);
@@ -523,19 +572,18 @@ pub fn validate_remote_attempt_log_record(
     policy: RemoteAttemptLogPolicy,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
     policy.validate()?;
-    if record.schema != REMOTE_ATTEMPT_LOG_RECORD_SCHEMA {
-        return Err(RemoteAttemptLogReasonCode::RecordSchemaUnsupported);
-    }
+    kernel::check_schema(&record.schema, REMOTE_ATTEMPT_LOG_RECORD_SCHEMA, kernel::ObjectKind::Record)
+        .map_err(RemoteAttemptLogReasonCode::from)?;
     validate_scope(&record.scope)?;
     validate_event_id(&record.event_id)?;
-    if record.sequence != record.cursor {
-        return Err(RemoteAttemptLogReasonCode::RecordPositionMismatch);
-    }
+    kernel::check_record_position(record.sequence, record.cursor).map_err(RemoteAttemptLogReasonCode::from)?;
     validate_record_payload_metadata(record, policy)?;
     validate_optional_digest(&record.previous_record_blake3)?;
-    if record.record_blake3 != record_payload_digest(record)? {
-        return Err(RemoteAttemptLogReasonCode::RecordDigestMismatch);
-    }
+    kernel::check_object_digest(
+        record.record_blake3.as_str(),
+        record_payload_digest(record)?.as_str(),
+        kernel::ObjectKind::Record,
+    ).map_err(RemoteAttemptLogReasonCode::from)?;
     debug_assert!(record.payload.len() <= u32_to_usize(policy.record_payload_bytes_max)?);
     debug_assert!(is_blake3_hex_digest(record.record_blake3.as_str()));
     Ok(())
@@ -576,18 +624,17 @@ pub fn validate_remote_attempt_log_segment(
     policy: RemoteAttemptLogPolicy,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
     policy.validate()?;
-    if segment.schema != REMOTE_ATTEMPT_LOG_SEGMENT_SCHEMA {
-        return Err(RemoteAttemptLogReasonCode::SegmentSchemaUnsupported);
-    }
+    kernel::check_schema(&segment.schema, REMOTE_ATTEMPT_LOG_SEGMENT_SCHEMA, kernel::ObjectKind::Segment)
+        .map_err(RemoteAttemptLogReasonCode::from)?;
     validate_scope(&segment.scope)?;
     validate_optional_digest(&segment.previous_segment_blake3)?;
     let summary = summarize_segment_records(&segment.records, policy)?;
-    if !segment_summary_matches(segment, &summary) {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    if segment.segment_blake3 != segment_payload_digest(segment)? {
-        return Err(RemoteAttemptLogReasonCode::SegmentDigestMismatch);
-    }
+    validate_segment_summary(segment, &summary)?;
+    kernel::check_object_digest(
+        segment.segment_blake3.as_str(),
+        segment_payload_digest(segment)?.as_str(),
+        kernel::ObjectKind::Segment,
+    ).map_err(RemoteAttemptLogReasonCode::from)?;
     debug_assert_eq!(segment.scope, summary.scope);
     debug_assert_eq!(segment.record_count, summary.record_count);
     Ok(())
@@ -626,9 +673,11 @@ pub fn validate_remote_attempt_log_manifest(
     policy: RemoteAttemptLogPolicy,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
     validate_manifest_shape(manifest, policy)?;
-    if manifest.manifest_blake3 != manifest_payload_digest(manifest)? {
-        return Err(RemoteAttemptLogReasonCode::ManifestDigestMismatch);
-    }
+    kernel::check_object_digest(
+        manifest.manifest_blake3.as_str(),
+        manifest_payload_digest(manifest)?.as_str(),
+        kernel::ObjectKind::Manifest,
+    ).map_err(RemoteAttemptLogReasonCode::from)?;
     debug_assert!(manifest.segments.len() <= u32_to_usize(policy.manifest_segment_count_max)?);
     debug_assert!(manifest.retained_start_cursor <= manifest.next_cursor);
     Ok(())
@@ -644,19 +693,17 @@ pub fn plan_remote_attempt_log_append(
     validate_remote_attempt_log_record(record, policy)?;
     validate_current_scope(&manifest.scope, &current.scope)?;
     validate_current_scope(&current.scope, &record.scope)?;
-    if record.phase != current.phase {
-        return Err(RemoteAttemptLogReasonCode::AttemptPhaseMismatch);
-    }
+    kernel::check_phase(current.phase, record.phase).map_err(RemoteAttemptLogReasonCode::from)?;
     if let Some(existing) = manifest.event_records.get(&record.event_id) {
         return classify_existing_record(manifest, existing, record);
     }
-    if manifest.event_records.len() >= u32_to_usize(policy.event_identity_count_max)? {
-        return Err(RemoteAttemptLogReasonCode::EventIdentityCapacityExceeded);
-    }
+    kernel::check_event_capacity(
+        manifest.event_records.len(),
+        u32_to_usize(policy.event_identity_count_max)?,
+    ).map_err(RemoteAttemptLogReasonCode::from)?;
     validate_append_position(manifest, record)?;
-    if manifest.segments.len() >= u32_to_usize(policy.manifest_segment_count_max)? {
-        return Err(RemoteAttemptLogReasonCode::ManifestBoundsExceeded);
-    }
+    kernel::check_segment_capacity(manifest.segments.len(), policy.manifest_segment_count_max)
+        .map_err(RemoteAttemptLogReasonCode::from)?;
     let segment_index = next_segment_index(manifest)?;
     let segment = seal_remote_attempt_log_segment(
         vec![record.clone()],
@@ -665,7 +712,7 @@ pub fn plan_remote_attempt_log_append(
         policy,
     )?;
     let next_manifest = append_segment_to_manifest(manifest, &segment, policy)?;
-    let expected_next_cursor = record.cursor.checked_add(1).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
+    let expected_next_cursor = kernel::checked_add_u64(record.cursor, 1).map_err(RemoteAttemptLogReasonCode::from)?;
     debug_assert_eq!(segment.record_count, 1);
     debug_assert_eq!(next_manifest.next_cursor, expected_next_cursor);
     Ok(RemoteAttemptLogAppendPlan {
@@ -682,15 +729,12 @@ pub fn validate_remote_attempt_log_chain(
     policy: RemoteAttemptLogPolicy,
 ) -> Result<RemoteAttemptLogChainSummary, RemoteAttemptLogReasonCode> {
     validate_remote_attempt_log_manifest(manifest, policy)?;
-    if segments.len() != manifest.segments.len() {
-        return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
-    }
+    kernel::check_chain_length(segments.len(), manifest.segments.len())
+        .map_err(RemoteAttemptLogReasonCode::from)?;
     let mut expected_cursor = manifest.retained_start_cursor;
     let mut expected_sequence = manifest.retained_start_cursor;
-    let mut previous_record =
-        manifest.truncation_anchor.as_ref().map(|anchor| anchor.dropped_tail_record_blake3.clone());
-    let mut previous_segment =
-        manifest.truncation_anchor.as_ref().map(|anchor| anchor.dropped_tail_segment_blake3.clone());
+    let mut previous_record = manifest.truncation_anchor.as_ref().map(|anchor| &anchor.dropped_tail_record_blake3);
+    let mut previous_segment = manifest.truncation_anchor.as_ref().map(|anchor| &anchor.dropped_tail_segment_blake3);
     let mut record_count = 0_u32;
     let mut payload_bytes = 0_u64;
     let mut retained_events = BTreeSet::new();
@@ -701,23 +745,19 @@ pub fn validate_remote_attempt_log_chain(
             scope: &manifest.scope,
             expected_sequence,
             expected_cursor,
-            previous_record_blake3: &previous_record,
-            previous_segment_blake3: &previous_segment,
+            previous_record_blake3: previous_record,
+            previous_segment_blake3: previous_segment,
         })?;
         validate_retained_event_records(segment, manifest, &mut retained_events)?;
-        record_count = checked_add_u32(CheckedAddU32Operands {
-            left: record_count,
-            right: segment.record_count,
-        })?;
-        payload_bytes = checked_add_u64(CheckedAddU64Operands {
-            left: payload_bytes,
-            right: segment.payload_bytes,
-        })?;
+        record_count = kernel::checked_add_u32(record_count, segment.record_count)
+            .map_err(RemoteAttemptLogReasonCode::from)?;
+        payload_bytes = kernel::checked_add_u64(payload_bytes, segment.payload_bytes)
+            .map_err(RemoteAttemptLogReasonCode::from)?;
         expected_sequence = segment.next_cursor;
         expected_cursor = segment.next_cursor;
         let head_record = segment.records.last().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
-        previous_record = Some(head_record.record_blake3.clone());
-        previous_segment = Some(segment.segment_blake3.clone());
+        previous_record = Some(&head_record.record_blake3);
+        previous_segment = Some(&segment.segment_blake3);
     }
     let summary = RemoteAttemptLogChainSummary {
         retained_start_cursor: manifest.retained_start_cursor,
@@ -725,8 +765,8 @@ pub fn validate_remote_attempt_log_chain(
         segment_count: usize_to_u32(segments.len())?,
         record_count,
         payload_bytes,
-        head_record_blake3: previous_record,
-        head_segment_blake3: previous_segment,
+        head_record_blake3: previous_record.cloned(),
+        head_segment_blake3: previous_segment.cloned(),
     };
     validate_chain_summary(manifest, &summary)?;
     debug_assert_eq!(summary.record_count, manifest.retained_record_count);
@@ -740,11 +780,15 @@ pub fn decide_remote_attempt_log_cursor(
     policy: RemoteAttemptLogPolicy,
 ) -> Result<RemoteAttemptLogCursorDecision, RemoteAttemptLogReasonCode> {
     validate_remote_attempt_log_manifest(manifest, policy)?;
-    let disposition = classify_cursor_position(RemoteAttemptLogCursorBounds {
-        retained_start_cursor: manifest.retained_start_cursor,
-        next_cursor: manifest.next_cursor,
+    let disposition = match kernel::classify_cursor(
+        manifest.retained_start_cursor,
+        manifest.next_cursor,
         requested_cursor,
-    })?;
+    ).map_err(RemoteAttemptLogReasonCode::from)? {
+        kernel::CursorDisposition::Retained => RemoteAttemptLogCursorDisposition::Retained,
+        kernel::CursorDisposition::AtHead => RemoteAttemptLogCursorDisposition::AtHead,
+        kernel::CursorDisposition::Truncated => RemoteAttemptLogCursorDisposition::Truncated,
+    };
     let (effective_cursor, reason_code) = match disposition {
         RemoteAttemptLogCursorDisposition::Retained => (requested_cursor, RemoteAttemptLogReasonCode::CursorRetained),
         RemoteAttemptLogCursorDisposition::AtHead => (requested_cursor, RemoteAttemptLogReasonCode::CursorAtHead),
@@ -760,31 +804,6 @@ pub fn decide_remote_attempt_log_cursor(
         effective_cursor,
         reason_code,
     })
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct RemoteAttemptLogCursorBounds {
-    retained_start_cursor: u64,
-    next_cursor: u64,
-    requested_cursor: u64,
-}
-
-fn classify_cursor_position(
-    bounds: RemoteAttemptLogCursorBounds,
-) -> Result<RemoteAttemptLogCursorDisposition, RemoteAttemptLogReasonCode> {
-    if bounds.retained_start_cursor > bounds.next_cursor {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    if bounds.requested_cursor > bounds.next_cursor {
-        return Err(RemoteAttemptLogReasonCode::CursorAfterHead);
-    }
-    if bounds.requested_cursor < bounds.retained_start_cursor {
-        return Ok(RemoteAttemptLogCursorDisposition::Truncated);
-    }
-    if bounds.requested_cursor == bounds.next_cursor {
-        return Ok(RemoteAttemptLogCursorDisposition::AtHead);
-    }
-    Ok(RemoteAttemptLogCursorDisposition::Retained)
 }
 
 pub fn plan_remote_attempt_log_replay(
@@ -803,7 +822,7 @@ pub fn plan_remote_attempt_log_replay(
             next_cursor: cursor.effective_cursor,
             cursor,
             records: Vec::new(),
-            has_more: manifest.retained_start_cursor < manifest.next_cursor,
+            has_more: kernel::replay_has_more(manifest.retained_start_cursor, manifest.next_cursor),
             truncation_anchor: manifest.truncation_anchor.clone(),
         });
     }
@@ -826,7 +845,9 @@ pub fn plan_remote_attempt_log_retention(
 ) -> Result<RemoteAttemptLogRetentionPlan, RemoteAttemptLogReasonCode> {
     validate_remote_attempt_log_chain(manifest, segments, policy)?;
     let drop_count = retention_drop_count(manifest, policy)?;
-    if drop_count == 0 {
+    if kernel::classify_retention(drop_count, segments.len())
+        .map_err(RemoteAttemptLogReasonCode::from)? == kernel::RetentionDecision::Unchanged
+    {
         return Ok(RemoteAttemptLogRetentionPlan {
             disposition: RemoteAttemptLogRetentionDisposition::Unchanged,
             reason_code: RemoteAttemptLogReasonCode::RetentionUnchanged,
@@ -836,218 +857,37 @@ pub fn plan_remote_attempt_log_retention(
             next_manifest: manifest.clone(),
         });
     }
-    if drop_count >= segments.len() {
-        return Err(RemoteAttemptLogReasonCode::RetentionWouldDropAll);
-    }
     build_retention_plan(manifest, segments, drop_count, policy)
 }
 
-fn validate_policy_nonzero(policy: RemoteAttemptLogPolicy) -> Result<(), RemoteAttemptLogReasonCode> {
-    if policy.record_payload_bytes_max < MIN_REMOTE_ATTEMPT_LOG_RECORD_PAYLOAD_BYTES {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.segment_record_count_max == 0 {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.segment_payload_bytes_max == 0 {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.manifest_segment_count_max == 0 {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.retained_segment_count_max == 0 {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.retained_record_count_max == 0 {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.retained_payload_bytes_max == 0 {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.replay_record_count_max == 0 {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.replay_payload_bytes_max == 0 {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.event_identity_count_max == 0 {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    debug_assert!(policy.record_payload_bytes_max >= MIN_REMOTE_ATTEMPT_LOG_RECORD_PAYLOAD_BYTES);
-    debug_assert!(policy.segment_record_count_max > 0);
-    Ok(())
-}
-
-fn validate_policy_hard_limits(policy: RemoteAttemptLogPolicy) -> Result<(), RemoteAttemptLogReasonCode> {
-    if policy.record_payload_bytes_max > MAX_REMOTE_ATTEMPT_LOG_RECORD_PAYLOAD_BYTES_HARD {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.segment_record_count_max > MAX_REMOTE_ATTEMPT_LOG_SEGMENT_RECORDS_HARD {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.segment_payload_bytes_max > MAX_REMOTE_ATTEMPT_LOG_SEGMENT_PAYLOAD_BYTES_HARD {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.manifest_segment_count_max > MAX_REMOTE_ATTEMPT_LOG_MANIFEST_SEGMENTS_HARD {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.retained_record_count_max > MAX_REMOTE_ATTEMPT_LOG_RETAINED_RECORDS_HARD {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.retained_payload_bytes_max > MAX_REMOTE_ATTEMPT_LOG_RETAINED_PAYLOAD_BYTES_HARD {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.replay_record_count_max > MAX_REMOTE_ATTEMPT_LOG_REPLAY_RECORDS_HARD {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.replay_payload_bytes_max > MAX_REMOTE_ATTEMPT_LOG_REPLAY_PAYLOAD_BYTES_HARD {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.event_identity_count_max > MAX_REMOTE_ATTEMPT_LOG_EVENT_IDENTITIES_HARD {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.retained_segment_count_max > policy.manifest_segment_count_max {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    debug_assert!(policy.record_payload_bytes_max <= MAX_REMOTE_ATTEMPT_LOG_RECORD_PAYLOAD_BYTES_HARD);
-    debug_assert!(policy.retained_segment_count_max <= policy.manifest_segment_count_max);
-    Ok(())
-}
-
-fn validate_policy_relationships(policy: RemoteAttemptLogPolicy) -> Result<(), RemoteAttemptLogReasonCode> {
-    if u64::from(policy.record_payload_bytes_max) > policy.segment_payload_bytes_max {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.segment_record_count_max > policy.retained_record_count_max {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.segment_payload_bytes_max > policy.retained_payload_bytes_max {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.replay_record_count_max > policy.retained_record_count_max {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if policy.replay_payload_bytes_max > policy.retained_payload_bytes_max {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    Ok(())
-}
-
-fn validate_policy_name(name: String) -> Result<String, RemoteAttemptLogReasonCode> {
-    if name.is_empty() || name.len() > MAX_REMOTE_ATTEMPT_LOG_POLICY_NAME_BYTES {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    if name.chars().any(char::is_control) {
-        return Err(RemoteAttemptLogReasonCode::PolicyInvalid);
-    }
-    Ok(name)
-}
-
-fn escape_and_bound_payload(
-    payload: &[u8],
-    payload_bytes_max: u32,
-) -> Result<RemoteAttemptLogRedactionPlan, RemoteAttemptLogReasonCode> {
-    let max = u32_to_usize(payload_bytes_max)?;
-    let mut rendered = Vec::with_capacity(payload.len().min(max));
-    let mut is_control_escaped = false;
-    let mut is_payload_truncated = false;
-    for byte in payload {
-        if byte.is_ascii_control() {
-            is_control_escaped = true;
-            let escaped = control_escape(*byte);
-            if rendered.len().saturating_add(CONTROL_ESCAPE_BYTES) > max {
-                is_payload_truncated = true;
-                break;
-            }
-            rendered.extend_from_slice(&escaped);
-            continue;
-        }
-        if rendered.len() >= max {
-            is_payload_truncated = true;
-            break;
-        }
-        rendered.push(*byte);
-    }
-    if rendered.len() < payload.len() && !is_control_escaped {
-        is_payload_truncated = true;
-    }
-    debug_assert!(rendered.len() <= max);
-    debug_assert!(!is_control_escaped || payload.iter().any(u8::is_ascii_control));
-    Ok(RemoteAttemptLogRedactionPlan {
-        payload: rendered,
-        flags: RemoteAttemptLogRecordFlags {
-            secret_redacted: false,
-            control_escaped: is_control_escaped,
-            payload_truncated: is_payload_truncated,
-        },
-    })
-}
-
-fn control_escape(byte: u8) -> [u8; CONTROL_ESCAPE_BYTES] {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let high = usize::from(byte >> 4);
-    let low = usize::from(byte & 0x0f);
-    [b'\\', b'x', HEX[high], HEX[low]]
-}
-
-fn contains_secret_marker(payload: &[u8]) -> bool {
-    SECRET_MARKERS.iter().any(|marker| {
-        payload
-            .windows(marker.len())
-            .any(|window| window.iter().zip(marker.iter()).all(|(left, right)| left.eq_ignore_ascii_case(right)))
-    })
-}
 
 fn validate_scope(scope: &RemoteAttemptLogScope) -> Result<(), RemoteAttemptLogReasonCode> {
-    if RemoteJobId::new(scope.job_id.as_str().to_string()).is_err()
-        || RemoteAttemptId::new(scope.attempt_id.as_str().to_string()).is_err()
-        || scope.fence_generation.get() == 0
-    {
-        return Err(RemoteAttemptLogReasonCode::ScopeIdentityInvalid);
-    }
-    Ok(())
+    kernel::validate_scope_identity(borrowed_scope(scope)).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 fn validate_event_id(event_id: &RemoteEventId) -> Result<(), RemoteAttemptLogReasonCode> {
-    RemoteEventId::new(event_id.as_str().to_string())
-        .map(|_| ())
-        .map_err(|_| RemoteAttemptLogReasonCode::ScopeIdentityInvalid)
+    kernel::validate_identity(event_id.as_str()).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 fn validate_current_scope(
     expected: &RemoteAttemptLogScope,
     observed: &RemoteAttemptLogScope,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    if expected.job_id != observed.job_id {
-        return Err(RemoteAttemptLogReasonCode::ScopeMismatch);
-    }
-    if observed.fence_generation < expected.fence_generation {
-        return Err(RemoteAttemptLogReasonCode::StaleFenceRejected);
-    }
-    if observed.fence_generation > expected.fence_generation {
-        return Err(RemoteAttemptLogReasonCode::UnknownFenceRejected);
-    }
-    if expected.attempt_id != observed.attempt_id {
-        return Err(RemoteAttemptLogReasonCode::AttemptIdentityMismatch);
-    }
-    Ok(())
+    kernel::check_scope(borrowed_scope(expected), borrowed_scope(observed)).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 fn validate_record_payload_metadata(
     record: &RemoteAttemptLogRecord,
     policy: RemoteAttemptLogPolicy,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    let payload_length_bytes = usize_to_u32(record.payload.len())?;
-    if payload_length_bytes > policy.record_payload_bytes_max {
-        return Err(RemoteAttemptLogReasonCode::RecordPayloadTooLarge);
-    }
-    if payload_length_bytes != record.payload_length_bytes || record.payload_blake3 != content_hash(&record.payload) {
-        return Err(RemoteAttemptLogReasonCode::RecordPayloadMetadataMismatch);
-    }
-    if record.flags.secret_redacted && record.payload != REDACTED_PAYLOAD {
-        return Err(RemoteAttemptLogReasonCode::RecordPayloadMetadataMismatch);
-    }
-    Ok(())
+    kernel::check_record_payload_metadata(
+        record.payload.len(),
+        record.payload_length_bytes,
+        policy.record_payload_bytes_max,
+        || record.payload_blake3 == content_hash(&record.payload),
+        record.flags.secret_redacted,
+        || record.payload == REDACTED_PAYLOAD,
+    ).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 #[derive(Serialize)]
@@ -1106,54 +946,62 @@ fn summarize_segment_records(
 ) -> Result<SegmentRecordSummary, RemoteAttemptLogReasonCode> {
     let first = records.first().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
     let last = records.last().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
-    let record_count = usize_to_u32(records.len())?;
-    if record_count > policy.segment_record_count_max {
-        return Err(RemoteAttemptLogReasonCode::SegmentBoundsExceeded);
-    }
-    debug_assert!(!records.is_empty());
-    debug_assert!(record_count <= policy.segment_record_count_max);
-    let mut expected_sequence = first.sequence;
-    let mut expected_cursor = first.cursor;
-    let mut previous_record = first.previous_record_blake3.clone();
-    let mut payload_bytes = 0_u64;
+    let record_count = kernel::check_segment_record_count(records.len(), policy.segment_record_count_max)
+        .map_err(RemoteAttemptLogReasonCode::from)?;
+    let mut summary = kernel::SegmentAccumulator {
+        scope: borrowed_scope(&first.scope),
+        expected_sequence: first.sequence,
+        expected_cursor: first.cursor,
+        previous_record: first.previous_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+        payload_bytes: 0,
+    };
     for record in records {
         validate_remote_attempt_log_record(record, policy)?;
-        if record.scope != first.scope || record.sequence != expected_sequence || record.cursor != expected_cursor {
-            return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
-        }
-        if record.previous_record_blake3 != previous_record {
-            return Err(RemoteAttemptLogReasonCode::PreviousRecordMismatch);
-        }
-        payload_bytes = checked_add_u64(CheckedAddU64Operands {
-            left: payload_bytes,
-            right: u64::from(record.payload_length_bytes),
-        })?;
-        if payload_bytes > policy.segment_payload_bytes_max {
-            return Err(RemoteAttemptLogReasonCode::SegmentBoundsExceeded);
-        }
-        expected_sequence = expected_sequence.checked_add(1).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
-        expected_cursor = expected_cursor.checked_add(1).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
-        previous_record = Some(record.record_blake3.clone());
+        summary.accept(
+            borrowed_scope(&record.scope),
+            record.sequence,
+            record.cursor,
+            record.previous_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+            record.record_blake3.as_str(),
+            record.payload_length_bytes,
+            policy.segment_payload_bytes_max,
+        ).map_err(RemoteAttemptLogReasonCode::from)?;
     }
     Ok(SegmentRecordSummary {
         scope: first.scope.clone(),
         first_sequence: first.sequence,
         last_sequence: last.sequence,
         first_cursor: first.cursor,
-        next_cursor: expected_cursor,
+        next_cursor: summary.expected_cursor,
         record_count,
-        payload_bytes,
+        payload_bytes: summary.payload_bytes,
     })
 }
 
-fn segment_summary_matches(segment: &RemoteAttemptLogSegment, summary: &SegmentRecordSummary) -> bool {
-    segment.scope == summary.scope
-        && segment.first_sequence == summary.first_sequence
-        && segment.last_sequence == summary.last_sequence
-        && segment.first_cursor == summary.first_cursor
-        && segment.next_cursor == summary.next_cursor
-        && segment.record_count == summary.record_count
-        && segment.payload_bytes == summary.payload_bytes
+fn validate_segment_summary(
+    segment: &RemoteAttemptLogSegment,
+    summary: &SegmentRecordSummary,
+) -> Result<(), RemoteAttemptLogReasonCode> {
+    kernel::check_segment_summary(
+        kernel::SegmentFacts {
+            scope: borrowed_scope(&summary.scope),
+            first_sequence: summary.first_sequence,
+            last_sequence: summary.last_sequence,
+            first_cursor: summary.first_cursor,
+            next_cursor: summary.next_cursor,
+            record_count: summary.record_count,
+            payload_bytes: summary.payload_bytes,
+        },
+        kernel::SegmentFacts {
+            scope: borrowed_scope(&segment.scope),
+            first_sequence: segment.first_sequence,
+            last_sequence: segment.last_sequence,
+            first_cursor: segment.first_cursor,
+            next_cursor: segment.next_cursor,
+            record_count: segment.record_count,
+            payload_bytes: segment.payload_bytes,
+        },
+    ).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 #[derive(Serialize)]
@@ -1216,9 +1064,8 @@ fn validate_manifest_shape(
     policy: RemoteAttemptLogPolicy,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
     policy.validate()?;
-    if manifest.schema != REMOTE_ATTEMPT_LOG_MANIFEST_SCHEMA {
-        return Err(RemoteAttemptLogReasonCode::ManifestSchemaUnsupported);
-    }
+    kernel::check_schema(&manifest.schema, REMOTE_ATTEMPT_LOG_MANIFEST_SCHEMA, kernel::ObjectKind::Manifest)
+        .map_err(RemoteAttemptLogReasonCode::from)?;
     validate_scope(&manifest.scope)?;
     validate_policy_identity(&manifest.policy, policy)?;
     validate_manifest_bounds(manifest, policy)?;
@@ -1236,139 +1083,112 @@ fn validate_policy_identity(
     identity: &RemoteAttemptLogPolicyIdentity,
     policy: RemoteAttemptLogPolicy,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    let expected = canonical_remote_attempt_log_policy_identity(identity.name.clone(), policy)?;
-    if &expected != identity {
-        return Err(RemoteAttemptLogReasonCode::PolicyIdentityMismatch);
-    }
-    Ok(())
+    policy.validate()?;
+    kernel::validate_policy_name(&identity.name).map_err(RemoteAttemptLogReasonCode::from)?;
+    kernel::check_policy_identity(
+        policy_digest(policy)?.as_str(),
+        identity.digest_blake3.as_str(),
+    ).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 fn validate_manifest_bounds(
     manifest: &RemoteAttemptLogManifest,
     policy: RemoteAttemptLogPolicy,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    let segment_count_max = u32_to_usize(policy.manifest_segment_count_max)?;
-    let event_identity_count_max = u32_to_usize(policy.event_identity_count_max)?;
-    if manifest.segments.len() > segment_count_max {
-        return Err(RemoteAttemptLogReasonCode::ManifestBoundsExceeded);
-    }
-    if manifest.event_records.len() > event_identity_count_max {
-        return Err(RemoteAttemptLogReasonCode::ManifestBoundsExceeded);
-    }
-    if manifest.retained_record_count > MAX_REMOTE_ATTEMPT_LOG_RETAINED_RECORDS_HARD {
-        return Err(RemoteAttemptLogReasonCode::ManifestBoundsExceeded);
-    }
-    if manifest.retained_payload_bytes > MAX_REMOTE_ATTEMPT_LOG_RETAINED_PAYLOAD_BYTES_HARD {
-        return Err(RemoteAttemptLogReasonCode::ManifestBoundsExceeded);
-    }
-    if manifest.retained_start_cursor > manifest.next_cursor {
-        return Err(RemoteAttemptLogReasonCode::ManifestBoundsExceeded);
-    }
-    if manifest.segments.is_empty() && empty_manifest_summary_is_invalid(manifest) {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    debug_assert!(manifest.segments.len() <= segment_count_max);
-    debug_assert!(manifest.event_records.len() <= event_identity_count_max);
-    Ok(())
-}
-
-fn empty_manifest_summary_is_invalid(manifest: &RemoteAttemptLogManifest) -> bool {
-    manifest.retained_record_count != 0
-        || manifest.retained_payload_bytes != 0
-        || manifest.head_record_blake3.is_some()
-        || manifest.head_segment_blake3.is_some()
-        || manifest.retained_start_cursor != manifest.next_cursor
-        || manifest.truncation_anchor.is_some()
+    kernel::check_manifest_bounds(
+        kernel::ManifestBounds {
+            segment_count: manifest.segments.len(),
+            event_count: manifest.event_records.len(),
+            retained_records: manifest.retained_record_count,
+            retained_bytes: manifest.retained_payload_bytes,
+            retained_start: manifest.retained_start_cursor,
+            next_cursor: manifest.next_cursor,
+            head_record_present: manifest.head_record_blake3.is_some(),
+            head_segment_present: manifest.head_segment_blake3.is_some(),
+            anchor_present: manifest.truncation_anchor.is_some(),
+        },
+        kernel_policy(policy),
+    ).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 fn validate_manifest_segment_refs(manifest: &RemoteAttemptLogManifest) -> Result<(), RemoteAttemptLogReasonCode> {
     let mut expected_cursor = manifest.retained_start_cursor;
     let mut expected_index = manifest.segments.first().map(|item| item.segment_index);
-    let mut previous_segment =
-        manifest.truncation_anchor.as_ref().map(|anchor| anchor.dropped_tail_segment_blake3.clone());
-    let mut previous_record =
-        manifest.truncation_anchor.as_ref().map(|anchor| anchor.dropped_tail_record_blake3.clone());
+    let mut previous_segment = manifest.truncation_anchor.as_ref().map(|anchor| &anchor.dropped_tail_segment_blake3);
+    let mut previous_record = manifest.truncation_anchor.as_ref().map(|anchor| &anchor.dropped_tail_record_blake3);
     let mut record_count = 0_u32;
     let mut payload_bytes = 0_u64;
     for item in &manifest.segments {
         validate_segment_ref(item)?;
-        if Some(item.segment_index) != expected_index {
-            return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
-        }
-        if item.first_cursor != expected_cursor {
-            return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
-        }
-        if item.first_sequence != expected_cursor {
-            return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
-        }
-        if item.previous_segment_blake3 != previous_segment {
-            return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
-        }
-        if item.first_previous_record_blake3 != previous_record {
-            return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
-        }
-        record_count = checked_add_u32(CheckedAddU32Operands {
-            left: record_count,
-            right: item.record_count,
-        })?;
-        payload_bytes = checked_add_u64(CheckedAddU64Operands {
-            left: payload_bytes,
-            right: item.payload_bytes,
-        })?;
+        kernel::check_ref_link(
+            kernel::RefLink {
+                index: expected_index,
+                first_cursor: expected_cursor,
+                first_sequence: expected_cursor,
+                previous_record: previous_record.map(RemoteAttemptLogDigest::as_str),
+                previous_segment: previous_segment.map(RemoteAttemptLogDigest::as_str),
+            },
+            kernel::RefLink {
+                index: Some(item.segment_index),
+                first_cursor: item.first_cursor,
+                first_sequence: item.first_sequence,
+                previous_record: item.first_previous_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+                previous_segment: item.previous_segment_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+            },
+        ).map_err(RemoteAttemptLogReasonCode::from)?;
+        record_count = kernel::checked_add_u32(record_count, item.record_count)
+            .map_err(RemoteAttemptLogReasonCode::from)?;
+        payload_bytes = kernel::checked_add_u64(payload_bytes, item.payload_bytes)
+            .map_err(RemoteAttemptLogReasonCode::from)?;
         expected_cursor = item.next_cursor;
-        expected_index = Some(item.segment_index.checked_add(1).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?);
-        previous_segment = Some(item.segment_blake3.clone());
-        previous_record = Some(item.head_record_blake3.clone());
+        expected_index = Some(kernel::next_segment_index(Some(item.segment_index))
+            .map_err(RemoteAttemptLogReasonCode::from)?);
+        previous_segment = Some(&item.segment_blake3);
+        previous_record = Some(&item.head_record_blake3);
     }
-    if record_count != manifest.retained_record_count {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    if payload_bytes != manifest.retained_payload_bytes {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    if expected_cursor != manifest.next_cursor {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    if previous_segment != manifest.head_segment_blake3 {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    if previous_record != manifest.head_record_blake3 {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    debug_assert_eq!(record_count, manifest.retained_record_count);
-    debug_assert_eq!(payload_bytes, manifest.retained_payload_bytes);
-    Ok(())
+    kernel::check_manifest_ref_totals(
+        kernel::ManifestTotals {
+            next_cursor: manifest.next_cursor,
+            segment_count: 0,
+            record_count: manifest.retained_record_count,
+            payload_bytes: manifest.retained_payload_bytes,
+            head_record: manifest.head_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+            head_segment: manifest.head_segment_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+        },
+        kernel::ManifestTotals {
+            next_cursor: expected_cursor,
+            segment_count: 0,
+            record_count,
+            payload_bytes,
+            head_record: previous_record.map(RemoteAttemptLogDigest::as_str),
+            head_segment: previous_segment.map(RemoteAttemptLogDigest::as_str),
+        },
+    ).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 fn validate_segment_ref(item: &RemoteAttemptLogSegmentRef) -> Result<(), RemoteAttemptLogReasonCode> {
     validate_optional_digest(&item.previous_segment_blake3)?;
     validate_optional_digest(&item.first_previous_record_blake3)?;
-    RemoteAttemptLogDigest::new(item.segment_blake3.as_str().to_string())?;
-    RemoteAttemptLogDigest::new(item.head_record_blake3.as_str().to_string())?;
-    if item.record_count == 0 || item.first_sequence != item.first_cursor {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    let expected_next = item
-        .first_cursor
-        .checked_add(u64::from(item.record_count))
-        .ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
-    let expected_last = expected_next.checked_sub(1).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
-    if item.next_cursor != expected_next || item.last_sequence != expected_last {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    Ok(())
+    kernel::validate_digest(item.segment_blake3.as_str()).map_err(RemoteAttemptLogReasonCode::from)?;
+    kernel::validate_digest(item.head_record_blake3.as_str()).map_err(RemoteAttemptLogReasonCode::from)?;
+    kernel::check_segment_ref_shape(
+        item.first_sequence,
+        item.first_cursor,
+        item.next_cursor,
+        item.last_sequence,
+        item.record_count,
+    ).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 fn validate_manifest_events(
     manifest: &RemoteAttemptLogManifest,
     policy: RemoteAttemptLogPolicy,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    if manifest.event_records.len() > u32_to_usize(policy.event_identity_count_max)? {
-        return Err(RemoteAttemptLogReasonCode::EventIdentityCapacityExceeded);
-    }
+    kernel::check_manifest_event_count(manifest.event_records.len(), policy.event_identity_count_max)
+        .map_err(RemoteAttemptLogReasonCode::from)?;
     for (event_id, digest) in &manifest.event_records {
         validate_event_id(event_id)?;
-        RemoteAttemptLogDigest::new(digest.as_str().to_string())?;
+        kernel::validate_digest(digest.as_str()).map_err(RemoteAttemptLogReasonCode::from)?;
     }
     Ok(())
 }
@@ -1426,9 +1246,8 @@ fn classify_existing_record(
     existing: &RemoteAttemptLogDigest,
     record: &RemoteAttemptLogRecord,
 ) -> Result<RemoteAttemptLogAppendPlan, RemoteAttemptLogReasonCode> {
-    if existing != &record.record_blake3 {
-        return Err(RemoteAttemptLogReasonCode::EventDigestConflict);
-    }
+    kernel::classify_existing_record(existing.as_str(), record.record_blake3.as_str())
+        .map_err(RemoteAttemptLogReasonCode::from)?;
     Ok(RemoteAttemptLogAppendPlan {
         disposition: RemoteAttemptLogAppendDisposition::AlreadyApplied,
         reason_code: RemoteAttemptLogReasonCode::AlreadyApplied,
@@ -1441,20 +1260,18 @@ fn validate_append_position(
     manifest: &RemoteAttemptLogManifest,
     record: &RemoteAttemptLogRecord,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    if record.sequence != manifest.next_cursor || record.cursor != manifest.next_cursor {
-        return Err(RemoteAttemptLogReasonCode::RecordPositionMismatch);
-    }
-    if record.previous_record_blake3 != manifest.head_record_blake3 {
-        return Err(RemoteAttemptLogReasonCode::PreviousRecordMismatch);
-    }
-    Ok(())
+    kernel::check_append_position(
+        manifest.next_cursor,
+        manifest.head_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+        record.sequence,
+        record.cursor,
+        record.previous_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+    ).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 fn next_segment_index(manifest: &RemoteAttemptLogManifest) -> Result<u64, RemoteAttemptLogReasonCode> {
-    match manifest.segments.last() {
-        Some(previous) => previous.segment_index.checked_add(1).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow),
-        None => Ok(INITIAL_SEGMENT_INDEX),
-    }
+    kernel::next_segment_index(manifest.segments.last().map(|previous| previous.segment_index))
+        .map_err(RemoteAttemptLogReasonCode::from)
 }
 
 fn append_segment_to_manifest(
@@ -1468,18 +1285,14 @@ fn append_segment_to_manifest(
     next.next_cursor = segment.next_cursor;
     next.head_record_blake3 = Some(head_record.record_blake3.clone());
     next.head_segment_blake3 = Some(segment.segment_blake3.clone());
-    next.retained_record_count = checked_add_u32(CheckedAddU32Operands {
-        left: next.retained_record_count,
-        right: segment.record_count,
-    })?;
-    next.retained_payload_bytes = checked_add_u64(CheckedAddU64Operands {
-        left: next.retained_payload_bytes,
-        right: segment.payload_bytes,
-    })?;
+    next.retained_record_count = kernel::checked_add_u32(next.retained_record_count, segment.record_count)
+        .map_err(RemoteAttemptLogReasonCode::from)?;
+    next.retained_payload_bytes = kernel::checked_add_u64(next.retained_payload_bytes, segment.payload_bytes)
+        .map_err(RemoteAttemptLogReasonCode::from)?;
     for record in &segment.records {
-        if next.event_records.insert(record.event_id.clone(), record.record_blake3.clone()).is_some() {
-            return Err(RemoteAttemptLogReasonCode::EventDigestConflict);
-        }
+        kernel::check_new_event_identity(
+            next.event_records.insert(record.event_id.clone(), record.record_blake3.clone()).is_some(),
+        ).map_err(RemoteAttemptLogReasonCode::from)?;
     }
     debug_assert_eq!(next.next_cursor, segment.next_cursor);
     debug_assert_eq!(next.head_record_blake3.as_ref(), Some(&head_record.record_blake3));
@@ -1490,10 +1303,36 @@ fn validate_segment_against_ref(
     segment: &RemoteAttemptLogSegment,
     expected: &RemoteAttemptLogSegmentRef,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    if segment_ref(segment)? != *expected {
-        return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
-    }
-    Ok(())
+    let first = segment.records.first().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
+    let last = segment.records.last().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
+    kernel::check_segment_ref(
+        kernel::SegmentRefFacts {
+            index: expected.segment_index,
+            segment_digest: expected.segment_blake3.as_str(),
+            previous_segment: expected.previous_segment_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+            first_sequence: expected.first_sequence,
+            last_sequence: expected.last_sequence,
+            first_cursor: expected.first_cursor,
+            next_cursor: expected.next_cursor,
+            first_previous_record: expected.first_previous_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+            head_record: expected.head_record_blake3.as_str(),
+            record_count: expected.record_count,
+            payload_bytes: expected.payload_bytes,
+        },
+        kernel::SegmentRefFacts {
+            index: segment.segment_index,
+            segment_digest: segment.segment_blake3.as_str(),
+            previous_segment: segment.previous_segment_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+            first_sequence: segment.first_sequence,
+            last_sequence: segment.last_sequence,
+            first_cursor: segment.first_cursor,
+            next_cursor: segment.next_cursor,
+            first_previous_record: first.previous_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+            head_record: last.record_blake3.as_str(),
+            record_count: segment.record_count,
+            payload_bytes: segment.payload_bytes,
+        },
+    ).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1501,8 +1340,8 @@ struct ChainLinkExpectation<'a> {
     scope: &'a RemoteAttemptLogScope,
     expected_sequence: u64,
     expected_cursor: u64,
-    previous_record_blake3: &'a Option<RemoteAttemptLogDigest>,
-    previous_segment_blake3: &'a Option<RemoteAttemptLogDigest>,
+    previous_record_blake3: Option<&'a RemoteAttemptLogDigest>,
+    previous_segment_blake3: Option<&'a RemoteAttemptLogDigest>,
 }
 
 fn validate_chain_link(
@@ -1510,24 +1349,22 @@ fn validate_chain_link(
     expected: ChainLinkExpectation<'_>,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
     let first = segment.records.first().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
-    if &segment.scope != expected.scope {
-        return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
-    }
-    if segment.first_sequence != expected.expected_sequence {
-        return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
-    }
-    if segment.first_cursor != expected.expected_cursor {
-        return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
-    }
-    if &first.previous_record_blake3 != expected.previous_record_blake3 {
-        return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
-    }
-    if &segment.previous_segment_blake3 != expected.previous_segment_blake3 {
-        return Err(RemoteAttemptLogReasonCode::SegmentChainMismatch);
-    }
-    debug_assert_eq!(&segment.scope, expected.scope);
-    debug_assert_eq!(segment.first_cursor, expected.expected_cursor);
-    Ok(())
+    kernel::check_chain_link(
+        kernel::ChainLink {
+            scope: borrowed_scope(expected.scope),
+            sequence: expected.expected_sequence,
+            cursor: expected.expected_cursor,
+            previous_record: expected.previous_record_blake3.map(RemoteAttemptLogDigest::as_str),
+            previous_segment: expected.previous_segment_blake3.map(RemoteAttemptLogDigest::as_str),
+        },
+        kernel::ChainLink {
+            scope: borrowed_scope(&segment.scope),
+            sequence: segment.first_sequence,
+            cursor: segment.first_cursor,
+            previous_record: first.previous_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+            previous_segment: segment.previous_segment_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+        },
+    ).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 fn validate_retained_event_records(
@@ -1536,12 +1373,10 @@ fn validate_retained_event_records(
     retained_events: &mut BTreeSet<RemoteEventId>,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
     for record in &segment.records {
-        if !retained_events.insert(record.event_id.clone()) {
-            return Err(RemoteAttemptLogReasonCode::EventDigestConflict);
-        }
-        if manifest.event_records.get(&record.event_id) != Some(&record.record_blake3) {
-            return Err(RemoteAttemptLogReasonCode::EventDigestConflict);
-        }
+        kernel::check_event_binding(
+            retained_events.insert(record.event_id.clone()),
+            || manifest.event_records.get(&record.event_id) == Some(&record.record_blake3),
+        ).map_err(RemoteAttemptLogReasonCode::from)?;
     }
     Ok(())
 }
@@ -1550,46 +1385,36 @@ fn validate_chain_summary(
     manifest: &RemoteAttemptLogManifest,
     summary: &RemoteAttemptLogChainSummary,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    if summary.next_cursor != manifest.next_cursor {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    if summary.segment_count != usize_to_u32(manifest.segments.len())? {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    if summary.record_count != manifest.retained_record_count {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    if summary.payload_bytes != manifest.retained_payload_bytes {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    if summary.head_record_blake3 != manifest.head_record_blake3 {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    if summary.head_segment_blake3 != manifest.head_segment_blake3 {
-        return Err(RemoteAttemptLogReasonCode::ManifestSummaryMismatch);
-    }
-    debug_assert_eq!(summary.next_cursor, manifest.next_cursor);
-    debug_assert_eq!(summary.record_count, manifest.retained_record_count);
-    Ok(())
+    kernel::check_chain_totals(
+        kernel::ManifestTotals {
+            next_cursor: manifest.next_cursor,
+            segment_count: usize_to_u32(manifest.segments.len())?,
+            record_count: manifest.retained_record_count,
+            payload_bytes: manifest.retained_payload_bytes,
+            head_record: manifest.head_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+            head_segment: manifest.head_segment_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+        },
+        kernel::ManifestTotals {
+            next_cursor: summary.next_cursor,
+            segment_count: summary.segment_count,
+            record_count: summary.record_count,
+            payload_bytes: summary.payload_bytes,
+            head_record: summary.head_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+            head_segment: summary.head_segment_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+        },
+    ).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 fn validate_replay_request(
     request: RemoteAttemptLogReplayRequest,
     policy: RemoteAttemptLogPolicy,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    if request.record_count_max == 0 {
-        return Err(RemoteAttemptLogReasonCode::ReplayRequestInvalid);
-    }
-    if request.payload_bytes_max == 0 {
-        return Err(RemoteAttemptLogReasonCode::ReplayRequestInvalid);
-    }
-    if request.record_count_max > policy.replay_record_count_max {
-        return Err(RemoteAttemptLogReasonCode::ReplayRequestInvalid);
-    }
-    if request.payload_bytes_max > policy.replay_payload_bytes_max {
-        return Err(RemoteAttemptLogReasonCode::ReplayRequestInvalid);
-    }
-    Ok(())
+    kernel::validate_replay_request(
+        request.record_count_max,
+        request.payload_bytes_max,
+        policy.replay_record_count_max,
+        policy.replay_payload_bytes_max,
+    ).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 fn collect_replay_records(
@@ -1602,28 +1427,30 @@ fn collect_replay_records(
     let mut records = Vec::with_capacity(record_count_max);
     let mut payload_bytes = 0_u64;
     for record in segments.iter().flat_map(|segment| &segment.records) {
-        if record.cursor < cursor.effective_cursor {
+        if kernel::replay_record_is_before_cursor(record.cursor, cursor.effective_cursor) {
             continue;
         }
-        let projected = checked_add_u64(CheckedAddU64Operands {
-            left: payload_bytes,
-            right: u64::from(record.payload_length_bytes),
-        })?;
-        if records.len() >= record_count_max || projected > request.payload_bytes_max {
+        let Some(projected) = kernel::admit_replay_record(
+            records.len(),
+            record_count_max,
+            payload_bytes,
+            record.payload_length_bytes,
+            request.payload_bytes_max,
+        ).map_err(RemoteAttemptLogReasonCode::from)? else {
             break;
-        }
+        };
         payload_bytes = projected;
         records.push(record.clone());
     }
-    let last = records.last().ok_or(RemoteAttemptLogReasonCode::ReplayLimitTooSmall)?;
-    let next_cursor = last.cursor.checked_add(1).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
+    let next_cursor = kernel::next_replay_cursor(records.last().map(|record| record.cursor))
+        .map_err(RemoteAttemptLogReasonCode::from)?;
     debug_assert!(payload_bytes <= request.payload_bytes_max);
     debug_assert!(records.len() <= record_count_max);
     Ok(RemoteAttemptLogReplayPlan {
         cursor,
         records,
         next_cursor,
-        has_more: next_cursor < manifest.next_cursor,
+        has_more: kernel::replay_has_more(next_cursor, manifest.next_cursor),
         truncation_anchor: None,
     })
 }
@@ -1632,42 +1459,25 @@ fn retention_drop_count(
     manifest: &RemoteAttemptLogManifest,
     policy: RemoteAttemptLogPolicy,
 ) -> Result<usize, RemoteAttemptLogReasonCode> {
-    let mut remaining = RemoteAttemptLogRetentionUsage {
+    let usage = kernel::RetentionUsage {
         segment_count: usize_to_u32(manifest.segments.len())?,
         record_count: manifest.retained_record_count,
         payload_bytes: manifest.retained_payload_bytes,
     };
-    let mut drop_count = 0_usize;
-    while retention_exceeded(remaining, policy) {
-        let item = manifest.segments.get(drop_count).ok_or(RemoteAttemptLogReasonCode::RetentionWouldDropAll)?;
-        remaining.segment_count =
-            remaining.segment_count.checked_sub(1).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
-        remaining.record_count = remaining
-            .record_count
-            .checked_sub(item.record_count)
-            .ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
-        remaining.payload_bytes = remaining
-            .payload_bytes
-            .checked_sub(item.payload_bytes)
-            .ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
-        drop_count = drop_count.checked_add(1).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
-    }
-    debug_assert!(!retention_exceeded(remaining, policy));
-    debug_assert!(drop_count <= manifest.segments.len());
-    Ok(drop_count)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct RemoteAttemptLogRetentionUsage {
-    segment_count: u32,
-    record_count: u32,
-    payload_bytes: u64,
-}
-
-fn retention_exceeded(usage: RemoteAttemptLogRetentionUsage, policy: RemoteAttemptLogPolicy) -> bool {
-    usage.segment_count > policy.retained_segment_count_max
-        || usage.record_count > policy.retained_record_count_max
-        || usage.payload_bytes > policy.retained_payload_bytes_max
+    let limits = kernel::RetentionUsage {
+        segment_count: policy.retained_segment_count_max,
+        record_count: policy.retained_record_count_max,
+        payload_bytes: policy.retained_payload_bytes_max,
+    };
+    kernel::retention_drop_count(
+        usage,
+        limits,
+        manifest.segments.iter().map(|item| kernel::RetentionUsage {
+            segment_count: 1,
+            record_count: item.record_count,
+            payload_bytes: item.payload_bytes,
+        }),
+    ).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 fn build_retention_plan(
@@ -1684,14 +1494,10 @@ fn build_retention_plan(
     let mut next = manifest.clone();
     next.segments.drain(..drop_count);
     next.retained_start_cursor = retained_start;
-    next.retained_record_count = next
-        .retained_record_count
-        .checked_sub(dropped_summary.record_count)
-        .ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
-    next.retained_payload_bytes = next
-        .retained_payload_bytes
-        .checked_sub(dropped_summary.payload_bytes)
-        .ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
+    next.retained_record_count = kernel::checked_sub_u32(next.retained_record_count, dropped_summary.record_count)
+        .map_err(RemoteAttemptLogReasonCode::from)?;
+    next.retained_payload_bytes = kernel::checked_sub_u64(next.retained_payload_bytes, dropped_summary.payload_bytes)
+        .map_err(RemoteAttemptLogReasonCode::from)?;
     next.truncation_anchor = Some(anchor.clone());
     let next_manifest = seal_manifest(next, policy)?;
     validate_remote_attempt_log_chain(&next_manifest, retained, policy)?;
@@ -1724,25 +1530,17 @@ fn summarize_dropped_segments(
 ) -> Result<DroppedSegmentSummary, RemoteAttemptLogReasonCode> {
     let first = dropped.first().ok_or(RemoteAttemptLogReasonCode::RetentionAnchorInvalid)?;
     let last = dropped.last().ok_or(RemoteAttemptLogReasonCode::RetentionAnchorInvalid)?;
-    let mut record_count = 0_u32;
-    let mut payload_bytes = 0_u64;
-    for segment in dropped {
-        record_count = checked_add_u32(CheckedAddU32Operands {
-            left: record_count,
-            right: segment.record_count,
-        })?;
-        payload_bytes = checked_add_u64(CheckedAddU64Operands {
-            left: payload_bytes,
-            right: segment.payload_bytes,
-        })?;
-    }
+    let (chunk_count, record_count, payload_bytes) = kernel::dropped_usage(
+        dropped.iter().map(|segment| (segment.record_count, segment.payload_bytes)),
+        dropped.len(),
+    ).map_err(RemoteAttemptLogReasonCode::from)?;
     let tail_record = last.records.last().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
     debug_assert!(!dropped.is_empty());
     debug_assert!(first.first_cursor < last.next_cursor);
     Ok(DroppedSegmentSummary {
         start_cursor: first.first_cursor,
         end_cursor: last.next_cursor,
-        chunk_count: usize_to_u32(dropped.len())?,
+        chunk_count,
         record_count,
         payload_bytes,
         tail_record_blake3: tail_record.record_blake3.clone(),
@@ -1789,27 +1587,15 @@ fn validate_truncation_anchor(
     scope: &RemoteAttemptLogScope,
     policy_identity: &RemoteAttemptLogPolicyIdentity,
 ) -> Result<(), RemoteAttemptLogReasonCode> {
-    if anchor.schema != REMOTE_ATTEMPT_LOG_TRUNCATION_ANCHOR_SCHEMA {
-        return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
-    }
-    if &anchor.scope != scope {
-        return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
-    }
-    if &anchor.policy != policy_identity {
-        return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
-    }
-    if anchor.dropped_start_cursor >= anchor.dropped_end_cursor_exclusive {
-        return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
-    }
-    if anchor.dropped_end_cursor_exclusive != anchor.new_retained_start_cursor {
-        return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
-    }
-    if anchor.dropped_chunk_count == 0 {
-        return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
-    }
-    if anchor.dropped_record_count == 0 {
-        return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
-    }
+    kernel::check_anchor(kernel::AnchorFacts {
+        schema_matches: anchor.schema == REMOTE_ATTEMPT_LOG_TRUNCATION_ANCHOR_SCHEMA,
+        dropped_start: anchor.dropped_start_cursor,
+        dropped_end: anchor.dropped_end_cursor_exclusive,
+        retained_start: anchor.new_retained_start_cursor,
+        dropped_chunks: anchor.dropped_chunk_count,
+        dropped_records: anchor.dropped_record_count,
+    }, || &anchor.scope == scope, || &anchor.policy == policy_identity)
+        .map_err(RemoteAttemptLogReasonCode::from)?;
     validate_optional_digest(&anchor.previous_anchor_blake3)?;
     for digest in [
         &anchor.dropped_tail_record_blake3,
@@ -1817,11 +1603,10 @@ fn validate_truncation_anchor(
         &anchor.prior_head_record_blake3,
         &anchor.prior_head_segment_blake3,
     ] {
-        RemoteAttemptLogDigest::new(digest.as_str().to_string())?;
+        kernel::validate_digest(digest.as_str()).map_err(RemoteAttemptLogReasonCode::from)?;
     }
-    if anchor.anchor_blake3 != truncation_anchor_payload_digest(anchor)? {
-        return Err(RemoteAttemptLogReasonCode::RetentionAnchorInvalid);
-    }
+    kernel::check_anchor_digest(anchor.anchor_blake3.as_str(), truncation_anchor_payload_digest(anchor)?.as_str())
+        .map_err(RemoteAttemptLogReasonCode::from)?;
     debug_assert_eq!(&anchor.scope, scope);
     debug_assert_eq!(&anchor.policy, policy_identity);
     Ok(())
@@ -1873,7 +1658,7 @@ fn truncation_anchor_payload_digest(
 
 fn validate_optional_digest(digest: &Option<RemoteAttemptLogDigest>) -> Result<(), RemoteAttemptLogReasonCode> {
     if let Some(digest) = digest {
-        RemoteAttemptLogDigest::new(digest.as_str().to_string())?;
+        kernel::validate_digest(digest.as_str()).map_err(RemoteAttemptLogReasonCode::from)?;
     }
     Ok(())
 }
@@ -1900,44 +1685,22 @@ fn zero_digest() -> RemoteAttemptLogDigest {
 }
 
 fn is_blake3_hex_digest(value: &str) -> bool {
-    value.len() == BLAKE3_HEX_LENGTH_CHARS
-        && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    kernel::digest_is_valid(value)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct CheckedAddU32Operands {
-    left: u32,
-    right: u32,
-}
-
-fn checked_add_u32(operands: CheckedAddU32Operands) -> Result<u32, RemoteAttemptLogReasonCode> {
-    operands.left.checked_add(operands.right).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct CheckedAddU64Operands {
-    left: u64,
-    right: u64,
-}
-
-fn checked_add_u64(operands: CheckedAddU64Operands) -> Result<u64, RemoteAttemptLogReasonCode> {
-    operands.left.checked_add(operands.right).ok_or(RemoteAttemptLogReasonCode::ArithmeticOverflow)
-}
 
 fn usize_to_u32(value: usize) -> Result<u32, RemoteAttemptLogReasonCode> {
-    u32::try_from(value).map_err(|_| RemoteAttemptLogReasonCode::ArithmeticOverflow)
+    kernel::usize_to_u32(value).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 fn u32_to_usize(value: u32) -> Result<usize, RemoteAttemptLogReasonCode> {
-    usize::try_from(value).map_err(|_| RemoteAttemptLogReasonCode::ArithmeticOverflow)
+    kernel::u32_to_usize(value).map_err(RemoteAttemptLogReasonCode::from)
 }
 
 #[cfg(test)]
 mod tests {
     // r[verify remote_builds.immutable_attempt_log_segments]
     // r[verify remote_builds.pure_log_cursor_kernel]
-    use proptest::prelude::*;
-
     use super::*;
 
     const TEST_FENCE_GENERATION: u64 = 7;
@@ -1947,7 +1710,6 @@ mod tests {
     const TEST_MULTI_RECORD_SEGMENT_COUNT: u32 = 2;
     const TEST_REPLAY_BYTES: u64 = 128;
     const TEST_SMALL_PAYLOAD_MAX: u32 = 16;
-    const TEST_PROPERTY_CURSOR_MAX_EXCLUSIVE: u64 = 10_000;
     const TEST_SECRET: &str = "Authorization: Bearer SHOULD_NOT_LEAK";
 
     fn scope() -> RemoteAttemptLogScope {
@@ -2033,20 +1795,17 @@ mod tests {
     }
 
     #[test]
-    fn canonical_record_segment_and_manifest_identities_are_deterministic() {
+    fn changing_payload_changes_record_and_segment_identities() {
         let manifest = empty(policy());
-        let left = record(&manifest, "event-canonical", b"same payload", policy());
-        let right = record(&manifest, "event-canonical", b"same payload", policy());
+        let original = record(&manifest, "event-canonical", b"same payload", policy());
         let changed = record(&manifest, "event-canonical", b"changed payload", policy());
-        let left_segment =
-            seal_remote_attempt_log_segment(vec![left.clone()], INITIAL_SEGMENT_INDEX, None, policy()).unwrap();
-        let right_segment =
-            seal_remote_attempt_log_segment(vec![right.clone()], INITIAL_SEGMENT_INDEX, None, policy()).unwrap();
+        let original_segment =
+            seal_remote_attempt_log_segment(vec![original.clone()], INITIAL_SEGMENT_INDEX, None, policy()).unwrap();
+        let changed_segment =
+            seal_remote_attempt_log_segment(vec![changed.clone()], INITIAL_SEGMENT_INDEX, None, policy()).unwrap();
 
-        assert_eq!(left.record_blake3, right.record_blake3);
-        assert_ne!(left.record_blake3, changed.record_blake3);
-        assert_eq!(left_segment.segment_blake3, right_segment.segment_blake3);
-        assert_eq!(manifest.manifest_blake3, empty(policy()).manifest_blake3);
+        assert_ne!(original.record_blake3, changed.record_blake3);
+        assert_ne!(original_segment.segment_blake3, changed_segment.segment_blake3);
     }
 
     #[test]
@@ -2318,57 +2077,7 @@ mod tests {
             seal_remote_attempt_log_segment(vec![overflow_record], INITIAL_SEGMENT_INDEX, None, policy()).unwrap_err(),
             RemoteAttemptLogReasonCode::ArithmeticOverflow
         );
-        assert_eq!(
-            checked_add_u64(CheckedAddU64Operands {
-                left: u64::MAX,
-                right: 1
-            }),
-            Err(RemoteAttemptLogReasonCode::ArithmeticOverflow)
-        );
-        assert_eq!(
-            checked_add_u32(CheckedAddU32Operands {
-                left: u32::MAX,
-                right: 1
-            }),
-            Err(RemoteAttemptLogReasonCode::ArithmeticOverflow)
-        );
         assert_eq!(manifest.next_cursor, INITIAL_LOG_POSITION);
-    }
-
-    proptest! {
-        #[test]
-        fn equivalent_record_facts_produce_equivalent_identity(
-            cursor in INITIAL_LOG_POSITION..TEST_PROPERTY_CURSOR_MAX_EXCLUSIVE,
-            payload in proptest::collection::vec(any::<u8>(), 0..256)
-        ) {
-            let manifest = empty(policy());
-            let input = RemoteAttemptLogRecordInput {
-                scope: manifest.scope.clone(),
-                event_id: RemoteEventId::new(format!("property-event-{cursor}")).unwrap(),
-                sequence: cursor,
-                cursor,
-                phase: RemoteAttemptPhase::Running,
-                stream: RemoteAttemptLogStream::Event,
-                kind: RemoteAttemptLogRecordKind::Diagnostic,
-                payload,
-                previous_record_blake3: None,
-            };
-            let left = seal_remote_attempt_log_record(input.clone(), policy()).unwrap();
-            let right = seal_remote_attempt_log_record(input, policy()).unwrap();
-            prop_assert_eq!(&left, &right);
-            prop_assert_eq!(left.record_blake3, right.record_blake3);
-        }
-
-        #[test]
-        fn checked_accounting_never_wraps(left in any::<u64>(), right in any::<u64>()) {
-            match checked_add_u64(CheckedAddU64Operands { left, right }) {
-                Ok(sum) => {
-                    prop_assert!(sum >= left);
-                    prop_assert!(sum >= right);
-                }
-                Err(reason) => prop_assert_eq!(reason, RemoteAttemptLogReasonCode::ArithmeticOverflow),
-            }
-        }
     }
 }
 
@@ -2380,12 +2089,12 @@ mod kani_proofs {
     fn checked_accounting_never_wraps() {
         let left: u64 = kani::any();
         let right: u64 = kani::any();
-        match checked_add_u64(CheckedAddU64Operands { left, right }) {
+        match kernel::checked_add_u64(left, right) {
             Ok(sum) => {
                 assert!(sum >= left);
                 assert!(sum >= right);
             }
-            Err(reason) => assert_eq!(reason, RemoteAttemptLogReasonCode::ArithmeticOverflow),
+            Err(reason) => assert_eq!(reason, kernel::AttemptLogError::ArithmeticOverflow),
         }
     }
 

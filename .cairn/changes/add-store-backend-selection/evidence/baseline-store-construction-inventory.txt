@@ -1,0 +1,52 @@
+Isolated origin/main HEAD da00f58425740adea559ef926c9dfa97b2cb8240
+Search pattern: StoreConfig::new\(|StoreConfig \{|StoreHandle::open\(
+Scope: src/, crates/, tests/, examples/, and tools/ of /home/brittonr/scratch/mantle-selection-baseline
+Each number below is a matched source line. Declarations at crates/crunch-store/src/handle.rs:110 and :141, the checker pattern literal at tools/check_store_capability_boundary.rs:220, and its deliberately non-compiling negative fixture string at :294 are omitted because they do not construct/open a store. These are observations at this commit, not a claim about other branches.
+
+src/:
+attest_cmd.rs:691,700
+bootstrap.rs:806,825
+build_plan.rs:594
+foreign_import_cmd.rs:1068
+foreign_provenance_audit.rs:119
+foreign_realization_shell.rs:166,206
+full_source_provider.rs:333,351
+main.rs:5703,5724,6319,6430,7720
+remote_build.rs:2546,2631,4014,12833,17520
+remote_transfer.rs:2749
+rust_plan.rs:19130
+store_cmd.rs:372,391,606
+
+crates/:
+crunch-build/src/orchestrate.rs:3123,3130
+crunch-pipeline/src/lib.rs:264,286,1199
+crunch-rust-cache/src/lib.rs:256,1462
+crunch-rustc-wrapper/src/lib.rs:307
+crunch-store/src/archive.rs:1090,1104
+crunch-store/src/casita.rs:1005,1111,1112,1113,1145,1238,1637,1704,1705,1706,1747,1765,1787,1810
+crunch-store/src/composition.rs:424
+crunch-store/src/gc.rs:2130,3407,3510,3554,3617,3624,3679,3735
+crunch-store/src/handle.rs:5777,5817,5907,6950,7025,7184,7216,7259,7296,7460,7487,7648
+crunch-store/src/nario.rs:874,1116
+crunch-store/src/overlay.rs:861,862,912,940,942,959,961
+crunch-store/src/pull.rs:1380,1881,2856
+crunch-store/src/push.rs:328,560
+crunch-store/src/repair.rs:708,1035
+
+tests/:
+attest_cli.rs:257
+composition_root_cli.rs:39
+integration.rs:204
+integration_build.rs:475,505
+store_archive_cli.rs:38
+store_gc_cli.rs:56,339
+
+examples/:
+benchmark_support.rs:1777
+
+Launchers that forward --state-dir or --store-prefix from the same isolated tree:
+src/bootstrap_validate.rs:268,270 (selected backend at :272-273)
+src/main.rs:5405,5409 (local remote worker; selected backend at :5411-5412)
+src/source_built_fixed_point_shell.rs:1908,1910 (selected backend at :1912-1913)
+src/transcript_cmd.rs:503 (selected backend at :506-507; --store-prefix is not forwarded)
+The Rust cache daemon is a separate binary entrypoint receiving required --store-backend at crates/crunch-rustc-wrapper/src/bin/mantle-rust-cache-daemon.rs:32-34; its state argument is at :31.

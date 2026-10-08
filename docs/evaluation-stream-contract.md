@@ -6,6 +6,41 @@ Use `mantle build --evaluation-stream <source.ncl>` to select the stream explici
 
 `--evaluation-stream` cannot be combined with `--json`, `--fix`, `--plan`, or remote build dispatch. Existing `--json build` output remains available during the compatibility period.
 
+## Optional live coordination view
+
+The NDJSON contract above is a **recorded stream**, not a subscription. For a
+separate, transient current-state view, start `mantle remote live serve --socket
+/run/user/<uid>/mantle-live.sock` and subscribe with `mantle remote live
+subscribe --socket /run/user/<uid>/mantle-live.sock [--owner RUN_ID] [--job
+ROOT_ID_OR_DRV_PATH_OR_JOB_ID] [--kind goal]`. Repeat each filter flag
+to select several values; without a filter, all current facts match. The
+subscription emits newline-delimited `mantle-live-build-protocol-v1`
+`snapshot-start`, matching
+`publish` facts, `snapshot-end`, then later `publish`/`retract` changes. Job
+filters exclude worker-presence facts, which have no job id.
+
+Set `MANTLE_LIVE_STATE_SOCKET` to that socket path when invoking `mantle build`
+to opt into best-effort publication. A missing, failed, or slow endpoint
+degrades observation only; it cannot reject a build or affect output admission.
+The daemon serves at most 4,096 current facts and 32 subscribers; each
+subscriber has a 64-event pending queue, and an oversized filter or frame is
+rejected. Facts are owner-scoped, retracted when the owner disconnects, and
+not persisted across a daemon restart. A subscriber MUST discard its prior
+facts on disconnect and request a fresh snapshot after reconnecting.
+
+The live `owner_run_id` names one build invocation. It is distinct from the
+content-addressed evaluation-stream `run_id`, which stays unchanged even for
+concurrent identical inputs; use the live owner id to filter one invocation.
+
+This view does not change `--evaluation-stream`, `--json build`, stdout framing,
+or the meaning of terminal root states. A live terminal fact is not a build
+receipt or evidence of output trust. The opt-in publisher observes selected
+evaluation-root discovery/terminal events and, separately, actual in-process
+Worker scheduler goals (identified by their `.drv` store path) when admitted,
+dispatched or completed. It also projects accepted remote coordinator states.
+The evaluation stream alone is never used to infer dispatch or worker presence;
+local Worker dispatch carries no remote attempt, fence or resource lease.
+
 ## Record framing
 
 Stdout contains one complete JSON object per line. Logs and human diagnostics use stderr.

@@ -32,10 +32,11 @@ a second coordination model.
   the current matching fact set on subscription and later changes that match
   its bounded filter.
   r[mantle.coordination_service.live_state_subscription]
-- Retract facts in the daemon when their owner stops: a completed goal, a
-  released reservation, a lost worker, a cancelled root, or the daemon's own
-  restart. A subscriber MUST receive the retraction rather than infer
-  staleness from a clock.
+- Retract facts while the daemon runs when their owner or asserted state stops:
+  a completed goal, a released reservation, a lost worker, or a cancelled root.
+  Graceful daemon shutdown retracts before disconnect. A crash cannot emit
+  frames; subscribers MUST invalidate prior facts on disconnect, and restart
+  begins empty rather than reviving assertions.
   r[mantle.coordination_service.retraction_on_owner_stop]
 - Keep the daemon outside build authority. It MUST NOT mutate the store,
   author evidence, or gate admission, scheduling, or output publication. Live

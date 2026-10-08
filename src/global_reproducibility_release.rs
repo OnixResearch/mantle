@@ -186,46 +186,30 @@ struct SurfaceClassification {
     unsupported_reason: Option<String>,
 }
 
-// CLI compatibility shell: main dispatch supplies these independently named paths.
-#[allow(tigerstyle::too_many_parameters)]
-pub(crate) fn cmd_global_reproducibility_release_evidence(
-    current_dir: &Path,
+/// Selected paths for one release-derived global evidence write.
+pub(crate) struct ReleaseSurfacePaths<'a> {
+    pub current_dir: &'a Path,
+    pub universe_path: PathBuf,
+    pub policy_path: PathBuf,
+    pub bundle_dir: PathBuf,
+    pub verification_dir: PathBuf,
+    pub release_verify_json: PathBuf,
+    pub evidence_path: PathBuf,
+}
+
+pub(crate) fn render_release_surface_evidence(
+    output: &ReleaseSurfaceEvidenceCommandOutput,
     json: bool,
-    universe_path: PathBuf,
-    policy_path: PathBuf,
-    bundle_dir: PathBuf,
-    verification_dir: PathBuf,
-    release_verify_json: PathBuf,
-    evidence_path: PathBuf,
 ) -> Result<(), RunError> {
-    let output = derive_release_surface_evidence_from_paths(ReleaseSurfacePaths {
-        current_dir,
-        universe_path,
-        policy_path,
-        bundle_dir,
-        verification_dir,
-        release_verify_json,
-        evidence_path,
-    })?;
     if json {
-        print_release_surface_evidence_json(&output)?;
+        print_release_surface_evidence_json(output)
     } else {
-        print_release_surface_evidence_human(&output);
+        print_release_surface_evidence_human(output);
+        Ok(())
     }
-    Ok(())
 }
 
-struct ReleaseSurfacePaths<'a> {
-    current_dir: &'a Path,
-    universe_path: PathBuf,
-    policy_path: PathBuf,
-    bundle_dir: PathBuf,
-    verification_dir: PathBuf,
-    release_verify_json: PathBuf,
-    evidence_path: PathBuf,
-}
-
-fn derive_release_surface_evidence_from_paths(
+pub(crate) fn derive_release_surface_evidence_from_paths(
     paths: ReleaseSurfacePaths<'_>,
 ) -> Result<ReleaseSurfaceEvidenceCommandOutput, RunError> {
     let universe =

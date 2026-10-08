@@ -25,8 +25,9 @@ identity, the capability profile, and the conformance rail. This change admits
 `casita` as a second backend through that seam and keeps every core capability,
 including in-place signature updates through `store sign` and PathInfo-backed
 action-result outputs. Final-NAR repair stays unsupported under `casita` until
-a durable repair fence exists. The standalone Rust unit cache is optional and
-stays unsupported under `casita` until durable castore roots are proven.
+a durable repair fence exists. The optional standalone Rust unit cache uses
+durable, verified castore payload roots under the declared `rust-unit-cache`
+capability.
 
 ## What Changes
 
@@ -68,14 +69,16 @@ stays unsupported under `casita` until durable castore roots are proven.
   staging and is never split. r[mantle.casita_store_backend.atomic_batch_import]
 - Keep PathInfo-backed `ActionResultPort` outputs core as output roots with
   fresh-process rehydration. Give castore-only payloads, including standalone
-  Rust unit cache nodes, permanent roots under `mantle/castore/` only once the
+  Rust unit cache nodes, permanent roots under `mantle/castore/` while the
   Casita profile declares `rust-unit-cache`.
   r[mantle.casita_store_backend.castore_payload_roots]
-- Keep a castore parity gate: while the interim guards persist,
-  `rust-unit-cache` is declared unsupported, Rust cache use fails with
-  `casita-rust-cache-unsupported`, `store gc` stays operable for outputs when
-  no Rust cache state exists and fails closed when it does, and nothing claims
-  full interchangeability. r[mantle.casita_store_backend.castore_parity_gate]
+- Declare Casita `rust-unit-cache` in the same cutover as durable payload
+  publication, fresh-process verification, and guarded GC retention. A
+  missing or changed retained root fails with `casita-root-missing` or
+  `casita-envelope-invalid` before reuse or GC fencing; a FailOpen wrapper
+  must not run the compiler through that integrity failure. Keep the other
+  optional capability limits and do not claim full interchangeability.
+  r[mantle.casita_store_backend.castore_parity_gate]
 - Carry one tracked, repository-owned patch for the pinned revision's
   `nar.rs:88` call, applied by both vendor paths with compile and drift
   checks, and never claim that unmodified upstream builds.
@@ -107,9 +110,10 @@ stays unsupported under `casita` until durable castore roots are proven.
   Casita network profile. r[mantle.casita_store_backend.offline_boundary]
 - Keep Casita types inside the store shell, extend the capability boundary
   checker, and declare the Casita profile: every core capability, bounded
-  atomic batch import, and no `store-repair-final-nar`, overlay composition,
-  unsigned admission, or, while the parity gate applies, Rust unit cache.
-  `--trust-unsigned` and `store repair-final-nar` fail closed under `casita`.
+  atomic batch import and the optional `rust-unit-cache` backed by durable
+  castore roots; no `store-repair-final-nar`, overlay composition, or unsigned
+  admission. `--trust-unsigned` and `store repair-final-nar` fail closed under
+  `casita`.
   r[mantle.casita_store_backend.capability_boundary]
 - Record bounded non-claims. r[mantle.casita_store_backend.claim_boundary]
 
@@ -142,10 +146,11 @@ stays unsupported under `casita` until durable castore roots are proven.
 - **Compatibility**: `snix` stays the default and keeps its formats and trust
   behavior. Store paths, NAR facts, signatures, action refs, source bundles,
   and store archives are identical across backends for the same signing key.
-  Casita mode has no overlay composition, no unsigned admission, no final-NAR
-  repair until a durable repair fence exists, no Rust unit cache while the
-  parity gate applies, and a 1,024-path batch bound; each fails closed with a
-  stable blocker, and `casita` is not fully interchangeable with `snix`.
+  Casita mode has no overlay composition, no unsigned admission, and no
+  final-NAR repair until a durable repair fence exists. Rust unit cache
+  payloads use verified castore roots; atomic batches have a 1,024-path bound.
+  Unsupported or over-bound operations fail closed with stable blockers, so
+  `casita` is not fully interchangeable with `snix`.
 
 ## Scope
 
@@ -167,8 +172,8 @@ records the decision.
   automatically, or a policy editing command.
 - Moving source-bundle records, retention records, action-result records, or
   attestations into Casita. They stay Mantle-owned files under the state
-  directory; PathInfo-backed outputs live under output roots, and castore
-  payloads live under Casita roots only once `rust-unit-cache` is declared.
+  directory; PathInfo-backed outputs live under output roots, and standalone
+  Rust unit cache payloads live under durable Casita castore roots.
 - A dedicated `store migrate` command. The verified store archive transport
   already carries closures, signatures, and per-run trust checks.
 - Preventing other Casita clients from changing roots after publication.
@@ -181,9 +186,10 @@ records the decision.
 - A fresh process with `--store-backend casita` reuses an admitted output
   after the physical export is deleted, with no rebuild and equal NAR facts.
 - A fresh process reuses a PathInfo-backed action-result output from its
-  output root without a rebuild, and `store gc` works for outputs when no Rust
-  unit cache state exists. Rust unit payload reuse is a criterion only once
-  `rust-unit-cache` is declared.
+  output root without a rebuild; `store gc` works for outputs both with and
+  without Rust unit cache state. With declared `rust-unit-cache`, a fresh
+  wrapper process reuses a verified retained payload without recompilation;
+  guarded GC preserves retained castore roots and releases unretained roots.
 - A second Casita client that publishes under the same root name between
   staging and commit, or repoints a root during `store sign`, makes Mantle's
   change commit nothing and keeps the other client's target.

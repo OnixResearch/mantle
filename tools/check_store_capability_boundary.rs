@@ -34,6 +34,11 @@ const RAW_SERVICE_ACCESSORS: [&str; 4] = [
     ".remote_pathinfo()",
 ];
 
+/// Vendor types and root mutation sessions must remain inside crunch-store,
+/// including when a source file is otherwise a declared Snix adapter.
+const CASITA_TYPE_REFERENCES: [&str; 3] = ["casita::", "LocalRepository", "UnrootedFilesystemImport"];
+const CASITA_SESSION_MUTATIONS: [&str; 2] = [".mutation_session(", ".publish_if_roots_match("];
+
 /// Writable store bookkeeping reserved to declared owners.
 const WRITABLE_OPERATIONS: [&str; 3] =
     ["insert_output_node(", "insert_built_output(", "insert_ca_mapping("];
@@ -41,8 +46,8 @@ const WRITABLE_OPERATIONS: [&str; 3] =
 /// Directories scanned for application-shell violations.
 const SCAN_ROOTS: [&str; 2] = ["src", "crates"];
 
-/// Store-internal crate: raw services are legal here.
-const STORE_CRATE: &str = "crunch-store";
+/// Only the actual store shell may depend directly on Casita.
+const STORE_CRATE_SOURCE_PREFIX: &str = "crates/crunch-store/src/";
 
 /// Declared store-backed adapter that owns a private store instance.
 /// Recorded per ADR 0058 update; not an application shell.
@@ -130,6 +135,8 @@ impl fmt::Display for Report {
         writeln!(f, "raw_service_escape_count={}", count_kind(&self.violations, "raw-service-escape"))?;
         writeln!(f, "writable_authority_escape_count={}", count_kind(&self.violations, "writable-authority"))?;
         writeln!(f, "handle_construction_escape_count={}", count_kind(&self.violations, "handle-construction"))?;
+        writeln!(f, "casita_type_escape_count={}", count_kind(&self.violations, "casita-type-escape"))?;
+        writeln!(f, "casita_session_escape_count={}", count_kind(&self.violations, "casita-session-escape"))?;
         Ok(())
     }
 }
@@ -185,16 +192,39 @@ fn check_file(root: &Path, path: &Path, source: &str, report: &mut Report) {
         .unwrap_or(path)
         .to_string_lossy()
         .replace('\\', "/");
-    let is_store_internal = relative.contains(STORE_CRATE);
+    let is_store_internal = relative.starts_with(STORE_CRATE_SOURCE_PREFIX);
     let is_declared_adapter = ADAPTER_ALLOWLIST.iter().any(|adapter| relative.contains(adapter));
     if is_declared_adapter {
         report.adapter_files.push(relative.clone());
     }
-    if is_store_internal || is_declared_adapter {
+    if is_store_internal {
         return;
     }
     let production = strip_test_regions(source);
     for (line_index, line) in production.lines().enumerate() {
+        for reference in CASITA_TYPE_REFERENCES {
+            if line.contains(reference) {
+                report.violations.push(Violation {
+                    path: relative.clone(),
+                    line: line_index + 1,
+                    kind: "casita-type-escape",
+                    detail: format!("Casita vendor type `{reference}` outside the store shell"),
+                });
+            }
+        }
+        for mutation in CASITA_SESSION_MUTATIONS {
+            if line.contains(mutation) {
+                report.violations.push(Violation {
+                    path: relative.clone(),
+                    line: line_index + 1,
+                    kind: "casita-session-escape",
+                    detail: format!("Casita root mutation `{mutation}` outside the store shell"),
+                });
+            }
+        }
+        if is_declared_adapter {
+            continue;
+        }
         for accessor in RAW_SERVICE_ACCESSORS {
             if line.contains(accessor) {
                 report.violations.push(Violation {
@@ -301,6 +331,20 @@ async fn construct() {
 }
 "#;
 
+const NEGATIVE_CASITA_TYPE: &str = r#"
+use casita::experimental::RootChange;
+fn escape() {
+    let _repository = LocalRepository::local("state/casita");
+}
+"#;
+
+const NEGATIVE_CASITA_SESSION: &str = r#"
+async fn escape(repository: &Repository) {
+    let session = repository.mutation_session().await;
+    session.publish_if_roots_match(vec![], vec![], vec![]).await;
+}
+"#;
+
 fn write_fixture(dir: &Path, name: &str, body: &str) -> PathBuf {
     let path = dir.join(name);
     std::fs::write(&path, body).expect("write fixture");
@@ -334,6 +378,40 @@ fn self_test() {
         count_kind(&construction.violations, "handle-construction"),
         1,
         "construction fixture: {construction}"
+    );
+
+    let casita_type = fixture_report(BTreeMap::from([("lib.rs", NEGATIVE_CASITA_TYPE)]));
+    assert_eq!(count_kind(&casita_type.violations, "casita-type-escape"), 2, "Casita type fixture: {casita_type}");
+
+    let casita_session = fixture_report(BTreeMap::from([("lib.rs", NEGATIVE_CASITA_SESSION)]));
+    assert_eq!(
+        count_kind(&casita_session.violations, "casita-session-escape"),
+        2,
+        "Casita session fixture: {casita_session}"
+    );
+    let mut adapter = Report::default();
+    check_file(
+        Path::new("/fixture"),
+        Path::new("/fixture/crates/crunch-rust-cache/src/lib.rs"),
+        NEGATIVE_CASITA_SESSION,
+        &mut adapter,
+    );
+    assert_eq!(
+        count_kind(&adapter.violations, "casita-session-escape"),
+        2,
+        "declared Snix adapter cannot open Casita sessions: {adapter}"
+    );
+    let mut prefix_impostor = Report::default();
+    check_file(
+        Path::new("/fixture"),
+        Path::new("/fixture/crates/crunch-store-extra/src/lib.rs"),
+        NEGATIVE_CASITA_TYPE,
+        &mut prefix_impostor,
+    );
+    assert_eq!(
+        count_kind(&prefix_impostor.violations, "casita-type-escape"),
+        2,
+        "a similarly named crate must not inherit the store shell exemption: {prefix_impostor}"
     );
 
     let test_exempt = fixture_report(BTreeMap::from([("lib.rs", "#[cfg(test)]\nmod tests {\n    fn escape(store: &crunch_store::StoreHandle) {\n        let _ = store.pathinfo_service();\n    }\n}\n")]));

@@ -44,6 +44,13 @@ fn read_retention_state(dir: &TempDir) -> crunch_project::ProjectRetentionState 
     serde_json::from_str(&text).unwrap()
 }
 
+fn persisted_project_files(dir: &TempDir) -> Vec<Vec<u8>> {
+    ["mantle.lock", ".mantle/inputs.ncl", RETENTION_STATE_FILE]
+        .iter()
+        .map(|name| std::fs::read(dir.path().join(name)).unwrap())
+        .collect()
+}
+
 #[test]
 fn init_creates_project_files() {
     let dir = TempDir::new().unwrap();
@@ -276,6 +283,7 @@ fn upgrade_on_current_version() {
     let dir = TempDir::new().unwrap();
 
     mantle().arg("init").current_dir(dir.path()).assert().success();
+    let before = persisted_project_files(&dir);
 
     mantle()
         .arg("upgrade")
@@ -283,6 +291,30 @@ fn upgrade_on_current_version() {
         .assert()
         .success()
         .stderr(predicate::str::contains("already at current version"));
+    assert_eq!(persisted_project_files(&dir), before);
+}
+
+#[test]
+fn upgrade_observes_persisted_legacy_lock_and_generated_inputs() {
+    let dir = TempDir::new().unwrap();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
+    let mut legacy = crunch_project::Lockfile::new();
+    legacy.version = crunch_project::SchemaVersion::new(0, 9, 0);
+    std::fs::write(dir.path().join("mantle.lock"), legacy.to_json().unwrap()).unwrap();
+    std::fs::write(dir.path().join(".mantle/inputs.ncl"), "stale generated bindings\n").unwrap();
+    std::fs::write(dir.path().join(RETENTION_STATE_FILE), r#"{"schema":"legacy","records":[]}"#).unwrap();
+
+    let output = mantle().arg("upgrade").current_dir(dir.path()).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("upgrade complete"));
+    let upgraded =
+        crunch_project::Lockfile::from_json(std::fs::read_to_string(dir.path().join("mantle.lock")).unwrap()).unwrap();
+    assert_eq!(upgraded.version, crunch_project::SchemaVersion::CURRENT);
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join(".mantle/inputs.ncl")).unwrap(),
+        crunch_project::generate_inputs_ncl(upgraded),
+    );
+    assert!(read_retention_state(&dir).validate().is_empty());
 }
 
 #[test]
@@ -290,6 +322,7 @@ fn refresh_on_empty_project() {
     let dir = TempDir::new().unwrap();
 
     mantle().arg("init").current_dir(dir.path()).assert().success();
+    let before = persisted_project_files(&dir);
 
     mantle()
         .arg("refresh")
@@ -297,6 +330,65 @@ fn refresh_on_empty_project() {
         .assert()
         .success()
         .stderr(predicate::str::contains("all inputs up to date"));
+    assert_eq!(persisted_project_files(&dir), before);
+}
+
+#[test]
+fn overbound_project_resolution_blocks_without_mutating_project_files() {
+    let dir = TempDir::new().unwrap();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
+    let marker = dir.path().join("resolver-launched");
+    let probe = dir.path().join("freshness-probe.sh");
+    std::fs::write(&probe, format!("#!/bin/sh\nprintf launched > '{}'\nprintf revision-v1\n", marker.display()))
+        .unwrap();
+    let probe_arg = serde_json::to_string(&probe.display().to_string()).unwrap();
+    let inputs = (0_u32..257).map(|index| {
+        let freshness = if index == 0 {
+            format!(
+                r#", freshness = {{ type = "command", requires_network = false, command = {{ argv = ["/bin/sh", {probe_arg}], cwd = ".", env = [], timeout_ms = 1000, output_limit_bytes = 4096, success_statuses = [0], utf8_required = true }} }}"#
+            )
+        } else {
+            String::new()
+        };
+        format!(
+            r#"{{ name = "pkg{index}", kind = {{ type = "file", url = "file:///unavailable/pkg{index}" }}{freshness} }}"#
+        )
+    }).collect::<Vec<_>>().join(",\n");
+    std::fs::write(
+        dir.path().join("mantle-project.ncl"),
+        format!("{{ version = \"1.0.0\", inputs = [{inputs}], patches = [] }}\n",),
+    )
+    .unwrap();
+    let before = persisted_project_files(&dir);
+    for command in ["refresh", "list-stale"] {
+        let output = mantle().arg(command).current_dir(dir.path()).output().unwrap();
+        assert!(!output.status.success(), "{command} must enforce the resolver bound");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("257 inputs beyond the 256-input limit"), "{stderr}");
+        assert!(!marker.exists(), "{command} launched the resolver before admitting the bound");
+        assert_eq!(persisted_project_files(&dir), before);
+    }
+}
+
+#[test]
+fn refresh_inputs_write_fault_retains_partial_lock_without_claiming_completion() {
+    let dir = TempDir::new().unwrap();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
+    write_file_input_manifest(&dir, Some(r#"{ mode = "current" }"#));
+    let old_inputs = std::fs::read(dir.path().join(".mantle/inputs.ncl")).unwrap();
+    let old_retention = std::fs::read(dir.path().join(RETENTION_STATE_FILE)).unwrap();
+    std::fs::create_dir(dir.path().join(".mantle/inputs.ncl.tmp")).unwrap();
+
+    let output = mantle().arg("refresh").current_dir(dir.path()).output().unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("writing temporary .mantle/inputs.ncl"), "{stderr}");
+    assert!(!stderr.contains("input(s) updated"), "{stderr}");
+    let lock =
+        crunch_project::Lockfile::from_json(std::fs::read_to_string(dir.path().join("mantle.lock")).unwrap()).unwrap();
+    assert!(lock.inputs.contains_key("pkg"), "lock write completed before generated input fault");
+    assert_eq!(std::fs::read(dir.path().join(".mantle/inputs.ncl")).unwrap(), old_inputs);
+    assert_eq!(std::fs::read(dir.path().join(RETENTION_STATE_FILE)).unwrap(), old_retention);
 }
 
 #[test]

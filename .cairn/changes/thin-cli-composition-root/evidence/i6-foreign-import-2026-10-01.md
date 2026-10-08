@@ -1,0 +1,31 @@
+# I6 foreign-import CLI observation boundary (2026-10-01)
+
+Scope: `foreign-import validate`, `plan`, `prepare-sources`, `realize`, and `audit`, plus the persisted-realization callback used by the embedded `mantlepkgs build` caller. This is **not** I6 completion, a final committed-source/SECOND-binary claim, a foreign frontend correctness claim, a rollback guarantee, or a full quality-gate result.
+
+## Before-cutover real CLI evidence
+
+The certified first executable `/home/brittonr/scratch/rust-plan-integrated-target/current-tree-stable/debug/mantle` (SHA-256 `9bff7a785ac1e74bff7966cf95e8f1501daed8ce39095e16c407b14949409eb0`; first executable and concurrent socket proof `artifact://9056`) ran the actual two-node fixture through validate, plan, prepare-sources, realize, and audit. With `SNIX_BUILD_BWRAP=/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap`, each positive operation exited 0, the realization was complete, the selected physical root contained `child\n`, the receipt digest was `c0207127303079ae2a4a3578be926fa0938d5b6138f84b8e9843610b438e5622`, and the passing audit digest was `e3175cdbe4028d595d3664e831a18b38bbd5c1afbfa8c6bdb190af506c6f264e`.
+
+A real false-success regression was reproduced before the change: two distinct `--plan-out`/`--receipt-out` names whose parent directories alias via a symlink targeted the same final file. The first executable exited 0 with `accepted=true` even though the persisted file held only the import receipt, not the advertised executable plan. Separate real negative operations rejected malformed validate JSON (exit 1), wrong source binding (exit 3, no output file), unsupported remote realization (exit 3, no state or receipt), and a one-node-limit audit (exit 1, persisted failing receipt matching stdout). A failing real builder (`exit 9`) produced a partial-failure realization receipt and exit 1, not a complete result. The corrected bwrap environment matters: a baseline attempt without it failed for unavailable sandbox execution, not for importer semantics.
+
+## Source cutover
+
+`src/foreign_import_cmd.rs` declares action-specific bounded input-read, optional store-access, and committed-output effects before the five host operations. The foreign host port counts admitted reads (including source bindings, optional signing-key access, and Nario archive inputs), performs source/store work, and independently reopens final output paths to compare parsed committed values before effect classification and any success report. Nario preparation also compares the actual imported archive count to the admitted request. Rejected input reports and partial realization/audit results preserve failure exits; a write replaced through aliased output names cannot be reported as an accepted plan. The regression in `tests/foreign_import_cli.rs` exercises this physical collision; it does not claim general filesystem confinement or atomic rollback of multiple files.
+
+`cmd_foreign_import_with_observation` calls its receipt observer **after** the persisted realization receipt readback and effect classification, **before** direct CLI output. The direct CLI delegates through a no-op observer and still renders exactly one receipt; the embedded mantlepkgs caller uses the observer to inspect the committed receipt before its own report. The in-module real two-node callback test reopens physical receipts for complete, partial (`exit 9` builder), and observer-denied cases; the denied observer suppresses the terminal realization report. `docs/foreign-derivation-import-trust-model.md` documents these boundaries and their non-claims.
+
+## Exercised current-tree checks and actual executable
+
+With `TMPDIR=/home/brittonr/scratch`, private `CARGO_TARGET_DIR=/home/brittonr/scratch/mantle-foreign-i6-target-b10e0a`, `NIX_CONFIG='eval-cache = false'`, and `CARGO_NET_OFFLINE=true`, the exact scoped `nix develop --offline --no-write-lock-file -c cargo test -p mantle --bin mantle foreign_import_cmd::tests:: --locked --offline -- --test-threads=1` run passed **10/10** (2,660 other bin tests filtered). The exact `... -c cargo test -p mantle --test foreign_import_cli --locked --offline -- --test-threads=1` run passed **18/18**, with one pre-existing backend/Nix-daemon-dependent test ignored. The first compile stopped before tests because the owned target's copied Nickel generated `out/grammar.rs` was mode 0444; only that already-owned generated file was changed to user-writable, then the identical first command passed. No vendored/product source or unrelated scratch was changed for this environment repair.
+
+The integration run linked the actual `/home/brittonr/scratch/mantle-foreign-i6-target-b10e0a/debug/mantle` (SHA-256 `55b2bc560ae85373bb2c83cee24d0fa9248f20ad3741be1ed7330f9f14b41431`). On fresh `/home/brittonr/scratch/foreign-i6-after-uXGQOn`, direct subprocess CLI smoke exercised all five leaves with the explicit bwrap path:
+
+| CLI operation | Positive outcome | Negative outcome |
+| --- | --- | --- |
+| validate | accepted JSON, exit 0 | malformed graph: rejected `malformed-json`, exit 1 |
+| plan | accepted JSON, separately committed executable plan and import-receipt schemas, exit 0 | symlink-aliased output names: exit 3, empty stdout, only the receipt survives; no accepted plan report |
+| prepare-sources | exit 0; stdout JSON equals the committed bundle | wrong source binding: exit 3, empty stdout, no bundle |
+| realize | exit 0; stdout JSON equals the committed complete receipt, selected physical root contains `child\n` | `--remote`: exit 3, empty stdout, no state or receipt |
+| audit | exit 0; stdout JSON equals the committed passing audit | `max_nodes=1`: exit 1, failing stdout JSON equals the committed audit with a finding |
+
+The current-tree complete receipt and audit digests match the independent before-cutover values above. The callback's partial and denied behaviors are exercised in the **10/10** bin tests, not inferred from the direct positive smoke. The scratch free-space floor was preserved (12,669,845,504 bytes available after smoke, above the 8 GiB stop). The shared root's broader source freeze, final immutable SECOND binary, full quality gates, and Cairn task completion remain independently owned and are **not** asserted by this scoped record.

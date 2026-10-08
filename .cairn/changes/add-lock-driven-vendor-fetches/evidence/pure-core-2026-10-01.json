@@ -1,0 +1,25 @@
+{
+  "schema": "mantle-lock-vendor-pure-core-evidence-v1",
+  "scope": "Pure no-std planning only; no admitted producer, fetched bytes, complete Git closure, or fresh-clone hydration",
+  "source_files": [
+    "crates/mantle-lock-vendor-core/src/lib.rs",
+    "crates/mantle-lock-vendor-core/src/shared_table.rs"
+  ],
+  "focused_after": {
+    "command": "TMPDIR=/home/brittonr/scratch nix develop --command sh -c 'rustc --edition=2024 --test crates/mantle-lock-vendor-core/src/lib.rs -o /home/brittonr/scratch/mantle-lock-vendor-core-tests && /home/brittonr/scratch/mantle-lock-vendor-core-tests'",
+    "result": "10 passed; 0 failed; 0 ignored; 0 measured",
+    "coverage": "registry checksum and Cargo layout, table-backed Git hash/revision, exact consumed table-row projection (unrelated additions retain producer bytes; missing or changed hashes deny), strict input/plan/artifact bounds, unsafe paths, duplicate and contradictory entries (including conflicting table rows), invalid grammar, sorted table union"
+  },
+  "no_std_rlib": {
+    "command": "TMPDIR=/home/brittonr/scratch nix develop --command rustc --edition=2024 --crate-type rlib --crate-name mantle_lock_vendor_core crates/mantle-lock-vendor-core/src/lib.rs -o /home/brittonr/scratch/libmantle_lock_vendor_core.rlib",
+    "result": "exit 0"
+  },
+  "current_shared_vendor_cache_registry_subset_smoke": {
+    "method": "Compiled throwaway executable using the pure core, filtered current Cargo.lock to registry/local entries, compared planned package paths and lock SHA256 with current generated vendor-deps .cargo-checksum.json; throwaway executable and source removed",
+    "registry_fetches": 919,
+    "missing_layout": 0,
+    "wrong_lock_hash": 0,
+    "planned_bytes": 327698,
+    "non_claim": "Current generated ignored cache parity for registry subset; no emitted profile payload, Git fetch, assembler publication, or producer derivation proof"
+  }
+}

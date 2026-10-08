@@ -4,11 +4,15 @@
 #![allow(tigerstyle::assertion_density, tigerstyle::unbounded_collection_growth)]
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use nix_compat::nixhash::CAHash;
+use nix_compat::nixhash::NixHash;
 use nix_compat::store_path::StorePath;
+use nix_compat::store_path::build_ca_path_with_store_dir;
 use snix_castore::Node;
 use snix_castore::blobservice::BlobService;
 use snix_castore::directoryservice::DirectoryService;
@@ -25,16 +29,25 @@ use crate::Error;
 use crate::GcReport;
 use crate::GcRootRecord;
 use crate::GcRootSource;
+use crate::ObservedSourceSlice;
 use crate::OutputSubstitutionReport;
 use crate::PersistOutputRequest;
 use crate::RootRegistration;
 use crate::StoreAuditEvent;
+use crate::StoreBackend;
 use crate::StoreFallbackMode;
 use crate::StoreHandle;
+use crate::VerifiedSourceBatchEntry;
+use crate::VerifiedSourceBatchResult;
 use crate::VerifiedSourceIngestRequest;
 use crate::export::export_castore_to_disk;
 use crate::handle::NAR_SHA256_BYTES;
+use crate::handle::path_info_content_and_signature_matches;
+use crate::handle::signed_path_info_for_node;
 use crate::roots;
+
+const MAX_VERIFIED_SOURCE_SLICES: usize = 256;
+const MAX_VERIFIED_SOURCE_SLICE_NAR_BYTES: u64 = 1024 * 1024 * 1024;
 
 /// Build-realization authority with private store services and session state.
 ///
@@ -79,6 +92,18 @@ use crate::roots;
 /// ```
 pub struct BuildStore {
     handle: StoreHandle,
+}
+
+/// Narrow authority for publishing a verified group of source slices together.
+///
+/// The builder's `BuildStore` cannot create or borrow this view. Composition
+/// roots pass it explicitly beside build authority.
+pub struct SliceAdmission {
+    backend: StoreBackend,
+    store_dir: String,
+    blob_service: Arc<dyn BlobService>,
+    directory_service: Arc<dyn DirectoryService>,
+    pathinfo_service: Arc<dyn PathInfoService>,
 }
 
 /// Fixed action-result discovery, verification, and publication authority.
@@ -194,6 +219,7 @@ pub struct PipelineStoreParts {
     pub action_results: ActionResultPort,
     pub build_service_store: BuildServiceStore,
     pub output_lookup: OutputLookup,
+    pub slice_admission: SliceAdmission,
     pub root_registry: RootRegistry,
 }
 
@@ -201,6 +227,7 @@ pub struct PipelineStoreParts {
 pub struct BuilderStoreParts {
     pub build_store: BuildStore,
     pub action_results: ActionResultPort,
+    pub slice_admission: SliceAdmission,
 }
 
 impl TransferObjectStore<'_> {
@@ -312,6 +339,16 @@ impl StoreHandle {
 }
 
 impl StoreHandle {
+    fn slice_admission_view(&self) -> SliceAdmission {
+        SliceAdmission {
+            backend: self.backend(),
+            store_dir: self.store_dir().to_owned(),
+            blob_service: self.blob_service(),
+            directory_service: self.directory_service(),
+            pathinfo_service: self.pathinfo_service(),
+        }
+    }
+
     #[must_use]
     pub fn into_pipeline_store_parts(mut self) -> PipelineStoreParts {
         let (ca_mappings, base_ca_mappings) = self.ca_mapping_snapshots();
@@ -341,11 +378,13 @@ impl StoreHandle {
             remote_pathinfo: self.remote_pathinfo(),
             store_dir: self.store_dir().to_string(),
         };
+        let slice_admission = self.slice_admission_view();
         PipelineStoreParts {
             build_store: BuildStore { handle: self },
             action_results,
             build_service_store,
             output_lookup,
+            slice_admission,
             root_registry,
         }
     }
@@ -360,9 +399,11 @@ impl StoreHandle {
             remote_pathinfo: self.remote_pathinfo(),
             store_dir: self.store_dir().to_string(),
         };
+        let slice_admission = self.slice_admission_view();
         BuilderStoreParts {
             build_store: BuildStore { handle: self },
             action_results,
+            slice_admission,
         }
     }
 
@@ -416,6 +457,14 @@ impl BuildStore {
     pub async fn read_file_node(&self, node: &Node, max_bytes: u64) -> Result<Vec<u8>, Error> {
         crate::build_io::read_file_node(self.handle.blob_service().as_ref(), node, max_bytes).await
     }
+    /// Inspect output CAS bytes without rewriting or publishing them.
+    pub async fn scan_output_references(
+        &self,
+        node: &Node,
+        candidates: &[String],
+    ) -> Result<Vec<crate::ContextualReferenceHit>, Error> {
+        crate::reference_scan::scan_output_references(&self.handle, node, candidates).await
+    }
 
     pub async fn rewrite_node(&self, node: &Node, old_bytes: &[u8], new_bytes: &[u8]) -> Result<(Node, bool), Error> {
         crate::build_io::rewrite_node(
@@ -435,6 +484,11 @@ impl BuildStore {
             current = rewritten;
         }
         Ok(current)
+    }
+
+    /// Observe a source subtree in existing castore output; this cannot publish it.
+    pub async fn observe_source_slice(&self, root: &Node, subpath: &str) -> Result<ObservedSourceSlice, Error> {
+        self.handle.observe_source_slice(root, subpath).await
     }
 
     pub async fn calculate_nar(&self, node: &Node) -> Result<(u64, [u8; 32]), Error> {
@@ -867,6 +921,157 @@ impl SourceAdmission<'_> {
     }
 }
 
+impl SliceAdmission {
+    /// Publish a complete verified source group as one visible PathInfo batch.
+    ///
+    /// Snix can leave unreferenced castore blobs from earlier build output;
+    /// physical blob cleanup is not part of this PathInfo transaction. No
+    /// physical export, attestation, registry mutation, or publisher effect
+    /// occurs here. A post-commit read failure is explicitly uncertain.
+    /// Casita conditionally commits its roots; Snix Redb commits the logical
+    /// PathInfo group atomically, but its writes unconditionally replace
+    /// existing digests. A competing writer can replace a preflighted
+    /// PathInfo before this batch commits. This API has no cross-process
+    /// no-clobber guarantee.
+    pub async fn admit_verified_source_batch(
+        &mut self,
+        entries: &[VerifiedSourceBatchEntry<'_>],
+    ) -> Result<Vec<VerifiedSourceBatchResult>, Error> {
+        if entries.is_empty() {
+            return Ok(Vec::new());
+        }
+        if entries.len() > MAX_VERIFIED_SOURCE_SLICES {
+            return Err(Error::Store(format!(
+                "verified-source-batch-limit: {} slices exceed {MAX_VERIFIED_SOURCE_SLICES}",
+                entries.len()
+            )));
+        }
+        let profile = self.backend.profile();
+        if !profile.atomic_batch_import {
+            return Err(Error::Store(format!(
+                "verified-source-batch-unsupported: backend {} has no atomic batch admission",
+                self.backend.as_str()
+            )));
+        }
+        if let Some(max) = profile.max_root_changes
+            && entries.len() > max
+        {
+            return Err(Error::Store(format!(
+                "verified-source-batch-limit: {} roots exceed backend limit {max}",
+                entries.len()
+            )));
+        }
+        let total_nar_bytes = entries
+            .iter()
+            .try_fold(0u64, |total, entry| total.checked_add(entry.observed.nar_size()))
+            .ok_or_else(|| Error::Store("verified-source-batch-limit: NAR byte count overflow".to_string()))?;
+        if total_nar_bytes > MAX_VERIFIED_SOURCE_SLICE_NAR_BYTES {
+            return Err(Error::Store(format!(
+                "verified-source-batch-limit: {total_nar_bytes} NAR bytes exceed {MAX_VERIFIED_SOURCE_SLICE_NAR_BYTES}"
+            )));
+        }
+
+        let mut seen_digests = BTreeSet::new();
+        let mut existing_candidates = Vec::new();
+        let mut new_path_infos = Vec::new();
+        let mut results = Vec::with_capacity(entries.len());
+        for entry in entries {
+            let observed = entry.observed;
+            let measured =
+                snix_store::nar::SimpleRenderer::new(self.blob_service.clone(), self.directory_service.clone())
+                    .calculate_nar(observed.node())
+                    .await
+                    .map_err(|error| Error::Store(format!("verified-source-batch-incomplete: {error}")))?;
+            if measured != (observed.nar_size(), observed.nar_sha256()) {
+                return Err(Error::Store(format!(
+                    "verified-source-batch-stale-observation: {} NAR content changed",
+                    entry.source_name
+                )));
+            }
+            let ca = CAHash::Nar(NixHash::Sha256(observed.nar_sha256()));
+            let store_path =
+                build_ca_path_with_store_dir(entry.source_name, &ca, Vec::<&str>::new(), false, &self.store_dir)
+                    .map_err(|error| Error::Store(format!("verified-source-batch-invalid-name: {error}")))?;
+            if !seen_digests.insert(*store_path.digest()) {
+                return Err(Error::Store(format!("verified-source-batch-duplicate: {store_path}")));
+            }
+            let candidate = signed_path_info_for_node(
+                store_path,
+                observed.node().clone(),
+                observed.nar_size(),
+                observed.nar_sha256(),
+                entry.signing_key,
+                &self.store_dir,
+                Some(ca),
+            );
+            let existing = self
+                .pathinfo_service
+                .get(*candidate.store_path.digest())
+                .await
+                .map_err(|error| Error::Store(format!("verified-source-batch-preflight-read: {error}")))?;
+            let logical_store_path = candidate.store_path.to_absolute_path_with_prefix(&self.store_dir);
+            if let Some(existing) = existing {
+                if !path_info_content_and_signature_matches(&existing, &candidate) {
+                    return Err(Error::Store(format!("verified-source-batch-conflict: {}", candidate.store_path)));
+                }
+                existing_candidates.push(candidate);
+            } else {
+                new_path_infos.push(candidate);
+            }
+            results.push(VerifiedSourceBatchResult {
+                logical_store_path,
+                nar_size: observed.nar_size(),
+                nar_sha256: observed.nar_sha256(),
+                nar_blake3: observed.nar_blake3(),
+            });
+        }
+
+        let committed = if new_path_infos.is_empty() {
+            Vec::new()
+        } else {
+            let new_digests = new_path_infos.iter().map(|info| *info.store_path.digest()).collect::<Vec<_>>();
+            match self.pathinfo_service.put_batch_atomic(new_path_infos).await {
+                Ok(committed)
+                    if committed.iter().map(|info| *info.store_path.digest()).eq(new_digests.iter().copied()) =>
+                {
+                    committed
+                }
+                Ok(_) => {
+                    return Err(Error::Store(
+                        "verified-source-batch-publication-uncertain: backend returned a different PathInfo batch"
+                            .to_string(),
+                    ));
+                }
+                Err(error) => {
+                    for digest in new_digests {
+                        match self.pathinfo_service.get(digest).await {
+                            Ok(None) => {}
+                            Ok(Some(_)) | Err(_) => {
+                                return Err(Error::Store(format!(
+                                    "verified-source-batch-publication-uncertain: {error}"
+                                )));
+                            }
+                        }
+                    }
+                    return Err(Error::Store(format!("verified-source-batch-publication-rejected: {error}")));
+                }
+            }
+        };
+        for candidate in existing_candidates.iter().chain(committed.iter()) {
+            match self.pathinfo_service.get(*candidate.store_path.digest()).await {
+                Ok(Some(stored)) if path_info_content_and_signature_matches(&stored, candidate) => {}
+                Ok(_) | Err(_) => {
+                    return Err(Error::Store(format!(
+                        "verified-source-batch-publication-uncertain: {} not verifiably visible",
+                        candidate.store_path
+                    )));
+                }
+            }
+        }
+        Ok(results)
+    }
+}
+
 impl StoreAdmin<'_> {
     pub fn list_retained_roots(&self) -> Result<Vec<GcRootRecord>, Error> {
         self.handle.list_retained_roots()
@@ -942,6 +1147,10 @@ impl BuildServiceStore {
 mod tests {
     use std::num::NonZeroUsize;
 
+    use nix_compat::narinfo::SigningKey;
+    use nix_compat::narinfo::VerifyingKey;
+    use snix_castore::Directory;
+    use snix_castore::PathComponent;
     use snix_castore::SymlinkTarget;
     use snix_store::pathinfoservice::LruPathInfoService;
 
@@ -1032,5 +1241,190 @@ mod tests {
 
         assert!(registered.is_none());
         assert!(root_registry.list().expect("list roots").is_empty());
+    }
+    #[tokio::test]
+    async fn source_slice_batch_publishes_both_backends_without_partial_conflicts() {
+        const STORE_PREFIX: &str = "/nix/store";
+        const FIRST_KEY_BYTE: u8 = 41;
+        const OTHER_KEY_BYTE: u8 = 42;
+        for backend in [StoreBackend::Snix, StoreBackend::Casita] {
+            let root = tempfile::tempdir().unwrap();
+            let state = root.path().join("state");
+            let output = root.path().join("store");
+            std::fs::create_dir_all(&state).unwrap();
+            let raw_key = ed25519_dalek::SigningKey::from_bytes(&[FIRST_KEY_BYTE; 32]);
+            let verifier = VerifyingKey::new("slice-fixture".to_string(), raw_key.verifying_key());
+            let signer = SigningKey::new("slice-fixture".to_string(), raw_key);
+            if backend == StoreBackend::Casita {
+                std::fs::write(state.join("casita-trusted-public-keys"), format!("{verifier}\n")).unwrap();
+            }
+            let other_raw_key = ed25519_dalek::SigningKey::from_bytes(&[OTHER_KEY_BYTE; 32]);
+            let other_verifier = VerifyingKey::new("other-slice-fixture".to_string(), other_raw_key.verifying_key());
+            let other_signer = SigningKey::new("other-slice-fixture".to_string(), other_raw_key);
+            let handle = StoreHandle::open(crate::StoreConfig::new(backend, state, output, STORE_PREFIX.to_string()))
+                .await
+                .unwrap();
+            let source_one = root.path().join("first.txt");
+            let source_two = root.path().join("second.txt");
+            std::fs::write(&source_one, b"first verified subtree").unwrap();
+            std::fs::write(&source_two, b"second verified subtree").unwrap();
+            let first_node = snix_castore::import::fs::ingest_path::<_, _, _, &[u8]>(
+                handle.blob_service(),
+                handle.directory_service(),
+                &source_one,
+                None,
+            )
+            .await
+            .unwrap();
+            let second_node = snix_castore::import::fs::ingest_path::<_, _, _, &[u8]>(
+                handle.blob_service(),
+                handle.directory_service(),
+                &source_two,
+                None,
+            )
+            .await
+            .unwrap();
+            let directory = Directory::try_from_iter([
+                (PathComponent::try_from("first").unwrap(), first_node),
+                (PathComponent::try_from("second").unwrap(), second_node),
+                (PathComponent::try_from("link").unwrap(), Node::Symlink {
+                    target: SymlinkTarget::try_from("first").unwrap(),
+                }),
+            ])
+            .unwrap();
+            let digest = handle.directory_service().put(directory.clone()).await.unwrap();
+            let root_node = Node::Directory {
+                digest,
+                size: directory.size(),
+            };
+            let mut parts = handle.into_builder_store_parts();
+            let first = parts.build_store.observe_source_slice(&root_node, "first").await.unwrap();
+            let second = parts.build_store.observe_source_slice(&root_node, "second").await.unwrap();
+            assert_ne!(first.nar_blake3(), second.nar_blake3());
+            assert!(
+                parts
+                    .build_store
+                    .observe_source_slice(&root_node, "link")
+                    .await
+                    .unwrap_err()
+                    .to_string()
+                    .contains("verified-source-slice-symlink-traversal")
+            );
+            assert!(
+                parts
+                    .build_store
+                    .observe_source_slice(&root_node, "link/child")
+                    .await
+                    .unwrap_err()
+                    .to_string()
+                    .contains("verified-source-slice-symlink-traversal")
+            );
+            assert!(
+                parts
+                    .build_store
+                    .observe_source_slice(&root_node, "missing")
+                    .await
+                    .unwrap_err()
+                    .to_string()
+                    .contains("verified-source-slice-absent")
+            );
+            let entries = [
+                VerifiedSourceBatchEntry {
+                    observed: &first,
+                    source_name: "first-source",
+                    signing_key: &signer,
+                },
+                VerifiedSourceBatchEntry {
+                    observed: &second,
+                    source_name: "second-source",
+                    signing_key: &signer,
+                },
+            ];
+            let results = parts.slice_admission.admit_verified_source_batch(&entries).await.unwrap();
+            assert_eq!(results.len(), 2, "{backend:?}");
+            let mut original_records = Vec::with_capacity(results.len());
+            for (result, observed) in results.iter().zip([&first, &second]) {
+                assert_eq!(result.nar_blake3, observed.nar_blake3());
+                assert_eq!(result.nar_size, observed.nar_size());
+                let stored_path =
+                    StorePath::from_absolute_path_with_prefix(result.logical_store_path.as_bytes(), STORE_PREFIX)
+                        .unwrap();
+                let stored = parts.slice_admission.pathinfo_service.get(*stored_path.digest()).await.unwrap().unwrap();
+                assert_eq!(stored.store_path, stored_path);
+                assert_eq!(stored.nar_sha256, observed.nar_sha256());
+                assert_eq!(stored.node, *observed.node());
+                assert_eq!(stored.signatures.len(), 1);
+                assert!(stored.ca.is_some());
+                let signed = crate::store_verify_signatures(
+                    parts.slice_admission.pathinfo_service.as_ref(),
+                    Some(&stored_path.to_string()),
+                    std::slice::from_ref(&verifier),
+                    STORE_PREFIX,
+                )
+                .await
+                .unwrap();
+                assert_eq!(signed.len(), 1);
+                assert_eq!(signed[0].trusted_count, 1, "{backend:?}: signature did not verify");
+                let wrong_key = crate::store_verify_signatures(
+                    parts.slice_admission.pathinfo_service.as_ref(),
+                    Some(&stored_path.to_string()),
+                    std::slice::from_ref(&other_verifier),
+                    STORE_PREFIX,
+                )
+                .await
+                .unwrap();
+                assert_eq!(wrong_key.len(), 1);
+                assert_eq!(wrong_key[0].trusted_count, 0, "{backend:?}: wrong key verified");
+                original_records.push(serde_json::to_vec(&stored).unwrap());
+            }
+            let reused = parts.slice_admission.admit_verified_source_batch(&entries).await.unwrap();
+            assert_eq!(reused, results);
+
+            let conflicting = [
+                VerifiedSourceBatchEntry {
+                    observed: &second,
+                    source_name: "not-published",
+                    signing_key: &signer,
+                },
+                VerifiedSourceBatchEntry {
+                    observed: &first,
+                    source_name: "first-source",
+                    signing_key: &other_signer,
+                },
+            ];
+            let error = parts.slice_admission.admit_verified_source_batch(&conflicting).await.unwrap_err();
+            assert!(error.to_string().contains("verified-source-batch-conflict"), "{backend:?}: {error}");
+            let absent_ca = CAHash::Nar(NixHash::Sha256(second.nar_sha256()));
+            let absent_path: StorePath<String> =
+                build_ca_path_with_store_dir("not-published", &absent_ca, Vec::<&str>::new(), false, STORE_PREFIX)
+                    .unwrap();
+            assert!(
+                parts.slice_admission.pathinfo_service.get(*absent_path.digest()).await.unwrap().is_none(),
+                "{backend:?} published an earlier candidate from a rejected batch"
+            );
+            for (result, original) in results.iter().zip(&original_records) {
+                let path: StorePath<String> =
+                    StorePath::from_absolute_path_with_prefix(result.logical_store_path.as_bytes(), STORE_PREFIX)
+                        .unwrap();
+                let record = parts.slice_admission.pathinfo_service.get(*path.digest()).await.unwrap().unwrap();
+                assert_eq!(serde_json::to_vec(&record).unwrap(), *original, "{backend:?} changed a retained PathInfo");
+            }
+            let names =
+                (0..=MAX_VERIFIED_SOURCE_SLICES).map(|index| format!("too-many-{index:04}")).collect::<Vec<_>>();
+            let excessive = names
+                .iter()
+                .map(|name| VerifiedSourceBatchEntry {
+                    observed: &first,
+                    source_name: name,
+                    signing_key: &signer,
+                })
+                .collect::<Vec<_>>();
+            let error = parts.slice_admission.admit_verified_source_batch(&excessive).await.unwrap_err();
+            assert!(error.to_string().contains("verified-source-batch-limit"), "{backend:?}: {error}");
+            let first_ca = CAHash::Nar(NixHash::Sha256(first.nar_sha256()));
+            let first_excess_path: StorePath<String> =
+                build_ca_path_with_store_dir(&names[0], &first_ca, Vec::<&str>::new(), false, STORE_PREFIX).unwrap();
+            assert!(parts.slice_admission.pathinfo_service.get(*first_excess_path.digest()).await.unwrap().is_none());
+        }
     }
 }

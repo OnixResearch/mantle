@@ -1,0 +1,774 @@
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/external_batch.rs:10:
+ //! r[impl external_batch_dispatchers.resources]
+ //! r[impl external_batch_dispatchers.fenced_lifecycle]
+ 
+-use crunch_remote_core::external_batch as core_batch;
+ use crunch_remote_core::attempt::RemoteAttemptId;
+ use crunch_remote_core::attempt::RemoteFenceGeneration;
+ use crunch_remote_core::attempt::RemoteJobId;
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/external_batch.rs:17:
++use crunch_remote_core::external_batch as core_batch;
+ use serde::Deserialize;
+ use serde::Serialize;
+ 
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/external_batch.rs:415:
+ }
+ 
+ fn derive_operation_id(kind: ExternalBatchOperationKind, dispatch_id_blake3: &str) -> Result<String, String> {
+-    core_batch::derive_operation_id(core_batch_kind(kind), dispatch_id_blake3).map_err(core_batch::BatchError::diagnostic)
++    core_batch::derive_operation_id(core_batch_kind(kind), dispatch_id_blake3)
++        .map_err(core_batch::BatchError::diagnostic)
+ }
+ 
+ #[cfg(test)]
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:16:
+ use crunch_remote_core::attempt::RemoteFenceGeneration;
+ use crunch_remote_core::attempt::RemoteJobId;
+ use crunch_remote_core::attempt_log as kernel;
+-
+ use serde::Deserialize;
+ use serde::Serialize;
+ 
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:521:
+     policy: RemoteAttemptLogPolicy,
+ ) -> Result<RemoteAttemptLogRedactionPlan, RemoteAttemptLogReasonCode> {
+     policy.validate()?;
+-    let redacted = kernel::redact_payload(payload, policy.record_payload_bytes_max)
+-        .map_err(RemoteAttemptLogReasonCode::from)?;
++    let redacted =
++        kernel::redact_payload(payload, policy.record_payload_bytes_max).map_err(RemoteAttemptLogReasonCode::from)?;
+     Ok(RemoteAttemptLogRedactionPlan {
+         payload: redacted.payload,
+         flags: RemoteAttemptLogRecordFlags {
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:583:
+         record.record_blake3.as_str(),
+         record_payload_digest(record)?.as_str(),
+         kernel::ObjectKind::Record,
+-    ).map_err(RemoteAttemptLogReasonCode::from)?;
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)?;
+     debug_assert!(record.payload.len() <= u32_to_usize(policy.record_payload_bytes_max)?);
+     debug_assert!(is_blake3_hex_digest(record.record_blake3.as_str()));
+     Ok(())
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:634:
+         segment.segment_blake3.as_str(),
+         segment_payload_digest(segment)?.as_str(),
+         kernel::ObjectKind::Segment,
+-    ).map_err(RemoteAttemptLogReasonCode::from)?;
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)?;
+     debug_assert_eq!(segment.scope, summary.scope);
+     debug_assert_eq!(segment.record_count, summary.record_count);
+     Ok(())
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:677:
+         manifest.manifest_blake3.as_str(),
+         manifest_payload_digest(manifest)?.as_str(),
+         kernel::ObjectKind::Manifest,
+-    ).map_err(RemoteAttemptLogReasonCode::from)?;
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)?;
+     debug_assert!(manifest.segments.len() <= u32_to_usize(policy.manifest_segment_count_max)?);
+     debug_assert!(manifest.retained_start_cursor <= manifest.next_cursor);
+     Ok(())
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:697:
+     if let Some(existing) = manifest.event_records.get(&record.event_id) {
+         return classify_existing_record(manifest, existing, record);
+     }
+-    kernel::check_event_capacity(
+-        manifest.event_records.len(),
+-        u32_to_usize(policy.event_identity_count_max)?,
+-    ).map_err(RemoteAttemptLogReasonCode::from)?;
++    kernel::check_event_capacity(manifest.event_records.len(), u32_to_usize(policy.event_identity_count_max)?)
++        .map_err(RemoteAttemptLogReasonCode::from)?;
+     validate_append_position(manifest, record)?;
+     kernel::check_segment_capacity(manifest.segments.len(), policy.manifest_segment_count_max)
+         .map_err(RemoteAttemptLogReasonCode::from)?;
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:729:
+     policy: RemoteAttemptLogPolicy,
+ ) -> Result<RemoteAttemptLogChainSummary, RemoteAttemptLogReasonCode> {
+     validate_remote_attempt_log_manifest(manifest, policy)?;
+-    kernel::check_chain_length(segments.len(), manifest.segments.len())
+-        .map_err(RemoteAttemptLogReasonCode::from)?;
++    kernel::check_chain_length(segments.len(), manifest.segments.len()).map_err(RemoteAttemptLogReasonCode::from)?;
+     let mut expected_cursor = manifest.retained_start_cursor;
+     let mut expected_sequence = manifest.retained_start_cursor;
+     let mut previous_record = manifest.truncation_anchor.as_ref().map(|anchor| &anchor.dropped_tail_record_blake3);
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:749:
+             previous_segment_blake3: previous_segment,
+         })?;
+         validate_retained_event_records(segment, manifest, &mut retained_events)?;
+-        record_count = kernel::checked_add_u32(record_count, segment.record_count)
+-            .map_err(RemoteAttemptLogReasonCode::from)?;
+-        payload_bytes = kernel::checked_add_u64(payload_bytes, segment.payload_bytes)
+-            .map_err(RemoteAttemptLogReasonCode::from)?;
++        record_count =
++            kernel::checked_add_u32(record_count, segment.record_count).map_err(RemoteAttemptLogReasonCode::from)?;
++        payload_bytes =
++            kernel::checked_add_u64(payload_bytes, segment.payload_bytes).map_err(RemoteAttemptLogReasonCode::from)?;
+         expected_sequence = segment.next_cursor;
+         expected_cursor = segment.next_cursor;
+         let head_record = segment.records.last().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:780:
+     policy: RemoteAttemptLogPolicy,
+ ) -> Result<RemoteAttemptLogCursorDecision, RemoteAttemptLogReasonCode> {
+     validate_remote_attempt_log_manifest(manifest, policy)?;
+-    let disposition = match kernel::classify_cursor(
+-        manifest.retained_start_cursor,
+-        manifest.next_cursor,
+-        requested_cursor,
+-    ).map_err(RemoteAttemptLogReasonCode::from)? {
+-        kernel::CursorDisposition::Retained => RemoteAttemptLogCursorDisposition::Retained,
+-        kernel::CursorDisposition::AtHead => RemoteAttemptLogCursorDisposition::AtHead,
+-        kernel::CursorDisposition::Truncated => RemoteAttemptLogCursorDisposition::Truncated,
+-    };
++    let disposition =
++        match kernel::classify_cursor(manifest.retained_start_cursor, manifest.next_cursor, requested_cursor)
++            .map_err(RemoteAttemptLogReasonCode::from)?
++        {
++            kernel::CursorDisposition::Retained => RemoteAttemptLogCursorDisposition::Retained,
++            kernel::CursorDisposition::AtHead => RemoteAttemptLogCursorDisposition::AtHead,
++            kernel::CursorDisposition::Truncated => RemoteAttemptLogCursorDisposition::Truncated,
++        };
+     let (effective_cursor, reason_code) = match disposition {
+         RemoteAttemptLogCursorDisposition::Retained => (requested_cursor, RemoteAttemptLogReasonCode::CursorRetained),
+         RemoteAttemptLogCursorDisposition::AtHead => (requested_cursor, RemoteAttemptLogReasonCode::CursorAtHead),
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:845:
+ ) -> Result<RemoteAttemptLogRetentionPlan, RemoteAttemptLogReasonCode> {
+     validate_remote_attempt_log_chain(manifest, segments, policy)?;
+     let drop_count = retention_drop_count(manifest, policy)?;
+-    if kernel::classify_retention(drop_count, segments.len())
+-        .map_err(RemoteAttemptLogReasonCode::from)? == kernel::RetentionDecision::Unchanged
++    if kernel::classify_retention(drop_count, segments.len()).map_err(RemoteAttemptLogReasonCode::from)?
++        == kernel::RetentionDecision::Unchanged
+     {
+         return Ok(RemoteAttemptLogRetentionPlan {
+             disposition: RemoteAttemptLogRetentionDisposition::Unchanged,
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:860:
+     build_retention_plan(manifest, segments, drop_count, policy)
+ }
+ 
+-
+ fn validate_scope(scope: &RemoteAttemptLogScope) -> Result<(), RemoteAttemptLogReasonCode> {
+     kernel::validate_scope_identity(borrowed_scope(scope)).map_err(RemoteAttemptLogReasonCode::from)
+ }
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:887:
+         || record.payload_blake3 == content_hash(&record.payload),
+         record.flags.secret_redacted,
+         || record.payload == REDACTED_PAYLOAD,
+-    ).map_err(RemoteAttemptLogReasonCode::from)
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)
+ }
+ 
+ #[derive(Serialize)]
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:957:
+     };
+     for record in records {
+         validate_remote_attempt_log_record(record, policy)?;
+-        summary.accept(
+-            borrowed_scope(&record.scope),
+-            record.sequence,
+-            record.cursor,
+-            record.previous_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+-            record.record_blake3.as_str(),
+-            record.payload_length_bytes,
+-            policy.segment_payload_bytes_max,
+-        ).map_err(RemoteAttemptLogReasonCode::from)?;
++        summary
++            .accept(
++                borrowed_scope(&record.scope),
++                record.sequence,
++                record.cursor,
++                record.previous_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
++                record.record_blake3.as_str(),
++                record.payload_length_bytes,
++                policy.segment_payload_bytes_max,
++            )
++            .map_err(RemoteAttemptLogReasonCode::from)?;
+     }
+     Ok(SegmentRecordSummary {
+         scope: first.scope.clone(),
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1001:
+             record_count: segment.record_count,
+             payload_bytes: segment.payload_bytes,
+         },
+-    ).map_err(RemoteAttemptLogReasonCode::from)
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)
+ }
+ 
+ #[derive(Serialize)]
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1085:
+ ) -> Result<(), RemoteAttemptLogReasonCode> {
+     policy.validate()?;
+     kernel::validate_policy_name(&identity.name).map_err(RemoteAttemptLogReasonCode::from)?;
+-    kernel::check_policy_identity(
+-        policy_digest(policy)?.as_str(),
+-        identity.digest_blake3.as_str(),
+-    ).map_err(RemoteAttemptLogReasonCode::from)
++    kernel::check_policy_identity(policy_digest(policy)?.as_str(), identity.digest_blake3.as_str())
++        .map_err(RemoteAttemptLogReasonCode::from)
+ }
+ 
+ fn validate_manifest_bounds(
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1108:
+             anchor_present: manifest.truncation_anchor.is_some(),
+         },
+         kernel_policy(policy),
+-    ).map_err(RemoteAttemptLogReasonCode::from)
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)
+ }
+ 
+ fn validate_manifest_segment_refs(manifest: &RemoteAttemptLogManifest) -> Result<(), RemoteAttemptLogReasonCode> {
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1135:
+                 previous_record: item.first_previous_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+                 previous_segment: item.previous_segment_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+             },
+-        ).map_err(RemoteAttemptLogReasonCode::from)?;
+-        record_count = kernel::checked_add_u32(record_count, item.record_count)
+-            .map_err(RemoteAttemptLogReasonCode::from)?;
+-        payload_bytes = kernel::checked_add_u64(payload_bytes, item.payload_bytes)
+-            .map_err(RemoteAttemptLogReasonCode::from)?;
++        )
++        .map_err(RemoteAttemptLogReasonCode::from)?;
++        record_count =
++            kernel::checked_add_u32(record_count, item.record_count).map_err(RemoteAttemptLogReasonCode::from)?;
++        payload_bytes =
++            kernel::checked_add_u64(payload_bytes, item.payload_bytes).map_err(RemoteAttemptLogReasonCode::from)?;
+         expected_cursor = item.next_cursor;
+-        expected_index = Some(kernel::next_segment_index(Some(item.segment_index))
+-            .map_err(RemoteAttemptLogReasonCode::from)?);
++        expected_index =
++            Some(kernel::next_segment_index(Some(item.segment_index)).map_err(RemoteAttemptLogReasonCode::from)?);
+         previous_segment = Some(&item.segment_blake3);
+         previous_record = Some(&item.head_record_blake3);
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1163:
+             head_record: previous_record.map(RemoteAttemptLogDigest::as_str),
+             head_segment: previous_segment.map(RemoteAttemptLogDigest::as_str),
+         },
+-    ).map_err(RemoteAttemptLogReasonCode::from)
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)
+ }
+ 
+ fn validate_segment_ref(item: &RemoteAttemptLogSegmentRef) -> Result<(), RemoteAttemptLogReasonCode> {
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1177:
+         item.next_cursor,
+         item.last_sequence,
+         item.record_count,
+-    ).map_err(RemoteAttemptLogReasonCode::from)
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)
+ }
+ 
+ fn validate_manifest_events(
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1266:
+         record.sequence,
+         record.cursor,
+         record.previous_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+-    ).map_err(RemoteAttemptLogReasonCode::from)
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)
+ }
+ 
+ fn next_segment_index(manifest: &RemoteAttemptLogManifest) -> Result<u64, RemoteAttemptLogReasonCode> {
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1292:
+     for record in &segment.records {
+         kernel::check_new_event_identity(
+             next.event_records.insert(record.event_id.clone(), record.record_blake3.clone()).is_some(),
+-        ).map_err(RemoteAttemptLogReasonCode::from)?;
++        )
++        .map_err(RemoteAttemptLogReasonCode::from)?;
+     }
+     debug_assert_eq!(next.next_cursor, segment.next_cursor);
+     debug_assert_eq!(next.head_record_blake3.as_ref(), Some(&head_record.record_blake3));
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1332:
+             record_count: segment.record_count,
+             payload_bytes: segment.payload_bytes,
+         },
+-    ).map_err(RemoteAttemptLogReasonCode::from)
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)
+ }
+ 
+ #[derive(Debug, Clone, Copy)]
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1364:
+             previous_record: first.previous_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+             previous_segment: segment.previous_segment_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+         },
+-    ).map_err(RemoteAttemptLogReasonCode::from)
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)
+ }
+ 
+ fn validate_retained_event_records(
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1373:
+     retained_events: &mut BTreeSet<RemoteEventId>,
+ ) -> Result<(), RemoteAttemptLogReasonCode> {
+     for record in &segment.records {
+-        kernel::check_event_binding(
+-            retained_events.insert(record.event_id.clone()),
+-            || manifest.event_records.get(&record.event_id) == Some(&record.record_blake3),
+-        ).map_err(RemoteAttemptLogReasonCode::from)?;
++        kernel::check_event_binding(retained_events.insert(record.event_id.clone()), || {
++            manifest.event_records.get(&record.event_id) == Some(&record.record_blake3)
++        })
++        .map_err(RemoteAttemptLogReasonCode::from)?;
+     }
+     Ok(())
+ }
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1402:
+             head_record: summary.head_record_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+             head_segment: summary.head_segment_blake3.as_ref().map(RemoteAttemptLogDigest::as_str),
+         },
+-    ).map_err(RemoteAttemptLogReasonCode::from)
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)
+ }
+ 
+ fn validate_replay_request(
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1414:
+         request.payload_bytes_max,
+         policy.replay_record_count_max,
+         policy.replay_payload_bytes_max,
+-    ).map_err(RemoteAttemptLogReasonCode::from)
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)
+ }
+ 
+ fn collect_replay_records(
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1436:
+             payload_bytes,
+             record.payload_length_bytes,
+             request.payload_bytes_max,
+-        ).map_err(RemoteAttemptLogReasonCode::from)? else {
++        )
++        .map_err(RemoteAttemptLogReasonCode::from)?
++        else {
+             break;
+         };
+         payload_bytes = projected;
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1477:
+             record_count: item.record_count,
+             payload_bytes: item.payload_bytes,
+         }),
+-    ).map_err(RemoteAttemptLogReasonCode::from)
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)
+ }
+ 
+ fn build_retention_plan(
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1533:
+     let (chunk_count, record_count, payload_bytes) = kernel::dropped_usage(
+         dropped.iter().map(|segment| (segment.record_count, segment.payload_bytes)),
+         dropped.len(),
+-    ).map_err(RemoteAttemptLogReasonCode::from)?;
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)?;
+     let tail_record = last.records.last().ok_or(RemoteAttemptLogReasonCode::SegmentEmpty)?;
+     debug_assert!(!dropped.is_empty());
+     debug_assert!(first.first_cursor < last.next_cursor);
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1587:
+     scope: &RemoteAttemptLogScope,
+     policy_identity: &RemoteAttemptLogPolicyIdentity,
+ ) -> Result<(), RemoteAttemptLogReasonCode> {
+-    kernel::check_anchor(kernel::AnchorFacts {
+-        schema_matches: anchor.schema == REMOTE_ATTEMPT_LOG_TRUNCATION_ANCHOR_SCHEMA,
+-        dropped_start: anchor.dropped_start_cursor,
+-        dropped_end: anchor.dropped_end_cursor_exclusive,
+-        retained_start: anchor.new_retained_start_cursor,
+-        dropped_chunks: anchor.dropped_chunk_count,
+-        dropped_records: anchor.dropped_record_count,
+-    }, || &anchor.scope == scope, || &anchor.policy == policy_identity)
+-        .map_err(RemoteAttemptLogReasonCode::from)?;
++    kernel::check_anchor(
++        kernel::AnchorFacts {
++            schema_matches: anchor.schema == REMOTE_ATTEMPT_LOG_TRUNCATION_ANCHOR_SCHEMA,
++            dropped_start: anchor.dropped_start_cursor,
++            dropped_end: anchor.dropped_end_cursor_exclusive,
++            retained_start: anchor.new_retained_start_cursor,
++            dropped_chunks: anchor.dropped_chunk_count,
++            dropped_records: anchor.dropped_record_count,
++        },
++        || &anchor.scope == scope,
++        || &anchor.policy == policy_identity,
++    )
++    .map_err(RemoteAttemptLogReasonCode::from)?;
+     validate_optional_digest(&anchor.previous_anchor_blake3)?;
+     for digest in [
+         &anchor.dropped_tail_record_blake3,
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_attempt_log.rs:1687:
+ fn is_blake3_hex_digest(value: &str) -> bool {
+     kernel::digest_is_valid(value)
+ }
+-
+ 
+ fn usize_to_u32(value: usize) -> Result<u32, RemoteAttemptLogReasonCode> {
+     kernel::usize_to_u32(value).map_err(RemoteAttemptLogReasonCode::from)
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_resources.rs:783:
+ ) -> Result<ResourceTotals, RemoteResourceReasonCode> {
+     let remaining = resource_core::reserve_capacity(capacity_from_totals(available), capacity_from_totals(requested))
+         .map_err(|reason| match reason {
+-            resource_core::CapacityShortfall::Cpu => RemoteResourceReasonCode::CpuUnavailable,
+-            resource_core::CapacityShortfall::Memory => RemoteResourceReasonCode::MemoryUnavailable,
+-            resource_core::CapacityShortfall::Scratch => RemoteResourceReasonCode::ScratchUnavailable,
+-        })?;
++        resource_core::CapacityShortfall::Cpu => RemoteResourceReasonCode::CpuUnavailable,
++        resource_core::CapacityShortfall::Memory => RemoteResourceReasonCode::MemoryUnavailable,
++        resource_core::CapacityShortfall::Scratch => RemoteResourceReasonCode::ScratchUnavailable,
++    })?;
+     let accelerators = subtract_named(
+         &available.accelerators,
+         &requested.accelerators,
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_resources.rs:813:
+     used: &ResourceTotals,
+     reason: RemoteResourceReasonCode,
+ ) -> Result<ResourceTotals, RemoteResourceReasonCode> {
+-    let remaining = resource_core::remaining_capacity(capacity_from_totals(available), capacity_from_totals(used))
+-        .ok_or(reason)?;
++    let remaining =
++        resource_core::remaining_capacity(capacity_from_totals(available), capacity_from_totals(used)).ok_or(reason)?;
+     let accelerators = subtract_named(&available.accelerators, &used.accelerators, reason)?;
+     let named_tokens = subtract_named(&available.named_tokens, &used.named_tokens, reason)?;
+     debug_assert!(remaining.cpu_units <= available.cpu_units);
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_resources.rs:858:
+ 
+ fn resource_fit_class(remaining: &ResourceTotals, requested: &ResourceTotals) -> ResourceFitClass {
+     let named_empty = remaining.accelerators.is_empty() && remaining.named_tokens.is_empty();
+-    let named_constrained = if remaining.cpu_units == 0
+-        && remaining.memory_bytes == 0
+-        && remaining.scratch_bytes == 0
+-        && named_empty
+-    {
+-        false
+-    } else {
+-        named_remaining_is_constrained(&remaining.accelerators, &requested.accelerators)
+-            || named_remaining_is_constrained(&remaining.named_tokens, &requested.named_tokens)
+-    };
++    let named_constrained =
++        if remaining.cpu_units == 0 && remaining.memory_bytes == 0 && remaining.scratch_bytes == 0 && named_empty {
++            false
++        } else {
++            named_remaining_is_constrained(&remaining.accelerators, &requested.accelerators)
++                || named_remaining_is_constrained(&remaining.named_tokens, &requested.named_tokens)
++        };
+     match resource_core::classify_fit(
+         capacity_from_totals(remaining),
+         capacity_from_totals(requested),
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/distributed/remote_resources.rs:1083:
+     decision: resource_core::LocalityDecision,
+ ) -> RemoteVerifiedLocalitySummary {
+     let (content_locality, reason_code) = match decision.locality {
+-        resource_core::LocalityClass::FullyPresent => (
+-            ContentLocalityClass::FullyPresent,
+-            RemoteLocalityReasonCode::VerifiedFullyPresent,
+-        ),
+-        resource_core::LocalityClass::PartiallyPresent => (
+-            ContentLocalityClass::PartiallyPresent,
+-            RemoteLocalityReasonCode::VerifiedPartiallyPresent,
+-        ),
+-        resource_core::LocalityClass::NoVerifiedContent => (
+-            ContentLocalityClass::NoVerifiedContent,
+-            RemoteLocalityReasonCode::VerifiedNoContent,
+-        ),
+-        resource_core::LocalityClass::Unverified => (
+-            ContentLocalityClass::NoVerifiedContent,
+-            RemoteLocalityReasonCode::UnverifiedHintDowngraded,
+-        ),
++        resource_core::LocalityClass::FullyPresent => {
++            (ContentLocalityClass::FullyPresent, RemoteLocalityReasonCode::VerifiedFullyPresent)
++        }
++        resource_core::LocalityClass::PartiallyPresent => {
++            (ContentLocalityClass::PartiallyPresent, RemoteLocalityReasonCode::VerifiedPartiallyPresent)
++        }
++        resource_core::LocalityClass::NoVerifiedContent => {
++            (ContentLocalityClass::NoVerifiedContent, RemoteLocalityReasonCode::VerifiedNoContent)
++        }
++        resource_core::LocalityClass::Unverified => {
++            (ContentLocalityClass::NoVerifiedContent, RemoteLocalityReasonCode::UnverifiedHintDowngraded)
++        }
+     };
+     let transfer_cost = match decision.transfer {
+         resource_core::TransferClass::None => TransferCostClass::None,
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/dynamic.rs:319:
+         self.resolved.content_addressed
+     }
+ 
+-    pub(crate) fn into_registration(self) -> (StorePath<String>, [u8; BLAKE3_DIGEST_BYTES], Derivation, bool, [u8; BLAKE3_DIGEST_BYTES]) {
++    pub(crate) fn into_registration(
++        self,
++    ) -> (StorePath<String>, [u8; BLAKE3_DIGEST_BYTES], Derivation, bool, [u8; BLAKE3_DIGEST_BYTES]) {
+         let resolved = self.resolved;
+         (
+             resolved.drv_path,
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/dynamic.rs:1475:
+                 let parent = fake_store_path("parent.drv");
+                 derivation.input_derivations.insert(parent.clone(), BTreeSet::from(["out".to_string()]));
+                 if mode == "fixed-output" {
+-                    derivation.outputs.get_mut("out").unwrap().ca_hash = Some(
+-                        nix_compat::nixhash::CAHash::Flat(
+-                            nix_compat::nixhash::NixHash::Sha256([0x42; BLAKE3_DIGEST_BYTES]),
+-                        ),
+-                    );
++                    derivation.outputs.get_mut("out").unwrap().ca_hash = Some(nix_compat::nixhash::CAHash::Flat(
++                        nix_compat::nixhash::NixHash::Sha256([0x42; BLAKE3_DIGEST_BYTES]),
++                    ));
+                 }
+                 let original_hash = derivation.hash_derivation_modulo_with_store_dir(|_| PARENT_DIGEST, store_prefix);
+                 derivation.calculate_output_paths_with_store_dir("hello", &original_hash, store_prefix).unwrap();
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/dynamic.rs:1486:
+-                let provisional = derivation.outputs["out"].path.as_ref().unwrap().to_absolute_path_with_prefix(store_prefix);
++                let provisional =
++                    derivation.outputs["out"].path.as_ref().unwrap().to_absolute_path_with_prefix(store_prefix);
+                 derivation.environment.insert("out".to_string(), provisional.into());
+                 if mode == "content-addressed" {
+                     derivation.outputs.get_mut("out").unwrap().path = None;
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/dynamic.rs:1497:
+                     DynamicAdmissionLimits::default(),
+                 )
+                 .unwrap();
+-                let fact = DynamicParentHashFact::native(parent.to_absolute_path_with_prefix(store_prefix), PARENT_DIGEST);
++                let fact =
++                    DynamicParentHashFact::native(parent.to_absolute_path_with_prefix(store_prefix), PARENT_DIGEST);
+                 let ready = resolve_dynamic_identity(validated, &[fact]).unwrap();
+                 assert_eq!(ready.hash_derivation_modulo, original_hash, "mode={mode} store={store_prefix}");
+                 assert_eq!(ready.drv_path, candidate, "mode={mode} store={store_prefix}");
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/dynamic.rs:1504:
+                 assert_eq!(ready.validated.parsed.source_bytes, finished, "mode={mode} store={store_prefix}");
+                 assert_eq!(ready.validated.parsed.derivation.to_aterm_bytes_with_store_dir(store_prefix), finished);
+-                assert_eq!(ready.validated.parsed.derivation.outputs["out"].path.is_none(), mode == "content-addressed");
++                assert_eq!(
++                    ready.validated.parsed.derivation.outputs["out"].path.is_none(),
++                    mode == "content-addressed"
++                );
+             }
+         }
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/dynamic_plan.rs:2441:
+         drv.inputs.clear();
+         drv.addressing_mode = AddressingMode::InputAddressed;
+         drv.dynamic_plan_outputs.clear();
+-        drv.env = BTreeMap::from([("url".to_string(), "https://static.crates.io/crates/memchr/memchr-2.7.6.crate".to_string())]);
++        drv.env = BTreeMap::from([(
++            "url".to_string(),
++            "https://static.crates.io/crates/memchr/memchr-2.7.6.crate".to_string(),
++        )]);
+         drv.fixed_output = Some(WireFixedOutputSpec {
+             mode: FixedOutputMode::Flat,
+             algo: FixedOutputHashAlgo::Sha256,
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/dynamic_plan.rs:2487:
+         expect_invalid_scalar(admit_plan_v1(missing_hash, TEST_STORE_PREFIX).unwrap_err(), "fetch fixed output");
+ 
+         let mut extra_inputs = pinned_fetch_wire();
+-        extra_inputs.units[0].derivation.inputs.push(WireDynamicInput::StorePath { path: TEST_STORE_PATH.to_string() });
++        extra_inputs.units[0].derivation.inputs.push(WireDynamicInput::StorePath {
++            path: TEST_STORE_PATH.to_string(),
++        });
+         expect_invalid_scalar(admit_plan_v1(extra_inputs, TEST_STORE_PREFIX).unwrap_err(), "fetch inputs");
+ 
+         let mut unpinned_git = pinned_fetch_wire();
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:44:
+ use crate::causal_trace::CausalTraceCollector;
+ use crate::dynamic::DynamicAdmissionError;
+ use crate::dynamic::DynamicAdmissionLimits;
+-use crate::dynamic::DynamicRegistrationDecision;
+ use crate::dynamic::DynamicParentHashFact;
++use crate::dynamic::DynamicRegistrationDecision;
+ use crate::dynamic::ExistingDynamicRegistration;
+ use crate::dynamic::IdentityResolvedDynamicDerivation;
+ use crate::dynamic::RegistryReadyDynamicDerivation;
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:134:
+     required_parent_paths(validated)
+         .into_iter()
+         .filter_map(|logical_path| {
+-            known_paths.native_hdm(&logical_path).map(|digest| DynamicParentHashFact::native(logical_path, digest))
++            known_paths
++                .native_hdm(&logical_path)
++                .map(|digest| DynamicParentHashFact::native(logical_path, digest))
+         })
+         .collect()
+ }
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:542:
+                 let derivation = if let Some(unit) = self.staged.get(&absolute) {
+                     unit.ready.derivation()
+                 } else {
+-                    &self.live.get_by_drv_path(&absolute).ok_or_else(|| Error::DerivationNotFound { path: path.clone() })?.derivation
++                    &self
++                        .live
++                        .get_by_drv_path(&absolute)
++                        .ok_or_else(|| Error::DerivationNotFound { path: path.clone() })?
++                        .derivation
+                 };
+                 if let Some(bindings) = derivation.environment.get(PLAN_OUTPUT_BINDINGS_ENV_KEY) {
+                     let records = decode_binding_records(bindings.as_ref(), self.live.store_dir())
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:601:
+ 
+ impl NativeUnitLookup for V2Registration<'_> {
+     fn native_hdm(&self, path: &str) -> Option<[u8; 32]> {
+-        self.staged.get(path).map(|unit| unit.ready.hash_derivation_modulo()).or_else(|| self.live.native_hdm(path))
++        self.staged
++            .get(path)
++            .map(|unit| unit.ready.hash_derivation_modulo())
++            .or_else(|| self.live.native_hdm(path))
+     }
+ 
+     fn native_output(&self, path: &str, output: &str) -> Option<StorePath<String>> {
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:612:
+     }
+ 
+     fn native_is_ca(&self, path: &str) -> bool {
+-        self.staged.get(path).map_or_else(|| self.live.native_is_ca(path), |unit| unit.ready.content_addressed())
++        self.staged
++            .get(path)
++            .map_or_else(|| self.live.native_is_ca(path), |unit| unit.ready.content_addressed())
+     }
+ 
+     fn native_provisional(&self, path: &str, output: &str) -> Option<&BString> {
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:994:
+         }
+         let ready_units = pending
+             .iter()
+-            .filter(|id| units_by_id.get(*id).is_some_and(|unit| unit_output_dependencies_registered(unit, &registered)))
++            .filter(|id| {
++                units_by_id.get(*id).is_some_and(|unit| unit_output_dependencies_registered(unit, &registered))
++            })
+             .cloned()
+             .collect::<Vec<_>>();
+         if ready_units.is_empty() {
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:1005:
+             let ready = prepare_native_dynamic_unit(unit, &sources, &registered, &stage, store_dir)?;
+             let path = ready.drv_path().clone();
+             let absolute = path.to_absolute_path_with_prefix(store_dir);
+-            let dynamic_plan_outputs = unit.derivation.dynamic_plan_outputs.iter().map(|output| output.as_str().to_owned()).collect::<Vec<_>>();
++            let dynamic_plan_outputs = unit
++                .derivation
++                .dynamic_plan_outputs
++                .iter()
++                .map(|output| output.as_str().to_owned())
++                .collect::<Vec<_>>();
+             match ready.decision() {
+                 DynamicRegistrationDecision::AlreadyPresent => {
+                     let existing_outputs = if let Some(staged) = stage.staged.get(&absolute) {
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:1013:
+                     } else {
+                         &known_paths
+                             .get_by_drv_path(&absolute)
+-                            .ok_or_else(|| Error::Store(format!("dynamic duplicate `{absolute}` is absent from the registry")))?
++                            .ok_or_else(|| {
++                                Error::Store(format!("dynamic duplicate `{absolute}` is absent from the registry"))
++                            })?
+                             .dynamic_plan_outputs
+                     };
+                     if existing_outputs != &dynamic_plan_outputs {
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:1025:
+                         return Err(Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")));
+                     }
+                     stage.order.push(absolute.clone());
+-                    stage.staged.insert(absolute, V2StagedUnit { ready, dynamic_plan_outputs });
++                    stage.staged.insert(absolute, V2StagedUnit {
++                        ready,
++                        dynamic_plan_outputs,
++                    });
+                 }
+             }
+             registered.insert(id.clone(), path);
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:1044:
+         .roots()
+         .iter()
+         .map(|root| {
+-            registered.get(root).cloned().ok_or_else(|| Error::Store(format!("native dynamic plan root was not registered: {root}")))
++            registered
++                .get(root)
++                .cloned()
++                .ok_or_else(|| Error::Store(format!("native dynamic plan root was not registered: {root}")))
+         })
+         .collect::<Result<Vec<_>, _>>()?;
+     stage.preflight_goals(worker, &root_drv_paths)?;
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:1097:
+     for parent_drv_path in derivation.input_derivations.keys() {
+         let parent_abs = parent_drv_path.to_absolute_path_with_prefix(store_dir);
+         let digest = known_paths.native_hdm(&parent_abs).ok_or_else(|| {
+-            Error::Store(format!("native dynamic unit '{}' references unregistered parent derivation {parent_abs}", unit.id))
++            Error::Store(format!(
++                "native dynamic unit '{}' references unregistered parent derivation {parent_abs}",
++                unit.id
++            ))
+         })?;
+         parent_hdms.insert(parent_drv_path.as_ref(), digest);
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:1117:
+         .map_err(|err| Error::Store(format!("computing native dynamic derivation path for '{}': {err}", unit.id)))?;
+     debug_assert_eq!(derivation.outputs.len(), unit.derivation.outputs.len());
+     // r[impl dynamic_derivation_admission.registry_boundary]
+-    let validated = admit_native_plan_derivation(derivation, drv_path.clone(), store_dir, DynamicAdmissionLimits::default())
+-        .map_err(|error| native_dynamic_admission_error(unit, error))?;
++    let validated =
++        admit_native_plan_derivation(derivation, drv_path.clone(), store_dir, DynamicAdmissionLimits::default())
++            .map_err(|error| native_dynamic_admission_error(unit, error))?;
+     let parent_facts = observe_dynamic_parent_facts(&validated, known_paths);
+     let resolved = resolve_dynamic_identity(validated, &parent_facts)
+         .map_err(|error| native_dynamic_admission_error(unit, error))?;
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:5142:
+         let dep_derivation = dep_entry.derivation.clone();
+         let dep_is_ca = dep_entry.content_addressed;
+         let existing_count = registry.len();
+-        let duplicate = register_native_dynamic_unit(dep, &sources, &BTreeMap::new(), &mut registry, "/nix/store").unwrap();
++        let duplicate =
++            register_native_dynamic_unit(dep, &sources, &BTreeMap::new(), &mut registry, "/nix/store").unwrap();
+         assert_eq!(duplicate, dep_drv);
+         assert_eq!(registry.len(), existing_count);
+         let mut colliding = DerivationRegistry::default();
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:5149:
+-        colliding.insert(
+-            dep_drv.clone(),
+-            dep_hash,
+-            dep_derivation,
+-            dep_is_ca,
+-            None,
+-        );
+-        let error = register_native_dynamic_unit(dep, &sources, &BTreeMap::new(), &mut colliding, "/nix/store")
+-            .unwrap_err();
++        colliding.insert(dep_drv.clone(), dep_hash, dep_derivation, dep_is_ca, None);
++        let error =
++            register_native_dynamic_unit(dep, &sources, &BTreeMap::new(), &mut colliding, "/nix/store").unwrap_err();
+         assert!(error.to_string().contains("already has a different admitted identity"));
+ 
+         let mut ca_dep = dep.clone();
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:6405:
+                 .native_plan_binding_facts
+                 .insert((rejected.producer_key, rejected.output_name), NativePlanBindingFact::Rejected);
+         }
+-        assert!(pis.get(*expected_path.digest()).await.unwrap().is_none(), "late unit published signed slice PathInfo");
++        assert!(
++            pis.get(*expected_path.digest()).await.unwrap().is_none(),
++            "late unit published signed slice PathInfo"
++        );
+         assert_eq!(reports.len(), 1);
+         assert_eq!(reports[0].scheduler_action, "rejected");
+         assert!(reports[0].rejection_reason.as_deref().unwrap_or("").starts_with("invalid-plan:"));
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:6447:
+         let existing_derivation = known_paths.get_by_drv_path(&producer.to_absolute_path()).unwrap().derivation.clone();
+         for index in 0..(MAX_GOALS - worker.registry.len()) {
+             let path = fake_sp(&format!("capacity-{index:05}.drv"));
+-            worker.registry.insert(path.to_absolute_path(), Goal::new(path, existing_derivation.clone())).unwrap();
++            worker
++                .registry
++                .insert(path.to_absolute_path(), Goal::new(path, existing_derivation.clone()))
++                .unwrap();
+         }
+         assert_eq!(worker.registry.len(), MAX_GOALS);
+         let registry_before = known_paths.len();
+Diff in /home/brittonr/git/OnixResearch/mantle/crates/crunch-build/src/worker.rs:6472:
+         let report = native_plan_report_from_rejection(&rejection);
+         assert_eq!(rejection.kind, NativeDynamicPlanRejectionKind::InvalidPlan);
+         assert!(rejection.detail.contains("goal registry at capacity"));
+-        assert!(pis.get(*expected_path.digest()).await.unwrap().is_none(), "full goal registry published signed slice PathInfo");
++        assert!(
++            pis.get(*expected_path.digest()).await.unwrap().is_none(),
++            "full goal registry published signed slice PathInfo"
++        );
+         assert_eq!(report.scheduler_action, "rejected");
+         assert!(report.rejection_reason.as_deref().unwrap().starts_with("invalid-plan:"));
+         assert_eq!(report.source_slices.len(), 2);

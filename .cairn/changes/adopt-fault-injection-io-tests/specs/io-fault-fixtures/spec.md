@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Give Mantle deterministic, annotated, test-only injection of `io::Error` so every declared build I/O failure path is provable without a damaged store.
+Give Mantle deterministic, annotated, test-only injection of `io::Error` so the named build/store I/O failure paths are provable without a damaged store.
 
 ## Requirements
 
@@ -18,7 +18,7 @@ The repository MUST confine `fault-injection` to dev-dependencies of the shell t
 
 #### Scenario: Store boundary sites are wrapped
 
-- GIVEN the shell's store read, NAR write, commit fsync, and cache write sites
+- GIVEN the shell's store blob read, NAR stream write, post-build action-result record pre-link fsync, and action-result cache write sites
 - WHEN the test target builds
 - THEN each site MUST pass through `fallible!`
 
@@ -28,10 +28,10 @@ Fixtures MUST store an explicit counter value before acting and MUST restore the
 
 #### Scenario: Fixture fires at a chosen site
 
-- GIVEN a fixture stores a counter value that reaches zero at the commit-fsync site
-- WHEN a build commits
+- GIVEN a fixture stores a counter value that reaches zero at the post-build action-result record pre-link fsync
+- WHEN publication attempts to commit the cache record
 - THEN the fsync MUST return an injected `io::Error`
-- AND the outcome MUST classify as declared
+- AND the store adapter MUST retain the `action-result-publication-sync-temp` diagnostic; ordinary publication remains diagnostic while CA-required realisation MUST fail closed as `ca-realisation-untrusted`
 
 #### Scenario: Random delays stay disabled
 

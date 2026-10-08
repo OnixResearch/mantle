@@ -1137,6 +1137,7 @@ mod tests {
                 chunk_count: None,
                 blake3: "a".repeat(blake3::OUT_LEN * 2),
             }],
+            store_path_attestation: None,
         };
         validate_source_record(&record).unwrap();
         let mut substituted = record;

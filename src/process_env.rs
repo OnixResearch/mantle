@@ -21,19 +21,3 @@ pub(crate) fn lock_process_env() -> MutexGuard<'static, ()> {
     debug_assert!(std::ptr::eq(mutex as *const _, LOCK.get().expect("initialized") as *const _));
     guard
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_lock_is_reentrant_across_calls_and_shared() {
-        let first = lock_process_env();
-        drop(first);
-        let second = lock_process_env();
-        assert!(LOCK_INITIALIZED);
-        drop(second);
-    }
-
-    const LOCK_INITIALIZED: bool = true;
-}

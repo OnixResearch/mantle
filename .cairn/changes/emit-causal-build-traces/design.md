@@ -55,6 +55,55 @@ validators.
 **Rationale:** A causal record describes an observation stream. Evidence must
 be reproducible from stored facts, which the trace is not.
 
+### Record format and admission
+
+The opt-in diagnostic is canonical UTF-8 JSON:
+`{"schema":"mantle-build-trace-v1","records":[...]}`. A record contains
+`action_id` (zero-based `u32`), `goal_blake3` (nullable 64 lowercase hex
+characters, BLAKE3 of the full logical derivation key), `kind` (a closed
+kebab-case action), `cause` (a closed kebab-case cause), `caused_by` (an
+`action_id`), and a nullable redacted `diagnostic`. The sole action zero is
+`external-trigger` with a self-cause; every later record names an earlier
+existing action with a typed compatible kind. Serialized records are canonical
+in action ID order, not by goal or wall-clock time. An interested second root
+does not rewrite a shared dependency's first triggering cause.
+
+A same-goal cache, dispatch, retry, cancellation, or cleanup edge retains
+the parent's redacted goal identity. A cross-goal failure edge is legal only
+when an earlier `dependency-ready` action recorded that direct
+dependent/dependency pair; a transitive leaf failure instead walks each
+immediately failed dependency. Merely sharing a parent kind or appearing
+earlier in an interleaved trace does not establish a causal dependency.
+
+Ordinary local `mantle build --causal-trace` has no retry or cancellation
+transition. Watch-mode cancellation is a separate, untraced flow. Those kinds
+exist in the closed vocabulary and collector fixtures, but production emission
+records only transitions actually observed on the traced path.
+
+Closed causes: `root-requirement`, `dependency-ready`, `dispatch`,
+`cache-decision`, `retry`, `cancellation`, `cleanup`, `external-trigger`.
+Closed actions: `external-trigger`, `root-requirement`, `dependency-ready`,
+`cache-check`, `cache-hit`, `cache-miss`, `dispatch`, `retry`, `succeeded`,
+`failed`, `cancellation`, `cleanup`. The core rejects unknown and missing
+fields, unknown causes/kinds, absent or forward-pointing causes, invalid
+action/cause/parent-kind combinations, non-canonical order, invalid digest
+identities, oversized records, and unredacted diagnostics. The shell caps
+input **before parsing** and rechecks canonical serialized bytes. Hard caps:
+16,384 action records, 1,024 encoded bytes per record, 4 MiB per trace, and
+256 UTF-8 bytes per diagnostic. Diagnostic token redaction uses the
+evaluation-stream rules for absolute paths, credential-shaped names, and
+standalone digests before persistence; read-time validation fails closed.
+Trace persistence is a separate mode-0600 file under the state diagnostic
+`logs/` directory. Its bytes are not embedded in the aggregate report or any
+receipt.
+Creation is exclusive: an existing diagnostic is never overwritten, including
+when a later build reuses a process ID; a numbered suffix keeps both artifacts.
+
+If strict store preflight rejects a fallback before a Worker goal exists, the
+CLI retains the original failure report and exposes typed `WorkerNotStarted`
+trace unavailability on stderr. No root/request-bound action can be observed
+there, so no seed-only or synthetic success/failure trace is persisted.
+
 ## Risks / Trade-offs
 
 - Emission adds an ordering dependency between scheduler events. The shell owns
@@ -66,5 +115,6 @@ be reproducible from stored facts, which the trace is not.
 
 ## Non-Claims
 
-- A trace proves the recorded causal order, not that the order is complete.
+- A trace links recorded actions by admitted cause edges; it does not
+  prove observation honesty or completeness.
 - A traced action is not proof that the action succeeded.

@@ -1,12 +1,12 @@
 # Tasks: Attenuate build authority with pattern caveats
 
-All tasks remain open. Creating this proposal is not producer acceptance.
+T1 stack decision is recorded; baseline and end-to-end acceptance remain open.
 
 ## Phase 1: Baseline and stack evaluation
 
-- [ ] [serial] T1.1 Create an isolated worktree from current `origin/main`. Record the current ticket, store-view, and project-scope admission paths, including one restriction observation per site. r[mantle.authority_attenuation.caveat_filter_semantics]
-- [ ] [serial] T1.2 Evaluate UCAN and Basalt for pattern caveats: filter expressiveness, composition, revocation, and proof-chain transport. Record the decision in an ADR. r[mantle.authority_attenuation.stack_authority_reuse]
-- [ ] [serial] T1.3 Define the accepted caveat set, chain-length bound, pattern-size bound, and fail-closed parsing rules. r[mantle.authority_attenuation.caveat_filter_semantics]
+- [x] [serial] T1.1 Create an isolated worktree from current `origin/main`; record ticket, store-view and project-selector admission paths and one original restriction observation per site (`evidence/baseline-and-core-2026-09-30.md`). r[mantle.authority_attenuation.caveat_filter_semantics]
+- [x] [serial] T1.2 Evaluate UCAN and Basalt for pattern caveats: filter expressiveness, composition, revocation, and proof-chain transport. Record the decision in ADR 0090. r[mantle.authority_attenuation.stack_authority_reuse]
+- [x] [serial] T1.3 Define the accepted caveat set, chain-length bound, pattern-size bound, and fail-closed parsing rules (`config/authority-caveats/default.ncl`, ADR 0090; isolated Nickel export/core tests). r[mantle.authority_attenuation.caveat_filter_semantics]
 
 ## Phase 2: Core filter language
 

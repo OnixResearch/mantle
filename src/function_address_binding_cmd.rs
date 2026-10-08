@@ -95,13 +95,19 @@ struct IdentityEquality<'a> {
     label: &'static str,
 }
 
+/// Written receipt and the exact bytes the CLI presents after classification.
+pub(crate) struct FunctionAddressBindingOutput {
+    pub receipt_path: PathBuf,
+    pub receipt: FunctionAddressBindingReceipt,
+    pub canonical_bytes: Vec<u8>,
+}
+
 // r[impl mantle.release_provenance.function_address_binding_cli.command]
 // r[impl mantle.release_provenance.function_address_binding_cli.shell]
-pub(crate) fn cmd_function_address_binding(
+pub(crate) fn execute_function_address_binding(
     current_dir: &Path,
-    json: bool,
     command: FunctionAddressBindingCommand,
-) -> Result<(), RunError> {
+) -> Result<FunctionAddressBindingOutput, RunError> {
     debug_assert!(!command.mode.is_empty());
     debug_assert!(!command.receipt_out.as_os_str().is_empty());
     let bundle_dir = resolve_operator_path(current_dir, &command.bundle_dir);
@@ -124,8 +130,19 @@ pub(crate) fn cmd_function_address_binding(
     let bytes = function_address_binding_receipt_canonical_bytes(receipt.clone())
         .map_err(|error| RunError::Internal(error.to_string()))?;
     write_receipt_noclobber(&receipt_out, &bytes)?;
-    emit_binding_receipt(json, &receipt_out, &receipt, &bytes)?;
-    reject_invalid_binding(&receipt)
+    Ok(FunctionAddressBindingOutput {
+        receipt_path: receipt_out,
+        receipt,
+        canonical_bytes: bytes,
+    })
+}
+
+pub(crate) fn render_function_address_binding(
+    json: bool,
+    output: &FunctionAddressBindingOutput,
+) -> Result<(), RunError> {
+    emit_binding_receipt(json, &output.receipt_path, &output.receipt, &output.canonical_bytes)?;
+    reject_invalid_binding(&output.receipt)
 }
 
 fn explicit_binding_paths(command: &FunctionAddressBindingCommand) -> Result<ExplicitBindingPaths<'_>, RunError> {

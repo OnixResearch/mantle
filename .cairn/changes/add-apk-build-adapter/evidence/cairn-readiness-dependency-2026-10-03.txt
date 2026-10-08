@@ -1,0 +1,452 @@
+$ /nix/store/j3ni3lj66ylskpcg78ip531s9lz4z4av-cairn-0.1.0/bin/cairn readiness add-apk-build-adapter --root . --format json
+{
+  "actions": [
+    {
+      "argv": [],
+      "authority": "advisory",
+      "causes": [
+        "b0356b032f7054c6520b27c43472297117abd25da2f733c9b12eabcd49319622"
+      ],
+      "expected_observation": "reviewed remediation rule for this exact diagnostic",
+      "id": "0a2d1a5173654ff1126530f22d2b9c612240d3d88bd6bcffdb4c5df908a3c3ef",
+      "kind": "unresolved",
+      "prerequisites": [
+        "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+        "9eae256a0a7e5f692a88c8355c6ca7da0fb776a2828d393d6fe68c05cb1aab14",
+        "c7ab52d9658bf029f5b5d3524dd7804e6ac71d4584214704f5dab0661bf67e8e"
+      ],
+      "target": "add-apk-build-adapter"
+    },
+    {
+      "argv": [],
+      "authority": "advisory",
+      "causes": [
+        "5ddb2accd1201baa1e31bc5361fa9fb4f365a7d0071da17c1a81e96cf2468949",
+        "d7598881589a077c1a306be1784502e484cb1035f55137114890deea7c67bbb5"
+      ],
+      "expected_observation": "upstream dependency accepted by its existing validator",
+      "id": "455f22e8021688dd4ff9f2eb454a1a117b32f5085b2877814a605324bbfa1bb9",
+      "kind": "dependency_wait",
+      "prerequisites": [
+        "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+        "9eae256a0a7e5f692a88c8355c6ca7da0fb776a2828d393d6fe68c05cb1aab14",
+        "c7ab52d9658bf029f5b5d3524dd7804e6ac71d4584214704f5dab0661bf67e8e",
+        "predecessor-change:adopt-android-prebuilt-toolchain-sources"
+      ],
+      "target": "adopt-android-prebuilt-toolchain-sources"
+    },
+    {
+      "argv": [],
+      "authority": "advisory",
+      "causes": [
+        "3e5cfdbab7cae7565a0b6d1a37d44ba6cdae44e41d67a1ab4e4ce45633d1ada7",
+        "9579048c7fb75d745ba6e9ec1619e942a4e98dd680569b833c77ed0642b5d2bf"
+      ],
+      "expected_observation": "reviewed remediation rule for this exact diagnostic",
+      "id": "f38e94f6e464c76802d3dbc33da5e8209539d397143e2c9bdfca23e865b44a40",
+      "kind": "unresolved",
+      "prerequisites": [
+        "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+        "9eae256a0a7e5f692a88c8355c6ca7da0fb776a2828d393d6fe68c05cb1aab14",
+        "c7ab52d9658bf029f5b5d3524dd7804e6ac71d4584214704f5dab0661bf67e8e"
+      ],
+      "target": "add-apk-build-adapter"
+    }
+  ],
+  "blockers": [
+    {
+      "code": "dependency.blocked",
+      "id": "5ddb2accd1201baa1e31bc5361fa9fb4f365a7d0071da17c1a81e96cf2468949",
+      "message": "The upstream change must satisfy the existing dependency validator",
+      "stage": "archive",
+      "target": "adopt-android-prebuilt-toolchain-sources"
+    },
+    {
+      "code": "plan.blocked",
+      "id": "9579048c7fb75d745ba6e9ec1619e942a4e98dd680569b833c77ed0642b5d2bf",
+      "message": "add-apk-build-adapter: change_dependency.unsatisfied_dependency: dependency adopt-android-prebuilt-toolchain-sources is not archived",
+      "stage": "archive",
+      "target": "add-apk-build-adapter"
+    },
+    {
+      "code": "dependency.blocked",
+      "id": "d7598881589a077c1a306be1784502e484cb1035f55137114890deea7c67bbb5",
+      "message": "The upstream change must satisfy the existing dependency validator",
+      "stage": "sync",
+      "target": "adopt-android-prebuilt-toolchain-sources"
+    },
+    {
+      "code": "plan.blocked",
+      "id": "3e5cfdbab7cae7565a0b6d1a37d44ba6cdae44e41d67a1ab4e4ce45633d1ada7",
+      "message": "add-apk-build-adapter: change_dependency.unsatisfied_dependency: dependency adopt-android-prebuilt-toolchain-sources is not archived",
+      "stage": "sync",
+      "target": "add-apk-build-adapter"
+    },
+    {
+      "code": "observation.unavailable",
+      "id": "b0356b032f7054c6520b27c43472297117abd25da2f733c9b12eabcd49319622",
+      "message": "Observation is unavailable",
+      "stage": "completion",
+      "target": "add-apk-build-adapter"
+    }
+  ],
+  "classification": "unavailable",
+  "diagnostics": [],
+  "input_hash": "e444223db71626ad6cebca04cb5e3c13b3e6bef4e5c87e538ef25cec9aef9262",
+  "mutation_authorized": false,
+  "non_claims": [
+    "Readiness does not authorize mutation or execute checks",
+    "Readiness does not prove evidence truth, code correctness, or release eligibility"
+  ],
+  "readiness_policy_hash": "3daf5296f1c72472fa26cb1aa80b6c661ecf791b500443457c6f1c256669ad98",
+  "receipt_hash": "57979b80029f7ea460615dd29b478b4513c74154e2c5ba397fde931d00d5a16f",
+  "schema": "cairn.readiness.v1",
+  "scope": {
+    "change": "add-apk-build-adapter",
+    "evidence_hash": "9eae256a0a7e5f692a88c8355c6ca7da0fb776a2828d393d6fe68c05cb1aab14",
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "source_hash": "c7ab52d9658bf029f5b5d3524dd7804e6ac71d4584214704f5dab0661bf67e8e"
+  },
+  "stages": [
+    {
+      "decision": {
+        "artifacts": [
+          {
+            "blockers": [],
+            "files": [
+              {
+                "blake3": "f5bd8ce57239c87732d53b44458b16ec15a06fc76ef91ea0b90cbb3ae348bd7a",
+                "path": ".cairn/changes/add-apk-build-adapter/proposal.md"
+              }
+            ],
+            "id": "proposal",
+            "missing": [],
+            "output_path": "proposal.md",
+            "path_kind": "file",
+            "requires": [],
+            "stage": "proposal",
+            "state": "done",
+            "structural_admission": "proposal",
+            "unlocks": [
+              "specs",
+              "design"
+            ]
+          },
+          {
+            "blockers": [],
+            "files": [
+              {
+                "blake3": "16fee8ca13d7ff030ed05592f3282f07fcbe5d4dcfc72ae54c70b9436d84a48d",
+                "path": ".cairn/changes/add-apk-build-adapter/specs/android-adapter/spec.md"
+              }
+            ],
+            "id": "specs",
+            "missing": [],
+            "output_path": "specs",
+            "path_kind": "spec_directory",
+            "requires": [
+              "proposal"
+            ],
+            "stage": "design",
+            "state": "done",
+            "structural_admission": "delta_specs",
+            "unlocks": [
+              "tasks"
+            ]
+          },
+          {
+            "blockers": [],
+            "files": [
+              {
+                "blake3": "5013ad30768e4f8636944e0bac55198ec991b333cffa5eedad52e37f9001b915",
+                "path": ".cairn/changes/add-apk-build-adapter/design.md"
+              }
+            ],
+            "id": "design",
+            "missing": [],
+            "output_path": "design.md",
+            "path_kind": "file",
+            "requires": [
+              "proposal"
+            ],
+            "stage": "design",
+            "state": "done",
+            "structural_admission": "design",
+            "unlocks": [
+              "tasks"
+            ]
+          },
+          {
+            "blockers": [],
+            "files": [
+              {
+                "blake3": "3c5d7972ad953e624dd6a4368e64d862d9d5e1158b7f8a0a7d8cd3e477e326c1",
+                "path": ".cairn/changes/add-apk-build-adapter/tasks.md"
+              }
+            ],
+            "id": "tasks",
+            "missing": [],
+            "output_path": "tasks.md",
+            "path_kind": "file",
+            "requires": [
+              "specs",
+              "design"
+            ],
+            "stage": "tasks",
+            "state": "done",
+            "structural_admission": "tasks",
+            "unlocks": []
+          }
+        ],
+        "issues": [],
+        "next_actions": [],
+        "non_claims": [
+          "workflow state proves only the selected policy graph and observed structural artifact facts",
+          "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+          "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+          "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+        ],
+        "profile_evaluation": {
+          "acceptance_ids": [],
+          "issues": [],
+          "non_claims": [
+            "workflow state proves only the selected policy graph and observed structural artifact facts",
+            "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+            "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+            "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+          ],
+          "profile_id": "spec-driven",
+          "profile_version": 1,
+          "review_receipt_hashes": [],
+          "spec_effect": "delta"
+        },
+        "schema_description": "OpenSpec proposal/spec/design/tasks lifecycle",
+        "schema_id": "spec-driven",
+        "schema_version": "cairn.workflow-status.v1",
+        "valid": true
+      },
+      "decision_hash": "4c07a27687c8dc77085483d654197eadf645e87305fb120c20f7be139014f7b1",
+      "stage": "artifact",
+      "state": "ready"
+    },
+    {
+      "decision": {
+        "change": "add-apk-build-adapter",
+        "issues": [],
+        "stage": "proposal",
+        "verdict": "PASS"
+      },
+      "decision_hash": "b2a58e301f6f251b52bc687979b24ef8810c660e1c1ca043d57fed657e5e0bc2",
+      "stage": "proposal",
+      "state": "ready"
+    },
+    {
+      "decision": {
+        "change": "add-apk-build-adapter",
+        "issues": [],
+        "stage": "design",
+        "verdict": "PASS"
+      },
+      "decision_hash": "51eb5779efb55a01fbdd63937158793c88dd6bec723639afbcbb0c049afbf995",
+      "stage": "design",
+      "state": "ready"
+    },
+    {
+      "decision": {
+        "change": "add-apk-build-adapter",
+        "issues": [],
+        "stage": "tasks",
+        "verdict": "PASS"
+      },
+      "decision_hash": "926959ed13e6c0f265be0d8b8a69a63d2aa7ff28828bd437aa8f740730e068e1",
+      "stage": "tasks",
+      "state": "ready"
+    },
+    {
+      "decision": null,
+      "decision_hash": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+      "stage": "completion",
+      "state": "unavailable"
+    },
+    {
+      "decision": {
+        "cross_repo_dependencies": {
+          "blocked_count": 0,
+          "dependency_count": 0,
+          "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+          "non_claims": [
+            "dependency satisfaction proves presented receipt linkage only",
+            "dependency satisfaction does not prove upstream correctness or remote trust",
+            "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+          ],
+          "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+          "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+          "rows": [],
+          "satisfied_count": 0,
+          "schema": "cairn.cross-repo-dependency-receipt.v1",
+          "valid": true,
+          "verdict": "PASS"
+        },
+        "gate_required": false,
+        "merge_preflight": {
+          "documents": [
+            {
+              "accepted_before_exists": false,
+              "accepted_before_hash": "1dbb5e712f7184b8ba82ec8ed2b99141c32289646e227fc41904c670e9b417c9",
+              "blocked": false,
+              "changed": true,
+              "delta_hash": "16fee8ca13d7ff030ed05592f3282f07fcbe5d4dcfc72ae54c70b9436d84a48d",
+              "destination": ".cairn/specs/android-adapter/spec.md",
+              "diagnostics": [],
+              "expected_after_hash": "cd50a31ea81fc6ffb7731aeeb0e07b5bcd059e12b060ed3b6352b7aeb89cb487",
+              "operations": [
+                {
+                  "block_hash": "bfe562634e8b2f86e8c30145b44d423605f318bae910fda82a865299abfdf4e3",
+                  "heading": "### Requirement: android_adapter.apk_plan_functional_core",
+                  "kind": "added",
+                  "requirement_id": "android_adapter.apk_plan_functional_core"
+                },
+                {
+                  "block_hash": "ed96b78eeeddfc213b47106de7bbd669e1e3c735854f547e4795c818320cc5d5",
+                  "heading": "### Requirement: android_adapter.apk_pipeline_lowering",
+                  "kind": "added",
+                  "requirement_id": "android_adapter.apk_pipeline_lowering"
+                },
+                {
+                  "block_hash": "87b9e31312e6ecc238e8c1d61af0bd24a058cc82469614578f446e9d254b8d5d",
+                  "heading": "### Requirement: android_adapter.apk_offline_shape_tests",
+                  "kind": "added",
+                  "requirement_id": "android_adapter.apk_offline_shape_tests"
+                }
+              ],
+              "outcomes": [
+                {
+                  "kind": "added",
+                  "requirement_id": "android_adapter.apk_plan_functional_core",
+                  "state": "applied"
+                },
+                {
+                  "kind": "added",
+                  "requirement_id": "android_adapter.apk_pipeline_lowering",
+                  "state": "applied"
+                },
+                {
+                  "kind": "added",
+                  "requirement_id": "android_adapter.apk_offline_shape_tests",
+                  "state": "applied"
+                }
+              ],
+              "source": ".cairn/changes/add-apk-build-adapter/specs/android-adapter/spec.md"
+            }
+          ]
+        },
+        "preview_argv": [
+          "cairn",
+          "sync",
+          "add-apk-build-adapter",
+          "--root",
+          ".",
+          "--policy",
+          "cairn-policy/generated/cairn-policy.json"
+        ],
+        "reasons": [
+          "add-apk-build-adapter: change_dependency.unsatisfied_dependency: dependency adopt-android-prebuilt-toolchain-sources is not archived"
+        ]
+      },
+      "decision_hash": "86ff57795862cbc9144f174b215d2ae754ee8b0e11718627d26e0d7ce622f971",
+      "stage": "sync",
+      "state": "blocked"
+    },
+    {
+      "decision": {
+        "cross_repo_dependencies": {
+          "blocked_count": 0,
+          "dependency_count": 0,
+          "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+          "non_claims": [
+            "dependency satisfaction proves presented receipt linkage only",
+            "dependency satisfaction does not prove upstream correctness or remote trust",
+            "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+          ],
+          "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+          "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+          "rows": [],
+          "satisfied_count": 0,
+          "schema": "cairn.cross-repo-dependency-receipt.v1",
+          "valid": true,
+          "verdict": "PASS"
+        },
+        "gate_required": false,
+        "merge_preflight": {
+          "documents": [
+            {
+              "accepted_before_exists": false,
+              "accepted_before_hash": "1dbb5e712f7184b8ba82ec8ed2b99141c32289646e227fc41904c670e9b417c9",
+              "blocked": false,
+              "changed": true,
+              "delta_hash": "16fee8ca13d7ff030ed05592f3282f07fcbe5d4dcfc72ae54c70b9436d84a48d",
+              "destination": ".cairn/specs/android-adapter/spec.md",
+              "diagnostics": [],
+              "expected_after_hash": "cd50a31ea81fc6ffb7731aeeb0e07b5bcd059e12b060ed3b6352b7aeb89cb487",
+              "operations": [
+                {
+                  "block_hash": "bfe562634e8b2f86e8c30145b44d423605f318bae910fda82a865299abfdf4e3",
+                  "heading": "### Requirement: android_adapter.apk_plan_functional_core",
+                  "kind": "added",
+                  "requirement_id": "android_adapter.apk_plan_functional_core"
+                },
+                {
+                  "block_hash": "ed96b78eeeddfc213b47106de7bbd669e1e3c735854f547e4795c818320cc5d5",
+                  "heading": "### Requirement: android_adapter.apk_pipeline_lowering",
+                  "kind": "added",
+                  "requirement_id": "android_adapter.apk_pipeline_lowering"
+                },
+                {
+                  "block_hash": "87b9e31312e6ecc238e8c1d61af0bd24a058cc82469614578f446e9d254b8d5d",
+                  "heading": "### Requirement: android_adapter.apk_offline_shape_tests",
+                  "kind": "added",
+                  "requirement_id": "android_adapter.apk_offline_shape_tests"
+                }
+              ],
+              "outcomes": [
+                {
+                  "kind": "added",
+                  "requirement_id": "android_adapter.apk_plan_functional_core",
+                  "state": "applied"
+                },
+                {
+                  "kind": "added",
+                  "requirement_id": "android_adapter.apk_pipeline_lowering",
+                  "state": "applied"
+                },
+                {
+                  "kind": "added",
+                  "requirement_id": "android_adapter.apk_offline_shape_tests",
+                  "state": "applied"
+                }
+              ],
+              "source": ".cairn/changes/add-apk-build-adapter/specs/android-adapter/spec.md"
+            }
+          ]
+        },
+        "preview_argv": [
+          "cairn",
+          "archive",
+          "add-apk-build-adapter",
+          "--root",
+          ".",
+          "--policy",
+          "cairn-policy/generated/cairn-policy.json"
+        ],
+        "reasons": [
+          "add-apk-build-adapter: change_dependency.unsatisfied_dependency: dependency adopt-android-prebuilt-toolchain-sources is not archived"
+        ]
+      },
+      "decision_hash": "175db79c8c1408d02267ec8f0951f9cccb5696390a281fed8ae8fcbd4b36bdd8",
+      "stage": "archive",
+      "state": "blocked"
+    }
+  ],
+  "valid": true
+}
+readiness_exit=0

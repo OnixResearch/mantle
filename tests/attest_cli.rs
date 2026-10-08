@@ -566,6 +566,55 @@ fn attest_project_workflow_on_built_root() {
 }
 
 #[test]
+fn attest_store_query_rejection_initializes_only_its_selected_store() {
+    let temp = tempfile::tempdir().unwrap();
+    let store_state = temp.path().join("store-state");
+    let unrelated_state = temp.path().join("release-state");
+    let output = crunch_cmd()
+        .arg("--state-dir")
+        .arg(&store_state)
+        .arg("attest")
+        .arg("show")
+        .arg("/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-unknown")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(store_state.join("store-identity.json").is_file());
+
+    let output = crunch_cmd()
+        .arg("--state-dir")
+        .arg(&unrelated_state)
+        .arg("attest")
+        .arg("release-show")
+        .arg(temp.path().join("missing-verification"))
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(!unrelated_state.exists());
+}
+
+#[test]
+fn attest_input_limit_rejects_before_store_initialization() {
+    let temp = tempfile::tempdir().unwrap();
+    let state_dir = temp.path().join("state");
+    let oversized_selector = "a".repeat(70_000);
+    let output = crunch_cmd()
+        .arg("--state-dir")
+        .arg(&state_dir)
+        .arg("attest")
+        .arg("show")
+        .arg(&oversized_selector)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("exceeds admitted bound"));
+    assert!(!state_dir.exists(), "preflight rejection must not open a store");
+}
+
+#[test]
 fn attest_show_and_verify_artifact() {
     let seed = seed_store();
 

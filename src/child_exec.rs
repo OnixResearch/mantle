@@ -37,7 +37,7 @@ pub(crate) fn run_child(exe_path: &Path, args: &[String]) -> Result<ExitStatus, 
 pub(crate) fn child_exit_code(status: ExitStatus) -> i32 {
     let code = status.code().unwrap_or(CHILD_NO_EXIT_CODE_STATUS);
     debug_assert!(status.code().is_some() || code == CHILD_NO_EXIT_CODE_STATUS);
-    debug_assert!(code >= 0 && code <= CHILD_EXIT_CODE_MAX);
+    debug_assert!((0..=CHILD_EXIT_CODE_MAX).contains(&code));
     code
 }
 

@@ -14,6 +14,7 @@ use async_trait::async_trait;
 use snix_build::buildservice::BuildRequest;
 use snix_build::buildservice::BuildResult;
 use snix_build::buildservice::BuildService;
+use tokio::sync::watch;
 use tracing::debug;
 
 use crate::fetch_build_service::is_fetch_request;
@@ -54,6 +55,18 @@ where
             let builder = request.command_args.first().cloned().unwrap_or_default();
             debug!(builder = %builder, "dispatching to sandbox service");
             self.sandbox.do_build(request).await
+        }
+    }
+    async fn do_build_cancellable(
+        &self,
+        request: BuildRequest,
+        cancellation: watch::Receiver<bool>,
+    ) -> io::Result<BuildResult> {
+        assert!(!request.command_args.is_empty(), "BuildRequest must have at least one command arg (the builder)");
+        if is_fetch_request(&request) {
+            self.fetch.do_build_cancellable(request, cancellation).await
+        } else {
+            self.sandbox.do_build_cancellable(request, cancellation).await
         }
     }
 }
@@ -221,5 +234,41 @@ mod tests {
 
         let err = dispatch.do_build(sandbox_request()).await.unwrap_err();
         assert!(err.to_string().contains("sandbox failed"));
+    }
+
+    #[tokio::test]
+    async fn watch_sandbox_dispatch_reaches_owned_bwrap_pre_cancel() {
+        use snix_build::buildservice::BubblewrapBuildService;
+        use snix_castore::blobservice::MemoryBlobService;
+
+        let workdir = tempfile::tempdir().unwrap();
+        let parts =
+            crate::test_support::pipeline_store_parts(MemoryBlobService::default(), crate::test_support::tmp_ds());
+        let fetch = crate::fetch_build_service::FetchBuildService::new(parts.build_service_store);
+        let sandbox = BubblewrapBuildService::new(
+            workdir.path().to_path_buf(),
+            MemoryBlobService::default(),
+            crate::test_support::tmp_ds(),
+        );
+        let dispatch = DispatchBuildService::new(fetch, sandbox);
+        let (_sender, cancelled) = tokio::sync::watch::channel(true);
+        let error = dispatch.do_build_cancellable(sandbox_request(), cancelled).await.unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::Interrupted);
+        assert!(std::fs::read_dir(workdir.path()).unwrap().next().is_none());
+    }
+
+    #[tokio::test]
+    async fn watch_fetch_dispatch_pre_cancel_skips_cas_and_sandbox() {
+        use snix_castore::blobservice::MemoryBlobService;
+
+        let parts =
+            crate::test_support::pipeline_store_parts(MemoryBlobService::default(), crate::test_support::tmp_ds());
+        let fetch = crate::fetch_build_service::FetchBuildService::new(parts.build_service_store);
+        let (sandbox, sandbox_calls) = CountingService::new("sandbox");
+        let dispatch = DispatchBuildService::new(fetch, sandbox);
+        let (_sender, cancelled) = tokio::sync::watch::channel(true);
+        let error = dispatch.do_build_cancellable(fetch_request(), cancelled).await.unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::Interrupted);
+        assert_eq!(sandbox_calls.load(Ordering::Relaxed), 0);
     }
 }

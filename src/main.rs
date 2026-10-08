@@ -10,6 +10,7 @@ mod ast_grep_evidence;
 mod attest_cmd;
 mod bootstrap;
 mod bootstrap_parity;
+mod bootstrap_pin_cmd;
 mod bootstrap_source_root;
 mod bootstrap_validate;
 mod build_cmd;
@@ -35,8 +36,11 @@ mod cargo_free_self_build;
 mod cargo_import;
 mod cargo_profile;
 mod cargo_profile_manifest;
+mod causal_trace_diagnostic;
 mod early_native_row_receipt;
 mod early_native_row_receipt_shell;
+mod elf_dynamic_fixup_core;
+mod elf_dynamic_fixup_shell;
 mod elf_local_symbol_core;
 mod elf_local_symbol_shell;
 mod errors;
@@ -314,8 +318,8 @@ const SOURCE_BUILT_FIXED_POINT_SOURCE_RECORDS_MAX_DEFAULT: u32 = 65_536;
 const SOURCE_BUILT_FIXED_POINT_JOBS_DEFAULT: u32 = 4;
 #[cfg(unix)]
 use build_cmd::BuildOutputMode;
+use build_cmd::admit_state_dir_with_observation;
 use build_cmd::build_import_paths;
-use build_cmd::state_dir;
 use clap::Command as ClapCommand;
 use clap::CommandFactory;
 use clap::Parser;
@@ -323,7 +327,19 @@ use clap::Subcommand;
 use clap::ValueEnum;
 use errors::RunError;
 use foreign_import_cmd::ForeignImportAction;
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::CommandFamily;
+use mantle_application_contract::EffectId;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::EffectSpec;
+use mantle_application_contract::ExpectedOutput;
+use mantle_application_contract::Observation;
+use mantle_application_contract::ObservationStatus;
 use mantle_application_contract::ProjectOperation;
+use mantle_application_contract::classify_observations;
+use mantle_application_contract::plan_effects;
 use mantlepkgs_cmd::MantlepkgsAction;
 use nix_free_demo_cmd::NixFreeDemoAction;
 use operator_diagnostics::DoctorProfile;
@@ -451,13 +467,38 @@ enum Command {
         #[arg(long)]
         plan: bool,
 
+        /// Rebuild an explicit Nickel file when it or its imports change (local sandbox only)
+        #[arg(
+            long,
+            conflicts_with_all = [
+                "fix", "plan", "offline_source_preflight", "offline_source_manifest", "offline_source_manifest_blake3", "interchange_dir",
+                "causal_trace", "evaluation_stream", "impure", "builder",
+                "ticket_fd", "builder_program", "builder_args", "trusted_builder_keys",
+                "remote_delta", "remote_observability_config",
+            ]
+        )]
+        watch: bool,
+
         /// Require imported source state for selected roots before planning or building
         #[arg(long)]
         offline_source_preflight: bool,
 
+        /// Signed store catalog of all lock-driven child fixed-output sources
+        #[arg(long, requires = "offline_source_manifest_blake3",
+              conflicts_with_all = ["fix", "plan", "watch", "builder", "impure", "trust_unsigned", "evaluation_stream"])]
+        offline_source_manifest: Option<PathBuf>,
+
+        /// Out-of-band BLAKE3 of the signed, complete child-source catalog
+        #[arg(long, requires = "offline_source_manifest")]
+        offline_source_manifest_blake3: Option<String>,
+
         /// Directory for owner-emitted build interchange records
         #[arg(long = "interchange-dir")]
         interchange_dir: Option<PathBuf>,
+
+        /// Write an opt-in causal scheduler diagnostic under the state directory logs
+        #[arg(long, conflicts_with_all = ["fix", "plan", "builder", "evaluation_stream"])]
+        causal_trace: bool,
 
         /// Emit the bounded mantle-evaluation-stream-v1 NDJSON contract on stdout
         #[arg(long, conflicts_with_all = ["fix", "plan", "builder"])]
@@ -563,6 +604,9 @@ enum Command {
         /// Workflow profile to check
         #[arg(long, value_enum, default_value = "build")]
         profile: DoctorProfile,
+        /// Query the live daemon's non-evidence readiness channel on stderr.
+        #[arg(long)]
+        readiness_socket: Option<PathBuf>,
     },
 
     /// Internal command-graph export for the checked operator catalog.
@@ -714,6 +758,12 @@ enum Command {
         /// Evaluator version recorded in the receipt
         #[arg(long = "evaluator-version", default_value = env!("CARGO_PKG_VERSION"))]
         evaluator_version: String,
+    },
+
+    /// Check or apply reviewable bootstrap source pin updates.
+    BootstrapPin {
+        #[command(subcommand)]
+        action: BootstrapPinAction,
     },
 
     /// Generate bootstrap seeds or validate bootstrap runtime evidence
@@ -1469,7 +1519,44 @@ enum TranscriptAction {
 }
 
 #[derive(Subcommand, Debug)]
+enum BootstrapPinAction {
+    /// Poll all declared upstream releases and save a preimage-bound plan.
+    Check {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        #[arg(long)]
+        cache_dir: PathBuf,
+        #[arg(long)]
+        plan: PathBuf,
+    },
+    /// Verify and apply a reviewed plan to TOML pins and derived Nickel readers.
+    Apply {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        #[arg(long)]
+        plan: PathBuf,
+        #[arg(long, required = true)]
+        reviewed: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
 enum BootstrapAction {
+    /// Rewrite declared dynamic ELF references before a build output is published.
+    ElfRelocate {
+        /// Existing ELF regular file inside a flat-store output member.
+        file: PathBuf,
+        /// Number of parent directories beneath that output's root.
+        #[arg(long)]
+        depth: usize,
+        /// Exact NEEDED string, dependency member, member-relative library path (repeat).
+        #[arg(long, num_args = 3)]
+        needed: Vec<String>,
+        /// Exact RUNPATH string, dependency member, member-relative directory (repeat).
+        #[arg(long, num_args = 3)]
+        runpath: Vec<String>,
+    },
+
     /// Report executable and unsupported source-root operations from live host observations
     Capabilities,
 
@@ -2528,6 +2615,11 @@ pub enum RemoteAction {
         #[command(subcommand)]
         action: RemoteFailureDebugAction,
     },
+    /// Serve or follow transient build facts outside build and store authority
+    Live {
+        #[command(subcommand)]
+        action: RemoteLiveAction,
+    },
     /// Print remote server protocol metadata or serve one framed stdio session
     Serve {
         /// Builder endpoint id expected by clients
@@ -2566,6 +2658,30 @@ pub enum RemoteAction {
         /// Explicit bounded SecretSpec provider
         #[arg(long, default_value = remote_service_secrets::REMOTE_SYSTEMD_CREDENTIAL_PROVIDER)]
         secret_provider: String,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum RemoteLiveAction {
+    /// Serve bounded live build facts over a local Unix socket
+    Serve {
+        /// Owner-only Unix socket path (not a store or evidence directory)
+        #[arg(long)]
+        socket: PathBuf,
+    },
+    /// Subscribe to the current matching set and later changes as NDJSON
+    Subscribe {
+        #[arg(long)]
+        socket: PathBuf,
+        /// Limit to these build owners; repeat for several owners
+        #[arg(long = "owner")]
+        owner_run_ids: Vec<String>,
+        /// Limit to these goal or root identities; repeat for several roots
+        #[arg(long = "job")]
+        job_ids: Vec<String>,
+        /// Limit to worker-presence, goal, reservation, or terminal-outcome
+        #[arg(long = "kind")]
+        kinds: Vec<String>,
     },
 }
 
@@ -2842,11 +2958,23 @@ pub enum StoreAction {
     Pin {
         /// Logical store path to retain
         path: String,
+        /// Local operator owner label (not an authenticated credential)
+        #[arg(long, default_value = "operator")]
+        owner: String,
+        /// Why this owner retains the path
+        #[arg(long, default_value = "explicit-pin-registered")]
+        reason: String,
     },
     /// Remove a retained GC root
     Unpin {
         /// Logical store path to remove
         path: String,
+        /// Local operator owner label whose interest may be removed
+        #[arg(long, default_value = "operator")]
+        owner: String,
+        /// Exact reason when one owner retains the path for multiple reasons
+        #[arg(long)]
+        reason: Option<String>,
     },
     /// Plan garbage collection, or execute one accepted unchanged plan
     Gc {
@@ -3035,7 +3163,8 @@ pub enum SourceBundleAction {
     /// Build a named bootstrap source-bundle profile from local inputs
     BootstrapProfile {
         /// Profile mode: legacy-seed, source-root, self-build-proof, fresh-clone-inputs,
-        /// fresh-clone-fixed-point, or source-built-fixed-point
+        /// fresh-clone-fixed-point, fresh-clone-lock-vendor-inputs,
+        /// fresh-clone-lock-vendor-fixed-point, or source-built-fixed-point
         #[arg(long, default_value = "legacy-seed")]
         mode: String,
 
@@ -3055,13 +3184,29 @@ pub enum SourceBundleAction {
         #[arg(long = "stagex-source-bundle")]
         stagex_source_bundle: Option<std::path::PathBuf>,
 
-        /// Mantle source tree for self-build proof mode
+        /// Mantle source tree for self-build and lock-vendor source profiles
         #[arg(long = "mantle-source")]
         mantle_source: Option<std::path::PathBuf>,
 
         /// Vendored Cargo input directory for self-build proof mode
         #[arg(long = "vendor-deps")]
         vendor_deps: Option<std::path::PathBuf>,
+
+        /// Realized lock-vendor producer executable for the separately acquired vendor tree
+        #[arg(long = "lock-vendor-producer")]
+        lock_vendor_producer: Option<std::path::PathBuf>,
+
+        /// Canonical selected lock-vendor hash table (not the mutable full table)
+        #[arg(long = "lock-vendor-selected-table")]
+        lock_vendor_selected_table: Option<std::path::PathBuf>,
+
+        /// Producer output store path; verify its signature and bytes independently
+        #[arg(long = "lock-vendor-output")]
+        lock_vendor_output: Option<std::path::PathBuf>,
+
+        /// Previously verified vendor tree omitted from the new source archive
+        #[arg(long = "excluded-vendor-deps")]
+        excluded_vendor_deps: Option<std::path::PathBuf>,
 
         /// Toolchain/source-root record for source-root or proof modes
         #[arg(long = "toolchain-source-root")]
@@ -3118,6 +3263,24 @@ pub enum SourceBundleAction {
         #[arg(long)]
         pin: bool,
     },
+    /// Attest a pre-existing physical output using its signed PathInfo and actual NAR before pinning source state
+    ImportStorePath {
+        /// Exact logical store path selected as a build input
+        #[arg(long)]
+        logical: String,
+
+        /// Corresponding direct physical output at --store/<logical basename>
+        #[arg(long)]
+        physical: std::path::PathBuf,
+
+        /// Explicit keys trusted to sign this path's PathInfo and references
+        #[arg(long = "trusted-public-keys", value_delimiter = ',', required = true)]
+        trusted_public_keys: Vec<String>,
+
+        /// Pin the signed source state for strict offline builds
+        #[arg(long)]
+        pin: bool,
+    },
     /// Hydrate a fresh checkout's explicit self-build inputs from a verified bundle
     HydrateSelfBuild {
         /// Bundle input path
@@ -3131,6 +3294,10 @@ pub enum SourceBundleAction {
         /// Fresh checkout whose absent vendor-deps directory will be published
         #[arg(long)]
         checkout: std::path::PathBuf,
+
+        /// Separately realized producer output; required for lock-vendor profiles
+        #[arg(long = "lock-vendor-output")]
+        lock_vendor_output: Option<std::path::PathBuf>,
     },
     /// Verify a bundle and optionally imported source state
     Verify {
@@ -3152,6 +3319,10 @@ pub enum SourceBundleAction {
         /// Additional Nickel import paths for --build-root evaluation
         #[arg(long = "import-path", short = 'I')]
         import_paths: Vec<std::path::PathBuf>,
+
+        /// Explicit keys trusted to sign every attested pre-existing store root
+        #[arg(long = "trusted-public-keys", value_delimiter = ',')]
+        trusted_public_keys: Vec<String>,
     },
 }
 
@@ -3219,6 +3390,13 @@ pub enum StoreArchiveAction {
     },
 }
 
+fn unix_time_now_s() -> Result<u64, RunError> {
+    let elapsed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| RunError::Internal(format!("system time before Unix epoch: {error}")))?;
+    Ok(elapsed.as_secs())
+}
+
 fn main() -> ExitCode {
     let args = Args::parse();
     if has_conflicting_machine_output_modes(&args) {
@@ -3279,6 +3457,7 @@ fn init_tracing(args: &Args) {
 struct RunContext {
     store: PathBuf,
     resolved_state_dir: PathBuf,
+    resolved_log_dir: PathBuf,
     store_prefix: String,
     store_backend: crunch_store::StoreBackend,
     verbose: bool,
@@ -3301,17 +3480,43 @@ impl RunContext {
     }
 }
 
-fn preflight_casita_cli_backend(args: &Args) -> Result<(), RunError> {
-    if args.store_backend != crunch_store::StoreBackend::Casita {
-        return Ok(());
+fn preflight_store_cli_capabilities(
+    args: &Args,
+    profile: crunch_store::StoreBackendCapabilityProfile,
+) -> Result<(), RunError> {
+    let backend = args.store_backend.as_str();
+    if matches!(&args.command, Command::Store {
+        action: StoreAction::Archive {
+            action: StoreArchiveAction::Import {
+                format: StoreArchiveFormat::NarioV2,
+                ..
+            },
+        },
+    }) && !profile.atomic_batch_import
+    {
+        return Err(RunError::Build(format!("{backend}-atomic-batch-import-unsupported")));
     }
     if matches!(&args.command, Command::Store {
         action: StoreAction::RepairFinalNar { .. }
-    }) {
-        return Err(RunError::Build("casita-repair-final-nar-unsupported".to_string()));
+    }) && !profile.core.contains(&"store-repair-final-nar")
+    {
+        return Err(RunError::Build(format!("{backend}-repair-final-nar-unsupported")));
     }
-    if !args.base_stores.is_empty() {
-        return Err(RunError::Build("casita-overlay-unsupported".to_string()));
+    if !args.base_stores.is_empty() && !profile.overlay_composition {
+        return Err(RunError::Build(format!("{backend}-overlay-unsupported")));
+    }
+    if matches!(&args.command, Command::RustCache { .. }) && !profile.rust_unit_cache {
+        return Err(RunError::Build(format!("{backend}-rust-cache-unsupported")));
+    }
+    if let Command::RustPlan {
+        local_rust_cache,
+        shared_rust_cache,
+        ..
+    } = &args.command
+        && !profile.rust_unit_cache
+        && (*local_rust_cache != RustLocalCacheMode::Off || *shared_rust_cache != RustSharedCacheMode::Off)
+    {
+        return Err(RunError::Build(format!("{backend}-rust-cache-unsupported")));
     }
     let unsigned = match &args.command {
         Command::Build { trust_unsigned, .. }
@@ -3337,8 +3542,8 @@ fn preflight_casita_cli_backend(args: &Args) -> Result<(), RunError> {
         } => *nario_trust_unsigned,
         _ => false,
     };
-    if unsigned {
-        return Err(RunError::Build("casita-trust-unsigned-unsupported".to_string()));
+    if unsigned && !profile.unsigned_admission {
+        return Err(RunError::Build(format!("{backend}-trust-unsigned-unsupported")));
     }
     Ok(())
 }
@@ -3348,6 +3553,7 @@ fn run(args: Args) -> Result<(), RunError> {
 }
 
 fn run_for_platform(args: Args, platform: mantle_portable_client_core::PlatformFamily) -> Result<(), RunError> {
+    let ctx = build_run_context(&args)?;
     match &args.command {
         Command::EvaluatorWorker => return evaluator_budget::worker_main(),
         Command::EvaluatorWorkerFixture { behavior } => {
@@ -3356,7 +3562,7 @@ fn run_for_platform(args: Args, platform: mantle_portable_client_core::PlatformF
         _ => {}
     }
     enforce_portable_command_admission(platform, &args.command)?;
-    preflight_casita_cli_backend(&args)?;
+    preflight_store_cli_capabilities(&args, args.store_backend.profile())?;
     if let Command::RemoteSecretWorker {
         manifest,
         profile,
@@ -3366,8 +3572,7 @@ fn run_for_platform(args: Args, platform: mantle_portable_client_core::PlatformF
         command_input::admit_remote_secret_worker(manifest, profile)?;
         return remote_service_secrets::run_remote_secret_worker(manifest, profile, provider);
     }
-    apply_state_dir_override(&args);
-    let ctx = build_run_context(&args);
+    apply_state_dir_override(&args)?;
     if !ctx.base_state_dirs.is_empty()
         && matches!(
             &args.command,
@@ -3492,6 +3697,7 @@ fn command_root(command: &Command) -> &'static str {
         Command::EvaluatorWorkerFixture { .. } => "__evaluator-worker-fixture",
         Command::Export { .. } => "export",
         Command::Bootstrap { .. } => "bootstrap",
+        Command::BootstrapPin { .. } => "bootstrap-pin",
         Command::Log { .. } => "log",
         Command::Store { .. } => "store",
         Command::Source { .. } => "source",
@@ -3516,25 +3722,107 @@ fn command_root(command: &Command) -> &'static str {
     }
 }
 
-fn apply_state_dir_override(args: &Args) {
+fn apply_state_dir_override(args: &Args) -> Result<(), RunError> {
     if let Some(state_dir) = &args.state_dir {
-        host_environment::export_state_dir(state_dir);
+        host_environment::export_state_dir(state_dir)?;
     }
+    Ok(())
 }
 
-fn build_run_context(args: &Args) -> RunContext {
+/// Plan the root environment read before the state-directory port executes.
+/// An explicit CLI override performs no environment read and needs no such effect.
+fn build_run_context(args: &Args) -> Result<RunContext, RunError> {
+    const ROOT_STATE_ENV_EFFECT: &str = "root-state-directory-environment";
+    let family = match &args.command {
+        Command::OperatorContract { .. } => CommandFamily::Planning,
+        Command::EvaluatorWorker | Command::EvaluatorWorkerFixture { .. } => CommandFamily::Evaluation,
+        Command::RemoteSecretWorker { .. } => CommandFamily::RemoteExecution,
+        Command::BootstrapPin { .. } => CommandFamily::Bootstrap,
+        command => CommandFamily::of_root(command_root(command))
+            .ok_or_else(|| RunError::Internal("unclassified root environment command".to_string()))?,
+    };
+    let environment_plan = if args.state_dir.is_none() {
+        Some(
+            plan_effects(family, &[EffectSpec {
+                effect_id: ROOT_STATE_ENV_EFFECT,
+                kind: EffectKind::ReadEnvironment,
+                limit: EffectMeasure::Calls(3),
+                expected_output: ExpectedOutput::None,
+            }])
+            .map_err(|error| RunError::Internal(format!("{}: root state-directory effect plan", error.code())))?,
+        )
+    } else {
+        None
+    };
+    let observed = admit_state_dir_with_observation(args.state_dir.as_deref());
+    if let Some(plan) = environment_plan {
+        let kind = observed
+            .environment_kind
+            .ok_or_else(|| RunError::Internal("root state-directory environment read was not observed".to_string()))?;
+        if observed.environment_reads == 0 {
+            return Err(RunError::Internal("root state-directory environment read count was zero".to_string()));
+        }
+        let outcome = classify_observations(&plan, &[Observation {
+            effect_id: EffectId(ROOT_STATE_ENV_EFFECT.to_string()),
+            kind,
+            status: ObservationStatus::Succeeded,
+            output: EffectOutput::None,
+            usage: EffectMeasure::Calls(observed.environment_reads),
+            diagnostics_code: None,
+        }]);
+        if outcome != ApplicationOutcome::Completed {
+            return Err(RunError::Internal(format!(
+                "root state-directory environment observations were inconsistent: {outcome:?}"
+            )));
+        }
+    } else if observed.environment_kind.is_some() || observed.environment_reads != 0 {
+        return Err(RunError::Internal("explicit state-directory override unexpectedly read environment".to_string()));
+    }
+    let resolved_state_dir = observed.resolved.map_err(|error| RunError::Internal(error.to_string()))?;
+    let resolved_log_dir = admit_root_log_dir(&resolved_state_dir, family)?;
     let store_prefix = resolve_store_prefix(args);
     debug_assert!(!store_prefix.is_empty(), "store_prefix must not be empty");
     debug_assert!(store_prefix.starts_with('/'), "store_prefix must be absolute");
-    RunContext {
+    Ok(RunContext {
         store: args.store.clone(),
-        resolved_state_dir: state_dir(),
+        resolved_state_dir,
+        resolved_log_dir,
         store_prefix,
         store_backend: args.store_backend,
         verbose: args.verbose,
         json: args.json,
         base_state_dirs: args.base_stores.clone(),
+    })
+}
+
+/// Observe and classify the only CRUNCH_LOG_DIR read before command effects.
+fn admit_root_log_dir(state_dir: &Path, family: CommandFamily) -> Result<PathBuf, RunError> {
+    const ROOT_LOG_ENV_EFFECT: &str = "root-build-log-environment";
+    let plan = plan_effects(family, &[EffectSpec {
+        effect_id: ROOT_LOG_ENV_EFFECT,
+        kind: EffectKind::ReadEnvironment,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    }])
+    .map_err(|error| RunError::Internal(format!("{}: root log-directory effect plan", error.code())))?;
+    let observed = build_cmd::admit_log_dir_with_observation(state_dir);
+    let kind = observed
+        .environment_kind
+        .ok_or_else(|| RunError::Internal("root log-directory environment read was not observed".to_string()))?;
+    let outcome = classify_observations(&plan, &[Observation {
+        effect_id: EffectId(ROOT_LOG_ENV_EFFECT.to_string()),
+        kind,
+        status: ObservationStatus::Succeeded,
+        output: EffectOutput::None,
+        usage: EffectMeasure::Calls(observed.environment_reads),
+        diagnostics_code: None,
+    }]);
+    if outcome != ApplicationOutcome::Completed {
+        return Err(RunError::Internal(format!(
+            "root log-directory environment observations were inconsistent: {outcome:?}"
+        )));
     }
+    observed.resolved.map_err(|error| RunError::Internal(error.to_string()))
 }
 
 fn command_label(command: &Command) -> &'static str {
@@ -3559,6 +3847,10 @@ fn command_label(command: &Command) -> &'static str {
         Command::EvaluatorWorkerFixture { .. } => "evaluator-worker-fixture",
         Command::Export { .. } => "export",
         Command::Bootstrap { action, .. } => bootstrap_command_label(action.as_ref()),
+        Command::BootstrapPin { action } => match action {
+            BootstrapPinAction::Check { .. } => "bootstrap-pin.check",
+            BootstrapPinAction::Apply { .. } => "bootstrap-pin.apply",
+        },
         Command::Log { .. } => "log",
         Command::Store { action } => store_command_label(action),
         Command::Source { action } => source_command_label(action),
@@ -3716,6 +4008,7 @@ fn filegen_command_label(action: &FilegenCommandAction) -> &'static str {
 
 fn bootstrap_command_label(action: Option<&BootstrapAction>) -> &'static str {
     match action {
+        Some(BootstrapAction::ElfRelocate { .. }) => "bootstrap.elf-relocate",
         Some(BootstrapAction::Capabilities) => "bootstrap.capabilities",
         Some(BootstrapAction::ParityReport { .. }) => "bootstrap.parity-report",
         Some(BootstrapAction::RustSourceProvider { .. }) => "bootstrap.rust-source-provider",
@@ -3736,6 +4029,10 @@ fn remote_command_label(action: &RemoteAction) -> &'static str {
             RemoteFailureDebugAction::ReplayPlan { .. } => "remote.debug.replay-plan",
             RemoteFailureDebugAction::Replay { .. } => "remote.debug.replay",
             RemoteFailureDebugAction::Gc { .. } => "remote.debug.gc",
+        },
+        RemoteAction::Live { action } => match action {
+            RemoteLiveAction::Serve { .. } => "remote.live.serve",
+            RemoteLiveAction::Subscribe { .. } => "remote.live.subscribe",
         },
         RemoteAction::Serve { .. } => "remote.serve",
     }
@@ -3781,6 +4078,7 @@ fn source_bundle_command_label(action: &SourceBundleAction) -> &'static str {
         SourceBundleAction::RefreshMantleSource { .. } => "source.bundle.refresh-mantle-source",
         SourceBundleAction::List { .. } => "source.bundle.list",
         SourceBundleAction::Import { .. } => "source.bundle.import",
+        SourceBundleAction::ImportStorePath { .. } => "source.bundle.import-store-path",
         SourceBundleAction::HydrateSelfBuild { .. } => "source.bundle.hydrate-self-build",
         SourceBundleAction::Verify { .. } => "source.bundle.verify",
         SourceBundleAction::Preflight { .. } => "source.bundle.preflight",
@@ -4061,7 +4359,10 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
     debug_assert!(ctx.store_prefix.starts_with('/'));
     debug_assert_eq!(ctx.json, args.json);
     match &args.command {
-        Command::Doctor { profile } => run_doctor_command(ctx, *profile),
+        Command::Doctor {
+            profile,
+            readiness_socket,
+        } => run_doctor_command(ctx, *profile, readiness_socket.as_deref()),
         Command::OperatorContract { mode } => run_operator_contract(*mode),
         Command::Graph { root, graph_file } => run_semantic_graph_command(
             ctx,
@@ -4121,8 +4422,21 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Build { .. } => run_build_from_command(ctx, &args.command),
         Command::WasmComponent { action } => run_wasm_component_command(ctx, action),
         Command::Bootstrap { .. } => run_bootstrap_from_command(ctx, &args.command),
+        Command::BootstrapPin { action } => match action {
+            BootstrapPinAction::Check { root, cache_dir, plan } => {
+                let pending = bootstrap_pin_cmd::check(root, cache_dir, plan).map_err(RunError::Internal)?;
+                if pending {
+                    Err(RunError::Internal("bootstrap source updates pending or resolution failed".into()))
+                } else {
+                    Ok(())
+                }
+            }
+            BootstrapPinAction::Apply { root, plan, reviewed } => {
+                bootstrap_pin_cmd::apply(root, plan, *reviewed).map_err(RunError::Internal)
+            }
+        },
         Command::Release { action } => run_release_command(ctx, action.clone()),
-        Command::Log { query, list } => log_cmd::cmd_log(query.as_deref(), *list),
+        Command::Log { query, list } => log_cmd::cmd_log(&ctx.resolved_log_dir, query.as_deref(), *list),
         Command::Store { action } => store_cmd::cmd_store(
             action.clone(),
             &ctx.store,
@@ -4134,15 +4448,11 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         ),
         Command::Source { action } => {
             command_input::admit_source_action_or_block(action)?;
-            source_bundle::cmd_source(action.clone(), &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
+            source_bundle::cmd_source(action.clone(), &ctx.resolved_state_dir, &ctx.store, ctx.store_backend, &ctx.store_prefix, ctx.json)
         }
-        Command::Receipt { action } => portable_receipt::cmd_receipt(
-            action.clone(),
-            &ctx.resolved_state_dir,
-            &ctx.store_prefix,
-            ctx.json,
-            unix_time_now_s()?,
-        ),
+        Command::Receipt { action } => {
+            portable_receipt::cmd_receipt(action.clone(), &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
+        }
         Command::Remote { action } => {
             command_input::admit_remote_action(action);
             run_remote_command(ctx, action.clone())
@@ -4183,23 +4493,112 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
 }
 
 fn run_rust_cache_command(ctx: &RunContext, action: &RustCacheAction) -> Result<(), RunError> {
-    if ctx.store_backend == crunch_store::StoreBackend::Casita {
-        return Err(RunError::Build("casita-rust-cache-unsupported".to_string()));
+    if !ctx.store_backend.profile().rust_unit_cache {
+        return Err(RunError::Build(format!("{}-rust-cache-unsupported", ctx.store_backend.as_str())));
     }
     match action {
         RustCacheAction::Serve {
             policy,
             receipt_dir,
             once,
-        } => crunch_rustc_wrapper::run_daemon(crunch_rustc_wrapper::DaemonOptions {
-            policy_path: policy.clone(),
-            backend: ctx.store_backend,
-            state_dir: ctx.resolved_state_dir.clone(),
-            store_output_dir: ctx.store.clone(),
-            receipt_dir: receipt_dir.clone(),
-            run_once: *once,
-        })
-        .map_err(|error| RunError::Internal(format!("serving Rust compiler cache requests: {error}"))),
+        } => {
+            let options = crunch_rustc_wrapper::DaemonOptions {
+                policy_path: policy.clone(),
+                backend: ctx.store_backend,
+                state_dir: ctx.resolved_state_dir.clone(),
+                store_output_dir: ctx.store.clone(),
+                receipt_dir: receipt_dir.clone(),
+                run_once: *once,
+            };
+            let socket = build_cmd::configured_live_socket();
+            let publisher =
+                Arc::new(std::sync::Mutex::new(None::<(remote_build::live_state::daemon::ReadinessPublisher, bool)>));
+            let result = if let Some(socket) = socket {
+                let started = Arc::clone(&publisher);
+                let response = Arc::clone(&publisher);
+                crunch_rustc_wrapper::run_daemon_with_response_observer(
+                    options,
+                    Arc::new(move || {
+                        let Some(nonce) = SystemTime::now().duration_since(UNIX_EPOCH).ok() else {
+                            return;
+                        };
+                        let id = format!("rust-cache-{}-{}", std::process::id(), nonce.as_nanos());
+                        if let Ok(reporter) = remote_build::live_state::daemon::ReadinessPublisher::start_service(
+                            &socket,
+                            id,
+                            crunch_service_readiness_core::RestartPolicy::Never,
+                        ) {
+                            *started.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
+                                Some((reporter, false));
+                        }
+                    }),
+                    Arc::new(move || {
+                        let mut guard = response.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                        if let Some((reporter, acknowledged)) = guard.as_mut()
+                            && !*acknowledged
+                            && reporter.ready_after_successful_request().is_ok()
+                        {
+                            *acknowledged = true;
+                        }
+                    }),
+                )
+            } else {
+                crunch_rustc_wrapper::run_daemon(options)
+            };
+            if let Some((mut reporter, _)) = publisher.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take()
+            {
+                let _ = reporter.exited(result.is_ok());
+            }
+            result.map_err(|error| RunError::Internal(format!("serving Rust compiler cache requests: {error}")))
+        }
+    }
+}
+
+fn run_remote_live_command(action: RemoteLiveAction) -> Result<(), RunError> {
+    match action {
+        RemoteLiveAction::Serve { socket } => {
+            let runtime = tokio::runtime::Runtime::new()
+                .map_err(|error| RunError::Internal(format!("creating live daemon runtime: {error}")))?;
+            let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let server_stop = Arc::clone(&stop);
+            runtime.block_on(async move {
+                let mut termination = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                    .map_err(|error| {
+                        RunError::Internal(format!("registering live daemon termination signal: {error}"))
+                    })?;
+                let mut server =
+                    tokio::task::spawn_blocking(move || remote_build::live_state::daemon::serve(&socket, &server_stop));
+                let completed = tokio::select! {
+                    result = &mut server => Some(result),
+                    _ = tokio::signal::ctrl_c() => None,
+                    _ = termination.recv() => None,
+                };
+                let result = match completed {
+                    Some(result) => result,
+                    None => {
+                        stop.store(true, std::sync::atomic::Ordering::Release);
+                        server.await
+                    }
+                };
+                result
+                    .map_err(|error| RunError::Internal(format!("joining live daemon: {error}")))?
+                    .map_err(|error| RunError::Internal(format!("serving live build state: {error}")))
+            })
+        }
+        RemoteLiveAction::Subscribe {
+            socket,
+            owner_run_ids,
+            job_ids,
+            kinds,
+        } => {
+            let filter = remote_build::live_state::daemon::LiveFilter {
+                owner_run_ids,
+                job_ids,
+                kinds,
+            };
+            remote_build::live_state::daemon::subscribe(&socket, filter, &mut std::io::stdout().lock())
+                .map_err(|error| RunError::Internal(format!("subscribing to live build state: {error}")))
+        }
     }
 }
 
@@ -4501,16 +4900,16 @@ fn graph_query_fact_count(observed: usize) -> Result<u32, RunError> {
 }
 
 /// One observed fact set handed to the contract for classification.
-struct SemanticGraphObservedFacts {
+struct SemanticGraphObservedFacts<'a> {
     kind: mantle_application_contract::GraphQueryKind,
-    facts: mantle_application_contract::GraphQueryFacts,
+    facts: mantle_application_contract::GraphQueryFacts<'a>,
 }
 
-impl mantle_application_contract::GraphQueryPort for SemanticGraphObservedFacts {
+impl mantle_application_contract::GraphQueryPort for SemanticGraphObservedFacts<'_> {
     fn query(
         &mut self,
         request: &mantle_application_contract::GraphQueryRequest,
-    ) -> Result<mantle_application_contract::GraphQueryFacts, mantle_application_contract::CapabilityError> {
+    ) -> Result<mantle_application_contract::GraphQueryFacts<'_>, mantle_application_contract::CapabilityError> {
         if request.kind != self.kind {
             return Err(mantle_application_contract::CapabilityError::new(
                 "graph-query-kind-mismatch",
@@ -4526,13 +4925,9 @@ impl mantle_application_contract::GraphQueryPort for SemanticGraphObservedFacts 
 /// Classify one observed query through the contract before anything is reported.
 fn classify_observed_graph_query(
     request: &mantle_application_contract::GraphQueryRequest,
-    facts: mantle_application_contract::GraphQueryFacts,
+    plan: &mantle_application_contract::EffectPlan,
+    facts: mantle_application_contract::GraphQueryFacts<'_>,
 ) -> Result<(), RunError> {
-    if let Some(blocker) = mantle_application_contract::validate_graph_query(request).first() {
-        return Err(RunError::Internal(format!("{}: {}", blocker.code, blocker.message)));
-    }
-    let plan = mantle_application_contract::graph_query_effect_plan()
-        .map_err(|error| RunError::Internal(format!("{}: {}", error.code, error.detail)))?;
     use mantle_application_contract::GraphQueryPort as _;
     let mut port = SemanticGraphObservedFacts {
         kind: request.kind,
@@ -4541,7 +4936,7 @@ fn classify_observed_graph_query(
     let observed = port
         .query(request)
         .map_err(|error| RunError::Internal(format!("{}: {}", error.code, error.detail)))?;
-    match mantle_application_contract::classify_graph_query(&plan, &observed) {
+    match mantle_application_contract::classify_graph_query(plan, &observed) {
         mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
         other => {
             Err(RunError::Internal(format!("semantic graph query observations were not all successful: {other:?}")))
@@ -4554,41 +4949,52 @@ fn execute_semantic_graph_query(
     graph: &semantic_graph::SemanticGraph,
     request: &mantle_application_contract::GraphQueryRequest,
 ) -> Result<String, RunError> {
+    if let Some(blocker) = mantle_application_contract::validate_graph_query(request).first() {
+        return Err(RunError::Internal(format!("{}: {}", blocker.code, blocker.message)));
+    }
+    // Resolve aliases from the admitted graph before executing the query. The
+    // returned query result supplies the actual identity independently.
+    let expected_target = graph.canonical_identity(&request.target).unwrap_or(&request.target);
+    let plan = mantle_application_contract::graph_query_effect_plan(expected_target)
+        .map_err(|error| RunError::Internal(format!("{}: {}", error.code, error.detail)))?;
     match request.kind {
         mantle_application_contract::GraphQueryKind::Graph => {
             let result = graph
                 .graph_for_root(&request.target)
                 .map_err(|err| report_semantic_graph_query_error_value(ctx, err))?;
             let facts = mantle_application_contract::GraphQueryFacts {
+                observed_target: &result.root,
                 nodes: graph_query_fact_count(result.nodes.len())?,
                 edges: graph_query_fact_count(result.edges.len())?,
                 aliases: graph_query_fact_count(result.aliases.len())?,
                 dependents: 0,
             };
-            classify_observed_graph_query(request, facts)?;
+            classify_observed_graph_query(request, &plan, facts)?;
             presentation::semantic_graph::render_graph_result(ctx.output_format(), &result)
         }
         mantle_application_contract::GraphQueryKind::Why => {
             let result = graph.why(&request.target).map_err(|err| report_semantic_graph_query_error_value(ctx, err))?;
             let facts = mantle_application_contract::GraphQueryFacts {
+                observed_target: &result.target,
                 nodes: graph_query_fact_count(result.sources.len())?,
                 edges: graph_query_fact_count(result.providers.len())?,
                 aliases: graph_query_fact_count(result.proof_receipts.len())?,
                 dependents: graph_query_fact_count(result.release_evidence.len())?,
             };
-            classify_observed_graph_query(request, facts)?;
+            classify_observed_graph_query(request, &plan, facts)?;
             presentation::semantic_graph::render_why_result(ctx.output_format(), &result)
         }
         mantle_application_contract::GraphQueryKind::Dependents => {
             let result =
                 graph.dependents(&request.target).map_err(|err| report_semantic_graph_query_error_value(ctx, err))?;
             let facts = mantle_application_contract::GraphQueryFacts {
+                observed_target: &result.target,
                 nodes: graph_query_fact_count(result.dependents.len())?,
                 edges: 0,
                 aliases: 0,
                 dependents: graph_query_fact_count(result.dependents.len())?,
             };
-            classify_observed_graph_query(request, facts)?;
+            classify_observed_graph_query(request, &plan, facts)?;
             presentation::semantic_graph::render_dependents_result(ctx.output_format(), &result)
         }
     }
@@ -4635,17 +5041,29 @@ fn run_transcript_command(action: TranscriptAction, ctx: &RunContext) -> Result<
             mantle_bin,
             allow_in_place,
             backend: ctx.store_backend,
+            state_dir: &ctx.resolved_state_dir,
         }),
     }
 }
 
-fn run_doctor_command(ctx: &RunContext, profile: DoctorProfile) -> Result<(), RunError> {
+fn run_doctor_command(
+    ctx: &RunContext,
+    profile: DoctorProfile,
+    readiness_socket: Option<&Path>,
+) -> Result<(), RunError> {
     let doctor_result = operator_diagnostics::collect_doctor_report(operator_diagnostics::DoctorRequest {
         profile,
         store_dir: &ctx.store,
         state_dir: &ctx.resolved_state_dir,
     });
     presentation::diagnostics::emit_doctor_report(&doctor_result, ctx.output_format())?;
+    if let Some(socket) = readiness_socket {
+        let readiness = remote_build::live_state::daemon::query_readiness(socket)
+            .map_err(|error| RunError::Internal(format!("querying live service readiness: {error}")))?;
+        let rendered = serde_json::to_string(&readiness)
+            .map_err(|error| RunError::Internal(format!("rendering live service readiness: {error}")))?;
+        eprintln!("{rendered}");
+    }
     doctor_report_result(doctor_result.ok)
 }
 
@@ -4795,8 +5213,12 @@ struct BuildCommandInput<'a> {
     import_paths: &'a [PathBuf],
     fix: bool,
     plan: bool,
+    watch: bool,
     offline_source_preflight: bool,
     interchange_dir: Option<&'a Path>,
+    offline_source_manifest: Option<&'a Path>,
+    offline_source_manifest_blake3: Option<&'a str>,
+    causal_trace: bool,
     output_mode: BuildOutputMode,
     jobs: Option<u32>,
     substituters: &'a str,
@@ -4824,8 +5246,12 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
         import_paths,
         fix,
         plan,
+        watch,
         offline_source_preflight,
+        offline_source_manifest,
+        offline_source_manifest_blake3,
         interchange_dir,
+        causal_trace,
         evaluation_stream,
         jobs,
         substituters,
@@ -4855,8 +5281,12 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
         import_paths,
         fix: *fix,
         plan: *plan,
+        watch: *watch,
         offline_source_preflight: *offline_source_preflight,
+        offline_source_manifest: offline_source_manifest.as_deref(),
+        offline_source_manifest_blake3: offline_source_manifest_blake3.as_deref(),
         interchange_dir: interchange_dir.as_deref(),
+        causal_trace: *causal_trace,
         output_mode: if *evaluation_stream {
             BuildOutputMode::EvaluationStream
         } else {
@@ -4902,9 +5332,13 @@ struct PreparedBuildCommand<'a> {
     target: project_build::BuildTarget,
     import_path_args: &'a [PathBuf],
     fix: bool,
+    watch: bool,
     plan: bool,
     offline_source_preflight: bool,
+    offline_source_manifest: Option<&'a Path>,
+    offline_source_manifest_blake3: Option<&'a str>,
     interchange_dir: Option<&'a Path>,
+    causal_trace: bool,
     output_mode: BuildOutputMode,
     max_jobs: u32,
     substituter_urls: Vec<String>,
@@ -4919,6 +5353,39 @@ struct PreparedBuildCommand<'a> {
 fn run_build_command<'a>(ctx: &'a RunContext, input: BuildCommandInput<'a>) -> Result<(), RunError> {
     debug_assert!(ctx.store_prefix.starts_with('/'));
     debug_assert!(!ctx.store.as_os_str().is_empty());
+    if input.watch {
+        if input.remote_builder.is_some()
+            || input.remote_ticket_fd.is_some()
+            || input.remote_builder_program.is_some()
+            || !input.remote_builder_args.is_empty()
+            || !input.trusted_builder_keys.is_empty()
+            || input.remote_observability_config.is_some()
+            || input.remote_delta
+            || input.remote_build_time_secs != remote_build::DEFAULT_TICKET_BUILD_TIME_SECS
+            || input.remote_secret_request.manifest_path != Path::new("secretspec.toml")
+            || input.remote_secret_request.profile != remote_service_secrets::REMOTE_SECRET_PRODUCTION_PROFILE
+            || input.remote_secret_request.provider != remote_service_secrets::REMOTE_SYSTEMD_CREDENTIAL_PROVIDER
+        {
+            return Err(RunError::Build(
+                "--watch requires local execution; remote builder options are unsupported".to_string(),
+            ));
+        }
+        if input.hermeticity.impure {
+            return Err(RunError::Build("--watch cannot use --impure host execution".to_string()));
+        }
+        if input.fix
+            || input.plan
+            || input.offline_source_preflight
+            || input.interchange_dir.is_some()
+            || input.causal_trace
+            || input.output_mode != BuildOutputMode::Human
+        {
+            return Err(RunError::Build("--watch supports only human, local file builds without --fix, --plan, source preflight, interchange, or causal trace".to_string()));
+        }
+        if !matches!(project_build::parse_build_target(input.file), project_build::BuildTarget::File(_)) {
+            return Err(RunError::Build("--watch requires an explicit file-backed Nickel target".to_string()));
+        }
+    }
     crunch_store::StoreConfig::preflight_backend_identity_for(
         ctx.store_backend,
         &ctx.resolved_state_dir,
@@ -4941,6 +5408,21 @@ fn prepare_build_command<'a>(
 ) -> Result<PreparedBuildCommand<'a>, RunError> {
     debug_assert!(ctx.store_prefix.starts_with('/'));
     debug_assert!(!input.substituters.trim().is_empty() || input.no_substitute);
+    if input.offline_source_manifest.is_some() != input.offline_source_manifest_blake3.is_some() {
+        return Err(RunError::Internal("offline vendor cache requires both manifest path and out-of-band BLAKE3".to_string()));
+    }
+    if input.offline_source_manifest.is_some()
+        && (!input.no_substitute || !input.hermeticity.strict_hermetic || input.trust_unsigned
+            || input.signing_key.is_none() || input.trusted_public_keys.is_empty()
+            || !ctx.base_state_dirs.is_empty() || input.fix || input.plan || input.watch
+            || input.remote_builder.is_some()
+            || input.output_mode == BuildOutputMode::EvaluationStream)
+    {
+        return Err(RunError::Internal(
+            "offline vendor cache requires a local strict no-substitute build without unsigned state overlays, explicit signing and trusted public keys, and no unsigned escape hatch"
+                .to_string(),
+        ));
+    }
     let substituter_urls = if input.no_substitute {
         Vec::new()
     } else {
@@ -4974,9 +5456,13 @@ fn prepare_build_command<'a>(
         target: project_build::parse_build_target(input.file),
         import_path_args: input.import_paths,
         fix: input.fix,
+        watch: input.watch,
         plan: input.plan,
         offline_source_preflight: input.offline_source_preflight,
+        offline_source_manifest: input.offline_source_manifest,
+        offline_source_manifest_blake3: input.offline_source_manifest_blake3,
         interchange_dir: input.interchange_dir,
+        causal_trace: input.causal_trace,
         output_mode: input.output_mode,
         max_jobs: crunch_pipeline::resolve_max_jobs(input.jobs),
         substituter_urls,
@@ -4989,16 +5475,42 @@ fn prepare_build_command<'a>(
     })
 }
 
+fn signed_offline_vendor_overrides(
+    prepared: &PreparedBuildCommand<'_>,
+) -> Result<Vec<crunch_build::FetchSourceOverride>, RunError> {
+    let (Some(path), Some(digest)) = (
+        prepared.offline_source_manifest,
+        prepared.offline_source_manifest_blake3,
+    ) else {
+        return Ok(Vec::new());
+    };
+    source_bundle::offline_vendor_cache_overrides(
+        path,
+        digest,
+        &prepared.ctx.resolved_state_dir,
+        &prepared.ctx.store,
+        &prepared.ctx.store_prefix,
+        prepared.ctx.store_backend,
+        prepared.parsed_trusted.as_deref().unwrap_or(&[]),
+    )
+}
+
 fn run_file_build_target(prepared: &PreparedBuildCommand<'_>, path: &Path) -> Result<(), RunError> {
     debug_assert!(prepared.ctx.store_prefix.starts_with('/'));
     debug_assert!(!path.as_os_str().is_empty());
     let nickel_search_dirs = build_import_paths(prepared.import_path_args)?;
+    let trust = source_bundle::SourceStoreTrust {
+        output_dir: &prepared.ctx.store,
+        backend: prepared.ctx.store_backend,
+        trusted_keys: prepared.parsed_trusted.as_deref().unwrap_or(&[]),
+    };
     let source_preflight = run_offline_source_preflight_if_requested(OfflineSourcePreflightRequest {
         enabled: prepared.offline_source_preflight,
         file: path,
         import_entries: &nickel_search_dirs,
         state_dir: &prepared.ctx.resolved_state_dir,
         store_prefix: &prepared.ctx.store_prefix,
+        trust: Some(&trust),
         output_mode: prepared.output_mode,
     })?;
     let source_fetch_plan =
@@ -5008,6 +5520,7 @@ fn run_file_build_target(prepared: &PreparedBuildCommand<'_>, path: &Path) -> Re
                 &nickel_search_dirs,
                 &prepared.ctx.resolved_state_dir,
                 &prepared.ctx.store_prefix,
+                Some(&trust),
             )?)
         } else {
             None
@@ -5060,12 +5573,35 @@ fn run_local_file_build(
     debug_assert!(prepared.max_jobs > 0);
     debug_assert!(prepared.ctx.store_prefix.starts_with('/'));
     debug_assert!(!path.as_os_str().is_empty());
-    if let Some(source_fetch_plan) = source_fetch_plan {
+    if prepared.watch {
+        return build_cmd::cmd_build_watch(build_cmd::LocalBuildCommandConfig {
+            file: path,
+            import_paths: import_entries,
+            output_dir: &prepared.ctx.store,
+            state_dir: &prepared.ctx.resolved_state_dir,
+            store_dir: &prepared.ctx.store_prefix,
+            backend: prepared.ctx.store_backend,
+            verbose: prepared.ctx.verbose,
+            max_jobs: prepared.max_jobs,
+            substituter_urls: &prepared.substituter_urls,
+            signing_key_path: prepared.signing_key,
+            trusted_public_keys: prepared.parsed_trusted.as_deref(),
+            trust_unsigned: prepared.trust_unsigned,
+            hermeticity_mode: prepared.hermeticity_mode,
+            base_state_dirs: prepared.ctx.base_state_dirs.clone(),
+        });
+    }
+    let source_overrides = source_bundle::merge_source_fetch_overrides(
+        source_fetch_plan.map(|plan| plan.overrides.clone()).unwrap_or_default(),
+        signed_offline_vendor_overrides(prepared)?,
+    )?;
+    if !source_overrides.is_empty() {
         return build_cmd::cmd_build_with_source_fetch_overrides(
             path,
             import_entries,
             &prepared.ctx.store,
             &prepared.ctx.resolved_state_dir,
+            &prepared.ctx.resolved_log_dir,
             &prepared.ctx.store_prefix,
             prepared.ctx.store_backend,
             prepared.ctx.verbose,
@@ -5078,7 +5614,8 @@ fn run_local_file_build(
             prepared.hermeticity_mode,
             prepared.output_mode,
             prepared.interchange_dir,
-            source_fetch_plan.overrides.clone(),
+            prepared.causal_trace,
+            source_overrides,
             prepared.ctx.base_state_dirs.clone(),
             None,
         );
@@ -5088,6 +5625,7 @@ fn run_local_file_build(
         import_entries,
         &prepared.ctx.store,
         &prepared.ctx.resolved_state_dir,
+        &prepared.ctx.resolved_log_dir,
         &prepared.ctx.store_prefix,
         prepared.ctx.store_backend,
         prepared.ctx.verbose,
@@ -5100,6 +5638,7 @@ fn run_local_file_build(
         prepared.hermeticity_mode,
         prepared.output_mode,
         prepared.interchange_dir,
+        prepared.causal_trace,
     )
 }
 
@@ -5112,12 +5651,18 @@ fn run_project_build_target(prepared: &PreparedBuildCommand<'_>) -> Result<(), R
     let root_registration = project_output_root_registration(&resolved)?;
     let mut nickel_search_dirs = build_import_paths(&[])?;
     nickel_search_dirs.extend(resolved.import_paths);
+    let trust = source_bundle::SourceStoreTrust {
+        output_dir: &prepared.ctx.store,
+        backend: prepared.ctx.store_backend,
+        trusted_keys: prepared.parsed_trusted.as_deref().unwrap_or(&[]),
+    };
     let source_preflight = run_offline_source_preflight_for_expr_if_requested(OfflineExprPreflightRequest {
         enabled: prepared.offline_source_preflight,
         expr: &expr,
         import_entries: &nickel_search_dirs,
         state_dir: &prepared.ctx.resolved_state_dir,
         store_prefix: &prepared.ctx.store_prefix,
+        trust: Some(&trust),
         output_mode: prepared.output_mode,
     })?;
     let source_fetch_plan = source_fetch_override_plan_for_expr_if_requested(
@@ -5126,6 +5671,7 @@ fn run_project_build_target(prepared: &PreparedBuildCommand<'_>) -> Result<(), R
         &nickel_search_dirs,
         &prepared.ctx.resolved_state_dir,
         &prepared.ctx.store_prefix,
+        Some(&trust),
     )?;
     if let Some(selection) = &prepared.remote_selection {
         return run_remote_build_command(RemoteBuildCommandRequest {
@@ -5143,11 +5689,15 @@ fn run_project_build_target(prepared: &PreparedBuildCommand<'_>) -> Result<(), R
             source_preflight: source_preflight.as_ref(),
         });
     }
+    let source_overrides = source_bundle::merge_source_fetch_overrides(
+        source_fetch_plan.as_ref().map(|plan| plan.overrides.clone()).unwrap_or_default(),
+        signed_offline_vendor_overrides(prepared)?,
+    )?;
     build_from_expr(InlineBuildRequest {
         expr: &expr,
         import_entries: &nickel_search_dirs,
         prepared,
-        source_fetch_overrides: source_fetch_plan.map(|plan| plan.overrides).unwrap_or_default(),
+        source_fetch_overrides: source_overrides,
         root_registration,
     })
 }
@@ -5320,7 +5870,9 @@ fn remote_build_selection(
     let selected_profile = select_remote_builder_profile(&farm_config, builder)?;
     let worker_generation = selected_profile
         .as_ref()
-        .map_or(crunch_build::distributed::RemoteFenceGeneration::INITIAL.get(), |profile| profile.worker_generation);
+        .map_or(crunch_remote_core::attempt::RemoteFenceGeneration::INITIAL.get(), |profile| {
+            profile.worker_generation
+        });
     let worker_concurrency = selected_profile
         .as_ref()
         .map_or(remote_build::DEFAULT_REMOTE_CONCURRENCY, |profile| profile.max_concurrency);
@@ -5342,7 +5894,7 @@ fn remote_build_selection(
             args,
         },
         trusted_output_keys,
-        now_unix_s: unix_time_now_s()?,
+        now_unix_s: remote_build::remote_cli_now_unix_s(builder).map_err(RunError::Internal)?,
         build_time_limit_secs: input.build_time_limit_secs,
         client_endpoint: None,
         transfer_capabilities,
@@ -5450,17 +6002,6 @@ fn remote_trusted_builder_keys(
     }
     let service_keys = remote_service_secrets::resolve_remote_service_keys_bounded(secret_request)?;
     Ok(vec![service_keys.result_signing_key.verifying_key.name().to_string()])
-}
-
-#[allow(
-    tigerstyle::ambient_clock,
-    reason = "CLI shell captures wall time once before passing explicit seconds into deterministic cores"
-)]
-fn unix_time_now_s() -> Result<u64, RunError> {
-    let elapsed_since_epoch_secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|err| RunError::Internal(format!("system clock before unix epoch: {err}")))?;
-    Ok(elapsed_since_epoch_secs.as_secs())
 }
 
 enum RemoteBuildSource<'a> {
@@ -5614,7 +6155,7 @@ fn cmd_remote_failure_debug_replay(
     let bundle_dir = remote_failure_debug::resolve_bundle_selector(&ctx.resolved_state_dir, input.bundle_selector)?;
     let (bundle, policy) =
         remote_failure_debug::load_and_validate_remote_failure_debug_bundle(&bundle_dir).map_err(RunError::Internal)?;
-    let now_unix_s = unix_time_now_s()?;
+    let now_unix_s = remote_build::remote_cli_now_unix_s(bundle.bundle_blake3.as_str()).map_err(RunError::Internal)?;
     let _lease = remote_failure_debug::acquire_remote_failure_debug_lease(
         &bundle_dir,
         now_unix_s,
@@ -5804,7 +6345,21 @@ async fn execute_remote_failure_replay(
 ) -> Result<CompletedRemoteFailureReplay, RunError> {
     debug_assert_eq!(runtime.dispatch.client.request.request_id, runtime.replay_request.request_id);
     debug_assert!(!runtime.dispatch.client.trusted_output_keys.is_empty());
-    let transcript = match remote_build::run_stdio_remote_child(&runtime.dispatch.command) {
+    let mut session = crunch_remote_core::effect::EffectSession::for_actor_attempt(
+        &runtime.replay_request.request_id,
+        crunch_remote_core::effect::RemoteEffectBinding {
+            job_id: &runtime.attempt.job_id,
+            attempt_id: &runtime.attempt.attempt_id,
+            fence_generation: runtime.attempt.fence_generation,
+        },
+        crunch_remote_core::effect::EffectActor::Client,
+    )
+    .map_err(|reason| RunError::Internal(format!("remote replay effect identity: {reason:?}")))?;
+    let transcript = match remote_build::run_stdio_remote_child(
+        &runtime.dispatch.command,
+        &runtime.replay_request.request_id,
+        &mut session,
+    ) {
         Ok(transcript) => transcript,
         Err(error) => {
             return Err(fail_remote_failure_replay(
@@ -5835,6 +6390,7 @@ async fn execute_remote_failure_replay(
         }
     };
     let output_admission = match remote_build::import_admitted_remote_stdio_outputs(
+        &mut session,
         &mut runtime.store,
         &runtime.replay_request,
         &admission,
@@ -6043,11 +6599,12 @@ struct RemoteFailureFieldQuery<'a> {
 }
 
 fn remote_failure_debug_report_field(query: RemoteFailureFieldQuery<'_>) -> Option<String> {
-    query
-        .reason
-        .split(';')
-        .map(str::trim)
-        .find_map(|field| field.strip_prefix(query.prefix).map(str::to_string))
+    query.reason.split(';').map(str::trim).find_map(|field| {
+        field
+            .strip_prefix(query.prefix)
+            .and_then(|value| value.split(['\r', '\n']).next())
+            .map(str::to_string)
+    })
 }
 
 /// Whether one remote failure status code is an admissible bounded token.
@@ -6056,7 +6613,7 @@ fn valid_remote_failure_status_code(value: &str) -> bool {
 }
 
 fn remote_protocol_failure_fact(reason: &str) -> remote_build::RemoteProductionTelemetryFact {
-    if reason.contains(remote_build::RemoteAttemptReasonCode::StaleReportRejected.as_str()) {
+    if reason.contains(crunch_remote_core::attempt::RemoteAttemptReasonCode::StaleReportRejected.as_str()) {
         return remote_build::RemoteProductionTelemetryFact::StaleFenceRejected;
     }
     if reason.contains(REMOTE_TRANSFER_INTERRUPTION_REASON_FRAGMENT) {
@@ -6098,12 +6655,38 @@ fn record_remote_failure_observability(
     ));
     let accepted_events_before = telemetry.accepted_events;
     *telemetry = remote_build::record_remote_production_telemetry(telemetry, fact, telemetry_policy);
-    let immutable_log = if fact == remote_build::RemoteProductionTelemetryFact::StaleFenceRejected {
-        remote_build::append_remote_rejected_production_observability_log(state_dir, attempt, telemetry)
-    } else {
-        remote_build::append_remote_production_observability_log(coordinator, attempt, telemetry)
+    let request_id = debug_context
+        .as_ref()
+        .map_or(attempt.attempt_id.as_str(), |context| context.request.request_id.as_str());
+    let binding = crunch_remote_core::effect::RemoteEffectBinding {
+        job_id: &attempt.job_id,
+        attempt_id: &attempt.attempt_id,
+        fence_generation: attempt.fence_generation,
     };
-    let telemetry_delivery = remote_telemetry_export::export_remote_telemetry(export_config, &telemetry.events);
+    let mut log_session = crunch_remote_core::effect::EffectSession::for_actor_attempt(
+        request_id,
+        binding,
+        crunch_remote_core::effect::EffectActor::FailureObservability,
+    )
+    .expect("validated remote failure observability identity");
+    let immutable_log = if fact == remote_build::RemoteProductionTelemetryFact::StaleFenceRejected {
+        remote_build::append_remote_rejected_production_observability_log(
+            &mut log_session, request_id, state_dir, attempt, telemetry,
+        )
+    } else {
+        remote_build::append_remote_production_observability_log(
+            &mut log_session, request_id, coordinator, attempt, telemetry,
+        )
+    };
+    let mut export_session = crunch_remote_core::effect::EffectSession::for_actor_attempt(
+        request_id,
+        binding,
+        crunch_remote_core::effect::EffectActor::TelemetryExport,
+    )
+    .expect("validated remote failure telemetry identity");
+    let telemetry_delivery = remote_build::export_remote_production_telemetry(
+        &mut export_session, request_id, export_config, &telemetry.events,
+    );
     let worker_debug = debug_context.as_ref().and_then(|context| context.worker_debug.clone());
     let failure_debug = debug_context.map(|context| {
         let result = publish_remote_failure_debug_observability(
@@ -6158,7 +6741,12 @@ fn fail_remote_attempt_after_observability(
     ) {
         return None;
     }
-    Some(remote_build::fail_remote_production_attempt(
+    let fail = if fact == remote_build::RemoteProductionTelemetryFact::OutputRejected {
+        remote_build::fail_remote_production_attempt_terminal
+    } else {
+        remote_build::fail_remote_production_attempt
+    };
+    Some(fail(
         coordinator,
         attempt,
         telemetry.accepted_events.saturating_add(1),
@@ -6306,6 +6894,80 @@ struct RemoteDispatchExecutionInput<'a> {
     prepared: &'a mut PreparedRemoteDispatch,
 }
 
+struct RemoteLiveBuildObservation {
+    owner_run_id: String,
+    owned_jobs: std::collections::BTreeSet<crunch_remote_core::attempt::RemoteJobId>,
+    present_workers: std::collections::BTreeSet<String>,
+    publisher: remote_build::live_state::producer::BestEffortLivePublisher,
+    degraded_reported: bool,
+}
+
+impl RemoteLiveBuildObservation {
+    fn start() -> Option<Self> {
+        let socket = build_cmd::configured_live_socket()?;
+        let nonce = match remote_build::remote_live_owner_nonce() {
+            Ok(nonce) => nonce,
+            Err(error) => {
+                eprintln!("live build observation degraded: owner nonce unavailable: {error}");
+                return None;
+            }
+        };
+        let owner_run_id = format!("remote-{}-{nonce}", std::process::id());
+        let publisher =
+            match remote_build::live_state::producer::BestEffortLivePublisher::new_empty(socket, owner_run_id.as_str())
+            {
+                Ok(publisher) => publisher,
+                Err(error) => {
+                    eprintln!("live build observation degraded: invalid owner: {error:?}");
+                    return None;
+                }
+            };
+        Some(Self {
+            owner_run_id,
+            owned_jobs: std::collections::BTreeSet::new(),
+            // Configured registration is not evidence of an active worker session.
+            present_workers: std::collections::BTreeSet::new(),
+            publisher,
+            degraded_reported: false,
+        })
+    }
+
+    fn observe(&mut self, state: &remote_build::RemoteCoordinatorState) {
+        if self.degraded_reported {
+            return;
+        }
+        let snapshot = remote_build::live_state::normalize_remote_live_facts_for_jobs(
+            &self.owner_run_id,
+            state,
+            &self.present_workers,
+            &self.owned_jobs,
+        );
+        let observation = snapshot.and_then(|snapshot| self.publisher.observe(snapshot));
+        match observation {
+            Ok(remote_build::live_state::producer::LivePublisherObservation::Degraded(reason)) => {
+                eprintln!("live build observation degraded: {reason:?}");
+                self.degraded_reported = true;
+            }
+            Err(error) => {
+                eprintln!("live build observation degraded: {error:?}");
+                self.publisher.finish();
+                self.degraded_reported = true;
+            }
+            _ => {}
+        }
+    }
+
+    fn report_degraded(&mut self) {
+        if self.degraded_reported {
+            return;
+        }
+        if let remote_build::live_state::producer::LivePublisherStatus::Degraded(reason) = self.publisher.status() {
+            eprintln!("live build observation degraded: {reason:?}");
+            self.degraded_reported = true;
+        }
+    }
+}
+
 async fn run_remote_build_dispatches_async(
     selection: &RemoteBuildSelection,
     inputs: Vec<remote_build::RemoteClientDerivationInput>,
@@ -6330,6 +6992,7 @@ async fn run_remote_build_dispatches_async(
     let mut coordinator = remote_build::load_coordinator_state(state_dir)?;
     let priority_plan = plan_remote_dispatch_priority(selection, &inputs)?;
     let competing_goal_count = priority_plan.evidence.competing_goal_count;
+    let mut live = RemoteLiveBuildObservation::start();
     let mut input_slots = inputs.into_iter().map(Some).collect::<Vec<_>>();
     let mut accepted_builds = Vec::with_capacity(input_slots.len());
     for (priority_index, selected_input_index) in priority_plan.ordered_input_indices.iter().enumerate() {
@@ -6346,6 +7009,10 @@ async fn run_remote_build_dispatches_async(
             input,
             priority_competing_goal_count: (priority_index == 0).then_some(competing_goal_count),
         })?;
+        if let Some(observer) = live.as_mut() {
+            observer.owned_jobs.insert(prepared.attempt.job_id.clone());
+            observer.observe(&coordinator);
+        }
         let accepted_build = execute_remote_dispatch(RemoteDispatchExecutionInput {
             selection,
             state_dir,
@@ -6353,8 +7020,15 @@ async fn run_remote_build_dispatches_async(
             coordinator: &mut coordinator,
             prepared: &mut prepared,
         })
-        .await?;
+        .await;
+        if let Some(observer) = live.as_mut() {
+            observer.observe(&coordinator);
+        }
+        let accepted_build = accepted_build?;
         accepted_builds.push(accepted_build);
+    }
+    if let Some(observer) = live.as_mut() {
+        observer.report_degraded();
     }
     assert_eq!(accepted_builds.len(), input_slots.len());
     assert!(input_slots.iter().all(Option::is_none));
@@ -6367,8 +7041,8 @@ async fn run_remote_build_dispatches_async(
     })
 }
 
-/// Effect kind the remote client reports for its network exchange.
-const REMOTE_BUILD_EFFECT: &str = "use-network";
+/// Independent identity of the completed network-and-store import operation.
+const REMOTE_BUILD_EFFECT: &str = "remote-build-import";
 /// Diagnostic code for a remote import whose outputs lack signed evidence.
 const REMOTE_BUILD_EVIDENCE_CODE: &str = "remote-build-import-evidence-missing";
 
@@ -6384,23 +7058,31 @@ fn is_evidenced_remote_output(output: &remote_build::RemoteImportedOutput) -> bo
         && !output.artifact_attestation_digest_blake3.is_empty()
 }
 
-/// Classify the remote build imports before reporting them.
 /// Whether every imported output across the builds carries its evidence.
-fn are_remote_outputs_evidenced(outputs: &[&remote_build::RemoteImportedOutput]) -> bool {
-    outputs.iter().all(|output| is_evidenced_remote_output(output))
+fn are_remote_outputs_evidenced<'a>(outputs: impl IntoIterator<Item = &'a remote_build::RemoteImportedOutput>) -> bool {
+    outputs.into_iter().all(is_evidenced_remote_output)
 }
 
 fn classify_remote_build_imports(report: &remote_build::RemoteClientBuildReport) -> Result<(), RunError> {
     let plan =
         mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::RemoteExecution, &[
-            REMOTE_BUILD_EFFECT,
+            mantle_application_contract::EffectSpec {
+                effect_id: REMOTE_BUILD_EFFECT,
+                kind: mantle_application_contract::EffectKind::StoreAccess,
+                limit: mantle_application_contract::EffectMeasure::Calls(1),
+                expected_output: mantle_application_contract::ExpectedOutput::None,
+            },
         ])
-        .ok_or_else(|| RunError::Internal("remote build effect plan exceeds its bound".to_string()))?;
-    let outputs: Vec<&remote_build::RemoteImportedOutput> =
-        report.imported.iter().flat_map(|build| build.imported.outputs.iter()).collect();
-    let is_evidenced = are_remote_outputs_evidenced(&outputs);
+        .map_err(|error| {
+            RunError::Internal(format!("remote build effect plan rejected: {}: {error:?}", error.code()))
+        })?;
+    let is_evidenced =
+        are_remote_outputs_evidenced(report.imported.iter().flat_map(|build| build.imported.outputs.iter()));
     let observation = mantle_application_contract::Observation {
         effect_id: mantle_application_contract::EffectId(String::from(REMOTE_BUILD_EFFECT)),
+        kind: mantle_application_contract::EffectKind::StoreAccess,
+        output: mantle_application_contract::EffectOutput::None,
+        usage: mantle_application_contract::EffectMeasure::Calls(1),
         status: if is_evidenced {
             mantle_application_contract::ObservationStatus::Succeeded
         } else {
@@ -6545,8 +7227,18 @@ fn configure_remote_dispatch_diagnostics(
     )
 }
 
+struct RemoteDispatchEffectPorts<'a> {
+    selection: &'a RemoteBuildSelection,
+    state_dir: &'a Path,
+    coordinator: &'a mut remote_build::RemoteCoordinatorState,
+    attempt: &'a remote_build::RemoteProductionAttemptBinding,
+    request: &'a remote_build::ConcreteBuildRequest,
+    telemetry: &'a mut crunch_build::distributed::RemoteTelemetryBuffer,
+    telemetry_policy: crunch_build::distributed::RemoteTelemetryPolicy,
+}
+
 async fn execute_remote_dispatch(
-    mut input: RemoteDispatchExecutionInput<'_>,
+    input: RemoteDispatchExecutionInput<'_>,
 ) -> Result<remote_build::RemoteClientImportedBuild, RunError> {
     debug_assert_eq!(input.prepared.request.request_id, input.prepared.plan.client.request.request_id);
     debug_assert!(!input.prepared.plan.client.trusted_output_keys.is_empty());
@@ -6558,38 +7250,68 @@ async fn execute_remote_dispatch(
     )
     .await
     .map_err(|err| RunError::Internal(format!("remote input stream preparation failed: {err}")))?;
-    let transcript = run_remote_dispatch_child(&mut input)?;
+    let prepared = &mut *input.prepared;
+    let request_id = &prepared.request.request_id;
+    let mut session = crunch_remote_core::effect::EffectSession::for_actor_attempt(
+        request_id,
+        crunch_remote_core::effect::RemoteEffectBinding {
+            job_id: &prepared.attempt.job_id,
+            attempt_id: &prepared.attempt.attempt_id,
+            fence_generation: prepared.attempt.fence_generation,
+        },
+        crunch_remote_core::effect::EffectActor::Client,
+    )
+    .map_err(|reason| RunError::Internal(format!("remote dispatch effect identity: {reason:?}")))?;
+    let mut ports = RemoteDispatchEffectPorts {
+        selection: input.selection,
+        state_dir: input.state_dir,
+        coordinator: input.coordinator,
+        attempt: &prepared.attempt,
+        request: &prepared.request,
+        telemetry: &mut prepared.telemetry,
+        telemetry_policy: prepared.telemetry_policy,
+    };
+    let transcript = run_remote_dispatch_child(&mut ports, &prepared.plan.command, &mut session)?;
     for event in &transcript.telemetry.events {
-        input.prepared.telemetry = crunch_build::distributed::record_remote_telemetry(
-            &input.prepared.telemetry,
+        *ports.telemetry = crunch_build::distributed::record_remote_telemetry(
+            ports.telemetry,
             event.clone(),
-            input.prepared.telemetry_policy,
+            ports.telemetry_policy,
         );
     }
-    let (admission, output_admission) = admit_remote_dispatch_outputs(&mut input, &transcript).await?;
-    finalize_remote_dispatch(input, transcript, admission, output_admission)
+    let (admission, output_admission) = admit_remote_dispatch_outputs(
+        &mut ports,
+        input.store,
+        &prepared.plan.client.trusted_output_keys,
+        &mut session,
+        &transcript,
+    )
+    .await?;
+    finalize_remote_dispatch(ports, &prepared.plan.label, &mut session, transcript, admission, output_admission)
 }
 
 fn run_remote_dispatch_child(
-    input: &mut RemoteDispatchExecutionInput<'_>,
+    ports: &mut RemoteDispatchEffectPorts<'_>,
+    command: &remote_build::RemoteStdioCommand,
+    session: &mut crunch_remote_core::effect::EffectSession<'_>,
 ) -> Result<remote_build::RemoteStdioTranscript, RunError> {
-    match remote_build::run_stdio_remote_child(&input.prepared.plan.command) {
+    match remote_build::run_stdio_remote_child(command, &ports.request.request_id, session) {
         Ok(transcript) => Ok(transcript),
         Err(error) => {
             let failure_fact = remote_protocol_failure_fact(&error.to_string());
             let failure_observability = record_remote_failure_observability(RemoteFailureObservabilityInput {
-                export_config: &input.selection.telemetry,
-                telemetry_policy: input.prepared.telemetry_policy,
-                state_dir: input.state_dir,
-                coordinator: input.coordinator,
-                attempt: &input.prepared.attempt,
-                telemetry: &mut input.prepared.telemetry,
+                export_config: &ports.selection.telemetry,
+                telemetry_policy: ports.telemetry_policy,
+                state_dir: ports.state_dir,
+                coordinator: ports.coordinator,
+                attempt: ports.attempt,
+                telemetry: ports.telemetry,
                 fact: failure_fact,
                 debug_context: Some(RemoteFailureDebugEmissionContext {
-                    policy: &input.selection.failure_debug,
-                    request: &input.prepared.request,
-                    route_class: &input.selection.options.builder.endpoint_id,
-                    created_unix_s: input.selection.options.now_unix_s,
+                    policy: &ports.selection.failure_debug,
+                    request: ports.request,
+                    route_class: &ports.selection.options.builder.endpoint_id,
+                    created_unix_s: ports.selection.options.now_unix_s,
                     worker_debug: parse_remote_worker_failure_debug_report(&error.to_string()),
                 }),
             });
@@ -6599,35 +7321,37 @@ fn run_remote_dispatch_child(
 }
 
 async fn admit_remote_dispatch_outputs(
-    input: &mut RemoteDispatchExecutionInput<'_>,
+    ports: &mut RemoteDispatchEffectPorts<'_>,
+    store: &mut crunch_store::StoreHandle,
+    trusted_output_keys: &[String],
+    session: &mut crunch_remote_core::effect::EffectSession<'_>,
     transcript: &remote_build::RemoteStdioTranscript,
 ) -> Result<(remote_build::RemoteOutputAdmissionReport, remote_build::RemoteOutputImportReport), RunError> {
-    debug_assert_eq!(input.prepared.request.request_id, input.prepared.plan.client.request.request_id);
-    debug_assert!(!input.prepared.plan.client.trusted_output_keys.is_empty());
+    debug_assert!(!trusted_output_keys.is_empty());
     let admission = match remote_build::admit_fenced_remote_stdio_output(
-        input.coordinator,
-        &input.prepared.attempt,
+        ports.coordinator,
+        ports.attempt,
         true,
-        &input.prepared.request,
-        &input.prepared.plan.client.trusted_output_keys,
+        ports.request,
+        trusted_output_keys,
         transcript,
-        input.selection.options.now_unix_s,
+        ports.selection.options.now_unix_s,
     ) {
         Ok(admission) => admission,
         Err(error) => {
             let failure_observability = record_remote_failure_observability(RemoteFailureObservabilityInput {
-                export_config: &input.selection.telemetry,
-                telemetry_policy: input.prepared.telemetry_policy,
-                state_dir: input.state_dir,
-                coordinator: input.coordinator,
-                attempt: &input.prepared.attempt,
-                telemetry: &mut input.prepared.telemetry,
+                export_config: &ports.selection.telemetry,
+                telemetry_policy: ports.telemetry_policy,
+                state_dir: ports.state_dir,
+                coordinator: ports.coordinator,
+                attempt: ports.attempt,
+                telemetry: ports.telemetry,
                 fact: remote_build::RemoteProductionTelemetryFact::OutputRejected,
                 debug_context: Some(RemoteFailureDebugEmissionContext {
-                    policy: &input.selection.failure_debug,
-                    request: &input.prepared.request,
-                    route_class: &input.selection.options.builder.endpoint_id,
-                    created_unix_s: input.selection.options.now_unix_s,
+                    policy: &ports.selection.failure_debug,
+                    request: ports.request,
+                    route_class: &ports.selection.options.builder.endpoint_id,
+                    created_unix_s: ports.selection.options.now_unix_s,
                     worker_debug: None,
                 }),
             });
@@ -6637,65 +7361,112 @@ async fn admit_remote_dispatch_outputs(
             ));
         }
     };
-    let output_admission = remote_build::import_admitted_remote_stdio_outputs(
-        input.store,
-        &input.prepared.request,
+    let output_admission = match remote_build::import_admitted_remote_stdio_outputs(
+        session,
+        store,
+        ports.request,
         &admission,
         transcript,
         true,
         Some(crunch_store::GcRootSource::Build),
     )
     .await
-    .map_err(|err| RunError::Internal(format!("remote output import failed: {err}")))?;
-    debug_assert_eq!(admission.request_id, input.prepared.request.request_id);
-    debug_assert_eq!(output_admission.request_id, input.prepared.request.request_id);
+    {
+        Ok(output_admission) => output_admission,
+        Err(error) => {
+            let failure_observability = record_remote_failure_observability(RemoteFailureObservabilityInput {
+                export_config: &ports.selection.telemetry,
+                telemetry_policy: ports.telemetry_policy,
+                state_dir: ports.state_dir,
+                coordinator: ports.coordinator,
+                attempt: ports.attempt,
+                telemetry: ports.telemetry,
+                fact: remote_build::RemoteProductionTelemetryFact::OutputRejected,
+                debug_context: Some(RemoteFailureDebugEmissionContext {
+                    policy: &ports.selection.failure_debug,
+                    request: ports.request,
+                    route_class: &ports.selection.options.builder.endpoint_id,
+                    created_unix_s: ports.selection.options.now_unix_s,
+                    worker_debug: None,
+                }),
+            });
+            return Err(annotate_remote_failure_error(
+                RunError::Internal(format!("remote output import failed: {error}")),
+                &failure_observability,
+            ));
+        }
+    };
+    debug_assert_eq!(admission.request_id, ports.request.request_id);
+    debug_assert_eq!(output_admission.request_id, ports.request.request_id);
     Ok((admission, output_admission))
 }
 
 fn finalize_remote_dispatch(
-    input: RemoteDispatchExecutionInput<'_>,
+    ports: RemoteDispatchEffectPorts<'_>,
+    label: &str,
+    session: &mut crunch_remote_core::effect::EffectSession<'_>,
     transcript: remote_build::RemoteStdioTranscript,
     admission: remote_build::RemoteOutputAdmissionReport,
     output_admission: remote_build::RemoteOutputImportReport,
 ) -> Result<remote_build::RemoteClientImportedBuild, RunError> {
-    debug_assert_eq!(admission.request_id, input.prepared.request.request_id);
-    debug_assert_eq!(output_admission.request_id, input.prepared.request.request_id);
+    debug_assert_eq!(admission.request_id, ports.request.request_id);
+    debug_assert_eq!(output_admission.request_id, ports.request.request_id);
     debug_assert!(!output_admission.outputs.is_empty());
     let telemetry = remote_build::record_remote_production_telemetry(
-        &input.prepared.telemetry,
+        ports.telemetry,
         remote_build::RemoteProductionTelemetryFact::OutputAdmitted,
-        input.prepared.telemetry_policy,
+        ports.telemetry_policy,
     );
     remote_build::complete_remote_production_attempt(
-        input.coordinator,
-        &input.prepared.attempt,
+        ports.coordinator,
+        ports.attempt,
         &admission.output_digest_blake3,
-        input.selection.options.now_unix_s.saturating_add(1),
+        ports.selection.options.now_unix_s.saturating_add(1),
     )
     .map_err(|err| RunError::Internal(format!("remote coordinator completion failed: {err}")))?;
     let immutable_log_result = remote_build::append_remote_production_observability_log(
-        input.coordinator,
-        &input.prepared.attempt,
+        session,
+        &ports.request.request_id,
+        ports.coordinator,
+        ports.attempt,
         &telemetry,
     );
+    let use_root_session = immutable_log_result.is_ok();
     let (immutable_log, immutable_log_health) = remote_immutable_log_health(immutable_log_result);
-    let telemetry_delivery =
-        remote_telemetry_export::export_remote_telemetry(&input.selection.telemetry, &telemetry.events);
+    let telemetry_delivery = if use_root_session {
+        remote_build::export_remote_production_telemetry(
+            session, &ports.request.request_id, &ports.selection.telemetry, &telemetry.events,
+        )
+    } else {
+        let mut export_session = crunch_remote_core::effect::EffectSession::for_actor_attempt(
+            &ports.request.request_id,
+            crunch_remote_core::effect::RemoteEffectBinding {
+                job_id: &ports.attempt.job_id,
+                attempt_id: &ports.attempt.attempt_id,
+                fence_generation: ports.attempt.fence_generation,
+            },
+            crunch_remote_core::effect::EffectActor::TelemetryExport,
+        )
+        .expect("validated remote completed telemetry identity");
+        remote_build::export_remote_production_telemetry(
+            &mut export_session, &ports.request.request_id, &ports.selection.telemetry, &telemetry.events,
+        )
+    };
     let health = remote_build::RemoteAttemptObservabilityHealth {
         telemetry: remote_build::remote_telemetry_buffer_health(&telemetry),
         exporters: telemetry_delivery,
-        trace_context: production_trace_health(input.selection, &transcript),
+        trace_context: production_trace_health(ports.selection, &transcript),
         immutable_log: immutable_log_health,
         non_claim: remote_build::REMOTE_OBSERVABILITY_NON_CLAIM.to_string(),
     };
     let _health_persistence = remote_build::update_remote_production_observability_health(
-        input.coordinator,
-        &input.prepared.attempt,
+        ports.coordinator,
+        ports.attempt,
         health.clone(),
     );
     Ok(remote_build::RemoteClientImportedBuild {
-        label: input.prepared.plan.label.clone(),
-        request_id: input.prepared.request.request_id.clone(),
+        label: label.to_string(),
+        request_id: ports.request.request_id.clone(),
         imported: output_admission,
         observability: remote_build::RemoteAttemptObservabilityReport {
             events: telemetry.events,
@@ -6902,6 +7673,7 @@ struct OfflineSourcePreflightRequest<'a> {
     import_entries: &'a [OsString],
     state_dir: &'a Path,
     store_prefix: &'a str,
+    trust: Option<&'a source_bundle::SourceStoreTrust<'a>>,
     output_mode: BuildOutputMode,
 }
 
@@ -6916,6 +7688,7 @@ fn run_offline_source_preflight_if_requested(
         request.import_entries,
         request.state_dir,
         request.store_prefix,
+        request.trust,
     )?;
     if source_bundle::source_offline_preflight_is_ready(&preflight) {
         return Ok(Some(preflight));
@@ -6937,6 +7710,7 @@ struct OfflineExprPreflightRequest<'a> {
     import_entries: &'a [OsString],
     state_dir: &'a Path,
     store_prefix: &'a str,
+    trust: Option<&'a source_bundle::SourceStoreTrust<'a>>,
     output_mode: BuildOutputMode,
 }
 
@@ -6953,6 +7727,7 @@ fn run_offline_source_preflight_for_expr_if_requested(
         import_entries: request.import_entries,
         state_dir: request.state_dir,
         store_prefix: request.store_prefix,
+        trust: request.trust,
         output_mode: request.output_mode,
     })
 }
@@ -6963,12 +7738,13 @@ fn source_fetch_override_plan_for_expr_if_requested(
     import_paths: &[std::ffi::OsString],
     state_dir: &Path,
     store_prefix: &str,
+    trust: Option<&source_bundle::SourceStoreTrust<'_>>,
 ) -> Result<Option<source_bundle::SourceFetchOverridePlan>, RunError> {
     if !enabled {
         return Ok(None);
     }
     let root = expression_scratch::InlineRoot::stage(expr)?;
-    source_bundle::source_fetch_override_plan_for_file(root.path(), import_paths, state_dir, store_prefix).map(Some)
+    source_bundle::source_fetch_override_plan_for_file(root.path(), import_paths, state_dir, store_prefix, trust).map(Some)
 }
 
 const SOURCE_ROOT_STORE_DIGEST_BYTES: usize = 20;
@@ -7063,9 +7839,24 @@ fn run_bootstrap_from_command(ctx: &RunContext, command: &Command) -> Result<(),
 
 fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<(), RunError> {
     match action {
+        BootstrapAction::ElfRelocate {
+            file,
+            depth,
+            needed,
+            runpath,
+        } => {
+            let count = elf_dynamic_fixup_shell::relocate_declared_file(file, *depth, needed, runpath)
+                .map_err(|error| RunError::Build(error.to_string()))?;
+            if ctx.json {
+                println!("{}", serde_json::json!({ "file": file, "rewrite_count": count }));
+            } else {
+                println!("relocated {count} ELF dynamic references in {}", file.display());
+            }
+            Ok(())
+        }
         BootstrapAction::Capabilities => source_root_capability::cmd_source_root_capabilities(ctx.json),
         BootstrapAction::ParityReport { require } => {
-            bootstrap_parity::cmd_bootstrap_parity_report(&current_dir_or_error()?, require, ctx.json)
+            bootstrap_parity::cmd_bootstrap_parity_report(Path::new("."), require, ctx.json)
         }
         BootstrapAction::RustSourceProvider {
             recipe,
@@ -7137,22 +7928,25 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
             report,
             adopt_state,
         } => {
-            let admission = full_source_provider::cmd_admit_full_source_provider(
+            let prepared = full_source_provider::cmd_admit_full_source_provider_deferred(
                 provider_dir,
                 expected_output_blake3,
                 source_closure,
                 expected_source_closure_blake3,
                 report,
-                ctx.json,
             )?;
-            if *adopt_state {
-                let logical_path = full_source_provider::adopt_admitted_full_source_provider(
-                    &admission,
+            let adoption = (*adopt_state).then(|| {
+                full_source_provider::adopt_admitted_full_source_provider(
+                    &prepared.report,
                     &ctx.store,
                     &ctx.resolved_state_dir,
                     &ctx.store_prefix,
                     ctx.store_backend,
-                )?;
+                )
+            });
+            full_source_provider::render_full_source_provider_admission(&prepared, provider_dir, report, ctx.json)?;
+            if let Some(result) = adoption {
+                let logical_path = result?;
                 eprintln!("Adopted admitted provider into local state: {logical_path}");
             }
             Ok(())
@@ -7585,10 +8379,10 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         patch_source_topology: *execute_patch_source_topology,
     });
     validate_rust_local_cache_mode(*local_rust_cache, execution_mode)?;
-    if ctx.store_backend == crunch_store::StoreBackend::Casita
+    if !ctx.store_backend.profile().rust_unit_cache
         && (*local_rust_cache != RustLocalCacheMode::Off || *shared_rust_cache != RustSharedCacheMode::Off)
     {
-        return Err(RunError::Build("casita-rust-cache-unsupported".to_string()));
+        return Err(RunError::Build(format!("{}-rust-cache-unsupported", ctx.store_backend.as_str())));
     }
     let root = root.clone().unwrap_or(current_dir_or_error()?);
     let captured = capture_rust_plan_command(RustPlanCaptureRequest {
@@ -8241,6 +9035,7 @@ fn run_legacy_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<(), Ru
     self_build::cmd_self_build(
         &request.ctx.store,
         &request.ctx.resolved_state_dir,
+        &request.ctx.resolved_log_dir,
         &request.ctx.store_prefix,
         request.ctx.store_backend,
         request.ctx.verbose,
@@ -8354,6 +9149,7 @@ fn build_from_expr(request: InlineBuildRequest<'_>) -> Result<(), RunError> {
         request.import_entries,
         &request.prepared.ctx.store,
         &request.prepared.ctx.resolved_state_dir,
+        &request.prepared.ctx.resolved_log_dir,
         &request.prepared.ctx.store_prefix,
         request.prepared.ctx.store_backend,
         request.prepared.ctx.verbose,
@@ -8366,6 +9162,7 @@ fn build_from_expr(request: InlineBuildRequest<'_>) -> Result<(), RunError> {
         request.prepared.hermeticity_mode,
         request.prepared.output_mode,
         request.prepared.interchange_dir,
+        request.prepared.causal_trace,
         request.source_fetch_overrides,
         Vec::new(),
         Some(request.root_registration),
@@ -8837,9 +9634,9 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let mut coordinator = remote_build::RemoteCoordinatorState::default();
         let attempt = remote_build::RemoteProductionAttemptBinding {
-            job_id: remote_build::RemoteJobId::new("failure-observability-job").unwrap(),
-            attempt_id: remote_build::RemoteAttemptId::new("failure-observability-attempt").unwrap(),
-            fence_generation: remote_build::RemoteFenceGeneration::new(TEST_FENCE_GENERATION).unwrap(),
+            job_id: crunch_remote_core::attempt::RemoteJobId::new("failure-observability-job").unwrap(),
+            attempt_id: crunch_remote_core::attempt::RemoteAttemptId::new("failure-observability-attempt").unwrap(),
+            fence_generation: crunch_remote_core::attempt::RemoteFenceGeneration::new(TEST_FENCE_GENERATION).unwrap(),
         };
         let export_config = remote_telemetry_export::RemoteTelemetryExportConfig::default();
         let telemetry_policy = crunch_build::distributed::RemoteTelemetryPolicy::default();
@@ -8884,27 +9681,40 @@ mod tests {
             remote_build::RemoteProductionTelemetryFact::ExecutionFailed
         );
         assert_eq!(
-            remote_protocol_failure_fact(remote_build::RemoteAttemptReasonCode::StaleReportRejected.as_str()),
+            remote_protocol_failure_fact(
+                crunch_remote_core::attempt::RemoteAttemptReasonCode::StaleReportRejected.as_str()
+            ),
             remote_build::RemoteProductionTelemetryFact::StaleFenceRejected
         );
         let worker_report = parse_remote_worker_failure_debug_report(&format!(
-            "build failed; worker_bundle_ref=remote-failure-debug:{}; worker_capture_outcome=captured; worker_cleanup_status=cleanup-attempted-after-capture",
+            "build failed; worker_bundle_ref=remote-failure-debug:{}; worker_capture_outcome=captured; worker_cleanup_status=cleanup-attempted-after-capture\n\nremediation: mantle.build.nonzero-exit",
             "a".repeat(REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS),
         ))
         .unwrap();
         assert_eq!(worker_report.capture_outcome_code, "captured");
+        assert_eq!(worker_report.cleanup_status_code, "cleanup-attempted-after-capture");
         assert!(
             parse_remote_worker_failure_debug_report(
                 "worker_bundle_ref=remote-failure-debug:bad; worker_capture_outcome=captured; worker_cleanup_status=ok"
             )
             .is_none()
         );
+        assert!(
+            parse_remote_worker_failure_debug_report(&format!(
+                "build failed\nworker_bundle_ref=remote-failure-debug:{}; worker_capture_outcome=captured; worker_cleanup_status=cleanup-attempted-after-capture",
+                "a".repeat(REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS),
+            ))
+            .is_none()
+        );
+        assert!(
+            parse_remote_worker_failure_debug_report(&format!(
+                "build failed; worker_bundle_ref=remote-failure-debug:{}; worker_capture_outcome=CAPTURED; worker_cleanup_status=cleanup-attempted-after-capture",
+                "a".repeat(REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS),
+            ))
+            .is_none()
+        );
     }
 
-    #[cfg(unix)]
-    const TEST_EXEC_MODE: u32 = 0o755;
-    #[cfg(unix)]
-    const TEST_READ_MODE: u32 = 0o644;
     const TEST_REMOTE_TRANSFERRED_BYTES: u64 = 11;
     const TEST_REMOTE_REUSED_BYTES: u64 = 0;
     const TEST_REMOTE_STATUS_CONCURRENCY: u32 = 2;
@@ -8928,6 +9738,7 @@ mod tests {
             base_stores: Vec::new(),
             command: Command::Doctor {
                 profile: DoctorProfile::Build,
+                readiness_socket: None,
             },
         }
     }
@@ -9010,6 +9821,195 @@ mod tests {
             parse_args_with_cli_test_stack(Vec::from(["mantle", "--store-backend", "tape", "store", "list"]))
                 .unwrap_err();
         assert!(rejected.contains("store-backend-unknown"));
+    }
+
+    #[test]
+    fn local_remote_builder_child_uses_selected_backend_for_worker_identity_preflight() {
+        let root = tempfile::tempdir().unwrap();
+        let ctx = RunContext {
+            store: root.path().join("coordinator-store"),
+            resolved_state_dir: root.path().join("coordinator-state"),
+            resolved_log_dir: root.path().join("coordinator-state/logs"),
+            store_prefix: "/mantle/store".to_string(),
+            store_backend: crunch_store::StoreBackend::Casita,
+            verbose: false,
+            json: false,
+            base_state_dirs: Vec::new(),
+        };
+        let worker_state = local_remote_worker_root(&ctx, "builder-1").join("state");
+        let worker_store = local_remote_worker_root(&ctx, "builder-1").join("store");
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(crunch_store::StoreHandle::open(crunch_store::StoreConfig::new(
+                crunch_store::StoreBackend::Snix,
+                worker_state.clone(),
+                worker_store,
+                ctx.store_prefix.clone(),
+            )))
+            .unwrap();
+        let identity_path = worker_state.join("store-identity.json");
+        let identity_before = fs::read(&identity_path).unwrap();
+        let state_entries_before = fs::read_dir(&worker_state).unwrap().count();
+        let secret_request = remote_service_secrets::RemoteServiceSecretRequest {
+            manifest_path: root.path().join("missing-secretspec.toml"),
+            profile: "bootstrap".to_string(),
+            provider: "systemd".to_string(),
+        };
+        let (_, child_args) = remote_stdio_builder_command("builder-1", None, &[], &secret_request, &ctx).unwrap();
+        let argv = std::iter::once(OsString::from("mantle"))
+            .chain(child_args.into_iter().map(OsString::from))
+            .collect::<Vec<_>>();
+        let parsed = std::thread::Builder::new()
+            .stack_size(crate::command_input::test_support::CLI_PARSE_TEST_STACK_BYTES)
+            .spawn(move || Args::try_parse_from(argv))
+            .unwrap()
+            .join()
+            .unwrap()
+            .unwrap();
+        let error = crunch_store::StoreConfig::preflight_backend_identity_for(
+            parsed.store_backend,
+            &worker_state,
+            &ctx.store_prefix,
+            &[],
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("store-backend-mismatch: requested casita, state declares snix"));
+        assert_eq!(fs::read(&identity_path).unwrap(), identity_before);
+        assert_eq!(fs::read_dir(&worker_state).unwrap().count(), state_entries_before);
+        assert!(!secret_request.manifest_path.exists());
+    }
+
+    #[test]
+    fn undeclared_cli_capabilities_fail_before_state_access() {
+        let base =
+            parse_args_with_cli_test_stack(vec!["mantle", "--base-store", "/unopened/base", "store", "list"]).unwrap();
+        let mut profile = base.store_backend.profile();
+        profile.overlay_composition = false;
+        assert!(
+            preflight_store_cli_capabilities(&base, profile)
+                .unwrap_err()
+                .to_string()
+                .contains("snix-overlay-unsupported")
+        );
+        assert!(preflight_store_cli_capabilities(&base, base.store_backend.profile()).is_ok());
+
+        let nario = parse_args_with_cli_test_stack(vec![
+            "mantle",
+            "--store-backend",
+            "casita",
+            "store",
+            "archive",
+            "import",
+            "--format",
+            "nario-v2",
+            "--from",
+            "/unopened/archive",
+        ])
+        .unwrap();
+        let mut profile = nario.store_backend.profile();
+        profile.atomic_batch_import = false;
+        assert!(
+            preflight_store_cli_capabilities(&nario, profile)
+                .unwrap_err()
+                .to_string()
+                .contains("casita-atomic-batch-import-unsupported")
+        );
+
+        let rust = parse_args_with_cli_test_stack(vec![
+            "mantle",
+            "rust-cache",
+            "serve",
+            "--policy",
+            "/unopened/policy",
+            "--receipt-dir",
+            "/unopened/receipts",
+            "--once",
+        ])
+        .unwrap();
+        let mut profile = rust.store_backend.profile();
+        profile.rust_unit_cache = false;
+        assert!(
+            preflight_store_cli_capabilities(&rust, profile)
+                .unwrap_err()
+                .to_string()
+                .contains("snix-rust-cache-unsupported")
+        );
+
+        let rust_plan = parse_args_with_cli_test_stack(vec![
+            "mantle",
+            "rust-plan",
+            "--execute-first-supported-unit",
+            "--local-rust-cache",
+            "read",
+        ])
+        .unwrap();
+        let mut profile = rust_plan.store_backend.profile();
+        profile.rust_unit_cache = false;
+        assert!(
+            preflight_store_cli_capabilities(&rust_plan, profile)
+                .unwrap_err()
+                .to_string()
+                .contains("snix-rust-cache-unsupported")
+        );
+
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("operator-state");
+        let output = root.path().join("unopened-output");
+        fs::create_dir(&state).unwrap();
+        let marker = state.join("keep");
+        fs::write(&marker, b"operator-owned").unwrap();
+        for (argv, expected_execute) in [
+            (
+                vec![
+                    "mantle",
+                    "store",
+                    "repair-final-nar",
+                    "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test",
+                ],
+                false,
+            ),
+            (
+                vec![
+                    "mantle",
+                    "store",
+                    "repair-final-nar",
+                    "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test",
+                    "--execute",
+                ],
+                true,
+            ),
+        ] {
+            let mut repair = parse_args_with_cli_test_stack(argv).unwrap();
+            assert!(matches!(
+                &repair.command,
+                Command::Store {
+                    action: StoreAction::RepairFinalNar { execute, .. }
+                } if *execute == expected_execute
+            ));
+            repair.state_dir = Some(state.clone());
+            repair.store = output.clone();
+            let mut profile = repair.store_backend.profile();
+            profile.core = &[];
+            assert!(
+                preflight_store_cli_capabilities(&repair, profile)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("snix-repair-final-nar-unsupported")
+            );
+            assert_eq!(fs::read(&marker).unwrap(), b"operator-owned");
+            assert_eq!(fs::read_dir(&state).unwrap().count(), 1);
+            assert!(!output.exists());
+        }
+
+        let unsigned = parse_args_with_cli_test_stack(vec!["mantle", "store", "verify", "--trust-unsigned"]).unwrap();
+        let mut profile = unsigned.store_backend.profile();
+        profile.unsigned_admission = false;
+        assert!(
+            preflight_store_cli_capabilities(&unsigned, profile)
+                .unwrap_err()
+                .to_string()
+                .contains("snix-trust-unsigned-unsupported")
+        );
     }
 
     #[test]
@@ -10030,7 +11030,7 @@ let Plan = {
   route = "mrustc-source-route",
   host_triple = "x86_64-unknown-linux-gnu",
   target_triple = "x86_64-unknown-linux-musl",
-  final_version = "1.94.0",
+  final_version = "1.94.1",
   policy = {
     source_built = true,
     uses_prebuilt_rust = false,
@@ -10055,10 +11055,10 @@ let Plan = {
       sha256_hex = "__SAMPLE_SHA256__",
     },
     {
-      id = "rust-1.94.0",
+      id = "rust-1.94.1",
       kind = "tarball",
       name = "rust-compiler-source",
-      version = "1.94.0",
+      version = "1.94.1",
       url = "__MISSING_URL__",
       sha256_hex = "__SAMPLE_SHA256__",
     },
@@ -10074,11 +11074,11 @@ let Plan = {
       notes = ["fast failing source fetch boundary"],
     },
     {
-      id = "rust-1.94.0-final",
+      id = "rust-1.94.1-final",
       kind = "rustc-final",
-      source_ids = ["rust-1.94.0"],
+      source_ids = ["rust-1.94.1"],
       bootstrap_stage_id = "mrustc-to-rust-1.90.0",
-      rust_version = "1.94.0",
+      rust_version = "1.94.1",
       outputs = ["rustc", "cargo", "rustdoc", "host-rustlib", "target-rustlib", "provider-receipt"],
       notes = ["install provider metadata and receipts"],
     },
@@ -11013,7 +12013,7 @@ let Plan = {
             "/tmp/mantle-fixed-point",
         ]))
         .expect("CLI parser test");
-        let ctx = build_run_context(&args);
+        let ctx = build_run_context(&args).expect("valid CLI state directory");
         let err = run_self_build_from_command(&ctx, &args.command).unwrap_err();
 
         assert!(err.to_string().contains("cannot be combined with legacy stage0/store self-build options"));
@@ -11095,14 +12095,6 @@ let Plan = {
         );
     }
 
-    #[cfg(unix)]
-    fn write_file_with_mode(path: &Path, contents: &str, mode: u32) {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::write(path, contents).unwrap();
-        let permissions = std::fs::Permissions::from_mode(mode);
-        std::fs::set_permissions(path, permissions).unwrap();
-    }
-
     #[test]
     fn no_host_tools_requires_stage0_inventory_before_host_bwrap_lookup() {
         let err = validate_stage0_inventory_args(true, None).unwrap_err();
@@ -11172,10 +12164,10 @@ mod remote_import_evidence_tests {
     fn the_aggregation_requires_every_output_to_be_evidenced() {
         let good = output("/mantle/store/aaa", "outer-key", "digest");
         let unsigned = output("/mantle/store/bbb", "", "digest");
-        assert!(are_remote_outputs_evidenced(&[]));
-        assert!(are_remote_outputs_evidenced(&[&good]));
-        assert!(are_remote_outputs_evidenced(&[&good, &good]));
-        assert!(!are_remote_outputs_evidenced(&[&good, &unsigned]));
+        assert!(are_remote_outputs_evidenced([]));
+        assert!(are_remote_outputs_evidenced([&good]));
+        assert!(are_remote_outputs_evidenced([&good, &good]));
+        assert!(!are_remote_outputs_evidenced([&good, &unsigned]));
     }
 
     #[test]

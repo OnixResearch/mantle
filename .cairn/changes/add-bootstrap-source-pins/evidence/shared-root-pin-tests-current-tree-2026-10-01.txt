@@ -1,0 +1,68 @@
+Fresh current-tree root prerequisite: Rust-plan owner `cargo check -p mantle --bin mantle --locked --offline` exit 0, artifact://7904.
+
+$ TMPDIR=/home/brittonr/scratch CARGO_TARGET_DIR=/home/brittonr/scratch/mantle-pins-shared-final-target NIX_CONFIG='eval-cache = false' nix develop --offline --no-write-lock-file -c cargo test --locked --offline -p mantle --bin mantle bootstrap_pin_cmd::tests:: -- --nocapture
+
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-glue v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-glue)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+warning: variant `Modeled` is never constructed
+    --> src/command_input.rs:1174:5
+     |
+1172 | pub(crate) enum RemoteCommandAdmission {
+     |                 ---------------------- variant in this enum
+1173 |     /// The DTO maps onto a remote-execution operation the contract administers.
+1174 |     Modeled(RemoteExecutionCommand),
+     |     ^^^^^^^
+     |
+     = note: `RemoteCommandAdmission` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: variant `RejectIdentityConflict` is never constructed
+   --> src/source_observation.rs:142:5
+    |
+136 | pub enum RecordIngestOutcome {
+    |          ------------------- variant in this enum
+...
+142 |     RejectIdentityConflict,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `RecordIngestOutcome` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `record_outcome_for_plan` is never used
+   --> src/source_observation.rs:213:8
+    |
+213 | pub fn record_outcome_for_plan(outcome: IngestOutcome) -> RecordIngestOutcome {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `TEST_EXEC_MODE` is never used
+    --> src/main.rs:9147:11
+     |
+9147 |     const TEST_EXEC_MODE: u32 = 0o755;
+     |           ^^^^^^^^^^^^^^
+
+warning: constant `TEST_READ_MODE` is never used
+    --> src/main.rs:9149:11
+     |
+9149 |     const TEST_READ_MODE: u32 = 0o644;
+     |           ^^^^^^^^^^^^^^
+
+warning: function `write_file_with_mode` is never used
+     --> src/main.rs:11496:8
+      |
+11496 |     fn write_file_with_mode(path: &Path, contents: &str, mode: u32) {
+      |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle" test) generated 6 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3m 41s
+     Running unittests src/main.rs (/home/brittonr/scratch/mantle-pins-shared-final-target/debug/deps/mantle-17eadc3783823be8)
+
+running 3 tests
+test bootstrap_pin_cmd::tests::host_bounds_use_parsed_https_authority ... ok
+test bootstrap_pin_cmd::tests::publication_rolls_back_first_pin_when_second_publication_fails ... ok
+test bootstrap_pin_cmd::tests::unresolved_source_blocks_entire_mixed_candidate_plan_without_writes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 2637 filtered out; finished in 0.01s
+Wall time: 260.47 seconds

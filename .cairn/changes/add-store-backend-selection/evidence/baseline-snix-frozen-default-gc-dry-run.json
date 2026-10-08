@@ -1,0 +1,75 @@
+{
+  "schema": "mantle-store-gc-report-v4",
+  "plan_id": "b3:eaece3a53194762aa1dfd7ef38f3eb89586a9e8924eb3389e1107786394790cd",
+  "retention_plan_id": "b3:c6eec1ce4fc0d3e87a900595d67f38f4cedbb7648faae88a6a449bfbca7af019",
+  "overlay_plan_blake3": null,
+  "is_dry_run": true,
+  "execution_complete": false,
+  "failed_operation": null,
+  "failed_operations": [],
+  "retained_root_count": 1,
+  "retained_castore_root_count": 0,
+  "candidate_path_count": 0,
+  "reclaimable_bytes_total": 2,
+  "reclaim_observations": [
+    {
+      "category": "blob-index",
+      "path": "/home/brittonr/scratch/mantle-selection-baseline-fixtures/state-clock-replay/blobs/blobs/b3/c8e5/c8e5bacd714e99df02694645f34a76885445ec581061d7161d0997686cdad3f1",
+      "path_kind": "file",
+      "bytes": 2,
+      "blocker": null
+    }
+  ],
+  "candidate_paths": [],
+  "retention_explanations": [
+    {
+      "path": "/mantle/store/z2y3k7267f9kbpfyw9zw0d1adjcn6z62-hello",
+      "root_class": "legacy-unmanaged",
+      "owner_scope": "legacy-unmanaged",
+      "policy_blake3": "b3:b31c5911810adfb3b165f1c66b7a710a9716f7ae40cb5045b7abfb520ad14e72",
+      "project_identity": null,
+      "selector": null,
+      "generation": null,
+      "lease_id": null,
+      "transition_id": "b3:3c9df62e03eb02bd296964534db2b0f1b4716ed93107d1cd370ad61c2fd439c1",
+      "transition_reason": "legacy-root-registered",
+      "disposition": "migrate",
+      "reason": "migrate-legacy-unmanaged-protected"
+    }
+  ],
+  "path_explanations": [
+    {
+      "path": "/mantle/store/z2y3k7267f9kbpfyw9zw0d1adjcn6z62-hello",
+      "reason": "reachable-from-retained-root",
+      "retaining_roots": [
+        "/mantle/store/z2y3k7267f9kbpfyw9zw0d1adjcn6z62-hello"
+      ]
+    }
+  ],
+  "base_reachability": [],
+  "usage": {
+    "observed_bytes": 128,
+    "retained_bytes": 0,
+    "reclaimable_bytes": 0,
+    "quarantined_bytes": 0,
+    "unclassified_bytes": 128,
+    "shared_bytes": 0,
+    "unknown_object_count": 0,
+    "roots": [
+      {
+        "root": "/mantle/store/z2y3k7267f9kbpfyw9zw0d1adjcn6z62-hello",
+        "inclusive_bytes": 128,
+        "unique_bytes": 128,
+        "unknown_object_count": 0
+      }
+    ]
+  },
+  "candidate_blob_index_count": 1,
+  "candidate_blob_chunk_count": 0,
+  "candidate_artifact_attestation_count": 0,
+  "candidate_closure_attestation_count": 0,
+  "candidate_exported_output_count": 0,
+  "candidate_action_result_record_count": 0,
+  "candidate_action_result_index_count": 0,
+  "operations": []
+}

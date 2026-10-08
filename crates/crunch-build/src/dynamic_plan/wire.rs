@@ -1,4 +1,5 @@
 use super::DeclaredSourceInput;
+use super::DynamicBuilder;
 use super::DynamicDerivation;
 use super::DynamicInput;
 use super::DynamicPlanError;
@@ -80,7 +81,10 @@ fn admit_source(wire: WireDeclaredSourceInput, store_prefix: &str) -> Result<Dec
     })
 }
 
-fn admit_unit(wire: WireDynamicUnit, store_prefix: &str) -> Result<DynamicUnit, DynamicPlanError> {
+pub(in crate::dynamic_plan) fn admit_unit(
+    wire: WireDynamicUnit,
+    store_prefix: &str,
+) -> Result<DynamicUnit, DynamicPlanError> {
     Ok(DynamicUnit {
         id: UnitId::new(wire.id)?,
         derivation: admit_derivation(wire.derivation, store_prefix)?,
@@ -101,7 +105,11 @@ fn admit_policy(wire: WireDynamicUnitPolicy) -> DynamicUnitPolicy {
 fn admit_derivation(wire: WireDynamicDerivation, store_prefix: &str) -> Result<DynamicDerivation, DynamicPlanError> {
     Ok(DynamicDerivation {
         name: wire.name,
-        builder: StorePathString::new(wire.builder, store_prefix)?,
+        builder: if wire.builder == crate::fetch_build_service::FETCH_BUILDER {
+            DynamicBuilder::FetchUrl
+        } else {
+            DynamicBuilder::StorePath(StorePathString::new(wire.builder, store_prefix)?)
+        },
         system: wire.system,
         args: wire.args,
         outputs: wire.outputs.into_iter().map(OutputName::new).collect::<Result<Vec<_>, _>>()?,

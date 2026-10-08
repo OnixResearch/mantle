@@ -1,9 +1,7 @@
 //! Native dynamic build-plan ABI.
 //!
-//! This module is the pure Rust core for `mantle-plan-v1` decoding,
-//! canonicalization, BLAKE3 digesting, and scalar grammar checks. It
-//! deliberately performs no store I/O, no worker mutation, and no scheduler
-//! registration.
+//! Pure decoding, canonicalization, and scalar validation for versioned plans.
+//! No store I/O, worker mutation, or scheduler registration lives here.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -134,6 +132,30 @@ impl std::fmt::Display for StorePathString {
     }
 }
 
+/// The only non-store builder admitted by a native dynamic plan is the
+/// fixed-output fetch service selector.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DynamicBuilder {
+    StorePath(StorePathString),
+    FetchUrl,
+}
+
+impl DynamicBuilder {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::StorePath(path) => path.as_str(),
+            Self::FetchUrl => crate::fetch_build_service::FETCH_BUILDER,
+        }
+    }
+}
+
+impl From<StorePathString> for DynamicBuilder {
+    fn from(path: StorePathString) -> Self {
+        Self::StorePath(path)
+    }
+}
+
 /// A checked derivation output name.
 ///
 /// ```compile_fail
@@ -171,7 +193,7 @@ mod nominal_sealed {
 /// Marker implemented by each closed dynamic-plan BLAKE3 role.
 pub trait Blake3Role: nominal_sealed::Sealed + Clone + Copy + std::fmt::Debug + Eq + Ord + 'static {}
 
-/// Marker for canonical `mantle-plan-v1` identities.
+/// Marker for canonical versioned dynamic-plan identities.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PlanDigestRole;
 impl nominal_sealed::Sealed for PlanDigestRole {}
@@ -235,6 +257,34 @@ pub type NarDigest = Blake3Hex<NarDigestRole>;
 #[path = "dynamic_plan/wire.rs"]
 mod wire;
 pub use wire::admit_plan_v1;
+
+#[path = "dynamic_plan/slices.rs"]
+mod slices;
+pub use slices::PlannedSlice;
+pub use slices::SliceNodeKind;
+pub use slices::SliceRejection;
+pub use slices::SliceRejectionKind;
+pub use slices::SliceTreeFact;
+pub use slices::plan_slices;
+#[path = "dynamic_plan/v2.rs"]
+mod v2;
+pub use v2::CanonicalDynamicPlanV2;
+pub use v2::DynamicPlanV2;
+pub use v2::MANTLE_PLAN_V2_SCHEMA;
+pub use v2::MAX_PLAN_SLICES;
+pub use v2::MAX_SLICE_ADMITTED_BYTES;
+pub use v2::MAX_SLICE_SUBPATH_BYTES;
+pub use v2::MAX_SLICE_SUBPATH_DEPTH;
+pub use v2::SliceSource;
+pub use v2::SourceV2;
+pub use v2::WireDynamicPlanV2;
+pub use v2::WireSliceSource;
+pub use v2::WireSourceV2;
+pub use v2::admit_plan_v2;
+pub use v2::canonical_plan_v2_bytes;
+pub use v2::decode_plan_v2;
+pub use v2::decode_validated_plan_v2;
+pub use v2::validate_slice_subpath;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DynamicPlaceholder {
@@ -324,7 +374,7 @@ pub struct DynamicUnitPolicy {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DynamicDerivation {
     pub name: String,
-    pub builder: StorePathString,
+    pub builder: DynamicBuilder,
     pub system: String,
     pub args: Vec<String>,
     pub outputs: Vec<OutputName>,
@@ -660,7 +710,10 @@ fn validate_units(units: &[DynamicUnit], store_prefix: &str) -> Result<(), Dynam
 
 fn validate_dynamic_derivation(derivation: &DynamicDerivation, store_prefix: &str) -> Result<(), DynamicPlanError> {
     validate_required_string("derivation name", &derivation.name, store_prefix)?;
-    validate_store_path_string(derivation.builder.as_str(), store_prefix)?;
+    match &derivation.builder {
+        DynamicBuilder::StorePath(path) => validate_store_path_string(path.as_str(), store_prefix)?,
+        DynamicBuilder::FetchUrl => validate_fetch_builder(derivation)?,
+    }
     validate_required_string("system", &derivation.system, store_prefix)?;
     validate_argument_strings(&derivation.args, store_prefix)?;
     validate_output_names("unit outputs", &derivation.outputs)?;
@@ -670,6 +723,87 @@ fn validate_dynamic_derivation(derivation: &DynamicDerivation, store_prefix: &st
     validate_fixed_output(derivation.fixed_output.as_ref(), store_prefix)?;
     validate_sandbox_mode(&derivation.sandbox)?;
     validate_output_names("dynamic plan outputs", &derivation.dynamic_plan_outputs)?;
+    Ok(())
+}
+
+fn validate_fetch_builder(derivation: &DynamicDerivation) -> Result<(), DynamicPlanError> {
+    let reject = |field, value: &str, reason| invalid_scalar(field, value, reason);
+    if !matches!(derivation.system.as_str(), "builtin" | "x86_64-linux") {
+        return reject("fetch system", &derivation.system, "unsupported fetcher system");
+    }
+    if !derivation.args.is_empty() {
+        return reject("fetch arguments", &derivation.args[0], "builtin fetcher takes no arguments");
+    }
+    if !derivation.inputs.is_empty() {
+        return reject("fetch inputs", "nonempty", "builtin fetcher takes no store inputs");
+    }
+    if derivation.outputs.len() != 1 || derivation.outputs[0].as_str() != "out" {
+        return reject("fetch outputs", "not exactly out", "builtin fetcher requires only out");
+    }
+    if !derivation.dynamic_plan_outputs.is_empty() {
+        return reject("fetch dynamic plan outputs", "nonempty", "fetch result cannot produce dynamic plans");
+    }
+    if derivation.addressing_mode != AddressingMode::InputAddressed {
+        return reject("fetch addressing mode", "content-addressed", "fixed-output fetch uses input-addressed mode");
+    }
+    let Some(spec) = derivation.fixed_output.as_ref() else {
+        return reject("fetch fixed output", "missing", "builtin fetcher requires a sha256 fixed output");
+    };
+    if spec.algo != FixedOutputHashAlgo::Sha256 {
+        return reject("fetch hash algorithm", "not sha256", "builtin fetcher requires sha256");
+    }
+    let hash = if spec.hash.starts_with("sha256-") {
+        nix_compat::nixhash::NixHash::from_sri(&spec.hash).ok().filter(|hash| {
+            let canonical = format!("sha256-{}", data_encoding::BASE64.encode(hash.digest_as_bytes()));
+            spec.hash == canonical || spec.hash == canonical.trim_end_matches('=')
+        })
+    } else {
+        data_encoding::HEXLOWER.decode(spec.hash.as_bytes()).ok().and_then(|digest| {
+            nix_compat::nixhash::NixHash::from_algo_and_digest(nix_compat::nixhash::HashAlgo::Sha256, &digest).ok()
+        })
+    };
+    if !matches!(hash, Some(nix_compat::nixhash::NixHash::Sha256(_))) {
+        return reject("fetch hash", &spec.hash, "expected a valid sha256 SRI or lowercase 64-digit hex digest");
+    }
+    let Some(url) = derivation.env.get("url") else {
+        return reject("fetch URL", "missing", "builtin fetcher requires url");
+    };
+    if url.chars().any(|ch| ch.is_whitespace() || ch.is_control()) || url.contains(&['\\', '{', '}'][..]) {
+        return reject("fetch URL", url, "unsafe URL characters");
+    }
+    let parsed = url::Url::parse(url).ok();
+    if !parsed.as_ref().is_some_and(|parsed| {
+        matches!(parsed.scheme(), "https" | "http")
+            && parsed.host_str().is_some()
+            && parsed.username().is_empty()
+            && parsed.password().is_none()
+            && parsed.fragment().is_none()
+    }) {
+        return reject("fetch URL", url, "expected an HTTP(S) URL without credentials or fragment");
+    }
+    let git = derivation.env.get("type").is_some_and(|value| value == "git");
+    let allowed: &[&str] = if git { &["url", "type", "rev"] } else { &["url"] };
+    for (key, value) in &derivation.env {
+        if !allowed.contains(&key.as_str()) {
+            return reject("fetch environment key", key, "unsupported fetcher parameter");
+        }
+        if value.contains(DYNAMIC_PLACEHOLDER_START) {
+            return reject("fetch environment value", value, "fetch parameters must be literal");
+        }
+    }
+    if git {
+        if spec.mode != FixedOutputMode::Recursive {
+            return reject("fetch fixed output mode", "flat", "git tree requires recursive NAR hash");
+        }
+        let Some(rev) = derivation.env.get("rev") else {
+            return reject("fetch revision", "missing", "git fetch requires pinned revision");
+        };
+        if rev.len() != 40 || !rev.bytes().all(|byte| is_lower_hex_char(char::from(byte))) {
+            return reject("fetch revision", rev, "expected a pinned 40-digit lowercase git commit id");
+        }
+    } else if spec.mode != FixedOutputMode::Flat {
+        return reject("fetch fixed output mode", "recursive", "URL archive fetch requires flat hash");
+    }
     Ok(())
 }
 
@@ -1491,7 +1625,7 @@ mod tests {
             id: unit_id("unit.extra"),
             derivation: DynamicDerivation {
                 name: "unit-extra".to_string(),
-                builder: store_path(TEST_STORE_PATH),
+                builder: store_path(TEST_STORE_PATH).into(),
                 system: "x86_64-linux".to_string(),
                 args: vec!["--extra".to_string()],
                 outputs: vec![output_name("out"), output_name("dev")],
@@ -2126,5 +2260,241 @@ mod tests {
         let missing_bindings =
             resolve_dynamic_placeholders("{{mantle-source:src.main}}", &BTreeMap::new(), &BTreeMap::new()).unwrap_err();
         expect_invalid_scalar(missing_bindings, "dynamic placeholder");
+    }
+
+    fn slice_wire_plan() -> v2::WireDynamicPlanV2 {
+        let mut value: Value = serde_json::from_str(&valid_plan_json()).unwrap();
+        value["schema"] = Value::String(v2::MANTLE_PLAN_V2_SCHEMA.to_owned());
+        value["sources"] = serde_json::json!([
+            {"id":"src.z","producer_output":"sources","subpath":"crate/z","store_name":"crate-same","nar_blake3":TEST_BLAKE3_HEX},
+            {"id":"src.main","producer_output":"sources","subpath":"crate/a","store_name":"crate-same","nar_blake3":TEST_BLAKE3_HEX}
+        ]);
+        serde_json::from_value(value).unwrap()
+    }
+
+    #[test]
+    fn v2_slice_canonical_order_and_digest_bind_expected_content() {
+        let wire = slice_wire_plan();
+        let raw = serde_json::to_vec(&wire).unwrap();
+        let accepted = v2::decode_validated_plan_v2(&raw, TEST_STORE_PREFIX).unwrap();
+        let ids = accepted.plan.sources.iter().map(|source| source.id().as_str()).collect::<Vec<_>>();
+        assert_eq!(ids, vec!["src.main", "src.z"]);
+        let canonical: Value = serde_json::from_slice(&accepted.bytes).unwrap();
+        assert_eq!(canonical["sources"][0]["id"], "src.main");
+        let mut reordered = wire.clone();
+        reordered.sources.reverse();
+        let reordered =
+            v2::decode_validated_plan_v2(&serde_json::to_vec(&reordered).unwrap(), TEST_STORE_PREFIX).unwrap();
+        assert_eq!(accepted.bytes, reordered.bytes);
+        assert_eq!(accepted.digest, reordered.digest);
+        let mut changed = wire;
+        let v2::WireSourceV2::Slice(slice) = &mut changed.sources[0] else {
+            panic!("slice fixture")
+        };
+        slice.nar_blake3 = "f".repeat(BLAKE3_HEX_BYTES);
+        let changed = v2::decode_validated_plan_v2(&serde_json::to_vec(&changed).unwrap(), TEST_STORE_PREFIX).unwrap();
+        assert_ne!(accepted.digest, changed.digest);
+    }
+
+    #[test]
+    fn v2_rejects_bad_subpaths_undeclared_output_and_source_conflict() {
+        for path in ["/absolute", "../up", "a//b", "a/./b", "a/../b"] {
+            assert!(v2::validate_slice_subpath(path).is_err(), "{path}");
+        }
+        assert!(v2::validate_slice_subpath(&"a/".repeat(33)).is_err());
+        assert!(v2::validate_slice_subpath(&"a".repeat(v2::MAX_SLICE_SUBPATH_BYTES as usize + 1)).is_err());
+        let mut wire = slice_wire_plan();
+        wire.sources.push(wire.sources[0].clone());
+        assert_eq!(v2::admit_plan_v2(wire.clone(), TEST_STORE_PREFIX).unwrap().sources.len(), 2);
+        let v2::WireSourceV2::Slice(slice) = &mut wire.sources[2] else {
+            panic!("slice fixture")
+        };
+        slice.nar_blake3 = "f".repeat(BLAKE3_HEX_BYTES);
+        let err = v2::admit_plan_v2(wire, TEST_STORE_PREFIX).unwrap_err();
+        assert!(matches!(err, DynamicPlanError::InvalidScalar {
+            reason: "slice-conflict",
+            ..
+        }));
+        let mut v1: Value = serde_json::from_str(&valid_plan_json()).unwrap();
+        v1["sources"][0] = serde_json::to_value(slice_wire_plan().sources[0].clone()).unwrap();
+        assert!(decode_validated_plan_v1(&serde_json::to_vec(&v1).unwrap(), TEST_STORE_PREFIX).is_err());
+        let mut invalid_name = slice_wire_plan();
+        let v2::WireSourceV2::Slice(slice) = &mut invalid_name.sources[0] else {
+            panic!("slice fixture")
+        };
+        slice.store_name = "bad/name".to_owned();
+        assert!(matches!(
+            v2::admit_plan_v2(invalid_name, TEST_STORE_PREFIX),
+            Err(DynamicPlanError::InvalidScalar {
+                field: "slice store name",
+                ..
+            })
+        ));
+        assert!(v2::decode_validated_plan_v2(valid_plan_json().as_bytes(), TEST_STORE_PREFIX).is_err());
+    }
+
+    #[test]
+    fn v2_enforces_slice_count_depth_and_canonical_byte_ceiling() {
+        assert!(v2::validate_slice_subpath(&vec!["a"; v2::MAX_SLICE_SUBPATH_DEPTH as usize].join("/")).is_ok());
+        let deep = vec!["a"; v2::MAX_SLICE_SUBPATH_DEPTH as usize + 1].join("/");
+        assert!(matches!(
+            v2::validate_slice_subpath(&deep),
+            Err(DynamicPlanError::LimitExceeded {
+                field: "slice subpath depth",
+                ..
+            })
+        ));
+        let mut wire = slice_wire_plan();
+        let original = wire.sources[0].clone();
+        wire.sources.clear();
+        for index in 0..=v2::MAX_PLAN_SLICES {
+            let v2::WireSourceV2::Slice(mut slice) = original.clone() else {
+                panic!("slice fixture")
+            };
+            slice.id = format!("slice.{index}");
+            wire.sources.push(v2::WireSourceV2::Slice(slice));
+        }
+        assert!(matches!(
+            v2::admit_plan_v2(wire, TEST_STORE_PREFIX),
+            Err(DynamicPlanError::LimitExceeded {
+                field: "slice count",
+                ..
+            })
+        ));
+        let mut admitted = v2::admit_plan_v2(slice_wire_plan(), TEST_STORE_PREFIX).unwrap();
+        admitted.provenance.insert("oversize".to_owned(), "x".repeat(MAX_DYNAMIC_PLAN_BYTES as usize));
+        assert!(matches!(v2::canonical_plan_v2_bytes(&admitted), Err(DynamicPlanError::PlanTooLarge { .. })));
+    }
+
+    #[test]
+    fn slice_planner_accepts_two_and_rejects_without_partial_plan() {
+        use slices::SliceNodeKind;
+        use slices::SliceRejectionKind;
+        use slices::SliceTreeFact;
+        use slices::plan_slices;
+        let accepted = v2::admit_plan_v2(slice_wire_plan(), TEST_STORE_PREFIX).unwrap();
+        let slices = accepted
+            .sources
+            .iter()
+            .filter_map(|source| match source {
+                v2::SourceV2::Slice(slice) => Some(slice.clone()),
+                v2::SourceV2::StorePath(_) => None,
+            })
+            .collect::<Vec<_>>();
+        let facts = slices
+            .iter()
+            .map(|slice| SliceTreeFact {
+                source_id: slice.id.clone(),
+                producer_output: slice.producer_output.clone(),
+                subpath: slice.subpath.clone(),
+                kind: SliceNodeKind::Directory,
+                traversed_symlink: false,
+                observed_nar_blake3: Some(slice.nar_blake3.clone()),
+                nar_bytes: 40,
+            })
+            .collect::<Vec<_>>();
+        let outputs = BTreeSet::from([output_name("sources")]);
+        let planned = plan_slices(&slices, &outputs, &facts).unwrap();
+        assert_eq!(planned.iter().map(|slice| slice.source_id.as_str()).collect::<Vec<_>>(), vec!["src.main", "src.z"]);
+        assert_eq!(planned[0].declared_nar_blake3, planned[1].declared_nar_blake3);
+        assert_eq!(planned[0].store_name, planned[1].store_name);
+        assert_ne!(planned[0].subpath, planned[1].subpath);
+        assert_eq!(planned[0].publication_source_id, planned[0].source_id);
+        assert_eq!(planned[1].publication_source_id, planned[0].source_id);
+        let distinct = slices.iter().map(|slice| slice.id.clone()).collect::<BTreeSet<_>>();
+        assert_eq!(distinct.len(), 2);
+        assert_eq!(planned.iter().map(|slice| &slice.publication_source_id).collect::<BTreeSet<_>>().len(), 1);
+        let mut renamed = slices.clone();
+        renamed[0].store_name = "another-name".to_owned();
+        let distinct_names = plan_slices(&renamed, &outputs, &facts).unwrap();
+        assert_eq!(distinct_names[0].publication_source_id, distinct_names[0].source_id);
+        assert_eq!(distinct_names[1].publication_source_id, distinct_names[1].source_id);
+        let mut wrong_root = facts.clone();
+        wrong_root[0].subpath = "another/root".to_owned();
+        assert_eq!(plan_slices(&slices, &outputs, &wrong_root).unwrap_err().kind, SliceRejectionKind::Conflict);
+        let mut missing = facts.clone();
+        missing[0].kind = SliceNodeKind::Absent;
+        assert_eq!(plan_slices(&slices, &outputs, &missing).unwrap_err().kind, SliceRejectionKind::Absent);
+        let mut symlink = facts.clone();
+        symlink[0].traversed_symlink = true;
+        assert_eq!(plan_slices(&slices, &outputs, &symlink).unwrap_err().kind, SliceRejectionKind::SymlinkTraversal);
+        let mut mismatch = facts.clone();
+        mismatch[0].observed_nar_blake3 = Some(NarDigest::new("f".repeat(BLAKE3_HEX_BYTES)).unwrap());
+        assert_eq!(plan_slices(&slices, &outputs, &mismatch).unwrap_err().kind, SliceRejectionKind::DigestMismatch);
+        let mut excess = facts;
+        excess[0].nar_bytes = v2::MAX_SLICE_ADMITTED_BYTES;
+        assert_eq!(plan_slices(&slices, &outputs, &excess).unwrap_err().kind, SliceRejectionKind::Limit);
+        assert_eq!(
+            plan_slices(&slices, &BTreeSet::new(), &excess).unwrap_err().kind,
+            SliceRejectionKind::OutputUndeclared
+        );
+        let too_many_facts = vec![excess[0].clone(); v2::MAX_PLAN_SLICES as usize + 1];
+        assert_eq!(plan_slices(&slices, &outputs, &too_many_facts).unwrap_err().detail, "tree fact count");
+    }
+
+    fn pinned_fetch_wire() -> WireDynamicPlanV1 {
+        let mut wire = valid_wire_plan();
+        let drv = &mut wire.units[0].derivation;
+        drv.builder = crate::fetch_build_service::FETCH_BUILDER.to_string();
+        drv.system = "x86_64-linux".to_string();
+        drv.args.clear();
+        drv.inputs.clear();
+        drv.addressing_mode = AddressingMode::InputAddressed;
+        drv.dynamic_plan_outputs.clear();
+        drv.env = BTreeMap::from([("url".to_string(), "https://static.crates.io/crates/memchr/memchr-2.7.6.crate".to_string())]);
+        drv.fixed_output = Some(WireFixedOutputSpec {
+            mode: FixedOutputMode::Flat,
+            algo: FixedOutputHashAlgo::Sha256,
+            hash: "0123456789abcdef".repeat(4),
+        });
+        wire
+    }
+
+    #[test]
+    fn native_fetch_admits_pinned_archive_and_recursive_git_tree() {
+        let flat = admit_plan_v1(pinned_fetch_wire(), TEST_STORE_PREFIX).unwrap();
+        assert_eq!(flat.units[0].derivation.builder, DynamicBuilder::FetchUrl);
+        assert_eq!(flat.units[0].derivation.fixed_output.as_ref().unwrap().mode, FixedOutputMode::Flat);
+
+        let mut git = pinned_fetch_wire();
+        let drv = &mut git.units[0].derivation;
+        drv.env.insert("url".to_string(), "https://github.com/example/repo.git".to_string());
+        drv.env.insert("type".to_string(), "git".to_string());
+        drv.env.insert("rev".to_string(), "0123456789abcdef0123456789abcdef01234567".to_string());
+        let spec = drv.fixed_output.as_mut().unwrap();
+        spec.mode = FixedOutputMode::Recursive;
+        spec.hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_string();
+        let admitted = admit_plan_v1(git, TEST_STORE_PREFIX).unwrap();
+        assert_eq!(admitted.units[0].derivation.builder, DynamicBuilder::FetchUrl);
+        assert_eq!(admitted.units[0].derivation.fixed_output.as_ref().unwrap().mode, FixedOutputMode::Recursive);
+    }
+
+    #[test]
+    fn native_fetch_denies_unpinned_or_unsafe_artifact_requests() {
+        for (key, value, field) in [
+            ("url", "file:///etc/passwd", "fetch URL"),
+            ("url", "https://user:secret@example.org/archive", "fetch URL"),
+            ("url", "https://example.org/archive#mutable", "fetch URL"),
+            ("type", "archive", "fetch environment key"),
+            ("rev", "HEAD", "fetch environment key"),
+        ] {
+            let mut wire = pinned_fetch_wire();
+            wire.units[0].derivation.env.insert(key.to_string(), value.to_string());
+            expect_invalid_scalar(admit_plan_v1(wire, TEST_STORE_PREFIX).unwrap_err(), field);
+        }
+        let mut missing_hash = pinned_fetch_wire();
+        missing_hash.units[0].derivation.fixed_output = None;
+        expect_invalid_scalar(admit_plan_v1(missing_hash, TEST_STORE_PREFIX).unwrap_err(), "fetch fixed output");
+
+        let mut extra_inputs = pinned_fetch_wire();
+        extra_inputs.units[0].derivation.inputs.push(WireDynamicInput::StorePath { path: TEST_STORE_PATH.to_string() });
+        expect_invalid_scalar(admit_plan_v1(extra_inputs, TEST_STORE_PREFIX).unwrap_err(), "fetch inputs");
+
+        let mut unpinned_git = pinned_fetch_wire();
+        unpinned_git.units[0].derivation.env.insert("type".to_string(), "git".to_string());
+        unpinned_git.units[0].derivation.fixed_output.as_mut().unwrap().mode = FixedOutputMode::Recursive;
+        expect_invalid_scalar(admit_plan_v1(unpinned_git.clone(), TEST_STORE_PREFIX).unwrap_err(), "fetch revision");
+        unpinned_git.units[0].derivation.env.insert("rev".to_string(), "main".to_string());
+        expect_invalid_scalar(admit_plan_v1(unpinned_git, TEST_STORE_PREFIX).unwrap_err(), "fetch revision");
     }
 }

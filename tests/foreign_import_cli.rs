@@ -145,6 +145,50 @@ fn foreign_import_cli_validates_and_plans_checked_fixtures() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn foreign_plan_refuses_success_when_distinct_output_names_alias() {
+    use std::os::unix::fs::symlink;
+
+    let temp = TempDir::new().expect("tempdir should be created");
+    let actual_dir = temp.path().join("real");
+    fs::create_dir(&actual_dir).expect("output directory should be created");
+    let alias_dir = temp.path().join("alias");
+    symlink(&actual_dir, &alias_dir).expect("output alias should be created");
+    let actual_output = actual_dir.join("result.json");
+    let alias_output = alias_dir.join("result.json");
+
+    let output = mantle_cmd()
+        .args([
+            "--json",
+            "foreign-import",
+            "plan",
+            "--graph",
+            path_str(&fixture_path(GUIX_GRAPH)),
+            "--package-index",
+            path_str(&fixture_path(GUIX_INDEX)),
+            "--policy",
+            path_str(&fixture_path(POLICY)),
+            "--package",
+            HELLO_PACKAGE,
+            "--system",
+            HELLO_SYSTEM,
+            "--plan-out",
+            path_str(&alias_output),
+            "--receipt-out",
+            path_str(&actual_output),
+        ])
+        .output()
+        .expect("foreign plan command should run");
+
+    let committed: Value =
+        serde_json::from_slice(&fs::read(&actual_output).expect("aliased output should be committed"))
+            .expect("aliased output should be JSON");
+    assert_eq!(committed["schema"], "foreign-derivation-import-receipt-v1");
+    assert!(!output.status.success(), "a replaced plan must not be reported as accepted");
+    assert!(output.stdout.is_empty(), "no success report may precede final-output verification");
+}
+
 #[test]
 fn foreign_import_cli_realizes_two_node_graph_and_reuses_exact_outputs() {
     let temp = TempDir::new().expect("tempdir should be created");

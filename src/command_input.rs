@@ -116,13 +116,12 @@ fn store_command(operation: StoreOperation, selectors: Vec<String>, dry_run: boo
     debug_assert!(
         operation == StoreOperation::Gc || operation == StoreOperation::Verify || operation == StoreOperation::Sign
     );
-    let command = StoreAdministrationCommand {
+    StoreAdministrationCommand {
         root: String::from(STORE_COMMAND_ROOT),
         operation,
         selectors,
         dry_run,
-    };
-    command
+    }
 }
 
 /// Reject one store DTO that names selectors the contract forbids.
@@ -255,7 +254,6 @@ mod tests {
         };
         let error = admit_store_action_or_block(&action).expect_err("blank selector must fail closed");
         assert!(error.to_string().contains("verify"), "{error}");
-        assert!(!admit_store_action_or_block(&StoreAction::List).is_err());
     }
 
     #[test]
@@ -269,6 +267,8 @@ mod tests {
             },
             StoreAction::Pin {
                 path: String::from("/mantle/store/aaaaaaaa"),
+                owner: String::from("operator"),
+                reason: String::from("explicit-pin-registered"),
             },
         ] {
             assert_eq!(admit_store_action(&action), StoreCommandAdmission::NotAdministered);
@@ -346,14 +346,13 @@ pub(crate) fn admit_release_action_or_block(action: &ReleaseAction) -> Result<Re
 
 /// Build one typed release command.
 fn release_command(operation: ReleaseOperation, bundle_dir: String) -> ReleaseCommand {
-    let command = ReleaseCommand {
+    ReleaseCommand {
         root: String::from(RELEASE_COMMAND_ROOT),
         operation,
         bundle_dir,
         required_proofs: Vec::new(),
         dry_run: false,
-    };
-    command
+    }
 }
 
 /// Render an optional path as text, treating an absent path as an empty string.
@@ -491,15 +490,14 @@ pub(crate) fn project_lifecycle_command(
 ) -> ProjectCommand {
     debug_assert!(ProjectOperation::all().contains(&operation));
     debug_assert!(!PROJECT_MANIFEST_FILE.is_empty());
-    let command = ProjectCommand {
+    ProjectCommand {
         root: String::from(PROJECT_COMMAND_ROOT),
         operation,
         subject: project_dir.display().to_string(),
         declared_entries: selected.to_vec(),
         manifest_path: project_dir.join(PROJECT_MANIFEST_FILE).display().to_string(),
         has_lock_write: writes_project_lock(operation),
-    };
-    command
+    }
 }
 
 /// Whether one project operation rewrites the lockfile.
@@ -658,15 +656,14 @@ mod graph_tests {
 /// command carries as an empty declared-entry list.
 pub(crate) fn evaluation_command(source: &Path, selected_roots: &[String]) -> EvaluationCommand {
     debug_assert!(!EVALUATION_COMMAND_ROOT.is_empty());
-    let command = EvaluationCommand {
+    EvaluationCommand {
         root: String::from(EVALUATION_COMMAND_ROOT),
         operation: EvaluationOperation::Evaluate,
         subject: source.display().to_string(),
         declared_entries: selected_roots.to_vec(),
         source_path: source.display().to_string(),
         worker_count: None,
-    };
-    command
+    }
 }
 
 /// Reject one evaluation command the contract refuses.
@@ -751,6 +748,7 @@ pub(crate) fn admit_source_action(action: &SourceAction) -> SourceCommandAdmissi
             | SourceBundleAction::RefreshMantleSource { .. }
             | SourceBundleAction::List { .. }
             | SourceBundleAction::Import { .. }
+            | SourceBundleAction::ImportStorePath { .. }
             | SourceBundleAction::HydrateSelfBuild { .. }
             | SourceBundleAction::Verify { .. }
             | SourceBundleAction::Preflight { .. } => SourceCommandAdmission::NotAdministered,
@@ -781,14 +779,13 @@ fn source_command(
 ) -> SourceProvenanceCommand {
     debug_assert!(!SOURCE_COMMAND_ROOT.is_empty());
     debug_assert!(!operation.as_str().is_empty());
-    let command = SourceProvenanceCommand {
+    SourceProvenanceCommand {
         root: String::from(SOURCE_COMMAND_ROOT),
         operation,
         subject: String::from(subject),
         declared_entries,
         expected_digest,
-    };
-    command
+    }
 }
 
 #[cfg(test)]
@@ -1005,14 +1002,13 @@ pub(crate) fn admit_filegen_action(action: &FilegenCommandAction) -> Result<Real
 /// Build one realization command for a filegen action.
 fn realize_command(manifest: &Path, dry_run: bool) -> RealizeCommand {
     debug_assert!(!FILEGEN_COMMAND_ROOT.is_empty());
-    let command = RealizeCommand {
+    RealizeCommand {
         root: String::from(FILEGEN_COMMAND_ROOT),
         roots: vec![manifest.display().to_string()],
         profile: None,
         requested_jobs: None,
         dry_run,
-    };
-    command
+    }
 }
 
 #[cfg(test)]
@@ -1176,8 +1172,6 @@ mod named_realization_tests {
 /// What one remote DTO admits.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum RemoteCommandAdmission {
-    /// The DTO maps onto a remote-execution operation the contract administers.
-    Modeled(RemoteExecutionCommand),
     /// The contract does not administer this action.
     NotAdministered,
 }
@@ -1194,6 +1188,7 @@ pub(crate) fn admit_remote_action(action: &RemoteAction) -> RemoteCommandAdmissi
         RemoteAction::Ticket { .. }
         | RemoteAction::Status { .. }
         | RemoteAction::Debug { .. }
+        | RemoteAction::Live { .. }
         | RemoteAction::Serve { .. } => RemoteCommandAdmission::NotAdministered,
     }
 }

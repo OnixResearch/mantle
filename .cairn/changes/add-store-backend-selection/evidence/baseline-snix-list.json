@@ -1,0 +1,15 @@
+{
+  "overlay": null,
+  "paths": [
+    {
+      "deriver": "c575623bccnl26lwry9sdpj0jnawgb47-hello",
+      "layer": {
+        "kind": "overlay"
+      },
+      "nar_size": 128,
+      "shadows": [],
+      "store_path": "z2y3k7267f9kbpfyw9zw0d1adjcn6z62-hello"
+    }
+  ],
+  "schema": "mantle-store-list-v2"
+}

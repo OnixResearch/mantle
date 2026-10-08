@@ -12,7 +12,6 @@ use serde::Serialize;
 use snix_store::path_info::PathInfo;
 
 use crate::ast_grep_evidence::AST_GREP_EVIDENCE_RELATIVE_PATH;
-use crate::ast_grep_evidence::AstGrepEvidenceRead;
 use crate::ast_grep_evidence::read_ast_grep_evidence;
 use crate::build_failure::BuildFailureEnvelope;
 use crate::build_failure::build_failure_envelopes;
@@ -38,11 +37,15 @@ pub struct BuildJsonReport {
     pub hermeticity_mode: String,
     pub hermeticity_audit_events: Vec<BuildJsonHermeticityAuditEvent>,
     pub build_environment_reports: Vec<BuildJsonEnvironmentReport>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub finish_gates: Vec<crunch_build::FinishGateReport>,
     pub network_policy_reports: Vec<BuildJsonNetworkPolicyReport>,
     pub workspace_reports: Vec<crunch_build::WorkspaceExecutionReport>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub action_result_reports: Vec<crunch_build::ActionResultRuntimeReport>,
     pub native_dynamic_plans: Vec<BuildJsonNativeDynamicPlan>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub plan_output_bindings: Vec<BuildJsonPlanOutputBinding>,
     pub scheduler_priority_decisions: Vec<crunch_pipeline::PriorityDecisionEvidence>,
     pub overlay_base_generations: Vec<BuildJsonOverlayBaseGeneration>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -204,8 +207,36 @@ pub struct BuildJsonNativeDynamicPlan {
     pub raw_artifact_digest: Option<String>,
     pub canonical_plan_digest: Option<String>,
     pub accepted_unit_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub source_slices: Vec<BuildJsonNativeSourceSlice>,
     pub rejection_reason: Option<String>,
     pub scheduler_action: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonPlanOutputBinding {
+    pub consumer_drv_key: String,
+    pub name: String,
+    pub producer_drv_path: String,
+    pub plan_output: String,
+    pub root: String,
+    pub unit_output: String,
+    pub plan_digest: Option<String>,
+    pub root_drv_path: Option<String>,
+    pub output_path: Option<String>,
+    pub status: String,
+    pub failure_reason: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonNativeSourceSlice {
+    pub source_id: String,
+    pub producer_output: String,
+    pub subpath: String,
+    pub declared_nar_blake3: String,
+    pub observed_nar_blake3: Option<String>,
+    pub admitted_store_path: Option<String>,
+    pub disposition: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -414,10 +445,12 @@ fn build_json_report(
         })
         .collect();
     let build_environment_rows = build_environment_reports(result);
+    let finish_gate_rows = result.finish_gate_reports.clone();
     let network_policy_rows = build_network_policy_reports(result);
     let workspace_rows = result.workspace_reports.clone();
     let action_result_rows = result.action_result_reports.clone();
     let native_dynamic_plans = build_native_dynamic_plan_reports(result, &config.store_dir);
+    let plan_output_bindings = build_plan_output_binding_reports(result, &config.store_dir);
     let scheduler_priority_decisions = result.priority_decisions.clone();
     let overlay_plan_blake3 = result.overlay_report.as_ref().map(|report| report.plan_blake3.clone());
     let overlay_base_generations = result.overlay_report.as_ref().map_or_else(Vec::new, |report| {
@@ -468,10 +501,12 @@ fn build_json_report(
         hermeticity_mode: result.hermeticity_mode.as_str().to_string(),
         hermeticity_audit_events,
         build_environment_reports: build_environment_rows,
+        finish_gates: finish_gate_rows,
         network_policy_reports: network_policy_rows,
         workspace_reports: workspace_rows,
         action_result_reports: action_result_rows,
         native_dynamic_plans,
+        plan_output_bindings,
         scheduler_priority_decisions,
         overlay_base_generations,
         overlay_plan_blake3,
@@ -596,10 +631,55 @@ fn build_native_dynamic_plan_reports(result: &PipelineResult, store_dir: &str) -
             raw_artifact_digest: row.raw_artifact_digest.clone(),
             canonical_plan_digest: row.canonical_plan_digest.clone(),
             accepted_unit_ids: row.accepted_unit_ids.clone(),
+            source_slices: row
+                .source_slices
+                .iter()
+                .map(|slice| BuildJsonNativeSourceSlice {
+                    source_id: slice.source_id.clone(),
+                    producer_output: slice.producer_output.clone(),
+                    subpath: slice.subpath.clone(),
+                    declared_nar_blake3: slice.declared_nar_blake3.clone(),
+                    observed_nar_blake3: slice.observed_nar_blake3.clone(),
+                    admitted_store_path: slice
+                        .admitted_store_path
+                        .as_ref()
+                        .map(|path| path.to_absolute_path_with_prefix(store_dir)),
+                    disposition: slice.disposition.clone(),
+                })
+                .collect(),
             rejection_reason: row.rejection_reason.clone(),
             scheduler_action: row.scheduler_action.clone(),
         })
         .collect()
+}
+
+fn build_plan_output_binding_reports(result: &PipelineResult, store_dir: &str) -> Vec<BuildJsonPlanOutputBinding> {
+    let mut rows: Vec<_> = result
+        .plan_output_bindings
+        .iter()
+        .map(|row| BuildJsonPlanOutputBinding {
+            consumer_drv_key: row.consumer_drv_key.clone(),
+            name: row.name.clone(),
+            producer_drv_path: row.producer_drv_path.to_absolute_path_with_prefix(store_dir),
+            plan_output: row.plan_output.clone(),
+            root: row.root.clone(),
+            unit_output: row.unit_output.clone(),
+            plan_digest: row.plan_digest.clone(),
+            root_drv_path: row.root_drv_path.as_ref().map(|path| path.to_absolute_path_with_prefix(store_dir)),
+            output_path: row.output_path.as_ref().map(|path| path.to_absolute_path_with_prefix(store_dir)),
+            status: row.status.clone(),
+            failure_reason: row.failure_reason.clone(),
+        })
+        .collect();
+    rows.sort_by(|left, right| {
+        (&left.name, &left.consumer_drv_key, &left.producer_drv_path, &left.plan_output).cmp(&(
+            &right.name,
+            &right.consumer_drv_key,
+            &right.producer_drv_path,
+            &right.plan_output,
+        ))
+    });
+    rows
 }
 
 fn build_counts(outcomes: &[BuildJsonOutcome], failed: &[BuildFailureEnvelope]) -> BuildJsonCounts {
@@ -698,27 +778,23 @@ fn ast_grep_structural_evidence_for_output(
     debug_assert!(!outcome.label.is_empty());
     debug_assert!(!output.name.is_empty());
     match read_ast_grep_evidence(&evidence_path) {
-        AstGrepEvidenceRead::Missing => AstGrepStructuralEvidenceOutcome::Absent,
-        AstGrepEvidenceRead::Valid(loaded) => {
-            AstGrepStructuralEvidenceOutcome::Valid(BuildJsonAstGrepStructuralEvidence {
-                label: outcome.label.clone(),
-                output_name: output.name.clone(),
-                evidence_path: evidence_path.display().to_string(),
-                sidecar_file_digest_blake3: loaded.sidecar_file_digest_blake3,
-                sidecar_canonical_digest_blake3: loaded.sidecar_canonical_digest_blake3,
-                evidence: loaded.evidence,
-            })
-        }
-        AstGrepEvidenceRead::Invalid { blocker_class, message } => {
-            AstGrepStructuralEvidenceOutcome::Invalid(BuildJsonAstGrepStructuralEvidenceDiagnostic {
-                label: outcome.label.clone(),
-                output_name: output.name.clone(),
-                evidence_path: evidence_path.display().to_string(),
-                blocker_class: blocker_class.to_string(),
-                message,
-                next_action: AST_GREP_EVIDENCE_NEXT_ACTION,
-            })
-        }
+        Ok(None) => AstGrepStructuralEvidenceOutcome::Absent,
+        Ok(Some(loaded)) => AstGrepStructuralEvidenceOutcome::Valid(BuildJsonAstGrepStructuralEvidence {
+            label: outcome.label.clone(),
+            output_name: output.name.clone(),
+            evidence_path: evidence_path.display().to_string(),
+            sidecar_file_digest_blake3: loaded.sidecar_file_digest_blake3,
+            sidecar_canonical_digest_blake3: loaded.sidecar_canonical_digest_blake3,
+            evidence: loaded.evidence,
+        }),
+        Err(error) => AstGrepStructuralEvidenceOutcome::Invalid(BuildJsonAstGrepStructuralEvidenceDiagnostic {
+            label: outcome.label.clone(),
+            output_name: output.name.clone(),
+            evidence_path: evidence_path.display().to_string(),
+            blocker_class: error.blocker_class.to_string(),
+            message: error.message,
+            next_action: AST_GREP_EVIDENCE_NEXT_ACTION,
+        }),
     }
 }
 
@@ -1177,10 +1253,12 @@ mod tests {
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),
@@ -1249,10 +1327,12 @@ mod tests {
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),
@@ -1266,7 +1346,7 @@ mod tests {
     }
 
     #[test]
-    fn build_json_report_includes_artifact_attestation_reference() {
+    fn build_json_report_includes_artifact_attestation_and_plan_output_bindings() {
         use std::collections::HashMap;
 
         let state_dir = tempfile::tempdir().unwrap();
@@ -1363,6 +1443,7 @@ mod tests {
                     strong_claim_blocked: false,
                 }),
             }],
+            finish_gate_reports: Vec::new(),
             network_policy_reports: vec![crunch_pipeline::BuildNetworkPolicyReport {
                 action_name: "demo".to_string(),
                 mode: "offline".to_string(),
@@ -1396,6 +1477,9 @@ mod tests {
                 schema: "mantle-action-result-runtime-report-v1".to_string(),
                 phase: "discovery".to_string(),
                 action_ref: "action-b3:demo".to_string(),
+                unresolved_derivation: None,
+                resolved_derivation: None,
+                resolved_identity: None,
                 disposition: "reused".to_string(),
                 selected_result_ref: Some("result-b3:demo".to_string()),
                 selected_source_id: Some("local-state".to_string()),
@@ -1408,17 +1492,87 @@ mod tests {
                 diagnostics: Vec::new(),
                 non_claims: vec!["index-presence-is-not-output-trust".to_string()],
             }],
-            native_dynamic_plans: vec![crunch_build::NativeDynamicPlanReport {
-                mode: "native".to_string(),
-                producer_key: drv_key_for(&config.store_dir, &drv_path),
-                output_name: "plan".to_string(),
-                plan_artifact_path: Some(output_path.clone()),
-                raw_artifact_digest: Some("raw-digest".to_string()),
-                canonical_plan_digest: Some("canonical-digest".to_string()),
-                accepted_unit_ids: vec!["unit.build".to_string()],
-                rejection_reason: None,
-                scheduler_action: "registered-roots".to_string(),
-            }],
+            native_dynamic_plans: vec![
+                crunch_build::NativeDynamicPlanReport {
+                    mode: "native".to_string(),
+                    producer_key: drv_key_for(&config.store_dir, &drv_path),
+                    output_name: "plan".to_string(),
+                    plan_artifact_path: Some(output_path.clone()),
+                    raw_artifact_digest: Some("raw-digest".to_string()),
+                    canonical_plan_digest: Some("canonical-digest".to_string()),
+                    accepted_unit_ids: vec!["unit.build".to_string()],
+                    source_slices: vec![
+                        crunch_build::NativeDynamicSourceSliceReport {
+                            source_id: "src.a".to_string(),
+                            producer_output: "sources".to_string(),
+                            subpath: "packages/a".to_string(),
+                            declared_nar_blake3: "a".repeat(64),
+                            observed_nar_blake3: Some("a".repeat(64)),
+                            admitted_store_path: Some(output_path.clone()),
+                            disposition: "admitted".to_string(),
+                        },
+                        crunch_build::NativeDynamicSourceSliceReport {
+                            source_id: "src.b".to_string(),
+                            producer_output: "sources".to_string(),
+                            subpath: "packages/b".to_string(),
+                            declared_nar_blake3: "a".repeat(64),
+                            observed_nar_blake3: Some("a".repeat(64)),
+                            admitted_store_path: Some(output_path.clone()),
+                            disposition: "admitted".to_string(),
+                        },
+                    ],
+                    rejection_reason: None,
+                    scheduler_action: "registered-roots".to_string(),
+                },
+                crunch_build::NativeDynamicPlanReport {
+                    mode: "native".to_string(),
+                    producer_key: drv_key_for(&config.store_dir, &drv_path),
+                    output_name: "plan-bad".to_string(),
+                    plan_artifact_path: Some(output_path.clone()),
+                    raw_artifact_digest: Some("raw-bad".to_string()),
+                    canonical_plan_digest: None,
+                    accepted_unit_ids: Vec::new(),
+                    source_slices: vec![crunch_build::NativeDynamicSourceSliceReport {
+                        source_id: "src.c".to_string(),
+                        producer_output: "sources".to_string(),
+                        subpath: "packages/missing".to_string(),
+                        declared_nar_blake3: "b".repeat(64),
+                        observed_nar_blake3: None,
+                        admitted_store_path: None,
+                        disposition: "slice-absent".to_string(),
+                    }],
+                    rejection_reason: Some("slice-absent: source src.c".to_string()),
+                    scheduler_action: "rejected".to_string(),
+                },
+            ],
+            plan_output_bindings: vec![
+                crunch_build::NativePlanOutputBindingReport {
+                    consumer_drv_key: drv_key_for(&config.store_dir, &drv_path),
+                    name: "z.rejected".to_string(),
+                    producer_drv_path: drv_path.clone(),
+                    plan_output: "plan-bad".to_string(),
+                    root: "unit.rejected".to_string(),
+                    unit_output: "out".to_string(),
+                    plan_digest: None,
+                    root_drv_path: None,
+                    output_path: None,
+                    status: "rejected".to_string(),
+                    failure_reason: Some("plan-rejected".to_string()),
+                },
+                crunch_build::NativePlanOutputBindingReport {
+                    consumer_drv_key: drv_key_for(&config.store_dir, &drv_path),
+                    name: "a.bound".to_string(),
+                    producer_drv_path: drv_path.clone(),
+                    plan_output: "plan".to_string(),
+                    root: "unit.build".to_string(),
+                    unit_output: "out".to_string(),
+                    plan_digest: Some("canonical-digest".to_string()),
+                    root_drv_path: Some(drv_path.clone()),
+                    output_path: Some(output_path.clone()),
+                    status: "bound".to_string(),
+                    failure_reason: None,
+                },
+            ],
             priority_decisions: vec![sample_priority_decision()],
             overlay_report: Some(crunch_store::StoreOverlayReport {
                 schema: crunch_store::STORE_OVERLAY_REPORT_SCHEMA.to_string(),
@@ -1489,11 +1643,68 @@ mod tests {
                 .non_claims
                 .contains(&"index-presence-is-not-output-trust".to_string())
         );
-        assert_eq!(report.native_dynamic_plans.len(), 1);
+        assert_eq!(report.native_dynamic_plans.len(), 2);
         assert_eq!(report.native_dynamic_plans[0].mode, "native");
         assert_eq!(report.native_dynamic_plans[0].output_name, "plan");
         assert_eq!(report.native_dynamic_plans[0].scheduler_action, "registered-roots");
         assert_eq!(report.native_dynamic_plans[0].accepted_unit_ids, vec!["unit.build".to_string()]);
+        let admitted = &report.native_dynamic_plans[0].source_slices;
+        assert_eq!(
+            admitted.iter().map(|row| (&*row.source_id, &*row.subpath, &*row.disposition)).collect::<Vec<_>>(),
+            vec![("src.a", "packages/a", "admitted"), ("src.b", "packages/b", "admitted"),],
+        );
+        assert_eq!(admitted[0].admitted_store_path, admitted[1].admitted_store_path);
+        assert_eq!(admitted[0].admitted_store_path.as_deref(), Some(logical_path.as_str()));
+        assert_eq!(admitted[0].declared_nar_blake3, admitted[0].observed_nar_blake3.as_deref().unwrap());
+        let rejected = &report.native_dynamic_plans[1];
+        assert_eq!(rejected.scheduler_action, "rejected");
+        assert_eq!(rejected.source_slices[0].subpath, "packages/missing");
+        assert_eq!(rejected.source_slices[0].disposition, "slice-absent");
+        assert!(rejected.source_slices[0].admitted_store_path.is_none());
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(
+            json["plan_output_bindings"],
+            json!([
+                {
+                    "consumer_drv_key": drv_key_for(&config.store_dir, &drv_path),
+                    "name": "a.bound",
+                    "producer_drv_path": drv_key_for(&config.store_dir, &drv_path),
+                    "plan_output": "plan",
+                    "root": "unit.build",
+                    "unit_output": "out",
+                    "plan_digest": "canonical-digest",
+                    "root_drv_path": drv_key_for(&config.store_dir, &drv_path),
+                    "output_path": output_path.to_absolute_path_with_prefix(&config.store_dir),
+                    "status": "bound",
+                    "failure_reason": null
+                },
+                {
+                    "consumer_drv_key": drv_key_for(&config.store_dir, &drv_path),
+                    "name": "z.rejected",
+                    "producer_drv_path": drv_key_for(&config.store_dir, &drv_path),
+                    "plan_output": "plan-bad",
+                    "root": "unit.rejected",
+                    "unit_output": "out",
+                    "plan_digest": null,
+                    "root_drv_path": null,
+                    "output_path": null,
+                    "status": "rejected",
+                    "failure_reason": "plan-rejected"
+                }
+            ])
+        );
+        let json_slices = &json["native_dynamic_plans"][0]["source_slices"];
+        assert_eq!(json_slices[0]["source_id"], "src.a");
+        assert_eq!(json_slices[1]["source_id"], "src.b");
+        assert_eq!(json_slices[0]["admitted_store_path"], logical_path);
+        assert_eq!(json_slices[1]["admitted_store_path"], logical_path);
+        assert_eq!(json_slices[0]["producer_output"], "sources");
+        assert_eq!(json_slices[1]["observed_nar_blake3"], "a".repeat(64));
+        let rejected_json = &json["native_dynamic_plans"][1]["source_slices"][0];
+        assert_eq!(rejected_json["source_id"], "src.c");
+        assert_eq!(rejected_json["subpath"], "packages/missing");
+        assert_eq!(rejected_json["disposition"], "slice-absent");
+        assert!(rejected_json["admitted_store_path"].is_null());
         assert_eq!(report.scheduler_priority_decisions.len(), 1);
         assert_eq!(report.overlay_plan_blake3, Some("b".repeat(TEST_WORKSPACE_DIGEST_HEX_LENGTH)));
         assert_eq!(report.overlay_base_generations[0].layer_index, 1);
@@ -1611,10 +1822,12 @@ mod tests {
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),
@@ -2019,10 +2232,12 @@ mod tests {
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),
@@ -2165,10 +2380,12 @@ mod tests {
                 "explicit --impure mode permits ambient host dependencies",
             )],
             build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            plan_output_bindings: Vec::new(),
             priority_decisions: Vec::new(),
             overlay_report: None,
             store_layer_selections: Vec::new(),

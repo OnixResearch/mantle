@@ -216,6 +216,28 @@ fn cargo_import_apply_writes_bounded_files_and_project_shape() {
 }
 
 #[test]
+fn cargo_import_apply_matches_reviewed_plan_bytes_and_is_repeatable() {
+    let workspace = tempfile::tempdir().unwrap();
+    write_supported_workspace(workspace.path());
+    let plan = run_import(workspace.path(), "--plan");
+    assert!(plan.status.success());
+    let planned = parse_plan(&plan);
+
+    for _ in 0..2 {
+        let applied = run_import(workspace.path(), "--apply");
+        assert!(applied.status.success(), "stderr: {}", String::from_utf8_lossy(&applied.stderr));
+        for operation in &planned.file_operations {
+            assert_eq!(
+                std::fs::read(workspace.path().join(&operation.path)).unwrap(),
+                operation.content.as_bytes(),
+                "{}",
+                operation.path
+            );
+        }
+    }
+}
+
+#[test]
 fn cargo_import_plan_accepts_declared_vendored_registry_source() {
     let workspace = tempfile::tempdir().unwrap();
     write_vendored_registry_workspace(workspace.path());
@@ -318,6 +340,10 @@ fn cargo_import_apply_fails_before_writing_conflicting_files() {
     assert!(!output.status.success());
     assert!(classes.contains(&"existing-file-conflict"), "classes: {classes:?}");
     assert!(!workspace.path().join(".mantle/inputs.ncl").exists());
+    let human = mantle_cmd().current_dir(workspace.path()).args(["import", "cargo", "--apply"]).output().unwrap();
+    assert_eq!(human.status.code(), Some(3));
+    assert!(String::from_utf8_lossy(&human.stdout).starts_with("Cargo import plan for"));
+    assert!(human.stderr.is_empty());
 }
 
 #[test]
@@ -335,4 +361,38 @@ fn cargo_import_blocks_missing_lockfile_and_unsupported_registry_source() {
     assert!(classes.contains(&"missing-lockfile"), "classes: {classes:?}");
     assert!(classes.contains(&"missing-lock-entry"), "classes: {classes:?}");
     assert!(plan.file_operations.is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn cargo_import_rejects_symlink_output_parent_before_any_write() {
+    let workspace = tempfile::tempdir().unwrap();
+    let external = tempfile::tempdir().unwrap();
+    write_supported_workspace(workspace.path());
+    std::os::unix::fs::symlink(external.path(), workspace.path().join(".mantle")).unwrap();
+
+    let output = run_import(workspace.path(), "--apply");
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("symlink import output"),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!workspace.path().join("mantle-project.ncl").exists());
+    assert!(!external.path().join("inputs.ncl").exists());
+}
+
+#[test]
+fn cargo_import_rejects_overlapping_output_targets_before_writing() {
+    let workspace = tempfile::tempdir().unwrap();
+    write_supported_workspace(workspace.path());
+    let output = mantle_cmd()
+        .current_dir(workspace.path())
+        .args(["import", "cargo", "--apply", "--project-file", ".mantle"])
+        .output()
+        .expect("cargo importer should run");
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("output targets overlap"));
+    assert!(!workspace.path().join(".mantle").exists());
 }

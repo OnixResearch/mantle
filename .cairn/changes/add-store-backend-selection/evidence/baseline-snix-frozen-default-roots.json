@@ -1,0 +1,19 @@
+[
+  {
+    "schema_version": 3,
+    "logical_path": "/mantle/store/z2y3k7267f9kbpfyw9zw0d1adjcn6z62-hello",
+    "source": "build",
+    "root_class": "legacy-unmanaged",
+    "owner_scope": "legacy-unmanaged",
+    "project_identity": null,
+    "selector": null,
+    "generation": null,
+    "generation_identity": null,
+    "lease": null,
+    "policy_blake3": "b3:b31c5911810adfb3b165f1c66b7a710a9716f7ae40cb5045b7abfb520ad14e72",
+    "created_unix_s": 1790810000,
+    "last_transition_id": "b3:3c9df62e03eb02bd296964534db2b0f1b4716ed93107d1cd370ad61c2fd439c1",
+    "last_transition_reason": "legacy-root-registered",
+    "removal_requested": false
+  }
+]

@@ -12,6 +12,18 @@ use std::path::PathBuf;
 use crunch_attestation::ArtifactAttestation;
 use crunch_attestation::Canonicalize;
 use crunch_attestation::EdgeKind;
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::CommandFamily;
+use mantle_application_contract::EffectId;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::EffectSpec;
+use mantle_application_contract::ExpectedOutput;
+use mantle_application_contract::Observation;
+use mantle_application_contract::ObservationStatus;
+use mantle_application_contract::classify_observations;
+use mantle_application_contract::plan_effects;
 use sha2::Sha256;
 
 use crate::full_source_provider::FullSourceProviderAdmissionReport;
@@ -38,6 +50,9 @@ use crate::source_toolchain_closure::RustSourceProviderMetadata;
 pub(crate) const FULL_SOURCE_RUST_BINDING_RELATIVE_PATH: &str =
     "share/mantle-rust-provider/receipts/full-source-binding.json";
 pub(crate) const FULL_SOURCE_RUST_HOST_TOOL_MANIFEST_FILE: &str = "full-source-rust-host-tools.json";
+const HOST_TOOL_INPUT_EFFECT: &str = "bootstrap-rust-host-tool-inputs";
+const HOST_TOOL_PUBLISH_EFFECT: &str = "bootstrap-rust-host-tool-publication";
+const HOST_TOOL_READBACK_EFFECT: &str = "bootstrap-rust-host-tool-manifest-readback";
 const FULL_SOURCE_LINUX_HEADERS_ATTESTATION_FILE: &str = "linux-headers-attestation.json";
 const FULL_SOURCE_BINDING_RECEIPT_ID: &str = "full-source-rust-provider-construction";
 const FULL_SOURCE_PROVIDER_TARGET: &str = "x86_64-linux-musl";
@@ -204,6 +219,50 @@ const FULL_SOURCE_RUST_HOST_TOOL_SPECS: &[FullSourceRustHostToolSpec] = &[
     },
 ];
 
+trait FullSourceHostToolPort {
+    fn output_exists(&mut self, output_dir: &Path) -> bool;
+    fn materialize(
+        &mut self,
+        request: &FullSourceRustHostToolMaterializationRequest<'_>,
+    ) -> Result<PathBuf, RustSourceProviderError>;
+    fn readback(&mut self, path: &Path) -> Result<FullSourceRustHostToolManifest, RustSourceProviderError>;
+}
+
+struct LocalFullSourceHostTools;
+
+impl FullSourceHostToolPort for LocalFullSourceHostTools {
+    fn output_exists(&mut self, output_dir: &Path) -> bool {
+        output_dir.exists()
+    }
+
+    fn materialize(
+        &mut self,
+        request: &FullSourceRustHostToolMaterializationRequest<'_>,
+    ) -> Result<PathBuf, RustSourceProviderError> {
+        fs::create_dir(request.output_dir).map_err(|error| {
+            RustSourceProviderError::Copy(format!(
+                "creating full-source Rust host-tool evidence directory {}: {error}",
+                request.output_dir.display()
+            ))
+        })?;
+        let result = materialize_full_source_rust_host_tools_inner(request);
+        if result.is_err() {
+            let _ = fs::remove_dir_all(request.output_dir);
+        }
+        result
+    }
+
+    fn readback(&mut self, path: &Path) -> Result<FullSourceRustHostToolManifest, RustSourceProviderError> {
+        let bytes = read_nonempty_bounded(path, "full-source Rust host-tool manifest", HOST_TOOL_MANIFEST_BYTES_MAX)?;
+        let manifest: FullSourceRustHostToolManifest = serde_json::from_slice(&bytes).map_err(|error| {
+            RustSourceProviderError::Parse(format!("parsing host-tool manifest {}: {error}", path.display()))
+        })?;
+        validate_full_source_rust_host_tool_manifest(&manifest)
+            .map_err(|error| RustSourceProviderError::Validate(error.to_string()))?;
+        Ok(manifest)
+    }
+}
+
 pub(crate) fn prepare_full_source_rust_execution_context(
     admission_report_path: &Path,
     host_tool_manifest_path: &Path,
@@ -271,23 +330,87 @@ fn canonical_non_symlink_directory(path: &Path, label: &str) -> Result<PathBuf, 
 pub(crate) fn materialize_full_source_rust_host_tools(
     request: FullSourceRustHostToolMaterializationRequest<'_>,
 ) -> Result<PathBuf, RustSourceProviderError> {
-    if request.output_dir.exists() {
+    let plan = plan_effects(CommandFamily::Bootstrap, &[
+        EffectSpec {
+            effect_id: HOST_TOOL_INPUT_EFFECT,
+            kind: EffectKind::ReadFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::None,
+        },
+        EffectSpec {
+            effect_id: HOST_TOOL_PUBLISH_EFFECT,
+            kind: EffectKind::WriteFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::None,
+        },
+        EffectSpec {
+            effect_id: HOST_TOOL_READBACK_EFFECT,
+            kind: EffectKind::ReadFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::Identity(
+                crate::full_source_rust_binding::FULL_SOURCE_RUST_HOST_TOOL_SCHEMA,
+            ),
+        },
+    ])
+    .map_err(|error| RustSourceProviderError::Validate(format!("planning host-tool publication: {}", error.code())))?;
+    let mut observed = [
+        host_tool_effect(HOST_TOOL_INPUT_EFFECT, EffectKind::ReadFiles),
+        host_tool_effect(HOST_TOOL_PUBLISH_EFFECT, EffectKind::WriteFiles),
+        host_tool_effect(HOST_TOOL_READBACK_EFFECT, EffectKind::ReadFiles),
+    ];
+    let result = execute_host_tool_materialization(&request, &mut LocalFullSourceHostTools, &mut observed);
+    match (classify_observations(&plan, &observed), result) {
+        (ApplicationOutcome::Completed, Ok(path)) => Ok(path),
+        (ApplicationOutcome::Failed { .. }, Err(error)) => Err(error),
+        (outcome, _) => Err(RustSourceProviderError::Validate(format!(
+            "full-source Rust host-tool observations inconsistent: {outcome:?}"
+        ))),
+    }
+}
+
+fn host_tool_effect(id: &str, kind: EffectKind) -> Observation {
+    Observation {
+        effect_id: EffectId(id.to_string()),
+        kind,
+        status: ObservationStatus::Skipped,
+        output: EffectOutput::None,
+        usage: EffectMeasure::Calls(0),
+        diagnostics_code: None,
+    }
+}
+
+fn host_tool_record<T>(observation: &mut Observation, result: &Result<T, RustSourceProviderError>) {
+    observation.status = if result.is_ok() {
+        ObservationStatus::Succeeded
+    } else {
+        ObservationStatus::Failed
+    };
+    observation.usage = EffectMeasure::Calls(1);
+    observation.diagnostics_code = result.is_err().then(|| format!("{}-failed", observation.effect_id.0));
+}
+
+fn execute_host_tool_materialization(
+    request: &FullSourceRustHostToolMaterializationRequest<'_>,
+    port: &mut impl FullSourceHostToolPort,
+    observed: &mut [Observation; 3],
+) -> Result<PathBuf, RustSourceProviderError> {
+    let exists = port.output_exists(request.output_dir);
+    observed[0].status = ObservationStatus::Succeeded;
+    observed[0].usage = EffectMeasure::Calls(1);
+    if exists {
         return Err(RustSourceProviderError::Copy(format!(
             "full-source Rust host-tool evidence directory already exists: {}",
             request.output_dir.display()
         )));
     }
-    fs::create_dir(request.output_dir).map_err(|error| {
-        RustSourceProviderError::Copy(format!(
-            "creating full-source Rust host-tool evidence directory {}: {error}",
-            request.output_dir.display()
-        ))
-    })?;
-    let result = materialize_full_source_rust_host_tools_inner(&request);
-    if result.is_err() {
-        let _ = fs::remove_dir_all(request.output_dir);
-    }
-    result
+    let published = port.materialize(request);
+    host_tool_record(&mut observed[1], &published);
+    let path = published?;
+    let manifest = port.readback(&path);
+    host_tool_record(&mut observed[2], &manifest);
+    let manifest = manifest?;
+    observed[2].output = EffectOutput::Identity(manifest.schema.clone());
+    Ok(path)
 }
 
 fn materialize_full_source_rust_host_tools_inner(

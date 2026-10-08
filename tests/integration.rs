@@ -1908,9 +1908,15 @@ fn verbose_store_roots_emits_store_fingerprint() {
 
 #[test]
 fn log_subcommand_no_logs() {
-    // Point to an empty log dir
     let dir = tempfile::tempdir().unwrap();
-    crunch_cmd().env("CRUNCH_LOG_DIR", dir.path()).arg("log").arg("--list").assert().success();
+    crunch_cmd()
+        .env("CRUNCH_LOG_DIR", dir.path())
+        .arg("log")
+        .arg("--list")
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains(dir.path().display().to_string()));
 }
 
 #[test]
@@ -1961,6 +1967,53 @@ fn log_subcommand_query_not_found() {
         .assert()
         .code(3)
         .stderr(predicate::str::contains("no log matching"));
+}
+
+#[test]
+fn log_subcommand_rejects_unreadable_log_before_printing_any_listing() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a-good.log"), "# status: success\n").unwrap();
+    std::fs::create_dir(dir.path().join("z-unreadable.log")).unwrap();
+
+    crunch_cmd()
+        .env("CRUNCH_LOG_DIR", dir.path())
+        .arg("log")
+        .arg("--list")
+        .assert()
+        .code(3)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("z-unreadable.log"));
+}
+
+#[test]
+fn log_subcommand_rejects_unreadable_matched_file() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join("query-unreadable.log")).unwrap();
+
+    crunch_cmd()
+        .env("CRUNCH_LOG_DIR", dir.path())
+        .arg("log")
+        .arg("query-unreadable")
+        .assert()
+        .code(3)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("query-unreadable.log"));
+}
+
+#[cfg(unix)]
+#[test]
+fn log_subcommand_rejects_missing_log_file() {
+    let dir = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink("missing-target", dir.path().join("lost.log")).unwrap();
+
+    crunch_cmd()
+        .env("CRUNCH_LOG_DIR", dir.path())
+        .arg("log")
+        .arg("--list")
+        .assert()
+        .code(3)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("lost.log"));
 }
 
 // ── Phase: Fetcher hash mismatch + --fix ─────────────────────────

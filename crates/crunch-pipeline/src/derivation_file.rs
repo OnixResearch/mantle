@@ -109,6 +109,10 @@ impl DerivationFileResolver {
                 self.resolve_inline_inputs(owner_file, &mut selection.drv, cache, depth.saturating_add(1))?;
                 Ok(Input::OutputSelection(selection))
             }
+            Input::PlanOutput(mut reference) => {
+                self.resolve_inline_inputs(owner_file, &mut reference.producer, cache, depth.saturating_add(1))?;
+                Ok(Input::PlanOutput(reference))
+            }
             Input::Source(_) | Input::ResolvedDerivation(_) => Ok(input),
         }
     }

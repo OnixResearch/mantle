@@ -12,6 +12,8 @@ artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.gi
 artifact-auth-ed25519 = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
 async-trait = "0.1"
 crunch-action-result-core = { path = "../crunch-action-result-core" }
+mantle-causal-trace-core = { path = "../mantle-causal-trace-core" }
+crunch-remote-core = { path = "../crunch-remote-core", features = ["serde"] }
 crunch-attestation = { path = "../crunch-attestation" }
 crunch-store = { path = "../crunch-store" }
 nix-compat = { path = "../../vendor/nix-compat", features = ["serde"] }

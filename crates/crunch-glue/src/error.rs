@@ -28,6 +28,8 @@ pub enum Error {
 
     #[error("invalid dynamic plan outputs: {0}")]
     InvalidDynamicPlanOutputs(String),
+    #[error("invalid plan-output binding: {0}")]
+    InvalidPlanOutputBinding(String),
 
     #[error("invalid addressing mode: {0}")]
     InvalidAddressingMode(String),

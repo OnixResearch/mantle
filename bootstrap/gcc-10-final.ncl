@@ -13,6 +13,15 @@ let gcc10_src = crunch.derivationFile "gcc-10.5.0-regenerated-source.ncl" in
   name = "gcc-10.5.0-musl-final-v1",
   builder = "/bin/sh",
   addressing_mode = 'input-addressed,
+  # r[impl mantle.derivation_finish_gates.reference_leak_gate]
+  # Published linker wrappers must not retain this build-tree shared runtime.
+  finish_gates = {
+    version = {
+      command = ["bin/gcc", "--version"],
+      expected = "10.5.0",
+    },
+    reference_leak.build_platform_paths = ["/tmp/gcc-10.5.0-musl-final/build/"],
+  },
   args = [
     "-c",
     m%"

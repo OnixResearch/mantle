@@ -1,0 +1,30 @@
+fatal: unable to access 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git/': The requested URL returned error: 530
+warning: could not read HEAD ref from repo at 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git', using 'master'
+fatal: unable to access 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git/': The requested URL returned error: 530
+error:
+       … while evaluating the `outPath` attribute
+         at «github:NixOS/nixpkgs/d233902339c02a9c334e7e593de68855ad26c4cb?narHash=sha256-30sZNZoA1cqF5JNO9fVX%2BwgiQYjB7HJqqJ4ztCDeBZE%3D»/lib/customisation.nix:431:7:
+          430|         drv.drvPath;
+          431|       outPath =
+             |       ^
+          432|         assert condition;
+
+       … while evaluating the attribute 'outPath'
+         at «github:NixOS/nixpkgs/d233902339c02a9c334e7e593de68855ad26c4cb?narHash=sha256-30sZNZoA1cqF5JNO9fVX%2BwgiQYjB7HJqqJ4ztCDeBZE%3D»/lib/customisation.nix:433:9:
+          432|         assert condition;
+          433|         drv.outPath;
+             |         ^
+          434|     };
+
+       … while evaluating derivation 'cairn-0.1.0'
+         whose name attribute is located at «github:NixOS/nixpkgs/d233902339c02a9c334e7e593de68855ad26c4cb?narHash=sha256-30sZNZoA1cqF5JNO9fVX%2BwgiQYjB7HJqqJ4ztCDeBZE%3D»/pkgs/stdenv/generic/make-derivation.nix:618:11
+
+       … while evaluating derivation 'cargo-vendor-dir'
+         whose name attribute is located at «github:NixOS/nixpkgs/d233902339c02a9c334e7e593de68855ad26c4cb?narHash=sha256-30sZNZoA1cqF5JNO9fVX%2BwgiQYjB7HJqqJ4ztCDeBZE%3D»/pkgs/stdenv/generic/make-derivation.nix:618:11
+
+       … while evaluating derivation 'bounded-exec-0.1.0'
+         whose name attribute is located at «github:NixOS/nixpkgs/d233902339c02a9c334e7e593de68855ad26c4cb?narHash=sha256-30sZNZoA1cqF5JNO9fVX%2BwgiQYjB7HJqqJ4ztCDeBZE%3D»/pkgs/stdenv/generic/make-derivation.nix:618:11
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: Failed to fetch git repository 'https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git'

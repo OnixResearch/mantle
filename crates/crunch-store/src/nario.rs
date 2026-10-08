@@ -42,6 +42,7 @@ use tokio::io::AsyncRead;
 use tokio::io::AsyncReadExt;
 
 use crate::Error;
+use crate::StoreBackendCapabilityProfile;
 use crate::export::export_castore_to_disk;
 use crate::handle::StoreHandle;
 
@@ -410,14 +411,16 @@ async fn finalize_nario_import(
     assert!(staged.len() <= NarioV2Limits::default().records_max);
     assert_eq!(handle.store_dir(), NARIO_V2_STORE_PREFIX);
     validate_reference_closure(handle, &staged).await?;
-    let path_infos = staged.iter().filter_map(|record| record.path_info.clone()).collect::<Vec<_>>();
+    let mut staged = staged;
+    let path_infos = staged.iter_mut().filter_map(|record| record.path_info.take()).collect::<Vec<_>>();
+    let imported_count = checked_u32(path_infos.len(), "nario-v2 imported count")?;
     let (materialization_dir, materializations) = if options.materialize {
         stage_materializations(handle, &path_infos).await?
     } else {
         (None, Vec::new())
     };
     publish_materializations(&materializations)?;
-    if let Err(error) = handle.pathinfo_service().put_batch_atomic(path_infos.clone()).await {
+    if let Err(error) = handle.pathinfo_service().put_batch_atomic(path_infos).await {
         if let Err(rollback_error) = rollback_materializations(&materializations) {
             return Err(nario_error(format!("nario-v2-atomic-publication: {error}; {rollback_error}")));
         }
@@ -425,7 +428,6 @@ async fn finalize_nario_import(
     }
     drop(materialization_dir);
     let paths = staged.iter().map(|record| record.listed.clone()).collect::<Vec<_>>();
-    let imported_count = checked_u32(path_infos.len(), "nario-v2 imported count")?;
     let skipped = staged.iter().filter(|record| record.present).count();
     Ok(NarioV2ImportReport {
         format: NARIO_V2_FORMAT_NAME,
@@ -449,8 +451,26 @@ pub async fn import_nario_v2<R: AsyncRead + Unpin + Send>(
     reader: &mut R,
     options: &NarioV2ImportOptions,
 ) -> Result<NarioV2ImportReport, Error> {
-    if handle.backend() == crate::StoreBackend::Casita && options.trust_unsigned {
-        return Err(nario_error("casita-trust-unsigned-unsupported: Casita import requires signatures"));
+    import_nario_v2_with_profile(handle, reader, options, handle.backend().profile()).await
+}
+
+async fn import_nario_v2_with_profile<R: AsyncRead + Unpin + Send>(
+    handle: &StoreHandle,
+    reader: &mut R,
+    options: &NarioV2ImportOptions,
+    profile: StoreBackendCapabilityProfile,
+) -> Result<NarioV2ImportReport, Error> {
+    if !profile.atomic_batch_import {
+        return Err(nario_error(format!(
+            "{}-atomic-batch-import-unsupported: backend does not declare atomic batch import",
+            handle.backend().as_str()
+        )));
+    }
+    if !profile.unsigned_admission && options.trust_unsigned {
+        return Err(nario_error(format!(
+            "{}-trust-unsigned-unsupported: backend requires signatures",
+            handle.backend().as_str()
+        )));
     }
     if handle.store_dir() != NARIO_V2_STORE_PREFIX {
         return Err(nario_error(format!(
@@ -460,7 +480,10 @@ pub async fn import_nario_v2<R: AsyncRead + Unpin + Send>(
     }
     handle.preflight_casita_archive_trust(&options.trusted_public_keys)?;
     let limits = NarioV2Limits::default();
-    let casita_root_change_limit = handle.casita_batch_root_change_limit();
+    let root_change_limit = match (profile.max_root_changes, handle.casita_batch_root_change_limit()) {
+        (Some(declared), Some(repository)) => Some(declared.min(repository)),
+        (declared, repository) => declared.or(repository),
+    };
     let mut hashing_reader = ArchiveHashReader::new(reader);
     let mut wire = NixReader::builder()
         .set_max_buf_size(limits.metadata_string_bytes_max)
@@ -484,8 +507,12 @@ pub async fn import_nario_v2<R: AsyncRead + Unpin + Send>(
             .map_err(nario_error)?;
         validate_metadata(&metadata, &limits).map_err(nario_error)?;
         require_metadata_ca_identity(&metadata)?;
-        if handle.backend() == crate::StoreBackend::Casita && metadata.signatures.is_empty() {
-            return Err(nario_error(format!("casita-signer-untrusted: {} is unsigned", metadata.store_path)));
+        if !profile.unsigned_admission && metadata.signatures.is_empty() {
+            return Err(nario_error(format!(
+                "{}-signer-untrusted: {} is unsigned",
+                handle.backend().as_str(),
+                metadata.store_path
+            )));
         }
         require_trusted(&metadata, options)?;
         let path = metadata.store_path.to_string();
@@ -507,11 +534,12 @@ pub async fn import_nario_v2<R: AsyncRead + Unpin + Send>(
             });
             continue;
         }
-        if let Some(root_change_limit) = casita_root_change_limit
+        if let Some(root_change_limit) = root_change_limit
             && new_paths >= root_change_limit
         {
             return Err(nario_error(format!(
-                "casita-batch-limit: {} new roots exceed configured {root_change_limit} at {}",
+                "{}-batch-limit: {} new roots exceed configured {root_change_limit} at {}",
+                handle.backend().as_str(),
                 new_paths.saturating_add(1),
                 metadata.store_path
             )));
@@ -855,6 +883,8 @@ impl<R: AsyncRead + Unpin> AsyncRead for ArchiveHashReader<R> {
 
 #[cfg(test)]
 mod tests {
+    use casita::experimental::MetadataStore;
+    use futures::TryStreamExt;
     use nix_compat::narinfo::SigningKey;
     use sha2::Sha256;
     use snix_castore::Node;
@@ -992,6 +1022,16 @@ mod tests {
             trusted_public_keys: vec![test_keys().1],
             materialize: false,
         }
+    }
+
+    async fn published_root_names(handle: &StoreHandle) -> BTreeSet<String> {
+        let snapshot = handle.casita_store.as_ref().unwrap().repository.metadata().snapshot().await.unwrap();
+        let mut roots = snapshot.roots();
+        let mut names = BTreeSet::new();
+        while let Some(root) = roots.try_next().await.unwrap() {
+            names.insert(root.name().as_str().to_owned());
+        }
+        names
     }
 
     const STORE_PATH_DIGEST_BYTES: usize = 20;
@@ -1149,12 +1189,41 @@ mod tests {
     async fn nario_casita_rejects_unsigned_override_before_reading_archive() {
         let destination = tempfile::tempdir().unwrap();
         let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        let repository = &handle.casita_store.as_ref().unwrap().repository;
+        let revision = repository.metadata().snapshot().await.unwrap().revision();
         let mut input = std::io::Cursor::new(b"not a nario archive");
         let mut options = import_options();
         options.trust_unsigned = true;
         let error = import_nario_v2(&handle, &mut input, &options).await.unwrap_err();
         assert!(error.to_string().contains("casita-trust-unsigned-unsupported"), "{error}");
         assert_eq!(input.position(), 0);
+        assert_eq!(repository.metadata().snapshot().await.unwrap().revision(), revision);
+        assert!(published_root_names(&handle).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn nario_casita_rejects_out_of_policy_key_before_archive_or_mutation() {
+        let source = tempfile::tempdir().unwrap();
+        let source_handle = test_handle(source.path(), crate::StoreBackend::Snix).await;
+        let (path_info, nar) = record_fixture(&source_handle, "casita-out-of-policy", b"signed policy payload").await;
+        let archive = wire_archive(&[(&path_info, &nar)]);
+        let destination = tempfile::tempdir().unwrap();
+        fs::create_dir_all(destination.path().join("state")).unwrap();
+        let other_private = ed25519_dalek::SigningKey::from_bytes(&[31u8; 32]);
+        let other_key = VerifyingKey::new("nario-casita-test-1".to_string(), other_private.verifying_key());
+        fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", other_key)).unwrap();
+        let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        let repository = &handle.casita_store.as_ref().unwrap().repository;
+        let revision = repository.metadata().snapshot().await.unwrap().revision();
+        let mut input = std::io::Cursor::new(archive);
+        let error = import_nario_v2(&handle, &mut input, &import_options()).await.unwrap_err();
+        assert!(error.to_string().contains("casita-import-key-unauthorized"), "{error}");
+        assert_eq!(input.position(), 0);
+        assert_eq!(repository.metadata().snapshot().await.unwrap().revision(), revision);
+        assert!(published_root_names(&handle).await.is_empty());
+        drop(handle);
+        let reopened = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        assert!(reopened.pathinfo_service().get(*path_info.store_path.digest()).await.unwrap().is_none());
     }
 
     #[tokio::test]
@@ -1171,6 +1240,35 @@ mod tests {
         let error = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap_err();
         assert!(error.to_string().contains("casita-signer-untrusted"), "{error}");
         assert!(handle.pathinfo_service().get(*unsigned.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn nario_snix_batch_import_accepts_unsigned_record_and_reopens_both_paths() {
+        let source = tempfile::tempdir().unwrap();
+        let source_handle = test_handle(source.path(), crate::StoreBackend::Snix).await;
+        let (signed, signed_nar) = record_fixture(&source_handle, "snix-batch-signed", b"signed payload").await;
+        let (mut unsigned, unsigned_nar) =
+            record_fixture(&source_handle, "snix-batch-unsigned", b"unsigned payload").await;
+        unsigned.signatures.clear();
+        let archive = wire_archive(&[(&signed, &signed_nar), (&unsigned, &unsigned_nar)]);
+        let destination = tempfile::tempdir().unwrap();
+
+        {
+            let handle = test_handle(destination.path(), crate::StoreBackend::Snix).await;
+            let error =
+                import_nario_v2(&handle, &mut std::io::Cursor::new(&archive), &import_options()).await.unwrap_err();
+            assert!(error.to_string().contains("untrusted-signature"), "{error}");
+            assert!(handle.pathinfo_service().get(*signed.store_path.digest()).await.unwrap().is_none());
+            assert!(handle.pathinfo_service().get(*unsigned.store_path.digest()).await.unwrap().is_none());
+
+            let mut options = import_options();
+            options.trust_unsigned = true;
+            let report = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &options).await.unwrap();
+            assert_eq!(report.imported_count, 2);
+        }
+        let reopened = test_handle(destination.path(), crate::StoreBackend::Snix).await;
+        assert_eq!(reopened.pathinfo_service().get(*signed.store_path.digest()).await.unwrap(), Some(signed));
+        assert_eq!(reopened.pathinfo_service().get(*unsigned.store_path.digest()).await.unwrap(), Some(unsigned));
     }
 
     #[tokio::test]
@@ -1207,10 +1305,26 @@ mod tests {
         let (conflicting, _) = record_fixture(&handle, "casita-conflict-second", b"other existing payload").await;
         assert_eq!(conflicting.store_path, second.store_path);
         handle.pathinfo_service().put(conflicting.clone()).await.unwrap();
+        let repository = &handle.casita_store.as_ref().unwrap().repository;
+        let conflicting_name = crate::casita::CasitaStore::root_name(&second.store_path).unwrap();
+        let before = repository.metadata().snapshot().await.unwrap();
+        let revision = before.revision();
+        let target = before.root(&conflicting_name).await.unwrap().unwrap();
+        let envelope = tempfile::tempdir().unwrap();
+        repository.checkout(&target, envelope.path().join("before")).await.unwrap();
+        let serialized = fs::read(envelope.path().join("before/pathinfo.json")).unwrap();
         let error = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap_err();
         assert!(error.to_string().contains(&second.store_path.to_string()), "{error}");
-        assert!(handle.pathinfo_service().get(*first.store_path.digest()).await.unwrap().is_none());
-        assert_eq!(handle.pathinfo_service().get(*second.store_path.digest()).await.unwrap(), Some(conflicting));
+        let after = repository.metadata().snapshot().await.unwrap();
+        assert_eq!(after.revision(), revision);
+        assert_eq!(after.root(&conflicting_name).await.unwrap(), Some(target.clone()));
+        assert_eq!(published_root_names(&handle).await, BTreeSet::from([conflicting_name.as_str().to_owned()]));
+        repository.checkout(&target, envelope.path().join("after")).await.unwrap();
+        assert_eq!(fs::read(envelope.path().join("after/pathinfo.json")).unwrap(), serialized);
+        drop(handle);
+        let reopened = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        assert!(reopened.pathinfo_service().get(*first.store_path.digest()).await.unwrap().is_none());
+        assert_eq!(reopened.pathinfo_service().get(*second.store_path.digest()).await.unwrap(), Some(conflicting));
     }
 
     #[tokio::test]
@@ -1227,10 +1341,51 @@ mod tests {
         fs::create_dir_all(destination.path().join("state")).unwrap();
         fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", test_keys().1)).unwrap();
         let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        let repository = &handle.casita_store.as_ref().unwrap().repository;
+        let revision = repository.metadata().snapshot().await.unwrap().revision();
         let error = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap_err();
         assert!(error.to_string().contains(&second.store_path.to_string()), "{error}");
-        assert!(handle.pathinfo_service().get(*first.store_path.digest()).await.unwrap().is_none());
-        assert!(handle.pathinfo_service().get(*second.store_path.digest()).await.unwrap().is_none());
+        assert_eq!(repository.metadata().snapshot().await.unwrap().revision(), revision);
+        assert!(published_root_names(&handle).await.is_empty());
+        assert_eq!(repository.preview_collection().await.unwrap().logical_objects, 0);
+        drop(handle);
+        let reopened = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        assert!(reopened.pathinfo_service().get(*first.store_path.digest()).await.unwrap().is_none());
+        assert!(reopened.pathinfo_service().get(*second.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn nario_casita_later_envelope_staging_failure_leaves_earlier_object_collectable() {
+        let source = tempfile::tempdir().unwrap();
+        let source_handle = test_handle(source.path(), crate::StoreBackend::Snix).await;
+        let (first, first_nar) = record_fixture(&source_handle, "casita-stage-first", b"first staged payload").await;
+        let (second, second_nar) =
+            record_fixture(&source_handle, "casita-stage-second", b"second staged payload").await;
+        let archive = wire_archive(&[(&first, &first_nar), (&second, &second_nar)]);
+        let destination = tempfile::tempdir().unwrap();
+        fs::create_dir_all(destination.path().join("state")).unwrap();
+        fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", test_keys().1)).unwrap();
+        let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        let repository = &handle.casita_store.as_ref().unwrap().repository;
+        let revision = repository.metadata().snapshot().await.unwrap().revision();
+        let baseline = repository.preview_collection().await.unwrap();
+        assert_eq!(baseline.logical_objects, 0);
+        *handle.casita_store.as_ref().unwrap().fail_before_staging_output_index.lock().await = Some(1);
+
+        let error = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap_err();
+        assert!(error.to_string().contains("casita-test-staging-interrupted"), "{error}");
+        assert!(error.to_string().contains(&second.store_path.to_string()), "{error}");
+        assert_ne!(repository.metadata().snapshot().await.unwrap().revision(), revision);
+        assert!(published_root_names(&handle).await.is_empty());
+        let pending = repository.preview_collection().await.unwrap();
+        assert!(pending.logical_objects > 0, "first envelope must have been staged without a root");
+        let removed = repository.collect().await.unwrap();
+        assert_eq!(removed.removed.logical_objects, pending.logical_objects);
+        assert_eq!(repository.preview_collection().await.unwrap().logical_objects, 0);
+        drop(handle);
+        let reopened = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        assert!(reopened.pathinfo_service().get(*first.store_path.digest()).await.unwrap().is_none());
+        assert!(reopened.pathinfo_service().get(*second.store_path.digest()).await.unwrap().is_none());
     }
 
     #[tokio::test]
@@ -1245,8 +1400,21 @@ mod tests {
         fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", test_keys().1)).unwrap();
         let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
         assert_eq!(handle.casita_batch_root_change_limit(), Some(ROOT_COUNT));
+        let repository = &handle.casita_store.as_ref().unwrap().repository;
+        let before_snapshot = repository.metadata().snapshot().await.unwrap();
+        let before_revision = before_snapshot.revision();
         let report = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap();
         assert_eq!(report.imported_count, ROOT_COUNT as u32);
+        let after_snapshot = repository.metadata().snapshot().await.unwrap();
+        assert_ne!(after_snapshot.revision(), before_revision);
+        let root_names = published_root_names(&handle).await;
+        drop(before_snapshot);
+        drop(after_snapshot);
+        assert_eq!(root_names.len(), ROOT_COUNT);
+        for path in &paths {
+            assert!(root_names.contains(crate::casita::CasitaStore::root_name(path).unwrap().as_str()));
+        }
+        assert_eq!(repository.preview_collection().await.unwrap().logical_objects, 0);
         drop(handle);
         let reopened = test_handle(destination.path(), crate::StoreBackend::Casita).await;
         for path in &paths {
@@ -1268,14 +1436,71 @@ mod tests {
         fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", test_keys().1)).unwrap();
         let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
         assert_eq!(handle.casita_batch_root_change_limit(), Some(ROOT_COUNT - 1));
+        let repository = &handle.casita_store.as_ref().unwrap().repository;
+        let before_revision = repository.metadata().snapshot().await.unwrap().revision();
         let error = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap_err();
         assert!(error.to_string().contains("casita-batch-limit"), "{error}");
         assert!(error.to_string().contains(&paths[ROOT_COUNT - 1].to_string()), "{error}");
+        assert_eq!(repository.metadata().snapshot().await.unwrap().revision(), before_revision);
+        assert!(published_root_names(&handle).await.is_empty());
+        assert_eq!(repository.preview_collection().await.unwrap().logical_objects, 0);
         drop(handle);
         let reopened = test_handle(destination.path(), crate::StoreBackend::Casita).await;
         for path in &paths {
             assert!(reopened.pathinfo_service().get(*path.digest()).await.unwrap().is_none(), "{path}");
         }
+    }
+
+    #[tokio::test]
+    async fn nario_declared_profile_bounds_gate_batch_without_repository_mutation() {
+        let source = tempfile::tempdir().unwrap();
+        let source_handle = test_handle(source.path(), crate::StoreBackend::Snix).await;
+        let (template, nar) = record_fixture(&source_handle, "profile-bound-template", b"shared profile NAR").await;
+        let (within_bound, accepted_paths) = boundary_archive(&template, &nar, 2);
+        let destination = tempfile::tempdir().unwrap();
+        fs::create_dir_all(destination.path().join("state")).unwrap();
+        fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", test_keys().1)).unwrap();
+        let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        let repository = &handle.casita_store.as_ref().unwrap().repository;
+        let mut profile = crate::StoreBackend::Casita.profile();
+        profile.max_root_changes = Some(2);
+
+        let accepted =
+            import_nario_v2_with_profile(&handle, &mut std::io::Cursor::new(within_bound), &import_options(), profile)
+                .await
+                .unwrap();
+        assert_eq!(accepted.imported_count, 2);
+        for path in &accepted_paths {
+            assert!(handle.pathinfo_service().get(*path.digest()).await.unwrap().is_some());
+        }
+
+        let (over_bound, rejected_paths) = {
+            let (archive, paths) = boundary_archive(&template, &nar, 5);
+            (archive, paths.into_iter().skip(2).collect::<Vec<_>>())
+        };
+        let before_revision = repository.metadata().snapshot().await.unwrap().revision();
+        let mut over_bound = std::io::Cursor::new(over_bound);
+        let error = import_nario_v2_with_profile(&handle, &mut over_bound, &import_options(), profile)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("casita-batch-limit"), "{error}");
+        assert!(error.to_string().contains(&rejected_paths[2].to_string()), "{error}");
+        assert_eq!(repository.metadata().snapshot().await.unwrap().revision(), before_revision);
+        for path in &accepted_paths {
+            assert!(handle.pathinfo_service().get(*path.digest()).await.unwrap().is_some());
+        }
+        for path in &rejected_paths {
+            assert!(handle.pathinfo_service().get(*path.digest()).await.unwrap().is_none());
+        }
+
+        profile.atomic_batch_import = false;
+        over_bound.set_position(0);
+        let error = import_nario_v2_with_profile(&handle, &mut over_bound, &import_options(), profile)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("casita-atomic-batch-import-unsupported"), "{error}");
+        assert_eq!(over_bound.position(), 0);
+        assert_eq!(repository.metadata().snapshot().await.unwrap().revision(), before_revision);
     }
 
     fn listed_fixture(store_path: &str, references: Vec<String>) -> NarioV2ListedPath {

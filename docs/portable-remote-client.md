@@ -20,10 +20,20 @@ A remote build also requires trusted builder key material. Mantle validates the
 remote capability, trust set, frontend-neutral payload kinds, target platform,
 and logical store prefix before dispatch.
 
-The remote response uses the existing signed `PathInfo` admission path. Mantle
-imports the result into client state and materializes the requested output in
-the configured physical store directory. The logical store prefix remains an
-explicit request fact and does not have to be `/nix/store`.
+The remote response uses the existing signed `PathInfo` admission path.
+Mantle verifies the requested output, content, builder key and signature,
+logical store prefix, and artifact evidence in the host adapter before
+admitting the output to client state and the configured physical store.
+Physical bytes can remain after a failed partial admission; they are not an
+admitted output. The logical store prefix is an explicit request fact and
+does not have to be `/nix/store`.
+
+The production client's active session and its child share the assigned job,
+attempt, and fence within their processes. Reconnect or reassignment is
+explicit, not an automatic effect-loop retry. The transfer manifest establishes
+chunk scope; a checkpoint or acknowledgement is not verified receiver content
+or signed output authority. See the
+[transient-handle boundary table](remote-transfer.md#transient-handle-admission).
 
 ## Stable blockers
 

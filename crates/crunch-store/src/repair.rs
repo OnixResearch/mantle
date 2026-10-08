@@ -135,13 +135,27 @@ impl FinalNarRepairInspection {
     }
 }
 
+fn require_final_nar_repair(handle: &StoreHandle, profile: crate::StoreBackendCapabilityProfile) -> Result<(), Error> {
+    if profile.core.contains(&"store-repair-final-nar") {
+        Ok(())
+    } else {
+        Err(Error::Store(format!("{}-repair-final-nar-unsupported", handle.backend().as_str())))
+    }
+}
+
 pub async fn inspect_final_nar_repair(
     handle: &StoreHandle,
     logical_store_path: &str,
 ) -> Result<FinalNarRepairInspection, Error> {
-    if handle.backend() == crate::StoreBackend::Casita {
-        return Err(Error::Store("casita-repair-final-nar-unsupported".to_string()));
-    }
+    inspect_final_nar_repair_with_profile(handle, logical_store_path, handle.backend().profile()).await
+}
+
+async fn inspect_final_nar_repair_with_profile(
+    handle: &StoreHandle,
+    logical_store_path: &str,
+    profile: crate::StoreBackendCapabilityProfile,
+) -> Result<FinalNarRepairInspection, Error> {
+    require_final_nar_repair(handle, profile)?;
     assert!(handle.store_dir().starts_with('/'), "logical store prefix must be absolute");
     assert!(!handle.state_dir().as_os_str().is_empty(), "state directory must not be empty");
     handle.revalidate_overlay_bases()?;
@@ -197,9 +211,16 @@ pub async fn execute_final_nar_repair(
     inspection: FinalNarRepairInspection,
     signing_key: &SigningKey<ed25519_dalek::SigningKey>,
 ) -> Result<FinalNarRepairReport, Error> {
-    if handle.backend() == crate::StoreBackend::Casita {
-        return Err(Error::Store("casita-repair-final-nar-unsupported".to_string()));
-    }
+    execute_final_nar_repair_with_profile(handle, inspection, signing_key, handle.backend().profile()).await
+}
+
+async fn execute_final_nar_repair_with_profile(
+    handle: &StoreHandle,
+    inspection: FinalNarRepairInspection,
+    signing_key: &SigningKey<ed25519_dalek::SigningKey>,
+    profile: crate::StoreBackendCapabilityProfile,
+) -> Result<FinalNarRepairReport, Error> {
+    require_final_nar_repair(handle, profile)?;
     assert!(!signing_key.name().is_empty(), "signing key name must not be empty");
     assert!(!inspection.original_path_info.store_path.name().is_empty());
     handle.revalidate_overlay_bases()?;
@@ -1056,6 +1077,39 @@ mod tests {
         assert!(inspect_error.to_string().contains("casita-repair-final-nar-unsupported"));
         assert!(execute_error.to_string().contains("casita-repair-final-nar-unsupported"));
         assert!(casita.pathinfo_service().get(*path_info.store_path.digest()).await.unwrap().is_none());
+        assert_eq!(snix.pathinfo_service().get(*path_info.store_path.digest()).await.unwrap(), Some(path_info));
+    }
+
+    #[tokio::test]
+    async fn undeclared_repair_capability_rejects_snix_library_entrypoints_before_effects() {
+        let dir = tempfile::tempdir().unwrap();
+        let snix = open_test_store(dir.path()).await;
+        let path_info = stale_signed_pathinfo(&snix, "profile-rejected").await;
+        snix.pathinfo_service().put(path_info.clone()).await.unwrap();
+        let logical_path = path_info.store_path.to_absolute_path_with_prefix(STORE_DIR);
+        let inspection = inspect_final_nar_repair(&snix, &logical_path).await.unwrap();
+
+        let mut profile = crate::StoreBackend::Snix.profile();
+        profile.core = crate::StoreBackend::Casita.profile().core;
+        let state_dir = dir.path().join("state");
+        let output_dir = dir.path().join("store");
+        std::fs::create_dir_all(&output_dir).unwrap();
+        std::fs::write(state_dir.join("keep.txt"), b"preserve Snix state").unwrap();
+        std::fs::write(output_dir.join("keep.txt"), b"preserve output state").unwrap();
+        let state_before = snapshot_repair_tree(&state_dir);
+        let output_before = snapshot_repair_tree(&output_dir);
+
+        let inspect_error =
+            inspect_final_nar_repair_with_profile(&snix, "/not/a/valid/store/path", profile).await.unwrap_err();
+        assert!(inspect_error.to_string().contains("snix-repair-final-nar-unsupported"));
+        assert_eq!(snapshot_repair_tree(&state_dir), state_before);
+        assert_eq!(snapshot_repair_tree(&output_dir), output_before);
+
+        let execute_error =
+            execute_final_nar_repair_with_profile(&snix, inspection, &signing_key(), profile).await.unwrap_err();
+        assert!(execute_error.to_string().contains("snix-repair-final-nar-unsupported"));
+        assert_eq!(snapshot_repair_tree(&state_dir), state_before);
+        assert_eq!(snapshot_repair_tree(&output_dir), output_before);
         assert_eq!(snix.pathinfo_service().get(*path_info.store_path.digest()).await.unwrap(), Some(path_info));
     }
 }

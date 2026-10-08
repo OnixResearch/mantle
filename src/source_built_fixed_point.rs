@@ -564,6 +564,43 @@ fn expected_stage_plans() -> Vec<SourceBuiltFixedPointStagePlan> {
     stages
 }
 
+/// A coordination-only view of the proof plan's actual output authority edges.
+/// Neither this declaration nor a stage command's exit verifies an action plan.
+pub(crate) struct StageReadinessBinding<'a> {
+    pub(crate) id: &'a str,
+    pub(crate) dependencies: Vec<&'a str>,
+    pub(crate) final_receipt_required: bool,
+}
+
+pub(crate) fn stage_readiness_bindings(
+    plan: &SourceBuiltFixedPointPlan,
+) -> Result<Vec<StageReadinessBinding<'_>>, String> {
+    let mut bindings = Vec::with_capacity(plan.stages.len());
+    for stage in &plan.stages {
+        let mut dependencies = Vec::new();
+        for input in &stage.inputs {
+            let StageAuthorityInput::Output { role } = input else {
+                continue;
+            };
+            let producer = plan
+                .stages
+                .iter()
+                .find(|candidate| candidate.output == *role)
+                .ok_or_else(|| format!("readiness stage {} has no output producer for {role:?}", stage.stage_id))?;
+            if producer.stage_id == stage.stage_id || dependencies.contains(&producer.stage_id.as_str()) {
+                return Err(format!("readiness stage {} has a self or duplicate predecessor", stage.stage_id));
+            }
+            dependencies.push(&producer.stage_id);
+        }
+        bindings.push(StageReadinessBinding {
+            id: &stage.stage_id,
+            dependencies,
+            final_receipt_required: stage.kind == ProofStageKind::MantleStage2,
+        });
+    }
+    Ok(bindings)
+}
+
 fn stagex_transition_stage() -> SourceBuiltFixedPointStagePlan {
     stage_plan(
         "stagex-transition",

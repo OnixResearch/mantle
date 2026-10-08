@@ -9,7 +9,6 @@ use std::path::Path;
 
 use crunch_source_core::ExistingObservation;
 use crunch_source_core::GitObjectFormat;
-use crunch_source_core::IngestOutcome;
 use crunch_source_core::LocatorBoundaryPolicy;
 use crunch_source_core::LocatorClass;
 use crunch_source_core::ProjectionPath;
@@ -35,6 +34,13 @@ const DEFAULT_PROJECTION: &str = "source";
 /// Map one source record onto an admitted observation when its adapter facts
 /// are sufficient. Insufficient or unrecognized facts yield `None`, which the
 /// caller reports as `provenance-unavailable` rather than backfilling.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "I9 source observation awaits external source-review and Leviathan V2 prerequisites"
+    )
+)]
 pub fn source_observation_for_record(record: &SourceRecord) -> Result<Option<SourceObservation>, RunError> {
     let Some(request) = observation_request_for_record(record) else {
         return Ok(None);
@@ -138,8 +144,6 @@ pub enum RecordIngestOutcome {
     Add,
     /// Canonical bytes already exist; no write occurs.
     ReuseIdentical,
-    /// The identity exists with different canonical bytes.
-    RejectIdentityConflict,
 }
 
 /// Read the canonical record already stored under one content identity.
@@ -209,16 +213,6 @@ pub fn plan_record_ingest(target: &Path, record: &SourceRecord) -> Result<Record
     }
 }
 
-/// Map the pure planner outcome onto the ingest decision.
-pub fn record_outcome_for_plan(outcome: IngestOutcome) -> RecordIngestOutcome {
-    match outcome {
-        IngestOutcome::Add => RecordIngestOutcome::Add,
-        IngestOutcome::ReuseIdentical => RecordIngestOutcome::ReuseIdentical,
-        IngestOutcome::RejectIdentityConflict => RecordIngestOutcome::RejectIdentityConflict,
-        IngestOutcome::RejectInvalid => RecordIngestOutcome::RejectIdentityConflict,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -250,6 +244,7 @@ mod tests {
                 chunk_count: None,
                 blake3: "b".repeat(64),
             }],
+            store_path_attestation: None,
         }
     }
 

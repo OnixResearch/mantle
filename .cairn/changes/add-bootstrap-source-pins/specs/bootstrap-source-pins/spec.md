@@ -14,6 +14,12 @@ The record format MUST reject unknown keys and fields with an error naming
 the known ones. Hash format MUST distinguish flat and unpacked-tree hashes
 consistently with the existing fixed-output fetch contract.
 
+TOML under `bootstrap/pins/` is the authoritative record. Its declared
+`recipes` name the migrated Nickel consumers; `artifacts.<role>.url` MUST
+equal substitution of `version` in `url_template`. A derived JSON projection
+under `bootstrap/pins/generated/` MUST match the TOML record exactly in the
+deterministic reader format before check or apply.
+
 #### Scenario: Valid record round-trips
 
 - GIVEN a well-formed pin record for a bootstrap source
@@ -37,6 +43,12 @@ Changing a pin MUST be exactly one data-file write plus regeneration of any
 declared derived data. Build logic in `bootstrap/*.ncl` MUST NOT depend on
 fields the pin record does not carry.
 
+The bounded repository migration validation rail MUST export each declared
+Nickel recipe and reject an evaluated fixed-output fetch whose URL, hash, or
+flat/tree mode differs from the authoritative pin. Runtime check/apply MUST
+verify pin and derived-reader bytes without requiring a standalone Nickel
+binary; they MUST NOT claim to have semantically checked recipe binding.
+
 #### Scenario: Version bump without recipe edits
 
 - GIVEN a recipe family migrated to pin data and a new upstream release
@@ -44,11 +56,12 @@ fields the pin record does not carry.
 - THEN the recipe tree MUST remain unmodified and the rebuild MUST use the
   new URL and hash.
 
-#### Scenario: Recipe hardcodes a version
+#### Scenario: Recipe retains an old upstream URL after a pin change
 
-- GIVEN a migrated recipe whose NCL still hardcodes a URL or version
-- WHEN the migration check runs
-- THEN Mantle MUST report the residual hardcode as an incomplete migration.
+- GIVEN a migrated recipe hardcodes its previous upstream URL while the pin
+  and derived reader declare a newer release
+- WHEN the repository semantic recipe validation rail evaluates the recipe
+- THEN the evaluated fetch MUST be rejected as an incomplete migration.
 
 ### Requirement: Batched resolution with caching
 
@@ -81,9 +94,16 @@ consume an unchanged or explicitly edited plan artifact, substitute the pinned
 version into URL templates, prefetch each artifact through the existing
 fixed-output fetch path, and write only pin data files.
 
-Apply MUST fail closed when a fetch hash does not match the upstream-observed
-hash, when a plan entry names an unknown source, or when the plan was mutated
-without review. Apply MUST be idempotent for already-current pins.
+Apply MUST fail closed when any plan entry has an unresolved upstream error,
+when a fetch hash does not match the upstream-observed hash, when a plan entry
+names an unknown source, or when the plan was mutated without review. Apply
+MUST be idempotent for already-current pins.
+
+An explicitly edited plan MUST be resealed and reviewed before apply; an
+unresealed edit or changed TOML preimage MUST fail closed. Apply MUST stage
+the TOML and derived-reader replacements and hold the source directory
+mutation lock through verification and publication; an external noncooperating
+editor is not serialized by this advisory lock.
 
 #### Scenario: Clean apply
 
@@ -99,3 +119,10 @@ without review. Apply MUST be idempotent for already-current pins.
   recorded hash
 - WHEN apply runs
 - THEN apply MUST fail closed, write nothing, and name the source.
+
+#### Scenario: Mixed candidate and unresolved source
+
+- GIVEN a sealed plan with one candidate and one upstream resolution error
+- WHEN reviewed apply runs
+- THEN apply MUST reject the whole plan before downloading or writing any
+  TOML or derived reader and MUST name the unresolved source.

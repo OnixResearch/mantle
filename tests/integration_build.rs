@@ -714,7 +714,8 @@ fn eval_hello_world_with_seed() {
             Input::Derivation(_)
             | Input::DerivationFile(_)
             | Input::ResolvedDerivation(_)
-            | Input::OutputSelection(_) => {
+            | Input::OutputSelection(_)
+            | Input::PlanOutput(_) => {
                 panic!("hello-world should only have source inputs from seed");
             }
         }
@@ -776,6 +777,7 @@ fn make_fetch_builder(
     let crunch_store::PipelineStoreParts {
         build_store,
         action_results,
+        slice_admission,
         build_service_store,
         output_lookup: _output_lookup,
         root_registry: _root_registry,
@@ -787,6 +789,7 @@ fn make_fetch_builder(
         crunch_store::BuilderStoreParts {
             build_store,
             action_results,
+            slice_admission,
         },
         dispatch,
         test_keypair(),
@@ -955,6 +958,93 @@ fn write_cli_fetch_fixture(root: &Path) -> PathBuf {
     fixture
 }
 
+struct CasitaTrustCache {
+    url: String,
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    worker: Option<std::thread::JoinHandle<()>>,
+}
+
+impl CasitaTrustCache {
+    fn serve(info: &snix_store::path_info::PathInfo, nar: Vec<u8>) -> Self {
+        use std::io::BufRead;
+        use std::io::Write;
+        use std::sync::atomic::Ordering;
+
+        let narinfo_path = format!("/{}.narinfo", nix_compat::nixbase32::encode(info.store_path.digest()));
+        let nar_url = format!("nar/{}.nar", info.store_path);
+        let nar_path = format!("/{nar_url}");
+        let narinfo = {
+            let mut narinfo = info.to_narinfo();
+            narinfo.url = &nar_url;
+            narinfo.to_string_with_store_dir("/mantle/store")
+        };
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let worker_stop = stop.clone();
+        let worker = std::thread::spawn(move || {
+            while !worker_stop.load(Ordering::SeqCst) {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        let mut reader = std::io::BufReader::new(stream.try_clone().unwrap());
+                        let mut request = String::new();
+                        reader.read_line(&mut request).unwrap();
+                        if request.is_empty() {
+                            continue;
+                        }
+                        loop {
+                            let mut line = String::new();
+                            reader.read_line(&mut line).unwrap();
+                            if line == "\r\n" || line.is_empty() {
+                                break;
+                            }
+                        }
+                        let method = request.split_whitespace().next().unwrap_or("");
+                        let path = request.split_whitespace().nth(1).unwrap_or("");
+                        let (status, content_type, body): (&str, &str, &[u8]) = if path == narinfo_path {
+                            ("200 OK", "text/x-nix-narinfo", narinfo.as_bytes())
+                        } else if path == nar_path {
+                            ("200 OK", "application/x-nix-nar", &nar)
+                        } else {
+                            ("404 Not Found", "text/plain", b"not found")
+                        };
+                        write!(
+                            stream,
+                            "HTTP/1.1 {status}\r\nContent-Length: {}\r\nContent-Type: {content_type}\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        )
+                        .unwrap();
+                        if method != "HEAD" {
+                            stream.write_all(body).unwrap();
+                        }
+                        stream.flush().unwrap();
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+        Self {
+            url: format!("http://{address}"),
+            stop,
+            worker: Some(worker),
+        }
+    }
+}
+
+impl Drop for CasitaTrustCache {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::SeqCst);
+        let _ = std::net::TcpStream::connect(self.url.trim_start_matches("http://"));
+        if let Some(worker) = self.worker.take() {
+            worker.join().unwrap();
+        }
+    }
+}
+
 #[test]
 fn signed_fixed_output_cli_cache_restores_missing_export_in_fresh_processes() {
     let root = tempfile::tempdir().unwrap();
@@ -1081,6 +1171,107 @@ fn signed_fixed_output_cli_cache_restores_missing_export_in_fresh_processes() {
 }
 
 #[test]
+fn casita_local_build_without_policy_verifies_and_unlisted_cache_signer_cannot_substitute() {
+    let root = tempfile::tempdir().unwrap();
+    let fixture = write_cli_fetch_fixture(root.path());
+    let state = root.path().join("state");
+    let store = root.path().join("store");
+    std::fs::create_dir(&state).unwrap();
+    std::fs::create_dir_all(&store).unwrap();
+    let signer = state.join("signing-key");
+    std::fs::write(&signer, format!("{CLI_TEST_KEYPAIR}\n")).unwrap();
+    let public_key = test_keypair().verifying_key.to_string();
+    let policy = state.join("casita-trusted-public-keys");
+    let run = |args: &[&str]| {
+        assert_cmd::Command::cargo_bin("mantle")
+            .unwrap()
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .args(["--store-backend", "casita"])
+            .arg("--state-dir")
+            .arg(&state)
+            .arg("--store")
+            .arg(&store)
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let built = run(&[
+        "--json",
+        "build",
+        "--no-substitute",
+        "--signing-key",
+        signer.to_str().unwrap(),
+        fixture.to_str().unwrap(),
+    ]);
+    assert!(built.status.success(), "{}", String::from_utf8_lossy(&built.stderr));
+    let report: serde_json::Value = serde_json::from_slice(&built.stdout).unwrap();
+    assert_eq!(report["counts"]["built_total"], 1);
+    let output = PathBuf::from(report["outcomes"][0]["outputs"][0]["path"].as_str().unwrap());
+    assert_eq!(std::fs::read(&output).unwrap(), CLI_FETCH_PAYLOAD);
+    assert!(!policy.exists());
+    let selector = output.file_name().unwrap().to_str().unwrap();
+    let verified = run(&["store", "verify", "--trusted-public-keys", &public_key, selector]);
+    assert!(verified.status.success(), "{}", String::from_utf8_lossy(&verified.stderr));
+    assert!(String::from_utf8_lossy(&verified.stdout).contains("trusted_signatures=1/1"));
+    assert!(!policy.exists());
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(async {
+        let source = crunch_store::StoreHandle::open(crunch_store::StoreConfig::new(
+            crunch_store::StoreBackend::Casita,
+            state.clone(),
+            store.clone(),
+            "/mantle/store".to_string(),
+        ))
+        .await
+        .unwrap();
+        let path: nix_compat::store_path::StorePath<String> =
+            nix_compat::store_path::StorePath::from_absolute_path_with_prefix(
+                format!("/mantle/store/{selector}").as_bytes(),
+                "/mantle/store",
+            )
+            .unwrap();
+        let signed = source.pathinfo_service().get(*path.digest()).await.unwrap().unwrap();
+        assert_eq!(signed.signatures.len(), 1);
+        let mut nar = Vec::new();
+        snix_store::nar::write_nar(
+            snix_store::utils::AsyncIoBridge(&mut nar),
+            &signed.node,
+            source.blob_service(),
+            source.directory_service(),
+        )
+        .await
+        .unwrap();
+        let remote = CasitaTrustCache::serve(&signed, nar);
+
+        let destination_state = root.path().join("destination-state");
+        let destination_store = root.path().join("destination-store");
+        std::fs::create_dir(&destination_state).unwrap();
+        let other_signer = ed25519_dalek::SigningKey::from_bytes(&[19_u8; 32]);
+        let other_key =
+            nix_compat::narinfo::VerifyingKey::new("destination-1".to_string(), other_signer.verifying_key());
+        let destination_policy = destination_state.join("casita-trusted-public-keys");
+        let policy_bytes = format!("{other_key}\n");
+        std::fs::write(&destination_policy, &policy_bytes).unwrap();
+        let mut config = crunch_store::StoreConfig::new(
+            crunch_store::StoreBackend::Casita,
+            destination_state.clone(),
+            destination_store.clone(),
+            "/mantle/store".to_string(),
+        );
+        config.remote_cache_urls.push(remote.url.clone());
+        let mut destination = crunch_store::StoreHandle::open(config).await.unwrap();
+        let error = destination.try_substitute_remote(*path.digest(), &path, "out", true, None).await.unwrap_err();
+        assert!(error.to_string().contains("casita-signer-untrusted"), "{error}");
+        assert_eq!(std::fs::read(&destination_policy).unwrap(), policy_bytes.as_bytes());
+        assert!(!destination_store.join(selector).exists());
+        assert!(!destination_state.join("casita-gc-fence.json").exists());
+        std::fs::write(&destination_policy, format!("{public_key}\n")).unwrap();
+        assert!(destination.pathinfo_service().get(*path.digest()).await.unwrap().is_none());
+        std::fs::write(&destination_policy, &policy_bytes).unwrap();
+    });
+}
+
+#[test]
 fn casita_legacy_bootstrap_fetch_uses_durable_local_signer_and_exclusive_policy() {
     let root = tempfile::tempdir().unwrap();
     let raw = root.path().join("raw");
@@ -1140,6 +1331,8 @@ fn casita_legacy_bootstrap_fetch_uses_durable_local_signer_and_exclusive_policy(
     let store = root.path().join("store");
     std::fs::create_dir(&state).unwrap();
     std::fs::create_dir(&store).unwrap();
+    let local_policy = state.join("casita-trusted-public-keys");
+    assert!(!local_policy.exists());
     let seed = root.path().join("seed.ncl");
     let seed_arg = seed.to_str().unwrap();
     let first = run(&state, &store, &["bootstrap", "--fetch", "--output", seed_arg]);
@@ -1166,6 +1359,7 @@ fn casita_legacy_bootstrap_fetch_uses_durable_local_signer_and_exclusive_policy(
     let verify = run(&state, &store, &["store", "verify", "--trusted-public-keys", &public_key, raw_selector]);
     assert!(verify.status.success(), "{}", String::from_utf8_lossy(&verify.stderr));
     assert!(String::from_utf8_lossy(&verify.stdout).contains("trusted_signatures=1/1"));
+    assert!(!local_policy.exists());
 
     let second = run(&state, &store, &["bootstrap", "--fetch", "--output", seed_arg]);
     assert!(second.status.success(), "{}", String::from_utf8_lossy(&second.stderr));
@@ -1173,6 +1367,7 @@ fn casita_legacy_bootstrap_fetch_uses_durable_local_signer_and_exclusive_policy(
     assert!(second_log.contains("(cached)") && second_log.contains("(reduced provider cached)"));
     assert_eq!(std::fs::read(&signing_key).unwrap(), key_bytes);
     assert_eq!(std::fs::read(&seed).unwrap(), seed_bytes);
+    assert!(!local_policy.exists());
 
     let foreign_state = root.path().join("foreign-state");
     let foreign_store = root.path().join("foreign-store");
@@ -1269,6 +1464,10 @@ fn casita_explicit_trust_policy_revokes_local_signer_across_fresh_processes() {
     assert_eq!(std::fs::read(&policy).unwrap(), excluded_policy.as_bytes());
 
     std::fs::write(&policy, &included_policy).unwrap();
+    let unpublished = run(&["--json", "store", "list"]);
+    assert!(unpublished.status.success(), "{}", String::from_utf8_lossy(&unpublished.stderr));
+    let unpublished: serde_json::Value = serde_json::from_slice(&unpublished.stdout).unwrap();
+    assert!(unpublished["paths"].as_array().unwrap().is_empty(), "{unpublished}");
     let included = run(&build_args);
     assert!(included.status.success(), "{}", String::from_utf8_lossy(&included.stderr));
     let built: serde_json::Value = serde_json::from_slice(&included.stdout).unwrap();
@@ -1291,15 +1490,270 @@ fn casita_explicit_trust_policy_revokes_local_signer_across_fresh_processes() {
         "{}",
         String::from_utf8_lossy(&revoked.stderr)
     );
+    let revoked_verify = run(&["store", "verify", "--trusted-public-keys", &local_key, selector]);
+    assert!(!revoked_verify.status.success(), "store verify accepted a signer excluded by policy");
+    assert!(String::from_utf8_lossy(&revoked_verify.stderr).contains("casita-signer-untrusted"));
+    let revoked_gc = run(&["store", "gc", "--dry-run"]);
+    assert!(!revoked_gc.status.success(), "GC planning accepted a signer excluded by policy");
+    assert!(String::from_utf8_lossy(&revoked_gc.stderr).contains("casita-signer-untrusted"));
     assert_eq!(std::fs::read(&policy).unwrap(), excluded_policy.as_bytes());
     assert_eq!(std::fs::read(&output).unwrap(), CLI_FETCH_PAYLOAD);
+    assert!(!state.join("casita-gc-fence.json").exists());
+
+    std::fs::remove_file(&policy).unwrap();
+    let local_fallback = run(&["--json", "store", "info", selector]);
+    assert!(local_fallback.status.success(), "{}", String::from_utf8_lossy(&local_fallback.stderr));
+    let local_fallback: serde_json::Value = serde_json::from_slice(&local_fallback.stdout).unwrap();
+    assert_eq!(local_fallback["paths"][0], signed_info["paths"][0]);
+    let fallback_verify = run(&["store", "verify", "--trusted-public-keys", &local_key, selector]);
+    assert!(fallback_verify.status.success(), "{}", String::from_utf8_lossy(&fallback_verify.stderr));
+    let fallback_gc = run(&["store", "gc", "--dry-run"]);
+    assert!(fallback_gc.status.success(), "{}", String::from_utf8_lossy(&fallback_gc.stderr));
+    assert!(!policy.exists());
+    assert_eq!(std::fs::read(&output).unwrap(), CLI_FETCH_PAYLOAD);
+    assert!(!state.join("casita-gc-fence.json").exists());
 
     std::fs::write(&policy, &included_policy).unwrap();
     let restored = run(&["--json", "store", "info", selector]);
     assert!(restored.status.success(), "{}", String::from_utf8_lossy(&restored.stderr));
     let restored: serde_json::Value = serde_json::from_slice(&restored.stdout).unwrap();
-    assert_eq!(restored["paths"][0]["signatures"], signatures);
+    assert_eq!(restored["paths"][0], signed_info["paths"][0]);
     assert_eq!(std::fs::read(&policy).unwrap(), included_policy.as_bytes());
+    let restored_verify = run(&["store", "verify", "--trusted-public-keys", &local_key, selector]);
+    assert!(restored_verify.status.success(), "{}", String::from_utf8_lossy(&restored_verify.stderr));
+    let restored_gc = run(&["store", "gc", "--dry-run"]);
+    assert!(restored_gc.status.success(), "{}", String::from_utf8_lossy(&restored_gc.stderr));
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(async {
+        let guard = crunch_store::StoreMutationGuard::acquire_wait(&state).unwrap();
+        let mut handle = crunch_store::StoreHandle::open(crunch_store::StoreConfig::new(
+            crunch_store::StoreBackend::Casita,
+            state.clone(),
+            store.clone(),
+            "/mantle/store".to_string(),
+        ))
+        .await
+        .unwrap();
+        let path: nix_compat::store_path::StorePath<String> =
+            nix_compat::store_path::StorePath::from_absolute_path_with_prefix(
+                format!("/mantle/store/{selector}").as_bytes(),
+                "/mantle/store",
+            )
+            .unwrap();
+        let original = handle.pathinfo_service().get(*path.digest()).await.unwrap().unwrap();
+        std::fs::write(&policy, &excluded_policy).unwrap();
+        let error = handle.pathinfo_service().get(*path.digest()).await.unwrap_err();
+        assert!(error.to_string().contains("casita-signer-untrusted"), "{error}");
+        let error = crunch_store::store_verify(handle.pathinfo_service().as_ref(), Some(selector), &store)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("casita-signer-untrusted"), "{error}");
+        let error = handle.garbage_collect_under_guard(&guard, None).await.unwrap_err();
+        assert!(error.to_string().contains("casita-signer-untrusted"), "{error}");
+        assert_eq!(std::fs::read(&output).unwrap(), CLI_FETCH_PAYLOAD);
+        assert!(!state.join("casita-gc-fence.json").exists());
+        std::fs::write(&policy, &included_policy).unwrap();
+        assert_eq!(handle.pathinfo_service().get(*path.digest()).await.unwrap(), Some(original.clone()));
+        std::fs::write(&policy, b"invalid-ed25519-key\n").unwrap();
+        let error = crunch_store::store_verify(handle.pathinfo_service().as_ref(), Some(selector), &store)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("casita-trust-policy-invalid"), "{error}");
+        assert_eq!(std::fs::read(&output).unwrap(), CLI_FETCH_PAYLOAD);
+        assert!(!state.join("casita-gc-fence.json").exists());
+        std::fs::write(&policy, &included_policy).unwrap();
+        assert_eq!(handle.pathinfo_service().get(*path.digest()).await.unwrap(), Some(original));
+    });
+}
+
+#[test]
+fn casita_explicit_external_signing_key_outside_policy_cannot_publish() {
+    let root = tempfile::tempdir().unwrap();
+    let fixture = write_cli_fetch_fixture(root.path());
+    let state = root.path().join("state");
+    let store = root.path().join("store");
+    std::fs::create_dir(&state).unwrap();
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::write(state.join("signing-key"), format!("{CLI_TEST_KEYPAIR}\n")).unwrap();
+    let policy = state.join("casita-trusted-public-keys");
+    let policy_bytes = format!("{}\n", test_keypair().verifying_key);
+    std::fs::write(&policy, &policy_bytes).unwrap();
+    let external_raw = ed25519_dalek::SigningKey::from_bytes(&[19_u8; 32]);
+    let external_signer = root.path().join("external-signing-key");
+    std::fs::write(
+        &external_signer,
+        format!("external-1:{}\n", data_encoding::BASE64.encode(&external_raw.to_keypair_bytes())),
+    )
+    .unwrap();
+    let run = |args: &[&str]| {
+        assert_cmd::Command::cargo_bin("mantle")
+            .unwrap()
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .args(["--store-backend", "casita"])
+            .arg("--state-dir")
+            .arg(&state)
+            .arg("--store")
+            .arg(&store)
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let rejected = run(&[
+        "--json",
+        "build",
+        "--no-substitute",
+        "--signing-key",
+        external_signer.to_str().unwrap(),
+        "--trusted-public-keys",
+        &test_keypair().verifying_key.to_string(),
+        fixture.to_str().unwrap(),
+    ]);
+    assert!(!rejected.status.success(), "external signer outside policy published an output");
+    let report: serde_json::Value = serde_json::from_slice(&rejected.stdout).unwrap();
+    assert!(
+        report["failed"][0]["message"].as_str().unwrap_or_default().contains("casita-signer-untrusted"),
+        "{report}"
+    );
+    let listed = run(&["--json", "store", "list"]);
+    assert!(listed.status.success(), "{}", String::from_utf8_lossy(&listed.stderr));
+    let listed: serde_json::Value = serde_json::from_slice(&listed.stdout).unwrap();
+    assert!(listed["paths"].as_array().unwrap().is_empty(), "{listed}");
+    assert_eq!(std::fs::read(&policy).unwrap(), policy_bytes.as_bytes());
+    assert!(!state.join("casita-gc-fence.json").exists());
+}
+
+#[test]
+fn casita_external_signer_policy_removal_rejects_fresh_lookup_verify_gc() {
+    fn snapshot_files(root: &Path) -> std::collections::BTreeMap<PathBuf, Option<Vec<u8>>> {
+        let mut files = std::collections::BTreeMap::new();
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(directory) = pending.pop() {
+            for entry in std::fs::read_dir(&directory).unwrap() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                let relative = path.strip_prefix(root).unwrap().to_path_buf();
+                // Fresh Casita readers update only these live lease bookkeeping files.
+                // Snapshot every other repository byte, including sqlite, WAL, and root packs.
+                let reader_lease = root.ends_with("casita")
+                    && relative.to_str().is_some_and(|name| {
+                        matches!(name, "casita.sqlite.online-pins" | "casita.sqlite.online-pins.readers")
+                            || (name.starts_with("casita.sqlite.online-pins.reader-") && name.ends_with(".lock"))
+                    });
+                if reader_lease {
+                    continue;
+                }
+                let contents = if entry.file_type().unwrap().is_dir() {
+                    pending.push(path);
+                    None
+                } else {
+                    Some(std::fs::read(path).unwrap())
+                };
+                files.insert(relative, contents);
+            }
+        }
+        files
+    }
+
+    let root = tempfile::tempdir().unwrap();
+    let fixture = write_cli_fetch_fixture(root.path());
+    let state = root.path().join("state");
+    let store = root.path().join("store");
+    std::fs::create_dir(&state).unwrap();
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::write(state.join("signing-key"), format!("{CLI_TEST_KEYPAIR}\n")).unwrap();
+    let local_key = test_keypair().verifying_key.to_string();
+    let external_raw = ed25519_dalek::SigningKey::from_bytes(&[19_u8; 32]);
+    let external_key =
+        nix_compat::narinfo::VerifyingKey::new("external-1".to_string(), external_raw.verifying_key()).to_string();
+    assert_ne!(external_key, local_key);
+    let external_signer = root.path().join("external-signing-key");
+    std::fs::write(
+        &external_signer,
+        format!("external-1:{}\n", data_encoding::BASE64.encode(&external_raw.to_keypair_bytes())),
+    )
+    .unwrap();
+    let policy = state.join("casita-trusted-public-keys");
+    let allowed_policy = format!("{external_key}\n");
+    let denied_policy = format!("{local_key}\n");
+    std::fs::write(&policy, &allowed_policy).unwrap();
+    let run = |args: &[&str]| {
+        assert_cmd::Command::cargo_bin("mantle")
+            .unwrap()
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .args(["--store-backend", "casita"])
+            .arg("--state-dir")
+            .arg(&state)
+            .arg("--store")
+            .arg(&store)
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let built = run(&[
+        "--json",
+        "build",
+        "--no-substitute",
+        "--signing-key",
+        external_signer.to_str().unwrap(),
+        "--trusted-public-keys",
+        &external_key,
+        fixture.to_str().unwrap(),
+    ]);
+    assert!(built.status.success(), "{}", String::from_utf8_lossy(&built.stderr));
+    let report: serde_json::Value = serde_json::from_slice(&built.stdout).unwrap();
+    assert_eq!(report["counts"]["built_total"], 1);
+    let output = PathBuf::from(report["outcomes"][0]["outputs"][0]["path"].as_str().unwrap());
+    assert_eq!(std::fs::read(&output).unwrap(), CLI_FETCH_PAYLOAD);
+    let selector = output.file_name().unwrap().to_str().unwrap();
+    let initial = run(&["--json", "store", "info", selector]);
+    assert!(initial.status.success(), "{}", String::from_utf8_lossy(&initial.stderr));
+    let initial_info: serde_json::Value = serde_json::from_slice(&initial.stdout).unwrap();
+    assert_eq!(initial_info["paths"][0]["signatures"].as_array().unwrap().len(), 1);
+    let verified = run(&["store", "verify", "--trusted-public-keys", &external_key, selector]);
+    assert!(verified.status.success(), "{}", String::from_utf8_lossy(&verified.stderr));
+    let original_roots = snapshot_files(&state.join("casita"));
+    let retention_dir = state.join("retention-interests");
+    let original_retention = retention_dir.exists().then(|| snapshot_files(&retention_dir));
+    std::fs::remove_file(&external_signer).unwrap();
+
+    for restricted_policy in [Some(denied_policy.as_bytes()), None] {
+        if let Some(bytes) = restricted_policy {
+            std::fs::write(&policy, bytes).unwrap();
+        } else {
+            std::fs::remove_file(&policy).unwrap();
+        }
+        for command in [
+            vec!["--json", "store", "info", selector],
+            vec!["store", "verify", "--trusted-public-keys", &external_key, selector],
+            vec!["store", "gc"],
+        ] {
+            let rejected = run(&command);
+            assert!(!rejected.status.success(), "{command:?} unexpectedly trusted the external signer");
+            assert!(
+                String::from_utf8_lossy(&rejected.stderr).contains("casita-signer-untrusted"),
+                "{command:?}: {}",
+                String::from_utf8_lossy(&rejected.stderr)
+            );
+        }
+        if let Some(bytes) = restricted_policy {
+            assert_eq!(std::fs::read(&policy).unwrap(), bytes);
+        } else {
+            assert_eq!(std::fs::symlink_metadata(&policy).unwrap_err().kind(), std::io::ErrorKind::NotFound);
+        }
+        assert_eq!(snapshot_files(&state.join("casita")), original_roots);
+        assert_eq!(retention_dir.exists().then(|| snapshot_files(&retention_dir)), original_retention);
+        assert!(!external_signer.exists());
+        assert_eq!(std::fs::read(&output).unwrap(), CLI_FETCH_PAYLOAD);
+        assert!(!state.join("casita-gc-fence.json").exists());
+        std::fs::write(&policy, &allowed_policy).unwrap();
+        let restored = run(&["--json", "store", "info", selector]);
+        assert!(restored.status.success(), "{}", String::from_utf8_lossy(&restored.stderr));
+        let restored: serde_json::Value = serde_json::from_slice(&restored.stdout).unwrap();
+        assert_eq!(restored["paths"], initial_info["paths"]);
+        assert_eq!(snapshot_files(&state.join("casita")), original_roots);
+        assert_eq!(retention_dir.exists().then(|| snapshot_files(&retention_dir)), original_retention);
+    }
+    assert_eq!(std::fs::read(&policy).unwrap(), allowed_policy.as_bytes());
 }
 
 #[test]

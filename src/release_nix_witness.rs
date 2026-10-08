@@ -76,6 +76,11 @@ struct ObservedArtifact {
     digest_blake3: String,
 }
 
+/// Pure pre-effect receipt destination selection shared with the release plan.
+pub(crate) fn resolve_witness_receipt_path(bundle_dir: &Path, requested: Option<&Path>) -> PathBuf {
+    requested.map(Path::to_path_buf).unwrap_or_else(|| bundle_dir.join(DEFAULT_WITNESS_RELATIVE_PATH))
+}
+
 pub(crate) fn write_release_nix_cross_builder_witness(
     request: &ReleaseNixWitnessRequest,
 ) -> Result<ReleaseNixWitnessSummary, RunError> {
@@ -112,10 +117,7 @@ pub(crate) fn write_release_nix_cross_builder_witness(
     let receipt = canonical_nix_cross_builder_witness_receipt(receipt).map_err(core_error)?;
     let receipt_bytes = serde_json::to_vec(&receipt)
         .map_err(|err| RunError::Internal(format!("serializing nix witness receipt: {err}")))?;
-    let receipt_path = request
-        .output_path
-        .clone()
-        .unwrap_or_else(|| request.bundle_dir.join(DEFAULT_WITNESS_RELATIVE_PATH));
+    let receipt_path = resolve_witness_receipt_path(&request.bundle_dir, request.output_path.as_deref());
     write_receipt(&receipt_path, &receipt_bytes)?;
 
     let summary = ReleaseNixWitnessSummary {

@@ -17,7 +17,7 @@ compatibility surface, crate name, or historical decision.
 | [0008](0008-reduced-muslcc-seed-provider.md) | Reduced musl.cc seed provider | Accepted |
 | [0009](0009-decentralized-release-verification.md) | Decentralized release verification separates technical and social trust | Proposed |
 | [0010](0010-keep-mantle-build-tool-boundary.md) | Keep Mantle's boundary build-shaped | Accepted |
-| [0011](0011-native-dynamic-plans.md) | Native dynamic plans | Proposed |
+| [0011](0011-native-dynamic-plans.md) | Native dynamic plans | Accepted |
 | [0012](0012-overlay-store-composition.md) | Overlay store composition | Proposed |
 | [0013](0013-remote-execution-hardening.md) | Harden remote execution without replacing Mantle foundations | Proposed |
 | [0014](0014-package-ast-grep-as-bounded-structural-evidence.md) | Package ast-grep as bounded structural evidence | Proposed |
@@ -87,4 +87,22 @@ compatibility surface, crate name, or historical decision.
 | [0078](0078-explore-distributed-evaluation.md) | Explore distributed evaluation feasibility | Accepted |
 | [0079](0079-spacewasm-stable-evidence-libtest-json.md) | Stable SpaceWasm evidence uses the libtest JSON harness grammar | Accepted |
 | [0080](0080-separate-coordination-from-batch-building.md) | Separate build coordination from batch building | Accepted |
+| [0081](0081-build-cargo-units-as-native-dynamic-plan-derivations.md) | Build Cargo units as native dynamic-plan derivations | Proposed |
 | [0082](0082-select-store-backends-explicitly-and-admit-casita.md) | Select store backends explicitly and admit Casita as a pinned backend | Proposed |
+| [0083](0083-require-declarations-before-transient-remote-handles.md) | Require declarations before transient remote handles | Proposed |
+| [0084](0084-dynamic-plan-source-slices.md) | Version dynamic plans for output-owned source slices | Proposed |
+| [0085](0085-publish-live-build-facts-outside-build-authority.md) | Publish live build facts outside build authority | Proposed |
+| [0086](0086-separate-bootstrap-source-pins-from-catalog-update-policy.md) | Separate bootstrap source pins from catalog update policy | Proposed |
+| [0087](0087-admit-prebuilt-android-toolchain-through-fixed-output-sources.md) | Admit prebuilt Android toolchain through fixed-output sources | Proposed |
+| [0088](0088-stage-apk-builds-after-verified-tool-extraction.md) | Stage APK builds after verified tool extraction | Proposed |
+| [0089](0089-bind-static-inputs-to-dynamic-plan-roots.md) | Bind static inputs to dynamic-plan roots by request identity | Proposed |
+| [0090](0090-carry-pattern-caveats-in-ucan-and-enforce-at-mantle-receivers.md) | Carry pattern caveats in UCAN and enforce at Mantle receivers | Proposed |
+| [0091](0091-version-long-lived-service-readiness-states-and-restart-policy.md) | Version long-lived service readiness states and restart policy | Proposed |
+| [0092](0092-lock-driven-vendor-fetches.md) | Acquire Cargo vendor inputs from lock-driven fixed-output fetches | Proposed |
+| [0093](0093-diff-admitted-watch-goals-by-identity.md) | Diff admitted watch goals by identity and cancel retracted work | Proposed |
+| [0095](0095-version-derivation-finish-gates.md) | Version derivation finish gates with explicit adoption | Proposed |
+| [0096](0096-keep-causal-build-traces-outside-evidence.md) | Keep causal build traces outside build evidence | Proposed |
+| [0098](0098-resolve-content-addressed-inputs-before-dispatch.md) | Resolve content-addressed inputs before dispatch under signed realisations | Proposed |
+| [0099](0099-reuse-local-daemon-for-depfile-validated-cc-cache.md) | Reuse the local daemon for depfile-validated C/C++ compilation | Proposed |
+| [0100](0100-store-retention-interests-per-owner-record.md) | Store retention interests as per-owner records | Proposed |
+| [0101](0101-limit-nix-gateway-to-bounded-concrete-operations.md) | Limit Nix gateway to bounded concrete operations | Proposed |

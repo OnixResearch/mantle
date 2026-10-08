@@ -1,0 +1,15 @@
+DIAGNOSTIC ONLY — no official signed APK receipt, no reproducibility claim.
+
+Reviewed archive SHA-256 (independent sha256sum):
+Temurin 17.0.17+10 jdk.tar.gz: 992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75
+Google command-line tools 19.0 commandlinetools-linux-13114758_latest.zip (reviewed cohort, not an APK stage input): 7ec965280a073311c339e571cd5de778b9975026cfcbe79f2b1cdcb1e15317ee
+Google build-tools 35.0.0 build-tools_r35_linux.zip: bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88
+Google platform 35_r02 platform-35_r02.zip: 0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0
+Connected original-HTTPS prefetch (pueue task 254, Success): source bundle export of the three consumed SDK/JDK FOD roots reported records=3, payload_bytes=318499535, readiness=Ready; bundle file BLAKE3 ca3dd6d4a669eabdc994a9cfe46943f3f16cf9fe69722235aac2cf942a488524 (637003052 JSON bytes). The separate reviewed command-line-tools archive hash above is checked, but its executable is not consumed by this APK pipeline.
+
+Candidate runtime source cohort, independently checked by `nix store verify --offline --sigs-needed 1 PATH...` (both checked, exit 0) and `nix hash path --type sha256 --sri PATH...`:
+/nix/store/n51dhmdbik1kfrsm62j5knavmigwrl1a-glibc-2.42-84: sha256-QooZLPl2X2/dqnezGgKOPNpzUbxhxbLwLzTSoOhD9Ho=, NAR size 35073128, signed by cache.nixos.org-1
+/nix/store/ssvq1r0xd8f7paf6zqgpfql1a4drwhy2-xgcc-15.3.0-libgcc: sha256-cMuvHKKZQ7us4kpUA40tNxZpkQQRivt6fWtZHAPVcK8=, NAR size 197672, signed by cache.nixos.org-1
+The runtime loader and libs must be re-admitted under the proof store prefix with these immutable NAR digests, signed PathInfo, and declared as BuildRequest input nodes before the official proof. No host `/lib64` bind is permitted.
+
+Independent manual bwrap `--tmpfs /` probes: mounted reviewed extracted SDK/JDK at `/store/buildtools` and `/store/jdk` and only the two runtime store roots at `/store/runtime` and `/store/libgcc`; commands invoked `/store/runtime/lib64/ld-linux-x86-64.so.2 --library-path /store/runtime/lib:/store/libgcc/lib:/store/buildtools/lib64:/store/jdk/lib:/store/jdk/lib/server` with exact reviewed executable paths. Observed official `aapt2 version`: Android Asset Packaging Tool (aapt) 2.19-11948202; `java -version`: Temurin 17.0.17+10; `javac -version`: 17.0.17; direct `java -cp lib/d8.jar com.android.tools.r8.D8 --version`: D8 8.6.2-dev; direct `java -jar lib/apksigner.jar version`: 0.9. Official zipalign transformed reviewed `lib/d8.jar` to `/tmp/aligned.jar`, followed by `zipalign -c 4 /tmp/aligned.jar` and nonempty output assertion; all exit 0. This proves launcher feasibility only, not any APK build.

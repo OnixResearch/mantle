@@ -1,0 +1,23 @@
+[package]
+name = "crunch-android"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+crunch-android-core = { path = "../crunch-android-core" }
+crunch-build = { path = "../crunch-build" }
+crunch-glue = { path = "../crunch-glue" }
+crunch-store = { path = "../crunch-store" }
+nix-compat = { path = "../../vendor/nix-compat" }
+libc = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+sha2 = "0.10.8"
+snix-store = { path = "../../vendor/snix-store" }
+
+[dev-dependencies]
+serde_json = "1"
+tempfile = "3"
+snix-build = { path = "../../vendor/snix-build" }
+snix-castore = { path = "../../vendor/snix-castore" }
+tokio = { version = "1", features = ["full"] }

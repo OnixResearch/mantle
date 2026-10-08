@@ -1,0 +1,27 @@
+{
+  "gates": {
+    "dlopen": {
+      "enabled": false,
+      "optional_sonames": []
+    },
+    "reference_leak": {
+      "build_platform_paths": [],
+      "enabled": true,
+      "native": "report"
+    },
+    "relocation": {
+      "enabled": false
+    },
+    "schema": "mantle-derivation-finish-gates-v1",
+    "version": {
+      "enabled": true,
+      "environment": {}
+    }
+  },
+  "max_command_arg_bytes": 4096,
+  "max_command_args": 16,
+  "max_excerpt_bytes": 160,
+  "max_optional_sonames": 32,
+  "max_scan_hits": 128,
+  "schema": "mantle-derivation-finish-policy-v1"
+}

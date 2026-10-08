@@ -8,7 +8,6 @@ Casita patch, compares every file, then resolves locked offline metadata.
 
 import argparse
 import ctypes
-import filecmp
 import hashlib
 import json
 import os
@@ -18,6 +17,7 @@ import sys
 import tempfile
 import tomllib
 
+
 ROOT = Path(__file__).resolve().parent.parent
 DEST = ROOT / "vendor-deps"
 CONFIG = ROOT / ".cargo/vendor-config.toml"
@@ -25,6 +25,8 @@ REV = "90404fcb1cfb3d83f2233715448dfefe913f5fd1"
 TURSO_REV = "dca55133caa690f90dcdd58d3c4329fb0703659c"
 CASITA_PATCH = ROOT / "patches/casita-blake3-finalize.patch"
 CASITA_NAR_SHA256 = "bed3012bed878a81b19348a2b927b95ea7e736b6888229d41a6342918a813e09"
+CASITA_NAR_PATCHED_SHA256 = "e88c332c3bb0605e5684e303c17e755adc66d2d525b80672dd7e16015f1be0b1"
+
 
 
 def require(condition, message):
@@ -74,6 +76,20 @@ def compare_config(generated):
     require(set(tomllib.loads(CONFIG.read_text())) == {"source"}, "vendor-config contains unexpected entries")
 
 
+def check_dev_shell_source_map(config_path):
+    """Reject a shell whose pinned Casita source points at an unpatched checkout."""
+    sources = tomllib.loads(config_path.read_text())["source"]
+    source = sources.get(f"https://github.com/cachix/casita?rev={REV}", {})
+    require(source.get("git") == "https://github.com/cachix/casita" and source.get("rev") == REV,
+            "dev shell: pinned Casita source mapping missing")
+    replacement = sources.get(source.get("replace-with"), {})
+    directory = replacement.get("directory")
+    require(isinstance(directory, str), "dev shell: Casita source replacement missing")
+    nar = Path(directory) / "casita-0.1.0/src/nar.rs"
+    require(nar.is_file() and hashlib.sha256(nar.read_bytes()).hexdigest() == CASITA_NAR_PATCHED_SHA256,
+            "dev shell: Casita source replacement is unpatched or modified")
+
+
 def apply_casita_patch(vendor):
     crate = vendor / "casita"
     manifest = tomllib.loads((crate / "Cargo.toml").read_text())["package"]
@@ -96,6 +112,7 @@ def apply_casita_patch(vendor):
     checksum = json.loads(checksum_path.read_text())
     require(checksum["files"]["src/nar.rs"] == original, "casita: generated checksum drift")
     checksum["files"]["src/nar.rs"] = hashlib.sha256(source.read_bytes()).hexdigest()
+    require(checksum["files"]["src/nar.rs"] == CASITA_NAR_PATCHED_SHA256, "casita: patched nar.rs content drift")
     checksum_path.write_text(json.dumps(checksum, sort_keys=True, separators=(",", ":")))
 
 
@@ -129,7 +146,13 @@ def compare_trees(generated, existing):
         require(name in rhs, f"missing vendor-deps entry: {name}")
         require(lhs[name].is_file() == rhs[name].is_file(), f"vendor-deps type drift: {name}")
         if lhs[name].is_file():
-            require(filecmp.cmp(lhs[name], rhs[name], shallow=False), f"vendor-deps content drift: {name}")
+            with lhs[name].open("rb") as generated_file, rhs[name].open("rb") as existing_file:
+                while True:
+                    generated_chunk = generated_file.read(64 * 1024)
+                    existing_chunk = existing_file.read(64 * 1024)
+                    require(generated_chunk == existing_chunk, f"vendor-deps content drift: {name}")
+                    if not generated_chunk:
+                        break
     return len(lhs)
 
 
@@ -157,6 +180,8 @@ def main():
     parser.add_argument("operation", choices=("generate", "check"))
     args = parser.parse_args()
     lock_packages = check_pins()
+    if os.environ.get("MANTLE_CARGO_HOME_BEFORE_DEV_SHELL"):
+        check_dev_shell_source_map(Path(os.environ["CARGO_HOME"]) / "config.toml")
     require(not DEST.is_symlink(), "vendor-deps is a symlink; refusing to follow")
     if args.operation == "generate":
         require(not DEST.exists(), "vendor-deps exists; refusing to clobber user data (run check, or move it aside yourself)")
