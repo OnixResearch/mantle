@@ -203,6 +203,7 @@ crunch-build = { path = "crates/crunch-build" }
 crunch-store = { path = "crates/crunch-store" }
 crunch-wasm-component = { path = "crates/crunch-wasm-component" }
 crunch-project = { path = "crates/crunch-project" }
+crunch-project-core = { path = "crates/crunch-project-core" }
 crunch-attestation = { path = "crates/crunch-attestation" }
 crunch-shell = { path = "crates/crunch-shell" }
 crunch-bootstrap-core = { path = "crates/crunch-bootstrap-core" }

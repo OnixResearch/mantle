@@ -726,6 +726,72 @@
     "supports_json": true
   },
   {
+    "path": "bootstrap-pin",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Check or apply reviewable bootstrap source pin updates",
+    "supports_json": true
+  },
+  {
+    "path": "bootstrap-pin apply",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--plan",
+      "--reviewed",
+      "--root",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Verify and apply a reviewed plan to TOML pins and derived Nickel readers",
+    "supports_json": true
+  },
+  {
+    "path": "bootstrap-pin check",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--cache-dir",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--plan",
+      "--root",
+      "--state-dir",
+      "--store",
+      "--store-backend",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Poll all declared upstream releases and save a preimage-bound plan",
+    "supports_json": true
+  },
+  {
     "path": "build",
     "aliases": [],
     "flags": [

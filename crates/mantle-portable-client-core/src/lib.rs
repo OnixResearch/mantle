@@ -13,7 +13,7 @@ use serde::Serialize;
 
 pub const PORTABLE_CLIENT_PLAN_SCHEMA: &str = "mantle-portable-client-plan-v1";
 pub const PLATFORM_PROFILE_SCHEMA: &str = "mantle-platform-support-profile-v1";
-pub const ROOT_COMMAND_COUNT: usize = 39;
+pub const ROOT_COMMAND_COUNT: usize = 40;
 pub const PAYLOAD_KIND_COUNT_MAX: usize = 8;
 pub const STORE_PREFIX_BYTES_MAX: usize = 256;
 pub const PLATFORM_LABEL_BYTES_MAX: usize = 64;
@@ -75,6 +75,13 @@ const PORTABLE_IO: CommandEffects = CommandEffects {
     starts_processes: false,
     requires_trust_material: true,
 };
+const PIN_IO: CommandEffects = CommandEffects {
+    reads_files: true,
+    writes_files: true,
+    uses_network: true,
+    starts_processes: false,
+    requires_trust_material: false,
+};
 const LOCAL_EXECUTION: CommandEffects = CommandEffects {
     reads_files: true,
     writes_files: true,
@@ -109,6 +116,7 @@ pub const COMMAND_PROFILES: [CommandProfile; ROOT_COMMAND_COUNT] = [
     profile("eval", CommandRole::PortableClient, READ_ONLY),
     profile("export", CommandRole::PortableClient, PORTABLE_IO),
     profile("bootstrap", CommandRole::Bootstrap, LOCAL_EXECUTION),
+    profile("bootstrap-pin", CommandRole::PortableClient, PIN_IO),
     profile("log", CommandRole::PortableClient, READ_ONLY),
     profile("store", CommandRole::PortableClient, PORTABLE_IO),
     profile("source", CommandRole::PortableClient, PORTABLE_IO),

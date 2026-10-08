@@ -1,6 +1,6 @@
 # Mantle command reference
 
-Catalog BLAKE3: `95c48307b3958bbebaad96ebe9fb177bfa0f6cca89b37c6af885374d297e43af`
+Catalog BLAKE3: `49a0cf9c3653d3c714c10e535badf2ee6c3af1a6c90f0051e76f5577f49a7fce`
 
 ## Daily commands
 
@@ -329,6 +329,33 @@ Run build-profile preflight, build a bootstrap derivation, and save evidence
 - Network: `optional`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
+
+### `mantle bootstrap-pin`
+
+Check or apply reviewable bootstrap source pin updates
+
+- Mutation: `none`
+- Network: `optional`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle bootstrap-pin apply`
+
+Verify and apply a reviewed plan to TOML pins and derived Nickel readers
+
+- Mutation: `project-files`
+- Network: `required`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-bootstrap-pin-apply-v1`
+
+### `mantle bootstrap-pin check`
+
+Poll all declared upstream releases and save a preimage-bound plan
+
+- Mutation: `project-files`
+- Network: `required`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-bootstrap-pin-plan-v1`
 
 ### `mantle dependents`
 

@@ -272,6 +272,21 @@
     },
     {
       "blocker": null,
+      "command_root": "bootstrap-pin",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": false,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
       "command_root": "log",
       "darwin_support": "supported",
       "effects": {
@@ -1832,6 +1847,123 @@
       "migration_reference": null,
       "mutation": "none",
       "network": "optional",
+      "owner": "mantle-cli",
+      "removal_gate": null,
+      "role": "public-command",
+      "support_tier": "advanced",
+      "supported_operations": [
+        "invoke",
+        "read-help"
+      ]
+    },
+    {
+      "canonical": "bootstrap-pin",
+      "compatibility_spellings": [],
+      "compatibility_state": "canonical",
+      "exit_classes": [
+        "policy-rejection",
+        "success",
+        "usage"
+      ],
+      "flags": [
+        "--base-store",
+        "--help",
+        "--json",
+        "--log-level",
+        "--nix-compat",
+        "--state-dir",
+        "--store",
+        "--store-backend",
+        "--store-prefix",
+        "--verbose",
+        "-h",
+        "-v"
+      ],
+      "kind": "command",
+      "machine_schema": "mantle-command-json-v1",
+      "migration_reference": null,
+      "mutation": "none",
+      "network": "optional",
+      "owner": "mantle-cli",
+      "removal_gate": null,
+      "role": "public-command",
+      "support_tier": "advanced",
+      "supported_operations": [
+        "invoke",
+        "read-help"
+      ]
+    },
+    {
+      "canonical": "bootstrap-pin apply",
+      "compatibility_spellings": [],
+      "compatibility_state": "canonical",
+      "exit_classes": [
+        "policy-rejection",
+        "success",
+        "usage"
+      ],
+      "flags": [
+        "--base-store",
+        "--help",
+        "--json",
+        "--log-level",
+        "--nix-compat",
+        "--plan",
+        "--reviewed",
+        "--root",
+        "--state-dir",
+        "--store",
+        "--store-backend",
+        "--store-prefix",
+        "--verbose",
+        "-h",
+        "-v"
+      ],
+      "kind": "command",
+      "machine_schema": "mantle-bootstrap-pin-apply-v1",
+      "migration_reference": null,
+      "mutation": "project-files",
+      "network": "required",
+      "owner": "mantle-cli",
+      "removal_gate": null,
+      "role": "public-command",
+      "support_tier": "advanced",
+      "supported_operations": [
+        "invoke",
+        "read-help"
+      ]
+    },
+    {
+      "canonical": "bootstrap-pin check",
+      "compatibility_spellings": [],
+      "compatibility_state": "canonical",
+      "exit_classes": [
+        "policy-rejection",
+        "success",
+        "usage"
+      ],
+      "flags": [
+        "--base-store",
+        "--cache-dir",
+        "--help",
+        "--json",
+        "--log-level",
+        "--nix-compat",
+        "--plan",
+        "--root",
+        "--state-dir",
+        "--store",
+        "--store-backend",
+        "--store-prefix",
+        "--verbose",
+        "-h",
+        "-v"
+      ],
+      "kind": "command",
+      "machine_schema": "mantle-bootstrap-pin-plan-v1",
+      "migration_reference": null,
+      "mutation": "project-files",
+      "network": "required",
       "owner": "mantle-cli",
       "removal_gate": null,
       "role": "public-command",

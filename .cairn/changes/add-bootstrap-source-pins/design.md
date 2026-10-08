@@ -43,8 +43,9 @@ must be one batched cached pass; per-package code is the exception
 - Shell: the resolver with conditional-request caching under a bounded state
   directory, the CLI commands, and the fixed-output prefetch through the
   existing fetch service.
-- Policy: typed Nickel for record schema and command policy; deterministic
-  export for the shell.
+- Record: TOML is the one authoritative machine-writable pin. The Rust core
+  validates its typed fields; a checked, deterministically regenerated JSON
+  projection is imported by Nickel. There is no evaluation-time fetch.
 - Existing reuse: fixed-output fetch and hash formats stay unchanged.
 
 ## Decisions
@@ -64,11 +65,43 @@ a different source and consumer set.
 **Rationale:** Matches the workspace rule that mutation is preimage-bound and
 dry-run first; the same shape already governs the catalog family.
 
+### Decision: Checked Nickel reader projection
+
+**Choice:** One TOML file per source, plus a derived JSON import per migrated
+recipe. Check/apply reject a stale projection; apply regenerates it only after
+all candidate prefetches and plan checks succeed.
+
+**Rationale:** Nickel imports JSON directly without eval-time filesystem
+adapters or another human-editable authority. The derived JSON is not an
+independent pin, and version bumps do not touch Nickel.
+
+Run `python3 bootstrap/pins/generate_readers.py` after an intentional TOML
+edit, then `python3 bootstrap/pins/generate_readers.py --check-recipes`
+inside the project dev shell. The dev shell does not ship Python; provision
+Python 3.11 or newer from the flake-locked nixpkgs
+(`nix shell --inputs-from . nixpkgs#python3 --command python3 ...`) and keep
+the dev shell's pinned Nickel on `PATH`. The runtime shell parses and validates TOML
+and derived JSON and checks byte-for-byte projection freshness without a
+standalone Nickel binary. The bounded repository validation rail exports
+each declared Nickel recipe without network fetches (45-second timeout,
+8-MiB output limit) and compares its evaluated fixed-output fetch URL,
+hash, and flat/tree mode to the pin. Runtime check/apply do not claim to
+prove recipe binding unless this separate validation rail has run.
+
 ## Risks / Trade-offs
 
 - Upstream identity data must be written once per source; migration cost is
   bounded by one record per recipe.
-- Conditional-request caching needs a state directory with explicit retention;
-  it is operator state, not build state.
-- Resolve hooks are per-source code; they are declared, bounded, and rare by
-  contract.
+- The check cache holds at most 256 entries under `--cache-dir` and no entry
+  over 64 KiB. Obsolete source caches are operator-owned state and must be
+  explicitly retired when this limit is reached; check does not delete them.
+- Resolve hooks are per-source declarations of a bounded JSON endpoint and
+  field names; a new upstream API shape requires an explicit new generic hook.
+- The pre-existing line-text `scripts/check-bootstrap-source-pins.rs`
+  rejected the migrated CMake fetch as `bad-hash-format` for the valid
+  `pin.artifacts.source.hash` expression (one file, one block, one issue).
+  A targeted search found no active callers in scripts, Nix, CI, current
+  Cairn changes, or docs beyond one historical inventory claim. The script
+  was removed, that inventory claim corrected, and archived Cairn artifacts
+  left untouched; the semantic `--check-recipes` rail now owns migrated
+  fetch validation. Legacy inline pins are not claimed as migrated.

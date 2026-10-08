@@ -195,7 +195,42 @@ behavior under `mantle bootstrap --fetch`; it is not selected by self-build.
 | Former trust root | Eliminated by | Notes |
 |---|---|---|
 | musl.cc native tarball (`x86_64-linux-musl-native.tgz`) | `bootstrap/seed-full.ncl` normalizing gcc-10 + musl-1.2.5 + binutils-2.41 outputs built from source through the live-bootstrap ladder | The ~56-stage chain from `stage0-posix` through `seed-full` replaces the single fetched binary provider |
-| Implicit trust in musl.cc binary provenance | Source-pin audit (`scripts/check-bootstrap-source-pins.rs`) covering all 84 fetch blocks | Each source is individually pinned with URL + SRI hash |
+| Implicit trust in musl.cc binary provenance | Source-built live-bootstrap recipes pin their source URL and SRI hash; migrated CMake's checked TOML/JSON pin is compared to its upstream fixed-output hash by `mantle bootstrap-pin check` | Separate `generate_readers.py --check-recipes` evaluates the declared Nickel fetch. Legacy inline pins remain outside the batched registry until migrated; the removed line-text audit did not semantically verify interpolated recipes |
+
+### Batched bootstrap source pin review
+
+`bootstrap/pins/{cmake,picolibc}.toml` are authoritative. The matching
+`bootstrap/pins/generated/*.json` are deterministic Nickel readers, not
+independent pin records. Inside the project dev shell (pinned Nickel), validate
+reader bytes **and** the declared recipes' evaluated fixed-output URL/hash/mode
+without fetching sources. The dev shell does not ship Python; the rail needs
+Python 3.11 or newer (`tomllib`), taken here from the flake-locked nixpkgs:
+
+```sh
+nix shell --inputs-from . nixpkgs#python3 --command \
+  python3 bootstrap/pins/generate_readers.py --check-recipes
+```
+
+The installed CLI does not require Nickel. Resolve the batch with a persistent
+conditional-request cache and inspect the sealed JSON before acknowledging it:
+
+```sh
+mantle bootstrap-pin check --root . \
+  --cache-dir "$HOME/.cache/mantle/bootstrap-pin-http" \
+  --plan "$HOME/.cache/mantle/bootstrap-pin-review.json"
+mantle bootstrap-pin apply --root . \
+  --plan "$HOME/.cache/mantle/bootstrap-pin-review.json" --reviewed
+```
+
+`check` exits nonzero when any source is pending **or** upstream resolution
+failed. `apply` rejects a plan with even one unresolved source, a changed TOML
+preimage, an unknown source, or a mismatched fetched hash; an already-current
+source is not rewritten. An accepted candidate updates only the TOML and its
+derived JSON, never the Nickel recipe. Run `--check-recipes` again after the
+data update: CLI preimage/reader checks do not themselves prove that a recipe
+still consumes the pin. These bootstrap source pins are independent of
+`mantlepkgs-update-plans` catalog policy, and unregistered legacy inline
+sources are not silently included in the batch.
 
 ### Remaining trust roots (not eliminated by this chain)
 

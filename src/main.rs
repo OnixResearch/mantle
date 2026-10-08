@@ -13,6 +13,7 @@ mod ast_grep_evidence;
 mod attest_cmd;
 mod bootstrap;
 mod bootstrap_parity;
+mod bootstrap_pin_cmd;
 mod bootstrap_source_root;
 mod bootstrap_validate;
 mod build_cmd;
@@ -717,6 +718,12 @@ enum Command {
         /// Evaluator version recorded in the receipt
         #[arg(long = "evaluator-version", default_value = env!("CARGO_PKG_VERSION"))]
         evaluator_version: String,
+    },
+
+    /// Check or apply reviewable bootstrap source pin updates.
+    BootstrapPin {
+        #[command(subcommand)]
+        action: BootstrapPinAction,
     },
 
     /// Generate bootstrap seeds or validate bootstrap runtime evidence
@@ -1468,6 +1475,28 @@ enum TranscriptAction {
         /// Permit transcripts marked `in_place: true` to run against caller state
         #[arg(long)]
         allow_in_place: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum BootstrapPinAction {
+    /// Poll all declared upstream releases and save a preimage-bound plan.
+    Check {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        #[arg(long)]
+        cache_dir: PathBuf,
+        #[arg(long)]
+        plan: PathBuf,
+    },
+    /// Verify and apply a reviewed plan to TOML pins and derived Nickel readers.
+    Apply {
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        #[arg(long)]
+        plan: PathBuf,
+        #[arg(long, required = true)]
+        reviewed: bool,
     },
 }
 
@@ -3503,6 +3532,7 @@ fn command_root(command: &Command) -> &'static str {
         Command::EvaluatorWorkerFixture { .. } => "__evaluator-worker-fixture",
         Command::Export { .. } => "export",
         Command::Bootstrap { .. } => "bootstrap",
+        Command::BootstrapPin { .. } => "bootstrap-pin",
         Command::Log { .. } => "log",
         Command::Store { .. } => "store",
         Command::Source { .. } => "source",
@@ -3570,6 +3600,10 @@ fn command_label(command: &Command) -> &'static str {
         Command::EvaluatorWorkerFixture { .. } => "evaluator-worker-fixture",
         Command::Export { .. } => "export",
         Command::Bootstrap { action, .. } => bootstrap_command_label(action.as_ref()),
+        Command::BootstrapPin { action } => match action {
+            BootstrapPinAction::Check { .. } => "bootstrap-pin.check",
+            BootstrapPinAction::Apply { .. } => "bootstrap-pin.apply",
+        },
         Command::Log { .. } => "log",
         Command::Store { action } => store_command_label(action),
         Command::Source { action } => source_command_label(action),
@@ -4132,6 +4166,19 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Build { .. } => run_build_from_command(ctx, &args.command),
         Command::WasmComponent { action } => run_wasm_component_command(ctx, action),
         Command::Bootstrap { .. } => run_bootstrap_from_command(ctx, &args.command),
+        Command::BootstrapPin { action } => match action {
+            BootstrapPinAction::Check { root, cache_dir, plan } => {
+                let pending = bootstrap_pin_cmd::check(root, cache_dir, plan).map_err(RunError::Internal)?;
+                if pending {
+                    Err(RunError::Internal("bootstrap source updates pending or resolution failed".into()))
+                } else {
+                    Ok(())
+                }
+            }
+            BootstrapPinAction::Apply { root, plan, reviewed } => {
+                bootstrap_pin_cmd::apply(root, plan, *reviewed).map_err(RunError::Internal)
+            }
+        },
         Command::Release { action } => run_release_command(ctx, action.clone()),
         Command::Log { query, list } => log_cmd::cmd_log(query.as_deref(), *list),
         Command::Store { action } => store_cmd::cmd_store(

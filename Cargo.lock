@@ -5418,6 +5418,7 @@ dependencies = [
  "crunch-nar",
  "crunch-pipeline",
  "crunch-project",
+ "crunch-project-core",
  "crunch-release-core",
  "crunch-rust-cache",
  "crunch-rust-cache-core",
