@@ -28,7 +28,7 @@ acceptance.
 
 - [x] [serial] T4.1 Migrate one bootstrap recipe family to pin data and prove a version bump with no Nickel edits and identical build phases. r[mantle.bootstrap_source_pins.nickel_reads_only]
 - [x] [serial] T4.2 Run focused core and shell tests before and after changes, strict Clippy, policy freshness, and relevant Nix checks. Preserve exact blockers. r[mantle.bootstrap_source_pins.pin_data_contract]
-- [ ] [serial] T4.3 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.bootstrap_source_pins.batched_resolution]
+- [x] [serial] T4.3 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.bootstrap_source_pins.batched_resolution]
 
 Re-verified on published main `e24bbbc2` (2026-10-08 UTC) in the isolated
 Leviathan worktree `finish/add-bootstrap-source-pins`:
