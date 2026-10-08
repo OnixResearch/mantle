@@ -195,28 +195,28 @@ fn observe_store_identity(state_dir: &Path, maximum_identity_bytes: u64) -> Resu
     let mut casita_marker = false;
     let mut identity_filename = false;
     let mut other_content = false;
-    if state_dir.exists() {
-        for entry in fs::read_dir(state_dir)
-            .map_err(|error| Error::Store(format!("reading state directory {}: {error}", state_dir.display())))?
-        {
-            let entry = entry
-                .map_err(|error| Error::Store(format!("reading state directory {}: {error}", state_dir.display())))?;
-            let name = entry.file_name();
-            if name == "casita" {
-                casita_marker = true;
-            } else if name == STORE_IDENTITY_FILE_NAME {
-                identity_filename = true;
-            } else if !matches!(
-                name.to_str(),
-                Some(
-                    "store-mutation.lock"
-                        | "signing-key"
-                        | "casita-trusted-public-keys"
-                        | "overlay-trusted-public-keys"
-                )
-            ) {
-                other_content = true;
-            }
+    if !state_dir.exists() {
+        return Ok(ObservedStoreIdentity::Identityless {
+            casita_marker,
+            identity_filename,
+            other_content,
+        });
+    }
+    for entry in fs::read_dir(state_dir)
+        .map_err(|error| Error::Store(format!("reading state directory {}: {error}", state_dir.display())))?
+    {
+        let entry =
+            entry.map_err(|error| Error::Store(format!("reading state directory {}: {error}", state_dir.display())))?;
+        let name = entry.file_name();
+        if name == "casita" {
+            casita_marker = true;
+        } else if name == STORE_IDENTITY_FILE_NAME {
+            identity_filename = true;
+        } else if !matches!(
+            name.to_str(),
+            Some("store-mutation.lock" | "signing-key" | "casita-trusted-public-keys" | "overlay-trusted-public-keys")
+        ) {
+            other_content = true;
         }
     }
     Ok(ObservedStoreIdentity::Identityless {
@@ -226,13 +226,20 @@ fn observe_store_identity(state_dir: &Path, maximum_identity_bytes: u64) -> Resu
     })
 }
 
+/// Logical identity a caller asks to open; named fields keep the two string
+/// identities from being swapped at call sites.
+#[derive(Clone, Copy, Debug)]
+struct RequestedStoreIdentity<'a> {
+    logical_prefix: &'a str,
+    trust_policy_id: &'a str,
+}
+
 fn decide_store_open<'a>(
     observed: &'a ObservedStoreIdentity,
     backend: StoreBackend,
     profile: StoreBackendCapabilityProfile,
     needs_overlay: bool,
-    logical_prefix: &str,
-    trust_policy_id: &str,
+    requested: RequestedStoreIdentity<'_>,
 ) -> Result<StoreOpenDecision, StoreOpenRejection<'a>> {
     if needs_overlay && !profile.overlay_composition {
         return Err(StoreOpenRejection::OverlayUnsupported);
@@ -248,7 +255,8 @@ fn decide_store_open<'a>(
             if actual_backend != backend {
                 return Err(StoreOpenRejection::BackendMismatch(actual_backend));
             }
-            if actual.logical_prefix != logical_prefix || actual.trust_policy_id != trust_policy_id {
+            if actual.logical_prefix != requested.logical_prefix || actual.trust_policy_id != requested.trust_policy_id
+            {
                 return Err(StoreOpenRejection::IdentityMismatch {
                     observed_prefix: &actual.logical_prefix,
                     observed_trust: &actual.trust_policy_id,
@@ -272,10 +280,13 @@ fn decide_store_open<'a>(
 fn store_open_rejection_error(
     rejection: StoreOpenRejection<'_>,
     state_dir: &Path,
-    logical_prefix: &str,
-    trust_policy_id: &str,
+    requested: RequestedStoreIdentity<'_>,
     backend: StoreBackend,
 ) -> Error {
+    let RequestedStoreIdentity {
+        logical_prefix,
+        trust_policy_id,
+    } = requested;
     match rejection {
         StoreOpenRejection::UnsupportedIdentity => {
             Error::Store("store-backend-mismatch: unsupported store identity schema or backend".to_string())
@@ -310,11 +321,12 @@ fn inspect_store_open(
 ) -> Result<(StoreOpenDecision, StoreOverlayRuntimePolicy), Error> {
     let policy = store_overlay_runtime_policy()?;
     let observed = observe_store_identity(state_dir, policy.limits.max_descriptor_bytes)?;
-    let decision =
-        decide_store_open(&observed, backend, profile, needs_overlay, logical_prefix, &policy.trust.policy_id)
-            .map_err(|rejection| {
-                store_open_rejection_error(rejection, state_dir, logical_prefix, &policy.trust.policy_id, backend)
-            })?;
+    let requested = RequestedStoreIdentity {
+        logical_prefix,
+        trust_policy_id: &policy.trust.policy_id,
+    };
+    let decision = decide_store_open(&observed, backend, profile, needs_overlay, requested)
+        .map_err(|rejection| store_open_rejection_error(rejection, state_dir, requested, backend))?;
     Ok((decision, policy))
 }
 
@@ -1085,8 +1097,10 @@ mod tests {
                 backend,
                 profile.unwrap_or_else(|| backend.profile()),
                 needs_overlay,
-                PREFIX,
-                TRUST,
+                RequestedStoreIdentity {
+                    logical_prefix: PREFIX,
+                    trust_policy_id: TRUST,
+                },
             );
             assert_eq!(actual, expected, "{name}");
         }

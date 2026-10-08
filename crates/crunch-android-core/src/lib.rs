@@ -163,25 +163,30 @@ fn safe_store_input(input: &str) -> bool {
     if !safe_store_part(first) || matches!(first, "etc" | "run") {
         return false;
     }
-    let mut root_found = false;
+    let mut has_store_root = false;
     for part in parts {
         if !safe_store_part(part) {
             return false;
         }
-        if root_found {
-            continue;
-        }
-        if let Some((hash, name)) = part.split_once('-') {
-            if hash.len() == 32
-                && hash.bytes().all(|byte| b"0123456789abcdfghijklmnpqrsvwxyz".contains(&byte))
-                && !name.is_empty()
-                && !name.starts_with('.')
-            {
-                root_found = true;
-            }
-        }
+        has_store_root = has_store_root || is_store_root_part(part);
     }
-    root_found
+    debug_assert!(!has_store_root || input.len() > 34, "a store root includes a 32-character hash component");
+    debug_assert!(!input.contains("//"), "accepted store inputs have no empty components");
+    has_store_root
+}
+
+// A store root component is `<32 nix-base32 chars>-<name>` with a visible name.
+fn is_store_root_part(part: &str) -> bool {
+    let Some((hash, name)) = part.split_once('-') else {
+        return false;
+    };
+    if hash.len() != 32 || name.is_empty() {
+        return false;
+    }
+    if name.starts_with('.') {
+        return false;
+    }
+    hash.bytes().all(|byte| b"0123456789abcdfghijklmnpqrsvwxyz".contains(&byte))
 }
 
 fn safe_store_part(part: &str) -> bool {
@@ -191,17 +196,25 @@ fn safe_store_part(part: &str) -> bool {
         && part.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"+._?=-".contains(&byte))
 }
 
+fn all_safe_members(members: &[String]) -> bool {
+    members.iter().all(|member| safe_member(member))
+}
+
 /// Rejects malformed declarations before constructing a dependency-ordered
 /// plan. No toolchain binding, byte inspection, clock read, or execution occurs.
 pub fn validate_and_lower(plan: &ApkPlan) -> Result<Vec<StepPlan>, PlanRejection> {
+    validate_plan(plan)?;
+    Ok(lower_steps(plan))
+}
+
+fn validate_plan(plan: &ApkPlan) -> Result<(), PlanRejection> {
     if !safe_member(&plan.manifest) {
         return Err(PlanRejection::MissingManifestMember);
     }
-    if plan.resources.is_empty()
-        || plan.java_sources.is_empty()
-        || !plan.resources.iter().all(|member| safe_member(member))
-        || !plan.java_sources.iter().all(|member| safe_member(member))
-    {
+    if plan.resources.is_empty() || plan.java_sources.is_empty() {
+        return Err(PlanRejection::EmptySourceSet);
+    }
+    if !all_safe_members(&plan.resources) || !all_safe_members(&plan.java_sources) {
         return Err(PlanRejection::EmptySourceSet);
     }
     if !bound_record(&plan.toolchains.jdk, "jdk")
@@ -210,30 +223,39 @@ pub fn validate_and_lower(plan: &ApkPlan) -> Result<Vec<StepPlan>, PlanRejection
     {
         return Err(PlanRejection::UnboundToolchainIdentity);
     }
-    if plan.reproducibility.entry_timestamp_epoch < 315_532_800
-        || plan.reproducibility.entry_timestamp_epoch > 4_354_819_199
-        || plan.reproducibility.locale != "C"
-        || plan.reproducibility.timezone != "UTC"
-    {
+    if !(315_532_800..=4_354_819_199).contains(&plan.reproducibility.entry_timestamp_epoch) {
+        return Err(PlanRejection::UnpinnedTimestampPolicy);
+    }
+    if plan.reproducibility.locale != "C" || plan.reproducibility.timezone != "UTC" {
         return Err(PlanRejection::UnpinnedTimestampPolicy);
     }
     if let Some(signing) = &plan.signing {
-        if !safe_store_input(&signing.keystore)
-            || !safe_store_input(&signing.store_password_file)
-            || !safe_store_input(&signing.key_password_file)
-        {
-            return Err(PlanRejection::KeystorePathEscape);
-        }
-        if signing.alias.is_empty()
-            || signing.schemes.is_empty()
-            || signing.schemes.iter().enumerate().any(|(index, scheme)| {
-                !matches!(scheme.as_str(), "v1" | "v2" | "v3") || signing.schemes[..index].contains(scheme)
-            })
-        {
-            return Err(PlanRejection::UnknownSignatureScheme);
-        }
+        validate_signing(signing)?;
     }
+    debug_assert!(safe_member(&plan.manifest), "accepted plans name a safe manifest member");
+    debug_assert!(!plan.resources.is_empty(), "accepted plans declare at least one resource");
+    Ok(())
+}
 
+fn validate_signing(signing: &SigningConfig) -> Result<(), PlanRejection> {
+    if !safe_store_input(&signing.keystore)
+        || !safe_store_input(&signing.store_password_file)
+        || !safe_store_input(&signing.key_password_file)
+    {
+        return Err(PlanRejection::KeystorePathEscape);
+    }
+    if signing.alias.is_empty()
+        || signing.schemes.is_empty()
+        || signing.schemes.iter().enumerate().any(|(index, scheme)| {
+            !matches!(scheme.as_str(), "v1" | "v2" | "v3") || signing.schemes[..index].contains(scheme)
+        })
+    {
+        return Err(PlanRejection::UnknownSignatureScheme);
+    }
+    Ok(())
+}
+
+fn lower_steps(plan: &ApkPlan) -> Vec<StepPlan> {
     let mut steps = vec![
         StepPlan {
             kind: StepKind::Aapt2Compile,
@@ -292,7 +314,12 @@ pub fn validate_and_lower(plan: &ApkPlan) -> Result<Vec<StepPlan>, PlanRejection
             outputs: vec![StepOutput::SignedApk],
         });
     }
-    Ok(steps)
+    debug_assert!(steps.first().is_some_and(|step| step.prior_outputs.is_empty()), "first step has no step inputs");
+    debug_assert!(
+        steps.last().is_some_and(|step| step.kind == StepKind::Apksigner) == plan.signing.is_some(),
+        "a signing step exists exactly when signing is declared"
+    );
+    steps
 }
 
 #[cfg(test)]

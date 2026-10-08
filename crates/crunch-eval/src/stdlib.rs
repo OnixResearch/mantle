@@ -66,10 +66,10 @@ pub fn write_stdlib(dir: Option<&Path>) -> Result<PathBuf, std::io::Error> {
 
     for (name, contents) in STDLIB_FILES {
         let path = target.join(name);
-        if name.contains('/') {
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
+        if name.contains('/')
+            && let Some(parent) = path.parent()
+        {
+            std::fs::create_dir_all(parent)?;
         }
         // Only write if content changed (avoid unnecessary FS writes)
         let needs_write = match std::fs::read_to_string(&path) {
