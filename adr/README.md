@@ -90,3 +90,4 @@ compatibility surface, crate name, or historical decision.
 | [0082](0082-select-store-backends-explicitly-and-admit-casita.md) | Select store backends explicitly and admit Casita as a pinned backend | Proposed |
 | [0084](0084-dynamic-plan-source-slices.md) | Version dynamic plans for output-owned source slices | Proposed |
 | [0089](0089-admit-prebuilt-android-toolchain-through-fixed-output-sources.md) | Admit prebuilt Android tools through pinned fixed-output sources | Proposed |
+| [0109](0109-reject-package-layer-design-priors-without-a-consumer.md) | Reject package-layer design priors that have no consumer | Accepted |

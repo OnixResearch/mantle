@@ -1,0 +1,28 @@
+{
+  "decision": "approved",
+  "findings": [],
+  "review_kind": "plan",
+  "reviewed_inputs": [
+    {
+      "hash": "d4f15cdd1e1e4c9490df37c37fc0121ab6a81a49bf03fb3a930f7bfe5751d5d4",
+      "path": "proposal.md"
+    },
+    {
+      "hash": "1124532fc155b50d7cd26010af16034bc9ce5cf91258000ab6bc2814dfbfd616",
+      "path": "design.md"
+    },
+    {
+      "hash": "3a27234c8ac73ea06062faf893d2154dd865d21273069037f1c8b69fdcc51f4a",
+      "path": "acceptance.md"
+    },
+    {
+      "hash": "a3c0f121d787f22258f0d53fd39494040c4d29ec0bc5e69618c44d36b5813a83",
+      "path": "tasks.md"
+    }
+  ],
+  "reviewer": {
+    "id": "agent:mantle-finish-prereqs",
+    "source": "agentic"
+  },
+  "schema_version": "cairn.semantic-review.review-receipt.v1"
+}

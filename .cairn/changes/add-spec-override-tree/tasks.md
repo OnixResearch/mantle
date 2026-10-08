@@ -1,25 +1,16 @@
-# Tasks: Add the spec override tree
+# Tasks: Close the spec override tree as rejected at admission
 
-All tasks remain open. Implementation is blocked behind the admission gate by
-requirement.
+The original implementation task list remains unchecked in
+`evidence/original-scope/tasks.md`. No original implementation task was
+performed.
 
-## Phase 1: Admission gate (blocking)
+## Phase 1: Admission decision
 
-- [ ] [serial] T1.1 Record the admission decision aligned with the package-layer family, naming the consumer surface, owner, and adoption path; re-review verb coverage against that surface. r[mantle.spec_override_tree.bounded_adoption_gate]
+- [x] [serial] T1.1 Preserve the original proposal, design, tasks, metadata, and spec delta verbatim from published main `e24bbbc2f803` and record their blob identities in `evidence/original-scope/SOURCE.md`. a[spec-override-tree.original-scope]
+- [x] [serial] T1.2 Run the admission review against the workspace foundation rule across Mantle and the sibling repositories; record the commands, revisions, and results in `evidence/admission-review-2026-10-07.md`. a[spec-override-tree.admission-review]
+- [x] [serial] T1.3 Record the rejection, rejected alternatives, revisit triggers, and non-claims in ADR 0109 and its `adr/README.md` index row. a[spec-override-tree.decision-record]
 
-## Phase 2: Core semantics (after admission)
+## Phase 2: Lifecycle closure
 
-- [ ] [serial] T2.1 Implement pure tree parsing, verb application, and path validation over in-memory spec structures. r[mantle.spec_override_tree.verb_semantics] r[mantle.spec_override_tree.path_validation]
-- [ ] [serial] T2.2 Implement layer merging with order preservation and final-set dependency name resolution. r[mantle.spec_override_tree.merge_cost_bound] r[mantle.spec_override_tree.path_validation]
-- [ ] [parallel] T2.3 Add positive fixtures: every verb on its declared shape, order preservation across layers, dependency introduced by one layer and referenced by another. r[mantle.spec_override_tree.verb_semantics] r[mantle.spec_override_tree.merge_cost_bound]
-- [ ] [parallel] T2.4 Add negative fixtures: unknown package, field missing without `set`, wrong-shape verb, unresolvable dependency, edited spec failing ordinary validation. r[mantle.spec_override_tree.path_validation]
-
-## Phase 3: Evaluation integration
-
-- [ ] [serial] T3.1 Integrate the merged tree with the package spec surface named at admission, with edited specs passing ordinary validation. r[mantle.spec_override_tree.verb_semantics]
-- [ ] [serial] T3.2 Measure the layer-count bound over many layers and record the result. r[mantle.spec_override_tree.merge_cost_bound]
-
-## Phase 4: Verification
-
-- [ ] [serial] T4.1 Run focused core and evaluation tests before and after changes, strict Clippy, policy freshness, and relevant Nix checks. Preserve exact blockers. r[mantle.spec_override_tree.verb_semantics]
-- [ ] [serial] T4.2 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.spec_override_tree.bounded_adoption_gate]
+- [x] [serial] T2.1 Remove the spec delta, select the `no-spec-delta` profile with a spec-effect rationale, and pass validation, the proposal, design, and tasks gates, and the no-op sync. a[spec-override-tree.no-accepted-requirement]
+- [x] [serial] T2.2 Write `evidence/closure-2026-10-08.md` stating the change is closed as rejected at admission and not implemented, and confirm the archive preflight reports no blockers. a[spec-override-tree.closure]

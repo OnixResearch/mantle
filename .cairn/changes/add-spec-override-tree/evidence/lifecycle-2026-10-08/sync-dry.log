@@ -1,0 +1,62 @@
+$ /home/brittonr/mantle-cairn-finish/cairn-result/bin/cairn sync add-spec-override-tree --root .
+{
+  "acceptance_ids": [
+    "spec-override-tree.admission-review",
+    "spec-override-tree.closure",
+    "spec-override-tree.decision-record",
+    "spec-override-tree.no-accepted-requirement",
+    "spec-override-tree.original-scope"
+  ],
+  "actions": [],
+  "blocked": false,
+  "change": "add-spec-override-tree",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [],
+  "dry_run": true,
+  "input_hash": "c070a84dc95894232022cf68f717ca965e3d9aa0bb67dc33e989fa74d039bf6e",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": []
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "ac1cff34ecb642f3d59a8bf949fdb4b232decf9d469a8c56c0cf5ccc3ae390e9",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "profile_identity_hash": "dcbb9375bdf42c56932270c963685d42cdbde1df234bb689de1aa66096faa3f0",
+  "reasons": [],
+  "receipt_hash": "47093e7107e5784e7d61959f4e09b3e05f326ae50f65e67e1da434fe7a85f724",
+  "review_receipt_hashes": [
+    "3a1284d638e3262228b2a337ef053660267232ff2aeed810136dccfb6d31803f"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

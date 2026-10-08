@@ -1,63 +1,80 @@
-# Design: Add the spec override tree
+# Design: Close the spec override tree as rejected at admission
 
-## Goal and scope
+## Context
 
-Define the override mechanism a Mantle package layer will expose: one merged
-tree of checked verbs with bounded cost. Design prior gated on consumer
-admission, aligned with `adopt-data-only-dependency-exports`.
+The original change (preserved verbatim in
+`evidence/original-scope/proposal.md`, `design.md`, `tasks.md`,
+`metadata.json`, and `specs/spec-override-tree/spec.md`) used the
+`spec-driven` profile. It carried a delta spec with four requirements:
 
-## Current behavior
+- `verb_semantics`
+- `path_validation`
+- `merge_cost_bound`
+- `bounded_adoption_gate`
 
-There is no package spec surface to override yet. The mantlepkgs catalog
-family evaluates nixpkgs packages as a producer action; its update-plans
-family owns typed, non-executable update policy. Neither exposes user-level
-spec variation. Nickel records merge by default, but unsupervised record
-merging is exactly the "silently ignored attribute" failure mode the verb
-set and path validation exclude.
+Its only allowed first step was T1.1, which records the admission decision.
+The 2026-10-07 admission review found no consumer, so the decision is
+rejection.
 
-The external reference's override tree (verbs `set`, `append`, `prepend`,
-`merge`, `remove`, `edit`; lists of trees merged first; every path checked;
-dependency strings resolved against the final set) measured about 54 MB for
-10,000 edits against 250–580 MB for overlay-style alternatives
-(`evidence/repkgs-review.md`).
+Cairn has no withdrawn or rejected change state:
 
-## Approach review
+- Archive is blocked while any task is todo, in progress, or unmarked
+  (`cairn-core/src/verified/plan.rs:198-210`).
+- Task states are only `[x]`, `[~]`, and `[ ]` (`repo/tasks.rs:23-43`).
+- The CLI has no reject or withdraw command for changes.
 
-| Family | Mechanism | Disposition | Required check |
-| --- | --- | --- | --- |
-| Nickel default merge | Records merge silently | Rejected as the override surface: unchecked, no verbs | Path-error fixtures |
-| Overlay-style layering | Per-layer application cost | Rejected: measured per-layer cost prior | Layer-count bound measurement |
-| Merged override tree | Verbs merged into one tree, then applied once | Selected direction | Order and bound fixtures |
-| Free-form edit functions only | `edit` as the sole verb | Rejected as the whole surface: uncheckable; kept as the escape hatch | Verbs cover the common cases; edit is per-package |
-
-## Contract and component ownership
-
-- Pure core: tree parsing, verb application, path validation, and reference
-  resolution are pure over in-memory structures, testable without a package
-  set.
-- Evaluation: integration lands with the package layer at admission.
-- No new components before admission.
+Checking the original implementation tasks would falsely claim work, so the
+change is rescoped transparently to the decision itself.
 
 ## Decisions
 
-### Decision: Verbs are closed, edit is the escape hatch
+### Decision: Preserve the original scope verbatim
 
-**Choice:** A fixed verb set plus a spec-to-spec `edit` per package.
+Copy the five original artifacts from published main
+`e24bbbc2f803f59872e2e59370bd8ce0829c918e` into `evidence/original-scope/`
+without edits. Record each file's Git blob identity in
+`evidence/original-scope/SOURCE.md`; a reader can confirm byte equality with
+`git hash-object`. The original tasks there stay unchecked, because none was
+performed.
 
-**Rationale:** Verbs are checkable and cheap; free-form functions are not,
-but removing them entirely forces verb sprawl. The reference reached the same
-shape.
+### Decision: Classify the change as `no-spec-delta`
 
-### Decision: Resolve dependency names against the final set
+The only behavior this change ships is a lifecycle decision record. No
+accepted requirement is added, modified, or removed. Removing
+`specs/spec-override-tree/spec.md` keeps the four
+`mantle.spec_override_tree.*` requirements out of `.cairn/specs`.
+Acceptance uses change-local `a[...]` criteria, which sync never promotes.
+`metadata.json` keeps `change_create`, the only profile source value Cairn
+admits (`artifact_workflow/profile.rs:61-65`). The switch from `spec-driven`
+is disclosed here and in ADR 0109, not presented as an original selection.
 
-**Choice:** Name resolution happens after tree merge, over the final package
-set.
+### Decision: Record the rejection once in ADR 0109
 
-**Rationale:** Overrides must be able to introduce packages and reference
-them; resolving during merge would forbid composition.
+Both package-layer priors share one admission decision, so one ADR records:
+
+- the evidence summary;
+- the rejected alternatives (implement now, park as `deferred`, delete);
+- the revisit triggers;
+- the non-claims.
+
+This change adds ADR 0109 and its index row.
+
+## Failure behavior
+
+- If any later reviewer finds a current consumer, this archive does not
+  block them. They open a new change from the preserved original scope and
+  re-review the contract against that consumer.
+- If any original `mantle.spec_override_tree.*` ID is cited as accepted,
+  it fails Cairn reference checks, because the ID never enters
+  `.cairn/specs`.
+- If the classification review receipt does not match the current proposal,
+  design, acceptance, or tasks bytes, the tasks gate, sync, and archive all
+  block.
 
 ## Risks / Trade-offs
 
-- The contract may need fields the future spec surface does not have; the
-  admission task re-reviews verb coverage against the real consumer.
-- Cost bounds must be measured, not asserted, once implemented.
+- A rejected design prior could be rediscovered and re-proposed without
+  context. ADR 0109 and the archived change keep the original text and
+  evidence next to the decision.
+- The text search may have missed a consumer that uses unrelated names. The
+  revisit triggers bound this risk.
