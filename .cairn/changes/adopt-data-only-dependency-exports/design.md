@@ -1,71 +1,84 @@
-# Design: Adopt data-only dependency exports
+# Design: Close data-only dependency exports as rejected at admission
 
-## Goal and scope
+## Context
 
-Define, ahead of demand, the dependency interface a Mantle package layer will
-use: typed exports records, no behavior injection, and a typed build-system
-registry. Implementation is gated on an admission decision naming the first
-consumer. This change is a design prior, not an implementation package.
+The original change used the `spec-driven` profile. Its original proposal,
+design, tasks, metadata, and spec delta are preserved verbatim in
+`evidence/original-scope/proposal.md`, `design.md`, `tasks.md`,
+`metadata.json`, and `specs/dependency-exports/spec.md`.
 
-Planning success means a native change package whose requirements and gate
-task make premature implementation impossible by rule.
+Its delta spec carried four requirements: `exports_record`,
+`no_behavior_hooks`, `typed_build_systems`, and `bounded_adoption_gate`.
 
-## Current behavior
+The only permitted first steps were T1.1, which records the admission
+decision, and T1.2, which re-validates the record fields against the named
+consumer's real dependency shapes. The 2026-10-07 admission review found no
+current consumer. The decision is therefore rejection, and T1.2 has no
+consumer to validate against.
 
-`builders/mk_derivation.ncl` composes PATH entries and passes string phases;
-dependencies influence builds through whatever recipe shell reads. There is
-no package layer yet; the mantlepkgs catalog family evaluates nixpkgs as a
-producer action rather than defining Mantle-native package semantics. Nothing
-conflicts with the proposed contract; nothing implements it either.
+Cairn has no withdrawn or rejected change state:
 
-The external reference ran a blind test of five builder API shapes against
-people and LLMs writing packages; explicit build systems with a plain phase
-list won every round. Its exports rule: one `exports.json` per output derived
-from the tree; prepare renders `CPPFLAGS`, `LDFLAGS`, `PKG_CONFIG_PATH`,
-`CMAKE_PREFIX_PATH` from records; `exports = false` marks outputs nothing
-links against (`evidence/repkgs-review.md`).
+- Archive is blocked while any task is todo, in progress, or unmarked
+  (`cairn-core/src/verified/plan.rs:198-210`).
+- Task states are only `[x]`, `[~]`, and `[ ]` (`repo/tasks.rs:23-43`).
+- The CLI has no reject or withdraw command for changes.
 
-## Approach review
-
-| Family | Mechanism | Disposition | Required check |
-| --- | --- | --- | --- |
-| Status quo | String phases, PATH composition | Rejected as the layer's future: uncheckable options, implicit behavior | Blind-test result recorded |
-| Setup-hook style | Dependencies inject shell into consumers | Rejected: behavior injection is the specific failure mode | No-behavior requirement |
-| Exports as data | Typed records rendered by consumer prepare | Selected direction | Rendering fixtures |
-| Full module system | Per-package fixpoints and option modules | Rejected: measured 10x evaluation cost in the reference; Mantle has no such demand | Evaluation-cost prior |
-
-## Contract and component ownership
-
-- Policy and eval: the exports record and registry contracts as typed Nickel
-  contracts; evaluation-time validation semantics owned by `crunch-eval`
-  integration points.
-- Core: rendering of consumer search paths from records is pure planning;
-  shell only writes environment.
-- No new components before admission; this package owns the contract text
-  and the gate.
+Checking the original tasks would falsely claim work. The change is
+therefore rescoped transparently to the decision itself.
 
 ## Decisions
 
-### Decision: Design prior with an implementation gate
+### Decision: Preserve the original scope verbatim
 
-**Choice:** All implementation tasks are blocked behind a recorded admission
-decision.
+Copy the five original artifacts from published main
+`e24bbbc2f803f59872e2e59370bd8ce0829c918e` into `evidence/original-scope/`
+without edits. Record each file's Git blob identity in
+`evidence/original-scope/SOURCE.md`, so `git hash-object` can confirm byte
+equality. The original tasks stay unchecked there.
 
-**Rationale:** The workspace rule rejects infrastructure without concrete
-demand. Writing the contract now is cheap because the external evidence is
-fresh; implementing it without a consumer would violate the demand rule.
+### Decision: Classify the change as `no-spec-delta`
 
-### Decision: Nickel, not a new language
+The only thing this change delivers is a lifecycle decision record. No
+accepted requirement is added, modified, or removed:
 
-**Choice:** The registry and records are Nickel contracts.
+- Removing `specs/dependency-exports/spec.md` keeps the four requirements out
+  of `.cairn/specs`.
+- Acceptance uses change-local `a[...]` criteria, which sync never promotes.
+- `metadata.json` keeps the only admitted profile source value,
+  `change_create`. Cairn accepts no other value
+  (`artifact_workflow/profile.rs:61-65`).
+- The switch from `spec-driven` is disclosed here and in ADR 0109. It is not
+  hidden as an original selection.
 
-**Rationale:** The reference's Nushell choice served its static-seed goals;
-Mantle's evaluation layer is Nickel and already enforces closed contracts.
+### Decision: Reference the shared ADR 0109
+
+Both package-layer priors share one admission decision. ADR 0109 records:
+
+- the evidence summary;
+- the rejected alternatives;
+- the revisit triggers, including acceptance of
+  `run-cargo-build-scripts-as-plan-units` with a need for typed exports;
+- the non-claims.
+
+The ADR file and its index row land with `add-spec-override-tree`. This
+change references the ADR and adds no second copy.
+
+## Failure behavior
+
+- **A consumer appears later.** This archive does not block a new change. The
+  new change starts from the preserved original scope and repeats T1.2
+  against the consumer's real dependency shapes.
+- **An original requirement ID is cited as accepted.** Any
+  `mantle.dependency_exports.*` ID cited this way fails Cairn reference
+  checks, because the ID never enters `.cairn/specs`.
+- **The review receipt is stale.** If the classification review receipt does
+  not match the current proposal, design, acceptance, or tasks bytes, the
+  tasks gate, sync, and archive all block.
 
 ## Risks / Trade-offs
 
-- A contract written before its consumer can guess wrong; the admission gate
-  task requires re-review of this design against the real consumer surface.
-- Environment defaults with placeholders add one expansion rule; the
-  relocatable-outputs change owns path-relativity mechanics and both must
-  agree.
+- **The Rust unit-plan lane may need exports later.** ADR 0109 names that
+  trigger. The archived original contract stays available, so there is
+  little to rebuild.
+- **The text search may miss consumers that use other names.** The revisit
+  triggers bound this risk.

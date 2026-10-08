@@ -1,6 +1,8 @@
 {
+  "spec_effect": "none",
+  "spec_effect_rationale": "The change is closed as rejected at admission (ADR 0109): no consumer exists, no implementation was performed, the original spec delta is preserved only as evidence, and no mantle.dependency_exports.* requirement enters the accepted specifications.",
   "workflow_profile": {
-    "id": "spec-driven",
+    "id": "no-spec-delta",
     "source": "change_create",
     "version": 1
   }
