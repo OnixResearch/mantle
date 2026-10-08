@@ -1,5 +1,7 @@
 // machine-artifact-public: attestation.release-envelope
 // machine-artifact-public: attestation.general-envelopes
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -20,6 +22,19 @@ use crunch_store::StoreConfig;
 use crunch_store::StoreHandle;
 use crunch_store::artifact_attestation_file_path;
 use crunch_store::closure_attestation_file_path;
+use mantle_application_contract::AttestAuthority;
+use mantle_application_contract::AttestFailure;
+use mantle_application_contract::AttestIdentity;
+use mantle_application_contract::AttestLimits;
+use mantle_application_contract::AttestObservation;
+use mantle_application_contract::AttestOperation;
+use mantle_application_contract::AttestOutcome;
+use mantle_application_contract::AttestPlan;
+use mantle_application_contract::AttestProgress;
+use mantle_application_contract::AttestRequest;
+use mantle_application_contract::AttestTarget;
+use mantle_application_contract::classify_attest;
+use mantle_application_contract::plan_attest;
 use nix_compat::store_path::StorePath;
 use serde::Deserialize;
 use serde::Serialize;
@@ -36,6 +51,8 @@ use crate::release_attestation::create_policy_files;
 use crate::release_attestation::create_witness_attestation;
 use crate::release_attestation::load_release_attestation_document;
 use crate::release_attestation::load_witness_documents;
+use crate::signing_key::config_dir_or;
+use crate::signing_key::default_signing_key_path;
 use crate::signing_key::load_configured_trusted_public_keys;
 use crate::signing_key::load_existing_signing_keypair;
 
@@ -156,6 +173,386 @@ fn absent_digest() -> Option<String> {
     None
 }
 
+#[derive(Clone, Copy)]
+struct AttestInvocation {
+    plan: AttestPlan,
+    /// Selected from the arguments passed into the real port, never copied
+    /// from the core plan or its expected effect.
+    actual: AttestRequest,
+    result_entries: u32,
+    authority_bytes: u32,
+}
+
+impl AttestInvocation {
+    fn with_store(mut self, store: &StoreHandle) -> Self {
+        self.actual.authority.state = attest_identity(store.state_dir());
+        self.actual.authority.output = attest_identity(&(Path::new(store.output_dir_str()), store.store_dir()));
+        self.actual.authority.store_backend = backend_code(store.backend());
+        self.actual.output_authority = attest_identity(store.state_dir());
+        self
+    }
+
+    fn with_port_selection(mut self, target: AttestTarget, selected_bytes: u32, selected_inputs: usize) -> Self {
+        self.actual.target = target;
+        self.actual.limits.selected_inputs = u32::try_from(selected_inputs).unwrap_or(u32::MAX);
+        self.actual.limits.selected_bytes = self.authority_bytes.saturating_add(selected_bytes);
+        self
+    }
+    fn returned_output(mut self, path: &Path, result_entries: u32) -> Self {
+        self.actual.output_authority = attest_identity(path);
+        self.result_entries = result_entries;
+        self
+    }
+
+    fn returned_entries(mut self, result_entries: u32) -> Self {
+        self.result_entries = result_entries;
+        self
+    }
+}
+
+fn matching_publication_directory<'a>(first: &'a Path, second: &Path) -> Result<&'a Path, RunError> {
+    let parent = first.parent().ok_or_else(|| {
+        RunError::Internal("attestation publication port returned a path without a directory".to_string())
+    })?;
+    if second.parent() != Some(parent) {
+        return Err(RunError::Internal(
+            "attestation publication port returned mismatched output authorities".to_string(),
+        ));
+    }
+    Ok(parent)
+}
+
+/// Preserve the CLI error only after classifying an independently selected
+/// port invocation. Failed store opens can already leave initialized state.
+fn attest_failed(invocation: AttestInvocation, progress: AttestProgress, error: RunError) -> RunError {
+    let failure = match progress {
+        AttestProgress::StoreOpenFailed => AttestFailure::StoreOpen,
+        AttestProgress::StoreOpenedThenFailed => AttestFailure::StoreContinuation,
+        AttestProgress::ReadFailed => AttestFailure::ReadCall,
+        AttestProgress::InputRejected => AttestFailure::Input,
+        AttestProgress::ReadRejected => AttestFailure::ReadValidation,
+        AttestProgress::PublishFailed => AttestFailure::PublicationCall,
+        _ => return RunError::Internal("attestation failure observation has no failure code".to_string()),
+    };
+    let observation = attest_observation(invocation, progress, Some(failure), 0);
+    match classify_attest(invocation.plan, observation) {
+        AttestOutcome::Failed => error,
+        _ => RunError::Internal("attestation port observation does not match its plan".to_string()),
+    }
+}
+
+fn attest_completed(invocation: AttestInvocation, progress: AttestProgress) -> Result<(), RunError> {
+    let observation = attest_observation(invocation, progress, None, invocation.result_entries);
+    match classify_attest(invocation.plan, observation) {
+        AttestOutcome::Completed => Ok(()),
+        _ => Err(RunError::Internal("attestation port observation does not match its plan".to_string())),
+    }
+}
+
+fn attest_observation(
+    invocation: AttestInvocation,
+    progress: AttestProgress,
+    failure: Option<AttestFailure>,
+    result_entries: u32,
+) -> AttestObservation {
+    let actual = invocation.actual;
+    AttestObservation {
+        operation: actual.operation,
+        effect_index: 0,
+        effect_id: actual.target.identity(),
+        capability: match actual.target {
+            AttestTarget::StoreSelector(_)
+            | AttestTarget::StoreRoots(_)
+            | AttestTarget::StorePair(_)
+            | AttestTarget::ProjectVerification(_) => mantle_application_contract::AttestCapability::StoreAccess,
+            AttestTarget::WitnessCreate(_) | AttestTarget::WitnessImport(_) | AttestTarget::PolicyInit(_) => {
+                mantle_application_contract::AttestCapability::PublishFiles
+            }
+            _ => mantle_application_contract::AttestCapability::ReadFiles,
+        },
+        authority: actual.authority,
+        target: actual.target,
+        selected_inputs: actual.limits.selected_inputs,
+        selected_bytes: actual.limits.selected_bytes,
+        result_entries,
+        output_authority: actual.output_authority,
+        progress,
+        failure,
+    }
+}
+
+fn operation_for_action(action: &crate::AttestAction) -> AttestOperation {
+    match action {
+        crate::AttestAction::Show { .. } => AttestOperation::Show,
+        crate::AttestAction::Closure { .. } => AttestOperation::Closure,
+        crate::AttestAction::Verify { target } => match target {
+            crate::AttestVerifyAction::Artifact { .. } => AttestOperation::VerifyArtifact,
+            crate::AttestVerifyAction::Closure { .. } => AttestOperation::VerifyClosure,
+            crate::AttestVerifyAction::Project { .. } => AttestOperation::VerifyProject,
+        },
+        crate::AttestAction::Diff { .. } => AttestOperation::Diff,
+        crate::AttestAction::Project { .. } => AttestOperation::Project,
+        crate::AttestAction::ReleaseShow { .. } => AttestOperation::ReleaseShow,
+        crate::AttestAction::KeyShow { .. } => AttestOperation::KeyShow,
+        crate::AttestAction::WitnessCreate { .. } => AttestOperation::WitnessCreate,
+        crate::AttestAction::WitnessShow { .. } => AttestOperation::WitnessShow,
+        crate::AttestAction::WitnessImport { .. } => AttestOperation::WitnessImport,
+        crate::AttestAction::PolicyInit { .. } => AttestOperation::PolicyInit,
+        crate::AttestAction::ReleaseVerify { .. } => AttestOperation::ReleaseVerify,
+    }
+}
+
+struct AttestHasher {
+    inner: blake3::Hasher,
+    written: u64,
+}
+
+impl Default for AttestHasher {
+    fn default() -> Self {
+        Self {
+            inner: blake3::Hasher::new(),
+            written: 0,
+        }
+    }
+}
+
+impl Hasher for AttestHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        self.inner.update(bytes);
+        self.written = self.written.saturating_add(bytes.len() as u64);
+    }
+
+    fn finish(&self) -> u64 {
+        let digest = self.inner.finalize();
+        u64::from_le_bytes(digest.as_bytes()[..8].try_into().expect("blake3 digest has eight bytes"))
+    }
+}
+
+fn attest_fingerprint<T: Hash + ?Sized>(value: &T) -> (AttestIdentity, u32) {
+    let mut hasher = AttestHasher::default();
+    value.hash(&mut hasher);
+    (
+        AttestIdentity(*hasher.inner.finalize().as_bytes()),
+        u32::try_from(hasher.written).unwrap_or(u32::MAX),
+    )
+}
+
+fn attest_identity<T: Hash + ?Sized>(value: &T) -> AttestIdentity {
+    attest_fingerprint(value).0
+}
+
+fn backend_code(backend: crunch_store::StoreBackend) -> u8 {
+    match backend {
+        crunch_store::StoreBackend::Snix => 1,
+        crunch_store::StoreBackend::Casita => 2,
+    }
+}
+
+fn attest_request_for_action(action: &crate::AttestAction, context: AttestCommandContext<'_>) -> (AttestRequest, u32) {
+    use crate::AttestAction;
+    use crate::AttestVerifyAction;
+
+    let operation = operation_for_action(action);
+    let selected_config_dir = match action {
+        AttestAction::KeyShow { signing_key: None } | AttestAction::WitnessCreate { signing_key: None, .. } => {
+            Some(config_dir_or(context.state_dir))
+        }
+        AttestAction::ReleaseVerify {
+            trusted_public_keys, ..
+        } if trusted_public_keys.is_empty() => Some(config_dir_or(context.state_dir)),
+        _ => None,
+    };
+    let (target, target_bytes, selected_inputs, max_result_entries, selected_output) = match action {
+        AttestAction::Show { path }
+        | AttestAction::Verify {
+            target: AttestVerifyAction::Artifact { path },
+        } => {
+            let (id, bytes) = attest_fingerprint(path);
+            (AttestTarget::StoreSelector(id), bytes, 1, 1, attest_identity(context.state_dir))
+        }
+        AttestAction::Closure { roots }
+        | AttestAction::Project { roots }
+        | AttestAction::Verify {
+            target: AttestVerifyAction::Closure { roots },
+        } => {
+            let (id, bytes) = attest_fingerprint(roots);
+            (
+                AttestTarget::StoreRoots(id),
+                bytes,
+                u32::try_from(roots.len()).unwrap_or(u32::MAX),
+                1,
+                attest_identity(context.state_dir),
+            )
+        }
+        AttestAction::Diff { left, right } => {
+            let (id, bytes) = attest_fingerprint(&(left, right));
+            (AttestTarget::StorePair(id), bytes, 2, 2, attest_identity(context.state_dir))
+        }
+        AttestAction::Verify {
+            target: AttestVerifyAction::Project { file, digest, roots },
+        } => {
+            let (id, bytes) = attest_fingerprint(&(roots, file, digest));
+            let count = roots.len().saturating_add(usize::from(file.is_some() || digest.is_some()));
+            (
+                AttestTarget::ProjectVerification(id),
+                bytes,
+                u32::try_from(count).unwrap_or(u32::MAX),
+                1,
+                attest_identity(context.state_dir),
+            )
+        }
+        AttestAction::ReleaseShow { verification_dir } => {
+            let (id, bytes) = attest_fingerprint(verification_dir);
+            (AttestTarget::VerificationDirectory(id), bytes, 1, 1, attest_identity(verification_dir))
+        }
+        AttestAction::KeyShow { signing_key } => {
+            let (id, bytes) = attest_fingerprint(&(context.current_dir, context.state_dir, signing_key));
+            let selected_path = signing_key
+                .as_deref()
+                .map(|path| resolve_cli_path(context.current_dir, path))
+                .unwrap_or_else(|| default_signing_key_path(context.state_dir));
+            (AttestTarget::SigningKey(id), bytes, 1, 1, attest_identity(&selected_path))
+        }
+        AttestAction::WitnessCreate {
+            verification_dir,
+            rebuilt_binary,
+            identity,
+            system,
+            toolchain,
+            host_class,
+            signing_key,
+        } => {
+            let (id, bytes) = attest_fingerprint(&(
+                context.current_dir,
+                context.state_dir,
+                verification_dir,
+                rebuilt_binary,
+                identity,
+                system,
+                toolchain,
+                host_class,
+                signing_key,
+            ));
+            let count = rebuilt_binary.len().saturating_add(1).saturating_add(usize::from(signing_key.is_some()));
+            (
+                AttestTarget::WitnessCreate(id),
+                bytes,
+                u32::try_from(count).unwrap_or(u32::MAX),
+                2,
+                attest_identity(
+                    &resolve_cli_path(context.current_dir, verification_dir)
+                        .join(crate::release_attestation::WITNESSES_DIR_NAME),
+                ),
+            )
+        }
+        AttestAction::WitnessShow {
+            verification_dir,
+            identity,
+        } => {
+            let (id, bytes) = attest_fingerprint(&(verification_dir, identity));
+            (AttestTarget::WitnessShow(id), bytes, 1, 1_024, attest_identity(verification_dir))
+        }
+        AttestAction::WitnessImport {
+            verification_dir,
+            source,
+        } => {
+            let (id, bytes) = attest_fingerprint(&(context.current_dir, verification_dir, source));
+            (
+                AttestTarget::WitnessImport(id),
+                bytes,
+                2,
+                2_048,
+                attest_identity(&resolve_cli_path(context.current_dir, verification_dir)),
+            )
+        }
+        AttestAction::PolicyInit {
+            verification_dir,
+            profile,
+            trusted_release_signer,
+            trusted_witness_identity,
+            min_matching_witnesses,
+            independence_field,
+            force,
+        } => {
+            let profile_code: u8 = match profile {
+                crate::AttestPolicyProfileArg::SelfProofOnly => 1,
+                crate::AttestPolicyProfileArg::OptionalWitness => 2,
+                crate::AttestPolicyProfileArg::SingleWitness => 3,
+                crate::AttestPolicyProfileArg::WitnessQuorum => 4,
+            };
+            let (id, bytes) = attest_fingerprint(&(
+                context.current_dir,
+                verification_dir,
+                profile_code,
+                trusted_release_signer,
+                trusted_witness_identity,
+                min_matching_witnesses,
+                independence_field,
+                force,
+            ));
+            let count =
+                1usize.saturating_add(trusted_release_signer.len()).saturating_add(trusted_witness_identity.len());
+            (
+                AttestTarget::PolicyInit(id),
+                bytes,
+                u32::try_from(count).unwrap_or(u32::MAX),
+                2,
+                attest_identity(&resolve_cli_path(context.current_dir, verification_dir)),
+            )
+        }
+        AttestAction::ReleaseVerify {
+            verification_dir,
+            trusted_public_keys,
+        } => {
+            let (id, bytes) = attest_fingerprint(&(verification_dir, trusted_public_keys, context.state_dir));
+            let count = trusted_public_keys.len().saturating_add(1);
+            (
+                AttestTarget::ReleaseVerification(id),
+                bytes,
+                u32::try_from(count).unwrap_or(u32::MAX),
+                1,
+                attest_identity(verification_dir),
+            )
+        }
+    };
+    let authority = AttestAuthority {
+        current_dir: attest_identity(context.current_dir),
+        config_dir: selected_config_dir.as_deref().map(attest_identity),
+        state: attest_identity(context.state_dir),
+        output: attest_identity(&(context.output_dir, context.store_dir)),
+        store_backend: backend_code(context.backend),
+        base_states: attest_identity(context.base_state_dirs),
+    };
+    let (_, authority_bytes) = attest_fingerprint(&(
+        context.current_dir,
+        context.state_dir,
+        context.output_dir,
+        context.store_dir,
+        context.base_state_dirs,
+        selected_config_dir.as_deref(),
+    ));
+    let min_result_entries = match operation {
+        AttestOperation::WitnessShow | AttestOperation::WitnessImport => 0,
+        AttestOperation::Diff | AttestOperation::WitnessCreate | AttestOperation::PolicyInit => 2,
+        _ => 1,
+    };
+    (
+        AttestRequest {
+            operation,
+            authority,
+            target,
+            limits: AttestLimits {
+                selected_inputs,
+                selected_bytes: target_bytes.saturating_add(authority_bytes),
+                min_result_entries,
+                max_result_entries,
+            },
+            output_authority: selected_output,
+        },
+        authority_bytes,
+    )
+}
+
 // Stable CLI dispatch compatibility: `main.rs` supplies these independently
 // typed fields positionally, while the implementation immediately names them.
 #[allow(
@@ -172,8 +569,7 @@ pub fn cmd_attest(
     base_state_dirs: &[PathBuf],
     is_json: bool,
 ) -> Result<(), RunError> {
-    let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
-    rt.block_on(cmd_attest_async(action, AttestCommandContext {
+    let context = AttestCommandContext {
         current_dir,
         output_dir,
         state_dir,
@@ -181,7 +577,13 @@ pub fn cmd_attest(
         store_dir,
         base_state_dirs,
         is_json,
-    }))
+    };
+    let (request, _) = attest_request_for_action(&action, context);
+    let plan = plan_attest(request).map_err(|blocker| {
+        RunError::Internal(format!("attestation selected input or result exceeds admitted bound: {blocker:?}"))
+    })?;
+    let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
+    rt.block_on(cmd_attest_async(action, context, plan))
 }
 
 // Exhaustive enum dispatch is intentionally centralized so every attestation
@@ -190,7 +592,11 @@ pub fn cmd_attest(
     tigerstyle::function_length,
     reason = "single exhaustive AttestAction dispatcher keeps CLI authority centralized"
 )]
-async fn cmd_attest_async(action: crate::AttestAction, context: AttestCommandContext<'_>) -> Result<(), RunError> {
+async fn cmd_attest_async(
+    action: crate::AttestAction,
+    context: AttestCommandContext<'_>,
+    plan: AttestPlan,
+) -> Result<(), RunError> {
     let AttestCommandContext {
         current_dir,
         output_dir,
@@ -200,47 +606,71 @@ async fn cmd_attest_async(action: crate::AttestAction, context: AttestCommandCon
         base_state_dirs,
         is_json,
     } = context;
+    // This descriptor comes from the arguments actually dispatched into the
+    // port, independently of the earlier admitted plan. Store and publication
+    // receipts further replace its output authority with returned facts.
+    let (actual, authority_bytes) = attest_request_for_action(&action, context);
+    let result_entries = 0;
+    let plan = AttestInvocation {
+        plan,
+        actual,
+        result_entries,
+        authority_bytes,
+    };
     debug_assert!(!store_dir.is_empty());
     debug_assert!(Path::new(store_dir).is_absolute());
     match action {
         crate::AttestAction::Show { path } => {
-            cmd_show(ShowRequest {
-                output_dir,
-                state_dir,
-                backend,
-                store_dir,
-                base_state_dirs,
-                selector: &path,
-            })
+            cmd_show(
+                ShowRequest {
+                    output_dir,
+                    state_dir,
+                    backend,
+                    store_dir,
+                    base_state_dirs,
+                    selector: &path,
+                },
+                plan,
+            )
             .await
         }
         crate::AttestAction::Closure { roots } => {
-            cmd_closure(output_dir, state_dir, store_dir, backend, base_state_dirs, &roots).await
+            cmd_closure(output_dir, state_dir, store_dir, backend, base_state_dirs, &roots, plan).await
         }
         crate::AttestAction::Verify { target } => {
-            cmd_verify(target, current_dir, output_dir, state_dir, store_dir, backend, base_state_dirs).await
+            cmd_verify(target, current_dir, output_dir, state_dir, store_dir, backend, base_state_dirs, plan).await
         }
         crate::AttestAction::Diff { left, right } => {
-            cmd_diff(DiffRequest {
-                output_dir,
-                state_dir,
-                backend,
-                store_dir,
-                base_state_dirs,
-                left: &left,
-                right: &right,
-            })
+            cmd_diff(
+                DiffRequest {
+                    output_dir,
+                    state_dir,
+                    backend,
+                    store_dir,
+                    base_state_dirs,
+                    left: &left,
+                    right: &right,
+                },
+                plan,
+            )
             .await
         }
         crate::AttestAction::Project { roots } => {
-            cmd_project(current_dir, output_dir, state_dir, store_dir, backend, base_state_dirs, &roots).await
+            cmd_project(current_dir, output_dir, state_dir, store_dir, backend, base_state_dirs, &roots, plan).await
         }
         crate::AttestAction::ReleaseShow { verification_dir } => {
-            let (attestation, stored_path) = load_release_attestation_document(&verification_dir)?;
+            let (selected, bytes) = attest_fingerprint(&verification_dir);
+            let plan = plan.with_port_selection(AttestTarget::VerificationDirectory(selected), bytes, 1);
+            let (attestation, stored_path) = load_release_attestation_document(&verification_dir)
+                .map_err(|error| attest_failed(plan, AttestProgress::ReadFailed, error))?;
+            let returned_directory = stored_path.parent().ok_or_else(|| {
+                RunError::Internal("release attestation port returned a path without a directory".to_string())
+            })?;
+            attest_completed(plan.returned_output(returned_directory, 1), AttestProgress::ReadReturned)?;
             print_document(&AttestationDocument::Release(attestation), Some(stored_path))
         }
         crate::AttestAction::KeyShow { signing_key } => {
-            cmd_key_show(current_dir, state_dir, is_json, signing_key.as_deref())
+            cmd_key_show(current_dir, state_dir, is_json, signing_key.as_deref(), plan)
         }
         crate::AttestAction::WitnessCreate {
             verification_dir,
@@ -250,26 +680,29 @@ async fn cmd_attest_async(action: crate::AttestAction, context: AttestCommandCon
             toolchain,
             host_class,
             signing_key,
-        } => cmd_witness_create(WitnessCreateCommand {
-            current_dir,
-            state_dir,
-            is_json,
-            verification_dir: &verification_dir,
-            rebuilt_binary: &rebuilt_binary,
-            identity: identity.as_deref(),
-            system: &system,
-            toolchain: &toolchain,
-            host_class: &host_class,
-            signing_key: signing_key.as_deref(),
-        }),
+        } => cmd_witness_create(
+            WitnessCreateCommand {
+                current_dir,
+                state_dir,
+                is_json,
+                verification_dir: &verification_dir,
+                rebuilt_binary: &rebuilt_binary,
+                identity: identity.as_deref(),
+                system: &system,
+                toolchain: &toolchain,
+                host_class: &host_class,
+                signing_key: signing_key.as_deref(),
+            },
+            plan,
+        ),
         crate::AttestAction::WitnessShow {
             verification_dir,
             identity,
-        } => cmd_witness_show(&verification_dir, identity.as_deref()),
+        } => cmd_witness_show(&verification_dir, identity.as_deref(), plan),
         crate::AttestAction::WitnessImport {
             verification_dir,
             source,
-        } => cmd_witness_import(current_dir, is_json, &verification_dir, &source),
+        } => cmd_witness_import(current_dir, is_json, &verification_dir, &source, plan),
         crate::AttestAction::PolicyInit {
             verification_dir,
             profile,
@@ -278,29 +711,39 @@ async fn cmd_attest_async(action: crate::AttestAction, context: AttestCommandCon
             min_matching_witnesses,
             independence_field,
             force,
-        } => cmd_policy_init(PolicyInitCommand {
-            current_dir,
-            is_json,
-            verification_dir: &verification_dir,
-            profile: map_policy_profile(profile),
-            trusted_release_signers: &trusted_release_signer,
-            trusted_witness_identities: &trusted_witness_identity,
-            min_matching_witnesses,
-            independence_field: independence_field.as_deref(),
-            is_force: force,
-        }),
+        } => cmd_policy_init(
+            PolicyInitCommand {
+                current_dir,
+                is_json,
+                verification_dir: &verification_dir,
+                profile: map_policy_profile(profile),
+                trusted_release_signers: &trusted_release_signer,
+                trusted_witness_identities: &trusted_witness_identity,
+                min_matching_witnesses,
+                independence_field: independence_field.as_deref(),
+                is_force: force,
+            },
+            plan,
+        ),
         crate::AttestAction::ReleaseVerify {
             verification_dir,
             trusted_public_keys,
-        } => cmd_release_verify(&verification_dir, &trusted_public_keys, state_dir, is_json),
+        } => cmd_release_verify(&verification_dir, &trusted_public_keys, state_dir, is_json, plan),
     }
 }
 
-async fn cmd_show(request: ShowRequest<'_>) -> Result<(), RunError> {
+async fn cmd_show(request: ShowRequest<'_>, plan: AttestInvocation) -> Result<(), RunError> {
+    let (selected, bytes) = attest_fingerprint(request.selector);
+    let plan = plan.with_port_selection(AttestTarget::StoreSelector(selected), bytes, 1);
     let store =
         open_store(request.output_dir, request.state_dir, request.store_dir, request.backend, request.base_state_dirs)
-            .await?;
-    let (document, stored_path, selected_layer) = load_artifact_document(&store, request.selector).await?;
+            .await
+            .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
+    let plan = plan.with_store(&store);
+    let (document, stored_path, selected_layer) = load_artifact_document(&store, request.selector)
+        .await
+        .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenedThenFailed, error))?;
+    attest_completed(plan.returned_entries(1), AttestProgress::StoreAccessReturned)?;
     print_document_with_layers(&document, Some(stored_path), Some(selected_layer), None)
 }
 
@@ -311,15 +754,26 @@ async fn cmd_closure(
     backend: crunch_store::StoreBackend,
     base_state_dirs: &[PathBuf],
     roots: &[String],
+    plan: AttestInvocation,
 ) -> Result<(), RunError> {
-    let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs).await?;
-    let root_paths = resolve_roots(roots, store_dir, output_dir)?;
-    let stored = store
-        .runtime_closure_attestation(&root_paths)
+    let (selected, bytes) = attest_fingerprint(roots);
+    let plan = plan.with_port_selection(AttestTarget::StoreRoots(selected), bytes, roots.len());
+    let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs)
         .await
-        .map_err(|e| RunError::Internal(format!("loading closure attestation: {e}")))?;
+        .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
+    let plan = plan.with_store(&store);
+    let root_paths = resolve_roots(roots, store_dir, output_dir)
+        .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenedThenFailed, error))?;
+    let stored = store.runtime_closure_attestation(&root_paths).await.map_err(|error| {
+        attest_failed(
+            plan,
+            AttestProgress::StoreOpenedThenFailed,
+            RunError::Internal(format!("loading closure attestation: {error}")),
+        )
+    })?;
     let path =
         closure_attestation_file_path(store.state_dir(), store.store_dir(), &root_paths, ClosureSemantics::Runtime);
+    attest_completed(plan.returned_entries(1), AttestProgress::StoreAccessReturned)?;
     print_document_with_layers(
         &AttestationDocument::Closure(stored.attestation),
         Some(path),
@@ -328,12 +782,21 @@ async fn cmd_closure(
     )
 }
 
-async fn cmd_diff(request: DiffRequest<'_>) -> Result<(), RunError> {
+async fn cmd_diff(request: DiffRequest<'_>, plan: AttestInvocation) -> Result<(), RunError> {
+    let (selected, bytes) = attest_fingerprint(&(request.left, request.right));
+    let plan = plan.with_port_selection(AttestTarget::StorePair(selected), bytes, 2);
     let store =
         open_store(request.output_dir, request.state_dir, request.store_dir, request.backend, request.base_state_dirs)
-            .await?;
-    let left_document = load_document_input(Some(&store), request.left).await?;
-    let right_document = load_document_input(Some(&store), request.right).await?;
+            .await
+            .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
+    let plan = plan.with_store(&store);
+    let left_document = load_document_input(Some(&store), request.left)
+        .await
+        .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenedThenFailed, error))?;
+    let right_document = load_document_input(Some(&store), request.right)
+        .await
+        .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenedThenFailed, error))?;
+    attest_completed(plan.returned_entries(2), AttestProgress::StoreAccessReturned)?;
     print_diff(request.left, &left_document, request.right, &right_document)
 }
 
@@ -345,9 +808,18 @@ async fn cmd_project(
     backend: crunch_store::StoreBackend,
     base_state_dirs: &[PathBuf],
     roots: &[String],
+    plan: AttestInvocation,
 ) -> Result<(), RunError> {
-    let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs).await?;
-    let document = load_project_document(current_dir, &store, roots).await?;
+    let (selected, bytes) = attest_fingerprint(roots);
+    let plan = plan.with_port_selection(AttestTarget::StoreRoots(selected), bytes, roots.len());
+    let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs)
+        .await
+        .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
+    let plan = plan.with_store(&store);
+    let document = load_project_document(current_dir, &store, roots)
+        .await
+        .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenedThenFailed, error))?;
+    attest_completed(plan.returned_entries(1), AttestProgress::StoreAccessReturned)?;
     print_document(&document, None)
 }
 
@@ -359,20 +831,38 @@ async fn cmd_verify(
     store_dir: &str,
     backend: crunch_store::StoreBackend,
     base_state_dirs: &[PathBuf],
+    mut plan: AttestInvocation,
 ) -> Result<(), RunError> {
-    match target {
+    let text = match target {
         crate::AttestVerifyAction::Artifact { path } => {
-            let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs).await?;
-            let (document, stored_path, _selected_layer) = load_artifact_document(&store, &path).await?;
+            let (selected, bytes) = attest_fingerprint(&path);
+            plan = plan.with_port_selection(AttestTarget::StoreSelector(selected), bytes, 1);
+            let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs)
+                .await
+                .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
+            plan = plan.with_store(&store);
+            let (document, stored_path, _selected_layer) = load_artifact_document(&store, &path)
+                .await
+                .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenedThenFailed, error))?;
             verify_persisted_document(&document, &stored_path)
+                .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenedThenFailed, error))?
         }
         crate::AttestVerifyAction::Closure { roots } => {
-            let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs).await?;
-            let root_paths = resolve_roots(&roots, store_dir, output_dir)?;
-            let stored = store
-                .runtime_closure_attestation(&root_paths)
+            let (selected, bytes) = attest_fingerprint(&roots);
+            plan = plan.with_port_selection(AttestTarget::StoreRoots(selected), bytes, roots.len());
+            let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs)
                 .await
-                .map_err(|e| RunError::Internal(format!("loading closure attestation: {e}")))?;
+                .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
+            plan = plan.with_store(&store);
+            let root_paths = resolve_roots(&roots, store_dir, output_dir)
+                .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenedThenFailed, error))?;
+            let stored = store.runtime_closure_attestation(&root_paths).await.map_err(|error| {
+                attest_failed(
+                    plan,
+                    AttestProgress::StoreOpenedThenFailed,
+                    RunError::Internal(format!("loading closure attestation: {error}")),
+                )
+            })?;
             let path = closure_attestation_file_path(
                 store.state_dir(),
                 store.store_dir(),
@@ -380,18 +870,41 @@ async fn cmd_verify(
                 ClosureSemantics::Runtime,
             );
             verify_persisted_document(&AttestationDocument::Closure(stored.attestation), &path)
+                .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenedThenFailed, error))?
         }
         crate::AttestVerifyAction::Project { file, digest, roots } => {
-            let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs).await?;
-            let document = load_project_document(current_dir, &store, &roots).await?;
+            let (selected, bytes) = attest_fingerprint(&(&roots, &file, &digest));
+            let selected_inputs = roots.len().saturating_add(usize::from(file.is_some() || digest.is_some()));
+            plan = plan.with_port_selection(AttestTarget::ProjectVerification(selected), bytes, selected_inputs);
+            let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs)
+                .await
+                .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
+            plan = plan.with_store(&store);
+            let document = load_project_document(current_dir, &store, &roots)
+                .await
+                .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenedThenFailed, error))?;
             verify_project_document(&document, file.as_deref(), digest.as_deref())
+                .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenedThenFailed, error))?
         }
-    }
+    };
+    attest_completed(plan.returned_entries(1), AttestProgress::StoreAccessReturned)?;
+    println!("{text}");
+    Ok(())
 }
 
-fn cmd_key_show(current_dir: &Path, state_dir: &Path, json: bool, signing_key: Option<&Path>) -> Result<(), RunError> {
+fn cmd_key_show(
+    current_dir: &Path,
+    state_dir: &Path,
+    json: bool,
+    signing_key: Option<&Path>,
+    plan: AttestInvocation,
+) -> Result<(), RunError> {
+    let (selected, bytes) = attest_fingerprint(&(current_dir, state_dir, signing_key));
+    let plan = plan.with_port_selection(AttestTarget::SigningKey(selected), bytes, 1);
     let resolved_signing_key = signing_key.map(|path| resolve_cli_path(current_dir, path));
-    let (keypair, source_path) = load_existing_signing_keypair(resolved_signing_key.as_deref(), state_dir)?;
+    let (keypair, source_path) = load_existing_signing_keypair(resolved_signing_key.as_deref(), state_dir)
+        .map_err(|error| attest_failed(plan, AttestProgress::ReadFailed, error))?;
+    attest_completed(plan.returned_output(&source_path, 1), AttestProgress::ReadReturned)?;
     let trusted_public_key = keypair.verifying_key.to_string();
     print_trusted_public_key(TrustedPublicKeyOutput {
         trusted_public_key: &trusted_public_key,
@@ -401,7 +914,24 @@ fn cmd_key_show(current_dir: &Path, state_dir: &Path, json: bool, signing_key: O
     })
 }
 
-fn cmd_witness_create(request: WitnessCreateCommand<'_>) -> Result<(), RunError> {
+fn cmd_witness_create(request: WitnessCreateCommand<'_>, plan: AttestInvocation) -> Result<(), RunError> {
+    let (selected, bytes) = attest_fingerprint(&(
+        request.current_dir,
+        request.state_dir,
+        request.verification_dir,
+        request.rebuilt_binary,
+        request.identity,
+        request.system,
+        request.toolchain,
+        request.host_class,
+        request.signing_key,
+    ));
+    let input_count = request
+        .rebuilt_binary
+        .len()
+        .saturating_add(1)
+        .saturating_add(usize::from(request.signing_key.is_some()));
+    let plan = plan.with_port_selection(AttestTarget::WitnessCreate(selected), bytes, input_count);
     let resolved_verification_dir = resolve_cli_path(request.current_dir, request.verification_dir);
     let resolved_binaries = resolve_cli_paths(request.current_dir, request.rebuilt_binary);
     let created = create_witness_attestation(
@@ -414,14 +944,31 @@ fn cmd_witness_create(request: WitnessCreateCommand<'_>) -> Result<(), RunError>
         WITNESS_SOURCE_ACQUISITION_MODE_MANUAL,
         request.signing_key,
         request.state_dir,
-    )?;
+    )
+    .map_err(|error| attest_failed(plan, AttestProgress::PublishFailed, error))?;
+    let returned_directory = matching_publication_directory(&created.attestation_path, &created.signature_path)?;
+    let plan = plan.returned_output(returned_directory, 2);
+    attest_completed(plan, AttestProgress::PublishReturned)?;
     print_created_witness_attestation(&created, request.is_json)
 }
 
-fn cmd_witness_import(current_dir: &Path, json: bool, verification_dir: &Path, source: &Path) -> Result<(), RunError> {
+fn cmd_witness_import(
+    current_dir: &Path,
+    json: bool,
+    verification_dir: &Path,
+    source: &Path,
+    plan: AttestInvocation,
+) -> Result<(), RunError> {
+    let (selected, bytes) = attest_fingerprint(&(current_dir, verification_dir, source));
+    let plan = plan.with_port_selection(AttestTarget::WitnessImport(selected), bytes, 2);
     let resolved_verification_dir = resolve_cli_path(current_dir, verification_dir);
     let resolved_source = resolve_cli_path(current_dir, source);
-    let handoff_receipt = import_witness_material(&resolved_verification_dir, &resolved_source)?;
+    let handoff_receipt = import_witness_material(&resolved_verification_dir, &resolved_source)
+        .map_err(|error| attest_failed(plan, AttestProgress::PublishFailed, error))?;
+    let returned_count = handoff_receipt.imported_witness_identities.len().saturating_mul(2);
+    let plan =
+        plan.returned_output(&handoff_receipt.verification_dir, u32::try_from(returned_count).unwrap_or(u32::MAX));
+    attest_completed(plan, AttestProgress::PublishReturned)?;
     debug_assert_eq!(handoff_receipt.verification_dir, resolved_verification_dir);
     debug_assert!(
         handoff_receipt.imported_witness_identities.capacity() >= handoff_receipt.imported_witness_identities.len()
@@ -461,7 +1008,22 @@ fn cmd_witness_import(current_dir: &Path, json: bool, verification_dir: &Path, s
     Ok(())
 }
 
-fn cmd_policy_init(request: PolicyInitCommand<'_>) -> Result<(), RunError> {
+fn cmd_policy_init(request: PolicyInitCommand<'_>, plan: AttestInvocation) -> Result<(), RunError> {
+    let profile_code = policy_profile_code(request.profile);
+    let (selected, bytes) = attest_fingerprint(&(
+        request.current_dir,
+        request.verification_dir,
+        profile_code,
+        request.trusted_release_signers,
+        request.trusted_witness_identities,
+        request.min_matching_witnesses,
+        request.independence_field,
+        request.is_force,
+    ));
+    let input_count = 1usize
+        .saturating_add(request.trusted_release_signers.len())
+        .saturating_add(request.trusted_witness_identities.len());
+    let plan = plan.with_port_selection(AttestTarget::PolicyInit(selected), bytes, input_count);
     let resolved_verification_dir = resolve_cli_path(request.current_dir, request.verification_dir);
     let created = create_policy_files(
         &resolved_verification_dir,
@@ -473,7 +1035,10 @@ fn cmd_policy_init(request: PolicyInitCommand<'_>) -> Result<(), RunError> {
             trusted_witness_identities: request.trusted_witness_identities,
         },
         request.is_force,
-    )?;
+    )
+    .map_err(|error| attest_failed(plan, AttestProgress::PublishFailed, error))?;
+    let returned_directory = matching_publication_directory(&created.policy_path, &created.revocations_path)?;
+    attest_completed(plan.returned_output(returned_directory, 2), AttestProgress::PublishReturned)?;
     print_created_policy_files(&created, request.is_json)
 }
 
@@ -486,8 +1051,24 @@ fn map_policy_profile(profile: crate::AttestPolicyProfileArg) -> PolicyInitProfi
     }
 }
 
-fn cmd_witness_show(verification_dir: &Path, requested_identity: Option<&str>) -> Result<(), RunError> {
-    let documents = load_witness_documents(verification_dir)?;
+fn policy_profile_code(profile: PolicyInitProfile) -> u8 {
+    match profile {
+        PolicyInitProfile::SelfProofOnly => 1,
+        PolicyInitProfile::OptionalWitness => 2,
+        PolicyInitProfile::SingleWitness => 3,
+        PolicyInitProfile::WitnessQuorum => 4,
+    }
+}
+
+fn cmd_witness_show(
+    verification_dir: &Path,
+    requested_identity: Option<&str>,
+    plan: AttestInvocation,
+) -> Result<(), RunError> {
+    let (selected, bytes) = attest_fingerprint(&(verification_dir, requested_identity));
+    let plan = plan.with_port_selection(AttestTarget::WitnessShow(selected), bytes, 1);
+    let documents = load_witness_documents(verification_dir)
+        .map_err(|error| attest_failed(plan, AttestProgress::ReadFailed, error))?;
     debug_assert!(documents.capacity() >= documents.len());
     debug_assert!(!verification_dir.as_os_str().is_empty());
     if let Some(identity) = requested_identity {
@@ -495,15 +1076,24 @@ fn cmd_witness_show(verification_dir: &Path, requested_identity: Option<&str>) -
             .into_iter()
             .find(|document| document.attestation.witness_identity == identity)
             .ok_or_else(|| {
-                RunError::Internal(format!(
-                    "no witness attestation with identity '{}' in {}",
-                    identity,
-                    verification_dir.display()
-                ))
+                attest_failed(
+                    plan,
+                    AttestProgress::ReadRejected,
+                    RunError::Internal(format!(
+                        "no witness attestation with identity '{}' in {}",
+                        identity,
+                        verification_dir.display()
+                    )),
+                )
             })?;
+        attest_completed(plan.returned_entries(1), AttestProgress::ReadReturned)?;
         return print_document(&AttestationDocument::Witness(document.attestation), Some(document.attestation_path));
     }
 
+    attest_completed(
+        plan.returned_entries(u32::try_from(documents.len()).unwrap_or(u32::MAX)),
+        AttestProgress::ReadReturned,
+    )?;
     let document_count = documents.len();
     let mut rendered = Vec::with_capacity(document_count);
     for document in documents {
@@ -530,24 +1120,25 @@ fn cmd_release_verify(
     explicit_trusted_public_keys: &[String],
     state_dir: &Path,
     is_json: bool,
+    plan: AttestInvocation,
 ) -> Result<(), RunError> {
-    let trusted_public_keys = resolve_release_verify_keys(explicit_trusted_public_keys, state_dir)?;
-    let output = verify_release_attestation_directory(verification_dir, &trusted_public_keys)?;
-    print_release_verification_output(&output, is_json)
-}
-
-fn resolve_release_verify_keys(
-    explicit_trusted_public_keys: &[String],
-    state_dir: &Path,
-) -> Result<Vec<nix_compat::narinfo::VerifyingKey>, RunError> {
-    let parsed_explicit_keys = parse_release_trusted_public_keys(explicit_trusted_public_keys)?;
-    let configured = load_configured_trusted_public_keys(parsed_explicit_keys.as_deref(), state_dir)?;
-    configured.ok_or_else(|| {
-        RunError::Internal(
+    let (selected, bytes) = attest_fingerprint(&(verification_dir, explicit_trusted_public_keys, state_dir));
+    let input_count = explicit_trusted_public_keys.len().saturating_add(1);
+    let plan = plan.with_port_selection(AttestTarget::ReleaseVerification(selected), bytes, input_count);
+    let parsed_explicit_keys = parse_release_trusted_public_keys(explicit_trusted_public_keys)
+        .map_err(|error| attest_failed(plan, AttestProgress::InputRejected, error))?;
+    let configured = load_configured_trusted_public_keys(parsed_explicit_keys.as_deref(), state_dir)
+        .map_err(|error| attest_failed(plan, AttestProgress::ReadFailed, error))?;
+    let trusted_public_keys = configured.ok_or_else(|| {
+        attest_failed(plan, AttestProgress::ReadRejected, RunError::Internal(
             "release verification requires trusted public keys via --trusted-public-key or configured trusted-public-keys"
                 .to_string(),
-        )
-    })
+        ))
+    })?;
+    let output = verify_release_attestation_directory(verification_dir, &trusted_public_keys)
+        .map_err(|error| attest_failed(plan, AttestProgress::ReadFailed, error))?;
+    attest_completed(plan.returned_entries(1), AttestProgress::ReadReturned)?;
+    print_release_verification_output(&output, is_json)
 }
 
 fn resolve_cli_paths(current_dir: &Path, paths: &[PathBuf]) -> Vec<PathBuf> {
@@ -840,7 +1431,7 @@ fn print_document_with_layers(
     Ok(())
 }
 
-fn verify_persisted_document(document: &AttestationDocument, stored_path: &Path) -> Result<(), RunError> {
+fn verify_persisted_document(document: &AttestationDocument, stored_path: &Path) -> Result<String, RunError> {
     let canonical_bytes = canonical_document_bytes(document)?;
     let stored_bytes = std::fs::read(stored_path)
         .map_err(|e| RunError::Internal(format!("reading {}: {e}", stored_path.display())))?;
@@ -852,15 +1443,14 @@ fn verify_persisted_document(document: &AttestationDocument, stored_path: &Path)
     }
 
     let digest = document_digest_hex(document)?;
-    println!("OK {} digest={} path={}", document.kind(), digest, stored_path.display());
-    Ok(())
+    Ok(format!("OK {} digest={} path={}", document.kind(), digest, stored_path.display()))
 }
 
 fn verify_project_document(
     document: &AttestationDocument,
     expected_file: Option<&Path>,
     expected_digest: Option<&str>,
-) -> Result<(), RunError> {
+) -> Result<String, RunError> {
     if let Some(path) = expected_file {
         let (expected_document, envelope_digest) = load_document_file_with_digest(path)?;
         if expected_document.kind() != document.kind() {
@@ -893,8 +1483,7 @@ fn verify_project_document(
             )));
         }
 
-        println!("OK {} digest={} file={}", document.kind(), actual_digest, path.display());
-        return Ok(());
+        return Ok(format!("OK {} digest={} file={}", document.kind(), actual_digest, path.display()));
     }
 
     if let Some(expected_digest) = expected_digest {
@@ -905,8 +1494,7 @@ fn verify_project_document(
                 expected_digest, actual_digest
             )));
         }
-        println!("OK {} digest={}", document.kind(), actual_digest);
-        return Ok(());
+        return Ok(format!("OK {} digest={}", document.kind(), actual_digest));
     }
 
     Err(RunError::Internal(

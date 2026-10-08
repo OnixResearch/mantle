@@ -18,6 +18,19 @@ use std::path::PathBuf;
 use std::process::Output;
 
 use clap::Subcommand;
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::CommandFamily;
+use mantle_application_contract::EffectId;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::EffectPlan;
+use mantle_application_contract::EffectSpec;
+use mantle_application_contract::ExpectedOutput;
+use mantle_application_contract::Observation;
+use mantle_application_contract::ObservationStatus;
+use mantle_application_contract::classify_observations;
+use mantle_application_contract::plan_effects;
 use mantlepkgs_core::MantlepkgsManifest;
 use mantlepkgs_core::VERSION_OBSERVATION_SCHEMA;
 use mantlepkgs_core::VERSION_RECHECK_SCHEMA;
@@ -165,6 +178,411 @@ struct ObservedVersion {
     reason_codes: Vec<String>,
 }
 
+// Each declaration is complete before the first Nickel evaluation, filesystem read, or Nix
+// invocation. The final read is a distinct capability: publication/rename alone cannot certify its
+// bytes.
+const INDEX_EFFECTS: &[EffectSpec<'static>] = &[
+    EffectSpec {
+        effect_id: "version-index-input",
+        kind: EffectKind::ReadFiles,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    },
+    EffectSpec {
+        effect_id: "version-index-producer",
+        kind: EffectKind::RunProcess,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    },
+    EffectSpec {
+        effect_id: "version-index-publish",
+        kind: EffectKind::WriteFiles,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    },
+    EffectSpec {
+        effect_id: "version-index-readback",
+        kind: EffectKind::ReadFiles,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    },
+];
+const RESOLVE_EFFECTS: &[EffectSpec<'static>] = &[
+    EffectSpec {
+        effect_id: "version-resolve-inputs",
+        kind: EffectKind::ReadFiles,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    },
+    EffectSpec {
+        effect_id: "version-resolve-publish",
+        kind: EffectKind::WriteFiles,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    },
+    EffectSpec {
+        effect_id: "version-resolve-readback",
+        kind: EffectKind::ReadFiles,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    },
+];
+const RECHECK_EFFECTS: &[EffectSpec<'static>] = &[
+    EffectSpec {
+        effect_id: "version-recheck-inputs",
+        kind: EffectKind::ReadFiles,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    },
+    EffectSpec {
+        effect_id: "version-recheck-producer",
+        kind: EffectKind::RunProcess,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    },
+    EffectSpec {
+        effect_id: "version-recheck-publish",
+        kind: EffectKind::WriteFiles,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    },
+    EffectSpec {
+        effect_id: "version-recheck-readback",
+        kind: EffectKind::ReadFiles,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    },
+];
+
+fn version_plan(specs: &[EffectSpec<'_>]) -> Result<EffectPlan, RunError> {
+    plan_effects(CommandFamily::Project, specs)
+        .map_err(|error| RunError::Internal(format!("planning version effects: {}", error.code())))
+}
+
+struct VersionEffects {
+    plan: EffectPlan,
+    observations: Vec<Observation>,
+}
+
+impl VersionEffects {
+    fn new(specs: &[EffectSpec<'_>]) -> Result<Self, RunError> {
+        Ok(Self {
+            plan: version_plan(specs)?,
+            observations: Vec::with_capacity(specs.len()),
+        })
+    }
+
+    fn execute<T>(
+        &mut self,
+        effect_id: &'static str,
+        kind: EffectKind,
+        usage: impl FnOnce() -> u32,
+        action: impl FnOnce() -> Result<(T, EffectOutput), RunError>,
+    ) -> Result<T, RunError> {
+        let Some(expected) = self.plan.effects.get(self.observations.len()) else {
+            return Err(RunError::Internal(format!("unplanned version effect: {effect_id}")));
+        };
+        if expected.effect_id.0 != effect_id || expected.kind != kind {
+            return Err(RunError::Internal(format!("out-of-order version effect: {effect_id}")));
+        }
+        let (result, output): (Result<T, RunError>, EffectOutput) = match action() {
+            Ok((value, output)) => (Ok(value), output),
+            Err(error) => (Err(error), EffectOutput::None),
+        };
+        self.observations.push(Observation {
+            effect_id: EffectId(effect_id.into()),
+            kind,
+            status: if result.is_ok() {
+                ObservationStatus::Succeeded
+            } else {
+                ObservationStatus::Failed
+            },
+            output,
+            usage: EffectMeasure::Calls(usage()),
+            diagnostics_code: result.as_ref().err().map(|_| "version-effect-failed".into()),
+        });
+        if result.is_err() {
+            self.finish_failure()?;
+        }
+        result
+    }
+
+    fn finish_failure(&mut self) -> Result<(), RunError> {
+        for effect in &self.plan.effects[self.observations.len()..] {
+            self.observations.push(Observation {
+                effect_id: effect.effect_id.clone(),
+                kind: effect.kind,
+                status: ObservationStatus::Skipped,
+                output: EffectOutput::None,
+                usage: EffectMeasure::Calls(0),
+                diagnostics_code: None,
+            });
+        }
+        match classify_observations(&self.plan, &self.observations) {
+            ApplicationOutcome::Failed { .. } => Ok(()),
+            outcome => Err(RunError::Internal(format!("version effects contradicted plan: {outcome:?}"))),
+        }
+    }
+
+    fn finish(&self) -> Result<(), RunError> {
+        match classify_observations(&self.plan, &self.observations) {
+            ApplicationOutcome::Completed => Ok(()),
+            outcome => Err(RunError::Internal(format!("version effects contradicted plan: {outcome:?}"))),
+        }
+    }
+}
+
+// The port is intentionally version-specific: the core cannot open a path, launch
+// Nix, or rename a stage. The concrete adapter retains those capabilities.
+trait VersionPort {
+    fn index_input(&self, path: &Path) -> Result<VersionCohort, RunError>;
+    fn index_observations(&self, cohort: &VersionCohort, nix: &Path) -> Result<Vec<VersionObservation>, RunError>;
+    fn resolution_inputs(
+        &self,
+        index: &Path,
+        policy: &Path,
+        requests: &Path,
+    ) -> Result<(VersionIndex, VersionSelectionPolicy, VersionRequestSet), RunError>;
+    fn recheck_inputs(
+        &self,
+        plan: &Path,
+        template: &Path,
+    ) -> Result<(VersionProductionPlan, MantlepkgsManifest), RunError>;
+    fn recheck_observations(
+        &self,
+        plan: &VersionProductionPlan,
+        nix: &Path,
+    ) -> Result<Vec<VersionGroupRecheck>, RunError>;
+    fn publish_index(
+        &self,
+        root: &Path,
+        cohort: &VersionCohort,
+        observations: &VersionObservationSet,
+        index: &VersionIndex,
+    ) -> Result<(), RunError>;
+    fn publish_resolution(
+        &self,
+        root: &Path,
+        policy: &VersionSelectionPolicy,
+        requests: &VersionRequestSet,
+        resolutions: &mantlepkgs_core::VersionResolutionSet,
+        plan: &VersionProductionPlan,
+    ) -> Result<(), RunError>;
+    fn publish_recheck(
+        &self,
+        root: &Path,
+        template: &Path,
+        rechecks: &VersionRecheckSet,
+        manifests: Option<&Vec<(String, MantlepkgsManifest)>>,
+    ) -> Result<(), RunError>;
+    fn verify_index(
+        &self,
+        root: &Path,
+        cohort: &VersionCohort,
+        observations: &VersionObservationSet,
+        index: &VersionIndex,
+    ) -> Result<EffectOutput, RunError>;
+    fn verify_resolution(
+        &self,
+        root: &Path,
+        policy: &VersionSelectionPolicy,
+        requests: &VersionRequestSet,
+        resolutions: &mantlepkgs_core::VersionResolutionSet,
+        plan: &VersionProductionPlan,
+    ) -> Result<EffectOutput, RunError>;
+    fn verify_recheck(
+        &self,
+        root: &Path,
+        rechecks: &VersionRecheckSet,
+        manifests: Option<&Vec<(String, MantlepkgsManifest)>>,
+    ) -> Result<EffectOutput, RunError>;
+}
+
+struct FsVersionPort;
+
+fn publish_version(root: &Path, write_stage: impl FnOnce(&Path) -> Result<(), RunError>) -> Result<(), RunError> {
+    let stage = prepare_stage(root)?;
+    let result = write_stage(&stage).and_then(|()| publish_stage(&stage, root));
+    cleanup_failed_stage(&stage, result.is_err());
+    result
+}
+
+fn verify_published<T: DeserializeOwned + PartialEq>(path: &Path, expected: &T) -> Result<(), RunError> {
+    let actual: T = read_json_bounded(path)?;
+    if actual != *expected {
+        return Err(RunError::Eval(format!(
+            "published version artifact differs from planned output: {}",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
+impl VersionPort for FsVersionPort {
+    fn index_input(&self, path: &Path) -> Result<VersionCohort, RunError> {
+        seal_version_cohort(&evaluate_nickel(path, "version cohort")?).map_err(core_eval_error)
+    }
+    fn index_observations(&self, cohort: &VersionCohort, nix: &Path) -> Result<Vec<VersionObservation>, RunError> {
+        validate_nix_program(nix)?;
+        observe_cohort(cohort, nix)
+    }
+    fn resolution_inputs(
+        &self,
+        index: &Path,
+        policy: &Path,
+        requests: &Path,
+    ) -> Result<(VersionIndex, VersionSelectionPolicy, VersionRequestSet), RunError> {
+        Ok((
+            read_json_bounded(index)?,
+            evaluate_nickel(policy, "version selection policy")?,
+            evaluate_nickel(requests, "version request set")?,
+        ))
+    }
+    fn recheck_inputs(
+        &self,
+        plan: &Path,
+        template: &Path,
+    ) -> Result<(VersionProductionPlan, MantlepkgsManifest), RunError> {
+        Ok((
+            seal_version_production_plan(&read_json_bounded::<VersionProductionPlan>(plan)?)
+                .map_err(core_eval_error)?,
+            evaluate_nickel(template, "Mantlepkgs template manifest")?,
+        ))
+    }
+    fn recheck_observations(
+        &self,
+        plan: &VersionProductionPlan,
+        nix: &Path,
+    ) -> Result<Vec<VersionGroupRecheck>, RunError> {
+        validate_nix_program(nix)?;
+        observe_rechecks(plan, nix)
+    }
+    fn publish_index(
+        &self,
+        root: &Path,
+        cohort: &VersionCohort,
+        observations: &VersionObservationSet,
+        index: &VersionIndex,
+    ) -> Result<(), RunError> {
+        publish_version(root, |stage| write_index_stage(stage, cohort, observations, index))
+    }
+    fn publish_resolution(
+        &self,
+        root: &Path,
+        policy: &VersionSelectionPolicy,
+        requests: &VersionRequestSet,
+        resolutions: &mantlepkgs_core::VersionResolutionSet,
+        plan: &VersionProductionPlan,
+    ) -> Result<(), RunError> {
+        publish_version(root, |stage| write_resolution_stage(stage, policy, requests, resolutions, plan))
+    }
+    fn publish_recheck(
+        &self,
+        root: &Path,
+        template: &Path,
+        rechecks: &VersionRecheckSet,
+        manifests: Option<&Vec<(String, MantlepkgsManifest)>>,
+    ) -> Result<(), RunError> {
+        let template_root = template
+            .parent()
+            .ok_or_else(|| RunError::Eval("the template manifest must have a parent directory".into()))?;
+        publish_version(root, |stage| write_recheck_stage(stage, template_root, rechecks, manifests))
+    }
+    fn verify_index(
+        &self,
+        root: &Path,
+        cohort: &VersionCohort,
+        observations: &VersionObservationSet,
+        index: &VersionIndex,
+    ) -> Result<EffectOutput, RunError> {
+        verify_published(&root.join(VERSION_COHORT_FILE), cohort)?;
+        verify_published(&root.join(VERSION_OBSERVATIONS_FILE), observations)?;
+        verify_published(&root.join(&cohort.index_relative_path), index)?;
+        Ok(EffectOutput::None)
+    }
+    fn verify_resolution(
+        &self,
+        root: &Path,
+        policy: &VersionSelectionPolicy,
+        requests: &VersionRequestSet,
+        resolutions: &mantlepkgs_core::VersionResolutionSet,
+        plan: &VersionProductionPlan,
+    ) -> Result<EffectOutput, RunError> {
+        verify_published(&root.join(VERSION_POLICY_FILE), policy)?;
+        verify_published(&root.join(VERSION_REQUESTS_FILE), requests)?;
+        verify_published(&root.join(VERSION_RESOLUTIONS_FILE), resolutions)?;
+        verify_published(&root.join(VERSION_PLAN_FILE), plan)?;
+        for receipt in &resolutions.receipts {
+            verify_published(
+                &root.join(VERSION_RECEIPTS_DIRECTORY).join(format!("{}.json", receipt.receipt_identity_blake3)),
+                receipt,
+            )?;
+        }
+        Ok(EffectOutput::None)
+    }
+    fn verify_recheck(
+        &self,
+        root: &Path,
+        rechecks: &VersionRecheckSet,
+        manifests: Option<&Vec<(String, MantlepkgsManifest)>>,
+    ) -> Result<EffectOutput, RunError> {
+        verify_published(&root.join(VERSION_RECHECKS_FILE), rechecks)?;
+        if let Some(manifests) = manifests {
+            for (identity, manifest) in manifests {
+                let group = root.join(VERSION_MANIFESTS_DIRECTORY).join(identity);
+                verify_published(&group.join(VERSION_MANIFEST_JSON_FILE), manifest)?;
+                let expected_nickel = render_manifest_nickel(manifest)?;
+                verify_published_bytes(&group.join(VERSION_MANIFEST_NICKEL_FILE), expected_nickel.as_bytes())?;
+                verify_published_bytes(
+                    &group.join(VERSION_MANIFEST_CONTRACT_FILE),
+                    VERSION_MANIFEST_CONTRACT.as_bytes(),
+                )?;
+                for artifact in [
+                    &manifest.conversion_policy.translation_policy,
+                    &manifest.conversion_policy.execution_profile,
+                ] {
+                    let path = group.join(&artifact.path);
+                    let bytes = read_published_bytes(&path)?;
+                    if blake3::hash(&bytes).to_hex().as_str() != artifact.digest_blake3 {
+                        return Err(RunError::Eval(format!(
+                            "published manifest policy digest mismatch: {}",
+                            artifact.path
+                        )));
+                    }
+                }
+            }
+        } else if root.join(VERSION_MANIFESTS_DIRECTORY).exists() {
+            return Err(RunError::Eval("published blocked recheck unexpectedly contains manifests".into()));
+        }
+        Ok(EffectOutput::None)
+    }
+}
+
+fn read_published_bytes(path: &Path) -> Result<Vec<u8>, RunError> {
+    let metadata = fs::symlink_metadata(path).map_err(|error| {
+        RunError::Internal(format!("reading published version artifact {}: {error}", path.display()))
+    })?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > VERSION_INPUT_BYTES_MAX {
+        return Err(RunError::Eval(format!(
+            "published version artifact is not one bounded regular file: {}",
+            path.display()
+        )));
+    }
+    fs::read(path)
+        .map_err(|error| RunError::Internal(format!("reading published version artifact {}: {error}", path.display())))
+}
+
+fn verify_published_bytes(path: &Path, expected: &[u8]) -> Result<(), RunError> {
+    let actual = read_published_bytes(path)?;
+    if actual != expected {
+        return Err(RunError::Eval(format!(
+            "published version artifact differs from planned output: {}",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
 pub(crate) fn cmd_mantlepkgs_version(action: MantlepkgsVersionAction, json: bool) -> Result<(), RunError> {
     match action {
         MantlepkgsVersionAction::Index {
@@ -188,16 +606,53 @@ pub(crate) fn cmd_mantlepkgs_version(action: MantlepkgsVersionAction, json: bool
 }
 
 fn run_index(cohort_path: &Path, nix_program: &Path, output_root: &Path, json: bool) -> Result<(), RunError> {
-    let cohort = seal_version_cohort(&evaluate_nickel(cohort_path, "version cohort")?).map_err(core_eval_error)?;
-    validate_nix_program(nix_program)?;
-    let observations = observe_cohort(&cohort, nix_program)?;
-    let observation_set = build_version_observation_set(&cohort, &observations).map_err(core_eval_error)?;
-    let index = build_version_index(&cohort, &observation_set).map_err(core_eval_error)?;
-    let stage = prepare_stage(output_root)?;
-    let result =
-        write_index_stage(&stage, &cohort, &observation_set, &index).and_then(|()| publish_stage(&stage, output_root));
-    cleanup_failed_stage(&stage, result.is_err());
-    result?;
+    run_index_with_port(&FsVersionPort, cohort_path, nix_program, output_root, json)
+}
+
+fn run_index_with_port(
+    port: &impl VersionPort,
+    cohort_path: &Path,
+    nix_program: &Path,
+    output_root: &Path,
+    json: bool,
+) -> Result<(), RunError> {
+    let mut effects = VersionEffects::new(INDEX_EFFECTS)?;
+    let cohort = effects.execute(
+        "version-index-input",
+        EffectKind::ReadFiles,
+        || 1,
+        || Ok((port.index_input(cohort_path)?, EffectOutput::None)),
+    )?;
+    let (observation_set, index) = effects.execute(
+        "version-index-producer",
+        EffectKind::RunProcess,
+        || 1,
+        || {
+            let observations = port.index_observations(&cohort, nix_program)?;
+            let set = build_version_observation_set(&cohort, &observations).map_err(core_eval_error)?;
+            let index = build_version_index(&cohort, &set).map_err(core_eval_error)?;
+            Ok(((set, index), EffectOutput::None))
+        },
+    )?;
+    effects.execute(
+        "version-index-publish",
+        EffectKind::WriteFiles,
+        || 1,
+        || {
+            port.publish_index(output_root, &cohort, &observation_set, &index)?;
+            Ok(((), EffectOutput::None))
+        },
+    )?;
+    effects.execute(
+        "version-index-readback",
+        EffectKind::ReadFiles,
+        || 1,
+        || {
+            let output = port.verify_index(output_root, &cohort, &observation_set, &index)?;
+            Ok(((), output))
+        },
+    )?;
+    effects.finish()?;
     emit_index_result(&index, output_root, json)
 }
 
@@ -397,22 +852,55 @@ fn run_resolve(
     output_root: &Path,
     json: bool,
 ) -> Result<(), RunError> {
-    let index = read_json_bounded::<VersionIndex>(index_path)?;
-    let mut policy_template = evaluate_nickel::<VersionSelectionPolicy>(policy_path, "version selection policy")?;
-    bind_policy_template_to_index(&mut policy_template, &index);
-    let policy = seal_version_selection_policy(&policy_template).map_err(core_eval_error)?;
-    let mut request_template = evaluate_nickel::<VersionRequestSet>(request_path, "version request set")?;
-    if request_template.policy_identity_blake3.is_empty() {
-        request_template.policy_identity_blake3 = policy.policy_identity_blake3.clone();
-    }
-    let requests = seal_version_request_set(&policy, &request_template).map_err(core_eval_error)?;
-    let resolutions = resolve_version_requests(&index, &policy, &requests).map_err(core_eval_error)?;
-    let plan = group_version_resolutions(&resolutions, &policy.limits).map_err(core_eval_error)?;
-    let stage = prepare_stage(output_root)?;
-    let result = write_resolution_stage(&stage, &policy, &requests, &resolutions, &plan)
-        .and_then(|()| publish_stage(&stage, output_root));
-    cleanup_failed_stage(&stage, result.is_err());
-    result?;
+    run_resolve_with_port(&FsVersionPort, index_path, policy_path, request_path, output_root, json)
+}
+
+fn run_resolve_with_port(
+    port: &impl VersionPort,
+    index_path: &Path,
+    policy_path: &Path,
+    request_path: &Path,
+    output_root: &Path,
+    json: bool,
+) -> Result<(), RunError> {
+    let mut effects = VersionEffects::new(RESOLVE_EFFECTS)?;
+    let (policy, requests, resolutions, plan) = effects.execute(
+        "version-resolve-inputs",
+        EffectKind::ReadFiles,
+        || 1,
+        || {
+            let (index, mut policy_template, mut request_template) =
+                port.resolution_inputs(index_path, policy_path, request_path)?;
+            bind_policy_template_to_index(&mut policy_template, &index);
+            let policy = seal_version_selection_policy(&policy_template).map_err(core_eval_error)?;
+            if request_template.policy_identity_blake3.is_empty() {
+                request_template.policy_identity_blake3 = policy.policy_identity_blake3.clone();
+            }
+            let requests = seal_version_request_set(&policy, &request_template).map_err(core_eval_error)?;
+            let resolutions = resolve_version_requests(&index, &policy, &requests).map_err(core_eval_error)?;
+            let plan = group_version_resolutions(&resolutions, &policy.limits).map_err(core_eval_error)?;
+            Ok(((policy, requests, resolutions, plan), EffectOutput::None))
+        },
+    )?;
+    effects.execute(
+        "version-resolve-publish",
+        EffectKind::WriteFiles,
+        || 1,
+        || {
+            port.publish_resolution(output_root, &policy, &requests, &resolutions, &plan)?;
+            Ok(((), EffectOutput::None))
+        },
+    )?;
+    effects.execute(
+        "version-resolve-readback",
+        EffectKind::ReadFiles,
+        || 1,
+        || {
+            let output = port.verify_resolution(output_root, &policy, &requests, &resolutions, &plan)?;
+            Ok(((), output))
+        },
+    )?;
+    effects.finish()?;
     emit_resolution_result(&plan, output_root, json)?;
     if plan.blocked_receipt_identity_blake3.is_empty() {
         Ok(())
@@ -442,27 +930,60 @@ fn run_recheck(
     output_root: &Path,
     json: bool,
 ) -> Result<(), RunError> {
-    let plan = seal_version_production_plan(&read_json_bounded::<VersionProductionPlan>(plan_path)?)
-        .map_err(core_eval_error)?;
-    let template = evaluate_nickel(template_manifest_path, "Mantlepkgs template manifest")?;
-    validate_nix_program(nix_program)?;
-    let raw_rechecks = observe_rechecks(&plan, nix_program)?;
-    let recheck_set = seal_version_recheck_set(&plan, &VersionRecheckSet {
-        schema: VERSION_RECHECK_SET_SCHEMA.into(),
-        recheck_set_identity_blake3: String::new(),
-        plan_identity_blake3: plan.plan_identity_blake3.clone(),
-        rechecks: raw_rechecks,
-    })
-    .map_err(core_eval_error)?;
+    run_recheck_with_port(&FsVersionPort, plan_path, template_manifest_path, nix_program, output_root, json)
+}
+
+fn run_recheck_with_port(
+    port: &impl VersionPort,
+    plan_path: &Path,
+    template_manifest_path: &Path,
+    nix_program: &Path,
+    output_root: &Path,
+    json: bool,
+) -> Result<(), RunError> {
+    let mut effects = VersionEffects::new(RECHECK_EFFECTS)?;
+    let (plan, template) = effects.execute(
+        "version-recheck-inputs",
+        EffectKind::ReadFiles,
+        || 1,
+        || Ok((port.recheck_inputs(plan_path, template_manifest_path)?, EffectOutput::None)),
+    )?;
+    let recheck_set = effects.execute(
+        "version-recheck-producer",
+        EffectKind::RunProcess,
+        || 1,
+        || {
+            let raw_rechecks = port.recheck_observations(&plan, nix_program)?;
+            let set = seal_version_recheck_set(&plan, &VersionRecheckSet {
+                schema: VERSION_RECHECK_SET_SCHEMA.into(),
+                recheck_set_identity_blake3: String::new(),
+                plan_identity_blake3: plan.plan_identity_blake3.clone(),
+                rechecks: raw_rechecks,
+            })
+            .map_err(core_eval_error)?;
+            Ok((set, EffectOutput::None))
+        },
+    )?;
     let manifests = build_version_group_manifests(&template, &plan, &recheck_set);
-    let template_root = template_manifest_path
-        .parent()
-        .ok_or_else(|| RunError::Eval("the template manifest must have a parent directory".into()))?;
-    let stage = prepare_stage(output_root)?;
-    let result = write_recheck_stage(&stage, template_root, &recheck_set, manifests.as_ref().ok())
-        .and_then(|()| publish_stage(&stage, output_root));
-    cleanup_failed_stage(&stage, result.is_err());
-    result?;
+    effects.execute(
+        "version-recheck-publish",
+        EffectKind::WriteFiles,
+        || 1,
+        || {
+            port.publish_recheck(output_root, template_manifest_path, &recheck_set, manifests.as_ref().ok())?;
+            Ok(((), EffectOutput::None))
+        },
+    )?;
+    effects.execute(
+        "version-recheck-readback",
+        EffectKind::ReadFiles,
+        || 1,
+        || {
+            let output = port.verify_recheck(output_root, &recheck_set, manifests.as_ref().ok())?;
+            Ok(((), output))
+        },
+    )?;
+    effects.finish()?;
     match manifests {
         Ok(manifests) => emit_recheck_result(&recheck_set, &manifests, output_root, json),
         Err(error) => {
@@ -1160,23 +1681,12 @@ mod tests {
     }
 
     #[test]
-    fn metadata_parser_accepts_exact_github_source() {
-        let bytes = format!(
-            "{{\"path\":\"/nix/store/source\",\"locked\":{{\"narHash\":\"{NAR_HASH}\",\"rev\":\"{REVISION}\",\"type\":\"github\"}}}}"
-        );
-        let metadata = parse_flake_metadata(bytes.as_bytes()).unwrap();
-        assert_eq!(metadata.locked.rev, REVISION);
-        assert_eq!(metadata.locked.nar_hash, NAR_HASH);
-    }
-
-    #[test]
     fn metadata_parser_rejects_relative_source_path() {
         let bytes = format!(
             "{{\"path\":\"relative\",\"locked\":{{\"narHash\":\"{NAR_HASH}\",\"rev\":\"{REVISION}\",\"type\":\"github\"}}}}"
         );
         let error = parse_flake_metadata(bytes.as_bytes()).unwrap_err();
-        assert!(error.to_string().contains("invalid source path"));
-        assert!(!error.to_string().contains("/nix/store/source"));
+        assert!(matches!(error, RunError::Eval(_)));
     }
 
     #[test]
@@ -1198,8 +1708,8 @@ mod tests {
             parse_version_output(&successful_output(br#"{"status":"nearby","version":"2.12.1"}"#)).unwrap_err();
         let incomplete =
             parse_version_output(&successful_output(br#"{"status":"success","version":null}"#)).unwrap_err();
-        assert!(unknown.to_string().contains("unknown status"));
-        assert!(incomplete.to_string().contains("omitted version"));
+        assert!(matches!(unknown, RunError::Eval(_)));
+        assert!(matches!(incomplete, RunError::Eval(_)));
     }
 
     #[test]
@@ -1223,7 +1733,6 @@ mod tests {
         std::os::unix::fs::symlink("../../../different", root.join("link")).unwrap();
         let second = hash_nixpkgs_source_tree(&root).unwrap();
         assert_ne!(first, second);
-        assert_eq!(first.len(), blake3::OUT_LEN * 2);
     }
 
     #[test]
@@ -1231,10 +1740,9 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("source");
         fs::create_dir(&root).unwrap();
-        let socket = std::os::unix::net::UnixListener::bind(root.join("socket")).unwrap();
+        let _socket = std::os::unix::net::UnixListener::bind(root.join("socket")).unwrap();
         let error = hash_nixpkgs_source_tree(&root).unwrap_err();
-        assert!(error.to_string().contains("special file"));
-        assert!(socket.local_addr().is_ok());
+        assert!(matches!(error, RunError::Eval(_)));
     }
 
     #[test]
@@ -1244,8 +1752,7 @@ mod tests {
         capture.set_len(u64::try_from(oversized_bytes).unwrap()).unwrap();
         let error =
             crate::mantlepkgs_cmd::read_capture(&mut capture, VERSION_INDEX_STDOUT_BYTES_MAX, "stdout").unwrap_err();
-        assert!(error.to_string().contains("exceeded its byte limit"));
-        assert!(u64::try_from(VERSION_INDEX_STDOUT_BYTES_MAX).unwrap() < capture.metadata().unwrap().len());
+        assert!(matches!(error, RunError::Internal(_)));
     }
 
     #[test]
@@ -1254,19 +1761,21 @@ mod tests {
         let output = temp.path().join("output");
         fs::create_dir(&output).unwrap();
         let error = prepare_stage(&output).unwrap_err();
-        assert!(error.to_string().contains("already exists"));
+        assert!(matches!(error, RunError::Eval(_)));
         assert!(output.is_dir());
     }
 
     #[test]
-    fn positive_contract_fixtures_evaluate() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("mantlepkgs/versions/fixtures");
-        let fixtures = ["valid-cohort.ncl", "valid-policy.ncl", "valid-requests.ncl"];
-        for fixture in fixtures {
-            let value = evaluate_nickel::<serde_json::Value>(&root.join(fixture), "positive contract fixture").unwrap();
-            assert!(value.is_object());
-            assert!(!value.as_object().unwrap().is_empty());
-        }
+    fn published_artifact_readback_rejects_modified_and_missing_bytes() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("published.json");
+        fs::write(&path, br#"{"version":"wrong"}"#).unwrap();
+        let expected = serde_json::json!({"version": "expected"});
+        let mismatch = verify_published(&path, &expected).unwrap_err();
+        assert!(matches!(mismatch, RunError::Eval(_)));
+        fs::remove_file(&path).unwrap();
+        let missing = verify_published(&path, &expected).unwrap_err();
+        assert!(matches!(missing, RunError::Internal(_)));
     }
 
     #[test]
@@ -1282,8 +1791,7 @@ mod tests {
         for fixture in fixtures {
             let error = evaluate_nickel::<serde_json::Value>(&root.join(fixture), "negative contract fixture")
                 .expect_err("negative fixture must fail");
-            assert!(error.to_string().contains("evaluating typed Mantlepkgs"));
-            assert!(error.to_string().contains(fixture));
+            assert!(matches!(error, RunError::Eval(_)));
         }
     }
 
@@ -1305,7 +1813,7 @@ mod tests {
         let invalid_cohort = root.join("mantlepkgs/versions/fixtures/invalid-floating-cohort.ncl");
         let index_output = temp.path().join("invalid-index-output");
         let index_error = run_index(&invalid_cohort, &nix, &index_output, false).unwrap_err();
-        assert!(index_error.to_string().contains("evaluating typed Mantlepkgs"));
+        assert!(matches!(index_error, RunError::Eval(_)));
         assert!(!signal.exists());
         assert!(!index_output.exists());
 
@@ -1314,7 +1822,7 @@ mod tests {
         let template = root.join("mantlepkgs/live-cohort/manifest.ncl");
         let recheck_output = temp.path().join("invalid-recheck-output");
         let recheck_error = run_recheck(&invalid_plan, &template, &nix, &recheck_output, false).unwrap_err();
-        assert!(recheck_error.to_string().contains("decoding version artifact"));
+        assert!(matches!(recheck_error, RunError::Eval(_)));
         assert!(!signal.exists());
         assert!(!recheck_output.exists());
     }

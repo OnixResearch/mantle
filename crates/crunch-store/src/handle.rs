@@ -151,10 +151,10 @@ impl StoreConfig {
         store_dir: &str,
         base_state_dirs: &[PathBuf],
     ) -> Result<(), Error> {
-        Self::preflight_backend_identity_for_profile(backend, backend.profile(), state_dir, store_dir, base_state_dirs)
+        Self::preflight_backend_identity_with_profile(backend, backend.profile(), state_dir, store_dir, base_state_dirs)
     }
 
-    fn preflight_backend_identity_for_profile(
+    pub(crate) fn preflight_backend_identity_with_profile(
         backend: StoreBackend,
         profile: StoreBackendCapabilityProfile,
         state_dir: &Path,
@@ -1614,25 +1614,48 @@ impl StoreHandle {
         roots::list_roots(&self.state_dir)
     }
 
-    pub async fn pin_retained_root(&self, logical_path: &str) -> Result<GcRootRecord, Error> {
+    pub async fn pin_retained_root(
+        &self,
+        logical_path: &str,
+        owner_label: &str,
+        reason: &str,
+    ) -> Result<GcRootRecord, Error> {
         if let Some(store) = &self.casita_store {
             store.require_recovered_gc()?;
         }
         self.revalidate_overlay_bases()?;
-        let root =
-            roots::pin_root(&self.state_dir, &self.store_dir, self.pathinfo_service.as_ref(), logical_path).await?;
+        let root = roots::pin_root_for_owner(
+            &self.state_dir,
+            &self.store_dir,
+            self.pathinfo_service.as_ref(),
+            logical_path,
+            owner_label,
+            reason,
+        )
+        .await?;
         self.revalidate_overlay_bases()?;
         Ok(root)
     }
 
-    pub fn unpin_retained_root(&self, logical_path: &str) -> Result<Option<GcRootRecord>, Error> {
+    pub fn unpin_retained_root(
+        &self,
+        logical_path: &str,
+        owner_label: &str,
+        reason: Option<&str>,
+    ) -> Result<Option<GcRootRecord>, Error> {
         if let Some(store) = &self.casita_store {
             store.require_recovered_gc()?;
         }
-        roots::unpin_root(&self.state_dir, roots::LogicalStorePathRef {
-            logical_path,
-            store_dir: &self.store_dir,
-        })
+        let owner = roots::operator_owner(owner_label)?;
+        roots::unpin_root_for_owner_reason(
+            &self.state_dir,
+            roots::LogicalStorePathRef {
+                logical_path,
+                store_dir: &self.store_dir,
+            },
+            &owner,
+            reason,
+        )
     }
 
     pub fn set_root_registration(&mut self, registration: Option<crate::retention::RootRegistration>) {
@@ -1778,7 +1801,17 @@ impl StoreHandle {
 
         let write_task = tokio::spawn(async move { write_nar(writer, &node, blob_service, directory_service).await });
 
-        tokio::io::copy(&mut reader, dest).await.map_err(|e| Error::Export(format!("streaming NAR: {e}")))?;
+        // r[impl mantle.io_fault.fixtures] Fault the actual NAR stream write
+        // at the store adapter, without changing the production copy.
+        #[cfg(test)]
+        let copy_result = async {
+            let count = fault_injection::fallible!(tokio::io::copy(&mut reader, dest).await);
+            Ok::<_, std::io::Error>(count)
+        }
+        .await;
+        #[cfg(not(test))]
+        let copy_result = tokio::io::copy(&mut reader, dest).await;
+        copy_result.map_err(|e| Error::Export(format!("streaming NAR: {e}")))?;
 
         write_task
             .await
@@ -7544,7 +7577,7 @@ mod tests {
             overlay_composition: false,
             ..StoreBackend::Snix.profile()
         };
-        let error = StoreConfig::preflight_backend_identity_for_profile(
+        let error = StoreConfig::preflight_backend_identity_with_profile(
             StoreBackend::Snix,
             no_overlay_profile,
             &writable,
@@ -8063,7 +8096,10 @@ mod tests {
         let base_path = test_output("stale-gc-base", STALE_BASE_DIGEST_BYTE);
         create_base_store(base_dir.path(), store_dir, &base_path).await;
         let mut handle = create_overlay_handle(overlay_dir.path(), base_dir.path(), store_dir).await;
-        handle.pin_retained_root(&base_path.to_absolute_path()).await.unwrap();
+        handle
+            .pin_retained_root(&base_path.to_absolute_path(), "operator", "explicit-pin-registered")
+            .await
+            .unwrap();
         let plan = handle.garbage_collect(None).await.unwrap();
         set_test_tree_read_only(base_dir.path(), false);
         std::fs::write(base_dir.path().join("stale-gc-marker"), b"changed").unwrap();
@@ -8107,7 +8143,10 @@ mod tests {
         let base_path = test_output("reverse-base", 48);
         create_base_store_with_references(base_dir.path(), store_dir, &base_path, vec![overlay_path.clone()]).await;
         let mut handle = create_overlay_handle(overlay_dir.path(), base_dir.path(), store_dir).await;
-        handle.pin_retained_root(&base_path.to_absolute_path()).await.unwrap();
+        handle
+            .pin_retained_root(&base_path.to_absolute_path(), "operator", "explicit-pin-registered")
+            .await
+            .unwrap();
 
         let error = handle.garbage_collect(None).await.unwrap_err();
         assert!(error.to_string().contains("BaseToOverlayReference"));

@@ -7,7 +7,9 @@
 //! This module is pure data — no I/O, no async, no Builder references.
 //! State transitions are validated and return errors on invalid moves.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use nix_compat::derivation::Derivation;
@@ -373,6 +375,78 @@ impl GoalRegistry {
             })
             .map(|(k, _)| k.clone())
             .collect()
+    }
+    /// Mark watched roots no longer selected and find every now-unreachable
+    /// goal. A completed dependency is still reachable through its declared
+    /// derivation edge even if it was already done when the waiter was wired.
+    /// The Worker must stop stale running sandboxes before calling
+    /// `watch_remove_stale`; this method only computes the transition.
+    pub fn watch_retract_roots(&mut self, keep_roots: &BTreeSet<String>) -> Result<Vec<String>, Error> {
+        for (key, goal) in &mut self.goals {
+            if goal.is_root && !keep_roots.contains(key) {
+                goal.is_root = false;
+            }
+        }
+        let mut reachable = BTreeSet::new();
+        let mut pending = VecDeque::new();
+        for key in keep_roots {
+            if self.goals.get(key).is_some_and(|goal| goal.is_root) {
+                reachable.insert(key.clone());
+                pending.push_back(key.clone());
+            }
+        }
+        while let Some(key) = pending.pop_front() {
+            if reachable.len() > MAX_GOALS as usize {
+                return Err(Error::Store("watch reachable goal bound exceeded".to_string()));
+            }
+            let goal = self
+                .goals
+                .get(&key)
+                .ok_or_else(|| Error::Store("watch goal vanished while traversing".to_string()))?;
+            let declared = goal
+                .derivation
+                .iter()
+                .flat_map(|derivation| derivation.input_derivations.keys().map(StorePath::to_absolute_path));
+            for dependency in declared.chain(goal.waitees.iter().cloned()).chain(goal.producer_key.iter().cloned()) {
+                if self.goals.contains_key(&dependency) && reachable.insert(dependency.clone()) {
+                    pending.push_back(dependency);
+                }
+            }
+        }
+        Ok(self
+            .goals
+            .keys()
+            .filter(|key| !reachable.contains(*key))
+            .cloned()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect())
+    }
+
+    /// Remove only goals whose watched sandbox reservation has already been
+    /// observed released. Retained waiters must never depend on a removed key.
+    pub fn watch_remove_stale(&mut self, stale: &[String]) -> Result<(), Error> {
+        let stale_keys = stale.iter().cloned().collect::<BTreeSet<_>>();
+        for (key, goal) in &self.goals {
+            if !stale_keys.contains(key)
+                && (goal.waitees.iter().any(|dependency| stale_keys.contains(dependency))
+                    || goal
+                        .derivation
+                        .iter()
+                        .flat_map(|derivation| derivation.input_derivations.keys())
+                        .any(|dependency| stale_keys.contains(&dependency.to_absolute_path()))
+                    || goal.producer_key.as_ref().is_some_and(|producer| stale_keys.contains(producer)))
+            {
+                return Err(Error::Store(format!("watch retained goal still depends on retracted goal: {key}")));
+            }
+        }
+        for key in stale {
+            self.goals.remove(key);
+        }
+        for goal in self.goals.values_mut() {
+            goal.waiters.retain(|waiter| !stale_keys.contains(waiter));
+        }
+        Ok(())
     }
 }
 
@@ -967,5 +1041,44 @@ mod tests {
 
         assert!(!is_new);
         assert_eq!(goal.drv_path, sp);
+    }
+    #[test]
+    fn watch_retraction_keeps_completed_shared_dependency_and_rejects_unsafe_removal() {
+        let retained = fake_sp("retained.drv");
+        let obsolete = fake_sp("obsolete.drv");
+        let shared = fake_sp("shared.drv");
+        let only_obsolete = fake_sp("only-obsolete.drv");
+        let mut retained_drv = make_drv();
+        retained_drv.input_derivations.insert(shared.clone(), BTreeSet::from(["out".to_string()]));
+        let mut obsolete_drv = make_drv();
+        obsolete_drv.input_derivations.insert(shared.clone(), BTreeSet::from(["out".to_string()]));
+        obsolete_drv.input_derivations.insert(only_obsolete.clone(), BTreeSet::from(["out".to_string()]));
+        let mut registry = GoalRegistry::new();
+        registry
+            .insert(retained.to_absolute_path(), Goal::new_root(retained.clone(), retained_drv))
+            .unwrap();
+        registry
+            .insert(obsolete.to_absolute_path(), Goal::new_root(obsolete.clone(), obsolete_drv))
+            .unwrap();
+        let mut finished_shared = Goal::new(shared.clone(), make_drv());
+        finished_shared.inspect(vec![]).unwrap();
+        finished_shared.mark_building().unwrap();
+        finished_shared.mark_done().unwrap();
+        registry.insert(shared.to_absolute_path(), finished_shared).unwrap();
+        registry
+            .insert(only_obsolete.to_absolute_path(), Goal::new(only_obsolete.clone(), make_drv()))
+            .unwrap();
+
+        let stale = registry.watch_retract_roots(&BTreeSet::from([retained.to_absolute_path()])).unwrap();
+        assert_eq!(
+            stale.iter().cloned().collect::<BTreeSet<_>>(),
+            BTreeSet::from([obsolete.to_absolute_path(), only_obsolete.to_absolute_path()])
+        );
+        assert!(registry.watch_remove_stale(&[shared.to_absolute_path()]).is_err());
+        assert!(registry.contains(&shared.to_absolute_path()));
+        registry.watch_remove_stale(&stale).unwrap();
+        assert_eq!(registry.root_count(), 1);
+        assert!(registry.contains(&shared.to_absolute_path()));
+        assert!(!registry.contains(&only_obsolete.to_absolute_path()));
     }
 }

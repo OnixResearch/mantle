@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mantle:service-readiness:v1",
+  "title": "Mantle long-lived service readiness v1",
+  "description": "Coordination state only; never a build, attestation, or release evidence schema. Cross-record uniqueness, graph acyclicity, declared user states, and derived-state consistency are pure-core checks beyond JSON Schema.",
+  "oneOf": [
+    { "$ref": "#/$defs/input" },
+    { "$ref": "#/$defs/report" }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+    "policy": { "enum": ["always", "on-error", "all", "never"] },
+    "state": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+    "user_state": {
+      "allOf": [
+        { "$ref": "#/$defs/state" },
+        { "not": { "enum": ["started", "ready", "complete", "failed"] } }
+      ]
+    },
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "stage_requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["require_action_reconciliation", "require_v2_receipt"],
+      "properties": {
+        "require_action_reconciliation": { "type": "boolean" },
+        "require_v2_receipt": { "type": "boolean" }
+      }
+    },
+    "proof_completion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage_evidence_digest_blake3", "output_digest_blake3", "execution_verified", "action_reconciled", "v2_receipt_verified"],
+      "properties": {
+        "stage_evidence_digest_blake3": { "$ref": "#/$defs/digest" },
+        "output_digest_blake3": { "$ref": "#/$defs/digest" },
+        "execution_verified": { "type": "boolean" },
+        "action_reconciled": { "type": "boolean" },
+        "v2_receipt_verified": { "type": "boolean" }
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "depends_on", "user_states", "restart_policy", "stage_requirements"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["service", "proof-stage"] },
+        "depends_on": { "type": "array", "maxItems": 128, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+        "user_states": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "$ref": "#/$defs/user_state" } },
+        "restart_policy": { "oneOf": [{ "$ref": "#/$defs/policy" }, { "type": "null" }] },
+        "stage_requirements": { "oneOf": [{ "$ref": "#/$defs/stage_requirements" }, { "type": "null" }] }
+      },
+      "allOf": [{
+        "if": { "properties": { "kind": { "const": "service" } }, "required": ["kind"] },
+        "then": { "properties": { "restart_policy": { "$ref": "#/$defs/policy" }, "stage_requirements": { "type": "null" } } },
+        "else": { "properties": { "restart_policy": { "type": "null" }, "stage_requirements": { "$ref": "#/$defs/stage_requirements" } } }
+      }]
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "generation", "states", "exit", "request_acknowledged", "proof_completion"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "generation": { "type": "integer", "minimum": 1, "maximum": 4294967295 },
+        "states": { "type": "array", "maxItems": 36, "uniqueItems": true, "items": { "$ref": "#/$defs/state" } },
+        "exit": { "enum": [null, "normal", "abnormal"] },
+        "request_acknowledged": { "type": "boolean" },
+        "proof_completion": { "oneOf": [{ "$ref": "#/$defs/proof_completion" }, { "type": "null" }] }
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "components", "observations"],
+      "properties": {
+        "schema": { "const": "mantle-service-readiness-v1" },
+        "components": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/component" } },
+        "observations": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/observation" } }
+      }
+    },
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "generation", "states", "restart_policy", "restart_action", "ready", "blocked_by"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "generation": { "type": ["integer", "null"], "minimum": 1, "maximum": 4294967295 },
+        "states": { "type": "array", "maxItems": 36, "uniqueItems": true, "items": { "$ref": "#/$defs/state" } },
+        "restart_policy": { "oneOf": [{ "$ref": "#/$defs/policy" }, { "type": "null" }] },
+        "restart_action": { "enum": [null, "none", "component", "group"] },
+        "ready": { "type": "boolean" },
+        "blocked_by": { "type": "array", "maxItems": 128, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+      }
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "classification", "evidence_eligible", "components"],
+      "properties": {
+        "schema": { "const": "mantle-service-readiness-v1" },
+        "classification": { "const": "coordination-state" },
+        "evidence_eligible": { "const": false },
+        "components": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/row" } }
+      }
+    }
+  }
+}

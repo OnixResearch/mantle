@@ -24,12 +24,13 @@ document says who retained a path or why. The migration path marks old roots
 
 ## Contract and component ownership
 
-- Pure core: record validation, canonical bytes, BLAKE3 record identity,
-  deterministic merge, owner-scoped release planning, and plan-input
-  construction over in-memory values.
-- Shell: directory reads and writes, atomic publication of one record,
-  legacy-file read for migration, and command rendering.
-- Policy: the record schema is versioned. Unknown versions fail closed.
+- Pure core: bounded record fact validation, BLAKE3 identity over canonical
+  bytes, deterministic merge, owner-scoped release planning, and GC plan-input
+  selection over in-memory values.
+- Shell: versioned record validation, canonical serde JSON encoding, directory
+  reads and atomic single-record writes, explicit legacy-file migration, and
+  command rendering.
+- Policy: unknown record versions and invalid identities fail closed.
 
 ## Decisions
 
@@ -42,13 +43,25 @@ identity of its canonical bytes.
 writers cannot overwrite each other, and the filename is the integrity check.
 This follows the reviewed Synit user-settings shape.
 
+Automatic re-registration of a non-explicit-pin root replaces the same
+owner's prior declaration for that path even when renewal or generation
+advancement changes its transition reason. Operator pins under distinct
+explicit reasons remain independent.
+
+Renewal and generation decisions consult the owner's own persisted declaration
+before the single-path merged reporting view; another owner cannot reset its
+renewal count or change its transition classification.
+
 ### Decision: Owner-scoped release only
 
-**Choice:** A release command removes records that name the caller's owner. It
-does not remove records of another owner.
+**Choice:** A release command removes the one validated interest matching its
+requested owner, path, and (when ambiguous) exact reason. It does not delete a
+different owner's record.
 
-**Rationale:** An operator action must not silently drop a CI or proof
-retention. Cross-owner cleanup becomes an explicit administrative action.
+**Rationale:** Independently declared interests must survive other owners'
+releases. Operator `--owner` is a local label, not authenticated identity;
+filesystem write access grants control of unsigned records. This is not a
+multi-tenant authorization boundary.
 
 ### Decision: GC consumes a merged view, not the record set
 

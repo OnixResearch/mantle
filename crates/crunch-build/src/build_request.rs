@@ -50,6 +50,7 @@ use crate::HermeticityMode;
 use crate::declared_profile_environment;
 use crate::environment_policy;
 use crate::execution_profile::NIX_FOREIGN_PROFILE_ID;
+use crate::finish_gates;
 use crate::network_policy::CompatibilityNetworkPolicy;
 use crate::network_policy::plan_network_policy;
 use crate::plan_output_binding::PLAN_OUTPUT_BINDINGS_ENV_KEY;
@@ -250,6 +251,7 @@ fn normalized_environment_for_profile(
         declared_environment
     };
     environment_vars.remove(PLAN_OUTPUT_BINDINGS_ENV_KEY);
+    environment_vars.remove(finish_gates::POLICY_ENV);
     let action_name = environment_policy::action_name_from_environment(&derivation.environment);
     let report = environment_policy::success_report(action_name, &environment_vars);
     Ok(NormalizedBuildEnvironment {
@@ -435,13 +437,56 @@ pub(crate) fn build_request_from_environment(
     debug_assert!(!store_dir.is_empty(), "store_dir must not be empty");
     debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute path");
 
-    let command_args = build_command_args(derivation, store_dir);
+    let mut command_args = build_command_args(derivation, store_dir);
+    let gates = if let Some(declared) = derivation.environment.get(finish_gates::POLICY_ENV) {
+        let declared = std::str::from_utf8(declared.as_ref())
+            .map_err(|_| crate::Error::Store("finish-gate declaration must be UTF-8".into()))?;
+        Some(finish_gates::parse_gate(declared).map_err(crate::Error::Store)?)
+    } else {
+        None
+    };
+    if let Some(gates) = &gates {
+        let shell_builder = command_args.first().is_some_and(|builder| {
+            builder == "/bin/sh" || builder.ends_with("/bin/bash") || builder.ends_with("/bin/sh")
+        });
+        if command_args.len() != 3 || !shell_builder || command_args[1] != "-c" {
+            return Err(crate::Error::Store("finish gates require a declared shell -c builder".into()));
+        }
+        let shell = finish_gates::render_finish_shell(gates).map_err(crate::Error::Store)?;
+        // Shell source is a positional argument, never text interpolated into
+        // the gate wrapper. `exit`, `exec`, `)`, and heredocs stay in the
+        // builder child and cannot change the post-install control flow.
+        let builder_program = command_args[0].clone();
+        let builder_script = std::mem::take(&mut command_args[2]);
+        let wrapper_prefix = concat!(
+            "if \"$0\" -c \"$1\"; then finish_gate_builder_status=0; else finish_gate_builder_status=$?; fi\n",
+            "if [ \"$finish_gate_builder_status\" -ne 0 ]; then\n",
+            "  printf 'finish-gate builder failed before gates: status=%s\\n' \"$finish_gate_builder_status\" >&2\n",
+            "  exit \"$finish_gate_builder_status\"\n",
+            "fi\n",
+        );
+        let mut wrapper = String::with_capacity(wrapper_prefix.len() + shell.len());
+        wrapper.push_str(wrapper_prefix);
+        wrapper.push_str(&shell);
+        command_args[2] = wrapper;
+        command_args.reserve(2);
+        command_args.push(builder_program);
+        command_args.push(builder_script);
+    }
     let constraints = build_constraints(derivation, execution_profile, allow_network);
     let refscan_needles = build_refscan_needles(derivation, inputs);
     let environment_vars = replace_environment_placeholders(environment_vars, &derivation.outputs, store_dir);
     let structured_attrs = materialize_structured_attrs(environment_vars, &derivation.outputs, store_dir)?;
     let pass_as_file = expand_pass_as_file(structured_attrs.environment_vars)?;
-    let additional_files = merge_additional_files(structured_attrs.additional_files, pass_as_file.additional_files)?;
+    let mut additional_files =
+        merge_additional_files(structured_attrs.additional_files, pass_as_file.additional_files)?;
+    if gates.as_ref().is_some_and(|gates| gates.dlopen.enabled) {
+        #[cfg(mantle_native_dlopen)]
+        additional_files.push(AdditionalFile {
+            path: PathBuf::from("build/mantle-finish-dlopen-audit.so"),
+            contents: Bytes::from_static(finish_gates::AUDIT_MODULE),
+        });
+    }
 
     // Tiger Style: assert command_args has at least the builder.
     debug_assert!(!command_args.is_empty());
@@ -506,7 +551,6 @@ pub(crate) fn bind_plan_output_request(
     }
     Ok(())
 }
-
 fn replace_environment_placeholders(
     mut environment_vars: BTreeMap<String, Vec<u8>>,
     outputs: &BTreeMap<String, Output>,
@@ -852,7 +896,11 @@ fn overlay_derivation_environment(
     assert!(!environment_vars.is_empty(), "sandbox env must be pre-populated");
     let mut audit_events = Vec::with_capacity(derivation.environment.len());
     for (key, value) in &derivation.environment {
-        if key == WORKSPACE_POLICY_ENV || key == WORKSPACE_LEASE_ENV || key == PLAN_OUTPUT_BINDINGS_ENV_KEY {
+        if key == WORKSPACE_POLICY_ENV
+            || key == WORKSPACE_LEASE_ENV
+            || key == PLAN_OUTPUT_BINDINGS_ENV_KEY
+            || key == finish_gates::POLICY_ENV
+        {
             continue;
         }
         reject_denied_strict_environment_key(derivation, hermeticity_mode, environment_vars.len(), key)?;

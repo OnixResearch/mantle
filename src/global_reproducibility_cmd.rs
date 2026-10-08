@@ -25,33 +25,22 @@ pub(crate) struct GlobalReproducibilityCommandOutput {
     pub report_path: Option<PathBuf>,
 }
 
-#[expect(
-    tigerstyle::too_many_parameters,
-    reason = "the protected release command caller retains this compatibility boundary"
-)]
-pub(crate) fn cmd_global_reproducibility(
-    current_dir: &Path,
-    json: bool,
-    universe_path: PathBuf,
-    policy_path: PathBuf,
-    evidence_paths: Vec<PathBuf>,
-    report_path: Option<PathBuf>,
-) -> Result<(), RunError> {
-    debug_assert!(!GLOBAL_REPRODUCIBILITY_OUTPUT_KIND.is_empty());
-    debug_assert!(!BLOCKED_GLOBAL_REPRODUCIBILITY_MESSAGE.is_empty());
-    let output = evaluate_global_reproducibility_from_paths(
-        current_dir,
-        universe_path,
-        policy_path,
-        evidence_paths,
-        report_path,
-    )?;
-    if json {
-        print_global_reproducibility_json(&output)?;
-    } else {
-        print_global_reproducibility_human(&output);
+impl GlobalReproducibilityCommandOutput {
+    pub(crate) fn is_eligible(&self) -> bool {
+        self.report.claim_class == GlobalReproducibilityClaimClass::Eligible
     }
-    if output.report.claim_class != GlobalReproducibilityClaimClass::Eligible {
+}
+
+pub(crate) fn render_global_reproducibility(
+    output: &GlobalReproducibilityCommandOutput,
+    json: bool,
+) -> Result<(), RunError> {
+    if json {
+        print_global_reproducibility_json(output)?;
+    } else {
+        print_global_reproducibility_human(output);
+    }
+    if !output.is_eligible() {
         return Err(RunError::Internal(format!(
             "{BLOCKED_GLOBAL_REPRODUCIBILITY_MESSAGE}: {} blocker(s)",
             output.report.blockers.len()

@@ -36,18 +36,22 @@ const RAW_SERVICE_ACCESSORS: [&str; 4] = [
     ".remote_pathinfo()",
 ];
 
+/// Root mutation sessions must remain inside crunch-store, including adapters.
+const CASITA_SESSION_MUTATIONS: [&str; 2] = [".mutation_session(", ".publish_if_roots_match("];
+
 /// Writable store bookkeeping reserved to declared owners.
 const WRITABLE_OPERATIONS: [&str; 3] =
     ["insert_output_node(", "insert_built_output(", "insert_ca_mapping("];
 
 /// Casita types must not cross the store-shell boundary, even through a
 /// declared Snix adapter. The module path also catches qualified type names.
-const CASITA_TYPE_MARKERS: [&str; 4] = ["casita::", "CasitaStore", "LocalRepository", "MutationSession"];
+const CASITA_TYPE_MARKERS: [&str; 5] =
+    ["casita::", "CasitaStore", "LocalRepository", "MutationSession", "UnrootedFilesystemImport"];
 
 /// Directories scanned for application-shell violations.
 const SCAN_ROOTS: [&str; 2] = ["src", "crates"];
 
-/// Store-internal crate: raw services are legal here.
+/// Only the actual store shell may depend directly on Casita.
 const STORE_CRATE: &str = "crunch-store";
 
 /// Declared store-backed adapter that owns a private Snix store instance.
@@ -214,12 +218,12 @@ fn check_file(root: &Path, path: &Path, source: &str, report: &mut Report) {
                 detail: format!("Casita type `{marker}` outside the store shell"),
             });
         }
-        if contains_marker(line, ".mutation_session(") {
+        if let Some(mutation) = CASITA_SESSION_MUTATIONS.iter().find(|mutation| contains_marker(line, mutation)) {
             report.violations.push(Violation {
                 path: relative.clone(),
                 line: line_index + 1,
                 kind: "casita-session-escape",
-                detail: "Casita mutation session outside the store shell".to_string(),
+                detail: format!("Casita root mutation `{mutation}` outside the store shell"),
             });
         }
         if is_declared_adapter {
@@ -396,6 +400,20 @@ async fn construct() {
 }
 "#;
 
+const NEGATIVE_CASITA_UNQUALIFIED_TYPE: &str = r#"
+use casita::experimental::RootChange;
+fn escape() {
+    let _repository = LocalRepository::local("state/casita");
+}
+"#;
+
+const NEGATIVE_CASITA_DIRECT_SESSION: &str = r#"
+async fn escape(repository: &Repository) {
+    let session = repository.mutation_session().await;
+    session.publish_if_roots_match(vec![], vec![], vec![]).await;
+}
+"#;
+
 fn write_fixture(dir: &Path, name: &str, body: &str) -> PathBuf {
     let path = dir.join(name);
     std::fs::create_dir_all(path.parent().expect("fixture has parent")).expect("create fixture parent");
@@ -463,6 +481,19 @@ fn self_test() {
         count_kind(&casita_in_adapter.violations, "casita-type-escape"),
         3,
         "declared Snix adapter cannot name Casita types: {casita_in_adapter}"
+    );
+
+    let unqualified_type = fixture_report(BTreeMap::from([("lib.rs", NEGATIVE_CASITA_UNQUALIFIED_TYPE)]));
+    assert_eq!(
+        count_kind(&unqualified_type.violations, "casita-type-escape"),
+        2,
+        "unqualified vendor types must not escape: {unqualified_type}"
+    );
+    let direct_session = fixture_report(BTreeMap::from([("lib.rs", NEGATIVE_CASITA_DIRECT_SESSION)]));
+    assert_eq!(
+        count_kind(&direct_session.violations, "casita-session-escape"),
+        2,
+        "direct root mutation must not escape: {direct_session}"
     );
 
     let raw = fixture_report(BTreeMap::from([("lib.rs", NEGATIVE_RAW_SERVICE)]));

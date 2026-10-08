@@ -6,9 +6,8 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use mantle_rust_plan_core::BuildProfile;
-use mantle_rust_plan_core::PackageFacts;
-use mantle_rust_plan_core::UnitEffect;
+use mantle_rust_plan_core::ExistingUnitEffect;
+use mantle_rust_plan_core::UnitObservation;
 
 /// Typed adapter failure classes shared by every port.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,93 +29,187 @@ impl AdapterError {
     }
 }
 
-/// Request for workspace facts.
+/// Selected workspace and profile inputs for receipt capture.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkspaceFactsRequest {
     /// Root package names requested by the operator.
     pub roots: Vec<String>,
-    pub profile: BuildProfile,
+    /// Exact accepted Cargo profile label, including test, bench, or custom profiles.
+    pub profile: String,
 }
 
-/// Admitted workspace facts returned by a facts port.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkspaceFactsView {
-    pub packages: Vec<PackageFacts>,
-    /// Requested features per package, already normalized by the adapter.
-    pub feature_requests: Vec<mantle_rust_plan_core::PackageFeatureRequest>,
-}
-
-/// Port: load bounded workspace facts.
+/// CLI errors are deliberately not capability errors:
+///
+/// ```compile_fail
+/// use mantle_rust_plan_app::{CompilerFacts, WorkspaceFactsRequest, WorkspaceFactsSource};
+/// struct RunError;
+/// struct CliWorkspace;
+/// impl WorkspaceFactsSource for CliWorkspace {
+///     fn load_workspace_facts(
+///         &mut self,
+///         _: &WorkspaceFactsRequest,
+///         _: Option<&str>,
+///         _: &CompilerFacts,
+///     ) -> Result<(), RunError> {
+///         unreachable!()
+///     }
+/// }
+/// ```
 pub trait WorkspaceFactsSource {
-    fn load_workspace_facts(&mut self, request: &WorkspaceFactsRequest) -> Result<WorkspaceFactsView, AdapterError>;
+    /// Materialize the accepted receipt once from actual captured tool values.
+    fn load_workspace_facts(
+        &mut self,
+        request: &WorkspaceFactsRequest,
+        cargo_version: Option<&str>,
+        compiler: &CompilerFacts,
+    ) -> Result<(), AdapterError>;
 }
 
-/// Request for Cargo oracle material.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OracleCaptureRequest {
-    pub roots: Vec<String>,
-    pub profile: BuildProfile,
+/// Borrowed request for Cargo metadata and the unit graph. The adapter keeps
+/// decoded host records privately for the subsequent workspace-facts stage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OracleCaptureRequest<'a> {
+    pub roots: &'a [String],
+    pub profile: &'a str,
 }
 
-/// Cargo oracle facts supplied as external evidence.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OracleFacts {
-    /// Canonical oracle identity supplied by the adapter.
-    pub oracle_identity: String,
-    /// Package keys the oracle selected, in canonical order.
-    pub selected_packages: Vec<String>,
-}
-
-/// Port: capture Cargo oracle material for parity evidence.
+/// Port: inspect the selected Cargo binary, then (after compiler inspection)
+/// capture and decode metadata and the unit graph. The no-Cargo path calls
+/// neither method. Decoded Cargo JSON remains private to the shell adapter.
 pub trait CargoOracleCapture {
-    fn capture_oracle(&mut self, request: &OracleCaptureRequest) -> Result<OracleFacts, AdapterError>;
+    fn inspect_cargo_version(&mut self) -> Result<String, AdapterError>;
+    fn capture_metadata_and_graph(&mut self, request: &OracleCaptureRequest<'_>) -> Result<(), AdapterError>;
 }
 
-/// Request for compiler inspection facts.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompilerInspectionRequest {
-    pub profile: BuildProfile,
+/// Request for compiler inspection without copying the profile label.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CompilerInspectionRequest<'a> {
+    pub profile: &'a str,
 }
 
-/// Compiler facts observed by an adapter.
+/// Actual selected rustc version output, consumed by receipt capture.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilerFacts {
-    /// Canonical compiler identity supplied by the adapter.
-    pub compiler_identity: String,
-    /// Target triple the compiler emits for.
-    pub target_triple: String,
+    pub rustc_version_verbose: String,
 }
 
-/// Port: inspect the selected compiler.
+/// Port: inspect the selected compiler before metadata or native workspace
+/// reads, matching the accepted CLI tool order.
 pub trait CompilerInspection {
-    fn inspect_compiler(&mut self, request: &CompilerInspectionRequest) -> Result<CompilerFacts, AdapterError>;
+    fn inspect_compiler(&mut self, request: &CompilerInspectionRequest<'_>) -> Result<CompilerFacts, AdapterError>;
 }
 
-/// Request for one unit's cache state.
+/// What the cache-aware executor actually observed while executing this
+/// effect. `NotObserved` is not a miss: execution may have stopped before a
+/// lookup, or no cache decision may be attestable from the receipt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheObservation {
+    NotObserved,
+    Miss,
+    ReusedOutput,
+    RestoredLocal,
+    RestoredShared,
+}
+
+/// One actually executed process attempt, bound to its admitted invocation.
+/// Cache hits produce no process attempt.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CacheLookupRequest {
+pub struct ProcessAttempt {
+    pub effect: mantle_rust_plan_core::ResolvedUnitEffect,
+    pub observation: mantle_rust_plan_core::ResolvedProcessObservation,
+}
+
+/// One completed unit with actual cache and process observations. Selected
+/// produced artifact identities are digest strings read from the real receipt,
+/// not host paths or identities invented by this application.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnitExecutionResult {
+    pub observation: UnitObservation,
+    pub cache: CacheObservation,
+    pub process_attempts: Vec<ProcessAttempt>,
+    /// Present only when a restored compiler artifact precedes a build script.
+    pub restored_compiler: Option<mantle_rust_plan_core::RestoredCompilerArtifactObservation>,
+    /// Only a real successful build-script process with failed metadata parsing.
+    pub build_script_postprocess_failure: Option<BuildScriptPostprocessFailure>,
+    /// Real selected artifact digest identities made available to consumers.
+    pub produced_artifacts: Vec<String>,
+}
+
+/// Provenance for a metadata blocker after an actually successful build-script
+/// process; no compiler or build-script execution failure is fabricated.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BuildScriptPostprocessFailure {
+    pub effect_id: mantle_rust_plan_core::EffectId,
     pub unit_id: mantle_rust_plan_core::UnitId,
-    pub unit_blake3: mantle_rust_plan_core::Blake3Digest,
+    pub script_resolved_blake3: mantle_rust_plan_core::Blake3Digest,
+    pub blocker_class: String,
 }
 
-/// Cache lookup result for one unit.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CacheLookup {
-    /// The unit's outputs are already present under the requested identity.
-    Cached {
-        /// Canonical output identity supplied by the adapter.
-        output_identity: String,
+/// Preparation binds dependencies and toolchain policy before any cache
+/// access. A stopped preparation has an actual blocked receipt already held
+/// by the shell and therefore no prepared cache request.
+pub enum PrepareOutcome<P> {
+    Ready {
+        prepared: P,
+        facts: mantle_rust_plan_core::ResolvedUnitFacts,
     },
-    /// The unit must be executed.
-    NotCached,
+    Stopped(UnitExecutionResult),
 }
 
-/// Port: read the Rust build cache.
-pub trait RustCacheAccess {
-    fn lookup_unit(&mut self, request: &CacheLookupRequest) -> Result<CacheLookup, AdapterError>;
+/// A cache terminal result includes verified reuse, restored artifacts, or a
+/// blocked stale-cache receipt. Only `Miss` may proceed to a compiler attempt.
+pub enum CacheRestore<R> {
+    Terminal { receipt: R, cache: CacheObservation },
+    Miss,
 }
 
-/// Port: execute one planned unit effect.
+/// Port: real cache reuse and local/shared restoration over already prepared,
+/// core-admitted process facts. The shell privately owns its prepared inputs.
+///
+/// A CLI `RunError` cannot replace the typed cache capability failure:
+///
+/// ```compile_fail
+/// use mantle_rust_plan_app::{CacheRestore, RustCacheAccess};
+/// use mantle_rust_plan_core::ResolvedUnitEffect;
+/// struct RunError;
+/// struct HostCache;
+/// impl RustCacheAccess<(), ()> for HostCache {
+///     fn restore_or_miss(
+///         &mut self,
+///         _: &mut (),
+///         _: &ResolvedUnitEffect,
+///     ) -> Result<CacheRestore<()>, RunError> {
+///         unreachable!()
+///     }
+/// }
+/// ```
+pub trait RustCacheAccess<P, R> {
+    fn restore_or_miss(
+        &mut self,
+        prepared: &mut P,
+        effect: &mantle_rust_plan_core::ResolvedUnitEffect,
+    ) -> Result<CacheRestore<R>, AdapterError>;
+}
+
+/// Port: prepare the selected unit, run rustc only on a real cache miss, then
+/// finish topology bookkeeping for either restored or compiled artifacts.
 pub trait UnitExecutor {
-    fn execute_unit(&mut self, effect: &UnitEffect) -> Result<mantle_rust_plan_core::UnitObservation, AdapterError>;
+    type Prepared;
+    type Receipt;
+
+    fn prepare_unit(&mut self, effect: &ExistingUnitEffect) -> Result<PrepareOutcome<Self::Prepared>, AdapterError>;
+    fn execute_miss(
+        &mut self,
+        prepared: &mut Self::Prepared,
+        planned: &ExistingUnitEffect,
+        effect: mantle_rust_plan_core::ResolvedUnitEffect,
+    ) -> Result<Self::Receipt, AdapterError>;
+    fn finish_unit(
+        &mut self,
+        planned: &ExistingUnitEffect,
+        prepared: Self::Prepared,
+        receipt: Self::Receipt,
+        cache: CacheObservation,
+        primary: Option<&mantle_rust_plan_core::ResolvedUnitEffect>,
+    ) -> Result<UnitExecutionResult, AdapterError>;
 }

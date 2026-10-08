@@ -37,7 +37,7 @@ pub const BOOTSTRAP_SOURCE_PROFILE_NON_CLAIM: &str =
     "bootstrap source profile proves source/input availability and identity only";
 pub const MANTLE_SOURCE_REFRESH_NON_CLAIM: &str =
     "profile refresh proves bounded record preservation and source identity only, not proof completion";
-pub const SOURCE_NEXT_ACTION_EXPORT_IMPORT_PIN: &str = "mantle source bundle export --build-root <root.ncl> --to <bundle.json>; mantle source bundle import --from <bundle.json> --pin";
+pub const SOURCE_NEXT_ACTION_EXPORT_IMPORT_PIN: &str = "mantle source bundle import-store-path --logical <store-path> --physical <output-store/basename> --trusted-public-keys <pub> --pin (signed store roots); mantle source bundle export --build-root <root.ncl> --to <bundle.json>; mantle source bundle import --from <bundle.json> --pin (materialized fetch sources)";
 pub const SOURCE_NEXT_ACTION_REEXPORT_IMPORT_PIN: &str = "mantle source bundle export --build-root <root.ncl> --to <bundle.json>; mantle source bundle import --from <bundle.json> --pin";
 pub const SOURCE_NEXT_ACTION_PIN_IMPORTED: &str = "mantle source bundle import --from <bundle.json> --pin";
 pub const SOURCE_NEXT_ACTION_INSPECT_ADAPTER: &str =
@@ -67,6 +67,7 @@ const REQUIRED_HYDRATION_RECORD_CLASS_COUNT: usize = 3;
 const REQUIRED_HYDRATION_RECORD_COUNT_PER_CLASS: usize = 1;
 const OFFLINE_BLOCKER_CLASS_COUNT: usize = 6;
 const BLAKE3_HEX_BYTES: usize = 64;
+const NAR_SHA256_HEX_BYTES: usize = 64;
 const GIT_OBJECT_ID_HEX_BYTES: usize = 40;
 const SYMLINK_PAYLOAD_BYTES: u64 = 0;
 const MIN_SOURCE_FILE_CHUNK_COUNT: u32 = 2;
@@ -101,6 +102,7 @@ const PACKED_REF_PEELED_PREFIX: char = '^';
 const RECORD_CONTENT_FILES_MARKER: &[u8] = b"files\0";
 const RECORD_CONTENT_KIND_MARKER: &[u8] = b"kind\0";
 const RECORD_CONTENT_METADATA_MARKER: &[u8] = b"metadata\0";
+const RECORD_CONTENT_STORE_ATTESTATION_MARKER: &[u8] = b"store-path-attestation-v1\0";
 const SOURCE_OFFLINE_PREFLIGHT_EMPTY_MARKER: &[u8] = b"mantle-source-offline-preflight-empty\0";
 const SOURCE_OFFLINE_PREFLIGHT_STATE_MARKER: &[u8] = b"mantle-source-offline-preflight-state\0";
 const RECORD_METADATA_BUILDER_KEY: &str = "builder";
@@ -135,6 +137,16 @@ const BOOTSTRAP_PROFILE_CLASS_BOOTSTRAP_SOURCE: &str = "bootstrap-source";
 const BOOTSTRAP_PROFILE_CLASS_STAGEX_SOURCE_BUNDLE: &str = "stagex-source-bundle";
 const BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE: &str = "mantle-source";
 const BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS: &str = "vendored-cargo-inputs";
+const BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_PRODUCER: &str = "lock-vendor-producer";
+const BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_SELECTED_TABLE: &str = "lock-vendor-selected-table";
+const BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_ACQUISITION: &str = "lock-vendor-acquisition";
+const LOCK_VENDOR_PRODUCER_IDENTITY_KEY: &str = "lock_vendor_producer_identity";
+const LOCK_VENDOR_SELECTED_TABLE_IDENTITY_KEY: &str = "lock_vendor_selected_table_identity";
+const LOCK_VENDOR_LOCK_CONTENT_KEY: &str = "lock_vendor_cargo_lock_blake3";
+const LOCK_VENDOR_OUTPUT_STORE_PATH_KEY: &str = "lock_vendor_output_store_path";
+const LOCK_VENDOR_OUTPUT_CONTENT_KEY: &str = "lock_vendor_output_tree_blake3";
+const LOCK_VENDOR_EXCLUDED_PAYLOAD_KEY: &str = "lock_vendor_excluded_payload_bytes";
+const LOCK_VENDOR_EXCLUDED_CONTENT_KEY: &str = "lock_vendor_excluded_tree_blake3";
 const BOOTSTRAP_PROFILE_CLASS_TOOLCHAIN_SOURCE_ROOT: &str = "toolchain-source-root";
 const BOOTSTRAP_PROFILE_CLASS_PROOF_INPUT: &str = "proof-input";
 const BOOTSTRAP_PROFILE_INDEX_WIDTH: usize = 4;
@@ -199,6 +211,14 @@ fn empty_source_record_metadata() -> BTreeMap<String, String> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorePathAttestation {
+    pub logical_store_path: String,
+    pub nar_sha256: String,
+    pub nar_size: u64,
+    pub signed_fingerprint_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceRecord {
     pub kind: SourceRecordKind,
     pub identity: String,
@@ -211,6 +231,8 @@ pub struct SourceRecord {
     pub payload_bytes: u64,
     pub content_blake3: String,
     pub files: Vec<SourceFileEntry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub store_path_attestation: Option<StorePathAttestation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -289,6 +311,35 @@ pub struct SourceFetchOverridePlan {
     _scratch_dirs: Vec<tempfile::TempDir>,
 }
 
+const OFFLINE_VENDOR_CACHE_FORMAT: &str = "mantle-lock-vendor-offline-cache-v1";
+const OFFLINE_VENDOR_LOCAL_PROVENANCE: &str = "local-integrity-observation-v1";
+const MAX_OFFLINE_VENDOR_CACHE_BYTES: u64 = 2 * 1024 * 1024;
+
+/// A locally signed store inventory. Its signer attests checked bytes and
+/// reviewed pins, not upstream publisher identity or live URL availability.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OfflineVendorCache {
+    format: String,
+    provenance: String,
+    store_prefix: String,
+    source_bundle_store_path: String,
+    reviewed_table: String,
+    artifacts: Vec<OfflineVendorArtifact>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OfflineVendorArtifact {
+    name: String,
+    version: String,
+    sha256: String,
+    hash_mode: String,
+    fetch_url: String,
+    git_rev: Option<String>,
+    store_path: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum BootstrapSourceBundleMode {
@@ -297,6 +348,8 @@ pub enum BootstrapSourceBundleMode {
     SelfBuildProof,
     FreshCloneInputs,
     FreshCloneFixedPoint,
+    FreshCloneLockVendorInputs,
+    FreshCloneLockVendorFixedPoint,
     SourceBuiltFixedPoint,
 }
 
@@ -309,6 +362,8 @@ impl BootstrapSourceBundleMode {
             "fresh-clone-inputs" => Ok(Self::FreshCloneInputs),
             "fresh-clone-fixed-point" => Ok(Self::FreshCloneFixedPoint),
             "source-built-fixed-point" => Ok(Self::SourceBuiltFixedPoint),
+            "fresh-clone-lock-vendor-inputs" => Ok(Self::FreshCloneLockVendorInputs),
+            "fresh-clone-lock-vendor-fixed-point" => Ok(Self::FreshCloneLockVendorFixedPoint),
             other => Err(RunError::Internal(format!("unsupported bootstrap source profile mode '{other}'"))),
         }
     }
@@ -320,22 +375,27 @@ impl BootstrapSourceBundleMode {
             Self::SelfBuildProof => "self-build-proof",
             Self::FreshCloneInputs => "fresh-clone-inputs",
             Self::FreshCloneFixedPoint => "fresh-clone-fixed-point",
+            Self::FreshCloneLockVendorInputs => "fresh-clone-lock-vendor-inputs",
+            Self::FreshCloneLockVendorFixedPoint => "fresh-clone-lock-vendor-fixed-point",
             Self::SourceBuiltFixedPoint => "source-built-fixed-point",
         }
     }
 
     fn expected_provider_kind(self) -> &'static str {
         match self {
-            Self::LegacySeed | Self::SelfBuildProof | Self::FreshCloneInputs | Self::FreshCloneFixedPoint => {
-                BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED
-            }
+            Self::LegacySeed
+            | Self::SelfBuildProof
+            | Self::FreshCloneInputs
+            | Self::FreshCloneFixedPoint
+            | Self::FreshCloneLockVendorInputs
+            | Self::FreshCloneLockVendorFixedPoint => BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED,
             Self::SourceRoot => BOOTSTRAP_PROVIDER_KIND_SOURCE_ROOT,
             Self::SourceBuiltFixedPoint => BOOTSTRAP_PROVIDER_KIND_STAGEX_LINEAGE,
         }
     }
 
     fn requires_full_self_build_inputs(self) -> bool {
-        matches!(self, Self::SelfBuildProof | Self::SourceBuiltFixedPoint)
+        matches!(self, Self::SelfBuildProof | Self::SourceBuiltFixedPoint | Self::FreshCloneLockVendorFixedPoint)
     }
 
     fn requires_vendor_inputs(self) -> bool {
@@ -346,11 +406,24 @@ impl BootstrapSourceBundleMode {
     }
 
     fn requires_bootstrap_sources(self) -> bool {
-        !matches!(self, Self::FreshCloneInputs | Self::FreshCloneFixedPoint)
+        !matches!(
+            self,
+            Self::FreshCloneInputs
+                | Self::FreshCloneFixedPoint
+                | Self::FreshCloneLockVendorInputs
+                | Self::FreshCloneLockVendorFixedPoint
+        )
     }
 
     fn requires_supplemental_fetch_closure(self) -> bool {
-        matches!(self, Self::FreshCloneFixedPoint | Self::SourceBuiltFixedPoint)
+        matches!(
+            self,
+            Self::FreshCloneFixedPoint | Self::SourceBuiltFixedPoint | Self::FreshCloneLockVendorFixedPoint
+        )
+    }
+
+    fn is_lock_vendor(self) -> bool {
+        matches!(self, Self::FreshCloneLockVendorInputs | Self::FreshCloneLockVendorFixedPoint)
     }
 
     fn hydration_authority_classes(self) -> (&'static str, &'static str) {
@@ -359,6 +432,14 @@ impl BootstrapSourceBundleMode {
         }
         (BOOTSTRAP_PROFILE_CLASS_PROVIDER_ARCHIVE, BOOTSTRAP_PROFILE_CLASS_PROVIDER_MANIFEST)
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct LockVendorProfileInputs {
+    pub producer: PathBuf,
+    pub selected_table: PathBuf,
+    pub output: PathBuf,
+    pub excluded_vendor: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -373,6 +454,7 @@ pub struct BootstrapSourceBundleProfileInput {
     pub toolchain_source_root: Option<PathBuf>,
     pub proof_inputs: Vec<PathBuf>,
     pub supplemental_records: Vec<SourceRecord>,
+    pub lock_vendor: Option<LockVendorProfileInputs>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -382,6 +464,10 @@ pub struct BootstrapSourceBundleProfileReport {
     pub manifest_blake3: String,
     pub required_record_count: u32,
     pub provider_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excluded_vendor_payload_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lock_vendor_producer_identity: Option<String>,
     pub non_claim: &'static str,
 }
 
@@ -492,6 +578,7 @@ struct SourceRecordPathRequest<'a> {
     is_skipping_git_dir: bool,
     allow_large_file_chunks: bool,
     root_entry_allowlist: Option<&'a [&'a str]>,
+    skip_lock_vendor_table: bool,
 }
 
 struct BootstrapProfileRecordRequest<'a> {
@@ -544,6 +631,12 @@ struct GitPackedRefMatch<'a> {
     revision: &'a str,
 }
 
+pub struct SourceStoreTrust<'a> {
+    pub output_dir: &'a Path,
+    pub backend: crunch_store::StoreBackend,
+    pub trusted_keys: &'a [nix_compat::narinfo::VerifyingKey],
+}
+
 struct StorePathLookup<'a> {
     store_prefix: &'a str,
     logical_store_path: &'a str,
@@ -558,6 +651,224 @@ struct SourceBundleCliContext<'a> {
     state_dir: &'a Path,
     store_prefix: &'a str,
     is_json_output: bool,
+    store_trust: Option<SourceStoreTrust<'a>>,
+}
+
+/// Host authority selected by the source command before executing its plan.
+trait SourceBundleEffectPort {
+    fn capture(
+        &mut self,
+        sources: &[String],
+        roots: &[PathBuf],
+        imports: &[PathBuf],
+        prefix: &str,
+    ) -> Result<SourceBundleManifest, RunError>;
+    fn export(
+        &mut self,
+        sources: &[String],
+        roots: &[PathBuf],
+        imports: &[PathBuf],
+        context: &SourceBundleCliContext<'_>,
+        cached_fetches: &[String],
+        fetch_missing: bool,
+    ) -> Result<(SourceBundleManifest, u32), RunError>;
+    fn read(&mut self, path: &Path) -> Result<(SourceBundleManifest, u64), RunError>;
+    fn publish(&mut self, path: &Path, manifest: &SourceBundleManifest, replace: bool) -> Result<(), RunError>;
+    fn import(
+        &mut self,
+        manifest: &SourceBundleManifest,
+        state: &Path,
+        pin: bool,
+    ) -> Result<SourceBundleImportReport, RunError>;
+    fn hydrate(
+        &mut self,
+        manifest: &SourceBundleManifest,
+        digest: &str,
+        checkout: &Path,
+        state: &Path,
+    ) -> Result<SelfBuildHydrationReport, RunError>;
+    fn hydrate_lock_vendor(
+        &mut self,
+        manifest: &SourceBundleManifest,
+        digest: &str,
+        checkout: &Path,
+        state: &Path,
+        producer_output: &Path,
+    ) -> Result<SelfBuildHydrationReport, RunError>;
+    fn verify_state(
+        &mut self,
+        manifest: &SourceBundleManifest,
+        state: &Path,
+    ) -> Result<SourceBundleVerifyReport, RunError>;
+    fn preflight_roots(
+        &mut self,
+        roots: &[PathBuf],
+        imports: &[PathBuf],
+        context: &SourceBundleCliContext<'_>,
+    ) -> Result<SourceOfflinePreflightReport, RunError>;
+    fn preflight_manifest(
+        &mut self,
+        manifest: &SourceBundleManifest,
+        state: &Path,
+        trust: Option<&SourceStoreTrust<'_>>,
+    ) -> Result<SourceOfflinePreflightReport, RunError>;
+    fn bootstrap(
+        &mut self,
+        input: &BootstrapSourceBundleProfileInput,
+        prefix: &str,
+    ) -> Result<SourceBundleManifest, RunError>;
+    fn supplementary(&mut self, paths: &[PathBuf], refresh: bool) -> Result<Vec<SourceRecord>, RunError>;
+    fn refreshed_record(&mut self, path: &Path, identity: &str, prefix: &str) -> Result<SourceRecord, RunError>;
+    fn published_bytes(&mut self, path: &Path) -> Result<u64, RunError>;
+    fn confirm_bundle(&mut self, path: &Path, expected: &SourceBundleManifest) -> Result<u64, RunError>;
+    fn confirm_state(
+        &mut self,
+        manifest: &SourceBundleManifest,
+        state: &Path,
+        require_pin: bool,
+    ) -> Result<u32, RunError>;
+    fn confirm_vendor(&mut self, manifest: &SourceBundleManifest, checkout: &Path) -> Result<u64, RunError>;
+    fn render<T: Serialize>(&mut self, value: &T) -> Result<String, RunError>;
+}
+
+struct SourceBundleFilePort;
+
+impl SourceBundleEffectPort for SourceBundleFilePort {
+    fn capture(
+        &mut self,
+        sources: &[String],
+        roots: &[PathBuf],
+        imports: &[PathBuf],
+        prefix: &str,
+    ) -> Result<SourceBundleManifest, RunError> {
+        plan_from_cli_inputs(sources, roots, imports, prefix)
+    }
+    fn export(
+        &mut self,
+        sources: &[String],
+        roots: &[PathBuf],
+        imports: &[PathBuf],
+        context: &SourceBundleCliContext<'_>,
+        cached_fetches: &[String],
+        fetch_missing: bool,
+    ) -> Result<(SourceBundleManifest, u32), RunError> {
+        export_from_cli_inputs(
+            sources,
+            roots,
+            imports,
+            cached_fetches,
+            context.store_prefix,
+            context.state_dir,
+            fetch_missing,
+        )
+    }
+    fn read(&mut self, path: &Path) -> Result<(SourceBundleManifest, u64), RunError> {
+        let manifest = read_source_bundle(path)?;
+        let bytes = self.published_bytes(path)?;
+        Ok((manifest, bytes))
+    }
+    fn publish(&mut self, path: &Path, manifest: &SourceBundleManifest, replace: bool) -> Result<(), RunError> {
+        if replace {
+            write_source_bundle(path, manifest)
+        } else {
+            write_source_bundle_no_replace(path, manifest)
+        }
+    }
+    fn import(
+        &mut self,
+        manifest: &SourceBundleManifest,
+        state: &Path,
+        pin: bool,
+    ) -> Result<SourceBundleImportReport, RunError> {
+        import_source_bundle(manifest, state, pin)
+    }
+    fn hydrate(
+        &mut self,
+        manifest: &SourceBundleManifest,
+        digest: &str,
+        checkout: &Path,
+        state: &Path,
+    ) -> Result<SelfBuildHydrationReport, RunError> {
+        hydrate_self_build_source_bundle(manifest, digest, checkout, state)
+    }
+    fn hydrate_lock_vendor(
+        &mut self,
+        manifest: &SourceBundleManifest,
+        digest: &str,
+        checkout: &Path,
+        state: &Path,
+        producer_output: &Path,
+    ) -> Result<SelfBuildHydrationReport, RunError> {
+        hydrate_lock_vendor_source_bundle(manifest, digest, checkout, state, producer_output)
+    }
+    fn verify_state(
+        &mut self,
+        manifest: &SourceBundleManifest,
+        state: &Path,
+    ) -> Result<SourceBundleVerifyReport, RunError> {
+        verify_source_bundle_state(manifest, state)
+    }
+    fn preflight_roots(
+        &mut self,
+        roots: &[PathBuf],
+        imports: &[PathBuf],
+        context: &SourceBundleCliContext<'_>,
+    ) -> Result<SourceOfflinePreflightReport, RunError> {
+        offline_preflight_for_build_roots(
+            roots,
+            imports,
+            context.state_dir,
+            context.store_prefix,
+            context.store_trust.as_ref(),
+        )
+    }
+    fn preflight_manifest(
+        &mut self,
+        manifest: &SourceBundleManifest,
+        state: &Path,
+        trust: Option<&SourceStoreTrust<'_>>,
+    ) -> Result<SourceOfflinePreflightReport, RunError> {
+        offline_preflight_for_manifest(manifest, state, trust)
+    }
+    fn bootstrap(
+        &mut self,
+        input: &BootstrapSourceBundleProfileInput,
+        prefix: &str,
+    ) -> Result<SourceBundleManifest, RunError> {
+        plan_bootstrap_source_bundle_profile(input, prefix)
+    }
+    fn supplementary(&mut self, paths: &[PathBuf], refresh: bool) -> Result<Vec<SourceRecord>, RunError> {
+        if refresh {
+            read_refresh_supplemental_bundle_records(paths)
+        } else {
+            read_supplemental_bundle_records(paths)
+        }
+    }
+    fn refreshed_record(&mut self, path: &Path, identity: &str, prefix: &str) -> Result<SourceRecord, RunError> {
+        source_built_mantle_source_record(path, identity, prefix)
+    }
+    fn published_bytes(&mut self, path: &Path) -> Result<u64, RunError> {
+        fs::metadata(path)
+            .map(|metadata| metadata.len())
+            .map_err(|error| RunError::Internal(format!("reading source bundle {} metadata: {error}", path.display())))
+    }
+    fn confirm_bundle(&mut self, path: &Path, expected: &SourceBundleManifest) -> Result<u64, RunError> {
+        observed_source_bundle_bytes(path, expected)
+    }
+    fn confirm_state(
+        &mut self,
+        manifest: &SourceBundleManifest,
+        state: &Path,
+        require_pin: bool,
+    ) -> Result<u32, RunError> {
+        observed_imported_source_state(manifest, state, require_pin)
+    }
+    fn confirm_vendor(&mut self, manifest: &SourceBundleManifest, checkout: &Path) -> Result<u64, RunError> {
+        observed_hydrated_vendor_bytes(manifest, checkout)
+    }
+    fn render<T: Serialize>(&mut self, value: &T) -> Result<String, RunError> {
+        render_json(value)
+    }
 }
 
 #[cfg(test)]
@@ -788,6 +1099,7 @@ pub fn plan_bootstrap_source_bundle_profile(
         store_prefix,
     })?;
     append_optional_bootstrap_profile_records(&mut records, input, store_prefix)?;
+    append_lock_vendor_profile_records(&mut records, input, store_prefix)?;
     append_supplemental_profile_records(&mut records, input)?;
     append_bootstrap_profile_sequence(&mut records, BootstrapProfileSequenceRequest {
         paths: &input.proof_inputs,
@@ -810,6 +1122,9 @@ fn bootstrap_profile_records_capacity(input: &BootstrapSourceBundleProfileInput)
         .ok_or_else(|| RunError::Internal("bootstrap profile record capacity overflow".to_string()))?;
     profile_entries = profile_entries
         .checked_add(input.supplemental_records.len())
+        .ok_or_else(|| RunError::Internal("bootstrap profile record capacity overflow".to_string()))?;
+    profile_entries = profile_entries
+        .checked_add(usize::from(input.lock_vendor.is_some()) * 3)
         .ok_or_else(|| RunError::Internal("bootstrap profile record capacity overflow".to_string()))?;
     for is_present in [
         input.stagex_source_bundle.is_some(),
@@ -961,6 +1276,127 @@ fn append_optional_bootstrap_profile_records(
     Ok(())
 }
 
+fn read_lock_vendor_bounded(path: &Path, limit: usize) -> Result<Vec<u8>, RunError> {
+    let file = fs::File::open(path)
+        .map_err(|error| RunError::Internal(format!("opening lock-vendor input {}: {error}", path.display())))?;
+    let size = file
+        .metadata()
+        .map_err(|error| RunError::Internal(format!("reading lock-vendor input {} size: {error}", path.display())))?
+        .len();
+    if size > limit as u64 {
+        return Err(RunError::Internal(format!("lock-vendor input {} exceeds {limit} bytes", path.display())));
+    }
+    let mut bytes = Vec::with_capacity(size as usize);
+    file.take(limit as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| RunError::Internal(format!("reading lock-vendor input {}: {error}", path.display())))?;
+    if bytes.len() > limit {
+        return Err(RunError::Internal(format!("lock-vendor input {} grew beyond {limit} bytes", path.display())));
+    }
+    Ok(bytes)
+}
+
+/// Bind producer and selected lock rows, but keep the completed vendor tree
+/// outside the first-class source archive. The receipt records the omitted
+/// payload and the producer's content identity, not a copy of vendor files.
+fn append_lock_vendor_profile_records(
+    records: &mut Vec<SourceRecord>,
+    input: &BootstrapSourceBundleProfileInput,
+    store_prefix: &str,
+) -> Result<(), RunError> {
+    let Some(lock_vendor) = input.lock_vendor.as_ref() else {
+        return Ok(());
+    };
+    let source = input
+        .mantle_source
+        .as_deref()
+        .ok_or_else(|| RunError::Internal("lock-vendor profile is missing --mantle-source".to_string()))?;
+    let lock_path = source.join("Cargo.lock");
+    let lock = read_lock_vendor_bounded(&lock_path, mantle_lock_vendor_core::MAX_LOCK_BYTES as usize)?;
+    let table = read_lock_vendor_bounded(
+        &lock_vendor.selected_table,
+        mantle_lock_vendor_core::shared_table::MAX_TABLE_BYTES as usize,
+    )?;
+    let parsed = mantle_lock_vendor_core::shared_table::SharedHashTable::parse(&table)
+        .map_err(|error| RunError::Internal(format!("selected lock-vendor hash table: {error:?}")))?;
+    let planned = mantle_lock_vendor_core::plan_cargo_vendor_with_table(
+        &lock,
+        mantle_lock_vendor_core::Limits::default(),
+        Some(&parsed),
+    )
+    .map_err(|error| RunError::Internal(format!("lock-vendor Cargo.lock: {error:?}")))?;
+    let selected = planned
+        .selected_shared_hashes(&parsed)
+        .map_err(|error| RunError::Internal(format!("selecting lock-vendor hashes: {error:?}")))?;
+    if selected.render().as_bytes() != table.as_slice() {
+        return Err(RunError::Internal(
+            "lock-vendor profile requires canonical selected table output, not the mutable full table".to_string(),
+        ));
+    }
+    let producer = bootstrap_profile_record(BootstrapProfileRecordRequest {
+        kind: SourceRecordKind::ProofInput,
+        identity: BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_PRODUCER.to_string(),
+        path: &lock_vendor.producer,
+        mode: input.mode,
+        class: BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_PRODUCER,
+        provider_metadata: None,
+        store_prefix,
+    })?;
+    let selected_table = bootstrap_profile_record(BootstrapProfileRecordRequest {
+        kind: SourceRecordKind::ProofInput,
+        identity: BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_SELECTED_TABLE.to_string(),
+        path: &lock_vendor.selected_table,
+        mode: input.mode,
+        class: BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_SELECTED_TABLE,
+        provider_metadata: None,
+        store_prefix,
+    })?;
+    let prior = lock_vendor_tree_receipt(&lock_vendor.excluded_vendor)?;
+    let completed = lock_vendor_tree_receipt(&lock_vendor.output)?;
+    crate::self_build::verify_checked_vendor_freshness(source, &lock_vendor.excluded_vendor)?;
+    crate::self_build::verify_checked_vendor_freshness(source, &lock_vendor.output)?;
+    if prior.content_blake3 != completed.content_blake3 {
+        return Err(RunError::Internal(
+            "lock-vendor producer output does not match excluded vendored tree content hashes".to_string(),
+        ));
+    }
+    let name = lock_vendor
+        .output
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| RunError::Internal("lock-vendor output has no UTF-8 store basename".to_string()))?;
+    let logical_path = format!("{store_prefix}/{name}");
+    nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(logical_path.as_bytes(), store_prefix)
+        .map_err(|error| RunError::Internal(format!("lock-vendor output must be a store path: {error}")))?;
+    let mut metadata = BTreeMap::new();
+    metadata.insert(RECORD_METADATA_PROFILE_MODE_KEY.to_string(), input.mode.as_str().to_string());
+    metadata.insert(
+        RECORD_METADATA_PROFILE_CLASS_KEY.to_string(),
+        BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_ACQUISITION.to_string(),
+    );
+    metadata.insert(LOCK_VENDOR_PRODUCER_IDENTITY_KEY.to_string(), producer.content_blake3.clone());
+    metadata.insert(LOCK_VENDOR_SELECTED_TABLE_IDENTITY_KEY.to_string(), selected_table.content_blake3.clone());
+    metadata.insert(LOCK_VENDOR_LOCK_CONTENT_KEY.to_string(), blake3::hash(&lock).to_hex().to_string());
+    metadata.insert(LOCK_VENDOR_OUTPUT_STORE_PATH_KEY.to_string(), logical_path);
+    metadata.insert(LOCK_VENDOR_OUTPUT_CONTENT_KEY.to_string(), completed.content_blake3);
+    metadata.insert(LOCK_VENDOR_EXCLUDED_CONTENT_KEY.to_string(), prior.content_blake3);
+    metadata.insert(LOCK_VENDOR_EXCLUDED_PAYLOAD_KEY.to_string(), prior.payload_bytes.to_string());
+    let kind = SourceRecordKind::PackageMirror;
+    let digest = digest_source_record_content(&kind, &metadata, &[])?;
+    records.extend([producer, selected_table, SourceRecord {
+        kind,
+        identity: BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_ACQUISITION.to_string(),
+        store_prefix: None,
+        adapter: None,
+        metadata,
+        payload_bytes: 0,
+        content_blake3: digest,
+        files: Vec::new(),
+        store_path_attestation: None,
+    }]);
+    Ok(())
+}
+
 pub fn bootstrap_source_bundle_profile_report(
     manifest: &SourceBundleManifest,
     mode: BootstrapSourceBundleMode,
@@ -986,12 +1422,23 @@ pub fn bootstrap_source_bundle_profile_report(
         .get(RECORD_METADATA_PROVIDER_KIND_KEY)
         .ok_or_else(|| RunError::Internal("bootstrap profile provider manifest missing provider kind".to_string()))?
         .clone();
+    let (excluded_vendor_payload_bytes, lock_vendor_producer_identity) = if mode.is_lock_vendor() {
+        let receipt = lock_vendor_acquisition_record(manifest)?;
+        let payload = receipt.metadata[LOCK_VENDOR_EXCLUDED_PAYLOAD_KEY]
+            .parse::<u64>()
+            .map_err(|error| RunError::Internal(format!("invalid excluded vendor payload bytes: {error}")))?;
+        (Some(payload), Some(receipt.metadata[LOCK_VENDOR_PRODUCER_IDENTITY_KEY].clone()))
+    } else {
+        (None, None)
+    };
     Ok(BootstrapSourceBundleProfileReport {
         format: BOOTSTRAP_SOURCE_PROFILE_FORMAT,
         mode,
         manifest_blake3: manifest.manifest_blake3.clone(),
         required_record_count: checked_u32(manifest.records.len(), "bootstrap profile record count")?,
         provider_kind,
+        excluded_vendor_payload_bytes,
+        lock_vendor_producer_identity,
         non_claim: BOOTSTRAP_SOURCE_PROFILE_NON_CLAIM,
     })
 }
@@ -1261,7 +1708,8 @@ pub fn export_source_bundle_from_derivations_with_connected_fetch(
     let available_sources = read_imported_source_records(state_dir)?;
     let mut records = canonicalize_source_specs(specs, store_prefix)?;
     let expected = normalize_source_records(collect_build_source_records(roots, store_prefix)?)?;
-    records.extend(materialize_export_records_with_connected_fetch(&expected, &available_sources)?);
+    let mut fetch_calls = 0;
+    records.extend(materialize_export_records_with_connected_fetch(&expected, &available_sources, &mut fetch_calls)?);
     assemble_source_bundle(records, store_prefix)
 }
 
@@ -1334,6 +1782,7 @@ fn canonicalize_bound_foreign_source_specs(
             is_skipping_git_dir: false,
             allow_large_file_chunks: true,
             root_entry_allowlist: None,
+            skip_lock_vendor_table: false,
         })?);
     }
     Ok(records)
@@ -1367,6 +1816,79 @@ pub(crate) fn assemble_source_bundle(
     };
     manifest.manifest_blake3 = digest_manifest_without_digest(&manifest)?;
     Ok(manifest)
+}
+
+fn lock_vendor_acquisition_record(manifest: &SourceBundleManifest) -> Result<&SourceRecord, RunError> {
+    let mut matches = manifest.records.iter().filter(|record| {
+        record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+            == Some(BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_ACQUISITION)
+    });
+    let receipt = matches
+        .next()
+        .ok_or_else(|| RunError::Internal("lock-vendor profile is missing acquisition receipt".to_string()))?;
+    if matches.next().is_some()
+        || receipt.kind != SourceRecordKind::PackageMirror
+        || !receipt.files.is_empty()
+        || receipt.payload_bytes != 0
+    {
+        return Err(RunError::Internal(
+            "lock-vendor acquisition receipt is not a unique virtual package record".to_string(),
+        ));
+    }
+    let mode = receipt
+        .metadata
+        .get(RECORD_METADATA_PROFILE_MODE_KEY)
+        .ok_or_else(|| RunError::Internal("lock-vendor receipt has no profile mode".to_string()))
+        .and_then(|value| BootstrapSourceBundleMode::parse(value))?;
+    if !mode.is_lock_vendor() {
+        return Err(RunError::Internal("lock-vendor receipt has wrong profile mode".to_string()));
+    }
+    for (class, key) in [
+        (BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_PRODUCER, LOCK_VENDOR_PRODUCER_IDENTITY_KEY),
+        (BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_SELECTED_TABLE, LOCK_VENDOR_SELECTED_TABLE_IDENTITY_KEY),
+    ] {
+        let index = unique_hydration_record_index(manifest, class, SourceRecordKind::ProofInput)?;
+        let input = &manifest.records[index];
+        if input.files.is_empty()
+            || input.metadata.get(RECORD_METADATA_PROFILE_MODE_KEY).map(String::as_str) != Some(mode.as_str())
+            || receipt.metadata.get(key) != Some(&input.content_blake3)
+        {
+            return Err(RunError::Internal(format!("lock-vendor {class} identity differs from acquisition receipt")));
+        }
+    }
+    let logical = receipt
+        .metadata
+        .get(LOCK_VENDOR_OUTPUT_STORE_PATH_KEY)
+        .ok_or_else(|| RunError::Internal("lock-vendor receipt has no output store path".to_string()))?;
+    nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(
+        logical.as_bytes(),
+        &manifest.store_prefix,
+    )
+    .map_err(|error| RunError::Internal(format!("lock-vendor receipt output is not a store path: {error}")))?;
+    for key in [
+        LOCK_VENDOR_OUTPUT_CONTENT_KEY,
+        LOCK_VENDOR_EXCLUDED_CONTENT_KEY,
+        LOCK_VENDOR_LOCK_CONTENT_KEY,
+    ] {
+        let value = receipt
+            .metadata
+            .get(key)
+            .ok_or_else(|| RunError::Internal(format!("lock-vendor receipt missing {key}")))?;
+        validate_blake3_hex(Blake3HexValidation {
+            value,
+            label: "lock-vendor tree content BLAKE3",
+        })?;
+    }
+    receipt
+        .metadata
+        .get(LOCK_VENDOR_EXCLUDED_PAYLOAD_KEY)
+        .ok_or_else(|| RunError::Internal("lock-vendor receipt missing excluded payload bytes".to_string()))?
+        .parse::<u64>()
+        .map_err(|error| RunError::Internal(format!("invalid excluded payload byte count: {error}")))?;
+    if receipt.metadata[LOCK_VENDOR_OUTPUT_CONTENT_KEY] != receipt.metadata[LOCK_VENDOR_EXCLUDED_CONTENT_KEY] {
+        return Err(RunError::Internal("lock-vendor output differs from excluded tree content identity".to_string()));
+    }
+    Ok(receipt)
 }
 
 fn plan_self_build_hydration(
@@ -1566,6 +2088,17 @@ fn write_source_bundle_no_replace(path: &Path, manifest: &SourceBundleManifest) 
 pub fn read_source_bundle(path: &Path) -> Result<SourceBundleManifest, RunError> {
     let file = fs::File::open(path)
         .map_err(|error| RunError::Internal(format!("reading source bundle {}: {error}", path.display())))?;
+    let bytes = file
+        .metadata()
+        .map_err(|error| RunError::Internal(format!("reading source bundle {} metadata: {error}", path.display())))?
+        .len();
+    if bytes > mantle_application_contract::MAX_SOURCE_BUNDLE_EFFECT_BYTES {
+        return Err(RunError::Internal(format!(
+            "source bundle {} exceeds admitted {} byte read bound",
+            path.display(),
+            mantle_application_contract::MAX_SOURCE_BUNDLE_EFFECT_BYTES
+        )));
+    }
     let reader = BufReader::new(file);
     let manifest = serde_json::from_reader::<_, SourceBundleManifest>(reader)
         .map_err(|error| RunError::Internal(format!("parsing source bundle {}: {error}", path.display())))?;
@@ -1663,6 +2196,131 @@ pub fn hydrate_self_build_source_bundle(
     })
 }
 
+/// Hydrate an excluded vendor tree from the separately realized producer
+/// output. The source manifest carries only its bounded content receipt, so
+/// no vendored package bytes are copied into a first-class source archive.
+pub fn hydrate_lock_vendor_source_bundle(
+    manifest: &SourceBundleManifest,
+    expected_manifest_blake3: &str,
+    checkout: &Path,
+    state_dir: &Path,
+    producer_output: &Path,
+) -> Result<SelfBuildHydrationReport, RunError> {
+    validate_manifest(manifest)?;
+    validate_blake3_hex(Blake3HexValidation {
+        value: expected_manifest_blake3,
+        label: "expected source bundle manifest BLAKE3",
+    })?;
+    if manifest.manifest_blake3 != expected_manifest_blake3 {
+        return Err(RunError::Internal("lock-vendor hydration source manifest identity mismatch".to_string()));
+    }
+    let receipt = lock_vendor_acquisition_record(manifest)?;
+    if manifest.records.iter().any(|record| {
+        record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+            == Some(BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS)
+    }) {
+        return Err(RunError::Internal("lock-vendor hydration cannot also embed a vendor tree record".to_string()));
+    }
+    let mode = BootstrapSourceBundleMode::parse(&receipt.metadata[RECORD_METADATA_PROFILE_MODE_KEY])?;
+    let (archive_class, manifest_class) = mode.hydration_authority_classes();
+    let archive_index = unique_hydration_record_index(manifest, archive_class, SourceRecordKind::BootstrapArchive)?;
+    let manifest_index = unique_hydration_record_index(manifest, manifest_class, SourceRecordKind::ProviderManifest)?;
+    for index in [archive_index, manifest_index] {
+        if manifest.records[index].metadata.get(RECORD_METADATA_PROFILE_MODE_KEY).map(String::as_str)
+            != Some(mode.as_str())
+        {
+            return Err(RunError::Internal(
+                "lock-vendor hydration provider mode differs from producer receipt".to_string(),
+            ));
+        }
+    }
+    let provider_kind =
+        manifest.records[manifest_index].metadata.get(RECORD_METADATA_PROVIDER_KIND_KEY).ok_or_else(|| {
+            RunError::Internal("lock-vendor hydration provider manifest is missing provider kind".to_string())
+        })?;
+    validate_bootstrap_provider_kind(mode, provider_kind)?;
+    if manifest.records[archive_index].files.is_empty() || manifest.records[manifest_index].files.is_empty() {
+        return Err(RunError::Internal(
+            "lock-vendor hydration requires materialized provider authority inputs".to_string(),
+        ));
+    }
+    let checkout = fs::canonicalize(checkout).map_err(|error| {
+        RunError::Internal(format!("canonicalizing lock-vendor checkout {}: {error}", checkout.display()))
+    })?;
+    if !checkout.is_dir() {
+        return Err(RunError::Internal("lock-vendor hydration checkout is not a directory".to_string()));
+    }
+    let destination = checkout.join(VENDOR_DEPS_DIR_NAME);
+    if destination.exists() {
+        return Err(RunError::Internal(format!("lock-vendor hydration refuses existing {}", destination.display())));
+    }
+    let expected_output = &receipt.metadata[LOCK_VENDOR_OUTPUT_STORE_PATH_KEY];
+    let actual_name = producer_output.file_name().and_then(|name| name.to_str());
+    if actual_name != expected_output.rsplit('/').next() {
+        return Err(RunError::Internal(format!(
+            "missing lock-vendor materialization step: producer output path differs from {expected_output}"
+        )));
+    }
+    let lock =
+        read_lock_vendor_bounded(&checkout.join("Cargo.lock"), mantle_lock_vendor_core::MAX_LOCK_BYTES as usize)?;
+    if blake3::hash(&lock).to_hex().as_str() != receipt.metadata[LOCK_VENDOR_LOCK_CONTENT_KEY] {
+        return Err(RunError::Internal(
+            "lock-vendor hydration checkout Cargo.lock differs from selected producer input".to_string(),
+        ));
+    }
+    let expected = &receipt.metadata[LOCK_VENDOR_OUTPUT_CONTENT_KEY];
+    let measured = lock_vendor_tree_receipt(producer_output)?;
+    if &measured.content_blake3 != expected
+        || measured.payload_bytes
+            != receipt.metadata[LOCK_VENDOR_EXCLUDED_PAYLOAD_KEY]
+                .parse::<u64>()
+                .map_err(|error| RunError::Internal(format!("invalid excluded payload size: {error}")))?
+    {
+        return Err(RunError::Internal(format!(
+            "lock-vendor producer output content or excluded payload size mismatch: {expected_output}"
+        )));
+    }
+    validate_existing_source_state_for_hydration(manifest, state_dir)?;
+    let staging = tempfile::Builder::new()
+        .prefix(HYDRATION_STAGING_PREFIX)
+        .tempdir_in(&checkout)
+        .map_err(|error| RunError::Internal(format!("creating lock-vendor hydration staging: {error}")))?;
+    let cargo_dir = staging.path().join(".cargo");
+    fs::create_dir(&cargo_dir)
+        .map_err(|error| RunError::Internal(format!("creating lock-vendor staged Cargo config: {error}")))?;
+    copy_hydration_input(&checkout.join("Cargo.lock"), &staging.path().join("Cargo.lock"))?;
+    copy_hydration_input(&checkout.join(".cargo/vendor-config.toml"), &cargo_dir.join("vendor-config.toml"))?;
+    let staged_vendor = staging.path().join(VENDOR_DEPS_DIR_NAME);
+    copy_lock_vendor_tree(producer_output, &staged_vendor)?;
+    crate::self_build::require_checked_vendor_inputs(staging.path())?;
+    if lock_vendor_tree_receipt(&staged_vendor)? != measured {
+        return Err(RunError::Internal(
+            "lock-vendor hydrated output changed during per-artifact verification".to_string(),
+        ));
+    }
+    publish_hydrated_vendor(staging.path(), &destination)?;
+    let import = match import_source_bundle(manifest, state_dir, true) {
+        Ok(report) => report,
+        Err(error) => return rollback_hydrated_vendor(&destination, error),
+    };
+    if lock_vendor_tree_receipt(&destination)? != measured {
+        return rollback_hydrated_vendor(
+            &destination,
+            RunError::Internal("lock-vendor published vendor tree failed readback verification".to_string()),
+        );
+    }
+    Ok(SelfBuildHydrationReport {
+        format: SELF_BUILD_HYDRATION_REPORT_FORMAT,
+        manifest_blake3: manifest.manifest_blake3.clone(),
+        vendor_content_blake3: measured.content_blake3,
+        provider_archive_content_blake3: manifest.records[archive_index].content_blake3.clone(),
+        imported_record_count: import.imported_count,
+        existing_record_count: import.skipped_present_count,
+        pinned: import.pinned,
+        non_claim: SOURCE_BUNDLE_NON_CLAIM,
+    })
+}
+
 fn validate_existing_source_state_for_hydration(
     manifest: &SourceBundleManifest,
     state_dir: &Path,
@@ -1737,6 +2395,78 @@ fn rollback_hydrated_vendor(
     }
 }
 
+/// Read back the published bytes and identity, rather than equating a successful
+/// write with a complete source artifact.
+fn observed_source_bundle_bytes(path: &Path, expected: &SourceBundleManifest) -> Result<u64, RunError> {
+    if !matches!(read_source_bundle(path), Ok(observed) if &observed == expected) {
+        return Err(RunError::Internal(format!(
+            "source bundle {} did not read back as the manifest that was written",
+            path.display()
+        )));
+    }
+    fs::metadata(path)
+        .map(|metadata| metadata.len())
+        .map_err(|error| RunError::Internal(format!("reading source bundle {} metadata: {error}", path.display())))
+}
+
+/// Confirm every imported record through its own durable read, including the
+/// pin when the operation promised one. A report's counts are not this proof.
+fn observed_imported_source_state(
+    manifest: &SourceBundleManifest,
+    state_dir: &Path,
+    require_pin: bool,
+) -> Result<u32, RunError> {
+    for record in &manifest.records {
+        let path = source_records_dir(state_dir).join(format!("{}.json", record.content_blake3));
+        if !matches!(read_record(&path), Ok(observed) if &observed == record) {
+            return Err(RunError::Internal(format!(
+                "source bundle import did not read back record {}",
+                record.identity
+            )));
+        }
+    }
+    if require_pin {
+        let path = source_pins_dir(state_dir).join(format!("{}.json", manifest.manifest_blake3));
+        if !matches!(read_source_bundle(&path), Ok(observed) if &observed == manifest) {
+            return Err(RunError::Internal(format!(
+                "source bundle import did not read back pin {}",
+                manifest.manifest_blake3
+            )));
+        }
+    }
+    checked_u32(manifest.records.len(), "observed source state record count")
+}
+
+/// Re-snapshot the vendor payload after publication, independently of the
+/// import counts and the staging tree that was renamed into the checkout.
+fn observed_hydrated_vendor_bytes(manifest: &SourceBundleManifest, checkout: &Path) -> Result<u64, RunError> {
+    if manifest.records.iter().any(|record| {
+        record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+            == Some(BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_ACQUISITION)
+    }) {
+        let receipt = lock_vendor_acquisition_record(manifest)?;
+        let observed = lock_vendor_tree_receipt(&checkout.join(VENDOR_DEPS_DIR_NAME))?;
+        if observed.content_blake3 != receipt.metadata[LOCK_VENDOR_OUTPUT_CONTENT_KEY] {
+            return Err(RunError::Internal(
+                "hydrated lock-vendor output differs from producer content receipt".to_string(),
+            ));
+        }
+        crate::self_build::require_checked_vendor_inputs(checkout)?;
+        return Ok(observed.payload_bytes);
+    }
+    let plan = plan_self_build_hydration(manifest, &manifest.manifest_blake3)?;
+    let expected = &manifest.records[plan.vendor_record_index];
+    let observed = materialize_source_record_from_path(expected, &checkout.join(VENDOR_DEPS_DIR_NAME), false)?;
+    if &observed != expected {
+        return Err(RunError::Internal(format!(
+            "self-build hydration vendor payload did not read back as record {}",
+            expected.identity
+        )));
+    }
+    crate::self_build::require_checked_vendor_inputs(checkout)?;
+    Ok(observed.payload_bytes)
+}
+
 pub fn verify_source_bundle_state(
     manifest: &SourceBundleManifest,
     state_dir: &Path,
@@ -1783,13 +2513,14 @@ pub fn offline_preflight_for_derivations(
     roots: &[(String, crunch_glue::CrunchDerivation)],
     state_dir: &Path,
     store_prefix: &str,
+    trust: Option<&SourceStoreTrust<'_>>,
 ) -> Result<SourceOfflinePreflightReport, RunError> {
     let records = collect_build_source_records(roots, store_prefix)?;
     if records.is_empty() {
         return empty_offline_preflight_report();
     }
     let manifest = assemble_source_bundle(records, store_prefix)?;
-    offline_preflight_for_manifest(&manifest, state_dir)
+    offline_preflight_for_manifest(&manifest, state_dir, trust)
 }
 
 pub fn offline_preflight_for_file(
@@ -1797,9 +2528,10 @@ pub fn offline_preflight_for_file(
     import_paths: &[OsString],
     state_dir: &Path,
     store_prefix: &str,
+    trust: Option<&SourceStoreTrust<'_>>,
 ) -> Result<SourceOfflinePreflightReport, RunError> {
     let records = collect_build_source_records_from_files(&[file.to_path_buf()], import_paths, store_prefix)?;
-    offline_preflight_for_records(records, state_dir, store_prefix)
+    offline_preflight_for_records(records, state_dir, store_prefix, trust)
 }
 
 pub fn offline_preflight_for_build_roots(
@@ -1807,32 +2539,35 @@ pub fn offline_preflight_for_build_roots(
     import_paths: &[PathBuf],
     state_dir: &Path,
     store_prefix: &str,
+    trust: Option<&SourceStoreTrust<'_>>,
 ) -> Result<SourceOfflinePreflightReport, RunError> {
     let evaluation_paths = crate::build_cmd::build_import_paths(import_paths)?;
     let records = collect_build_source_records_from_files(build_roots, &evaluation_paths, store_prefix)?;
-    offline_preflight_for_records(records, state_dir, store_prefix)
+    offline_preflight_for_records(records, state_dir, store_prefix, trust)
 }
 
 fn offline_preflight_for_records(
     records: Vec<SourceRecord>,
     state_dir: &Path,
     store_prefix: &str,
+    trust: Option<&SourceStoreTrust<'_>>,
 ) -> Result<SourceOfflinePreflightReport, RunError> {
     if records.is_empty() {
         return empty_offline_preflight_report();
     }
     let manifest = assemble_source_bundle(records, store_prefix)?;
-    offline_preflight_for_manifest(&manifest, state_dir)
+    offline_preflight_for_manifest(&manifest, state_dir, trust)
 }
 
 pub fn offline_preflight_for_manifest(
     manifest: &SourceBundleManifest,
     state_dir: &Path,
+    trust: Option<&SourceStoreTrust<'_>>,
 ) -> Result<SourceOfflinePreflightReport, RunError> {
     validate_manifest(manifest)?;
     let available_sources = read_imported_source_records(state_dir)?;
     let pinned_sources = read_pinned_source_records(state_dir)?;
-    classify_offline_preflight(manifest, &available_sources, &pinned_sources)
+    classify_offline_preflight(manifest, &available_sources, &pinned_sources, state_dir, trust)
 }
 
 pub fn source_offline_preflight_is_ready(report: &SourceOfflinePreflightReport) -> bool {
@@ -1844,9 +2579,344 @@ pub fn source_fetch_override_plan_for_file(
     import_paths: &[OsString],
     state_dir: &Path,
     store_prefix: &str,
+    trust: Option<&SourceStoreTrust<'_>>,
 ) -> Result<SourceFetchOverridePlan, RunError> {
     let records = collect_build_source_records_from_files(&[file.to_path_buf()], import_paths, store_prefix)?;
-    source_fetch_override_plan_for_records(records, state_dir, store_prefix)
+    source_fetch_override_plan_for_records(records, state_dir, store_prefix, trust)
+}
+
+/// Admit only a complete catalog whose bytes and every referenced artifact
+/// have locally trusted PathInfo and independently match the producer's lock
+/// decisions. The signing key attests local observation, not upstream origin.
+pub fn offline_vendor_cache_overrides(
+    catalog_path: &Path,
+    expected_blake3: &str,
+    state_dir: &Path,
+    output_dir: &Path,
+    store_prefix: &str,
+    backend: crunch_store::StoreBackend,
+    trusted_keys: &[nix_compat::narinfo::VerifyingKey],
+) -> Result<Vec<crunch_build::FetchSourceOverride>, RunError> {
+    validate_blake3_hex(Blake3HexValidation {
+        value: expected_blake3,
+        label: "offline vendor catalog BLAKE3",
+    })?;
+    if trusted_keys.is_empty() {
+        return Err(RunError::Internal("offline vendor cache requires explicit trusted public keys".to_string()));
+    }
+    let catalog_name = offline_cache_store_name(catalog_path, output_dir, store_prefix)?;
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|error| RunError::Internal(format!("offline cache verification runtime: {error}")))?;
+    runtime.block_on(async {
+        let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            backend,
+            state_dir: state_dir.to_path_buf(),
+            output_dir: output_dir.to_path_buf(),
+            remote_cache_urls: Vec::new(),
+            fallback_mode: crunch_store::StoreFallbackMode::Practical,
+            store_dir: store_prefix.to_string(),
+            base_state_dirs: Vec::new(),
+        })
+        .await
+        .map_err(|error| RunError::Internal(format!("opening offline cache store: {error}")))?;
+        let service = store.pathinfo_service();
+        verified_offline_cache_path(&*service, catalog_path, catalog_name, store_prefix, trusted_keys).await?;
+        let metadata = fs::metadata(catalog_path)
+            .map_err(|error| RunError::Internal(format!("reading offline catalog: {error}")))?;
+        if metadata.len() > MAX_OFFLINE_VENDOR_CACHE_BYTES {
+            return Err(RunError::Internal("offline vendor catalog exceeds bounded read size".to_string()));
+        }
+        let bytes =
+            fs::read(catalog_path).map_err(|error| RunError::Internal(format!("reading offline catalog: {error}")))?;
+        if blake3::hash(&bytes).to_hex().as_str() != expected_blake3 {
+            return Err(RunError::Internal("offline vendor catalog digest differs from declared BLAKE3".to_string()));
+        }
+        let catalog: OfflineVendorCache = serde_json::from_slice(&bytes)
+            .map_err(|error| RunError::Internal(format!("parsing offline vendor catalog: {error}")))?;
+        if catalog.format != OFFLINE_VENDOR_CACHE_FORMAT
+            || catalog.store_prefix != store_prefix
+            || catalog.provenance != OFFLINE_VENDOR_LOCAL_PROVENANCE
+        {
+            return Err(RunError::Internal(
+                "offline vendor catalog format, local-integrity provenance or logical store prefix differs".to_string(),
+            ));
+        }
+        let source = offline_cache_physical_path(&catalog.source_bundle_store_path, output_dir, store_prefix)?;
+        let source_name = source
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| RunError::Internal("invalid offline source-bundle store path".to_string()))?;
+        verified_offline_cache_path(&*service, &source, source_name, store_prefix, trusted_keys).await?;
+        let lock_path = source.join("workspace/Cargo.lock");
+        if lock_path.is_symlink() || !lock_path.is_file() {
+            return Err(RunError::Internal(
+                "signed offline source bundle lacks a regular workspace/Cargo.lock".to_string(),
+            ));
+        }
+        let lock = fs::read(&lock_path)
+            .map_err(|error| RunError::Internal(format!("reading signed offline Cargo.lock: {error}")))?;
+        if lock.len() > mantle_lock_vendor_core::MAX_LOCK_BYTES as usize {
+            return Err(RunError::Internal("signed offline Cargo.lock exceeds producer bound".to_string()));
+        }
+        let table = mantle_lock_vendor_core::shared_table::SharedHashTable::parse(catalog.reviewed_table.as_bytes())
+            .map_err(|error| RunError::Internal(format!("offline reviewed table: {error:?}")))?;
+        let planned = mantle_lock_vendor_core::plan_cargo_vendor_with_table(
+            &lock,
+            mantle_lock_vendor_core::Limits::default(),
+            Some(&table),
+        )
+        .map_err(|error| RunError::Internal(format!("offline locked artifact plan: {error:?}")))?;
+        if planned.artifacts.is_empty() {
+            return Err(RunError::Internal(
+                "offline vendor catalog requires at least one locked external artifact".to_string(),
+            ));
+        }
+        let mut seen_artifacts = BTreeSet::new();
+        for artifact in &catalog.artifacts {
+            if !seen_artifacts.insert((artifact.name.as_str(), artifact.version.as_str())) {
+                return Err(RunError::Internal(format!(
+                    "duplicate offline vendor catalog artifact: {}@{}",
+                    artifact.name, artifact.version,
+                )));
+            }
+        }
+        if planned.artifacts.len() != catalog.artifacts.len() {
+            let offending = planned
+                .artifacts
+                .iter()
+                .find(|artifact| !seen_artifacts.contains(&(artifact.name.as_str(), artifact.version.as_str())))
+                .map(|artifact| format!("missing {}@{}", artifact.name, artifact.version))
+                .or_else(|| {
+                    catalog
+                        .artifacts
+                        .iter()
+                        .find(|declared| {
+                            !planned
+                                .artifacts
+                                .iter()
+                                .any(|expected| declared.name == expected.name && declared.version == expected.version)
+                        })
+                        .map(|artifact| format!("unexpected {}@{}", artifact.name, artifact.version))
+                })
+                .ok_or_else(|| {
+                    RunError::Internal("offline vendor catalog artifact cardinality is inconsistent".to_string())
+                })?;
+            return Err(RunError::Internal(format!(
+                "offline vendor catalog {offending}; has {} artifacts but signed Cargo.lock requires {}",
+                catalog.artifacts.len(),
+                planned.artifacts.len(),
+            )));
+        }
+        let mut cache_paths = BTreeMap::new();
+        let mut override_paths = BTreeMap::new();
+        let mut overrides = Vec::with_capacity(planned.artifacts.len());
+        for (expected, declared) in planned.artifacts.iter().zip(&catalog.artifacts) {
+            let identity = format!("{}@{}", expected.name, expected.version);
+            let mode = match expected.hash_mode {
+                mantle_lock_vendor_core::shared_table::HashMode::FlatSha256 => "flat",
+                mantle_lock_vendor_core::shared_table::HashMode::RecursiveSha256 => "recursive",
+            };
+            if declared.name != expected.name
+                || declared.version != expected.version
+                || declared.sha256 != expected.sha256
+                || declared.hash_mode != mode
+                || declared.fetch_url != expected.fetch_url
+                || declared.git_rev != expected.git_rev
+            {
+                return Err(RunError::Internal(format!(
+                    "offline vendor catalog identity, hash, mode or transport differs for {identity}"
+                )));
+            }
+            let source_path = offline_cache_physical_path(&declared.store_path, output_dir, store_prefix)?;
+            let stored_name = source_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .ok_or_else(|| RunError::Internal(format!("invalid cache store path for {identity}")))?;
+            let stored_nar = if let Some(nar) = cache_paths.get(stored_name) {
+                *nar
+            } else {
+                let (nar, _, _) =
+                    verified_offline_cache_path(&*service, &source_path, stored_name, store_prefix, trusted_keys)
+                        .await?;
+                cache_paths.insert(stored_name.to_string(), nar);
+                nar
+            };
+            let kind = if mode == "flat" {
+                if !source_path.is_file() || source_path.is_symlink() {
+                    return Err(RunError::Internal(format!("offline crate cache is not a regular file: {identity}")));
+                }
+                use sha2::Digest as _;
+                let mut hasher = sha2::Sha256::new();
+                let mut input = fs::File::open(&source_path)
+                    .map_err(|error| RunError::Internal(format!("opening offline crate {identity}: {error}")))?;
+                let mut buffer = [0_u8; 65_536];
+                loop {
+                    let read = input
+                        .read(&mut buffer)
+                        .map_err(|error| RunError::Internal(format!("reading offline crate {identity}: {error}")))?;
+                    if read == 0 {
+                        break;
+                    };
+                    hasher.update(&buffer[..read]);
+                }
+                if HEXLOWER.encode(&hasher.finalize()) != expected.sha256 {
+                    return Err(RunError::Internal(format!("offline crate archive SHA-256 differs for {identity}")));
+                }
+                crunch_build::FetchSourceOverrideKind::File
+            } else {
+                if !source_path.is_dir() || source_path.is_symlink() || HEXLOWER.encode(&stored_nar) != expected.sha256
+                {
+                    return Err(RunError::Internal(format!("offline reviewed Git NAR SHA-256 differs for {identity}")));
+                }
+                crunch_build::FetchSourceOverrideKind::Git
+            };
+            let key = (mode, declared.fetch_url.as_str(), declared.git_rev.as_deref());
+            if let Some(prior) = override_paths.insert(key, declared.store_path.as_str()) {
+                if prior != declared.store_path {
+                    return Err(RunError::Internal(format!("contradictory offline Git source paths for {identity}")));
+                }
+                continue;
+            }
+            overrides.push(crunch_build::FetchSourceOverride {
+                url: declared.fetch_url.clone(),
+                kind,
+                rev: declared.git_rev.clone(),
+                payload_path: source_path,
+                source_state_blake3: expected_blake3.to_string(),
+            });
+        }
+        Ok(overrides)
+    })
+}
+
+fn offline_cache_store_name<'a>(path: &'a Path, output_dir: &Path, store_prefix: &str) -> Result<&'a str, RunError> {
+    if path.is_symlink() || !path.exists() || path.parent() != Some(output_dir) {
+        return Err(RunError::Internal(format!(
+            "offline artifact must be directly exported from the declared store: {}",
+            path.display()
+        )));
+    }
+    let name = path
+        .file_name()
+        .and_then(|entry| entry.to_str())
+        .ok_or_else(|| RunError::Internal("offline store artifact name is not UTF-8".to_string()))?;
+    let logical = format!("{store_prefix}/{name}");
+    nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(logical.as_bytes(), store_prefix)
+        .map_err(|error| RunError::Internal(format!("invalid offline store identity {name}: {error}")))?;
+    Ok(name)
+}
+
+fn offline_cache_physical_path(logical: &str, output_dir: &Path, store_prefix: &str) -> Result<PathBuf, RunError> {
+    let path =
+        nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(logical.as_bytes(), store_prefix)
+            .map_err(|error| RunError::Internal(format!("invalid declared offline store path {logical}: {error}")))?;
+    let physical = output_dir.join(path.to_string());
+    offline_cache_store_name(&physical, output_dir, store_prefix)?;
+    Ok(physical)
+}
+
+async fn verified_offline_cache_path(
+    service: &dyn snix_store::pathinfoservice::PathInfoService,
+    physical: &Path,
+    name: &str,
+    store_prefix: &str,
+    trusted_keys: &[nix_compat::narinfo::VerifyingKey],
+) -> Result<([u8; 32], u64, String), RunError> {
+    let logical = format!("{store_prefix}/{name}");
+    let path =
+        nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(logical.as_bytes(), store_prefix)
+            .map_err(|error| RunError::Internal(format!("invalid offline store identity {name}: {error}")))?;
+    let info = service
+        .get(*path.digest())
+        .await
+        .map_err(|error| RunError::Internal(format!("reading offline PathInfo {name}: {error}")))?
+        .ok_or_else(|| RunError::Internal(format!("missing signed offline PathInfo: {name}")))?;
+    if info.store_path != path {
+        return Err(RunError::Internal(format!("offline PathInfo identity differs for {name}")));
+    }
+    let references: Vec<_> = info.references.iter().map(|reference| reference.as_ref()).collect();
+    let fingerprint = nix_compat::narinfo::fingerprint_with_store_dir(
+        &info.store_path.as_ref(),
+        &info.nar_sha256,
+        info.nar_size,
+        references.iter(),
+        store_prefix,
+    );
+    if !info
+        .signatures
+        .iter()
+        .any(|signature| trusted_keys.iter().any(|key| key.verify(&fingerprint, &signature.as_ref())))
+    {
+        return Err(RunError::Internal(format!("untrusted or unsigned offline PathInfo: {name}")));
+    }
+    let observation = crunch_nar::observe_path_blocking(
+        physical.to_path_buf(),
+        crunch_nar::FilesystemNarRequest::new(
+            HashAlgo::Sha256,
+            crunch_nar::CaseHackPolicy::native(),
+            MAX_SOURCE_TOTAL_BYTES,
+        ),
+    )
+    .await
+    .map_err(|error| RunError::Internal(format!("observing offline NAR {name}: {error}")))?;
+    if observation.digest.digest_as_bytes() != info.nar_sha256 || observation.nar_size != info.nar_size {
+        return Err(RunError::Internal(format!("signed offline NAR differs from physical bytes: {name}")));
+    }
+    Ok((info.nar_sha256, info.nar_size, blake3::hash(fingerprint.as_bytes()).to_hex().to_string()))
+}
+
+fn verify_signed_store_root(
+    logical: &str,
+    state_dir: &Path,
+    store_prefix: &str,
+    trust: &SourceStoreTrust<'_>,
+) -> Result<StorePathAttestation, RunError> {
+    if trust.trusted_keys.is_empty() || !trust.output_dir.is_absolute() {
+        return Err(RunError::Internal(
+            "store-path attestation requires explicit trusted keys and absolute output store".to_string(),
+        ));
+    }
+    let store_metadata = fs::symlink_metadata(trust.output_dir).map_err(|error| {
+        RunError::Internal(format!("reading attested output store {}: {error}", trust.output_dir.display()))
+    })?;
+    if !store_metadata.is_dir() || store_metadata.file_type().is_symlink() {
+        return Err(RunError::Internal("attested output store must be a direct directory".to_string()));
+    }
+    let physical = offline_cache_physical_path(logical, trust.output_dir, store_prefix)?;
+    let metadata = fs::symlink_metadata(&physical)
+        .map_err(|error| RunError::Internal(format!("reading attested store root {}: {error}", physical.display())))?;
+    if metadata.file_type().is_symlink() || !(metadata.is_dir() || metadata.is_file()) {
+        return Err(RunError::Internal(format!(
+            "attested store root is not a direct physical store output: {}",
+            physical.display()
+        )));
+    }
+    let name = physical
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| RunError::Internal("attested store path has no UTF-8 basename".to_string()))?;
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|error| RunError::Internal(format!("store-root verification runtime: {error}")))?;
+    let (nar_sha256, nar_size, signed_fingerprint_blake3) = runtime.block_on(async {
+        let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            backend: trust.backend,
+            state_dir: state_dir.to_path_buf(),
+            output_dir: trust.output_dir.to_path_buf(),
+            remote_cache_urls: Vec::new(),
+            fallback_mode: crunch_store::StoreFallbackMode::Practical,
+            store_dir: store_prefix.to_string(),
+            base_state_dirs: Vec::new(),
+        })
+        .await
+        .map_err(|error| RunError::Internal(format!("opening attested store: {error}")))?;
+        verified_offline_cache_path(&*store.pathinfo_service(), &physical, name, store_prefix, trust.trusted_keys).await
+    })?;
+    Ok(StorePathAttestation {
+        logical_store_path: logical.to_string(),
+        nar_sha256: HEXLOWER.encode(&nar_sha256),
+        nar_size,
+        signed_fingerprint_blake3,
+    })
 }
 
 // r[impl source_transports.source_bundle_realizes_fetcher_inputs]
@@ -1862,17 +2932,28 @@ pub fn full_proof_source_fetch_override_plan(
     let manifest = read_source_bundle(&pin_path).map_err(|error| {
         RunError::Internal(format!("reading pinned full-proof source manifest {}: {error}", pin_path.display()))
     })?;
-    let hydration_plan = plan_self_build_hydration(&manifest, manifest_blake3)?;
-    let mode = hydration_profile_mode(&manifest, &hydration_plan)?;
-    if mode != BootstrapSourceBundleMode::FreshCloneFixedPoint {
+    let mode = if manifest.records.iter().any(|record| {
+        record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+            == Some(BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_ACQUISITION)
+    }) {
+        let receipt = lock_vendor_acquisition_record(&manifest)?;
+        BootstrapSourceBundleMode::parse(&receipt.metadata[RECORD_METADATA_PROFILE_MODE_KEY])?
+    } else {
+        let hydration_plan = plan_self_build_hydration(&manifest, manifest_blake3)?;
+        hydration_profile_mode(&manifest, &hydration_plan)?
+    };
+    if !matches!(
+        mode,
+        BootstrapSourceBundleMode::FreshCloneFixedPoint | BootstrapSourceBundleMode::FreshCloneLockVendorFixedPoint
+    ) {
         return Err(RunError::Internal(format!(
-            "self-build offline source policy requires fresh-clone-fixed-point profile, got {}",
+            "self-build offline source policy requires fresh-clone-fixed-point or fresh-clone-lock-vendor-fixed-point profile, got {}",
             mode.as_str()
         )));
     }
     let available_sources = read_imported_source_records(state_dir)?;
     let pinned_sources = read_pinned_source_records(state_dir)?;
-    let report = classify_offline_preflight(&manifest, &available_sources, &pinned_sources)?;
+    let report = classify_offline_preflight(&manifest, &available_sources, &pinned_sources, state_dir, None)?;
     if !source_offline_preflight_is_ready(&report) {
         return Err(RunError::Internal(format!("full-proof source preflight is not ready: {:?}", report.ready_class)));
     }
@@ -1970,15 +3051,17 @@ pub fn source_fetch_override_plan_for_derivations(
     roots: &[(String, crunch_glue::CrunchDerivation)],
     state_dir: &Path,
     store_prefix: &str,
+    trust: Option<&SourceStoreTrust<'_>>,
 ) -> Result<SourceFetchOverridePlan, RunError> {
     let records = collect_build_source_records(roots, store_prefix)?;
-    source_fetch_override_plan_for_records(records, state_dir, store_prefix)
+    source_fetch_override_plan_for_records(records, state_dir, store_prefix, trust)
 }
 
 fn source_fetch_override_plan_for_records(
     records: Vec<SourceRecord>,
     state_dir: &Path,
     store_prefix: &str,
+    trust: Option<&SourceStoreTrust<'_>>,
 ) -> Result<SourceFetchOverridePlan, RunError> {
     assert!(records.len() <= MAX_SOURCE_RECORDS);
     assert!(store_prefix.starts_with('/'));
@@ -1992,7 +3075,8 @@ fn source_fetch_override_plan_for_records(
     let manifest = assemble_source_bundle(records, store_prefix)?;
     let available_sources = read_imported_source_records(state_dir)?;
     let pinned_sources = read_pinned_source_records(state_dir)?;
-    let preflight_receipt = classify_offline_preflight(&manifest, &available_sources, &pinned_sources)?;
+    let preflight_receipt =
+        classify_offline_preflight(&manifest, &available_sources, &pinned_sources, state_dir, trust)?;
     if !source_offline_preflight_is_ready(&preflight_receipt) {
         return Err(RunError::Internal(format!(
             "offline source preflight is not ready: {:?}",
@@ -2023,6 +3107,7 @@ fn canonicalize_source_spec(spec: &SourceSpec, store_prefix: &str) -> Result<Sou
         is_skipping_git_dir: false,
         allow_large_file_chunks: false,
         root_entry_allowlist: None,
+        skip_lock_vendor_table: false,
     })
 }
 
@@ -2034,6 +3119,7 @@ fn source_record_from_path(request: SourceRecordPathRequest<'_>) -> Result<Sourc
         request.is_skipping_git_dir,
         request.allow_large_file_chunks,
         request.root_entry_allowlist,
+        request.skip_lock_vendor_table,
     )?;
     let content_blake3 = digest_source_record_content(&request.kind, &request.metadata, &files)?;
     Ok(SourceRecord {
@@ -2045,6 +3131,7 @@ fn source_record_from_path(request: SourceRecordPathRequest<'_>) -> Result<Sourc
         payload_bytes,
         content_blake3,
         files,
+        store_path_attestation: None,
     })
 }
 
@@ -2088,6 +3175,25 @@ fn validate_bootstrap_profile_input(
     }
     if input.mode.requires_vendor_inputs() && input.vendor_deps.is_none() {
         return Err(RunError::Internal(format!("{} bootstrap profile requires --vendor-deps", input.mode.as_str())));
+    }
+    if input.mode.is_lock_vendor() {
+        if input.vendor_deps.is_some() {
+            return Err(RunError::Internal("lock-vendor profile excludes --vendor-deps payload; use --excluded-vendor-deps only for parity measurement".to_string()));
+        }
+        if input.mantle_source.is_none() {
+            return Err(RunError::Internal(
+                "lock-vendor profile requires --mantle-source containing Cargo.lock".to_string(),
+            ));
+        }
+        if input.lock_vendor.is_none() {
+            return Err(RunError::Internal(
+                "lock-vendor profile requires producer, selected table, output and excluded vendor inputs".to_string(),
+            ));
+        }
+    } else if input.lock_vendor.is_some() {
+        return Err(RunError::Internal(
+            "lock-vendor inputs require a fresh-clone-lock-vendor profile mode".to_string(),
+        ));
     }
     if input.bootstrap_sources.len() > MAX_SOURCE_RECORDS {
         return Err(RunError::Internal(format!("bootstrap profile source count exceeds {MAX_SOURCE_RECORDS}")));
@@ -2154,6 +3260,7 @@ fn bootstrap_profile_record(request: BootstrapProfileRecordRequest<'_>) -> Resul
         is_skipping_git_dir: is_mantle_source,
         allow_large_file_chunks: request.mode == BootstrapSourceBundleMode::SourceBuiltFixedPoint,
         root_entry_allowlist,
+        skip_lock_vendor_table: is_mantle_source && request.mode.is_lock_vendor(),
     })
 }
 
@@ -2250,7 +3357,7 @@ fn canonicalize_fetch_payload_entries(
     path: &Path,
     is_skipping_git_dir: bool,
 ) -> Result<(Vec<SourceFileEntry>, u64), RunError> {
-    canonicalize_payload_entries_with_policy(path, is_skipping_git_dir, true, None)
+    canonicalize_payload_entries_with_policy(path, is_skipping_git_dir, true, None, false)
 }
 
 fn canonicalize_payload_entries_with_policy(
@@ -2258,6 +3365,7 @@ fn canonicalize_payload_entries_with_policy(
     is_skipping_git_dir: bool,
     allow_large_file_chunks: bool,
     root_entry_allowlist: Option<&[&str]>,
+    skip_lock_vendor_table: bool,
 ) -> Result<(Vec<SourceFileEntry>, u64), RunError> {
     let root = fs::canonicalize(path)
         .map_err(|err| RunError::Internal(format!("canonicalizing source path {}: {err}", path.display())))?;
@@ -2283,6 +3391,7 @@ fn canonicalize_payload_entries_with_policy(
         is_skipping_git_dir,
         allow_large_file_chunks,
         root_entry_allowlist,
+        skip_lock_vendor_table,
         &mut collection,
     )?;
     collection
@@ -2299,6 +3408,7 @@ fn collect_source_entries(
     is_skipping_git_dir: bool,
     allow_large_file_chunks: bool,
     root_entry_allowlist: Option<&[&str]>,
+    skip_lock_vendor_table: bool,
     collection: &mut SourceEntryCollection,
 ) -> Result<(), RunError> {
     assert!(current.starts_with(root));
@@ -2319,7 +3429,10 @@ fn collect_source_entries(
             .map_err(|err| RunError::Internal(format!("reading source metadata {}: {err}", next_path.display())))?;
         if metadata.is_dir() {
             let allowlist = (next_path == root).then_some(root_entry_allowlist).flatten();
-            let children = read_sorted_source_children(&next_path, is_skipping_git_dir, allowlist)?;
+            let mut children = read_sorted_source_children(&next_path, is_skipping_git_dir, allowlist)?;
+            if skip_lock_vendor_table && next_path.strip_prefix(root).ok() == Some(Path::new("bootstrap/pins")) {
+                children.retain(|path| path.file_name().is_none_or(|name| name != "cargo-shared-lock-hashes-v1"));
+            }
             reserve_pending_source_paths(&mut pending_paths, children.len())?;
             pending_paths.extend(children.into_iter().rev());
             continue;
@@ -2330,6 +3443,150 @@ fn collect_source_entries(
         }
     }
     Err(RunError::Internal(format!("source entry walk exceeds {MAX_SOURCE_FILES_PER_RECORD} nodes")))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LockVendorTreeReceipt {
+    content_blake3: String,
+    payload_bytes: u64,
+}
+
+/// Observe content, modes and empty directories without retaining vendor
+/// bytes in the source manifest. Both the old tree and producer output use
+/// the same bounded walk; hydration repeats it before and after publication.
+fn lock_vendor_tree_receipt(path: &Path) -> Result<LockVendorTreeReceipt, RunError> {
+    let root_meta = fs::symlink_metadata(path)
+        .map_err(|error| RunError::Internal(format!("reading lock-vendor tree {}: {error}", path.display())))?;
+    if !root_meta.is_dir() || root_meta.file_type().is_symlink() {
+        return Err(RunError::Internal(format!("lock-vendor tree is not an ordinary directory: {}", path.display())));
+    }
+    let root = fs::canonicalize(path)
+        .map_err(|error| RunError::Internal(format!("canonicalizing lock-vendor tree {}: {error}", path.display())))?;
+    let mut pending = vec![root.clone()];
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"mantle-lock-vendor-tree-v1\0");
+    let mut payload_bytes = 0u64;
+    for _ in 0..MAX_SOURCE_FILES_PER_RECORD {
+        let Some(current) = pending.pop() else {
+            return Ok(LockVendorTreeReceipt {
+                content_blake3: hasher.finalize().to_hex().to_string(),
+                payload_bytes,
+            });
+        };
+        let metadata = fs::symlink_metadata(&current)
+            .map_err(|error| RunError::Internal(format!("reading lock-vendor entry {}: {error}", current.display())))?;
+        let relative = current
+            .strip_prefix(&root)
+            .map_err(|error| RunError::Internal(format!("lock-vendor path escaped root: {error}")))?;
+        let name = relative
+            .to_str()
+            .ok_or_else(|| RunError::Internal(format!("lock-vendor path is not UTF-8: {}", relative.display())))?;
+        let name_length = u64::try_from(name.len())
+            .map_err(|_| RunError::Internal("lock-vendor path length exceeds u64".to_string()))?;
+        hasher.update(&name_length.to_le_bytes());
+        hasher.update(name.as_bytes());
+        if metadata.file_type().is_symlink() {
+            return Err(RunError::Internal(format!("lock-vendor tree contains a symlink: {}", current.display())));
+        }
+        if metadata.is_dir() {
+            hasher.update(b"d");
+            let children = read_sorted_source_children(&current, false, None)?;
+            reserve_pending_source_paths(&mut pending, children.len())?;
+            pending.extend(children.into_iter().rev());
+        } else if metadata.is_file() {
+            hasher.update(b"f");
+            hasher.update(&[u8::from(is_executable(&metadata))]);
+            hasher.update(&metadata.len().to_le_bytes());
+            payload_bytes = payload_bytes
+                .checked_add(metadata.len())
+                .ok_or_else(|| RunError::Internal("lock-vendor payload byte count overflow".to_string()))?;
+            if payload_bytes > MAX_SOURCE_TOTAL_BYTES {
+                return Err(RunError::Internal(format!("lock-vendor payload exceeds {MAX_SOURCE_TOTAL_BYTES} bytes")));
+            }
+            let mut file = fs::File::open(&current).map_err(|error| {
+                RunError::Internal(format!("opening lock-vendor file {}: {error}", current.display()))
+            })?;
+            let mut buffer = [0u8; 64 * 1024];
+            let mut observed = 0u64;
+            loop {
+                let bytes = file.read(&mut buffer).map_err(|error| {
+                    RunError::Internal(format!("reading lock-vendor file {}: {error}", current.display()))
+                })?;
+                if bytes == 0 {
+                    break;
+                }
+                observed = observed
+                    .checked_add(bytes as u64)
+                    .ok_or_else(|| RunError::Internal("lock-vendor file size overflow".to_string()))?;
+                if observed > metadata.len() {
+                    return Err(RunError::Internal(format!(
+                        "lock-vendor file grew during observation: {}",
+                        current.display()
+                    )));
+                }
+                hasher.update(&buffer[..bytes]);
+            }
+            if observed != metadata.len() {
+                return Err(RunError::Internal(format!(
+                    "lock-vendor file changed during observation: {}",
+                    current.display()
+                )));
+            }
+        } else {
+            return Err(RunError::Internal(format!("lock-vendor tree contains a special file: {}", current.display())));
+        }
+    }
+    Err(RunError::Internal(format!("lock-vendor tree exceeds {MAX_SOURCE_FILES_PER_RECORD} entries")))
+}
+
+fn copy_lock_vendor_tree(source: &Path, destination: &Path) -> Result<(), RunError> {
+    let root_metadata = fs::symlink_metadata(source)
+        .map_err(|error| RunError::Internal(format!("reading producer vendor output {}: {error}", source.display())))?;
+    if !root_metadata.is_dir() || root_metadata.file_type().is_symlink() || destination.exists() {
+        return Err(RunError::Internal(
+            "producer vendor output must be an ordinary directory and hydration staging must be absent".to_string(),
+        ));
+    }
+    let root = fs::canonicalize(source)
+        .map_err(|error| RunError::Internal(format!("canonicalizing producer vendor output: {error}")))?;
+    let mut pending = vec![root.clone()];
+    for _ in 0..MAX_SOURCE_FILES_PER_RECORD {
+        let Some(current) = pending.pop() else { return Ok(()) };
+        let metadata = fs::symlink_metadata(&current).map_err(|error| {
+            RunError::Internal(format!("reading producer vendor entry {}: {error}", current.display()))
+        })?;
+        if metadata.file_type().is_symlink() {
+            return Err(RunError::Internal(format!(
+                "producer vendor output contains a symlink: {}",
+                current.display()
+            )));
+        }
+        let relative = current
+            .strip_prefix(&root)
+            .map_err(|error| RunError::Internal(format!("producer vendor entry escaped root: {error}")))?;
+        let target = destination.join(relative);
+        if metadata.is_dir() {
+            fs::create_dir(&target).map_err(|error| {
+                RunError::Internal(format!("creating hydrated vendor directory {}: {error}", target.display()))
+            })?;
+            let children = read_sorted_source_children(&current, false, None)?;
+            reserve_pending_source_paths(&mut pending, children.len())?;
+            pending.extend(children.into_iter().rev());
+        } else if metadata.is_file() {
+            fs::copy(&current, &target).map_err(|error| {
+                RunError::Internal(format!("copying verified vendor file {}: {error}", current.display()))
+            })?;
+            fs::set_permissions(&target, metadata.permissions()).map_err(|error| {
+                RunError::Internal(format!("preserving vendor file mode {}: {error}", target.display()))
+            })?;
+        } else {
+            return Err(RunError::Internal(format!(
+                "producer vendor output contains a special file: {}",
+                current.display()
+            )));
+        }
+    }
+    Err(RunError::Internal(format!("producer vendor output exceeds {MAX_SOURCE_FILES_PER_RECORD} entries")))
 }
 
 fn read_sorted_source_children(
@@ -2723,6 +3980,18 @@ pub(crate) fn digest_source_record_content(
     Ok(hasher.finalize().to_hex().to_string())
 }
 
+fn digest_attested_store_path_record(
+    kind: &SourceRecordKind,
+    metadata: &BTreeMap<String, String>,
+    attestation: &StorePathAttestation,
+) -> Result<String, RunError> {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(RECORD_CONTENT_STORE_ATTESTATION_MARKER);
+    serde_json::to_writer(Blake3Writer(&mut hasher), &(kind, metadata, attestation))
+        .map_err(|error| RunError::Internal(format!("serializing store-path attestation: {error}")))?;
+    Ok(hasher.finalize().to_hex().to_string())
+}
+
 /// How deeply `validate_manifest` checks regular-file payloads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ManifestPayloadValidation {
@@ -2846,9 +4115,55 @@ fn validate_source_record(record: &SourceRecord, payload_mode: ManifestPayloadVa
         )));
     }
     validate_source_record_files(record, payload_mode)?;
-    let expected_digest = digest_source_record_content(&record.kind, &record.metadata, &record.files)?;
+    let expected_digest = if let Some(attestation) = &record.store_path_attestation {
+        validate_store_path_attestation(record, attestation)?;
+        digest_attested_store_path_record(&record.kind, &record.metadata, attestation)?
+    } else {
+        digest_source_record_content(&record.kind, &record.metadata, &record.files)?
+    };
     if expected_digest != record.content_blake3 {
         return Err(RunError::Internal(format!("source record {} content digest mismatch", record.identity)));
+    }
+    Ok(())
+}
+
+fn validate_store_path_attestation(record: &SourceRecord, attestation: &StorePathAttestation) -> Result<(), RunError> {
+    if record.kind != SourceRecordKind::ToolchainSourceRoot
+        || !record.files.is_empty()
+        || record.payload_bytes != 0
+        || record.adapter.is_some()
+        || record.metadata.len() != 2
+        || record.metadata.get(RECORD_METADATA_SOURCE_KIND_KEY).map(String::as_str) != Some("pre-existing-store-path")
+        || record.metadata.get(RECORD_METADATA_STORE_PATH_KEY).map(String::as_str)
+            != Some(attestation.logical_store_path.as_str())
+    {
+        return Err(RunError::Internal(
+            "store-path attestation must bind one declared toolchain source root".to_string(),
+        ));
+    }
+    let prefix = record
+        .store_prefix
+        .as_deref()
+        .ok_or_else(|| RunError::Internal("store-path attestation has no store prefix".to_string()))?;
+    nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(
+        attestation.logical_store_path.as_bytes(),
+        prefix,
+    )
+    .map_err(|error| RunError::Internal(format!("invalid attested store path: {error}")))?;
+    let expected_identity =
+        format!("{DERIVED_STORE_PATH_ID_PREFIX}-{}", digest_virtual_source_record(&record.kind, &record.metadata)?,);
+    if record.identity != expected_identity
+        || attestation.nar_size == 0
+        || attestation.nar_size > MAX_SOURCE_TOTAL_BYTES
+        || attestation.nar_sha256.len() != NAR_SHA256_HEX_BYTES
+        || !attestation.nar_sha256.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        || attestation.signed_fingerprint_blake3.len() != BLAKE3_HEX_BYTES
+        || !attestation
+            .signed_fingerprint_blake3
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err(RunError::Internal("store-path attestation identity or NAR bounds differ".to_string()));
     }
     Ok(())
 }
@@ -3139,6 +4454,8 @@ fn classify_offline_preflight(
     manifest: &SourceBundleManifest,
     available_sources: &[SourceRecord],
     pinned_sources: &[SourceRecord],
+    state_dir: &Path,
+    trust: Option<&SourceStoreTrust<'_>>,
 ) -> Result<SourceOfflinePreflightReport, RunError> {
     validate_manifest(manifest)?;
     assert!(manifest.records.len() <= MAX_SOURCE_RECORDS);
@@ -3167,6 +4484,32 @@ fn classify_offline_preflight(
         if source_record_is_stale_for_preflight(expected, stored_record) {
             stale_source_ids.push(expected.identity.clone());
             continue;
+        }
+        if expected.kind == SourceRecordKind::ToolchainSourceRoot
+            && expected.metadata.get(RECORD_METADATA_SOURCE_KIND_KEY).map(String::as_str)
+                == Some("pre-existing-store-path")
+        {
+            if let Some(attestation) = &stored_record.store_path_attestation {
+                let Some(trust) = trust else {
+                    untrusted_source_ids.push(expected.identity.clone());
+                    continue;
+                };
+                match verify_signed_store_root(
+                    &attestation.logical_store_path,
+                    state_dir,
+                    &manifest.store_prefix,
+                    trust,
+                ) {
+                    Ok(observed) if observed == *attestation => {}
+                    _ => {
+                        untrusted_source_ids.push(expected.identity.clone());
+                        continue;
+                    }
+                }
+            } else if stored_record.files.is_empty() {
+                missing_source_ids.push(expected.identity.clone());
+                continue;
+            }
         }
         if !source_record_is_pinned(expected, stored_record, pinned_sources) {
             unpinned_source_ids.push(expected.identity.clone());
@@ -3370,7 +4713,14 @@ fn source_record_is_pinned(expected: &SourceRecord, imported: &SourceRecord, pin
 fn find_matching_source_record<'a>(expected: &SourceRecord, records: &'a [SourceRecord]) -> Option<&'a SourceRecord> {
     records
         .iter()
-        .find(|stored| source_record_metadata_matches_preflight(expected, stored) && !stored.files.is_empty())
+        .find(|stored| {
+            source_record_metadata_matches_preflight(expected, stored) && stored.store_path_attestation.is_some()
+        })
+        .or_else(|| {
+            records
+                .iter()
+                .find(|stored| source_record_metadata_matches_preflight(expected, stored) && !stored.files.is_empty())
+        })
         .or_else(|| records.iter().find(|stored| source_record_metadata_matches_preflight(expected, stored)))
         .or_else(|| records.iter().find(|stored| stored.identity == expected.identity))
 }
@@ -3580,6 +4930,26 @@ fn source_fetch_override_key(source_override: &crunch_build::FetchSourceOverride
     (kind, source_override.url.clone(), source_override.rev.clone())
 }
 
+/// No implicit precedence when a static source bundle and a signed dynamic
+/// catalog both claim the same fetch URL/revision.
+pub fn merge_source_fetch_overrides(
+    mut static_sources: Vec<crunch_build::FetchSourceOverride>,
+    dynamic_sources: Vec<crunch_build::FetchSourceOverride>,
+) -> Result<Vec<crunch_build::FetchSourceOverride>, RunError> {
+    let mut identities = BTreeSet::new();
+    for entry in static_sources.iter().chain(&dynamic_sources) {
+        let key = source_fetch_override_key(entry);
+        if !identities.insert(key) {
+            return Err(RunError::Internal(format!(
+                "duplicate static and offline vendor source override for {}",
+                entry.url,
+            )));
+        }
+    }
+    static_sources.extend(dynamic_sources);
+    Ok(static_sources)
+}
+
 pub(crate) fn source_record_is_fetcher_input(record: &SourceRecord) -> bool {
     matches!(record.kind, SourceRecordKind::FixedUrl | SourceRecordKind::VcsSnapshot)
         || source_record_is_legacy_provider_fetch(record)
@@ -3597,7 +4967,9 @@ fn bootstrap_provider_archive_record_matches(record: &SourceRecord, mode: Bootst
     let record_mode = record.metadata.get(RECORD_METADATA_PROFILE_MODE_KEY).map(String::as_str);
     let is_legacy_compatible_mode = record_mode == Some(BootstrapSourceBundleMode::SelfBuildProof.as_str())
         || record_mode == Some(BootstrapSourceBundleMode::FreshCloneInputs.as_str())
-        || record_mode == Some(BootstrapSourceBundleMode::FreshCloneFixedPoint.as_str());
+        || record_mode == Some(BootstrapSourceBundleMode::FreshCloneFixedPoint.as_str())
+        || record_mode == Some(BootstrapSourceBundleMode::FreshCloneLockVendorInputs.as_str())
+        || record_mode == Some(BootstrapSourceBundleMode::FreshCloneLockVendorFixedPoint.as_str());
     let is_mode_match = record_mode == Some(mode.as_str())
         || (mode == BootstrapSourceBundleMode::LegacySeed && is_legacy_compatible_mode);
     record.kind == SourceRecordKind::BootstrapArchive
@@ -3823,6 +5195,7 @@ fn materialize_export_records(
 fn materialize_export_records_with_connected_fetch(
     records: &[SourceRecord],
     imported_records: &[SourceRecord],
+    fetch_calls: &mut u32,
 ) -> Result<Vec<SourceRecord>, RunError> {
     let mut materialized = Vec::with_capacity(records.len());
     let mut reusable_records = imported_records.to_vec();
@@ -3832,6 +5205,9 @@ fn materialize_export_records_with_connected_fetch(
                 verify_imported_record_fixed_output(record, stored)?;
                 stored.clone()
             } else {
+                *fetch_calls = fetch_calls
+                    .checked_add(1)
+                    .ok_or_else(|| RunError::Internal("connected source fetch count overflow".to_string()))?;
                 let fetched = fetch_and_materialize_source_record(record)?;
                 reusable_records.push(fetched.clone());
                 fetched
@@ -4191,6 +5567,11 @@ pub(crate) fn materialize_source_record_from_path(
             is_skipping_git_dir,
             source_record_uses_canonical_chunks(record),
             None,
+            record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+                == Some(BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)
+                && record.metadata.get(RECORD_METADATA_PROFILE_MODE_KEY).is_some_and(|mode| {
+                    BootstrapSourceBundleMode::parse(mode).is_ok_and(BootstrapSourceBundleMode::is_lock_vendor)
+                }),
         )?
     };
     let content_blake3 = digest_source_record_content(&record.kind, &record.metadata, &files)?;
@@ -4615,6 +5996,7 @@ fn virtual_source_record(
         payload_bytes: 0,
         content_blake3: digest,
         files: Vec::new(),
+        store_path_attestation: None,
     })
 }
 
@@ -4630,13 +6012,33 @@ pub fn render_json(value: &impl Serialize) -> Result<String, RunError> {
 pub fn cmd_source(
     action: crate::SourceAction,
     state_dir: &Path,
+    output_dir: &Path,
+    backend: crunch_store::StoreBackend,
     store_prefix: &str,
     is_json_output: bool,
 ) -> Result<(), RunError> {
+    let trusted_input = match &action {
+        crate::SourceAction::Bundle {
+            action:
+                crate::SourceBundleAction::ImportStorePath {
+                    trusted_public_keys, ..
+                }
+                | crate::SourceBundleAction::Preflight {
+                    trusted_public_keys, ..
+                },
+        } => trusted_public_keys.as_slice(),
+        _ => &[],
+    };
+    let parsed_trusted = crate::trusted_keys::parse_trusted_public_keys(trusted_input)?.unwrap_or_default();
     let context = SourceBundleCliContext {
         state_dir,
         store_prefix,
         is_json_output,
+        store_trust: Some(SourceStoreTrust {
+            output_dir,
+            backend,
+            trusted_keys: &parsed_trusted,
+        }),
     };
     match action {
         crate::SourceAction::Bundle { action } => cmd_source_bundle(action, &context),
@@ -4652,6 +6054,10 @@ struct BootstrapProfileCliInput {
     mantle_source: Option<PathBuf>,
     vendor_deps: Option<PathBuf>,
     toolchain_source_root: Option<PathBuf>,
+    lock_vendor_producer: Option<PathBuf>,
+    lock_vendor_selected_table: Option<PathBuf>,
+    lock_vendor_output: Option<PathBuf>,
+    excluded_vendor_deps: Option<PathBuf>,
     proof_inputs: Vec<PathBuf>,
     include_bundles: Vec<PathBuf>,
     to: Option<PathBuf>,
@@ -4661,9 +6067,25 @@ struct BootstrapProfileCliInput {
 fn cmd_bootstrap_profile(
     input: BootstrapProfileCliInput,
     context: &SourceBundleCliContext<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+    port: &mut impl SourceBundleEffectPort,
 ) -> Result<(), RunError> {
     let mode = BootstrapSourceBundleMode::parse(&input.mode)?;
-    let supplemental_records = read_supplemental_bundle_records(&input.include_bundles)?;
+    let lock_vendor = match (
+        input.lock_vendor_producer,
+        input.lock_vendor_selected_table,
+        input.lock_vendor_output,
+        input.excluded_vendor_deps,
+    ) {
+        (None, None, None, None) => None,
+        (Some(producer), Some(selected_table), Some(output), Some(excluded_vendor)) => {
+            Some(LockVendorProfileInputs { producer, selected_table, output, excluded_vendor })
+        }
+        _ => return Err(RunError::Internal(
+            "lock-vendor profile requires --lock-vendor-producer, --lock-vendor-selected-table, --lock-vendor-output and --excluded-vendor-deps together".to_string(),
+        )),
+    };
+    let supplemental_records = port.supplementary(&input.include_bundles, false)?;
     let profile_input = BootstrapSourceBundleProfileInput {
         mode,
         provider_archive: input.provider_archive,
@@ -4675,29 +6097,100 @@ fn cmd_bootstrap_profile(
         toolchain_source_root: input.toolchain_source_root,
         proof_inputs: input.proof_inputs,
         supplemental_records,
+        lock_vendor,
     };
-    let manifest = plan_bootstrap_source_bundle_profile(&profile_input, context.store_prefix)?;
-    assert_eq!(manifest.format, SOURCE_BUNDLE_FORMAT);
-    assert_eq!(manifest.non_claim, SOURCE_BUNDLE_NON_CLAIM);
-    let wrote_profile = input.to.is_some();
-    if let Some(path) = input.to {
-        write_source_bundle(&path, &manifest)?;
+    let manifest = port.bootstrap(&profile_input, context.store_prefix)?;
+    let (observations, preflight) = observe_bootstrap_profile_effects(
+        &manifest,
+        input.to.as_deref(),
+        input.preflight,
+        context.state_dir,
+        context.store_trust.as_ref(),
+        plan,
+        port,
+    )?;
+    let ready = preflight.as_ref().is_none_or(source_offline_preflight_is_ready);
+    let terminal = classify_source_plan(plan, &observations, (!ready).then_some(RunError::Reported(1)));
+    if !matches!(&terminal, Ok(()) | Err(RunError::Reported(1))) {
+        return terminal;
     }
-    if input.preflight {
-        let preflight_receipt = offline_preflight_for_manifest(&manifest, context.state_dir)?;
-        print_offline_preflight_report(&preflight_receipt, context.is_json_output)?;
-        let failure = (!source_offline_preflight_is_ready(&preflight_receipt))
-            .then_some((SOURCE_PREFLIGHT_NOT_READY_CODE, RunError::Reported(1)));
-        return classify_source_effect(SOURCE_PREFLIGHT_EFFECT, failure);
+    if let Some(report) = preflight {
+        if context.is_json_output {
+            println!("{}", port.render(&report)?);
+        } else {
+            print_offline_preflight_report(&report, false)?;
+        }
+        return terminal;
     }
-    let profile_receipt = bootstrap_source_bundle_profile_report(&manifest, mode)?;
-    print_bootstrap_profile_report(&profile_receipt, context.is_json_output)?;
-    let effect = if wrote_profile {
-        SOURCE_PROFILE_WRITE_EFFECT
+    let report = bootstrap_source_bundle_profile_report(&manifest, mode)?;
+    if context.is_json_output {
+        println!("{}", port.render(&report)?);
     } else {
-        SOURCE_PROFILE_PLAN_EFFECT
+        print_bootstrap_profile_report(&report, false)?;
+    }
+    terminal
+}
+
+fn observe_bootstrap_profile_effects(
+    manifest: &SourceBundleManifest,
+    published_path: Option<&Path>,
+    run_preflight: bool,
+    state_dir: &Path,
+    trust: Option<&SourceStoreTrust<'_>>,
+    plan: &mantle_application_contract::EffectPlan,
+    port: &mut impl SourceBundleEffectPort,
+) -> Result<(Vec<mantle_application_contract::Observation>, Option<SourceOfflinePreflightReport>), RunError> {
+    let mut observations = vec![source_manifest_observation(manifest, None)?];
+    if let Some(path) = published_path {
+        port.publish(path, manifest, true)?;
+        let bytes = port.published_bytes(path)?;
+        observations.push(source_observation(
+            "source-publication",
+            mantle_application_contract::EffectKind::WriteFiles,
+            Some("source-bundle"),
+            mantle_application_contract::EffectMeasure::Bytes(bytes),
+            None,
+        ));
+    }
+    let preflight = if run_preflight {
+        let report = port.preflight_manifest(manifest, state_dir, trust)?;
+        let ready = source_offline_preflight_is_ready(&report);
+        observations.push(source_observation(
+            "source-state",
+            mantle_application_contract::EffectKind::ReadFiles,
+            ready.then_some("source-state"),
+            mantle_application_contract::EffectMeasure::Items(
+                report
+                    .record_count
+                    .saturating_sub(checked_u32(report.missing_records.len(), "missing source records")?),
+            ),
+            (!ready).then_some(SOURCE_PREFLIGHT_NOT_READY_CODE),
+        ));
+        Some(report)
+    } else {
+        None
     };
-    classify_source_effect(effect, None)
+    if let Some(path) = published_path {
+        let bytes = port.confirm_bundle(path, manifest).map_err(|error| {
+            classified_source_port_failure(
+                plan,
+                &observations,
+                "source-readback",
+                mantle_application_contract::EffectKind::ReadFiles,
+                mantle_application_contract::EffectMeasure::Bytes(0),
+                "source-bundle-readback-mismatch",
+                error,
+            )
+        })?;
+        observations.push(source_observation(
+            "source-readback",
+            mantle_application_contract::EffectKind::ReadFiles,
+            Some("source-bundle"),
+            mantle_application_contract::EffectMeasure::Bytes(bytes),
+            None,
+        ));
+    }
+    Ok((observations, preflight))
 }
 
 fn cmd_refresh_mantle_source(
@@ -4706,18 +6199,51 @@ fn cmd_refresh_mantle_source(
     include_bundles: &[PathBuf],
     to: &Path,
     context: &SourceBundleCliContext<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+    port: &mut impl SourceBundleEffectPort,
 ) -> Result<(), RunError> {
     if from == to {
         return Err(RunError::Internal("source-built profile refresh input and output paths must differ".to_string()));
     }
-    let manifest = read_source_bundle(from)?;
+    let (manifest, input_bytes) = port.read(from)?;
+    let input = source_manifest_observation(&manifest, Some(input_bytes))?;
     let original = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)?;
-    let replacement = source_built_mantle_source_record(mantle_source, &original.identity, &manifest.store_prefix)?;
-    let supplemental_records = read_refresh_supplemental_bundle_records(include_bundles)?;
+    let replacement = port.refreshed_record(mantle_source, &original.identity, &manifest.store_prefix)?;
+    let supplemental_records = port.supplementary(include_bundles, true)?;
     let (refreshed, report) = plan_source_built_mantle_source_refresh(manifest, replacement, supplemental_records)?;
-    write_source_bundle_no_replace(to, &refreshed)?;
-    print_mantle_source_refresh_report(&report, context.is_json_output)?;
-    classify_source_effect(SOURCE_REFRESH_EFFECT, None)
+    port.publish(to, &refreshed, false)?;
+    let bytes = port.published_bytes(to)?;
+    let published = source_observation(
+        "source-publication",
+        mantle_application_contract::EffectKind::WriteFiles,
+        Some("source-bundle"),
+        mantle_application_contract::EffectMeasure::Bytes(bytes),
+        None,
+    );
+    let readback_bytes = port.confirm_bundle(to, &refreshed).map_err(|error| {
+        classified_source_port_failure(
+            plan,
+            &[input.clone(), published.clone()],
+            "source-readback",
+            mantle_application_contract::EffectKind::ReadFiles,
+            mantle_application_contract::EffectMeasure::Bytes(0),
+            "source-bundle-readback-mismatch",
+            error,
+        )
+    })?;
+    let readback = source_observation(
+        "source-readback",
+        mantle_application_contract::EffectKind::ReadFiles,
+        Some("source-bundle"),
+        mantle_application_contract::EffectMeasure::Bytes(readback_bytes),
+        None,
+    );
+    classify_source_plan(plan, &[input, published, readback], None)?;
+    if context.is_json_output {
+        println!("{}", port.render(&report)?);
+        return Ok(());
+    }
+    print_mantle_source_refresh_report(&report, false)
 }
 
 fn read_refresh_supplemental_bundle_records(paths: &[PathBuf]) -> Result<Vec<SourceRecord>, RunError> {
@@ -4778,13 +6304,201 @@ fn merge_identical_source_records(records: Vec<SourceRecord>) -> Result<Vec<Sour
     Ok(merged)
 }
 
-fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
+// r[impl application_architecture.effect_observation_boundary]
+/// Admit all phases from the CLI declaration, before any source read or write.
+fn source_action_declaration(
+    action: &crate::SourceBundleAction,
+) -> (mantle_application_contract::SourceBundleEffectAction, usize) {
+    use mantle_application_contract::SourceBundleEffectAction as Action;
     match action {
         crate::SourceBundleAction::Plan {
             sources,
             build_roots,
             import_paths,
-        } => cmd_plan_source_bundle(&sources, &build_roots, &import_paths, context),
+        } => (Action::Plan, sources.len().saturating_add(build_roots.len()).saturating_add(import_paths.len())),
+        crate::SourceBundleAction::Export {
+            sources,
+            build_roots,
+            import_paths,
+            cached_fetches,
+            fetch_missing,
+            ..
+        } => (
+            Action::Export {
+                fetch_missing: *fetch_missing,
+            },
+            sources
+                .len()
+                .saturating_add(build_roots.len())
+                .saturating_add(import_paths.len())
+                .saturating_add(cached_fetches.len()),
+        ),
+        crate::SourceBundleAction::BootstrapProfile {
+            bootstrap_sources,
+            proof_inputs,
+            include_bundles,
+            stagex_source_bundle,
+            mantle_source,
+            vendor_deps,
+            toolchain_source_root,
+            lock_vendor_producer,
+            lock_vendor_selected_table,
+            lock_vendor_output,
+            excluded_vendor_deps,
+            to,
+            preflight,
+            ..
+        } => (
+            Action::BootstrapProfile {
+                publish: to.is_some(),
+                preflight: *preflight,
+            },
+            2usize
+                .saturating_add(bootstrap_sources.len())
+                .saturating_add(proof_inputs.len())
+                .saturating_add(include_bundles.len())
+                .saturating_add(
+                    [
+                        stagex_source_bundle,
+                        mantle_source,
+                        vendor_deps,
+                        toolchain_source_root,
+                        lock_vendor_producer,
+                        lock_vendor_selected_table,
+                        lock_vendor_output,
+                        excluded_vendor_deps,
+                    ]
+                    .iter()
+                    .filter(|path| path.is_some())
+                    .count(),
+                ),
+        ),
+        crate::SourceBundleAction::RefreshMantleSource { include_bundles, .. } => {
+            (Action::Refresh, 2usize.saturating_add(include_bundles.len()))
+        }
+        crate::SourceBundleAction::List { .. } => (Action::List, 1),
+        crate::SourceBundleAction::Import { pin, .. } => (Action::Import { pin: *pin }, 1),
+        crate::SourceBundleAction::ImportStorePath { pin, .. } => (Action::Import { pin: *pin }, 2),
+        crate::SourceBundleAction::HydrateSelfBuild { lock_vendor_output, .. } => {
+            (Action::Hydrate, 1 + usize::from(lock_vendor_output.is_some()))
+        }
+        crate::SourceBundleAction::Verify { imported, .. } => (Action::Verify { imported: *imported }, 1),
+        crate::SourceBundleAction::Preflight {
+            build_roots,
+            import_paths,
+            ..
+        } => (Action::Preflight, build_roots.len().saturating_add(import_paths.len())),
+    }
+}
+
+fn source_cli_effect_plan(
+    action: &crate::SourceBundleAction,
+) -> Result<mantle_application_contract::EffectPlan, RunError> {
+    let (operation, declared_count) = source_action_declaration(action);
+    let declared_input_count = u32::try_from(declared_count)
+        .map_err(|_| RunError::Internal("source effect declared input count exceeds u32".to_string()))?;
+    mantle_application_contract::plan_source_bundle_effects(mantle_application_contract::SourceBundleEffectRequest {
+        action: operation,
+        declared_input_count,
+    })
+    .map_err(|blocker| match blocker {
+        mantle_application_contract::SourceProvenanceBlocker::Domain(domain) => {
+            RunError::Internal(format!("source effect plan {}: {}", domain.code, domain.message))
+        }
+        other => RunError::Internal(format!("source effect plan blocked: {other:?}")),
+    })
+}
+
+fn source_observation(
+    effect_id: &str,
+    kind: mantle_application_contract::EffectKind,
+    output: Option<&str>,
+    usage: mantle_application_contract::EffectMeasure,
+    failure_code: Option<&str>,
+) -> mantle_application_contract::Observation {
+    mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId(effect_id.to_string()),
+        kind,
+        status: if failure_code.is_some() {
+            mantle_application_contract::ObservationStatus::Failed
+        } else {
+            mantle_application_contract::ObservationStatus::Succeeded
+        },
+        output: match output {
+            Some(identity) => mantle_application_contract::EffectOutput::Identity(identity.to_string()),
+            None => mantle_application_contract::EffectOutput::None,
+        },
+        usage,
+        diagnostics_code: failure_code.map(str::to_string),
+    }
+}
+
+fn source_manifest_observation(
+    manifest: &SourceBundleManifest,
+    read_bytes: Option<u64>,
+) -> Result<mantle_application_contract::Observation, RunError> {
+    let observed_bytes = if let Some(bytes) = read_bytes {
+        bytes
+    } else {
+        manifest.records.iter().try_fold(0u64, |sum, record| {
+            sum.checked_add(record.payload_bytes)
+                .ok_or_else(|| RunError::Internal("source manifest observed payload bytes overflow".to_string()))
+        })?
+    };
+    Ok(source_observation(
+        "source-input",
+        mantle_application_contract::EffectKind::ReadFiles,
+        Some(&manifest.format),
+        mantle_application_contract::EffectMeasure::Bytes(observed_bytes),
+        None,
+    ))
+}
+
+fn classify_source_plan(
+    plan: &mantle_application_contract::EffectPlan,
+    observations: &[mantle_application_contract::Observation],
+    recorded_failure: Option<RunError>,
+) -> Result<(), RunError> {
+    match mantle_application_contract::classify_observations(plan, observations) {
+        mantle_application_contract::ApplicationOutcome::Completed if recorded_failure.is_none() => Ok(()),
+        mantle_application_contract::ApplicationOutcome::Failed { .. } => Err(recorded_failure.unwrap_or_else(|| {
+            RunError::Internal("source effect failed without a recorded adapter failure".to_string())
+        })),
+        other => Err(RunError::Internal(format!("source effect observations contradict plan: {other:?}"))),
+    }
+}
+
+/// A failed adapter observation can end a partial plan, but must never be
+/// translated into successful evidence. Preserve the adapter's CLI diagnostic.
+fn classified_source_port_failure(
+    plan: &mantle_application_contract::EffectPlan,
+    prior: &[mantle_application_contract::Observation],
+    effect_id: &str,
+    kind: mantle_application_contract::EffectKind,
+    usage: mantle_application_contract::EffectMeasure,
+    code: &str,
+    error: RunError,
+) -> RunError {
+    let mut observed = Vec::with_capacity(prior.len().saturating_add(1));
+    observed.extend_from_slice(prior);
+    observed.push(source_observation(effect_id, kind, None, usage, Some(code)));
+    match mantle_application_contract::classify_observations(plan, &observed) {
+        mantle_application_contract::ApplicationOutcome::Completed => {
+            RunError::Internal(format!("source {effect_id} adapter failure classified as success"))
+        }
+        _ => error,
+    }
+}
+
+fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
+    let plan = source_cli_effect_plan(&action)?;
+    let mut port = SourceBundleFilePort;
+    match action {
+        crate::SourceBundleAction::Plan {
+            sources,
+            build_roots,
+            import_paths,
+        } => cmd_plan_source_bundle(&sources, &build_roots, &import_paths, context, &plan, &mut port),
         crate::SourceBundleAction::Export {
             sources,
             build_roots,
@@ -4800,6 +6514,8 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
             &to,
             fetch_missing,
             context,
+            &plan,
+            &mut port,
         ),
         crate::SourceBundleAction::BootstrapProfile {
             mode,
@@ -4810,6 +6526,10 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
             mantle_source,
             vendor_deps,
             toolchain_source_root,
+            lock_vendor_producer,
+            lock_vendor_selected_table,
+            lock_vendor_output,
+            excluded_vendor_deps,
             proof_inputs,
             include_bundles,
             to,
@@ -4824,31 +6544,54 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
                 mantle_source,
                 vendor_deps,
                 toolchain_source_root,
+                lock_vendor_producer,
+                lock_vendor_selected_table,
+                lock_vendor_output,
+                excluded_vendor_deps,
                 proof_inputs,
                 include_bundles,
                 to,
                 preflight,
             },
             context,
+            &plan,
+            &mut port,
         ),
         crate::SourceBundleAction::RefreshMantleSource {
             from,
             mantle_source,
             include_bundles,
             to,
-        } => cmd_refresh_mantle_source(&from, &mantle_source, &include_bundles, &to, context),
-        crate::SourceBundleAction::List { from } => cmd_list_source_bundle(&from, context),
-        crate::SourceBundleAction::Import { from, pin } => cmd_import_source_bundle(&from, pin, context),
+        } => cmd_refresh_mantle_source(&from, &mantle_source, &include_bundles, &to, context, &plan, &mut port),
+        crate::SourceBundleAction::List { from } => cmd_list_source_bundle(&from, context, &plan, &mut port),
+        crate::SourceBundleAction::Import { from, pin } => {
+            cmd_import_source_bundle(&from, pin, context, &plan, &mut port)
+        }
+        crate::SourceBundleAction::ImportStorePath {
+            logical, physical, pin, ..
+        } => cmd_import_signed_store_path(&logical, &physical, pin, context, &plan, &mut port),
         crate::SourceBundleAction::HydrateSelfBuild {
             from,
             expected_manifest_blake3,
             checkout,
-        } => cmd_hydrate_self_build_source_bundle(&from, &expected_manifest_blake3, &checkout, context),
-        crate::SourceBundleAction::Verify { from, imported } => cmd_verify_source_bundle(&from, imported, context),
+            lock_vendor_output,
+        } => cmd_hydrate_self_build_source_bundle(
+            &from,
+            &expected_manifest_blake3,
+            &checkout,
+            lock_vendor_output.as_deref(),
+            context,
+            &plan,
+            &mut port,
+        ),
+        crate::SourceBundleAction::Verify { from, imported } => {
+            cmd_verify_source_bundle(&from, imported, context, &plan, &mut port)
+        }
         crate::SourceBundleAction::Preflight {
             build_roots,
             import_paths,
-        } => cmd_preflight_source_bundle(&build_roots, &import_paths, context),
+            ..
+        } => cmd_preflight_source_bundle(&build_roots, &import_paths, context, &plan, &mut port),
     }
 }
 
@@ -4857,10 +6600,18 @@ fn cmd_plan_source_bundle(
     build_roots: &[PathBuf],
     import_paths: &[PathBuf],
     context: &SourceBundleCliContext<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+    port: &mut impl SourceBundleEffectPort,
 ) -> Result<(), RunError> {
-    let manifest = plan_from_cli_inputs(sources, build_roots, import_paths, context.store_prefix)?;
-    print_plan_report(&plan_report(&manifest)?, context.is_json_output)?;
-    classify_source_effect(SOURCE_PLAN_EFFECT, None)
+    let manifest = port.capture(sources, build_roots, import_paths, context.store_prefix)?;
+    let observation = source_manifest_observation(&manifest, None)?;
+    let report = plan_report(&manifest)?;
+    classify_source_plan(plan, &[observation], None)?;
+    if context.is_json_output {
+        println!("{}", port.render(&report)?);
+        return Ok(());
+    }
+    print_plan_report(&report, false)
 }
 
 fn cmd_export_source_bundle(
@@ -4871,198 +6622,264 @@ fn cmd_export_source_bundle(
     to: &Path,
     fetch_missing: bool,
     context: &SourceBundleCliContext<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+    port: &mut impl SourceBundleEffectPort,
 ) -> Result<(), RunError> {
-    let manifest = export_from_cli_inputs(
-        sources,
-        build_roots,
-        import_paths,
-        cached_fetches,
-        context.store_prefix,
-        context.state_dir,
-        fetch_missing,
-    )?;
-    write_source_bundle(to, &manifest)?;
-    classify_source_bundle_export(to, &manifest)?;
-    print_plan_report(&plan_report(&manifest)?, context.is_json_output)
-}
-
-/// Effect kind the export reports for its written bundle.
-const SOURCE_BUNDLE_READBACK_EFFECT: &str = "read-files";
-/// Diagnostic code for a bundle that does not read back.
-const SOURCE_BUNDLE_READBACK_CODE: &str = "source-bundle-readback-mismatch";
-
-/// Classify the export's read-back before reporting the export.
-///
-/// The write returning success is not the fact that matters to an operator: the
-/// fact is whether the bundle can be read back as the manifest that was
-/// written. The typed observation carries that fact, and the contract decides
-/// whether the export may report completion.
-fn classify_source_bundle_export(to: &Path, written: &SourceBundleManifest) -> Result<(), RunError> {
-    assert!(!to.as_os_str().is_empty());
-    let plan =
-        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::SourceProvenance, &[
-            SOURCE_BUNDLE_READBACK_EFFECT,
-        ])
-        .ok_or_else(|| RunError::Internal("source bundle readback effect plan exceeds its bound".to_string()))?;
-    let readback = read_source_bundle(to);
-    let is_matching = match &readback {
-        Ok(manifest) => manifest == written,
-        Err(_) => false,
-    };
-    let observation = mantle_application_contract::Observation {
-        effect_id: mantle_application_contract::EffectId(String::from(SOURCE_BUNDLE_READBACK_EFFECT)),
-        status: if is_matching {
-            mantle_application_contract::ObservationStatus::Succeeded
-        } else {
-            mantle_application_contract::ObservationStatus::Failed
-        },
-        diagnostics_code: if is_matching {
-            None
-        } else {
-            Some(String::from(SOURCE_BUNDLE_READBACK_CODE))
-        },
-    };
-    match mantle_application_contract::classify_observations(&plan, &[observation]) {
-        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
-        mantle_application_contract::ApplicationOutcome::Failed { .. } => Err(RunError::Internal(format!(
-            "source bundle {} did not read back as the manifest that was written",
-            to.display()
-        ))),
-        other => Err(RunError::Internal(format!("source bundle readback observations were inconsistent: {other:?}"))),
+    let (manifest, fetch_calls) =
+        port.export(sources, build_roots, import_paths, context, cached_fetches, fetch_missing)?;
+    let mut observations = Vec::with_capacity(plan.effects.len());
+    observations.push(source_manifest_observation(&manifest, None)?);
+    if fetch_missing {
+        observations.push(source_observation(
+            "source-connected-fetch",
+            mantle_application_contract::EffectKind::UseNetwork,
+            None,
+            mantle_application_contract::EffectMeasure::Calls(fetch_calls),
+            None,
+        ));
     }
+    port.publish(to, &manifest, true)?;
+    let written_bytes = port.published_bytes(to)?;
+    observations.push(source_observation(
+        "source-publication",
+        mantle_application_contract::EffectKind::WriteFiles,
+        Some("source-bundle"),
+        mantle_application_contract::EffectMeasure::Bytes(written_bytes),
+        None,
+    ));
+    let readback_bytes = port.confirm_bundle(to, &manifest).map_err(|error| {
+        classified_source_port_failure(
+            plan,
+            &observations,
+            "source-readback",
+            mantle_application_contract::EffectKind::ReadFiles,
+            mantle_application_contract::EffectMeasure::Bytes(0),
+            "source-bundle-readback-mismatch",
+            error,
+        )
+    })?;
+    observations.push(source_observation(
+        "source-readback",
+        mantle_application_contract::EffectKind::ReadFiles,
+        Some("source-bundle"),
+        mantle_application_contract::EffectMeasure::Bytes(readback_bytes),
+        None,
+    ));
+    let report = plan_report(&manifest)?;
+    classify_source_plan(plan, &observations, None)?;
+    if context.is_json_output {
+        println!("{}", port.render(&report)?);
+        return Ok(());
+    }
+    print_plan_report(&report, false)
 }
 
-fn cmd_list_source_bundle(from: &Path, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
-    let manifest = read_source_bundle(from)?;
-    print_plan_report(&list_source_bundle(&manifest)?, context.is_json_output)?;
-    classify_source_effect(SOURCE_LIST_EFFECT, None)
+fn cmd_list_source_bundle(
+    from: &Path,
+    context: &SourceBundleCliContext<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+    port: &mut impl SourceBundleEffectPort,
+) -> Result<(), RunError> {
+    let (manifest, input_bytes) = port.read(from)?;
+    let observation = source_manifest_observation(&manifest, Some(input_bytes))?;
+    let report = list_source_bundle(&manifest)?;
+    classify_source_plan(plan, &[observation], None)?;
+    if context.is_json_output {
+        println!("{}", port.render(&report)?);
+        return Ok(());
+    }
+    print_plan_report(&report, false)
 }
 
-fn cmd_import_source_bundle(from: &Path, pin: bool, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
-    let manifest = read_source_bundle(from)?;
-    let operation_output = import_source_bundle(&manifest, context.state_dir, pin)?;
-    classify_source_bundle_import(&operation_output)?;
-    print_import_report(&operation_output, context.is_json_output)
+fn cmd_import_source_bundle(
+    from: &Path,
+    pin: bool,
+    context: &SourceBundleCliContext<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+    port: &mut impl SourceBundleEffectPort,
+) -> Result<(), RunError> {
+    let (manifest, input_bytes) = port.read(from)?;
+    if manifest.records.iter().any(|record| record.store_path_attestation.is_some()) {
+        return Err(RunError::Internal(
+            "attested store roots require import-store-path with explicit trusted public keys and physical output"
+                .to_string(),
+        ));
+    }
+    import_verified_source_manifest(&manifest, input_bytes, pin, context, plan, port)
 }
 
-/// Effect kind the import reports for the state it writes.
-const SOURCE_BUNDLE_IMPORT_EFFECT: &str = "write-files";
-/// Diagnostic code for an import that did not account for every record.
-const SOURCE_BUNDLE_IMPORT_CODE: &str = "source-bundle-import-incomplete";
+fn cmd_import_signed_store_path(
+    logical: &str,
+    physical: &Path,
+    pin: bool,
+    context: &SourceBundleCliContext<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+    port: &mut impl SourceBundleEffectPort,
+) -> Result<(), RunError> {
+    let trust = context
+        .store_trust
+        .as_ref()
+        .ok_or_else(|| RunError::Internal("signed store path requires explicit trusted store authority".to_string()))?;
+    let expected_physical = offline_cache_physical_path(logical, trust.output_dir, context.store_prefix)?;
+    if physical != expected_physical {
+        return Err(RunError::Internal(format!(
+            "signed store path physical location must be {}",
+            expected_physical.display()
+        )));
+    }
+    let attestation = verify_signed_store_root(logical, context.state_dir, context.store_prefix, trust)?;
+    let mut record = store_path_source_record(StorePathSourceRequest {
+        source_path: logical,
+        store_prefix: context.store_prefix,
+    })?;
+    record.content_blake3 = digest_attested_store_path_record(&record.kind, &record.metadata, &attestation)?;
+    record.store_path_attestation = Some(attestation.clone());
+    let manifest = assemble_source_bundle(vec![record], context.store_prefix)?;
+    import_verified_source_manifest(&manifest, attestation.nar_size, pin, context, plan, port)
+}
 
-/// Classify the import report before reporting it.
-///
-/// The fact that matters is accounting: every record the bundle declares is
-/// either written now or was already present. A record that is neither means the
-/// import under-delivered, and the classification fails closed instead of
-/// reporting a successful import of an incomplete state.
-fn classify_source_bundle_import(report: &SourceBundleImportReport) -> Result<(), RunError> {
-    let plan =
-        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::SourceProvenance, &[
-            SOURCE_BUNDLE_IMPORT_EFFECT,
-        ])
-        .ok_or_else(|| RunError::Internal("source bundle import effect plan exceeds its bound".to_string()))?;
+fn import_verified_source_manifest(
+    manifest: &SourceBundleManifest,
+    input_bytes: u64,
+    pin: bool,
+    context: &SourceBundleCliContext<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+    port: &mut impl SourceBundleEffectPort,
+) -> Result<(), RunError> {
+    let input_observation = source_manifest_observation(manifest, Some(input_bytes))?;
+    let report = port.import(manifest, context.state_dir, pin)?;
+    let accounted = validated_import_accounting(&report)?;
+    let publication = source_observation(
+        "source-publication",
+        mantle_application_contract::EffectKind::WriteFiles,
+        Some("source-state"),
+        mantle_application_contract::EffectMeasure::Items(accounted),
+        None,
+    );
+    let recorded = port.confirm_state(manifest, context.state_dir, pin).map_err(|error| {
+        classified_source_port_failure(
+            plan,
+            &[input_observation.clone(), publication.clone()],
+            "source-state",
+            mantle_application_contract::EffectKind::ReadFiles,
+            mantle_application_contract::EffectMeasure::Items(0),
+            "source-bundle-import-incomplete",
+            error,
+        )
+    })?;
+    let readback = source_observation(
+        "source-state",
+        mantle_application_contract::EffectKind::ReadFiles,
+        Some("source-state"),
+        mantle_application_contract::EffectMeasure::Items(recorded),
+        None,
+    );
+    classify_source_plan(plan, &[input_observation, publication, readback], None)?;
+    if context.is_json_output {
+        println!("{}", port.render(&report)?);
+        return Ok(());
+    }
+    print_import_report(&report, false)
+}
+
+fn validated_import_accounting(report: &SourceBundleImportReport) -> Result<u32, RunError> {
     let declared_records = u32::try_from(report.records.len())
         .map_err(|_| RunError::Internal("source bundle declares more records than u32".to_string()))?;
     let accounted_records = report.imported_count.saturating_add(report.skipped_present_count);
-    let is_accounted = accounted_records == declared_records;
-    debug_assert!(accounted_records <= declared_records || !is_accounted);
-    let observation = mantle_application_contract::Observation {
-        effect_id: mantle_application_contract::EffectId(String::from(SOURCE_BUNDLE_IMPORT_EFFECT)),
-        status: if is_accounted {
-            mantle_application_contract::ObservationStatus::Succeeded
-        } else {
-            mantle_application_contract::ObservationStatus::Failed
-        },
-        diagnostics_code: if is_accounted {
-            None
-        } else {
-            Some(String::from(SOURCE_BUNDLE_IMPORT_CODE))
-        },
-    };
-    match mantle_application_contract::classify_observations(&plan, &[observation]) {
-        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
-        mantle_application_contract::ApplicationOutcome::Failed { .. } => Err(RunError::Internal(format!(
+    if accounted_records != declared_records {
+        return Err(RunError::Internal(format!(
             "source bundle import accounted for {accounted_records} of {declared_records} declared records"
-        ))),
-        other => Err(RunError::Internal(format!("source bundle import observations were inconsistent: {other:?}"))),
+        )));
     }
+    Ok(accounted_records)
 }
-
-/// Effect identity of the source bundle planning read.
-const SOURCE_PLAN_EFFECT: &str = "read-files";
-
-/// Effect identity of the bundle listing read.
-const SOURCE_LIST_EFFECT: &str = "read-files";
-
-/// Effect identity of the offline preflight read.
-const SOURCE_PREFLIGHT_EFFECT: &str = "read-files";
 
 /// Diagnostic code reported when a preflight is not ready.
 const SOURCE_PREFLIGHT_NOT_READY_CODE: &str = "source-preflight-not-ready";
-
-/// Effect identity of the mantle-source refresh write.
-const SOURCE_REFRESH_EFFECT: &str = "write-files";
-
-/// Effect identity of the self-build hydration write.
-const SOURCE_HYDRATE_EFFECT: &str = "write-files";
-
-/// Effect identity of the bootstrap profile plan read.
-const SOURCE_PROFILE_PLAN_EFFECT: &str = "read-files";
-
-/// Effect identity of the bootstrap profile write.
-const SOURCE_PROFILE_WRITE_EFFECT: &str = "write-files";
-
-/// Effect identity of the bundle verification read.
-const SOURCE_VERIFY_EFFECT: &str = "read-files";
-
-/// Classify one finished source provenance effect before success is reported.
-///
-/// Same shape as the store and project families: one planned effect, one
-/// observation, and the exact failure the command already used on rejection.
-fn classify_source_effect(effect: &str, failure: Option<(&str, RunError)>) -> Result<(), RunError> {
-    let plan =
-        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::SourceProvenance, &[
-            effect,
-        ])
-        .ok_or_else(|| RunError::Internal(format!("source {effect} effect plan exceeds its bound")))?;
-    let observation = mantle_application_contract::Observation {
-        effect_id: mantle_application_contract::EffectId(String::from(effect)),
-        status: if failure.is_some() {
-            mantle_application_contract::ObservationStatus::Failed
-        } else {
-            mantle_application_contract::ObservationStatus::Succeeded
-        },
-        diagnostics_code: failure.as_ref().map(|(code, _)| String::from(*code)),
-    };
-    match mantle_application_contract::classify_observations(&plan, &[observation]) {
-        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
-        mantle_application_contract::ApplicationOutcome::Failed { .. } => match failure {
-            Some((_, error)) => Err(error),
-            None => {
-                Err(RunError::Internal(format!("source {effect} classification failed without a recorded failure")))
-            }
-        },
-        other => Err(RunError::Internal(format!("source {effect} observations were inconsistent: {other:?}"))),
-    }
-}
 
 fn cmd_hydrate_self_build_source_bundle(
     from: &Path,
     expected_manifest_blake3: &str,
     checkout: &Path,
+    lock_vendor_output: Option<&Path>,
     context: &SourceBundleCliContext<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+    port: &mut impl SourceBundleEffectPort,
 ) -> Result<(), RunError> {
-    let manifest = read_source_bundle(from)?;
-    let report = hydrate_self_build_source_bundle(&manifest, expected_manifest_blake3, checkout, context.state_dir)?;
-    print_self_build_hydration_report(&report, context.is_json_output)?;
-    classify_source_effect(SOURCE_HYDRATE_EFFECT, None)
+    let (manifest, input_bytes) = port.read(from)?;
+    let input = source_manifest_observation(&manifest, Some(input_bytes))?;
+    let report = if manifest.records.iter().any(|record| {
+        record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+            == Some(BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_ACQUISITION)
+    }) {
+        let output = lock_vendor_output.ok_or_else(|| {
+            RunError::Internal(
+                "lock-vendor hydration requires --lock-vendor-output (the separately realized producer output)"
+                    .to_string(),
+            )
+        })?;
+        port.hydrate_lock_vendor(&manifest, expected_manifest_blake3, checkout, context.state_dir, output)?
+    } else {
+        if lock_vendor_output.is_some() {
+            return Err(RunError::Internal("--lock-vendor-output requires a lock-vendor profile manifest".to_string()));
+        }
+        port.hydrate(&manifest, expected_manifest_blake3, checkout, context.state_dir)?
+    };
+    let vendor_bytes = port.confirm_vendor(&manifest, checkout).map_err(|error| {
+        classified_source_port_failure(
+            plan,
+            std::slice::from_ref(&input),
+            "source-vendor-hydration",
+            mantle_application_contract::EffectKind::WriteFiles,
+            mantle_application_contract::EffectMeasure::Bytes(0),
+            "source-bundle-hydration-incomplete",
+            error,
+        )
+    })?;
+    let vendor = source_observation(
+        "source-vendor-hydration",
+        mantle_application_contract::EffectKind::WriteFiles,
+        Some("vendor-deps"),
+        mantle_application_contract::EffectMeasure::Bytes(vendor_bytes),
+        None,
+    );
+    let recorded = port.confirm_state(&manifest, context.state_dir, true).map_err(|error| {
+        classified_source_port_failure(
+            plan,
+            &[input.clone(), vendor.clone()],
+            "source-state",
+            mantle_application_contract::EffectKind::ReadFiles,
+            mantle_application_contract::EffectMeasure::Items(0),
+            "source-bundle-hydration-incomplete",
+            error,
+        )
+    })?;
+    let state = source_observation(
+        "source-state",
+        mantle_application_contract::EffectKind::ReadFiles,
+        Some("source-state"),
+        mantle_application_contract::EffectMeasure::Items(recorded),
+        None,
+    );
+    classify_source_plan(plan, &[input, vendor, state], None)?;
+    if context.is_json_output {
+        println!("{}", port.render(&report)?);
+        return Ok(());
+    }
+    print_self_build_hydration_report(&report, false)
 }
 
-fn cmd_verify_source_bundle(from: &Path, imported: bool, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
-    let manifest = read_source_bundle(from)?;
-    let verify_receipt = if imported {
-        verify_source_bundle_state(&manifest, context.state_dir)?
+fn cmd_verify_source_bundle(
+    from: &Path,
+    imported: bool,
+    context: &SourceBundleCliContext<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+    port: &mut impl SourceBundleEffectPort,
+) -> Result<(), RunError> {
+    let (manifest, input_bytes) = port.read(from)?;
+    let input = source_manifest_observation(&manifest, Some(input_bytes))?;
+    let report = if imported {
+        port.verify_state(&manifest, context.state_dir)?
     } else {
         SourceBundleVerifyReport {
             manifest_blake3: manifest.manifest_blake3.clone(),
@@ -5074,25 +6891,67 @@ fn cmd_verify_source_bundle(from: &Path, imported: bool, context: &SourceBundleC
             non_claim: SOURCE_BUNDLE_NON_CLAIM,
         }
     };
-    // The verify report is the readiness carrier: the CLI contract pins a
-    // success exit for `missing` and `stale` classes (the operator reads the
-    // class), so the observation records the completed read without gating.
-    print_verify_report(&verify_receipt, context.is_json_output)?;
-    classify_source_effect(SOURCE_VERIFY_EFFECT, None)
+    let mut observations = vec![input];
+    if imported {
+        // Missing or stale state is readiness, not an exit failure.
+        let present = manifest.records.len().saturating_sub(report.missing_records.len());
+        observations.push(source_observation(
+            "source-state",
+            mantle_application_contract::EffectKind::ReadFiles,
+            Some("source-state"),
+            mantle_application_contract::EffectMeasure::Items(checked_u32(present, "observed source state")?),
+            None,
+        ));
+    }
+    classify_source_plan(plan, &observations, None)?;
+    if context.is_json_output {
+        println!("{}", port.render(&report)?);
+        return Ok(());
+    }
+    print_verify_report(&report, false)
 }
 
 fn cmd_preflight_source_bundle(
     build_roots: &[PathBuf],
     import_paths: &[PathBuf],
     context: &SourceBundleCliContext<'_>,
+    plan: &mantle_application_contract::EffectPlan,
+    port: &mut impl SourceBundleEffectPort,
 ) -> Result<(), RunError> {
-    let preflight_receipt =
-        offline_preflight_for_build_roots(build_roots, import_paths, context.state_dir, context.store_prefix)?;
-    print_offline_preflight_report(&preflight_receipt, context.is_json_output)?;
-    if source_offline_preflight_is_ready(&preflight_receipt) {
-        return classify_source_effect(SOURCE_PREFLIGHT_EFFECT, None);
+    let report = port.preflight_roots(build_roots, import_paths, context)?;
+    let observed_bytes = report.records.iter().try_fold(0u64, |sum, record| {
+        sum.checked_add(record.payload_bytes)
+            .ok_or_else(|| RunError::Internal("preflight observed payload bytes overflow".to_string()))
+    })?;
+    let read = source_observation(
+        "source-input",
+        mantle_application_contract::EffectKind::ReadFiles,
+        Some(report.format),
+        mantle_application_contract::EffectMeasure::Bytes(observed_bytes),
+        None,
+    );
+    let ready = source_offline_preflight_is_ready(&report);
+    let state = source_observation(
+        "source-state",
+        mantle_application_contract::EffectKind::ReadFiles,
+        ready.then_some("source-state"),
+        mantle_application_contract::EffectMeasure::Items(
+            report
+                .record_count
+                .saturating_sub(checked_u32(report.missing_records.len(), "missing source records")?),
+        ),
+        (!ready).then_some(SOURCE_PREFLIGHT_NOT_READY_CODE),
+    );
+    let terminal = classify_source_plan(plan, &[read, state], (!ready).then_some(RunError::Reported(1)));
+    if !matches!(&terminal, Ok(()) | Err(RunError::Reported(1))) {
+        return terminal;
     }
-    classify_source_effect(SOURCE_PREFLIGHT_EFFECT, Some((SOURCE_PREFLIGHT_NOT_READY_CODE, RunError::Reported(1))))
+    if context.is_json_output {
+        println!("{}", port.render(&report)?);
+    } else {
+        print_offline_preflight_report(&report, false)?;
+    }
+    terminal
 }
 
 fn plan_from_cli_inputs(
@@ -5119,7 +6978,7 @@ fn export_from_cli_inputs(
     store_prefix: &str,
     state_dir: &Path,
     fetch_missing: bool,
-) -> Result<SourceBundleManifest, RunError> {
+) -> Result<(SourceBundleManifest, u32), RunError> {
     let specs = sources.iter().map(|source| parse_source_spec(source)).collect::<Result<Vec<_>, _>>()?;
     if fetch_missing && !cached_fetches.is_empty() {
         return Err(RunError::Internal("--cached-fetch cannot be combined with --fetch-missing".to_string()));
@@ -5130,7 +6989,7 @@ fn export_from_cli_inputs(
                 "--cached-fetch requires --build-root with pinned fetch records".to_string(),
             ));
         }
-        return plan_source_bundle(&specs, store_prefix);
+        return Ok((plan_source_bundle(&specs, store_prefix)?, 0));
     }
     let evaluation_paths = crate::build_cmd::build_import_paths(import_paths)?;
     let derived_records = collect_build_source_records_from_files(build_roots, &evaluation_paths, store_prefix)?;
@@ -5181,12 +7040,17 @@ fn export_from_cli_inputs(
             "cached fetch URL does not match a pinned fixed-output source in --build-root: {unmatched}"
         )));
     }
+    let mut fetch_calls = 0;
     if fetch_missing {
-        records.extend(materialize_export_records_with_connected_fetch(&expected, &available_sources)?);
+        records.extend(materialize_export_records_with_connected_fetch(
+            &expected,
+            &available_sources,
+            &mut fetch_calls,
+        )?);
     } else {
         records.extend(materialize_export_records(&expected, &available_sources)?);
     }
-    assemble_source_bundle(records, store_prefix)
+    Ok((assemble_source_bundle(records, store_prefix)?, fetch_calls))
 }
 
 fn resolve_cached_fetch_mapping<'a>(
@@ -5720,7 +7584,7 @@ mod tests {
         let (files, payload_bytes) = if source_record_is_fetcher_input(record) {
             canonicalize_fetch_payload_entries(payload_path, skip_git_dir).unwrap()
         } else {
-            canonicalize_payload_entries_with_policy(payload_path, skip_git_dir, false, None).unwrap()
+            canonicalize_payload_entries_with_policy(payload_path, skip_git_dir, false, None, false).unwrap()
         };
         let content_blake3 = digest_source_record_content(&record.kind, &record.metadata, &files).unwrap();
         SourceRecord {
@@ -5806,6 +7670,7 @@ mod tests {
             toolchain_source_root: Some(toolchain),
             proof_inputs: vec![proof],
             supplemental_records: Vec::new(),
+            lock_vendor: None,
         }
     }
 
@@ -5901,6 +7766,113 @@ mod tests {
         assert!(manifest.records.len() > REQUIRED_HYDRATION_RECORD_CLASS_COUNT);
         assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
         (manifest, checkout)
+    }
+    fn lock_vendor_hydration_fixture(temp: &Path) -> (SourceBundleManifest, PathBuf, PathBuf, PathBuf) {
+        let mut input = bootstrap_profile_fixture(&temp.join("profile"));
+        input.mode = BootstrapSourceBundleMode::FreshCloneLockVendorInputs;
+        input.bootstrap_sources.clear();
+        input.vendor_deps = None;
+        let source = input.mantle_source.as_ref().unwrap();
+        write_hydration_checkout(source);
+        let excluded = source.join(VENDOR_DEPS_DIR_NAME);
+        fs::remove_dir_all(&excluded).unwrap();
+        write_hydration_vendor(&excluded, false);
+        let table = temp.join("selected-hashes-v1");
+        fs::write(&table, "mantle-shared-lock-hashes-v1\n").unwrap();
+        let producer = temp.join("lock-vendor-producer");
+        fs::write(&producer, b"selected lock-vendor producer identity").unwrap();
+        let output = temp.join(format!("{}-lock-vendor-inputs", "a".repeat(32)));
+        write_hydration_vendor(&output, false);
+        input.lock_vendor = Some(LockVendorProfileInputs {
+            producer,
+            selected_table: table,
+            output: output.clone(),
+            excluded_vendor: excluded,
+        });
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let checkout = temp.join("fresh-checkout");
+        write_hydration_checkout(&checkout);
+        (manifest, checkout, output, source.to_path_buf())
+    }
+
+    #[test]
+    fn lock_vendor_profile_omits_vendor_bytes_and_hydrates_fresh_checkout_with_verified_packages() {
+        let temp = tempfile::tempdir().unwrap();
+        let (manifest, checkout, output, source) = lock_vendor_hydration_fixture(temp.path());
+        let report =
+            bootstrap_source_bundle_profile_report(&manifest, BootstrapSourceBundleMode::FreshCloneLockVendorInputs)
+                .unwrap();
+        let receipt = lock_vendor_acquisition_record(&manifest).unwrap();
+        let source_record = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap();
+        let initial = manifest.manifest_blake3.clone();
+        fs::create_dir_all(source.join("bootstrap/pins")).unwrap();
+        fs::write(
+            source.join("bootstrap/pins/cargo-shared-lock-hashes-v1"),
+            concat!(
+                "mantle-shared-lock-hashes-v1\n",
+                "cargo/artifact-auth-core@0.1.0/git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d880ddf4c2967f4c024b489b5c0022bf1\trecursive-sha256\t5c640b1bad0335e63d15461c3a69fa71f627842209cf2a9ff955bdca87c36055\thttps://github.com/OnixResearch/onix-artifact.git\n",
+            ),
+        )
+        .unwrap();
+        let mut input = bootstrap_profile_fixture(&temp.path().join("second-profile"));
+        input.mode = BootstrapSourceBundleMode::FreshCloneLockVendorInputs;
+        input.bootstrap_sources.clear();
+        input.vendor_deps = None;
+        input.mantle_source = Some(source.clone());
+        input.lock_vendor = Some(LockVendorProfileInputs {
+            producer: temp.path().join("lock-vendor-producer"),
+            selected_table: temp.path().join("selected-hashes-v1"),
+            output: output.clone(),
+            excluded_vendor: source.join(VENDOR_DEPS_DIR_NAME),
+        });
+        // The reviewed B row changes the mutable full table, not the selected
+        // producer input or source snapshot of the locked A package.
+        let with_unrelated_row = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let unchanged_source =
+            require_single_profile_record(&with_unrelated_row, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap();
+        assert_eq!(source_record.content_blake3, unchanged_source.content_blake3);
+        assert_eq!(receipt.content_blake3, lock_vendor_acquisition_record(&with_unrelated_row).unwrap().content_blake3);
+        assert_eq!(initial, with_unrelated_row.manifest_blake3);
+        assert!(receipt.files.is_empty());
+        assert_eq!(receipt.payload_bytes, 0);
+        assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
+        let state = temp.path().join("state");
+        let hydrated = hydrate_lock_vendor_source_bundle(&manifest, &initial, &checkout, &state, &output).unwrap();
+        assert_eq!(hydrated.vendor_content_blake3, receipt.metadata[LOCK_VENDOR_OUTPUT_CONTENT_KEY]);
+        assert_eq!(
+            observed_hydrated_vendor_bytes(&manifest, &checkout).unwrap(),
+            report.excluded_vendor_payload_bytes.unwrap()
+        );
+        assert_eq!(observed_imported_source_state(&manifest, &state, true).unwrap(), manifest.records.len() as u32);
+        fs::write(checkout.join(VENDOR_DEPS_DIR_NAME).join("dep-a/src/lib.rs"), b"pub fn tampered() {}\n").unwrap();
+        assert!(observed_hydrated_vendor_bytes(&manifest, &checkout).is_err());
+    }
+
+    #[test]
+    fn lock_vendor_hydration_rejects_output_or_checkout_lock_mismatch_before_publication() {
+        let temp = tempfile::tempdir().unwrap();
+        let (manifest, checkout, output, _) = lock_vendor_hydration_fixture(temp.path());
+        let state = temp.path().join("state");
+        fs::write(output.join("dep-a/src/lib.rs"), b"pub fn tampered() {}\n").unwrap();
+        assert!(
+            hydrate_lock_vendor_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state, &output)
+                .is_err()
+        );
+        assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
+        assert!(!source_pins_dir(&state).exists());
+        write_hydration_vendor(&output, false);
+        fs::OpenOptions::new()
+            .append(true)
+            .open(checkout.join("Cargo.lock"))
+            .unwrap()
+            .write_all(b"\n")
+            .unwrap();
+        assert!(
+            hydrate_lock_vendor_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state, &output)
+                .is_err()
+        );
+        assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
+        assert!(!source_pins_dir(&state).exists());
     }
 
     #[cfg(unix)]
@@ -6436,7 +8408,7 @@ mod tests {
         let state_dir = temp.path().join("state");
         import_source_bundle(&manifest, &state_dir, true).unwrap();
 
-        let preflight = offline_preflight_for_manifest(&manifest, &state_dir).unwrap();
+        let preflight = offline_preflight_for_manifest(&manifest, &state_dir, None).unwrap();
 
         assert_eq!(report.format, BOOTSTRAP_SOURCE_PROFILE_FORMAT);
         assert_eq!(report.mode, BootstrapSourceBundleMode::SelfBuildProof);
@@ -6469,6 +8441,26 @@ mod tests {
         assert_eq!(provider.report.ready_class, SourceReadiness::Ready);
         assert_eq!(provider.overrides.len(), 1);
         assert!(provider.overrides[0].payload_path.join("src/main.txt").is_file());
+    }
+
+    #[test]
+    fn hydration_readback_rejects_partial_vendor_and_missing_pin() {
+        let temp = tempfile::tempdir().unwrap();
+        let (manifest, checkout) = hydration_fixture(temp.path(), false);
+        let state_dir = temp.path().join("state");
+        hydrate_self_build_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state_dir).unwrap();
+        let vendor_index = plan_self_build_hydration(&manifest, &manifest.manifest_blake3).unwrap().vendor_record_index;
+        let expected_vendor_bytes = manifest.records[vendor_index].payload_bytes;
+        assert_eq!(observed_hydrated_vendor_bytes(&manifest, &checkout).unwrap(), expected_vendor_bytes);
+        assert_eq!(
+            observed_imported_source_state(&manifest, &state_dir, true).unwrap(),
+            u32::try_from(manifest.records.len()).unwrap()
+        );
+        fs::remove_file(checkout.join(VENDOR_DEPS_DIR_NAME).join("dep-a/src/lib.rs")).unwrap();
+        assert!(observed_hydrated_vendor_bytes(&manifest, &checkout).is_err());
+        let pin = source_pins_dir(&state_dir).join(format!("{}.json", manifest.manifest_blake3));
+        fs::remove_file(pin).unwrap();
+        assert!(observed_imported_source_state(&manifest, &state_dir, true).is_err());
     }
 
     // r[verify bootstrap_inventory.fresh_clone_source_hydration]
@@ -7390,6 +9382,70 @@ mod tests {
     }
 
     #[test]
+    fn pinned_virtual_store_path_is_not_offline_ready() {
+        let temp = tempfile::tempdir().unwrap();
+        let logical = format!("/mantle/store/{}-fixture", "0".repeat(32));
+        let root = root_derivation(vec![crunch_glue::Input::Source(logical.clone())]);
+        let roots = [("default".to_string(), root)];
+        let planned =
+            assemble_source_bundle(collect_build_source_records(&roots, "/mantle/store").unwrap(), "/mantle/store")
+                .unwrap();
+        import_source_bundle(&planned, temp.path(), true).unwrap();
+
+        let report = offline_preflight_for_derivations(&roots, temp.path(), "/mantle/store", None).unwrap();
+        assert_eq!(report.ready_class, SourceReadiness::Missing);
+        assert_eq!(report.missing_records, vec![planned.records[0].identity.clone()]);
+    }
+
+    #[test]
+    fn forged_store_root_attestation_requires_physical_signer() {
+        let temp = tempfile::tempdir().unwrap();
+        let logical = format!("/mantle/store/{}-fixture", "0".repeat(32));
+        let mut record = store_path_source_record(StorePathSourceRequest {
+            source_path: &logical,
+            store_prefix: "/mantle/store",
+        })
+        .unwrap();
+        let attestation = StorePathAttestation {
+            logical_store_path: logical.clone(),
+            nar_sha256: "a".repeat(NAR_SHA256_HEX_BYTES),
+            nar_size: 1,
+            signed_fingerprint_blake3: "b".repeat(BLAKE3_HEX_BYTES),
+        };
+        record.content_blake3 =
+            digest_attested_store_path_record(&record.kind, &record.metadata, &attestation).unwrap();
+        record.store_path_attestation = Some(attestation);
+        let signed_manifest = assemble_source_bundle(vec![record.clone()], "/mantle/store").unwrap();
+        import_source_bundle(&signed_manifest, temp.path(), true).unwrap();
+        let roots = [("default".to_string(), root_derivation(vec![crunch_glue::Input::Source(logical)]))];
+        let without_keys = offline_preflight_for_derivations(&roots, temp.path(), "/mantle/store", None).unwrap();
+        assert_eq!(without_keys.ready_class, SourceReadiness::Untrusted);
+        assert_eq!(without_keys.untrusted_records, vec![record.identity.clone()]);
+
+        let output_dir = temp.path().join("store");
+        fs::create_dir(&output_dir).unwrap();
+        let trust = SourceStoreTrust {
+            output_dir: &output_dir,
+            backend: crunch_store::StoreBackend::Snix,
+            trusted_keys: &[],
+        };
+        let with_no_signer =
+            offline_preflight_for_derivations(&roots, temp.path(), "/mantle/store", Some(&trust)).unwrap();
+        assert_eq!(with_no_signer.ready_class, SourceReadiness::Untrusted);
+
+        let mut wrong_path = record.clone();
+        wrong_path.store_path_attestation.as_mut().unwrap().logical_store_path =
+            format!("/mantle/store/{}-other", "0".repeat(32));
+        wrong_path.content_blake3 = digest_attested_store_path_record(
+            &wrong_path.kind,
+            &wrong_path.metadata,
+            wrong_path.store_path_attestation.as_ref().unwrap(),
+        )
+        .unwrap();
+        assert!(validate_source_record(&wrong_path, ManifestPayloadValidation::VerifyPayloads).is_err());
+    }
+
+    #[test]
     fn source_offline_preflight_accepts_pinned_imported_file_payload() {
         let temp = tempfile::tempdir().unwrap();
         let payload = temp.path().join("payload.txt");
@@ -7401,7 +9457,7 @@ mod tests {
         let state_dir = temp.path().join("state");
         import_source_bundle(&exported, &state_dir, true).unwrap();
 
-        let report = offline_preflight_for_derivations(&roots, &state_dir, "/mantle/store").unwrap();
+        let report = offline_preflight_for_derivations(&roots, &state_dir, "/mantle/store", None).unwrap();
 
         assert_eq!(report.ready_class, SourceReadiness::Ready);
         assert_eq!(report.record_count, 1);
@@ -7424,6 +9480,7 @@ mod tests {
             &[("default".to_string(), root)],
             &temp.path().join("missing-state"),
             "/mantle/store",
+            None,
         )
         .unwrap();
 
@@ -7445,6 +9502,7 @@ mod tests {
             &[("default".to_string(), root)],
             &temp.path().join("state"),
             "/mantle/store",
+            None,
         )
         .unwrap();
 
@@ -7468,7 +9526,7 @@ mod tests {
         let state_dir = temp.path().join("state");
         import_source_bundle(&exported, &state_dir, false).unwrap();
 
-        let report = offline_preflight_for_derivations(&roots, &state_dir, "/mantle/store").unwrap();
+        let report = offline_preflight_for_derivations(&roots, &state_dir, "/mantle/store", None).unwrap();
 
         assert_eq!(report.ready_class, SourceReadiness::Unpinned);
         assert_eq!(report.unpinned_records.len(), 1);
@@ -7546,7 +9604,7 @@ mod tests {
         let manifest = assemble_source_bundle(vec![captured], "/mantle/store").unwrap();
         let state = temp.path().join("source-state");
         import_source_bundle(&manifest, &state, true).unwrap();
-        let ready = offline_preflight_for_derivations(&roots, &state, "/mantle/store").unwrap();
+        let ready = offline_preflight_for_derivations(&roots, &state, "/mantle/store", None).unwrap();
         assert_eq!(ready.ready_class, SourceReadiness::Ready);
 
         fs::write(&archive, b"drifted archive").unwrap();
@@ -7567,7 +9625,7 @@ mod tests {
         let state_dir = temp.path().join("state");
         import_source_bundle(&exported, &state_dir, true).unwrap();
 
-        let plan = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store").unwrap();
+        let plan = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store", None).unwrap();
 
         assert_eq!(plan.report.ready_class, SourceReadiness::Ready);
         assert_eq!(plan.overrides.len(), 1);
@@ -7602,7 +9660,7 @@ mod tests {
         let manifest = assemble_source_bundle(vec![record], "/nix/store").unwrap();
         let state = temp.path().join("source-state");
         import_source_bundle(&manifest, &state, true).unwrap();
-        let plan = source_fetch_override_plan_for_derivations(&roots, &state, "/nix/store").unwrap();
+        let plan = source_fetch_override_plan_for_derivations(&roots, &state, "/nix/store", None).unwrap();
         assert_eq!(plan.report.ready_class, SourceReadiness::Ready);
         assert_eq!(plan.overrides.len(), 1);
         assert_eq!(plan.overrides[0].url, URL);
@@ -7719,7 +9777,7 @@ let Derivation = import "derivation.ncl" in
         let state_dir = temp.path().join("state");
         import_source_bundle(&exported, &state_dir, true).unwrap();
 
-        let plan = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store").unwrap();
+        let plan = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store", None).unwrap();
 
         assert_eq!(plan.overrides.len(), 1);
         assert_eq!(plan.overrides[0].url, payload_url);
@@ -7750,7 +9808,7 @@ let Derivation = import "derivation.ncl" in
         let state_dir = temp.path().join("state");
         import_source_bundle(&exported, &state_dir, false).unwrap();
 
-        let err = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store").unwrap_err();
+        let err = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store", None).unwrap_err();
 
         assert!(err.to_string().contains("offline source preflight is not ready"));
         assert!(err.to_string().contains("Unpinned"));
@@ -7788,7 +9846,7 @@ let Derivation = import "derivation.ncl" in
         let source_state_manifest = assemble_source_bundle(imported, "/mantle/store").unwrap();
         import_source_bundle(&source_state_manifest, &state_dir, true).unwrap();
 
-        let plan = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store").unwrap();
+        let plan = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store", None).unwrap();
 
         assert_eq!(plan.report.ready_class, SourceReadiness::Ready);
         assert_eq!(plan.overrides.len(), 2);
@@ -7828,7 +9886,7 @@ let Derivation = import "derivation.ncl" in
         let source_state_manifest = assemble_source_bundle(vec![wrong_record], "/mantle/store").unwrap();
         import_source_bundle(&source_state_manifest, &state_dir, true).unwrap();
 
-        let err = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store").unwrap_err();
+        let err = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store", None).unwrap_err();
 
         assert!(err.to_string().contains("offline source preflight is not ready"));
         assert!(err.to_string().contains("Stale"));
@@ -7845,7 +9903,7 @@ let Derivation = import "derivation.ncl" in
             adapter: Some(adapter_with_extra(ADAPTER_EXTRA_UNSUPPORTED_KEY, ADAPTER_EXTRA_TRUE_VALUE)),
         };
         let manifest = plan_source_bundle(&[spec], "/mantle/store").unwrap();
-        let report = offline_preflight_for_manifest(&manifest, &temp.path().join("state")).unwrap();
+        let report = offline_preflight_for_manifest(&manifest, &temp.path().join("state"), None).unwrap();
 
         assert_eq!(report.ready_class, SourceReadiness::Unsupported);
         assert_eq!(report.unsupported_records, vec!["unsupported-adapter".to_string()]);
@@ -7869,7 +9927,7 @@ let Derivation = import "derivation.ncl" in
         };
         let manifest = plan_source_bundle(&[spec], "/mantle/store").unwrap();
         import_source_bundle(&manifest, &temp.path().join("state"), true).unwrap();
-        let report = offline_preflight_for_manifest(&manifest, &temp.path().join("state")).unwrap();
+        let report = offline_preflight_for_manifest(&manifest, &temp.path().join("state"), None).unwrap();
 
         assert_eq!(report.ready_class, SourceReadiness::Untrusted);
         assert_eq!(report.untrusted_records, vec!["untrusted-adapter".to_string()]);
@@ -7887,6 +9945,7 @@ let Derivation = import "derivation.ncl" in
             &[("default".to_string(), root)],
             &temp.path().join("state"),
             "/mantle/store",
+            None,
         )
         .unwrap();
 
@@ -7997,6 +10056,7 @@ let Derivation = import "derivation.ncl" in
             payload_bytes: u64::try_from(content.len()).unwrap(),
             content_blake3,
             files,
+            store_path_attestation: None,
         };
 
         let err = validate_source_record(&record, ManifestPayloadValidation::VerifyPayloads).unwrap_err();
@@ -8005,7 +10065,7 @@ let Derivation = import "derivation.ncl" in
 }
 
 #[cfg(test)]
-mod readback_classification_tests {
+mod readback_tests {
 
     use super::*;
 
@@ -8028,7 +10088,7 @@ mod readback_classification_tests {
         let path = temp.path().join("bundle.json");
         let manifest = manifest_for(&temp, "alpha");
         write_source_bundle(&path, &manifest).unwrap();
-        assert!(classify_source_bundle_export(&path, &manifest).is_ok());
+        assert_eq!(observed_source_bundle_bytes(&path, &manifest).unwrap(), fs::metadata(&path).unwrap().len());
     }
 
     #[test]
@@ -8036,7 +10096,7 @@ mod readback_classification_tests {
         let temp = tempfile::tempdir().unwrap();
         let manifest = manifest_for(&temp, "alpha");
         let missing = temp.path().join("absent.json");
-        let error = classify_source_bundle_export(&missing, &manifest).expect_err("a missing bundle must fail");
+        let error = observed_source_bundle_bytes(&missing, &manifest).expect_err("a missing bundle must fail");
         assert!(error.to_string().contains("did not read back"), "{error}");
     }
 
@@ -8047,8 +10107,22 @@ mod readback_classification_tests {
         let written = manifest_for(&temp, "alpha");
         let other = manifest_for(&temp, "beta");
         write_source_bundle(&path, &written).unwrap();
-        assert!(classify_source_bundle_export(&path, &other).is_err());
-        assert!(classify_source_bundle_export(&path, &written).is_ok());
+        assert!(observed_source_bundle_bytes(&path, &other).is_err());
+        assert!(observed_source_bundle_bytes(&path, &written).is_ok());
+    }
+    #[test]
+    fn imported_state_readback_detects_missing_artifacts_after_replay() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = manifest_for(&temp, "replay");
+        let state_dir = temp.path().join("state");
+        let first = import_source_bundle(&manifest, &state_dir, true).unwrap();
+        let replay = import_source_bundle(&manifest, &state_dir, true).unwrap();
+        assert_eq!(first.imported_count, 1);
+        assert_eq!(replay.skipped_present_count, 1);
+        assert_eq!(observed_imported_source_state(&manifest, &state_dir, true).unwrap(), 1);
+        let record_path = source_records_dir(&state_dir).join(format!("{}.json", manifest.records[0].content_blake3));
+        fs::remove_file(record_path).unwrap();
+        assert!(observed_imported_source_state(&manifest, &state_dir, true).is_err());
     }
 }
 
@@ -8079,50 +10153,21 @@ mod import_accounting_tests {
 
     #[test]
     fn an_import_that_accounts_for_every_record_is_completed() {
-        assert!(classify_source_bundle_import(&report(2, 1, 3)).is_ok());
-        assert!(classify_source_bundle_import(&report(3, 0, 3)).is_ok());
-        assert!(classify_source_bundle_import(&report(0, 3, 3)).is_ok());
-        assert!(classify_source_bundle_import(&report(0, 0, 0)).is_ok());
+        assert_eq!(validated_import_accounting(&report(2, 1, 3)).unwrap(), 3);
+        assert_eq!(validated_import_accounting(&report(3, 0, 3)).unwrap(), 3);
+        assert_eq!(validated_import_accounting(&report(0, 3, 3)).unwrap(), 3);
+        assert_eq!(validated_import_accounting(&report(0, 0, 0)).unwrap(), 0);
     }
 
     #[test]
     fn an_import_that_leaves_a_record_unaccounted_is_rejected() {
-        let error = classify_source_bundle_import(&report(1, 1, 3)).expect_err("2 of 3 must fail closed");
+        let error = validated_import_accounting(&report(1, 1, 3)).expect_err("2 of 3 must fail closed");
         assert!(error.to_string().contains("accounted for 2 of 3"), "{error}");
     }
 
     #[test]
     fn an_import_that_counts_more_records_than_declared_is_rejected() {
-        assert!(classify_source_bundle_import(&report(2, 2, 3)).is_err());
-        assert!(classify_source_bundle_import(&report(1, 0, 0)).is_err());
-    }
-}
-
-#[cfg(test)]
-mod operation_classification_tests {
-    use super::*;
-
-    #[test]
-    fn a_succeeded_source_effect_classifies_as_completed() {
-        assert!(classify_source_effect(SOURCE_PLAN_EFFECT, None).is_ok());
-        assert!(classify_source_effect(SOURCE_HYDRATE_EFFECT, None).is_ok());
-    }
-
-    #[test]
-    fn a_failed_source_effect_returns_its_recorded_failure() {
-        let error = classify_source_effect(
-            SOURCE_PREFLIGHT_EFFECT,
-            Some((SOURCE_PREFLIGHT_NOT_READY_CODE, RunError::Reported(1))),
-        )
-        .expect_err("a failed observation rejects the report");
-        assert!(matches!(error, RunError::Reported(1)));
-    }
-    #[test]
-    fn verify_classifies_the_read_without_gating_on_readiness() {
-        // The CLI contract pins a success exit for `missing` and `stale`
-        // verify classes: the report is the readiness carrier, so the
-        // observation records the completed read and nothing gates on class.
-        assert!(classify_source_effect(SOURCE_VERIFY_EFFECT, None).is_ok());
-        assert_eq!(SOURCE_VERIFY_EFFECT, "read-files");
+        assert!(validated_import_accounting(&report(2, 2, 3)).is_err());
+        assert!(validated_import_accounting(&report(1, 0, 0)).is_err());
     }
 }

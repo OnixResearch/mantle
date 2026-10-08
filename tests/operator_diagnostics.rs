@@ -35,6 +35,278 @@ fn fake_ok_script() -> &'static str {
     "#!/bin/sh\nexit 0\n"
 }
 
+#[test]
+fn empty_selected_state_environment_rejects_artifact_import_before_any_write() {
+    for name in ["CRUNCH_STATE_DIR", "XDG_STATE_HOME", "HOME"] {
+        for verbose in [false, true] {
+            let root = TempDir::new().unwrap();
+            let source = root.path().join("source.txt");
+            fs::write(&source, b"state admission regression\n").unwrap();
+            let mut command = crunch();
+            command
+                .arg("--json")
+                .args(["artifact", "import"])
+                .arg(&source)
+                .current_dir(root.path())
+                .env_remove("CRUNCH_STATE_DIR")
+                .env_remove("XDG_STATE_HOME")
+                .env_remove("HOME")
+                .env(name, "");
+            if verbose {
+                command.arg("--verbose");
+            }
+            let output = command.output().unwrap();
+            assert_eq!(output.status.code(), Some(3), "{name}: {output:?}");
+            assert!(output.stdout.is_empty(), "{name}: no success report");
+            let stderr = String::from_utf8(output.stderr).unwrap();
+            assert!(stderr.contains(&format!("empty-state-dir-env: {name}")), "{stderr}");
+            assert!(!stderr.contains("panicked"), "{stderr}");
+            assert!(!root.path().join("frontend-artifacts").exists(), "{name}: no CWD state");
+            assert!(!root.path().join("crunch").exists(), "{name}: no relative XDG state");
+            assert!(!root.path().join(".local").exists(), "{name}: no relative HOME state");
+        }
+    }
+}
+
+#[test]
+fn relative_selected_state_environment_rejects_artifact_import_without_cwd_writes() {
+    for name in ["CRUNCH_STATE_DIR", "XDG_STATE_HOME", "HOME"] {
+        for value in ["relative/state", "."] {
+            let root = TempDir::new().unwrap();
+            let source = root.path().join("source.txt");
+            fs::write(&source, b"relative environment must not become cwd state\n").unwrap();
+            let output = crunch()
+                .args(["--json", "artifact", "import"])
+                .arg(&source)
+                .current_dir(root.path())
+                .env_remove("CRUNCH_STATE_DIR")
+                .env_remove("XDG_STATE_HOME")
+                .env_remove("HOME")
+                .env(name, value)
+                .output()
+                .unwrap();
+            assert_eq!(output.status.code(), Some(3), "{name}={value}: {output:?}");
+            assert!(output.stdout.is_empty(), "{name}={value}: no success report");
+            let stderr = String::from_utf8(output.stderr).unwrap();
+            assert!(stderr.contains(&format!("relative-state-dir-env: {name}")), "{stderr}");
+            assert!(!stderr.contains("panicked"), "{stderr}");
+            assert_eq!(count_entries(root.path()), 1, "{name}={value}: only source.txt may exist");
+        }
+    }
+}
+
+#[test]
+fn explicit_state_dir_overrides_empty_environment_and_preserves_relative_path() {
+    for override_path in ["relative-state", "."] {
+        let root = TempDir::new().unwrap();
+        let source = root.path().join("source.txt");
+        fs::write(&source, b"relative override admission\n").unwrap();
+        let output = crunch()
+            .args(["--json", "--state-dir", override_path, "artifact", "import"])
+            .arg(&source)
+            .current_dir(root.path())
+            .env("CRUNCH_STATE_DIR", "")
+            .env("XDG_STATE_HOME", "")
+            .env("HOME", "")
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{override_path}: {output:?}");
+        assert!(root.path().join(override_path).join("frontend-artifacts").is_dir());
+        if override_path != "." {
+            assert!(!root.path().join("frontend-artifacts").exists());
+        }
+    }
+}
+
+#[test]
+fn selected_crunch_state_dir_ignores_empty_lower_priority_fallbacks() {
+    let root = TempDir::new().unwrap();
+    let source = root.path().join("source.txt");
+    fs::write(&source, b"crunch state precedence\n").unwrap();
+    let selected_state = root.path().join("selected-state");
+    let output = crunch()
+        .args(["--json", "artifact", "import"])
+        .arg(&source)
+        .current_dir(root.path())
+        .env("CRUNCH_STATE_DIR", &selected_state)
+        .env("XDG_STATE_HOME", "")
+        .env("HOME", "")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert!(selected_state.join("frontend-artifacts").is_dir());
+    assert!(!root.path().join("frontend-artifacts").exists());
+}
+
+#[test]
+fn empty_state_environment_rejects_bootstrap_validate_before_evidence_write() {
+    let root = TempDir::new().unwrap();
+    let evidence = root.path().join("evidence");
+    let output = crunch()
+        .args(["--json", "bootstrap", "validate"])
+        .arg(root.path().join("absent.ncl"))
+        .arg("--evidence-dir")
+        .arg(&evidence)
+        .current_dir(root.path())
+        .env("CRUNCH_STATE_DIR", "")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(3), "{output:?}");
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("empty-state-dir-env: CRUNCH_STATE_DIR"), "{stderr}");
+    assert!(!stderr.contains("panicked"), "{stderr}");
+    assert!(!evidence.exists());
+    assert_eq!(count_entries(root.path()), 0);
+}
+
+#[test]
+fn selected_xdg_and_home_fallbacks_store_artifacts_outside_working_directory() {
+    for (selected, suffix) in [("XDG_STATE_HOME", "crunch"), ("HOME", ".local/state/crunch")] {
+        let root = TempDir::new().unwrap();
+        let source = root.path().join("source.txt");
+        fs::write(&source, b"fallback admission\n").unwrap();
+        let base = root.path().join("selected-base");
+        let output = crunch()
+            .args(["--json", "artifact", "import"])
+            .arg(&source)
+            .current_dir(root.path())
+            .env_remove("CRUNCH_STATE_DIR")
+            .env_remove("XDG_STATE_HOME")
+            .env("HOME", "")
+            .env(selected, &base)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        assert!(base.join(suffix).join("frontend-artifacts").is_dir());
+        assert!(!root.path().join("frontend-artifacts").exists());
+    }
+}
+
+#[test]
+fn unset_home_retains_tmp_state_fallback_without_creating_cwd_state() {
+    let root = TempDir::new().unwrap();
+    let output = crunch()
+        .args(["--verbose", "refactor", "list"])
+        .current_dir(root.path())
+        .env_remove("CRUNCH_STATE_DIR")
+        .env_remove("XDG_STATE_HOME")
+        .env_remove("HOME")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains(r#""state_dir":"/tmp/.local/state/crunch""#), "{stderr}");
+    assert_eq!(count_entries(root.path()), 0);
+}
+
+#[test]
+fn empty_log_directory_environment_rejects_before_log_or_transcript_effects() {
+    for command_args in [vec!["log", "--list"], vec![
+        "transcript",
+        "run",
+        "missing.md",
+        "--allow-in-place",
+    ]] {
+        let root = TempDir::new().unwrap();
+        let output = crunch()
+            .args(["--json", "--state-dir", "relative-state"])
+            .args(&command_args)
+            .current_dir(root.path())
+            .env("CRUNCH_STATE_DIR", "")
+            .env("CRUNCH_LOG_DIR", "")
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(3), "{command_args:?}: {output:?}");
+        assert!(output.stdout.is_empty());
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(stderr.contains("empty-state-dir-env: CRUNCH_LOG_DIR"), "{stderr}");
+        assert!(!stderr.contains("panicked"), "{stderr}");
+        assert_eq!(count_entries(root.path()), 0, "no transcript scratch or CWD log writes");
+    }
+}
+
+#[test]
+fn selected_log_directory_and_relative_state_override_preserve_log_output() {
+    let root = TempDir::new().unwrap();
+    let selected_logs = root.path().join("selected-logs");
+    fs::create_dir(&selected_logs).unwrap();
+    fs::write(selected_logs.join("selected.log"), "# status: success\n# derivation: selected-log\n").unwrap();
+    let fallback_logs = root.path().join("relative-state/logs");
+    fs::create_dir_all(&fallback_logs).unwrap();
+    fs::write(fallback_logs.join("fallback.log"), "# status: success\n# derivation: wrong-log\n").unwrap();
+    let output = crunch()
+        .args(["--state-dir", "relative-state", "log", "--list"])
+        .current_dir(root.path())
+        .env("CRUNCH_STATE_DIR", "")
+        .env("XDG_STATE_HOME", "")
+        .env("HOME", "")
+        .env("CRUNCH_LOG_DIR", &selected_logs)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("selected-log"), "{stdout}");
+    assert!(!stdout.contains("wrong-log"), "{stdout}");
+}
+
+#[cfg(unix)]
+#[test]
+fn selected_non_utf8_state_environment_keeps_its_exact_path() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    let root = TempDir::new().unwrap();
+    let selected_state = root.path().join(OsString::from_vec(b"state-\xff".to_vec()));
+    let selected_logs = selected_state.join("logs");
+    fs::create_dir_all(&selected_logs).unwrap();
+    fs::write(selected_logs.join("selected.log"), "# status: success\n# derivation: non-utf8-selected\n").unwrap();
+    let home_fallback = root.path().join("home");
+    let home_logs = home_fallback.join(".local/state/crunch/logs");
+    fs::create_dir_all(&home_logs).unwrap();
+    fs::write(home_logs.join("wrong-home.log"), "# status: success\n# derivation: wrong-home\n").unwrap();
+    let output = crunch()
+        .args(["log", "--list"])
+        .current_dir(root.path())
+        .env("CRUNCH_STATE_DIR", &selected_state)
+        .env("XDG_STATE_HOME", "")
+        .env("HOME", &home_fallback)
+        .env_remove("CRUNCH_LOG_DIR")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("non-utf8-selected"), "{stdout}");
+    assert!(!stdout.contains("wrong-home"), "{stdout}");
+    assert!(!root.path().join("logs").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn selected_non_utf8_log_environment_keeps_its_exact_path() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    let root = TempDir::new().unwrap();
+    let selected_logs = root.path().join(OsString::from_vec(b"logs-\xff".to_vec()));
+    fs::create_dir(&selected_logs).unwrap();
+    fs::write(selected_logs.join("selected.log"), "# status: success\n# derivation: non-utf8-logs\n").unwrap();
+    let fallback_logs = root.path().join("relative-state/logs");
+    fs::create_dir_all(&fallback_logs).unwrap();
+    fs::write(fallback_logs.join("wrong.log"), "# status: success\n# derivation: wrong-state-logs\n").unwrap();
+    let output = crunch()
+        .args(["--state-dir", "relative-state", "log", "--list"])
+        .current_dir(root.path())
+        .env("CRUNCH_STATE_DIR", "")
+        .env("CRUNCH_LOG_DIR", &selected_logs)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("non-utf8-logs"), "{stdout}");
+    assert!(!stdout.contains("wrong-state-logs"), "{stdout}");
+}
+
 fn repo_lib_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").join("lib.ncl")
 }

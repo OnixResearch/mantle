@@ -1,6 +1,6 @@
 {
   "schema": "mantle-operator-command-catalog-v1",
-  "identity_blake3": "49a0cf9c3653d3c714c10e535badf2ee6c3af1a6c90f0051e76f5577f49a7fce",
+  "identity_blake3": "b0803673530dbe88fcda7ec4fe014e3ef452dafef7f1760685a8cf2d0a0bba35",
   "entries": [
     {
       "descriptor": {
@@ -584,7 +584,7 @@
           "read-help"
         ],
         "support_tier": "advanced",
-        "mutation": "none",
+        "mutation": "store-state",
         "network": "none",
         "compatibility_state": "canonical",
         "flags": [
@@ -643,7 +643,7 @@
           "read-help"
         ],
         "support_tier": "advanced",
-        "mutation": "none",
+        "mutation": "store-state",
         "network": "none",
         "compatibility_state": "canonical",
         "flags": [
@@ -834,7 +834,7 @@
           "read-help"
         ],
         "support_tier": "advanced",
-        "mutation": "none",
+        "mutation": "store-state",
         "network": "none",
         "compatibility_state": "canonical",
         "flags": [
@@ -1013,7 +1013,7 @@
           "read-help"
         ],
         "support_tier": "daily",
-        "mutation": "none",
+        "mutation": "store-state",
         "network": "none",
         "compatibility_state": "canonical",
         "flags": [
@@ -1131,7 +1131,7 @@
           "read-help"
         ],
         "support_tier": "advanced",
-        "mutation": "none",
+        "mutation": "store-state",
         "network": "none",
         "compatibility_state": "canonical",
         "flags": [
@@ -1190,7 +1190,7 @@
           "read-help"
         ],
         "support_tier": "advanced",
-        "mutation": "none",
+        "mutation": "store-state",
         "network": "none",
         "compatibility_state": "canonical",
         "flags": [
@@ -1251,7 +1251,7 @@
           "read-help"
         ],
         "support_tier": "advanced",
-        "mutation": "none",
+        "mutation": "store-state",
         "network": "none",
         "compatibility_state": "canonical",
         "flags": [
@@ -1318,7 +1318,7 @@
           "read-help"
         ],
         "support_tier": "advanced",
-        "mutation": "store-state",
+        "mutation": "project-files",
         "network": "none",
         "compatibility_state": "canonical",
         "flags": [
@@ -1383,8 +1383,8 @@
           "read-help"
         ],
         "support_tier": "advanced",
-        "mutation": "store-state",
-        "network": "optional",
+        "mutation": "project-files",
+        "network": "none",
         "compatibility_state": "canonical",
         "flags": [
           "--base-store",
@@ -1583,6 +1583,71 @@
           "--json",
           "--log-level",
           "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "bootstrap elf-relocate",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--depth",
+          "--help",
+          "--json",
+          "--log-level",
+          "--needed",
+          "--nix-compat",
+          "--runpath",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Rewrite declared dynamic ELF references before a build output is published",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "bootstrap elf-relocate",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "store-state",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--depth",
+          "--help",
+          "--json",
+          "--log-level",
+          "--needed",
+          "--nix-compat",
+          "--runpath",
           "--state-dir",
           "--store",
           "--store-backend",
@@ -2241,6 +2306,7 @@
           "--builder",
           "--builder-arg",
           "--builder-program",
+          "--causal-trace",
           "--evaluation-stream",
           "--fix",
           "--help",
@@ -2252,6 +2318,8 @@
           "--log-level",
           "--nix-compat",
           "--no-substitute",
+          "--offline-source-manifest",
+          "--offline-source-manifest-blake3",
           "--offline-source-preflight",
           "--plan",
           "--remote-build-time-secs",
@@ -2272,6 +2340,7 @@
           "--trusted-builder-key",
           "--trusted-public-keys",
           "--verbose",
+          "--watch",
           "-I",
           "-h",
           "-j",
@@ -2299,6 +2368,7 @@
           "--builder",
           "--builder-arg",
           "--builder-program",
+          "--causal-trace",
           "--evaluation-stream",
           "--fix",
           "--help",
@@ -2310,6 +2380,8 @@
           "--log-level",
           "--nix-compat",
           "--no-substitute",
+          "--offline-source-manifest",
+          "--offline-source-manifest-blake3",
           "--offline-source-preflight",
           "--plan",
           "--remote-build-time-secs",
@@ -2330,6 +2402,7 @@
           "--trusted-builder-key",
           "--trusted-public-keys",
           "--verbose",
+          "--watch",
           "-I",
           "-h",
           "-j",
@@ -2553,6 +2626,7 @@
           "--log-level",
           "--nix-compat",
           "--profile",
+          "--readiness-socket",
           "--state-dir",
           "--store",
           "--store-backend",
@@ -2585,6 +2659,7 @@
           "--log-level",
           "--nix-compat",
           "--profile",
+          "--readiness-socket",
           "--state-dir",
           "--store",
           "--store-backend",
@@ -8409,6 +8484,193 @@
     },
     {
       "descriptor": {
+        "path": "remote live",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Serve or follow transient build facts outside build and store authority",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "remote live",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "remote live serve",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--socket",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Serve bounded live build facts over a local Unix socket",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "remote live serve",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--socket",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "remote live subscribe",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--job",
+          "--json",
+          "--kind",
+          "--log-level",
+          "--nix-compat",
+          "--owner",
+          "--socket",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Subscribe to the current matching set and later changes as NDJSON",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "remote live subscribe",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--job",
+          "--json",
+          "--kind",
+          "--log-level",
+          "--nix-compat",
+          "--owner",
+          "--socket",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-live-build-protocol-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
         "path": "remote serve",
         "aliases": [],
         "flags": [
@@ -9700,9 +9962,13 @@
         "flags": [
           "--base-store",
           "--bootstrap-source",
+          "--excluded-vendor-deps",
           "--help",
           "--include-bundle",
           "--json",
+          "--lock-vendor-output",
+          "--lock-vendor-producer",
+          "--lock-vendor-selected-table",
           "--log-level",
           "--mantle-source",
           "--mode",
@@ -9743,9 +10009,13 @@
         "flags": [
           "--base-store",
           "--bootstrap-source",
+          "--excluded-vendor-deps",
           "--help",
           "--include-bundle",
           "--json",
+          "--lock-vendor-output",
+          "--lock-vendor-producer",
+          "--lock-vendor-selected-table",
           "--log-level",
           "--mantle-source",
           "--mode",
@@ -9860,6 +10130,7 @@
           "--from",
           "--help",
           "--json",
+          "--lock-vendor-output",
           "--log-level",
           "--nix-compat",
           "--state-dir",
@@ -9894,6 +10165,7 @@
           "--from",
           "--help",
           "--json",
+          "--lock-vendor-output",
           "--log-level",
           "--nix-compat",
           "--state-dir",
@@ -9963,6 +10235,73 @@
           "--store",
           "--store-backend",
           "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "source bundle import-store-path",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--logical",
+          "--nix-compat",
+          "--physical",
+          "--pin",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--trusted-public-keys",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Attest a pre-existing physical output using its signed PathInfo and actual NAR before pinning source state",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "source bundle import-store-path",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "store-state",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--logical",
+          "--nix-compat",
+          "--physical",
+          "--pin",
+          "--state-dir",
+          "--store",
+          "--store-backend",
+          "--store-prefix",
+          "--trusted-public-keys",
           "--verbose",
           "-h",
           "-v"
@@ -10121,6 +10460,7 @@
           "--store",
           "--store-backend",
           "--store-prefix",
+          "--trusted-public-keys",
           "--verbose",
           "-I",
           "-h",
@@ -10155,6 +10495,7 @@
           "--store",
           "--store-backend",
           "--store-prefix",
+          "--trusted-public-keys",
           "--verbose",
           "-I",
           "-h",
@@ -11054,6 +11395,8 @@
           "--json",
           "--log-level",
           "--nix-compat",
+          "--owner",
+          "--reason",
           "--state-dir",
           "--store",
           "--store-backend",
@@ -11085,6 +11428,8 @@
           "--json",
           "--log-level",
           "--nix-compat",
+          "--owner",
+          "--reason",
           "--state-dir",
           "--store",
           "--store-backend",
@@ -11436,6 +11781,8 @@
           "--json",
           "--log-level",
           "--nix-compat",
+          "--owner",
+          "--reason",
           "--state-dir",
           "--store",
           "--store-backend",
@@ -11467,6 +11814,8 @@
           "--json",
           "--log-level",
           "--nix-compat",
+          "--owner",
+          "--reason",
           "--state-dir",
           "--store",
           "--store-backend",

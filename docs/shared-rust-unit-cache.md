@@ -167,6 +167,8 @@ payload roots. PathInfo-backed action-result outputs remain independent: they
 rehydrate from `mantle/outputs/` without opening the Rust unit cache or
 publishing a `mantle/castore/` root. See [Store backends](store-backends.md#capability-profiles).
 
+A FailOpen compiler wrapper also rejects a known broken retained Casita payload root without recompiling; FailOpen is not permission to bypass a recorded integrity failure.
+
 ## Non-claims
 
 A shared hit proves only admitted reuse for the recorded action, policy,

@@ -1,4 +1,5 @@
-# Reviewed generated-file declarations. `mantle filegen plan` is non-mutating;
+# Reviewed generated-file declarations. `mantle filegen plan` does not apply
+# generated files; `--plan-out` writes the reviewed plan artifact.
 # `mantle filegen apply` accepts only the still-current reviewed plan.
 let project = import "filegen-schema.ncl" in
 

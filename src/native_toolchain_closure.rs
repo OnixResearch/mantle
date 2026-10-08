@@ -2,6 +2,18 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::CommandFamily;
+use mantle_application_contract::EffectId;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::EffectSpec;
+use mantle_application_contract::ExpectedOutput;
+use mantle_application_contract::Observation;
+use mantle_application_contract::ObservationStatus;
+use mantle_application_contract::classify_observations;
+use mantle_application_contract::plan_effects;
 use serde::Deserialize;
 
 use crate::errors::RunError;
@@ -54,12 +66,47 @@ const DIRECTORY_DIGEST_INITIAL_CAPACITY: usize = 4_096;
 const MAX_GCC_RUNTIME_VERSION_DIRS: usize = 1_024;
 const ADVERTISED_TRIPLE_CAPACITY: usize = 3;
 const NATIVE_CLOSURE_MEMBER_CAPACITY: usize = 17;
+const NATIVE_INPUT_EFFECT: &str = "bootstrap-native-closure-input-read";
+const NATIVE_PUBLISH_EFFECT: &str = "bootstrap-native-closure-publish";
+const NATIVE_READBACK_EFFECT: &str = "bootstrap-native-closure-readback";
 
 pub(crate) struct NativeToolchainClosureOptions<'a> {
     pub(crate) rust_source_provider: &'a Path,
     pub(crate) host_root: &'a Path,
     pub(crate) target_root: &'a Path,
     pub(crate) output: &'a Path,
+}
+
+trait NativeClosurePort {
+    fn collect(
+        &mut self,
+        options: &NativeToolchainClosureOptions<'_>,
+    ) -> Result<crate::source_toolchain_closure::NativeClosureMaterialization, RunError>;
+    fn publish(&mut self, path: &Path, bytes: &[u8]) -> Result<(), RunError>;
+    fn readback(&mut self, path: &Path) -> Result<Vec<u8>, RunError>;
+}
+
+struct LocalNativeClosure;
+
+impl NativeClosurePort for LocalNativeClosure {
+    fn collect(
+        &mut self,
+        options: &NativeToolchainClosureOptions<'_>,
+    ) -> Result<crate::source_toolchain_closure::NativeClosureMaterialization, RunError> {
+        collect_native_closure(options)
+    }
+
+    fn publish(&mut self, path: &Path, bytes: &[u8]) -> Result<(), RunError> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|err| RunError::Internal(format!("creating {}: {err}", parent.display())))?;
+        }
+        fs::write(path, bytes).map_err(|err| RunError::Internal(format!("writing {}: {err}", path.display())))
+    }
+
+    fn readback(&mut self, path: &Path) -> Result<Vec<u8>, RunError> {
+        fs::read(path).map_err(|err| RunError::Internal(format!("reading {}: {err}", path.display())))
+    }
 }
 
 struct ProviderIdentity {
@@ -127,13 +174,109 @@ fn empty_list<T>() -> Vec<T> {
 pub(crate) fn cmd_materialize_native_toolchain_closure(
     options: NativeToolchainClosureOptions<'_>,
 ) -> Result<(), RunError> {
+    let plan = plan_effects(CommandFamily::Bootstrap, &[
+        EffectSpec {
+            effect_id: NATIVE_INPUT_EFFECT,
+            kind: EffectKind::ReadFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::None,
+        },
+        EffectSpec {
+            effect_id: NATIVE_PUBLISH_EFFECT,
+            kind: EffectKind::WriteFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::None,
+        },
+        EffectSpec {
+            effect_id: NATIVE_READBACK_EFFECT,
+            kind: EffectKind::ReadFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::None,
+        },
+    ])
+    .map_err(|error| RunError::Internal(format!("planning native toolchain closure: {}", error.code())))?;
+    let mut observed = [
+        native_observation(NATIVE_INPUT_EFFECT, EffectKind::ReadFiles),
+        native_observation(NATIVE_PUBLISH_EFFECT, EffectKind::WriteFiles),
+        native_observation(NATIVE_READBACK_EFFECT, EffectKind::ReadFiles),
+    ];
+    let result = execute_native_closure(&options, &mut LocalNativeClosure, &mut observed);
+    match (classify_observations(&plan, &observed), result) {
+        (ApplicationOutcome::Completed, Ok(validation)) => {
+            eprintln!("Materialized source-built native toolchain closure {}", options.output.display());
+            eprintln!("  members: {}", validation.member_count);
+            eprintln!("  policy_digest_blake3: {}", validation.policy_digest_blake3);
+            Ok(())
+        }
+        (ApplicationOutcome::Failed { .. }, Err(error)) => Err(error),
+        (outcome, _) => Err(RunError::Internal(format!("native closure observations inconsistent: {outcome:?}"))),
+    }
+}
+
+fn native_observation(id: &str, kind: EffectKind) -> Observation {
+    Observation {
+        effect_id: EffectId(id.to_string()),
+        kind,
+        status: ObservationStatus::Skipped,
+        output: EffectOutput::None,
+        usage: EffectMeasure::Calls(0),
+        diagnostics_code: None,
+    }
+}
+
+fn native_record_result<T>(observation: &mut Observation, result: &Result<T, RunError>) {
+    observation.status = if result.is_ok() {
+        ObservationStatus::Succeeded
+    } else {
+        ObservationStatus::Failed
+    };
+    observation.usage = EffectMeasure::Calls(1);
+    observation.diagnostics_code = result.is_err().then(|| format!("{}-failed", observation.effect_id.0));
+}
+
+fn execute_native_closure(
+    options: &NativeToolchainClosureOptions<'_>,
+    port: &mut impl NativeClosurePort,
+    observed: &mut [Observation; 3],
+) -> Result<crate::source_toolchain_closure::ToolchainClosureValidation, RunError> {
+    let collected = port.collect(options);
+    native_record_result(&mut observed[0], &collected);
+    let materialized = collected?;
+    if !materialized.manifest.seed_exceptions.is_empty() {
+        return Err(RunError::Internal("native materializer produced seed exceptions".to_string()));
+    }
+    if materialized.validation.seed_exception_count != 0 {
+        return Err(RunError::Internal("native materializer validation counted seed exceptions".to_string()));
+    }
+    debug_assert!(materialized.manifest.seed_exceptions.is_empty());
+    debug_assert_eq!(materialized.validation.seed_exception_count, 0);
+    let bytes = serde_json::to_vec_pretty(&materialized.manifest)
+        .map_err(|err| RunError::Internal(format!("serializing native toolchain closure: {err}")))?;
+    let published = port.publish(options.output, &bytes);
+    native_record_result(&mut observed[1], &published);
+    published?;
+    let readback = port.readback(options.output);
+    native_record_result(&mut observed[2], &readback);
+    if readback? != bytes {
+        observed[2].status = ObservationStatus::Failed;
+        observed[2].diagnostics_code = Some("bootstrap-native-closure-readback-mismatch".to_string());
+        return Err(RunError::Internal(format!(
+            "native toolchain closure readback differs from publication {}",
+            options.output.display()
+        )));
+    }
+    Ok(materialized.validation)
+}
+
+fn collect_native_closure(
+    options: &NativeToolchainClosureOptions<'_>,
+) -> Result<crate::source_toolchain_closure::NativeClosureMaterialization, RunError> {
     if options.output.exists() {
         return Err(RunError::Build(format!(
             "source-built native toolchain closure blocked: output {} already exists",
             options.output.display()
         )));
     }
-
     let rust_identity = rust_provider_identity(options.rust_source_provider)?;
     let host_identity =
         native_root_identity(options.host_root, HOST_ROOT_LABEL, NativeRootRole::Host, &rust_identity.host_triple)?;
@@ -151,28 +294,8 @@ pub(crate) fn cmd_materialize_native_toolchain_closure(
         host_identity: &host_identity,
         target_identity: &target_identity,
     })?;
-    let materialized = crate::source_toolchain_closure::materialize_source_built_native_closure(&candidates)
-        .map_err(|err| RunError::Build(format!("source-built native toolchain closure blocked: {}", err.message())))?;
-    if !materialized.manifest.seed_exceptions.is_empty() {
-        return Err(RunError::Internal("native materializer produced seed exceptions".to_string()));
-    }
-    if materialized.validation.seed_exception_count != 0 {
-        return Err(RunError::Internal("native materializer validation counted seed exceptions".to_string()));
-    }
-    debug_assert!(materialized.manifest.seed_exceptions.is_empty());
-    debug_assert_eq!(materialized.validation.seed_exception_count, 0);
-    if let Some(parent) = options.output.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|err| RunError::Internal(format!("creating {}: {err}", parent.display())))?;
-    }
-    let bytes = serde_json::to_vec_pretty(&materialized.manifest)
-        .map_err(|err| RunError::Internal(format!("serializing native toolchain closure: {err}")))?;
-    fs::write(options.output, bytes)
-        .map_err(|err| RunError::Internal(format!("writing {}: {err}", options.output.display())))?;
-    eprintln!("Materialized source-built native toolchain closure {}", options.output.display());
-    eprintln!("  members: {}", materialized.validation.member_count);
-    eprintln!("  policy_digest_blake3: {}", materialized.validation.policy_digest_blake3);
-    Ok(())
+    crate::source_toolchain_closure::materialize_source_built_native_closure(&candidates)
+        .map_err(|err| RunError::Build(format!("source-built native toolchain closure blocked: {}", err.message())))
 }
 
 fn rust_provider_identity(provider_root: &Path) -> Result<RustProviderIdentity, RunError> {

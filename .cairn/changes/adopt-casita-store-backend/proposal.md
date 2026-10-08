@@ -73,11 +73,13 @@ durable castore payload roots and fresh-process no-recompile reuse are proven.
   names it. The Casita profile declares `rust-unit-cache` after verified
   fresh-process reuse without another compiler invocation.
   r[mantle.casita_store_backend.castore_payload_roots]
-- Complete the castore parity gate: a missing or changed retained payload
-  root fails closed before compiler fallback or a GC fence; `store gc` still
-  plans output GC without opening Rust cache state when none exists.
-  Neither payload-root coverage nor the declared capability claims full
-  interchangeability. r[mantle.casita_store_backend.castore_parity_gate]
+- Declare Casita `rust-unit-cache` in the same cutover as durable payload
+  publication, fresh-process verification, and guarded GC retention. A
+  missing or changed retained root fails with `casita-root-missing` or
+  `casita-envelope-invalid` before reuse or GC fencing; a FailOpen wrapper
+  must not run the compiler through that integrity failure. Keep the other
+  optional capability limits and do not claim full interchangeability.
+  r[mantle.casita_store_backend.castore_parity_gate]
 - Carry one tracked, repository-owned patch for the pinned revision's
   `nar.rs:88` call, applied by both vendor paths with compile and drift
   checks, and never claim that unmodified upstream builds.
@@ -183,10 +185,10 @@ records the decision.
 - A fresh process with `--store-backend casita` reuses an admitted output
   after the physical export is deleted, with no rebuild and equal NAR facts.
 - A fresh process reuses a PathInfo-backed action-result output from its
-  output root without a rebuild, and `store gc` works for outputs when no Rust
-  unit cache state exists. A retained Rust unit payload rooted in Casita
-  restores in a fresh process without invoking the compiler again; changed
-  or missing retained payload roots block reuse and GC before fallback.
+  output root without a rebuild; `store gc` works for outputs both with and
+  without Rust unit cache state. With declared `rust-unit-cache`, a fresh
+  wrapper process reuses a verified retained payload without recompilation;
+  guarded GC preserves retained castore roots and releases unretained roots.
 - A second Casita client that publishes under the same root name between
   staging and commit, or repoints a root during `store sign`, makes Mantle's
   change commit nothing and keeps the other client's target.

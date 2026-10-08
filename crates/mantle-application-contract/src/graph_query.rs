@@ -12,7 +12,13 @@ use alloc::vec::Vec;
 use crate::envelope::ApplicationBlocker;
 use crate::envelope::ApplicationOutcome;
 use crate::envelope::CapabilityError;
+use crate::envelope::EffectId;
+use crate::envelope::EffectKind;
+use crate::envelope::EffectMeasure;
+use crate::envelope::EffectOutput;
 use crate::envelope::EffectPlan;
+use crate::envelope::EffectSpec;
+use crate::envelope::ExpectedOutput;
 use crate::envelope::Observation;
 use crate::envelope::ObservationStatus;
 use crate::envelope::plan_effects;
@@ -65,16 +71,17 @@ pub struct GraphQueryRequest {
     pub target: String,
 }
 
-/// Entity facts reported by one finished graph query.
+/// Entity facts and actual result identity reported by one finished query.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GraphQueryFacts {
+pub struct GraphQueryFacts<'a> {
+    pub observed_target: &'a str,
     pub nodes: u32,
     pub edges: u32,
     pub aliases: u32,
     pub dependents: u32,
 }
 
-impl GraphQueryFacts {
+impl GraphQueryFacts<'_> {
     /// Whether every fact sits inside the admitted bound.
     pub fn is_bounded(&self) -> bool {
         let bound = MAX_GRAPH_QUERY_ENTITIES;
@@ -88,14 +95,18 @@ impl GraphQueryFacts {
 
 /// Port: execute one typed graph query and report its facts.
 pub trait GraphQueryPort {
-    fn query(&mut self, request: &GraphQueryRequest) -> Result<GraphQueryFacts, CapabilityError>;
+    fn query(&mut self, request: &GraphQueryRequest) -> Result<GraphQueryFacts<'_>, CapabilityError>;
 }
 
-/// The bounded effect plan for one graph query.
-pub fn graph_query_effect_plan() -> Result<EffectPlan, CapabilityError> {
-    plan_effects(CommandFamily::Planning, &[GRAPH_QUERY_READ_EFFECT]).ok_or_else(|| {
-        CapabilityError::new("graph-query-plan-rejected", "the graph-query effect plan exceeds its bound")
-    })
+/// The bounded effect plan for one query and its declared target.
+pub fn graph_query_effect_plan(target: &str) -> Result<EffectPlan, CapabilityError> {
+    plan_effects(CommandFamily::Planning, &[EffectSpec {
+        effect_id: GRAPH_QUERY_READ_EFFECT,
+        kind: EffectKind::ReadFiles,
+        limit: EffectMeasure::Items(MAX_GRAPH_QUERY_ENTITIES),
+        expected_output: ExpectedOutput::Identity(target),
+    }])
+    .map_err(|error| CapabilityError::new(error.code(), "the graph-query effect plan was rejected"))
 }
 
 /// Validate one graph query before any port is called.
@@ -113,34 +124,24 @@ pub fn validate_graph_query(request: &GraphQueryRequest) -> Vec<ApplicationBlock
     blockers
 }
 
-/// Classify one finished query against its plan.
-///
-/// A query whose facts exceed the admitted bound is reported as a failed
-/// observation, so no caller can report an unbounded graph view.
-pub fn classify_graph_query(plan: &EffectPlan, facts: &GraphQueryFacts) -> ApplicationOutcome {
-    let status = if facts.is_bounded() {
-        ObservationStatus::Succeeded
-    } else {
-        ObservationStatus::Failed
-    };
+/// Classify the actual result identity and bounded entity facts.
+pub fn classify_graph_query(plan: &EffectPlan, facts: &GraphQueryFacts<'_>) -> ApplicationOutcome {
+    let largest_count = facts.nodes.max(facts.edges).max(facts.aliases).max(facts.dependents);
+    let is_bounded = facts.is_bounded();
     let observation = Observation {
-        effect_id: plan.effects.first().map_or_else(
-            || crate::envelope::EffectId(String::from(GRAPH_QUERY_READ_EFFECT)),
-            |effect| effect.effect_id.clone(),
-        ),
-        status,
-        diagnostics_code: if facts.is_bounded() {
-            None
+        effect_id: EffectId(String::from(GRAPH_QUERY_READ_EFFECT)),
+        kind: EffectKind::ReadFiles,
+        status: if is_bounded {
+            ObservationStatus::Succeeded
         } else {
-            Some(format!("graph-query-fact-exceeds-{MAX_GRAPH_QUERY_ENTITIES}"))
+            ObservationStatus::Failed
         },
+        output: EffectOutput::Identity(String::from(facts.observed_target)),
+        usage: EffectMeasure::Items(largest_count),
+        diagnostics_code: (!is_bounded).then(|| format!("graph-query-fact-exceeds-{MAX_GRAPH_QUERY_ENTITIES}")),
     };
-    let observations = vec![observation];
-    let outcome = crate::envelope::classify_observations(plan, &observations);
-    debug_assert!(matches!(
-        outcome,
-        ApplicationOutcome::Completed | ApplicationOutcome::Failed { .. } | ApplicationOutcome::Rejected { .. }
-    ));
+    let outcome = crate::envelope::classify_observations(plan, &[observation]);
+    debug_assert!(outcome != ApplicationOutcome::Completed || is_bounded);
     debug_assert!(plan.effects.len() == 1);
     outcome
 }
@@ -150,11 +151,12 @@ mod tests {
     use super::*;
 
     fn plan() -> EffectPlan {
-        graph_query_effect_plan().expect("the graph-query plan is admitted")
+        graph_query_effect_plan("root").expect("the graph-query plan is admitted")
     }
 
-    fn facts(nodes: u32) -> GraphQueryFacts {
+    fn facts(nodes: u32) -> GraphQueryFacts<'static> {
         GraphQueryFacts {
+            observed_target: "root",
             nodes,
             edges: 0,
             aliases: 0,
@@ -179,9 +181,18 @@ mod tests {
     #[test]
     fn an_unbounded_fact_fails_closed() {
         let outcome = classify_graph_query(&plan(), &facts(MAX_GRAPH_QUERY_ENTITIES.saturating_add(1)));
-        assert_eq!(outcome, ApplicationOutcome::Failed { failed_effect_count: 1 });
+        assert_eq!(outcome, ApplicationOutcome::Contradicted { effect_count: 1 });
         assert!(!facts(MAX_GRAPH_QUERY_ENTITIES.saturating_add(1)).is_bounded());
         assert!(facts(MAX_GRAPH_QUERY_ENTITIES).is_bounded());
+    }
+
+    #[test]
+    fn a_result_for_another_graph_target_is_rejected() {
+        let observed = GraphQueryFacts {
+            observed_target: "another-root",
+            ..facts(2)
+        };
+        assert_eq!(classify_graph_query(&plan(), &observed), ApplicationOutcome::Contradicted { effect_count: 1 });
     }
 
     #[test]

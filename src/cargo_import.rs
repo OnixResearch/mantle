@@ -2,6 +2,11 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use mantle_application_contract::CapabilityError;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::ObservationStatus;
 use serde::Deserialize;
 use serde::Serialize;
 use sha2::Digest;
@@ -12,8 +17,28 @@ use crate::cargo_profile_manifest::parse_profile_table;
 use crate::cargo_profile_manifest::resolve_profile;
 use crate::cargo_profile_manifest::select_command_profile;
 use crate::errors::RunError;
+use crate::pin_import::ImportApplied;
+use crate::pin_import::ImportApplyError;
+use crate::pin_import::ImportApplyFacts;
+use crate::pin_import::ImportApplyPhase;
+use crate::pin_import::ImportOutputCapability;
+use crate::pin_import::ImportOutputPort;
+use crate::pin_import::classify_blocked_import_effects;
+use crate::pin_import::classify_import_effects;
+use crate::pin_import::classify_import_failure;
+use crate::pin_import::import_apply_error;
+use crate::pin_import::import_capability_error;
+use crate::pin_import::import_effect_plan;
+use crate::pin_import::import_observation;
+use crate::pin_import::import_targets_identity;
+use crate::pin_import::verify_import_readback;
 
 pub const CARGO_IMPORT_PLAN_SCHEMA: &str = "mantle-cargo-import-plan-v1";
+const CARGO_IMPORT_READ_EFFECT: &str = "cargo-import-workspace-read";
+const CARGO_IMPORT_WRITE_EFFECT: &str = "cargo-import-output-write";
+const CARGO_IMPORT_READBACK_EFFECT: &str = "cargo-import-output-readback";
+const CARGO_IMPORT_BLOCKED_EXIT_CODE: u8 = 3;
+
 const DEFAULT_PROJECT_FILE: &str = "mantle-project.ncl";
 const DEFAULT_INPUTS_FILE: &str = ".mantle/inputs.ncl";
 const DEFAULT_TARGET_TRIPLE: &str = "x86_64-unknown-linux-musl";
@@ -197,8 +222,34 @@ pub struct CargoImportShellOptions<'a> {
 
 struct WorkspaceFactLoadRequest<'a> {
     root: &'a Path,
+    output: &'a dyn ImportOutputCapability,
     project_file: &'a str,
     inputs_file: &'a str,
+}
+
+trait CargoImportInputPort {
+    fn load(
+        &self,
+        request: WorkspaceFactLoadRequest<'_>,
+        profile: &str,
+    ) -> Result<(CargoWorkspaceFacts, u32), CapabilityError>;
+}
+
+struct FilesystemCargoImportPort;
+
+impl CargoImportInputPort for FilesystemCargoImportPort {
+    fn load(
+        &self,
+        request: WorkspaceFactLoadRequest<'_>,
+        profile: &str,
+    ) -> Result<(CargoWorkspaceFacts, u32), CapabilityError> {
+        let root = request.root;
+        let facts = load_workspace_facts(request)
+            .map_err(|error| CapabilityError::new("cargo-import-workspace-read", error.message()))?;
+        validate_root_profile(root, profile)
+            .map_err(|error| CapabilityError::new("cargo-import-profile-read", error.message()))?;
+        Ok((facts, 2))
+    }
 }
 
 struct RelativeOutputPathValidation<'a> {
@@ -218,12 +269,30 @@ struct CargoImportEmissionOptions {
 }
 
 pub fn run_cargo_import(options: CargoImportShellOptions<'_>) -> Result<(), RunError> {
-    let facts = load_workspace_facts(WorkspaceFactLoadRequest {
-        root: options.root,
-        project_file: options.project_file,
-        inputs_file: options.inputs_file,
-    })?;
-    validate_root_profile(options.root, options.profile)?;
+    let targets = [options.project_file, options.inputs_file];
+    let target_identity = import_targets_identity(&targets);
+    let effects = import_effect_plan(
+        CARGO_IMPORT_READ_EFFECT,
+        CARGO_IMPORT_WRITE_EFFECT,
+        CARGO_IMPORT_READBACK_EFFECT,
+        &target_identity,
+        2,
+        GENERATED_FILE_OPERATION_COUNT as u32,
+        options.apply,
+    )?;
+    let output = ImportOutputPort::open(options.root)?;
+    let input = FilesystemCargoImportPort;
+    let (facts, read_calls) = input
+        .load(
+            WorkspaceFactLoadRequest {
+                root: options.root,
+                output: &output,
+                project_file: options.project_file,
+                inputs_file: options.inputs_file,
+            },
+            options.profile,
+        )
+        .map_err(import_capability_error)?;
     let plan = build_cargo_import_plan(facts, CargoImportOptions {
         selected_package: options.selected_package.map(ToOwned::to_owned),
         selected_binary: options.selected_binary.map(ToOwned::to_owned),
@@ -234,6 +303,17 @@ pub fn run_cargo_import(options: CargoImportShellOptions<'_>) -> Result<(), RunE
     });
     debug_assert_eq!(plan.schema, CARGO_IMPORT_PLAN_SCHEMA);
     debug_assert_eq!(plan.target_triple.as_str(), options.target_triple);
+    let read = import_observation(
+        CARGO_IMPORT_READ_EFFECT,
+        EffectKind::ReadFiles,
+        if plan.blockers.is_empty() {
+            ObservationStatus::Succeeded
+        } else {
+            ObservationStatus::Failed
+        },
+        EffectMeasure::Calls(read_calls),
+        EffectOutput::None,
+    );
     let emission = CargoImportEmissionOptions {
         is_applied: options.apply,
         is_json: options.json,
@@ -241,24 +321,48 @@ pub fn run_cargo_import(options: CargoImportShellOptions<'_>) -> Result<(), RunE
 
     if options.apply {
         if !plan.blockers.is_empty() {
-            emit_cargo_import_plan(&plan, &emission)?;
-            return Err(RunError::Internal(format!(
-                "refusing to apply cargo import plan with {} blocker(s)",
-                plan.blockers.len()
-            )));
+            classify_blocked_import_effects(&effects, &read)?;
+            emit_cargo_import_plan(&plan, &CargoImportEmissionOptions {
+                is_applied: false,
+                is_json: options.json,
+            })?;
+            return Err(RunError::Reported(CARGO_IMPORT_BLOCKED_EXIT_CODE));
         }
-        apply_cargo_import_plan(options.root, &plan)?;
+        let applied = match apply_cargo_import_plan(&output, &plan, &targets) {
+            Ok(facts) => facts,
+            Err(failure) => return Err(classify_import_failure(&effects, read, failure)),
+        };
+        let observations = [
+            read,
+            import_observation(
+                CARGO_IMPORT_WRITE_EFFECT,
+                EffectKind::WriteFiles,
+                ObservationStatus::Succeeded,
+                EffectMeasure::Items(applied.facts.writes),
+                EffectOutput::None,
+            ),
+            import_observation(
+                CARGO_IMPORT_READBACK_EFFECT,
+                EffectKind::ReadFiles,
+                ObservationStatus::Succeeded,
+                EffectMeasure::Items(applied.facts.verified),
+                EffectOutput::Identity(applied.target_identity),
+            ),
+        ];
+        classify_import_effects(&effects, &observations)?;
         emit_cargo_import_plan(&plan, &emission)?;
         return Ok(());
+    }
+    if plan.blockers.is_empty() {
+        classify_import_effects(&effects, std::slice::from_ref(&read))?;
+    } else {
+        classify_blocked_import_effects(&effects, &read)?;
     }
     emit_cargo_import_plan(&plan, &emission)?;
     if plan.blockers.is_empty() {
         return Ok(());
     }
-    Err(RunError::Internal(format!(
-        "cargo import plan has {} blocker(s); rerun after resolving them",
-        plan.blockers.len()
-    )))
+    Err(RunError::Reported(CARGO_IMPORT_BLOCKED_EXIT_CODE))
 }
 
 pub fn build_cargo_import_plan(facts: CargoWorkspaceFacts, options: CargoImportOptions) -> CargoImportPlan {
@@ -884,7 +988,7 @@ fn load_workspace_facts(request: WorkspaceFactLoadRequest<'_>) -> Result<CargoWo
     for package_path in package_paths {
         packages.push(load_package_fact(&package_path)?);
     }
-    let existing_files = read_existing_files(request.root, &[request.project_file, request.inputs_file])?;
+    let existing_files = read_existing_files(request.output, &[request.project_file, request.inputs_file])?;
     let facts = CargoWorkspaceFacts {
         workspace_root: root_text,
         lockfile_digest_blake3: lock_digest,
@@ -1340,45 +1444,98 @@ fn dependency_source(value: &Value) -> CargoDependencySource {
     }
 }
 
-fn read_existing_files(root: &Path, paths: &[&str]) -> Result<Vec<ExistingProjectFile>, RunError> {
+fn read_existing_files(
+    output: &dyn ImportOutputCapability,
+    paths: &[&str],
+) -> Result<Vec<ExistingProjectFile>, RunError> {
     let mut files = Vec::with_capacity(paths.len());
     for path in paths {
-        let absolute = root.join(path);
-        if !absolute.exists() {
-            continue;
+        if let Some(bytes) = output.read(path).map_err(import_capability_error)? {
+            let content = String::from_utf8(bytes)
+                .map_err(|err| RunError::Internal(format!("reading existing import file {path}: {err}")))?;
+            files.push(ExistingProjectFile {
+                path: (*path).to_string(),
+                content,
+            });
         }
-        let content = std::fs::read_to_string(&absolute)
-            .map_err(|err| RunError::Internal(format!("reading {}: {err}", absolute.display())))?;
-        files.push(ExistingProjectFile {
-            path: (*path).to_string(),
-            content,
-        });
     }
     Ok(files)
 }
 
-fn apply_cargo_import_plan(root: &Path, plan: &CargoImportPlan) -> Result<(), RunError> {
+fn apply_cargo_import_plan(
+    output: &dyn ImportOutputCapability,
+    plan: &CargoImportPlan,
+    targets: &[&str],
+) -> Result<ImportApplied, ImportApplyError> {
+    let mut facts = ImportApplyFacts { writes: 0, verified: 0 };
     if !plan.blockers.is_empty() {
-        return Err(RunError::Internal(format!(
-            "refusing to apply cargo import plan with {} blocker(s)",
-            plan.blockers.len()
-        )));
+        return Err(import_apply_error(
+            ImportApplyPhase::Preflight,
+            facts,
+            RunError::Internal(format!("refusing to apply cargo import plan with {} blocker(s)", plan.blockers.len())),
+        ));
     }
-    debug_assert!(plan.blockers.is_empty());
+    if plan.file_operations.len() != targets.len()
+        || plan.file_operations.iter().zip(targets).any(|(operation, target)| operation.path != *target)
+    {
+        let error = RunError::Internal("cargo import plan targets differ from declared output paths".to_string());
+        return Err(import_apply_error(ImportApplyPhase::Preflight, facts, error));
+    }
     debug_assert!(plan.file_operations.len() <= GENERATED_FILE_OPERATION_COUNT);
-    for operation in &plan.file_operations {
-        if operation.action == "keep-equivalent" {
-            continue;
+    for (index, operation) in plan.file_operations.iter().enumerate() {
+        for other in plan.file_operations.iter().skip(index + 1) {
+            let left = Path::new(&operation.path);
+            let right = Path::new(&other.path);
+            if left.starts_with(right) || right.starts_with(left) {
+                let error = RunError::Internal(format!(
+                    "cargo import output targets overlap: {} and {}",
+                    operation.path, other.path
+                ));
+                return Err(import_apply_error(ImportApplyPhase::Preflight, facts, error));
+            }
         }
-        let path = root.join(&operation.path);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|err| RunError::Internal(format!("creating {}: {err}", parent.display())))?;
-        }
-        std::fs::write(&path, &operation.content)
-            .map_err(|err| RunError::Internal(format!("writing {}: {err}", path.display())))?;
     }
-    Ok(())
+    for operation in &plan.file_operations {
+        let observed = output
+            .read(&operation.path)
+            .map_err(|error| import_apply_error(ImportApplyPhase::Preflight, facts, import_capability_error(error)))?;
+        ImportOutputPort::validate_content_size(&operation.path, operation.content.as_bytes())
+            .map_err(|error| import_apply_error(ImportApplyPhase::Preflight, facts, error))?;
+        match (operation.action.as_str(), observed) {
+            ("write", None) => {}
+            ("write", Some(bytes)) | ("keep-equivalent", Some(bytes)) if bytes == operation.content.as_bytes() => {}
+            _ => {
+                let error =
+                    RunError::Internal(format!("cargo import output {} changed since planning", operation.path));
+                return Err(import_apply_error(ImportApplyPhase::Preflight, facts, error));
+            }
+        }
+    }
+    for operation in &plan.file_operations {
+        if operation.action == "write" {
+            let did_write = output
+                .ensure_contents(&operation.path, operation.content.as_bytes())
+                .map_err(|error| import_apply_error(ImportApplyPhase::Write, facts, import_capability_error(error)))?;
+            if did_write {
+                facts.writes = facts.writes.checked_add(1).ok_or_else(|| {
+                    import_apply_error(
+                        ImportApplyPhase::Write,
+                        facts,
+                        RunError::Internal("cargo import write count overflow".to_string()),
+                    )
+                })?;
+            }
+        }
+    }
+    let observed_targets = verify_import_readback(
+        output,
+        plan.file_operations.iter().map(|operation| (operation.path.as_str(), operation.content.as_bytes())),
+        &mut facts,
+    )?;
+    Ok(ImportApplied {
+        facts,
+        target_identity: observed_targets,
+    })
 }
 
 fn emit_cargo_import_plan(plan: &CargoImportPlan, options: &CargoImportEmissionOptions) -> Result<(), RunError> {
@@ -1605,7 +1762,9 @@ mod tests {
         use std::ffi::OsString;
         use std::os::unix::ffi::OsStringExt;
 
-        let invalid_root = PathBuf::from(OsString::from_vec(vec![b'/', b't', b'm', b'p', b'/', 0xff]));
+        let scratch = tempfile::tempdir().unwrap();
+        let invalid_root = scratch.path().join(OsString::from_vec(vec![0xff]));
+        std::fs::create_dir(&invalid_root).unwrap();
         let err = run_cargo_import(CargoImportShellOptions {
             root: &invalid_root,
             selected_package: None,
@@ -1619,6 +1778,7 @@ mod tests {
         })
         .unwrap_err();
 
-        assert!(err.to_string().contains("UTF-8 workspace root"));
+        assert!(matches!(err, RunError::Internal(_)), "{err}");
+        assert!(!invalid_root.join(DEFAULT_PROJECT_FILE).exists());
     }
 }

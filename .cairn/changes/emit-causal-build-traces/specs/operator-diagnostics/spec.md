@@ -25,6 +25,22 @@ MUST keep their current shape.
 - WHEN the trace is collected
 - THEN the record for the reuse MUST name the admission check as its cause
 
+#### Scenario: Interleaved parallel roots remain independently chainable
+
+- GIVEN two root goals dispatched with parallel jobs and an interleaved
+  dependency failure
+- WHEN each action's cause is followed
+- THEN the failing leaf MUST lead to its triggering root requirement
+- AND the unrelated root MUST NOT be invented as its cause
+
+#### Scenario: Store preflight fails before a worker can be observed
+
+- GIVEN strict store preflight rejects a fallback before any Worker goal exists
+- WHEN an operator requests a causal trace
+- THEN the original failure report and exit status MUST remain unchanged
+- AND the CLI MUST expose typed `WorkerNotStarted` trace unavailability without
+  persisting a synthetic action or trace file
+
 ### Requirement: Cause validation fails closed
 
 r[mantle.operator_diagnostics.causal_trace_cause_validation] Trace reading MUST
@@ -45,6 +61,20 @@ diagnostic rules.
 - GIVEN a trace record whose cause names an action absent from the trace
 - WHEN the trace is read
 - THEN validation MUST reject the trace
+
+#### Scenario: Unrelated parallel failure cannot be a cause
+
+- GIVEN two interleaved roots whose dependency edges were recorded
+- WHEN a root's failure is reassigned to another root's failed goal
+- THEN validation MUST reject that cause unless the direct dependency edge
+  was observed earlier
+
+#### Scenario: Missing cause and unsafe diagnostic rejected
+
+- GIVEN a missing or forward-pointing cause, an oversized record or trace,
+  or an unredacted credential, absolute path, or standalone digest
+- WHEN the trace is read
+- THEN validation MUST reject the trace rather than repair the edge or text
 
 ### Requirement: Traces stay outside the evidence plane
 

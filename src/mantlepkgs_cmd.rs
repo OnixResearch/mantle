@@ -41,6 +41,19 @@ use std::time::Instant;
 
 use clap::Subcommand;
 use crunch_build::ExecutionProfile;
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::CommandFamily;
+use mantle_application_contract::EffectId;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::EffectPlan;
+use mantle_application_contract::EffectSpec;
+use mantle_application_contract::ExpectedOutput;
+use mantle_application_contract::Observation;
+use mantle_application_contract::ObservationStatus as EffectStatus;
+use mantle_application_contract::classify_observations;
+use mantle_application_contract::plan_effects;
 use mantlepkgs_core::ADVISORY_RESPONSE_OSV_SCHEMA;
 use mantlepkgs_core::ADVISORY_RESPONSE_REPOLOGY_SCHEMA;
 use mantlepkgs_core::AdvisoryFinding;
@@ -149,7 +162,7 @@ use crate::foreign_executable_plan::compile_foreign_executable_plan_with_profile
 use crate::foreign_graph_compiler::compile_foreign_graph_with_profile_and_output_mode;
 use crate::foreign_import_cmd::ForeignImportAction;
 use crate::foreign_import_cmd::ForeignImportContext;
-use crate::foreign_import_cmd::cmd_foreign_import;
+use crate::foreign_import_cmd::cmd_foreign_import_with_observation;
 use crate::foreign_realization_receipt::ForeignRealizationReceipt;
 use crate::linux_rename::rename_path_no_replace;
 use crate::mantlepkgs_adapter::MergedForeignArtifacts;
@@ -159,6 +172,7 @@ use crate::mantlepkgs_adapter::observe_package;
 use crate::mantlepkgs_version_cmd::MantlepkgsVersionAction;
 use crate::mantlepkgs_version_cmd::cmd_mantlepkgs_version;
 use crate::source_bundle::ForeignSourcePathBinding;
+use crate::source_bundle::SourceBundleManifest;
 use crate::source_bundle::digest_bound_foreign_source_path;
 use crate::source_bundle::plan_bound_foreign_source_bundle;
 use crate::source_bundle::write_json_atomically;
@@ -192,6 +206,7 @@ const IMPACT_ACTION_RESULT_REPORTS_MAX: u32 = 65_536;
 const IMPACT_ACTION_RESULT_REPORT_BYTES_MAX: u64 = IMPACT_INPUT_BYTES_MAX;
 const UPDATE_INPUT_BYTES_MAX: u64 = 64 * MEBIBYTE_BYTES;
 const UPDATE_DOCUMENT_BYTES_MAX: u64 = 16 * MEBIBYTE_BYTES;
+const UPDATE_ADVISORY_FILE_COUNT_MAX: usize = 65_536;
 const UPDATE_EXECUTION_RECEIPT_FILE: &str = "update-execution-receipt.json";
 const UPDATE_STAGE_PREFIX: &str = ".mantle-update-stage-";
 const UPDATE_HTTP_USER_AGENT: &str = "mantlepkgs-update-observer/1";
@@ -206,6 +221,387 @@ const DOMAIN_SHARD_ALIAS_LIMIT: u32 = 65_536;
 const DOMAIN_SHARD_ARTIFACT_LIMIT: u32 = 65_536;
 const NIX_EXPERIMENTAL_FEATURES: &str = "nix-command flakes";
 const FAILURE_EXIT_CODE: u8 = 1;
+
+/// A plan is constructed before the first capability call. The adapter records
+/// the result of each invocation, including failed calls, before presentation.
+struct MantlepkgsEffects {
+    plan: EffectPlan,
+    observations: Vec<Observation>,
+}
+type PolicyArtifacts = (Vec<u8>, Vec<u8>, TranslationPolicy, ExecutionProfile);
+
+enum CatalogPublication {
+    Published {
+        catalog: MantlepkgsCatalog,
+        path: PathBuf,
+    },
+    Blocked {
+        plan: CatalogPlan,
+        report: PathBuf,
+        bytes: Vec<u8>,
+    },
+}
+
+trait MantlepkgsPort {
+    fn read_clock(&self) -> Instant;
+    fn elapsed_millis(&self, start: Instant) -> Result<u64, RunError>;
+    fn read_manifest(&self, path: &Path) -> Result<MantlepkgsManifest, RunError>;
+    fn read_domain_manifest(&self, path: &Path) -> Result<DomainCatalogManifest, RunError>;
+    fn verify_generation(&self, path: &Path) -> Result<VerifiedGeneration, RunError>;
+    fn select(&self, generation: &Path, package: &str, system: &str) -> Result<CompiledSelection, RunError>;
+    fn bind_sources(
+        &self,
+        selection: &CompiledSelection,
+        bindings: &[ForeignSourcePathBinding],
+    ) -> Result<SourceBundleManifest, RunError>;
+    fn read_json<T: DeserializeOwned>(&self, path: &Path, limit: u64) -> Result<T, RunError>;
+    fn write_json<T: Serialize>(&self, path: &Path, value: &T, label: &str) -> Result<(), RunError>;
+    fn confirm_json<T: Serialize>(&self, path: &Path, expected: &T, limit: u64) -> Result<(), RunError>;
+    fn read_corpus_artifacts(
+        &self,
+        sealed: &ExternalCorpusEvidence,
+        root: &Path,
+    ) -> Result<Vec<CorpusArtifactObservation>, RunError>;
+    fn read_impact_reports(
+        &self,
+        paths: &[PathBuf],
+    ) -> Result<BTreeMap<String, crunch_build::ActionResultRuntimeReport>, RunError>;
+    fn read_update_policy(&self, path: &Path) -> Result<UpdatePolicy, RunError>;
+    fn acquire_response(
+        &self,
+        policy: &UpdatePolicy,
+        response: Option<&Path>,
+        url: Option<&str>,
+        status: &str,
+        reasons: &[String],
+        expected_url: &str,
+    ) -> Result<ResponseAcquisition, RunError>;
+    fn read_mutation_document(&self, policy: &UpdatePolicy, root: &Path) -> Result<MutationDocument, RunError>;
+    fn execute_update(
+        &self,
+        plan: &UpdatePlan,
+        request: &UpdateExecuteRequest<'_>,
+    ) -> Result<mantlepkgs_core::UpdateExecutionReceipt, RunError>;
+    fn confirm_update_tree(
+        &self,
+        root: &Path,
+        receipt: &mantlepkgs_core::UpdateExecutionReceipt,
+    ) -> Result<(), RunError>;
+    fn read_advisories(&self, paths: &[PathBuf]) -> Result<Vec<AdvisoryObservation>, RunError>;
+    fn load_policy(&self, path: &Path, manifest: &MantlepkgsManifest) -> Result<PolicyArtifacts, RunError>;
+    fn prepare_seed_root(&self, root: &Path) -> Result<PathBuf, RunError>;
+    fn produce_batch(
+        &self,
+        manifest: &MantlepkgsManifest,
+        nix_program: &Path,
+        seed_root: &Path,
+    ) -> Result<ProducerBatch, RunError>;
+    fn publish_batch(
+        &self,
+        manifest: &MantlepkgsManifest,
+        batch: &ProducerBatch,
+        policy_artifacts: &PolicyArtifacts,
+        output_root: &Path,
+    ) -> Result<CatalogPublication, RunError>;
+    fn verify_publication(&self, result: &CatalogPublication) -> Result<(), RunError>;
+}
+
+struct FsMantlepkgsPort;
+
+impl MantlepkgsPort for FsMantlepkgsPort {
+    fn read_clock(&self) -> Instant {
+        Instant::now()
+    }
+    fn elapsed_millis(&self, start: Instant) -> Result<u64, RunError> {
+        u64::try_from(start.elapsed().as_millis())
+            .map_err(|_| RunError::Internal("validation elapsed milliseconds overflow".into()))
+    }
+    fn read_manifest(&self, path: &Path) -> Result<MantlepkgsManifest, RunError> {
+        evaluate_manifest(path)
+    }
+    fn read_domain_manifest(&self, path: &Path) -> Result<DomainCatalogManifest, RunError> {
+        evaluate_domain_manifest(path)
+    }
+    fn verify_generation(&self, path: &Path) -> Result<VerifiedGeneration, RunError> {
+        verify_generation(path)
+    }
+    fn select(&self, generation: &Path, package: &str, system: &str) -> Result<CompiledSelection, RunError> {
+        compile_catalog_selection(generation, package, system)
+    }
+    fn bind_sources(
+        &self,
+        selection: &CompiledSelection,
+        bindings: &[ForeignSourcePathBinding],
+    ) -> Result<SourceBundleManifest, RunError> {
+        plan_bound_foreign_source_bundle(
+            &selection.plan.source_requirements,
+            bindings,
+            &selection.plan.target_store_prefix,
+        )
+    }
+    fn read_json<T: DeserializeOwned>(&self, path: &Path, limit: u64) -> Result<T, RunError> {
+        read_json_bounded(path, limit)
+    }
+    fn write_json<T: Serialize>(&self, path: &Path, value: &T, label: &str) -> Result<(), RunError> {
+        write_json_atomically(path, value, label)
+    }
+    fn read_corpus_artifacts(
+        &self,
+        sealed: &ExternalCorpusEvidence,
+        root: &Path,
+    ) -> Result<Vec<CorpusArtifactObservation>, RunError> {
+        observe_corpus_artifacts(sealed, root)
+    }
+    fn read_impact_reports(
+        &self,
+        paths: &[PathBuf],
+    ) -> Result<BTreeMap<String, crunch_build::ActionResultRuntimeReport>, RunError> {
+        load_impact_action_result_reports(paths)
+    }
+    fn read_update_policy(&self, path: &Path) -> Result<UpdatePolicy, RunError> {
+        read_sealed_update_policy(path)
+    }
+    fn acquire_response(
+        &self,
+        policy: &UpdatePolicy,
+        response: Option<&Path>,
+        url: Option<&str>,
+        status: &str,
+        reasons: &[String],
+        expected_url: &str,
+    ) -> Result<ResponseAcquisition, RunError> {
+        acquire_update_response(policy, response, url, status, reasons, expected_url)
+    }
+    fn read_mutation_document(&self, policy: &UpdatePolicy, root: &Path) -> Result<MutationDocument, RunError> {
+        observe_update_mutation_document(policy, root)
+    }
+    fn read_advisories(&self, paths: &[PathBuf]) -> Result<Vec<AdvisoryObservation>, RunError> {
+        paths.iter().map(|path| read_json_bounded(path, UPDATE_INPUT_BYTES_MAX)).collect()
+    }
+    fn execute_update(
+        &self,
+        plan: &UpdatePlan,
+        request: &UpdateExecuteRequest<'_>,
+    ) -> Result<mantlepkgs_core::UpdateExecutionReceipt, RunError> {
+        execute_update_plan(plan, request)
+    }
+    fn confirm_update_tree(
+        &self,
+        root: &Path,
+        receipt: &mantlepkgs_core::UpdateExecutionReceipt,
+    ) -> Result<(), RunError> {
+        for output in &receipt.applied_outputs {
+            let path = confined_file(root, &output.relative_path)?;
+            let bytes = read_bounded(&path, UPDATE_DOCUMENT_BYTES_MAX)?;
+            if blake3_hex(&bytes) != output.output_digest_blake3 {
+                return Err(RunError::Internal(format!(
+                    "update output changed before reporting: {}",
+                    output.relative_path
+                )));
+            }
+        }
+        Ok(())
+    }
+    fn confirm_json<T: Serialize>(&self, path: &Path, expected: &T, limit: u64) -> Result<(), RunError> {
+        let observed = read_bounded(path, limit)?;
+        let expected_bytes = pretty_json_bytes(expected, "Mantlepkgs output read-back")?;
+        if observed != expected_bytes {
+            return Err(RunError::Internal(format!(
+                "Mantlepkgs published artifact differs on read-back: {}",
+                path.display()
+            )));
+        }
+        Ok(())
+    }
+    fn load_policy(&self, path: &Path, manifest: &MantlepkgsManifest) -> Result<PolicyArtifacts, RunError> {
+        load_policy_artifacts(path, manifest)
+    }
+    fn prepare_seed_root(&self, root: &Path) -> Result<PathBuf, RunError> {
+        prepare_seed_retention_root(root)
+    }
+    fn produce_batch(
+        &self,
+        manifest: &MantlepkgsManifest,
+        nix_program: &Path,
+        seed_root: &Path,
+    ) -> Result<ProducerBatch, RunError> {
+        produce_locked_batch(manifest, nix_program, seed_root)
+    }
+    fn publish_batch(
+        &self,
+        manifest: &MantlepkgsManifest,
+        batch: &ProducerBatch,
+        policy_artifacts: &PolicyArtifacts,
+        output_root: &Path,
+    ) -> Result<CatalogPublication, RunError> {
+        publish_batch(manifest, batch, policy_artifacts, output_root)
+    }
+    fn verify_publication(&self, result: &CatalogPublication) -> Result<(), RunError> {
+        match result {
+            CatalogPublication::Published { catalog, path } => {
+                let observed = verify_generation(path)?;
+                if observed.catalog != *catalog {
+                    return Err(RunError::Internal("published Mantlepkgs catalog changed before reporting".into()));
+                }
+            }
+            CatalogPublication::Blocked { report, bytes, .. } => {
+                let observed = read_bounded(report, DOMAIN_ARTIFACT_BYTES_MAX)?;
+                if observed != *bytes {
+                    return Err(RunError::Internal(format!(
+                        "published Mantlepkgs failure report differs on read-back: {}",
+                        report.display()
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl MantlepkgsEffects {
+    fn new(specs: &[EffectSpec<'_>]) -> Result<Self, RunError> {
+        let plan = plan_effects(CommandFamily::Project, specs)
+            .map_err(|error| RunError::Internal(format!("Mantlepkgs effect plan rejected: {}", error.code())))?;
+        let observations = Vec::with_capacity(plan.effects.len());
+        Ok(Self { plan, observations })
+    }
+
+    fn call<T, P: MantlepkgsPort>(
+        &mut self,
+        port: &P,
+        effect_id: &str,
+        kind: EffectKind,
+        operation: impl FnOnce(&P) -> Result<T, RunError>,
+    ) -> Result<T, RunError> {
+        let Some(effect) = self.plan.effects.get(self.observations.len()) else {
+            return Err(RunError::Internal(format!("unplanned Mantlepkgs effect: {effect_id}")));
+        };
+        if effect.effect_id.0 != effect_id || effect.kind != kind {
+            return Err(RunError::Internal(format!("out-of-order Mantlepkgs effect: {effect_id}")));
+        }
+        let result = operation(port);
+        self.observations.push(Observation {
+            effect_id: EffectId(effect_id.into()),
+            kind,
+            status: if result.is_ok() {
+                EffectStatus::Succeeded
+            } else {
+                EffectStatus::Failed
+            },
+            output: EffectOutput::None,
+            usage: EffectMeasure::Calls(1),
+            diagnostics_code: result.as_ref().err().map(|error| error.kind().into()),
+        });
+        if result.is_err() {
+            self.classify_failed()?;
+        }
+        result
+    }
+
+    pub(crate) fn readback<T: Serialize>(
+        &mut self,
+        port: &impl MantlepkgsPort,
+        effect_id: &str,
+        path: &Path,
+        expected: &T,
+        limit: u64,
+    ) -> Result<(), RunError> {
+        let Some(effect) = self.plan.effects.get(self.observations.len()) else {
+            return Err(RunError::Internal(format!("unplanned Mantlepkgs read-back: {effect_id}")));
+        };
+        if effect.effect_id.0 != effect_id || effect.kind != EffectKind::ReadFiles {
+            return Err(RunError::Internal(format!("out-of-order Mantlepkgs read-back: {effect_id}")));
+        }
+        let result = port.confirm_json(path, expected, limit);
+        self.observations.push(Observation {
+            effect_id: EffectId(effect_id.into()),
+            kind: EffectKind::ReadFiles,
+            status: if result.is_ok() {
+                EffectStatus::Succeeded
+            } else {
+                EffectStatus::Failed
+            },
+            output: if result.is_ok() {
+                EffectOutput::Identity(path.display().to_string())
+            } else {
+                EffectOutput::None
+            },
+            usage: EffectMeasure::Calls(1),
+            diagnostics_code: result.as_ref().err().map(|error| error.kind().into()),
+        });
+        if result.is_err() {
+            self.classify_failed()?;
+        }
+        result
+    }
+
+    fn skip_remaining(&mut self, reason: &str) {
+        for effect in self.plan.effects.iter().skip(self.observations.len()) {
+            self.observations.push(Observation {
+                effect_id: effect.effect_id.clone(),
+                kind: effect.kind,
+                status: EffectStatus::Skipped,
+                output: EffectOutput::None,
+                usage: EffectMeasure::Calls(0),
+                diagnostics_code: Some(reason.into()),
+            });
+        }
+    }
+
+    fn classify_failed(&mut self) -> Result<(), RunError> {
+        self.skip_remaining("prior-effect-failed");
+        match classify_observations(&self.plan, &self.observations) {
+            ApplicationOutcome::Failed { .. } => Ok(()),
+            other => Err(RunError::Internal(format!("Mantlepkgs effect observations contradicted plan: {other:?}"))),
+        }
+    }
+
+    fn domain<T>(&mut self, result: Result<T, RunError>) -> Result<T, RunError> {
+        if result.is_err() {
+            self.skip_remaining("domain-blocked");
+            match classify_observations(&self.plan, &self.observations) {
+                ApplicationOutcome::Completed | ApplicationOutcome::Failed { .. } => {}
+                other => {
+                    return Err(RunError::Internal(format!(
+                        "Mantlepkgs effect observations contradicted plan: {other:?}"
+                    )));
+                }
+            }
+        }
+        result
+    }
+
+    fn record_response_failure(&mut self, code: &str) {
+        if let Some(observed) = self.observations.last_mut() {
+            observed.status = EffectStatus::Failed;
+            observed.diagnostics_code = Some(code.into());
+        }
+    }
+
+    fn finish_recorded_status(&self, status: ObservationStatus) -> Result<(), RunError> {
+        match classify_observations(&self.plan, &self.observations) {
+            ApplicationOutcome::Completed => Ok(()),
+            ApplicationOutcome::Failed { failed_effect_count: 1 } if status != ObservationStatus::Success => Ok(()),
+            other => Err(RunError::Internal(format!("Mantlepkgs effect observations contradicted plan: {other:?}"))),
+        }
+    }
+
+    fn finish(&self) -> Result<(), RunError> {
+        match classify_observations(&self.plan, &self.observations) {
+            ApplicationOutcome::Completed => Ok(()),
+            other => Err(RunError::Internal(format!("Mantlepkgs effect observations contradicted plan: {other:?}"))),
+        }
+    }
+}
+
+fn mantlepkgs_effect<'a>(effect_id: &'a str, kind: EffectKind, output: ExpectedOutput<'a>) -> EffectSpec<'a> {
+    EffectSpec {
+        effect_id,
+        kind,
+        limit: EffectMeasure::Calls(1),
+        expected_output: output,
+    }
+}
 
 #[derive(Subcommand, Debug, Clone)]
 pub(crate) enum MantlepkgsAction {
@@ -874,9 +1270,17 @@ struct ValidationBuildRequest<'a> {
 }
 
 fn run_validate(manifest_path: &Path, json: bool) -> Result<(), RunError> {
-    let manifest = evaluate_manifest(manifest_path)?;
-    let normalized = normalize_manifest(&manifest).map_err(core_eval_error)?;
-    let digest = manifest_digest_blake3(&normalized).map_err(core_eval_error)?;
+    let mut effects = MantlepkgsEffects::new(&[mantlepkgs_effect(
+        "validate-manifest-read",
+        EffectKind::ReadFiles,
+        ExpectedOutput::None,
+    )])?;
+    let manifest = effects.call(&FsMantlepkgsPort, "validate-manifest-read", EffectKind::ReadFiles, |port| {
+        port.read_manifest(manifest_path)
+    })?;
+    let normalized = effects.domain(normalize_manifest(&manifest).map_err(core_eval_error))?;
+    let digest = effects.domain(manifest_digest_blake3(&normalized).map_err(core_eval_error))?;
+    effects.finish()?;
     if json {
         println!(
             "{}",
@@ -902,24 +1306,38 @@ fn run_domain_adapt(
     output: &Path,
     json: bool,
 ) -> Result<(), RunError> {
+    let output_identity = output.display().to_string();
+    let mut effects = MantlepkgsEffects::new(&[
+        mantlepkgs_effect("domain-adapt-generation", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("domain-adapt-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect("domain-adapt-readback", EffectKind::ReadFiles, ExpectedOutput::Identity(&output_identity)),
+    ])?;
     if output.starts_with(generation) {
         return Err(RunError::Eval("domain shard output must remain outside the immutable source generation".into()));
     }
-    let verified = verify_generation(generation)?;
-    let shard = adapt_v1_catalog_to_domain_shard(V1DomainShardInput {
-        catalog: &verified.catalog,
-        name,
-        class,
-        owner_label,
-        source_repository,
-        limits: DomainShardLimits {
-            max_packages: DOMAIN_SHARD_PACKAGE_LIMIT,
-            max_aliases: DOMAIN_SHARD_ALIAS_LIMIT,
-            max_artifacts: DOMAIN_SHARD_ARTIFACT_LIMIT,
-        },
-    })
-    .map_err(core_eval_error)?;
-    write_json_atomically(output, &shard, "Mantlepkgs domain shard")?;
+    let verified = effects.call(&FsMantlepkgsPort, "domain-adapt-generation", EffectKind::ReadFiles, |port| {
+        port.verify_generation(generation)
+    })?;
+    let shard = effects.domain(
+        adapt_v1_catalog_to_domain_shard(V1DomainShardInput {
+            catalog: &verified.catalog,
+            name,
+            class,
+            owner_label,
+            source_repository,
+            limits: DomainShardLimits {
+                max_packages: DOMAIN_SHARD_PACKAGE_LIMIT,
+                max_aliases: DOMAIN_SHARD_ALIAS_LIMIT,
+                max_artifacts: DOMAIN_SHARD_ARTIFACT_LIMIT,
+            },
+        })
+        .map_err(core_eval_error),
+    )?;
+    effects.call(&FsMantlepkgsPort, "domain-adapt-write", EffectKind::WriteFiles, |port| {
+        port.write_json(output, &shard, "Mantlepkgs domain shard")
+    })?;
+    effects.readback(&FsMantlepkgsPort, "domain-adapt-readback", output, &shard, DOMAIN_ARTIFACT_BYTES_MAX)?;
+    effects.finish()?;
     if json {
         println!(
             "{}",
@@ -943,12 +1361,50 @@ fn run_domain_compose(
     output: &Path,
     json: bool,
 ) -> Result<(), RunError> {
+    let sealed_identity = sealed_manifest_out.display().to_string();
+    let output_identity = output.display().to_string();
+    let mut effects = MantlepkgsEffects::new(&[
+        mantlepkgs_effect("domain-compose-manifest", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("domain-compose-sealed-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect("domain-compose-catalog-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect(
+            "domain-compose-sealed-readback",
+            EffectKind::ReadFiles,
+            ExpectedOutput::Identity(&sealed_identity),
+        ),
+        mantlepkgs_effect(
+            "domain-compose-catalog-readback",
+            EffectKind::ReadFiles,
+            ExpectedOutput::Identity(&output_identity),
+        ),
+    ])?;
     reject_output_path_collisions(&[sealed_manifest_out, output])?;
-    let manifest = evaluate_domain_manifest(manifest_path)?;
-    let sealed = seal_domain_manifest(&manifest).map_err(core_eval_error)?;
-    let catalog = compose_domain_catalog(&sealed).map_err(core_eval_error)?;
-    write_json_atomically(sealed_manifest_out, &sealed, "sealed Mantlepkgs domain manifest")?;
-    write_json_atomically(output, &catalog, "Mantlepkgs domain catalog")?;
+    let manifest = effects.call(&FsMantlepkgsPort, "domain-compose-manifest", EffectKind::ReadFiles, |port| {
+        port.read_domain_manifest(manifest_path)
+    })?;
+    let sealed = effects.domain(seal_domain_manifest(&manifest).map_err(core_eval_error))?;
+    let catalog = effects.domain(compose_domain_catalog(&sealed).map_err(core_eval_error))?;
+    effects.call(&FsMantlepkgsPort, "domain-compose-sealed-write", EffectKind::WriteFiles, |port| {
+        port.write_json(sealed_manifest_out, &sealed, "sealed Mantlepkgs domain manifest")
+    })?;
+    effects.call(&FsMantlepkgsPort, "domain-compose-catalog-write", EffectKind::WriteFiles, |port| {
+        port.write_json(output, &catalog, "Mantlepkgs domain catalog")
+    })?;
+    effects.readback(
+        &FsMantlepkgsPort,
+        "domain-compose-sealed-readback",
+        sealed_manifest_out,
+        &sealed,
+        DOMAIN_ARTIFACT_BYTES_MAX,
+    )?;
+    effects.readback(
+        &FsMantlepkgsPort,
+        "domain-compose-catalog-readback",
+        output,
+        &catalog,
+        DOMAIN_ARTIFACT_BYTES_MAX,
+    )?;
+    effects.finish()?;
     if json {
         println!(
             "{}",
@@ -976,17 +1432,55 @@ fn run_validation_build(request: ValidationBuildRequest<'_>, context: &Mantlepkg
         request.realization_receipt_out,
         request.validation_receipt_out,
     ])?;
-    let domain_catalog = read_json_bounded::<DomainCatalog>(request.domain_catalog, DOMAIN_ARTIFACT_BYTES_MAX)?;
-    let validation_plan = plan_validation_root(&domain_catalog, request.validation_root).map_err(core_eval_error)?;
-    let verified_generation = verify_generation(request.generation)?;
-    require_validation_generation_binding(&domain_catalog, &validation_plan, &verified_generation.catalog)?;
-    write_json_atomically(request.validation_plan_out, &validation_plan, "Mantlepkgs validation-root plan")?;
-    let build_started = Instant::now();
-    let build_result = run_build(
+    let plan_identity = request.validation_plan_out.display().to_string();
+    let receipt_identity = request.validation_receipt_out.display().to_string();
+    let mut effects = MantlepkgsEffects::new(&[
+        mantlepkgs_effect("validation-domain-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("validation-generation-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("validation-plan-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect("validation-plan-readback", EffectKind::ReadFiles, ExpectedOutput::Identity(&plan_identity)),
+        mantlepkgs_effect("validation-clock-start", EffectKind::ReadClock, ExpectedOutput::None),
+        mantlepkgs_effect("validation-build", EffectKind::RunProcess, ExpectedOutput::None),
+        mantlepkgs_effect("validation-clock-elapsed", EffectKind::ReadClock, ExpectedOutput::None),
+        mantlepkgs_effect("validation-receipt-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect(
+            "validation-receipt-readback",
+            EffectKind::ReadFiles,
+            ExpectedOutput::Identity(&receipt_identity),
+        ),
+    ])?;
+    let domain_catalog = effects.call(&FsMantlepkgsPort, "validation-domain-read", EffectKind::ReadFiles, |port| {
+        port.read_json::<DomainCatalog>(request.domain_catalog, DOMAIN_ARTIFACT_BYTES_MAX)
+    })?;
+    let validation_plan =
+        effects.domain(plan_validation_root(&domain_catalog, request.validation_root).map_err(core_eval_error))?;
+    let verified_generation =
+        effects.call(&FsMantlepkgsPort, "validation-generation-read", EffectKind::ReadFiles, |port| {
+            port.verify_generation(request.generation)
+        })?;
+    effects.domain(require_validation_generation_binding(
+        &domain_catalog,
+        &validation_plan,
+        &verified_generation.catalog,
+    ))?;
+    effects.call(&FsMantlepkgsPort, "validation-plan-write", EffectKind::WriteFiles, |port| {
+        port.write_json(request.validation_plan_out, &validation_plan, "Mantlepkgs validation-root plan")
+    })?;
+    effects.readback(
+        &FsMantlepkgsPort,
+        "validation-plan-readback",
+        request.validation_plan_out,
+        &validation_plan,
+        DOMAIN_ARTIFACT_BYTES_MAX,
+    )?;
+    let build_started = effects
+        .call(&FsMantlepkgsPort, "validation-clock-start", EffectKind::ReadClock, |port| Ok(port.read_clock()))?;
+    let mut completed_receipt = None;
+    let build_result = run_build_with_observation(
         BuildRequest {
             generation: request.generation,
             package: &validation_plan.validation_selector,
-            system: validation_system(&domain_catalog, request.validation_root)?,
+            system: effects.domain(validation_system(&domain_catalog, request.validation_root))?,
             source_bundle: request.source_bundle,
             source_bundle_blake3: request.source_bundle_blake3,
             plan_out: request.plan_out,
@@ -997,17 +1491,52 @@ fn run_validation_build(request: ValidationBuildRequest<'_>, context: &Mantlepkg
             offline: request.offline,
         },
         context,
+        |realization| {
+            effects.call(&FsMantlepkgsPort, "validation-build", EffectKind::RunProcess, |_| Ok(()))?;
+            let failed = realization.status != crate::foreign_realization_receipt::FOREIGN_REALIZATION_COMPLETE_STATUS;
+            if failed {
+                effects.record_response_failure("validation-build-incomplete");
+            }
+            let elapsed_milliseconds =
+                effects.call(&FsMantlepkgsPort, "validation-clock-elapsed", EffectKind::ReadClock, |port| {
+                    port.elapsed_millis(build_started)
+                })?;
+            let observation =
+                effects.domain(validation_observation(&validation_plan, realization, elapsed_milliseconds))?;
+            let receipt = effects
+                .domain(record_validation_observation(&validation_plan, &observation).map_err(core_eval_error))?;
+            effects.call(&FsMantlepkgsPort, "validation-receipt-write", EffectKind::WriteFiles, |port| {
+                port.write_json(request.validation_receipt_out, &receipt, "Mantlepkgs validation-root receipt")
+            })?;
+            effects.readback(
+                &FsMantlepkgsPort,
+                "validation-receipt-readback",
+                request.validation_receipt_out,
+                &receipt,
+                DOMAIN_ARTIFACT_BYTES_MAX,
+            )?;
+            effects.finish_recorded_status(if failed {
+                ObservationStatus::Failed
+            } else {
+                ObservationStatus::Success
+            })?;
+            completed_receipt = Some(receipt);
+            Ok(())
+        },
     );
-    if !request.realization_receipt_out.is_file() {
-        return build_result;
-    }
-    let realization =
-        read_json_bounded::<ForeignRealizationReceipt>(request.realization_receipt_out, DOMAIN_ARTIFACT_BYTES_MAX)?;
-    let elapsed_milliseconds = u64::try_from(build_started.elapsed().as_millis())
-        .map_err(|_| RunError::Internal("validation elapsed milliseconds overflow".into()))?;
-    let observation = validation_observation(&validation_plan, &realization, elapsed_milliseconds)?;
-    let receipt = record_validation_observation(&validation_plan, &observation).map_err(core_eval_error)?;
-    write_json_atomically(request.validation_receipt_out, &receipt, "Mantlepkgs validation-root receipt")?;
+    let Some(receipt) = completed_receipt else {
+        if effects.observations.len() > 5 {
+            if effects.observations.len() == 6 {
+                effects.record_response_failure("validation-observation-failed");
+                effects.classify_failed()?;
+            }
+            return build_result;
+        }
+        return effects.call(&FsMantlepkgsPort, "validation-build", EffectKind::RunProcess, |_| match build_result {
+            Err(error) => Err(error),
+            Ok(()) => Err(RunError::Internal("foreign realization returned without a durable receipt".into())),
+        });
+    };
     if context.json {
         println!(
             "{}",
@@ -1020,10 +1549,7 @@ fn run_validation_build(request: ValidationBuildRequest<'_>, context: &Mantlepkg
             receipt.validation_root_identity_blake3, receipt.outcome, receipt.accepted, receipt.receipt_identity_blake3
         );
     }
-    match build_result {
-        Ok(()) => {}
-        Err(error) => return Err(error),
-    }
+    build_result?;
     if !receipt.accepted {
         return Err(RunError::Reported(FAILURE_EXIT_CODE));
     }
@@ -1036,8 +1562,57 @@ fn run_corpus_verify(
     sealed_evidence_out: &Path,
     json: bool,
 ) -> Result<(), RunError> {
-    let evidence = read_json_bounded::<ExternalCorpusEvidence>(evidence_path, DOMAIN_ARTIFACT_BYTES_MAX)?;
-    let sealed = seal_external_corpus_evidence(&evidence).map_err(core_eval_error)?;
+    let output_identity = sealed_evidence_out.display().to_string();
+    let mut effects = MantlepkgsEffects::new(&[
+        mantlepkgs_effect("corpus-evidence-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("corpus-artifacts-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("corpus-evidence-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect(
+            "corpus-evidence-readback",
+            EffectKind::ReadFiles,
+            ExpectedOutput::Identity(&output_identity),
+        ),
+    ])?;
+    let evidence = effects.call(&FsMantlepkgsPort, "corpus-evidence-read", EffectKind::ReadFiles, |port| {
+        port.read_json::<ExternalCorpusEvidence>(evidence_path, DOMAIN_ARTIFACT_BYTES_MAX)
+    })?;
+    let sealed = effects.domain(seal_external_corpus_evidence(&evidence).map_err(core_eval_error))?;
+    let observations = effects.call(&FsMantlepkgsPort, "corpus-artifacts-read", EffectKind::ReadFiles, |port| {
+        port.read_corpus_artifacts(&sealed, artifact_root)
+    })?;
+    effects.domain(validate_external_corpus_evidence(&sealed, &observations).map_err(core_eval_error))?;
+    effects.call(&FsMantlepkgsPort, "corpus-evidence-write", EffectKind::WriteFiles, |port| {
+        port.write_json(sealed_evidence_out, &sealed, "sealed Mantlepkgs external-corpus evidence")
+    })?;
+    effects.readback(
+        &FsMantlepkgsPort,
+        "corpus-evidence-readback",
+        sealed_evidence_out,
+        &sealed,
+        DOMAIN_ARTIFACT_BYTES_MAX,
+    )?;
+    effects.finish()?;
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string(&sealed)
+                .map_err(|error| RunError::Internal(format!("serializing corpus evidence: {error}")))?
+        );
+    } else {
+        println!(
+            "mantlepkgs corpus evidence verified: identity={} packages={} artifacts={}",
+            sealed.evidence_identity_blake3,
+            sealed.selected_packages.len(),
+            sealed.artifacts.len()
+        );
+    }
+    Ok(())
+}
+
+fn observe_corpus_artifacts(
+    sealed: &ExternalCorpusEvidence,
+    artifact_root: &Path,
+) -> Result<Vec<CorpusArtifactObservation>, RunError> {
     let mut observations = Vec::with_capacity(sealed.artifacts.len());
     for artifact in &sealed.artifacts {
         let path = confined_file(artifact_root, &artifact.path)?;
@@ -1057,39 +1632,55 @@ fn run_corpus_verify(
             catalog_packages,
         });
     }
-    validate_external_corpus_evidence(&sealed, &observations).map_err(core_eval_error)?;
-    write_json_atomically(sealed_evidence_out, &sealed, "sealed Mantlepkgs external-corpus evidence")?;
-    if json {
-        println!(
-            "{}",
-            serde_json::to_string(&sealed)
-                .map_err(|error| RunError::Internal(format!("serializing corpus evidence: {error}")))?
-        );
-    } else {
-        println!(
-            "mantlepkgs corpus evidence verified: identity={} packages={} artifacts={}",
-            sealed.evidence_identity_blake3,
-            sealed.selected_packages.len(),
-            sealed.artifacts.len()
-        );
-    }
-    Ok(())
+    Ok(observations)
 }
 
 fn run_impact(request: ImpactRequest<'_>) -> Result<(), RunError> {
+    let output_identity = request.output.display().to_string();
+    let mut specs = vec![
+        mantlepkgs_effect("impact-policy-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("impact-base-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("impact-head-read", EffectKind::ReadFiles, ExpectedOutput::None),
+    ];
+    if !request.action_result_report_paths.is_empty() {
+        specs.push(mantlepkgs_effect("impact-action-reports-read", EffectKind::ReadFiles, ExpectedOutput::None));
+    }
+    specs.extend([
+        mantlepkgs_effect("impact-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect("impact-readback", EffectKind::ReadFiles, ExpectedOutput::Identity(&output_identity)),
+    ]);
+    let mut effects = MantlepkgsEffects::new(&specs)?;
     reject_impact_output_collision(&request)?;
-    let policy = read_json_bounded::<ImpactComparisonPolicy>(request.policy_path, IMPACT_INPUT_BYTES_MAX)?;
-    let base = read_json_bounded::<ImpactSnapshot>(request.base_path, IMPACT_INPUT_BYTES_MAX)?;
-    let head = read_json_bounded::<ImpactSnapshot>(request.head_path, IMPACT_INPUT_BYTES_MAX)?;
-    let action_results = load_impact_action_result_reports(request.action_result_report_paths)?;
-    validate_impact_action_result_bindings(&base, &head, &action_results)?;
-    let report = build_package_impact_report(ImpactComparisonInput {
-        policy: &policy,
-        base: &base,
-        head: &head,
-    })
-    .map_err(core_eval_error)?;
-    write_json_atomically(request.output, &report, "Mantlepkgs package-impact report")?;
+    let policy = effects.call(&FsMantlepkgsPort, "impact-policy-read", EffectKind::ReadFiles, |port| {
+        port.read_json::<ImpactComparisonPolicy>(request.policy_path, IMPACT_INPUT_BYTES_MAX)
+    })?;
+    let base = effects.call(&FsMantlepkgsPort, "impact-base-read", EffectKind::ReadFiles, |port| {
+        port.read_json::<ImpactSnapshot>(request.base_path, IMPACT_INPUT_BYTES_MAX)
+    })?;
+    let head = effects.call(&FsMantlepkgsPort, "impact-head-read", EffectKind::ReadFiles, |port| {
+        port.read_json::<ImpactSnapshot>(request.head_path, IMPACT_INPUT_BYTES_MAX)
+    })?;
+    let action_results = if request.action_result_report_paths.is_empty() {
+        BTreeMap::new()
+    } else {
+        effects.call(&FsMantlepkgsPort, "impact-action-reports-read", EffectKind::ReadFiles, |port| {
+            port.read_impact_reports(request.action_result_report_paths)
+        })?
+    };
+    effects.domain(validate_impact_action_result_bindings(&base, &head, &action_results))?;
+    let report = effects.domain(
+        build_package_impact_report(ImpactComparisonInput {
+            policy: &policy,
+            base: &base,
+            head: &head,
+        })
+        .map_err(core_eval_error),
+    )?;
+    effects.call(&FsMantlepkgsPort, "impact-write", EffectKind::WriteFiles, |port| {
+        port.write_json(request.output, &report, "Mantlepkgs package-impact report")
+    })?;
+    effects.readback(&FsMantlepkgsPort, "impact-readback", request.output, &report, IMPACT_INPUT_BYTES_MAX)?;
+    effects.finish()?;
     if request.is_json {
         println!(
             "{}",
@@ -1213,12 +1804,24 @@ fn action_result_admission_error(action_ref: &str, selected_result_ref: impl AsR
 }
 
 fn run_update_policy_seal(policy_path: &Path, output: &Path, is_json: bool) -> Result<(), RunError> {
+    let output_identity = output.display().to_string();
+    let mut effects = MantlepkgsEffects::new(&[
+        mantlepkgs_effect("update-policy-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("update-policy-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect("update-policy-readback", EffectKind::ReadFiles, ExpectedOutput::Identity(&output_identity)),
+    ])?;
     if policy_path == output {
         return Err(RunError::Eval("update policy output must differ from its input".into()));
     }
-    let policy = read_json_bounded::<UpdatePolicy>(policy_path, UPDATE_INPUT_BYTES_MAX)?;
-    let sealed = seal_update_policy(&policy).map_err(core_eval_error)?;
-    write_json_atomically(output, &sealed, "sealed Mantlepkgs update policy")?;
+    let policy = effects.call(&FsMantlepkgsPort, "update-policy-read", EffectKind::ReadFiles, |port| {
+        port.read_json::<UpdatePolicy>(policy_path, UPDATE_INPUT_BYTES_MAX)
+    })?;
+    let sealed = effects.domain(seal_update_policy(&policy).map_err(core_eval_error))?;
+    effects.call(&FsMantlepkgsPort, "update-policy-write", EffectKind::WriteFiles, |port| {
+        port.write_json(output, &sealed, "sealed Mantlepkgs update policy")
+    })?;
+    effects.readback(&FsMantlepkgsPort, "update-policy-readback", output, &sealed, UPDATE_INPUT_BYTES_MAX)?;
+    effects.finish()?;
     if is_json {
         println!(
             "{}",
@@ -1236,35 +1839,89 @@ fn run_update_policy_seal(policy_path: &Path, output: &Path, is_json: bool) -> R
 }
 
 fn run_update_source_observe(request: UpdateObserveRequest<'_>) -> Result<(), RunError> {
+    let output_identity = request.output.display().to_string();
+    let acquisition_kind = if request.url.is_some() {
+        Some(EffectKind::UseNetwork)
+    } else if request.response_path.is_some() {
+        Some(EffectKind::ReadFiles)
+    } else {
+        None
+    };
+    let mut specs = vec![mantlepkgs_effect(
+        "source-policy-read",
+        EffectKind::ReadFiles,
+        ExpectedOutput::None,
+    )];
+    if let Some(kind) = acquisition_kind {
+        specs.push(mantlepkgs_effect("source-response-acquire", kind, ExpectedOutput::None));
+    }
+    specs.extend([
+        mantlepkgs_effect("source-observation-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect(
+            "source-observation-readback",
+            EffectKind::ReadFiles,
+            ExpectedOutput::Identity(&output_identity),
+        ),
+    ]);
+    let mut effects = MantlepkgsEffects::new(&specs)?;
     reject_update_observation_output_collision(request.response_path, request.output)?;
-    let policy = read_sealed_update_policy(request.policy_path)?;
+    let policy = effects.call(&FsMantlepkgsPort, "source-policy-read", EffectKind::ReadFiles, |port| {
+        port.read_update_policy(request.policy_path)
+    })?;
     let expected_url = configured_source_url(&policy);
-    let mut acquisition = acquire_update_response(
-        &policy,
-        request.response_path,
-        request.url,
-        request.requested_status,
-        request.reasons,
-        &expected_url,
-    )?;
+    let mut acquisition = match acquisition_kind {
+        Some(kind) => effects.call(&FsMantlepkgsPort, "source-response-acquire", kind, |port| {
+            port.acquire_response(
+                &policy,
+                request.response_path,
+                request.url,
+                request.requested_status,
+                request.reasons,
+                &expected_url,
+            )
+        })?,
+        None => effects.domain(acquire_update_response(
+            &policy,
+            None,
+            None,
+            request.requested_status,
+            request.reasons,
+            &expected_url,
+        ))?,
+    };
+    if acquisition_kind.is_some() && acquisition.status != ObservationStatus::Success {
+        effects.record_response_failure("source-response-not-successful");
+    }
     let candidates = parse_source_response(&policy, &mut acquisition);
-    let observation = seal_source_observation(&policy, &SourceObservation {
-        schema: UPDATE_SOURCE_OBSERVATION_SCHEMA.into(),
-        observation_identity_blake3: String::new(),
-        policy_identity_blake3: policy.policy_identity_blake3.clone(),
-        adapter_identity: policy.adapter_identity.clone(),
-        source_kind: policy.source_kind,
-        query: policy.source_query.clone(),
-        source_authority: policy.source_authority.clone(),
-        response_schema: policy.response_schema.clone(),
-        response_identity_blake3: acquisition.response_identity_blake3,
-        status: acquisition.status,
-        candidates,
-        reason_codes: acquisition.reason_codes,
-        collection: acquisition.collection,
-    })
-    .map_err(core_eval_error)?;
-    write_json_atomically(request.output, &observation, "Mantlepkgs source observation")?;
+    let observation = effects.domain(
+        seal_source_observation(&policy, &SourceObservation {
+            schema: UPDATE_SOURCE_OBSERVATION_SCHEMA.into(),
+            observation_identity_blake3: String::new(),
+            policy_identity_blake3: policy.policy_identity_blake3.clone(),
+            adapter_identity: policy.adapter_identity.clone(),
+            source_kind: policy.source_kind,
+            query: policy.source_query.clone(),
+            source_authority: policy.source_authority.clone(),
+            response_schema: policy.response_schema.clone(),
+            response_identity_blake3: acquisition.response_identity_blake3,
+            status: acquisition.status,
+            candidates,
+            reason_codes: acquisition.reason_codes,
+            collection: acquisition.collection,
+        })
+        .map_err(core_eval_error),
+    )?;
+    effects.call(&FsMantlepkgsPort, "source-observation-write", EffectKind::WriteFiles, |port| {
+        port.write_json(request.output, &observation, "Mantlepkgs source observation")
+    })?;
+    effects.readback(
+        &FsMantlepkgsPort,
+        "source-observation-readback",
+        request.output,
+        &observation,
+        UPDATE_INPUT_BYTES_MAX,
+    )?;
+    effects.finish_recorded_status(observation.status)?;
     print_update_observation_result(
         "source",
         &observation.observation_identity_blake3,
@@ -1275,44 +1932,98 @@ fn run_update_source_observe(request: UpdateObserveRequest<'_>) -> Result<(), Ru
 }
 
 fn run_update_advisory_observe(request: UpdateAdvisoryObserveRequest<'_>) -> Result<(), RunError> {
+    let output_identity = request.output.display().to_string();
+    let acquisition_kind = if request.url.is_some() {
+        Some(EffectKind::UseNetwork)
+    } else if request.response_path.is_some() {
+        Some(EffectKind::ReadFiles)
+    } else {
+        None
+    };
+    let mut specs = vec![mantlepkgs_effect(
+        "advisory-policy-read",
+        EffectKind::ReadFiles,
+        ExpectedOutput::None,
+    )];
+    if let Some(kind) = acquisition_kind {
+        specs.push(mantlepkgs_effect("advisory-response-acquire", kind, ExpectedOutput::None));
+    }
+    specs.extend([
+        mantlepkgs_effect("advisory-observation-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect(
+            "advisory-observation-readback",
+            EffectKind::ReadFiles,
+            ExpectedOutput::Identity(&output_identity),
+        ),
+    ]);
+    let mut effects = MantlepkgsEffects::new(&specs)?;
     reject_update_observation_output_collision(request.response_path, request.output)?;
-    let policy = read_sealed_update_policy(request.policy_path)?;
-    let service = parse_advisory_service(request.service)?;
+    let policy = effects.call(&FsMantlepkgsPort, "advisory-policy-read", EffectKind::ReadFiles, |port| {
+        port.read_update_policy(request.policy_path)
+    })?;
+    let service = effects.domain(parse_advisory_service(request.service))?;
     let requirement = match service {
         AdvisoryService::Osv => &policy.advisory_policy.osv,
         AdvisoryService::Repology => &policy.advisory_policy.repology,
     };
     let expected_url = requirement.query.clone();
-    let mut acquisition = acquire_update_response(
-        &policy,
-        request.response_path,
-        request.url,
-        request.requested_status,
-        request.reasons,
-        &expected_url,
-    )?;
+    let mut acquisition = match acquisition_kind {
+        Some(kind) => effects.call(&FsMantlepkgsPort, "advisory-response-acquire", kind, |port| {
+            port.acquire_response(
+                &policy,
+                request.response_path,
+                request.url,
+                request.requested_status,
+                request.reasons,
+                &expected_url,
+            )
+        })?,
+        None => effects.domain(acquire_update_response(
+            &policy,
+            None,
+            None,
+            request.requested_status,
+            request.reasons,
+            &expected_url,
+        ))?,
+    };
+    if acquisition_kind.is_some() && acquisition.status != ObservationStatus::Success {
+        effects.record_response_failure("advisory-response-not-successful");
+    }
     let findings = parse_advisory_response(service, &requirement.package_coordinate, request.version, &mut acquisition);
-    let observation = seal_advisory_observation(&policy, &AdvisoryObservation {
-        schema: UPDATE_ADVISORY_OBSERVATION_SCHEMA.into(),
-        observation_identity_blake3: String::new(),
-        policy_identity_blake3: policy.policy_identity_blake3.clone(),
-        service,
-        service_identity: requirement.service_identity.clone(),
-        query: requirement.query.clone(),
-        package_coordinate: requirement.package_coordinate.clone(),
-        version: request.version.into(),
-        response_schema: match service {
-            AdvisoryService::Osv => ADVISORY_RESPONSE_OSV_SCHEMA.into(),
-            AdvisoryService::Repology => ADVISORY_RESPONSE_REPOLOGY_SCHEMA.into(),
-        },
-        response_identity_blake3: acquisition.response_identity_blake3,
-        status: acquisition.status,
-        findings,
-        reason_codes: acquisition.reason_codes,
-        collection: acquisition.collection,
-    })
-    .map_err(core_eval_error)?;
-    write_json_atomically(request.output, &observation, "Mantlepkgs advisory observation")?;
+    let observation = effects.domain(
+        seal_advisory_observation(&policy, &AdvisoryObservation {
+            schema: UPDATE_ADVISORY_OBSERVATION_SCHEMA.into(),
+            observation_identity_blake3: String::new(),
+            policy_identity_blake3: policy.policy_identity_blake3.clone(),
+            service,
+            service_identity: requirement.service_identity.clone(),
+            query: requirement.query.clone(),
+            package_coordinate: requirement.package_coordinate.clone(),
+            version: request.version.into(),
+            response_schema: match service {
+                AdvisoryService::Osv => ADVISORY_RESPONSE_OSV_SCHEMA.into(),
+                AdvisoryService::Repology => ADVISORY_RESPONSE_REPOLOGY_SCHEMA.into(),
+            },
+            response_identity_blake3: acquisition.response_identity_blake3,
+            status: acquisition.status,
+            findings,
+            reason_codes: acquisition.reason_codes,
+            collection: acquisition.collection,
+        })
+        .map_err(core_eval_error),
+    )?;
+    effects.call(&FsMantlepkgsPort, "advisory-observation-write", EffectKind::WriteFiles, |port| {
+        port.write_json(request.output, &observation, "Mantlepkgs advisory observation")
+    })?;
+    effects.readback(
+        &FsMantlepkgsPort,
+        "advisory-observation-readback",
+        request.output,
+        &observation,
+        UPDATE_INPUT_BYTES_MAX,
+    )?;
+    effects.finish_recorded_status(observation.status)?;
     print_update_observation_result(
         "advisory",
         &observation.observation_identity_blake3,
@@ -1323,27 +2034,62 @@ fn run_update_advisory_observe(request: UpdateAdvisoryObserveRequest<'_>) -> Res
 }
 
 fn run_update_plan(request: UpdatePlanRequest<'_>) -> Result<(), RunError> {
+    if request.advisory_observation_paths.len() > UPDATE_ADVISORY_FILE_COUNT_MAX {
+        return Err(RunError::Eval("too many advisory observation files".into()));
+    }
+    let output_identity = request.output.display().to_string();
+    let mut specs = vec![
+        mantlepkgs_effect("update-plan-policy-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("update-plan-source-read", EffectKind::ReadFiles, ExpectedOutput::None),
+    ];
+    if !request.advisory_observation_paths.is_empty() {
+        specs.push(mantlepkgs_effect("update-plan-advisories-read", EffectKind::ReadFiles, ExpectedOutput::None));
+    }
+    specs.extend([
+        mantlepkgs_effect("update-plan-validation-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("update-plan-document-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("update-plan-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect("update-plan-readback", EffectKind::ReadFiles, ExpectedOutput::Identity(&output_identity)),
+    ]);
+    let mut effects = MantlepkgsEffects::new(&specs)?;
     reject_update_plan_output_collisions(&request)?;
-    let policy = read_sealed_update_policy(request.policy_path)?;
+    let policy = effects.call(&FsMantlepkgsPort, "update-plan-policy-read", EffectKind::ReadFiles, |port| {
+        port.read_update_policy(request.policy_path)
+    })?;
     let source_observation =
-        read_json_bounded::<SourceObservation>(request.source_observation_path, UPDATE_INPUT_BYTES_MAX)?;
-    let advisory_observations = request
-        .advisory_observation_paths
-        .iter()
-        .map(|path| read_json_bounded::<AdvisoryObservation>(path, UPDATE_INPUT_BYTES_MAX))
-        .collect::<Result<Vec<_>, _>>()?;
+        effects.call(&FsMantlepkgsPort, "update-plan-source-read", EffectKind::ReadFiles, |port| {
+            port.read_json::<SourceObservation>(request.source_observation_path, UPDATE_INPUT_BYTES_MAX)
+        })?;
+    let advisory_observations = if request.advisory_observation_paths.is_empty() {
+        Vec::new()
+    } else {
+        effects.call(&FsMantlepkgsPort, "update-plan-advisories-read", EffectKind::ReadFiles, |port| {
+            port.read_advisories(request.advisory_observation_paths)
+        })?
+    };
     let validation_evidence =
-        read_json_bounded::<UpdateValidationEvidence>(request.validation_evidence_path, UPDATE_INPUT_BYTES_MAX)?;
-    let mutation_document = observe_update_mutation_document(&policy, request.source_root)?;
-    let plan = build_update_plan(UpdatePlanInput {
-        policy: &policy,
-        source_observation: &source_observation,
-        advisory_observations: &advisory_observations,
-        validation_evidence: &validation_evidence,
-        mutation_documents: &[mutation_document],
-    })
-    .map_err(core_eval_error)?;
-    write_json_atomically(request.output, &plan, "Mantlepkgs update plan")?;
+        effects.call(&FsMantlepkgsPort, "update-plan-validation-read", EffectKind::ReadFiles, |port| {
+            port.read_json::<UpdateValidationEvidence>(request.validation_evidence_path, UPDATE_INPUT_BYTES_MAX)
+        })?;
+    let mutation_document =
+        effects.call(&FsMantlepkgsPort, "update-plan-document-read", EffectKind::ReadFiles, |port| {
+            port.read_mutation_document(&policy, request.source_root)
+        })?;
+    let plan = effects.domain(
+        build_update_plan(UpdatePlanInput {
+            policy: &policy,
+            source_observation: &source_observation,
+            advisory_observations: &advisory_observations,
+            validation_evidence: &validation_evidence,
+            mutation_documents: &[mutation_document],
+        })
+        .map_err(core_eval_error),
+    )?;
+    effects.call(&FsMantlepkgsPort, "update-plan-write", EffectKind::WriteFiles, |port| {
+        port.write_json(request.output, &plan, "Mantlepkgs update plan")
+    })?;
+    effects.readback(&FsMantlepkgsPort, "update-plan-readback", request.output, &plan, UPDATE_INPUT_BYTES_MAX)?;
+    effects.finish()?;
     if request.is_json {
         println!(
             "{}",
@@ -1363,15 +2109,47 @@ fn run_update_plan(request: UpdatePlanRequest<'_>) -> Result<(), RunError> {
 }
 
 fn run_update_execute(request: UpdateExecuteRequest<'_>) -> Result<(), RunError> {
+    let receipt_path = request.output_root.join(UPDATE_EXECUTION_RECEIPT_FILE);
+    let receipt_identity = receipt_path.display().to_string();
+    let denial_identity = request.denial_receipt_output.display().to_string();
+    let mut effects = MantlepkgsEffects::new(&[
+        mantlepkgs_effect("execute-plan-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("execute-publish", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect(
+            "execute-receipt-readback",
+            EffectKind::ReadFiles,
+            ExpectedOutput::Identity(&receipt_identity),
+        ),
+        mantlepkgs_effect("execute-output-readback", EffectKind::ReadFiles, ExpectedOutput::None),
+    ])?;
+    let mut denial_effects = MantlepkgsEffects::new(&[
+        mantlepkgs_effect("execute-denial-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect("execute-denial-readback", EffectKind::ReadFiles, ExpectedOutput::Identity(&denial_identity)),
+    ])?;
     reject_update_execution_path_collisions(&request)?;
-    let plan = read_json_bounded::<UpdatePlan>(request.plan_path, UPDATE_INPUT_BYTES_MAX)?;
-    let expected_identity = update_plan_identity_blake3(&plan).map_err(core_eval_error)?;
+    let plan = effects.call(&FsMantlepkgsPort, "execute-plan-read", EffectKind::ReadFiles, |port| {
+        port.read_json::<UpdatePlan>(request.plan_path, UPDATE_INPUT_BYTES_MAX)
+    })?;
+    let expected_identity = effects.domain(update_plan_identity_blake3(&plan).map_err(core_eval_error))?;
     if plan.plan_identity_blake3 != expected_identity {
-        return Err(RunError::Eval("update-identity-mismatch plan.plan_identity_blake3".into()));
+        return effects.domain(Err(RunError::Eval("update-identity-mismatch plan.plan_identity_blake3".into())));
     }
-    let result = execute_update_plan(&plan, &request);
+    let result = effects.call(&FsMantlepkgsPort, "execute-publish", EffectKind::WriteFiles, |port| {
+        port.execute_update(&plan, &request)
+    });
     match result {
         Ok(receipt) => {
+            effects.readback(
+                &FsMantlepkgsPort,
+                "execute-receipt-readback",
+                &receipt_path,
+                &receipt,
+                UPDATE_INPUT_BYTES_MAX,
+            )?;
+            effects.call(&FsMantlepkgsPort, "execute-output-readback", EffectKind::ReadFiles, |port| {
+                port.confirm_update_tree(request.output_root, &receipt)
+            })?;
+            effects.finish()?;
             if request.is_json {
                 println!(
                     "{}",
@@ -1389,15 +2167,27 @@ fn run_update_execute(request: UpdateExecuteRequest<'_>) -> Result<(), RunError>
             Ok(())
         }
         Err(error) => {
-            let denial = record_update_execution(
-                &plan,
-                UpdateExecutionDisposition::Denied,
-                None,
-                Vec::new(),
-                update_denial_reason_codes(&error),
-            )
-            .map_err(core_eval_error)?;
-            write_json_atomically(request.denial_receipt_output, &denial, "Mantlepkgs update denial receipt")?;
+            let denial = denial_effects.domain(
+                record_update_execution(
+                    &plan,
+                    UpdateExecutionDisposition::Denied,
+                    None,
+                    Vec::new(),
+                    update_denial_reason_codes(&error),
+                )
+                .map_err(core_eval_error),
+            )?;
+            denial_effects.call(&FsMantlepkgsPort, "execute-denial-write", EffectKind::WriteFiles, |port| {
+                port.write_json(request.denial_receipt_output, &denial, "Mantlepkgs update denial receipt")
+            })?;
+            denial_effects.readback(
+                &FsMantlepkgsPort,
+                "execute-denial-readback",
+                request.denial_receipt_output,
+                &denial,
+                UPDATE_INPUT_BYTES_MAX,
+            )?;
+            denial_effects.finish()?;
             Err(error)
         }
     }
@@ -2007,11 +2797,36 @@ fn evaluate_domain_manifest(path: &Path) -> Result<DomainCatalogManifest, RunErr
 }
 
 fn run_generate(manifest_path: &Path, nix_program: &Path, output_root: &Path, json: bool) -> Result<(), RunError> {
-    let manifest = normalize_manifest(&evaluate_manifest(manifest_path)?).map_err(core_eval_error)?;
-    let _ = load_policy_artifacts(manifest_path, &manifest)?;
-    let seed_retention_root = prepare_seed_retention_root(output_root)?;
-    let batch = produce_locked_batch(&manifest, nix_program, &seed_retention_root)?;
-    publish_batch(manifest_path, &manifest, &batch, output_root, json)
+    let mut effects = MantlepkgsEffects::new(&[
+        mantlepkgs_effect("generate-manifest-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("generate-policy-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("generate-seed-root", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect("generate-producer", EffectKind::RunProcess, ExpectedOutput::None),
+        mantlepkgs_effect("generate-publish", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect("generate-readback", EffectKind::ReadFiles, ExpectedOutput::None),
+    ])?;
+    let manifest = effects.call(&FsMantlepkgsPort, "generate-manifest-read", EffectKind::ReadFiles, |port| {
+        port.read_manifest(manifest_path)
+    })?;
+    let manifest = effects.domain(normalize_manifest(&manifest).map_err(core_eval_error))?;
+    let policy = effects.call(&FsMantlepkgsPort, "generate-policy-read", EffectKind::ReadFiles, |port| {
+        port.load_policy(manifest_path, &manifest)
+    })?;
+    let seed_retention_root =
+        effects.call(&FsMantlepkgsPort, "generate-seed-root", EffectKind::WriteFiles, |port| {
+            port.prepare_seed_root(output_root)
+        })?;
+    let batch = effects.call(&FsMantlepkgsPort, "generate-producer", EffectKind::RunProcess, |port| {
+        port.produce_batch(&manifest, nix_program, &seed_retention_root)
+    })?;
+    let published = effects.call(&FsMantlepkgsPort, "generate-publish", EffectKind::WriteFiles, |port| {
+        port.publish_batch(&manifest, &batch, &policy, output_root)
+    })?;
+    effects.call(&FsMantlepkgsPort, "generate-readback", EffectKind::ReadFiles, |port| {
+        port.verify_publication(&published)
+    })?;
+    effects.finish()?;
+    emit_catalog_publication(published, json)
 }
 
 fn prepare_seed_retention_root(output_root: &Path) -> Result<PathBuf, RunError> {
@@ -2033,13 +2848,44 @@ fn run_publish(
     output_root: &Path,
     json: bool,
 ) -> Result<(), RunError> {
-    let manifest = normalize_manifest(&evaluate_manifest(manifest_path)?).map_err(core_eval_error)?;
-    let batch = read_json_bounded::<ProducerBatch>(producer_batch_path, manifest.limits.max_graph_bytes)?;
-    publish_batch(manifest_path, &manifest, &batch, output_root, json)
+    let mut effects = MantlepkgsEffects::new(&[
+        mantlepkgs_effect("publish-manifest-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("publish-batch-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("publish-policy-read", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("publish-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect("publish-readback", EffectKind::ReadFiles, ExpectedOutput::None),
+    ])?;
+    let manifest = effects.call(&FsMantlepkgsPort, "publish-manifest-read", EffectKind::ReadFiles, |port| {
+        port.read_manifest(manifest_path)
+    })?;
+    let manifest = effects.domain(normalize_manifest(&manifest).map_err(core_eval_error))?;
+    let batch = effects.call(&FsMantlepkgsPort, "publish-batch-read", EffectKind::ReadFiles, |port| {
+        port.read_json::<ProducerBatch>(producer_batch_path, manifest.limits.max_graph_bytes)
+    })?;
+    effects.domain(validate_batch_header(&batch))?;
+    let policy = effects.call(&FsMantlepkgsPort, "publish-policy-read", EffectKind::ReadFiles, |port| {
+        port.load_policy(manifest_path, &manifest)
+    })?;
+    let published = effects.call(&FsMantlepkgsPort, "publish-write", EffectKind::WriteFiles, |port| {
+        port.publish_batch(&manifest, &batch, &policy, output_root)
+    })?;
+    effects.call(&FsMantlepkgsPort, "publish-readback", EffectKind::ReadFiles, |port| {
+        port.verify_publication(&published)
+    })?;
+    effects.finish()?;
+    emit_catalog_publication(published, json)
 }
 
 fn run_verify(generation: &Path, json: bool) -> Result<(), RunError> {
-    let verified = verify_generation(generation)?;
+    let mut effects = MantlepkgsEffects::new(&[mantlepkgs_effect(
+        "verify-generation",
+        EffectKind::ReadFiles,
+        ExpectedOutput::None,
+    )])?;
+    let verified = effects.call(&FsMantlepkgsPort, "verify-generation", EffectKind::ReadFiles, |port| {
+        port.verify_generation(generation)
+    })?;
+    effects.finish()?;
     if json {
         println!(
             "{}",
@@ -2065,10 +2911,34 @@ fn run_plan(
     import_receipt_out: &Path,
     json: bool,
 ) -> Result<(), RunError> {
-    let selection = compile_catalog_selection(generation, package, system)?;
+    let plan_identity = plan_out.display().to_string();
+    let receipt_identity = import_receipt_out.display().to_string();
+    let mut effects = MantlepkgsEffects::new(&[
+        mantlepkgs_effect("plan-selection", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("plan-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect("plan-receipt-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect("plan-readback", EffectKind::ReadFiles, ExpectedOutput::Identity(&plan_identity)),
+        mantlepkgs_effect("plan-receipt-readback", EffectKind::ReadFiles, ExpectedOutput::Identity(&receipt_identity)),
+    ])?;
     reject_equal_output_paths(plan_out, import_receipt_out)?;
-    write_json_atomically(plan_out, &selection.plan, "Mantlepkgs foreign executable plan")?;
-    write_json_atomically(import_receipt_out, &selection.import_receipt, "Mantlepkgs foreign import receipt")?;
+    let selection = effects.call(&FsMantlepkgsPort, "plan-selection", EffectKind::ReadFiles, |port| {
+        port.select(generation, package, system)
+    })?;
+    effects.call(&FsMantlepkgsPort, "plan-write", EffectKind::WriteFiles, |port| {
+        port.write_json(plan_out, &selection.plan, "Mantlepkgs foreign executable plan")
+    })?;
+    effects.call(&FsMantlepkgsPort, "plan-receipt-write", EffectKind::WriteFiles, |port| {
+        port.write_json(import_receipt_out, &selection.import_receipt, "Mantlepkgs foreign import receipt")
+    })?;
+    effects.readback(&FsMantlepkgsPort, "plan-readback", plan_out, &selection.plan, DOMAIN_ARTIFACT_BYTES_MAX)?;
+    effects.readback(
+        &FsMantlepkgsPort,
+        "plan-receipt-readback",
+        import_receipt_out,
+        &selection.import_receipt,
+        DOMAIN_ARTIFACT_BYTES_MAX,
+    )?;
+    effects.finish()?;
     if json {
         println!(
             "{}",
@@ -2091,7 +2961,16 @@ fn run_prepare_sources(
     output: &Path,
     json: bool,
 ) -> Result<(), RunError> {
-    let selection = compile_catalog_selection(generation, package, system)?;
+    let output_identity = output.display().to_string();
+    let mut effects = MantlepkgsEffects::new(&[
+        mantlepkgs_effect("sources-selection", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("sources-bind", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("sources-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect("sources-readback", EffectKind::ReadFiles, ExpectedOutput::Identity(&output_identity)),
+    ])?;
+    let selection = effects.call(&FsMantlepkgsPort, "sources-selection", EffectKind::ReadFiles, |port| {
+        port.select(generation, package, system)
+    })?;
     let bindings = selection
         .plan
         .source_requirements
@@ -2101,12 +2980,14 @@ fn run_prepare_sources(
             path: PathBuf::from(&requirement.foreign_path),
         })
         .collect::<Vec<_>>();
-    let bundle = plan_bound_foreign_source_bundle(
-        &selection.plan.source_requirements,
-        &bindings,
-        &selection.plan.target_store_prefix,
-    )?;
-    write_json_atomically(output, &bundle, "Mantlepkgs source bundle")?;
+    let bundle = effects.call(&FsMantlepkgsPort, "sources-bind", EffectKind::ReadFiles, |port| {
+        port.bind_sources(&selection, &bindings)
+    })?;
+    effects.call(&FsMantlepkgsPort, "sources-write", EffectKind::WriteFiles, |port| {
+        port.write_json(output, &bundle, "Mantlepkgs source bundle")
+    })?;
+    effects.readback(&FsMantlepkgsPort, "sources-readback", output, &bundle, MANTLEPKGS_SOURCE_BUNDLE_BYTES_MAX)?;
+    effects.finish()?;
     if json {
         println!(
             "{}",
@@ -2125,11 +3006,52 @@ fn run_prepare_sources(
 }
 
 fn run_build(request: BuildRequest<'_>, context: &MantlepkgsContext<'_>) -> Result<(), RunError> {
-    let selection = compile_catalog_selection(request.generation, request.package, request.system)?;
+    run_build_with_observation(request, context, |_| Ok(()))
+}
+
+fn run_build_with_observation(
+    request: BuildRequest<'_>,
+    context: &MantlepkgsContext<'_>,
+    on_realize: impl FnOnce(&ForeignRealizationReceipt) -> Result<(), RunError>,
+) -> Result<(), RunError> {
     reject_distinct_build_outputs(&request)?;
-    write_json_atomically(request.plan_out, &selection.plan, "Mantlepkgs foreign executable plan")?;
-    write_json_atomically(request.import_receipt_out, &selection.import_receipt, "Mantlepkgs foreign import receipt")?;
-    cmd_foreign_import(
+    let plan_identity = request.plan_out.display().to_string();
+    let import_identity = request.import_receipt_out.display().to_string();
+    let receipt_identity = request.receipt_out.display().to_string();
+    let mut effects = MantlepkgsEffects::new(&[
+        mantlepkgs_effect("build-selection", EffectKind::ReadFiles, ExpectedOutput::None),
+        mantlepkgs_effect("build-plan-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect("build-plan-readback", EffectKind::ReadFiles, ExpectedOutput::Identity(&plan_identity)),
+        mantlepkgs_effect("build-import-write", EffectKind::WriteFiles, ExpectedOutput::None),
+        mantlepkgs_effect("build-import-readback", EffectKind::ReadFiles, ExpectedOutput::Identity(&import_identity)),
+        mantlepkgs_effect("build-realize", EffectKind::RunProcess, ExpectedOutput::None),
+        mantlepkgs_effect("build-receipt-readback", EffectKind::ReadFiles, ExpectedOutput::Identity(&receipt_identity)),
+    ])?;
+    let selection = effects.call(&FsMantlepkgsPort, "build-selection", EffectKind::ReadFiles, |port| {
+        port.select(request.generation, request.package, request.system)
+    })?;
+    effects.call(&FsMantlepkgsPort, "build-plan-write", EffectKind::WriteFiles, |port| {
+        port.write_json(request.plan_out, &selection.plan, "Mantlepkgs foreign executable plan")
+    })?;
+    effects.readback(
+        &FsMantlepkgsPort,
+        "build-plan-readback",
+        request.plan_out,
+        &selection.plan,
+        DOMAIN_ARTIFACT_BYTES_MAX,
+    )?;
+    effects.call(&FsMantlepkgsPort, "build-import-write", EffectKind::WriteFiles, |port| {
+        port.write_json(request.import_receipt_out, &selection.import_receipt, "Mantlepkgs foreign import receipt")
+    })?;
+    effects.readback(
+        &FsMantlepkgsPort,
+        "build-import-readback",
+        request.import_receipt_out,
+        &selection.import_receipt,
+        DOMAIN_ARTIFACT_BYTES_MAX,
+    )?;
+    let mut observed = false;
+    let result = cmd_foreign_import_with_observation(
         ForeignImportAction::Realize {
             plan: request.plan_out.to_path_buf(),
             import_receipt: request.import_receipt_out.to_path_buf(),
@@ -2155,18 +3077,42 @@ fn run_build(request: BuildRequest<'_>, context: &MantlepkgsContext<'_>) -> Resu
             verbose: context.verbose,
             json: context.json,
         },
-    )
+        |receipt| {
+            observed = true;
+            effects.call(&FsMantlepkgsPort, "build-realize", EffectKind::RunProcess, |_| Ok(()))?;
+            if receipt.status != crate::foreign_realization_receipt::FOREIGN_REALIZATION_COMPLETE_STATUS {
+                effects.record_response_failure("foreign-realization-incomplete");
+            }
+            effects.readback(
+                &FsMantlepkgsPort,
+                "build-receipt-readback",
+                request.receipt_out,
+                receipt,
+                DOMAIN_ARTIFACT_BYTES_MAX,
+            )?;
+            let status = if receipt.status == crate::foreign_realization_receipt::FOREIGN_REALIZATION_COMPLETE_STATUS {
+                ObservationStatus::Success
+            } else {
+                ObservationStatus::Failed
+            };
+            effects.finish_recorded_status(status)?;
+            on_realize(receipt)
+        },
+    );
+    if !observed {
+        return effects.call(&FsMantlepkgsPort, "build-realize", EffectKind::RunProcess, |_| result);
+    }
+    result
 }
 
 fn publish_batch(
-    manifest_path: &Path,
     manifest: &MantlepkgsManifest,
     batch: &ProducerBatch,
+    policy_artifacts: &PolicyArtifacts,
     output_root: &Path,
-    json: bool,
-) -> Result<(), RunError> {
+) -> Result<CatalogPublication, RunError> {
     validate_batch_header(batch)?;
-    let (policy_bytes, profile_bytes, policy, profile) = load_policy_artifacts(manifest_path, manifest)?;
+    let (policy_bytes, profile_bytes, policy, profile) = policy_artifacts;
     let facts = batch.packages.iter().map(produced_facts).collect::<Vec<_>>();
     let observations = facts
         .iter()
@@ -2175,18 +3121,23 @@ fn publish_batch(
                 .selectors
                 .iter()
                 .find(|selector| selector.system == facts.system && selector.name == facts.selector_name)
-                .map(|selector| observe_buildability(selector, facts, &policy, &profile))
+                .map(|selector| observe_buildability(selector, facts, policy, profile))
                 .unwrap_or_else(|| unexpected_producer_observation(facts))
         })
         .collect::<Vec<_>>();
     let plan = plan_catalog(manifest, &batch.producer, &observations).map_err(core_eval_error)?;
     if !plan.batch_complete {
-        return publish_failure_report(output_root, &plan, json);
+        let (report, bytes) = publish_failure_report(output_root, &plan)?;
+        return Ok(CatalogPublication::Blocked { plan, report, bytes });
     }
     let merged = merge_buildable_packages(&facts, &manifest.selectors).map_err(blocker_error)?;
-    validate_compilation_contract(manifest, &merged, &policy, &profile)?;
-    let publication = prepare_publication(&plan, &merged, &policy_bytes, &profile_bytes, batch)?;
-    publish_generation(output_root, &plan, &publication, json)
+    validate_compilation_contract(manifest, &merged, policy, profile)?;
+    let publication = prepare_publication(&plan, &merged, policy_bytes, profile_bytes, batch)?;
+    let path = publish_generation(output_root, &plan, &publication)?;
+    Ok(CatalogPublication::Published {
+        catalog: publication.catalog,
+        path,
+    })
 }
 
 struct PreparedPublication {
@@ -2239,8 +3190,7 @@ fn publish_generation(
     output_root: &Path,
     plan: &CatalogPlan,
     publication: &PreparedPublication,
-    json: bool,
-) -> Result<(), RunError> {
+) -> Result<PathBuf, RunError> {
     let generations = output_root.join(&plan.manifest.output.generation_directory);
     fs::create_dir_all(&generations).map_err(|error| {
         RunError::Internal(format!("creating Mantlepkgs generation root {}: {error}", generations.display()))
@@ -2263,7 +3213,7 @@ fn publish_generation(
         )));
     }
     sync_directory(&generations)?;
-    emit_publication(&publication.catalog, &final_path, json)
+    Ok(final_path)
 }
 
 fn stage_publication(stage: &Path, publication: &PreparedPublication) -> Result<(), RunError> {
@@ -2737,7 +3687,7 @@ fn producer_selection_receipts(
     Ok(receipts)
 }
 
-fn publish_failure_report(output_root: &Path, plan: &CatalogPlan, json: bool) -> Result<(), RunError> {
+fn publish_failure_report(output_root: &Path, plan: &CatalogPlan) -> Result<(PathBuf, Vec<u8>), RunError> {
     let failures = output_root.join(&plan.manifest.output.generation_directory).join(FAILURE_DIRECTORY);
     fs::create_dir_all(&failures).map_err(|error| {
         RunError::Internal(format!("creating Mantlepkgs failure directory {}: {error}", failures.display()))
@@ -2755,8 +3705,12 @@ fn publish_failure_report(output_root: &Path, plan: &CatalogPlan, json: bool) ->
     rename_path_no_replace(&stage, &target).map_err(|error| {
         RunError::Internal(format!("publishing Mantlepkgs failure report {}: {error}", target.display()))
     })?;
+    Ok((target, bytes))
+}
+
+fn emit_blocked_publication(plan: &CatalogPlan, target: &Path, bytes: &[u8], json: bool) -> Result<(), RunError> {
     if json {
-        println!("{}", String::from_utf8_lossy(&bytes).trim());
+        println!("{}", String::from_utf8_lossy(bytes).trim());
     } else {
         println!(
             "mantlepkgs generation blocked: plan_blake3={} report={}",
@@ -2772,6 +3726,13 @@ fn publish_failure_report(output_root: &Path, plan: &CatalogPlan, json: bool) ->
         }
     }
     Err(RunError::Reported(FAILURE_EXIT_CODE))
+}
+
+fn emit_catalog_publication(publication: CatalogPublication, json: bool) -> Result<(), RunError> {
+    match publication {
+        CatalogPublication::Published { catalog, path } => emit_publication(&catalog, &path, json),
+        CatalogPublication::Blocked { plan, report, bytes } => emit_blocked_publication(&plan, &report, &bytes, json),
+    }
 }
 
 fn evaluate_manifest(path: &Path) -> Result<MantlepkgsManifest, RunError> {
@@ -3226,6 +4187,37 @@ mod tests {
     #[cfg(unix)]
     const NON_UTF8_PATH_BYTE: u8 = 0xff;
 
+    #[test]
+    fn domain_rejection_after_read_fails_classification_without_claiming_future_calls() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = temp.path().join("input.json");
+        fs::write(&input, b"{\"ready\":true}").unwrap();
+        let mut effects = MantlepkgsEffects::new(&[
+            mantlepkgs_effect("input-read", EffectKind::ReadFiles, ExpectedOutput::None),
+            mantlepkgs_effect("output-write", EffectKind::WriteFiles, ExpectedOutput::None),
+            mantlepkgs_effect("output-readback", EffectKind::ReadFiles, ExpectedOutput::None),
+        ])
+        .unwrap();
+        let input_value = effects
+            .call(&FsMantlepkgsPort, "input-read", EffectKind::ReadFiles, |port| {
+                port.read_json::<serde_json::Value>(&input, 1_024)
+            })
+            .unwrap();
+        assert_eq!(input_value["ready"], true);
+        let error = effects.domain::<()>(Err(RunError::Eval("policy-blocked".into()))).unwrap_err();
+        assert!(matches!(&error, RunError::Eval(message) if message == "policy-blocked"));
+        assert_eq!(effects.observations[0].status, EffectStatus::Succeeded);
+        assert_eq!(effects.observations[0].usage, EffectMeasure::Calls(1));
+        for skipped in &effects.observations[1..] {
+            assert_eq!(skipped.status, EffectStatus::Skipped);
+            assert_eq!(skipped.usage, EffectMeasure::Calls(0));
+            assert_eq!(skipped.diagnostics_code.as_deref(), Some("domain-blocked"));
+        }
+        assert!(matches!(classify_observations(&effects.plan, &effects.observations), ApplicationOutcome::Failed {
+            failed_effect_count: 2
+        }));
+    }
+
     fn update_policy_fixture() -> UpdatePolicy {
         seal_update_policy(&UpdatePolicy {
             schema: mantlepkgs_core::UPDATE_POLICY_SCHEMA.into(),
@@ -3483,6 +4475,9 @@ mod tests {
             schema: crunch_build::action_result::ACTION_RESULT_RUNTIME_REPORT_SCHEMA.into(),
             phase: crunch_build::action_result::ACTION_RESULT_PHASE_DISCOVERY.into(),
             action_ref: IMPACT_ACTION_REF.into(),
+            unresolved_derivation: None,
+            resolved_derivation: None,
+            resolved_identity: None,
             disposition: crunch_build::action_result::ACTION_RESULT_DISPOSITION_REUSED.into(),
             selected_result_ref: Some(IMPACT_RESULT_REF.into()),
             selected_source_id: Some("local-action-results".into()),
@@ -3545,7 +4540,6 @@ mod tests {
             read_json_bounded::<mantlepkgs_core::MantlePackageImpactReport>(&output, IMPACT_INPUT_BYTES_MAX).unwrap();
         assert_eq!(report.schema, mantlepkgs_core::IMPACT_REPORT_SCHEMA);
         assert!(report.package_impacts.is_empty());
-        assert!(Command::new("nix").env("PATH", temp.path().join("no-nix")).status().is_err());
     }
 
     #[test]
@@ -3609,7 +4603,6 @@ mod tests {
         assert_eq!(original["version"], "v1.2.3");
         assert_eq!(receipt.disposition, UpdateExecutionDisposition::Applied);
         assert!(!denial.exists());
-        assert!(Command::new("nix").env("PATH", temp.path().join("no-nix")).status().is_err());
     }
 
     #[test]
@@ -4014,7 +5007,6 @@ mod tests {
         assert_eq!(composed.packages.len(), COMPOSED_PUBLIC_PACKAGE_COUNT);
         assert_eq!(composed.variants.len(), 1);
         assert_eq!(composed.validation_roots.len(), 1);
-        assert!(Command::new("nix").env("PATH", temp.path().join("no-nix")).status().is_err());
     }
 
     #[test]
@@ -4099,7 +5091,20 @@ mod tests {
         fs::write(&manifest_path, "{}\n").unwrap();
         let batch = fixture_batch(&manifest);
 
-        publish_batch(&manifest_path, &manifest, &batch, temp.path(), false).unwrap();
+        let policy_artifacts = load_policy_artifacts(&manifest_path, &manifest).unwrap();
+        let published = publish_batch(&manifest, &batch, &policy_artifacts, temp.path()).unwrap();
+        FsMantlepkgsPort.verify_publication(&published).unwrap();
+        if let CatalogPublication::Published { catalog, path } = &published {
+            let mut mismatched = catalog.clone();
+            mismatched.catalog_identity_blake3 = "0".repeat(64);
+            let false_publication = CatalogPublication::Published {
+                catalog: mismatched,
+                path: path.clone(),
+            };
+            assert!(FsMantlepkgsPort.verify_publication(&false_publication).is_err());
+        } else {
+            panic!("fixture batch must publish a generation");
+        }
         let plan = plan_catalog(&manifest, &batch.producer, &[observe_package(
             &manifest.selectors[0],
             &produced_facts(&batch.packages[0]),
@@ -4118,7 +5123,7 @@ mod tests {
             .unwrap();
         assert!(child.status.success(), "child stderr: {}", String::from_utf8_lossy(&child.stderr));
         let catalog_before = fs::read(generation.join(CATALOG_JSON_PATH)).unwrap();
-        let duplicate = publish_batch(&manifest_path, &manifest, &batch, temp.path(), false);
+        let duplicate = publish_batch(&manifest, &batch, &policy_artifacts, temp.path());
         assert!(matches!(duplicate, Err(RunError::Internal(_))));
         assert_eq!(fs::read(generation.join(CATALOG_JSON_PATH)).unwrap(), catalog_before);
         let stages = fs::read_dir(temp.path().join("generations"))
@@ -4236,8 +5241,10 @@ mod tests {
         batch.packages[0]
             .blockers
             .push(CatalogBlocker::new("producer-failed", "hello", "fixture producer failure"));
-        let result = publish_batch(&input.join("manifest.ncl"), &manifest, &batch, temp.path(), false);
-        assert!(matches!(result, Err(RunError::Reported(FAILURE_EXIT_CODE))));
+        let policy_artifacts = load_policy_artifacts(&input.join("manifest.ncl"), &manifest).unwrap();
+        let result = publish_batch(&manifest, &batch, &policy_artifacts, temp.path()).unwrap();
+        assert!(matches!(result, CatalogPublication::Blocked { .. }));
+        FsMantlepkgsPort.verify_publication(&result).unwrap();
         let generation_root = temp.path().join("generations");
         assert!(generation_root.join(FAILURE_DIRECTORY).is_dir());
         let success_count = fs::read_dir(&generation_root)

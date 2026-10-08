@@ -1,0 +1,11 @@
+{
+  "exported_count": 1,
+  "total_payload_bytes": 128,
+  "paths": [
+    {
+      "store_path": "z2y3k7267f9kbpfyw9zw0d1adjcn6z62-hello",
+      "nar_size": 128,
+      "nar_sha256_hex": "86b90edc64f470240656da9a80f655d3b57c19be6b9ba41e03e4596732e1dd01"
+    }
+  ]
+}

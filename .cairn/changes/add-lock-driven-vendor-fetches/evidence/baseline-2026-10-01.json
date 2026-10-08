@@ -1,0 +1,52 @@
+{
+  "schema": "mantle-lock-vendor-baseline-v1",
+  "origin_main": "da00f58425740adea559ef926c9dfa97b2cb8240",
+  "isolated_worktree": "/home/brittonr/scratch/mantle-lock-vendor-baseline-da00f5",
+  "isolated_cargo_lock_sha256": "f670020c83e393e077e297dcc91dba30b37fbc20fd26a889e548567e072feb08",
+  "isolated_cargo_lock_bytes": 255436,
+  "isolated_lock_packages": {
+    "total": 987,
+    "registry_with_lock_sha256": 919,
+    "git_without_artifact_hash": 18,
+    "local": 50
+  },
+  "isolated_vendor_tree": {
+    "exists": false,
+    "reason": "vendor-deps is gitignored; origin/main checkout has no generated vendor tree"
+  },
+  "current_shared_ignored_vendor_cache_bytes_du_sb": 898499784,
+  "shared_cache_non_claim": "This is current ignored checkout-local cache footprint, not emitted source-profile payload or fresh-clone reduction.",
+  "emitted_fresh_clone_profile_vendor_payload_bytes": 896632634,
+  "emitted_profile": {
+    "first_binary": "/home/brittonr/scratch/rust-plan-integrated-target/current-tree-stable/debug/mantle",
+    "first_binary_sha256": "9bff7a785ac1e74bff7966cf95e8f1501daed8ce39095e16c407b14949409eb0",
+    "provider_fixture_manifest_json": {"schema_version": 1, "provider_kind": "musl.cc-native-reduced-v1", "reduction": {"retained_tools": ["cc", "ar"], "dropped_components": ["locale-catalogs"]}, "normalized_seed_contract": {"target": "x86_64-linux-musl", "dynamic_linker": "ld-musl-x86_64.so.1"}},
+    "provider_fixture_manifest_serialization": "UTF-8 json.dumps(provider_fixture_manifest_json, separators=(',', ':')) followed by a single LF; reconstituted 246-byte SHA256 equals provider_fixture_manifest_sha256",
+    "provider_fixture_manifest_sha256": "f548fd5bf45df9554ac8ba05d8b089d8ccfc50f087ed53b81bad9b6d7b949fcf",
+    "provider_fixture_archive_file": {"relative_path": "src/main.txt", "utf8_contents": "payload\n", "sha256": "d4e4877bac978b7952f0d544fc52ebff5411d351d129f1f056fa43f11da9af2b"},
+    "command": "TMPDIR=/home/brittonr/scratch /home/brittonr/scratch/rust-plan-integrated-target/current-tree-stable/debug/mantle --json source bundle bootstrap-profile --mode fresh-clone-inputs --provider-archive /home/brittonr/scratch/mantle-lock-vendor-baseline-profile/provider-archive --provider-manifest /home/brittonr/scratch/mantle-lock-vendor-baseline-profile/provider.json --vendor-deps /home/brittonr/scratch/mantle-lock-vendor-baseline-da00f5/vendor-deps --to /home/brittonr/scratch/mantle-lock-vendor-baseline-profile/fresh-clone-inputs.json",
+    "manifest_path": "/home/brittonr/scratch/mantle-lock-vendor-baseline-profile/fresh-clone-inputs.json",
+    "report_format": "mantle-bootstrap-source-profile-v1",
+    "serialized_manifest_bytes_stat": 1806345932,
+    "serialized_manifest_measurement_command": "stat -c '%s bytes %n' /home/brittonr/scratch/mantle-lock-vendor-baseline-profile/fresh-clone-inputs.json",
+    "command_wall_seconds_observed": 3148.39,
+    "report_mode": "fresh-clone-inputs",
+    "report_required_record_count": 3,
+    "manifest_blake3": "82772a3e10da34d5cd36251cb5893e9010d3aa89f669862b29702b3f78fecb99",
+    "provider_archive": {"identity": "bootstrap-provider-archive", "payload_bytes": 8, "file_count": 1, "content_blake3": "6bdfc1e79b7de5f9f6dbce1eb86945a9fcf2af020c242f881636c7e2a2c998bb"},
+    "provider_manifest": {"identity": "bootstrap-provider-manifest", "payload_bytes": 246, "file_count": 1, "content_blake3": "dcaf76d496b4451888a82db7dece85df03ad27d48dc7574dcbc5225e164eb13f"},
+    "vendor_record": {"identity": "vendored-cargo-inputs", "kind": "package-mirror", "payload_bytes": 896632634, "file_count": 45231, "content_blake3": "b2c69a76f9b883a1d09fc2ae79908374c6b9204357990f34b10bfcaf3a5a927c"},
+    "extraction_command": "python3 -c 'import json,sys; m=json.load(open(sys.argv[1],\"rb\")); print(json.dumps({\"format\":m[\"format\"],\"manifest_blake3\":m[\"manifest_blake3\"],\"records\":[{\"identity\":r[\"identity\"],\"kind\":r[\"kind\"],\"payload_bytes\":r[\"payload_bytes\"],\"file_count\":len(r[\"files\"]),\"content_blake3\":r[\"content_blake3\"]} for r in m[\"records\"]]},sort_keys=True))' /home/brittonr/scratch/mantle-lock-vendor-baseline-profile/fresh-clone-inputs.json",
+    "provider_fixture_non_claim": "Small synthetic provider fixture copied from existing CLI test metadata; real checked isolated vendor closure, not provider release or self-build proof.",
+    "payload_non_claim": "Vendor bytes were read from the emitted manifest records[].payload_bytes, not inferred from du. Equality with isolated cache du here does not make cache footprint profile evidence or establish any lock-driven reduction."
+  },
+  "focused_before": {
+    "command": "TMPDIR=/home/brittonr/scratch CARGO_TARGET_DIR=/home/brittonr/scratch/mantle-lock-vendor-baseline-target nix develop --command cargo test -p crunch-source-core --lib --offline",
+    "result": "1 passed; 0 failed; 0 ignored"
+  },
+  "existing_surfaces": {
+    "vendor_validation": "src/self_build.rs::require_checked_vendor_inputs checks Cargo.lock, .cargo/vendor-config.toml, package checksum manifests and file SHA-256",
+    "profile_admission": "src/source_bundle.rs::validate_bootstrap_profile_input requires vendor_deps in fresh-clone modes; plan_self_build_hydration requires vendored-cargo-inputs PackageMirror",
+    "dynamic_admission": "crates/crunch-build/src/dynamic_plan.rs + worker.rs parent-bound native dynamic-plan admission; DispatchBuildService uses builtin:fetchurl"
+  }
+}

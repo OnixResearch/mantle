@@ -12,7 +12,6 @@ use serde::Serialize;
 use snix_store::path_info::PathInfo;
 
 use crate::ast_grep_evidence::AST_GREP_EVIDENCE_RELATIVE_PATH;
-use crate::ast_grep_evidence::AstGrepEvidenceRead;
 use crate::ast_grep_evidence::read_ast_grep_evidence;
 use crate::build_failure::BuildFailureEnvelope;
 use crate::build_failure::build_failure_envelopes;
@@ -38,6 +37,8 @@ pub struct BuildJsonReport {
     pub hermeticity_mode: String,
     pub hermeticity_audit_events: Vec<BuildJsonHermeticityAuditEvent>,
     pub build_environment_reports: Vec<BuildJsonEnvironmentReport>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub finish_gates: Vec<crunch_build::FinishGateReport>,
     pub network_policy_reports: Vec<BuildJsonNetworkPolicyReport>,
     pub workspace_reports: Vec<crunch_build::WorkspaceExecutionReport>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -444,6 +445,7 @@ fn build_json_report(
         })
         .collect();
     let build_environment_rows = build_environment_reports(result);
+    let finish_gate_rows = result.finish_gate_reports.clone();
     let network_policy_rows = build_network_policy_reports(result);
     let workspace_rows = result.workspace_reports.clone();
     let action_result_rows = result.action_result_reports.clone();
@@ -499,6 +501,7 @@ fn build_json_report(
         hermeticity_mode: result.hermeticity_mode.as_str().to_string(),
         hermeticity_audit_events,
         build_environment_reports: build_environment_rows,
+        finish_gates: finish_gate_rows,
         network_policy_reports: network_policy_rows,
         workspace_reports: workspace_rows,
         action_result_reports: action_result_rows,
@@ -679,7 +682,6 @@ fn build_plan_output_binding_reports(result: &PipelineResult, store_dir: &str) -
     });
     rows
 }
-
 fn build_counts(outcomes: &[BuildJsonOutcome], failed: &[BuildFailureEnvelope]) -> BuildJsonCounts {
     let succeeded_total = count_as_u32(outcomes.len());
     let failed_total = count_as_u32(failed.len());
@@ -776,27 +778,23 @@ fn ast_grep_structural_evidence_for_output(
     debug_assert!(!outcome.label.is_empty());
     debug_assert!(!output.name.is_empty());
     match read_ast_grep_evidence(&evidence_path) {
-        AstGrepEvidenceRead::Missing => AstGrepStructuralEvidenceOutcome::Absent,
-        AstGrepEvidenceRead::Valid(loaded) => {
-            AstGrepStructuralEvidenceOutcome::Valid(BuildJsonAstGrepStructuralEvidence {
-                label: outcome.label.clone(),
-                output_name: output.name.clone(),
-                evidence_path: evidence_path.display().to_string(),
-                sidecar_file_digest_blake3: loaded.sidecar_file_digest_blake3,
-                sidecar_canonical_digest_blake3: loaded.sidecar_canonical_digest_blake3,
-                evidence: loaded.evidence,
-            })
-        }
-        AstGrepEvidenceRead::Invalid { blocker_class, message } => {
-            AstGrepStructuralEvidenceOutcome::Invalid(BuildJsonAstGrepStructuralEvidenceDiagnostic {
-                label: outcome.label.clone(),
-                output_name: output.name.clone(),
-                evidence_path: evidence_path.display().to_string(),
-                blocker_class: blocker_class.to_string(),
-                message,
-                next_action: AST_GREP_EVIDENCE_NEXT_ACTION,
-            })
-        }
+        Ok(None) => AstGrepStructuralEvidenceOutcome::Absent,
+        Ok(Some(loaded)) => AstGrepStructuralEvidenceOutcome::Valid(BuildJsonAstGrepStructuralEvidence {
+            label: outcome.label.clone(),
+            output_name: output.name.clone(),
+            evidence_path: evidence_path.display().to_string(),
+            sidecar_file_digest_blake3: loaded.sidecar_file_digest_blake3,
+            sidecar_canonical_digest_blake3: loaded.sidecar_canonical_digest_blake3,
+            evidence: loaded.evidence,
+        }),
+        Err(error) => AstGrepStructuralEvidenceOutcome::Invalid(BuildJsonAstGrepStructuralEvidenceDiagnostic {
+            label: outcome.label.clone(),
+            output_name: output.name.clone(),
+            evidence_path: evidence_path.display().to_string(),
+            blocker_class: error.blocker_class.to_string(),
+            message: error.message,
+            next_action: AST_GREP_EVIDENCE_NEXT_ACTION,
+        }),
     }
 }
 
@@ -1255,6 +1253,7 @@ mod tests {
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),
@@ -1328,6 +1327,7 @@ mod tests {
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),
@@ -1346,7 +1346,7 @@ mod tests {
     }
 
     #[test]
-    fn build_json_report_includes_artifact_attestation_reference() {
+    fn build_json_report_includes_artifact_attestation_and_plan_output_bindings() {
         use std::collections::HashMap;
 
         let state_dir = tempfile::tempdir().unwrap();
@@ -1443,6 +1443,7 @@ mod tests {
                     strong_claim_blocked: false,
                 }),
             }],
+            finish_gate_reports: Vec::new(),
             network_policy_reports: vec![crunch_pipeline::BuildNetworkPolicyReport {
                 action_name: "demo".to_string(),
                 mode: "offline".to_string(),
@@ -1476,6 +1477,9 @@ mod tests {
                 schema: "mantle-action-result-runtime-report-v1".to_string(),
                 phase: "discovery".to_string(),
                 action_ref: "action-b3:demo".to_string(),
+                unresolved_derivation: None,
+                resolved_derivation: None,
+                resolved_identity: None,
                 disposition: "reused".to_string(),
                 selected_result_ref: Some("result-b3:demo".to_string()),
                 selected_source_id: Some("local-state".to_string()),
@@ -1809,6 +1813,7 @@ mod tests {
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),
@@ -2218,6 +2223,7 @@ mod tests {
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),
@@ -2365,6 +2371,7 @@ mod tests {
                 "explicit --impure mode permits ambient host dependencies",
             )],
             build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),

@@ -1,0 +1,179 @@
+{
+  "cargo_lock_sha256": "f670020c83e393e077e297dcc91dba30b37fbc20fd26a889e548567e072feb08",
+  "checked_vendor_input": "Isolated origin/main scripts/vendor-deps.py generate followed by check; cargo vendor --locked, tracked Casita patch, offline metadata 766 external package names, fresh tree 53491 entries equal",
+  "registry_archive_reuse": {
+    "source_cache_dir": "/home/brittonr/.cargo/registry/cache/index.crates.io-1949cf8c6b5b557f",
+    "method": "For every one of 919 registry-sourced isolated Cargo.lock packages, read the corresponding <name>-<version>.crate from this cache, compute SHA-256 of the actual archive bytes, and compare with that package's upstream lock checksum; no network and no vendor per-file checksum is used as authority.",
+    "archives_present": 919,
+    "archives_missing": 0,
+    "lock_hash_mismatches": 0,
+    "total_cached_archive_bytes": 121890531,
+    "sample": {"artifact": "base64@0.22.1", "archive_sha256": "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6", "command": "sha256sum /home/brittonr/.cargo/registry/cache/index.crates.io-1949cf8c6b5b557f/base64-0.22.1.crate"}
+  },
+  "git_artifacts": 18,
+  "git_manifest_comparison": [
+    {
+      "cargo_normalized_notice": true,
+      "name": "artifact-auth-core",
+      "relative_path": "artifact-auth-core",
+      "upstream_manifest_sha256": "44adbb28fde14538fcedea0c288a6e78260dd5870831eeede6f295d867c03ee8",
+      "vendor_manifest_sha256": "d8e667f36d3a5906f3627959b33d0c55fead29d74457a3ea1f02fd70d186443f",
+      "version": "0.1.0"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "artifact-auth-ed25519",
+      "relative_path": "artifact-auth-ed25519",
+      "upstream_manifest_sha256": "0afc53a9916e1ae150ea7fa68f49c6ed3a5483206cf1267c0e127bbe9cbe607f",
+      "vendor_manifest_sha256": "a284bc353f0aab490294bb440cdfcc3cb74ce0f3da9bdcc6f0f40bb8d650aa65",
+      "version": "0.1.0"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "bounded-tree-cap",
+      "relative_path": "bounded-tree-cap",
+      "upstream_manifest_sha256": "74b1c0d09dee24dcaf0675b5f493eef572f3d83d1e58e844d4ca4746b4569015",
+      "vendor_manifest_sha256": "d9b233c818e489b17dd6d658b88a3a6df357472432926b59443bbf5837ef91da",
+      "version": "0.1.0"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "bounded-tree-core",
+      "relative_path": "bounded-tree-core",
+      "upstream_manifest_sha256": "8346ec2c6d1a273a990fef3ba216f710933e46e404ec6eda0495ee4525fa85f2",
+      "vendor_manifest_sha256": "16c8293c18c9673d318a8427e160bd6fd31426f029314cba549a79c8c55cf22f",
+      "version": "0.1.0"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "casita",
+      "relative_path": "casita",
+      "upstream_manifest_sha256": "d7ca68d7385e56a49f3a48789cced893f27a346accb53548d926135d8b52bfca",
+      "vendor_manifest_sha256": "67c626934d5f2a3d7d6e84c7eb508587e285e588b4be02e1610315eb658675ed",
+      "version": "0.1.0"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "durable-file-publication",
+      "relative_path": "durable-file-publication",
+      "upstream_manifest_sha256": "444a2dacefee5ca4c785014261536b2a29e9500a6888e812b5336e5e7ae02b2b",
+      "vendor_manifest_sha256": "8d2bd2d0409b3af7b048abc45121f2421adc3ef27abc4f3ae1f5f696afca4444",
+      "version": "0.1.0"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "nickel-export-core",
+      "relative_path": "nickel-export-core",
+      "upstream_manifest_sha256": "34045941605eeb0c172e505237851556139d23f32ff1975c441f6fed5a5e45a6",
+      "vendor_manifest_sha256": "7f1b876aca6f15dccd449fb305d173123c067b770b3437502a00cb830ec0daed",
+      "version": "0.1.0"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "transactional-reconciliation-core",
+      "relative_path": "transactional-reconciliation-core",
+      "upstream_manifest_sha256": "aa8b8add2c9665ac55c5ae0eb54ee3936ea168e181bc49a0002ae8eb6d4251d5",
+      "vendor_manifest_sha256": "cfc602f2167db3293af06eecc1698da2d3651c9f012895495036dd604c4adcc8",
+      "version": "0.1.0"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "turso",
+      "relative_path": "turso",
+      "upstream_manifest_sha256": "cebdf237515fdfa90074b265929db91c17215abdf8fdc2c783070c656be29c81",
+      "vendor_manifest_sha256": "d106b9adcf9ac11d73d076f8753b853797b770c2e0a8d415f7d09d97c88aa951",
+      "version": "0.8.0-pre.7"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "turso_core",
+      "relative_path": "turso_core",
+      "upstream_manifest_sha256": "d353b21695f0806680f5149849a59df7b481af9284ce8f4b13ba366d1c220b74",
+      "vendor_manifest_sha256": "f002fb095d3362ef37fd0056ca25c63dc30d43dc1aef43d949c56ed4559c0777",
+      "version": "0.8.0-pre.7"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "turso_ext",
+      "relative_path": "turso_ext",
+      "upstream_manifest_sha256": "c845abb92c80baeed7cf63d226193898e903af3447a25f93f14eb88294c283ab",
+      "vendor_manifest_sha256": "258b87648c3461ec1b5427deef9c5ce55a74f9629e54a1772d9b6f251221ce86",
+      "version": "0.8.0-pre.7"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "turso_macros",
+      "relative_path": "turso_macros",
+      "upstream_manifest_sha256": "d852e2bf72fa8ebac6f19f9fd9994695a848b2aa737e7569aded7ea13fe80c05",
+      "vendor_manifest_sha256": "263b507950b54f02643fbe4d0317a3e68748a97ee6ba5219b13e6faa3af21fdb",
+      "version": "0.8.0-pre.7"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "turso_parser",
+      "relative_path": "turso_parser",
+      "upstream_manifest_sha256": "3aec1414721054f1e7a7b90613c05d0d549028857fb53abfc7754d2629445eb5",
+      "vendor_manifest_sha256": "869ef952a1084bf655274158ebe29f553ff223277c47a2218fbfa44dbbd6c76b",
+      "version": "0.8.0-pre.7"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "turso_sdk_kit",
+      "relative_path": "turso_sdk_kit",
+      "upstream_manifest_sha256": "d99bad1e307c289349587cc858728288ddc56d9e6f62224dbafba78ed5361185",
+      "vendor_manifest_sha256": "0067c839853dc2a7a90bd469b983133972509fa54cbc49a3a665ebf3d5a369ce",
+      "version": "0.8.0-pre.7"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "turso_sdk_kit_macros",
+      "relative_path": "turso_sdk_kit_macros",
+      "upstream_manifest_sha256": "80580bfee370730e699bd145e02ecf0845eb4df4d7639347dfbc447c302de4de",
+      "vendor_manifest_sha256": "0f03151c1241de2d8e4d60ac1db4f63bbdd1f23617f829f251adac58e7fee6d5",
+      "version": "0.8.0-pre.7"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "turso_sync_engine",
+      "relative_path": "turso_sync_engine",
+      "upstream_manifest_sha256": "caffd686f5823fbeb8b8946541135fb83eb2a38f9a1a044141b1e36781cd4c1f",
+      "vendor_manifest_sha256": "d429e02308790343b78b421a2180c71c6fd4eb298337f41240199d6984d86fc3",
+      "version": "0.8.0-pre.7"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "turso_sync_sdk_kit",
+      "relative_path": "turso_sync_sdk_kit",
+      "upstream_manifest_sha256": "eb97bec58ff8fdc9c379ec89f22891039af605abab2c0b81e7706fffcd4f8c48",
+      "vendor_manifest_sha256": "4a3a20a7453343fde5aed43df9a6d96e5bf02ef712dd4035dc921e9598062c1c",
+      "version": "0.8.0-pre.7"
+    },
+    {
+      "cargo_normalized_notice": true,
+      "name": "wu-manber",
+      "relative_path": "wu-manber",
+      "upstream_manifest_sha256": "a0fa99af5243dcd18af7035abd61bcd8ebc77417ce62afee667f9984b8457e42",
+      "vendor_manifest_sha256": "bb54679d3b6532e69dc50c533848a10a00565e708ad52654ed0a0a76bb66e082",
+      "version": "0.1.0"
+    }
+  ],
+  "git_manifests_automatically_normalized": 18,
+  "git_manifests_differing_from_pinned_upstream": 18,
+  "layout_parity": {
+    "missing_package_directories": [],
+    "unexpected_package_directories": [],
+    "wrong_git_package_checksum": [],
+    "wrong_registry_lock_checksum": []
+  },
+  "non_claim": "This is complete pure plan and checked Cargo-generated cache layout parity, NOT 937 actual fixed-output derivations, source-verifying assembler publication, excluded-vendor hydration or bundle-size reduction.",
+  "origin_main": "da00f58425740adea559ef926c9dfa97b2cb8240",
+  "plan_command": "TMPDIR=/home/brittonr/scratch nix develop --command sh -c 'rustc --edition=2024 --crate-name mantle_lock_vendor_core --crate-type rlib crates/mantle-lock-vendor-core/src/lib.rs -o /home/brittonr/scratch/mantle-lock-vendor-private/libmantle_lock_vendor_core.rlib && rustc --edition=2024 /home/brittonr/scratch/mantle-lock-vendor-private/plan-smoke.rs --extern mantle_lock_vendor_core=/home/brittonr/scratch/mantle-lock-vendor-private/libmantle_lock_vendor_core.rlib -o /home/brittonr/scratch/mantle-lock-vendor-private/plan-smoke && /home/brittonr/scratch/mantle-lock-vendor-private/plan-smoke'",
+  "planned_artifacts": 937,
+  "planned_bytes": 337575,
+  "private_plan_path": "/home/brittonr/scratch/mantle-lock-vendor-private/plan.tsv",
+  "private_plan_sha256": "c8ff2b255f27625ee52bd641a9960db8fd7e89851515ea0bec1296bd72f0231f",
+  "registry_artifacts": 919,
+  "schema": "mantle-lock-vendor-private-full-lock-plan-v1",
+  "selected_git_hash_table_sha256": "c655bbde58d5718a4d5c66289161e242ce697b03dd04184e61ddbb0b7e9189c7",
+  "selected_table_rows": 18
+}

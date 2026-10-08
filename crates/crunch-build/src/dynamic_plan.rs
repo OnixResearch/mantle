@@ -1,9 +1,7 @@
 //! Native dynamic build-plan ABI.
 //!
-//! This module is the pure Rust core for `mantle-plan-v1` decoding,
-//! canonicalization, BLAKE3 digesting, and scalar grammar checks. It
-//! deliberately performs no store I/O, no worker mutation, and no scheduler
-//! registration.
+//! Pure decoding, canonicalization, and scalar validation for versioned plans.
+//! No store I/O, worker mutation, or scheduler registration lives here.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -134,6 +132,30 @@ impl std::fmt::Display for StorePathString {
     }
 }
 
+/// The only non-store builder admitted by a native dynamic plan is the
+/// fixed-output fetch service selector.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DynamicBuilder {
+    StorePath(StorePathString),
+    FetchUrl,
+}
+
+impl DynamicBuilder {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::StorePath(path) => path.as_str(),
+            Self::FetchUrl => crate::fetch_build_service::FETCH_BUILDER,
+        }
+    }
+}
+
+impl From<StorePathString> for DynamicBuilder {
+    fn from(path: StorePathString) -> Self {
+        Self::StorePath(path)
+    }
+}
+
 /// A checked derivation output name.
 ///
 /// ```compile_fail
@@ -171,7 +193,7 @@ mod nominal_sealed {
 /// Marker implemented by each closed dynamic-plan BLAKE3 role.
 pub trait Blake3Role: nominal_sealed::Sealed + Clone + Copy + std::fmt::Debug + Eq + Ord + 'static {}
 
-/// Marker for canonical `mantle-plan-v1` identities.
+/// Marker for canonical versioned dynamic-plan identities.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PlanDigestRole;
 impl nominal_sealed::Sealed for PlanDigestRole {}
@@ -351,7 +373,7 @@ pub struct DynamicUnitPolicy {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DynamicDerivation {
     pub name: String,
-    pub builder: StorePathString,
+    pub builder: DynamicBuilder,
     pub system: String,
     pub args: Vec<String>,
     pub outputs: Vec<OutputName>,
@@ -687,7 +709,10 @@ fn validate_units(units: &[DynamicUnit], store_prefix: &str) -> Result<(), Dynam
 
 fn validate_dynamic_derivation(derivation: &DynamicDerivation, store_prefix: &str) -> Result<(), DynamicPlanError> {
     validate_required_string("derivation name", &derivation.name, store_prefix)?;
-    validate_store_path_string(derivation.builder.as_str(), store_prefix)?;
+    match &derivation.builder {
+        DynamicBuilder::StorePath(path) => validate_store_path_string(path.as_str(), store_prefix)?,
+        DynamicBuilder::FetchUrl => validate_fetch_builder(derivation)?,
+    }
     validate_required_string("system", &derivation.system, store_prefix)?;
     validate_argument_strings(&derivation.args, store_prefix)?;
     validate_output_names("unit outputs", &derivation.outputs)?;
@@ -697,6 +722,87 @@ fn validate_dynamic_derivation(derivation: &DynamicDerivation, store_prefix: &st
     validate_fixed_output(derivation.fixed_output.as_ref(), store_prefix)?;
     validate_sandbox_mode(&derivation.sandbox)?;
     validate_output_names("dynamic plan outputs", &derivation.dynamic_plan_outputs)?;
+    Ok(())
+}
+
+fn validate_fetch_builder(derivation: &DynamicDerivation) -> Result<(), DynamicPlanError> {
+    let reject = |field, value: &str, reason| invalid_scalar(field, value, reason);
+    if !matches!(derivation.system.as_str(), "builtin" | "x86_64-linux") {
+        return reject("fetch system", &derivation.system, "unsupported fetcher system");
+    }
+    if !derivation.args.is_empty() {
+        return reject("fetch arguments", &derivation.args[0], "builtin fetcher takes no arguments");
+    }
+    if !derivation.inputs.is_empty() {
+        return reject("fetch inputs", "nonempty", "builtin fetcher takes no store inputs");
+    }
+    if derivation.outputs.len() != 1 || derivation.outputs[0].as_str() != "out" {
+        return reject("fetch outputs", "not exactly out", "builtin fetcher requires only out");
+    }
+    if !derivation.dynamic_plan_outputs.is_empty() {
+        return reject("fetch dynamic plan outputs", "nonempty", "fetch result cannot produce dynamic plans");
+    }
+    if derivation.addressing_mode != AddressingMode::InputAddressed {
+        return reject("fetch addressing mode", "content-addressed", "fixed-output fetch uses input-addressed mode");
+    }
+    let Some(spec) = derivation.fixed_output.as_ref() else {
+        return reject("fetch fixed output", "missing", "builtin fetcher requires a sha256 fixed output");
+    };
+    if spec.algo != FixedOutputHashAlgo::Sha256 {
+        return reject("fetch hash algorithm", "not sha256", "builtin fetcher requires sha256");
+    }
+    let hash = if spec.hash.starts_with("sha256-") {
+        nix_compat::nixhash::NixHash::from_sri(&spec.hash).ok().filter(|hash| {
+            let canonical = format!("sha256-{}", data_encoding::BASE64.encode(hash.digest_as_bytes()));
+            spec.hash == canonical || spec.hash == canonical.trim_end_matches('=')
+        })
+    } else {
+        data_encoding::HEXLOWER.decode(spec.hash.as_bytes()).ok().and_then(|digest| {
+            nix_compat::nixhash::NixHash::from_algo_and_digest(nix_compat::nixhash::HashAlgo::Sha256, &digest).ok()
+        })
+    };
+    if !matches!(hash, Some(nix_compat::nixhash::NixHash::Sha256(_))) {
+        return reject("fetch hash", &spec.hash, "expected a valid sha256 SRI or lowercase 64-digit hex digest");
+    }
+    let Some(url) = derivation.env.get("url") else {
+        return reject("fetch URL", "missing", "builtin fetcher requires url");
+    };
+    if url.chars().any(|ch| ch.is_whitespace() || ch.is_control()) || url.contains(&['\\', '{', '}'][..]) {
+        return reject("fetch URL", url, "unsafe URL characters");
+    }
+    let parsed = url::Url::parse(url).ok();
+    if !parsed.as_ref().is_some_and(|parsed| {
+        matches!(parsed.scheme(), "https" | "http")
+            && parsed.host_str().is_some()
+            && parsed.username().is_empty()
+            && parsed.password().is_none()
+            && parsed.fragment().is_none()
+    }) {
+        return reject("fetch URL", url, "expected an HTTP(S) URL without credentials or fragment");
+    }
+    let git = derivation.env.get("type").is_some_and(|value| value == "git");
+    let allowed: &[&str] = if git { &["url", "type", "rev"] } else { &["url"] };
+    for (key, value) in &derivation.env {
+        if !allowed.contains(&key.as_str()) {
+            return reject("fetch environment key", key, "unsupported fetcher parameter");
+        }
+        if value.contains(DYNAMIC_PLACEHOLDER_START) {
+            return reject("fetch environment value", value, "fetch parameters must be literal");
+        }
+    }
+    if git {
+        if spec.mode != FixedOutputMode::Recursive {
+            return reject("fetch fixed output mode", "flat", "git tree requires recursive NAR hash");
+        }
+        let Some(rev) = derivation.env.get("rev") else {
+            return reject("fetch revision", "missing", "git fetch requires pinned revision");
+        };
+        if rev.len() != 40 || !rev.bytes().all(|byte| is_lower_hex_char(char::from(byte))) {
+            return reject("fetch revision", rev, "expected a pinned 40-digit lowercase git commit id");
+        }
+    } else if spec.mode != FixedOutputMode::Flat {
+        return reject("fetch fixed output mode", "recursive", "URL archive fetch requires flat hash");
+    }
     Ok(())
 }
 
@@ -1518,7 +1624,7 @@ mod tests {
             id: unit_id("unit.extra"),
             derivation: DynamicDerivation {
                 name: "unit-extra".to_string(),
-                builder: store_path(TEST_STORE_PATH),
+                builder: store_path(TEST_STORE_PATH).into(),
                 system: "x86_64-linux".to_string(),
                 args: vec!["--extra".to_string()],
                 outputs: vec![output_name("out"), output_name("dev")],
@@ -2323,5 +2429,76 @@ mod tests {
         );
         let too_many_facts = vec![excess[0].clone(); v2::MAX_PLAN_SLICES as usize + 1];
         assert_eq!(plan_slices(&slices, &outputs, &too_many_facts).unwrap_err().detail, "tree fact count");
+    }
+
+    fn pinned_fetch_wire() -> WireDynamicPlanV1 {
+        let mut wire = valid_wire_plan();
+        let drv = &mut wire.units[0].derivation;
+        drv.builder = crate::fetch_build_service::FETCH_BUILDER.to_string();
+        drv.system = "x86_64-linux".to_string();
+        drv.args.clear();
+        drv.inputs.clear();
+        drv.addressing_mode = AddressingMode::InputAddressed;
+        drv.dynamic_plan_outputs.clear();
+        drv.env = BTreeMap::from([(
+            "url".to_string(),
+            "https://static.crates.io/crates/memchr/memchr-2.7.6.crate".to_string(),
+        )]);
+        drv.fixed_output = Some(WireFixedOutputSpec {
+            mode: FixedOutputMode::Flat,
+            algo: FixedOutputHashAlgo::Sha256,
+            hash: "0123456789abcdef".repeat(4),
+        });
+        wire
+    }
+
+    #[test]
+    fn native_fetch_admits_pinned_archive_and_recursive_git_tree() {
+        let flat = admit_plan_v1(pinned_fetch_wire(), TEST_STORE_PREFIX).unwrap();
+        assert_eq!(flat.units[0].derivation.builder, DynamicBuilder::FetchUrl);
+        assert_eq!(flat.units[0].derivation.fixed_output.as_ref().unwrap().mode, FixedOutputMode::Flat);
+
+        let mut git = pinned_fetch_wire();
+        let drv = &mut git.units[0].derivation;
+        drv.env.insert("url".to_string(), "https://github.com/example/repo.git".to_string());
+        drv.env.insert("type".to_string(), "git".to_string());
+        drv.env.insert("rev".to_string(), "0123456789abcdef0123456789abcdef01234567".to_string());
+        let spec = drv.fixed_output.as_mut().unwrap();
+        spec.mode = FixedOutputMode::Recursive;
+        spec.hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_string();
+        let admitted = admit_plan_v1(git, TEST_STORE_PREFIX).unwrap();
+        assert_eq!(admitted.units[0].derivation.builder, DynamicBuilder::FetchUrl);
+        assert_eq!(admitted.units[0].derivation.fixed_output.as_ref().unwrap().mode, FixedOutputMode::Recursive);
+    }
+
+    #[test]
+    fn native_fetch_denies_unpinned_or_unsafe_artifact_requests() {
+        for (key, value, field) in [
+            ("url", "file:///etc/passwd", "fetch URL"),
+            ("url", "https://user:secret@example.org/archive", "fetch URL"),
+            ("url", "https://example.org/archive#mutable", "fetch URL"),
+            ("type", "archive", "fetch environment key"),
+            ("rev", "HEAD", "fetch environment key"),
+        ] {
+            let mut wire = pinned_fetch_wire();
+            wire.units[0].derivation.env.insert(key.to_string(), value.to_string());
+            expect_invalid_scalar(admit_plan_v1(wire, TEST_STORE_PREFIX).unwrap_err(), field);
+        }
+        let mut missing_hash = pinned_fetch_wire();
+        missing_hash.units[0].derivation.fixed_output = None;
+        expect_invalid_scalar(admit_plan_v1(missing_hash, TEST_STORE_PREFIX).unwrap_err(), "fetch fixed output");
+
+        let mut extra_inputs = pinned_fetch_wire();
+        extra_inputs.units[0].derivation.inputs.push(WireDynamicInput::StorePath {
+            path: TEST_STORE_PATH.to_string(),
+        });
+        expect_invalid_scalar(admit_plan_v1(extra_inputs, TEST_STORE_PREFIX).unwrap_err(), "fetch inputs");
+
+        let mut unpinned_git = pinned_fetch_wire();
+        unpinned_git.units[0].derivation.env.insert("type".to_string(), "git".to_string());
+        unpinned_git.units[0].derivation.fixed_output.as_mut().unwrap().mode = FixedOutputMode::Recursive;
+        expect_invalid_scalar(admit_plan_v1(unpinned_git.clone(), TEST_STORE_PREFIX).unwrap_err(), "fetch revision");
+        unpinned_git.units[0].derivation.env.insert("rev".to_string(), "main".to_string());
+        expect_invalid_scalar(admit_plan_v1(unpinned_git, TEST_STORE_PREFIX).unwrap_err(), "fetch revision");
     }
 }

@@ -10,7 +10,6 @@ unpatched git checkout or a non-Crane source in the default Nix shell.
 
 import argparse
 import ctypes
-import filecmp
 import hashlib
 import json
 import os
@@ -19,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+
 
 ROOT = Path(__file__).resolve().parent.parent
 DEST = ROOT / "vendor-deps"
@@ -106,6 +106,20 @@ def compare_config(generated):
     require(set(tomllib.loads(CONFIG.read_text())) == {"source"}, "vendor-config contains unexpected entries")
 
 
+def check_dev_shell_source_map(config_path):
+    """Reject a shell whose pinned Casita source points at an unpatched checkout."""
+    sources = tomllib.loads(config_path.read_text())["source"]
+    source = sources.get(f"https://github.com/cachix/casita?rev={REV}", {})
+    require(source.get("git") == "https://github.com/cachix/casita" and source.get("rev") == REV,
+            "dev shell: pinned Casita source mapping missing")
+    replacement = sources.get(source.get("replace-with"), {})
+    directory = replacement.get("directory")
+    require(isinstance(directory, str), "dev shell: Casita source replacement missing")
+    nar = Path(directory) / "casita-0.1.0/src/nar.rs"
+    require(nar.is_file() and hashlib.sha256(nar.read_bytes()).hexdigest() == CASITA_PATCHED_NAR_SHA256,
+            "dev shell: Casita source replacement is unpatched or modified")
+
+
 def apply_casita_patch(vendor):
     crate = vendor / "casita"
     manifest = tomllib.loads((crate / "Cargo.toml").read_text())["package"]
@@ -164,7 +178,13 @@ def compare_trees(generated, existing):
         require(name in rhs, f"missing vendor-deps entry: {name}")
         require(lhs[name].is_file() == rhs[name].is_file(), f"vendor-deps type drift: {name}")
         if lhs[name].is_file():
-            require(filecmp.cmp(lhs[name], rhs[name], shallow=False), f"vendor-deps content drift: {name}")
+            with lhs[name].open("rb") as generated_file, rhs[name].open("rb") as existing_file:
+                while True:
+                    generated_chunk = generated_file.read(64 * 1024)
+                    existing_chunk = existing_file.read(64 * 1024)
+                    require(generated_chunk == existing_chunk, f"vendor-deps content drift: {name}")
+                    if not generated_chunk:
+                        break
     return len(lhs)
 
 
@@ -224,6 +244,8 @@ def main():
     if args.operation == "dev-shell-check":
         check_dev_shell(lock_packages)
         return
+    if os.environ.get("MANTLE_CARGO_HOME_BEFORE_DEV_SHELL"):
+        check_dev_shell_source_map(Path(os.environ["CARGO_HOME"]) / "config.toml")
     require(not DEST.is_symlink(), "vendor-deps is a symlink; refusing to follow")
     if args.operation == "generate":
         require(not DEST.exists(), "vendor-deps exists; refusing to clobber user data (run check, or move it aside yourself)")

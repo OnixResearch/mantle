@@ -12,6 +12,7 @@ use crate::opaque_evidence::OpaqueEvidenceSidecarBinding;
 use crate::opaque_evidence::TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE;
 use crate::opaque_evidence::TRELLIS_PROOF_PROFILE_VERSION;
 use crate::opaque_evidence::TRELLIS_PROOF_VALENCE_ROLE_PROPERTY;
+use crate::opaque_evidence::is_trellis_proof_profile;
 use crate::opaque_evidence::opaque_evidence_sidecar_binding_diagnostics;
 
 pub const TRELLIS_PROOF_MODE_OPTIONAL: &str = "optional";
@@ -108,10 +109,7 @@ fn matching_profile_bindings(
     let matches = manifest
         .opaque_evidence_sidecar_bindings
         .iter()
-        .filter(|receipt| {
-            receipt.binding.evidence_kind == OPAQUE_EVIDENCE_KIND_PROOF
-                && receipt.binding.profile_version == TRELLIS_PROOF_PROFILE_VERSION
-        })
+        .filter(|receipt| is_trellis_proof_profile(&receipt.binding))
         .take(DUPLICATE_DETECTION_COUNT)
         .collect::<Vec<_>>();
     debug_assert!(matches.len() <= DUPLICATE_DETECTION_COUNT);

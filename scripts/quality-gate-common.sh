@@ -10,6 +10,7 @@ readonly -a FIRST_PARTY_PACKAGES=(
   mantle
   crunch-android-core
   crunch-android
+  mantle-causal-trace-core
   crunch-attestation
   crunch-build
   crunch-delta
@@ -17,8 +18,12 @@ readonly -a FIRST_PARTY_PACKAGES=(
   crunch-glue
   crunch-pipeline
   crunch-project
+  crunch-remote-app
+  crunch-remote-core
+  crunch-service-readiness-core
   crunch-shell
   crunch-store
+  crunch-watch-core
 )
 
 # Keep vendored workspace exclusions in one checked-in place.

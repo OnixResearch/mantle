@@ -327,8 +327,11 @@ pub async fn import_store_archive<R: AsyncRead + Unpin + Send>(
 ) -> Result<ArchiveImportReport, Error> {
     assert!(!handle.store_dir().is_empty());
     assert!(handle.store_dir().starts_with('/'));
-    if handle.backend() == crate::StoreBackend::Casita && options.trust_unsigned {
-        return Err(Error::Store("casita-trust-unsigned-unsupported: Casita import requires signatures".to_string()));
+    if !handle.backend().profile().unsigned_admission && options.trust_unsigned {
+        return Err(Error::Store(format!(
+            "{}-trust-unsigned-unsupported: backend requires signatures",
+            handle.backend().as_str()
+        )));
     }
     handle.revalidate_overlay_bases()?;
     handle.preflight_casita_archive_trust(&options.trusted_public_keys)?;
@@ -573,8 +576,12 @@ async fn import_or_skip_path<R: AsyncRead + Unpin + Send>(
     assert!(!record.listed.store_path.is_empty());
     assert!(!context.handle.store_dir().is_empty());
     require_ca_path_identity(&record.path_frame.path_info, context.handle.store_dir()).map_err(Error::Store)?;
-    if context.handle.backend() == crate::StoreBackend::Casita && record.path_frame.path_info.signatures.is_empty() {
-        return Err(Error::Store(format!("casita-signer-untrusted: {} is unsigned", record.listed.store_path)));
+    if !context.handle.backend().profile().unsigned_admission && record.path_frame.path_info.signatures.is_empty() {
+        return Err(Error::Store(format!(
+            "{}-signer-untrusted: {} is unsigned",
+            context.handle.backend().as_str(),
+            record.listed.store_path
+        )));
     }
     let local_state = local_archive_path_state(context.handle, &record.path_frame.path_info).await?;
     if local_state == LocalArchivePathState::ConflictingMetadata {

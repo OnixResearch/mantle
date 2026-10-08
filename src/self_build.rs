@@ -1169,7 +1169,10 @@ pub(crate) fn require_checked_vendor_inputs(src_dir: &Path) -> Result<(), RunErr
     let vendor_dir = src_dir.join("vendor-deps");
     let vendor_config = src_dir.join(".cargo").join("vendor-config.toml");
     if !vendor_dir.is_dir() {
-        return Err(RunError::Internal(format!("source-tree vendor-deps/ missing: {}", vendor_dir.display())));
+        return Err(RunError::Internal(format!(
+            "source-tree vendor-deps/ missing: {}; materialize the verified source bundle before self-build preflight (lock-vendor profiles require hydrate-self-build --lock-vendor-output)",
+            vendor_dir.display(),
+        )));
     }
     let vendor_config_text = std::fs::read_to_string(&vendor_config)
         .map_err(|e| RunError::Internal(format!("read {}: {e}", vendor_config.display())))?;
@@ -1182,7 +1185,7 @@ pub(crate) fn require_checked_vendor_inputs(src_dir: &Path) -> Result<(), RunErr
     verify_checked_vendor_freshness(src_dir, &vendor_dir)
 }
 
-fn verify_checked_vendor_freshness(src_dir: &Path, vendor_dir: &Path) -> Result<(), RunError> {
+pub(crate) fn verify_checked_vendor_freshness(src_dir: &Path, vendor_dir: &Path) -> Result<(), RunError> {
     assert!(src_dir.is_dir(), "source dir must exist: {}", src_dir.display());
     assert!(vendor_dir.is_dir(), "vendor dir must exist: {}", vendor_dir.display());
     let lock_path = src_dir.join("Cargo.lock");
@@ -2399,6 +2402,7 @@ fn verify_tools_on_disk(output_dir: &Path) -> Result<(BwrapSource, PathBuf), Run
 struct SelfBuildPipelineContext<'a> {
     output_dir: &'a Path,
     state_dir: &'a Path,
+    logs_dir: &'a Path,
     store_dir: &'a str,
     backend: crunch_store::StoreBackend,
     verbose: bool,
@@ -2614,7 +2618,7 @@ fn build_crunch_binary(
         pipeline,
     );
     let result = run_build(&config)?;
-    report_build_result(&config, &result, false, crate::build_cmd::BuildOutputMode::Human)?;
+    report_build_result(&config, &result, false, crate::build_cmd::BuildOutputMode::Human, pipeline.logs_dir)?;
     emit_progress_marker("crunch-build-done");
     let output_root_dir = resolve_single_root_output_dir(&result, &config.store_dir, pipeline.output_dir, "mantle")?;
     let output_binary = output_root_dir.join("bin").join("mantle");
@@ -2632,7 +2636,7 @@ fn build_bootstrap_tool(
     assert!(!import_paths.is_empty(), "import paths must not be empty");
     let config = self_build_pipeline_config(tool_ncl.to_path_buf(), import_paths.to_vec(), None, pipeline);
     let result = run_build(&config)?;
-    report_build_result(&config, &result, false, crate::build_cmd::BuildOutputMode::Human)?;
+    report_build_result(&config, &result, false, crate::build_cmd::BuildOutputMode::Human, pipeline.logs_dir)?;
     let tool_label = tool_ncl
         .file_stem()
         .and_then(|stem| stem.to_str())
@@ -3218,6 +3222,7 @@ fn emit_self_build_completion(report: &SelfBuildReport) {
 pub struct SelfBuildCommandOptions<'a> {
     pub output_dir: &'a Path,
     pub state_dir: &'a Path,
+    pub logs_dir: &'a Path,
     pub store_dir: &'a str,
     pub backend: crunch_store::StoreBackend,
     pub verbose: bool,
@@ -3299,6 +3304,7 @@ fn run_self_build_roots(
     let pipeline = SelfBuildPipelineContext {
         output_dir: &setup.output_dir,
         state_dir: options.state_dir,
+        logs_dir: options.logs_dir,
         store_dir: options.store_dir,
         backend: options.backend,
         verbose: options.verbose,
@@ -3335,6 +3341,7 @@ fn run_self_build_roots(
 pub type CmdSelfBuildFn = for<'a> fn(
     &'a Path,
     &'a Path,
+    &'a Path,
     &'a str,
     crunch_store::StoreBackend,
     bool,
@@ -3357,6 +3364,7 @@ pub type CmdSelfBuildFn = for<'a> fn(
 
 pub const CMD_SELF_BUILD: CmdSelfBuildFn = |output_dir,
                                             state_dir,
+                                            logs_dir,
                                             store_dir,
                                             backend,
                                             verbose,
@@ -3378,6 +3386,7 @@ pub const CMD_SELF_BUILD: CmdSelfBuildFn = |output_dir,
     execute_self_build(SelfBuildCommandOptions {
         output_dir,
         state_dir,
+        logs_dir,
         store_dir,
         backend,
         verbose,
@@ -3881,6 +3890,7 @@ mod tests {
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),
@@ -3927,6 +3937,7 @@ mod tests {
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
             action_result_reports: Vec::new(),

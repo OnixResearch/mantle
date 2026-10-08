@@ -8,6 +8,7 @@
 
 let { Name, System, Input, Sandbox, .. } = import "contracts.ncl" in
 let { FixedOutput } = import "fixed_output.ncl" in
+let Gate = (import "finish_gates.ncl").Gate in
 let PositiveNumber = std.contract.from_validator (fun value =>
   if std.is_number value && value > 0 then 'Ok
   else 'Error { message = "expected a positive bounded workspace number" }
@@ -84,8 +85,12 @@ let PlanInputs = std.contract.from_validator (fun value =>
     | default = ["out"],
 
   dynamic_plan_outputs | Array String
-    | doc "Output names that may contain native mantle-plan-v1 dynamic build plans. Each name must also appear in outputs."
+    | doc "Output names that may contain native mantle-plan-v1 or mantle-plan-v2 dynamic build plans. Each name must also appear in outputs."
     | default = [],
+
+  finish_gates | Gate
+    | doc "Optional explicit adoption of versioned post-install gates. Existing derivations without this field keep their legacy behavior."
+    | optional,
 
   env | { _ : String }
     | doc "Environment variables set during the build. Output paths and system are auto-populated by the glue layer."

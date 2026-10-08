@@ -1,0 +1,16 @@
+{
+  "builder_signing_key_id": "cache.example.com-1",
+  "output_digest_blake3": "9471488b0fc8d3411e436639c5cab49b6099385b40606ef1c5abfffeda7c7ba1",
+  "outputs": [
+    {
+      "artifact_attestation_digest_blake3": "95fde4aa04ae1810b7cc322b244e41aae64655ca5091280af337d3f549b21327",
+      "content_digest_blake3": "2a3b4fea49193f60ba09ed5ede3b90b60bacbd84df50fd39a0b405f3031c0c7e",
+      "logical_path": "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-fixture",
+      "name": "out",
+      "path_info_signing_key_id": "cache.example.com-1",
+      "size_bytes": 64
+    }
+  ],
+  "request_id": "request-1",
+  "store_prefix": "/mantle/store"
+}

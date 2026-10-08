@@ -2136,7 +2136,7 @@ mod tests {
     const EXPECTED_PROVIDER_STATUS_SOURCE_COUNT: usize = 6;
     const EXPECTED_PROVIDER_STATUS_RECEIPT_COUNT: usize = 1;
     const MRUSTC_SOURCE_SHA256_HEX: &str = "c1ba35f5fc5c4ca2952d9f5526e900dcb6632ea7fd4d71fa58029b3bb563ae56";
-    const FINAL_RUST_VERSION: &str = "1.94.0";
+    const FINAL_RUST_VERSION: &str = "1.94.1";
     const CHECKED_IN_FINAL_RUST_VERSION: &str = "1.94.1";
     const CHECKED_IN_FINAL_RUST_SHA256_HEX: &str = "4c142a625f12e3cdf716c68ae19f4f60d98ad1482627b08579b15838e95ad514";
 
@@ -3214,9 +3214,9 @@ mod tests {
                     "4c230a44b3d9c9f3cef950943719f8380058d27c91fda5e36a9a947ef013e01f",
                 ),
                 rust_provider_bootstrap_source(
-                    "rust-1.94.0",
+                    "rust-1.94.1",
                     FINAL_RUST_VERSION,
-                    "b83f921cd3f321ff614f9c06a8b870d89299fc02888b48a5549683a36823474c",
+                    "4c142a625f12e3cdf716c68ae19f4f60d98ad1482627b08579b15838e95ad514",
                 ),
             ],
             stages: vec![
@@ -3249,9 +3249,9 @@ mod tests {
                     "1.93.1",
                 ),
                 rust_provider_bootstrap_stage(
-                    "rust-1.94.0-final",
+                    "rust-1.94.1-final",
                     RustSourceProviderBootstrapStageKind::RustcFinal,
-                    &["rust-1.94.0"],
+                    &["rust-1.94.1"],
                     "rust-1.93.1-stage1",
                     FINAL_RUST_VERSION,
                 ),

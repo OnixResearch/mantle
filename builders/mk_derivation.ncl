@@ -18,6 +18,7 @@
 
 let Derivation = import "derivation.ncl" in
 let { Input, .. } = import "contracts.ncl" in
+let Gate = (import "finish_gates.ncl").Gate in
 
 # Contract for mkDerivation's input attributes.
 let MkDerivationArgs = {
@@ -77,8 +78,12 @@ let MkDerivationArgs = {
     | default = ["out"],
 
   dynamic_plan_outputs | Array String
-    | doc "Output names that may contain native mantle-plan-v1 dynamic build plans. Each name must also appear in outputs."
+    | doc "Output names that may contain native mantle-plan-v1 or mantle-plan-v2 dynamic build plans. Each name must also appear in outputs."
     | default = [],
+
+  finish_gates | Gate
+    | doc "Versioned post-install gates. Default for newly constructed builder derivations; opt out explicitly for non-runnable outputs."
+    | optional,
 
   env | { _ : String }
     | doc "Extra environment variables."
@@ -257,6 +262,14 @@ let rec mk_derivation_with_shell = fun shell attrs =>
     inputs = src_inputs @ all_inputs,
     pname | not_exported = resolved.pname,
     version | not_exported = resolved.version,
+    finish_gates =
+      if std.record.has_field "finish_gates" resolved then resolved.finish_gates
+      else ({
+        version = {
+          command = ["bin/%{resolved.pname}", "--version"],
+          expected = resolved.version,
+        },
+      } | Gate),
     meta | not_exported = resolved.meta,
     passthru | not_exported = resolved.passthru,
     overrideAttrs | not_exported = fun f =>

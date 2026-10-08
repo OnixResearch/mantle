@@ -54,7 +54,7 @@ fn nix_free_demo_cli_rejects_missing_fixed_point_without_success_claim() {
     let output = mantle_cmd()
         .args(["nix-free-demo", "validate", path_str(&summary_path)])
         .assert()
-        .failure()
+        .code(1)
         .get_output()
         .clone();
     let stdout = String::from_utf8(output.stdout).expect("stdout should be UTF-8");
@@ -76,7 +76,7 @@ fn nix_free_demo_cli_rejects_missing_guard_as_json() {
     let output = mantle_cmd()
         .args(["--json", "nix-free-demo", "validate", path_str(&summary_path)])
         .assert()
-        .failure()
+        .code(1)
         .get_output()
         .clone();
     let report: Value = serde_json::from_slice(&output.stdout).expect("stdout should be JSON");
@@ -106,6 +106,57 @@ fn nix_free_demo_cli_renders_readme_from_summary() {
     assert!(stdout.contains(DIGEST_A));
     assert!(stdout.contains("not release reproducibility"));
     assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn nix_free_demo_cli_readme_of_unclaimable_summary_renders_and_exits_one() {
+    let temp = TempDir::new().expect("tempdir should be created");
+    let mut summary = claimable_summary();
+    summary["fixed_point_verdict"] = Value::String("blocked".to_string());
+    let summary_path = write_summary(temp.path(), summary);
+
+    let output = mantle_cmd()
+        .args(["nix-free-demo", "readme", path_str(&summary_path)])
+        .assert()
+        .code(1)
+        .get_output()
+        .clone();
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be UTF-8");
+
+    assert!(stdout.contains("# Mantle fixed-point demo bundle"));
+    assert!(stdout.contains("Demo claim: not claimable"));
+    assert!(stdout.contains(MISSING_FIXED_POINT));
+    assert!(!stdout.contains(CLAIMABLE_TEXT));
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn nix_free_demo_cli_keeps_distinct_exit_classes_for_malformed_and_unreadable_summaries() {
+    let temp = TempDir::new().expect("tempdir should be created");
+    let malformed = temp.path().join("malformed.json");
+    std::fs::write(&malformed, "not-json").expect("malformed summary should be written");
+    let missing = temp.path().join("missing.json");
+
+    let malformed_output = mantle_cmd()
+        .args(["--json", "nix-free-demo", "validate", path_str(&malformed)])
+        .assert()
+        .code(1)
+        .get_output()
+        .clone();
+    let report: Value = serde_json::from_slice(&malformed_output.stdout).expect("stdout should be JSON");
+    assert_eq!(report["verdict"], "malformed");
+    assert_eq!(report["demo_claimable"], false);
+    assert_eq!(report["diagnostics"][0]["code"], "malformed-summary");
+    assert!(malformed_output.stderr.is_empty());
+
+    let missing_output = mantle_cmd()
+        .args(["nix-free-demo", "validate", path_str(&missing)])
+        .assert()
+        .code(3)
+        .get_output()
+        .clone();
+    assert!(missing_output.stdout.is_empty(), "an unreadable summary must not print a report");
+    assert!(String::from_utf8_lossy(&missing_output.stderr).contains("reading Nix-free demo summary"));
 }
 
 #[test]
@@ -151,11 +202,14 @@ fn nix_free_demo_cli_generate_rejects_bad_inputs_without_partial_valid_bundle() 
     let temp = TempDir::new().expect("tempdir should be created");
     let transcript = write_transcript(temp.path(), "blocked before binary\n");
     let missing_transcript = temp.path().join("missing.log");
-    assert_generate_failure(&temp.path().join("missing-transcript"), &missing_transcript, MISSING_TRANSCRIPT);
+    let missing_out = temp.path().join("missing-transcript");
+    assert_generate_failure(&missing_out, &missing_transcript, MISSING_TRANSCRIPT);
+    assert!(!missing_out.exists(), "a rejected request must not create its output");
 
     let blocked_out = temp.path().join("blocked-with-digests");
     let blocked = generate_args(&blocked_out, &transcript).with_proof_status("blocked").without_non_claims(false);
     assert_generate_args_failure(blocked, CONTRADICTORY_STATUS);
+    assert!(!blocked_out.exists(), "a rejected request must not create its output");
 
     let no_claims_out = temp.path().join("blocked-no-claims");
     let no_claims = generate_args(&no_claims_out, &transcript)
@@ -163,16 +217,124 @@ fn nix_free_demo_cli_generate_rejects_bad_inputs_without_partial_valid_bundle() 
         .without_stage_digests()
         .without_non_claims(true);
     assert_generate_args_failure(no_claims, MISSING_NON_CLAIMS);
+    assert!(!no_claims_out.exists(), "a rejected request must not create its output");
 
     let bad_digest_out = temp.path().join("bad-digest");
     let bad_digest = generate_args(&bad_digest_out, &transcript).with_bad_receipt_digest();
     assert_generate_args_failure(bad_digest, "receipt-digest");
+    assert!(!bad_digest_out.exists(), "a rejected request must not create its output");
 
     let conflict_out = temp.path().join("conflict");
     std::fs::create_dir(&conflict_out).expect("conflict dir should be created");
     std::fs::write(conflict_out.join("unrelated.txt"), "keep me").expect("conflict file should be written");
     assert_generate_failure(&conflict_out, &transcript, OUTPUT_CONFLICT);
-    assert!(conflict_out.join("unrelated.txt").exists());
+    assert_eq!(dir_entry_names(&conflict_out), vec!["unrelated.txt".to_string()]);
+}
+
+#[test]
+fn nix_free_demo_cli_generate_rejects_unreadable_inputs_first_without_writing() {
+    let temp = TempDir::new().expect("tempdir should be created");
+    let transcript = write_transcript(temp.path(), "stage1 ok\nstage2 ok\n");
+
+    let directory_transcript = temp.path().join("transcript-dir");
+    std::fs::create_dir(&directory_transcript).expect("transcript dir should be created");
+    let directory_out = temp.path().join("directory-transcript");
+    let report = generate_rejection(&generate_args(&directory_out, &directory_transcript));
+    assert_eq!(report["diagnostics"][0]["code"], MISSING_TRANSCRIPT);
+    let message = report["diagnostics"][0]["message"].as_str().expect("message should be a string");
+    assert!(message.starts_with(path_str(&directory_transcript)), "{message}");
+    assert!(!directory_out.exists(), "a rejected request must not create its output");
+
+    let file_out = temp.path().join("out-is-a-file");
+    std::fs::write(&file_out, "keep me").expect("output file should be written");
+    let report = generate_rejection(&generate_args(&file_out, &transcript));
+    assert_eq!(report["diagnostics"][0]["code"], OUTPUT_CONFLICT);
+    let message = report["diagnostics"][0]["message"].as_str().expect("message should be a string");
+    assert!(message.starts_with("read output dir: "), "{message}");
+    assert_eq!(std::fs::read_to_string(&file_out).expect("output file should stay readable"), "keep me");
+
+    let occupied_out = temp.path().join("occupied");
+    std::fs::create_dir(&occupied_out).expect("occupied dir should be created");
+    std::fs::write(occupied_out.join("unrelated.txt"), "keep me").expect("occupied file should be written");
+    let occupied = generate_args(&occupied_out, &transcript).with_arg("--guard", "malformed");
+    assert_eq!(generate_rejection(&occupied)["diagnostics"][0]["code"], OUTPUT_CONFLICT);
+    assert_eq!(dir_entry_names(&occupied_out), vec!["unrelated.txt".to_string()]);
+
+    let missing_out = temp.path().join("missing-before-guard");
+    let missing = generate_args(&missing_out, &temp.path().join("missing.log")).with_arg("--guard", "malformed");
+    assert_eq!(generate_rejection(&missing)["diagnostics"][0]["code"], MISSING_TRANSCRIPT);
+    assert!(!missing_out.exists(), "a rejected request must not create its output");
+}
+
+#[test]
+fn nix_free_demo_cli_generate_reports_exactly_the_files_it_wrote() {
+    let temp = TempDir::new().expect("tempdir should be created");
+    let transcript = write_transcript(temp.path(), "stage1 ok\nstage2 ok\n");
+    let out = temp.path().join("bundle");
+
+    let report = run_generate(&out, &transcript).success_json();
+
+    let reported = report["files"]
+        .as_array()
+        .expect("files should be an array")
+        .iter()
+        .map(|file| file.as_str().expect("file should be a string").to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(reported, bundle_file_paths(&out));
+    let transcript_bytes = std::fs::read(&transcript).expect("transcript should be readable");
+    let copied = std::fs::read(out.join("transcripts").join(TRANSCRIPT_FILE_NAME)).expect("copy should be readable");
+    assert_eq!(copied, transcript_bytes);
+    let manifest: Value = serde_json::from_slice(&std::fs::read(out.join("manifest.json")).expect("manifest"))
+        .expect("manifest should be JSON");
+    assert_eq!(manifest["transcripts"][0]["digest_blake3"], blake3::hash(&transcript_bytes).to_hex().as_str());
+}
+
+#[cfg(unix)]
+#[test]
+fn nix_free_demo_cli_generate_partial_write_failure_reports_no_bundle() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = TempDir::new().expect("tempdir should be created");
+    let read_only_dir = temp.path().join("read-only");
+    std::fs::create_dir(&read_only_dir).expect("read-only transcript dir should be created");
+    let first = write_transcript(&read_only_dir, "first transcript\n");
+    std::fs::set_permissions(&first, std::fs::Permissions::from_mode(0o444))
+        .expect("transcript should become read-only");
+    if std::fs::OpenOptions::new().write(true).open(&first).is_ok() {
+        eprintln!("skipping: this user can write read-only files, so the second transcript copy cannot fail");
+        return;
+    }
+    let second_dir = temp.path().join("second");
+    std::fs::create_dir(&second_dir).expect("second transcript dir should be created");
+    let second = write_transcript(&second_dir, "second transcript\n");
+    let out = temp.path().join("bundle");
+    let args = generate_args(&out, &first).with_arg("--transcript", path_str(&second));
+
+    let output = mantle_cmd().args(&args.args).assert().code(3).get_output().clone();
+
+    assert!(output.stdout.is_empty(), "a partial bundle must not print a generate report");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains(&format!("copying transcript {}", path_str(&second))), "{stderr}");
+    assert!(
+        out.join("transcripts").join(TRANSCRIPT_FILE_NAME).exists(),
+        "the first copy lands before the failure"
+    );
+    assert!(!out.join("summary.json").exists(), "no document is written after the failed copy");
+}
+
+#[test]
+fn nix_free_demo_cli_generate_failed_write_exits_internal_without_report_or_bundle() {
+    let temp = TempDir::new().expect("tempdir should be created");
+    let transcript = write_transcript(temp.path(), "stage1 ok\nstage2 ok\n");
+    let blocking_file = temp.path().join("bundle-parent-is-a-file");
+    std::fs::write(&blocking_file, "not a directory").expect("blocking file should be written");
+    let out = blocking_file.join("bundle");
+
+    let output = mantle_cmd().args(&generate_args(&out, &transcript).args).assert().code(3).get_output().clone();
+
+    assert!(output.stdout.is_empty(), "a failed bundle write must not print a generate report");
+    assert!(!output.stderr.is_empty());
+    assert!(!out.exists());
 }
 
 struct GenerateArgs {
@@ -206,6 +368,12 @@ impl GenerateArgs {
 
     fn with_bad_receipt_digest(mut self) -> Self {
         replace_arg_value(&mut self.args, "--receipt-digest", BAD_RECEIPT_DIGEST_ARG);
+        self
+    }
+
+    fn with_arg(mut self, flag: &str, value: &str) -> Self {
+        self.args.push(flag.to_string());
+        self.args.push(value.to_string());
         self
     }
 }
@@ -254,12 +422,50 @@ fn assert_generate_failure(out: &std::path::Path, transcript: &std::path::Path, 
 }
 
 fn assert_generate_args_failure(args: GenerateArgs, expected_code: &str) {
-    let output = mantle_cmd().args(&args.args).assert().failure().get_output().clone();
+    let output = mantle_cmd().args(&args.args).assert().code(1).get_output().clone();
     let report: Value = serde_json::from_slice(&output.stdout).expect("stdout should be JSON");
     assert_eq!(report["generated"], false);
     assert_eq!(report["diagnostics"][0]["code"], expected_code);
     assert!(report["files"].as_array().unwrap().is_empty());
     assert!(output.stderr.is_empty());
+}
+
+/// Run one rejected generation and return its report.
+fn generate_rejection(args: &GenerateArgs) -> Value {
+    let output = mantle_cmd().args(&args.args).assert().code(1).get_output().clone();
+    let report: Value = serde_json::from_slice(&output.stdout).expect("stdout should be JSON");
+    assert_eq!(report["generated"], false);
+    assert!(report["files"].as_array().expect("files should be an array").is_empty());
+    assert!(output.stderr.is_empty());
+    report
+}
+
+fn dir_entry_names(dir: &std::path::Path) -> Vec<String> {
+    let mut names = std::fs::read_dir(dir)
+        .expect("dir should be listable")
+        .map(|entry| entry.expect("entry should be readable").file_name().to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    names.sort();
+    names
+}
+
+/// Every regular file under `root`, as sorted `/`-separated relative paths.
+fn bundle_file_paths(root: &std::path::Path) -> Vec<String> {
+    let mut files = Vec::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        for entry in std::fs::read_dir(&dir).expect("bundle dir should be listable") {
+            let path = entry.expect("bundle entry should be readable").path();
+            if path.is_dir() {
+                pending.push(path);
+            } else {
+                let relative = path.strip_prefix(root).expect("entry should be under the bundle");
+                files.push(relative.to_str().expect("bundle paths should be UTF-8").to_string());
+            }
+        }
+    }
+    files.sort();
+    files
 }
 
 fn replace_arg_value(args: &mut [String], flag: &str, value: &str) {

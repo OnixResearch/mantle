@@ -10,10 +10,11 @@ crunch-eval = { path = "../crunch-eval" }
 crunch-evaluation-stream-core = { path = "../crunch-evaluation-stream-core" }
 crunch-glue = { path = "../crunch-glue" }
 crunch-store = { path = "../crunch-store" }
+crunch-watch-core = { path = "../crunch-watch-core" }
 nix-compat = { path = "../../vendor/nix-compat" }
 snix-build = { path = "../../vendor/snix-build" }
 thiserror = "2.0"
-tokio = { version = "1", features = ["rt", "sync"] }
+tokio = { version = "1", features = ["rt", "sync", "time"] }
 tracing = "0.1"
 
 [dev-dependencies]

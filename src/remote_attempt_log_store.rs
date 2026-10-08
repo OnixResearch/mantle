@@ -35,7 +35,6 @@ use crunch_build::distributed::RemoteAttemptLogRetentionDisposition;
 use crunch_build::distributed::RemoteAttemptLogScope;
 use crunch_build::distributed::RemoteAttemptLogSegment;
 use crunch_build::distributed::RemoteAttemptLogStream;
-use crunch_build::distributed::RemoteEventId;
 use crunch_build::distributed::empty_remote_attempt_log_manifest;
 use crunch_build::distributed::plan_remote_attempt_log_append;
 use crunch_build::distributed::plan_remote_attempt_log_replay;
@@ -43,6 +42,7 @@ use crunch_build::distributed::plan_remote_attempt_log_retention;
 use crunch_build::distributed::seal_remote_attempt_log_record;
 use crunch_build::distributed::validate_remote_attempt_log_chain;
 use crunch_build::distributed::validate_remote_attempt_log_manifest;
+use crunch_remote_core::attempt::RemoteEventId;
 use durable_file_publication::core::CleanupDisposition;
 use durable_file_publication::core::DurabilityMode;
 use durable_file_publication::core::PrimaryFailure;
@@ -932,10 +932,10 @@ fn reason(reason: RemoteAttemptLogReasonCode) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crunch_build::distributed::RemoteAttemptId;
-    use crunch_build::distributed::RemoteAttemptPhase;
-    use crunch_build::distributed::RemoteFenceGeneration;
-    use crunch_build::distributed::RemoteJobId;
+    use crunch_remote_core::attempt::RemoteAttemptId;
+    use crunch_remote_core::attempt::RemoteAttemptPhase;
+    use crunch_remote_core::attempt::RemoteFenceGeneration;
+    use crunch_remote_core::attempt::RemoteJobId;
     use durable_file_publication::core::Classification;
     use durable_file_publication::core::ClassificationError;
     use durable_file_publication::corpus::CONFORMANCE_CORPUS;

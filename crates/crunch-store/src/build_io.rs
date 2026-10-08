@@ -43,10 +43,17 @@ pub async fn read_file_node(blob_service: &dyn BlobService, node: &Node, max_byt
         .map_err(|error| Error::Store(format!("opening blob: {error}")))?
         .ok_or_else(|| Error::Store(format!("blob {digest} is missing")))?;
     let mut bytes = Vec::with_capacity(capacity_bytes);
-    reader
-        .read_to_end(&mut bytes)
-        .await
-        .map_err(|error| Error::Store(format!("reading blob: {error}")))?;
+    // r[impl mantle.io_fault.fixtures] A test fault is classified like a
+    // failed blob read; production executes only the original I/O expression.
+    #[cfg(test)]
+    let read_result = async {
+        let size = fault_injection::fallible!(reader.read_to_end(&mut bytes).await);
+        Ok::<_, std::io::Error>(size)
+    }
+    .await;
+    #[cfg(not(test))]
+    let read_result = reader.read_to_end(&mut bytes).await;
+    read_result.map_err(|error| Error::Store(format!("reading blob: {error}")))?;
     Ok(bytes)
 }
 

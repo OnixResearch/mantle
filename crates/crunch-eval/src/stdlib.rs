@@ -19,12 +19,14 @@ const STDLIB_FILES: &[(&str, &str)] = &[
         "artifact-source-migration-receipt.ncl",
         include_str!("../../../lib/artifact-source-migration-receipt.ncl"),
     ),
+    ("cargo_unit_plan.ncl", include_str!("../../../lib/cargo_unit_plan.ncl")),
     ("contracts.ncl", include_str!("../../../lib/contracts.ncl")),
     (
         "durable-file-publication-adoption-receipt.ncl",
         include_str!("../../../lib/durable-file-publication-adoption-receipt.ncl"),
     ),
     ("derivation.ncl", include_str!("../../../lib/derivation.ncl")),
+    ("finish_gates.ncl", include_str!("../../../lib/finish_gates.ncl")),
     ("fetch.ncl", include_str!("../../../lib/fetch.ncl")),
     ("fixed_output.ncl", include_str!("../../../lib/fixed_output.ncl")),
     ("helpers.ncl", include_str!("../../../lib/helpers.ncl")),
@@ -238,6 +240,8 @@ mod tests {
         assert!(actual.contains("kernelscript_experiment.ncl"));
         assert!(actual.contains("oci_registry_trust.ncl"));
         assert!(actual.contains("scheduling.ncl"));
+        assert!(actual.contains("android.ncl"));
+        assert!(actual.contains("android/sources.ncl"));
     }
 
     #[test]
@@ -251,6 +255,7 @@ mod tests {
         assert!(dir.path().join("fetch.ncl").exists());
         assert!(dir.path().join("kernelscript_experiment.ncl").exists());
         assert!(dir.path().join("oci_registry_trust.ncl").exists());
+        assert!(dir.path().join("android/sources.ncl").exists());
     }
 
     #[test]

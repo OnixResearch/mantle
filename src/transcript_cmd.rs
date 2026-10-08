@@ -4,6 +4,19 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::CommandFamily;
+use mantle_application_contract::EffectId;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::EffectPlan;
+use mantle_application_contract::EffectSpec;
+use mantle_application_contract::ExpectedOutput;
+use mantle_application_contract::Observation;
+use mantle_application_contract::ObservationStatus;
+use mantle_application_contract::classify_observations;
+use mantle_application_contract::plan_effects;
 use serde::Deserialize;
 use serde::Serialize;
 use tempfile::TempDir;
@@ -16,14 +29,86 @@ const TEMP_PLACEHOLDER: &str = "${MANTLE_TRANSCRIPT_TMP}";
 const MAX_TRANSCRIPT_BYTES: u64 = 16_777_216;
 const MAX_TRANSCRIPT_LINES: usize = 100_000;
 const MAX_TRANSCRIPT_BLOCKS: usize = 10_000;
+const TRANSCRIPT_EVIDENCE_SCHEMA: &str = "mantle-transcript-output-v1";
+const TRANSCRIPT_INPUT_EFFECT: &str = "transcript-input-read";
+const TRANSCRIPT_WRITE_EFFECT: &str = "transcript-scratch-and-evidence-write";
+const TRANSCRIPT_PROCESS_EFFECT: &str = "transcript-process-run";
+const TRANSCRIPT_READBACK_EFFECT: &str = "transcript-evidence-readback";
+
+trait TranscriptPort {
+    fn read_input(&mut self, path: &Path) -> Result<String, RunError>;
+    fn prepare_scratch(
+        &mut self,
+        in_place: bool,
+        backend: crunch_store::StoreBackend,
+        state_dir: &Path,
+    ) -> Result<TranscriptScratch, RunError>;
+    fn execute(
+        &mut self,
+        transcript: &Transcript,
+        mantle_bin: &Path,
+        scratch: &TranscriptScratch,
+        work_dir: &Path,
+    ) -> TranscriptExecution;
+    fn publish(&mut self, path: &Path, evidence: TranscriptEvidence) -> Result<blake3::Hash, RunError>;
+    fn readback(&mut self, path: &Path) -> Result<blake3::Hash, RunError>;
+}
+
+struct LocalTranscriptPort;
+
+impl TranscriptPort for LocalTranscriptPort {
+    fn read_input(&mut self, path: &Path) -> Result<String, RunError> {
+        let metadata = fs::metadata(path)
+            .map_err(|err| RunError::Internal(format!("reading transcript `{}` metadata: {err}", path.display())))?;
+        if metadata.len() > MAX_TRANSCRIPT_BYTES {
+            return Err(RunError::Internal(format!(
+                "transcript `{}` exceeds {MAX_TRANSCRIPT_BYTES} bytes",
+                path.display()
+            )));
+        }
+        fs::read_to_string(path)
+            .map_err(|err| RunError::Internal(format!("reading transcript `{}`: {err}", path.display())))
+    }
+
+    fn prepare_scratch(
+        &mut self,
+        in_place: bool,
+        backend: crunch_store::StoreBackend,
+        state_dir: &Path,
+    ) -> Result<TranscriptScratch, RunError> {
+        TranscriptScratch::new(in_place, backend, state_dir)
+    }
+
+    fn execute(
+        &mut self,
+        transcript: &Transcript,
+        mantle_bin: &Path,
+        scratch: &TranscriptScratch,
+        work_dir: &Path,
+    ) -> TranscriptExecution {
+        execute_transcript(transcript, mantle_bin, scratch, work_dir)
+    }
+
+    fn publish(&mut self, path: &Path, evidence: TranscriptEvidence) -> Result<blake3::Hash, RunError> {
+        write_evidence(path, evidence)
+    }
+
+    fn readback(&mut self, path: &Path) -> Result<blake3::Hash, RunError> {
+        let bytes = fs::read(path).map_err(|err| {
+            RunError::Internal(format!("reading transcript output artifact `{}`: {err}", path.display()))
+        })?;
+        Ok(blake3::hash(&bytes))
+    }
+}
 
 #[derive(Debug, Clone)]
-pub struct TranscriptRunOptions {
+pub struct TranscriptRunOptions<'a> {
     pub transcript: PathBuf,
     pub output: Option<PathBuf>,
     pub mantle_bin: Option<PathBuf>,
     pub backend: crunch_store::StoreBackend,
     pub allow_in_place: bool,
+    pub state_dir: &'a Path,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,7 +140,7 @@ struct Transcript {
     blocks: Vec<Block>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct CommandRun {
     visible_index: usize,
     command: String,
@@ -107,25 +192,116 @@ struct RunEvidence {
     normalized_output: String,
 }
 
-pub fn cmd_transcript_run(options: TranscriptRunOptions) -> Result<(), RunError> {
+pub fn cmd_transcript_run(options: TranscriptRunOptions<'_>) -> Result<(), RunError> {
     let summary = run_transcript(options)?;
     println!("transcript ok: {} visible step(s); output: {}", summary.visible_steps, summary.output.display());
     Ok(())
 }
 
-fn run_transcript(options: TranscriptRunOptions) -> Result<TranscriptRunSummary, RunError> {
-    let metadata = fs::metadata(&options.transcript).map_err(|err| {
-        RunError::Internal(format!("reading transcript `{}` metadata: {err}", options.transcript.display()))
-    })?;
-    if metadata.len() > MAX_TRANSCRIPT_BYTES {
-        return Err(RunError::Internal(format!(
-            "transcript `{}` exceeds {MAX_TRANSCRIPT_BYTES} bytes",
-            options.transcript.display()
-        )));
+fn run_transcript(options: TranscriptRunOptions<'_>) -> Result<TranscriptRunSummary, RunError> {
+    let plan = transcript_effect_plan()?;
+    let mut observed = [
+        transcript_observation(
+            TRANSCRIPT_INPUT_EFFECT,
+            EffectKind::ReadFiles,
+            ObservationStatus::Skipped,
+            0,
+            EffectOutput::None,
+        ),
+        transcript_observation(
+            TRANSCRIPT_WRITE_EFFECT,
+            EffectKind::WriteFiles,
+            ObservationStatus::Skipped,
+            0,
+            EffectOutput::None,
+        ),
+        transcript_observation(
+            TRANSCRIPT_PROCESS_EFFECT,
+            EffectKind::RunProcess,
+            ObservationStatus::Skipped,
+            0,
+            EffectOutput::None,
+        ),
+        transcript_observation(
+            TRANSCRIPT_READBACK_EFFECT,
+            EffectKind::ReadFiles,
+            ObservationStatus::Skipped,
+            0,
+            EffectOutput::None,
+        ),
+    ];
+    let mut port = LocalTranscriptPort;
+    let result = run_transcript_with_port(options, &mut port, &mut observed);
+    match (classify_observations(&plan, &observed), result) {
+        (ApplicationOutcome::Completed, Ok(summary)) => Ok(summary),
+        (ApplicationOutcome::Failed { .. }, Err(error)) | (ApplicationOutcome::Contradicted { .. }, Err(error)) => {
+            Err(error)
+        }
+        (outcome, _) => Err(RunError::Internal(format!("transcript effects inconsistent: {outcome:?}"))),
     }
-    let text = fs::read_to_string(&options.transcript)
-        .map_err(|err| RunError::Internal(format!("reading transcript `{}`: {err}", options.transcript.display())))?;
-    let transcript = parse_transcript(&text)?;
+}
+
+fn transcript_effect_plan() -> Result<EffectPlan, RunError> {
+    plan_effects(CommandFamily::Evaluation, &[
+        EffectSpec {
+            effect_id: TRANSCRIPT_INPUT_EFFECT,
+            kind: EffectKind::ReadFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::None,
+        },
+        EffectSpec {
+            effect_id: TRANSCRIPT_WRITE_EFFECT,
+            kind: EffectKind::WriteFiles,
+            limit: EffectMeasure::Calls(2),
+            expected_output: ExpectedOutput::None,
+        },
+        EffectSpec {
+            effect_id: TRANSCRIPT_PROCESS_EFFECT,
+            kind: EffectKind::RunProcess,
+            limit: EffectMeasure::Calls(MAX_TRANSCRIPT_BLOCKS as u32),
+            expected_output: ExpectedOutput::None,
+        },
+        EffectSpec {
+            effect_id: TRANSCRIPT_READBACK_EFFECT,
+            kind: EffectKind::ReadFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::Identity(TRANSCRIPT_EVIDENCE_SCHEMA),
+        },
+    ])
+    .map_err(|error| RunError::Internal(format!("planning transcript effects: {}", error.code())))
+}
+
+fn transcript_observation(
+    id: &str,
+    kind: EffectKind,
+    status: ObservationStatus,
+    calls: u32,
+    output: EffectOutput,
+) -> Observation {
+    Observation {
+        effect_id: EffectId(id.to_string()),
+        kind,
+        status,
+        output,
+        usage: EffectMeasure::Calls(calls),
+        diagnostics_code: (status == ObservationStatus::Failed).then(|| format!("{id}-failed")),
+    }
+}
+
+fn run_transcript_with_port(
+    options: TranscriptRunOptions<'_>,
+    port: &mut impl TranscriptPort,
+    observed: &mut [Observation; 4],
+) -> Result<TranscriptRunSummary, RunError> {
+    let text = port.read_input(&options.transcript);
+    observed[0].status = if text.is_ok() {
+        ObservationStatus::Succeeded
+    } else {
+        ObservationStatus::Failed
+    };
+    observed[0].usage = EffectMeasure::Calls(1);
+    observed[0].diagnostics_code = text.is_err().then(|| format!("{TRANSCRIPT_INPUT_EFFECT}-failed"));
+    let transcript = parse_transcript(&text?)?;
     if transcript.options.in_place && !options.allow_in_place {
         return Err(RunError::Internal(
             "transcript requests in_place=true; rerun with --allow-in-place to execute it".to_string(),
@@ -133,29 +309,79 @@ fn run_transcript(options: TranscriptRunOptions) -> Result<TranscriptRunSummary,
     }
     debug_assert!(!transcript.blocks.is_empty());
     debug_assert!(transcript.blocks.len() <= MAX_TRANSCRIPT_BLOCKS);
-
     let output_path = options.output.unwrap_or_else(|| default_output_path(&options.transcript));
     let work_dir = transcript_work_dir(&options.transcript);
     let mantle_bin = options.mantle_bin.unwrap_or_else(default_mantle_bin);
-    let scratch = TranscriptScratch::new(transcript.options.in_place, options.backend)?;
-    let execution = execute_transcript(&transcript, &mantle_bin, &scratch, &work_dir);
+    let scratch = port.prepare_scratch(transcript.options.in_place, options.backend, options.state_dir);
+    observed[1].status = if scratch.is_ok() {
+        ObservationStatus::Succeeded
+    } else {
+        ObservationStatus::Failed
+    };
+    observed[1].usage = EffectMeasure::Calls(1);
+    observed[1].diagnostics_code = scratch.is_err().then(|| format!("{TRANSCRIPT_WRITE_EFFECT}-failed"));
+    let scratch = scratch?;
+    let execution = port.execute(&transcript, &mantle_bin, &scratch, &work_dir);
+    observed[2].status = if execution.result.is_ok() {
+        ObservationStatus::Succeeded
+    } else {
+        ObservationStatus::Failed
+    };
+    observed[2].usage = EffectMeasure::Calls(execution.attempted_processes);
+    observed[2].diagnostics_code = execution.result.is_err().then(|| format!("{TRANSCRIPT_PROCESS_EFFECT}-failed"));
     debug_assert!(execution.result.is_err() || !execution.visible_runs.is_empty());
     debug_assert!(execution.visible_runs.len() <= transcript.blocks.len());
-
-    write_evidence(&output_path, TranscriptEvidence {
-        schema: "mantle-transcript-output-v1",
+    let visible_steps = execution.visible_runs.len();
+    let published = port.publish(&output_path, TranscriptEvidence {
+        schema: TRANSCRIPT_EVIDENCE_SCHEMA,
         transcript: options.transcript.display().to_string(),
         in_place: transcript.options.in_place,
-        visible_steps: execution.visible_runs.len(),
+        visible_steps,
         hidden_setups: execution.hidden_setups.iter().map(HiddenRunEvidence::from).collect(),
         hidden_cleanups: execution.hidden_cleanups.iter().map(HiddenRunEvidence::from).collect(),
         runs: execution.visible_runs.iter().map(RunEvidence::from).collect(),
         cleanup_failures: execution.cleanup_failures,
-    })?;
-
+    });
+    observed[1].status = if published.is_ok() {
+        ObservationStatus::Succeeded
+    } else {
+        ObservationStatus::Failed
+    };
+    observed[1].usage = EffectMeasure::Calls(2);
+    observed[1].diagnostics_code = published.is_err().then(|| format!("{TRANSCRIPT_WRITE_EFFECT}-failed"));
+    let expected_digest = published?;
+    let persisted = port.readback(&output_path);
+    observed[3].usage = EffectMeasure::Calls(1);
+    match persisted {
+        Ok(actual_digest) => {
+            let matches = actual_digest == expected_digest;
+            observed[3].output = if matches {
+                EffectOutput::Identity(TRANSCRIPT_EVIDENCE_SCHEMA.to_string())
+            } else {
+                EffectOutput::None
+            };
+            observed[3].status = if matches {
+                ObservationStatus::Succeeded
+            } else {
+                ObservationStatus::Failed
+            };
+            observed[3].diagnostics_code = (!matches).then(|| format!("{TRANSCRIPT_READBACK_EFFECT}-failed"));
+            if !matches {
+                return Err(RunError::Internal(format!(
+                    "transcript output artifact `{}` does not match observed runs",
+                    output_path.display()
+                )));
+            }
+        }
+        Err(error) => {
+            observed[3].status = ObservationStatus::Failed;
+            observed[3].diagnostics_code = Some(format!("{TRANSCRIPT_READBACK_EFFECT}-failed"));
+            return Err(error);
+        }
+    }
     execution.result?;
     Ok(TranscriptRunSummary {
-        visible_steps: execution.visible_runs.len(),
+        visible_steps,
         output: output_path,
     })
 }
@@ -173,6 +399,7 @@ struct TranscriptExecution {
     hidden_setups: Vec<HiddenRun>,
     hidden_cleanups: Vec<HiddenRun>,
     cleanup_failures: Vec<String>,
+    attempted_processes: u32,
     result: Result<(), RunError>,
 }
 
@@ -193,7 +420,6 @@ struct VisibleBlockContext<'a> {
 
 struct TranscriptExecutionState {
     visible_runs: Vec<CommandRun>,
-    last_run: Option<CommandRun>,
     is_last_error_pending: bool,
     pending_setups: Vec<String>,
     cleanups: Vec<String>,
@@ -208,9 +434,9 @@ fn execute_transcript(
     work_dir: &Path,
 ) -> TranscriptExecution {
     let block_count_max = transcript.blocks.len();
+    let mut attempted_processes = 0;
     let mut state = TranscriptExecutionState {
         visible_runs: Vec::with_capacity(block_count_max),
-        last_run: None,
         is_last_error_pending: false,
         pending_setups: Vec::with_capacity(block_count_max),
         cleanups: Vec::with_capacity(block_count_max),
@@ -227,14 +453,15 @@ fn execute_transcript(
         if state.result.is_err() {
             break;
         }
-        if let Err(error) = execute_transcript_block(block, &block_context, &mut state) {
+        if let Err(error) = execute_transcript_block(block, &block_context, &mut state, &mut attempted_processes) {
             state.result = Err(error);
         }
     }
     validate_transcript_completion(&mut state);
     debug_assert!(state.visible_runs.len() <= transcript.blocks.len());
     debug_assert!(state.hidden_setups.len() <= transcript.blocks.len());
-    let (hidden_cleanups, cleanup_failures) = run_transcript_cleanups(state.cleanups, scratch, work_dir);
+    let (hidden_cleanups, cleanup_failures) =
+        run_transcript_cleanups(state.cleanups, scratch, work_dir, &mut attempted_processes);
     if state.result.is_ok() && !cleanup_failures.is_empty() {
         state.result =
             Err(RunError::Build(format!("hidden transcript cleanup failed: {}", cleanup_failures.join("; "))));
@@ -244,6 +471,7 @@ fn execute_transcript(
         hidden_setups: state.hidden_setups,
         hidden_cleanups,
         cleanup_failures,
+        attempted_processes,
         result: state.result,
     }
 }
@@ -252,6 +480,7 @@ fn execute_transcript_block(
     block: &Block,
     context: &TranscriptBlockContext<'_>,
     state: &mut TranscriptExecutionState,
+    attempted_processes: &mut u32,
 ) -> Result<(), RunError> {
     match block.kind {
         BlockKind::Options => Ok(()),
@@ -264,7 +493,7 @@ fn execute_transcript_block(
             Ok(())
         }
         BlockKind::Expect | BlockKind::ExpectJson => {
-            let run = state.last_run.as_ref().ok_or_else(|| {
+            let run = state.visible_runs.last().ok_or_else(|| {
                 RunError::Internal("transcript expect block must follow a mantle command".to_string())
             })?;
             verify_expectation(run, block)?;
@@ -280,6 +509,7 @@ fn execute_transcript_block(
                 work_dir: context.work_dir,
             },
             state,
+            attempted_processes,
         ),
     }
 }
@@ -287,6 +517,7 @@ fn execute_transcript_block(
 fn execute_visible_block(
     context: VisibleBlockContext<'_>,
     state: &mut TranscriptExecutionState,
+    attempted_processes: &mut u32,
 ) -> Result<(), RunError> {
     let VisibleBlockContext {
         block,
@@ -301,26 +532,27 @@ fn execute_visible_block(
         ));
     }
     for setup in state.pending_setups.drain(..) {
-        state.hidden_setups.push(run_hidden_shell(&setup, scratch, work_dir, "setup")?);
+        state.hidden_setups.push(run_hidden_shell(&setup, scratch, work_dir, "setup", attempted_processes)?);
     }
     let visible_index = state
         .visible_runs
         .len()
         .checked_add(1)
         .ok_or_else(|| RunError::Internal("transcript visible step index overflowed usize".to_string()))?;
-    let run = run_visible_mantle(VisibleRunRequest {
-        mantle_bin,
-        command: &block.body,
-        is_expected_failure: matches!(block.kind, BlockKind::MantleError),
-        scratch,
-        work_dir,
-        is_in_place,
-        visible_index,
-    })?;
+    let run = run_visible_mantle(
+        VisibleRunRequest {
+            mantle_bin,
+            command: &block.body,
+            is_expected_failure: matches!(block.kind, BlockKind::MantleError),
+            scratch,
+            work_dir,
+            is_in_place,
+            visible_index,
+        },
+        attempted_processes,
+    )?;
     state.is_last_error_pending = run.expected_failure;
-    state.last_run = Some(run.clone());
     state.visible_runs.push(run);
-    debug_assert!(state.last_run.is_some());
     debug_assert!(!state.visible_runs.is_empty());
     Ok(())
 }
@@ -341,12 +573,13 @@ fn run_transcript_cleanups(
     cleanups: Vec<String>,
     scratch: &TranscriptScratch,
     work_dir: &Path,
+    attempted_processes: &mut u32,
 ) -> (Vec<HiddenRun>, Vec<String>) {
     let cleanup_count_max = cleanups.len();
     let mut hidden_cleanups = Vec::with_capacity(cleanup_count_max);
     let mut cleanup_failures = Vec::with_capacity(cleanup_count_max);
     for cleanup in cleanups {
-        match run_hidden_shell(&cleanup, scratch, work_dir, "cleanup") {
+        match run_hidden_shell(&cleanup, scratch, work_dir, "cleanup", attempted_processes) {
             Ok(hidden) => hidden_cleanups.push(hidden),
             Err(error) => cleanup_failures.push(error.to_string()),
         }
@@ -385,7 +618,7 @@ fn default_output_path(transcript: &Path) -> PathBuf {
     PathBuf::from(path)
 }
 
-fn write_evidence(path: &Path, evidence: TranscriptEvidence) -> Result<(), RunError> {
+fn write_evidence(path: &Path, evidence: TranscriptEvidence) -> Result<blake3::Hash, RunError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| {
             RunError::Internal(format!("creating transcript output directory `{}`: {err}", parent.display()))
@@ -393,8 +626,10 @@ fn write_evidence(path: &Path, evidence: TranscriptEvidence) -> Result<(), RunEr
     }
     let bytes = serde_json::to_vec_pretty(&evidence)
         .map_err(|err| RunError::Internal(format!("serializing transcript output artifact: {err}")))?;
-    fs::write(path, bytes)
-        .map_err(|err| RunError::Internal(format!("writing transcript output artifact `{}`: {err}", path.display())))
+    let digest = blake3::hash(&bytes);
+    fs::write(path, &bytes)
+        .map_err(|err| RunError::Internal(format!("writing transcript output artifact `{}`: {err}", path.display())))?;
+    Ok(digest)
 }
 
 fn default_mantle_bin() -> PathBuf {
@@ -409,7 +644,7 @@ struct TranscriptScratch {
 }
 
 impl TranscriptScratch {
-    fn new(in_place: bool, backend: crunch_store::StoreBackend) -> Result<Self, RunError> {
+    fn new(in_place: bool, backend: crunch_store::StoreBackend, admitted_state_dir: &Path) -> Result<Self, RunError> {
         let tmp = tempfile::Builder::new()
             .prefix("mantle-transcript-")
             .tempdir()
@@ -420,7 +655,7 @@ impl TranscriptScratch {
             tmp.path().join("store")
         };
         let state_dir = if in_place {
-            crate::build_cmd::state_dir()
+            admitted_state_dir.to_path_buf()
         } else {
             tmp.path().join("state")
         };
@@ -445,6 +680,7 @@ fn run_hidden_shell(
     scratch: &TranscriptScratch,
     work_dir: &Path,
     label: &'static str,
+    attempted_processes: &mut u32,
 ) -> Result<HiddenRun, RunError> {
     debug_assert!(label == "setup" || label == "cleanup");
     debug_assert!(!work_dir.as_os_str().is_empty());
@@ -453,8 +689,9 @@ fn run_hidden_shell(
         .arg(expand_temp(script, scratch))
         .current_dir(work_dir)
         .env(TRANSCRIPT_TMP_ENV, scratch.tmp_path())
-        .output()
-        .map_err(|err| RunError::Internal(format!("running hidden transcript {label}: {err}")))?;
+        .output();
+    *attempted_processes += 1;
+    let output = output.map_err(|err| RunError::Internal(format!("running hidden transcript {label}: {err}")))?;
     let mut combined = String::new();
     combined.push_str(&String::from_utf8_lossy(&output.stdout));
     combined.push_str(&String::from_utf8_lossy(&output.stderr));
@@ -483,7 +720,7 @@ struct VisibleRunRequest<'a> {
     visible_index: usize,
 }
 
-fn run_visible_mantle(request: VisibleRunRequest<'_>) -> Result<CommandRun, RunError> {
+fn run_visible_mantle(request: VisibleRunRequest<'_>, attempted_processes: &mut u32) -> Result<CommandRun, RunError> {
     let tokens = split_command(request.command)?;
     if tokens.first().map(String::as_str) != Some(MANTLE_PREFIX) {
         return Err(RunError::Internal(format!(
@@ -510,7 +747,9 @@ fn run_visible_mantle(request: VisibleRunRequest<'_>) -> Result<CommandRun, RunE
         cmd.arg(expand_temp(token, request.scratch));
     }
     cmd.current_dir(request.work_dir).env(TRANSCRIPT_TMP_ENV, request.scratch.tmp_path());
-    let output = cmd.output().map_err(|err| {
+    let output = cmd.output();
+    *attempted_processes += 1;
+    let output = output.map_err(|err| {
         RunError::Internal(format!(
             "running transcript command `{}` via `{}`: {err}",
             request.command,
@@ -829,7 +1068,7 @@ missing.ncl
 
     #[test]
     fn output_normalization_replaces_isolated_paths() {
-        let scratch = TranscriptScratch::new(false, crunch_store::StoreBackend::Snix).unwrap();
+        let scratch = TranscriptScratch::new(false, crunch_store::StoreBackend::Snix, Path::new("unused")).unwrap();
         let raw = format!(
             "{}\r\n{}\n{}\n\n\n",
             scratch.tmp_path().display(),

@@ -1,0 +1,27 @@
+Detached origin/main baseline process evidence
+
+Worktree: /home/brittonr/scratch/mantle-live-state-baseline-da00f5
+HEAD: da00f58425740adea559ef926c9dfa97b2cb8240
+CLI: /home/brittonr/scratch/mantle-live-state-target-da00f5/debug/crunch
+
+Aggregate report:
+  env TMPDIR=/home/brittonr/scratch nix develop --offline -c /home/brittonr/scratch/mantle-live-state-target-da00f5/debug/crunch --json --store /home/brittonr/scratch/mantle-live-state-json-store --state-dir /home/brittonr/scratch/mantle-live-state-json-state build --no-substitute tests/fixtures/simple.ncl
+Observed: exit 0, one final crunch-build-report-v1 JSON document, succeeded_total=1, built_total=1; no subscription or retraction record.
+
+Evaluation NDJSON:
+  env TMPDIR=/home/brittonr/scratch nix develop --offline -c /home/brittonr/scratch/mantle-live-state-target-da00f5/debug/crunch --store /home/brittonr/scratch/mantle-live-state-smoke-store --state-dir /home/brittonr/scratch/mantle-live-state-smoke-state build --no-substitute --evaluation-stream tests/fixtures/simple.ncl
+Observed: exit 0, four mantle-evaluation-stream-v1 records in order run-start, root-discovered, root-terminal (succeeded, conversion), run-summary (success, one terminal root). No subscription/retraction.
+
+Worker-loss ledger:
+  env CARGO_TARGET_DIR=/home/brittonr/scratch/mantle-live-state-target-da00f5 TMPDIR=/home/brittonr/scratch nix develop --offline -c cargo test -p crunch-evaluation-stream-core --lib coordinator_failure_marks_started_work_as_lost -- --nocapture --test-threads=1
+Observed: one test passed, started root WorkerLost, pending roots NotStarted; ledger observation only, no subscriber retraction.
+
+Remote resource-release:
+  env CARGO_TARGET_DIR=/home/brittonr/scratch/mantle-live-state-target-da00f5 TMPDIR=/home/brittonr/scratch nix develop --offline -c cargo test -p mantle --bin mantle remote_build::tests::resource_leases_release_on_completion_cancellation_timeout_and_worker_loss -- --nocapture --test-threads=1
+Observed: one test passed: remote coordinator released capacity on worker loss, cancellation, timeout and completion; no subscription event.
+
+Subscription CLI:
+  env TMPDIR=/home/brittonr/scratch nix develop --offline -c /home/brittonr/scratch/mantle-live-state-target-da00f5/debug/crunch remote live --help
+Observed: exit 2, `error: unrecognized subcommand 'live'`.
+
+Preexisting bwrap-gated aggregate and stream integration tests reported `skipping build test: bwrap or /nix/store not available`; their nominal passes were not treated as build-path evidence. The above direct CLI runs supplied baseline proof. `--json build` and `--evaluation-stream` are incompatible modes; ADR 0080 assigns coordination to a separate resident daemon.

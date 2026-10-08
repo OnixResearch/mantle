@@ -89,6 +89,33 @@ Native derivations keep Mantle BLAKE3 identity and configured-prefix paths.
 Nix compatibility imports keep Nix-required identity rules in the reviewed adapter.
 No implicit conversion crosses these domains.
 
+## Lock-driven native Cargo vendor plan
+
+The `mantle-lock-vendor-producer` reads bounded `Cargo.lock` bytes and a
+canonical table containing only hash rows selected for that lock. It emits
+one native fixed-output `builtin:fetchurl` unit per external package, named by
+its package/version/hash identity. The fetch unit has no source-archive edge:
+adding an unrelated locked package, a new reviewed row, or changing the
+assembler cannot rewrite the existing package fetch identity.
+
+For up to 240 external packages, the plan has exactly the package fetch
+units plus **one** final vendor assembler; no shard units or synthetic
+dependency chain intervene. Beyond 240, bounded shard units group fetch
+edges so no assembler exceeds the 256-input execution limit. The final unit
+must verify every locked package and `.cargo-checksum.json` and use only the
+declared Python interpreter, selected table, source bundle, and offline
+Rust/Cargo toolchain. Missing reviewed Git transports, fixed hashes, or
+tool dependencies are blockers, never ambient compiler/network fallbacks.
+
+Native registration treats source outputs as placeholders until they are
+realized, while retaining the full direct parent hash facts and bytes for
+completed parents. Exact duplicate plans are idempotent; conflicting
+dynamic batches or a collision with a static derivation fail before
+registry/goal/ready-queue mutation. A source profile's separately recorded
+vendor-tree receipt proves neither that the native plan was admitted nor
+that the final store output has a trusted signature: verify these as
+separate steps.
+
 ## Rollback
 
 Rollback must restore `dynamic.rs`, `registry.rs`, and the Worker adapter together.

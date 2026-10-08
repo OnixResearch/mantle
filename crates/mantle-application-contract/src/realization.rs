@@ -9,7 +9,6 @@ use alloc::vec::Vec;
 
 use mantle_rust_plan_core::Blake3Digest;
 use mantle_rust_plan_core::BuildProfile;
-use mantle_rust_plan_core::PlanReceiptPreimage;
 
 use crate::envelope::ApplicationBlocker;
 use crate::envelope::CapabilityError;
@@ -63,8 +62,6 @@ pub struct RealizeResult {
     pub cache_hits: u32,
     /// Output identities in canonical order.
     pub output_identities: Vec<Blake3Digest>,
-    /// Receipt preimage when execution completed.
-    pub receipt_preimage: Option<PlanReceiptPreimage>,
 }
 
 /// Terminal realization outcome.

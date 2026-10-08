@@ -1,0 +1,38 @@
+{
+  "source_revision": "da00f58425740adea559ef926c9dfa97b2cb8240",
+  "origin_executable_sha256": "e36c4dabcc0f70cebb798e8faecb757fe5fe5fbb3abcddb7d2bc37312009afc8",
+  "accepted": {
+    "exit_code": 0,
+    "stderr_bytes": 0,
+    "wire_bytes": 1149,
+    "wire_sha256": "846001a24cd21acf10fea590f3f5ab4b4cd7000f7baa633f5c4ccb5579b3296f",
+    "ticket_uses_before": 1,
+    "ticket_uses_after": 0,
+    "frame_kinds": [
+      "auth-ok",
+      "missing-inputs",
+      "build-queued",
+      "build-started",
+      "build-finished",
+      "output-transfer-done",
+      "done"
+    ],
+    "server_phases_after_response": [
+      "await-build-request",
+      "await-input-upload",
+      "queued",
+      "building",
+      "await-output-transfer",
+      "done",
+      "done"
+    ],
+    "output_digest_blake3": "9471488b0fc8d3411e436639c5cab49b6099385b40606ef1c5abfffeda7c7ba1"
+  },
+  "malformed_header": {
+    "input_bytes_hex": "00",
+    "exit_code": 3,
+    "wire_bytes": 0,
+    "stderr_sha256": "4189257b615ea85749a72717eb323e0b02338cabd3a20aa165e51184637ca9b4",
+    "ticket_state_created": false
+  }
+}

@@ -20,15 +20,34 @@ use crunch_release_core::deterministic_build_proof_receipt_canonical_bytes;
 use crunch_release_core::deterministic_release_claim_eligible;
 use crunch_release_core::deterministic_sandbox_isolation_evidence_canonical_bytes;
 use crunch_release_core::validate_provider_fixed_point_release_artifact_binding;
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::CapabilityError;
+use mantle_application_contract::Effect;
+use mantle_application_contract::EffectId;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::ExpectedOutput;
+use mantle_application_contract::Observation;
+use mantle_application_contract::ObservationStatus;
+use mantle_application_contract::ReleaseEffectOperation;
+use mantle_application_contract::ReleaseEffectPlan;
+use mantle_application_contract::ReleaseEffectPort;
+use mantle_application_contract::classify_release_operation;
+use mantle_application_contract::plan_release_operation;
 
 use crate::ast_grep_evidence::validate_ast_grep_release_attachment_file;
 use crate::content_bound_requirement_evidence::ContentBoundRequirementCreateRequest;
 use crate::content_bound_requirement_evidence::load_content_bound_requirement_create_request;
 use crate::errors::RunError;
 use crate::function_address_binding_cmd::FunctionAddressBindingCommand;
-use crate::function_address_binding_cmd::cmd_function_address_binding;
-use crate::global_reproducibility_cmd::cmd_global_reproducibility;
-use crate::global_reproducibility_release::cmd_global_reproducibility_release_evidence;
+use crate::function_address_binding_cmd::execute_function_address_binding;
+use crate::function_address_binding_cmd::render_function_address_binding;
+use crate::global_reproducibility_cmd::evaluate_global_reproducibility_from_paths;
+use crate::global_reproducibility_cmd::render_global_reproducibility;
+use crate::global_reproducibility_release::ReleaseSurfacePaths;
+use crate::global_reproducibility_release::derive_release_surface_evidence_from_paths;
+use crate::global_reproducibility_release::render_release_surface_evidence;
 use crate::release_attestation::create_release_attestation;
 use crate::release_attestation::create_witness_attestation;
 use crate::release_attestation::default_verification_dir;
@@ -42,6 +61,7 @@ use crate::release_evidence::StackProvenanceCreateRequest;
 use crate::release_evidence::create_release_evidence_bundle;
 use crate::release_evidence::verify_release_evidence_bundle;
 use crate::release_nix_witness::ReleaseNixWitnessRequest;
+use crate::release_nix_witness::resolve_witness_receipt_path;
 use crate::release_nix_witness::write_release_nix_cross_builder_witness;
 use crate::release_reproducibility::DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION;
 use crate::release_reproducibility::ReleaseReproduceRequest;
@@ -52,6 +72,7 @@ use crate::release_reproducibility::load_bundle_reproducibility_report;
 use crate::release_reproducibility::reproduce_release_artifacts;
 use crate::release_source::write_tracked_source_archive;
 use crate::verification_gauntlet_cmd::cmd_release_gauntlet;
+use crate::verification_gauntlet_cmd::selected_gauntlet_output;
 use crate::witness_handoff::create_witness_request_directory;
 use crate::witness_handoff::default_witness_request_dir;
 use crate::witness_rebuild::WITNESS_SCRATCH_ENV;
@@ -88,50 +109,80 @@ pub(crate) fn cmd_release(
     };
     debug_assert_eq!(context.current_dir, current_dir);
     debug_assert_eq!(context.state_dir, state_dir);
+    // Admission is a pure domain decision; a blocked bundle must not reach a
+    // filesystem, process, or transport capability.
+    crate::command_input::admit_release_action_or_block(&action)?;
     match action {
-        crate::ReleaseAction::Create { .. } => {
-            cmd_release_create(context, release_create_command(action)?)?;
-            classify_release_effect(RELEASE_CREATE_EFFECT, None)
-        }
+        crate::ReleaseAction::Create { .. } => cmd_release_create(context, release_create_command(action)?),
         crate::ReleaseAction::Verify { .. } => {
             cmd_release_verify(release_verify_request(action, current_dir)?, context.is_json_output)
         }
         crate::ReleaseAction::Transport { action } => cmd_release_transport_action(action, context.is_json_output),
-        crate::ReleaseAction::Reproduce { .. } => {
-            cmd_release_reproduce(context, release_reproduce_command(action)?)?;
-            classify_release_effect(RELEASE_REPRODUCE_EFFECT, None)
-        }
-        crate::ReleaseAction::FunctionAddressBind { .. } => {
-            cmd_release_function_address_action(action, context)?;
-            classify_release_effect(RELEASE_FUNCTION_ADDRESS_EFFECT, None)
-        }
-        crate::ReleaseAction::GlobalReproducibility { .. } => {
-            cmd_global_reproducibility_action(action, context)?;
-            classify_release_effect(RELEASE_GLOBAL_REPRODUCIBILITY_EFFECT, None)
-        }
+        crate::ReleaseAction::Reproduce { .. } => cmd_release_reproduce(context, release_reproduce_command(action)?),
+        crate::ReleaseAction::FunctionAddressBind { .. } => cmd_release_function_address_action(action, context),
+        crate::ReleaseAction::GlobalReproducibility { .. } => cmd_global_reproducibility_action(action, context),
         crate::ReleaseAction::GlobalReproducibilityEvidence { .. } => {
-            cmd_global_reproducibility_evidence_action(action, context)?;
-            classify_release_effect(RELEASE_GLOBAL_REPRODUCIBILITY_EFFECT, None)
+            cmd_global_reproducibility_evidence_action(action, context)
         }
-        crate::ReleaseAction::Gauntlet { action } => {
-            cmd_release_gauntlet(action, context.current_dir, context.is_json_output)?;
-            classify_release_effect(RELEASE_GAUNTLET_EFFECT, None)
-        }
-        crate::ReleaseAction::NixWitness { .. } => {
-            cmd_release_nix_witness_action(action, context)?;
-            classify_release_effect(RELEASE_NIX_WITNESS_EFFECT, None)
-        }
-        crate::ReleaseAction::Attest { .. } => {
-            cmd_release_attest_action(action, context)?;
-            classify_release_effect(RELEASE_ATTEST_EFFECT, None)
-        }
-        crate::ReleaseAction::WitnessExport { .. } => {
-            cmd_release_witness_export_action(action, context)?;
-            classify_release_effect(RELEASE_WITNESS_EXPORT_EFFECT, None)
-        }
+        crate::ReleaseAction::Gauntlet { action } => cmd_release_gauntlet_action(action, context),
+        crate::ReleaseAction::NixWitness { .. } => cmd_release_nix_witness_action(action, context),
+        crate::ReleaseAction::Attest { .. } => cmd_release_attest_action(action, context),
+        crate::ReleaseAction::WitnessExport { .. } => cmd_release_witness_export_action(action, context),
         crate::ReleaseAction::WitnessRebuild { .. } => {
-            cmd_release_witness_rebuild(context, release_witness_rebuild_command(action)?)?;
-            classify_release_effect(RELEASE_WITNESS_REBUILD_EFFECT, None)
+            cmd_release_witness_rebuild(context, release_witness_rebuild_command(action)?)
+        }
+    }
+}
+fn cmd_release_gauntlet_action(
+    action: crate::ReleaseGauntletAction,
+    context: ReleaseCommandContext<'_>,
+) -> Result<(), RunError> {
+    let kind = match &action {
+        crate::ReleaseGauntletAction::Canonicalize { output: None, .. } => ReleaseEffectOperation::GauntletCanonicalize,
+        crate::ReleaseGauntletAction::Canonicalize { output: Some(_), .. } => {
+            ReleaseEffectOperation::GauntletCanonicalizeToFile
+        }
+        crate::ReleaseGauntletAction::Continuous { .. } => ReleaseEffectOperation::GauntletContinuous,
+        crate::ReleaseGauntletAction::StrictHermeticityRegression { .. } => {
+            ReleaseEffectOperation::GauntletStrictRegression
+        }
+    };
+    let selected_output = selected_gauntlet_output(&action, context.current_dir);
+    let plan = release_plan(kind, selected_output.as_deref(), EffectMeasure::Bytes(1_u64 << 30))?;
+    let mut port = CliReleasePort {
+        operation: Some(|| {
+            cmd_release_gauntlet(action, context.current_dir, context.is_json_output, |facts| {
+                let authority = if facts.output_path.is_some() {
+                    EffectKind::WriteFiles
+                } else {
+                    EffectKind::ReadFiles
+                };
+                let observed = release_observation(
+                    kind,
+                    authority,
+                    facts.output_path,
+                    EffectMeasure::Bytes(facts.output_bytes),
+                    ObservationStatus::Succeeded,
+                    None,
+                );
+                match classify_release_operation(&plan, &[observed]) {
+                    ApplicationOutcome::Completed => Ok(()),
+                    other => Err(RunError::Internal(format!("gauntlet effect contradicted its plan: {other:?}"))),
+                }
+            })
+        }),
+        original_failure: None,
+    };
+    match port.execute() {
+        Ok(()) => Ok(()),
+        Err(capability) => {
+            let failed = failed_release_observation(&plan.effects.effects[0], capability.code);
+            match classify_release_operation(&plan, &[failed]) {
+                ApplicationOutcome::Failed { .. } => {
+                    Err(port.original_failure.expect("the failed gauntlet port retained its original error"))
+                }
+                other => Err(RunError::Internal(format!("gauntlet failure contradicted its plan: {other:?}"))),
+            }
         }
     }
 }
@@ -143,22 +194,266 @@ struct ReleaseCommandContext<'a> {
     is_json_output: bool,
 }
 
+/// CLI capability adapter: preserve the original `RunError` for presentation
+/// while the application port reports a typed capability failure.
+struct CliReleasePort<F> {
+    operation: Option<F>,
+    original_failure: Option<RunError>,
+}
+
+impl<F, T> ReleaseEffectPort for CliReleasePort<F>
+where F: FnOnce() -> Result<T, RunError>
+{
+    type Output = T;
+
+    fn execute(&mut self) -> Result<T, CapabilityError> {
+        let operation = self.operation.take().expect("one release plan calls its port once");
+        match operation() {
+            Ok(output) => Ok(output),
+            Err(error) => {
+                let detail = if error.message().is_empty() {
+                    "release operation reported failure"
+                } else {
+                    error.message()
+                };
+                let capability = CapabilityError::new("release-adapter-failed", detail);
+                self.original_failure = Some(error);
+                Err(capability)
+            }
+        }
+    }
+}
+
+fn release_plan(
+    operation: ReleaseEffectOperation,
+    expected_output: Option<&Path>,
+    limit: EffectMeasure,
+) -> Result<ReleaseEffectPlan, RunError> {
+    let selected = expected_output.map(Path::to_string_lossy);
+    let output = selected.as_deref().map_or(ExpectedOutput::None, ExpectedOutput::Identity);
+    plan_release_operation(operation, output, limit)
+        .map_err(|error| RunError::Internal(format!("release effect plan rejected: {}", error.code())))
+}
+
+fn release_observation(
+    operation: ReleaseEffectOperation,
+    kind: EffectKind,
+    output: Option<&Path>,
+    usage: EffectMeasure,
+    status: ObservationStatus,
+    code: Option<&str>,
+) -> Observation {
+    Observation {
+        effect_id: EffectId(String::from(operation.identity())),
+        kind,
+        status,
+        output: output.map_or(EffectOutput::None, |path| EffectOutput::Identity(path.to_string_lossy().into_owned())),
+        usage,
+        diagnostics_code: code.map(String::from),
+    }
+}
+
+fn zero_release_usage(limit: EffectMeasure) -> EffectMeasure {
+    match limit {
+        EffectMeasure::Calls(_) => EffectMeasure::Calls(0),
+        EffectMeasure::Items(_) => EffectMeasure::Items(0),
+        EffectMeasure::Bytes(_) => EffectMeasure::Bytes(0),
+    }
+}
+
+/// Failure is not an undo operation. Record a physically present selected
+/// path without implying that this invocation created it.
+fn failed_release_observation(effect: &Effect, code: String) -> Observation {
+    let present = match &effect.expected_output {
+        EffectOutput::Identity(identity) => std::fs::symlink_metadata(identity)
+            .ok()
+            .filter(|metadata| !metadata.file_type().is_symlink())
+            .map(|metadata| (identity, metadata)),
+        EffectOutput::None => None,
+    };
+    let usage = match (&present, effect.limit) {
+        (Some(_), EffectMeasure::Calls(_)) => EffectMeasure::Calls(1),
+        (Some(_), EffectMeasure::Items(_)) => EffectMeasure::Items(1),
+        (Some((_, metadata)), EffectMeasure::Bytes(_)) => {
+            EffectMeasure::Bytes(if metadata.is_file() { metadata.len() } else { 0 })
+        }
+        (None, limit) => zero_release_usage(limit),
+    };
+    Observation {
+        effect_id: effect.effect_id.clone(),
+        kind: effect.kind,
+        status: ObservationStatus::Failed,
+        output: present.map_or(EffectOutput::None, |(identity, _)| EffectOutput::Identity(identity.clone())),
+        usage,
+        diagnostics_code: Some(code),
+    }
+}
+
+/// Classify the port's observation or real failure before returning any
+/// success value to a presentation adapter. A failed call may have written
+/// partial output; measured presence is not a claim of atomic completion.
+fn execute_release_operation<T, F, O>(
+    plan: &ReleaseEffectPlan,
+    operation: F,
+    observe: O,
+) -> Result<(T, ApplicationOutcome), RunError>
+where
+    F: FnOnce() -> Result<T, RunError>,
+    O: FnOnce(&T) -> Result<Observation, RunError>,
+{
+    let mut port = CliReleasePort {
+        operation: Some(operation),
+        original_failure: None,
+    };
+    match port.execute() {
+        Ok(value) => {
+            let observed = match observe(&value) {
+                Ok(observed) => observed,
+                Err(error) => {
+                    let effect = &plan.effects.effects[0];
+                    let failed = failed_release_observation(effect, String::from("release-observation-failed"));
+                    let outcome = classify_release_operation(plan, &[failed]);
+                    return match outcome {
+                        ApplicationOutcome::Failed { .. } => Err(error),
+                        other => {
+                            Err(RunError::Internal(format!("release failure observation contradicted plan: {other:?}")))
+                        }
+                    };
+                }
+            };
+            let outcome = classify_release_operation(plan, &[observed]);
+            match outcome {
+                ApplicationOutcome::Completed | ApplicationOutcome::Failed { .. } => Ok((value, outcome)),
+                other => Err(RunError::Internal(format!("release effect observation contradicted plan: {other:?}"))),
+            }
+        }
+        Err(capability) => {
+            let effect = &plan.effects.effects[0];
+            let observed = failed_release_observation(effect, capability.code);
+            let outcome = classify_release_operation(plan, &[observed]);
+            match outcome {
+                ApplicationOutcome::Failed { .. } => {
+                    Err(port.original_failure.expect("the failed port retained its original CLI error"))
+                }
+                other => Err(RunError::Internal(format!("release port failure contradicted plan: {other:?}"))),
+            }
+        }
+    }
+}
+fn read_verified_release_manifest(
+    operation: ReleaseEffectOperation,
+    bundle_dir: &Path,
+) -> Result<crate::release_evidence::ReleaseEvidenceManifest, RunError> {
+    let plan = release_plan(operation, Some(bundle_dir), EffectMeasure::Items(16))?;
+    let (manifest, _) = execute_release_operation(
+        &plan,
+        || verify_release_evidence_bundle(bundle_dir),
+        |manifest| {
+            observed_release_file_bytes(&bundle_dir.join("manifest.json"))?;
+            Ok(release_observation(
+                operation,
+                EffectKind::ReadFiles,
+                Some(bundle_dir),
+                EffectMeasure::Items(u32::try_from(manifest.binaries.len()).unwrap_or(u32::MAX)),
+                ObservationStatus::Succeeded,
+                None,
+            ))
+        },
+    )?;
+    Ok(manifest)
+}
+
+fn observed_release_file_bytes(path: &Path) -> Result<u64, RunError> {
+    let metadata = std::fs::metadata(path)
+        .map_err(|error| RunError::Internal(format!("reading release output {}: {error}", path.display())))?;
+    if !metadata.is_file() {
+        return Err(RunError::Internal(format!("release output is not a file: {}", path.display())));
+    }
+    Ok(metadata.len())
+}
+
+fn observed_release_directory(path: &Path) -> Result<(), RunError> {
+    let metadata = std::fs::symlink_metadata(path)
+        .map_err(|error| RunError::Internal(format!("reading release output {}: {error}", path.display())))?;
+    if !metadata.is_dir() {
+        return Err(RunError::Internal(format!("release output is not a directory: {}", path.display())));
+    }
+    Ok(())
+}
+
 fn cmd_release_transport_action(action: crate::ReleaseTransportAction, is_json_output: bool) -> Result<(), RunError> {
     match action {
         crate::ReleaseTransportAction::Pack { bundle_dir, to } => {
-            let outcome = crate::release_chapter_transport::pack_release_transport(&bundle_dir, &to)?;
-            render_release_transport_output(&outcome, is_json_output, "packed")?;
-            classify_release_effect(RELEASE_TRANSPORT_PACK_EFFECT, None)
+            let kind = ReleaseEffectOperation::TransportPack;
+            let plan = release_plan(
+                kind,
+                Some(&to),
+                EffectMeasure::Items(crunch_release_core::CHAPTER_TRANSPORT_MAX_MEMBERS_COUNT),
+            )?;
+            let (outcome, _) = execute_release_operation(
+                &plan,
+                || crate::release_chapter_transport::pack_release_transport(&bundle_dir, &to),
+                |outcome| {
+                    observed_release_directory(&outcome.transport_dir)?;
+                    Ok(release_observation(
+                        kind,
+                        EffectKind::WriteFiles,
+                        Some(&outcome.transport_dir),
+                        EffectMeasure::Items(outcome.receipt.member_count),
+                        ObservationStatus::Succeeded,
+                        None,
+                    ))
+                },
+            )?;
+            render_release_transport_output(&outcome, is_json_output, "packed")
         }
         crate::ReleaseTransportAction::Inspect { transport_dir } => {
-            let inspection = crate::release_chapter_transport::inspect_release_transport(&transport_dir)?;
-            render_release_transport_output(&inspection, is_json_output, "valid")?;
-            classify_release_effect(RELEASE_TRANSPORT_INSPECT_EFFECT, None)
+            let kind = ReleaseEffectOperation::TransportInspect;
+            let plan = release_plan(
+                kind,
+                Some(&transport_dir),
+                EffectMeasure::Items(crunch_release_core::CHAPTER_TRANSPORT_MAX_MEMBERS_COUNT),
+            )?;
+            let (inspection, _) = execute_release_operation(
+                &plan,
+                || crate::release_chapter_transport::inspect_release_transport(&transport_dir),
+                |inspection| {
+                    observed_release_directory(&inspection.transport_dir)?;
+                    Ok(release_observation(
+                        kind,
+                        EffectKind::ReadFiles,
+                        Some(&inspection.transport_dir),
+                        EffectMeasure::Items(inspection.receipt.member_count),
+                        ObservationStatus::Succeeded,
+                        None,
+                    ))
+                },
+            )?;
+            render_release_transport_output(&inspection, is_json_output, "valid")
         }
         crate::ReleaseTransportAction::Unpack { transport_dir, to } => {
-            let outcome = crate::release_chapter_transport::unpack_release_transport(&transport_dir, &to)?;
-            render_release_transport_output(&outcome, is_json_output, "unpacked")?;
-            classify_release_effect(RELEASE_TRANSPORT_UNPACK_EFFECT, None)
+            let kind = ReleaseEffectOperation::TransportUnpack;
+            let plan = release_plan(
+                kind,
+                Some(&to),
+                EffectMeasure::Items(crunch_release_core::CHAPTER_TRANSPORT_MAX_MEMBERS_COUNT),
+            )?;
+            let (outcome, _) = execute_release_operation(
+                &plan,
+                || crate::release_chapter_transport::unpack_release_transport(&transport_dir, &to),
+                |outcome| {
+                    observed_release_directory(&outcome.destination_dir)?;
+                    Ok(release_observation(
+                        kind,
+                        EffectKind::WriteFiles,
+                        Some(&outcome.destination_dir),
+                        EffectMeasure::Items(outcome.member_count),
+                        ObservationStatus::Succeeded,
+                        None,
+                    ))
+                },
+            )?;
+            render_release_transport_output(&outcome, is_json_output, "unpacked")
         }
     }
 }
@@ -199,16 +494,39 @@ fn cmd_release_function_address_action(
     };
     debug_assert!(context.current_dir.components().next().is_some());
     debug_assert!(context.state_dir.components().next().is_some());
-    cmd_function_address_binding(context.current_dir, context.is_json_output, FunctionAddressBindingCommand {
-        bundle_dir,
-        mode,
-        from_preserves_binding,
-        sidecar_relative_path: sidecar,
-        valence_receipt_relative_path: valence_receipt,
-        kamacite_receipt_relative_path: kamacite_receipt,
-        release_binary_relative_path: release_binary,
-        receipt_out,
-    })
+    let kind = ReleaseEffectOperation::FunctionAddressBind;
+    let selected_receipt = resolve_input_path(context.current_dir, receipt_out.clone());
+    let plan = release_plan(kind, Some(&selected_receipt), EffectMeasure::Bytes(1_048_576))?;
+    let (output, _) = execute_release_operation(
+        &plan,
+        || {
+            execute_function_address_binding(context.current_dir, FunctionAddressBindingCommand {
+                bundle_dir,
+                mode,
+                from_preserves_binding,
+                sidecar_relative_path: sidecar,
+                valence_receipt_relative_path: valence_receipt,
+                kamacite_receipt_relative_path: kamacite_receipt,
+                release_binary_relative_path: release_binary,
+                receipt_out,
+            })
+        },
+        |output| {
+            let bytes = observed_release_file_bytes(&output.receipt_path)?;
+            if bytes != u64::try_from(output.canonical_bytes.len()).unwrap_or(u64::MAX) {
+                return Err(RunError::Internal("function-address receipt read-back size differs".to_string()));
+            }
+            Ok(release_observation(
+                kind,
+                EffectKind::WriteFiles,
+                Some(&output.receipt_path),
+                EffectMeasure::Bytes(bytes),
+                ObservationStatus::Succeeded,
+                None,
+            ))
+        },
+    )?;
+    render_function_address_binding(context.is_json_output, &output)
 }
 
 fn cmd_global_reproducibility_action(
@@ -224,7 +542,42 @@ fn cmd_global_reproducibility_action(
     else {
         return Err(RunError::Internal("expected global reproducibility action".to_string()));
     };
-    cmd_global_reproducibility(context.current_dir, context.is_json_output, universe, policy, evidence, report_path)
+    let kind = if report_path.is_some() {
+        ReleaseEffectOperation::GlobalReproducibilityWithReport
+    } else {
+        ReleaseEffectOperation::GlobalReproducibility
+    };
+    let selected_report = report_path.as_ref().map(|path| resolve_input_path(context.current_dir, path.clone()));
+    let limit = if selected_report.is_some() {
+        EffectMeasure::Bytes(1_u64 << 30)
+    } else {
+        EffectMeasure::Items(4_096)
+    };
+    let plan = release_plan(kind, selected_report.as_deref(), limit)?;
+    let (output, _) = execute_release_operation(
+        &plan,
+        || evaluate_global_reproducibility_from_paths(context.current_dir, universe, policy, evidence, report_path),
+        |output| {
+            let usage = match &output.report_path {
+                Some(path) => EffectMeasure::Bytes(observed_release_file_bytes(path)?),
+                None => EffectMeasure::Items(output.report.included_surface_count),
+            };
+            let authority = if output.report_path.is_some() {
+                EffectKind::WriteFiles
+            } else {
+                EffectKind::ReadFiles
+            };
+            Ok(release_observation(
+                kind,
+                authority,
+                output.report_path.as_deref(),
+                usage,
+                ObservationStatus::Succeeded,
+                None,
+            ))
+        },
+    )?;
+    render_global_reproducibility(&output, context.is_json_output)
 }
 
 fn cmd_global_reproducibility_evidence_action(
@@ -244,16 +597,35 @@ fn cmd_global_reproducibility_evidence_action(
     };
     debug_assert!(context.current_dir.components().next().is_some());
     debug_assert!(context.state_dir.components().next().is_some());
-    cmd_global_reproducibility_release_evidence(
-        context.current_dir,
-        context.is_json_output,
-        universe,
-        policy,
-        bundle_dir,
-        verification_dir,
-        release_verify_json,
-        evidence_path,
-    )
+    let kind = ReleaseEffectOperation::GlobalReproducibilityEvidence;
+    let selected_evidence = resolve_input_path(context.current_dir, evidence_path.clone());
+    let plan = release_plan(kind, Some(&selected_evidence), EffectMeasure::Bytes(1_u64 << 30))?;
+    let (output, _) = execute_release_operation(
+        &plan,
+        || {
+            derive_release_surface_evidence_from_paths(ReleaseSurfacePaths {
+                current_dir: context.current_dir,
+                universe_path: universe,
+                policy_path: policy,
+                bundle_dir,
+                verification_dir,
+                release_verify_json,
+                evidence_path,
+            })
+        },
+        |output| {
+            let bytes = observed_release_file_bytes(&output.evidence_path)?;
+            Ok(release_observation(
+                kind,
+                EffectKind::WriteFiles,
+                Some(&output.evidence_path),
+                EffectMeasure::Bytes(bytes),
+                ObservationStatus::Succeeded,
+                None,
+            ))
+        },
+    )?;
+    render_release_surface_evidence(&output, context.is_json_output)
 }
 
 fn cmd_release_nix_witness_action(
@@ -386,8 +758,29 @@ struct ReleaseCreateCommand {
 }
 
 fn cmd_release_create(context: ReleaseCommandContext<'_>, command: ReleaseCreateCommand) -> Result<(), RunError> {
-    let prepared = prepare_release_create(context.current_dir, command)?;
-    let manifest = create_release_evidence_bundle(&prepared.request)?;
+    let kind = ReleaseEffectOperation::Create;
+    let selected_bundle = resolve_bundle_dir(context.current_dir, &command.release_id, command.bundle_dir.clone());
+    let plan = release_plan(kind, Some(&selected_bundle), EffectMeasure::Items(16))?;
+    let ((prepared, manifest), _) = execute_release_operation(
+        &plan,
+        || {
+            let prepared = prepare_release_create(context.current_dir, command)?;
+            let manifest = create_release_evidence_bundle(&prepared.request)?;
+            Ok((prepared, manifest))
+        },
+        |(prepared, manifest)| {
+            observed_release_directory(&prepared.request.bundle_dir)?;
+            observed_release_file_bytes(&prepared.request.bundle_dir.join("manifest.json"))?;
+            Ok(release_observation(
+                kind,
+                EffectKind::WriteFiles,
+                Some(&prepared.request.bundle_dir),
+                EffectMeasure::Items(u32::try_from(manifest.binaries.len()).unwrap_or(u32::MAX)),
+                ObservationStatus::Succeeded,
+                None,
+            ))
+        },
+    )?;
     emit_release_create_result(&prepared.request, &manifest, context.is_json_output)
 }
 
@@ -822,122 +1215,39 @@ fn release_verify_request(action: crate::ReleaseAction, current_dir: &Path) -> R
 }
 
 fn cmd_release_verify(request: ReleaseVerifyRequest, is_json_output: bool) -> Result<(), RunError> {
-    let evaluation = evaluate_release_verification(request)?;
-    let outcome = classify_release_decision(evaluation.decision.valid)?;
-    let is_valid = outcome == mantle_application_contract::ApplicationOutcome::Completed;
+    let kind = ReleaseEffectOperation::Verify;
+    let selected_bundle = resolve_input_path(&request.current_dir, request.bundle_dir.clone());
+    let plan = release_plan(kind, Some(&selected_bundle), EffectMeasure::Items(16))?;
+    let (evaluation, outcome) = execute_release_operation(
+        &plan,
+        || evaluate_release_verification(request),
+        |evaluation| {
+            observed_release_file_bytes(&evaluation.resolved_bundle_dir.join("manifest.json"))?;
+            Ok(release_observation(
+                kind,
+                EffectKind::ReadFiles,
+                Some(&evaluation.resolved_bundle_dir),
+                EffectMeasure::Items(u32::try_from(evaluation.manifest.binaries.len()).unwrap_or(u32::MAX)),
+                if evaluation.decision.valid {
+                    ObservationStatus::Succeeded
+                } else {
+                    ObservationStatus::Failed
+                },
+                (!evaluation.decision.valid).then_some(RELEASE_VERIFY_INVALID_CODE),
+            ))
+        },
+    )?;
+    let is_valid = outcome == ApplicationOutcome::Completed;
     emit_release_verification(&evaluation, is_valid, is_json_output)?;
     match outcome {
-        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
-        mantle_application_contract::ApplicationOutcome::Failed { .. } => {
-            Err(RunError::Reported(RELEASE_VERIFICATION_REJECTED_EXIT_CODE))
-        }
+        ApplicationOutcome::Completed => Ok(()),
+        ApplicationOutcome::Failed { .. } => Err(RunError::Reported(RELEASE_VERIFICATION_REJECTED_EXIT_CODE)),
         other => Err(RunError::Internal(format!("release verification observations were inconsistent: {other:?}"))),
     }
 }
 
-/// Effect kind the verification reports for reading the bundle.
-const RELEASE_VERIFY_EFFECT: &str = "read-files";
 /// Diagnostic code for a verification decision that is not valid.
 const RELEASE_VERIFY_INVALID_CODE: &str = "release-verify-decision-invalid";
-
-/// Classify the verification decision before reporting it.
-///
-/// The decision is the contract's to make: one planned read effect carries
-/// whether the verification holds, and the classification decides completion.
-/// The exit code and the report stream stay what they were.
-fn classify_release_decision(is_valid: bool) -> Result<mantle_application_contract::ApplicationOutcome, RunError> {
-    let plan = mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::Release, &[
-        RELEASE_VERIFY_EFFECT,
-    ])
-    .ok_or_else(|| RunError::Internal("release verification effect plan exceeds its bound".to_string()))?;
-    let observation = mantle_application_contract::Observation {
-        effect_id: mantle_application_contract::EffectId(String::from(RELEASE_VERIFY_EFFECT)),
-        status: if is_valid {
-            mantle_application_contract::ObservationStatus::Succeeded
-        } else {
-            mantle_application_contract::ObservationStatus::Failed
-        },
-        diagnostics_code: if is_valid {
-            None
-        } else {
-            Some(String::from(RELEASE_VERIFY_INVALID_CODE))
-        },
-    };
-    let outcome = mantle_application_contract::classify_observations(&plan, &[observation]);
-    debug_assert!(matches!(
-        outcome,
-        mantle_application_contract::ApplicationOutcome::Completed
-            | mantle_application_contract::ApplicationOutcome::Failed { .. }
-    ));
-    Ok(outcome)
-}
-
-/// Effect identity of the release bundle write.
-const RELEASE_CREATE_EFFECT: &str = "write-files";
-
-/// Effect identity of the transport pack write.
-const RELEASE_TRANSPORT_PACK_EFFECT: &str = "write-files";
-
-/// Effect identity of the transport inspection read.
-const RELEASE_TRANSPORT_INSPECT_EFFECT: &str = "read-files";
-
-/// Effect identity of the transport unpack write.
-const RELEASE_TRANSPORT_UNPACK_EFFECT: &str = "write-files";
-
-/// Effect identity of the reproduction rebuild.
-const RELEASE_REPRODUCE_EFFECT: &str = "run-process";
-
-/// Effect identity of the function-address evidence bind.
-const RELEASE_FUNCTION_ADDRESS_EFFECT: &str = "write-files";
-
-/// Effect identity of the global reproducibility report read.
-const RELEASE_GLOBAL_REPRODUCIBILITY_EFFECT: &str = "read-files";
-
-/// Effect identity of the gauntlet run.
-const RELEASE_GAUNTLET_EFFECT: &str = "run-process";
-
-/// Effect identity of the Nix witness receipt write.
-const RELEASE_NIX_WITNESS_EFFECT: &str = "write-files";
-
-/// Effect identity of the release attestation write.
-const RELEASE_ATTEST_EFFECT: &str = "write-files";
-
-/// Effect identity of the witness request export write.
-const RELEASE_WITNESS_EXPORT_EFFECT: &str = "write-files";
-
-/// Effect identity of the witness rebuild write.
-const RELEASE_WITNESS_REBUILD_EFFECT: &str = "write-files";
-
-/// Classify one finished release effect before success is reported.
-///
-/// Same shape as the store, project, and source families: one planned effect,
-/// one observation, and the exact failure the command already used on
-/// rejection; inner handlers keep their own fail-closed paths.
-fn classify_release_effect(effect: &str, failure: Option<(&str, RunError)>) -> Result<(), RunError> {
-    let plan =
-        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::Release, &[effect])
-            .ok_or_else(|| RunError::Internal(format!("release {effect} effect plan exceeds its bound")))?;
-    let observation = mantle_application_contract::Observation {
-        effect_id: mantle_application_contract::EffectId(String::from(effect)),
-        status: if failure.is_some() {
-            mantle_application_contract::ObservationStatus::Failed
-        } else {
-            mantle_application_contract::ObservationStatus::Succeeded
-        },
-        diagnostics_code: failure.as_ref().map(|(code, _)| String::from(*code)),
-    };
-    match mantle_application_contract::classify_observations(&plan, &[observation]) {
-        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
-        mantle_application_contract::ApplicationOutcome::Failed { .. } => match failure {
-            Some((_, error)) => Err(error),
-            None => {
-                Err(RunError::Internal(format!("release {effect} classification failed without a recorded failure")))
-            }
-        },
-        other => Err(RunError::Internal(format!("release {effect} observations were inconsistent: {other:?}"))),
-    }
-}
-
 // r[impl mantle.release_provenance.verification_decision.complete]
 fn evaluate_release_verification(request: ReleaseVerifyRequest) -> Result<ReleaseVerifyEvaluation, RunError> {
     let resolved_bundle_dir = resolve_input_path(&request.current_dir, request.bundle_dir.clone());
@@ -1960,7 +2270,25 @@ fn cmd_release_reproduce(context: ReleaseCommandContext<'_>, command: ReleaseRep
             .deterministic_proof_dir
             .map(|path| resolve_input_path(context.current_dir, path)),
     };
-    let summary = reproduce_release_artifacts(&request)?;
+    let kind = ReleaseEffectOperation::Reproduce;
+    let selected_report =
+        crate::release_reproducibility::resolve_report_path(&request.bundle_dir, request.report_path.as_deref());
+    let plan = release_plan(kind, Some(&selected_report), EffectMeasure::Bytes(1_u64 << 30))?;
+    let (summary, _) = execute_release_operation(
+        &plan,
+        || reproduce_release_artifacts(&request),
+        |summary| {
+            let bytes = observed_release_file_bytes(&summary.report_path)?;
+            Ok(release_observation(
+                kind,
+                EffectKind::RunProcess,
+                Some(&summary.report_path),
+                EffectMeasure::Bytes(bytes),
+                ObservationStatus::Succeeded,
+                None,
+            ))
+        },
+    )?;
     emit_release_reproduce_result(&summary, context.is_json_output)
 }
 
@@ -2119,7 +2447,26 @@ fn cmd_release_nix_witness(
         nix_output_identity: command.nix_output_identity,
         require_match: command.is_require_match,
     };
-    let summary = write_release_nix_cross_builder_witness(&request)?;
+    let kind = ReleaseEffectOperation::NixWitness;
+    let selected_receipt = resolve_witness_receipt_path(&request.bundle_dir, request.output_path.as_deref());
+    let plan = release_plan(kind, Some(&selected_receipt), EffectMeasure::Bytes(1_u64 << 30))?;
+    // `--require-match` may write a mismatch receipt before returning an
+    // error. The shared failure observer records its physical presence.
+    let (summary, _) = execute_release_operation(
+        &plan,
+        || write_release_nix_cross_builder_witness(&request),
+        |summary| {
+            let bytes = observed_release_file_bytes(&summary.receipt_path)?;
+            Ok(release_observation(
+                kind,
+                EffectKind::WriteFiles,
+                Some(&summary.receipt_path),
+                EffectMeasure::Bytes(bytes),
+                ObservationStatus::Succeeded,
+                None,
+            ))
+        },
+    )?;
     debug_assert!(!summary.release_id.is_empty());
     debug_assert!(!summary.receipt_digest_blake3.is_empty());
     if context.is_json_output {
@@ -2162,18 +2509,40 @@ fn cmd_release_attest(
 ) -> Result<(), RunError> {
     let current_dir = context.current_dir;
     let resolved_bundle_dir = resolve_input_path(current_dir, bundle_dir);
-    let verified_manifest = verify_release_evidence_bundle(&resolved_bundle_dir)?;
+    let verified_manifest = read_verified_release_manifest(ReleaseEffectOperation::AttestRead, &resolved_bundle_dir)?;
     let resolved_verification_dir = match verification_dir {
         Some(path) => resolve_input_path(current_dir, path),
         None => default_verification_dir(current_dir, &verified_manifest.release_id),
     };
     debug_assert!(!verified_manifest.release_id.is_empty());
     debug_assert!(resolved_bundle_dir.components().next().is_some());
-    let created = create_release_attestation(
-        &verified_manifest,
-        &resolved_verification_dir,
-        signing_key.as_deref(),
-        context.state_dir,
+    let kind = ReleaseEffectOperation::Attest;
+    let plan = release_plan(kind, Some(&resolved_verification_dir), EffectMeasure::Bytes(1_u64 << 30))?;
+    let (created, _) = execute_release_operation(
+        &plan,
+        || {
+            create_release_attestation(
+                &verified_manifest,
+                &resolved_verification_dir,
+                signing_key.as_deref(),
+                context.state_dir,
+            )
+        },
+        |created| {
+            let attestation_bytes = observed_release_file_bytes(&created.attestation_path)?;
+            let signature_bytes = observed_release_file_bytes(&created.signature_path)?;
+            let bytes = attestation_bytes
+                .checked_add(signature_bytes)
+                .ok_or_else(|| RunError::Internal("release attestation output size overflowed".to_string()))?;
+            Ok(release_observation(
+                kind,
+                EffectKind::WriteFiles,
+                created.attestation_path.parent(),
+                EffectMeasure::Bytes(bytes),
+                ObservationStatus::Succeeded,
+                None,
+            ))
+        },
     )?;
     if context.is_json_output {
         let rendered = serde_json::json!({
@@ -2207,7 +2576,8 @@ fn cmd_release_witness_export(
     request_dir: Option<PathBuf>,
 ) -> Result<(), RunError> {
     let resolved_bundle_dir = resolve_input_path(current_dir, bundle_dir);
-    let verified_manifest = verify_release_evidence_bundle(&resolved_bundle_dir)?;
+    let verified_manifest =
+        read_verified_release_manifest(ReleaseEffectOperation::WitnessExportRead, &resolved_bundle_dir)?;
     let resolved_verification_dir = match verification_dir {
         Some(path) => resolve_input_path(current_dir, path),
         None => default_verification_dir(current_dir, &verified_manifest.release_id),
@@ -2218,11 +2588,30 @@ fn cmd_release_witness_export(
     };
     debug_assert!(!verified_manifest.release_id.is_empty());
     debug_assert!(resolved_request_dir.components().next().is_some());
-    let created = create_witness_request_directory(
-        &verified_manifest,
-        &resolved_bundle_dir,
-        &resolved_verification_dir,
-        &resolved_request_dir,
+    let kind = ReleaseEffectOperation::WitnessExport;
+    let plan = release_plan(kind, Some(&resolved_request_dir), EffectMeasure::Bytes(1_u64 << 30))?;
+    let (created, _) = execute_release_operation(
+        &plan,
+        || {
+            create_witness_request_directory(
+                &verified_manifest,
+                &resolved_bundle_dir,
+                &resolved_verification_dir,
+                &resolved_request_dir,
+            )
+        },
+        |created| {
+            observed_release_directory(&created.request_dir)?;
+            let bytes = observed_release_file_bytes(&created.request_path)?;
+            Ok(release_observation(
+                kind,
+                EffectKind::WriteFiles,
+                Some(&created.request_dir),
+                EffectMeasure::Bytes(bytes),
+                ObservationStatus::Succeeded,
+                None,
+            ))
+        },
     )?;
     if is_json_output {
         let rendered = serde_json::json!({
@@ -2303,11 +2692,39 @@ fn cmd_release_witness_rebuild(
     let resolved_request_dir = resolve_input_path(context.current_dir, command.request_dir);
     let resolved_scratch_dir =
         resolve_witness_scratch_dir(context.current_dir, &resolved_request_dir, command.scratch_dir)?;
-    let plan = plan_witness_rebuild(
-        &resolved_request_dir,
-        &resolved_scratch_dir,
-        command.is_require_independent_source,
-        command.is_require_git_source,
+    let kind = ReleaseEffectOperation::WitnessRebuild;
+    let rebuild_plan = if command.is_check {
+        None
+    } else {
+        Some(release_plan(kind, Some(&resolved_scratch_dir), EffectMeasure::Items(16))?)
+    };
+    let read_kind = if command.is_check {
+        ReleaseEffectOperation::WitnessRebuildCheck
+    } else {
+        ReleaseEffectOperation::WitnessRebuildRead
+    };
+    let read_plan = release_plan(read_kind, Some(&resolved_request_dir), EffectMeasure::Items(16))?;
+    let (plan, _) = execute_release_operation(
+        &read_plan,
+        || {
+            plan_witness_rebuild(
+                &resolved_request_dir,
+                &resolved_scratch_dir,
+                command.is_require_independent_source,
+                command.is_require_git_source,
+            )
+        },
+        |plan| {
+            observed_release_directory(&plan.request_dir)?;
+            Ok(release_observation(
+                read_kind,
+                EffectKind::ReadFiles,
+                Some(&plan.request_dir),
+                EffectMeasure::Items(u32::try_from(plan.expected_outputs.len()).unwrap_or(u32::MAX)),
+                ObservationStatus::Succeeded,
+                None,
+            ))
+        },
     )?;
     debug_assert!(!plan.release_id.is_empty());
     debug_assert!(plan.request_dir.components().next().is_some());
@@ -2316,44 +2733,66 @@ fn cmd_release_witness_rebuild(
     }
 
     let metadata = required_witness_rebuild_metadata(command.system, command.toolchain, command.host_class)?;
-    if let Err(err) = prepare_witness_rebuild_scratch(&plan) {
-        let failure_meta = build_prelaunch_failure_audit_meta(&plan, err.message())?;
-        write_audit_meta(&audit_meta_path(&plan), &failure_meta)?;
-        return Err(err);
-    }
-    let execution = run_witness_rebuild_workflow(&plan)?;
-    if let Err(err) = validate_successful_rebuild(&plan, &execution) {
-        let failure_meta = build_failure_audit_meta(
-            &plan,
-            &execution.workflow_driver_path,
-            &execution.rebuilt_output_paths,
-            execution.started_unix_ms,
-            execution.finished_unix_ms,
-            err.message(),
-        )?;
-        write_audit_meta(&audit_meta_path(&plan), &failure_meta)?;
-        return Err(err);
-    }
-    let success = WitnessRebuildSuccess {
-        rebuilt_output_paths: execution.rebuilt_output_paths,
-        workflow_driver_path: execution.workflow_driver_path,
-        started_unix_ms: execution.started_unix_ms,
-        finished_unix_ms: execution.finished_unix_ms,
-        output: execution.output,
-    };
-    let created = create_witness_attestation(
-        &plan.scratch_layout.verification_dir,
-        &success.rebuilt_output_paths,
-        command.identity.as_deref(),
-        &metadata.system,
-        &metadata.toolchain,
-        &metadata.host_class,
-        source_acquisition_mode_for_plan(&plan),
-        command.signing_key.as_deref(),
-        context.state_dir,
+    let effect_plan = rebuild_plan.expect("a requested witness rebuild has an admitted process plan");
+    let ((success, created), _) = execute_release_operation(
+        &effect_plan,
+        || {
+            if let Err(err) = prepare_witness_rebuild_scratch(&plan) {
+                let failure_meta = build_prelaunch_failure_audit_meta(&plan, err.message())?;
+                write_audit_meta(&audit_meta_path(&plan), &failure_meta)?;
+                return Err(err);
+            }
+            let execution = run_witness_rebuild_workflow(&plan)?;
+            if let Err(err) = validate_successful_rebuild(&plan, &execution) {
+                let failure_meta = build_failure_audit_meta(
+                    &plan,
+                    &execution.workflow_driver_path,
+                    &execution.rebuilt_output_paths,
+                    execution.started_unix_ms,
+                    execution.finished_unix_ms,
+                    err.message(),
+                )?;
+                write_audit_meta(&audit_meta_path(&plan), &failure_meta)?;
+                return Err(err);
+            }
+            let success = WitnessRebuildSuccess {
+                rebuilt_output_paths: execution.rebuilt_output_paths,
+                workflow_driver_path: execution.workflow_driver_path,
+                started_unix_ms: execution.started_unix_ms,
+                finished_unix_ms: execution.finished_unix_ms,
+                output: execution.output,
+            };
+            let created = create_witness_attestation(
+                &plan.scratch_layout.verification_dir,
+                &success.rebuilt_output_paths,
+                command.identity.as_deref(),
+                &metadata.system,
+                &metadata.toolchain,
+                &metadata.host_class,
+                source_acquisition_mode_for_plan(&plan),
+                command.signing_key.as_deref(),
+                context.state_dir,
+            )?;
+            let audit_meta =
+                build_success_audit_meta(&plan, &success, &created.attestation_path, &created.signature_path)?;
+            write_audit_meta(&audit_meta_path(&plan), &audit_meta)?;
+            Ok((success, created))
+        },
+        |(success, created)| {
+            observed_release_directory(&plan.scratch_layout.scratch_root)?;
+            observed_release_file_bytes(&created.attestation_path)?;
+            observed_release_file_bytes(&created.signature_path)?;
+            observed_release_file_bytes(&audit_meta_path(&plan))?;
+            Ok(release_observation(
+                kind,
+                EffectKind::RunProcess,
+                Some(&plan.scratch_layout.scratch_root),
+                EffectMeasure::Items(u32::try_from(success.rebuilt_output_paths.len()).unwrap_or(u32::MAX)),
+                ObservationStatus::Succeeded,
+                None,
+            ))
+        },
     )?;
-    let audit_meta = build_success_audit_meta(&plan, &success, &created.attestation_path, &created.signature_path)?;
-    write_audit_meta(&audit_meta_path(&plan), &audit_meta)?;
     print_witness_rebuild_success(
         &plan,
         &success,
@@ -3192,56 +3631,5 @@ mod tests {
             "witness agreement without lineage proof must fail: {:?}",
             result.failure_reasons
         );
-    }
-}
-
-#[cfg(test)]
-mod release_decision_classification_tests {
-    use super::*;
-
-    #[test]
-    fn a_valid_decision_is_completed() {
-        let outcome = classify_release_decision(true).expect("a valid decision must classify");
-        assert_eq!(outcome, mantle_application_contract::ApplicationOutcome::Completed);
-    }
-
-    #[test]
-    fn an_invalid_decision_is_failed() {
-        let outcome = classify_release_decision(false).expect("an invalid decision must classify");
-        assert_eq!(outcome, mantle_application_contract::ApplicationOutcome::Failed { failed_effect_count: 1 });
-    }
-
-    #[test]
-    fn the_classification_never_rejects_for_an_admitted_plan() {
-        for is_valid in [true, false] {
-            let outcome = classify_release_decision(is_valid).expect("both decisions must classify");
-            assert!(matches!(
-                outcome,
-                mantle_application_contract::ApplicationOutcome::Completed
-                    | mantle_application_contract::ApplicationOutcome::Failed { .. }
-            ));
-        }
-    }
-}
-
-#[cfg(test)]
-mod operation_classification_tests {
-    use super::*;
-
-    #[test]
-    fn a_succeeded_release_effect_classifies_as_completed() {
-        assert!(classify_release_effect(RELEASE_CREATE_EFFECT, None).is_ok());
-        assert!(classify_release_effect(RELEASE_REPRODUCE_EFFECT, None).is_ok());
-        assert!(classify_release_effect(RELEASE_WITNESS_REBUILD_EFFECT, None).is_ok());
-    }
-
-    #[test]
-    fn a_failed_release_effect_returns_its_recorded_failure() {
-        let error = classify_release_effect(
-            RELEASE_ATTEST_EFFECT,
-            Some(("release-attest-unwritten", RunError::Internal("attestation was not written".to_string()))),
-        )
-        .expect_err("a failed observation rejects the report");
-        assert!(format!("{error}").contains("attestation was not written"), "{error}");
     }
 }

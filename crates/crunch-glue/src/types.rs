@@ -18,6 +18,7 @@ use serde::de::value::MapAccessDeserializer;
 use crate::nickel_string::NickelString;
 
 pub const WORKSPACE_POLICY_ENV: &str = "__MANTLE_STATEFUL_WORKSPACE_POLICY";
+pub const FINISH_GATES_POLICY_ENV: &str = "__MANTLE_DERIVATION_FINISH_GATES";
 pub const PLAN_OUTPUT_BINDINGS_ENV_KEY: &str = "__MANTLE_PLAN_OUTPUT_BINDINGS";
 pub const MAX_PLAN_OUTPUT_REFERENCES: usize = 16;
 
@@ -37,7 +38,6 @@ fn valid_output_name(value: &str) -> bool {
             .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || matches!(ch, b'_' | b'+' | b'-'))
 }
 
-// r[impl mantle.dynamic_plan_output_inputs.typed_reference]
 pub fn validate_plan_output_ref(reference: &PlanOutputRef) -> Result<(), String> {
     if !valid_id(&reference.name, 64) {
         return Err(format!("invalid plan-output reference name '{}'", reference.name));
@@ -57,8 +57,6 @@ pub fn validate_plan_output_ref(reference: &PlanOutputRef) -> Result<(), String>
             reference.plan_output, reference.producer.name
         ));
     }
-    debug_assert!(valid_id(&reference.name, 64) && valid_id(&reference.root, 128));
-    debug_assert!(reference.producer.outputs.contains(&reference.plan_output));
     Ok(())
 }
 
@@ -164,6 +162,42 @@ pub struct WorkspaceCleanRebuildConfig {
     pub require_declared_inputs: bool,
 }
 
+#[derive(Deserialize, Serialize)]
+struct FinishGates {
+    schema: String,
+    version: FinishVersion,
+    reference_leak: FinishReferenceLeak,
+    relocation: FinishToggle,
+    dlopen: FinishDlopen,
+}
+
+#[derive(Deserialize, Serialize)]
+struct FinishVersion {
+    enabled: bool,
+    command: Option<Vec<String>>,
+    expected: Option<String>,
+    environment: std::collections::BTreeMap<String, String>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct FinishReferenceLeak {
+    enabled: bool,
+    #[serde(deserialize_with = "deserialize_nickel_string")]
+    native: String,
+    build_platform_paths: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct FinishToggle {
+    enabled: bool,
+}
+
+#[derive(Deserialize, Serialize)]
+struct FinishDlopen {
+    enabled: bool,
+    optional_sonames: Vec<String>,
+}
+
 #[derive(Deserialize)]
 struct RawCrunchDerivation {
     name: String,
@@ -178,6 +212,7 @@ struct RawCrunchDerivation {
     addressing_mode: Option<NickelString>,
     provenance: Option<Claims>,
     workspace: Option<WorkspaceConfig>,
+    finish_gates: Option<FinishGates>,
 }
 
 impl<'de> Deserialize<'de> for CrunchDerivation {
@@ -192,10 +227,19 @@ impl<'de> Deserialize<'de> for CrunchDerivation {
         if env.contains_key(PLAN_OUTPUT_BINDINGS_ENV_KEY) {
             return Err(de::Error::custom("reserved plan-output bindings environment key is set"));
         }
+        if env.contains_key(FINISH_GATES_POLICY_ENV) {
+            return Err(de::Error::custom("reserved finish gates environment key is set"));
+        }
         if let Some(workspace) = raw.workspace {
             let encoded = serde_json::to_string(&workspace).map_err(de::Error::custom)?;
             if env.insert(WORKSPACE_POLICY_ENV.to_string(), encoded).is_some() {
                 return Err(de::Error::custom("reserved workspace policy environment key is set"));
+            }
+        }
+        if let Some(finish_gates) = raw.finish_gates {
+            let encoded = serde_json::to_string(&finish_gates).map_err(de::Error::custom)?;
+            if env.insert(FINISH_GATES_POLICY_ENV.to_string(), encoded).is_some() {
+                return Err(de::Error::custom("reserved finish gates environment key is set"));
             }
         }
         Ok(Self {

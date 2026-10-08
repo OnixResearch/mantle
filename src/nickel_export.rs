@@ -14,6 +14,20 @@ use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::CapabilityError;
+use mantle_application_contract::CommandFamily;
+use mantle_application_contract::EffectId;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::EffectPlan;
+use mantle_application_contract::EffectSpec;
+use mantle_application_contract::ExpectedOutput;
+use mantle_application_contract::Observation;
+use mantle_application_contract::ObservationStatus;
+use mantle_application_contract::classify_observations;
+use mantle_application_contract::plan_effects;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -37,6 +51,11 @@ const MAX_EXPORT_OUTPUT_BYTES: usize = 67_108_864;
 const EXPORT_OPTION_DIAGNOSTIC_BASE_CAPACITY: usize = 4;
 #[cfg(unix)]
 const NO_FOLLOW_OPEN_FLAGS: i32 = libc::O_NOFOLLOW;
+const CAPTURE_EFFECT: &str = "nickel-export-source-capture";
+const EVALUATE_EFFECT: &str = "nickel-export-evaluate";
+const VERIFY_SOURCE_EFFECT: &str = "nickel-export-source-recheck";
+const PUBLISH_EFFECT: &str = "nickel-export-output-write";
+const READBACK_EFFECT: &str = "nickel-export-output-readback";
 
 #[derive(Debug, Clone)]
 pub struct NickelExportOptions<'a> {
@@ -137,6 +156,185 @@ fn active_cutover_authority() -> CutoverAuthority {
     }
 }
 
+// r[impl application_architecture.effect_observation_boundary]
+trait ExportPort {
+    fn capture(
+        &self,
+        root: &Path,
+        request: &NormalizedExportRequest,
+    ) -> Result<CapturedSources, Vec<NickelExportDiagnostic>>;
+    fn evaluate(&self, root: &Path, request: &NormalizedExportRequest) -> Result<String, String>;
+    fn recheck(&self, root: &Path, captured: &CapturedSources) -> Result<(), Vec<NickelExportDiagnostic>>;
+    fn publish(&self, root: &Path, out: &Path, bytes: &[u8]) -> Result<(), RunError>;
+    fn readback(&self, root: &Path, out: &Path) -> Result<(String, u64), ExportReadbackFailure>;
+}
+
+struct FsExportPort;
+
+impl ExportPort for FsExportPort {
+    fn capture(
+        &self,
+        root: &Path,
+        request: &NormalizedExportRequest,
+    ) -> Result<CapturedSources, Vec<NickelExportDiagnostic>> {
+        capture_sources(root, request)
+    }
+
+    fn evaluate(&self, root: &Path, request: &NormalizedExportRequest) -> Result<String, String> {
+        evaluate_export_output(root, request)
+    }
+
+    fn recheck(&self, root: &Path, captured: &CapturedSources) -> Result<(), Vec<NickelExportDiagnostic>> {
+        verify_captured_sources_unchanged(root, captured)
+    }
+
+    fn publish(&self, root: &Path, out: &Path, bytes: &[u8]) -> Result<(), RunError> {
+        write_output_file(root, out, bytes)
+    }
+
+    fn readback(&self, root: &Path, out: &Path) -> Result<(String, u64), ExportReadbackFailure> {
+        read_output_identity(root, out)
+    }
+}
+
+enum ExportEvalError {
+    Evaluator(String),
+    Bound,
+}
+
+#[derive(Debug)]
+struct ExportReadbackFailure {
+    capability: CapabilityError,
+    observed_bytes: u64,
+}
+
+impl ExportReadbackFailure {
+    fn new(detail: String, observed_bytes: u64) -> Self {
+        Self {
+            capability: CapabilityError {
+                code: READBACK_EFFECT.to_string(),
+                detail,
+            },
+            observed_bytes,
+        }
+    }
+
+    fn into_run(self) -> RunError {
+        RunError::Internal(self.capability.detail)
+    }
+}
+
+struct ExportEffects {
+    plan: EffectPlan,
+    observations: Vec<Observation>,
+}
+
+impl ExportEffects {
+    fn new(specs: &[EffectSpec<'_>]) -> Result<Self, RunError> {
+        let plan = plan_effects(CommandFamily::Release, specs)
+            .map_err(|error| RunError::Internal(format!("Nickel export effect plan rejected: {}", error.code())))?;
+        let observations = Vec::with_capacity(plan.effects.len());
+        Ok(Self { plan, observations })
+    }
+
+    fn record<T, E>(
+        &mut self,
+        effect_id: &str,
+        kind: EffectKind,
+        usage: EffectMeasure,
+        output: EffectOutput,
+        result: Result<T, E>,
+    ) -> Result<Result<T, E>, RunError> {
+        let success = result.is_ok();
+        self.observations.push(Observation {
+            effect_id: EffectId(effect_id.to_string()),
+            kind,
+            status: if success {
+                ObservationStatus::Succeeded
+            } else {
+                ObservationStatus::Failed
+            },
+            output: if success { output } else { EffectOutput::None },
+            usage,
+            diagnostics_code: if success {
+                None
+            } else {
+                Some(format!("{effect_id}-failed"))
+            },
+        });
+        if !success {
+            for remaining in self.plan.effects.iter().skip(self.observations.len()) {
+                self.observations.push(Observation {
+                    effect_id: remaining.effect_id.clone(),
+                    kind: remaining.kind,
+                    status: ObservationStatus::Skipped,
+                    output: EffectOutput::None,
+                    usage: match remaining.limit {
+                        EffectMeasure::Calls(_) => EffectMeasure::Calls(0),
+                        EffectMeasure::Items(_) => EffectMeasure::Items(0),
+                        EffectMeasure::Bytes(_) => EffectMeasure::Bytes(0),
+                    },
+                    diagnostics_code: Some("prior-effect-failed".to_string()),
+                });
+            }
+            self.classify(false)?;
+        }
+        Ok(result)
+    }
+
+    fn classify(&self, success: bool) -> Result<(), RunError> {
+        let outcome = classify_observations(&self.plan, &self.observations);
+        if matches!(
+            (&outcome, success),
+            (ApplicationOutcome::Completed, true) | (ApplicationOutcome::Failed { .. }, false)
+        ) {
+            Ok(())
+        } else {
+            Err(RunError::Internal(format!("Nickel export effect observation contradicted plan: {outcome:?}")))
+        }
+    }
+}
+
+fn source_effects() -> Result<ExportEffects, RunError> {
+    ExportEffects::new(&[
+        EffectSpec {
+            effect_id: CAPTURE_EFFECT,
+            kind: EffectKind::ReadFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::None,
+        },
+        EffectSpec {
+            effect_id: EVALUATE_EFFECT,
+            kind: EffectKind::ReadFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::None,
+        },
+        EffectSpec {
+            effect_id: VERIFY_SOURCE_EFFECT,
+            kind: EffectKind::ReadFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::None,
+        },
+    ])
+}
+
+fn publication_effects(expected_digest: &str) -> Result<ExportEffects, RunError> {
+    ExportEffects::new(&[
+        EffectSpec {
+            effect_id: PUBLISH_EFFECT,
+            kind: EffectKind::WriteFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::None,
+        },
+        EffectSpec {
+            effect_id: READBACK_EFFECT,
+            kind: EffectKind::ReadFiles,
+            limit: EffectMeasure::Bytes(MAX_EXPORT_OUTPUT_BYTES as u64),
+            expected_output: ExpectedOutput::Identity(expected_digest),
+        },
+    ])
+}
+
 pub fn cmd_nickel_export(options: NickelExportOptions<'_>) -> Result<(), RunError> {
     let normalized = match normalize_export_options(&options) {
         Ok(normalized) => normalized,
@@ -149,62 +347,126 @@ pub fn cmd_nickel_export(options: NickelExportOptions<'_>) -> Result<(), RunErro
     };
     debug_assert_eq!(normalized.format, FORMAT_JSON);
     debug_assert!(!normalized.file.is_empty());
+    let port = FsExportPort;
+    run_export_with_port(&port, &options, normalized)
+}
 
-    let captured = match capture_sources(options.root, &normalized) {
+fn run_export_with_port(
+    port: &impl ExportPort,
+    options: &NickelExportOptions<'_>,
+    normalized: NormalizedExportRequest,
+) -> Result<(), RunError> {
+    let mut effects = source_effects()?;
+    let captured = match effects.record(
+        CAPTURE_EFFECT,
+        EffectKind::ReadFiles,
+        EffectMeasure::Calls(1),
+        EffectOutput::None,
+        port.capture(options.root, &normalized),
+    )? {
         Ok(captured) => captured,
         Err(diagnostics) => {
-            let failure_summary =
-                failed_report(&normalized.format, normalized.output_target.clone(), "source", diagnostics);
-            render_report(&failure_summary, options.json)?;
+            let report = failed_report(&normalized.format, normalized.output_target.clone(), "source", diagnostics);
+            render_report(&report, options.json)?;
             return Err(RunError::Reported(EXPORT_FAILURE_EXIT_CODE));
         }
     };
 
-    let output = match evaluate_export_output(options.root, &normalized) {
-        Ok(output) => output,
-        Err(message) => {
-            return handle_evaluator_failure(&normalized, &captured, message, options.json);
+    let evaluated = port.evaluate(options.root, &normalized).map_err(ExportEvalError::Evaluator).and_then(|output| {
+        if output.len() > MAX_EXPORT_OUTPUT_BYTES {
+            Err(ExportEvalError::Bound)
+        } else {
+            Ok(output)
         }
-    };
-    if output.len() > MAX_EXPORT_OUTPUT_BYTES {
-        let failure_summary =
-            failed_report(&normalized.format, normalized.output_target.clone(), "eval", vec![diagnostic(
+    });
+    let output = match effects.record(
+        EVALUATE_EFFECT,
+        EffectKind::ReadFiles,
+        EffectMeasure::Calls(1),
+        EffectOutput::None,
+        evaluated,
+    )? {
+        Ok(output) => output,
+        Err(ExportEvalError::Bound) => {
+            let report = failed_report(&normalized.format, normalized.output_target.clone(), "eval", vec![diagnostic(
                 "output-bound",
                 &normalized.file,
                 format!("Nickel export output exceeds {MAX_EXPORT_OUTPUT_BYTES} bytes"),
             )]);
-        render_report(&failure_summary, options.json)?;
+            render_report(&report, options.json)?;
+            return Err(RunError::Reported(EXPORT_FAILURE_EXIT_CODE));
+        }
+        Err(ExportEvalError::Evaluator(message)) => {
+            return handle_evaluator_failure(&normalized, &captured, message, options.json);
+        }
+    };
+
+    if let Err(diagnostics) = effects.record(
+        VERIFY_SOURCE_EFFECT,
+        EffectKind::ReadFiles,
+        EffectMeasure::Calls(1),
+        EffectOutput::None,
+        port.recheck(options.root, &captured),
+    )? {
+        let report = failed_report(&normalized.format, normalized.output_target.clone(), "source-changed", diagnostics);
+        render_report(&report, options.json)?;
         return Err(RunError::Reported(EXPORT_FAILURE_EXIT_CODE));
     }
-    if let Err(diagnostics) = verify_captured_sources_unchanged(options.root, &captured) {
-        let failure_summary =
-            failed_report(&normalized.format, normalized.output_target.clone(), "source-changed", diagnostics);
-        render_report(&failure_summary, options.json)?;
-        return Err(RunError::Reported(EXPORT_FAILURE_EXIT_CODE));
-    }
+    effects.classify(true)?;
 
     let legacy_receipt = build_legacy_export_receipt(&normalized, &captured, output.as_bytes());
     let canonical_result = canonical_admission(&normalized, &captured, output.as_bytes(), &legacy_receipt);
     let receipt = match select_authoritative_receipt(active_cutover_authority(), &legacy_receipt, canonical_result) {
         Ok(receipt) => receipt,
         Err(failure) => {
-            let failure_summary = failed_report(
+            let report = failed_report(
                 &normalized.format,
                 normalized.output_target.clone(),
                 &failure.class,
                 failure.diagnostics,
             );
-            render_report(&failure_summary, options.json)?;
+            render_report(&report, options.json)?;
             return Err(RunError::Reported(EXPORT_FAILURE_EXIT_CODE));
         }
     };
     let receipt_digest = crate::nickel_export_core_adapter::mantle_receipt_digest(&receipt)
         .map_err(|failure| RunError::Internal(adapter_failure_message(&failure)))?;
     if normalized.output_target != OUTPUT_TARGET_STDOUT {
-        write_output_file(options.root, Path::new(&normalized.output_target), output.as_bytes())?;
+        let out = Path::new(&normalized.output_target);
+        // The receipt's digest is decided from captured evaluator bytes, before publishing.
+        let mut publication = publication_effects(&receipt.output_digest_blake3)?;
+        publication.record(
+            PUBLISH_EFFECT,
+            EffectKind::WriteFiles,
+            EffectMeasure::Calls(1),
+            EffectOutput::None,
+            port.publish(options.root, out, output.as_bytes()),
+        )??;
+        let (identity, observed_bytes) = match port.readback(options.root, out) {
+            Ok(fact) => fact,
+            Err(error) => {
+                let usage = EffectMeasure::Bytes(error.observed_bytes);
+                let observed = publication.record(
+                    READBACK_EFFECT,
+                    EffectKind::ReadFiles,
+                    usage,
+                    EffectOutput::None,
+                    Err::<(), _>(error),
+                )?;
+                return Err(observed.expect_err("readback failure must remain a capability error").into_run());
+            }
+        };
+        publication.record(
+            READBACK_EFFECT,
+            EffectKind::ReadFiles,
+            EffectMeasure::Bytes(observed_bytes),
+            EffectOutput::Identity(identity),
+            Ok::<(), RunError>(()),
+        )??;
+        publication.classify(true)?;
     }
-    let success_summary = success_report(normalized, receipt, receipt_digest, output);
-    render_success(&success_summary, options.json)
+    let report = success_report(normalized, receipt, receipt_digest, output);
+    render_success(&report, options.json)
 }
 
 fn normalize_export_options(
@@ -605,6 +867,55 @@ fn render_report(report: &NickelExportReport, json: bool) -> Result<(), RunError
     Ok(())
 }
 
+fn read_output_identity(root: &Path, out: &Path) -> Result<(String, u64), ExportReadbackFailure> {
+    reject_symlink_components(root, out, false)
+        .map_err(|message| ExportReadbackFailure::new(format!("unsafe Nickel export read-back: {message}"), 0))?;
+    let path = root.join(out);
+    let metadata = fs::symlink_metadata(&path).map_err(|error| {
+        ExportReadbackFailure::new(format!("inspecting Nickel export read-back {}: {error}", path.display()), 0)
+    })?;
+    if !metadata.is_file() {
+        return Err(ExportReadbackFailure::new(
+            format!("Nickel export read-back is not a regular file: {}", path.display()),
+            0,
+        ));
+    }
+    let mut file = open_regular_file_no_follow(&path).map_err(|error| {
+        ExportReadbackFailure::new(format!("opening Nickel export read-back {}: {error}", path.display()), 0)
+    })?;
+    hash_output_readback(&mut file, &path)
+}
+
+fn hash_output_readback(reader: &mut impl Read, path: &Path) -> Result<(String, u64), ExportReadbackFailure> {
+    // The pinned nickel-export-core identity is an unkeyed BLAKE3 digest of exact bytes.
+    // Hash incrementally so read-back never allocates a second whole export payload.
+    let mut digest = blake3::Hasher::new();
+    let mut chunk = [0_u8; 16_384];
+    let mut observed_bytes = 0_u64;
+    let probe_limit = MAX_EXPORT_OUTPUT_BYTES as u64 + 1;
+    while observed_bytes < probe_limit {
+        let remaining = probe_limit - observed_bytes;
+        let capacity = usize::try_from(remaining).unwrap_or(chunk.len()).min(chunk.len());
+        let count = match reader.read(&mut chunk[..capacity]) {
+            Ok(0) => break,
+            Ok(count) => count,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => {
+                return Err(ExportReadbackFailure::new(
+                    format!("reading Nickel export read-back {}: {error}", path.display()),
+                    observed_bytes,
+                ));
+            }
+        };
+        let count_bytes = u64::try_from(count).map_err(|_| {
+            ExportReadbackFailure::new("Nickel export read-back size overflow".to_string(), observed_bytes)
+        })?;
+        observed_bytes += count_bytes;
+        digest.update(&chunk[..count]);
+    }
+    Ok((digest.finalize().to_hex().to_string(), observed_bytes))
+}
+
 fn write_output_file(root: &Path, out: &Path, content: &[u8]) -> Result<(), RunError> {
     assert!(!out.is_absolute(), "export output must be normalized before writing");
     reject_symlink_components(root, out, true)
@@ -875,5 +1186,194 @@ mod tests {
         let diagnostics = verify_captured_sources_unchanged(temp.path(), &captured).unwrap_err();
         assert_eq!(diagnostics[0].class, "source-changed");
         assert_eq!(diagnostics[0].subject, "main.ncl");
+    }
+
+    struct TamperingExportPort;
+
+    impl ExportPort for TamperingExportPort {
+        fn capture(
+            &self,
+            root: &Path,
+            request: &NormalizedExportRequest,
+        ) -> Result<CapturedSources, Vec<NickelExportDiagnostic>> {
+            FsExportPort.capture(root, request)
+        }
+
+        fn evaluate(&self, root: &Path, request: &NormalizedExportRequest) -> Result<String, String> {
+            FsExportPort.evaluate(root, request)
+        }
+
+        fn recheck(&self, root: &Path, captured: &CapturedSources) -> Result<(), Vec<NickelExportDiagnostic>> {
+            FsExportPort.recheck(root, captured)
+        }
+
+        fn publish(&self, root: &Path, out: &Path, bytes: &[u8]) -> Result<(), RunError> {
+            FsExportPort.publish(root, out, bytes)
+        }
+
+        fn readback(&self, root: &Path, out: &Path) -> Result<(String, u64), ExportReadbackFailure> {
+            // A concurrent writer changes the actual published file between the two port calls.
+            fs::write(root.join(out), b"{\"answer\":43}")
+                .map_err(|error| ExportReadbackFailure::new(format!("tampering output fixture: {error}"), 0))?;
+            FsExportPort.readback(root, out)
+        }
+    }
+
+    #[test]
+    fn tampered_published_output_cannot_produce_success_receipt() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join("main.ncl"), "{ answer = 42 }").unwrap();
+        let out = Path::new("published.json");
+        let request = options(temp.path(), Path::new("main.ncl"), &[], Some(out));
+        let normalized = normalize_export_options(&request).unwrap();
+        let failure = run_export_with_port(&TamperingExportPort, &request, normalized).unwrap_err();
+        assert!(failure.message().contains("Contradicted"), "{failure:?}");
+        assert_eq!(fs::read(temp.path().join(out)).unwrap(), b"{\"answer\":43}");
+    }
+
+    #[test]
+    fn readback_observes_actual_bytes_and_rejects_output_over_budget() {
+        let temp = tempfile::tempdir().unwrap();
+        let out = Path::new("published.json");
+        write_output_file(temp.path(), out, TEST_OUTPUT).unwrap();
+        let expected = crate::nickel_export_core_adapter::export_source_ref("output", TEST_OUTPUT).digest_blake3;
+        let mut publication = publication_effects(&expected).unwrap();
+        publication
+            .record(
+                PUBLISH_EFFECT,
+                EffectKind::WriteFiles,
+                EffectMeasure::Calls(1),
+                EffectOutput::None,
+                Ok::<(), RunError>(()),
+            )
+            .unwrap()
+            .unwrap();
+        let (actual_identity, actual_bytes) = read_output_identity(temp.path(), out).unwrap();
+        assert_eq!(actual_identity, expected);
+        assert_eq!(actual_bytes, TEST_OUTPUT.len() as u64);
+        File::options()
+            .write(true)
+            .open(temp.path().join(out))
+            .unwrap()
+            .set_len(MAX_EXPORT_OUTPUT_BYTES as u64 + 1)
+            .unwrap();
+        let (actual_identity, actual_bytes) = read_output_identity(temp.path(), out).unwrap();
+        assert_eq!(actual_bytes, MAX_EXPORT_OUTPUT_BYTES as u64 + 1);
+        publication
+            .record(
+                READBACK_EFFECT,
+                EffectKind::ReadFiles,
+                EffectMeasure::Bytes(actual_bytes),
+                EffectOutput::Identity(actual_identity),
+                Ok::<(), RunError>(()),
+            )
+            .unwrap()
+            .unwrap();
+        assert!(matches!(
+            classify_observations(&publication.plan, &publication.observations),
+            ApplicationOutcome::Contradicted { .. },
+        ));
+    }
+
+    struct FailingAfterBytes {
+        delivered: bool,
+    }
+
+    impl Read for FailingAfterBytes {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            if self.delivered {
+                return Err(std::io::Error::other("fixture read failed"));
+            }
+            self.delivered = true;
+            buffer[..3].copy_from_slice(b"one");
+            Ok(3)
+        }
+    }
+
+    #[test]
+    fn partial_readback_failure_records_measured_bytes_before_refusing_success() {
+        let mut reader = FailingAfterBytes { delivered: false };
+        let failure = hash_output_readback(&mut reader, Path::new("published.json")).unwrap_err();
+        assert_eq!(failure.observed_bytes, 3);
+        assert_eq!(failure.capability.code, READBACK_EFFECT);
+        let mut publication = publication_effects("expected-output-digest").unwrap();
+        publication
+            .record(
+                PUBLISH_EFFECT,
+                EffectKind::WriteFiles,
+                EffectMeasure::Calls(1),
+                EffectOutput::None,
+                Ok::<(), RunError>(()),
+            )
+            .unwrap()
+            .unwrap();
+        let measured = failure.observed_bytes;
+        let recorded = publication
+            .record(
+                READBACK_EFFECT,
+                EffectKind::ReadFiles,
+                EffectMeasure::Bytes(measured),
+                EffectOutput::None,
+                Err::<(), _>(failure),
+            )
+            .unwrap()
+            .unwrap_err();
+        assert!(recorded.into_run().message().contains("fixture read failed"));
+        assert_eq!(publication.observations[1].usage, EffectMeasure::Bytes(3));
+        assert_eq!(classify_observations(&publication.plan, &publication.observations), ApplicationOutcome::Failed {
+            failed_effect_count: 1
+        },);
+    }
+
+    #[test]
+    fn export_effects_retain_the_commands_release_authority() {
+        let root_family = CommandFamily::of_root("export").expect("export is a public command root");
+        assert_eq!(root_family, CommandFamily::Release);
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join("main.ncl"), "{ answer = 42 }").unwrap();
+        let request = options(temp.path(), Path::new("main.ncl"), &[], None);
+        let normalized = normalize_export_options(&request).unwrap();
+        let mut source = source_effects().unwrap();
+        let captured = source
+            .record(
+                CAPTURE_EFFECT,
+                EffectKind::ReadFiles,
+                EffectMeasure::Calls(1),
+                EffectOutput::None,
+                FsExportPort.capture(temp.path(), &normalized),
+            )
+            .unwrap()
+            .unwrap();
+        source
+            .record(
+                EVALUATE_EFFECT,
+                EffectKind::ReadFiles,
+                EffectMeasure::Calls(1),
+                EffectOutput::None,
+                FsExportPort.evaluate(temp.path(), &normalized),
+            )
+            .unwrap()
+            .unwrap();
+        source
+            .record(
+                VERIFY_SOURCE_EFFECT,
+                EffectKind::ReadFiles,
+                EffectMeasure::Calls(1),
+                EffectOutput::None,
+                FsExportPort.recheck(temp.path(), &captured),
+            )
+            .unwrap()
+            .unwrap();
+        source.classify(true).unwrap();
+        let publication = publication_effects("expected-output-digest").unwrap();
+        for effect in source.plan.effects.iter().chain(&publication.plan.effects) {
+            assert_eq!(effect.family, root_family, "effect {} crossed the export family boundary", effect.effect_id.0);
+        }
+        let mut wrong_authority = source.plan.clone();
+        wrong_authority.effects[0].family = CommandFamily::Evaluation;
+        assert!(matches!(
+            classify_observations(&wrong_authority, &source.observations),
+            ApplicationOutcome::Contradicted { .. },
+        ));
     }
 }

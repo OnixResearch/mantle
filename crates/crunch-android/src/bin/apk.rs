@@ -24,7 +24,7 @@ use serde::Serialize;
     about = "Render a pinned Android APK plan as a Mantle derivation graph"
 )]
 struct Args {
-    /// Nickel expression evaluating to android.mkApk's typed plan record.
+    /// Nickel expression evaluating to android.mkApk's published typed plan record.
     #[arg(long)]
     plan: PathBuf,
     /// JSON bindings for declared app input, locally checked archive bytes, and explicit runtime

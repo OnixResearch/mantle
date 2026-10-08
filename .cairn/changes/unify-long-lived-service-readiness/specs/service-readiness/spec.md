@@ -15,6 +15,12 @@ same vocabulary.
 
 An unknown state MUST be rejected at admission.
 
+The versioned declaration/report shape is
+[`schema.json`](schema.json); graph, generation, and policy semantics are
+defined in the change design and Proposed ADR 0091. The JSON Schema alone
+does not validate cross-record dependencies or prove that a producer served
+a request.
+
 #### Scenario: Coordination daemon reports readiness
 
 - GIVEN the coordination daemon starting with no published facts
@@ -39,9 +45,11 @@ An unknown state MUST be rejected at admission.
 ### Requirement: Dependencies are declared and block readiness
 
 r[mantle.service_readiness.declared_dependencies] Each long-lived component and
-declared proof stage MUST declare the components it depends on. A component
-MUST NOT report `ready` before every declared dependency reports `ready` or
-`complete`. A blocked component MUST report the blocking dependency.
+declared proof stage MUST declare the components it depends on. A new
+dependent MUST NOT start before every declared dependency reports `ready`
+or `complete`. A component MUST NOT report `ready` before that point;
+if an already-started component loses a dependency, it MUST retract `ready`.
+A blocked component MUST report the blocking dependency.
 
 #### Scenario: Dependent waits for its dependency
 
@@ -49,6 +57,7 @@ MUST NOT report `ready` before every declared dependency reports `ready` or
 - AND `a` has started but is not ready
 - WHEN `b` evaluates its readiness
 - THEN `b` MUST report not-ready with `a` named as the blocker
+- AND `b` MUST NOT start before `a` is `ready` or `complete`
 
 ### Requirement: Restart policy comes from a closed matrix
 
@@ -56,6 +65,12 @@ r[mantle.service_readiness.restart_policy_matrix] Every supervised component
 MUST name exactly one restart policy from `always`, `on-error`, `all`, and
 `never`. The declared policy MUST appear in the component's runtime report. A
 missing or unknown policy MUST be rejected.
+
+Proof stages are not supervised services and declare `restart_policy: null`.
+For services, normal exit restarts only under `always`; abnormal exit
+restarts the component under `always` or `on-error`, restarts the supervised
+group under `all`, and is terminal under `never`. An abnormal early exit
+remains `failed` even under `never`.
 
 #### Scenario: Policy controls restart behavior
 

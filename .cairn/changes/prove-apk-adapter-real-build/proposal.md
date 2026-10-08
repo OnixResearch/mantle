@@ -8,7 +8,7 @@ This proof is execution-gated. It needs the network once to fetch the admitted t
 
 ## What Changes
 
-- Add `examples/android-minimal.ncl`: a minimal APK plan (one activity, no resources beyond the manifest, one Java source).
+- Add `examples/android-minimal.ncl`: a minimal signed APK plan (one activity, one XML string resource, one Java source, fixed id/version, test-only signing).
 - Add an evidence rail that builds the example with the admitted toolchain and writes a receipt binding toolchain identities and the output digest.
 - Prove rebuild determinism: two clean rebuilds in fresh stores produce the same output BLAKE3.
 - Add bounded structural verification of the produced APK: deterministic zip entry ordering, compiled manifest presence, DEX presence, signing block presence when signed, and an `apksigner verify` capture.

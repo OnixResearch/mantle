@@ -39,6 +39,18 @@ The shell in `src/nickel_export.rs` retains:
 The adapter never reads files, resolves imports, executes Nickel, inspects the
 environment, writes outputs, or makes build/release decisions.
 
+For `mantle export`, normalized source capture, Nickel evaluation, and source
+recheck execute only after a bounded application effect plan is accepted. A
+file destination has a separate publication plan decided from the evaluator
+output digest before writing. The shell reads the published regular file back
+through the no-follow port, measures its actual bytes (at most the bounded
+probe), and compares its independently computed BLAKE3 identity with the
+planned digest before reporting success. A failed write or read-back retains
+its capability error and exit code 3; a changed or oversized read-back fails
+closed rather than announcing a receipt. Earlier file writes can remain after
+failure, so the reported receipt is not a transaction or durable-write proof.
+Stdout rendering remains presentation, not a file read-back claim.
+
 ## Dual-run and rollback
 
 Legacy and canonical paths receive the same captured source/dependency bytes,

@@ -4,6 +4,16 @@
 
 Remote execution contains deterministic policy and extensive host effects in the same modules. Existing `distributed` submodules provide useful pure kernels, but the public seam still exposes Snix and store types.
 
+Implementation status is intentionally narrower than this target diagram:
+the checked I4/I5 local stdio composition uses the new core's bounded
+attempt/transfer/output/receipt effects and application-owned output facts,
+while std adapters retain credentials, signature and wire checks, physical
+store admission, and process-local session effects. It does not add automatic
+retry. Quantified resource/locality policy (I2), all SSH/local/external-batch
+application ports (I3), and V1–V5 validation remain open; see
+[`evidence/focused-validation.md`](evidence/focused-validation.md) for the
+observed partial proofs, not a full hexagon completion receipt.
+
 The target flow is:
 
 ```text

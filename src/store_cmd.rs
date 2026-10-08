@@ -5,6 +5,7 @@ use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 
+use mantle_application_contract::EffectKind;
 use serde::Serialize;
 
 const PATHINFO_SCAN_COUNT_MAX: u32 = 1_000_000;
@@ -27,69 +28,72 @@ const STORE_VERIFY_EFFECT: &str = "verify-paths";
 const STORE_VERIFY_MISMATCH_CODE: &str = "store-verify-mismatch";
 
 /// Effect identity of the store listing read.
-const STORE_LIST_EFFECT: &str = "read-files";
+const STORE_LIST_EFFECT: &str = "store-list";
 
 /// Effect identity of the store path-info read.
-const STORE_INFO_EFFECT: &str = "read-files";
+const STORE_INFO_EFFECT: &str = "store-info";
 /// Effect identity of the retained-roots read (without migration).
-const STORE_ROOTS_LIST_EFFECT: &str = "read-files";
+const STORE_ROOTS_LIST_EFFECT: &str = "store-roots-list";
 
 /// Effect identity of the legacy-root migration write.
-const STORE_ROOTS_MIGRATE_EFFECT: &str = "write-files";
+const STORE_ROOTS_MIGRATE_EFFECT: &str = "store-roots-migrate";
 
 /// Effect identity of the store usage plan read.
-const STORE_USAGE_EFFECT: &str = "read-files";
+const STORE_USAGE_EFFECT: &str = "store-usage";
 
 /// Effect identity of the GC-root retention write.
-const STORE_PIN_EFFECT: &str = "write-files";
+const STORE_PIN_EFFECT: &str = "store-pin";
 
 /// Effect identity of the GC-root release write.
-const STORE_UNPIN_EFFECT: &str = "write-files";
+const STORE_UNPIN_EFFECT: &str = "store-unpin";
 
 /// Diagnostic code reported when an unpin names an unknown root.
 const STORE_UNPIN_UNKNOWN_ROOT_CODE: &str = "store-unpin-unknown-root";
 
+/// Effect identity of a plan-only garbage-collection read.
+const STORE_GC_PLAN_EFFECT: &str = "store-gc-plan";
+
 /// Effect identity of the garbage-collection write.
-const STORE_GC_EFFECT: &str = "write-files";
+const STORE_GC_EFFECT: &str = "store-gc";
 
 /// Diagnostic code reported when GC execution stops incomplete.
 const STORE_GC_INCOMPLETE_CODE: &str = "store-gc-incomplete";
 
 /// Effect identity of the final-NAR repair inspection read.
-const STORE_REPAIR_INSPECT_EFFECT: &str = "read-files";
+const STORE_REPAIR_INSPECT_EFFECT: &str = "store-repair-inspect";
 
 /// Effect identity of the final-NAR repair execution write.
-const STORE_REPAIR_EXECUTE_EFFECT: &str = "write-files";
+const STORE_REPAIR_EXECUTE_EFFECT: &str = "store-repair-execute";
 
 /// Effect identity of the PathInfo signing write.
-const STORE_SIGN_EFFECT: &str = "write-files";
+const STORE_SIGN_EFFECT: &str = "store-sign";
 
 /// Effect identity of the push selection read.
-const STORE_PUSH_SELECT_EFFECT: &str = "read-files";
+const STORE_PUSH_SELECT_EFFECT: &str = "store-push-select";
 
 /// Effect identity of the cache push write.
-const STORE_PUSH_EFFECT: &str = "write-files";
+const STORE_PUSH_EFFECT: &str = "store-push";
 
 /// Effect identity of the pull import write.
-const STORE_PULL_EFFECT: &str = "write-files";
+const STORE_PULL_EFFECT: &str = "store-pull";
 
 /// Diagnostic code reported when a closure pull does not admit its root.
 const STORE_PULL_ROOT_NOT_ADMITTED_CODE: &str = "store-pull-closure-root-not-admitted";
 
 /// Effect identity of the composition planning read.
-const STORE_COMPOSITION_PLAN_EFFECT: &str = "read-files";
+const STORE_COMPOSITION_PLAN_EFFECT: &str = "store-composition-plan";
 
 /// Effect identity of the composition realization write.
-const STORE_COMPOSITION_REALIZE_EFFECT: &str = "write-files";
+const STORE_COMPOSITION_REALIZE_EFFECT: &str = "store-composition-realize";
 
 /// Effect identity of the archive export write.
-const STORE_ARCHIVE_EXPORT_EFFECT: &str = "write-files";
+const STORE_ARCHIVE_EXPORT_EFFECT: &str = "store-archive-export";
 
 /// Effect identity of the archive import write.
-const STORE_ARCHIVE_IMPORT_EFFECT: &str = "write-files";
+const STORE_ARCHIVE_IMPORT_EFFECT: &str = "store-archive-import";
 
 /// Effect identity of the archive listing read.
-const STORE_ARCHIVE_LIST_EFFECT: &str = "read-files";
+const STORE_ARCHIVE_LIST_EFFECT: &str = "store-archive-list";
 
 pub fn cmd_store(
     action: crate::StoreAction,
@@ -172,15 +176,15 @@ async fn cmd_store_mutation_or_transfer(
     context: StoreCommandContext<'_>,
 ) -> Result<(), RunError> {
     match action {
-        crate::StoreAction::Pin { path } => {
+        crate::StoreAction::Pin { path, owner, reason } => {
             let _guard = store_mutation_guard(context)?;
             let store = open_store_under_guard(context, &_guard).await?;
-            cmd_store_pin(&store, &path).await
+            cmd_store_pin(&store, &path, &owner, &reason).await
         }
-        crate::StoreAction::Unpin { path } => {
+        crate::StoreAction::Unpin { path, owner, reason } => {
             let _guard = store_mutation_guard(context)?;
             let store = open_store_under_guard(context, &_guard).await?;
-            cmd_store_unpin(&store, &path)
+            cmd_store_unpin(&store, &path, &owner, reason.as_deref())
         }
         crate::StoreAction::Gc {
             execute,
@@ -215,8 +219,8 @@ async fn cmd_store_mutation_or_transfer(
             execute,
             signing_key,
         } => {
-            if context.backend == crunch_store::StoreBackend::Casita {
-                return Err(RunError::Build("casita-repair-final-nar-unsupported".to_string()));
+            if !context.backend.profile().core.contains(&"store-repair-final-nar") {
+                return Err(RunError::Build(format!("{}-repair-final-nar-unsupported", context.backend.as_str())));
             }
             let _guard = store_mutation_guard(context)?;
             let store = open_store_under_guard(context, &_guard).await?;
@@ -352,9 +356,12 @@ async fn plan_rust_cache_retention(
     })
     .await
     .map_err(|error| RunError::Build(format!("planning Rust cache retention: {error}")))?;
-    let plan = rust_cache
-        .plan_retention_gc()
-        .map_err(|error| RunError::Build(format!("planning Rust cache retention: {error}")))?;
+    let plan = if context.backend == crunch_store::StoreBackend::Casita {
+        rust_cache.plan_retention_gc_verified().await
+    } else {
+        rust_cache.plan_retention_gc()
+    }
+    .map_err(|error| RunError::Build(format!("planning Rust cache retention: {error}")))?;
     drop(rust_cache);
     Ok(Some(plan))
 }
@@ -616,7 +623,7 @@ async fn cmd_store_list(store: &crunch_store::StoreHandle, is_json_output: bool)
             }))
             .map_err(|error| RunError::Internal(format!("serializing store list: {error}")))?
         );
-        return classify_store_effect(STORE_LIST_EFFECT, None);
+        return classify_store_effect(STORE_LIST_EFFECT, EffectKind::ReadFiles, None);
     }
     print_overlay_summary(overlay.as_ref());
     if entries.is_empty() {
@@ -632,7 +639,7 @@ async fn cmd_store_list(store: &crunch_store::StoreHandle, is_json_output: bool)
         }
         eprintln!("{} path(s)", entries.len());
     }
-    classify_store_effect(STORE_LIST_EFFECT, None)
+    classify_store_effect(STORE_LIST_EFFECT, EffectKind::ReadFiles, None)
 }
 
 async fn cmd_store_info(store: &crunch_store::StoreHandle, path: &str, is_json_output: bool) -> Result<(), RunError> {
@@ -649,11 +656,15 @@ async fn cmd_store_info(store: &crunch_store::StoreHandle, path: &str, is_json_o
     let overlay = store
         .overlay_report()
         .map_err(|error| RunError::Internal(format!("building overlay report: {error}")))?;
+    let interests = crunch_store::list_interest_reports(store.state_dir())
+        .map_err(|error| RunError::Internal(format!("listing retention interests: {error}")))?;
     if is_json_output {
         let paths = details
             .iter()
             .map(|detail| {
                 let path_info = &detail.value;
+                let logical_path = path_info.store_path.to_absolute_path_with_prefix(store.store_dir());
+                let retention_interests = interests.iter().find(|entry| entry.logical_path == logical_path);
                 serde_json::json!({
                     "store_path": path_info.store_path.to_string(),
                     "layer": detail.layer,
@@ -665,13 +676,14 @@ async fn cmd_store_info(store: &crunch_store::StoreHandle, path: &str, is_json_o
                     "signatures": path_info.signatures.iter().map(ToString::to_string).collect::<Vec<_>>(),
                     "ca": path_info.ca.as_ref().map(|value| format!("{value:?}")),
                     "node": format!("{:?}", path_info.node),
+                    "retention_interests": retention_interests,
                 })
             })
             .collect::<Vec<_>>();
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
-                "schema": "mantle-store-info-v2",
+                "schema": "mantle-store-info-v3",
                 "backend": store.backend().as_str(),
                 "backend_capabilities": store.backend().profile(),
                 "overlay": overlay,
@@ -679,7 +691,7 @@ async fn cmd_store_info(store: &crunch_store::StoreHandle, path: &str, is_json_o
             }))
             .map_err(|error| RunError::Internal(format!("serializing store info: {error}")))?
         );
-        return classify_store_effect(STORE_INFO_EFFECT, None);
+        return classify_store_effect(STORE_INFO_EFFECT, EffectKind::ReadFiles, None);
     }
     print_overlay_summary(overlay.as_ref());
     let profile = store.backend().profile();
@@ -724,8 +736,21 @@ async fn cmd_store_info(store: &crunch_store::StoreHandle, path: &str, is_json_o
             }
         }
         println!("node:       {:?}", path_info.node);
+        let logical_path = path_info.store_path.to_absolute_path_with_prefix(store.store_dir());
+        if let Some(path_interests) = interests.iter().find(|entry| entry.logical_path == logical_path) {
+            println!("retention_record_count: {}", path_interests.record_count);
+            println!("retention_legacy_unmanaged: {}", path_interests.legacy_unmanaged);
+            for fact in &path_interests.interests {
+                println!(
+                    "  retention owner={} reason={} identity={}",
+                    fact.owner,
+                    fact.reason,
+                    fact.record_id.as_deref().unwrap_or("-")
+                );
+            }
+        }
     }
-    classify_store_effect(STORE_INFO_EFFECT, None)
+    classify_store_effect(STORE_INFO_EFFECT, EffectKind::ReadFiles, None)
 }
 
 fn print_overlay_summary(report: Option<&crunch_store::StoreOverlayReport>) {
@@ -764,22 +789,28 @@ fn cmd_store_roots(
     } else {
         store.list_retained_roots().map_err(|error| RunError::Internal(format!("{error}")))?
     };
-    let effect = if migrate {
-        STORE_ROOTS_MIGRATE_EFFECT
+    let interests = crunch_store::list_interest_reports(context.state_dir)
+        .map_err(|error| RunError::Internal(format!("listing retention interests: {error}")))?;
+    let (effect, observed_kind) = if migrate {
+        (STORE_ROOTS_MIGRATE_EFFECT, EffectKind::WriteFiles)
     } else {
-        STORE_ROOTS_LIST_EFFECT
+        (STORE_ROOTS_LIST_EFFECT, EffectKind::ReadFiles)
     };
     if context.is_json_output {
         println!(
             "{}",
-            serde_json::to_string_pretty(&roots)
-                .map_err(|error| RunError::Internal(format!("serializing root report: {error}")))?
+            serde_json::to_string_pretty(&serde_json::json!({
+                "schema": "mantle-store-roots-v1",
+                "roots": roots,
+                "retention_interests": interests,
+            }))
+            .map_err(|error| RunError::Internal(format!("serializing root report: {error}")))?
         );
-        return classify_store_effect(effect, None);
+        return classify_store_effect(effect, observed_kind, None);
     }
     if roots.is_empty() {
         eprintln!("No retained GC roots.");
-        return classify_store_effect(effect, None);
+        return classify_store_effect(effect, observed_kind, None);
     }
     for root in &roots {
         println!(
@@ -793,13 +824,26 @@ fn cmd_store_roots(
             root.last_transition_id,
             root.last_transition_reason,
         );
+        if let Some(path) = interests.iter().find(|entry| entry.logical_path == root.logical_path) {
+            println!("  record_count={} legacy_unmanaged={}", path.record_count, path.legacy_unmanaged);
+            for fact in &path.interests {
+                println!(
+                    "  INTEREST owner={} reason={} identity={}",
+                    fact.owner,
+                    fact.reason,
+                    fact.record_id.as_deref().unwrap_or("-")
+                );
+            }
+        }
     }
     eprintln!("{} retained root(s)", roots.len());
-    classify_store_effect(effect, None)
+    classify_store_effect(effect, observed_kind, None)
 }
 
 #[derive(Serialize)]
 struct StoreUsageOutput<'a> {
+    schema: &'static str,
+    retention_interests: &'a [crunch_store::GcPathInterests],
     usage: &'a crunch_store::GcUsageReport,
     reclaim_observations: &'a [crunch_store::GcReclaimObservation],
 }
@@ -812,16 +856,20 @@ async fn cmd_store_usage(
 ) -> Result<(), RunError> {
     let report =
         run_store_gc_plan(store, guard, None, rust_retention.map_or(&[][..], |plan| plan.live_nodes())).await?;
+    let interests = crunch_store::list_interest_reports(store.state_dir())
+        .map_err(|error| RunError::Internal(format!("listing retention interests: {error}")))?;
     if is_json_output {
         println!(
             "{}",
             serde_json::to_string_pretty(&StoreUsageOutput {
+                schema: "mantle-store-usage-v1",
+                retention_interests: &interests,
                 usage: &report.usage,
                 reclaim_observations: &report.reclaim_observations,
             })
             .map_err(|error| RunError::Internal(format!("serializing usage report: {error}")))?
         );
-        return classify_store_effect(STORE_USAGE_EFFECT, None);
+        return classify_store_effect(STORE_USAGE_EFFECT, EffectKind::ReadFiles, None);
     }
     println!(
         "observed_bytes={}  retained_bytes={}  reclaimable_bytes={}  quarantined_bytes={}  unclassified_bytes={}  shared_bytes={}  unknown_objects={}",
@@ -839,29 +887,54 @@ async fn cmd_store_usage(
             root.root, root.inclusive_bytes, root.unique_bytes, root.unknown_object_count,
         );
     }
+    for interest in &interests {
+        println!(
+            "INTERESTS {} record_count={} legacy_unmanaged={}",
+            interest.logical_path, interest.record_count, interest.legacy_unmanaged
+        );
+        for fact in &interest.interests {
+            println!(
+                "  owner={} reason={} identity={}",
+                fact.owner,
+                fact.reason,
+                fact.record_id.as_deref().unwrap_or("-")
+            );
+        }
+    }
     for observation in &report.reclaim_observations {
         if let Some(blocker) = observation.blocker.as_deref() {
             println!("UNKNOWN_BYTES {}  category={}  blocker={}", observation.path, observation.category, blocker,);
         }
     }
-    classify_store_effect(STORE_USAGE_EFFECT, None)
+    classify_store_effect(STORE_USAGE_EFFECT, EffectKind::ReadFiles, None)
 }
-async fn cmd_store_pin(store: &crunch_store::StoreHandle, path: &str) -> Result<(), RunError> {
-    let root = store.pin_retained_root(path).await.map_err(|e| RunError::Build(format!("{e}")))?;
+async fn cmd_store_pin(
+    store: &crunch_store::StoreHandle,
+    path: &str,
+    owner: &str,
+    reason: &str,
+) -> Result<(), RunError> {
+    let root = store.pin_retained_root(path, owner, reason).await.map_err(|e| RunError::Build(format!("{e}")))?;
     println!("PINNED {}  source={}  created_unix_s={}", root.logical_path, root.source, root.created_unix_s);
-    classify_store_effect(STORE_PIN_EFFECT, None)
+    classify_store_effect(STORE_PIN_EFFECT, EffectKind::WriteFiles, None)
 }
 
-fn cmd_store_unpin(store: &crunch_store::StoreHandle, path: &str) -> Result<(), RunError> {
-    let removed = store.unpin_retained_root(path).map_err(|e| RunError::Build(format!("{e}")))?;
+fn cmd_store_unpin(
+    store: &crunch_store::StoreHandle,
+    path: &str,
+    owner: &str,
+    reason: Option<&str>,
+) -> Result<(), RunError> {
+    let removed = store.unpin_retained_root(path, owner, reason).map_err(|e| RunError::Build(format!("{e}")))?;
     let Some(root) = removed else {
         return classify_store_effect(
             STORE_UNPIN_EFFECT,
+            EffectKind::WriteFiles,
             Some((STORE_UNPIN_UNKNOWN_ROOT_CODE, RunError::Build(format!("retained root not found: {path}")))),
         );
     };
     println!("UNPINNED {}", root.logical_path);
-    classify_store_effect(STORE_UNPIN_EFFECT, None)
+    classify_store_effect(STORE_UNPIN_EFFECT, EffectKind::WriteFiles, None)
 }
 
 async fn run_store_gc_plan(
@@ -917,7 +990,19 @@ async fn cmd_store_gc(
             )),
         )
     });
-    classify_store_effect(STORE_GC_EFFECT, incomplete_failure)
+    classify_store_effect(
+        if is_plan_only {
+            STORE_GC_PLAN_EFFECT
+        } else {
+            STORE_GC_EFFECT
+        },
+        if is_plan_only {
+            EffectKind::ReadFiles
+        } else {
+            EffectKind::WriteFiles
+        },
+        incomplete_failure,
+    )
 }
 
 fn print_human_gc_report(
@@ -1041,13 +1126,22 @@ async fn cmd_store_verify(
 /// The typed classification replaces the ad-hoc count check, so the failure
 /// decision and its diagnostic code come from the contract vocabulary.
 fn classify_store_verify(summary: &VerifySummary) -> Result<(), RunError> {
+    let kind = mantle_application_contract::EffectKind::StoreAccess;
     let plan =
         mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::StoreAdministration, &[
-            STORE_VERIFY_EFFECT,
+            mantle_application_contract::EffectSpec {
+                effect_id: STORE_VERIFY_EFFECT,
+                kind,
+                limit: mantle_application_contract::EffectMeasure::Calls(2),
+                expected_output: mantle_application_contract::ExpectedOutput::None,
+            },
         ])
-        .ok_or_else(|| RunError::Internal("store verify effect plan exceeds its bound".to_string()))?;
+        .map_err(|error| RunError::Internal(format!("store verify plan rejected: {}: {error:?}", error.code())))?;
     let observation = mantle_application_contract::Observation {
         effect_id: mantle_application_contract::EffectId(String::from(STORE_VERIFY_EFFECT)),
+        kind,
+        output: mantle_application_contract::EffectOutput::None,
+        usage: mantle_application_contract::EffectMeasure::Calls(2),
         status: if summary.mismatches == 0 {
             mantle_application_contract::ObservationStatus::Succeeded
         } else {
@@ -1073,19 +1167,54 @@ struct VerifySummary {
     mismatches: u32,
 }
 
-/// Classify one finished store administration effect before success is reported.
-///
-/// Every store operation that reports after an effect shares this shape: one
-/// planned effect, one observation of how it ended, and the exact failure the
-/// command already used when the classification rejects the report.
-fn classify_store_effect(effect: &str, failure: Option<(&str, RunError)>) -> Result<(), RunError> {
+/// Authority is chosen from a closed set of independent operation identities.
+fn store_effect_kind(effect: &str) -> Result<EffectKind, RunError> {
+    match effect {
+        STORE_LIST_EFFECT
+        | STORE_INFO_EFFECT
+        | STORE_ROOTS_LIST_EFFECT
+        | STORE_USAGE_EFFECT
+        | STORE_GC_PLAN_EFFECT
+        | STORE_REPAIR_INSPECT_EFFECT
+        | STORE_PUSH_SELECT_EFFECT
+        | STORE_COMPOSITION_PLAN_EFFECT
+        | STORE_ARCHIVE_LIST_EFFECT => Ok(EffectKind::ReadFiles),
+        STORE_ROOTS_MIGRATE_EFFECT
+        | STORE_PIN_EFFECT
+        | STORE_UNPIN_EFFECT
+        | STORE_GC_EFFECT
+        | STORE_REPAIR_EXECUTE_EFFECT
+        | STORE_SIGN_EFFECT
+        | STORE_COMPOSITION_REALIZE_EFFECT
+        | STORE_ARCHIVE_EXPORT_EFFECT => Ok(EffectKind::WriteFiles),
+        STORE_PULL_EFFECT | STORE_ARCHIVE_IMPORT_EFFECT => Ok(EffectKind::StoreAccess),
+        STORE_PUSH_EFFECT => Ok(EffectKind::UseNetwork),
+        _ => Err(RunError::Internal(format!("unrecognized store effect identity: {effect}"))),
+    }
+}
+
+/// Classify one finished store administration operation before success.
+fn classify_store_effect(
+    effect: &str,
+    observed_kind: EffectKind,
+    failure: Option<(&str, RunError)>,
+) -> Result<(), RunError> {
+    let kind = store_effect_kind(effect)?;
     let plan =
         mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::StoreAdministration, &[
-            effect,
+            mantle_application_contract::EffectSpec {
+                effect_id: effect,
+                kind,
+                limit: mantle_application_contract::EffectMeasure::Calls(1),
+                expected_output: mantle_application_contract::ExpectedOutput::None,
+            },
         ])
-        .ok_or_else(|| RunError::Internal(format!("store {effect} effect plan exceeds its bound")))?;
+        .map_err(|error| RunError::Internal(format!("store {effect} plan rejected: {}: {error:?}", error.code())))?;
     let observation = mantle_application_contract::Observation {
         effect_id: mantle_application_contract::EffectId(String::from(effect)),
+        kind: observed_kind,
+        output: mantle_application_contract::EffectOutput::None,
+        usage: mantle_application_contract::EffectMeasure::Calls(1),
         status: if failure.is_some() {
             mantle_application_contract::ObservationStatus::Failed
         } else {
@@ -1244,12 +1373,12 @@ async fn cmd_store_repair_final_nar(
         inspection.report(is_execute)
     };
     print_final_nar_repair_report(&report, is_json_output)?;
-    let effect = if is_execute && repair_was_required {
-        STORE_REPAIR_EXECUTE_EFFECT
+    let (effect, observed_kind) = if is_execute && repair_was_required {
+        (STORE_REPAIR_EXECUTE_EFFECT, EffectKind::WriteFiles)
     } else {
-        STORE_REPAIR_INSPECT_EFFECT
+        (STORE_REPAIR_INSPECT_EFFECT, EffectKind::ReadFiles)
     };
-    classify_store_effect(effect, None)
+    classify_store_effect(effect, observed_kind, None)
 }
 
 fn print_final_nar_repair_report(
@@ -1322,7 +1451,7 @@ async fn cmd_store_sign(
     }
 
     eprintln!("{} signed, {} appended, {} replaced, {} total", signed, appended, replaced, results.len());
-    classify_store_effect(STORE_SIGN_EFFECT, None)
+    classify_store_effect(STORE_SIGN_EFFECT, EffectKind::WriteFiles, None)
 }
 
 struct StorePushRequest<'a> {
@@ -1348,7 +1477,7 @@ async fn cmd_store_push(store: &crunch_store::StoreHandle, request: StorePushReq
 
     if selected.is_empty() {
         eprintln!("no matching paths found");
-        return classify_store_effect(STORE_PUSH_SELECT_EFFECT, None);
+        return classify_store_effect(STORE_PUSH_SELECT_EFFECT, EffectKind::ReadFiles, None);
     }
 
     let options = crunch_store::PushOptions {
@@ -1377,7 +1506,7 @@ async fn cmd_store_push(store: &crunch_store::StoreHandle, request: StorePushReq
         push_evidence.total_nar_bytes,
         push_evidence.total_narinfo_bytes,
     );
-    classify_store_effect(STORE_PUSH_EFFECT, None)
+    classify_store_effect(STORE_PUSH_EFFECT, EffectKind::UseNetwork, None)
 }
 
 fn parse_pull_source(source: &str) -> Result<crunch_store::PullSource, RunError> {
@@ -1453,8 +1582,10 @@ fn closure_pull_failure(report: &crunch_store::HttpClosurePullReport) -> Option<
 /// pull additionally proves its root was admitted.
 fn classify_pull_evidence(evidence: &StorePullEvidence) -> Result<(), RunError> {
     match evidence {
-        StorePullEvidence::Explicit(_) => classify_store_effect(STORE_PULL_EFFECT, None),
-        StorePullEvidence::Closure(report) => classify_store_effect(STORE_PULL_EFFECT, closure_pull_failure(report)),
+        StorePullEvidence::Explicit(_) => classify_store_effect(STORE_PULL_EFFECT, EffectKind::StoreAccess, None),
+        StorePullEvidence::Closure(report) => {
+            classify_store_effect(STORE_PULL_EFFECT, EffectKind::StoreAccess, closure_pull_failure(report))
+        }
     }
 }
 
@@ -1617,7 +1748,7 @@ async fn cmd_store_composition(
             let prepared = crunch_store::plan_composition_request(&request)
                 .map_err(|error| RunError::Internal(error.to_string()))?;
             print_composition_plan(&prepared, context.is_json_output)?;
-            classify_store_effect(STORE_COMPOSITION_PLAN_EFFECT, None)
+            classify_store_effect(STORE_COMPOSITION_PLAN_EFFECT, EffectKind::ReadFiles, None)
         }
         crate::StoreCompositionAction::Realize { from, receipt_out } => {
             let request = read_composition_request(&from)?;
@@ -1628,7 +1759,7 @@ async fn cmd_store_composition(
                 .map_err(|error| RunError::Internal(error.to_string()))?;
             crate::source_bundle::write_json_atomically(&receipt_out, &receipt, "composition realization receipt")?;
             print_composition_receipt(&receipt, context.is_json_output)?;
-            classify_store_effect(STORE_COMPOSITION_REALIZE_EFFECT, None)
+            classify_store_effect(STORE_COMPOSITION_REALIZE_EFFECT, EffectKind::WriteFiles, None)
         }
     }
 }
@@ -1783,10 +1914,10 @@ async fn cmd_store_archive_export(
             "exported={} payload_bytes={}",
             archive_write_summary.exported_count, archive_write_summary.total_payload_bytes
         );
-        return classify_store_effect(STORE_ARCHIVE_EXPORT_EFFECT, None);
+        return classify_store_effect(STORE_ARCHIVE_EXPORT_EFFECT, EffectKind::WriteFiles, None);
     }
     print_archive_export_report(&archive_write_summary, request.is_json_output)?;
-    classify_store_effect(STORE_ARCHIVE_EXPORT_EFFECT, None)
+    classify_store_effect(STORE_ARCHIVE_EXPORT_EFFECT, EffectKind::WriteFiles, None)
 }
 
 struct StoreArchiveImportRequest<'a> {
@@ -1832,7 +1963,7 @@ async fn cmd_store_archive_import(
         }
         .map_err(|e| RunError::Internal(format!("nario-v2 archive import: {e}")))?;
         print_nario_import_report(&report, request.is_json_output)?;
-        return classify_store_effect(STORE_ARCHIVE_IMPORT_EFFECT, None);
+        return classify_store_effect(STORE_ARCHIVE_IMPORT_EFFECT, EffectKind::StoreAccess, None);
     }
     let options = crunch_store::ArchiveImportOptions {
         trust_unsigned: request.is_trust_unsigned,
@@ -1851,7 +1982,7 @@ async fn cmd_store_archive_import(
     }
     .map_err(|e| RunError::Internal(format!("archive import: {e}")))?;
     print_archive_import_report(&report, request.is_json_output)?;
-    classify_store_effect(STORE_ARCHIVE_IMPORT_EFFECT, None)
+    classify_store_effect(STORE_ARCHIVE_IMPORT_EFFECT, EffectKind::StoreAccess, None)
 }
 
 async fn cmd_store_archive_list(
@@ -1872,7 +2003,7 @@ async fn cmd_store_archive_list(
         }
         .map_err(|e| RunError::Internal(format!("nario-v2 archive list: {e}")))?;
         print_nario_list_report(&report, is_json_output)?;
-        return classify_store_effect(STORE_ARCHIVE_LIST_EFFECT, None);
+        return classify_store_effect(STORE_ARCHIVE_LIST_EFFECT, EffectKind::ReadFiles, None);
     }
     let report = if is_stdio_path(source) {
         let mut stdin = tokio::io::stdin();
@@ -1886,7 +2017,7 @@ async fn cmd_store_archive_list(
     }
     .map_err(|e| RunError::Internal(format!("archive list: {e}")))?;
     print_archive_list_report(&report, is_json_output)?;
-    classify_store_effect(STORE_ARCHIVE_LIST_EFFECT, None)
+    classify_store_effect(STORE_ARCHIVE_LIST_EFFECT, EffectKind::ReadFiles, None)
 }
 
 fn print_archive_export_report(
@@ -2062,15 +2193,36 @@ mod tests {
     }
 
     #[test]
+    fn store_authority_does_not_follow_effect_label_or_fallback() {
+        use mantle_application_contract::EffectKind;
+
+        assert_ne!(STORE_LIST_EFFECT, STORE_INFO_EFFECT);
+        assert_eq!(store_effect_kind(STORE_LIST_EFFECT).expect("known list read"), EffectKind::ReadFiles);
+        assert_eq!(store_effect_kind(STORE_INFO_EFFECT).expect("known info read"), EffectKind::ReadFiles);
+        assert!(store_effect_kind(STORE_VERIFY_EFFECT).is_err());
+        assert_eq!(store_effect_kind(STORE_GC_PLAN_EFFECT).expect("plan is read-only"), EffectKind::ReadFiles);
+        assert_eq!(store_effect_kind(STORE_GC_EFFECT).expect("execution writes"), EffectKind::WriteFiles);
+        assert!(store_effect_kind("unknown-store-effect").is_err());
+    }
+
+    #[test]
     fn a_succeeded_store_effect_classifies_as_completed() {
-        assert!(classify_store_effect(STORE_GC_EFFECT, None).is_ok());
-        assert!(classify_store_effect(STORE_PULL_EFFECT, None).is_ok());
+        assert!(classify_store_effect(STORE_GC_EFFECT, EffectKind::WriteFiles, None).is_ok());
+        assert!(classify_store_effect(STORE_PULL_EFFECT, EffectKind::StoreAccess, None).is_ok());
+    }
+
+    #[test]
+    fn observed_store_authority_must_match_the_independent_plan() {
+        let error = classify_store_effect(STORE_GC_EFFECT, EffectKind::ReadFiles, None)
+            .expect_err("a claimed read cannot satisfy a planned GC write");
+        assert!(format!("{error}").contains("observations were inconsistent"));
     }
 
     #[test]
     fn a_failed_store_effect_returns_its_recorded_failure() {
         let error = classify_store_effect(
             STORE_UNPIN_EFFECT,
+            EffectKind::WriteFiles,
             Some((
                 STORE_UNPIN_UNKNOWN_ROOT_CODE,
                 RunError::Build("retained root not found: /mantle/store/demo".to_string()),

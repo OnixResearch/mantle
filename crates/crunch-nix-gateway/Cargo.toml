@@ -1,0 +1,32 @@
+[package]
+name = "crunch-nix-gateway"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+crunch-nix-gateway-core = { path = "../crunch-nix-gateway-core" }
+crunch-build = { path = "../crunch-build" }
+crunch-glue = { path = "../crunch-glue" }
+crunch-store = { path = "../crunch-store" }
+nix-compat = { path = "../../vendor/nix-compat" }
+snix-store = { path = "../../vendor/snix-store" }
+fs2 = "0.4"
+libc = "0.2"
+replay-ledger-core = { git = "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git", rev = "a0de79303f3f45c18a34fff535b690a85cb3cf59" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rustix = { version = "1.1", features = ["net", "process"] }
+getrandom = "0.3"
+zeroize = "1"
+tokio = { version = "1", features = ["rt", "time"] }
+
+[dev-dependencies]
+crunch-store = { path = "../crunch-store", features = ["test-support"] }
+ed25519-dalek = "2.1.1"
+base64 = "0.22"
+blake3 = "1"
+subtle = "2"
+snix-castore = { path = "../../vendor/snix-castore" }
+tempfile = "3"
+tokio = { version = "1", features = ["full"] }

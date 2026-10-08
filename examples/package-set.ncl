@@ -16,6 +16,8 @@ let stdenv = builders.mkStdenv seed in
   libfoo = stdenv.mkDerivation {
     pname = "libfoo",
     version = "0.1",
+    # Static library and header only: there is no runnable bin/libfoo.
+    finish_gates.version.enabled = false,
     buildInputs = [seed.gcc],
     buildPhase = m%"
       cat > foo.c << 'EOF'
@@ -42,7 +44,12 @@ let stdenv = builders.mkStdenv seed in
     buildPhase = m%"
       cat > main.c << 'EOF'
       #include <stdio.h>
-      int main() {
+      #include <string.h>
+      int main(int argc, char *argv[]) {
+          if (argc > 1 && strcmp(argv[1], "--version") == 0) {
+              printf("app 0.1\n");
+              return 0;
+          }
           printf("app works!\n");
           return 0;
       }

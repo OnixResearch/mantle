@@ -1,6 +1,6 @@
 # Mantle command reference
 
-Catalog BLAKE3: `49a0cf9c3653d3c714c10e535badf2ee6c3af1a6c90f0051e76f5577f49a7fce`
+Catalog BLAKE3: `b0803673530dbe88fcda7ec4fe014e3ef452dafef7f1760685a8cf2d0a0bba35`
 
 ## Daily commands
 
@@ -8,7 +8,7 @@ Catalog BLAKE3: `49a0cf9c3653d3c714c10e535badf2ee6c3af1a6c90f0051e76f5577f49a7fc
 
 Show an artifact attestation for a store path
 
-- Mutation: `none`
+- Mutation: `store-state`
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
@@ -136,7 +136,7 @@ Attestation inspection and verification commands
 
 Assemble and print a runtime closure attestation for one or more roots
 
-- Mutation: `none`
+- Mutation: `store-state`
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
@@ -145,7 +145,7 @@ Assemble and print a runtime closure attestation for one or more roots
 
 Diff two attestation documents or artifact selectors
 
-- Mutation: `none`
+- Mutation: `store-state`
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
@@ -172,7 +172,7 @@ Initialize verifier-local policy and revocation files in a verification director
 
 Render a project attestation from crunch-project.ncl, crunch.lock, and selected roots
 
-- Mutation: `none`
+- Mutation: `store-state`
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
@@ -208,7 +208,7 @@ Verify attestation bytes against canonical reconstruction
 
 Verify a persisted artifact attestation
 
-- Mutation: `none`
+- Mutation: `store-state`
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
@@ -217,7 +217,7 @@ Verify a persisted artifact attestation
 
 Verify a persisted runtime closure attestation
 
-- Mutation: `none`
+- Mutation: `store-state`
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
@@ -226,7 +226,7 @@ Verify a persisted runtime closure attestation
 
 Verify a synthesized project attestation against a saved envelope/file or expected digest
 
-- Mutation: `none`
+- Mutation: `store-state`
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
@@ -235,7 +235,7 @@ Verify a synthesized project attestation against a saved envelope/file or expect
 
 Create and sign a witness attestation under a verification directory
 
-- Mutation: `store-state`
+- Mutation: `project-files`
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
@@ -244,8 +244,8 @@ Create and sign a witness attestation under a verification directory
 
 Import returned witness sidecars into a verification directory
 
-- Mutation: `store-state`
-- Network: `optional`
+- Mutation: `project-files`
+- Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
 
@@ -273,6 +273,15 @@ Report executable and unsupported source-root operations from live host observat
 
 - Mutation: `none`
 - Network: `optional`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle bootstrap elf-relocate`
+
+Rewrite declared dynamic ELF references before a build output is published
+
+- Mutation: `store-state`
+- Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
 
@@ -1131,6 +1140,33 @@ Validate and render a side-effect-free replay plan
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
 
+### `mantle remote live`
+
+Serve or follow transient build facts outside build and store authority
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote live serve`
+
+Serve bounded live build facts over a local Unix socket
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote live subscribe`
+
+Subscribe to the current matching set and later changes as NDJSON
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-live-build-protocol-v1`
+
 ### `mantle remote serve`
 
 Print remote server protocol metadata or serve one framed stdio session
@@ -1317,6 +1353,15 @@ Import a source bundle into Mantle source state
 
 - Mutation: `store-state`
 - Network: `optional`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle source bundle import-store-path`
+
+Attest a pre-existing physical output using its signed PathInfo and actual NAR before pinning source state
+
+- Mutation: `store-state`
+- Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
 

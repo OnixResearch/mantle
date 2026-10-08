@@ -86,7 +86,7 @@ fn load_signing_keypair_from_path(path: &Path) -> Result<signing::KeyPair, RunEr
         .map_err(|e| RunError::Internal(format!("parsing signing key {}: {e}", path.display())))
 }
 
-fn default_signing_key_path(state_dir: &Path) -> PathBuf {
+pub(crate) fn default_signing_key_path(state_dir: &Path) -> PathBuf {
     config_dir_or(state_dir).join("signing-key")
 }
 
@@ -140,6 +140,6 @@ pub fn load_configured_trusted_public_keys(
     Ok(Some(parsed))
 }
 
-fn config_dir_or(state_dir: &Path) -> PathBuf {
+pub(crate) fn config_dir_or(state_dir: &Path) -> PathBuf {
     std::env::var("CRUNCH_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|_| state_dir.to_path_buf())
 }
