@@ -6450,6 +6450,7 @@
       "flags": [
         "--base-store",
         "--build-root",
+        "--cached-fetch",
         "--fetch-missing",
         "--help",
         "--import-path",
