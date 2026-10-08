@@ -32,4 +32,4 @@ record the earlier unpublished copy and are kept as history only.
 - [x] [serial] T4.2 Run an unchanged second build and prove the consumer is reused without execution. r[mantle.dynamic_plan_output_inputs.request_identity]
 - [x] [serial] T4.3 Document the input in the `lib/derivation.ncl` field docs and the dynamic-plan documentation with failure reasons and non-claims. r[mantle.dynamic_plan_output_inputs.provenance]
 - [x] [serial] T4.4 Run focused `crunch-glue`, `crunch-eval`, `crunch-build`, and `crunch-pipeline` suites before and after the change, strict Clippy for touched first-party packages, Cairn validation, and the proposal, design, and tasks gates. Preserve exact output in `evidence/`. r[mantle.dynamic_plan_output_inputs.dispatch_binding]
-- [ ] [serial] T4.5 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.dynamic_plan_output_inputs.provenance]
+- [x] [serial] T4.5 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.dynamic_plan_output_inputs.provenance] Evidence: `evidence/lifecycle-2026-10-08.md`.
