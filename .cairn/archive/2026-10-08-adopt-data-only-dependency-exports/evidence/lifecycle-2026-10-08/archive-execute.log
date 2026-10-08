@@ -1,0 +1,422 @@
+$ /home/brittonr/mantle-cairn-finish/cairn-result/bin/cairn archive adopt-data-only-dependency-exports --root . --execute   (CAIRN_ARCHIVE_DATE=2026-10-08)
+{
+  "acceptance_ids": [
+    "dependency-exports.admission-review",
+    "dependency-exports.closure",
+    "dependency-exports.decision-record",
+    "dependency-exports.no-accepted-requirement",
+    "dependency-exports.original-scope"
+  ],
+  "actions": [
+    {
+      "description": "move active change to archive: adopt-data-only-dependency-exports",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports"
+    }
+  ],
+  "blocked": false,
+  "change": "adopt-data-only-dependency-exports",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "84eb7a280fb21c5c71bb38ef0e994a2183eba8ce0db5f66d5192cca00692bfd7",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "c2691cc6412c4a35cd86531ca3457ddd72724a42cd2d47f33328dbd413125ac0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/acceptance.md"
+        },
+        {
+          "content_hash": "b03e9acc8e304178c062bc74546871fd144cc660c4f9e65161d65fafcb756b73",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/design.md"
+        },
+        {
+          "content_hash": "213d420df130a55ac1557499a799d295681809d3dfd4a82b74a77164d65ed33f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/admission-review-2026-10-07.md"
+        },
+        {
+          "content_hash": "e114324c23f9b116c43e2a15c04987a3f43d2369e950388ebea9e0f797fadb42",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/closure-2026-10-08.md"
+        },
+        {
+          "content_hash": "c42f72c6d85a0da82ac01ddc8e0877aceb13c93b3b89af232d5779febbcdafb2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/gates-2026-09-10.md"
+        },
+        {
+          "content_hash": "d03b8dc6ba9db542d44e44d8ed34ba71bef871d55b9cc20832a2c00194da54b3",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/archive-dry.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/archive-dry.status"
+        },
+        {
+          "content_hash": "c3731ec4876b313e3ec573b5b3be5b501edeebc0b5c296ca5de1f39a3c6f7b1d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/diff-check.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/diff-check.status"
+        },
+        {
+          "content_hash": "aa57bc9f5e66cdb0ac2014d6d4db6de75b04c006fe2592c0986aab829b49d882",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/gate-design.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/gate-design.status"
+        },
+        {
+          "content_hash": "f91d307216077c24b31e4cb1283fa77a6359e5bca73a9543d262d38743aa6b38",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/gate-proposal.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/gate-proposal.status"
+        },
+        {
+          "content_hash": "68ae75295267c3db64a1c1834c0978afd34901884b4b89fb298318f68c2548c7",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/gate-tasks.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/gate-tasks.status"
+        },
+        {
+          "content_hash": "ffd26e40665d8b79428e76bc4c83924108ccd78eb299110cb45540fcbc5aba09",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/sync-dry.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/sync-dry.status"
+        },
+        {
+          "content_hash": "f7972fcbe2a3f5da07579194bb7b4bed409a9786fc4bc4018db95b7c85765ee4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/sync-execute.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/sync-execute.status"
+        },
+        {
+          "content_hash": "3df8a72c61445355415260056b06d8035b62b9b6ef7164f03ad60f2c7c5dcaad",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/validate.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/validate.status"
+        },
+        {
+          "content_hash": "1d42a3316c6058b73b2d340ff96cef23c2601e6d16d9e5b8244cb7a32699fccf",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/workflow-status.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/workflow-status.status"
+        },
+        {
+          "content_hash": "ddb89730ced282ca5b659a4ca81af844494b361fb468d31eb165cf0dcd9923d5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/original-scope/SOURCE.md"
+        },
+        {
+          "content_hash": "be9c490b6e7cdbcaeb070683883de6b3949f34b507112365c034c8ecce24ee00",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/original-scope/design.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/original-scope/metadata.json"
+        },
+        {
+          "content_hash": "0b618e582bd2c088ac3e58c11f596519df5de4d09a66a5b7ae5606a2dfd467c2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/original-scope/proposal.md"
+        },
+        {
+          "content_hash": "eabdd04c61ebb7e6a846e031054849d34107164fa6af49bfa7ed967e4ab097f8",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/original-scope/specs/dependency-exports/spec.md"
+        },
+        {
+          "content_hash": "22862f699f580e3583d7053b374aa383aaf6673b3237a3374173c0e7462c85ed",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/original-scope/tasks.md"
+        },
+        {
+          "content_hash": "0d7ee095b66338d556cc8f881c2607d75abfe26e45f20f5aac052109d3c288b4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/evidence/repkgs-review.md"
+        },
+        {
+          "content_hash": "e26db2e5b79026f3c8bfa5e342dd9894c6201db1f5a85e5592238cf96da75678",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/metadata.json"
+        },
+        {
+          "content_hash": "03d4a63b6106b0782aa122287266b4f334e94e9861cb35c08f04505fbd71b9a8",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/proposal.md"
+        },
+        {
+          "content_hash": "f2cb327aad5e5f5d15902c40a43a0c6540cf8653769e31719bd1b3e70239da45",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "eb865af2e9ec2c67e12229d27f25b6559dba77877305d85f9156ef4435857070",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-08-adopt-data-only-dependency-exports/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports"
+        }
+      ],
+      "manifest_hash": "44e76312dd2e2c2f91f9312cf9cd27fcd2bce058656ff3fddbad7dde5183eb84"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "c2691cc6412c4a35cd86531ca3457ddd72724a42cd2d47f33328dbd413125ac0",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/acceptance.md"
+        },
+        {
+          "content_hash": "b03e9acc8e304178c062bc74546871fd144cc660c4f9e65161d65fafcb756b73",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/design.md"
+        },
+        {
+          "content_hash": "213d420df130a55ac1557499a799d295681809d3dfd4a82b74a77164d65ed33f",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/admission-review-2026-10-07.md"
+        },
+        {
+          "content_hash": "e114324c23f9b116c43e2a15c04987a3f43d2369e950388ebea9e0f797fadb42",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/closure-2026-10-08.md"
+        },
+        {
+          "content_hash": "c42f72c6d85a0da82ac01ddc8e0877aceb13c93b3b89af232d5779febbcdafb2",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/gates-2026-09-10.md"
+        },
+        {
+          "content_hash": "d03b8dc6ba9db542d44e44d8ed34ba71bef871d55b9cc20832a2c00194da54b3",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/archive-dry.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/archive-dry.status"
+        },
+        {
+          "content_hash": "c3731ec4876b313e3ec573b5b3be5b501edeebc0b5c296ca5de1f39a3c6f7b1d",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/diff-check.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/diff-check.status"
+        },
+        {
+          "content_hash": "aa57bc9f5e66cdb0ac2014d6d4db6de75b04c006fe2592c0986aab829b49d882",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/gate-design.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/gate-design.status"
+        },
+        {
+          "content_hash": "f91d307216077c24b31e4cb1283fa77a6359e5bca73a9543d262d38743aa6b38",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/gate-proposal.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/gate-proposal.status"
+        },
+        {
+          "content_hash": "68ae75295267c3db64a1c1834c0978afd34901884b4b89fb298318f68c2548c7",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/gate-tasks.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/gate-tasks.status"
+        },
+        {
+          "content_hash": "ffd26e40665d8b79428e76bc4c83924108ccd78eb299110cb45540fcbc5aba09",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/sync-dry.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/sync-dry.status"
+        },
+        {
+          "content_hash": "f7972fcbe2a3f5da07579194bb7b4bed409a9786fc4bc4018db95b7c85765ee4",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/sync-execute.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/sync-execute.status"
+        },
+        {
+          "content_hash": "3df8a72c61445355415260056b06d8035b62b9b6ef7164f03ad60f2c7c5dcaad",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/validate.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/validate.status"
+        },
+        {
+          "content_hash": "1d42a3316c6058b73b2d340ff96cef23c2601e6d16d9e5b8244cb7a32699fccf",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/workflow-status.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/lifecycle-2026-10-08/workflow-status.status"
+        },
+        {
+          "content_hash": "ddb89730ced282ca5b659a4ca81af844494b361fb468d31eb165cf0dcd9923d5",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/original-scope/SOURCE.md"
+        },
+        {
+          "content_hash": "be9c490b6e7cdbcaeb070683883de6b3949f34b507112365c034c8ecce24ee00",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/original-scope/design.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/original-scope/metadata.json"
+        },
+        {
+          "content_hash": "0b618e582bd2c088ac3e58c11f596519df5de4d09a66a5b7ae5606a2dfd467c2",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/original-scope/proposal.md"
+        },
+        {
+          "content_hash": "eabdd04c61ebb7e6a846e031054849d34107164fa6af49bfa7ed967e4ab097f8",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/original-scope/specs/dependency-exports/spec.md"
+        },
+        {
+          "content_hash": "22862f699f580e3583d7053b374aa383aaf6673b3237a3374173c0e7462c85ed",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/original-scope/tasks.md"
+        },
+        {
+          "content_hash": "0d7ee095b66338d556cc8f881c2607d75abfe26e45f20f5aac052109d3c288b4",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/evidence/repkgs-review.md"
+        },
+        {
+          "content_hash": "e26db2e5b79026f3c8bfa5e342dd9894c6201db1f5a85e5592238cf96da75678",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/metadata.json"
+        },
+        {
+          "content_hash": "03d4a63b6106b0782aa122287266b4f334e94e9861cb35c08f04505fbd71b9a8",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/proposal.md"
+        },
+        {
+          "content_hash": "f2cb327aad5e5f5d15902c40a43a0c6540cf8653769e31719bd1b3e70239da45",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "eb865af2e9ec2c67e12229d27f25b6559dba77877305d85f9156ef4435857070",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-data-only-dependency-exports/tasks.md"
+        }
+      ],
+      "manifest_hash": "3656c00b4705962081da89c48c68b7f7ef5d7eca139a36c635a6fd695f0a0555"
+    },
+    "kind": "archive",
+    "manifest_hash": "9a7fcaec0418a2fcdadcd2c83555b494b68471b5ced9c0f0816f4976569bf506"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "b79dcf42b372d0099d98849e941a54d0577fde1a65233a9ca763a09e47a497cd",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "profile_identity_hash": "843f77cd244a5f62cb22e4a66ab156f3a06074c6e3321e943ea1b31407aad313",
+  "reasons": [],
+  "receipt_hash": "7ac1cdb95e55bfdaab5a1358b6bdded85dbcc59cc5dd5131078894d32e536821",
+  "review_receipt_hashes": [
+    "04e9dcb636eb75a0bd07efc1839cb81915b017273c7afd2420daa9c18c2a008b"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
