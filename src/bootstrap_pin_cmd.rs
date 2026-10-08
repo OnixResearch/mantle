@@ -1,3 +1,4 @@
+// machine-artifact-public: bootstrap.source-pin-plans
 //! Batched bootstrap pin resolution and preimage-bound, pin-only application.
 use std::collections::BTreeMap;
 use std::fs;

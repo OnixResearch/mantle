@@ -1214,7 +1214,7 @@ let Registry = {
         "contract_blake3"= "d158d85e21edcccbf6d6ae7bc6d3d59aea4acb8f1dc8a52438be38567d4c50f2",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "230228d02be1df38f427caa0f6ca4cd7c1ec8666c2350508d409aef177ccd494",
-        "producer_identity_blake3"= "35bed6c82be4122d29b19b0787d7925ce3376e6451b3b1c5cd3e7f1969ced618",
+        "producer_identity_blake3"= "f785dc6cb1f353f55212708c8404a7a24fcbe33cbfefb51da6b7754b99b87754",
         "consumer_policy_blake3"= "c81ddbc9befcf012a5b42b3f44c2f17fe44f890ce0dfcc228b2cfefd5eb30dd4"
       },
       "non_claims"= [
@@ -1275,7 +1275,7 @@ let Registry = {
         "contract_blake3"= "723027e965189230cabb05b8ba069effec984e9bd527625a4320c8bd3cbe1af3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "9acb57b93f3b9150f79d59ff8a46ca3b5c2e5b98e83320b0308d57334a13d4a3",
-        "producer_identity_blake3"= "f44e97f6dc92509f1fa7f1810898b211f105f42ea06e30034a502915e4f180fe",
+        "producer_identity_blake3"= "e6a21d72493fd027766dcae9fbb625e120689f12a34650c95a2379849d12deec",
         "consumer_policy_blake3"= "e81324a18c19a70aaa2bec634d4a0b7dccceede6f048bbd332b432a9938adefe"
       },
       "non_claims"= [
@@ -2270,6 +2270,64 @@ let Registry = {
         "debug parity output is not release evidence"
       ],
       "rationale"= "Diagnostic surface intentionally remains unstable."
+    },
+    {
+      "id"= "bootstrap.source-pin-plans",
+      "class"= "compatibility",
+      "rust_owner"= "crates/crunch-project-core/src/bootstrap_pins.rs::PinPlan",
+      "producer"= {
+        "command_or_api"= "mantle bootstrap-pin check|apply",
+        "marker"= "bootstrap.source-pin-plans",
+        "source_paths"= [
+          "crates/crunch-project-core/src/bootstrap_pins.rs",
+          "src/bootstrap_pin_cmd.rs"
+        ]
+      },
+      "consumers"= [
+        "mantle bootstrap-pin apply",
+        "bootstrap pin reviewers",
+        "bootstrap Nickel recipes (derived pin readers)",
+        "Cairn evidence"
+      ],
+      "artifacts"= {
+        "schema"= "",
+        "generated_contract"= "",
+        "positive_fixtures"= [],
+        "negative_fixture_set"= ""
+      },
+      "version_policy"= {
+        "current"= "mantle-bootstrap-pin-v1-family",
+        "supported"= [
+          "mantle-bootstrap-pin-v1-family"
+        ],
+        "unknown_version_behavior"= "reject an unknown pin or plan schema and any unknown field before planning, prefetch, or pin publication",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "cargo test -p crunch-project-core --lib bootstrap_pins",
+        "cargo test -p mantle --bin mantle bootstrap_pin_cmd::tests::",
+        "nix shell --inputs-from . nixpkgs#python3 --command python3 bootstrap/pins/generate_readers.py --check-recipes"
+      ],
+      "fixture_coverage"= [
+        "version",
+        "identity",
+        "tamper",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "classification only: mantle-bootstrap-pin-v1 records, mantle-bootstrap-pin-plan-v1 plans (BLAKE3 digest over schema and entries) and mantle-bootstrap-pin-apply-v1 receipts are validated by deny-unknown-fields Rust types and byte-exact derived-reader checks, not a generated contract",
+      "freshness"= {
+        "schema_blake3"= "",
+        "contract_blake3"= "",
+        "prelude_blake3"= "",
+        "fixture_set_blake3"= "",
+        "producer_identity_blake3"= "",
+        "consumer_policy_blake3"= ""
+      },
+      "non_claims"= [
+        "a sealed plan or apply receipt proves only its bounded upstream observation and TOML preimage, not source content, bootstrap correctness, or build behavior"
+      ],
+      "rationale"= "Bootstrap source pin plans are reviewable apply inputs and derived readers are imported by Nickel; this family records that versioned boundary until it receives a generated contract."
     },
     {
       "id"= "nix-free-demo.reports",
