@@ -41,24 +41,28 @@ pub struct ManifestFacts<'a> {
     pub closure_refs_count: usize,
 }
 
+pub struct RequestedManifestFacts<'a> {
+    pub request_id: &'a str,
+    pub store_prefix: &'a str,
+    pub input_refs: &'a [String],
+}
+
 /// Validate protocol binding without asserting that any uploaded bytes arrived.
 // r[impl remote_builds.hexagonal_core]
 pub fn admit_input_manifest(
     manifest: ManifestFacts<'_>,
-    request_id: &str,
-    store_prefix: &str,
-    requested_refs: &[String],
+    requested: RequestedManifestFacts<'_>,
 ) -> Result<(), InputAdmissionError> {
-    if manifest.request_id != request_id {
+    if manifest.request_id != requested.request_id {
         return Err(InputAdmissionError::ManifestRequestIdMismatch);
     }
-    if manifest.store_prefix != store_prefix {
+    if manifest.store_prefix != requested.store_prefix {
         return Err(InputAdmissionError::ManifestStorePrefixMismatch);
     }
     if manifest.input_refs.len() > MAX_REMOTE_INPUT_REFS || manifest.closure_refs_count > MAX_REMOTE_INPUT_REFS {
         return Err(InputAdmissionError::InputRefCountExceeded);
     }
-    if manifest.input_refs != requested_refs {
+    if manifest.input_refs != requested.input_refs {
         return Err(InputAdmissionError::ManifestDoesNotMatchRequest);
     }
     Ok(())
@@ -107,10 +111,10 @@ pub enum CoordinatorRequestError {
     RequiredSandboxEmpty,
     RequiredNetworkEmpty,
     TrustedOutputKeysEmpty,
-    RequiredFeatureCountExceeded(usize),
+    RequiredFeatureCountExceeded(u64),
     RequiredFeatureEmpty,
     RequiredFeatureDuplicate,
-    LiveOutputClaimCountExceeded(usize),
+    LiveOutputClaimCountExceeded(u64),
     LiveOutputClaimEmpty,
     LiveOutputClaimDuplicate,
     LocalityScopeInvalid,
@@ -155,9 +159,9 @@ pub struct CoordinatorDeclarationFacts<'a, F, C> {
     pub required_network_mode: &'a str,
     pub trusted_output_key_count: usize,
     pub required_features: F,
-    pub required_features_max: usize,
+    pub required_features_max: u64,
     pub live_output_claims: C,
-    pub live_output_claims_max: usize,
+    pub live_output_claims_max: u64,
 }
 
 pub fn validate_coordinator_declaration<'a, F, C>(
@@ -179,6 +183,8 @@ where
     if facts.trusted_output_key_count == 0 {
         return Err(CoordinatorRequestError::TrustedOutputKeysEmpty);
     }
+    debug_assert!(!facts.required_system.is_empty());
+    debug_assert!(facts.trusted_output_key_count > 0);
     validate_bounded_unique_strings(facts.required_features, facts.required_features_max, false).map_err(|reason| {
         match reason {
             BoundedUniqueStringsError::CountExceeded(max) => CoordinatorRequestError::RequiredFeatureCountExceeded(max),
@@ -200,23 +206,27 @@ where
     Ok(())
 }
 
+pub struct CoordinatorRuntimeLimits<'a> {
+    pub locality_scope: Option<(&'a str, &'a str)>,
+    pub uploaded_bytes: u64,
+    pub max_uploaded_bytes: u64,
+    pub build_time_limit_secs: u64,
+    pub max_build_time_limit_secs: u64,
+}
+
 pub fn validate_coordinator_runtime_limits(
-    locality_scope: Option<(&str, &str)>,
-    uploaded_bytes: u64,
-    max_uploaded_bytes: u64,
-    build_time_limit_secs: u64,
-    max_build_time_limit_secs: u64,
+    limits: CoordinatorRuntimeLimits<'_>,
 ) -> Result<(), CoordinatorRequestError> {
-    if let Some((manifest_digest, policy_digest)) = locality_scope
+    if let Some((manifest_digest, policy_digest)) = limits.locality_scope
         && (!crate::output::is_blake3_hex_digest(manifest_digest)
             || !crate::output::is_blake3_hex_digest(policy_digest))
     {
         return Err(CoordinatorRequestError::LocalityScopeInvalid);
     }
-    if uploaded_bytes > max_uploaded_bytes {
+    if limits.uploaded_bytes > limits.max_uploaded_bytes {
         return Err(CoordinatorRequestError::UploadByteLimitExceeded);
     }
-    if build_time_limit_secs == 0 || build_time_limit_secs > max_build_time_limit_secs {
+    if limits.build_time_limit_secs == 0 || limits.build_time_limit_secs > limits.max_build_time_limit_secs {
         return Err(CoordinatorRequestError::BuildTimeLimitExceeded);
     }
     Ok(())
@@ -225,7 +235,7 @@ pub fn validate_coordinator_runtime_limits(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoundedUniqueStringsError {
     Missing,
-    CountExceeded(usize),
+    CountExceeded(u64),
     Empty,
     Duplicate,
 }
@@ -243,13 +253,14 @@ impl BoundedUniqueStringsError {
 
 pub fn validate_bounded_unique_strings<'a>(
     values: impl ExactSizeIterator<Item = &'a str>,
-    max_count: usize,
+    max_count: u64,
     nonempty: bool,
 ) -> Result<(), BoundedUniqueStringsError> {
     if nonempty && values.len() == 0 {
         return Err(BoundedUniqueStringsError::Missing);
     }
-    if values.len() > max_count {
+    let count = u64::try_from(values.len()).map_err(|_| BoundedUniqueStringsError::CountExceeded(max_count))?;
+    if count > max_count {
         return Err(BoundedUniqueStringsError::CountExceeded(max_count));
     }
     let mut seen = BTreeSet::new();
@@ -269,7 +280,7 @@ pub enum WorkerRegistrationError {
     ProtocolVersionMismatch,
     GenerationZero,
     ConcurrencyExceeded(u32),
-    ResumeSummaryCountExceeded(usize),
+    ResumeSummaryCountExceeded(u64),
     ResumeIdentityEmpty,
     ResumeFenceInvalid,
     ResumeKeyInvalid,
@@ -296,11 +307,15 @@ impl WorkerRegistrationError {
     }
 }
 
+pub struct WorkerConcurrency {
+    pub concurrency: u32,
+    pub max_concurrency: u32,
+}
+
 pub fn validate_worker_registration_header(
     protocol_version_matches: bool,
     worker_generation: u64,
-    concurrency: u32,
-    max_concurrency: u32,
+    limits: WorkerConcurrency,
 ) -> Result<(), WorkerRegistrationError> {
     if !protocol_version_matches {
         return Err(WorkerRegistrationError::ProtocolVersionMismatch);
@@ -308,15 +323,20 @@ pub fn validate_worker_registration_header(
     if worker_generation == 0 {
         return Err(WorkerRegistrationError::GenerationZero);
     }
-    if concurrency == 0 || concurrency > max_concurrency {
-        return Err(WorkerRegistrationError::ConcurrencyExceeded(max_concurrency));
+    if limits.concurrency == 0 || limits.concurrency > limits.max_concurrency {
+        return Err(WorkerRegistrationError::ConcurrencyExceeded(limits.max_concurrency));
     }
     Ok(())
 }
 
-pub fn validate_worker_resume_count(count: usize, max_count: usize) -> Result<(), WorkerRegistrationError> {
-    if count > max_count {
-        Err(WorkerRegistrationError::ResumeSummaryCountExceeded(max_count))
+pub struct WorkerResumeCount {
+    pub count: u64,
+    pub max_count: u64,
+}
+
+pub fn validate_worker_resume_count(resume: WorkerResumeCount) -> Result<(), WorkerRegistrationError> {
+    if resume.count > resume.max_count {
+        Err(WorkerRegistrationError::ResumeSummaryCountExceeded(resume.max_count))
     } else {
         Ok(())
     }
@@ -332,11 +352,10 @@ pub struct WorkerResumeFacts<'a> {
 }
 
 pub fn validate_worker_resume_summary(facts: WorkerResumeFacts<'_>) -> Result<(), WorkerRegistrationError> {
-    if facts.job_id.is_empty()
-        || facts.attempt_id.is_empty()
-        || facts.attempt_id == facts.legacy_missing_attempt_id
-        || facts.normalized_build_key.is_empty()
-    {
+    if facts.job_id.is_empty() || facts.attempt_id.is_empty() {
+        return Err(WorkerRegistrationError::ResumeIdentityEmpty);
+    }
+    if facts.attempt_id == facts.legacy_missing_attempt_id || facts.normalized_build_key.is_empty() {
         return Err(WorkerRegistrationError::ResumeIdentityEmpty);
     }
     if facts.fence_generation == 0 {
@@ -356,9 +375,18 @@ mod tests {
 
     #[test]
     fn worker_registration_checks_version_list_uniqueness_and_resume_fence_before_key() {
-        assert_eq!(validate_worker_registration_header(true, 2, 4, 4), Ok(()));
         assert_eq!(
-            validate_worker_registration_header(false, 0, 0, 4),
+            validate_worker_registration_header(true, 2, WorkerConcurrency {
+                concurrency: 4,
+                max_concurrency: 4,
+            },),
+            Ok(())
+        );
+        assert_eq!(
+            validate_worker_registration_header(false, 0, WorkerConcurrency {
+                concurrency: 0,
+                max_concurrency: 4,
+            },),
             Err(WorkerRegistrationError::ProtocolVersionMismatch)
         );
         assert_eq!(validate_bounded_unique_strings(["x"].into_iter(), 2, true), Ok(()));
@@ -425,17 +453,44 @@ mod tests {
             Err(CoordinatorRequestError::LiveOutputClaimDuplicate)
         );
         let digest = "a".repeat(64);
-        assert_eq!(validate_coordinator_runtime_limits(Some((&digest, &digest)), 10, 10, 30, 30), Ok(()));
         assert_eq!(
-            validate_coordinator_runtime_limits(Some(("forged", &digest)), 11, 10, 0, 30),
+            validate_coordinator_runtime_limits(CoordinatorRuntimeLimits {
+                locality_scope: Some((&digest, &digest)),
+                uploaded_bytes: 10,
+                max_uploaded_bytes: 10,
+                build_time_limit_secs: 30,
+                max_build_time_limit_secs: 30,
+            }),
+            Ok(())
+        );
+        assert_eq!(
+            validate_coordinator_runtime_limits(CoordinatorRuntimeLimits {
+                locality_scope: Some(("forged", &digest)),
+                uploaded_bytes: 11,
+                max_uploaded_bytes: 10,
+                build_time_limit_secs: 0,
+                max_build_time_limit_secs: 30,
+            }),
             Err(CoordinatorRequestError::LocalityScopeInvalid)
         );
         assert_eq!(
-            validate_coordinator_runtime_limits(None, 11, 10, 0, 30),
+            validate_coordinator_runtime_limits(CoordinatorRuntimeLimits {
+                locality_scope: None,
+                uploaded_bytes: 11,
+                max_uploaded_bytes: 10,
+                build_time_limit_secs: 0,
+                max_build_time_limit_secs: 30,
+            }),
             Err(CoordinatorRequestError::UploadByteLimitExceeded)
         );
         assert_eq!(
-            validate_coordinator_runtime_limits(None, 10, 10, 0, 30),
+            validate_coordinator_runtime_limits(CoordinatorRuntimeLimits {
+                locality_scope: None,
+                uploaded_bytes: 10,
+                max_uploaded_bytes: 10,
+                build_time_limit_secs: 0,
+                max_build_time_limit_secs: 30,
+            }),
             Err(CoordinatorRequestError::BuildTimeLimitExceeded)
         );
     }
@@ -449,7 +504,14 @@ mod tests {
             input_refs: &refs,
             closure_refs_count: 0,
         };
-        assert_eq!(admit_input_manifest(manifest, "request-a", "/mantle/store", &refs), Ok(()));
+        assert_eq!(
+            admit_input_manifest(manifest, RequestedManifestFacts {
+                request_id: "request-a",
+                store_prefix: "/mantle/store",
+                input_refs: &refs,
+            },),
+            Ok(())
+        );
         assert_eq!(admit_source_input_refs(&refs, &[String::from("b")]), Ok(()));
     }
 
@@ -463,7 +525,11 @@ mod tests {
             closure_refs_count: MAX_REMOTE_INPUT_REFS + 1,
         };
         assert_eq!(
-            admit_input_manifest(manifest, "request-a", "/mantle/store", &[]),
+            admit_input_manifest(manifest, RequestedManifestFacts {
+                request_id: "request-a",
+                store_prefix: "/mantle/store",
+                input_refs: &[],
+            },),
             Err(InputAdmissionError::ManifestRequestIdMismatch)
         );
         let manifest = ManifestFacts {
@@ -473,7 +539,11 @@ mod tests {
             closure_refs_count: MAX_REMOTE_INPUT_REFS + 1,
         };
         assert_eq!(
-            admit_input_manifest(manifest, "request-a", "/mantle/store", &[]),
+            admit_input_manifest(manifest, RequestedManifestFacts {
+                request_id: "request-a",
+                store_prefix: "/mantle/store",
+                input_refs: &[],
+            },),
             Err(InputAdmissionError::InputRefCountExceeded)
         );
     }

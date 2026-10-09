@@ -1818,9 +1818,15 @@ fn finish_client_response(
     request: &WrapperRequest,
     response: WrapperResponse,
 ) -> Result<i32, Error> {
+    assert_eq!(response.request_ref, request.request_ref, "daemon response must belong to this request");
     if response.disposition == WrapperDisposition::Bypass {
         return run_direct_compiler_strings(compiler, &request.input.arguments);
     }
+    assert_eq!(
+        response.bypass_class.is_some(),
+        response.disposition == WrapperDisposition::Rejected,
+        "non-bypass responses classify only rejections"
+    );
     std::io::stdout().write_all(&response.stdout).map_err(|source| Error::Io {
         context: "write-wrapper-stdout".to_string(),
         source,

@@ -64,9 +64,10 @@ nix develop --no-write-lock-file -c nickel export --format json \
 b3sum evidence/radicle/durable-file-publication-adoption-v1.json
 ```
 
-The generated JSON has BLAKE3
-`4a7e35d9ac58740ce93f2c6c81a8b66fa3623f9a2aeed645c5b62c7914ad98ad`;
-its adjacent `.blake3` holds this plain hex digest.
+At that revision, the generated JSON had BLAKE3
+`4a7e35d9ac58740ce93f2c6c81a8b66fa3623f9a2aeed645c5b62c7914ad98ad`.
+At the current worktree revision, regenerated JSON and adjacent `.blake3`
+both bind `fd048e0ddc3356cf11a48bd661ae79bd02049c594a0bee4a4c64675f4dcf98f8`.
 
 The Nix adoption check compares normalized Nickel export and JSON, their exact
 digest, and current workspace file hashes. This maintenance does not alter the
@@ -75,6 +76,19 @@ publication mapping, or authority boundary.
 It does not establish upstream source correctness, a fresh public HTTPS fetch,
 a successful full flake gate, self-hosting, release eligibility, or deployment
 readiness.
+
+The 2026-10-08 Tiger Style and Nix source-closure repairs, plus existing
+workspace dependency changes, require refreshing three current bindings.
+Direct BLAKE3 over the Leviathan worktree gives `Cargo.toml`
+`0d016551043ed7884bc783432650c6fa5dce799bf4c14c321812b31b88ab28d6`,
+`Cargo.lock`
+`21eac824a09a21c6f47460ffe2e1e543486b1eef39e1cf37ffe614d075380c0b`,
+and `flake.nix`
+`098217fce30cb113ffd17feff36999374aedfa03886f2d6c07e0d05498b851de`.
+`flake.lock` retains the historical digest. The typed receipt and independent
+validator now bind the current three hashes; the table above records the older
+revision. `observed_date` and the original validation outcomes remain
+historical, not replayed adoption evidence.
 
 The prepublication receipt-refresh candidate based on Mantle revision
 `787c6af4dafc970e67bba0530e764cff0bb11196` passed both adoption Nickel

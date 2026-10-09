@@ -411,6 +411,8 @@
         # bootstrap blocker inventory gate also needs scripts/ and OpenSpec
         # bootstrap text so flake checks inspect the same repo-controlled sources
         # as the local script.
+        # crunch-build compiles its loader-audit C source; the remote hexagon
+        # parity suite embeds origin observations from scoped Cairn evidence.
         # r[impl mantle.durable_publication_validation.source_closure]
         contentBoundRequirementFixtureRoot = toString ./fixtures/content-bound-requirements;
         isContentBoundRequirementFixture =
@@ -428,6 +430,8 @@
           && !pkgs.lib.hasPrefix "${gitMetadataPath}/" pathString
           && (
             (craneLib.filterCargoSources path type)
+            || pathString == toString ./crates/crunch-build/audit
+            || pathString == toString ./crates/crunch-build/audit/finish_dlopen_audit.c
             || pathString == toString ./README.md
             || pathString == toString ./flake.nix
             || pkgs.lib.hasPrefix "${toString ./.github/workflows}/" pathString
@@ -437,6 +441,11 @@
             || pkgs.lib.hasPrefix "${toString ./mantlepkgs}/" pathString
             || pkgs.lib.hasPrefix "${toString ./cairn-policy/evidence}/" pathString
             || pkgs.lib.hasPrefix "${toString ./cairn/archive}/" pathString
+            || pathString == toString ./.cairn
+            || pathString == toString ./.cairn/changes
+            || pathString == toString ./.cairn/changes/separate-remote-build-hexagon
+            || pathString == toString ./.cairn/changes/separate-remote-build-hexagon/evidence
+            || pkgs.lib.hasPrefix "${toString ./.cairn/changes/separate-remote-build-hexagon/evidence}/" pathString
             || pkgs.lib.hasPrefix "${toString ./.cairn/archive}/" pathString
             || pathString == toString ./config
             || pkgs.lib.hasPrefix "${toString ./config}/" pathString
@@ -974,7 +983,10 @@
           CRUNCH_NO_FUSE = "1";
           SLEEPINESS = "0";
           MANTLE_TEST_OFFLINE = "1";
-          nativeCheckInputs = [ pkgs.git ];
+          nativeCheckInputs = [
+            pkgs.git
+            pkgs.openssh
+          ];
         };
 
         # Ship both the typed APK graph renderer and its Android-only signed
@@ -1010,6 +1022,7 @@
           inherit
             src
             cargoArtifacts
+            cargoVendorDir
             nativeBuildInputs
             buildInputs
             ;
@@ -1179,13 +1192,17 @@
           text = ''
             export PKG_CONFIG_PATH="${pkgs.lib.makeSearchPath "lib/pkgconfig" buildInputs}:''${PKG_CONFIG_PATH:-}"
             export SNIX_BUILD_SANDBOX_SHELL="''${SNIX_BUILD_SANDBOX_SHELL:-/bin/sh}"
-            exec cargo-tigerstyle "$@"
+            CARGO_HOME="$(mktemp -d "''${TMPDIR:-/tmp}/mantle-tigerstyle-cargo-home.XXXXXXXX")"
+            export CARGO_HOME
+            trap 'rm -r -- "$CARGO_HOME"' EXIT
+            ln -s "${cargoVendorDir}/config.toml" "$CARGO_HOME/config.toml"
+            cargo-tigerstyle "$@"
           '';
         };
 
         releaseDeterminismQuality = craneLib.cargoNextest {
           pname = "crunch-release-determinism-quality";
-          inherit src cargoArtifacts buildInputs;
+          inherit src cargoArtifacts cargoVendorDir buildInputs;
           nativeBuildInputs = nativeBuildInputs ++ [ pkgs.git ];
           cargoNextestExtraArgs = "--test release_cli release_reproduce_generated_two_clean_store_proof_verifies_deterministic_release";
           partitions = 1;
@@ -1198,7 +1215,7 @@
 
         releaseNixWitnessQuality = craneLib.cargoNextest {
           pname = "crunch-release-nix-witness-quality";
-          inherit src cargoArtifacts buildInputs;
+          inherit src cargoArtifacts cargoVendorDir buildInputs;
           nativeBuildInputs = nativeBuildInputs ++ [ pkgs.git ];
           cargoNextestExtraArgs = "--test release_cli release_nix_witness";
           partitions = 1;
@@ -1213,6 +1230,7 @@
           inherit
             src
             cargoArtifacts
+            cargoVendorDir
             nativeBuildInputs
             buildInputs
             ;
@@ -1728,26 +1746,39 @@
                 touch "$out"
               '';
 
-          tigerstyle =
-            (tigerstyle.lib.mkConsumerCheck {
-              inherit system nativeBuildInputs buildInputs;
+          # The upstream consumer helper vendors Cargo.lock independently, so it
+          # misses the admitted Casita source patch used by Crane and the dev shell.
+          tigerstyle = pkgs.runCommand "mantle-tigerstyle-check"
+            {
               src = ./.;
-              cargoLock = ./Cargo.lock;
-            }).overrideAttrs
-              (_old: {
-                SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
-              });
+              inherit buildInputs;
+              nativeBuildInputs = nativeBuildInputs ++ [ tigerstyleRunner ];
+              SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+            }
+            ''
+              export HOME="$PWD/home"
+              mkdir -p "$HOME"
+              cp -r "$src" source
+              chmod -R u+w source
+              cd source
+              crunch-tigerstyle check
+              mkdir -p "$out"
+            '';
 
           # Run tests with nextest
           nextest = craneLib.cargoNextest {
             inherit
               src
               cargoArtifacts
-              nativeBuildInputs
+              cargoVendorDir
               buildInputs
               ;
+            # Real stdio remote failure tests exercise ssh, not a fake transport.
+            nativeBuildInputs = nativeBuildInputs ++ [ pkgs.openssh ];
             partitions = 1;
             partitionType = "count";
+            # Report all hermetic release-test failures in one check run.
+            cargoNextestExtraArgs = "--no-fail-fast";
             SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
             GIT = "${pkgs.git}/bin/git";
             SSL_CERT_FILE = caCertificateBundlePath;
@@ -1767,6 +1798,7 @@
             inherit
               src
               cargoArtifacts
+              cargoVendorDir
               nativeBuildInputs
               buildInputs
               ;

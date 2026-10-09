@@ -51,20 +51,39 @@ fn trusted(path_info: &snix_store::path_info::PathInfo, keys: &[VerifyingKey], p
     !keys.is_empty() && crunch_build::verify_pathinfo_signatures_with_store_dir(path_info, keys, prefix).is_trusted()
 }
 
-fn hash_sha256(hex: &str, label: &str) -> Result<[u8; 32], Error> {
+enum DigestLabel {
+    Fod,
+    Runtime,
+}
+
+fn hash_sha256(hex: &str, label: DigestLabel) -> Result<[u8; 32], Error> {
+    let label = match label {
+        DigestLabel::Fod => "FOD",
+        DigestLabel::Runtime => "runtime",
+    };
     if hex.len() != 64 {
         return Err(invalid(format!("{label} digest length")));
     }
     let mut digest = [0_u8; 32];
-    for (index, byte) in digest.iter_mut().enumerate() {
-        *byte = u8::from_str_radix(&hex[index * 2..index * 2 + 2], 16)
-            .map_err(|_| invalid(format!("{label} digest encoding")))?;
+    for (byte, pair) in digest.iter_mut().zip(hex.as_bytes().chunks_exact(2)) {
+        let pair = std::str::from_utf8(pair).map_err(|_| invalid(format!("{label} digest encoding")))?;
+        *byte = u8::from_str_radix(pair, 16).map_err(|_| invalid(format!("{label} digest encoding")))?;
     }
     Ok(digest)
 }
 
 fn flat_sha256(hex: &str) -> Result<CAHash, Error> {
-    Ok(CAHash::Flat(NixHash::Sha256(hash_sha256(hex, "FOD")?)))
+    Ok(CAHash::Flat(NixHash::Sha256(hash_sha256(hex, DigestLabel::Fod)?)))
+}
+
+fn same_output_identity(stored: &snix_store::path_info::PathInfo, fresh: &snix_store::path_info::PathInfo) -> bool {
+    if stored.store_path != fresh.store_path || stored.node != fresh.node {
+        return false;
+    }
+    if stored.nar_sha256 != fresh.nar_sha256 || stored.nar_size != fresh.nar_size {
+        return false;
+    }
+    stored.references == fresh.references && stored.ca == fresh.ca
 }
 
 async fn verify_one(
@@ -92,6 +111,8 @@ async fn verify_one(
     {
         return Err(invalid("extraction input identity drift"));
     }
+    debug_assert_eq!(converted.input_sources.len(), 2);
+    debug_assert!(converted.input_sources.contains(&archive));
     let archive_info = lookup
         .find(&archive)
         .await
@@ -116,14 +137,7 @@ async fn verify_one(
         .await
         .map_err(|error| invalid(error.to_string()))?
         .ok_or_else(|| invalid("extraction output PathInfo missing"))?;
-    if stored.store_path != fresh.store_path
-        || stored.node != fresh.node
-        || stored.nar_sha256 != fresh.nar_sha256
-        || stored.nar_size != fresh.nar_size
-        || stored.references != fresh.references
-        || stored.ca != fresh.ca
-        || !trusted(&stored, trusted_keys, logical)
-    {
+    if !same_output_identity(&stored, fresh) || !trusted(&stored, trusted_keys, logical) {
         return Err(invalid("same-run output differs from authenticated store content"));
     }
     let tree_path = prefix.join(stored.store_path.to_string());
@@ -158,13 +172,18 @@ async fn verify_runtime(
         .await
         .map_err(|error| invalid(error.to_string()))?
         .ok_or_else(|| invalid("runtime PathInfo missing"))?;
-    if info.store_path != key
-        || info.nar_sha256 != hash_sha256(&runtime.identity.nar_sha256, "runtime")?
+    if info.store_path != key {
+        return Err(invalid("runtime content identity or trust mismatch"));
+    }
+    let expected_digest = hash_sha256(&runtime.identity.nar_sha256, DigestLabel::Runtime)?;
+    if info.nar_sha256 != expected_digest
         || info.nar_size != runtime.identity.nar_size
         || !trusted(&info, trusted_keys, logical)
     {
         return Err(invalid("runtime content identity or trust mismatch"));
     }
+    debug_assert_eq!(info.store_path, key);
+    debug_assert_eq!(info.nar_sha256, expected_digest);
     let metadata = std::fs::symlink_metadata(&runtime.store_path)?;
     if !metadata.is_dir() || metadata.file_type().is_symlink() {
         return Err(invalid("runtime tree is absent or redirected"));
@@ -193,4 +212,20 @@ pub async fn verified_same_run_extractions(
         jdk: verify_one(&jdk, &outcomes[1], lookup, trusted_keys, store_prefix).await?,
         platform: verify_one(&platform, &outcomes[2], lookup, trusted_keys, store_prefix).await?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sha256_decoder_accepts_hex_and_rejects_split_multibyte_digest() {
+        assert_eq!(hash_sha256(&"ab".repeat(32), DigestLabel::Fod).unwrap(), [0xab; 32]);
+        let malformed = format!("aé{}", "0".repeat(61));
+        assert_eq!(malformed.len(), 64);
+        assert!(matches!(
+            hash_sha256(&malformed, DigestLabel::Runtime),
+            Err(Error::InvalidInput(message)) if message == "runtime digest encoding"
+        ));
+    }
 }

@@ -355,8 +355,12 @@ fn receive_remote_transfer_data_chunk_request(
         transferred_bytes,
     };
     let acknowledged =
-        acknowledge_remote_transfer_chunk(policy, &demand.scope, &reserved, &acknowledgement, &observed, progress_step)
-            .map_err(reason)?;
+        acknowledge_remote_transfer_chunk(policy, &demand.scope, &reserved, RemoteTransferAcknowledgementFacts {
+            acknowledgement: &acknowledgement,
+            observed_digest_blake3: &observed,
+            progress_step,
+        })
+        .map_err(reason)?;
     assert!(acknowledged.in_flight.is_empty());
     assert!(acknowledged.acknowledged_chunk_digests.contains(&observed));
     Ok((acknowledged, acknowledgement))
@@ -1399,9 +1403,11 @@ fn transfer_one_chunk(request: TransferChunkRequest<'_>) -> Result<RemoteTransfe
         request.policy,
         &request.demand.scope,
         &reserved,
-        &acknowledgement,
-        &observed,
-        request.progress_step,
+        RemoteTransferAcknowledgementFacts {
+            acknowledgement: &acknowledgement,
+            observed_digest_blake3: &observed,
+            progress_step: request.progress_step,
+        },
     )
     .map_err(reason)?;
     persist_transfer_progress(PersistTransferProgressRequest {
@@ -2384,9 +2390,17 @@ mod tests {
             (sender.join().unwrap(), receiver_state, acknowledgement)
         });
         let observed = acknowledgement.chunk_digest_blake3.clone();
-        let acknowledged_sender =
-            acknowledge_remote_transfer_chunk(policy, &demand.scope, &sender_state, &acknowledgement, &observed, 1)
-                .unwrap();
+        let acknowledged_sender = acknowledge_remote_transfer_chunk(
+            policy,
+            &demand.scope,
+            &sender_state,
+            RemoteTransferAcknowledgementFacts {
+                acknowledgement: &acknowledgement,
+                observed_digest_blake3: &observed,
+                progress_step: 1,
+            },
+        )
+        .unwrap();
         assert_eq!(acknowledged_sender.acknowledged_chunk_digests, receiver_state.acknowledged_chunk_digests,);
         assert!(receiver_chunk_path(&receiver_root, &observed).is_file());
     }

@@ -578,6 +578,59 @@ impl V2Registration<'_> {
         }
         Ok(())
     }
+    fn stage_unit(
+        &mut self,
+        unit: &DynamicUnit,
+        sources: &BTreeMap<SourceId, StorePath<String>>,
+        registered: &BTreeMap<UnitId, StorePath<String>>,
+        store_dir: &str,
+    ) -> Result<StorePath<String>, Error> {
+        let ready = prepare_native_dynamic_unit(unit, sources, registered, self, store_dir)?;
+        let path = ready.drv_path().clone();
+        let absolute = path.to_absolute_path_with_prefix(store_dir);
+        let dynamic_plan_outputs = unit
+            .derivation
+            .dynamic_plan_outputs
+            .iter()
+            .map(|output| output.as_str().to_owned())
+            .collect::<Vec<_>>();
+        match ready.decision() {
+            DynamicRegistrationDecision::AlreadyPresent => {
+                let existing_outputs = if let Some(staged) = self.staged.get(&absolute) {
+                    &staged.dynamic_plan_outputs
+                } else {
+                    &self
+                        .live
+                        .get_by_drv_path(&absolute)
+                        .ok_or_else(|| {
+                            Error::Store(format!("dynamic duplicate `{absolute}` is absent from the registry"))
+                        })?
+                        .dynamic_plan_outputs
+                };
+                if existing_outputs != &dynamic_plan_outputs {
+                    return Err(Error::Store(format!("dynamic duplicate `{absolute}` changed plan outputs")));
+                }
+            }
+            DynamicRegistrationDecision::Insert => {
+                let Some(remaining) = MAX_ENTRIES.checked_sub(self.live.len()) else {
+                    return Err(Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")));
+                };
+                let staged_count = u32::try_from(self.staged.len())
+                    .map_err(|_| Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")))?;
+                if staged_count >= remaining {
+                    return Err(Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")));
+                }
+                self.order.push(absolute.clone());
+                self.staged.insert(absolute, V2StagedUnit {
+                    ready,
+                    dynamic_plan_outputs,
+                });
+                debug_assert_eq!(self.order.len(), self.staged.len());
+                debug_assert!(self.live.len().saturating_add(staged_count) < MAX_ENTRIES);
+            }
+        }
+        Ok(path)
+    }
 }
 
 trait NativeUnitLookup {
@@ -977,6 +1030,7 @@ fn v2_sources_by_id(
     let CanonicalNativePlan::V2(plan) = &accepted.plan else {
         return Err(Error::Store("expected V2 native dynamic plan".to_owned()));
     };
+    let source_count_max = plan.plan.sources.len();
     let mut by_id = BTreeMap::new();
     for source in &plan.plan.sources {
         let path = match source {
@@ -990,8 +1044,13 @@ fn v2_sources_by_id(
                 .and_then(|row| row.admitted_store_path.clone())
                 .ok_or_else(|| Error::Store(format!("source slice '{}' was not admitted", slice.id)))?,
         };
+        if by_id.len() >= source_count_max {
+            return Err(Error::Store("native dynamic source map exceeded validated plan bound".to_string()));
+        }
         by_id.insert(source.id().clone(), path);
+        debug_assert!(by_id.len() <= source_count_max);
     }
+    debug_assert_eq!(by_id.len(), source_count_max);
     Ok(by_id)
 }
 
@@ -1006,6 +1065,8 @@ fn prepare_v2_registration(
     let units_by_id = accepted.plan.units().iter().map(|unit| (unit.id.clone(), unit)).collect::<BTreeMap<_, _>>();
     let mut pending = units_by_id.keys().cloned().collect::<BTreeSet<_>>();
     let mut registered = BTreeMap::new();
+    let registered_count_max = units_by_id.len();
+    debug_assert_eq!(pending.len(), registered_count_max);
     let mut stage = V2Registration {
         live: known_paths,
         staged: BTreeMap::new(),
@@ -1027,46 +1088,9 @@ fn prepare_v2_registration(
         }
         for id in ready_units {
             let unit = units_by_id[&id];
-            let ready = prepare_native_dynamic_unit(unit, &sources, &registered, &stage, store_dir)?;
-            let path = ready.drv_path().clone();
-            let absolute = path.to_absolute_path_with_prefix(store_dir);
-            let dynamic_plan_outputs = unit
-                .derivation
-                .dynamic_plan_outputs
-                .iter()
-                .map(|output| output.as_str().to_owned())
-                .collect::<Vec<_>>();
-            match ready.decision() {
-                DynamicRegistrationDecision::AlreadyPresent => {
-                    let existing_outputs = if let Some(staged) = stage.staged.get(&absolute) {
-                        &staged.dynamic_plan_outputs
-                    } else {
-                        &known_paths
-                            .get_by_drv_path(&absolute)
-                            .ok_or_else(|| {
-                                Error::Store(format!("dynamic duplicate `{absolute}` is absent from the registry"))
-                            })?
-                            .dynamic_plan_outputs
-                    };
-                    if existing_outputs != &dynamic_plan_outputs {
-                        return Err(Error::Store(format!("dynamic duplicate `{absolute}` changed plan outputs")));
-                    }
-                }
-                DynamicRegistrationDecision::Insert => {
-                    let Some(remaining) = MAX_ENTRIES.checked_sub(known_paths.len()) else {
-                        return Err(Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")));
-                    };
-                    let staged_count = u32::try_from(stage.staged.len())
-                        .map_err(|_| Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")))?;
-                    if staged_count >= remaining {
-                        return Err(Error::Store(format!("dynamic registry exceeds MAX_ENTRIES ({MAX_ENTRIES})")));
-                    }
-                    stage.order.push(absolute.clone());
-                    stage.staged.insert(absolute, V2StagedUnit {
-                        ready,
-                        dynamic_plan_outputs,
-                    });
-                }
+            let path = stage.stage_unit(unit, &sources, &registered, store_dir)?;
+            if registered.len() >= registered_count_max {
+                return Err(Error::Store("native dynamic unit map exceeded validated plan bound".to_string()));
             }
             registered.insert(id.clone(), path);
             pending.remove(&id);
@@ -1079,6 +1103,8 @@ fn prepare_v2_registration(
             pending.into_iter().map(|unit| unit.to_string()).collect::<Vec<_>>().join(", ")
         )));
     }
+    debug_assert!(pending.is_empty());
+    debug_assert_eq!(registered.len(), registered_count_max);
     let root_drv_paths = accepted
         .plan
         .roots()
@@ -1137,6 +1163,7 @@ fn prepare_native_dynamic_unit(
 
     let mut derivation = build_native_dynamic_derivation(unit, sources, registered_units, known_paths, store_dir)?;
     let mut parent_hdms = BTreeMap::new();
+    let parent_count_max = derivation.input_derivations.len();
     for parent_drv_path in derivation.input_derivations.keys() {
         let parent_abs = parent_drv_path.to_absolute_path_with_prefix(store_dir);
         let digest = known_paths.native_hdm(&parent_abs).ok_or_else(|| {
@@ -1145,6 +1172,9 @@ fn prepare_native_dynamic_unit(
                 unit.id
             ))
         })?;
+        if parent_hdms.len() >= parent_count_max {
+            return Err(Error::Store("native dynamic parent hashes exceeded input bound".to_string()));
+        }
         parent_hdms.insert(parent_drv_path.as_ref(), digest);
     }
     let hdm = derivation.hash_derivation_modulo_with_store_dir(|parent| parent_hdms[parent], store_dir);
@@ -1242,6 +1272,30 @@ fn build_native_dynamic_derivation(
     })
 }
 
+fn dynamic_output_binding(
+    known_paths: &impl NativeUnitLookup,
+    drv_abs: &str,
+    dependency: &UnitId,
+    output: &OutputName,
+    store_dir: &str,
+) -> Result<Option<StorePathString>, Error> {
+    debug_assert!(drv_abs.starts_with(store_dir));
+    debug_assert!(!output.as_str().is_empty());
+    if let Some(path) = known_paths.native_output(drv_abs, output.as_str()) {
+        return admit_dynamic_binding_path(path.to_absolute_path_with_prefix(store_dir), store_dir).map(Some);
+    }
+    if !known_paths.native_is_ca(drv_abs) {
+        return Ok(None);
+    }
+    // A CA output has a provisional path until its signed realization.
+    let provisional = known_paths
+        .native_provisional(drv_abs, output.as_str())
+        .ok_or_else(|| Error::Store(format!("native dynamic CA unit {dependency}:{output} has no provisional path")))?;
+    let path = String::from_utf8(provisional.to_vec())
+        .map_err(|_| Error::Store(format!("native dynamic CA unit {dependency}:{output} path is not UTF-8")))?;
+    admit_dynamic_binding_path(path, store_dir).map(Some)
+}
+
 fn dynamic_placeholder_bindings(
     unit: &DynamicUnit,
     sources: &BTreeMap<SourceId, StorePath<String>>,
@@ -1291,25 +1345,9 @@ fn dynamic_placeholder_bindings(
                 })?;
                 let drv_abs = drv_path.to_absolute_path_with_prefix(store_dir);
                 let binding_key = (dependency.clone(), output.clone());
-                if let Some(path) = known_paths.native_output(&drv_abs, output.as_str()) {
-                    if output_bindings.len() >= binding_count_max {
-                        return Err(Error::Store("native dynamic output bindings exceeded input bound".to_string()));
-                    }
-                    let binding_path =
-                        admit_dynamic_binding_path(path.to_absolute_path_with_prefix(store_dir), store_dir)?;
-                    output_bindings.insert(binding_key, binding_path);
-                } else if known_paths.native_is_ca(&drv_abs) {
-                    // CA outputs have a provisional path until their signed
-                    // realization. Staged and live parents use the same rule.
-                    let provisional = known_paths.native_provisional(&drv_abs, output.as_str()).ok_or_else(|| {
-                        Error::Store(format!("native dynamic CA unit {dependency}:{output} has no provisional path"))
-                    })?;
-                    let binding_path = admit_dynamic_binding_path(
-                        String::from_utf8(provisional.to_vec()).map_err(|_| {
-                            Error::Store(format!("native dynamic CA unit {dependency}:{output} path is not UTF-8"))
-                        })?,
-                        store_dir,
-                    )?;
+                if let Some(binding_path) =
+                    dynamic_output_binding(known_paths, &drv_abs, dependency, output, store_dir)?
+                {
                     if output_bindings.len() >= binding_count_max {
                         return Err(Error::Store("native dynamic output bindings exceeded input bound".to_string()));
                     }
@@ -2151,6 +2189,14 @@ impl Worker {
         Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_count_max})")))
     }
 
+    #[allow(
+        tigerstyle::ambient_clock,
+        reason = "watch coordinator shell reads monotonic clock for deadlines"
+    )]
+    fn watch_deadline_after(duration: std::time::Duration) -> tokio::time::Instant {
+        tokio::time::Instant::now() + duration
+    }
+
     /// Run consecutive complete root selections against the same goal registry.
     /// CandidateReady follows observed stale teardown; dispatch follows its matching commit token.
     pub async fn run_watch<BServ>(
@@ -2166,13 +2212,15 @@ impl Worker {
         if self.watch_cancellations.is_some() {
             return Err(Error::Store("watch worker is already running".to_string()));
         }
+        let max_jobs = usize::try_from(self.max_jobs)
+            .map_err(|_| Error::Store("watch job capacity exceeds platform limit".to_string()))?;
         self.watch_cancellations = Some(HashMap::new());
         let mut outcomes = Vec::new();
         let mut all_outcomes = Vec::new();
         let mut failed = Vec::new();
         let mut native_dynamic_plans = Vec::new();
         let mut state = WorkerLoopState {
-            sem: Arc::new(Semaphore::new(self.max_jobs as usize)),
+            sem: Arc::new(Semaphore::new(max_jobs)),
             join_set: JoinSet::new(),
             pending_meta: HashMap::new(),
             outcomes: &mut outcomes,
@@ -2214,8 +2262,12 @@ impl Worker {
     fn watch_request_cancellation(&self, stale: &[String]) {
         if let Some(senders) = self.watch_cancellations.as_ref() {
             for key in stale {
-                if let Some(sender) = senders.get(key) {
-                    let _ = sender.send(true);
+                let Some(sender) = senders.get(key) else {
+                    continue;
+                };
+                if sender.send(true).is_err() {
+                    // The receiver has completed; JoinSet still owns teardown observation.
+                    debug!(goal = %key, "watch cancellation receiver already closed");
                 }
             }
         }
@@ -2242,11 +2294,11 @@ impl Worker {
                     return Err(Error::Store(format!("watch incoming derivation identity collision: {key}")));
                 }
                 if let Some(existing) = known_paths.get_by_drv_path(&key) {
-                    if existing.hash_derivation_modulo != *hdm
-                        || existing.derivation.as_ref() != derivation
-                        || existing.content_addressed != *content_addressed
-                        || existing.dynamic_plan_outputs != *dynamic_plan_outputs
-                    {
+                    let is_same_derivation =
+                        existing.hash_derivation_modulo == *hdm && existing.derivation.as_ref() == derivation;
+                    let is_same_policy = existing.content_addressed == *content_addressed
+                        && existing.dynamic_plan_outputs == *dynamic_plan_outputs;
+                    if !is_same_derivation || !is_same_policy {
                         return Err(Error::Store(format!("watch incoming registered derivation changed: {key}")));
                     }
                 } else {
@@ -2254,8 +2306,9 @@ impl Worker {
                 }
             }
         }
-        let metadata_count = usize::try_from(known_paths.len()).unwrap_or(usize::MAX);
-        if metadata_count.saturating_add(new_metadata.len()) > crate::registry::MAX_ENTRIES as usize {
+        let new_metadata_count = u32::try_from(new_metadata.len())
+            .map_err(|_| Error::Store("watch incoming derivation registry capacity exceeded".to_string()))?;
+        if known_paths.len().checked_add(new_metadata_count).is_none_or(|count| count > MAX_ENTRIES) {
             return Err(Error::Store("watch incoming derivation registry capacity exceeded".to_string()));
         }
         let mut reachable: BTreeSet<String> =
@@ -2265,7 +2318,7 @@ impl Worker {
             update.roots.iter().map(|message| message.drv_path.to_absolute_path_with_prefix(prefix)).collect();
         while let Some(path) = queue.pop_front() {
             reachable.insert(path.clone());
-            if reachable.len() > MAX_GOALS as usize {
+            if u32::try_from(reachable.len()).map_or(true, |count| count > MAX_GOALS) {
                 return Err(Error::Store("watch incoming live goal capacity exceeded".to_string()));
             }
             if !visited.insert(path.clone()) {
@@ -2302,7 +2355,7 @@ impl Worker {
         Ok(WatchPending {
             generation,
             stale,
-            deadline: tokio::time::Instant::now() + WATCH_CANCELLATION_DEADLINE,
+            deadline: Self::watch_deadline_after(WATCH_CANCELLATION_DEADLINE),
             reported: false,
         })
     }
@@ -2366,7 +2419,7 @@ impl Worker {
             if !live.insert(path.clone()) {
                 continue;
             }
-            if live.len() > MAX_GOALS as usize {
+            if u32::try_from(live.len()).map_or(true, |count| count > MAX_GOALS) {
                 return Err(Error::Store("watch retained metadata exceeds goal limit".to_string()));
             }
             let entry = known_paths
@@ -2445,39 +2498,38 @@ impl Worker {
         let mut candidate: Option<(u64, oneshot::Receiver<()>, tokio::time::Instant)> = None;
         let mut active: Option<u64> = None;
         let mut settled: Option<u64> = None;
-        let mut closed = false;
+        let mut is_closed = false;
         loop {
             if pending.is_none() {
                 if let Some(update) = queued.take() {
                     candidate = None;
                     pending = Some(self.watch_begin_update(update, known_paths)?);
                     active = None;
-                } else if closed {
+                } else if is_closed {
                     candidate = None;
+                    let stale = self.registry.watch_retract_roots(&BTreeSet::new())?;
+                    self.watch_request_cancellation(&stale);
                     pending = Some(WatchPending {
                         generation: 0,
-                        stale: self.registry.watch_retract_roots(&BTreeSet::new())?,
-                        deadline: tokio::time::Instant::now() + WATCH_CANCELLATION_DEADLINE,
+                        stale,
+                        deadline: Self::watch_deadline_after(WATCH_CANCELLATION_DEADLINE),
                         reported: false,
                     });
-                    self.watch_request_cancellation(&pending.as_ref().expect("installed").stale);
                     active = None;
                 }
             }
-            if pending
-                .as_ref()
-                .is_some_and(|wait| !wait.stale.iter().any(|key| state.pending_meta.contains_key(key)))
+            if let Some(wait) =
+                pending.take_if(|wait| !wait.stale.iter().any(|key| state.pending_meta.contains_key(key)))
             {
-                let wait = pending.take().expect("checked");
                 self.watch_finish_retraction(&wait.stale, builder, known_paths, state)?;
-                if closed {
+                if is_closed {
                     if state.join_set.is_empty() {
                         return Ok(());
                     }
                 } else if queued.is_none() {
                     active = None;
                     let (commit, receiver) = oneshot::channel();
-                    candidate = Some((wait.generation, receiver, tokio::time::Instant::now() + WATCH_COMMIT_DEADLINE));
+                    candidate = Some((wait.generation, receiver, Self::watch_deadline_after(WATCH_COMMIT_DEADLINE)));
                     Self::watch_emit(events, WatchWorkerEvent::CandidateReady {
                         generation: wait.generation,
                         commit,
@@ -2488,7 +2540,7 @@ impl Worker {
             }
             if let Some(generation) = active
                 && pending.is_none()
-                && !closed
+                && !is_closed
             {
                 self.dispatch_ready(builder, known_paths, state, &mut None).await?;
                 if self.registry.all_roots_terminal() && settled != Some(generation) {
@@ -2532,16 +2584,16 @@ impl Worker {
                     settled = Some(generation);
                 }
             }
-            if closed && pending.is_none() && state.join_set.is_empty() {
+            if is_closed && pending.is_none() && state.join_set.is_empty() {
                 return Ok(());
             }
             let deadline = pending
                 .as_ref()
-                .map_or_else(|| tokio::time::Instant::now() + WATCH_CANCELLATION_DEADLINE, |wait| wait.deadline);
+                .map_or_else(|| Self::watch_deadline_after(WATCH_CANCELLATION_DEADLINE), |wait| wait.deadline);
             let mut waiting_commit = candidate.take();
             let commit_deadline = waiting_commit
                 .as_ref()
-                .map_or_else(|| tokio::time::Instant::now() + WATCH_COMMIT_DEADLINE, |(_, _, deadline)| *deadline);
+                .map_or_else(|| Self::watch_deadline_after(WATCH_COMMIT_DEADLINE), |(_, _, deadline)| *deadline);
             tokio::select! {
                 biased;
                 join = state.join_set.join_next(), if !state.join_set.is_empty() => {
@@ -2550,7 +2602,7 @@ impl Worker {
                             builder, known_paths, state).await?;
                     }
                 }
-                update = updates.recv(), if !closed => {
+                update = updates.recv(), if !is_closed => {
                     match update {
                         Some(update) => {
                             queued = Some(update);
@@ -2563,7 +2615,7 @@ impl Worker {
                             }
                         }
                         None => {
-                            closed = true;
+                            is_closed = true;
                             queued = None;
                             waiting_commit = None;
                         }
@@ -2575,10 +2627,12 @@ impl Worker {
                         None => std::future::pending().await,
                     }
                 }, if waiting_commit.is_some() => {
-                    let generation = waiting_commit.take().expect("guarded").0;
-                    if response.is_ok() && pending.is_none() && queued.is_none() && !closed {
-                        active = Some(generation);
-                        settled = None;
+                    if let Some((generation, _, _)) = waiting_commit.take() {
+                        let is_commit_current = pending.is_none() && queued.is_none() && !is_closed;
+                        if response.is_ok() && is_commit_current {
+                            active = Some(generation);
+                            settled = None;
+                        }
                     }
                     // A dropped token rejects the candidate without killing
                     // the watch session. Await the rollback update.
@@ -2812,13 +2866,13 @@ impl Worker {
         let mut native_scan = self
             .scan_native_dynamic_plans(drv_key, &outcome, builder, known_paths.store_dir(), &declared_native_outputs)
             .await?;
-        let mut admitted_reports = Vec::with_capacity(native_scan.accepted.len());
+        let mut admitted_plan_rows = Vec::with_capacity(native_scan.accepted.len());
         for mut accepted in native_scan.accepted.drain(..) {
             let mut staged = None;
             match self.admit_v2_source_slices(&mut accepted, &outcome, known_paths, builder, &mut staged).await? {
                 Some(rejection) => native_scan.rejected.push(rejection),
                 None => {
-                    admitted_reports.push(native_plan_report_from_accepted(&accepted));
+                    admitted_plan_rows.push(native_plan_report_from_accepted(&accepted));
                     info!(
                         producer = %accepted.producer_key,
                         output = %accepted.output_name,
@@ -2831,7 +2885,7 @@ impl Worker {
             }
         }
         self.log_native_dynamic_plan_scan(&native_scan);
-        state.native_dynamic_plans.extend(admitted_reports);
+        state.native_dynamic_plans.extend(admitted_plan_rows);
         state.native_dynamic_plans.extend(native_plan_reports_from_scan(&native_scan));
         for rejected in native_scan.rejected {
             self.native_plan_binding_facts
@@ -3640,22 +3694,22 @@ impl Worker {
                             }
                             Ok(Ok(result)) => Ok(result),
                             Ok(Err(error)) => {
-                                let unobserved_fetch = error
+                                let is_unobserved_fetch = error
                                     .get_ref()
                                     .and_then(|inner| {
                                         inner.downcast_ref::<crate::fetch_build_service::UnobservedWatchFetch>()
                                     })
                                     .is_some();
                                 #[cfg(target_os = "linux")]
-                                let unobserved_sandbox = error
+                                let is_unobserved_sandbox = error
                                     .get_ref()
                                     .and_then(|inner| {
                                         inner.downcast_ref::<snix_build::buildservice::UnobservedWatchSandbox>()
                                     })
                                     .is_some();
                                 #[cfg(not(target_os = "linux"))]
-                                let unobserved_sandbox = false;
-                                if unobserved_fetch || unobserved_sandbox {
+                                let is_unobserved_sandbox = false;
+                                if is_unobserved_fetch || is_unobserved_sandbox {
                                     // Retain JoinSet ownership and acquired reservation.
                                     std::future::pending::<()>().await;
                                 }

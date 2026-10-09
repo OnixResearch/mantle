@@ -167,6 +167,8 @@ pub const fn transition(phase: Phase, direction: Direction, frame: FrameKind) ->
             });
         }
     };
+    debug_assert!(!matches!(next, P::Open));
+    debug_assert!(matches!(next, P::Failed) == matches!(frame, F::Error));
     Ok(next)
 }
 

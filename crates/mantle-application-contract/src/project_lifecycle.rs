@@ -331,13 +331,17 @@ pub trait ProjectEffectPort {
     fn write_retention(&mut self, manifest: &Self::Manifest, lock: &Self::Lock) -> Result<(), Self::Error>;
 }
 
+/// Permissions admitted for project resolution. Process access can remain
+/// available for local freshness checks even when network access is denied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProjectEffectPermissions {
+    pub is_network_allowed: bool,
+    pub is_process_allowed: bool,
+}
+
 /// Decide all possible calls before the first effect. Conditional writes are
 /// observed as skipped, not dropped or retroactively planned.
-pub fn project_effect_plan(
-    operation: ProjectOperation,
-    network_allowed: bool,
-    process_allowed: bool,
-) -> ProjectEffectPlan {
+pub fn project_effect_plan(operation: ProjectOperation, permissions: ProjectEffectPermissions) -> ProjectEffectPlan {
     use ProjectAuthority::ReadFiles;
     use ProjectAuthority::WriteFiles;
     use ProjectEffect::Gitignore;
@@ -352,8 +356,8 @@ pub fn project_effect_plan(
     use ProjectEffect::Resolve;
     use ProjectEffect::RetentionWrite;
     let resolve = ProjectAuthority::Resolve {
-        network_allowed,
-        process_allowed,
+        network_allowed: permissions.is_network_allowed,
+        process_allowed: permissions.is_process_allowed,
     };
     let calls: &[(ProjectEffect, ProjectAuthority, ProjectObservationKind)] = match operation {
         ProjectOperation::Init => &[
@@ -405,6 +409,27 @@ pub fn project_effect_plan(
     ProjectEffectPlan { operation, steps }
 }
 
+/// Compare one planned call with its observation independently of the
+/// command-wide rule for skipping persistence after a write has begun.
+fn is_project_observation_mismatched(step: &ProjectEffectStep, observation: &ProjectEffectObservation) -> bool {
+    let is_identity_mismatched = step.effect != observation.effect
+        || step.target != observation.target
+        || step.authority != observation.authority
+        || step.expected_observation != observation.kind;
+    let is_usage_mismatched = observation.calls > step.max_calls
+        || observation.items > step.max_items
+        || (observation.calls == 0 && observation.items != 0)
+        || (observation.calls == 0) != (observation.status == ProjectEffectStatus::Skipped);
+    let is_readback_mismatched = !matches!(
+        (step.expected_observation, observation.status, observation.readback_matches),
+        (ProjectObservationKind::CallResult, _, None)
+            | (ProjectObservationKind::FileReadback, ProjectEffectStatus::Succeeded, Some(true))
+            | (ProjectObservationKind::FileReadback, ProjectEffectStatus::Skipped, None)
+            | (ProjectObservationKind::FileReadback, ProjectEffectStatus::Failed, Some(false) | None)
+    );
+    is_identity_mismatched || is_usage_mismatched || is_readback_mismatched
+}
+
 /// Reject identity, authority, output, ordering, or call-limit drift. Conditional
 /// writes may all be skipped when no mutation was needed; a partial write or
 /// failed resolution never becomes a completed operation.
@@ -421,37 +446,22 @@ pub fn classify_project_effects(
     }
     let missing = plan.steps.len().saturating_sub(observations.len());
     let extra = observations.len().saturating_sub(plan.steps.len());
-    let mut persistence_started = false;
-    let mut mismatch = 0_usize;
-    let mut failures = 0_usize;
-    let mut failed_before = false;
+    debug_assert!(missing == 0 || extra == 0);
+    let mut is_persistence_started = false;
+    let mut mismatch = 0_u32;
+    let mut failures = 0_u32;
+    let mut is_failed_before = false;
     for (step, observation) in plan.steps.iter().zip(observations) {
-        if step.effect != observation.effect
-            || step.target != observation.target
-            || step.authority != observation.authority
-            || step.expected_observation != observation.kind
-            || observation.calls > step.max_calls
-            || observation.items > step.max_items
-            || (observation.calls == 0 && observation.items != 0)
-            || (observation.calls == 0) != (observation.status == ProjectEffectStatus::Skipped)
-            || (step.expected_observation == ProjectObservationKind::CallResult
-                && observation.readback_matches.is_some())
-            || (step.expected_observation == ProjectObservationKind::FileReadback
-                && !matches!(
-                    (observation.status, observation.readback_matches),
-                    (ProjectEffectStatus::Succeeded, Some(true))
-                        | (ProjectEffectStatus::Skipped, None)
-                        | (ProjectEffectStatus::Failed, Some(false) | None)
-                ))
-            || (step.conditional
-                && persistence_started
-                && !failed_before
-                && observation.status == ProjectEffectStatus::Skipped)
-        {
+        let is_effect_mismatched = is_project_observation_mismatched(step, observation);
+        let is_skip_after_persistence = step.conditional
+            && is_persistence_started
+            && !is_failed_before
+            && observation.status == ProjectEffectStatus::Skipped;
+        if is_effect_mismatched || is_skip_after_persistence {
             mismatch = mismatch.saturating_add(1);
         }
         if step.conditional && observation.calls > 0 {
-            persistence_started = true;
+            is_persistence_started = true;
         }
         if observation.status == ProjectEffectStatus::Failed
             || (observation.status == ProjectEffectStatus::Skipped && !step.conditional)
@@ -459,18 +469,34 @@ pub fn classify_project_effects(
             failures = failures.saturating_add(1);
         }
         if observation.status == ProjectEffectStatus::Failed {
-            failed_before = true;
+            is_failed_before = true;
         }
     }
+    debug_assert!(mismatch <= u32::from(MAX_PROJECT_EFFECTS_PER_PLAN));
+    debug_assert!(failures <= u32::from(MAX_PROJECT_EFFECTS_PER_PLAN));
     if mismatch > 0 || missing > 0 || extra > 0 {
+        // The plan bounds mismatches and missing effects to seven. A caller
+        // can supply more observations than the u32 report field represents.
+        let Some(unknown_effect_count) = u32::try_from(extra).ok().and_then(|extra| extra.checked_add(mismatch)) else {
+            return ApplicationOutcome::Rejected {
+                unknown_effect_count: 1,
+                missing_effect_count: 0,
+            };
+        };
+        let Ok(missing_effect_count) = u32::try_from(missing) else {
+            return ApplicationOutcome::Rejected {
+                unknown_effect_count: 1,
+                missing_effect_count: 0,
+            };
+        };
         return ApplicationOutcome::Rejected {
-            unknown_effect_count: u32::try_from(mismatch.saturating_add(extra)).unwrap_or(u32::MAX),
-            missing_effect_count: u32::try_from(missing).unwrap_or(u32::MAX),
+            unknown_effect_count,
+            missing_effect_count,
         };
     }
     if failures > 0 {
         return ApplicationOutcome::Failed {
-            failed_effect_count: u32::try_from(failures).unwrap_or(u32::MAX),
+            failed_effect_count: failures,
         };
     }
     ApplicationOutcome::Completed
@@ -479,6 +505,14 @@ pub fn classify_project_effects(
 #[cfg(test)]
 mod tests {
     use super::*;
+    const NO_PERMISSIONS: ProjectEffectPermissions = ProjectEffectPermissions {
+        is_network_allowed: false,
+        is_process_allowed: false,
+    };
+    const LOCAL_ONLY_PERMISSIONS: ProjectEffectPermissions = ProjectEffectPermissions {
+        is_network_allowed: false,
+        is_process_allowed: true,
+    };
 
     fn sample_request() -> ProjectCommand {
         ProjectCommand {
@@ -550,7 +584,7 @@ mod tests {
 
     #[test]
     fn refresh_plans_resolution_and_each_independently_observed_write() {
-        let plan = project_effect_plan(ProjectOperation::Refresh, false, true);
+        let plan = project_effect_plan(ProjectOperation::Refresh, LOCAL_ONLY_PERMISSIONS);
         let mut actual = observations(&plan);
         assert_eq!(plan.steps.len(), 5);
         assert_eq!(plan.steps[1].authority, ProjectAuthority::Resolve {
@@ -569,11 +603,45 @@ mod tests {
     }
 
     #[test]
+    fn resolver_permissions_keep_network_and_process_independent() {
+        let permissions = ProjectEffectPermissions {
+            is_network_allowed: true,
+            is_process_allowed: false,
+        };
+        let plan = project_effect_plan(ProjectOperation::ListStale, permissions);
+        assert_eq!(plan.steps[1].authority, ProjectAuthority::Resolve {
+            network_allowed: true,
+            process_allowed: false,
+        });
+        assert_eq!(plan.steps[0].authority, ProjectAuthority::ReadFiles);
+    }
+
+    #[test]
+    fn rejected_effect_counts_keep_mismatch_extra_and_missing_distinct() {
+        let plan = project_effect_plan(ProjectOperation::Refresh, LOCAL_ONLY_PERMISSIONS);
+        let mut actual = observations(&plan);
+        actual[0].target = ProjectTarget::Resolver;
+        actual[1].status = ProjectEffectStatus::Failed;
+        let extra = actual[0];
+        actual.push(extra);
+        assert_eq!(classify_project_effects(&plan, &actual), crate::envelope::ApplicationOutcome::Rejected {
+            unknown_effect_count: 2,
+            missing_effect_count: 0,
+        });
+        actual.pop();
+        actual.pop();
+        assert_eq!(classify_project_effects(&plan, &actual), crate::envelope::ApplicationOutcome::Rejected {
+            unknown_effect_count: 1,
+            missing_effect_count: 1,
+        });
+    }
+
+    #[test]
     fn resolver_admits_exact_boundary_and_blocks_overbound_before_call() {
-        let refresh = project_effect_plan(ProjectOperation::Refresh, false, true);
+        let refresh = project_effect_plan(ProjectOperation::Refresh, LOCAL_ONLY_PERMISSIONS);
         assert!(refresh.admit_resolution_count(256).is_ok());
         assert_eq!(refresh.admit_resolution_count(257), Err(ProjectBlocker::TooManyDeclaredEntries));
-        let show = project_effect_plan(ProjectOperation::Show, false, false);
+        let show = project_effect_plan(ProjectOperation::Show, NO_PERMISSIONS);
         assert!(matches!(show.admit_resolution_count(0), Err(ProjectBlocker::Domain(_))));
     }
 
@@ -588,7 +656,7 @@ mod tests {
 
     #[test]
     fn wrong_observation_identity_authority_output_and_limit_are_rejected() {
-        let plan = project_effect_plan(ProjectOperation::Init, false, false);
+        let plan = project_effect_plan(ProjectOperation::Init, NO_PERMISSIONS);
         let base = observations(&plan);
         for corrupt in [
             ProjectEffectObservation {
@@ -621,7 +689,7 @@ mod tests {
 
     #[test]
     fn scaffold_readback_must_observe_matching_bytes_before_success() {
-        let plan = project_effect_plan(ProjectOperation::Init, false, false);
+        let plan = project_effect_plan(ProjectOperation::Init, NO_PERMISSIONS);
         let mut actual = observations(&plan);
         let last = actual.last_mut().unwrap();
         last.readback_matches = Some(false);
@@ -638,7 +706,7 @@ mod tests {
 
     #[test]
     fn unchanged_refresh_skips_all_writes_but_partial_persistence_rejects() {
-        let plan = project_effect_plan(ProjectOperation::Refresh, false, true);
+        let plan = project_effect_plan(ProjectOperation::Refresh, LOCAL_ONLY_PERMISSIONS);
         let mut actual = observations(&plan);
         for observation in &mut actual[2..] {
             observation.calls = 0;
@@ -656,7 +724,7 @@ mod tests {
     }
     #[test]
     fn failed_late_write_keeps_earlier_write_observation_without_claiming_completion() {
-        let plan = project_effect_plan(ProjectOperation::Refresh, false, true);
+        let plan = project_effect_plan(ProjectOperation::Refresh, LOCAL_ONLY_PERMISSIONS);
         let mut actual = observations(&plan);
         actual[3].status = ProjectEffectStatus::Failed;
         actual[4].calls = 0;
@@ -670,7 +738,7 @@ mod tests {
 
     #[test]
     fn skipping_required_init_write_never_claims_a_complete_scaffold() {
-        let plan = project_effect_plan(ProjectOperation::Init, false, false);
+        let plan = project_effect_plan(ProjectOperation::Init, NO_PERMISSIONS);
         let mut actual = observations(&plan);
         actual[2].calls = 0;
         actual[2].items = 0;
@@ -682,7 +750,7 @@ mod tests {
 
     #[test]
     fn early_blocker_and_skipped_conditional_writes_cannot_complete() {
-        let plan = project_effect_plan(ProjectOperation::Upgrade, false, false);
+        let plan = project_effect_plan(ProjectOperation::Upgrade, NO_PERMISSIONS);
         let mut actual = observations(&plan);
         actual[0].status = ProjectEffectStatus::Failed;
         for observation in &mut actual[1..] {

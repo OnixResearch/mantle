@@ -215,36 +215,38 @@ pub fn signed_record_for_outputs(
     hermeticity_mode: HermeticityMode,
     keypair: &KeyPair,
 ) -> Result<SignedActionResultRecord, String> {
-    signed_record_for_outputs_with_action_ref(
-        derivation,
-        outputs,
+    signed_record_for_outputs_with_action_ref(derivation, outputs, SignedRecordContext {
         store_dir,
         hermeticity_mode,
         keypair,
-        action_ref_for_derivation(derivation, store_dir),
-    )
+        action_ref: action_ref_for_derivation(derivation, store_dir),
+    })
+}
+
+pub struct SignedRecordContext<'a> {
+    pub store_dir: &'a str,
+    pub hermeticity_mode: HermeticityMode,
+    pub keypair: &'a KeyPair,
+    pub action_ref: String,
 }
 
 pub fn signed_record_for_outputs_with_action_ref(
     derivation: &Derivation,
     outputs: &BTreeMap<String, PathInfo>,
-    store_dir: &str,
-    hermeticity_mode: HermeticityMode,
-    keypair: &KeyPair,
-    action_ref: String,
+    context: SignedRecordContext<'_>,
 ) -> Result<SignedActionResultRecord, String> {
-    debug_assert!(action_ref.starts_with(ACTION_REF_PREFIX));
-    let producer_identity = keypair.verifying_key.name().to_string();
+    debug_assert!(context.action_ref.starts_with(ACTION_REF_PREFIX));
+    let producer_identity = context.keypair.verifying_key.name().to_string();
     let input = record_input_for_outputs(
-        action_ref,
+        context.action_ref,
         derivation,
         outputs,
-        store_dir,
-        hermeticity_mode,
+        context.store_dir,
+        context.hermeticity_mode,
         producer_identity.clone(),
     )?;
     let record = canonical_action_result(input).map_err(|error| error.code().to_string())?;
-    let signature = keypair.signing_key.sign(record.result_ref.as_bytes()).to_owned();
+    let signature = context.keypair.signing_key.sign(record.result_ref.as_bytes()).to_owned();
     let signed_record = SignedActionResultRecord {
         record,
         record_signatures: vec![DetachedRecordSignature {
@@ -477,6 +479,26 @@ impl SignedDerivationAdmissionError {
     }
 }
 
+fn signed_derivation_file_size(info: &PathInfo, path: &StorePath<String>) -> Option<u64> {
+    let Node::File { size, .. } = &info.node else {
+        return None;
+    };
+    if info.store_path != *path || *size == 0 || *size > MAX_SIGNED_DERIVATION_BYTES {
+        return None;
+    }
+    Some(*size)
+}
+
+fn signed_derivation_metadata_is_bounded(info: &PathInfo) -> bool {
+    if info.nar_size == 0 || info.nar_size > MAX_SIGNED_DERIVATION_NAR_BYTES || info.ca.is_some() {
+        return false;
+    }
+    if info.signatures.is_empty() || info.signatures.len() > MAX_SIGNED_DERIVATION_SIGNATURES {
+        return false;
+    }
+    !info.signatures.iter().any(|signature| signature.name().len() > MAX_SIGNED_DERIVATION_SIGNER_BYTES)
+}
+
 /// Bind the requested logical `.drv` to actual bounded ATerm bytes in CAS.
 /// Metadata signatures are verified with full configured public keys, then
 /// the NAR digest is measured rather than accepted from signed metadata alone.
@@ -486,11 +508,13 @@ pub async fn verify_signed_store_derivation<'a>(
 ) -> Result<VerifiedStoreDerivation<'a>, SignedDerivationAdmissionError> {
     use SignedDerivationAdmissionError as Failure;
 
-    if !source.store_dir.starts_with('/')
-        || !path.name().ends_with(".drv")
-        || source.trusted_keys.is_empty()
-        || source.trusted_keys.len() > MAX_SIGNED_DERIVATION_SIGNATURES
-    {
+    if !source.store_dir.starts_with('/') {
+        return Err(Failure::Identity);
+    }
+    if !path.name().ends_with(".drv") {
+        return Err(Failure::Identity);
+    }
+    if source.trusted_keys.is_empty() || source.trusted_keys.len() > MAX_SIGNED_DERIVATION_SIGNATURES {
         return Err(Failure::Identity);
     }
     let info = source
@@ -499,18 +523,8 @@ pub async fn verify_signed_store_derivation<'a>(
         .await
         .map_err(|_| Failure::UntrustedDerivation)?
         .ok_or(Failure::MissingDerivation)?;
-    let Node::File { size, .. } = &info.node else {
-        return Err(Failure::Identity);
-    };
-    if *size == 0
-        || *size > MAX_SIGNED_DERIVATION_BYTES
-        || info.nar_size == 0
-        || info.nar_size > MAX_SIGNED_DERIVATION_NAR_BYTES
-        || info.ca.is_some()
-        || info.signatures.is_empty()
-        || info.signatures.len() > MAX_SIGNED_DERIVATION_SIGNATURES
-        || info.signatures.iter().any(|signature| signature.name().len() > MAX_SIGNED_DERIVATION_SIGNER_BYTES)
-    {
+    let size_bytes = signed_derivation_file_size(&info, path).ok_or(Failure::Identity)?;
+    if !signed_derivation_metadata_is_bounded(&info) {
         return Err(Failure::Identity);
     }
     let references: Vec<StorePathRef<'_>> = info.references.iter().map(StorePath::as_ref).collect();
@@ -535,15 +549,20 @@ pub async fn verify_signed_store_derivation<'a>(
     if measured != (info.nar_size, info.nar_sha256) {
         return Err(Failure::UntrustedDerivation);
     }
+    debug_assert!(info.nar_size >= size_bytes);
     let bytes = source
         .build_store
         .read_file_node(&info.node, MAX_SIGNED_DERIVATION_BYTES)
         .await
         .map_err(|_| Failure::IncompleteDerivation)?;
+    if bytes.len() as u64 != size_bytes {
+        return Err(Failure::IncompleteDerivation);
+    }
     let derivation = Derivation::from_aterm_bytes(&bytes).map_err(|_| Failure::Identity)?;
     if derivation.to_aterm_bytes_with_store_dir(source.store_dir) != bytes {
         return Err(Failure::Identity);
     }
+    debug_assert!(bytes.len() as u64 <= MAX_SIGNED_DERIVATION_BYTES);
     Ok(VerifiedStoreDerivation {
         path: path.clone(),
         derivation,
@@ -614,8 +633,10 @@ pub async fn admit_signed_derivation_outputs(
                 probes.entry(result_ref).or_insert(probe.outputs);
             }
             candidates.push(DiscoveredActionResultCandidate { signed_record, facts });
+            debug_assert!(probes.len() <= candidates.len());
         }
     }
+    debug_assert_eq!(candidates.len(), candidate_count);
     let plan = plan_strong_reuse(request, candidates).map_err(|_| Failure::UntrustedResult)?;
     if plan.conflict_class.is_some() || plan.candidate_decisions.iter().filter(|decision| decision.admitted).count() > 1
     {
@@ -623,13 +644,7 @@ pub async fn admit_signed_derivation_outputs(
     }
     let selected = plan.selected_result_ref.ok_or(Failure::UntrustedResult)?;
     let outputs = probes.remove(&selected).ok_or(Failure::UntrustedResult)?;
-    if outputs.len() != derivation.outputs.len()
-        || derivation.outputs.iter().any(|(name, declaration)| {
-            outputs
-                .get(name)
-                .is_none_or(|info| declaration.path.as_ref().is_some_and(|expected| expected != &info.store_path))
-        })
-    {
+    if !outputs_match_declared_paths(derivation, &outputs) {
         return Err(Failure::UntrustedResult);
     }
     Ok(Some(AdmittedSignedDerivationOutputs {
@@ -1249,14 +1264,12 @@ mod tests {
         let action_ref = action_ref_for_bound_roots(&derivation, &bindings, "/mantle/store").unwrap();
         let outputs = BTreeMap::from([("out".to_owned(), path_info())]);
         let keypair = keypair();
-        let signed = signed_record_for_outputs_with_action_ref(
-            &derivation,
-            &outputs,
-            "/mantle/store",
-            HermeticityMode::Strict,
-            &keypair,
-            action_ref.clone(),
-        )
+        let signed = signed_record_for_outputs_with_action_ref(&derivation, &outputs, SignedRecordContext {
+            store_dir: "/mantle/store",
+            hermeticity_mode: HermeticityMode::Strict,
+            keypair: &keypair,
+            action_ref: action_ref.clone(),
+        })
         .unwrap();
         let trusted = std::slice::from_ref(&keypair.verifying_key);
         let admitted = candidate_admission_facts_with_action_ref(

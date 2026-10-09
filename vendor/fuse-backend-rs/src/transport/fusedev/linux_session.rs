@@ -540,20 +540,19 @@ fn fuse_fusermount_mount(
     };
     // Old version of fusermount doesn't support long --options, yet.
     info!("fuse_fusermount_mount: _FUSE_COMMFD={}", send.as_raw_fd());
+    // A child helper must not bypass its caller's structured error channel.
+    // Preserve its exit status as SessionFailure for fallback and diagnostics.
     let mut proc = cmd
         .env("_FUSE_COMMFD", format!("{}", send.as_raw_fd()))
         .arg("-o")
         .arg(&opts)
         .arg("--")
         .arg(mountpoint)
+        .stderr(std::process::Stdio::null())
         .spawn()
         .map_err(IoError)?;
 
-    if auto_unmount {
-        std::thread::spawn(move || {
-            let _ = proc.wait();
-        });
-    } else {
+    if !auto_unmount {
         match proc.wait().map_err(IoError)?.code() {
             Some(0) => {}
             exit_code => {
@@ -563,14 +562,34 @@ fn fuse_fusermount_mount(
     }
     drop(send);
 
-    match vmm_sys_util::sock_ctrl_msg::ScmSocket::recv_with_fd(&recv, &mut [0u8; 8]).map_err(|e| {
-        SessionFailure(format!("Unexpected error when receiving fuse file descriptor from fusermount: {}", e))
-    })? {
-        (_recv_bytes, Some(file)) => Ok((file, if auto_unmount { Some(recv) } else { None })),
-        (recv_bytes, None) => Err(SessionFailure(format!(
-            "fusermount did not send a file descriptor.  We received {recv_bytes} bytes."
-        ))),
+    let failure = match vmm_sys_util::sock_ctrl_msg::ScmSocket::recv_with_fd(&recv, &mut [0u8; 8]) {
+        Ok((_recv_bytes, Some(file))) => {
+            if auto_unmount {
+                std::thread::spawn(move || {
+                    let _ = proc.wait();
+                });
+            }
+            return Ok((file, if auto_unmount { Some(recv) } else { None }));
+        }
+        Ok((recv_bytes, None)) => {
+            format!("fusermount did not send a file descriptor.  We received {recv_bytes} bytes.")
+        }
+        Err(error) => format!("Unexpected error when receiving fuse file descriptor from fusermount: {error}"),
+    };
+    // A failed mount cannot retain the receiver for auto-unmount. Close it
+    // before waiting: fusermount may not exit until that socket is closed.
+    drop(recv);
+    if auto_unmount {
+        match proc.wait().map_err(IoError)?.code() {
+            Some(0) => {}
+            exit_code => {
+                return Err(SessionFailure(format!(
+                    "{failure} Unexpected exit code when running fusermount: {exit_code:?}"
+                )))
+            }
+        }
     }
+    Err(SessionFailure(failure))
 }
 
 /// Umount a fuse file system
@@ -605,6 +624,7 @@ fn fuse_fusermount_umount(mountpoint: &str, fusermount: &str) -> Result<()> {
         .arg("--lazy")
         .arg("--")
         .arg(mountpoint)
+        .stderr(std::process::Stdio::null())
         .status()
         .map_err(IoError)?
         .code()
@@ -679,6 +699,40 @@ mod tests {
         se.umount().unwrap();
         se.set_fuse_file(cloned_file);
         se.mount().unwrap();
+    }
+
+    #[test]
+    fn test_fusermount_failure_stderr_stays_in_helper() {
+        const CHILD: &str = "MANTLE_TEST_FUSERMOUNT_STDERR_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            let dir = TempDir::new().unwrap();
+            let helper = dir.as_path().join("failing-fusermount");
+            std::fs::write(&helper, "#!/bin/sh\nprintf 'raw mount failure\\n' >&2\nexit 23\n").unwrap();
+            let mut permissions = std::fs::metadata(&helper).unwrap().permissions();
+            permissions.set_mode(0o755);
+            std::fs::set_permissions(&helper, permissions).unwrap();
+            let helper = helper.to_str().unwrap();
+
+            let mount_error =
+                fuse_fusermount_mount(dir.as_path(), "fuse", "", String::new(), MsFlags::empty(), false, None, helper)
+                    .unwrap_err();
+            assert!(matches!(mount_error, SessionFailure(message) if message.contains("Some(23)")));
+            let auto_unmount_error =
+                fuse_fusermount_mount(dir.as_path(), "fuse", "", String::new(), MsFlags::empty(), true, None, helper)
+                    .unwrap_err();
+            assert!(matches!(auto_unmount_error, SessionFailure(message) if message.contains("Some(23)")));
+            let unmount_error = fuse_fusermount_umount(dir.as_path().to_str().unwrap(), helper).unwrap_err();
+            assert!(matches!(unmount_error, SessionFailure(message) if message.contains("Some(23)")));
+            return;
+        }
+
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("test_fusermount_failure_stderr_stays_in_helper")
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "helper subprocess failed: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.stderr.is_empty(), "fusermount helper leaked into caller stderr: {:?}", output.stderr);
     }
 }
 

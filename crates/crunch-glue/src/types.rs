@@ -57,6 +57,8 @@ pub fn validate_plan_output_ref(reference: &PlanOutputRef) -> Result<(), String>
             reference.plan_output, reference.producer.name
         ));
     }
+    debug_assert!(reference.name.len() <= 64);
+    debug_assert!(reference.producer.outputs.contains(&reference.plan_output));
     Ok(())
 }
 

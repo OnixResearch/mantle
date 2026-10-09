@@ -839,8 +839,14 @@ fn physical_production_signed_output_and_fenced_transfer_match_original_semantic
     let (ticket_id, bearer) = production_ticket(&fixture, 16 * 1024 * 1024);
     assert_eq!(production_ticket_uses(&fixture, &ticket_id), expected["ticket_uses_before"]);
     let wrapper = root.path().join("capture-worker-response.sh");
-    fs::write(&wrapper, b"#!/usr/bin/env bash\nset -euo pipefail\n\"$MANTLE_TEST_BIN\" \"$@\" | (ulimit -f 512; umask 077; tee \"$MANTLE_TEST_WIRE_OUTPUT\")\n")
-        .expect("private bounded response-only worker wrapper");
+    let configured_shell = std::env::var("MANTLE_TEST_SCRIPT_SHELL");
+    let shell = configured_shell.as_deref().unwrap_or("/usr/bin/env bash");
+    let mut script = fs::File::create(&wrapper).expect("private bounded response-only worker wrapper");
+    writeln!(script, "#!{shell}").expect("write worker wrapper interpreter");
+    script
+        .write_all(b"set -euo pipefail\n\"$MANTLE_TEST_BIN\" \"$@\" | (ulimit -f 512; umask 077; tee \"$MANTLE_TEST_WIRE_OUTPUT\")\n")
+        .expect("write bounded response-only worker wrapper");
+    drop(script);
     fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).expect("private worker wrapper mode");
     // Dispatch matches the Worker's signer name; full-public-key store verification follows import.
     let trusted_builder_name = crunch_build::load_keypair(SIGNING_KEY)

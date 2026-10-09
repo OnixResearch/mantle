@@ -41,6 +41,15 @@ Notes:
 - Vendored workspace-member test binaries stay on their focused rails because
   some require host capabilities such as a usable FUSE mount. Their libraries
   still compile through first-party consumers.
+- `vendor/fuse-backend-rs/` is the local Cargo patch of the crates.io
+  `fuse-backend-rs` 0.12.0 source. Mantle's local edit to
+  `src/transport/fusedev/linux_session.rs` prevents mount and unmount helper
+  stderr from bypassing the CLI's JSON report; a nonzero helper exit returns
+  `SessionFailure`, including auto-unmount startup that returns no FUSE fd.
+  Run
+  `cargo test -p fuse-backend-rs --lib test_fusermount_failure_stderr_stays_in_helper`
+  to check mount, auto-unmount, and unmount failures with a fake executable,
+  without claiming a working host FUSE mount or pristine upstream source.
 - The wrapper serializes libtest cases so process-global environment, lock,
   and resource-pressure fixtures cannot interfere across otherwise unrelated
   tests. Tests that own concurrency still exercise it internally.

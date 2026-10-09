@@ -91,33 +91,36 @@ where I: IntoIterator<Item = ExpectedOutputFacts<'output>> {
             return Err(PlanBlocker::EnvValueExceeded);
         }
     }
+    debug_assert!(facts.command_args.len() <= MAX_EXECUTOR_ARGS);
+    debug_assert!(facts.command_env.len() <= MAX_EXECUTOR_ENV_VARS);
     let mut hasher = blake3::Hasher::new();
-    hash_labeled(&mut hasher, "request-id", facts.request_id);
-    hash_labeled(&mut hasher, "store-prefix", facts.store_prefix);
+    hash_labeled(&mut hasher, ("request-id", facts.request_id));
+    hash_labeled(&mut hasher, ("store-prefix", facts.store_prefix));
     hash_source(&mut hasher, facts.source);
-    hash_labeled(&mut hasher, "system", facts.system);
+    hash_labeled(&mut hasher, ("system", facts.system));
     for arg in facts.command_args {
-        hash_labeled(&mut hasher, "command-arg", arg);
+        hash_labeled(&mut hasher, ("command-arg", arg));
     }
     for (name, value) in facts.command_env {
-        hash_labeled(&mut hasher, "env-name", name);
-        hash_labeled(&mut hasher, "env-value", value);
+        hash_labeled(&mut hasher, ("env-name", name));
+        hash_labeled(&mut hasher, ("env-value", value));
     }
     let mut output_count = 0_usize;
     for output in facts.expected_outputs {
-        output_count += 1;
+        output_count = output_count.saturating_add(1);
         if output_count > MAX_EXPECTED_OUTPUTS {
             return Err(PlanBlocker::ExpectedOutputCountExceeded);
         }
-        hash_labeled(&mut hasher, "output-name", output.name);
+        hash_labeled(&mut hasher, ("output-name", output.name));
         match output.logical_path {
-            Some(logical_path) => hash_labeled(&mut hasher, "output-path", logical_path),
-            None => hash_labeled(&mut hasher, "output-path-state", "content-addressed-unknown"),
+            Some(logical_path) => hash_labeled(&mut hasher, ("output-path", logical_path)),
+            None => hash_labeled(&mut hasher, ("output-path-state", "content-addressed-unknown")),
         }
     }
     if output_count == 0 {
         return Err(PlanBlocker::ExpectedOutputsEmpty);
     }
+    debug_assert!(output_count <= MAX_EXPECTED_OUTPUTS);
     Ok(*hasher.finalize().as_bytes())
 }
 
@@ -153,15 +156,15 @@ impl OrderedOutputReceipt {
     }
 
     pub fn append(&mut self, fields: OutputReceiptFields<'_>) {
-        hash_labeled(&mut self.hasher, "output-name", fields.name);
-        hash_labeled(&mut self.hasher, "output-path", fields.logical_path);
-        hash_labeled(&mut self.hasher, "content-digest", fields.content_digest_blake3);
-        hash_labeled(&mut self.hasher, "artifact-digest", fields.artifact_attestation_digest_blake3);
+        hash_labeled(&mut self.hasher, ("output-name", fields.name));
+        hash_labeled(&mut self.hasher, ("output-path", fields.logical_path));
+        hash_labeled(&mut self.hasher, ("content-digest", fields.content_digest_blake3));
+        hash_labeled(&mut self.hasher, ("artifact-digest", fields.artifact_attestation_digest_blake3));
         hash_labeled_u64(&mut self.hasher, "size-bytes", fields.size_bytes);
-        hash_labeled(&mut self.hasher, "nar-payload-digest", fields.nar_payload_digest_blake3.unwrap_or("<absent>"));
+        hash_labeled(&mut self.hasher, ("nar-payload-digest", fields.nar_payload_digest_blake3.unwrap_or("<absent>")));
         match fields.nar_payload_size_bytes {
             Some(size) => hash_labeled_u64(&mut self.hasher, "nar-payload-size", size),
-            None => hash_labeled(&mut self.hasher, "nar-payload-size", "<absent>"),
+            None => hash_labeled(&mut self.hasher, ("nar-payload-size", "<absent>")),
         }
     }
 
@@ -176,7 +179,7 @@ fn hash_labeled_u64(hasher: &mut blake3::Hasher, label: &str, value: u64) {
     let mut start = decimal.len();
     loop {
         start -= 1;
-        decimal[start] = b'0' + (remaining % 10) as u8;
+        decimal[start] = b'0'.saturating_add((remaining % 10).to_le_bytes()[0]);
         remaining /= 10;
         if remaining == 0 {
             break;
@@ -192,10 +195,10 @@ fn hash_source(hasher: &mut blake3::Hasher, source: ExecutableSourceFacts<'_>) {
             schema,
             spec_digest_blake3,
         } => {
-            hash_labeled(hasher, "source-kind", "action");
-            hash_labeled(hasher, "action-id", action_id);
-            hash_labeled(hasher, "schema", schema);
-            hash_labeled(hasher, "spec-digest", spec_digest_blake3);
+            hash_labeled(hasher, ("source-kind", "action"));
+            hash_labeled(hasher, ("action-id", action_id));
+            hash_labeled(hasher, ("schema", schema));
+            hash_labeled(hasher, ("spec-digest", spec_digest_blake3));
         }
         ExecutableSourceFacts::Derivation {
             declared_drv_path,
@@ -203,16 +206,16 @@ fn hash_source(hasher: &mut blake3::Hasher, source: ExecutableSourceFacts<'_>) {
             drv_name,
             drv_digest_blake3,
         } => {
-            hash_labeled(hasher, "source-kind", "derivation");
-            hash_labeled(hasher, "declared-drv-path", declared_drv_path);
-            hash_labeled(hasher, "computed-drv-path", computed_drv_path);
-            hash_labeled(hasher, "drv-name", drv_name);
-            hash_labeled(hasher, "drv-digest", drv_digest_blake3);
+            hash_labeled(hasher, ("source-kind", "derivation"));
+            hash_labeled(hasher, ("declared-drv-path", declared_drv_path));
+            hash_labeled(hasher, ("computed-drv-path", computed_drv_path));
+            hash_labeled(hasher, ("drv-name", drv_name));
+            hash_labeled(hasher, ("drv-digest", drv_digest_blake3));
         }
     }
 }
 
-fn hash_labeled(hasher: &mut blake3::Hasher, label: &str, value: &str) {
+fn hash_labeled(hasher: &mut blake3::Hasher, (label, value): (&str, &str)) {
     hash_labeled_bytes(hasher, label, value.as_bytes());
 }
 
@@ -224,7 +227,7 @@ fn hash_labeled_bytes(hasher: &mut blake3::Hasher, label: &str, value: &[u8]) {
     let mut start = decimal.len();
     loop {
         start -= 1;
-        decimal[start] = b'0' + (remaining % 10) as u8;
+        decimal[start] = b'0'.saturating_add((remaining % 10).to_le_bytes()[0]);
         remaining /= 10;
         if remaining == 0 {
             break;

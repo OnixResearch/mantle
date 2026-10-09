@@ -195,6 +195,7 @@ pub use project_lifecycle::ProjectBlocker;
 pub use project_lifecycle::ProjectCommand;
 pub use project_lifecycle::ProjectEffect;
 pub use project_lifecycle::ProjectEffectObservation;
+pub use project_lifecycle::ProjectEffectPermissions;
 pub use project_lifecycle::ProjectEffectPlan;
 pub use project_lifecycle::ProjectEffectPort;
 pub use project_lifecycle::ProjectEffectStatus;

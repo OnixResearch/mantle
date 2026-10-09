@@ -229,8 +229,12 @@ pub struct BatchResponseFacts<'a> {
     pub non_claim: &'a str,
 }
 
-pub fn validate_identifier(kind: IdentifierKind, value: &str, max_bytes: usize) -> Result<(), BatchError> {
-    if value.is_empty() || value.len() > max_bytes {
+pub fn validate_identifier(kind: IdentifierKind, value: &str, max_bytes: u64) -> Result<(), BatchError> {
+    if value.is_empty() {
+        return Err(BatchError::IdentifierLength(kind));
+    }
+    let value_bytes = u64::try_from(value.len()).map_err(|_| BatchError::IdentifierLength(kind))?;
+    if value_bytes > max_bytes {
         return Err(BatchError::IdentifierLength(kind));
     }
     if value.chars().any(char::is_control) {
@@ -252,19 +256,25 @@ pub fn validate_limits(limits: BatchLimits, max_timeout: u64, max_reconcile: u32
     Ok(())
 }
 
-pub fn validate_input(
-    facts: BatchInputFacts<'_>,
-    max_identifier_bytes: usize,
-    max_timeout: u64,
-    max_reconcile: u32,
-) -> Result<(), BatchError> {
-    validate_identifier(IdentifierKind::AdapterInstance, facts.adapter_instance_id, max_identifier_bytes)?;
-    validate_identifier(IdentifierKind::WorkerEndpoint, facts.expected_worker_endpoint_id, max_identifier_bytes)?;
-    validate_identifier(IdentifierKind::ProviderClass, facts.provider_class, max_identifier_bytes)?;
+#[derive(Debug, Clone, Copy)]
+pub struct BatchValidationLimits {
+    pub identifier_bytes_max: u64,
+    pub timeout_secs_max: u64,
+    pub reconcile_attempts_max: u32,
+}
+
+pub fn validate_input(facts: BatchInputFacts<'_>, bounds: BatchValidationLimits) -> Result<(), BatchError> {
+    validate_identifier(IdentifierKind::AdapterInstance, facts.adapter_instance_id, bounds.identifier_bytes_max)?;
+    validate_identifier(
+        IdentifierKind::WorkerEndpoint,
+        facts.expected_worker_endpoint_id,
+        bounds.identifier_bytes_max,
+    )?;
+    validate_identifier(IdentifierKind::ProviderClass, facts.provider_class, bounds.identifier_bytes_max)?;
     validate_identifier(
         IdentifierKind::SemanticCapabilityClass,
         facts.semantic_capability_class,
-        max_identifier_bytes,
+        bounds.identifier_bytes_max,
     )?;
     if !is_blake3_hex_digest(facts.dispatcher_profile_ref_blake3)
         || !is_blake3_hex_digest(facts.worker_bootstrap_ref_blake3)
@@ -277,12 +287,14 @@ pub fn validate_input(
     if !is_blake3_hex_digest(facts.normalized_build_key) {
         return Err(BatchError::NormalizedBuildKeyInvalid);
     }
-    validate_limits(facts.limits, max_timeout, max_reconcile)?;
+    debug_assert!(facts.dispatcher_generation > 0);
+    debug_assert!(is_blake3_hex_digest(facts.normalized_build_key));
+    validate_limits(facts.limits, bounds.timeout_secs_max, bounds.reconcile_attempts_max)?;
     match (facts.kind, facts.external_job_id) {
         (BatchKind::Submit | BatchKind::Reconcile, None) => Ok(()),
         (BatchKind::Submit, Some(_)) => Err(BatchError::SubmitExternalJobIdPresent),
         (_, Some(external_job_id)) => {
-            validate_identifier(IdentifierKind::ExternalJobId, external_job_id, max_identifier_bytes)
+            validate_identifier(IdentifierKind::ExternalJobId, external_job_id, bounds.identifier_bytes_max)
         }
         (_, None) => Err(BatchError::ExternalJobIdMissing),
     }
@@ -292,7 +304,7 @@ pub fn validate_followup(
     submit: BatchOperationFacts<'_>,
     kind: BatchKind,
     external_job_id: Option<&str>,
-    max_identifier_bytes: usize,
+    max_identifier_bytes: u64,
 ) -> Result<(), BatchError> {
     if submit.kind != BatchKind::Submit || submit.external_job_id.is_some() {
         return Err(BatchError::FollowupSubmitBasisInvalid);
@@ -328,14 +340,20 @@ pub fn validate_operation(
     if facts.claim_scope != CLAIM_SCOPE || facts.non_claim != NON_CLAIM {
         return Err(BatchError::OperationClaimBoundaryInvalid);
     }
+    debug_assert_eq!(facts.schema, PROTOCOL_SCHEMA);
+    debug_assert_eq!(facts.claim_scope, CLAIM_SCOPE);
     validate_limits(facts.limits, max_timeout, max_reconcile)
+}
+
+pub struct BatchResponseBounds {
+    pub max_identifier_bytes: u64,
+    pub max_reason_bytes: u64,
 }
 
 pub fn validate_response(
     request: BatchOperationFacts<'_>,
     response: BatchResponseFacts<'_>,
-    max_identifier_bytes: usize,
-    max_reason_bytes: usize,
+    bounds: BatchResponseBounds,
 ) -> Result<(), BatchError> {
     if response.schema != PROTOCOL_SCHEMA {
         return Err(BatchError::ResponseSchemaUnsupported);
@@ -357,7 +375,7 @@ pub fn validate_response(
     {
         return Err(BatchError::ResponseAttemptFenceMismatch);
     }
-    validate_identifier(IdentifierKind::ResponseReason, response.reason_code, max_reason_bytes)?;
+    validate_identifier(IdentifierKind::ResponseReason, response.reason_code, bounds.max_reason_bytes)?;
     if response.non_claim != NON_CLAIM {
         return Err(BatchError::ResponseNonClaimInvalid);
     }
@@ -365,13 +383,15 @@ pub fn validate_response(
         return Err(BatchError::ResponseJobIdMissing);
     }
     if let Some(id) = response.external_job_id {
-        validate_identifier(IdentifierKind::ResponseJobId, id, max_identifier_bytes)?;
+        validate_identifier(IdentifierKind::ResponseJobId, id, bounds.max_identifier_bytes)?;
     }
     if let Some(expected) = request.external_job_id
         && response.external_job_id != Some(expected)
     {
         return Err(BatchError::ResponseJobIdConflict);
     }
+    debug_assert_eq!(response.schema, PROTOCOL_SCHEMA);
+    debug_assert_eq!(response.dispatch_id_blake3, request.dispatch_id_blake3);
     Ok(())
 }
 
@@ -382,6 +402,8 @@ pub fn validate_state_transition(previous: BatchState, next: BatchState) -> Resu
     if previous.is_terminal() {
         return Err(BatchError::StateTransitionTerminalConflict);
     }
+    debug_assert_ne!(previous, BatchState::Unknown);
+    debug_assert!(!previous.is_terminal());
     match (previous, next) {
         (BatchState::Submitted, _)
         | (BatchState::Pending, BatchState::Running)
@@ -397,14 +419,18 @@ pub fn validate_state_transition(previous: BatchState, next: BatchState) -> Resu
     }
 }
 
+pub struct ReconcileAttempt {
+    pub attempt: u32,
+    pub max_attempts: u32,
+}
+
 pub fn decide_reconciliation(
     state: BatchState,
     worker_registered: bool,
-    reconcile_attempt: u32,
-    max_reconcile_attempts: u32,
+    reconcile: ReconcileAttempt,
     overall_deadline_exceeded: bool,
 ) -> Result<BatchDecision, BatchError> {
-    if reconcile_attempt > max_reconcile_attempts {
+    if reconcile.attempt > reconcile.max_attempts {
         return Err(BatchError::ReconcileAttemptLimitExceeded);
     }
     if worker_registered {
@@ -413,11 +439,13 @@ pub fn decide_reconciliation(
     if overall_deadline_exceeded {
         return Ok(BatchDecision::MarkLost);
     }
+    debug_assert!(reconcile.attempt <= reconcile.max_attempts);
+    debug_assert!(!worker_registered);
     let decision = match state {
         BatchState::Submitted | BatchState::Pending | BatchState::Running => BatchDecision::AwaitWorkerRegistration,
         BatchState::Unknown => BatchDecision::PreserveUnknown,
         BatchState::Succeeded | BatchState::Failed | BatchState::Cancelled => {
-            if reconcile_attempt < max_reconcile_attempts {
+            if reconcile.attempt < reconcile.max_attempts {
                 BatchDecision::Resubmit
             } else {
                 BatchDecision::MarkLost
@@ -508,7 +536,13 @@ mod tests {
             non_claim: NON_CLAIM,
         };
         assert_eq!(validate_operation(request, 100, 3), Ok(()));
-        assert_eq!(validate_response(request, response, 256, 128), Ok(()));
+        assert_eq!(
+            validate_response(request, response, BatchResponseBounds {
+                max_identifier_bytes: 256,
+                max_reason_bytes: 128,
+            },),
+            Ok(())
+        );
         assert_eq!(
             validate_response(
                 request,
@@ -516,13 +550,48 @@ mod tests {
                     fence_generation: 1,
                     ..response
                 },
-                256,
-                128
+                BatchResponseBounds {
+                    max_identifier_bytes: 256,
+                    max_reason_bytes: 128,
+                }
             ),
             Err(BatchError::ResponseAttemptFenceMismatch)
         );
-        assert_eq!(decide_reconciliation(BatchState::Succeeded, false, 2, 3, false), Ok(BatchDecision::Resubmit));
-        assert_eq!(decide_reconciliation(BatchState::Succeeded, false, 3, 3, false), Ok(BatchDecision::MarkLost));
-        assert_eq!(decide_reconciliation(BatchState::Unknown, true, 1, 3, false), Ok(BatchDecision::Reattach));
+        assert_eq!(
+            decide_reconciliation(
+                BatchState::Succeeded,
+                false,
+                ReconcileAttempt {
+                    attempt: 2,
+                    max_attempts: 3
+                },
+                false,
+            ),
+            Ok(BatchDecision::Resubmit)
+        );
+        assert_eq!(
+            decide_reconciliation(
+                BatchState::Succeeded,
+                false,
+                ReconcileAttempt {
+                    attempt: 3,
+                    max_attempts: 3
+                },
+                false,
+            ),
+            Ok(BatchDecision::MarkLost)
+        );
+        assert_eq!(
+            decide_reconciliation(
+                BatchState::Unknown,
+                true,
+                ReconcileAttempt {
+                    attempt: 1,
+                    max_attempts: 3
+                },
+                false,
+            ),
+            Ok(BatchDecision::Reattach)
+        );
     }
 }

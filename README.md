@@ -95,6 +95,11 @@ The command prints admitted, retained, and retracted goals and their settled
 outputs; invalid edits leave the last admitted goals in place. Removing a
 running goal cancels its sandbox and waits for teardown before admitting the
 replacement set. Ctrl-C or SIGTERM also waits for active sandboxes to stop.
+
+The dependency scan follows parsed imports only. It admits at most 256 watched
+files, reads at most 2 MiB per file and 16 MiB in aggregate, and keeps the
+last admitted goals when an import is unreadable, invalid, or over the bound.
+
 Watch output is human-readable, not the stable `--json` aggregate report;
 `--watch` cannot be combined with remote builders, `--impure`, `--plan`,
 `--causal-trace`, or `--evaluation-stream`.
@@ -777,6 +782,12 @@ The ordinary first-party gate excludes vendored workspace-member test binaries
 whose focused rails require additional host capabilities. Heavy self-hosting,
 release-determinism, remote-build, and sandbox integration rails remain explicit
 operator actions rather than every-edit checks.
+
+The Tiger Style CLI (`nix run .#tigerstyle -- check`) and the Nix
+`checks.<system>.tigerstyle` gate use the same pinned Crane Cargo source map as
+`nix develop`. That map includes the admitted Casita source patch; an ambient
+Cargo registry or the upstream Tiger Style consumer check's independent
+`Cargo.lock` vendor set is not an equivalent Mantle check.
 
 Useful documentation:
 

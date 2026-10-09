@@ -20,19 +20,22 @@ pub enum LeaseReleaseDecision {
     Release,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ReconnectFacts<'a> {
+    pub active_session_id: &'a str,
+    pub candidate_session_id: &'a str,
+    pub attempts: u32,
+    pub max_attempts: u32,
+}
+
 /// A same-session reconnect takes precedence even when retry attempts are
 /// exhausted. A different session can be selected only below the limit.
 // r[impl remote_builds.hexagonal_core]
-pub fn decide_reconnect(
-    active_session_id: &str,
-    candidate_session_id: &str,
-    attempts: u32,
-    max_attempts: u32,
-) -> ReconnectDecision {
-    if active_session_id == candidate_session_id {
+pub fn decide_reconnect(facts: ReconnectFacts<'_>) -> ReconnectDecision {
+    if facts.active_session_id == facts.candidate_session_id {
         return ReconnectDecision::SameSession;
     }
-    if attempts >= max_attempts {
+    if facts.attempts >= facts.max_attempts {
         return ReconnectDecision::BackoffRequired;
     }
     ReconnectDecision::NewSession
@@ -54,10 +57,33 @@ mod tests {
 
     #[test]
     fn same_session_precedes_exhausted_reconnect_attempts() {
-        assert_eq!(decide_reconnect("session-a", "session-a", 3, 3), ReconnectDecision::SameSession);
-        assert_eq!(decide_reconnect("session-a", "session-b", 3, 3), ReconnectDecision::BackoffRequired);
-        assert_eq!(decide_reconnect("session-a", "session-b", 2, 3), ReconnectDecision::NewSession);
-        assert_eq!(decide_reconnect("session-a", "session-b", 0, 0), ReconnectDecision::BackoffRequired);
+        let same_session = ReconnectFacts {
+            active_session_id: "session-a",
+            candidate_session_id: "session-a",
+            attempts: 3,
+            max_attempts: 3,
+        };
+        assert_eq!(decide_reconnect(same_session), ReconnectDecision::SameSession);
+        let different_session = ReconnectFacts {
+            candidate_session_id: "session-b",
+            ..same_session
+        };
+        assert_eq!(decide_reconnect(different_session), ReconnectDecision::BackoffRequired);
+        assert_eq!(
+            decide_reconnect(ReconnectFacts {
+                attempts: 2,
+                ..different_session
+            }),
+            ReconnectDecision::NewSession
+        );
+        assert_eq!(
+            decide_reconnect(ReconnectFacts {
+                attempts: 0,
+                max_attempts: 0,
+                ..different_session
+            }),
+            ReconnectDecision::BackoffRequired
+        );
     }
 
     #[test]

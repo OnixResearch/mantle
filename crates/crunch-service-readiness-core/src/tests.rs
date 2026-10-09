@@ -130,6 +130,40 @@ fn dependency_graph_rejects_missing_cycle_and_duplicate_edges() {
 }
 
 #[test]
+fn maximum_depth_dependency_chain_evaluates_and_detects_a_cycle_at_the_boundary() {
+    let component_count = usize::try_from(MAX_COMPONENTS).unwrap();
+    let ids = (0..MAX_COMPONENTS).map(|index| std::format!("node-{index:03}")).collect::<std::vec::Vec<_>>();
+    let names = ids.iter().map(|id| id.as_str()).collect::<std::vec::Vec<_>>();
+    let dependencies = (0..component_count)
+        .map(|index| {
+            if index == 0 {
+                std::vec::Vec::new()
+            } else {
+                std::vec![names[index - 1]]
+            }
+        })
+        .collect::<std::vec::Vec<_>>();
+    let declarations = names
+        .iter()
+        .enumerate()
+        .map(|(index, id)| service(id, &dependencies[index], Some(RestartPolicy::Always)))
+        .collect::<std::vec::Vec<_>>();
+    let report = evaluate(&snapshot(&declarations, &[])).unwrap();
+    assert_eq!(may_start(&report, names[0]), Some(true));
+    assert_eq!(may_start(&report, names[component_count - 1]), Some(false));
+    assert_eq!(row(&report, names[component_count - 1]).blocked_by, [names[component_count - 2]]);
+
+    let mut cyclic_dependencies = dependencies.clone();
+    cyclic_dependencies[0].push(names[component_count - 1]);
+    let cyclic = names
+        .iter()
+        .enumerate()
+        .map(|(index, id)| service(id, &cyclic_dependencies[index], Some(RestartPolicy::Always)))
+        .collect::<std::vec::Vec<_>>();
+    assert_eq!(error_code(&snapshot(&cyclic, &[])), ErrorCode::CyclicDependency);
+}
+
+#[test]
 fn admission_rejects_missing_policy_unknown_state_and_wrong_version() {
     let missing = [service("cache", &[], None)];
     assert_eq!(error_code(&snapshot(&missing, &[])), ErrorCode::MissingPolicy);

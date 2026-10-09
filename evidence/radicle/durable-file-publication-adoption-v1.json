@@ -8,9 +8,9 @@
     "shared_release_authority": false
   },
   "cargo": {
-    "lock_blake3": "accad9f34300f46479f606967b6879b050bcdf6a7ee714d9f107cbc00eb3655b",
+    "lock_blake3": "21eac824a09a21c6f47460ffe2e1e543486b1eef39e1cf37ffe614d075380c0b",
     "lock_source": "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f59003cea9bfdb40ed4d89653d50fada1f",
-    "manifest_blake3": "20bd9ca126210da3552c86e1ab4a523b49c20b9e90644fbdefba33ba847edd56",
+    "manifest_blake3": "0d016551043ed7884bc783432650c6fa5dce799bf4c14c321812b31b88ab28d6",
     "package": "durable-file-publication"
   },
   "evidence": [
@@ -52,7 +52,7 @@
     ]
   },
   "nix": {
-    "flake_blake3": "358a31e6ab9c9fea664e95e3a78064822627570d023ee2102829e723386ca8c7",
+    "flake_blake3": "098217fce30cb113ffd17feff36999374aedfa03886f2d6c07e0d05498b851de",
     "lock_blake3": "15cc9a3667d4b1a4439cefbf81a3a0cfcc39e8935eb3ebe51b5036e43caf02bf",
     "locked_rev": "951c27f59003cea9bfdb40ed4d89653d50fada1f",
     "locked_url": "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git",
