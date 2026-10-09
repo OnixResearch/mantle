@@ -18,13 +18,19 @@ use crate::admission::has;
 /// Derive a deterministic, non-evidence coordination snapshot from bounded facts.
 pub fn evaluate<'a>(snapshot: &Snapshot<'a>) -> Result<ReadinessReport<'a>, ReadinessError<'a>> {
     let admitted = admit(snapshot)?;
+    debug_assert_eq!(admitted.indices.len(), snapshot.components.len());
+    debug_assert_eq!(admitted.dependency_order.len(), snapshot.components.len());
     let mut rows: Vec<Option<ReadinessRow<'a>>> = vec![None; snapshot.components.len()];
     for &index in &admitted.dependency_order {
         let declaration = &snapshot.components[index];
-        let mut blocked_by = Vec::new();
+        let mut blocked_by = Vec::with_capacity(declaration.depends_on.len());
         for dependency in declaration.depends_on {
-            let dependency_index = admitted.indices[dependency];
-            let predecessor = rows[dependency_index].as_ref().expect("topological predecessor is present");
+            let Some(&dependency_index) = admitted.indices.get(dependency) else {
+                return Err(ReadinessError::new(ErrorCode::UnknownDependency, Some(declaration.id), Some(dependency)));
+            };
+            let Some(predecessor) = rows.get(dependency_index).and_then(Option::as_ref) else {
+                return Err(ReadinessError::new(ErrorCode::CyclicDependency, Some(declaration.id), Some(dependency)));
+            };
             if !predecessor.ready && !has(&predecessor.states, "complete") {
                 blocked_by.push(*dependency);
             }
@@ -35,8 +41,11 @@ pub fn evaluate<'a>(snapshot: &Snapshot<'a>) -> Result<ReadinessReport<'a>, Read
         rows[index] = Some(row);
     }
     let mut ordered = Vec::with_capacity(snapshot.components.len());
-    for &index in admitted.indices.values() {
-        ordered.push(rows[index].take().expect("admitted component is projected"));
+    for (&id, &index) in &admitted.indices {
+        let Some(row) = rows.get_mut(index).and_then(Option::take) else {
+            return Err(ReadinessError::new(ErrorCode::UnknownComponent, Some(id), None));
+        };
+        ordered.push(row);
     }
     Ok(ReadinessReport::new(ordered))
 }
@@ -54,13 +63,14 @@ pub fn advance<'a>(
     {
         return Err(ReadinessError::new(ErrorCode::InvalidPreviousReport, None, None));
     }
-    let report = evaluate(snapshot)?;
+    let admitted_readiness = evaluate(snapshot)?;
+    debug_assert_eq!(admitted_readiness.components.len(), snapshot.components.len());
+    debug_assert!(!admitted_readiness.evidence_eligible);
     for declaration in snapshot.components {
-        let index = report
-            .components
-            .binary_search_by_key(&declaration.id, |row| row.id)
-            .expect("declaration has report row");
-        let current = &report.components[index];
+        let Ok(index) = admitted_readiness.components.binary_search_by_key(&declaration.id, |row| row.id) else {
+            return Err(ReadinessError::new(ErrorCode::UnknownComponent, Some(declaration.id), None));
+        };
+        let current = &admitted_readiness.components[index];
         let old = previous
             .components
             .binary_search_by_key(&declaration.id, |row| row.id)
@@ -78,7 +88,7 @@ pub fn advance<'a>(
         }
         validate_transition(declaration.id, old, current, snapshot)?;
     }
-    Ok(report)
+    Ok(admitted_readiness)
 }
 
 fn validate_transition<'a>(
@@ -87,6 +97,8 @@ fn validate_transition<'a>(
     current: &ReadinessRow<'a>,
     snapshot: &Snapshot<'a>,
 ) -> Result<(), ReadinessError<'a>> {
+    debug_assert_eq!(current.id, id);
+    debug_assert!(current.generation.is_none_or(|generation| generation > 0));
     let old_generation = old.and_then(|row| row.generation);
     let Some(new_generation) = current.generation else {
         if old_generation.is_some() {
@@ -113,12 +125,12 @@ fn validate_transition<'a>(
             return Err(ReadinessError::new(ErrorCode::RestartDenied, Some(id), None));
         }
     }
-    let observation = snapshot.observations.iter().find(|entry| entry.id == id).expect("observed generation");
-    if !has(&current.states, "started")
-        || has(&current.states, "ready")
-        || observation.request_acknowledged
-        || observation.exit.is_some()
-    {
+    let Some(observation) = snapshot.observations.iter().find(|entry| entry.id == id) else {
+        return Err(ReadinessError::new(ErrorCode::UnobservedStart, Some(id), None));
+    };
+    let is_invalid_start = !has(&current.states, "started") || has(&current.states, "ready");
+    let has_advanced_observation = observation.request_acknowledged || observation.exit.is_some();
+    if is_invalid_start || has_advanced_observation {
         return Err(ReadinessError::new(ErrorCode::UnobservedStart, Some(id), None));
     }
     if let Some(blocker) = current.blocked_by.first() {
@@ -139,20 +151,26 @@ fn derive_row<'a>(
     observation: Option<&'a Observation<'a>>,
     blocked_by: Vec<&'a str>,
 ) -> Result<ReadinessRow<'a>, ReadinessError<'a>> {
+    debug_assert!(blocked_by.len() <= declaration.depends_on.len());
+    debug_assert!(observation.is_none_or(|entry| entry.id == declaration.id));
     let mut states = Vec::new();
     let mut restart_action = None;
     let mut generation = None;
     if let Some(observation) = observation {
         generation = Some(observation.generation);
         if declaration.kind == ComponentKind::Service {
-            restart_action = project_service(observation, declaration.restart_policy, &mut states);
+            let Some(policy) = declaration.restart_policy else {
+                return Err(ReadinessError::new(ErrorCode::MissingPolicy, Some(declaration.id), None));
+            };
+            restart_action = project_service(observation, policy, &mut states);
         } else {
             states.extend_from_slice(observation.states);
         }
     }
-    let observed_ready = has(&states, "ready");
-    let ready = observed_ready && blocked_by.is_empty();
-    if observed_ready && !ready {
+    debug_assert!(u32::try_from(states.len()).is_ok_and(|count| count <= crate::MAX_OBSERVATION_STATES));
+    let is_observed_ready = has(&states, "ready");
+    let is_ready = is_observed_ready && blocked_by.is_empty();
+    if is_observed_ready && !is_ready {
         states.retain(|state| *state != "ready");
     }
     if declaration.kind == ComponentKind::ProofStage && !blocked_by.is_empty() && has(&states, "complete") {
@@ -168,20 +186,20 @@ fn derive_row<'a>(
         states,
         restart_policy: declaration.restart_policy,
         restart_action,
-        ready,
+        ready: is_ready,
         blocked_by,
     })
 }
 
 fn project_service<'a>(
     observation: &Observation<'a>,
-    policy: Option<RestartPolicy>,
+    policy: RestartPolicy,
     states: &mut Vec<&'a str>,
 ) -> Option<RestartAction> {
     if let Some(exit) = observation.exit {
-        let complete = exit == ExitKind::Normal && observation.request_acknowledged;
-        states.push(if complete { "complete" } else { "failed" });
-        return Some(restart_action(policy.expect("admitted service has policy"), exit));
+        let is_complete = exit == ExitKind::Normal && observation.request_acknowledged;
+        states.push(if is_complete { "complete" } else { "failed" });
+        return Some(restart_action(policy, exit));
     }
     states.extend_from_slice(observation.states);
     None

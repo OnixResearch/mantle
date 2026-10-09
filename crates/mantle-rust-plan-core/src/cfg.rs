@@ -4,9 +4,11 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::features::TargetCfgSelection;
 use crate::features::classify_target_cfg_dependency;
 use crate::features::native_optional_dependency_selected;
 use crate::model::MAX_NATIVE_SCALAR_BYTES;
+use crate::model::NativeTargetClassification;
 use crate::model::classify_native_target_triple;
 
 /// Preserve the accepted native target-cfg interpreter's bounded evaluation.
@@ -31,17 +33,32 @@ pub fn classify_native_dependency_from_selected_cfg(
 ) -> NativeDependencyEligibility {
     let is_optional_selected = native_optional_dependency_selected(dependency_name, feature_defs, selected_features);
     let is_dependency_selected = is_cfg_selected && (!is_optional || is_optional_selected);
+    let cfg_selection = if is_cfg_selected {
+        TargetCfgSelection::Selected
+    } else {
+        TargetCfgSelection::NotSelected
+    };
     NativeDependencyEligibility {
         is_cfg_selected,
         is_optional_selected,
         is_dependency_selected,
-        decision: classify_target_cfg_dependency(is_dependency_selected, is_cfg_selected),
+        decision: classify_target_cfg_dependency(is_dependency_selected, cfg_selection),
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeCfgEvaluationRequest<'a> {
+    pub expression: &'a str,
+    pub active_target: &'a str,
 }
 
 /// Literal target triples, and the accepted `cfg(...)` grammar (`not`, `any`,
 /// `all`, and bounded target atoms) are evaluated without host access.
-pub fn evaluate_supported_target_cfg(expression: &str, active_target: &str) -> Option<bool> {
+pub fn evaluate_supported_target_cfg(request: NativeCfgEvaluationRequest<'_>) -> Option<bool> {
+    let NativeCfgEvaluationRequest {
+        expression,
+        active_target,
+    } = request;
     if expression.len() > MAX_NATIVE_SCALAR_BYTES || active_target.len() > MAX_NATIVE_SCALAR_BYTES {
         return None;
     }
@@ -50,7 +67,7 @@ pub fn evaluate_supported_target_cfg(expression: &str, active_target: &str) -> O
         return Some(trimmed == active_target);
     }
     let inner = trimmed.strip_prefix("cfg(")?.strip_suffix(')')?.trim();
-    evaluate_cfg_inner(inner, active_target)
+    evaluate_cfg_inner(inner, classify_native_target_triple(active_target))
 }
 
 enum Frame<'a> {
@@ -60,7 +77,9 @@ enum Frame<'a> {
     All { arguments: Vec<&'a str>, next_index: usize },
 }
 
-fn evaluate_cfg_inner(expression: &str, active_target: &str) -> Option<bool> {
+fn evaluate_cfg_inner(expression: &str, target: NativeTargetClassification<'_>) -> Option<bool> {
+    debug_assert!(expression.len() <= MAX_NATIVE_SCALAR_BYTES);
+    debug_assert!(target.arch.len() <= MAX_NATIVE_SCALAR_BYTES);
     let mut frames = Vec::with_capacity(8);
     let mut values = Vec::with_capacity(8);
     frames.push(Frame::Evaluate(expression));
@@ -69,22 +88,10 @@ fn evaluate_cfg_inner(expression: &str, active_target: &str) -> Option<bool> {
             return (values.len() == 1).then(|| values.pop()).flatten();
         };
         match frame {
-            Frame::Evaluate(candidate) => {
-                let trimmed = candidate.trim();
-                if let Some(inner) = call_arg(trimmed, "not") {
-                    frames.push(Frame::Not);
-                    frames.push(Frame::Evaluate(inner));
-                } else if let Some(inner) = call_arg(trimmed, "any") {
-                    queue_arguments(split_args(inner)?, false, &mut frames, &mut values)?;
-                } else if let Some(inner) = call_arg(trimmed, "all") {
-                    queue_arguments(split_args(inner)?, true, &mut frames, &mut values)?;
-                } else {
-                    values.push(evaluate_atom(trimmed, active_target)?);
-                }
-            }
+            Frame::Evaluate(candidate) => queue_cfg_candidate(candidate, target, &mut frames, &mut values)?,
             Frame::Not => {
-                let value = values.pop()?;
-                values.push(!value);
+                let is_selected = values.pop()?;
+                values.push(!is_selected);
             }
             Frame::Any { arguments, next_index } => {
                 if values.pop()? {
@@ -105,7 +112,41 @@ fn evaluate_cfg_inner(expression: &str, active_target: &str) -> Option<bool> {
     None
 }
 
-fn call_arg<'a>(expression: &'a str, name: &str) -> Option<&'a str> {
+fn queue_cfg_candidate<'a>(
+    candidate: &'a str,
+    target: NativeTargetClassification<'_>,
+    frames: &mut Vec<Frame<'a>>,
+    values: &mut Vec<bool>,
+) -> Option<()> {
+    debug_assert!(candidate.len() <= MAX_NATIVE_SCALAR_BYTES);
+    debug_assert!(frames.len() < MAX_CFG_EVALUATION_STEPS);
+    let trimmed = candidate.trim();
+    if let Some(inner) = call_arg(trimmed, CfgOperator::Not) {
+        frames.push(Frame::Not);
+        frames.push(Frame::Evaluate(inner));
+    } else if let Some(inner) = call_arg(trimmed, CfgOperator::Any) {
+        queue_arguments(split_args(inner)?, false, frames, values)?;
+    } else if let Some(inner) = call_arg(trimmed, CfgOperator::All) {
+        queue_arguments(split_args(inner)?, true, frames, values)?;
+    } else {
+        values.push(evaluate_atom(trimmed, target)?);
+    }
+    Some(())
+}
+
+#[derive(Clone, Copy)]
+enum CfgOperator {
+    Not,
+    Any,
+    All,
+}
+
+fn call_arg(expression: &str, operator: CfgOperator) -> Option<&str> {
+    let name = match operator {
+        CfgOperator::Not => "not",
+        CfgOperator::Any => "any",
+        CfgOperator::All => "all",
+    };
     expression.strip_prefix(name)?.strip_prefix('(')?.strip_suffix(')')
 }
 
@@ -156,16 +197,17 @@ fn continue_arguments<'a>(
 }
 
 fn split_args(args: &str) -> Option<Vec<&str>> {
+    debug_assert!(args.len() <= MAX_NATIVE_SCALAR_BYTES);
     let mut parts = Vec::with_capacity(args.matches(',').count().saturating_add(1));
     let mut depth = 0usize;
-    let mut in_string = false;
+    let mut is_outside_string = true;
     let mut start = 0usize;
     for (index, ch) in args.char_indices() {
         match ch {
-            '"' => in_string = !in_string,
-            '(' if !in_string => depth = depth.checked_add(1)?,
-            ')' if !in_string => depth = depth.checked_sub(1)?,
-            ',' if !in_string && depth == 0 => {
+            '"' => is_outside_string = !is_outside_string,
+            '(' if is_outside_string => depth = depth.checked_add(1)?,
+            ')' if is_outside_string => depth = depth.checked_sub(1)?,
+            ',' if is_outside_string && depth == 0 => {
                 let part = args[start..index].trim();
                 if !part.is_empty() {
                     parts.push(part);
@@ -175,7 +217,8 @@ fn split_args(args: &str) -> Option<Vec<&str>> {
             _ => {}
         }
     }
-    if in_string || depth != 0 {
+    debug_assert!(start <= args.len());
+    if !is_outside_string || depth != 0 {
         return None;
     }
     let tail = args[start..].trim();
@@ -185,8 +228,9 @@ fn split_args(args: &str) -> Option<Vec<&str>> {
     Some(parts)
 }
 
-fn evaluate_atom(atom: &str, active_target: &str) -> Option<bool> {
-    let target = classify_native_target_triple(active_target);
+fn evaluate_atom(atom: &str, target: NativeTargetClassification<'_>) -> Option<bool> {
+    debug_assert!(atom.len() <= MAX_NATIVE_SCALAR_BYTES);
+    debug_assert!(target.pointer_width == "32" || target.pointer_width == "64");
     if atom == "unix" {
         return Some(target.is_unix);
     }
@@ -195,7 +239,7 @@ fn evaluate_atom(atom: &str, active_target: &str) -> Option<bool> {
     }
     if let Some((key, raw_value)) = atom.split_once('=') {
         let value = raw_value.trim().trim_matches('"');
-        let matched = match key.trim() {
+        let is_target_match = match key.trim() {
             "target_os" => value == target.os,
             "target_arch" => value == target.arch,
             "target_family" => value == target.family,
@@ -216,7 +260,7 @@ fn evaluate_atom(atom: &str, active_target: &str) -> Option<bool> {
             key if key.ends_with("_backend") || key.starts_with("rustix_") || key == "getrandom_backend" => false,
             _ => return None,
         };
-        return Some(matched);
+        return Some(is_target_match);
     }
     matches!(
         atom,
@@ -234,4 +278,46 @@ fn evaluate_atom(atom: &str, active_target: &str) -> Option<bool> {
             | "rustix_use_experimental_asm"
     )
     .then_some(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nested_cfg_and_malformed_arguments_preserve_admission() {
+        let evaluate = |expression| {
+            evaluate_supported_target_cfg(NativeCfgEvaluationRequest {
+                expression,
+                active_target: "x86_64-unknown-linux-gnu",
+            })
+        };
+        assert_eq!(evaluate("cfg(all(any(unix, windows), not(windows)))"), Some(true));
+        assert_eq!(evaluate("cfg(any())"), Some(false));
+        assert_eq!(evaluate("cfg(all())"), Some(true));
+        assert_eq!(evaluate("cfg(any(target_os = \"linux))"), None);
+        assert_eq!(evaluate("cfg(any(unix, not(windows)"), None);
+    }
+
+    #[test]
+    fn nested_cfg_stops_at_the_evaluation_step_limit() {
+        for (depth, expected) in [(511usize, Some(false)), (512usize, None)] {
+            let mut expression = String::from("cfg(");
+            for _ in 0..depth {
+                expression.push_str("not(");
+            }
+            expression.push_str("unix");
+            for _ in 0..depth {
+                expression.push(')');
+            }
+            expression.push(')');
+            assert_eq!(
+                evaluate_supported_target_cfg(NativeCfgEvaluationRequest {
+                    expression: &expression,
+                    active_target: "x86_64-unknown-linux-gnu",
+                }),
+                expected
+            );
+        }
+    }
 }

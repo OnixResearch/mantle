@@ -30,6 +30,18 @@ contracts separately. The target check verifies that core policy compiles
 without host filesystem, process, or cache facilities; it does not execute
 Rust code under WebAssembly.
 
+The core takes named `NativeCfgEvaluationRequest` and `NativeHostTarget`
+inputs for cfg evaluation and host/target selection; the std adapter supplies
+those observations. `classify_existing_unit_observations` returns
+`InputLimitExceeded` when effects or observations exceed `MAX_UNITS`, rather
+than reporting a saturated count as exact. The bounded normal and malformed
+cfg, feature, topology, and observation paths remain covered by the focused
+core, application, and adapter rails below.
+
+`execute_existing_units` rejects more than `MAX_UNITS` before invoking a unit
+executor. This is an application admission failure, not a per-unit execution
+observation.
+
 ## Focused rails
 
 Serial evidence rail:

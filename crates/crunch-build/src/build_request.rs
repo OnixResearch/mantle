@@ -896,10 +896,13 @@ fn overlay_derivation_environment(
     assert!(!environment_vars.is_empty(), "sandbox env must be pre-populated");
     let mut audit_events = Vec::with_capacity(derivation.environment.len());
     for (key, value) in &derivation.environment {
-        if key == WORKSPACE_POLICY_ENV
-            || key == WORKSPACE_LEASE_ENV
-            || key == PLAN_OUTPUT_BINDINGS_ENV_KEY
-            || key == finish_gates::POLICY_ENV
+        if [
+            WORKSPACE_POLICY_ENV,
+            WORKSPACE_LEASE_ENV,
+            PLAN_OUTPUT_BINDINGS_ENV_KEY,
+            finish_gates::POLICY_ENV,
+        ]
+        .contains(&key.as_str())
         {
             continue;
         }

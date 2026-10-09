@@ -70,10 +70,21 @@ pub struct NativeTargetClassification<'a> {
     pub is_unix: bool,
 }
 
+/// Host and target triples supplied by the shell; named fields prevent swapping.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeHostTarget<'a> {
+    pub host: &'a str,
+    pub target: &'a str,
+}
+
 /// Select the native execution triple without looking up the host or target.
 /// The accepted path uses the target triple only for target execution units.
-pub fn select_native_execution_triple<'a>(execution_kind: &str, host: &'a str, target: &'a str) -> &'a str {
-    if execution_kind == "target" { target } else { host }
+pub fn select_native_execution_triple<'a>(execution_kind: &str, triples: NativeHostTarget<'a>) -> &'a str {
+    if execution_kind == "target" {
+        triples.target
+    } else {
+        triples.host
+    }
 }
 
 /// Preserve the existing bounded target cfg / build-script environment facts.
@@ -124,7 +135,7 @@ pub fn classify_native_target_triple(triple: &str) -> NativeTargetClassification
         "wasm32" => "bulk-memory,multivalue,mutable-globals,nontrapping-fptoint,reference-types,sign-ext",
         _ => "",
     };
-    NativeTargetClassification {
+    let classification = NativeTargetClassification {
         os,
         arch,
         family,
@@ -135,7 +146,10 @@ pub fn classify_native_target_triple(triple: &str) -> NativeTargetClassification
         pointer_width,
         features,
         is_unix,
-    }
+    };
+    debug_assert!(matches!(classification.pointer_width, "32" | "64"));
+    debug_assert!(!classification.is_unix || classification.family == "unix");
+    classification
 }
 
 /// Borrowed scalar from an adapter-decoded manifest or workspace package.
@@ -158,7 +172,7 @@ fn validate_native_package_name(name: &str) -> Result<(), PlanBlocker> {
     Ok(())
 }
 
-fn admit_native_package_scalar(package_name: &str, value: &str) -> Result<String, PlanBlocker> {
+fn admit_native_package_scalar((package_name, value): (&str, &str)) -> Result<String, PlanBlocker> {
     if value.is_empty() || value.len() > MAX_NATIVE_SCALAR_BYTES {
         return Err(PlanBlocker::new(
             "package-identity",
@@ -174,8 +188,10 @@ pub fn resolve_native_package_version(
     value: NativeInheritedValue<'_>,
 ) -> Result<String, PlanBlocker> {
     validate_native_package_name(package_name)?;
+    debug_assert!(!package_name.is_empty());
+    debug_assert!(package_name.len() <= MAX_NATIVE_SCALAR_BYTES);
     if let Some(literal) = value.literal {
-        return admit_native_package_scalar(package_name, literal);
+        return admit_native_package_scalar((package_name, literal));
     }
     if !value.workspace {
         return Err(PlanBlocker::new(
@@ -191,7 +207,7 @@ pub fn resolve_native_package_version(
             "package `{package_name}` inherits version from [workspace.package], but no workspace package version is declared"
         ),
     ))?;
-    admit_native_package_scalar(package_name, workspace)
+    admit_native_package_scalar((package_name, workspace))
 }
 
 pub fn resolve_native_package_edition(
@@ -200,7 +216,7 @@ pub fn resolve_native_package_edition(
 ) -> Result<String, PlanBlocker> {
     validate_native_package_name(package_name)?;
     if let Some(literal) = value.literal {
-        return admit_native_package_scalar(package_name, literal);
+        return admit_native_package_scalar((package_name, literal));
     }
     if !value.workspace {
         return Ok(String::from("2015"));
@@ -214,7 +230,7 @@ pub fn resolve_native_package_edition(
             ),
         )
     })?;
-    admit_native_package_scalar(package_name, workspace)
+    admit_native_package_scalar((package_name, workspace))
 }
 
 /// A target the shell discovered in declared order, with path evidence.
@@ -238,6 +254,56 @@ pub struct NativeAdmittedTarget {
     pub edition: String,
 }
 
+fn validate_native_target_candidate(package_id: &str, candidate: &NativeTargetCandidate) -> Result<(), PlanBlocker> {
+    if candidate.source_failure_display.as_ref().is_some_and(|display| {
+        candidate.name.len() > MAX_NATIVE_SCALAR_BYTES || display.len() > MAX_NATIVE_SCALAR_BYTES
+    }) {
+        return Err(PlanBlocker::new(
+            "target-identity-limit",
+            package_id,
+            "native target identity fields exceed the admitted scalar bound",
+        ));
+    }
+    if let Some(source_display) = &candidate.source_failure_display {
+        return Err(PlanBlocker::new(
+            "missing-target-source",
+            package_id,
+            &alloc::format!("target `{}` source {} is not readable", candidate.name, source_display),
+        ));
+    }
+    let fields = [
+        candidate.name.as_str(),
+        candidate.kind.as_str(),
+        candidate.source_path.as_str(),
+        candidate.edition.as_str(),
+    ];
+    if fields.iter().any(|field| field.is_empty()) {
+        return Err(PlanBlocker::new(
+            "target-identity",
+            package_id,
+            "native target name, kind, source path and edition must be non-empty",
+        ));
+    }
+    if fields.iter().any(|field| field.len() > MAX_NATIVE_SCALAR_BYTES) {
+        return Err(PlanBlocker::new(
+            "target-identity-limit",
+            package_id,
+            "native target identity fields exceed the admitted scalar bound",
+        ));
+    }
+    if !matches!(candidate.kind.as_str(), "lib" | "bin" | "custom-build" | "proc-macro") {
+        return Err(PlanBlocker::new(
+            "unsupported-target-kind",
+            package_id,
+            "native target kind is outside the supported lib/bin/custom-build/proc-macro fragment",
+        ));
+    }
+    debug_assert!(candidate.source_failure_display.is_none());
+    debug_assert!(fields.iter().all(|field| !field.is_empty() && field.len() <= MAX_NATIVE_SCALAR_BYTES));
+    debug_assert!(matches!(candidate.kind.as_str(), "lib" | "bin" | "custom-build" | "proc-macro"));
+    Ok(())
+}
+
 pub fn admit_native_targets(
     package_id: &str,
     candidates: Vec<NativeTargetCandidate>,
@@ -245,56 +311,12 @@ pub fn admit_native_targets(
     if package_id.is_empty() {
         return Err(PlanBlocker::new("package-identity", "packages", "native target package ID must be non-empty"));
     }
-    if candidates.len() > MAX_TARGETS_PER_PACKAGE as usize {
+    if count_exceeds(candidates.len(), MAX_TARGETS_PER_PACKAGE) {
         return Err(PlanBlocker::new("target-limit", package_id, "package targets exceed the admitted target bound"));
     }
     let mut targets = Vec::with_capacity(candidates.len());
     for candidate in candidates {
-        if candidate.source_failure_display.as_ref().is_some_and(|display| {
-            candidate.name.len() > MAX_NATIVE_SCALAR_BYTES || display.len() > MAX_NATIVE_SCALAR_BYTES
-        }) {
-            return Err(PlanBlocker::new(
-                "target-identity-limit",
-                package_id,
-                "native target identity fields exceed the admitted scalar bound",
-            ));
-        }
-        if let Some(source_display) = candidate.source_failure_display {
-            return Err(PlanBlocker::new(
-                "missing-target-source",
-                package_id,
-                &alloc::format!("target `{}` source {} is not readable", candidate.name, source_display,),
-            ));
-        }
-        if candidate.name.is_empty()
-            || candidate.kind.is_empty()
-            || candidate.source_path.is_empty()
-            || candidate.edition.is_empty()
-        {
-            return Err(PlanBlocker::new(
-                "target-identity",
-                package_id,
-                "native target name, kind, source path and edition must be non-empty",
-            ));
-        }
-        if candidate.name.len() > MAX_NATIVE_SCALAR_BYTES
-            || candidate.kind.len() > MAX_NATIVE_SCALAR_BYTES
-            || candidate.source_path.len() > MAX_NATIVE_SCALAR_BYTES
-            || candidate.edition.len() > MAX_NATIVE_SCALAR_BYTES
-        {
-            return Err(PlanBlocker::new(
-                "target-identity-limit",
-                package_id,
-                "native target identity fields exceed the admitted scalar bound",
-            ));
-        }
-        if !matches!(candidate.kind.as_str(), "lib" | "bin" | "custom-build" | "proc-macro") {
-            return Err(PlanBlocker::new(
-                "unsupported-target-kind",
-                package_id,
-                "native target kind is outside the supported lib/bin/custom-build/proc-macro fragment",
-            ));
-        }
+        validate_native_target_candidate(package_id, &candidate)?;
         targets.push(NativeAdmittedTarget {
             crate_name: candidate.name.replace('-', "_"),
             name: candidate.name,
@@ -310,6 +332,8 @@ pub fn admit_native_targets(
             "native package/target fragment found no readable lib/bin target source",
         ));
     }
+    debug_assert!(!targets.is_empty());
+    debug_assert!(!count_exceeds(targets.len(), MAX_TARGETS_PER_PACKAGE));
     targets.sort();
     targets.dedup();
     Ok(targets)
@@ -331,72 +355,60 @@ pub struct NormalizedPackageFacts {
     pub selected_dependencies: Vec<String>,
 }
 
-/// Admit actual package IDs, select their reachable dependency closure, and
-/// return package IDs in the accepted deterministic manifest order.
-///
-/// The shell supplies only matched workspace roots (unmatched paths were
-/// silently ignored by the native planner), or every package ID when the
-/// workspace root set is empty. Unresolved source edges remain adapter-owned
-/// and retain their existing native-unit blockers.
-pub fn select_normalized_package_closure(
-    roots: &[String],
-    packages: &[NormalizedPackageFacts],
-) -> Result<Vec<String>, Vec<PlanBlocker>> {
-    let mut blockers = Vec::new();
-    if count_exceeds(packages.len(), MAX_PACKAGES) || count_exceeds(roots.len(), MAX_PACKAGES) {
-        return Err(vec![PlanBlocker::new(
-            "package-limit",
+fn validate_normalized_package_identity(package: &NormalizedPackageFacts) -> Result<(), PlanBlocker> {
+    let fields = [
+        package.package_id.as_str(),
+        package.package_name.as_str(),
+        package.version.as_str(),
+        package.source_identity.as_str(),
+        package.order_key.as_str(),
+    ];
+    if fields.iter().any(|field| field.is_empty()) {
+        return Err(PlanBlocker::new(
+            "package-identity",
             "packages",
-            "native package closure exceeds the admitted package bound",
-        )]);
+            "native package ID, name, version, source and order identity must be non-empty",
+        ));
     }
-    if roots.iter().any(|root| root.len() > MAX_NATIVE_SCALAR_BYTES) {
-        return Err(vec![PlanBlocker::new(
-            "package-root-limit",
-            "roots",
-            "native package root identities exceed the admitted scalar bound",
-        )]);
+    if fields.iter().any(|field| field.len() > MAX_NATIVE_SCALAR_BYTES) {
+        return Err(PlanBlocker::new(
+            "package-identity-limit",
+            "packages",
+            "native package identity fields exceed the admitted scalar bound",
+        ));
     }
-    let mut by_id = BTreeMap::new();
-    let mut by_order = BTreeMap::new();
-    for package in packages {
-        if package.package_id.is_empty()
-            || package.package_name.is_empty()
-            || package.version.is_empty()
-            || package.source_identity.is_empty()
-            || package.order_key.is_empty()
-        {
-            blockers.push(PlanBlocker::new(
-                "package-identity",
-                "packages",
-                "native package ID, name, version, source and order identity must be non-empty",
-            ));
-            continue;
-        }
-        if package.package_id.len() > MAX_NATIVE_SCALAR_BYTES
-            || package.package_name.len() > MAX_NATIVE_SCALAR_BYTES
-            || package.version.len() > MAX_NATIVE_SCALAR_BYTES
-            || package.source_identity.len() > MAX_NATIVE_SCALAR_BYTES
-            || package.order_key.len() > MAX_NATIVE_SCALAR_BYTES
-        {
-            blockers.push(PlanBlocker::new(
-                "package-identity-limit",
-                "packages",
-                "native package identity fields exceed the admitted scalar bound",
-            ));
-            continue;
-        }
-        if package
+    if package
+        .selected_features
+        .iter()
+        .chain(&package.selected_dependencies)
+        .any(|identity| identity.len() > MAX_NATIVE_SCALAR_BYTES)
+    {
+        return Err(PlanBlocker::new(
+            "package-selection-identity-limit",
+            &package.package_id,
+            "selected features or dependency identities exceed the admitted scalar bound",
+        ));
+    }
+    debug_assert!(fields.iter().all(|field| !field.is_empty() && field.len() <= MAX_NATIVE_SCALAR_BYTES));
+    debug_assert!(
+        package
             .selected_features
             .iter()
             .chain(&package.selected_dependencies)
-            .any(|identity| identity.len() > MAX_NATIVE_SCALAR_BYTES)
-        {
-            blockers.push(PlanBlocker::new(
-                "package-selection-identity-limit",
-                &package.package_id,
-                "selected features or dependency identities exceed the admitted scalar bound",
-            ));
+            .all(|identity| identity.len() <= MAX_NATIVE_SCALAR_BYTES)
+    );
+    Ok(())
+}
+
+fn index_normalized_packages<'a>(
+    packages: &'a [NormalizedPackageFacts],
+    blockers: &mut Vec<PlanBlocker>,
+) -> BTreeMap<&'a str, &'a NormalizedPackageFacts> {
+    let mut by_id = BTreeMap::new();
+    let mut by_order = BTreeMap::new();
+    for package in packages {
+        if let Err(blocker) = validate_normalized_package_identity(package) {
+            blockers.push(blocker);
             continue;
         }
         if by_id.insert(package.package_id.as_str(), package).is_some() {
@@ -432,36 +444,55 @@ pub fn select_normalized_package_closure(
             ));
         }
     }
-    if !blockers.is_empty() {
-        blockers.sort();
-        blockers.dedup();
-        return Err(blockers);
-    }
-    for root in roots {
-        if root.is_empty() || !by_id.contains_key(root.as_str()) {
-            blockers.push(PlanBlocker::new(
-                "missing-package-root",
-                if root.is_empty() { "roots" } else { root },
-                "matched workspace package root has no supplied package facts",
-            ));
-        }
-    }
-    for package in packages {
-        for dependency in &package.selected_dependencies {
-            if !by_id.contains_key(dependency.as_str()) {
-                blockers.push(PlanBlocker::new(
+    debug_assert!(by_id.len() <= packages.len());
+    debug_assert!(by_id.iter().all(|(id, package)| *id == package.package_id));
+    by_id
+}
+
+fn missing_normalized_package_references(
+    roots: &[String],
+    packages: &[NormalizedPackageFacts],
+    by_id: &BTreeMap<&str, &NormalizedPackageFacts>,
+) -> Vec<PlanBlocker> {
+    let missing_roots = roots.iter().filter(|root| root.is_empty() || !by_id.contains_key(root.as_str())).map(|root| {
+        PlanBlocker::new(
+            "missing-package-root",
+            if root.is_empty() { "roots" } else { root },
+            "matched workspace package root has no supplied package facts",
+        )
+    });
+    let missing_dependencies = packages.iter().flat_map(|package| {
+        package
+            .selected_dependencies
+            .iter()
+            .filter(|dependency| !by_id.contains_key(dependency.as_str()))
+            .map(|_| {
+                PlanBlocker::new(
                     "missing-dependency-package",
                     &package.package_id,
                     "selected dependency package has no normalized facts",
-                ));
-            }
-        }
-    }
-    if !blockers.is_empty() {
-        blockers.sort();
-        blockers.dedup();
-        return Err(blockers);
-    }
+                )
+            })
+    });
+    let missing: Vec<_> = missing_roots.chain(missing_dependencies).collect();
+    debug_assert!(
+        missing.len()
+            <= packages
+                .iter()
+                .fold(roots.len(), |count, package| { count.saturating_add(package.selected_dependencies.len()) })
+    );
+    debug_assert!(missing.iter().all(|blocker| {
+        matches!(blocker.code.as_str(), "missing-package-root" | "missing-dependency-package")
+            && !blocker.subject.is_empty()
+    }));
+    missing
+}
+
+fn reachable_normalized_packages<'a>(
+    roots: &[String],
+    packages: &'a [NormalizedPackageFacts],
+    by_id: &BTreeMap<&str, &NormalizedPackageFacts>,
+) -> Result<Vec<&'a NormalizedPackageFacts>, Vec<PlanBlocker>> {
     let mut queue: VecDeque<&str> = roots.iter().map(String::as_str).collect();
     let mut visited = BTreeSet::new();
     while let Some(package_id) = queue.pop_front() {
@@ -477,8 +508,50 @@ pub fn select_normalized_package_closure(
         }
         queue.extend(by_id[package_id].selected_dependencies.iter().map(String::as_str));
     }
-    let mut selected =
-        packages.iter().filter(|package| visited.contains(package.package_id.as_str())).collect::<Vec<_>>();
+    Ok(packages.iter().filter(|package| visited.contains(package.package_id.as_str())).collect())
+}
+
+/// Admit actual package IDs, select their reachable dependency closure, and
+/// return package IDs in the accepted deterministic manifest order.
+///
+/// The shell supplies only matched workspace roots (unmatched paths were
+/// silently ignored by the native planner), or every package ID when the
+/// workspace root set is empty. Unresolved source edges remain adapter-owned
+/// and retain their existing native-unit blockers.
+pub fn select_normalized_package_closure(
+    roots: &[String],
+    packages: &[NormalizedPackageFacts],
+) -> Result<Vec<String>, Vec<PlanBlocker>> {
+    if count_exceeds(packages.len(), MAX_PACKAGES) || count_exceeds(roots.len(), MAX_PACKAGES) {
+        return Err(vec![PlanBlocker::new(
+            "package-limit",
+            "packages",
+            "native package closure exceeds the admitted package bound",
+        )]);
+    }
+    if roots.iter().any(|root| root.len() > MAX_NATIVE_SCALAR_BYTES) {
+        return Err(vec![PlanBlocker::new(
+            "package-root-limit",
+            "roots",
+            "native package root identities exceed the admitted scalar bound",
+        )]);
+    }
+    debug_assert!(!count_exceeds(packages.len(), MAX_PACKAGES));
+    debug_assert!(!count_exceeds(roots.len(), MAX_PACKAGES));
+    let mut blockers = Vec::with_capacity(packages.len().saturating_mul(4));
+    let by_id = index_normalized_packages(packages, &mut blockers);
+    if !blockers.is_empty() {
+        blockers.sort();
+        blockers.dedup();
+        return Err(blockers);
+    }
+    blockers = missing_normalized_package_references(roots, packages, &by_id);
+    if !blockers.is_empty() {
+        blockers.sort();
+        blockers.dedup();
+        return Err(blockers);
+    }
+    let mut selected = reachable_normalized_packages(roots, packages, &by_id)?;
     selected.sort_by(|left, right| {
         (left.order_key.as_str(), left.package_id.as_str()).cmp(&(right.order_key.as_str(), right.package_id.as_str()))
     });
@@ -490,5 +563,57 @@ pub(crate) fn count_exceeds(count_items: usize, maximum_items: u32) -> bool {
         Ok(count_items) => count_items > maximum_items,
         // A collection wider than the admitted bound is over the bound.
         Err(_) => true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn package(id: &str, order: &str, dependencies: &[&str]) -> NormalizedPackageFacts {
+        NormalizedPackageFacts {
+            package_id: String::from(id),
+            package_name: String::from(id),
+            version: String::from("1.0.0"),
+            source_identity: String::from("local"),
+            order_key: String::from(order),
+            selected_features: Vec::new(),
+            selected_dependencies: dependencies.iter().map(|dependency| String::from(*dependency)).collect(),
+        }
+    }
+
+    #[test]
+    fn selected_closure_uses_manifest_order_not_traversal_order() {
+        let packages = [
+            package("root", "z", &["other", "middle"]),
+            package("middle", "b", &["other"]),
+            package("unrelated", "a", &[]),
+            package("other", "c", &[]),
+        ];
+        let selected = select_normalized_package_closure(&[String::from("root")], &packages).unwrap();
+        assert_eq!(selected, ["middle", "other", "root"]);
+    }
+
+    #[test]
+    fn source_failure_precedes_other_target_identity_errors() {
+        let candidate = NativeTargetCandidate {
+            name: String::from("failing-target"),
+            kind: String::new(),
+            source_path: String::new(),
+            edition: String::new(),
+            source_failure_display: Some(String::from("src/missing.rs")),
+        };
+        let blocker = admit_native_targets("package", vec![candidate]).unwrap_err();
+        assert_eq!(blocker.code, "missing-target-source");
+        assert_eq!(blocker.message, "target `failing-target` source src/missing.rs is not readable");
+    }
+
+    #[test]
+    fn invalid_package_identity_precedes_missing_dependency_checks() {
+        let mut package = package("root", "z", &["missing"]);
+        package.version.clear();
+        let blockers = select_normalized_package_closure(&[String::from("root")], &[package]).unwrap_err();
+        assert_eq!(blockers.len(), 1);
+        assert_eq!(blockers[0].code, "package-identity");
     }
 }

@@ -705,7 +705,7 @@ pub mod reviewed {
             && (identity.unpack_shape.archive == "zip" || identity.unpack_shape.archive == "tar-gz")
             && identity.unpack_shape.root.len() <= 256
             && identity.unpack_shape.root.ends_with('/')
-            && safe_member(&identity.unpack_shape.root[..identity.unpack_shape.root.len() - 1])
+            && identity.unpack_shape.root.strip_suffix('/').is_some_and(safe_member)
             && identity.platform == "x86_64-linux"
     }
 
@@ -770,20 +770,20 @@ pub mod reviewed {
                 return Err(Rejection::UnknownSignatureScheme);
             }
         }
+        debug_assert!(!plan.module.is_empty());
+        debug_assert!(plan.version_code != 0);
+        debug_assert!(plan.resources.len() <= MAX_MEMBERS);
+        debug_assert!(plan.java_sources.len() <= MAX_MEMBERS);
         Ok(())
     }
 
-    // r[impl android_adapter.apk_plan_functional_core]
-    pub fn lower(plan: &ApkPlan) -> Result<LoweredApk, Rejection> {
-        validate(plan)?;
+    fn lower_compile_link_java(plan: &ApkPlan, resources: Vec<String>, java: Vec<String>) -> Vec<StepPlan> {
+        debug_assert!(!resources.is_empty());
+        debug_assert!(!java.is_empty());
+        debug_assert!(resources.len() <= MAX_MEMBERS);
+        debug_assert!(java.len() <= MAX_MEMBERS);
         let tools = &plan.toolchain.build_tools;
         let platform = &plan.toolchain.platform;
-        let mut resources = plan.resources.clone();
-        resources.sort_unstable();
-        resources.dedup();
-        let mut java = plan.java_sources.clone();
-        java.sort_unstable();
-        java.dedup();
         let mut compile_inputs: Vec<_> = resources.into_iter().map(StepInput::SourceMember).collect();
         compile_inputs.push(StepInput::ToolchainIdentity(tools.clone()));
         let mut steps = alloc::vec![
@@ -817,6 +817,20 @@ pub mod reviewed {
             toolchain_identity: plan.toolchain.jdk.clone(),
             output: "classes".into(),
         });
+        steps
+    }
+
+    fn lower_dex_package_sign(plan: &ApkPlan, steps: &mut Vec<StepPlan>) -> StepKind {
+        debug_assert_eq!(steps.len(), 3);
+        debug_assert!(matches!(
+            steps.last(),
+            Some(StepPlan {
+                kind: StepKind::Javac,
+                ..
+            })
+        ));
+        let tools = &plan.toolchain.build_tools;
+        let platform = &plan.toolchain.platform;
         steps.push(StepPlan {
             kind: StepKind::D8,
             inputs: alloc::vec![
@@ -851,15 +865,24 @@ pub mod reviewed {
                 toolchain_identity: tools.clone(),
                 output: "signed.apk".into(),
             });
+            StepKind::Apksigner
+        } else {
+            StepKind::Zipalign
         }
-        Ok(LoweredApk {
-            final_output: if plan.signing.is_some() {
-                StepKind::Apksigner
-            } else {
-                StepKind::Zipalign
-            },
-            steps,
-        })
+    }
+
+    // r[impl android_adapter.apk_plan_functional_core]
+    pub fn lower(plan: &ApkPlan) -> Result<LoweredApk, Rejection> {
+        validate(plan)?;
+        let mut resources = plan.resources.clone();
+        resources.sort_unstable();
+        resources.dedup();
+        let mut java = plan.java_sources.clone();
+        java.sort_unstable();
+        java.dedup();
+        let mut steps = lower_compile_link_java(plan, resources, java);
+        let final_output = lower_dex_package_sign(plan, &mut steps);
+        Ok(LoweredApk { steps, final_output })
     }
 
     #[cfg(test)]

@@ -36,11 +36,18 @@ pub fn native_optional_dependency_selected(
     })
 }
 
+/// Whether the target cfg expression selected a dependency.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TargetCfgSelection {
+    Selected,
+    NotSelected,
+}
+
 /// Preserve the accepted three-way cfg dependency decision.
-pub fn classify_target_cfg_dependency(is_dependency_selected: bool, is_cfg_selected: bool) -> &'static str {
+pub fn classify_target_cfg_dependency(is_dependency_selected: bool, cfg_selection: TargetCfgSelection) -> &'static str {
     if is_dependency_selected {
         "selected"
-    } else if is_cfg_selected {
+    } else if cfg_selection == TargetCfgSelection::Selected {
         "not-selected-optional"
     } else {
         "not-selected"
@@ -101,13 +108,43 @@ pub fn resolve_native_feature_selection(request: &NativeFeatureSelectionRequest)
             "features",
             "native feature resolution exceeded bounded fixed-point step limit",
         ));
-        return NativeFeatureSelection {
-            selected_features: Vec::new(),
-            activated_optional_dependencies: Vec::new(),
-            dependency_feature_edges: Vec::new(),
-            blockers: blockers.into_iter().collect(),
-        };
+        return blocked_native_features(blockers);
     }
+    validate_native_feature_request(request, &mut definitions, &mut optional, &mut blockers);
+    if !blockers.is_empty() {
+        return blocked_native_features(blockers);
+    }
+
+    let mut activation = NativeFeatureActivation::default();
+    seed_native_features(request, &definitions, &optional, &mut activation);
+    activation.resolve(&definitions, &optional);
+    assert_eq!(activation.queue.len(), activation.selected.len());
+    assert!(
+        activation.queue.len()
+            <= request
+                .feature_definitions
+                .len()
+                .saturating_add(request.optional_dependencies.len())
+                .saturating_add(request.explicit_features.len())
+    );
+    activation.finish()
+}
+
+fn blocked_native_features(blockers: BTreeSet<PlanBlocker>) -> NativeFeatureSelection {
+    NativeFeatureSelection {
+        selected_features: Vec::new(),
+        activated_optional_dependencies: Vec::new(),
+        dependency_feature_edges: Vec::new(),
+        blockers: blockers.into_iter().collect(),
+    }
+}
+
+fn validate_native_feature_request<'a>(
+    request: &'a NativeFeatureSelectionRequest,
+    definitions: &mut BTreeMap<&'a str, &'a [String]>,
+    optional: &mut BTreeSet<&'a str>,
+    blockers: &mut BTreeSet<PlanBlocker>,
+) {
     for feature in &request.feature_definitions {
         if feature.name.is_empty() || definitions.insert(&feature.name, &feature.entries).is_some() {
             blockers.insert(PlanBlocker::new(
@@ -126,94 +163,112 @@ pub fn resolve_native_feature_selection(request: &NativeFeatureSelectionRequest)
             ));
         }
     }
-    if !blockers.is_empty() {
-        return NativeFeatureSelection {
-            selected_features: Vec::new(),
-            activated_optional_dependencies: Vec::new(),
-            dependency_feature_edges: Vec::new(),
-            blockers: blockers.into_iter().collect(),
-        };
-    }
-    let mut selected = BTreeSet::<String>::new();
-    let mut queue = Vec::<String>::new();
+    debug_assert!(definitions.keys().all(|name| !name.is_empty()));
+    debug_assert!(optional.iter().all(|name| !name.is_empty()));
+}
+
+#[derive(Default)]
+struct NativeFeatureActivation {
+    selected: BTreeSet<String>,
+    queue: Vec<String>,
+    activated_optional: BTreeSet<String>,
+    edges: BTreeSet<NativeDependencyFeatureEdge>,
+    blockers: BTreeSet<PlanBlocker>,
+}
+
+fn seed_native_features(
+    request: &NativeFeatureSelectionRequest,
+    definitions: &BTreeMap<&str, &[String]>,
+    optional: &BTreeSet<&str>,
+    activation: &mut NativeFeatureActivation,
+) {
     if request.all_features {
         for name in definitions.keys().chain(optional.iter()) {
-            push_native_feature_key(name, &mut selected, &mut queue);
+            push_native_feature_key(name, &mut activation.selected, &mut activation.queue);
         }
     } else if !request.explicit_features.is_empty() {
         let mut explicit = request.explicit_features.clone();
         explicit.sort();
         explicit.dedup();
         for name in &explicit {
-            push_native_feature_key(name, &mut selected, &mut queue);
+            push_native_feature_key(name, &mut activation.selected, &mut activation.queue);
         }
     } else if !request.no_default_features && definitions.contains_key(DEFAULT_FEATURE) {
-        push_native_feature_key(DEFAULT_FEATURE, &mut selected, &mut queue);
+        push_native_feature_key(DEFAULT_FEATURE, &mut activation.selected, &mut activation.queue);
     }
-    let mut activated_optional = BTreeSet::<String>::new();
-    let mut edges = BTreeSet::<NativeDependencyFeatureEdge>::new();
-    let mut cursor = 0;
-    while cursor < queue.len() {
-        if cursor >= MAX_NATIVE_FEATURE_STEPS {
-            blockers.insert(PlanBlocker::new(
-                "feature-resolution-step-limit",
-                "features",
-                "native feature resolution exceeded bounded fixed-point step limit",
-            ));
-            break;
-        }
-        let feature = queue[cursor].clone();
-        cursor += 1;
-        if let Some(entries) = definitions.get(feature.as_str()) {
-            for entry in *entries {
-                if let Some(dependency) = entry.strip_prefix("dep:") {
-                    if dependency.is_empty() {
-                        blockers.insert(PlanBlocker::new(
-                            "unsupported-feature-entry",
-                            "features",
-                            "empty dep: feature entry",
-                        ));
-                    } else {
-                        activated_optional.insert(String::from(dependency));
-                    }
-                } else if let Some((dependency, enabled_feature)) = entry.split_once('/') {
-                    let (dependency, weak) =
-                        dependency.strip_suffix('?').map_or((dependency, false), |name| (name, true));
-                    if dependency.is_empty() || enabled_feature.is_empty() {
-                        blockers.insert(PlanBlocker::new(
-                            "unsupported-feature-entry",
-                            "features",
-                            &alloc::format!("dependency feature entry `{entry}` is malformed"),
-                        ));
-                    } else {
-                        edges.insert(NativeDependencyFeatureEdge {
-                            dependency: String::from(dependency),
-                            feature: String::from(enabled_feature),
-                            weak,
-                        });
-                    }
-                } else if definitions.contains_key(entry.as_str()) {
-                    push_native_feature_key(entry, &mut selected, &mut queue);
-                } else if optional.contains(entry.as_str()) {
-                    activated_optional.insert(entry.clone());
-                    push_native_feature_key(entry, &mut selected, &mut queue);
-                } else {
-                    blockers.insert(PlanBlocker::new(
-                        "unknown-feature-entry",
-                        "features",
-                        &alloc::format!("feature entry `{entry}` references no known feature or optional dependency"),
-                    ));
-                }
+}
+
+impl NativeFeatureActivation {
+    fn resolve(&mut self, definitions: &BTreeMap<&str, &[String]>, optional: &BTreeSet<&str>) {
+        let mut cursor = 0;
+        while cursor < self.queue.len() {
+            if cursor >= MAX_NATIVE_FEATURE_STEPS {
+                self.blockers.insert(PlanBlocker::new(
+                    "feature-resolution-step-limit",
+                    "features",
+                    "native feature resolution exceeded bounded fixed-point step limit",
+                ));
+                break;
             }
-        } else if optional.contains(feature.as_str()) {
-            activated_optional.insert(feature.clone());
+            let feature = self.queue[cursor].clone();
+            cursor += 1;
+            if let Some(entries) = definitions.get(feature.as_str()) {
+                for entry in *entries {
+                    self.resolve_entry(entry, definitions, optional);
+                }
+            } else if optional.contains(feature.as_str()) {
+                self.activated_optional.insert(feature);
+            }
         }
     }
-    NativeFeatureSelection {
-        selected_features: selected.into_iter().collect(),
-        activated_optional_dependencies: activated_optional.into_iter().collect(),
-        dependency_feature_edges: edges.into_iter().collect(),
-        blockers: blockers.into_iter().collect(),
+
+    fn resolve_entry(&mut self, entry: &str, definitions: &BTreeMap<&str, &[String]>, optional: &BTreeSet<&str>) {
+        if let Some(dependency) = entry.strip_prefix("dep:") {
+            if dependency.is_empty() {
+                self.blockers.insert(PlanBlocker::new(
+                    "unsupported-feature-entry",
+                    "features",
+                    "empty dep: feature entry",
+                ));
+            } else {
+                self.activated_optional.insert(String::from(dependency));
+            }
+        } else if let Some((dependency, enabled_feature)) = entry.split_once('/') {
+            let (dependency, weak) = dependency.strip_suffix('?').map_or((dependency, false), |name| (name, true));
+            if dependency.is_empty() || enabled_feature.is_empty() {
+                self.blockers.insert(PlanBlocker::new(
+                    "unsupported-feature-entry",
+                    "features",
+                    &alloc::format!("dependency feature entry `{entry}` is malformed"),
+                ));
+            } else {
+                self.edges.insert(NativeDependencyFeatureEdge {
+                    dependency: String::from(dependency),
+                    feature: String::from(enabled_feature),
+                    weak,
+                });
+            }
+        } else if definitions.contains_key(entry) {
+            push_native_feature_key(entry, &mut self.selected, &mut self.queue);
+        } else if optional.contains(entry) {
+            self.activated_optional.insert(String::from(entry));
+            push_native_feature_key(entry, &mut self.selected, &mut self.queue);
+        } else {
+            self.blockers.insert(PlanBlocker::new(
+                "unknown-feature-entry",
+                "features",
+                &alloc::format!("feature entry `{entry}` references no known feature or optional dependency"),
+            ));
+        }
+    }
+
+    fn finish(self) -> NativeFeatureSelection {
+        NativeFeatureSelection {
+            selected_features: self.selected.into_iter().collect(),
+            activated_optional_dependencies: self.activated_optional.into_iter().collect(),
+            dependency_feature_edges: self.edges.into_iter().collect(),
+            blockers: self.blockers.into_iter().collect(),
+        }
     }
 }
 

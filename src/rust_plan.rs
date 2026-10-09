@@ -5894,8 +5894,12 @@ fn native_target_cfg_dependency(
         }));
     }
     let normalized_manifest_path = manifest_path.as_ref().map(|path| normalize_path_string(path));
-    let decision =
-        mantle_rust_plan_core::classify_target_cfg_dependency(is_dependency_selected, inputs.is_cfg_selected);
+    let cfg_selection = if inputs.is_cfg_selected {
+        mantle_rust_plan_core::TargetCfgSelection::Selected
+    } else {
+        mantle_rust_plan_core::TargetCfgSelection::NotSelected
+    };
+    let decision = mantle_rust_plan_core::classify_target_cfg_dependency(is_dependency_selected, cfg_selection);
     let fact = NativeTargetCfgDependencySummary {
         cfg: inputs.cfg_expr.to_string(),
         active_target: inputs.planning.active_target.to_string(),
@@ -5921,7 +5925,11 @@ fn native_target_cfg_dependencies(
     let mut cfg_facts = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut selected_dependencies = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for (cfg_expr, target) in inputs.target_tables {
-        let is_cfg_selected = mantle_rust_plan_core::evaluate_supported_target_cfg(cfg_expr, inputs.active_target)
+        let is_cfg_selected =
+            mantle_rust_plan_core::evaluate_supported_target_cfg(mantle_rust_plan_core::NativeCfgEvaluationRequest {
+                expression: cfg_expr,
+                active_target: inputs.active_target,
+            })
             .ok_or_else(|| {
                 native_blocker(NativePackageBlockerInputs {
                     package_id: inputs.package_id.clone(),
@@ -5956,7 +5964,11 @@ fn selected_triple_for_execution_kind(execution_kind: &str, options: &RustPlanOp
     debug_assert!(!execution_kind.is_empty());
     let host = host_target_triple();
     let target = options.targets.first().map(String::as_str).unwrap_or(&host);
-    mantle_rust_plan_core::select_native_execution_triple(execution_kind, &host, target).to_string()
+    mantle_rust_plan_core::select_native_execution_triple(execution_kind, mantle_rust_plan_core::NativeHostTarget {
+        host: &host,
+        target,
+    })
+    .to_string()
 }
 
 fn host_target_triple() -> String {

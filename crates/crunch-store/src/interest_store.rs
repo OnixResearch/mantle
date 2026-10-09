@@ -11,6 +11,7 @@ use crunch_gc_core::interest::INTEREST_SCHEMA_VERSION;
 use crunch_gc_core::interest::InterestFact;
 use crunch_gc_core::interest::MAX_INTEREST_BYTES;
 use crunch_gc_core::interest::MAX_INTEREST_RECORDS;
+use crunch_gc_core::interest::ReleaseSelector;
 use data_encoding::HEXLOWER;
 use fs2::FileExt;
 use serde::Deserialize;
@@ -21,6 +22,7 @@ use crate::roots::GcRootRecord;
 
 const RECORD_DIRECTORY: &str = "retention-interests";
 const RECORD_EXTENSION: &str = "json";
+const MAX_INTEREST_READ_BYTES: u64 = (MAX_INTEREST_BYTES as u64).saturating_add(1);
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 // r[impl mantle.store_lifecycle.retention_interest_records]
@@ -49,12 +51,10 @@ impl InterestRecord {
         if self.schema_version != INTEREST_SCHEMA_VERSION {
             return Err(invalid("unsupported retention interest version"));
         }
-        if self.owner.is_empty()
-            || self.owner.len() > 256
-            || self.logical_path.len() > 4_096
-            || self.reason.is_empty()
-            || self.reason.len() > 256
-        {
+        if self.owner.is_empty() || self.reason.is_empty() {
+            return Err(invalid("retention interest field exceeds bound or is empty"));
+        }
+        if self.owner.len() > 256 || self.logical_path.len() > 4_096 || self.reason.len() > 256 {
             return Err(invalid("retention interest field exceeds bound or is empty"));
         }
         if self.owner != self.declaration.owner_scope
@@ -110,7 +110,7 @@ fn read_file(path: &Path) -> Result<(String, InterestRecord), Error> {
     let mut bytes = Vec::new();
     std::fs::File::open(path)
         .map_err(|error| invalid(format!("opening {}: {error}", path.display())))?
-        .take(MAX_INTEREST_BYTES as u64 + 1)
+        .take(MAX_INTEREST_READ_BYTES)
         .read_to_end(&mut bytes)
         .map_err(|error| invalid(format!("reading {}: {error}", path.display())))?;
     if bytes.len() > MAX_INTEREST_BYTES {
@@ -119,10 +119,12 @@ fn read_file(path: &Path) -> Result<(String, InterestRecord), Error> {
     let record: InterestRecord =
         serde_json::from_slice(&bytes).map_err(|error| invalid(format!("parsing {}: {error}", path.display())))?;
     let expected = record.canonical_bytes()?;
+    assert!(expected.len() <= MAX_INTEREST_BYTES, "canonical interest must stay within the read limit");
     if bytes != expected {
         return Err(invalid(format!("noncanonical retention interest {}", path.display())));
     }
     let digest = identity(&bytes);
+    assert_eq!(digest.len(), 64, "BLAKE3 interest identity must have 64 hexadecimal characters");
     if path.file_name().and_then(|name| name.to_str()) != Some(format!("{digest}.{RECORD_EXTENSION}").as_str()) {
         return Err(invalid(format!("retention interest identity mismatch {}", path.display())));
     }
@@ -157,6 +159,8 @@ pub(crate) fn load(state_dir: &Path) -> Result<Vec<(String, InterestRecord)>, Er
         }
     }
     let facts = facts(&records);
+    assert!(records.len() <= MAX_INTEREST_RECORDS, "loaded interest count must remain bounded");
+    assert_eq!(facts.len(), records.len(), "every loaded interest must have one identity fact");
     crunch_gc_core::interest::merge(&facts).map_err(invalid)?;
     Ok(records)
 }
@@ -201,25 +205,27 @@ pub(crate) fn publish_replacing_owner(state_dir: &Path, record: &InterestRecord)
 
 fn publish_with_replacement(state_dir: &Path, record: &InterestRecord, replace_owner: bool) -> Result<(), Error> {
     let bytes = record.canonical_bytes()?;
+    assert!(bytes.len() <= MAX_INTEREST_BYTES, "published interest must stay within the read limit");
     crate::roots::ensure_root_mutation_allowed(state_dir)?;
     let _lock = lock(state_dir)?;
     let prior = load(state_dir)?;
+    assert!(prior.len() <= MAX_INTEREST_RECORDS, "published interest count must remain bounded");
     let digest = identity(&bytes);
-    let already_published = prior.iter().any(|(id, _)| id == &digest);
+    let is_published = prior.iter().any(|(id, _)| id == &digest);
     let replaces = |existing: &InterestRecord| {
         existing.owner == record.owner
             && existing.logical_path == record.logical_path
             && (replace_owner || existing.reason == record.reason)
     };
     let needs_cleanup = prior.iter().any(|(id, existing)| id != &digest && replaces(existing));
-    if already_published && !needs_cleanup {
+    if is_published && !needs_cleanup {
         return Ok(());
     }
-    if prior.len() >= MAX_INTEREST_RECORDS && !already_published && !needs_cleanup {
+    if prior.len() >= MAX_INTEREST_RECORDS && !is_published && !needs_cleanup {
         return Err(invalid("retention interest record count exceeds limit"));
     }
     let dir = directory(state_dir);
-    if !already_published {
+    if !is_published {
         std::fs::create_dir_all(&dir).map_err(|error| invalid(format!("creating {}: {error}", dir.display())))?;
         let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let pending = dir.join(format!(".pending-{}-{sequence}", std::process::id()));
@@ -259,28 +265,23 @@ fn publish_with_replacement(state_dir: &Path, record: &InterestRecord, replace_o
     Ok(())
 }
 
-pub(crate) fn release(
-    state_dir: &Path,
-    owner: &str,
-    logical_path: &str,
-    reason: Option<&str>,
-) -> Result<Option<GcRootRecord>, Error> {
+pub(crate) fn release(state_dir: &Path, selector: ReleaseSelector<'_>) -> Result<Option<GcRootRecord>, Error> {
     crate::roots::ensure_root_mutation_allowed(state_dir)?;
     let _lock = lock(state_dir)?;
     let records = load(state_dir)?;
-    let ids =
-        crunch_gc_core::interest::release_identities(&facts(&records), crunch_gc_core::interest::ReleaseSelector {
-            owner,
-            path: logical_path,
-            reason,
-        })
-        .map_err(invalid)?;
+    let ids = crunch_gc_core::interest::release_identities(&facts(&records), selector).map_err(invalid)?;
     let mut removed = None;
     for id in ids {
         let record = records
             .iter()
             .find(|(identity, _)| identity == &id)
             .ok_or_else(|| invalid("retention interest release identity disappeared"))?;
+        assert_eq!(record.1.owner, selector.owner, "release must not remove another owner's interest");
+        assert_eq!(record.1.logical_path, selector.path, "release must not remove another path's interest");
+        assert!(
+            selector.reason.is_none_or(|reason| record.1.reason == reason),
+            "release must select only the requested reason"
+        );
         std::fs::remove_file(directory(state_dir).join(format!("{id}.{RECORD_EXTENSION}")))
             .map_err(|error| invalid(format!("releasing interest {id}: {error}")))?;
         removed = Some(record.1.declaration.clone());

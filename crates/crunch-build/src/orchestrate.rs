@@ -73,6 +73,7 @@ pub(crate) struct BuilderSourceSlice<'a> {
 }
 
 const DERIVATION_SUFFIX: &str = ".drv";
+const MAX_FINISH_REFERENCE_FINDINGS: usize = 128;
 
 fn recorded_action_ref_for_parent(parent: &crate::registry::RegistryEntry, store_dir: &str) -> Result<String, Error> {
     if let Some(action_ref) = &parent.resolved_action_ref {
@@ -169,6 +170,14 @@ pub struct BuildOutcome {
 struct CacheCheckHit {
     infos: BTreeMap<String, PathInfo>,
     substitutions: BTreeMap<String, OutputSubstitutionReport>,
+}
+
+struct SharedActionLookup<'a> {
+    drv_path: &'a StorePath<String>,
+    derivation: &'a Derivation,
+    original_drv_path: &'a StorePath<String>,
+    action_ref: &'a str,
+    is_root: bool,
 }
 
 struct SharedActionCandidates {
@@ -679,6 +688,9 @@ where BServ: BuildService + 'static
             .probes_by_result_ref
             .get(&selected)
             .ok_or_else(|| Error::Store("ca-realisation-untrusted: PathInfo unavailable".to_string()))?;
+        if probe.outputs.len() > ca_input_resolution::MAX_CA_INPUT_OUTPUTS {
+            return Err(Error::Store("ca-resolution-limit: admitted output count exceeds bound".to_string()));
+        }
         let mut outputs = BTreeMap::new();
         for (output_name, path_info) in &probe.outputs {
             let recorded = if parent.content_addressed {
@@ -695,6 +707,9 @@ where BServ: BuildService + 'static
                 return Err(Error::Store(format!(
                     "ca-realisation-untrusted: {output_name} path disagrees with completed goal"
                 )));
+            }
+            if outputs.len() >= ca_input_resolution::MAX_CA_INPUT_OUTPUTS {
+                return Err(Error::Store("ca-resolution-limit: admitted output count exceeds bound".to_string()));
             }
             outputs.insert(output_name.clone(), recorded.clone());
         }
@@ -714,8 +729,13 @@ where BServ: BuildService + 'static
             let parent = known_paths
                 .get_by_drv_path(&parent_abs)
                 .ok_or_else(|| Error::Store(format!("ca-input-unrealized: missing parent {parent_abs}")))?;
-            let parent_was_resolved = parent.resolved_drv_path.as_ref().is_some_and(|resolved| resolved != parent_path);
-            if !parent.content_addressed && !parent_was_resolved {
+            let is_parent_resolved = parent.resolved_drv_path.as_ref().is_some_and(|resolved| resolved != parent_path);
+            if !parent.content_addressed && !is_parent_resolved {
+                if remaining.len() >= derivation.input_derivations.len() {
+                    return Err(Error::Store(
+                        "ca-resolution-limit: remaining input count exceeds derivation".to_string(),
+                    ));
+                }
                 remaining.insert(parent_path.as_ref(), parent.hash_derivation_modulo);
                 continue;
             }
@@ -732,6 +752,11 @@ where BServ: BuildService + 'static
                     .ok_or_else(|| Error::Store(format!("ca-input-unrealized: provisional {output_name}")))?;
                 let provisional = String::from_utf8(provisional.to_vec())
                     .map_err(|_| Error::Store("ca-realisation-untrusted: non-UTF8 provisional path".to_string()))?;
+                if admitted.len() >= ca_input_resolution::MAX_CA_INPUT_OUTPUTS {
+                    return Err(Error::Store(
+                        "ca-resolution-limit: admitted input output count exceeds bound".to_string(),
+                    ));
+                }
                 admitted.push(AdmittedResolvedInput {
                     derivation: parent_path.clone(),
                     output: output_name.clone(),
@@ -786,7 +811,7 @@ where BServ: BuildService + 'static
         let derivation_ref = resolved.derivation.as_ref();
         let drv_absolute = drv_path.to_absolute_path_with_prefix(self.store.store_dir());
         known_paths.record_resolved_derivation(&drv_absolute, resolved.derivation.clone(), resolved.path.clone())?;
-        let report_start = self.action_result_reports.len();
+        let prior_action_results_count = self.action_result_reports.len();
 
         // Keep the evaluated .drv identity stable. Realized plan roots are
         // execution inputs; only the signed action identity binds their
@@ -813,10 +838,19 @@ where BServ: BuildService + 'static
         let is_mutable_workspace = derivation_uses_mutable_workspace(derivation_ref)?;
         if !is_mutable_workspace
             && let Some(shared_hit) = self
-                .check_shared_action_result(&resolved.path, derivation_ref, drv_path, &action_ref, known_paths, is_root)
+                .check_shared_action_result(
+                    SharedActionLookup {
+                        drv_path: &resolved.path,
+                        derivation: derivation_ref,
+                        original_drv_path: drv_path,
+                        action_ref: &action_ref,
+                        is_root,
+                    },
+                    known_paths,
+                )
                 .await?
         {
-            self.label_resolved_report(report_start, drv_path, &resolved, "reused");
+            self.label_resolved_report(prior_action_results_count, drv_path, &resolved, "reused");
             info!(drv = %drv_name, "shared action result admitted, skipping executor");
             return Ok(PrepareResult::Done(BuildOutcome {
                 drv_path: drv_path.clone(),
@@ -831,14 +865,13 @@ where BServ: BuildService + 'static
         // For bound consumers, only the signed action result above can reuse
         // unchanged roots; a changed mapping must execute or fail closed.
         let is_ca = derivation_ref.outputs.values().all(|output| output.path.is_none() && output.ca_hash.is_none());
-        if !is_mutable_workspace
-            && bound_plan_outputs.is_empty()
-            && !is_ca
-            && resolved.identity.is_none()
+        let is_plain_pathinfo_cache_eligible =
+            !is_mutable_workspace && bound_plan_outputs.is_empty() && !is_ca && resolved.identity.is_none();
+        if is_plain_pathinfo_cache_eligible
             && let Some(cached_hit) = self.check_cache(&resolved.path, derivation_ref, is_root).await?
         {
             self.record_cached_output_paths(drv_path, derivation_ref, &cached_hit.infos, known_paths)?;
-            self.label_resolved_report(report_start, drv_path, &resolved, "reused");
+            self.label_resolved_report(prior_action_results_count, drv_path, &resolved, "reused");
             info!(drv = %drv_name, "all outputs cached, skipping build");
             return Ok(PrepareResult::Done(BuildOutcome {
                 drv_path: drv_path.clone(),
@@ -848,7 +881,7 @@ where BServ: BuildService + 'static
                 log: None,
             }));
         }
-        self.label_resolved_report(report_start, drv_path, &resolved, "built");
+        self.label_resolved_report(prior_action_results_count, drv_path, &resolved, "built");
 
         // 3. Ensure input derivation outputs are in castore.
         for input_drv_path in derivation_ref.input_derivations.keys() {
@@ -940,12 +973,13 @@ where BServ: BuildService + 'static
         let declared = std::str::from_utf8(declared.as_ref())
             .map_err(|_| Error::Store("finish-gate declaration must be UTF-8".into()))?;
         let gates = finish_gates::parse_gate(declared).map_err(Error::Store)?;
-        let cross_build = prepared.derivation.system != format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS);
+        let is_cross_build =
+            prepared.derivation.system != format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS);
         let candidates = finish_gates::reference_candidates(
             &gates,
             self.store.store_dir(),
             prepared.sandbox_inputs.keys().map(|path| path.to_absolute_path_with_prefix(self.store.store_dir())),
-            cross_build,
+            is_cross_build,
         )
         .map_err(Error::Store)?;
         let mut findings = Vec::new();
@@ -958,31 +992,37 @@ where BServ: BuildService + 'static
                 .scan_output_references(&output.node, &candidates)
                 .await
                 .map_err(|error| Error::Store(format!("finish-gate reference scan: {error}")))?;
-            findings.extend(
-                finish_gates::evaluate_references(
-                    &gates,
-                    hits.into_iter().map(|hit| finish_gates::ReferenceObservation {
-                        file: hit.file,
-                        reference: hit.reference,
-                        excerpt: hit.excerpt,
-                    }),
-                    self.store.store_dir(),
-                    output_name,
-                    cross_build,
-                )
-                .map_err(Error::Store)?,
-            );
-            if findings.len() > 128 {
+            let output_findings = finish_gates::evaluate_references(
+                &gates,
+                hits.into_iter().map(|hit| finish_gates::ReferenceObservation {
+                    file: hit.file,
+                    reference: hit.reference,
+                    excerpt: hit.excerpt,
+                }),
+                finish_gates::ReferenceScanContext {
+                    logical_store_prefix: self.store.store_dir(),
+                    output: output_name,
+                    cross_build: is_cross_build,
+                },
+            )
+            .map_err(Error::Store)?;
+            if output_findings.len() > MAX_FINISH_REFERENCE_FINDINGS.saturating_sub(findings.len()) {
                 return Err(Error::Store("finish-gate reference findings exceed 128".into()));
             }
+            findings.reserve(output_findings.len());
+            findings.extend(output_findings);
         }
-        let report = finish_gates::result_report(&prepared.drv_name, &gates, findings, build_result.log.as_deref())
-            .map_err(Error::Store)?;
-        let denied = report.reference_findings.iter().find(|finding| finding.denied).cloned();
-        let missing_dlopen =
-            report.missing_sonames.iter().find(|name| !report.optional_sonames.contains(name)).cloned();
-        let audit_error = report.audit_error.clone();
-        self.finish_gate_reports.push(report);
+        let gate_result =
+            finish_gates::result_report(&prepared.drv_name, &gates, findings, build_result.log.as_deref())
+                .map_err(Error::Store)?;
+        let denied = gate_result.reference_findings.iter().find(|finding| finding.denied).cloned();
+        let missing_dlopen = gate_result
+            .missing_sonames
+            .iter()
+            .find(|name| !gate_result.optional_sonames.contains(name))
+            .cloned();
+        let audit_error = gate_result.audit_error.clone();
+        self.finish_gate_reports.push(gate_result);
         if let Some(finding) = denied {
             return Err(Error::Store(format!(
                 "finish-gate reference leak denied in output {} file {}: {} excerpt={}",
@@ -1050,11 +1090,11 @@ where BServ: BuildService + 'static
         }
 
         if !derivation_uses_mutable_workspace(&prepared.derivation)? {
-            let signed_realisation_required = prepared.is_ca || prepared.resolved_identity.is_some();
+            let is_signed_realisation_required = prepared.is_ca || prepared.resolved_identity.is_some();
             self.publish_completed_action_result(
                 &prepared.derivation,
                 &output_infos,
-                signed_realisation_required,
+                is_signed_realisation_required,
                 prepared.action_ref.clone(),
             )
             .await?;
@@ -1710,13 +1750,16 @@ where BServ: BuildService + 'static
 
     async fn check_shared_action_result(
         &mut self,
-        drv_path: &StorePath<String>,
-        derivation: &Derivation,
-        original_drv_path: &StorePath<String>,
-        action_ref: &str,
+        lookup: SharedActionLookup<'_>,
         known_paths: &mut DerivationRegistry,
-        is_root: bool,
     ) -> Result<Option<CacheCheckHit>, Error> {
+        let SharedActionLookup {
+            drv_path,
+            derivation,
+            original_drv_path,
+            action_ref,
+            is_root,
+        } = lookup;
         let collection = self.collect_shared_action_candidates(derivation, action_ref).await?;
         let policy_refs = policy_refs_for_derivation(derivation, self.store.store_dir(), self.hermeticity_mode)
             .map_err(Error::Store)?;
@@ -1843,19 +1886,21 @@ where BServ: BuildService + 'static
         &mut self,
         derivation: &Derivation,
         outputs: &BTreeMap<String, PathInfo>,
-        require_realisation: bool,
+        is_realisation_required: bool,
         action_ref: String,
     ) -> Result<(), Error> {
         let signed = match signed_record_for_outputs_with_action_ref(
             derivation,
             outputs,
-            self.store.store_dir(),
-            self.hermeticity_mode,
-            &self.keypair,
-            action_ref,
+            crate::action_result::SignedRecordContext {
+                store_dir: self.store.store_dir(),
+                hermeticity_mode: self.hermeticity_mode,
+                keypair: &self.keypair,
+                action_ref,
+            },
         ) {
             Ok(signed) => signed,
-            Err(error) if require_realisation => {
+            Err(error) if is_realisation_required => {
                 return Err(Error::Store(format!("ca-realisation-untrusted: {error}")));
             }
             Err(error) => {
@@ -1865,7 +1910,7 @@ where BServ: BuildService + 'static
         };
         let diagnostics = match self.action_results.publish_local(&signed).await {
             Ok(_) => Vec::new(),
-            Err(error) if require_realisation => {
+            Err(error) if is_realisation_required => {
                 return Err(Error::Store(format!("ca-realisation-untrusted: {error}")));
             }
             Err(error) => {

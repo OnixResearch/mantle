@@ -162,11 +162,11 @@ pub fn plan_effects(family: CommandFamily, specs: &[EffectSpec<'_>]) -> Result<E
         if effects.iter().any(|effect: &Effect| effect.effect_id.0 == spec.effect_id) {
             return Err(PlanError::DuplicateEffectId { index });
         }
-        let valid_limit = match spec.limit {
+        let is_budget_positive = match spec.limit {
             EffectMeasure::Calls(count) | EffectMeasure::Items(count) => count > 0,
             EffectMeasure::Bytes(bytes) => bytes > 0,
         };
-        if !valid_limit {
+        if !is_budget_positive {
             return Err(PlanError::ZeroLimit { index });
         }
         let expected_output = match spec.expected_output {
@@ -226,13 +226,36 @@ pub enum ApplicationOutcome {
     Contradicted { effect_count: u32 },
 }
 
+fn is_observation_consistent(effect: &Effect, observation: &Observation) -> bool {
+    let is_usage_admissible = match (effect.limit, observation.usage) {
+        (EffectMeasure::Calls(max), EffectMeasure::Calls(used))
+        | (EffectMeasure::Items(max), EffectMeasure::Items(used)) => used <= max,
+        (EffectMeasure::Bytes(max), EffectMeasure::Bytes(used)) => used <= max,
+        _ => false,
+    };
+    let is_output_consistent = (observation.status != ObservationStatus::Succeeded
+        && observation.output == EffectOutput::None)
+        || effect.expected_output == observation.output;
+    let is_skip_unexecuted = observation.status != ObservationStatus::Skipped
+        || (observation.output == EffectOutput::None
+            && matches!(
+                observation.usage,
+                EffectMeasure::Calls(0) | EffectMeasure::Items(0) | EffectMeasure::Bytes(0)
+            ));
+    let is_authority_consistent = observation.kind == effect.kind && is_usage_admissible;
+    is_authority_consistent && is_output_consistent && is_skip_unexecuted
+}
+
 /// Classify real adapter observations against explicit policy.
 ///
 /// Unknown, repeated, or missing identities reject. Authority, output, unit
 /// dimension, and usage mismatches reject even if the adapter claims success.
 pub fn classify_observations(plan: &EffectPlan, observations: &[Observation]) -> ApplicationOutcome {
-    if plan.effects.is_empty()
-        || plan.effects.len() > MAX_EFFECTS_PER_PLAN as usize
+    let Ok(planned_effect_count) = u32::try_from(plan.effects.len()) else {
+        return ApplicationOutcome::Contradicted { effect_count: 1 };
+    };
+    if planned_effect_count == 0
+        || planned_effect_count > MAX_EFFECTS_PER_PLAN
         || plan.effects.iter().enumerate().any(|(index, effect)| {
             effect.effect_id.0.is_empty()
                 || effect.family != plan.effects[0].family
@@ -257,28 +280,19 @@ pub fn classify_observations(plan: &EffectPlan, observations: &[Observation]) ->
             continue;
         }
         seen.push(observation.effect_id.0.as_str());
-        let within_limit = match (effect.limit, observation.usage) {
-            (EffectMeasure::Calls(max), EffectMeasure::Calls(used))
-            | (EffectMeasure::Items(max), EffectMeasure::Items(used)) => used <= max,
-            (EffectMeasure::Bytes(max), EffectMeasure::Bytes(used)) => used <= max,
-            _ => false,
-        };
-        let output_matches = (observation.status != ObservationStatus::Succeeded
-            && observation.output == EffectOutput::None)
-            || effect.expected_output == observation.output;
-        let skipped_is_unexecuted = observation.status != ObservationStatus::Skipped
-            || (observation.output == EffectOutput::None
-                && matches!(
-                    observation.usage,
-                    EffectMeasure::Calls(0) | EffectMeasure::Items(0) | EffectMeasure::Bytes(0)
-                ));
-        if observation.kind != effect.kind || !within_limit || !output_matches || !skipped_is_unexecuted {
+        if !is_observation_consistent(effect, observation) {
             contradicted = contradicted.saturating_add(1);
         } else if observation.status != ObservationStatus::Succeeded {
             failed = failed.saturating_add(1);
         }
     }
-    let missing = u32::try_from(plan.effects.len().saturating_sub(seen.len())).unwrap_or(u32::MAX);
+    let Ok(seen_effect_count) = u32::try_from(seen.len()) else {
+        return ApplicationOutcome::Contradicted { effect_count: 1 };
+    };
+    debug_assert!(seen_effect_count <= planned_effect_count);
+    let Some(missing) = planned_effect_count.checked_sub(seen_effect_count) else {
+        return ApplicationOutcome::Contradicted { effect_count: 1 };
+    };
     if unknown > 0 || missing > 0 {
         return ApplicationOutcome::Rejected {
             unknown_effect_count: unknown,
@@ -329,6 +343,49 @@ mod environment_tests {
         let mut over_budget = observed;
         over_budget.usage = EffectMeasure::Calls(5);
         assert_eq!(classify_observations(&plan, &[over_budget]), ApplicationOutcome::Contradicted { effect_count: 1 });
+    }
+
+    #[test]
+    fn missing_or_repeated_effect_rejects_before_observed_failure() {
+        let plan = plan_effects(CommandFamily::Bootstrap, &[
+            EffectSpec {
+                effect_id: "first",
+                kind: EffectKind::ReadEnvironment,
+                limit: EffectMeasure::Calls(1),
+                expected_output: ExpectedOutput::None,
+            },
+            EffectSpec {
+                effect_id: "second",
+                kind: EffectKind::ReadEnvironment,
+                limit: EffectMeasure::Calls(1),
+                expected_output: ExpectedOutput::None,
+            },
+        ])
+        .unwrap();
+        let first = Observation {
+            effect_id: EffectId(String::from("first")),
+            kind: EffectKind::ReadEnvironment,
+            status: ObservationStatus::Failed,
+            output: EffectOutput::None,
+            usage: EffectMeasure::Calls(0),
+            diagnostics_code: None,
+        };
+        assert_eq!(classify_observations(&plan, core::slice::from_ref(&first)), ApplicationOutcome::Rejected {
+            unknown_effect_count: 0,
+            missing_effect_count: 1,
+        });
+        let second = Observation {
+            effect_id: EffectId(String::from("second")),
+            status: ObservationStatus::Succeeded,
+            ..first.clone()
+        };
+        assert_eq!(classify_observations(&plan, &[first.clone(), second.clone()]), ApplicationOutcome::Failed {
+            failed_effect_count: 1,
+        });
+        assert_eq!(classify_observations(&plan, &[first.clone(), second, first]), ApplicationOutcome::Rejected {
+            unknown_effect_count: 1,
+            missing_effect_count: 0,
+        });
     }
 
     #[test]

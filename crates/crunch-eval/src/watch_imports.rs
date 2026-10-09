@@ -27,8 +27,8 @@ use nickel_lang_core::traverse::TraverseControl;
 use crate::Error;
 
 const MAX_WATCH_FILES: usize = 256;
-const MAX_WATCH_FILE_BYTES: usize = 2 * 1024 * 1024;
-const MAX_WATCH_TOTAL_BYTES: usize = 16 * 1024 * 1024;
+const MAX_WATCH_FILE_BYTES: usize = 2_097_152;
+const MAX_WATCH_TOTAL_BYTES: usize = 16_777_216;
 
 /// Return a stable, sorted set of the root and transitive on-disk imports.
 ///
@@ -73,15 +73,17 @@ pub fn source_dependencies(root: &Path, import_paths: &[OsString]) -> Result<Vec
             return Err(boundary("too many watched Nickel source files"));
         }
         let remaining = MAX_WATCH_TOTAL_BYTES.saturating_sub(total_bytes);
-        let read_limit = MAX_WATCH_FILE_BYTES.min(remaining);
+        let read_limit_bytes = MAX_WATCH_FILE_BYTES.min(remaining);
         let mut bytes = Vec::new();
-        std::fs::File::open(&path)?
-            .take(u64::try_from(read_limit).unwrap_or(u64::MAX).saturating_add(1))
-            .read_to_end(&mut bytes)?;
-        if bytes.len() > read_limit {
+        let file_read_limit_bytes =
+            u64::try_from(read_limit_bytes).map_err(|_| boundary("watched Nickel read limit cannot fit u64"))?;
+        std::fs::File::open(&path)?.take(file_read_limit_bytes.saturating_add(1)).read_to_end(&mut bytes)?;
+        if bytes.len() > read_limit_bytes {
             return Err(boundary("watched Nickel sources exceed byte limit"));
         }
-        total_bytes += bytes.len();
+        total_bytes = total_bytes
+            .checked_add(bytes.len())
+            .ok_or_else(|| boundary("watched Nickel sources exceed byte limit"))?;
         if format != InputFormat::Nickel {
             continue;
         }
@@ -90,7 +92,7 @@ pub fn source_dependencies(root: &Path, import_paths: &[OsString]) -> Result<Vec
         let parsed = TermParser::new()
             .parse_strict_compat(&mut PosTable::new(), id, Lexer::new(cache.sources.source(id)))
             .map_err(|_| boundary("could not parse watched Nickel source"))?;
-        let mut imports = Vec::new();
+        let mut discovered_paths = Vec::new();
         enum ScanStop {
             ImportBudget,
             PackageImport,
@@ -99,10 +101,10 @@ pub fn source_dependencies(root: &Path, import_paths: &[OsString]) -> Result<Vec
             &mut |value: &nickel_lang_core::eval::value::NickelValue, _: &()| {
                 match value.as_term() {
                     Some(Term::Import(Import::Path { path, format })) => {
-                        if imports.len() >= MAX_WATCH_FILES {
+                        if discovered_paths.len() >= MAX_WATCH_FILES {
                             return TraverseControl::Return(ScanStop::ImportBudget);
                         }
-                        imports.push((path.clone(), *format));
+                        discovered_paths.push((path.clone(), *format));
                     }
                     Some(Term::Import(Import::Package { .. })) => {
                         return TraverseControl::Return(ScanStop::PackageImport);
@@ -120,20 +122,32 @@ pub fn source_dependencies(root: &Path, import_paths: &[OsString]) -> Result<Vec
             }
             None => {}
         }
-        for (import, format) in imports {
-            let parent = path.parent().ok_or_else(|| boundary("watched source has no parent directory"))?;
-            let found = std::iter::once(parent.to_path_buf())
-                .chain(import_paths.iter().map(PathBuf::from))
-                .find_map(|base| {
-                    let candidate = base.join(&import);
-                    std::fs::File::open(&candidate).ok().map(|_| candidate)
-                })
-                .ok_or_else(|| boundary("watched Nickel import is missing or unreadable"))?;
-            pending.push((normalize_path(found).map_err(Error::Io)?, format));
-        }
+        enqueue_resolved_imports(&path, discovered_paths, import_paths, &mut pending)?;
     }
 
+    debug_assert!(observed.len() <= MAX_WATCH_FILES);
+    debug_assert!(total_bytes <= MAX_WATCH_TOTAL_BYTES);
     Ok(observed.into_iter().collect())
+}
+
+fn enqueue_resolved_imports(
+    path: &Path,
+    discovered_paths: Vec<(OsString, InputFormat)>,
+    import_paths: &[OsString],
+    pending: &mut Vec<(PathBuf, InputFormat)>,
+) -> Result<(), Error> {
+    for (import, format) in discovered_paths {
+        let parent = path.parent().ok_or_else(|| boundary("watched source has no parent directory"))?;
+        let found = std::iter::once(parent.to_path_buf())
+            .chain(import_paths.iter().map(PathBuf::from))
+            .find_map(|base| {
+                let candidate = base.join(&import);
+                std::fs::File::open(&candidate).ok().map(|_| candidate)
+            })
+            .ok_or_else(|| boundary("watched Nickel import is missing or unreadable"))?;
+        pending.push((normalize_path(found).map_err(Error::Io)?, format));
+    }
+    Ok(())
 }
 
 fn boundary(message: &str) -> Error {

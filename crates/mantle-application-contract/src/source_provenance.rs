@@ -109,7 +109,6 @@ pub fn plan_source_bundle_effects(request: SourceBundleEffectRequest) -> Result<
     let preflight_read = PREFLIGHT_SOURCE_EFFECT;
     let state = READ_STATE_EFFECT;
     let write = WRITE_BUNDLE_EFFECT;
-    let import_write = WRITE_STATE_EFFECT;
     let confirm = CONFIRM_BUNDLE_EFFECT;
     let network = FETCH_SOURCE_EFFECT;
     let hydrate = HYDRATE_VENDOR_EFFECT;
@@ -117,7 +116,7 @@ pub fn plan_source_bundle_effects(request: SourceBundleEffectRequest) -> Result<
         SourceBundleEffectAction::Plan | SourceBundleEffectAction::List => &[read],
         SourceBundleEffectAction::Export { fetch_missing: false } => &[read, write, confirm],
         SourceBundleEffectAction::Export { fetch_missing: true } => &[read, network, write, confirm],
-        SourceBundleEffectAction::Import { .. } => &[read, import_write, state],
+        SourceBundleEffectAction::Import { .. } => &[read, WRITE_STATE_EFFECT, state],
         SourceBundleEffectAction::Verify { imported: false } => &[read],
         SourceBundleEffectAction::Verify { imported: true }
         | SourceBundleEffectAction::BootstrapProfile {
@@ -140,13 +139,16 @@ pub fn plan_source_bundle_effects(request: SourceBundleEffectRequest) -> Result<
         } => &[read],
         SourceBundleEffectAction::Hydrate => &[read, hydrate, state],
     };
-    plan_effects(CommandFamily::SourceProvenance, effects).map_err(|error| {
+    let plan = plan_effects(CommandFamily::SourceProvenance, effects).map_err(|error| {
         SourceProvenanceBlocker::Domain(ApplicationBlocker::new(
             error.code(),
             "source_provenance",
             "source operation has an invalid or unbounded effect plan",
         ))
-    })
+    })?;
+    debug_assert_eq!(plan.effects.len(), effects.len());
+    debug_assert!(plan.effects.iter().all(|effect| effect.family == CommandFamily::SourceProvenance));
+    Ok(plan)
 }
 
 /// Maximum admitted declared entries for one source provenance command.

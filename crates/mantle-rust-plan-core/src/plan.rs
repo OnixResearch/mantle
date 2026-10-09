@@ -24,7 +24,7 @@ const RESOLVED_OBSERVATION_DOMAIN: &[u8] = b"mantle-rust-resolved-unit-observati
 const RESTORED_COMPILER_DOMAIN: &[u8] = b"mantle-rust-restored-compiler-artifact-v1\0";
 
 /// Maximum total declared process-word and identity bytes for one attempt.
-pub const MAX_RESOLVED_EFFECT_BYTES: usize = 8 * 1024 * 1024;
+pub const MAX_RESOLVED_EFFECT_BYTES: usize = 8_388_608;
 /// Maximum bytes in one argument, executable, environment value, or identity.
 pub const MAX_PROCESS_WORD_BYTES: usize = 1024 * 1024;
 
@@ -52,26 +52,28 @@ pub fn classify_cargo_free_planning_blockers(readiness: [bool; 4]) -> Vec<String
 /// Preserve the selected rustc linker mode unless an explicit split or
 /// joined `-C link-self-contained` option exists.
 pub fn plan_native_runtime_arguments(reviewable_args: &[String]) -> Vec<String> {
-    let mut explicit = false;
-    let mut previous_codegen = false;
+    let mut is_explicit = false;
+    let mut is_previous_codegen = false;
     for arg in reviewable_args {
         let is_link_option = |option: &str| {
             option == "link-self-contained"
                 || option.strip_prefix("link-self-contained").is_some_and(|suffix| suffix.starts_with('='))
         };
-        if previous_codegen && is_link_option(arg) {
-            explicit = true;
+        if is_previous_codegen && is_link_option(arg) {
+            is_explicit = true;
         }
         if arg.strip_prefix("-C").is_some_and(is_link_option) {
-            explicit = true;
+            is_explicit = true;
         }
-        previous_codegen = arg == "-C";
+        is_previous_codegen = arg == "-C";
     }
     let mut arguments = reviewable_args.to_vec();
-    if !explicit {
+    if !is_explicit {
         arguments.push(String::from("-C"));
         arguments.push(String::from("link-self-contained=no"));
     }
+    debug_assert!(arguments.len() >= reviewable_args.len());
+    debug_assert!(is_explicit || arguments.len() == reviewable_args.len().saturating_add(2));
     arguments
 }
 
@@ -253,15 +255,14 @@ pub fn classify_restored_compiler_artifact(
     restored: &RestoredCompilerArtifactObservation,
 ) -> Result<Blake3Digest, PlanBlocker> {
     let subject = planned.unit_id.0.as_str();
-    if planned.target_kind != "custom-build"
-        || primary.facts.role != ProcessEffectRole::RustCompiler
-        || primary.facts.attempt != 0
-        || primary.facts.unit_id != planned.unit_id
-        || primary.facts.effect_id != planned.effect_id
-        || restored.effect_id != planned.effect_id
-        || restored.unit_id != planned.unit_id
-        || restored.compiler_resolved_blake3 != primary.resolved_blake3
-    {
+    let is_primary_compiler = planned.target_kind == "custom-build"
+        && primary.facts.role == ProcessEffectRole::RustCompiler
+        && primary.facts.attempt == 0;
+    let is_selected_primary = primary.facts.unit_id == planned.unit_id && primary.facts.effect_id == planned.effect_id;
+    let is_matching_restoration = restored.effect_id == planned.effect_id
+        && restored.unit_id == planned.unit_id
+        && restored.compiler_resolved_blake3 == primary.resolved_blake3;
+    if !(is_primary_compiler && is_selected_primary && is_matching_restoration) {
         return Err(PlanBlocker::new(
             "restored-compiler-predecessor",
             subject,
@@ -278,6 +279,8 @@ pub fn classify_restored_compiler_artifact(
             "restored compiler receipt must cover the selected outputs and observed artifact set",
         ));
     }
+    debug_assert_eq!(primary.facts.unit_id, planned.unit_id);
+    debug_assert_eq!(restored.declared_outputs, planned.expected_outputs);
     domain_digest(RESTORED_COMPILER_DOMAIN, restored).map_err(|_| {
         PlanBlocker::new(
             "restored-compiler-identity",
@@ -330,6 +333,8 @@ pub enum PlanExecutionOutcome {
         unknown_effect_count: u32,
         missing_effect_count: u32,
     },
+    /// Supplied effects or observations exceed the admitted topology bound.
+    InputLimitExceeded,
 }
 
 /// Admit already selected native derivations without rewriting their Cargo/rustc
@@ -337,20 +342,25 @@ pub enum PlanExecutionOutcome {
 /// internal producer edges. Paths and external artifacts remain declared inputs.
 pub fn plan_existing_unit_effects(units: Vec<ExistingUnitFacts>) -> Result<Vec<ExistingUnitEffect>, Vec<PlanBlocker>> {
     let order = ordered_existing_unit_indices(&units)?;
-    Ok(match order {
-        None => units.into_iter().map(unit_into_effect).collect(),
-        Some(indices) => {
-            let mut slots = units.into_iter().map(Some).collect::<Vec<_>>();
-            indices
-                .into_iter()
-                .map(|index| unit_into_effect(slots[index].take().expect("admitted unit index")))
-                .collect()
-        }
-    })
+    let Some(indices) = order else {
+        return Ok(units.into_iter().map(unit_into_effect).collect());
+    };
+    let mut slots = units.into_iter().map(Some).collect::<Vec<_>>();
+    let mut effects = Vec::with_capacity(indices.len());
+    for index in indices {
+        let Some(unit) = slots.get_mut(index).and_then(Option::take) else {
+            return Err(vec![PlanBlocker::new(
+                "unit-identity",
+                "units",
+                "ordered unit index is absent or repeated",
+            )]);
+        };
+        effects.push(unit_into_effect(unit));
+    }
+    Ok(effects)
 }
 
 fn ordered_existing_unit_indices(units: &[ExistingUnitFacts]) -> Result<Option<Vec<usize>>, Vec<PlanBlocker>> {
-    let mut blockers = Vec::new();
     if units.is_empty() {
         return Err(vec![PlanBlocker::new(
             "missing-units",
@@ -365,20 +375,44 @@ fn ordered_existing_unit_indices(units: &[ExistingUnitFacts]) -> Result<Option<V
             "selected units exceed the admitted bound",
         )]);
     }
+    let mut blockers = Vec::with_capacity(units.len());
+    let (by_id, mut is_already_ordered) = validate_existing_units(units, &mut blockers);
+    validate_existing_dependencies(units, &by_id, &mut is_already_ordered, &mut blockers);
+    if !blockers.is_empty() {
+        blockers.sort();
+        blockers.dedup();
+        return Err(blockers);
+    }
+    debug_assert_eq!(by_id.len(), units.len());
+    debug_assert!(!count_exceeds(units.len(), MAX_UNITS));
+    if is_already_ordered {
+        return Ok(None);
+    }
+    order_selected_units(units, &by_id).map(Some)
+}
+
+fn validate_existing_units<'a>(
+    units: &'a [ExistingUnitFacts],
+    blockers: &mut Vec<PlanBlocker>,
+) -> (BTreeMap<&'a str, usize>, bool) {
     let mut by_id = BTreeMap::new();
     let mut by_order = BTreeSet::new();
-    let mut already_ordered = true;
+    let mut is_already_ordered = true;
     let mut previous_order = None;
     for (index, unit) in units.iter().enumerate() {
         if let Some(previous) = previous_order {
-            already_ordered &= previous < unit.execution_order;
+            is_already_ordered &= previous < unit.execution_order;
         }
         previous_order = Some(unit.execution_order);
-        if unit.unit_id.is_empty()
-            || unit.package_id.is_empty()
-            || unit.target_name.is_empty()
-            || unit.target_kind.is_empty()
-            || unit.execution_kind.is_empty()
+        if [
+            &unit.unit_id,
+            &unit.package_id,
+            &unit.target_name,
+            &unit.target_kind,
+            &unit.execution_kind,
+        ]
+        .iter()
+        .any(|identity| identity.is_empty())
         {
             blockers.push(PlanBlocker::new(
                 "unit-identity",
@@ -397,60 +431,76 @@ fn ordered_existing_unit_indices(units: &[ExistingUnitFacts]) -> Result<Option<V
                 "selected topology ranks must be unique",
             ));
         }
-        if !matches!(unit.execution_kind.as_str(), "target" | "host" | "host-dependency") {
+        debug_assert_eq!(by_id.get(unit.unit_id.as_str()), Some(&index));
+        debug_assert!(by_order.contains(&unit.execution_order));
+        validate_existing_unit_effect(unit, blockers);
+    }
+    (by_id, is_already_ordered)
+}
+
+fn validate_existing_unit_effect(unit: &ExistingUnitFacts, blockers: &mut Vec<PlanBlocker>) {
+    if !matches!(unit.execution_kind.as_str(), "target" | "host" | "host-dependency") {
+        blockers.push(PlanBlocker::new(
+            "unsupported-execution-kind",
+            &unit.unit_id,
+            "selected unit execution kind is outside the bounded native topology",
+        ));
+    }
+    if count_exceeds(unit.arguments.len(), MAX_ARGS_PER_EFFECT) {
+        blockers.push(PlanBlocker::new(
+            "effect-argument-limit",
+            &unit.unit_id,
+            "effect arguments exceed the declared bound",
+        ));
+    }
+    if count_exceeds(unit.environment.len(), MAX_ENVIRONMENT_ENTRIES_PER_EFFECT) {
+        blockers.push(PlanBlocker::new(
+            "effect-environment-limit",
+            &unit.unit_id,
+            "effect environment exceeds the declared bound",
+        ));
+    }
+    if count_exceeds(unit.dependency_unit_ids.len(), MAX_UNITS)
+        || count_exceeds(unit.input_identities.len(), MAX_ARGS_PER_EFFECT)
+        || count_exceeds(unit.expected_outputs.len(), MAX_ARGS_PER_EFFECT)
+    {
+        blockers.push(PlanBlocker::new(
+            "effect-input-output-limit",
+            &unit.unit_id,
+            "declared dependencies, input identities or outputs exceed the admitted bound",
+        ));
+    }
+    let is_missing_values =
+        unit.arguments.is_empty() || unit.expected_outputs.is_empty() || unit.arguments.iter().any(String::is_empty);
+    let is_missing_identity =
+        unit.input_identities.iter().any(String::is_empty) || unit.expected_outputs.iter().any(String::is_empty);
+    if is_missing_values || is_missing_identity {
+        blockers.push(PlanBlocker::new(
+            "incomplete-unit-effect",
+            &unit.unit_id,
+            "effect arguments, input identities and expected outputs must be declared values",
+        ));
+    }
+    let mut environment_names = BTreeSet::new();
+    for (name, value) in &unit.environment {
+        if name.is_empty() || value.contains('\0') || !environment_names.insert(name.as_str()) {
             blockers.push(PlanBlocker::new(
-                "unsupported-execution-kind",
+                "invalid-effect-environment",
                 &unit.unit_id,
-                "selected unit execution kind is outside the bounded native topology",
+                "environment names must be non-empty and unique, values cannot contain NUL",
             ));
-        }
-        if count_exceeds(unit.arguments.len(), MAX_ARGS_PER_EFFECT) {
-            blockers.push(PlanBlocker::new(
-                "effect-argument-limit",
-                &unit.unit_id,
-                "effect arguments exceed the declared bound",
-            ));
-        }
-        if count_exceeds(unit.environment.len(), MAX_ENVIRONMENT_ENTRIES_PER_EFFECT) {
-            blockers.push(PlanBlocker::new(
-                "effect-environment-limit",
-                &unit.unit_id,
-                "effect environment exceeds the declared bound",
-            ));
-        }
-        if count_exceeds(unit.dependency_unit_ids.len(), MAX_UNITS)
-            || count_exceeds(unit.input_identities.len(), MAX_ARGS_PER_EFFECT)
-            || count_exceeds(unit.expected_outputs.len(), MAX_ARGS_PER_EFFECT)
-        {
-            blockers.push(PlanBlocker::new(
-                "effect-input-output-limit",
-                &unit.unit_id,
-                "declared dependencies, input identities or outputs exceed the admitted bound",
-            ));
-        }
-        if unit.arguments.is_empty()
-            || unit.expected_outputs.is_empty()
-            || unit.arguments.iter().any(String::is_empty)
-            || unit.input_identities.iter().any(String::is_empty)
-            || unit.expected_outputs.iter().any(String::is_empty)
-        {
-            blockers.push(PlanBlocker::new(
-                "incomplete-unit-effect",
-                &unit.unit_id,
-                "effect arguments, input identities and expected outputs must be declared values",
-            ));
-        }
-        let mut environment_names = BTreeSet::new();
-        for (name, value) in &unit.environment {
-            if name.is_empty() || value.contains('\0') || !environment_names.insert(name.as_str()) {
-                blockers.push(PlanBlocker::new(
-                    "invalid-effect-environment",
-                    &unit.unit_id,
-                    "environment names must be non-empty and unique, values cannot contain NUL",
-                ));
-            }
         }
     }
+    debug_assert!(environment_names.iter().all(|name| !name.is_empty()));
+    debug_assert!(environment_names.len() <= unit.environment.len());
+}
+
+fn validate_existing_dependencies(
+    units: &[ExistingUnitFacts],
+    by_id: &BTreeMap<&str, usize>,
+    is_already_ordered: &mut bool,
+    blockers: &mut Vec<PlanBlocker>,
+) {
     for unit in units {
         let mut seen_dependencies = BTreeSet::new();
         for dependency in &unit.dependency_unit_ids {
@@ -462,7 +512,7 @@ fn ordered_existing_unit_indices(units: &[ExistingUnitFacts]) -> Result<Option<V
                 ));
             }
             if let Some(&producer_index) = by_id.get(dependency.as_str()) {
-                already_ordered &= units[producer_index].execution_order < unit.execution_order;
+                *is_already_ordered &= units[producer_index].execution_order < unit.execution_order;
             } else {
                 blockers.push(PlanBlocker::new(
                     "missing-unit-producer",
@@ -472,48 +522,100 @@ fn ordered_existing_unit_indices(units: &[ExistingUnitFacts]) -> Result<Option<V
             }
         }
     }
-    if !blockers.is_empty() {
-        blockers.sort();
-        blockers.dedup();
-        return Err(blockers);
-    }
-    if already_ordered {
-        return Ok(None);
-    }
-    // The native derivation order is only a tie-break. The core derives the
-    // executable order from resolved producer edges, and rejects cycles.
-    let mut indegrees = BTreeMap::<&str, usize>::new();
+}
+
+struct SelectedUnitEdges<'a> {
+    indegrees: BTreeMap<&'a str, u32>,
+    consumers: BTreeMap<&'a str, Vec<usize>>,
+}
+
+fn selected_unit_edges(units: &[ExistingUnitFacts]) -> Result<SelectedUnitEdges<'_>, Vec<PlanBlocker>> {
+    let mut indegrees = BTreeMap::<&str, u32>::new();
     let mut consumers = BTreeMap::<&str, Vec<usize>>::new();
     for (index, unit) in units.iter().enumerate() {
-        indegrees.insert(unit.unit_id.as_str(), unit.dependency_unit_ids.len());
+        let Ok(degree) = u32::try_from(unit.dependency_unit_ids.len()) else {
+            return Err(vec![PlanBlocker::new(
+                "effect-input-output-limit",
+                &unit.unit_id,
+                "declared dependencies, input identities or outputs exceed the admitted bound",
+            )]);
+        };
+        if indegrees.len() >= units.len() {
+            return Err(vec![PlanBlocker::new(
+                "unit-limit",
+                "units",
+                "selected units exceed the admitted bound",
+            )]);
+        }
+        indegrees.insert(unit.unit_id.as_str(), degree);
         for producer in &unit.dependency_unit_ids {
+            if !consumers.contains_key(producer.as_str()) && consumers.len() >= units.len() {
+                return Err(vec![PlanBlocker::new(
+                    "unit-limit",
+                    "units",
+                    "selected units exceed the admitted bound",
+                )]);
+            }
             consumers.entry(producer.as_str()).or_default().push(index);
         }
     }
+    debug_assert_eq!(indegrees.len(), units.len());
+    debug_assert!(consumers.keys().all(|id| indegrees.contains_key(id)));
+    Ok(SelectedUnitEdges { indegrees, consumers })
+}
+
+// The native derivation order is only a tie-break; producer edges determine execution.
+fn order_selected_units(
+    units: &[ExistingUnitFacts],
+    by_id: &BTreeMap<&str, usize>,
+) -> Result<Vec<usize>, Vec<PlanBlocker>> {
+    let SelectedUnitEdges {
+        mut indegrees,
+        consumers,
+    } = selected_unit_edges(units)?;
     let mut ready = BTreeSet::new();
     for unit in units {
-        if indegrees[unit.unit_id.as_str()] == 0 {
+        if indegrees.get(unit.unit_id.as_str()) == Some(&0) {
             ready.insert((unit.execution_order, unit.unit_id.as_str()));
         }
     }
+    debug_assert!(ready.len() <= units.len());
     let mut ordered = Vec::with_capacity(units.len());
     while let Some((_, id)) = ready.pop_first() {
-        ordered.push(by_id[id]);
-        if let Some(dependents) = consumers.get(id) {
-            for &index in dependents {
-                let dependent = &units[index];
-                let remaining = indegrees.get_mut(dependent.unit_id.as_str()).expect("admitted unit");
-                *remaining -= 1;
-                if *remaining == 0 {
-                    ready.insert((dependent.execution_order, dependent.unit_id.as_str()));
-                }
+        let Some(&index) = by_id.get(id) else {
+            return Err(vec![PlanBlocker::new(
+                "missing-unit-producer",
+                id,
+                "declared unit producer is absent from the selected topology",
+            )]);
+        };
+        ordered.push(index);
+        for &dependent_index in consumers.get(id).into_iter().flatten() {
+            let dependent = &units[dependent_index];
+            let Some(degree) = indegrees.get_mut(dependent.unit_id.as_str()) else {
+                return Err(vec![PlanBlocker::new(
+                    "missing-unit-producer",
+                    &dependent.unit_id,
+                    "declared unit producer is absent from the selected topology",
+                )]);
+            };
+            let Some(next) = degree.checked_sub(1) else {
+                return Err(vec![PlanBlocker::new(
+                    "dependency-cycle",
+                    &dependent.unit_id,
+                    "selected unit topology contains a dependency cycle",
+                )]);
+            };
+            *degree = next;
+            if next == 0 {
+                ready.insert((dependent.execution_order, dependent.unit_id.as_str()));
             }
         }
     }
     if ordered.len() != units.len() {
         let mut cycle_blockers = units
             .iter()
-            .filter(|unit| indegrees[unit.unit_id.as_str()] != 0)
+            .filter(|unit| indegrees.get(unit.unit_id.as_str()).is_some_and(|degree| *degree != 0))
             .map(|unit| {
                 PlanBlocker::new(
                     "dependency-cycle",
@@ -525,11 +627,12 @@ fn ordered_existing_unit_indices(units: &[ExistingUnitFacts]) -> Result<Option<V
         cycle_blockers.sort();
         return Err(cycle_blockers);
     }
-    Ok(Some(ordered))
+    debug_assert!(ordered.iter().all(|index| *index < units.len()));
+    Ok(ordered)
 }
 
 fn unit_into_effect(unit: ExistingUnitFacts) -> ExistingUnitEffect {
-    let mut effect_id = String::with_capacity(EFFECT_ID_PREFIX.len() + unit.unit_id.len());
+    let mut effect_id = String::with_capacity(EFFECT_ID_PREFIX.len().saturating_add(unit.unit_id.len()));
     effect_id.push_str(EFFECT_ID_PREFIX);
     effect_id.push_str(&unit.unit_id);
     ExistingUnitEffect {
@@ -565,7 +668,7 @@ fn admit_resolved_unit_effect_with_restored(
     prior: Option<&ResolvedProcessObservation>,
     restored: Option<(&RestoredCompilerArtifactObservation, &Blake3Digest)>,
 ) -> Result<ResolvedUnitEffect, Vec<PlanBlocker>> {
-    let mut blockers = Vec::new();
+    let mut blockers = Vec::with_capacity(16);
     let subject = planned.unit_id.0.as_str();
     if facts.unit_id != planned.unit_id || facts.effect_id != planned.effect_id {
         blockers.push(PlanBlocker::new(
@@ -574,6 +677,35 @@ fn admit_resolved_unit_effect_with_restored(
             "resolved effect must retain the selected unit and effect identities",
         ));
     }
+    validate_resolved_predecessor(planned, &facts, prior, restored, &mut blockers);
+    validate_resolved_fields(planned, &facts, &mut blockers);
+    let total_bytes = validate_resolved_words(&facts, subject, &mut blockers);
+    validate_resolved_dependencies(planned, &facts, subject, total_bytes, &mut blockers);
+    if !blockers.is_empty() {
+        blockers.sort();
+        blockers.dedup();
+        return Err(blockers);
+    }
+    debug_assert_eq!(facts.unit_id, planned.unit_id);
+    debug_assert_eq!(facts.effect_id, planned.effect_id);
+    let resolved_blake3 = domain_digest(RESOLVED_EFFECT_DOMAIN, &facts).map_err(|_| {
+        vec![PlanBlocker::new(
+            "resolved-effect-identity-failed",
+            subject,
+            "resolved process facts could not be canonically identified",
+        )]
+    })?;
+    Ok(ResolvedUnitEffect { facts, resolved_blake3 })
+}
+
+fn validate_resolved_predecessor(
+    planned: &ExistingUnitEffect,
+    facts: &ResolvedUnitFacts,
+    prior: Option<&ResolvedProcessObservation>,
+    restored: Option<(&RestoredCompilerArtifactObservation, &Blake3Digest)>,
+    blockers: &mut Vec<PlanBlocker>,
+) {
+    let subject = planned.unit_id.0.as_str();
     match (facts.role, facts.attempt) {
         (ProcessEffectRole::RustCompiler, 0)
             if prior.is_none() && restored.is_none() && facts.prior_attempt_identity.is_none() => {}
@@ -583,8 +715,9 @@ fn admit_resolved_unit_effect_with_restored(
             } else {
                 UnitObservationStatus::Succeeded
             };
-            let correct_role = facts.role != ProcessEffectRole::BuildScriptRun || planned.target_kind == "custom-build";
-            let valid_prior = prior
+            let is_correct_role =
+                facts.role != ProcessEffectRole::BuildScriptRun || planned.target_kind == "custom-build";
+            let is_valid_prior = prior
                 .filter(|observation| {
                     observation.effect_id == planned.effect_id
                         && observation.unit_id == planned.unit_id
@@ -595,14 +728,14 @@ fn admit_resolved_unit_effect_with_restored(
                                 observation.exit_code == Some(0) && !observation.output_identities.is_empty()
                             }
                             UnitObservationStatus::Failed => observation.exit_code.is_some_and(|code| code != 0),
-                            _ => false,
+                            UnitObservationStatus::Skipped => false,
                         }
                         && observation.attempt <= 1
                         && (facts.role != ProcessEffectRole::RustCompiler || observation.attempt == 0)
                 })
                 .and_then(|observation| domain_digest(RESOLVED_OBSERVATION_DOMAIN, observation).ok())
                 .is_some_and(|identity| facts.prior_attempt_identity.as_ref() == Some(&identity));
-            let valid_restored = facts.role == ProcessEffectRole::BuildScriptRun
+            let is_valid_restored = facts.role == ProcessEffectRole::BuildScriptRun
                 && prior.is_none()
                 && restored.is_some_and(|(observation, identity)| {
                     facts.prior_attempt_identity.as_ref() == Some(identity)
@@ -615,12 +748,16 @@ fn admit_resolved_unit_effect_with_restored(
                             .iter()
                             .any(|input| input.as_str() == observation.output_artifact_set_identity.as_str())
                 });
-            if !correct_role || !(valid_prior || valid_restored) {
+            if !is_correct_role || !(is_valid_prior || is_valid_restored) {
                 blockers.push(PlanBlocker::new(
                     "resolved-effect-predecessor",
                     subject,
                     "fallback and build-script processes require matching observed compiler or restored output evidence",
                 ));
+            }
+            if is_correct_role && (is_valid_prior || is_valid_restored) {
+                debug_assert!(facts.prior_attempt_identity.is_some());
+                debug_assert!(facts.role != ProcessEffectRole::BuildScriptRun || planned.target_kind == "custom-build");
             }
         }
         _ => blockers.push(PlanBlocker::new(
@@ -629,6 +766,10 @@ fn admit_resolved_unit_effect_with_restored(
             "resolved process role or attempt is outside the bounded unit topology",
         )),
     }
+}
+
+fn validate_resolved_fields(planned: &ExistingUnitEffect, facts: &ResolvedUnitFacts, blockers: &mut Vec<PlanBlocker>) {
+    let subject = planned.unit_id.0.as_str();
     match facts.role {
         ProcessEffectRole::RustCompiler if facts.expected_outputs != planned.expected_outputs => {
             blockers.push(PlanBlocker::new(
@@ -648,34 +789,41 @@ fn admit_resolved_unit_effect_with_restored(
                 "build-script run must declare OUT_DIR and metadata stdout observations",
             ));
         }
-        _ => {}
+        ProcessEffectRole::RustCompiler | ProcessEffectRole::BuildScriptRun => {}
     }
-    if !facts.executable.is_valid(true)
+    let is_invalid_command = !facts.executable.is_valid(true)
         || facts.toolchain_identity.is_empty()
-        || facts.working_directory.as_ref().is_some_and(|cwd| !cwd.is_valid(true))
-        || facts.arguments.iter().any(|arg| !arg.is_valid(false))
-        || facts.environment.iter().any(|(_, value)| !value.is_valid(false))
-        || facts.input_identities.iter().any(String::is_empty)
-        || facts.expected_outputs.iter().any(String::is_empty)
-    {
+        || facts.working_directory.as_ref().is_some_and(|cwd| !cwd.is_valid(true));
+    let is_invalid_words = facts.arguments.iter().any(|arg| !arg.is_valid(false))
+        || facts.environment.iter().any(|(_, value)| !value.is_valid(false));
+    let is_invalid_identities =
+        facts.input_identities.iter().any(String::is_empty) || facts.expected_outputs.iter().any(String::is_empty);
+    if is_invalid_command || is_invalid_words || is_invalid_identities {
         blockers.push(PlanBlocker::new(
             "incomplete-resolved-effect",
             subject,
             "resolved executable, toolchain, arguments, environment, inputs and outputs must be declared values",
         ));
     }
-    if count_exceeds(facts.arguments.len(), MAX_ARGS_PER_EFFECT)
-        || count_exceeds(facts.environment.len(), MAX_ENVIRONMENT_ENTRIES_PER_EFFECT)
-        || count_exceeds(facts.input_identities.len(), MAX_ARGS_PER_EFFECT)
+    let is_large_words = count_exceeds(facts.arguments.len(), MAX_ARGS_PER_EFFECT)
+        || count_exceeds(facts.environment.len(), MAX_ENVIRONMENT_ENTRIES_PER_EFFECT);
+    let is_large_identities = count_exceeds(facts.input_identities.len(), MAX_ARGS_PER_EFFECT)
         || count_exceeds(facts.expected_outputs.len(), MAX_ARGS_PER_EFFECT)
-        || count_exceeds(facts.dependency_observations.len(), MAX_UNITS)
-    {
+        || count_exceeds(facts.dependency_observations.len(), MAX_UNITS);
+    if is_large_words || is_large_identities {
         blockers.push(PlanBlocker::new(
             "resolved-effect-limit",
             subject,
             "resolved effect collections exceed the admitted bounds",
         ));
     }
+    if !is_invalid_command {
+        debug_assert!(facts.executable.is_valid(true));
+        debug_assert!(!facts.toolchain_identity.is_empty());
+    }
+}
+
+fn validate_resolved_words(facts: &ResolvedUnitFacts, subject: &str, blockers: &mut Vec<PlanBlocker>) -> usize {
     let mut total_bytes = facts
         .executable
         .byte_len()
@@ -683,12 +831,13 @@ fn admit_resolved_unit_effect_with_restored(
         .saturating_add(facts.effect_id.0.len())
         .saturating_add(facts.unit_id.0.len())
         .saturating_add(facts.prior_attempt_identity.as_ref().map_or(0, |identity| identity.as_str().len()));
-    let mut oversized_word = false;
+    let mut is_word_over_limit_bytes = false;
     for word in facts.arguments.iter().chain(facts.environment.iter().map(|(_, value)| value)) {
         total_bytes = total_bytes.saturating_add(word.byte_len());
-        oversized_word |= word.byte_len() > MAX_PROCESS_WORD_BYTES;
+        is_word_over_limit_bytes |= word.byte_len() > MAX_PROCESS_WORD_BYTES;
+        debug_assert!(total_bytes >= word.byte_len());
     }
-    if oversized_word {
+    if is_word_over_limit_bytes {
         blockers.push(PlanBlocker::new(
             "resolved-process-word-limit",
             subject,
@@ -703,6 +852,7 @@ fn admit_resolved_unit_effect_with_restored(
     }
     for identity in facts.input_identities.iter().chain(&facts.expected_outputs) {
         total_bytes = total_bytes.saturating_add(identity.len());
+        debug_assert!(total_bytes >= identity.len());
         if identity.len() > MAX_PROCESS_WORD_BYTES {
             blockers.push(PlanBlocker::new(
                 "resolved-identity-limit",
@@ -721,6 +871,16 @@ fn admit_resolved_unit_effect_with_restored(
             ));
         }
     }
+    total_bytes
+}
+
+fn validate_resolved_dependencies(
+    planned: &ExistingUnitEffect,
+    facts: &ResolvedUnitFacts,
+    subject: &str,
+    mut total_bytes: usize,
+    blockers: &mut Vec<PlanBlocker>,
+) {
     for identity in &planned.input_identities {
         if !facts.input_identities.contains(identity) {
             blockers.push(PlanBlocker::new(
@@ -730,18 +890,18 @@ fn admit_resolved_unit_effect_with_restored(
             ));
         }
     }
+    let base_bytes = total_bytes;
     let declared: BTreeSet<&str> = planned.dependency_unit_ids.iter().map(|id| id.0.as_str()).collect();
     let mut observed = BTreeSet::new();
     for producer in &facts.dependency_observations {
         total_bytes = total_bytes
             .saturating_add(producer.producer_unit_id.0.len())
             .saturating_add(producer.artifact_identity.len());
-        if !declared.contains(producer.producer_unit_id.0.as_str())
+        let is_invalid_producer = !declared.contains(producer.producer_unit_id.0.as_str())
             || producer.artifact_identity.is_empty()
-            || producer.artifact_identity.len() > MAX_PROCESS_WORD_BYTES
-            || !facts.input_identities.contains(&producer.artifact_identity)
-            || !observed.insert(producer.producer_unit_id.0.as_str())
-        {
+            || producer.artifact_identity.len() > MAX_PROCESS_WORD_BYTES;
+        let is_invalid_input = !facts.input_identities.contains(&producer.artifact_identity);
+        if is_invalid_producer || is_invalid_input || !observed.insert(producer.producer_unit_id.0.as_str()) {
             blockers.push(PlanBlocker::new(
                 "invalid-producer-observation",
                 subject,
@@ -749,10 +909,12 @@ fn admit_resolved_unit_effect_with_restored(
             ));
         }
     }
-    if total_bytes > MAX_RESOLVED_EFFECT_BYTES
+    debug_assert!(total_bytes >= base_bytes);
+    debug_assert!(observed.iter().all(|id| declared.contains(id)));
+    let is_large_process = total_bytes > MAX_RESOLVED_EFFECT_BYTES
         || facts.executable.byte_len() > MAX_PROCESS_WORD_BYTES
-        || facts.working_directory.as_ref().is_some_and(|cwd| cwd.byte_len() > MAX_PROCESS_WORD_BYTES)
-    {
+        || facts.working_directory.as_ref().is_some_and(|cwd| cwd.byte_len() > MAX_PROCESS_WORD_BYTES);
+    if is_large_process {
         blockers.push(PlanBlocker::new(
             "resolved-effect-byte-limit",
             subject,
@@ -766,19 +928,6 @@ fn admit_resolved_unit_effect_with_restored(
             "every selected dependency producer must have an observed artifact identity",
         ));
     }
-    if !blockers.is_empty() {
-        blockers.sort();
-        blockers.dedup();
-        return Err(blockers);
-    }
-    let resolved_blake3 = domain_digest(RESOLVED_EFFECT_DOMAIN, &facts).map_err(|_| {
-        vec![PlanBlocker::new(
-            "resolved-effect-identity-failed",
-            subject,
-            "resolved process facts could not be canonically identified",
-        )]
-    })?;
-    Ok(ResolvedUnitEffect { facts, resolved_blake3 })
 }
 
 /// Bind one observed result to its exact admitted process attempt and outputs.
@@ -787,12 +936,11 @@ pub fn classify_resolved_process_observation(
     observation: &ResolvedProcessObservation,
 ) -> Result<Blake3Digest, PlanBlocker> {
     let facts = &effect.facts;
-    if observation.effect_id != facts.effect_id
+    let is_wrong_effect = observation.effect_id != facts.effect_id
         || observation.unit_id != facts.unit_id
-        || observation.resolved_blake3 != effect.resolved_blake3
-        || observation.role != facts.role
-        || observation.attempt != facts.attempt
-    {
+        || observation.resolved_blake3 != effect.resolved_blake3;
+    let is_wrong_attempt = observation.role != facts.role || observation.attempt != facts.attempt;
+    if is_wrong_effect || is_wrong_attempt {
         return Err(PlanBlocker::new(
             "wrong-resolved-observation",
             &facts.unit_id.0,
@@ -815,11 +963,8 @@ pub fn classify_resolved_process_observation(
     }
     let mut names = BTreeSet::new();
     for (name, identity) in &observation.output_identities {
-        if name.is_empty()
-            || identity.is_empty()
-            || !facts.expected_outputs.contains(name)
-            || !names.insert(name.as_str())
-        {
+        let is_invalid_identity = name.is_empty() || identity.is_empty() || !facts.expected_outputs.contains(name);
+        if is_invalid_identity || !names.insert(name.as_str()) {
             return Err(PlanBlocker::new(
                 "invalid-observed-output",
                 &facts.unit_id.0,
@@ -834,6 +979,8 @@ pub fn classify_resolved_process_observation(
             "every successful declared process output requires an observed identity",
         ));
     }
+    debug_assert_eq!(observation.output_identities.len(), names.len());
+    debug_assert!(names.iter().all(|name| facts.expected_outputs.iter().any(|output| output.as_str() == *name)));
     domain_digest(RESOLVED_OBSERVATION_DOMAIN, observation).map_err(|_| {
         PlanBlocker::new(
             "resolved-observation-identity-failed",
@@ -849,6 +996,59 @@ pub fn order_existing_unit_topology(
     roots: &[String],
     units: &[ExistingTopologyUnit],
 ) -> Result<Vec<String>, PlanBlocker> {
+    let by_id = validate_existing_topology(roots, units)?;
+    let edge_count = units.iter().fold(0usize, |count, unit| count.saturating_add(unit.dependencies.len()));
+    let traversal_steps = roots.len().saturating_add(edge_count).saturating_mul(2).saturating_add(1);
+    let mut ordered = Vec::with_capacity(roots.len());
+    let mut temporary = BTreeSet::new();
+    let mut permanent = BTreeSet::new();
+    let mut pending = Vec::with_capacity(traversal_steps.min(units.len()));
+    for root in roots {
+        if permanent.contains(root.as_str()) {
+            continue;
+        }
+        pending.push((root.as_str(), false));
+        for _ in 0..traversal_steps {
+            let Some((id, exiting)) = pending.pop() else {
+                break;
+            };
+            if exiting {
+                temporary.remove(id);
+                if permanent.insert(id) {
+                    ordered.push(String::from(id));
+                }
+                continue;
+            }
+            if permanent.contains(id) {
+                continue;
+            }
+            if !temporary.insert(id) {
+                return Err(PlanBlocker::new(
+                    "dependency-cycle",
+                    id,
+                    &alloc::format!("target topology contains a dependency cycle at unit {id}"),
+                ));
+            }
+            pending.push((id, true));
+            pending.extend(by_id[id].dependencies.iter().rev().map(|dependency| (dependency.as_str(), false)));
+        }
+        if !pending.is_empty() {
+            return Err(PlanBlocker::new(
+                "topology-traversal-limit-exceeded",
+                root,
+                &alloc::format!("target topology traversal exceeded {traversal_steps} bounded steps"),
+            ));
+        }
+    }
+    debug_assert!(ordered.len() <= units.len());
+    debug_assert!(roots.iter().all(|root| permanent.contains(root.as_str())));
+    Ok(ordered)
+}
+
+fn validate_existing_topology<'a>(
+    roots: &[String],
+    units: &'a [ExistingTopologyUnit],
+) -> Result<BTreeMap<&'a str, &'a ExistingTopologyUnit>, PlanBlocker> {
     if count_exceeds(units.len(), MAX_UNITS) || count_exceeds(roots.len(), MAX_UNITS) {
         return Err(PlanBlocker::new("unit-limit", "units", "selected topology exceeds the admitted unit bound"));
     }
@@ -893,50 +1093,9 @@ pub fn order_existing_unit_topology(
             ));
         }
     }
-    let edge_count = units.iter().fold(0usize, |count, unit| count.saturating_add(unit.dependencies.len()));
-    let traversal_steps = roots.len().saturating_add(edge_count).saturating_mul(2).saturating_add(1);
-    let mut ordered = Vec::with_capacity(roots.len());
-    let mut temporary = BTreeSet::new();
-    let mut permanent = BTreeSet::new();
-    let mut pending = Vec::with_capacity(traversal_steps.min(MAX_UNITS as usize));
-    for root in roots {
-        if permanent.contains(root.as_str()) {
-            continue;
-        }
-        pending.push((root.as_str(), false));
-        for _ in 0..traversal_steps {
-            let Some((id, exiting)) = pending.pop() else {
-                break;
-            };
-            if exiting {
-                temporary.remove(id);
-                if permanent.insert(id) {
-                    ordered.push(String::from(id));
-                }
-                continue;
-            }
-            if permanent.contains(id) {
-                continue;
-            }
-            if !temporary.insert(id) {
-                return Err(PlanBlocker::new(
-                    "dependency-cycle",
-                    id,
-                    &alloc::format!("target topology contains a dependency cycle at unit {id}"),
-                ));
-            }
-            pending.push((id, true));
-            pending.extend(by_id[id].dependencies.iter().rev().map(|dependency| (dependency.as_str(), false)));
-        }
-        if !pending.is_empty() {
-            return Err(PlanBlocker::new(
-                "topology-traversal-limit-exceeded",
-                root,
-                &alloc::format!("target topology traversal exceeded {traversal_steps} bounded steps"),
-            ));
-        }
-    }
-    Ok(ordered)
+    debug_assert_eq!(by_id.len(), units.len());
+    debug_assert!(roots.iter().all(|root| by_id.contains_key(root.as_str())));
+    Ok(by_id)
 }
 
 /// The accepted Rust-plan surface classification, independent of presentation.
@@ -987,6 +1146,8 @@ pub fn classify_rust_plan_compatibility(no_cargo_oracle: bool, blockers: &[Strin
     ]);
     non_claims.sort();
     non_claims.dedup();
+    debug_assert!(blocker_classes.windows(2).all(|pair| pair[0] < pair[1]));
+    debug_assert!(surface_ids.windows(2).all(|pair| pair[0] < pair[1]));
     RustPlanCompatibilityDecision {
         compatibility_class: String::from(compatibility_class),
         status: String::from(status),
@@ -1005,9 +1166,12 @@ pub fn classify_existing_unit_observations(
 }
 
 fn classify_observations<'a>(
-    effects: impl Iterator<Item = (&'a EffectId, &'a UnitId)>,
+    effects: impl core::iter::ExactSizeIterator<Item = (&'a EffectId, &'a UnitId)>,
     observations: &[UnitObservation],
 ) -> PlanExecutionOutcome {
+    if count_exceeds(effects.len(), MAX_UNITS) || count_exceeds(observations.len(), MAX_UNITS) {
+        return PlanExecutionOutcome::InputLimitExceeded;
+    }
     let planned: BTreeMap<&str, &str> = effects.map(|(effect, unit)| (effect.0.as_str(), unit.0.as_str())).collect();
     let mut seen = BTreeSet::new();
     let mut accepted = BTreeSet::new();
@@ -1016,25 +1180,41 @@ fn classify_observations<'a>(
     for observation in observations {
         let effect = observation.effect_id.0.as_str();
         if !seen.insert(effect) {
-            unknown = unknown.saturating_add(1);
+            let Some(next) = unknown.checked_add(1) else {
+                return PlanExecutionOutcome::InputLimitExceeded;
+            };
+            unknown = next;
             continue;
         }
         if planned.get(effect).copied() != Some(observation.unit_id.0.as_str())
             || !observation_exit_is_consistent(observation)
         {
-            unknown = unknown.saturating_add(1);
+            let Some(next) = unknown.checked_add(1) else {
+                return PlanExecutionOutcome::InputLimitExceeded;
+            };
+            unknown = next;
             continue;
         }
         accepted.insert(effect);
         if observation.status != UnitObservationStatus::Succeeded {
-            failed = failed.saturating_add(1);
+            let Some(next) = failed.checked_add(1) else {
+                return PlanExecutionOutcome::InputLimitExceeded;
+            };
+            failed = next;
         }
     }
-    let missing = planned.len().saturating_sub(accepted.len());
+    debug_assert!(accepted.iter().all(|effect| planned.contains_key(effect)));
+    debug_assert!(accepted.len() <= seen.len());
+    let Some(missing) = planned.len().checked_sub(accepted.len()) else {
+        return PlanExecutionOutcome::InputLimitExceeded;
+    };
     if unknown > 0 || missing > 0 {
         return PlanExecutionOutcome::Rejected {
             unknown_effect_count: unknown,
-            missing_effect_count: u32::try_from(missing).unwrap_or(u32::MAX),
+            missing_effect_count: match u32::try_from(missing) {
+                Ok(count) => count,
+                Err(_) => return PlanExecutionOutcome::InputLimitExceeded,
+            },
         };
     }
     if failed > 0 {
@@ -1050,5 +1230,24 @@ fn observation_exit_is_consistent(observation: &UnitObservation) -> bool {
         UnitObservationStatus::Succeeded => observation.exit_code.is_none_or(|code| code == 0),
         UnitObservationStatus::Failed => observation.exit_code.is_none_or(|code| code != 0),
         UnitObservationStatus::Skipped => observation.exit_code.is_none(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn observations_over_admitted_unit_limit_are_not_counted_as_valid_execution() {
+        let observations = (0..=MAX_UNITS)
+            .map(|_| UnitObservation {
+                effect_id: EffectId(String::from("effect")),
+                unit_id: UnitId(String::from("unit")),
+                status: UnitObservationStatus::Succeeded,
+                exit_code: Some(0),
+                diagnostics_code: None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(classify_existing_unit_observations(&[], &observations), PlanExecutionOutcome::InputLimitExceeded);
     }
 }

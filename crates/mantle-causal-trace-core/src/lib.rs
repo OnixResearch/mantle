@@ -14,6 +14,22 @@ pub const MAX_RECORD_BYTES: usize = 1_024;
 pub const MAX_TRACE_BYTES: usize = 4_194_304;
 pub const MAX_DIAGNOSTIC_BYTES: usize = 256;
 const HASH_HEX_BYTES: usize = 64;
+const DIAGNOSTIC_SECRET_MARKERS: [&[u8]; 14] = [
+    b"secret",
+    b"token",
+    b"password",
+    b"passwd",
+    b"credential",
+    b"authorization",
+    b"bearer",
+    b"api_key",
+    b"api-key",
+    b"access_key",
+    b"access-key",
+    b"private_key",
+    b"private-key",
+    b"cookie",
+];
 
 /// Each edge labels the *decision* that brought this action into being, not
 /// the outcome or a speculative reconstruction from log order.
@@ -267,6 +283,8 @@ pub fn redact_diagnostic(input: &str) -> String {
     let mut result = String::new();
     let scan_limit_bytes = input.len().min(MAX_DIAGNOSTIC_BYTES.saturating_mul(2));
     let boundary = input.floor_char_boundary(scan_limit_bytes);
+    debug_assert!(boundary <= input.len());
+    debug_assert!(input.is_char_boundary(boundary));
     for token in input[..boundary].split_whitespace() {
         let bare = token.trim_start_matches(['\'', '"', '(', '[', '{']);
         let is_path = bare.starts_with('/') || bare.starts_with("file://");
@@ -288,27 +306,12 @@ pub fn redact_diagnostic(input: &str) -> String {
         }
         result.push_str(rendered);
     }
+    debug_assert!(result.len() <= MAX_DIAGNOSTIC_BYTES);
     result
 }
 
 fn has_sensitive_marker(token: &[u8]) -> bool {
-    const MARKERS: [&[u8]; 14] = [
-        b"secret",
-        b"token",
-        b"password",
-        b"passwd",
-        b"credential",
-        b"authorization",
-        b"bearer",
-        b"api_key",
-        b"api-key",
-        b"access_key",
-        b"access-key",
-        b"private_key",
-        b"private-key",
-        b"cookie",
-    ];
-    MARKERS
+    DIAGNOSTIC_SECRET_MARKERS
         .iter()
         .any(|marker| token.windows(marker.len()).any(|window| window.eq_ignore_ascii_case(marker)))
 }
