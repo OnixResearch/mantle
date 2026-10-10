@@ -46,3 +46,9 @@ archive add-apk-build-adapter --root .       dry_run=true; blocked=false; reason
 ```
 
 The Cairn verdicts establish lifecycle structure, dependency ordering, and conflict-free spec merge for the presented files; they do not establish real APK execution.
+
+## Post-archive validation
+
+Pinned Cairn `sync add-apk-build-adapter --root . --execute` reported `blocked=false`, `mutated=true`, receipt `51eecd678483a7e576e51aad17a85eabce96b4670c665868f5a00788036bda4c`. After the pre-archive implementation commit, `archive add-apk-build-adapter --root . --execute` reported `blocked=false`, `mutated=true`, receipt `44995cac3cd274f19a589ce65bb2783d33297bc2c62330512759c4fabf2c9182` and moved the change to `1970-01-01-add-apk-build-adapter`.
+
+The captured **post-archive** `cairn validate --root .` JSON output is `evidence/cairn-postarchive-validation-2026-10-10.json` in this archived change: exit 0, `valid=true`, `issues=[]`, receipt `a71c2c814378411b235346ab6a5d2c7bcb2b4f8b1a8c9e5993829de3fe3a2b70`. This is a lifecycle validation, not an APK execution claim. Downstream `cairn readiness prove-apk-adapter-real-build --root . --format json` remained `classification=unavailable`: nine tasks not archive-ready and completion observation unavailable.
