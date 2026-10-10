@@ -75,7 +75,7 @@ The first isolated-target `cargo test -p mantle --bin mantle rust_plan::tests:: 
 test result: FAILED. 202 passed; 2 failed; 0 ignored; 0 measured; 2434 filtered out; finished in 4.51s
 ```
 
-The two failing legacy fixtures manually cleared a planned effect's declared outputs or called an isolated target while it had a selected host producer. New selected-effect preflight rejected them earlier with typed `incomplete-unit-effect` and `isolated-unit-has-selected-producer`, respectively. These fixtures had asserted obsolete later adapter errors (`missing-declared-output`, `missing-host-artifact`) and were removed rather than re-pinned to the new error words. No passing-after focused-root result is claimed here yet; the final V4 and V5 results must be recorded against a coherent post-integration source snapshot.
+The two failing legacy fixtures manually cleared a planned effect's declared outputs or called an isolated target while it had a selected host producer. New selected-effect preflight rejected them earlier with typed `incomplete-unit-effect` and `isolated-unit-has-selected-producer`, respectively. These fixtures had asserted obsolete later adapter errors (`missing-declared-output`, `missing-host-artifact`) and were removed rather than re-pinned to the new error words. At this pre-final boundary no passing-after focused-root result was available; the committed-tree V4 result below supersedes that gap.
 
 ## Provisional second-source type check
 
@@ -99,3 +99,50 @@ Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 15s
 ```
 
 Exit 0; no Rust source type errors. Three earlier attempts stopped in vendored `bzip2-sys`, `zstd-sys`, and `nickel-lang-parser` build scripts because already-generated files in this **private scratch target** were read-only and their `fs::copy` calls could not overwrite them. Restoring write permission to this private target's build artifacts resolved those failures without changing repository or vendor sources. This check preceded the guarded Watch CLI source changes and does not certify the final committed binary or complete V4/V5.
+
+## Committed-tree V4 focused acceptance (2026-10-10)
+
+The source under test was `710add98b8090cca1ac9617c36df94d2766295d0` in the isolated Leviathan worktree. The Nix development shell used `--no-write-lock-file` and exact-revision local Git overrides for `cairn`, `cairn/artifact`, `tigerstyle`, `artifactAuthSource`, `octet`, `octet/valence`, and `octet/cairn`; the local source NAR hashes matched the locked source hashes. The private upstream archives could not be fetched directly. The Octet pin was imported from the existing workstation Octet checkout into Leviathan's input mirror without changing the Mantle lockfile or Octet source.
+
+With `TMPDIR=/home/brittonr/mantle-cairn-finish/targets`, an isolated `CARGO_TARGET_DIR=/home/brittonr/mantle-cairn-finish/targets/remote-core-style-20261008`, and the checked-in toolchain, these commands exited 0 in that shell:
+
+```text
+cargo test -p mantle-rust-plan-core -p mantle-rust-plan-app --locked --offline -- --test-threads=1
+cargo test -p mantle --bin mantle rust_plan::tests:: --locked --offline -- --test-threads=1
+cargo test -p mantle --test rust_plan_cli --locked --offline -- --test-threads=1
+```
+
+Exact `test result:` lines, in execution order (application library, application fixtures, core library, core fixtures, application and core compiled negative authority examples, root adapter, and real CLI integration):
+
+```text
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s
+test result: ok. 202 passed; 0 failed; 0 ignored; 0 measured; 2431 filtered out; finished in 3.02s
+test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 180.75s
+```
+
+The retained full transcript is `/home/brittonr/mantle-cairn-finish/logs/rust-plan-v4-focused-octet-valence-cairn-20261010.log` (BLAKE3 `d5331b216fbd103349e1eaeea5327612e4163240adaf02e0e919112a40a7b807`). The 59 CLI tests exercise real accepted and rejected `rust-plan` processes and bounded compiler execution. This is focused V4 acceptance, not full Cargo compatibility or a self-build proof; V5 is checked separately below.
+
+## Committed-tree V5 bounded gates (2026-10-10)
+
+The source under test remained `710add98b8090cca1ac9617c36df94d2766295d0`. The same exact-NAR-mirrored developer shell used for V4 ran these commands with `--locked --offline` and exited 0:
+
+```text
+cargo check -p mantle-rust-plan-core --target wasm32-unknown-unknown
+cargo clippy -p mantle-rust-plan-core -p mantle-rust-plan-app --all-targets -- -D warnings
+cargo clippy -p mantle --bin mantle --no-deps -- -D warnings
+```
+
+The wasm core check finished in 8.80s; focused core/application Clippy finished in 2.83s; strict first-party root adapter Clippy finished in 1m 48s. An initial root Clippy command without `--no-deps` failed on 36 existing `vendor/fuse-backend-rs` lints, so only the failed first-party root leg was rerun with the repository's vendored-dependency exclusion. This is not a strict Clippy claim about vendored packages. The retained transcripts are `/home/brittonr/mantle-cairn-finish/logs/rust-plan-v5-wasm-clippy-cargo-free-20261010.log` (BLAKE3 `6eb39fafc15b553f9d3128a7d98120244be11c6dcc4dea620c9fbb04333834f0`) and `/home/brittonr/mantle-cairn-finish/logs/rust-plan-v5-root-firstparty-clippy-cargo-free-20261010.log` (BLAKE3 `a43ba91961f21b09c6dcf2873b62af77beb27030e40e061f923e74b990791f46`).
+
+The corrected leg then executed `scripts/prove-cargo-free-rust-plan.sh --full --bundle-dir /home/brittonr/mantle-cairn-finish/proofs/rust-plan-v5-710add98b-20261010 --mantle-bin /home/brittonr/mantle-cairn-finish/targets/remote-core-style-20261008/debug/mantle`. Its actual output was `cargo-free proof OK: /home/brittonr/mantle-cairn-finish/proofs/rust-plan-v5-710add98b-20261010`; the CLI binary BLAKE3 was `deef9f8a48e94663f6fd57f19e6713136158c1f559d3b1763de65050472c86a6`. The bundle's `meta.json` has schema `mantle-cargo-free-rust-plan-proof-v2`, `status = success`, `smoke_stdout = 42`, and `cargo_forbidden_marker_absent = true`; `status.txt` contains `0`, actual executable stdout contains `42`, and the receipt reports `topology_execution.execution_status = success` with three successful real compiler units (two libraries and one binary). Receipt BLAKE3: `541516b4986e9d90803b6ba1e99a3a8389b00009870f8ff65b1dd7d57a705eed`; metadata BLAKE3: `9032986d33e312e177e7a4a4ebfbaf8bfc718647d3028d74c8b5d86f2baed308`. This fixture does not establish Cargo compatibility, fixed-point self-hosting, bootstrap provenance, release reproducibility, or network fetches.
+
+The full `nix flake check -L --keep-going --no-write-lock-file` using the four exact locked-source local Git mirrors completed `all checks passed!` on x86_64-linux: the root nextest summary was `6262 tests run: 6262 passed, 150 skipped`. Incompatible `aarch64-darwin`, `aarch64-linux`, and `x86_64-darwin` were omitted. Full transcript: `/home/brittonr/mantle-cairn-finish/logs/rust-plan-v5-full-flake-verified-inputs-20261010.log`, BLAKE3 `299c9a5f705917ea5544aa18e4483f134731cf813d55df7c546670fbc8cf1237`.
+
+Mantle's dev-shell Cairn pin `695124d459574ba7aeba6097310d237f393c243c` rejects the checked-in `outcome_machine` admission, as documented in `cairn-policy/PIN-SKEW-2026-09-11.md`; it cannot validate this policy. The repo-prescribed live-checkout Cairn CLI was used from Leviathan's `/home/brittonr/mantle-cairn-finish/cairn` at `007ba5193dd8fec9067a1c0e0f8ef487807af872`, with the exact locked artifact source mirrored locally. Direct private Git SSH remains inaccessible; neither the Mantle lockfile nor the Cairn policy export was changed.
+
+After V4 and V5 were marked done in `tasks.md` and the evidence above was written, `cairn validate --root .` reported `valid: true`. `cairn gate proposal`, `cairn gate design`, and `cairn gate tasks` for `separate-rust-plan-hexagon` each reported `verdict: PASS` and `valid: true`; the tasks gate returned no ready tasks. The final retained gate transcript is `/home/brittonr/mantle-cairn-finish/logs/rust-plan-v5-current-cairn-final-post-evidence-20261010.log` (BLAKE3 `a367776cd4e23ae8388721fce65a7e3c1b1e11ad11d6ed4fb001d20556aa130d`). These are validation and readiness checks, not a Cairn archive, self-build proof, release, or publication.
