@@ -2,10 +2,12 @@
 
 ## Status
 
-Proposed (2026-10-08). This decision is not accepted. The merged reviewed
-API, documentation, identity checks, and Cairn lifecycle boundary still require
-verification against the published source cohort before the active Android
-admission change can claim completion or archive.
+Accepted (2026-10-10) for the reviewed metadata and Nickel
+`android.reviewed` bridge on the x86_64-linux cohort. The named bridge's
+positive and drifted-record fixtures passed, and a sandbox consumer copied
+the exact fixed-output build-tools archive selected by the source-v1 binder.
+This decision does not accept ADR 0089's separately proposed status or the
+downstream signed-APK proof.
 
 ## Context
 
@@ -30,7 +32,7 @@ are different from ADR 0089's preimage. Renumbering its draft ADR 0087 to
 - Do not promote a local implementation or an unverified combined tree to an
   accepted source-admission decision.
 
-## Proposed decision
+## Decision
 
 Keep two separately named domains. The top-level Android source-v1
 `cohort`, `source`, and `bind` API and its `mantle-android-source-v1` preimage
@@ -59,16 +61,26 @@ the fetcher's fixed-output SHA-256 check, not either recorded BLAKE3 string.
 The APK plan may bind only to those admitted source facts; a reviewed string
 alone does not admit a source or permit execution.
 
-This bridge is implemented in `lib/android.ncl`, but its positive and drifted
-record fixtures and final merged-source checks had not been exercised when
-this decision was proposed. It is not yet acceptance evidence.
+The merged `lib/android.ncl` bridge passed the positive and negative
+reviewed-record fixtures and the canonical ADR 0089 cohort cross-check. A
+current `android.reviewed.bind_tool` consumer selected one source-v1
+`builtin:fetchurl` input with the original build-tools HTTPS URL and the
+published SHA-256 SRI pin. Its offline source bundle was imported and pinned;
+the sandboxed native consumer was built, not served from its action cache.
+The separately materialized fixed-output input and consumer output were each
+61,958,799 bytes, had SHA-256
+`bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88`,
+and compared byte-for-byte equal. Both exact paths passed locally signed
+PathInfo/NAR verification. The source export may have reused available bytes;
+this run did not prove a fresh HTTPS transfer. Command, output and BLAKE3
+transcripts are in
+`.cairn/changes/adopt-android-prebuilt-toolchain-sources/evidence/implementation-2026-09-30.md`.
 
-This proposal does not change ADR 0089, authorize a different upstream source
-cohort, or accept the distinct reviewed schema merely because both records
-refer to the same upstream archive. Evidence from an earlier `android.bind_tool`
-call remains historical to that source snapshot; the merged named API needs
-its own bounded verification before the associated Cairn trust-decision task
-can be checked.
+This decision does not change ADR 0089 or authorize a different upstream
+cohort. The earlier top-level `android.bind_tool` result remains historical,
+not evidence for the current route. If the published source-v1 cohort or its
+separately proposed ADR changes, the finite bridge and its byte-equivalence
+evidence must be reviewed again.
 
 The reviewed-to-source-v1 bridge governs Nickel's `android.reviewed`
 authoring/binding route. The canonical Rust CLI `prepare_apk` route separately
@@ -76,7 +88,7 @@ evaluates the published `android.cohort` before admission. This decision does
 **not** claim that the generic Rust `PreparedApk::bind` API runs the Nickel
 bridge: direct callers must supply an independently approved `Toolchain` and
 the Rust binder checks the declared archive SHA-256 bytes against it. Neither
-route can borrow this proposal's unverified status as evidence for the other.
+route can borrow the other's scoped proof as evidence for APK execution.
 
 ## Rejected alternatives
 
@@ -92,12 +104,14 @@ route can borrow this proposal's unverified status as evidence for the other.
 
 ## Consequences and non-claims
 
-A passing reviewed-metadata freshness check would show only that the declared
-metadata matches its reviewed preimage. A fixed-output SHA-256 check establishes
-only the fetched bytes for that request. Neither proves upstream provenance,
-license compliance, benign tool behavior, APK correctness, reproducibility, or
-release eligibility. Acceptance of this ADR requires inspecting the merged
-named API and exercising positive and drifted-record negative bindings, the
-canonical ADR 0089 cohort cross-check, and the independently verified
-fixed-output source bytes; until then the active change's ADR task and archive
-gate remain open.
+A passing reviewed-metadata freshness check shows only that the declared
+metadata matches its reviewed preimage. Fixed-output SHA-256 establishes only
+the bytes of the selected source request; locally signed store PathInfo
+attests to this Mantle store's recorded output, not upstream authenticity.
+Neither establishes upstream provenance, license compliance, benign tool
+behavior, SDK execution, APK correctness, reproducibility, or release
+eligibility. Mantle's Android source-admission maintainers own the finite
+bridge; the accepted decision is repeatable through the reviewed positive
+and drifted-record fixtures, the original-URL source-bundle import, the
+source-v1 fixed-output and native consumer builds, and the exact-path
+verification receipts cited above.

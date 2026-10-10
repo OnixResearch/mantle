@@ -107,4 +107,4 @@ compatibility surface, crate name, or historical decision.
 | [0101](0101-limit-nix-gateway-to-bounded-concrete-operations.md) | Limit Nix gateway to bounded concrete operations | Proposed |
 | [0103](0103-bind-static-inputs-to-dynamic-plan-roots.md) | Bind static inputs to dynamic-plan roots by request identity | Proposed |
 | [0109](0109-reject-package-layer-design-priors-without-a-consumer.md) | Reject package-layer design priors that have no consumer | Accepted |
-| [0110](0110-separate-reviewed-android-metadata-from-source-identity.md) | Separate reviewed Android metadata from source identity | Proposed |
+| [0110](0110-separate-reviewed-android-metadata-from-source-identity.md) | Separate reviewed Android metadata from source identity | Accepted |

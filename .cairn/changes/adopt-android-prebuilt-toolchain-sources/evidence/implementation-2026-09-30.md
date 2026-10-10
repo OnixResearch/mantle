@@ -46,3 +46,131 @@ Temurin's upstream Adoptium release asset API for `17.0.17+10` independently rep
 - After the reviewed original-HTTPS physical consumer proof, local `cairn gate proposal`, `gate design`, and `gate tasks` for `adopt-android-prebuilt-toolchain-sources --root .` each returned `verdict=PASS`, `issues=[]`, exit 0; tasks reported `task_done=19`, `task_todo=0`. These advisory gates do not substitute for an APK runtime or archive decision.
 
 The demonstrated trust boundary is source-record admission, offline fixture replay, and one original-HTTPS reviewed Android build-tools archive physically copied by an identity-bound native consumer with verified local PathInfo/NAR. No prebuilt JDK or Android SDK executable was run, no four-component signed APK was built, no upstream binary provenance or bootstrap-chain provenance is established, and this Cairn is not archived. APK-proof and release acceptance remain separate.
+
+## Current named-API decision check (2026-10-10)
+
+This section is additional evidence over merged Mantle parent
+`05422d87ac1452f45dc9bae602a0248e3f21fc45`, not a rewrite of the
+2026-09-30 snapshot above. The immediate outcome is acceptance of the
+*reviewed metadata/finite source-v1 bridge* in ADR 0110; the maintained
+capability is identity-bound, offline-replayable source admission for Android
+tool consumers. Mantle Android source-admission maintainers own the reviewed
+alias table and its drift fixtures. ADR 0089 remains a separate proposed
+decision for the published source-v1 implementation. Any cohort change
+requires checking both preimages, the pin equivalence and the byte path again.
+
+- Isolated clean-parent worktree, locked Mantle Nix dev shell, private Cargo
+  target: `cargo test -p mantle --test android_sources --locked --offline --
+  --test-threads 1` reported `test result: ok. 9 passed; 0 failed`;
+  `cargo test -p crunch-eval --lib stdlib::tests:: --locked --offline --
+  --test-threads 1` reported `test result: ok. 11 passed; 0 failed`.
+  Among the named cases: `reviewed_binding_declares_fetch_and_rejects_metadata_drift`,
+  `reviewed_tool_binding_uses_one_validated_source_v1_fetch_for_each_alias`,
+  `published_source_and_reviewed_metadata_cannot_cross_identity_domains`,
+  and the offline unmatched-source rejection. Full captured log:
+  `android-reviewed-adr0110-focused-fixtures-20261010.log`
+  (BLAKE3 `b9f259604bf34066f4d346df55f9141d008ef5fd626e58e7fdc77cbf3279bc6b`).
+- The locked `nix build .#default` packaged `mantle` from the same source
+  cohort. `mantle eval --import-path lib` of an external
+  `android.reviewed.bind_tool "android-build-tools"` native consumer had
+  **one** fixed-output `builtin:fetchurl` input for the original
+  `https://dl.google.com/android/repository/build-tools_r35_linux.zip`,
+  pinned to published SHA-256 SRI
+  `sha256-vTpJZpEuuLMO0NALDNprZUO5SdX/4AvqVMBMgeFWHYg=`. Its reviewed
+  metadata identity was
+  `5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f`,
+  not the source-v1 identity.
+- `source bundle export --build-root reviewed-consumer.ncl --import-path lib
+  --fetch-missing` returned `ready`, one `fixed-url` record and 61,958,799
+  bytes. `source bundle import --pin` imported one record (manifest BLAKE3
+  `cc8d22a2b17e86da6733316b2815ed1e530fe27588f29f6c01778ec26c887ba0`);
+  `source bundle verify --imported` and exact-consumer `source bundle
+  preflight` returned `ready` without missing or stale records. The export
+  did **not** establish a new HTTPS transfer: available source bytes may
+  have been reused. Logs:
+  `android-reviewed-adr0110-original-https-source-export-20261010.log`
+  (BLAKE3 `8ce63218ce4d5d55e4ce6b879249875085d01f0e99c47aae42d8b04bfbede259`)
+  and `android-reviewed-adr0110-current-bridge-physical-consumer-20261010.log`
+  (BLAKE3 `6aabb16ff104d20e365e941a5255e6657d53180a024a3dd12978a62929c45a7f`).
+- `build reviewed-consumer.ncl --offline-source-preflight --no-substitute`
+  used a pinned static BusyBox shell in bwrap to check the bound environment,
+  then copied **only** the declared source-v1 `$NIX_STORE` archive into
+  `$out`; `built_total=1`, `cached_total=0`, `failed_total=0`,
+  `fod_mismatches=[]`. A separate `build canonical-build-tools.ncl
+  --offline-source-preflight --no-substitute` selected that fixed-output
+  input: `cached_total=1`, `failed_total=0`, `fod_mismatches=[]` after import.
+  Its log is `android-reviewed-adr0110-canonical-source-physical-20261010.log`
+  (BLAKE3 `728d99b3288b3abb6c11e42bc0ecd6f5cc65493be97ff48aaf260e8b27636b41`).
+- Physical source
+  `2zy2i572yas9gfpdz7ax1kjs09paal7v-android-build-tools-35.0.0` and
+  physical consumer
+  `41h22yl3dvgwcq2kyqbyzfi9nhmlxizv-reviewed-build-tools-source-v1-consumer`
+  under `/home/brittonr/mantle-cairn-finish/proofs/android-reviewed-adr0110-20261010/store/`
+  each had 61,958,799 bytes, `sha256sum`
+  `bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88`,
+  `nix hash file --type blake3 --base16`
+  `044d83ad8acdb4db798f5e8af1140d93e2574bee6d1b072b3e6916cedeb6585a`,
+  and `cmp` returned 0. `mantle store info` reported matching NAR SHA-256
+  `9d68905675654706e6717a2a278f1f67871fb17b150034cdb537c25b8d3f3b46`
+  and NAR size 61,958,912. `store verify --signing-key` for **each**
+  exact path returned `trusted_signatures=1/1`, `0 mismatches`. Log:
+  `android-reviewed-adr0110-local-pathinfo-verify-20261010.log`
+  (BLAKE3 `7cb83dbce7b351d4c8601d6eb20686323c0d277505aa307f36429a55d0d7ac8a`).
+
+The source and consumer PathInfo signatures are local Mantle store assertions,
+not vendor signatures. A raw-file output's optional AST-grep evidence reader
+reported `ast-grep-evidence-read-error`; the JSON build result and the
+independent byte comparison above do not rely on that parser. No SDK or JDK
+executable ran, no APK was signed, and this archive check proves neither
+upstream provenance nor release eligibility. Repeatable positive and negative
+routes live in `tests/android_sources.rs` and the embedded stdlib tests; the
+external physical proof inputs and outputs remain in the isolated proof path
+above rather than being added to the checkout.
+
+### Current Cairn merge review
+
+The accepted `.cairn/specs/android-adapter/spec.md` already contained all
+three requirement IDs. The initial `cairn sync` preflight correctly rejected
+two duplicate `ADDED` headings. The change delta now uses `MODIFIED` for all
+three, retaining the existing source-v1 normative admission and binding
+sentences and adding the distinct reviewed SHA-256/BLAKE3 metadata and finite
+bridge constraints. The non-claim requirement was identical to the accepted
+one. A new `cairn sync` dry run reported `blocked=false`, two modifications
+`applied`, and the identical non-claim block `already_applied`; the archive
+dry run reported `blocked=false`. These are **previews**, not executed sync
+or archive receipts. The separate advisory `cairn readiness` report has
+`completion=unavailable` without a supplied completion observation; it
+does not authorize mutation.
+
+Using the pinned Cairn executable from Mantle's flake cohort,
+`cairn validate --root .` returned `valid=true`, empty global/change/spec
+issues. `cairn gate proposal|design|tasks
+adopt-android-prebuilt-toolchain-sources --root .` each returned `PASS`
+with no issues; the tasks gate counted `19 done`, `0 todo`. Exact external
+transcripts (BLAKE3) are:
+
+| Check | Log under `/home/brittonr/mantle-cairn-finish/logs/` | BLAKE3 |
+|---|---|---|
+| Global validate | `android-reviewed-adr0110-cairn-validate-reconciled-20261010.log` | `c7c7db25b8c35bc41a4f503bffe29235d15f9e48d037bd4fd49c251fd98e59ab` |
+| Proposal gate | `android-reviewed-adr0110-cairn-gate-proposal-reconciled-20261010.log` | `473413a7d03b8837c730e6f537645d7259356a4a569c618608261baeae32f9aa` |
+| Design gate | `android-reviewed-adr0110-cairn-gate-design-reconciled-20261010.log` | `5d86598f452b1515b88c25b3b94672ae87c4e6c7347a7e6d8fba35b80c662046` |
+| Tasks gate | `android-reviewed-adr0110-cairn-gate-tasks-reconciled-20261010.log` | `8f18f730d19b72c047aa69c3dc83a77ea825d3fad22f6ee97b0bf049611c1b63` |
+| Sync preview | `android-reviewed-adr0110-cairn-sync-preview-20261010.log` | `dddf8c9f17968e7aa308f44ee31c32d20fe93ebdf86c54c8f7f4885019923513` |
+| Archive preview | `android-reviewed-adr0110-cairn-archive-preview-20261010.log` | `2228ca60295f9b8776e9684a1ae2feecec02a29f7ef33b1cf4ca7c8ecdc4ed2f` |
+
+### Merged-tree Mantle check before lifecycle cutover
+
+On the isolated Android acceptance worktree, `nix flake check -L
+--keep-going --no-write-lock-file` with only locked-source local-mirror
+overrides and Nix store-space options exited 0 (detached task 794):
+`running 25 flake checks...`, `all checks passed!`. Its first-party nextest
+check reported `6262 tests run: 6262 passed, 150 skipped`; the named
+`android_sources` positive/drift and `android_sources_offline` actual
+fixed-output digest-drift rejections passed. This check ran on x86_64-linux;
+the incompatible aarch64/darwin systems were not checked. Captured log:
+`/home/brittonr/mantle-cairn-finish/logs/android-reviewed-adr0110-full-flake-corrected-20261010.log`,
+BLAKE3 `ef74b093bde22d92acd219110c69f8af57adc247bfdf5a0311f0f6f8bdf6e848`.
+The flake source filter excludes this *active* Cairn change delta and its
+evidence; the separately captured pinned Cairn validation/gates and sync
+preview above cover that surface. Archive-state checks require a fresh gate
+after Cairn moves the change into the filtered archive.

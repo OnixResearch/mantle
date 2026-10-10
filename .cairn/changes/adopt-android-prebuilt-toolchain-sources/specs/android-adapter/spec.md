@@ -1,12 +1,12 @@
 # Android Adapter Delta
 
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: android_adapter.prebuilt_source_admission
 
 r[android_adapter.prebuilt_source_admission]
 
-Prebuilt Android toolchain components MUST enter the Android adapter through fixed-output fetch derivations declared in a typed source manifest. Each component record MUST carry the component name, exact version, upstream URL, SHA-256 digest of archive bytes, BLAKE3 record identity over canonical normalized metadata excluding that identity field, unpack shape, and declared platform. The manifest MUST reject incomplete records. The reviewed cohort's BLAKE3 metadata identities MUST be recomputed by a deterministic freshness rail before accepting changes; Nickel does not provide BLAKE3 hashing.
+Prebuilt Android toolchain components MUST enter Mantle only through fixed-output fetch derivations declared in a typed source manifest. Each component record MUST carry the component name, exact version, upstream URL, SHA-256 digest, BLAKE3 record identity, unpack shape, and declared platform. The manifest MUST reject incomplete records. For the `android.reviewed` adapter, the SHA-256 pin is over archive bytes and the distinct reviewed BLAKE3 identity is over canonical normalized metadata excluding the identity field. The reviewed cohort's metadata identities MUST be recomputed by a deterministic freshness rail before accepting changes; Nickel does not provide BLAKE3 hashing. Its binder MUST check the selected published source-v1 fixed-output record against the finite reviewed-to-published cohort mapping.
 
 #### Scenario: Complete pinned record is admitted
 
@@ -26,7 +26,7 @@ Prebuilt Android toolchain components MUST enter the Android adapter through fix
 
 r[android_adapter.toolchain_identity_binding]
 
-Every derivation produced by the Android adapter for execution of a prebuilt toolchain component MUST declare the matching reviewed toolchain identity and fixed-output fetch as an input. Metadata drift MUST be refused before lowering the consumer; if acquired bytes differ from the SHA-256 pin, the fetch MUST fail before any consumer tool executes. BLAKE3 at Nickel lowering is a checked-in metadata binding, not an independent runtime recomputation.
+Every derivation that executes a prebuilt Android toolchain component MUST declare the matching toolchain identity record as an input. If the resolved component bytes do not match the recorded digest, the build MUST fail before the tool executes. For derivations produced by the `android.reviewed` adapter, the matching reviewed identity and published source-v1 fixed-output fetch MUST both be declared as inputs. Metadata drift MUST be refused before lowering the consumer; if acquired bytes differ from the SHA-256 pin, the fetch MUST fail before any consumer tool executes. BLAKE3 at Nickel lowering is a checked-in metadata binding, not an independent runtime recomputation.
 
 #### Scenario: Identity matches admitted bytes
 
