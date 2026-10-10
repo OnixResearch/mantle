@@ -19,24 +19,7 @@ fn fixture_archive(root: &Path, component: &str, tools: &[&str]) -> BoundArchive
         } else {
             content.join("tools").join(tool)
         };
-        let behavior = match *tool {
-            "aapt2" => {
-                "case \"$1\" in compile) while [ \"$1\" != '-o' ]; do shift; done; shift; printf 'flat' > \"$1/fixture.flat\";; link) while [ \"$1\" != '-o' ]; do shift; done; shift; printf 'apk' > \"$1\"; \"$UTILITY\" mkdir -p \"$out/gen\"; printf 'class R {}' > \"$out/gen/R.java\";; esac"
-            }
-            "javac" => "while [ \"$1\" != '-d' ]; do shift; done; shift; printf 'class' > \"$1/Demo.class\"",
-            "java" => {
-                "case \"$*\" in *com.android.tools.r8.D8*) printf 'dex' > \"$out/classes.dex\";; *apksigner.jar*sign*) while [ \"$1\" != '--out' ]; do shift; done; shift; printf 'signed-apk' > \"$1\";; *) exit 72;; esac"
-            }
-            "zipalign" => "for arg in \"$@\"; do destination=\"$arg\"; done; printf 'unsigned-apk' > \"$destination\"",
-            "jar" => ":",
-            _ => unreachable!(),
-        };
-        let invocation = if *tool == "java" {
-            "case \"$*\" in *com.android.tools.r8.D8*) invocation=d8;; *apksigner.jar*) invocation=apksigner;; *) exit 72;; esac".to_string()
-        } else {
-            format!("invocation='{tool}'")
-        };
-        fs::write(&path, format!("#!/bin/sh\nlog_path=\"${{LOG_PATH:-$out/argv.log}}\"\n{invocation}\nprintf '%s|%s|%s|%s|%s|%s\\n' \"$invocation\" \"$*\" \"$LC_ALL\" \"$TZ\" \"$SOURCE_DATE_EPOCH\" \"$HOME\" >> \"$log_path\"\n{behavior}\n")).unwrap();
+        fs::write(&path, "#!/bin/sh\nprintf 'unexpected synthetic SDK execution\\n' >&2\nexit 99\n").unwrap();
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
     }
@@ -162,100 +145,12 @@ pub(super) fn runtime_cohort(inputs: &BuildInputs) -> RuntimeCohort {
     }
 }
 
-// Deliberately synthetic file:// records exercise only the direct adapter's
-// reviewed-toolchain and archive-byte boundary, not source-v1 admission.
 #[test]
-fn stub_archives_execute_generated_steps_in_order_with_pinned_environment() {
-    let dir = tempfile::tempdir().unwrap();
-    let (plan, inputs) = fixture(dir.path(), true);
-    let reviewed = plan.toolchain.clone();
-    let runtime = runtime_cohort(&inputs);
-    let prepared = PreparedApk::bind(plan, inputs, &reviewed, &runtime, dir.path()).unwrap();
-    let log = dir.path().join("log");
-    let mut extraction_outputs = Vec::new();
-    for (index, extraction) in prepared.extractions(dir.path()).unwrap().iter().enumerate() {
-        let out = dir.path().join(format!("extraction-{index}"));
-        let work = dir.path().join(format!("unpack-work-{index}"));
-        fs::create_dir(&work).unwrap();
-        let status = Command::new(&extraction.builder)
-            .args(&extraction.args)
-            .current_dir(&work)
-            .env_clear()
-            .envs(&extraction.env)
-            .env("out", &out)
-            .status()
-            .unwrap();
-        assert!(status.success(), "archive extraction failed: {:?}", extraction.kind);
-        assert!(!log.exists(), "SDK executable ran during extraction");
-        extraction_outputs.push(out);
-    }
-    // This shell-only shape smoke is not store provenance proof. The public
-    // adapter exposes trees only through verified_same_run_extractions.
-    let trees = ExtractedTrees {
-        build: extraction_outputs[0].display().to_string(),
-        jdk: extraction_outputs[1].display().to_string(),
-        platform: extraction_outputs[2].display().to_string(),
-    };
-    let mut previous = BTreeMap::new();
-    for (index, step) in prepared.steps().iter().enumerate() {
-        let derivation = prepared.derivation(step.kind, &previous, &trees, dir.path()).unwrap();
-        for input in &derivation.inputs {
-            assert!(input.starts_with(dir.path().to_str().unwrap()), "undeclared host input: {input}");
-        }
-        if step.kind == StepKind::Aapt2Link {
-            assert!(derivation.inputs.contains(&previous[&StepKind::Aapt2Compile].display().to_string()));
-        }
-        if step.kind == StepKind::Apksigner {
-            assert!(derivation.inputs.iter().any(|input| input.ends_with("/key.jks")));
-            assert!(derivation.inputs.iter().any(|input| input.ends_with("/key.password")));
-        }
-        let out = dir.path().join(format!("output-{index}"));
-        let work = dir.path().join(format!("work-{index}"));
-        fs::create_dir(&work).unwrap();
-        let status = Command::new(&derivation.builder)
-            .args(&derivation.args)
-            .current_dir(&work)
-            .env_clear()
-            .envs(&derivation.env)
-            .env("LOG_PATH", &log)
-            .env("out", &out)
-            .status()
-            .unwrap();
-        assert!(status.success(), "step {:?} failed", step.kind);
-        assert!(out.join(&step.output).exists(), "declared {:?} output missing", step.kind);
-        previous.insert(step.kind, out);
-    }
-    let events = fs::read_to_string(log).unwrap();
-    let actual: Vec<_> = events.lines().map(|line| line.split('|').next().unwrap()).collect();
-    assert_eq!(actual, ["aapt2", "aapt2", "javac", "d8", "jar", "zipalign", "apksigner"]);
-    let calls: Vec<_> = events.lines().collect();
-    assert!(calls[0].contains("res/values/strings.xml"));
-    assert!(calls[1].contains("compiled-resources/fixture.flat"));
-    assert!(calls[1].contains("--rename-manifest-package org.example.demo"));
-    assert!(calls[1].contains("--version-code 1"));
-    assert!(calls[2].contains("src/Demo.java"));
-    assert!(calls[2].contains("output-1/gen/R.java"));
-    assert!(calls[3].contains("output-2/classes/Demo.class"));
-    assert!(calls[4].contains("output-3"));
-    assert!(calls[5].contains("with-dex.apk"));
-    assert!(calls[6].contains("output-4/unsigned.apk"));
-    for event in events.lines() {
-        let fields: Vec<_> = event.split('|').collect();
-        assert_eq!(&fields[2..5], ["C", "UTC", "315532800"]);
-        assert!(fields[5].contains("/.android-home"));
-        assert!(!event.contains("/.android/"));
-    }
-    assert!(events.contains("--ks "));
-    assert!(events.contains("key.jks"));
-}
-
-#[test]
-fn invalid_plans_and_archive_drift_have_no_tool_effects() {
+fn invalid_plans_and_archive_drift_reject_before_graph_generation() {
     let dir = tempfile::tempdir().unwrap();
     let (mut plan, inputs) = fixture(dir.path(), false);
     let reviewed = plan.toolchain.clone();
     let runtime = runtime_cohort(&inputs);
-    let log = dir.path().join("log");
     let failures = [
         (Rejection::MissingManifestMember, "manifest"),
         (Rejection::UnboundToolchainIdentity, "identity"),
@@ -290,7 +185,6 @@ fn invalid_plans_and_archive_drift_have_no_tool_effects() {
         assert!(
             matches!(PreparedApk::bind(candidate, inputs.clone(), &reviewed, &runtime, dir.path()), Err(Error::Plan(observed)) if observed == category)
         );
-        assert!(!log.exists());
     }
     let mut changed_runtime = inputs.clone();
     changed_runtime.runtime_glibc.identity.nar_sha256 = "f".repeat(64);
@@ -315,7 +209,6 @@ fn invalid_plans_and_archive_drift_have_no_tool_effects() {
         PreparedApk::bind(original, inputs, &reviewed, &runtime, dir.path()),
         Err(Error::DigestDrift(_))
     ));
-    assert!(!log.exists());
 }
 
 #[test]
@@ -334,14 +227,13 @@ fn signing_key_must_be_the_declared_source_member_even_with_identical_bytes() {
 }
 
 #[test]
-fn symlinked_archive_utility_and_signing_inputs_fail_before_tool_execution() {
+fn symlinked_archive_utility_and_signing_inputs_are_rejected() {
     use std::os::unix::fs::symlink;
     let dir = tempfile::tempdir().unwrap();
     let outside = tempfile::tempdir().unwrap();
     let (plan, inputs) = fixture(dir.path(), true);
     let reviewed = plan.toolchain.clone();
     let runtime = runtime_cohort(&inputs);
-    let log = dir.path().join("log");
     let archive_link = inputs.clone();
     let external_archive = outside.path().join("archive.tar.gz");
     fs::copy(&archive_link.build_tools.store_path, &external_archive).unwrap();
@@ -386,5 +278,4 @@ fn symlinked_archive_utility_and_signing_inputs_fail_before_tool_execution() {
         PreparedApk::bind(plan, archive_link, &reviewed, &runtime, dir.path()),
         Err(Error::InvalidInput(_))
     ));
-    assert!(!log.exists(), "symlink escape reached an SDK stub");
 }

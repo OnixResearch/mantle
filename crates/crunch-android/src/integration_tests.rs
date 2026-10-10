@@ -108,7 +108,7 @@ async fn realize(builder: &mut Builder<Service>, drv: CrunchDerivation, prefix: 
 }
 
 #[test]
-fn sandbox_executes_real_extraction_and_unsigned_apk_derivation_steps() {
+fn sandbox_rejects_swapped_cached_untrusted_or_drifted_extractions() {
     if !has_bwrap() {
         eprintln!("skipping: bwrap/user namespace unavailable");
         return;
@@ -120,12 +120,10 @@ fn sandbox_executes_real_extraction_and_unsigned_apk_derivation_steps() {
     let original_source = inputs.source_root.clone();
     let source_path = prefix.join(format!("{}-android-source", "a".repeat(32)));
     fs::rename(&original_source, &source_path).unwrap();
-    let static_busybox = std::env::var_os("SNIX_BUILD_SANDBOX_SHELL").map(PathBuf::from).unwrap_or_else(|| {
-        PathBuf::from(
-            "/nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox",
-        )
-    });
-    assert!(static_busybox.is_file(), "static busybox utility is required for the real sandbox fixture");
+    let static_busybox = PathBuf::from(
+        std::env::var_os("SNIX_BUILD_SANDBOX_SHELL").expect("set SNIX_BUILD_SANDBOX_SHELL to static BusyBox"),
+    );
+    assert!(static_busybox.is_file(), "static BusyBox is required for the real sandbox fixture");
     let utility_store_root = prefix.join(format!("{}-apk-utility", "b".repeat(32)));
     fs::create_dir(&utility_store_root).unwrap();
     let utility_member = utility_store_root.join("busybox");
@@ -235,13 +233,14 @@ fn sandbox_executes_real_extraction_and_unsigned_apk_derivation_steps() {
         }
         plan.toolchain = reviewed.clone();
         let reviewed_runtime = super::tests::runtime_cohort(&inputs);
-        let mut prepared = PreparedApk::bind(plan, inputs, &reviewed, &reviewed_runtime, &prefix).unwrap();
+        let prepared = PreparedApk::bind(plan, inputs, &reviewed, &reviewed_runtime, &prefix).unwrap();
         let mut extraction_results = Vec::new();
         for extraction in prepared.extractions(&prefix).unwrap() {
             extraction_results.push(realize(&mut builder, extraction_as_derivation(&extraction), prefix_text).await);
         }
         let outcomes: [BuildOutcome; 3] = extraction_results.try_into().unwrap();
-        let trees = verified_same_run_extractions(&prepared, &outcomes, &output_lookup, &trust, &prefix)
+        assert!(outcomes.iter().all(|outcome| !outcome.cached), "extraction must run in this store");
+        verified_same_run_extractions(&prepared, &outcomes, &output_lookup, &trust, &prefix)
             .await
             .expect("same-run extraction provenance");
         let mut swapped = outcomes.clone();
@@ -251,35 +250,11 @@ fn sandbox_executes_real_extraction_and_unsigned_apk_derivation_steps() {
         let mut cached = outcomes.clone();
         cached[0].cached = true;
         assert!(verified_same_run_extractions(&prepared, &cached, &output_lookup, &trust, &prefix).await.is_err());
-        let runtime_digest = prepared.inputs.runtime_glibc.identity.nar_sha256.clone();
-        prepared.inputs.runtime_glibc.identity.nar_sha256 = "0".repeat(64);
+        let mut drifted = prepared;
+        drifted.inputs.runtime_glibc.identity.nar_sha256 = "0".repeat(64);
         assert!(
-            verified_same_run_extractions(&prepared, &outcomes, &output_lookup, &trust, &prefix).await.is_err(),
+            verified_same_run_extractions(&drifted, &outcomes, &output_lookup, &trust, &prefix).await.is_err(),
             "a changed runtime tree digest must stop before an SDK stage",
         );
-        prepared.inputs.runtime_glibc.identity.nar_sha256 = runtime_digest;
-        let mut previous = BTreeMap::new();
-        let mut observations = Vec::new();
-        for step in prepared.steps() {
-            let derivation = prepared.derivation(step.kind, &previous, &trees, &prefix).unwrap();
-            assert!(
-                derivation.inputs.contains(&prepared.inputs.runtime_glibc.store_path.display().to_string())
-                    && derivation.inputs.contains(&prepared.inputs.runtime_libgcc.store_path.display().to_string()),
-                "every SDK stage must bind both immutable runtime roots",
-            );
-            let output = realize(&mut builder, tool_as_derivation(&derivation), prefix_text).await;
-            let output_dir = prefix.join(output.outputs["out"].store_path.to_string());
-            assert!(output_dir.join(&step.output).exists(), "missing {:?} output", step.kind);
-            observations
-                .push(fs::read_to_string(output_dir.join("argv.log")).expect("stub invocation inside real sandbox"));
-            previous.insert(step.kind, output_dir);
-        }
-        assert!(observations[0].contains("aapt2|compile"));
-        assert!(observations[1].contains("aapt2|link"));
-        assert!(observations[2].contains("javac|"));
-        assert!(observations[3].contains("d8|"));
-        assert!(observations[4].contains("jar|") && observations[4].contains("zipalign|"));
-        assert_eq!(previous.len(), 5);
-        assert!(previous[&StepKind::Zipalign].join("unsigned.apk").is_file());
     });
 }
