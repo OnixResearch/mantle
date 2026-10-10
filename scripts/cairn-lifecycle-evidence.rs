@@ -17,7 +17,7 @@ use std::process::ExitCode;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const DEFAULT_ROOT: &str = ".";
-const DEFAULT_CAIRN: &str = "path:../cairn#cairn";
+const DEFAULT_CAIRN: &str = "cairn";
 const CAIRN_ENV: &str = "CAIRN";
 const ARCHIVE_DATE_ENV: &str = "CAIRN_ARCHIVE_DATE";
 // Lifecycle state lives under `.cairn/` since the 2026-09-09 consolidation; the

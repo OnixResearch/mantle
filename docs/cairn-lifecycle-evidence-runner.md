@@ -16,9 +16,9 @@ Lifecycle state lives under `.cairn/` (`.cairn/changes/<change>/`,
 `.cairn/archive/<date>-<change>/`). Two inputs select the Cairn build and the
 archive directory name:
 
-- `--cairn <value>` (default: `$CAIRN`, else `path:../cairn#cairn`). A value
-  containing `#` is a flake reference run through `nix run <ref> --`; any other
-  value is executed directly, e.g. a prebuilt `…/bin/cairn`.
+- `--cairn <value>` (default: `$CAIRN`, else `cairn` from the pinned dev
+  shell's `PATH`). A value containing `#` is an explicit flake override run
+  through `nix run <ref> --`; any other value is executed directly.
 - `--archive-date YYYY-MM-DD` (default: `$CAIRN_ARCHIVE_DATE`, else the current
   UTC date). Dates before 2000-01-01, such as the `1970-01-01` epoch default
   that produced misdated archives, are rejected.
@@ -29,7 +29,6 @@ Use dry-run mode before mutation:
 nix develop -c cargo -Zscript scripts/cairn-lifecycle-evidence.rs \
   --change <change-name> \
   --commands .cairn/changes/<change-name>/evidence/commands.txt \
-  --cairn <flake-ref-or-cairn-binary> \
   --requirement-id verification_evidence.example_requirement \
   --dry-run
 ```
@@ -83,7 +82,6 @@ boxes are ready:
 nix develop -c cargo -Zscript scripts/cairn-lifecycle-evidence.rs \
   --change <change-name> \
   --commands .cairn/changes/<change-name>/evidence/commands.txt \
-  --cairn <flake-ref-or-cairn-binary> \
   --requirement-id verification_evidence.example_requirement
 ```
 
