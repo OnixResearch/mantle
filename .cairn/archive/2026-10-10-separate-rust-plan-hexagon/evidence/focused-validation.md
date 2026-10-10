@@ -196,3 +196,39 @@ The gate omitted incompatible aarch64-darwin, aarch64-linux, and
 x86_64-darwin systems. It does not archive the change, repair the separate
 outdated function-address release-intake fixtures, or prove self-build,
 release eligibility, or deployment.
+
+## Native Cairn sync and archive after publication (2026-10-10)
+
+With the verified implementation and Cairn pin committed on published Mantle
+`main` at `f17816217575d659390913af9df7b6b68d8c618e`, the Nix-packaged
+Cairn binary named above executed the `separate-rust-plan-hexagon` spec sync.
+The sync reported `blocked: false`, `mutated: true`, and added the four
+`rust_package_planning` requirement IDs for the hexagonal core,
+application-owned ports, explicit unit effects, and compatibility to
+`.cairn/specs/rust-package-planning/spec.md`; its expected accepted-spec hash
+was `6cef3707548ab39e2c680e2ce595034d8175a949274947ad2da5629db69e0c0c`.
+The retained sync receipt is
+`/home/brittonr/mantle-cairn-finish/logs/mantle-rust-plan-cairn-native-prearchive-sync-20261010.log`
+(BLAKE3 `ea17f0669a61c38e2f7dd8ace4b6061bceca636ffabd71a4ba2a4b2812206f49`).
+
+On the synced main tree, Cairn validation reported `valid: true`; proposal,
+design, and tasks gates each returned `valid: true`, `verdict: PASS`, with no
+ready tasks. The archive dry-run was unblocked with no reasons. Full gate and
+dry-run output is retained at
+`/home/brittonr/mantle-cairn-finish/logs/mantle-rust-plan-cairn-native-post-sync-prearchive-gates-20261010.log`
+(BLAKE3 `6e3a9b9df245ce2ee745d17200f261d85bb558ad9642d857ba049a1c2fc98f52`).
+The dated native archive then reported `blocked: false`, `mutated: true` and
+moved the change to `.cairn/archive/2026-10-10-separate-rust-plan-hexagon/`;
+post-archive validation returned `valid: true`. Its retained transcript is
+`/home/brittonr/mantle-cairn-finish/logs/mantle-rust-plan-cairn-native-archive-postvalidate-20261010.log`
+(BLAKE3 `68c9fabb65217dbaf1442eb739164741e5d3c8de76d3809a628b07933a5814bc`).
+This lifecycle close is not a source-built fixed-point proof, release
+eligibility, a passing function-address intake, or deployment.
+
+With the archived change and accepted spec staged as Nix source inputs, the
+post-archive x86_64-linux `nix flake check -L --keep-going --no-write-lock-file`
+completed `all checks passed!`; nextest reported
+`6262 tests run: 6262 passed, 150 skipped`. Transcript:
+`/home/brittonr/mantle-cairn-finish/logs/mantle-rust-plan-postarchive-full-flake-20261010.log`
+(BLAKE3 `0b82e4b88aa731623c4bbe0882277cbc43121238ae13e7405a8d2270b2fcadf6`).
+This gate omitted aarch64-darwin, aarch64-linux, and x86_64-darwin.
