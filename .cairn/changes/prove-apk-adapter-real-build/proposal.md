@@ -2,7 +2,7 @@
 
 ## Why
 
-Offline shape tests prove ordering and wiring, not a working APK. The adapter's honest completion needs one execution with the real prebuilt JDK and Android SDK: build a minimal checked-in APK, verify its structure, and prove rebuild determinism.
+Offline adapter tests prove typed rejection before SDK effects and declared-input-sensitive output identities; they do not execute SDK stages or produce a working APK. The adapter's real-build claim needs execution with the admitted prebuilt JDK and Android SDK: build a minimal checked-in APK, verify its structure, and prove rebuild determinism.
 
 This proof is execution-gated. It needs the network once to fetch the admitted toolchain components, or a prefetched source bundle. After that, replay is offline. The change records its environment prerequisites and its blockers rather than claiming unexecuted results.
 

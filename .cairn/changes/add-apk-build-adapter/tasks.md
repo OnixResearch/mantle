@@ -24,16 +24,16 @@
 - [x] [serial] 3.2 Add the new modules to the `crunch-eval` embedded stdlib mirror and verify with `CRUNCH_FORCE_EMBEDDED_STDLIB=1`. r[android_adapter.apk_pipeline_lowering]
 - [x] [serial] 3.3 Add Nickel contract tests for the `mkApk` surface with positive and negative fixtures. r[android_adapter.apk_pipeline_lowering]
 
-## 4. Offline shape tests
+## 4. Offline behavior tests
 
-- [x] [serial] 4.1 Add stub tool executables that record argv and environment to a declared output. r[android_adapter.apk_offline_shape_tests]
-- [x] [serial] 4.2 Add the offline shape test asserting step ordering, input wiring, pinned environment values, and stub-only execution. r[android_adapter.apk_offline_shape_tests]
-- [x] [serial] 4.3 Add offline rejection tests proving each typed category fails before any stub invocation. r[android_adapter.apk_offline_shape_tests]
+- [x] [serial] 4.1 Use fail-closed synthetic tool members in fixture archives: no placeholder APK or stub invocation log may count as execution evidence. r[android_adapter.apk_offline_behavior_tests]
+- [x] [serial] 4.2 Fetch pinned fixture archives through the builder, sandbox-extract them, and reject swapped, cached, untrusted, or runtime-drifted outcomes before SDK dispatch. r[android_adapter.apk_offline_behavior_tests]
+- [x] [serial] 4.3 Check typed rejection categories and archive-byte drift before graph generation, with output identity stable for equivalent plans and sensitive to declared source and signing changes. r[android_adapter.apk_offline_behavior_tests]
 
 ## 5. Validate
 
 - [x] [serial] 5.1 Run `cargo test -p crunch-android-core -p crunch-android` with positive and negative coverage. r[android_adapter.apk_plan_functional_core]
-- [x] [serial] 5.2 Run the offline shape integration tests through the pipeline test harness with `can_build()` gating on non-Linux hosts. r[android_adapter.apk_offline_shape_tests]
+- [x] [serial] 5.2 Exercise the offline real-builder fetch and sandbox extraction provenance test where bwrap is available; a skipped test is not acceptance evidence. r[android_adapter.apk_offline_behavior_tests]
 - [x] [serial] 5.3 Run first-package `cargo fmt --check` and focused Clippy for the new crates with `-D warnings`. r[android_adapter.apk_plan_functional_core]
 - [x] [serial] 5.4 Update the first-party Clippy exclusion lists and `deny.toml` handling if the new crates need entries. r[android_adapter.apk_plan_functional_core]
-- [x] [serial] 5.5 Run Cairn validation and the proposal, design, and tasks gates for this change. r[android_adapter.apk_offline_shape_tests]
+- [x] [serial] 5.5 Run Cairn validation and the proposal, design, and tasks gates for this change after the new behavior tests and evidence update. r[android_adapter.apk_offline_behavior_tests]

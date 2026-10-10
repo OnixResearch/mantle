@@ -49,21 +49,28 @@ The adapter MUST lower a validated plan to separate Mantle derivations for resou
 - **THEN** the output MUST be the zipaligned unsigned APK
 - **AND** no signing step MUST be generated
 
-### Requirement: android_adapter.apk_offline_shape_tests
+### Requirement: android_adapter.apk_offline_behavior_tests
 
-r[android_adapter.apk_offline_shape_tests]
+r[android_adapter.apk_offline_behavior_tests]
 
-The adapter MUST be covered by offline integration tests that use stub tool executables instead of real toolchain binaries. These tests MUST prove step ordering, input wiring, pinned environment values, and rejection paths without network access or prebuilt binary execution.
+The adapter MUST be covered by offline tests for typed rejection, declared-input-sensitive output identities, and same-run extraction admission. Fixed-output fixture archives MUST be fetched through the builder and extracted in its real sandbox before testing provenance rejection. Synthetic SDK scripts, echoed invocations, and placeholder APK bytes MUST NOT be used as evidence that an SDK stage ran or produced a usable APK.
 
-#### Scenario: Shape test proves ordering and wiring
+#### Scenario: Equivalent declarations retain their output identity
 
-- **GIVEN** stub executables that record their argv and environment
-- **WHEN** the offline shape test builds a plan
-- **THEN** the recorded invocations MUST appear in the required order with the declared inputs and pinned environment values
+- **GIVEN** a reviewed APK plan with declared source, toolchain, runtime, and optional signing inputs
+- **WHEN** the adapter lowers equivalent plans, a reordered resource list, a changed declared resource, and a changed signing identity
+- **THEN** equivalent plans and resource orderings MUST retain the same final output identity
+- **AND** changed declared resource or signing inputs MUST change that identity
+
+#### Scenario: Unsafe extraction outcomes stop before an SDK stage
+
+- **GIVEN** local fixed-output fixture archives fetched by the builder and extracted in the sandbox during the same run
+- **WHEN** an extraction outcome is swapped, cached, missing a trusted store signature, or bound to a drifted runtime digest
+- **THEN** the adapter MUST reject the extraction outcome before admitting a tool tree or generating an SDK stage
 
 #### Scenario: Rejection paths are exercised offline
 
-- **GIVEN** plans that trigger each typed rejection category
+- **GIVEN** plans that trigger each typed rejection category or an archive whose bytes differ from its declared digest
 - **WHEN** the offline tests evaluate them
-- **THEN** each MUST fail with its typed category before any step executes
-- **AND** no stub tool MUST be invoked for a rejected plan
+- **THEN** each plan MUST fail with its typed category, or the archive MUST fail with digest drift
+- **AND** no derivation graph MUST be generated for a rejected input

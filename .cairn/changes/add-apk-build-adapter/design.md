@@ -128,10 +128,10 @@ immutable proof inputs; this command neither fetches nor imports them.
 - Unpinned timestamp policy: core rejects the plan.
 - Keystore path escape or ambient reference: core rejects the plan.
 - Network access during any step: derivations run in the existing sandbox with no network.
-- Stub tool mismatch in tests: throwaway stub scripts MAY help inspect invocation shape, but their echoed argv or environment is not permanent acceptance evidence; a consumer-visible artifact or rejection-before-effects proof is required.
+- Stub tool mismatch in tests: synthetic executables fail closed. Their echoed argv, environment, or placeholder APK bytes cannot establish adapter acceptance; offline acceptance uses declared-input-sensitive output identities and real sandbox extraction provenance rejection before SDK execution.
 
 ## Testing
 
 - Core unit tests: valid plans lower to five ordered unsigned steps or six signed steps; every typed rejection returns its category at boundary values.
 - Adapter tests: wrong tool bytes or identities fail before graph generation; a declared source or signing change changes the final output identity while equivalent declarations remain deterministic.
-- Offline integration proof MUST assert typed rejection before effects or deterministic, reproducible APK/ZIP artifact bytes. Stub-only recorded argv and environment are exploratory diagnostics, not permanent tests or proof of real pinned SDK execution. The original stub-only shape-test task remains open until it can be satisfied consistently with this rule; the separate real-build change owns actual prebuilt tool execution.
+- Offline integration proof MUST assert typed rejection before effects or deterministic, reproducible APK/ZIP artifact bytes. The real builder fetches fixture archives and executes their extraction derivations; swapped, cached, untrusted, or runtime-drifted same-run outcomes must fail before an SDK stage. Core and adapter tests check typed plan rejection and declared-input-sensitive output identity. Stub-only recorded argv and environment are not permanent tests or proof of pinned SDK execution; the separate real-build change owns actual prebuilt tool execution.

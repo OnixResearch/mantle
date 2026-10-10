@@ -16,7 +16,7 @@ The composition follows the existing adapter split in this repo: a pure core cra
 - Lower the plan to separate derivations with pinned reproducibility inputs: fixed entry timestamp epoch, fixed locale and timezone, and declared toolchain identities.
 - Support an unsigned output path so CI can defer signing.
 - Admit keystores only as explicit derivation inputs, never from ambient `HOME`.
-- Add offline shape tests with stub tool executables that prove ordering, wiring, and hermeticity without executing real toolchain binaries.
+- Add offline behavior tests that verify declared-input-sensitive output identity and typed pre-effect rejection using real builder fetch and sandbox extraction; stub output is not APK-build evidence.
 
 ## Non-Goals
 
