@@ -50,7 +50,7 @@ The admitted components are prebuilt third-party binaries. Admission proves cont
 - license compliance for downstream distribution;
 - any source-built or bootstrap-chain claim.
 
-Execution stays inside bwrap sandbox derivations with only declared inputs mounted. ADR 0089 records the published source-v1 fixed-output decision and rejects source-building OpenJDK now; proposed ADR 0110 records the reviewed prebuilt-record-v1 metadata identity with its separate preimage, not an alias for ADR 0089's source-v1 identity. ADR 0079 is allocated to SpaceWasm evidence.
+Execution stays inside bwrap sandbox derivations with only declared inputs mounted. ADR 0089 records the separately proposed source-v1 fixed-output decision and rejects source-building OpenJDK now; accepted ADR 0110 records the reviewed prebuilt-record-v1 metadata identity with its separate preimage, not an alias for ADR 0089's source-v1 identity. ADR 0079 is allocated to SpaceWasm evidence.
 
 ## Failure and abuse controls
 
