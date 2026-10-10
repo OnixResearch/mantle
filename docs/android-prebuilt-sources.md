@@ -21,7 +21,7 @@ Use `AndroidReviewedSources.reviewed_source "temurin-jdk"` to select a pinned re
 
 A source bundle exported from the reviewed fetch derivation can be imported and pinned, then replayed with `build --offline-source-preflight --no-substitute`. `tests/android_sources.rs` uses a real `file:///` fixture and removes its original payload before offline replay; its unmatched URL case refuses the request at preflight. Offline readiness proves availability of the requested bytes, not an Android tool run. Archive admission does not unpack, execute or test JDK/SDK binaries and proves neither binary provenance nor license eligibility, malware absence, compiler correctness, APK behavior, reproducibility or release eligibility. ADR 0089 governs the separate published source-v1 cohort and does not assign its source identities to this reviewed metadata manifest.
 
-A historical isolated proof fetched the reviewed build-tools 35.0.0 archive through its original HTTPS URL, imported and pinned the source bundle, verified locally signed fetched PathInfo/NAR, and used the then-top-level `android.bind_tool` consumer to copy the actual archive to a byte-identical output. Current authoring uses `android.reviewed.bind_tool`; the historical receipt predates this namespace cutover and does not demonstrate the current expression. It proves neither SDK executable use nor a signed APK. The preserved command/output receipt is `.cairn/changes/adopt-android-prebuilt-toolchain-sources/evidence/implementation-2026-09-30.md`.
+A historical isolated proof fetched the reviewed build-tools 35.0.0 archive through its original HTTPS URL, imported and pinned the source bundle, verified locally signed fetched PathInfo/NAR, and used the then-top-level `android.bind_tool` consumer to copy the actual archive to a byte-identical output. Current authoring uses `android.reviewed.bind_tool`; the historical receipt predates this namespace cutover and does not demonstrate the current expression. It proves neither SDK executable use nor a signed APK. The preserved command/output receipt is `.cairn/archive/1970-01-01-adopt-android-prebuilt-toolchain-sources/evidence/implementation-2026-09-30.md`.
 
 The 2026-10-10 current named-API proof selected one canonical source-v1
 `builtin:fetchurl` input for `android.reviewed.bind_tool "android-build-tools"`.
@@ -31,8 +31,8 @@ locally signed fixed-output archive; the two 61,958,799-byte files compared
 equal and had archive-byte SHA-256
 `bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88`.
 Current positive/drift fixtures and exact-path store verification are recorded
-in the same Cairn implementation receipt. The export reused available source
-bytes, not a newly proved HTTPS transfer; neither it nor accepted
+in the same archived Cairn implementation receipt. The export may have reused
+available source bytes; it did not prove a new HTTPS transfer. Neither it nor accepted
 [ADR 0110](../adr/0110-separate-reviewed-android-metadata-from-source-identity.md)
 establishes upstream authenticity, source-built provenance, SDK execution,
 an APK proof or release eligibility. ADR 0089 remains a separate proposed
