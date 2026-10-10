@@ -46,7 +46,7 @@
       flake = false;
     };
     octet.url = "github:OnixResearch/octet/86ee46b3b9257b145d2dbeb6ce9d9897607db99c";
-    cairn.url = "github:OnixResearch/cairn/695124d459574ba7aeba6097310d237f393c243c";
+    cairn.url = "github:OnixResearch/cairn/007ba5193dd8fec9067a1c0e0f8ef487807af872";
     # Pinned Nickel CLI cohort 1.17.0 (tag 1.17.0). Mantle validates sources
     # and runs CLI checks with this exact evaluator, never a floating nixpkgs
     # nickel.
@@ -973,6 +973,9 @@
             nativeBuildInputs
             buildInputs
             ;
+          # Match the serialized libtest policy in quality-gate-common.sh.
+          # Each test still exercises its own internal concurrency.
+          cargoTestExtraArgs = "-- --test-threads 1";
           SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
           GIT = "${pkgs.git}/bin/git";
           SSL_CERT_FILE = caCertificateBundlePath;

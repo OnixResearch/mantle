@@ -143,6 +143,56 @@ The corrected leg then executed `scripts/prove-cargo-free-rust-plan.sh --full --
 
 The full `nix flake check -L --keep-going --no-write-lock-file` using the four exact locked-source local Git mirrors completed `all checks passed!` on x86_64-linux: the root nextest summary was `6262 tests run: 6262 passed, 150 skipped`. Incompatible `aarch64-darwin`, `aarch64-linux`, and `x86_64-darwin` were omitted. Full transcript: `/home/brittonr/mantle-cairn-finish/logs/rust-plan-v5-full-flake-verified-inputs-20261010.log`, BLAKE3 `299c9a5f705917ea5544aa18e4483f134731cf813d55df7c546670fbc8cf1237`.
 
-Mantle's dev-shell Cairn pin `695124d459574ba7aeba6097310d237f393c243c` rejects the checked-in `outcome_machine` admission, as documented in `cairn-policy/PIN-SKEW-2026-09-11.md`; it cannot validate this policy. The repo-prescribed live-checkout Cairn CLI was used from Leviathan's `/home/brittonr/mantle-cairn-finish/cairn` at `007ba5193dd8fec9067a1c0e0f8ef487807af872`, with the exact locked artifact source mirrored locally. Direct private Git SSH remains inaccessible; neither the Mantle lockfile nor the Cairn policy export was changed.
+At the V5 run, Mantle's then-pinned Cairn revision `695124d459574ba7aeba6097310d237f393c243c` rejected the checked-in `outcome_machine` admission, as documented in `cairn-policy/PIN-SKEW-2026-09-11.md`; it could not validate that policy. The repo-prescribed live-checkout Cairn CLI was used from Leviathan's `/home/brittonr/mantle-cairn-finish/cairn` at `007ba5193dd8fec9067a1c0e0f8ef487807af872`, with the exact locked artifact source mirrored locally. Direct private Git SSH was unavailable; neither the Mantle lockfile nor the Cairn policy export was changed in that V5 run.
 
 After V4 and V5 were marked done in `tasks.md` and the evidence above was written, `cairn validate --root .` reported `valid: true`. `cairn gate proposal`, `cairn gate design`, and `cairn gate tasks` for `separate-rust-plan-hexagon` each reported `verdict: PASS` and `valid: true`; the tasks gate returned no ready tasks. The final retained gate transcript is `/home/brittonr/mantle-cairn-finish/logs/rust-plan-v5-current-cairn-final-post-evidence-20261010.log` (BLAKE3 `a367776cd4e23ae8388721fce65a7e3c1b1e11ad11d6ed4fb001d20556aa130d`). These are validation and readiness checks, not a Cairn archive, self-build proof, release, or publication.
+
+## Published Cairn pin acceptance (2026-10-10)
+
+Mantle's `flake.nix` and generated root `flake.lock` now pin published Cairn
+revision `007ba5193dd8fec9067a1c0e0f8ef487807af872` with NAR hash
+`sha256-Kgx8JgsC/+26ETbL3lRaxXAYfzv2cmtG/i9OywPOz0c=`, verified both
+through GitHub and the local mirror. The dev shell put the Nix-packaged
+`/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn`
+on `PATH`. Running that pinned CLI on the repository reported `valid: true`
+for `validate --root .` and `valid: true`, `verdict: PASS` for proposal,
+design, and tasks gates for this change; the tasks gate returned no ready
+tasks. The same seven exact-revision input mirrors were necessary on
+Leviathan because direct Git input fetching was unavailable.
+
+The retained pinned-tool transcript is
+`/home/brittonr/mantle-cairn-finish/logs/mantle-cairn-pin-007ba-cli-gates-corrected-20261010.log`
+(BLAKE3 `d615f47e2a866f7aa5974054cbf500d573526e0f6a1ba08eb51f0762c35e0552`).
+This supersedes the pin-skew workaround for new Mantle checks; it does not
+retroactively change the V4/V5 source or establish archive, fixed-point,
+release, or publication readiness.
+
+## Final pinned-input Nix acceptance (2026-10-10)
+
+The Cairn pin changes the root `flake.nix` and `flake.lock` digests consumed by
+the durable-file-publication adoption receipt. Pinned Nickel 1.17.0 regenerated
+the JSON from its typed `.ncl`; the independent validator and `.blake3`
+sidecar now bind the current Nix file hashes. The first broad gate exposed a
+separate root-package `cargo test` failure in the remote coordinator lock
+test under parallel libtest scheduling; the same source test passed in both
+isolated nextest binaries. The Nix `crunch` package test phase now uses
+`--test-threads 1`, matching Mantle's existing first-party quality rail
+without changing that test's internal two-thread concurrency or the
+fail-closed mutation guard. This does not establish a root cause for the
+earlier transient lock-busy result.
+
+The focused adoption check and serialized root package check passed; the root
+binary unit-test legs each recorded `2,565 passed; 0 failed; 68 ignored`.
+Their retained transcript is
+`/home/brittonr/mantle-cairn-finish/logs/mantle-cairn-pin-007ba-focused-adoption-serial-package-20261010.log`
+(BLAKE3 `e5e03505c3a20360c98b94be620046acf579284d6173b5a01eaee95ab1fbce50`).
+On the final documentation-inclusive source snapshot,
+`nix flake check -L --keep-going --no-write-lock-file` with exact-NAR local
+source mirrors completed `all checks passed!` on x86_64-linux; its nextest
+summary was `6262 tests run: 6262 passed, 150 skipped`. The final transcript
+is `/home/brittonr/mantle-cairn-finish/logs/mantle-cairn-pin-007ba-post-docs-full-flake-20261010.log`
+(BLAKE3 `b0f362f8949005d02478599dd9d0a6a1b60a19a2c41be3fb822e3b774e97f5a7`).
+The gate omitted incompatible aarch64-darwin, aarch64-linux, and
+x86_64-darwin systems. It does not archive the change, repair the separate
+outdated function-address release-intake fixtures, or prove self-build,
+release eligibility, or deployment.
