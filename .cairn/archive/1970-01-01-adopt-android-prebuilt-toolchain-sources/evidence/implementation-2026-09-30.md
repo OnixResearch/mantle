@@ -174,3 +174,40 @@ The flake source filter excludes this *active* Cairn change delta and its
 evidence; the separately captured pinned Cairn validation/gates and sync
 preview above cover that surface. Archive-state checks require a fresh gate
 after Cairn moves the change into the filtered archive.
+
+### Executed Cairn cutover and postarchive validation
+
+The implementation/evidence/ADR commit
+`796cca191` preceded lifecycle mutation. `cairn sync
+adopt-android-prebuilt-toolchain-sources --root . --execute` returned
+`mutated=true`, `blocked=false`, and accepted Android spec hash
+`fbff39d3ecf84a6f53ba2ff5ee8b8448acebc773948dda48ff48952b79918896`.
+The source-v1 admission and binding requirements were modified with the
+additional reviewed constraints; the prebuilt non-claim block was already
+applied. Captured execution:
+`android-reviewed-adr0110-cairn-sync-executed-20261010.log`
+(BLAKE3 `ccf1512019e5c0265354b1f1beaa066941fea93376cf7f3cbce491418a7006f1`).
+
+`cairn archive adopt-android-prebuilt-toolchain-sources --root . --execute`
+returned `mutated=true`, `blocked=false` and moved the active change to
+`.cairn/archive/1970-01-01-adopt-android-prebuilt-toolchain-sources/`
+(archive receipt
+`android-reviewed-adr0110-cairn-archive-executed-20261010.log`,
+BLAKE3 `467b909e1dd9bfb669e51321d016dc7ccddde442837025306f58b98b82db0fee`).
+The `1970-01-01` prefix is Cairn's chosen directory name for this change,
+**not** the date of the 2026-10-10 proof. Live ADR and guide evidence links
+were moved to that path. The downstream `add-apk-build-adapter` metadata still
+names this predecessor; its readiness no longer reports
+`change_dependency.unsatisfied_dependency`. It continues to report
+`completion=unavailable` without a supplied completion observation. This
+cutover does not archive the downstream change or prove real SDK execution.
+
+Full captured postarchive `cairn validate --root .` output (exit 0) is
+`evidence/cairn-postarchive-validation-2026-10-10.json`, BLAKE3
+`44c5e8ea7035467970462dad87e144f27b6cff38b9833557ff57155293eb0f6b`.
+Its `receipt_hash` is
+`0ad2efb1f41c7f84b793f2ce0d8635c75cfeacd9f8ab62e53ce5f29a25cea9d2`;
+it reports `valid=true`, `issues=[]`, `change_issues=[]`, and `spec_issues=[]`.
+This is postarchive Cairn *structural* validation, not a product or release
+claim. Recheck the filtered archive and updated guide with Mantle's full
+flake gate after this transcript is in the source tree.

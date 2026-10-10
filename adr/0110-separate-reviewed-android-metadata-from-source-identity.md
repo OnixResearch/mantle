@@ -74,7 +74,7 @@ and compared byte-for-byte equal. Both exact paths passed locally signed
 PathInfo/NAR verification. The source export may have reused available bytes;
 this run did not prove a fresh HTTPS transfer. Command, output and BLAKE3
 transcripts are in
-`.cairn/changes/adopt-android-prebuilt-toolchain-sources/evidence/implementation-2026-09-30.md`.
+`.cairn/archive/1970-01-01-adopt-android-prebuilt-toolchain-sources/evidence/implementation-2026-09-30.md`.
 
 This decision does not change ADR 0089 or authorize a different upstream
 cohort. The earlier top-level `android.bind_tool` result remains historical,
