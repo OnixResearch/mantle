@@ -290,7 +290,7 @@ def prepare_git_sidecars(a, rows):
                 continue
             value, _ = run(["git", "-C", checkout, "rev-parse", "HEAD"])
             url, _ = run(["git", "-C", checkout, "remote", "get-url", "origin"])
-            if value == row[5] and url == original:
+            if value == row[5] and url == db.resolve().as_uri():
                 matches.append((db, checkout))
         require(len(matches) == 1, f"ambiguous or missing pinned Git checkout: {source}")
         db, checkout = matches[0]

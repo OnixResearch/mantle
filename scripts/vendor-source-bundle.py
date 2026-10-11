@@ -96,6 +96,20 @@ def add_index(files, source):
     require(f"{destination}/config.json" in files, "missing sparse registry config.json")
 
 
+def _verify_checkout_revision_and_local_origin(checkout, db, revision, git_environment):
+    """Cargo checkouts originate from their local object DB, not the upstream URL."""
+    head = subprocess.run(
+        ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+        env=git_environment, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    origin = subprocess.run(
+        ["git", "-C", str(checkout), "remote", "get-url", "origin"],
+        env=git_environment, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    require(head == revision, "Git checkout revision drift")
+    require(origin == db.resolve().as_uri(), "Git checkout origin is not its declared Cargo object DB")
+
+
 def prepare(args):
     repo = Path(__file__).resolve().parent.parent
     fixture = repo / "fixtures/lock-vendor-two-crate"
@@ -172,12 +186,7 @@ def prepare(args):
                 dynamic.v.bounded_git_metadata(checkout / ".git")
                 require((checkout / ".cargo-ok").is_file() and not (checkout / ".cargo-ok").is_symlink(),
                         "missing pinned Git checkout completion")
-                head = subprocess.run(["git", "-C", str(checkout), "rev-parse", "HEAD"],
-                                      env=git_environment, capture_output=True, text=True, check=True).stdout.strip()
-                origin = subprocess.run(["git", "-C", str(checkout), "remote", "get-url", "origin"],
-                                        env=git_environment, capture_output=True, text=True, check=True).stdout.strip()
-                require(head == revision and origin == source[4:].split("?", 1)[0].split("#", 1)[0],
-                        "Git checkout revision or declared source transport drift")
+                _verify_checkout_revision_and_local_origin(checkout, db, revision, git_environment)
                 actual, _ = dynamic.v.nar_sha256(fetched)
                 require(actual == reviewed_hash, f"Git NAR differs from reviewed lock table: {source}")
                 dynamic.v.verify_git_revision_tree(db, revision, fetched)
