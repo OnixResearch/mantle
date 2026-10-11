@@ -95,3 +95,36 @@ r[mantle.rust_unit_plan.build_scripts.matrix_evidence] The Rust compatibility su
 - GIVEN a matrix row marked supported for `unit_plan` without a named fixture
 - WHEN the matrix drift rail runs
 - THEN it MUST fail naming the row
+
+## MODIFIED Requirements
+
+### Requirement: Unsupported graphs fail closed
+
+r[mantle.rust_unit_plan.supported_fragment] The lane MUST support library,
+binary, proc-macro and build-script compilation units, and bounded sandboxed
+build-script execution units with declared compiled-script and target-facts
+inputs, for the declared lane triples. It MUST block unbound build-script
+execution units, test, doc and check modes, unsupported source kinds,
+undeclared triples, and plans beyond dynamic-plan limits with stable blockers.
+It MUST NOT fall back to Cargo compilation.
+
+#### Scenario: Build-script execution without its binding
+
+- GIVEN a workspace unit graph containing a build-script execution unit whose
+  compiled-script execution binding is absent
+- WHEN the adapter lowers it
+- THEN it MUST fail with `unit-plan-build-script-run-unsupported` naming the
+  package
+- AND no plan MUST be emitted
+
+#### Scenario: Unsupported target mode
+
+- GIVEN a unit effect for a test target
+- WHEN the adapter lowers it
+- THEN it MUST fail with `unit-plan-mode-unsupported` naming the unit
+
+#### Scenario: Plan beyond limits
+
+- GIVEN a unit graph that lowers to more units than the dynamic-plan unit limit
+- WHEN the producer lowers it
+- THEN it MUST fail with `unit-plan-limit` naming the limit
