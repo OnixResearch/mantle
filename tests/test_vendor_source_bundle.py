@@ -1,5 +1,6 @@
 """Behavioral regressions for the bounded lock-vendor source archive."""
 
+import hashlib
 import importlib.util
 import os
 from pathlib import Path
@@ -14,6 +15,14 @@ spec = importlib.util.spec_from_file_location("vendor_source_bundle", SCRIPT)
 assert spec is not None and spec.loader is not None
 bundle = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bundle)
+REPLAY_SCRIPT = (
+    Path(__file__).resolve().parents[1]
+    / "scripts/lock-vendor-replay/replay.py"
+)
+replay_spec = importlib.util.spec_from_file_location("lock_vendor_replay", REPLAY_SCRIPT)
+assert replay_spec is not None and replay_spec.loader is not None
+replay = importlib.util.module_from_spec(replay_spec)
+replay_spec.loader.exec_module(replay)
 
 
 class SourceBundleGitCheckoutTest(unittest.TestCase):
@@ -117,6 +126,54 @@ class SourceBundleGitCheckoutTest(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "not its declared Cargo object DB"):
                 bundle._verify_checkout_revision_and_local_origin(checkout, db, revision, git_environment)
+
+    def test_missing_registry_archive_uses_locked_fixed_fetch_and_present_tamper_denies(self):
+        with tempfile.TemporaryDirectory(prefix="vendor-registry-source-") as temporary:
+            cache = Path(temporary)
+            artifact = b"locked registry archive"
+            digest = hashlib.sha256(artifact).hexdigest()
+            row = ("fixture", "1.2.3", digest, "flat")
+            uri = "https://static.crates.io/crates/fixture/fixture-1.2.3.crate"
+            self.assertEqual(replay.registry_source(cache, row), uri)
+
+            entry = cache / "fixture-1.2.3.crate"
+            entry.write_bytes(artifact)
+            self.assertEqual(replay.registry_source(cache, row), entry.as_uri())
+            entry.write_bytes(b"tampered")
+            with self.assertRaisesRegex(RuntimeError, "wrong locked archive"):
+                replay.registry_source(cache, row)
+            entry.unlink()
+            entry.symlink_to(cache / "nonexistent.crate")
+            with self.assertRaisesRegex(RuntimeError, "wrong locked archive"):
+                replay.registry_source(cache, row)
+
+    def test_source_archive_accepts_pinned_checkout_link_but_rejects_escape(self):
+        with tempfile.TemporaryDirectory(prefix="vendor-bundle-checkout-link-") as temporary:
+            root = Path(temporary)
+            checkout = root / "checkout"
+            (checkout / "src").mkdir(parents=True)
+            (checkout / "evaluations").mkdir()
+            (checkout / "src/lib.rs").write_text("pub fn pinned() {}\n")
+            (checkout / "evaluations/native-fskit").symlink_to("../src", target_is_directory=True)
+            checkout_prefix = "git-cache/checkouts/fixture/abc1234"
+            files = {}
+            bundle.add_tree(files, checkout, checkout_prefix, allow_symlinks=True)
+            source_archive = root / "source.tar.gz"
+            bundle.export(files, source_archive)
+            observed = replay.unpacked_nar(source_archive, root / "accepted")
+            self.assertEqual(len(observed), 64)
+            extracted = root / "accepted/source-tree" / checkout_prefix
+            self.assertTrue((extracted / "evaluations/native-fskit").is_symlink())
+            self.assertEqual((extracted / "evaluations/native-fskit").resolve(), extracted / "src")
+
+            unsafe_archive = root / "unsafe.tar.gz"
+            with tarfile.open(unsafe_archive, "w:gz") as archive:
+                link = tarfile.TarInfo(f"{checkout_prefix}/evaluations/native-fskit")
+                link.type = tarfile.SYMTYPE
+                link.linkname = "../../../../../../etc"
+                archive.addfile(link)
+            with self.assertRaisesRegex(RuntimeError, "Git checkout symlink escapes pinned source"):
+                replay.unpacked_nar(unsafe_archive, root / "denied")
 
     def test_export_rejects_escaping_symlink_and_noncanonical_directory(self):
         with tempfile.TemporaryDirectory(prefix="vendor-bundle-unsafe-") as temporary:

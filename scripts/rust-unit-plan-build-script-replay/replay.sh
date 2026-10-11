@@ -143,14 +143,14 @@ build graphs "$B/ncl/graphs.ncl" success; plan graphs
 build links "$B/ncl/links.ncl" success; plan links
 build bz-a "$B/ncl/bz-a.ncl" success; plan bz-a
 build bz-b "$B/ncl/bz-b.ncl" success; plan bz-b
-# A role change changes bzip2's script and dependent units; unaffected graph units must be reused.
-"$H/check.sh" positive "$B" "$STORE"
+# A native role change alters the script and dependent root; unchanged units must not rebuild.
+"$H/check.sh" positive "$B"
 build nonzero "$B/ncl/nonzero.ncl" failure
 plan nonzero
 grep -R -q 'build-script-nonzero-exit' "$B/runs/nonzero/logs"
 build host "$B/ncl/host.ncl" success; plan host
 build network "$B/ncl/network.ncl" success; plan network
-"$H/check.sh" sandbox "$B" "$STORE"
+"$H/check.sh" sandbox "$B"
 # A missing declaration cannot access the previously built native library in the sandbox.
 goal bz-undeclared "$(p bz)" "$B/ncl/empty-native.json"
 build bz-undeclared "$B/ncl/bz-undeclared.ncl" failure
@@ -160,10 +160,10 @@ jq -cn --arg pkg "$PKG_ID" --arg pkg_config "$(p pkg_config)" \
   '{($pkg):{inputs:{"pkg-config":$pkg_config},env:{PKG_CONFIG_PATH:"{{role:absent}}/lib/pkgconfig"},path:["{{role:pkg-config}}/bin"]}}' > "$B/ncl/wrong-role-native.json"
 goal bz-wrong-role "$(p bz)" "$B/ncl/wrong-role-native.json"
 build bz-wrong-role "$B/ncl/bz-wrong-role.ncl" failure
-grep -q 'native-input-role-undeclared' "$B/runs/bz-wrong-role/stderr"
+jq -e '(.native_dynamic_plans | length) == 0 and (.failed | any(.[]; .message | contains("native-input-role-undeclared")))' "$B/runs/bz-wrong-role/report.json" >/dev/null
 # A host path presented as a native role is rejected by the Nickel StorePath contract.
 jq -cn --arg pkg "$PKG_ID" '{($pkg):{inputs:{bzip2:"/etc"},env:{PKG_CONFIG_PATH:"{{role:bzip2}}/lib/pkgconfig"},path:[]}}' > "$B/ncl/host-role-native.json"
 goal bz-host-role "$(p bz)" "$B/ncl/host-role-native.json"
 build bz-host-role "$B/ncl/bz-host-role.ncl" failure
-"$H/check.sh" negatives "$B" "$STORE"
+"$H/check.sh" negatives "$B"
 printf 'native build-script replay PASS: %s\n' "$B/summary.json"

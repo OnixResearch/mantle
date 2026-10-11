@@ -1,0 +1,2 @@
+python3 -m unittest discover -s tests -p test_vendor_source_bundle.py -v
+cd "$HOME/mantle-cairn-finish/tmp/rust-efficiency-20261011/lock-vendor-workspace-final-v11/fresh-checkout" && CARGO_HOME="$HOME/mantle-cairn-finish/tmp/rust-efficiency-20261011/lock-vendor-workspace-final-v11/empty-cargo-home" CARGO_NET_OFFLINE=true cargo metadata --offline --locked --format-version 1 --config .cargo/vendor-config.toml > /dev/null

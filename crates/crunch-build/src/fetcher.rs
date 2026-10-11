@@ -582,8 +582,18 @@ fn cleanup_fetch_output(path: &str) {
 
 /// Open a reader for a URL. Supports http(s):// and file:// schemes.
 fn open_url_reader(url: &str) -> Result<Box<dyn Read + Send>, FetchError> {
-    if let Some(path) = url.strip_prefix("file://") {
-        let file = std::fs::File::open(path).map_err(|e| FetchError::HttpError {
+    if url.starts_with("file://") {
+        // Project-local sources use file://./path relative to the caller's CWD.
+        // Absolute file URLs still need percent decoding and a local-host check.
+        let file = if let Some(relative) = url.strip_prefix("file://./") {
+            std::fs::File::open(relative)
+        } else {
+            let parsed = Url::parse(url).map_err(|error| FetchError::InvalidUrl(format!("{url}: {error}")))?;
+            let path =
+                parsed.to_file_path().map_err(|()| FetchError::InvalidUrl(format!("not a local file URL: {url}")))?;
+            std::fs::File::open(path)
+        }
+        .map_err(|e| FetchError::HttpError {
             url: url.to_string(),
             reason: format!("opening local file: {e}"),
         })?;
@@ -2140,6 +2150,28 @@ mod tests {
         ));
         assert!(matches!(fetch_raw_to_file("", output), Err(FetchError::InvalidBoundary(_))));
         assert!(!temp.path().join("output").exists());
+    }
+
+    #[test]
+    fn file_fetch_decodes_pinned_archive_path_and_rejects_remote_host() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("bzip2-sys-0.1.13+1.0.8.crate");
+        let destination = temp.path().join("fetched.crate");
+        let invalid_destination = temp.path().join("unexpected.crate");
+        let content = b"locked registry archive";
+        std::fs::write(&source, content).unwrap();
+        let url = Url::from_file_path(&source).unwrap().to_string().replace('+', "%2B");
+        assert!(url.contains("%2B"));
+
+        fetch_raw_to_file(&url, destination.to_str().unwrap()).unwrap();
+        assert_eq!(std::fs::read(&destination).unwrap(), content);
+
+        let remote_host_url = format!("file://remote.invalid{}", Url::parse(&url).unwrap().path());
+        assert!(matches!(
+            fetch_raw_to_file(&remote_host_url, invalid_destination.to_str().unwrap()),
+            Err(FetchError::InvalidUrl(_))
+        ));
+        assert!(!invalid_destination.exists());
     }
 
     #[test]

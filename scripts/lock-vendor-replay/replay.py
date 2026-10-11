@@ -17,7 +17,7 @@ import sys
 import tarfile
 import tomllib
 
-REPO = Path(__file__).resolve().parents[5]
+REPO = Path(__file__).resolve().parents[2]
 FIXTURE = REPO / "fixtures/lock-vendor-two-crate"
 DEFAULT_ROOT = Path.home() / "mantle-cairn-finish"
 HEX = re.compile(r"[0-9a-f]{64}\Z")
@@ -99,6 +99,7 @@ def build(a, state, store, file, label, *, offline=None, negative=False):
     args = ["build", "--no-substitute", "--signing-key", a.signing_key,
             "--trusted-public-keys", a.trusted_key, "-I", REPO / "lib"]
     if offline:
+        args.append("--strict-hermetic")
         args += ["--offline-source-manifest", offline[0],
                  "--offline-source-manifest-blake3", offline[1]]
     args.append(file)
@@ -231,11 +232,23 @@ def unpacked_nar(archive, scratch):
     tree = scratch / "source-tree"
     tree.mkdir(parents=True)
     with tarfile.open(archive, "r:gz") as source:
+        seen = set()
         for entry in source:
             require(entry.name and not Path(entry.name).is_absolute()
-                    and ".." not in Path(entry.name).parts and not entry.issym()
-                    and not entry.islnk(), f"unsafe source archive member: {entry.name}")
-            require(entry.isfile() or entry.isdir(), "source bundle contains special entry")
+                    and ".." not in Path(entry.name).parts
+                    and entry.name not in seen and not entry.islnk(),
+                    f"unsafe source archive member: {entry.name}")
+            seen.add(entry.name)
+            if entry.issym():
+                parts = Path(entry.name).parts
+                checkout_root = Path(*parts[:4])
+                target = Path(os.path.normpath(str(Path(entry.name).parent / entry.linkname)))
+                require(len(parts) >= 5 and parts[:2] == ("git-cache", "checkouts")
+                        and entry.linkname and not Path(entry.linkname).is_absolute()
+                        and target.is_relative_to(checkout_root),
+                        f"Git checkout symlink escapes pinned source: {entry.name}")
+            require(entry.isfile() or entry.isdir() or entry.issym(),
+                    "source bundle contains special entry")
         source.extractall(tree, filter="data")
     return nar(tree)
 
@@ -326,7 +339,7 @@ def publisher_batch(a, state, store, specs, index, python):
         named[f"r{offset}"] = key
         if spec[0] == "flat":
             parts.append(f'  r{offset} = mantle.fetchurl {{ name = "{label}", '
-                         f'url = {q(spec[1].as_uri())}, hash = {q(spec[2])} }},')
+                         f'url = {q(spec[1])}, hash = {q(spec[2])} }},')
         else:
             old = spec[1]
             code = "import os,shutil,sys; shutil.copytree(sys.argv[1],os.environ['out'],symlinks=True)"
@@ -346,17 +359,26 @@ def publisher_batch(a, state, store, specs, index, python):
     return outputs
 
 
+def registry_source(cache, row):
+    """A missing cache file is acquired by the signed fixed-output fetcher."""
+    name = f"{row[0]}-{row[1]}.crate"
+    source = cache / name
+    if source.exists() or source.is_symlink():
+        require(source.is_file() and not source.is_symlink() and sha(source) == row[2],
+                f"wrong locked archive: {row[0]}@{row[1]}")
+        return source.as_uri()
+    return f"https://static.crates.io/crates/{row[0]}/{name}"
+
+
 def signed_catalog(a, state, store, rows, archive, archive_nar, git_trees, python):
     cache = a.registry_cache
     require(cache.is_dir(), f"missing immutable registry cache: {cache}")
     publisher, aliases = [], {}
     for row in rows:
         if row[3] == "flat":
-            source = cache / f"{row[0]}-{row[1]}.crate"
-            require(source.is_file() and not source.is_symlink() and sha(source) == row[2],
-                    f"missing/wrong locked archive: {row[0]}@{row[1]}")
+            source_url = registry_source(cache, row)
             key = row[:2]
-            publisher.append((key, ("flat", source, row[2])))
+            publisher.append((key, ("flat", source_url, row[2])))
             aliases[row[:2]] = key
         else:
             match = next(((s, tree) for s, (digest, tree) in git_trees.items()
@@ -544,7 +566,7 @@ def negative_assembler(a, state, store, identity, bundle, selected, python, rust
         archive = a.registry_cache / f"{p['name']}-{p['version']}.crate"
         require(archive.is_file() and sha(archive) == p["checksum"],
                 f"missing exact-source input archive for assembler negative: {p['name']}")
-        specs.append(((p["name"], p["version"]), ("flat", archive, p["checksum"])))
+        specs.append(((p["name"], p["version"]), ("flat", archive.as_uri(), p["checksum"])))
     published = publisher_batch(a, state, store, specs, 99, python)
     outputs = {}
     for unit_id, unit in units.items():
@@ -642,6 +664,15 @@ def realize_provider(a, state, store):
     recipe = REPO / "bootstrap/seed-legacy.ncl"
     require(recipe.is_file() and "sha256-ZtQZncMvugqmS7OMvMtdhY5MMtem4KXBhamxWbHUDkY="
             in recipe.read_text(), "legacy provider pin drift")
+    # Intermediate PathInfo does not promise physical export; demand the raw
+    # tarball as an explicit build root before consuming it as a profile input.
+    raw_wrapper = a.scratch / "raw-provider-root.ncl"
+    raw_wrapper.write_text('let mantle = import "lib.ncl" in { '
+                           'raw = mantle.fetchTarball { name = "musl-gcc-raw", '
+                           'url = "https://musl.cc/x86_64-linux-musl-native.tgz", '
+                           'hash = "sha256-ZtQZncMvugqmS7OMvMtdhY5MMtem4KXBhamxWbHUDkY=" } }\n')
+    raw_result, _ = build(a, state, store, raw_wrapper, "raw-provider-root")
+    archive = Path(exact_output(raw_result, "raw"))
     wrapper = a.scratch / "real-provider.ncl"
     wrapper.write_text('let mantle = import "lib.ncl" in '
                        f'let seed = import {q(str(recipe))} in {{ '
@@ -650,7 +681,8 @@ def realize_provider(a, state, store):
                        'hash = "sha256-ZtQZncMvugqmS7OMvMtdhY5MMtem4KXBhamxWbHUDkY=" }, '
                        'normalized = seed.toolchain }\n')
     result, _ = build(a, state, store, wrapper, "real-provider")
-    archive = Path(exact_output(result, "raw"))
+    require(exact_output(result, "raw") == str(archive),
+            "normalization did not consume the separately exported pinned raw provider")
     normalized = Path(exact_output(result, "normalized"))
     for name, path in (("raw-provider", archive), ("normalized-provider", normalized)):
         verify(a, state, store, "/nix/store/" + path.name, name)
@@ -688,7 +720,10 @@ def hydrate_profile(a, state, store, identity, producer_path, selected_path):
     missing, _ = run(missing_cmd, cwd=checkout, stdout=a.scratch / "self-build-without-hydration.json",
                      env={**os.environ, "TMPDIR": str(a.scratch)}, expected=1)
     stderr = (a.scratch / "self-build-without-hydration.json.stderr").read_text()
-    require("hydrate-self-build" in missing + stderr, "self-build did not identify missing hydration")
+    require("required staged source entry missing:" in missing + stderr
+            and "/vendor-deps" in missing + stderr
+            and not (checkout / "vendor-deps").exists(),
+            "self-build did not reject missing vendor-deps before hydration")
     manifest = a.scratch / "fresh-clone-profile.json"
     profile_args = ["source", "bundle", "bootstrap-profile", "--mode", "fresh-clone-lock-vendor-inputs",
                     "--provider-archive", a.provider_archive,
@@ -737,7 +772,9 @@ def hydrate_profile(a, state, store, identity, producer_path, selected_path):
     selected_file = package / relative
     require(selected_file.is_file() and not selected_file.is_symlink(), "no checked vendor file for mismatch")
     previous = selected_file.read_bytes()
+    original_mode = selected_file.stat().st_mode & 0o777
     try:
+        selected_file.chmod(original_mode | 0o200)
         selected_file.write_bytes(previous + b"\n# hydration-integrity-negative\n")
         _, rc = run(missing_cmd, cwd=checkout, stdout=a.scratch / "self-build-mismatched-hydration.json",
                     env={**os.environ, "TMPDIR": str(a.scratch)}, expected=1)
@@ -748,6 +785,7 @@ def hydrate_profile(a, state, store, identity, producer_path, selected_path):
                                                      "offending_artifact": str(selected_file)}
     finally:
         selected_file.write_bytes(previous)
+        selected_file.chmod(original_mode)
     require(nar(checkout / "vendor-deps") == nar(output),
             "mismatch control did not restore exact hydrated vendor tree")
     return {"profile_manifest_blake3": manifest_hash,
