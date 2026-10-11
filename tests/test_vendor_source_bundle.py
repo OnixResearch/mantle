@@ -1,6 +1,7 @@
 """Behavioral regressions for the bounded lock-vendor source archive."""
 
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import tarfile
@@ -74,6 +75,48 @@ class SourceBundleGitCheckoutTest(unittest.TestCase):
                 capture_output=True, text=True,
             )
             self.assertFalse(tampered.returncode == 0 and tampered.stdout.strip() == head)
+
+    def test_cargo_checkout_requires_exact_local_object_database_and_locked_revision(self):
+        with tempfile.TemporaryDirectory(prefix="vendor-bundle-cache-origin-") as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            db = root / "cache/db/fixture"
+            subprocess.run(["git", "init", "-q", "--initial-branch=main", str(source)], check=True)
+            (source / "Cargo.toml").write_text('[package]\nname = "fixture"\nversion = "0.1.0"\n')
+            subprocess.run(["git", "-C", str(source), "add", "Cargo.toml"], check=True)
+            subprocess.run(
+                ["git", "-C", str(source), "-c", "user.name=Vendor Fixture",
+                 "-c", "user.email=vendor@example.invalid", "commit", "-qm", "fixture"],
+                check=True,
+            )
+            revision = subprocess.check_output(
+                ["git", "-C", str(source), "rev-parse", "HEAD"], text=True
+            ).strip()
+            checkout = root / "cache/checkouts/fixture" / revision[:7]
+            db.parent.mkdir(parents=True)
+            checkout.parent.mkdir(parents=True)
+            subprocess.run(["git", "clone", "-q", "--bare", str(source), str(db)], check=True)
+            subprocess.run(["git", "clone", "-q", str(db), str(checkout)], check=True)
+            subprocess.run(["git", "-C", str(checkout), "remote", "set-url", "origin", db.resolve().as_uri()], check=True)
+            (checkout / ".cargo-ok").write_text("ok\n")
+            self.assertEqual(
+                subprocess.check_output(["git", "-C", str(checkout), "rev-parse", "HEAD"], text=True).strip(),
+                revision,
+            )
+            git_environment = {
+                "PATH": os.environ["PATH"], "HOME": "/nonexistent",
+                "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+                "GIT_TERMINAL_PROMPT": "0",
+            }
+            bundle._verify_checkout_revision_and_local_origin(checkout, db, revision, git_environment)
+            with self.assertRaisesRegex(ValueError, "revision drift"):
+                bundle._verify_checkout_revision_and_local_origin(checkout, db, "0" * 40, git_environment)
+            subprocess.run(
+                ["git", "-C", str(checkout), "remote", "set-url", "origin", "https://example.invalid/forged.git"],
+                check=True,
+            )
+            with self.assertRaisesRegex(ValueError, "not its declared Cargo object DB"):
+                bundle._verify_checkout_revision_and_local_origin(checkout, db, revision, git_environment)
 
     def test_export_rejects_escaping_symlink_and_noncanonical_directory(self):
         with tempfile.TemporaryDirectory(prefix="vendor-bundle-unsafe-") as temporary:
