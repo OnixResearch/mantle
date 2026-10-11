@@ -7,12 +7,14 @@ H=$WT/scripts/rust-unit-plan-build-script-replay
 B=${RCBS_B:-$R/tmp/rust-efficiency-20261011/rcbs-unit}
 STORE=${RCBS_STORE:-$R/stores/rust-efficiency-20261011/rcbs-client}
 MANTLE=$R/targets/rust-efficiency-20261011/release/mantle
+PYTHON=/nix/store/3n4qphl9s728sz8frmpqqrv9b1m87g68-python3-3.14.7/bin/python3
+test -x "$PYTHON"
 export SNIX_BUILD_BWRAP=/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/bwrap
 export SNIX_BUILD_SANDBOX_SHELL=/nix/store/h75l4bwd606k94l22ajqdb98vfar5x66-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
 [[ ! -e $B && ! -e $STORE ]] || { echo 'proof scratch/client exists; refusing unchecked reuse' >&2; exit 1; }
 # A host-reachable loopback listener distinguishes sandbox denial from an unreachable public IP.
 coproc NETWORK_PROBE {
-  exec python3 -u -c '
+  exec "$PYTHON" -u -c '
 import socket
 listener = socket.socket()
 listener.bind(("127.0.0.1", 0))
@@ -27,7 +29,7 @@ probe_pid=$NETWORK_PROBE_PID
 trap 'kill "$probe_pid" 2>/dev/null || true; wait "$probe_pid" 2>/dev/null || true' EXIT
 IFS= read -r RCBS_NETWORK_PORT <&"${NETWORK_PROBE[0]}"
 [[ $RCBS_NETWORK_PORT =~ ^[0-9]+$ ]] || { echo 'invalid loopback probe port' >&2; exit 1; }
-python3 -c 'import socket, sys; socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=2).close()' "$RCBS_NETWORK_PORT"
+"$PYTHON" -c 'import socket, sys; socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=2).close()' "$RCBS_NETWORK_PORT"
 export RCBS_NETWORK_PORT
 cd "$WT"
 "$H/prepare.sh"
