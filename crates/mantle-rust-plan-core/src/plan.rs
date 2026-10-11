@@ -439,7 +439,8 @@ fn validate_existing_units<'a>(
 }
 
 fn validate_existing_unit_effect(unit: &ExistingUnitFacts, blockers: &mut Vec<PlanBlocker>) {
-    if !matches!(unit.execution_kind.as_str(), "target" | "host" | "host-dependency") {
+    let is_build_script_run = unit.execution_kind == "build-script-run" && unit.target_kind == "custom-build";
+    if !matches!(unit.execution_kind.as_str(), "target" | "host" | "host-dependency") && !is_build_script_run {
         blockers.push(PlanBlocker::new(
             "unsupported-execution-kind",
             &unit.unit_id,

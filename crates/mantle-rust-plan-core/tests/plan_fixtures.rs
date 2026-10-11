@@ -82,6 +82,55 @@ fn native_effects_derive_topology_and_preserve_actual_derivation_material() {
 }
 
 #[test]
+fn native_effects_admit_build_script_runs_with_only_declared_topology_and_outputs() {
+    let mut compiled = real_unit("script-compiled", 0, &[]);
+    compiled.execution_kind = String::from("host");
+    compiled.target_kind = String::from("custom-build");
+    let mut run = real_unit("script-run", 1, &["script-compiled"]);
+    run.execution_kind = String::from("build-script-run");
+    run.target_kind = String::from("custom-build");
+    run.arguments = vec![String::from("run-build-script")];
+    run.expected_outputs = vec![String::from("out"), String::from("flags")];
+    let effects = plan_existing_unit_effects(vec![run.clone(), compiled]).unwrap();
+    assert_eq!(effects[0].unit_id.0, "script-compiled");
+    assert_eq!(effects[1].unit_id.0, "script-run");
+    assert_eq!(effects[1].dependency_unit_ids, vec![UnitId(String::from("script-compiled"))]);
+    assert_eq!(effects[1].arguments, run.arguments);
+    assert_eq!(effects[1].expected_outputs, run.expected_outputs);
+}
+
+#[test]
+fn native_effects_reject_empty_compiler_arguments_and_unpaired_script_execution() {
+    let mut compile = real_unit("compile", 0, &[]);
+    compile.arguments.clear();
+    assert!(
+        plan_existing_unit_effects(vec![compile])
+            .unwrap_err()
+            .iter()
+            .any(|blocker| blocker.code == "incomplete-unit-effect")
+    );
+    let mut run = real_unit("script-run", 0, &[]);
+    run.target_kind = String::from("custom-build");
+    run.execution_kind = String::from("build-script-run");
+    run.arguments.clear();
+    assert!(
+        plan_existing_unit_effects(vec![run])
+            .unwrap_err()
+            .iter()
+            .any(|blocker| blocker.code == "incomplete-unit-effect")
+    );
+    let mut wrong_kind = real_unit("wrong-kind", 0, &[]);
+    wrong_kind.execution_kind = String::from("build-script-run");
+    wrong_kind.arguments = vec![String::from("run-build-script")];
+    assert!(
+        plan_existing_unit_effects(vec![wrong_kind])
+            .unwrap_err()
+            .iter()
+            .any(|blocker| blocker.code == "unsupported-execution-kind")
+    );
+}
+
+#[test]
 fn native_effects_reject_missing_producers_cycles_and_ambiguous_units() {
     let missing = plan_existing_unit_effects(vec![real_unit("app", 0, &["absent"])]).unwrap_err();
     assert!(missing.iter().any(|blocker| blocker.code == "missing-unit-producer"));

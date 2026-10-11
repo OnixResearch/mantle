@@ -141,6 +141,8 @@ const BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_PRODUCER: &str = "lock-vendor-producer
 const BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_SELECTED_TABLE: &str = "lock-vendor-selected-table";
 const BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_ACQUISITION: &str = "lock-vendor-acquisition";
 const LOCK_VENDOR_PRODUCER_IDENTITY_KEY: &str = "lock_vendor_producer_identity";
+const LOCK_VENDOR_PARENT_DRV_PATH_KEY: &str = "lock_vendor_parent_drv_path";
+const LOCK_VENDOR_PLAN_DIGEST_KEY: &str = "lock_vendor_canonical_plan_digest";
 const LOCK_VENDOR_SELECTED_TABLE_IDENTITY_KEY: &str = "lock_vendor_selected_table_identity";
 const LOCK_VENDOR_LOCK_CONTENT_KEY: &str = "lock_vendor_cargo_lock_blake3";
 const LOCK_VENDOR_OUTPUT_STORE_PATH_KEY: &str = "lock_vendor_output_store_path";
@@ -439,6 +441,8 @@ pub struct LockVendorProfileInputs {
     pub producer: PathBuf,
     pub selected_table: PathBuf,
     pub output: PathBuf,
+    pub parent_drv_path: String,
+    pub canonical_plan_digest: String,
     pub excluded_vendor: PathBuf,
 }
 
@@ -468,6 +472,10 @@ pub struct BootstrapSourceBundleProfileReport {
     pub excluded_vendor_payload_bytes: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lock_vendor_producer_identity: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lock_vendor_parent_drv_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lock_vendor_plan_digest: Option<String>,
     pub non_claim: &'static str,
 }
 
@@ -694,6 +702,8 @@ trait SourceBundleEffectPort {
         checkout: &Path,
         state: &Path,
         producer_output: &Path,
+        parent_drv_path: &str,
+        canonical_plan_digest: &str,
     ) -> Result<SelfBuildHydrationReport, RunError>;
     fn verify_state(
         &mut self,
@@ -798,8 +808,18 @@ impl SourceBundleEffectPort for SourceBundleFilePort {
         checkout: &Path,
         state: &Path,
         producer_output: &Path,
+        parent_drv_path: &str,
+        canonical_plan_digest: &str,
     ) -> Result<SelfBuildHydrationReport, RunError> {
-        hydrate_lock_vendor_source_bundle(manifest, digest, checkout, state, producer_output)
+        hydrate_lock_vendor_source_bundle(
+            manifest,
+            digest,
+            checkout,
+            state,
+            producer_output,
+            parent_drv_path,
+            canonical_plan_digest,
+        )
     }
     fn verify_state(
         &mut self,
@@ -1351,6 +1371,11 @@ fn append_lock_vendor_profile_records(
         provider_metadata: None,
         store_prefix,
     })?;
+    validate_lock_vendor_parent_identity(
+        &lock_vendor.parent_drv_path,
+        &lock_vendor.canonical_plan_digest,
+        store_prefix,
+    )?;
     let prior = lock_vendor_tree_receipt(&lock_vendor.excluded_vendor)?;
     let completed = lock_vendor_tree_receipt(&lock_vendor.output)?;
     crate::self_build::verify_checked_vendor_freshness(source, &lock_vendor.excluded_vendor)?;
@@ -1376,6 +1401,8 @@ fn append_lock_vendor_profile_records(
     );
     metadata.insert(LOCK_VENDOR_PRODUCER_IDENTITY_KEY.to_string(), producer.content_blake3.clone());
     metadata.insert(LOCK_VENDOR_SELECTED_TABLE_IDENTITY_KEY.to_string(), selected_table.content_blake3.clone());
+    metadata.insert(LOCK_VENDOR_PARENT_DRV_PATH_KEY.to_string(), lock_vendor.parent_drv_path.clone());
+    metadata.insert(LOCK_VENDOR_PLAN_DIGEST_KEY.to_string(), lock_vendor.canonical_plan_digest.clone());
     metadata.insert(LOCK_VENDOR_LOCK_CONTENT_KEY.to_string(), blake3::hash(&lock).to_hex().to_string());
     metadata.insert(LOCK_VENDOR_OUTPUT_STORE_PATH_KEY.to_string(), logical_path);
     metadata.insert(LOCK_VENDOR_OUTPUT_CONTENT_KEY.to_string(), completed.content_blake3);
@@ -1422,14 +1449,24 @@ pub fn bootstrap_source_bundle_profile_report(
         .get(RECORD_METADATA_PROVIDER_KIND_KEY)
         .ok_or_else(|| RunError::Internal("bootstrap profile provider manifest missing provider kind".to_string()))?
         .clone();
-    let (excluded_vendor_payload_bytes, lock_vendor_producer_identity) = if mode.is_lock_vendor() {
+    let (
+        excluded_vendor_payload_bytes,
+        lock_vendor_producer_identity,
+        lock_vendor_parent_drv_path,
+        lock_vendor_plan_digest,
+    ) = if mode.is_lock_vendor() {
         let receipt = lock_vendor_acquisition_record(manifest)?;
         let payload = receipt.metadata[LOCK_VENDOR_EXCLUDED_PAYLOAD_KEY]
             .parse::<u64>()
             .map_err(|error| RunError::Internal(format!("invalid excluded vendor payload bytes: {error}")))?;
-        (Some(payload), Some(receipt.metadata[LOCK_VENDOR_PRODUCER_IDENTITY_KEY].clone()))
+        (
+            Some(payload),
+            Some(receipt.metadata[LOCK_VENDOR_PRODUCER_IDENTITY_KEY].clone()),
+            Some(receipt.metadata[LOCK_VENDOR_PARENT_DRV_PATH_KEY].clone()),
+            Some(receipt.metadata[LOCK_VENDOR_PLAN_DIGEST_KEY].clone()),
+        )
     } else {
-        (None, None)
+        (None, None, None, None)
     };
     Ok(BootstrapSourceBundleProfileReport {
         format: BOOTSTRAP_SOURCE_PROFILE_FORMAT,
@@ -1439,6 +1476,8 @@ pub fn bootstrap_source_bundle_profile_report(
         provider_kind,
         excluded_vendor_payload_bytes,
         lock_vendor_producer_identity,
+        lock_vendor_parent_drv_path,
+        lock_vendor_plan_digest,
         non_claim: BOOTSTRAP_SOURCE_PROFILE_NON_CLAIM,
     })
 }
@@ -1818,6 +1857,26 @@ pub(crate) fn assemble_source_bundle(
     Ok(manifest)
 }
 
+fn validate_lock_vendor_parent_identity(
+    parent_drv_path: &str,
+    plan_digest: &str,
+    store_prefix: &str,
+) -> Result<(), RunError> {
+    let parent = nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(
+        parent_drv_path.as_bytes(),
+        store_prefix,
+    )
+    .map_err(|error| RunError::Internal(format!("invalid lock-vendor native parent derivation path: {error}")))?;
+    if !parent.name().ends_with(".drv") {
+        return Err(RunError::Internal(
+            "lock-vendor native parent must be a derivation path ending in .drv".to_string(),
+        ));
+    }
+    validate_blake3_hex(Blake3HexValidation {
+        value: plan_digest,
+        label: "lock-vendor accepted canonical plan digest",
+    })
+}
 fn lock_vendor_acquisition_record(manifest: &SourceBundleManifest) -> Result<&SourceRecord, RunError> {
     let mut matches = manifest.records.iter().filter(|record| {
         record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
@@ -1843,6 +1902,15 @@ fn lock_vendor_acquisition_record(manifest: &SourceBundleManifest) -> Result<&So
     if !mode.is_lock_vendor() {
         return Err(RunError::Internal("lock-vendor receipt has wrong profile mode".to_string()));
     }
+    let parent = receipt
+        .metadata
+        .get(LOCK_VENDOR_PARENT_DRV_PATH_KEY)
+        .ok_or_else(|| RunError::Internal("lock-vendor receipt has no admitted parent derivation".to_string()))?;
+    let digest = receipt
+        .metadata
+        .get(LOCK_VENDOR_PLAN_DIGEST_KEY)
+        .ok_or_else(|| RunError::Internal("lock-vendor receipt has no admitted canonical plan digest".to_string()))?;
+    validate_lock_vendor_parent_identity(parent, digest, &manifest.store_prefix)?;
     for (class, key) in [
         (BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_PRODUCER, LOCK_VENDOR_PRODUCER_IDENTITY_KEY),
         (BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_SELECTED_TABLE, LOCK_VENDOR_SELECTED_TABLE_IDENTITY_KEY),
@@ -2205,6 +2273,8 @@ pub fn hydrate_lock_vendor_source_bundle(
     checkout: &Path,
     state_dir: &Path,
     producer_output: &Path,
+    parent_drv_path: &str,
+    canonical_plan_digest: &str,
 ) -> Result<SelfBuildHydrationReport, RunError> {
     validate_manifest(manifest)?;
     validate_blake3_hex(Blake3HexValidation {
@@ -2215,6 +2285,15 @@ pub fn hydrate_lock_vendor_source_bundle(
         return Err(RunError::Internal("lock-vendor hydration source manifest identity mismatch".to_string()));
     }
     let receipt = lock_vendor_acquisition_record(manifest)?;
+    validate_lock_vendor_parent_identity(parent_drv_path, canonical_plan_digest, &manifest.store_prefix)?;
+    if receipt.metadata[LOCK_VENDOR_PARENT_DRV_PATH_KEY] != parent_drv_path
+        || receipt.metadata[LOCK_VENDOR_PLAN_DIGEST_KEY] != canonical_plan_digest
+    {
+        return Err(RunError::Internal(
+            "lock-vendor hydration parent derivation or accepted plan digest differs from acquisition receipt"
+                .to_string(),
+        ));
+    }
     if manifest.records.iter().any(|record| {
         record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
             == Some(BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS)
@@ -6057,6 +6136,8 @@ struct BootstrapProfileCliInput {
     lock_vendor_producer: Option<PathBuf>,
     lock_vendor_selected_table: Option<PathBuf>,
     lock_vendor_output: Option<PathBuf>,
+    lock_vendor_parent_drv_path: Option<String>,
+    lock_vendor_plan_digest: Option<String>,
     excluded_vendor_deps: Option<PathBuf>,
     proof_inputs: Vec<PathBuf>,
     include_bundles: Vec<PathBuf>,
@@ -6076,13 +6157,27 @@ fn cmd_bootstrap_profile(
         input.lock_vendor_selected_table,
         input.lock_vendor_output,
         input.excluded_vendor_deps,
+        input.lock_vendor_parent_drv_path,
+        input.lock_vendor_plan_digest,
     ) {
-        (None, None, None, None) => None,
-        (Some(producer), Some(selected_table), Some(output), Some(excluded_vendor)) => {
-            Some(LockVendorProfileInputs { producer, selected_table, output, excluded_vendor })
-        }
+        (None, None, None, None, None, None) => None,
+        (
+            Some(producer),
+            Some(selected_table),
+            Some(output),
+            Some(excluded_vendor),
+            Some(parent_drv_path),
+            Some(canonical_plan_digest),
+        ) => Some(LockVendorProfileInputs {
+            producer,
+            selected_table,
+            output,
+            excluded_vendor,
+            parent_drv_path,
+            canonical_plan_digest,
+        }),
         _ => return Err(RunError::Internal(
-            "lock-vendor profile requires --lock-vendor-producer, --lock-vendor-selected-table, --lock-vendor-output and --excluded-vendor-deps together".to_string(),
+            "lock-vendor profile requires --lock-vendor-producer, --lock-vendor-selected-table, --lock-vendor-output, --excluded-vendor-deps, --lock-vendor-parent-drv-path and --lock-vendor-plan-digest together".to_string(),
         )),
     };
     let supplemental_records = port.supplementary(&input.include_bundles, false)?;
@@ -6529,6 +6624,8 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
             lock_vendor_producer,
             lock_vendor_selected_table,
             lock_vendor_output,
+            lock_vendor_parent_drv_path,
+            lock_vendor_plan_digest,
             excluded_vendor_deps,
             proof_inputs,
             include_bundles,
@@ -6547,6 +6644,8 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
                 lock_vendor_producer,
                 lock_vendor_selected_table,
                 lock_vendor_output,
+                lock_vendor_parent_drv_path,
+                lock_vendor_plan_digest,
                 excluded_vendor_deps,
                 proof_inputs,
                 include_bundles,
@@ -6575,11 +6674,15 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
             expected_manifest_blake3,
             checkout,
             lock_vendor_output,
+            lock_vendor_parent_drv_path,
+            lock_vendor_plan_digest,
         } => cmd_hydrate_self_build_source_bundle(
             &from,
             &expected_manifest_blake3,
             &checkout,
             lock_vendor_output.as_deref(),
+            lock_vendor_parent_drv_path.as_deref(),
+            lock_vendor_plan_digest.as_deref(),
             context,
             &plan,
             &mut port,
@@ -6802,6 +6905,8 @@ fn cmd_hydrate_self_build_source_bundle(
     expected_manifest_blake3: &str,
     checkout: &Path,
     lock_vendor_output: Option<&Path>,
+    parent_drv_path: Option<&str>,
+    canonical_plan_digest: Option<&str>,
     context: &SourceBundleCliContext<'_>,
     plan: &mantle_application_contract::EffectPlan,
     port: &mut impl SourceBundleEffectPort,
@@ -6818,10 +6923,26 @@ fn cmd_hydrate_self_build_source_bundle(
                     .to_string(),
             )
         })?;
-        port.hydrate_lock_vendor(&manifest, expected_manifest_blake3, checkout, context.state_dir, output)?
+        let (Some(parent_drv_path), Some(canonical_plan_digest)) = (parent_drv_path, canonical_plan_digest) else {
+            return Err(RunError::Internal(
+                "lock-vendor hydration requires --lock-vendor-parent-drv-path and --lock-vendor-plan-digest"
+                    .to_string(),
+            ));
+        };
+        port.hydrate_lock_vendor(
+            &manifest,
+            expected_manifest_blake3,
+            checkout,
+            context.state_dir,
+            output,
+            parent_drv_path,
+            canonical_plan_digest,
+        )?
     } else {
-        if lock_vendor_output.is_some() {
-            return Err(RunError::Internal("--lock-vendor-output requires a lock-vendor profile manifest".to_string()));
+        if lock_vendor_output.is_some() || parent_drv_path.is_some() || canonical_plan_digest.is_some() {
+            return Err(RunError::Internal(
+                "lock-vendor hydration flags require a lock-vendor profile manifest".to_string(),
+            ));
         }
         port.hydrate(&manifest, expected_manifest_blake3, checkout, context.state_dir)?
     };
@@ -7767,6 +7888,8 @@ mod tests {
         assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
         (manifest, checkout)
     }
+    const LOCK_VENDOR_TEST_PARENT: &str = "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-lock-vendor-plan.drv";
+    const LOCK_VENDOR_TEST_PLAN_DIGEST: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     fn lock_vendor_hydration_fixture(temp: &Path) -> (SourceBundleManifest, PathBuf, PathBuf, PathBuf) {
         let mut input = bootstrap_profile_fixture(&temp.join("profile"));
         input.mode = BootstrapSourceBundleMode::FreshCloneLockVendorInputs;
@@ -7787,6 +7910,8 @@ mod tests {
             producer,
             selected_table: table,
             output: output.clone(),
+            parent_drv_path: LOCK_VENDOR_TEST_PARENT.to_string(),
+            canonical_plan_digest: LOCK_VENDOR_TEST_PLAN_DIGEST.to_string(),
             excluded_vendor: excluded,
         });
         let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
@@ -7805,6 +7930,8 @@ mod tests {
         let receipt = lock_vendor_acquisition_record(&manifest).unwrap();
         let source_record = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap();
         let initial = manifest.manifest_blake3.clone();
+        assert_eq!(report.lock_vendor_parent_drv_path.as_deref(), Some(LOCK_VENDOR_TEST_PARENT));
+        assert_eq!(report.lock_vendor_plan_digest.as_deref(), Some(LOCK_VENDOR_TEST_PLAN_DIGEST));
         fs::create_dir_all(source.join("bootstrap/pins")).unwrap();
         fs::write(
             source.join("bootstrap/pins/cargo-shared-lock-hashes-v1"),
@@ -7823,6 +7950,8 @@ mod tests {
             producer: temp.path().join("lock-vendor-producer"),
             selected_table: temp.path().join("selected-hashes-v1"),
             output: output.clone(),
+            parent_drv_path: LOCK_VENDOR_TEST_PARENT.to_string(),
+            canonical_plan_digest: LOCK_VENDOR_TEST_PLAN_DIGEST.to_string(),
             excluded_vendor: source.join(VENDOR_DEPS_DIR_NAME),
         });
         // The reviewed B row changes the mutable full table, not the selected
@@ -7837,7 +7966,16 @@ mod tests {
         assert_eq!(receipt.payload_bytes, 0);
         assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
         let state = temp.path().join("state");
-        let hydrated = hydrate_lock_vendor_source_bundle(&manifest, &initial, &checkout, &state, &output).unwrap();
+        let hydrated = hydrate_lock_vendor_source_bundle(
+            &manifest,
+            &initial,
+            &checkout,
+            &state,
+            &output,
+            LOCK_VENDOR_TEST_PARENT,
+            LOCK_VENDOR_TEST_PLAN_DIGEST,
+        )
+        .unwrap();
         assert_eq!(hydrated.vendor_content_blake3, receipt.metadata[LOCK_VENDOR_OUTPUT_CONTENT_KEY]);
         assert_eq!(
             observed_hydrated_vendor_bytes(&manifest, &checkout).unwrap(),
@@ -7855,8 +7993,16 @@ mod tests {
         let state = temp.path().join("state");
         fs::write(output.join("dep-a/src/lib.rs"), b"pub fn tampered() {}\n").unwrap();
         assert!(
-            hydrate_lock_vendor_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state, &output)
-                .is_err()
+            hydrate_lock_vendor_source_bundle(
+                &manifest,
+                &manifest.manifest_blake3,
+                &checkout,
+                &state,
+                &output,
+                LOCK_VENDOR_TEST_PARENT,
+                LOCK_VENDOR_TEST_PLAN_DIGEST,
+            )
+            .is_err()
         );
         assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
         assert!(!source_pins_dir(&state).exists());
@@ -7868,11 +8014,55 @@ mod tests {
             .write_all(b"\n")
             .unwrap();
         assert!(
-            hydrate_lock_vendor_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state, &output)
-                .is_err()
+            hydrate_lock_vendor_source_bundle(
+                &manifest,
+                &manifest.manifest_blake3,
+                &checkout,
+                &state,
+                &output,
+                LOCK_VENDOR_TEST_PARENT,
+                LOCK_VENDOR_TEST_PLAN_DIGEST,
+            )
+            .is_err()
         );
         assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
         assert!(!source_pins_dir(&state).exists());
+    }
+
+    #[test]
+    fn lock_vendor_parent_identity_is_required_and_checked_before_hydration_publication() {
+        let temp = tempfile::tempdir().unwrap();
+        let (manifest, checkout, output, _) = lock_vendor_hydration_fixture(temp.path());
+        let state = temp.path().join("state");
+        for (parent, digest) in [
+            ("/mantle/store/cccccccccccccccccccccccccccccccc-other.drv", LOCK_VENDOR_TEST_PLAN_DIGEST),
+            (LOCK_VENDOR_TEST_PARENT, "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"),
+            ("/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-not-a-derivation", LOCK_VENDOR_TEST_PLAN_DIGEST),
+            (LOCK_VENDOR_TEST_PARENT, "not-a-blake3-digest"),
+        ] {
+            let error = hydrate_lock_vendor_source_bundle(
+                &manifest,
+                &manifest.manifest_blake3,
+                &checkout,
+                &state,
+                &output,
+                parent,
+                digest,
+            )
+            .unwrap_err()
+            .to_string();
+            assert!(error.contains("lock-vendor"), "{error}");
+            assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
+            assert!(!source_pins_dir(&state).exists());
+        }
+        let mut incomplete = manifest.clone();
+        let receipt = incomplete
+            .records
+            .iter_mut()
+            .find(|record| record.identity == BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_ACQUISITION)
+            .unwrap();
+        receipt.metadata.remove(LOCK_VENDOR_PLAN_DIGEST_KEY);
+        assert!(lock_vendor_acquisition_record(&incomplete).is_err());
     }
 
     #[cfg(unix)]

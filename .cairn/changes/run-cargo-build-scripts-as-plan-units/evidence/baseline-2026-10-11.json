@@ -1,0 +1,38 @@
+{
+  "schema": "mantle-rust-build-script-baseline-v1",
+  "maintenance_owner": "mantle",
+  "invocation": "mantle --json rust-plan --root <offline fixture copy> --cargo /nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/cargo --rustc /nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc; CARGO_NET_OFFLINE=true; declared pinned vendor directory source",
+  "fixtures": [
+    {
+      "name": "proc-macro2-serde-derive-libc",
+      "immutable_source_root": "/nix/store/d43yiwfqg9ls684sjcazn42vjn937m71-bs-graphs",
+      "receipt": "mantle-cairn-finish/tmp/rust-efficiency-20261011/rust-plan-graphs-baseline.json",
+      "receipt_sha256": "6a964767f23fc751a00a9e71ed714fe15b4df4bf94e7ec2d6eb4c750994b904d",
+      "receipt_blake3": "9ccc91cf4a923f14cc827f553df6680c169652c5e720a97f9f28398a43fd1935",
+      "packages": 9,
+      "cargo_oracle_units": 22,
+      "cargo_oracle_roots": 1,
+      "native_host_units": 7,
+      "host_packages": ["quote", "serde", "serde_core", "serde_derive", "libc", "proc-macro2"]
+    },
+    {
+      "name": "bzip2-sys-native-library",
+      "immutable_source_root": "/nix/store/dqgqqczf6pzb59pg7r13p80aa3xvnwr7-bz-sys",
+      "receipt": "mantle-cairn-finish/tmp/rust-efficiency-20261011/rust-plan-bzip2-sys-baseline.json",
+      "receipt_sha256": "388cb34f2ee24a9b8fda62c0800eeec2920a4cb90cd5f6491417713a8bca159a",
+      "receipt_blake3": "44c142e4a50fbbf75bbe98d45117b77c4efbb14b9ee8e153850638353041ba38",
+      "packages": 6,
+      "cargo_oracle_units": 8,
+      "cargo_oracle_roots": 1,
+      "native_host_units": 1,
+      "host_packages": ["bzip2-sys"]
+    }
+  ],
+  "matrix_baseline": {
+    "source": "examples/rust_compatibility_surface_matrix.ncl",
+    "build-script-env-metadata": {"unit_plan_status": "blocked", "blockers": ["unit-plan-build-script-run-unsupported"]},
+    "proc-macro-host-artifact": {"unit_plan_status": "out_of_scope"},
+    "native-link-metadata": {"unit_plan_status": "out_of_scope"}
+  },
+  "non_claims": ["rust-plan-is-planning-evidence-not-script-execution", "not-full-cargo-compatibility", "not-compiler-correctness"]
+}

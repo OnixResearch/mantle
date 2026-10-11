@@ -65,10 +65,13 @@ ensure_toolchain_environment() {
 }
 
 wasm_target_available_without_rustup() {
-  local target_libdir
+  local target_libdir core
   target_libdir="$("${RUSTC_RUNNER[@]}" --print target-libdir --target "$WASM_TARGET" 2>/dev/null)" || return 1
   [[ -d "$target_libdir" ]] || return 1
-  find "$target_libdir" -maxdepth 1 -type f | grep -q .
+  for core in "$target_libdir"/libcore-*.rlib; do
+    [[ -f "$core" ]] && return 0
+  done
+  return 1
 }
 
 ensure_wasm_target() {
