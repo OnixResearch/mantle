@@ -1,6 +1,8 @@
 # Tasks: Build Cargo units as dynamic-plan derivations
 
-The bounded two-package implementation, signed same-state app proof, and typed wrong-root rejection are recorded. Unchecked baseline, broader work-reduction, final immutable-source proof gates, and archival remain open; this package is not accepted.
+The bounded two-package implementation and fresh signed replay cover unchanged,
+package-edit, outside-package-edit, wrong-root, offline Cargo parity, and a
+clean signed client. Final gates, accepted-spec sync, and archive remain open.
 
 ## Phase 1: Baseline and contract
 
@@ -25,8 +27,8 @@ The bounded two-package implementation, signed same-state app proof, and typed w
 
 ## Phase 4: Verification and documentation
 
-- [ ] [serial] T4.1 Build the supported representative fixtures through `mantle build`, prove an unchanged warm rerun executes zero units, and compare the supported default-feature two-package app against default `offlineCargoPackage` on the same immutable source, lock, pinned toolchain, target, and profile. Run both apps with identical arguments and environment; check actual stdout, stderr, and exit against the same expected result, fail parity on mismatch, and leave unsupported or unavailable comparisons unproven. Do not claim raw binary parity. r[mantle.rust_unit_plan.frontend_boundary] r[mantle.rust_unit_plan.work_reduction]
-- [ ] [serial] T4.2 Record the work-reduction bundle for fresh, one-package edit, outside-package edit, and clean-client runs. r[mantle.rust_unit_plan.work_reduction] r[mantle.rust_unit_plan.per_crate_sources]
+- [x] [serial] T4.1 Build the supported representative fixtures through `mantle build`, prove an unchanged warm rerun executes zero units, and compare the supported default-feature two-package app against default `offlineCargoPackage` on the same immutable source, lock, pinned toolchain, target, and profile. Run both apps with identical arguments and environment; check actual stdout, stderr, and exit against the same expected result, fail parity on mismatch, and leave unsupported or unavailable comparisons unproven. Do not claim raw binary parity. r[mantle.rust_unit_plan.frontend_boundary] r[mantle.rust_unit_plan.work_reduction]
+- [x] [serial] T4.2 Record the work-reduction bundle for fresh, one-package edit, outside-package edit, and clean-client runs. r[mantle.rust_unit_plan.work_reduction] r[mantle.rust_unit_plan.per_crate_sources]
 - [x] [serial] T4.3 Measure Mantle's own workspace against plan and scheduler limits and record the counts without a pass or fail claim. r[mantle.rust_unit_plan.supported_fragment]
 - [x] [serial] T4.4 Document the lane in `docs/operator-workflows.md`, the examples catalog, and the matrix, including non-claims and the relationship to `offlineCargoPackage` and `rust-plan`. r[mantle.rust_unit_plan.evidence_lane]
 - [ ] [serial] T4.5 Run focused Rust-plan core, application, and helper tests, `examples_inventory` and `rust_compatibility_rail`, strict Clippy for touched first-party packages, Cairn validation, and the proposal, design, and tasks gates. Preserve exact output in `evidence/`. r[mantle.rust_unit_plan.lowering]

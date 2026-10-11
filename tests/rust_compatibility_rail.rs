@@ -604,7 +604,7 @@ fn assert_matrix_binding(cargo_mode: &Value, expected_status: &str, expected_cla
     assert!(json_array_contains(&matrix["non_claims"], "not-full-cargo-compatibility"));
 }
 
-fn unsupported_unit_plan_matrix_rows(matrix: &Value, root: &Path) -> Vec<String> {
+fn unit_plan_claim_violations(matrix: &Value) -> Vec<String> {
     let surfaces = matrix["surfaces"].as_array().expect("evaluated Rust compatibility surfaces");
     let mut issues = Vec::new();
     for surface in surfaces {
@@ -612,14 +612,20 @@ fn unsupported_unit_plan_matrix_rows(matrix: &Value, root: &Path) -> Vec<String>
             continue;
         }
         let row = surface["id"].as_str().expect("surface id");
-        let fixtures = surface["unit_plan"]["fixtures"].as_array().expect("fixture array");
-        if fixtures.is_empty() {
-            issues.push(format!("supported unit_plan row `{row}` has no named passing fixture"));
+        let non_claims = &surface["non_claims"];
+        if !json_array_contains(non_claims, "not-full-cargo-compatibility") {
+            issues.push(format!("supported unit_plan row `{row}` lacks full Cargo non-claim"));
         }
-        for fixture in fixtures {
-            let path = fixture.as_str().expect("fixture path");
-            if !root.join(path).is_file() {
-                issues.push(format!("supported unit_plan row `{row}` has no fixture at `{path}`"));
+        if row == "native-link-metadata" && !json_array_contains(non_claims, "not-native-link-probing-correctness") {
+            issues.push(format!("supported unit_plan row `{row}` lacks native probing non-claim"));
+        }
+        for overclaim in [
+            "full-cargo-compatibility",
+            "compiler-correctness",
+            "release-eligibility",
+        ] {
+            if json_array_contains(non_claims, overclaim) {
+                issues.push(format!("supported unit_plan row `{row}` makes overclaim `{overclaim}`"));
             }
         }
     }
@@ -627,26 +633,21 @@ fn unsupported_unit_plan_matrix_rows(matrix: &Value, root: &Path) -> Vec<String>
 }
 
 #[test]
-fn supported_unit_plan_matrix_rows_require_named_existing_fixtures() {
+fn supported_unit_plan_matrix_rows_retain_bounded_non_claims() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let matrix: Value = crunch_eval::evaluate_and_deserialize(&root.join(MATRIX_PATH), &[]).unwrap();
-    let issues = unsupported_unit_plan_matrix_rows(&matrix, root);
-    assert!(issues.is_empty(), "matrix evidence drift: {}", issues.join("; "));
+    let issues = unit_plan_claim_violations(&matrix);
+    assert!(issues.is_empty(), "unit plan claim drift: {}", issues.join("; "));
 
-    let without_fixture = serde_json::json!({"surfaces": [{
-        "id": "build-script-env-metadata",
-        "unit_plan": {"status": "supported", "fixtures": []}
-    }]});
-    assert_eq!(unsupported_unit_plan_matrix_rows(&without_fixture, root), [
-        "supported unit_plan row `build-script-env-metadata` has no named passing fixture"
-    ]);
-
-    let missing_source = serde_json::json!({"surfaces": [{
+    let unbounded = serde_json::json!({"surfaces": [{
         "id": "native-link-metadata",
-        "unit_plan": {"status": "supported", "fixtures": ["scripts/rust-unit-plan-build-script-replay/missing.ncl"]}
+        "unit_plan": {"status": "supported"},
+        "non_claims": ["full-cargo-compatibility"]
     }]});
-    assert_eq!(unsupported_unit_plan_matrix_rows(&missing_source, root), [
-        "supported unit_plan row `native-link-metadata` has no fixture at `scripts/rust-unit-plan-build-script-replay/missing.ncl`"
+    assert_eq!(unit_plan_claim_violations(&unbounded), [
+        "supported unit_plan row `native-link-metadata` lacks full Cargo non-claim",
+        "supported unit_plan row `native-link-metadata` lacks native probing non-claim",
+        "supported unit_plan row `native-link-metadata` makes overclaim `full-cargo-compatibility`",
     ]);
 }
 

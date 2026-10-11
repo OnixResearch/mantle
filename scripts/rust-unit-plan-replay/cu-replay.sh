@@ -71,6 +71,12 @@ trust="$(p public_key),$(cat "$B/keys/publisher-public")"
 "$MANTLE" --nix-compat --store "$CLIENT/store" --state-dir "$CLIENT/state" store pull --from "$results_cache" --trusted-public-keys "$trust" --all >"$B/results-pull.stdout" 2>"$B/results-pull.stderr"
 grep -Eq 'imported=6 skipped_present=0 skipped_untrusted=0 skipped_hash_mismatch=0 skipped_missing_nar=0' "$B/results-pull.stderr"
 CU_TRUSTED_KEYS="$trust" "$H/cu-build.sh" build 08-clean-client client "$B/ncl/baseline.ncl"
-"$H/cu-summary.sh" 08-clean-client client 1 3 0
+"$H/cu-summary.sh" 08-clean-client client
+jq -e '.counts.built_total == 1 and .counts.failed_total == 0 and
+  ([.outcomes[] | select(.label == "app" and .cached == false)] | length == 1) and
+  ([.outcomes[] | select(.label | startswith("rust-unit-"))] |
+    length == 2 and all(.[]; .cached == true)) and
+  ([.outcomes[] | select(.label == "producer" and .cached == false)] | length == 0)' \
+  "$B/runs/08-clean-client/report.json" >/dev/null
 jq -e -s 'any(.[]; .run == "03-unchanged-rerun" and .units_executed == 0 and .units_reused == 2) and any(.[]; .run == "04-app-edit-producer" and .units_executed == 1 and .units_reused == 1) and any(.[]; .run == "06-outside-edit" and .units_executed == 0 and .units_reused == 2) and any(.[]; .run == "08-clean-client" and .units_executed == 0 and .units_reused == 2)' "$B/summary.jsonl" >/dev/null
 printf 'rust-unit-efficiency-proof: fresh, unchanged, package-edit, outside-edit, wrong-root, matched offline Cargo behavior, signed clean client PASS\n'

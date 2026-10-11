@@ -344,10 +344,17 @@ python3 scripts/vendor-source-bundle.py \
 The sidecar JSON maps **each exact `Cargo.lock` Git source** under `"git"` to
 `"git_db"` and `"checkout"` paths relative to `--git-cache`, plus an explicit
 absolute `"git_tree"` path to its independently fetched pristine source.
-Exporter admission checks every selected Git source against the reviewed
-table, the Git commit and checkout origin/revision, every fetched tree's
-reviewed NAR SHA-256, and pinned Git blobs/modes (including checked-in CRLF
-attributes).
+Exporter admission binds checkout `HEAD` to the locked revision and checkout
+`origin` to the declared **local Cargo Git object database** (`file://`), not
+to the upstream transport URL. The reviewed selected table separately binds
+the upstream fetch URL, commit, and fetched tree NAR SHA-256; pinned Git
+blobs/modes (including checked-in CRLF attributes) must match the fetched
+tree. A forged checkout remote is denied even at the correct revision.
+
+Relative Git checkout symlinks remain in the source archive only when they
+resolve inside that pinned checkout; absolute, escaping and hard links are
+rejected before extraction.
+
 The archive embeds the bounded Git object databases and checkouts and a
 per-source `git-transports.json` with reviewed fetch URL, revision and NAR
 hash; it does **not** embed the full global table, the fetched source-tree
@@ -356,6 +363,14 @@ SSH-to-HTTPS fetch route requires its explicit reviewed table row; an
 offline pinned checkout for an unavailable Git remote does not prove that
 remote is reachable. Selected Git fetches and registry archives remain
 separate fixed-output derivation inputs, not aliases for these sidecars.
+
+The full-lock replay takes an explicit `--registry-cache` directory of
+`.crate` archives. Each present file must be a regular file matching its
+`Cargo.lock` SHA-256; a corrupt or symlinked cache entry is denied. A missing
+entry instead becomes a separate `mantle.fetchurl` for
+`https://static.crates.io/crates/<name>/<name>-<version>.crate`, with that
+same locked fixed-output checksum. Neither an HTTP response nor a host Cargo
+cache entry substitutes for the resulting signed store output.
 
 ```bash
 mantle --nix-compat source bundle bootstrap-profile \
@@ -388,6 +403,26 @@ store signature/PathInfo independently: a source manifest receipt is **not**
 store-output trust, compiler correctness, or proof that the producer ran. Send
 the signed output alongside the source bundle and publish the profile's
 `manifest_blake3` over an independent authenticated channel.
+
+For a full-lock acceptance run, use the checked-in
+[`scripts/lock-vendor-replay/run.sh`](../scripts/lock-vendor-replay/run.sh)
+from the repository's Nix development shell. Pass `--mode workspace`, a built
+Mantle `--cli` under this replay's isolated rust-efficiency target directory,
+a fresh `--scratch` and a unique `--publisher-name` under an isolated
+`--store-root`, and explicit `--index`, `--git-cache`, `--git-trees`,
+`--registry-cache`, `--excluded-vendor`, and Nix-store `--b3sum` inputs. The
+replay records its accepted native plan, signed fetch and assembler outputs,
+fresh-checkout hydration, and failed mismatch controls in `report.json` under
+the scratch directory; an existing scratch or publisher store is refused.
+Construct the excluded comparison tree independently with
+[`scripts/vendor-lock-oracle.py`](../scripts/vendor-lock-oracle.py): it checks
+every supplied cached archive against the **current** `Cargo.lock`, requires
+the one missing archive from a separately signed store output with that exact
+lock checksum, runs locked offline `cargo vendor`, applies the repository's
+reviewed Casita patch, and checks the full package inventory. Do not compare
+against an older vendor tree whose lock checksums have drifted. A matching
+vendor NAR digest is content parity for that lock and patch, not a claim of
+general Cargo equivalence, release readiness, or a source-built Mantle binary.
 
 On a fresh checkout without `vendor-deps/`, provide the separately realized
 output explicitly; no command substitutes a host Cargo cache or network:
@@ -822,12 +857,13 @@ executing rustc; changing only the app source rebuilt its unit and reused its
 dependency, while an unrelated workspace README edit executed zero Rust
 units. A separately imported signed client accepted six exported PathInfos
 (producer outputs, two unit outputs, and static verifier). Its fresh
-`--no-substitute` build reused both Rust units, but rebuilt the static
-verifier: three cached, one built, zero failed. Compare the actual app exit
-status and stdout/stderr with a same-input offline Cargo build; do not assume
-byte-identical executables or claim a zero-build fresh client. The producer
-caps source slices at 256; the measured Mantle workspace has 925 units and
-711 distinct package sources, so it is outside this bounded lane. Neither
+`--no-substitute` build reused both Rust units and rebuilt the static
+verifier: one built, zero failed, and two or three cached outcomes depending
+on whether the already-signed producer appears in that report. Compare the
+actual app exit status and stdout/stderr with a same-input offline Cargo build;
+do not assume byte-identical executables or claim a zero-build fresh client.
+The producer caps source slices at 256; the measured Mantle workspace has 925
+units and 711 distinct package sources, so it is outside this bounded lane. Neither
 replay proves full Cargo or LLVM correctness, release reproducibility, or
 bootstrap correctness.
 
@@ -851,6 +887,16 @@ paths. The script compares actual app stdout with locked offline Cargo,
 checks native-role changes and denied host/network/script failures, and
 preserves reports under its scratch directory. Its immutable source fixtures
 and tool paths are host-specific and must be reviewed before reuse.
+
+The accepted registry graph includes `proc_macro2`, `serde_derive`, and
+`libc`, with six separate build-script execution units among 23 accepted
+units. The `unit_plan` matrix marks the proc-macro host artifact, build-script
+environment, and declared native-link rows supported for these reviewed
+fixtures only. The Git-source row stays blocked, and the `native_rust_plan`
+and offline Cargo matrix rows retain their own statuses. Compare application
+output with locked offline Cargo and inspect the accepted plan and per-unit
+outcomes; a successful root alone does not establish that every build script
+was run or that an unchanged unit was reused.
 
 Both `cargo:` and `cargo::` accept the bounded `rustc-cfg`,
 `rustc-check-cfg`, `rustc-env`, `rustc-link-lib`, `rustc-link-search`,
