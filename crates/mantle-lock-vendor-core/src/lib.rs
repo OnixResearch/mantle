@@ -254,8 +254,17 @@ fn git_fetch_source<'a>(source: &'a str, name: &str) -> Result<(&'a str, &'a str
     let (url_and_query, rev) = git
         .rsplit_once('#')
         .ok_or_else(|| deny(DenialCode::InvalidField, Some(name), "Git source lacks pinned revision"))?;
-    if rev.len() != 40 && rev.len() != 64 {
-        return Err(deny(DenialCode::InvalidField, Some(name), "Git revision must be 40 or 64 lowercase hex digits"));
+    if rev.len() != 40 {
+        let code = if rev.len() == 64 {
+            DenialCode::UnsupportedSource
+        } else {
+            DenialCode::InvalidField
+        };
+        return Err(deny(
+            code,
+            Some(name),
+            "Git revision must be a 40-digit SHA-1 commit supported by the native assembler",
+        ));
     }
     if !rev.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
         return Err(deny(DenialCode::InvalidField, Some(name), "Git revision must be lowercase hex"));
@@ -645,6 +654,11 @@ mod tests {
                 .code,
             DenialCode::InvalidField
         );
+        let unsupported_revision = format!("{}{}", REV, "0123456789abcdef01234567");
+        let unsupported = text.replace(REV, &unsupported_revision);
+        let denial = plan_cargo_vendor_with_table(unsupported.as_bytes(), Limits::default(), Some(&table)).unwrap_err();
+        assert_eq!(denial.code, DenialCode::UnsupportedSource);
+        assert_eq!(denial.artifact.as_deref(), Some("gitdep"));
     }
 
     #[test]

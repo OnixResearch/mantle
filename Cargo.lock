@@ -5562,6 +5562,7 @@ name = "mantle-lock-vendor-producer"
 version = "0.1.0"
 dependencies = [
  "mantle-lock-vendor-core",
+ "serde_json",
 ]
 
 [[package]]

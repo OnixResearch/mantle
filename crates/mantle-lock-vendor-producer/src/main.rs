@@ -113,9 +113,31 @@ fn plan(
     rust: &str,
     runtime: &[&str],
 ) -> Result<String, String> {
+    store_path(bundle, false)?;
+    if lock != Path::new(bundle).join("workspace/Cargo.lock") {
+        return Err("producer Cargo.lock must be the declared source bundle's workspace/Cargo.lock".into());
+    }
+    store_path(table.to_str().ok_or("non-UTF-8 selected table path")?, false)?;
+    let lock_bytes = bounded_read(lock, MAX_LOCK_BYTES as u64)?;
+    let table_bytes = bounded_read(table, MAX_TABLE_BYTES as u64)?;
+    plan_from_bytes(lock, table, builder, bundle, rust, runtime, &lock_bytes, &table_bytes)
+}
+fn plan_from_bytes(
+    lock: &Path,
+    table: &Path,
+    builder: &str,
+    bundle: &str,
+    rust: &str,
+    runtime: &[&str],
+    lock_bytes: &[u8],
+    table_bytes: &[u8],
+) -> Result<String, String> {
     store_path(builder, true)?;
     store_path(bundle, false)?;
     store_path(rust, false)?;
+    if lock != Path::new(bundle).join("workspace/Cargo.lock") {
+        return Err("producer Cargo.lock must be the declared source bundle's workspace/Cargo.lock".into());
+    }
     let table_path = table.to_str().ok_or("non-UTF-8 selected table path")?;
     store_path(table_path, false)?;
     if runtime.len() > MAX_EXTRA_RUNTIME_SOURCES {
@@ -149,10 +171,11 @@ fn plan(
     {
         return Err("ambiguous declared Git or patch tool".into());
     }
-    let lock_bytes = bounded_read(lock, MAX_LOCK_BYTES as u64)?;
-    let table_bytes = bounded_read(table, MAX_TABLE_BYTES as u64)?;
-    let shared = SharedHashTable::parse(&table_bytes).map_err(|e| format!("shared hashes: {e:?}"))?;
-    let planned = plan_cargo_vendor_with_table(&lock_bytes, Limits::default(), Some(&shared))
+    if lock_bytes.len() > MAX_LOCK_BYTES as usize || table_bytes.len() > MAX_TABLE_BYTES as usize {
+        return Err("producer lock or selected table exceeds declared byte bound".into());
+    }
+    let shared = SharedHashTable::parse(table_bytes).map_err(|e| format!("shared hashes: {e:?}"))?;
+    let planned = plan_cargo_vendor_with_table(lock_bytes, Limits::default(), Some(&shared))
         .map_err(|e| format!("Cargo.lock: {e:?}"))?;
     let selected = planned.selected_shared_hashes(&shared).map_err(|e| format!("selected shared hashes: {e:?}"))?;
     if selected.render().as_bytes() != table_bytes {
@@ -169,13 +192,11 @@ fn plan(
     }
     let mut units = Vec::new();
     let mut fetch_ids = Vec::with_capacity(planned.artifacts.len());
-    let mut seen_fetch_ids = BTreeSet::new();
-    for artifact in &planned.artifacts {
+    for (index, artifact) in planned.artifacts.iter().enumerate() {
         let stem = fetch_stem(&artifact.name, &artifact.version);
-        let id = format!("fetch.{stem}.{}", artifact.sha256);
-        if !seen_fetch_ids.insert(id.clone()) {
-            return Err(format!("two lock dependencies have the same stable fetch identity: {id}"));
-        }
+        // The sorted position disambiguates distinct long names with the
+        // same 48-byte stem and identical upstream artifact checksum.
+        let id = format!("fetch.{index:04}.{stem}.{}", artifact.sha256);
         fetch_ids.push(id.clone());
         let url = artifact.fetch_url.as_str();
         if !url.starts_with("https://") {
@@ -379,4 +400,147 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         plan(Path::new(&args[1]), Path::new(&args[2]), builder, bundle, rust, &runtime).map_err(io::Error::other)?;
     let output = std::path::PathBuf::from(env::var_os("plan").ok_or("producer requires declared plan output")?);
     publish_new(&output, json.as_bytes()).map_err(Into::into)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Value;
+
+    use super::*;
+
+    const BUNDLE: &str = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-vendor-bundle";
+    const TABLE: &str = "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-selected-hashes";
+    const PYTHON: &str = "/nix/store/cccccccccccccccccccccccccccccccc-python/bin/python3";
+    const RUST: &str = "/nix/store/dddddddddddddddddddddddddddddddd-rust";
+    const EMPTY_TABLE: &str = "mantle-shared-lock-hashes-v1\n";
+    const REGISTRY: &str = "registry+https://github.com/rust-lang/crates.io-index";
+
+    fn lock_for(names: impl Iterator<Item = String>) -> String {
+        let mut lock = "version = 4\n".to_string();
+        for (index, name) in names.enumerate() {
+            let digit = format!("{:x}", index % 16);
+            lock.push_str(&format!(
+                "\n[[package]]\nname = \"{name}\"\nversion = \"1.0.0\"\nsource = \"{REGISTRY}\"\nchecksum = \"{}\"\n",
+                digit.repeat(64)
+            ));
+        }
+        lock
+    }
+
+    fn emit(lock: &str, table: &str) -> Result<Value, String> {
+        let json = plan_from_bytes(
+            &Path::new(BUNDLE).join("workspace/Cargo.lock"),
+            Path::new(TABLE),
+            PYTHON,
+            BUNDLE,
+            RUST,
+            &[],
+            lock.as_bytes(),
+            table.as_bytes(),
+        )?;
+        serde_json::from_str(&json).map_err(|error| error.to_string())
+    }
+
+    #[test]
+    fn emits_exact_locked_flat_fetches_and_single_assembly_root() {
+        let lock = lock_for(["zeta".to_string(), "alpha".to_string()].into_iter());
+        let value = emit(&lock, EMPTY_TABLE).unwrap();
+        let units = value["units"].as_array().unwrap();
+        assert_eq!(units.len(), 3);
+        let fetches: Vec<_> = units.iter().filter(|unit| unit["id"].as_str().unwrap().starts_with("fetch.")).collect();
+        assert_eq!(fetches.len(), 2);
+        for (index, (name, hash)) in [("alpha", "1".repeat(64)), ("zeta", "0".repeat(64))].iter().enumerate() {
+            let fetch = fetches[index];
+            assert_eq!(fetch["derivation"]["builder"], "builtin:fetchurl");
+            assert_eq!(fetch["derivation"]["fixed_output"]["hash"], hash.as_str());
+            assert_eq!(fetch["derivation"]["fixed_output"]["mode"], "flat");
+            assert_eq!(
+                fetch["derivation"]["env"]["url"],
+                format!("https://static.crates.io/crates/{name}/{name}-1.0.0.crate")
+            );
+            assert!(fetch["derivation"]["inputs"].as_array().unwrap().is_empty());
+        }
+        let assembler = &units[2];
+        assert_eq!(assembler["id"], "vendor.complete");
+        assert_eq!(assembler["derivation"]["fixed_output"], Value::Null);
+        assert_eq!(assembler["derivation"]["inputs"].as_array().unwrap().len(), 6);
+        assert_eq!(value["roots"], serde_json::json!(["vendor.complete"]));
+        assert_eq!(value["sources"].as_array().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn shards_above_direct_dependency_budget_without_losing_any_fetch() {
+        let lock = lock_for((0..241).map(|index| format!("crate{index:04}")));
+        let value = emit(&lock, EMPTY_TABLE).unwrap();
+        let units = value["units"].as_array().unwrap();
+        assert_eq!(units.len(), 244);
+        assert_eq!(units.iter().filter(|unit| unit["derivation"]["builder"] == "builtin:fetchurl").count(), 241);
+        let shards: Vec<_> = units.iter().filter(|unit| unit["id"].as_str().unwrap().starts_with("shard.")).collect();
+        assert_eq!(shards.len(), 2);
+        assert_eq!(shards[0]["derivation"]["inputs"].as_array().unwrap().len(), 243);
+        assert_eq!(shards[1]["derivation"]["inputs"].as_array().unwrap().len(), 4);
+        assert_eq!(units.last().unwrap()["derivation"]["inputs"].as_array().unwrap().len(), 6);
+    }
+
+    #[test]
+    fn distinct_locked_names_with_same_prefix_and_checksum_keep_distinct_fetch_units() {
+        let names = [format!("{}a", "x".repeat(49)), format!("{}b", "x".repeat(49))];
+        let lock = lock_for(names.into_iter()).replace(&"1".repeat(64), &"0".repeat(64));
+        let value = emit(&lock, EMPTY_TABLE).unwrap();
+        let units = value["units"].as_array().unwrap();
+        assert_eq!(units.len(), 3);
+        assert_ne!(units[0]["id"], units[1]["id"]);
+        assert_ne!(units[0]["derivation"]["env"]["url"], units[1]["derivation"]["env"]["url"]);
+        assert_eq!(units[0]["derivation"]["fixed_output"]["hash"], units[1]["derivation"]["fixed_output"]["hash"]);
+        assert_eq!(units[2]["derivation"]["inputs"].as_array().unwrap().len(), 6);
+    }
+
+    #[test]
+    fn refuses_undeclared_lock_full_table_and_incompatible_hash_modes() {
+        let lock = lock_for(["alpha".to_string()].into_iter());
+        let wrong = Path::new("/nix/store/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee-unrelated/Cargo.lock");
+        assert!(
+            plan_from_bytes(
+                wrong,
+                Path::new(TABLE),
+                PYTHON,
+                BUNDLE,
+                RUST,
+                &[],
+                lock.as_bytes(),
+                EMPTY_TABLE.as_bytes()
+            )
+            .unwrap_err()
+            .contains("declared source bundle")
+        );
+        let extra = format!(
+            "{EMPTY_TABLE}cargo/unused@1/git+https://example.test/repo#0123456789abcdef0123456789abcdef01234567\tflat-sha256\t{}\n",
+            "a".repeat(64)
+        );
+        assert!(emit(&lock, &extra).unwrap_err().contains("canonical selected table"));
+        let invalid_lock = lock.replace(&"0".repeat(64), "invalid");
+        assert!(emit(&invalid_lock, EMPTY_TABLE).unwrap_err().contains("InvalidField"));
+        let missing = lock.replace(&format!("checksum = \"{}\"\n", "0".repeat(64)), "");
+        assert!(emit(&missing, EMPTY_TABLE).unwrap_err().contains("MissingHash"));
+        let git_rev = "0123456789abcdef0123456789abcdef01234567";
+        let git_source = format!("git+https://example.test/one.git#{git_rev}");
+        let git_lock =
+            format!("version = 4\n[[package]]\nname = \"dep\"\nversion = \"1.0.0\"\nsource = \"{git_source}\"\n");
+        let git_table = format!("{EMPTY_TABLE}cargo/dep@1.0.0/{git_source}\tflat-sha256\t{}\n", "a".repeat(64));
+        assert!(emit(&git_lock, &git_table).unwrap_err().contains("InvalidField"));
+        assert!(
+            plan_from_bytes(
+                &Path::new(BUNDLE).join("workspace/Cargo.lock"),
+                Path::new(TABLE),
+                PYTHON,
+                BUNDLE,
+                RUST,
+                &[],
+                &vec![b' '; MAX_LOCK_BYTES as usize + 1],
+                EMPTY_TABLE.as_bytes(),
+            )
+            .unwrap_err()
+            .contains("byte bound")
+        );
+    }
 }

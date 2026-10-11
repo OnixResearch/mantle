@@ -58,6 +58,7 @@ fn bindings() -> PlanBindings {
             rustc_metadata_hash: "abcdef1234".into(),
             triple: "x86_64-unknown-linux-gnu".into(),
             externs,
+            build_script_run: None,
         });
     }
     PlanBindings {

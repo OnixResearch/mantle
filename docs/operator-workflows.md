@@ -363,16 +363,21 @@ mantle --nix-compat source bundle bootstrap-profile \
   --provider-archive ./unpacked-legacy-provider \
   --provider-manifest ./provider.json \
   --mantle-source ./mantle-src \
-  --lock-vendor-producer /nix/store/<producer>/bin/lock-vendor-producer \
+  --lock-vendor-producer /nix/store/<producer> \
   --lock-vendor-selected-table /nix/store/<selected-table> \
   --lock-vendor-output /nix/store/<completed-vendor> \
+  --lock-vendor-parent-drv-path /nix/store/<admitted-producer>.drv \
+  --lock-vendor-plan-digest <accepted-canonical-plan-blake3> \
   --excluded-vendor-deps ./previously-verified-vendor-deps \
   --to lock-vendor-inputs.json
 ```
 
 Use the same logical store prefix as the signed producer output PathInfo;
-`--nix-compat` above binds `/nix/store`. A physical export directory under
-`/tmp` is only a carrier for that signed output, not a new logical store path.
+`--nix-compat` above binds `/nix/store`. Supply the parent derivation path and
+canonical digest from the **accepted native plan and bound consumer output**
+in the build report, not from caller-provided metadata alone. A physical export
+directory under `/tmp` is only a carrier for that signed output, not a new
+logical store path.
 
 The excluded tree and new producer output must have the same bounded content
 and bytes and independently match every locked package/checksum. The profile
@@ -393,6 +398,8 @@ mantle --nix-compat --json --state-dir ./offline-state source bundle hydrate-sel
   --expected-manifest-blake3 <manifest-blake3> \
   --checkout . \
   --lock-vendor-output /nix/store/<completed-vendor> \
+  --lock-vendor-parent-drv-path /nix/store/<admitted-producer>.drv \
+  --lock-vendor-plan-digest <accepted-canonical-plan-blake3> \
   > self-build-source-hydration.json
 
 empty_cargo_home="$(mktemp -d)"
@@ -753,6 +760,14 @@ outputs; a declared static verifier consumes the bound app unit root. Ordinary
 `mantle build .#name` remains the project-build path, while `mantle rust-plan`
 is separate native planning evidence, not this Cargo-unit execution lane.
 
+For the reviewed Linux cohort, [`scripts/rust-unit-plan-replay/cu-replay.sh`](../scripts/rust-unit-plan-replay/cu-replay.sh)
+creates a fresh signed input cache and separate publisher/client stores, runs
+the unchanged, package-edit, outside-package-edit, wrong-root, and same-input
+offline Cargo cases, and preserves per-run JSON reports and app stdout/stderr.
+`CU_B` and `CU_STORE_NAMESPACE` select initially absent dedicated scratch and
+store paths. Its Nix toolchain and historical fixture paths are pinned to the
+reviewed cohort; do not run it as a host-independent installer.
+
 Before running from the repository root, review and provision the example's
 **eight exact static input roots** (the producer's seven declared inputs plus
 the static app verifier) and their transitive closure in the local Nix store.
@@ -801,16 +816,71 @@ same reviewed producer and verifier; change **only** its requested app root to
 Run the same signed-client `build --no-substitute` command against that
 scratch fixture. Expect nonzero exit with `plan_output_bindings` reporting
 `status=rejected`, `failure_reason=plan-output-root-missing`, and null root
-derivation/output paths; the verifier must not run. The current-root
-fresh-import client required one same-state recovery after a 1800-second
-first-command timeout: that recovered positive reported four successes
-(two built, two cached) and zero failures; its wrong-root negative reported
-zero builds and one typed failure. These are not uninterrupted cold-build or
-final immutable SECOND receipts. This adapter caps source slices at 256;
-the measured Mantle workspace has 925 units and 711 distinct package
-sources, so it is outside this bounded lane. Do not infer full Cargo or LLVM
-correctness, compiler correctness, release reproducibility, or bootstrap
-correctness from this example.
+derivation/output paths; the verifier must not run. In the bounded signed
+replay, an unchanged second invocation reused all two Rust units without
+executing rustc; changing only the app source rebuilt its unit and reused its
+dependency, while an unrelated workspace README edit executed zero Rust
+units. A separately imported signed client accepted six exported PathInfos
+(producer outputs, two unit outputs, and static verifier). Its fresh
+`--no-substitute` build reused both Rust units, but rebuilt the static
+verifier: three cached, one built, zero failed. Compare the actual app exit
+status and stdout/stderr with a same-input offline Cargo build; do not assume
+byte-identical executables or claim a zero-build fresh client. The producer
+caps source slices at 256; the measured Mantle workspace has 925 units and
+711 distinct package sources, so it is outside this bounded lane. Neither
+replay proves full Cargo or LLVM correctness, release reproducibility, or
+bootstrap correctness.
+
+### Bounded build-script units
+
+The opt-in Cargo-unit producer also lowers Cargo `run-custom-build` nodes:
+the compiled script, a shared per-target compiler cfg/host-facts unit, and
+the script execution are distinct sandboxed plan units. A successful script
+writes generated files into its declared `out` output and directive files
+under `flags/`: `args-immediate` (scoped Rust arguments), `args-transitive`
+(`-L` search paths), `env` (`rustc-env`), `links` (`DEP_*` metadata), `rerun`,
+and `warnings`. Dependent compilations read those outputs as declared direct
+inputs, not from the host Cargo target directory.
+
+For the same reviewed cohort,
+[`scripts/rust-unit-plan-build-script-replay/replay.sh`](../scripts/rust-unit-plan-build-script-replay/replay.sh)
+creates a fresh signed-client proof for `proc-macro2`, `serde` with derive,
+`libc`, `links` metadata, and a `bzip2-sys` build against a separately
+Mantle-built `libbz2`. `RCBS_B` and `RCBS_STORE` must name initially absent
+paths. The script compares actual app stdout with locked offline Cargo,
+checks native-role changes and denied host/network/script failures, and
+preserves reports under its scratch directory. Its immutable source fixtures
+and tool paths are host-specific and must be reviewed before reuse.
+
+Both `cargo:` and `cargo::` accept the bounded `rustc-cfg`,
+`rustc-check-cfg`, `rustc-env`, `rustc-link-lib`, `rustc-link-search`,
+`rustc-flags` (`-l`/`-L` only), and target-scoped `rustc-link-arg*`
+directives. `metadata` and legacy unreserved keys supply `links` values.
+Unknown directives, `cargo::error`, nonzero script exit, conflicting `links`
+keys, and output-limit violations fail the plan unit; `rerun-if-*` is recorded
+but never controls identity or scheduling. Script stdout is bounded at 8 MiB
+and 65,536 lines. This does not claim all Cargo build-script directives or
+unreviewed cross-target behavior.
+
+For a failed dependent root, the JSON report identifies its saved build log.
+Read that log's `origin <drv path>:` line for the failed plan unit's cause;
+the root's `dependency ... failed` message alone is not the script error.
+
+Native tools and libraries require `native_inputs` on
+[`lib/cargo_unit_plan.ncl`](../lib/cargo_unit_plan.ncl), keyed by the **exact
+Cargo package ID**, including source and version metadata. Each declaration
+has `inputs` mapping role names to separately realized logical store paths,
+`env` templates containing `{{role:<name>}}`, and `path` entries for the
+declared tool directories. The same normalized map must appear in the
+producer's signed config; undeclared roles and parent-path escapes fail
+closed. For example, the `bzip2-sys@0.1.13+1.0.8` fixture declares separate
+Mantle-built `bzip2` and signed `pkg-config` roles, then supplies
+`PKG_CONFIG_PATH="{{role:bzip2}}/lib/pkgconfig"` and
+`path=["{{role:pkg-config}}/bin"]`. Removing the native declaration must
+leave the library inaccessible to the build script. The build-script sandbox
+has neither ambient network nor host files nor Cargo execution. Signed
+PathInfo attests selected input/output identities, not script correctness,
+compiler correctness, full Cargo compatibility, or release eligibility.
 
 ## Structured refactor sessions
 

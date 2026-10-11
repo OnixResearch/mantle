@@ -3218,6 +3218,14 @@ pub enum SourceBundleAction {
         #[arg(long = "lock-vendor-output")]
         lock_vendor_output: Option<std::path::PathBuf>,
 
+        /// Admitted native dynamic-plan producer derivation path from the build report
+        #[arg(long = "lock-vendor-parent-drv-path")]
+        lock_vendor_parent_drv_path: Option<String>,
+
+        /// Accepted native dynamic-plan canonical BLAKE3 digest from the build report
+        #[arg(long = "lock-vendor-plan-digest")]
+        lock_vendor_plan_digest: Option<String>,
+
         /// Previously verified vendor tree omitted from the new source archive
         #[arg(long = "excluded-vendor-deps")]
         excluded_vendor_deps: Option<std::path::PathBuf>,
@@ -3313,6 +3321,14 @@ pub enum SourceBundleAction {
         /// Separately realized producer output; required for lock-vendor profiles
         #[arg(long = "lock-vendor-output")]
         lock_vendor_output: Option<std::path::PathBuf>,
+
+        /// Admitted producer derivation path bound to the verified bundle receipt
+        #[arg(long = "lock-vendor-parent-drv-path")]
+        lock_vendor_parent_drv_path: Option<String>,
+
+        /// Accepted plan digest bound to the verified bundle receipt
+        #[arg(long = "lock-vendor-plan-digest")]
+        lock_vendor_plan_digest: Option<String>,
     },
     /// Verify a bundle and optionally imported source state
     Verify {

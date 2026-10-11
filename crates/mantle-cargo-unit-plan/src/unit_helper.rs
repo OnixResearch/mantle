@@ -1,16 +1,35 @@
 //! Static-linkable Rust unit builder. It cannot discover a store or Cargo state:
 //! every compiler, source, and direct dependency is supplied by a plan unit.
+//!
+//! Modes (first argument): `target-facts` records the declared rustc's target
+//! cfg; `run-build-script` executes a compiled Cargo build script with only its
+//! declared environment and writes `flags`; anything else is a rustc invocation.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::env;
 use std::fs;
+use std::io::Read;
 use std::io::Write;
 use std::io::{self};
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+use std::process::Stdio;
 
+use mantle_rust_plan_core::BuildScriptFlagsFiles;
+use mantle_rust_plan_core::ImmediateArgTarget;
+use mantle_rust_plan_core::MAX_BUILD_SCRIPT_OUTPUT_BYTES;
+use mantle_rust_plan_core::TARGET_FACTS_FILE;
+use mantle_rust_plan_core::check_link_search_roots;
+use mantle_rust_plan_core::merge_links_env;
+use mantle_rust_plan_core::parse_build_script_output;
+use mantle_rust_plan_core::parse_flags_env;
+use mantle_rust_plan_core::parse_target_facts;
+use mantle_rust_plan_core::parse_transitive_args;
+use mantle_rust_plan_core::render_build_script_flags;
+use mantle_rust_plan_core::render_target_facts;
+use mantle_rust_plan_core::select_immediate_args;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -91,7 +110,8 @@ fn extern_artifact(output: &str) -> Result<PathBuf, String> {
 fn write_response_file(path: &Path, args: &[String]) -> Result<(), String> {
     let mut file = fs::File::create(path).map_err(|error| format!("unit-helper-argument-file: {error}"))?;
     for arg in args {
-        if arg.is_empty() || arg.chars().any(char::is_whitespace) {
+        // rustc reads one argument per line, so only line breaks and NUL are unsafe.
+        if arg.is_empty() || arg.contains(['\n', '\r', '\0']) {
             return Err(format!("unit-helper-argument-unsupported: {arg}"));
         }
         writeln!(file, "{arg}").map_err(|error| format!("unit-helper-argument-file: {error}"))?;
@@ -118,7 +138,7 @@ fn artifacts(output: &Path) -> Result<Vec<String>, String> {
     Ok(result)
 }
 
-fn run() -> Result<(), String> {
+fn run_rustc() -> Result<(), String> {
     let out = PathBuf::from(required("out")?);
     let rustc = required("MANTLE_UNIT_RUSTC")?;
     let linker = required("MANTLE_UNIT_LINKER")?;
@@ -158,6 +178,8 @@ fn run() -> Result<(), String> {
         arguments.push("--extern".into());
         arguments.push(format!("{name}={}", artifact.display()));
     }
+    let (script_arguments, script_env) = build_script_flags(&arguments, prefix)?;
+    arguments.extend(script_arguments);
     if !arguments.iter().any(|arg| arg.starts_with(&source)) {
         return Err("unit-helper-source-absent: no declared source argument".into());
     }
@@ -172,6 +194,7 @@ fn run() -> Result<(), String> {
         .env("HOME", out.as_os_str())
         .env("TMPDIR", out.as_os_str())
         .envs(compile_env)
+        .envs(script_env)
         .status()
         .map_err(|error| format!("unit-helper-rustc-failed: {error}"))?;
     if !status.success() {
@@ -191,8 +214,261 @@ fn run() -> Result<(), String> {
     Ok(())
 }
 
+fn json_env<T: serde::de::DeserializeOwned>(key: &str) -> Result<T, String> {
+    serde_json::from_str(&required(key)?).map_err(|error| format!("unit-helper-invalid-environment: {key}: {error}"))
+}
+
+/// Read one `flags` file of a declared unit output under the store prefix.
+fn read_flags_file(output: &str, prefix: &str, file: &str) -> Result<String, String> {
+    if !output.starts_with(&format!("{prefix}/")) {
+        return Err(format!("unit-helper-invalid-manifest: undeclared path {output}"));
+    }
+    let path = Path::new(output).join(file);
+    let metadata =
+        fs::metadata(&path).map_err(|error| format!("unit-helper-missing-flags: {}: {error}", path.display()))?;
+    if metadata.len() > MAX_BUILD_SCRIPT_OUTPUT_BYTES as u64 {
+        return Err(format!("build-script-output-limit: {}", path.display()));
+    }
+    fs::read_to_string(&path).map_err(|error| format!("unit-helper-missing-flags: {}: {error}", path.display()))
+}
+
+/// Extra rustc arguments and compile environment derived from `flags`.
+type ScriptFlags = (Vec<String>, Vec<(String, String)>);
+
+/// rustc arguments and environment from build-script `flags`: the immediate
+/// arguments and `rustc-env` of the package's own script, `OUT_DIR`, and the
+/// `-L` search paths of every transitively reachable script.
+// r[impl mantle.rust_unit_plan.build_scripts.directive_propagation]
+fn build_script_flags(arguments: &[String], prefix: &str) -> Result<ScriptFlags, String> {
+    let mut extra = Vec::new();
+    let mut extra_env = Vec::new();
+    if let Ok(flags) = env::var("MANTLE_UNIT_BUILD_SCRIPT_FLAGS") {
+        let out = required("MANTLE_UNIT_BUILD_SCRIPT_OUT")?;
+        let kind = required("MANTLE_UNIT_TARGET_KIND")?;
+        let name = required("MANTLE_UNIT_TARGET_NAME")?;
+        let is_cdylib = arguments
+            .windows(2)
+            .any(|pair| pair[0] == "--crate-type" && pair[1].split(',').any(|ty| ty == "cdylib"))
+            || arguments.iter().any(|arg| {
+                arg.strip_prefix("--crate-type=").is_some_and(|types| types.split(',').any(|ty| ty == "cdylib"))
+            });
+        let target = ImmediateArgTarget {
+            kind: &kind,
+            name: &name,
+            is_cdylib,
+        };
+        let immediate = read_flags_file(&flags, prefix, "args-immediate")?;
+        extra.extend(select_immediate_args(&immediate, &target).map_err(|error| error.to_string())?);
+        extra_env.extend(parse_flags_env(&read_flags_file(&flags, prefix, "env")?).map_err(|error| error.to_string())?);
+        if !out.starts_with(&format!("{prefix}/")) {
+            return Err(format!("unit-helper-invalid-manifest: undeclared path {out}"));
+        }
+        extra_env.push(("OUT_DIR".to_string(), out));
+    }
+    if env::var_os("MANTLE_UNIT_TRANSITIVE_FLAGS").is_some() {
+        let transitive: Vec<String> = json_env("MANTLE_UNIT_TRANSITIVE_FLAGS")?;
+        for flags in &transitive {
+            let file = read_flags_file(flags, prefix, "args-transitive")?;
+            extra.extend(parse_transitive_args(&file).map_err(|error| error.to_string())?);
+        }
+    }
+    Ok((extra, extra_env))
+}
+
+fn rustc_stdout(rustc: &str, arguments: &[&str], scratch: &Path) -> Result<String, String> {
+    let output = Command::new(rustc)
+        .args(arguments)
+        .env_clear()
+        .env("HOME", scratch)
+        .env("TMPDIR", scratch)
+        .output()
+        .map_err(|error| format!("unit-helper-rustc-failed: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "unit-helper-rustc-failed: {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    String::from_utf8(output.stdout).map_err(|_| "unit-helper-rustc-failed: non-UTF-8 output".to_string())
+}
+
+/// `target-facts`: one typed environment file per toolchain and triple.
+// r[impl mantle.rust_unit_plan.build_scripts.target_facts]
+fn run_target_facts() -> Result<(), String> {
+    let out = PathBuf::from(required("out")?);
+    let rustc = required("MANTLE_UNIT_RUSTC")?;
+    let target = required("MANTLE_UNIT_TARGET")?;
+    let host = required("MANTLE_UNIT_HOST")?;
+    fs::create_dir_all(&out).map_err(|error| format!("unit-helper-output: {error}"))?;
+    let version = rustc_stdout(&rustc, &["-vV"], &out)?;
+    let observed = version.lines().find_map(|line| line.strip_prefix("host: ")).unwrap_or_default();
+    if observed != host {
+        return Err(format!("unit-helper-host-mismatch: declared {host}, rustc reports {observed}"));
+    }
+    let cfg = rustc_stdout(&rustc, &["--print", "cfg", "--target", &target], &out)?;
+    let facts = render_target_facts(&cfg, &target, &host).map_err(|error| error.to_string())?;
+    fs::write(out.join(TARGET_FACTS_FILE), facts).map_err(|error| format!("unit-helper-output: {error}"))
+}
+
+/// The compiled script is the single artifact recorded by its compile unit.
+fn script_executable(unit: &str) -> Result<PathBuf, String> {
+    let found = manifest(unit)?;
+    let executables = found
+        .artifacts
+        .iter()
+        .filter(|artifact| !artifact.ends_with(".d") && !artifact.ends_with(".rmeta"))
+        .collect::<Vec<_>>();
+    let [artifact] = executables.as_slice() else {
+        return Err(format!("unit-helper-invalid-manifest: {unit}: expected one build-script executable"));
+    };
+    if !artifact.starts_with("lib/") || artifact.contains("..") {
+        return Err(format!("unit-helper-invalid-manifest: {unit}: {artifact}"));
+    }
+    let path = Path::new(unit).join(artifact);
+    if !path.is_file() {
+        return Err(format!("unit-helper-missing-artifact: {}", path.display()));
+    }
+    Ok(path)
+}
+
+struct ScriptRun {
+    script: PathBuf,
+    source: String,
+    out: PathBuf,
+    env: Vec<(String, String)>,
+    path: Vec<String>,
+}
+
+/// Environment of a build script: declared package facts and native values,
+/// target facts, `DEP_*` from `links` dependencies, and `OUT_DIR`. Nothing is
+/// inherited from the helper's own environment.
+fn script_environment(out: &Path, prefix: &str) -> Result<Vec<(String, String)>, String> {
+    let declared: BTreeMap<String, String> = json_env("MANTLE_UNIT_SCRIPT_ENV")?;
+    let lane_owned = |key: &str| {
+        matches!(key, "OUT_DIR" | "TARGET" | "HOST" | "PATH")
+            || key.starts_with("DEP_")
+            || key.starts_with("CARGO_CFG_")
+    };
+    if let Some(key) = declared.keys().find(|key| lane_owned(key.as_str()) || key.contains('=')) {
+        return Err(format!("unit-helper-invalid-environment: {key}"));
+    }
+    let facts_unit = required("MANTLE_UNIT_TARGET_FACTS")?;
+    let facts = parse_target_facts(&read_flags_file(&facts_unit, prefix, TARGET_FACTS_FILE)?)
+        .map_err(|error| error.to_string())?;
+    let links_units: Vec<String> = json_env("MANTLE_UNIT_LINKS_DEPENDENCIES")?;
+    let mut links_files = Vec::with_capacity(links_units.len());
+    for unit in &links_units {
+        links_files.push(read_flags_file(unit, prefix, "links")?);
+    }
+    let links = merge_links_env(&links_files.iter().map(String::as_str).collect::<Vec<_>>())
+        .map_err(|error| error.to_string())?;
+    let mut env = declared.into_iter().collect::<Vec<_>>();
+    env.extend(facts);
+    env.extend(links);
+    env.push(("OUT_DIR".to_string(), out.to_string_lossy().into_owned()));
+    Ok(env)
+}
+
+fn write_flags(flags: &Path, files: &BuildScriptFlagsFiles) -> Result<(), String> {
+    fs::create_dir_all(flags).map_err(|error| format!("unit-helper-output: {error}"))?;
+    for (name, contents) in [
+        ("args-immediate", &files.args_immediate),
+        ("args-transitive", &files.args_transitive),
+        ("env", &files.env),
+        ("links", &files.links),
+        ("rerun", &files.rerun),
+        ("warnings", &files.warnings),
+    ] {
+        fs::write(flags.join(name), contents).map_err(|error| format!("unit-helper-output: {error}"))?;
+    }
+    Ok(())
+}
+
+fn execute_script(run: &ScriptRun) -> Result<String, String> {
+    let mut command = Command::new(&run.script);
+    command.env_clear().current_dir(&run.source).envs(run.env.iter().map(|(key, value)| (key, value)));
+    if !run.path.is_empty() {
+        command.env("PATH", run.path.join(":"));
+    }
+    command.stdout(Stdio::piped()).stderr(Stdio::inherit());
+    let mut child = command.spawn().map_err(|error| format!("build-script-nonzero-exit: spawn failed: {error}"))?;
+    let mut stdout = Vec::new();
+    let limit = u64::try_from(MAX_BUILD_SCRIPT_OUTPUT_BYTES)
+        .expect("8 MiB build-script bound fits u64")
+        .saturating_add(1);
+    let read = child.stdout.take().expect("piped build-script stdout").take(limit).read_to_end(&mut stdout);
+    if let Err(error) = read {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(format!("build-script-nonzero-exit: stdout read failed: {error}"));
+    }
+    if stdout.len() > MAX_BUILD_SCRIPT_OUTPUT_BYTES {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err("build-script-output-limit: build-script stdout exceeds 8 MiB".into());
+    }
+    let status = child.wait().map_err(|error| format!("build-script-nonzero-exit: wait failed: {error}"))?;
+    if !status.success() {
+        return Err(format!("build-script-nonzero-exit: {status}"));
+    }
+    Ok(String::from_utf8(stdout).unwrap_or_else(|error| String::from_utf8_lossy(error.as_bytes()).into_owned()))
+}
+
+/// `run-build-script`: execute the compiled script in its source slice with
+/// only the declared environment, then parse and record its directives.
+// r[impl mantle.rust_unit_plan.build_scripts.run_units]
+// r[impl mantle.rust_unit_plan.build_scripts.sandbox_boundary]
+fn run_build_script() -> Result<(), String> {
+    let out = PathBuf::from(required("out")?);
+    let flags = PathBuf::from(required("flags")?);
+    let source = required("MANTLE_UNIT_SOURCE")?;
+    let prefix = Path::new(&source)
+        .parent()
+        .and_then(Path::to_str)
+        .ok_or_else(|| "unit-helper-invalid-source: expected store source root".to_string())?
+        .to_string();
+    let script_unit = required("MANTLE_UNIT_BUILD_SCRIPT")?;
+    if !script_unit.starts_with(&format!("{prefix}/")) {
+        return Err(format!("unit-helper-invalid-manifest: undeclared path {script_unit}"));
+    }
+    let native: Vec<String> = json_env("MANTLE_UNIT_NATIVE_INPUTS")?;
+    let path: Vec<String> = json_env("MANTLE_UNIT_SCRIPT_PATH")?;
+    if let Some(entry) = path
+        .iter()
+        .find(|entry| !native.iter().any(|root| entry.starts_with(root.as_str())) || entry.contains(':'))
+    {
+        return Err(format!("unit-helper-invalid-environment: PATH entry {entry} is not a native input"));
+    }
+    fs::create_dir_all(&out).map_err(|error| format!("unit-helper-output: {error}"))?;
+    let run = ScriptRun {
+        script: script_executable(&script_unit)?,
+        env: script_environment(&out, &prefix)?,
+        source,
+        out,
+        path,
+    };
+    let stdout = execute_script(&run)?;
+    let directives = parse_build_script_output(&stdout).map_err(|error| error.to_string())?;
+    let out_root = run.out.to_string_lossy();
+    let mut roots = vec![out_root.as_ref(), run.source.as_str()];
+    roots.extend(native.iter().map(String::as_str));
+    check_link_search_roots(&directives, &roots).map_err(|error| error.to_string())?;
+    let links = run.env.iter().find(|(key, _)| key == "CARGO_MANIFEST_LINKS").map(|(_, value)| value.as_str());
+    let files = render_build_script_flags(&directives, links);
+    for warning in &directives.warnings {
+        let _ = writeln!(io::stderr(), "warning: {warning}");
+    }
+    write_flags(&flags, &files)
+}
+
 fn main() {
-    if let Err(error) = run() {
+    let result = match env::args().nth(1).as_deref() {
+        Some("target-facts") => run_target_facts(),
+        Some("run-build-script") => run_build_script(),
+        _ => run_rustc(),
+    };
+    if let Err(error) = result {
         let _ = writeln!(io::stderr(), "{error}");
         std::process::exit(1);
     }

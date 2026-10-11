@@ -12,6 +12,36 @@ fn stdlib_import_path() -> Vec<OsString> {
 }
 
 #[test]
+fn lock_vendor_evaluation_defers_missing_lock_and_fetch_to_the_declared_producer() {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let recipe = root.join("fixtures/lock-vendor-two-crate/mantle.ncl");
+    let missing_bundle = "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-missing-locked-source";
+    let expression = format!(
+        r#"(import "{}") {{
+            producer = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-vendor-producer",
+            bundle = "{missing_bundle}",
+            selected_table = "/nix/store/cccccccccccccccccccccccccccccccc-selected-hashes",
+            python = "/nix/store/dddddddddddddddddddddddddddddddd-python",
+            rust = "/nix/store/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee-rust",
+            runtime = [],
+        }}"#,
+        recipe.display()
+    );
+    assert!(!std::path::Path::new(missing_bundle).exists());
+    let planned: serde_json::Value =
+        crunch_eval::evaluate_str_and_deserialize(&expression, &stdlib_import_path()).unwrap();
+    assert_eq!(planned["args"][0], format!("{missing_bundle}/workspace/Cargo.lock"));
+    assert_eq!(planned["dynamic_plan_outputs"], serde_json::json!(["plan"]));
+    assert_eq!(
+        planned["builder"],
+        "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-vendor-producer/bin/lock-vendor-producer"
+    );
+
+    let undeclared = expression.replace(missing_bundle, "/etc/host-cargo-source");
+    assert!(crunch_eval::evaluate_str(&undeclared, &stdlib_import_path()).is_err());
+}
+
+#[test]
 fn contract_catches_missing_name() {
     let result = crunch_eval::evaluate_str(
         r#"let crunch = import "lib.ncl" in { builder = "/bin/sh" } | crunch.Derivation"#,

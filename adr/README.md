@@ -110,3 +110,4 @@ compatibility surface, crate name, or historical decision.
 | [0110](0110-separate-reviewed-android-metadata-from-source-identity.md) | Separate reviewed Android metadata from source identity | Accepted |
 | [0111](0111-isolate-apk-signing-input-store-objects.md) | Isolate APK signing inputs in distinct store objects | Proposed |
 | [0112](0112-verify-completed-apk-builds-with-pinned-tools.md) | Verify completed APK builds with pinned tools | Proposed |
+| [0113](0113-select-equivalent-cargo-host-plan-units.md) | Select only equivalent Rust-plan host units for Cargo graphs | Proposed |
