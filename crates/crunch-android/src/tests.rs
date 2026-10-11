@@ -98,11 +98,14 @@ pub(super) fn fixture(root: &Path, signed: bool) -> (ApkPlan, BuildInputs) {
     .unwrap();
     use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(&utility, fs::Permissions::from_mode(0o755)).unwrap();
-    fs::create_dir_all(sources.join("keys")).unwrap();
-    let keystore = sources.join("keys/key.jks");
-    let password = root.join("key.password");
+    let signing_root = root.join("signing");
+    fs::create_dir_all(signing_root.join("keys")).unwrap();
+    let keystore = signing_root.join("keys/key.jks");
+    let store_password = root.join("store.password");
+    let key_password = root.join("key.password");
     fs::write(&keystore, "fixture-key").unwrap();
-    fs::write(&password, "fixture-password").unwrap();
+    fs::write(&store_password, "fixture-password").unwrap();
+    fs::write(&key_password, "fixture-password").unwrap();
     let plan = ApkPlan {
         module: "demo".into(),
         application_id: "org.example.demo".into(),
@@ -135,7 +138,8 @@ pub(super) fn fixture(root: &Path, signed: bool) -> (ApkPlan, BuildInputs) {
         runtime_libgcc,
         utility,
         keystore: signed.then_some(keystore),
-        key_password_file: signed.then_some(password),
+        store_password_file: signed.then_some(store_password),
+        key_password_file: signed.then_some(key_password),
     })
 }
 pub(super) fn runtime_cohort(inputs: &BuildInputs) -> RuntimeCohort {
@@ -212,17 +216,54 @@ fn invalid_plans_and_archive_drift_reject_before_graph_generation() {
 }
 
 #[test]
-fn signing_key_must_be_the_declared_source_member_even_with_identical_bytes() {
+fn signing_inputs_require_isolated_store_objects_and_declared_member() {
     let dir = tempfile::tempdir().unwrap();
     let (plan, mut inputs) = fixture(dir.path(), true);
     let reviewed = plan.toolchain.clone();
     let runtime = runtime_cohort(&inputs);
-    let alternate = dir.path().join("other-key.jks");
+    PreparedApk::bind(plan.clone(), inputs.clone(), &reviewed, &runtime, dir.path())
+        .expect("independently declared signing root");
+
+    let source_key = inputs.source_root.join("keys/key.jks");
+    fs::create_dir_all(source_key.parent().unwrap()).unwrap();
+    fs::copy(inputs.keystore.as_ref().unwrap(), &source_key).unwrap();
+    let mut colocated = inputs.clone();
+    colocated.keystore = Some(source_key);
+    assert!(matches!(
+        PreparedApk::bind(plan.clone(), colocated, &reviewed, &runtime, dir.path()),
+        Err(Error::Plan(Rejection::KeystorePathEscape))
+    ));
+
+    let alternate = dir.path().join("signing/keys/other.jks");
     fs::copy(inputs.keystore.as_ref().unwrap(), &alternate).unwrap();
-    inputs.keystore = Some(alternate);
+    let mut wrong_member = inputs.clone();
+    wrong_member.keystore = Some(alternate);
+    assert!(matches!(
+        PreparedApk::bind(plan.clone(), wrong_member, &reviewed, &runtime, dir.path()),
+        Err(Error::Plan(Rejection::KeystorePathEscape))
+    ));
+    let mut shared_password = inputs.clone();
+    shared_password.store_password_file = shared_password.key_password_file.clone();
+    assert!(matches!(
+        PreparedApk::bind(plan.clone(), shared_password, &reviewed, &runtime, dir.path()),
+        Err(Error::InvalidInput(_))
+    ));
+
+    let source_store_password = inputs.source_root.join("keys/store.password");
+    fs::copy(inputs.store_password_file.as_ref().unwrap(), &source_store_password).unwrap();
+    let mut colocated_store_password = inputs.clone();
+    colocated_store_password.store_password_file = Some(source_store_password);
+    assert!(matches!(
+        PreparedApk::bind(plan.clone(), colocated_store_password, &reviewed, &runtime, dir.path()),
+        Err(Error::InvalidInput(_))
+    ));
+
+    let source_password = inputs.source_root.join("keys/key.password");
+    fs::copy(inputs.key_password_file.as_ref().unwrap(), &source_password).unwrap();
+    inputs.key_password_file = Some(source_password);
     assert!(matches!(
         PreparedApk::bind(plan, inputs, &reviewed, &runtime, dir.path()),
-        Err(Error::Plan(Rejection::KeystorePathEscape))
+        Err(Error::InvalidInput(_))
     ));
 }
 

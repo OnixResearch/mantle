@@ -223,7 +223,7 @@ fn validate_plan(plan: &ApkPlan) -> Result<(), PlanRejection> {
     {
         return Err(PlanRejection::UnboundToolchainIdentity);
     }
-    if !(315_532_800..=4_354_819_199).contains(&plan.reproducibility.entry_timestamp_epoch) {
+    if !(315_532_802..=4_354_819_199).contains(&plan.reproducibility.entry_timestamp_epoch) {
         return Err(PlanRejection::UnpinnedTimestampPolicy);
     }
     if plan.reproducibility.locale != "C" || plan.reproducibility.timezone != "UTC" {
@@ -352,7 +352,7 @@ mod tests {
             },
             signing: None,
             reproducibility: ReproducibilityPolicy {
-                entry_timestamp_epoch: 315_532_800,
+                entry_timestamp_epoch: 315_532_802,
                 locale: "C".to_string(),
                 timezone: "UTC".to_string(),
             },
@@ -564,7 +564,7 @@ pub mod reviewed {
     pub const MAX_MEMBERS: usize = 256;
     pub const MAX_PATH_BYTES: usize = 1024;
     pub const MAX_NAME_BYTES: usize = 128;
-    pub const MIN_ZIP_EPOCH: u64 = 315_532_800;
+    pub const MIN_ZIP_EPOCH: u64 = 315_532_802;
     pub const MAX_ZIP_EPOCH: u64 = 4_354_819_199;
 
     #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

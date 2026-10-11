@@ -108,3 +108,5 @@ compatibility surface, crate name, or historical decision.
 | [0103](0103-bind-static-inputs-to-dynamic-plan-roots.md) | Bind static inputs to dynamic-plan roots by request identity | Proposed |
 | [0109](0109-reject-package-layer-design-priors-without-a-consumer.md) | Reject package-layer design priors that have no consumer | Accepted |
 | [0110](0110-separate-reviewed-android-metadata-from-source-identity.md) | Separate reviewed Android metadata from source identity | Accepted |
+| [0111](0111-isolate-apk-signing-input-store-objects.md) | Isolate APK signing inputs in distinct store objects | Proposed |
+| [0112](0112-verify-completed-apk-builds-with-pinned-tools.md) | Verify completed APK builds with pinned tools | Proposed |

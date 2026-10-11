@@ -25,7 +25,6 @@ REVIEWED_ARCHIVES = {
 }
 GLIBC = Path("/nix/store/n51dhmdbik1kfrsm62j5knavmigwrl1a-glibc-2.42-84")
 LIBGCC = Path("/nix/store/ssvq1r0xd8f7paf6zqgpfql1a4drwhy2-xgcc-15.3.0-libgcc")
-BUSYBOX = Path("/nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox")
 GLIBC_NAR_SHA256 = "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a"
 LIBGCC_NAR_SHA256 = "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af"
 SOURCE_ROOT = Path("examples/android-reviewed-toolchain-fetch.ncl")
@@ -43,7 +42,9 @@ def run(command, cwd, *, environment=None, check=True):
 
 
 def nix_command(*command):
-    return ["nix", "develop", "--offline", "--no-write-lock-file", "--command", *command]
+    if os.environ.get("IN_NIX_SHELL") not in {"pure", "impure"}:
+        raise RuntimeError("fresh APK builds require the pre-entered pinned Nix development shell")
+    return list(command)
 
 
 def digest(path):
@@ -135,7 +136,7 @@ def observe_apk(path):
     return {"entries": names, "compiled_manifest": True, "dex": True, "apk_signing_block": True, "dex_offset": dex_offset}
 
 
-def verify_with_reviewed_apksigner(apk, case, cwd):
+def verify_with_reviewed_apksigner(apk, case, cwd, bwrap):
     observation = case["observation"]
     extracts = {entry["name"]: Path(entry["store_path"]) for entry in observation["extractions"]}
     build_tools = extracts["android-extract-android-build-tools"] / "android-15"
@@ -145,8 +146,8 @@ def verify_with_reviewed_apksigner(apk, case, cwd):
     libgcc = store / ("d" * 32 + "-runtime-libgcc")
     # The verifier sees only the already-admitted runtime and extracted SDK
     # contents plus this one APK; host /lib64 and /nix/store remain unmounted.
-    command = nix_command(
-        "bwrap", "--unshare-user", "--uid", "1000", "--gid", "100", "--tmpfs", "/",
+    command = [
+        str(bwrap), "--unshare-user", "--uid", "1000", "--gid", "100", "--tmpfs", "/",
         "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--dir", "/store",
         "--dir", "/build", "--ro-bind", str(glibc), "/store/runtime",
         "--ro-bind", str(libgcc), "/store/libgcc",
@@ -158,7 +159,7 @@ def verify_with_reviewed_apksigner(apk, case, cwd):
         "/store/runtime/lib:/store/libgcc/lib:/store/buildtools/lib64:/store/jdk/lib:/store/jdk/lib/server",
         "/store/jdk/bin/java", "-jar", "/store/buildtools/lib/apksigner.jar",
         "verify", "--verbose", "/store/reviewed.apk",
-    )
+    ]
     completed = run(command, cwd, check=False)
     return {"exit_code": completed.returncode, "stdout": completed.stdout, "stderr": completed.stderr}
 
@@ -172,6 +173,10 @@ def main():
     parser.add_argument("--jdk", type=Path, required=True)
     parser.add_argument("--platform", type=Path, required=True)
     parser.add_argument("--commandline-tools", type=Path, required=True)
+    parser.add_argument("--busybox", type=Path, required=True, help="signed static BusyBox from the locked Nixpkgs cohort")
+    parser.add_argument("--bwrap", type=Path, required=True, help="signed Bubblewrap from the locked Nixpkgs cohort")
+    parser.add_argument("--python", type=Path, required=True, help="signed Python interpreter from the locked Nixpkgs cohort")
+    parser.add_argument("--b3sum", type=Path, required=True, help="signed BLAKE3 tool from the locked Nixpkgs cohort")
     parser.add_argument("--target-dir", type=Path, required=True, help="private Cargo target, never the shared target")
     parser.add_argument("--evidence-dir", type=Path, required=True, help="receipt/log directory outside immutable source snapshot")
     parser.add_argument("--source-snapshot-manifest", type=Path, required=True, help="controlled-copy manifest outside source snapshot")
@@ -181,6 +186,10 @@ def main():
     parser.add_argument("--expected-mantle-sha256", required=True, help="independently pinned first Mantle binary SHA-256")
     parser.add_argument("--expected-bundle-blake3", help="BLAKE3 of the previously exported original-HTTPS source bundle")
     arguments = parser.parse_args()
+    busybox = arguments.busybox.resolve()
+    bwrap = arguments.bwrap.resolve()
+    python = arguments.python.resolve()
+    b3sum = arguments.b3sum.resolve()
     repo = Path(__file__).resolve().parent.parent
     evidence = arguments.evidence_dir.resolve()
     for label, location in [
@@ -201,13 +210,21 @@ def main():
             raise RuntimeError(f"success receipt already exists; refuse to overwrite evidence: {receipt}")
         if run_dir.exists():
             raise RuntimeError(f"proof run directory must be fresh: {run_dir}")
+        if arguments.target_dir.resolve().exists():
+            raise RuntimeError("proof Cargo target must be fresh for each immutable snapshot run")
         if shutil.disk_usage(run_dir.parent).free < 16 * (1 << 30):
             raise RuntimeError("proof scratch filesystem has less than 16 GiB free")
-        for executable in [arguments.mantle, BUSYBOX, GLIBC / "lib/ld-linux-x86-64.so.2", LIBGCC / "lib/libgcc_s.so.1"]:
+        for executable in [arguments.mantle, busybox, bwrap, python, b3sum, GLIBC / "lib/ld-linux-x86-64.so.2", LIBGCC / "lib/libgcc_s.so.1"]:
             if not executable.is_file():
                 raise RuntimeError(f"reviewed executable/runtime prerequisite missing: {executable}")
-        if shutil.which("nix") is None or shutil.which("b3sum") is None:
-            raise RuntimeError("Nix and b3sum are required to verify the reviewed cohort")
+        if Path(sys.executable).resolve() != python:
+            raise RuntimeError("proof interpreter differs from the explicitly pinned Python")
+        if shutil.which("nix") is None:
+            raise RuntimeError("Nix is required to verify the reviewed cohort")
+        run(["nix", "store", "verify", "--offline", "--sigs-needed", "1", str(python.parent.parent), str(b3sum.parent.parent)], repo)
+        os.environ["PATH"] = str(b3sum.parent) + os.pathsep + os.environ.get("PATH", "")
+        if shutil.which("b3sum") != str(b3sum):
+            raise RuntimeError("pinned BLAKE3 tool cannot be selected")
         expected_source = arguments.expected_source_nar_sha256.lower()
         expected_mantle = arguments.expected_mantle_sha256.lower()
         expected_profile = arguments.expected_source_profile_blake3.lower()
@@ -254,7 +271,7 @@ def main():
         for label, archive in archives.items():
             if not archive.is_file() or digest(archive) != REVIEWED_ARCHIVES[label]:
                 raise RuntimeError(f"{label} archive absent or differs from original reviewed SHA-256")
-        run(["nix", "store", "verify", "--offline", "--sigs-needed", "1", str(GLIBC), str(LIBGCC), str(BUSYBOX.parent.parent)], repo)
+        run(["nix", "store", "verify", "--offline", "--sigs-needed", "1", str(GLIBC), str(LIBGCC), str(busybox.parent.parent), str(bwrap.parent.parent)], repo)
         nar_hashes = run(["nix", "hash", "path", "--type", "sha256", "--base16", str(GLIBC), str(LIBGCC)], repo).stdout.splitlines()
         if nar_hashes != [GLIBC_NAR_SHA256, LIBGCC_NAR_SHA256]:
             raise RuntimeError("signed runtime cohort NAR content differs from independently pinned digests")
@@ -262,7 +279,7 @@ def main():
         # The pinned devshell creates a temporary Cargo home under TMPDIR.
         # /tmp may be full; keep every devshell invocation on proof scratch.
         os.environ["TMPDIR"] = str(run_dir)
-        run(nix_command("bwrap", "--unshare-user", "--tmpfs", "/", "--dev", "/dev", "--proc", "/proc", "--dir", "/bin", "--ro-bind", str(BUSYBOX), "/bin/sh", "--", "/bin/sh", "-c", "exit 0"), repo)
+        run([str(bwrap), "--unshare-user", "--tmpfs", "/", "--dev", "/dev", "--proc", "/proc", "--dir", "/bin", "--ro-bind", str(busybox), "/bin/sh", "--", "/bin/sh", "-c", "exit 0"], repo)
         bundle = arguments.bundle.resolve()
         if bundle.exists() and not arguments.expected_bundle_blake3:
             raise RuntimeError("prefetched reviewed source bundle requires an independently pinned BLAKE3")
@@ -307,7 +324,8 @@ def main():
         exported = run(nix_command("nickel", "export", "--format", "json", str(EXAMPLE)), repo)
         example_json = run_dir / "example.json"
         example_json.write_text(exported.stdout, encoding="utf-8")
-        if not json.loads(exported.stdout)["plan"]["signing"]:
+        example_plan = json.loads(exported.stdout)["plan"]
+        if not example_plan["signing"]:
             raise RuntimeError("example does not request signing")
         stage = "test-only-keystore"
         host_jdk = run_dir / "host-jdk"
@@ -323,8 +341,8 @@ def main():
         password_value = "mantle-test-only-not-a-release-key"
         password.write_text(password_value + "\n", encoding="ascii")
         password.chmod(0o600)
-        run(nix_command(
-            "bwrap", "--unshare-user", "--tmpfs", "/", "--dev", "/dev", "--proc", "/proc",
+        run([
+            str(bwrap), "--unshare-user", "--tmpfs", "/", "--dev", "/dev", "--proc", "/proc",
             "--dir", "/store", "--ro-bind", str(GLIBC), "/store/runtime",
             "--ro-bind", str(LIBGCC), "/store/libgcc",
             "--ro-bind", str(host_jdk / "jdk-17.0.17+10"), "/store/jdk",
@@ -337,7 +355,7 @@ def main():
             "-validity", "3650", "-dname", "CN=Mantle APK proof,O=Test only", "-storetype", "PKCS12",
             "-keystore", "/store/signing/release.jks", "-storepass", password_value,
             "-keypass", password_value, "-noprompt",
-        ), repo)
+        ], repo)
         keystore.chmod(0o600)
         stage = "three-real-sandbox-builds"
         environment = os.environ.copy()
@@ -345,7 +363,7 @@ def main():
             "TMPDIR": str(run_dir),
             "CARGO_TARGET_DIR": str(arguments.target_dir.resolve()),
             "CRUNCH_NO_FUSE": "1",
-            "SNIX_BUILD_SANDBOX_SHELL": str(BUSYBOX),
+            "SNIX_BUILD_SANDBOX_SHELL": str(busybox),
             "APK_PROOF_RUN_DIR": str(run_dir),
             "APK_PROOF_EXAMPLE_JSON": str(example_json),
             "APK_PROOF_SOURCE_STATE_BLAKE3": source_state_blake3,
@@ -372,7 +390,7 @@ def main():
         for case in cases:
             apk = Path(case["observation"]["apk"])
             structure = observe_apk(apk)
-            verification = verify_with_reviewed_apksigner(apk, case, repo)
+            verification = verify_with_reviewed_apksigner(apk, case, repo, bwrap)
             if verification["exit_code"] != 0:
                 raise RuntimeError(f"reviewed apksigner rejected {case['run']}: {verification}")
             if "Verified using v2 scheme (APK Signature Scheme v2): true" not in verification["stdout"]:
@@ -399,7 +417,7 @@ def main():
             old = output.read(1)
             output.seek(results[0]["structure"]["dex_offset"])
             output.write(bytes([old[0] ^ 1]))
-        tamper_result = verify_with_reviewed_apksigner(tampered, cases[0], repo)
+        tamper_result = verify_with_reviewed_apksigner(tampered, cases[0], repo, bwrap)
         if tamper_result["exit_code"] == 0:
             raise RuntimeError("tampered signed region unexpectedly passed reviewed apksigner verify")
         lines = [line for line in build_log.read_text(encoding="utf-8").splitlines() if "test result:" in line]
@@ -458,10 +476,17 @@ def main():
                 "host_os": sys.platform,
                 "host_arch": platform.machine(),
                 "source_fetch_mode": "offline-pinned-source-bundle-and-sha256-checked-file-overrides",
-                "SOURCE_DATE_EPOCH": 315532800,
+                "SOURCE_DATE_EPOCH": example_plan["reproducibility"]["entry_timestamp_epoch"],
                 "LC_ALL": "C",
                 "TZ": "UTC",
-                "sandbox_shell_blake3": blake3(BUSYBOX, repo),
+                "sandbox_shell_store_path": str(busybox.parent.parent),
+                "sandbox_shell_blake3": blake3(busybox, repo),
+                "bwrap_store_path": str(bwrap.parent.parent),
+                "bwrap_blake3": blake3(bwrap, repo),
+                "python_store_path": str(python.parent.parent),
+                "python_blake3": blake3(python, repo),
+                "b3sum_store_path": str(b3sum.parent.parent),
+                "b3sum_blake3": blake3(b3sum, repo),
                 "fresh_store_and_state_count": 3,
             },
             "builds": results,

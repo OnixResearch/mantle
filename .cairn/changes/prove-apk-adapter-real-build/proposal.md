@@ -30,5 +30,5 @@ This proof is execution-gated. It needs the network once to fetch the admitted t
 ## Impact
 
 - **Affected specs:** `android-adapter`
-- **Affected code:** `examples/android-minimal.ncl` (new), evidence rail script or integration test, receipts
-- **Compatibility:** additive; evidence only
+- **Affected code:** `examples/android-minimal.ncl`, `lib/android.ncl`'s reviewed-to-published fetch bridge, the checked-in evidence rail and ignored real-SDK test, and `crates/crunch-android/src/lib.rs` signing-root admission and derivation inputs
+- **Compatibility:** direct signed `PreparedApk::bind` callers must supply a keystore member beneath a distinct signing store object; shared app-source signing paths now fail before graph generation. Unsigned plans and the separate pinned-source API are unchanged.
