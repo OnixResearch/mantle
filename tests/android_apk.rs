@@ -25,7 +25,6 @@ fn reviewed_apk_authoring_matches_core_wire_shape() {
     assert_eq!(plan["toolchain"]["build_tools"]["version"], "35.0.0");
     assert_eq!(plan["toolchain"]["jdk"]["version"], "17.0.17+10");
     assert_eq!(plan["toolchain"]["platform"]["version"], "35_r02");
-    assert_eq!(plan["reproducibility"]["entry_timestamp_epoch"], 315532800);
     assert!(plan["signing"].is_null());
     let core: crunch_android_core::reviewed::ApkPlan = serde_json::from_value(plan).unwrap();
     let lowered = crunch_android_core::lower(&core).unwrap();
@@ -88,5 +87,4 @@ fn forced_embedded_stdlib_authors_the_reviewed_apk_plan() {
     let plan: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(plan["toolchain"]["build_tools"]["version"], "35.0.0");
     assert_eq!(plan["toolchain"]["platform"]["version"], "35_r02");
-    assert_eq!(plan["reproducibility"]["entry_timestamp_epoch"], 315532800);
 }

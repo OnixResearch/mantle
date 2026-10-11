@@ -2,7 +2,7 @@
 
 ## Context
 
-The adapter's offline tests use stub tools. The real question is whether three authenticated extraction derivations and six SDK stages, driven by the admitted prebuilt toolchain and a signed native runtime cohort, produce a structurally valid signed APK with reproducible bytes. That question is answered only by executing the real path and recording what happened.
+The adapter's offline tests prove same-run extraction admission and rejection before SDK effects; they do not run synthetic tool stages or produce APKs. The real question is whether three authenticated extraction derivations and six SDK stages, driven by the admitted prebuilt toolchain and a signed native runtime cohort, produce a structurally valid signed APK with reproducible bytes. That question is answered only by executing the real path and recording what happened.
 
 The repo already has the pattern for this: execution-gated proof changes that record environment prerequisites, run detached with pueue, and never quote results from memory.
 
@@ -34,6 +34,37 @@ A checked-in rail builds the example and writes a receipt binding:
 
 The rail runs detached with pueue under the repo's long-build conventions. Prefetched bundles replay offline through `SourceFetchOverridePlan`, so the expensive network dependency is one-time.
 
+The fresh-build entrypoint consumes an already-entered pinned Nix devshell,
+not a new `nix develop` evaluation of the immutable 10,000-member snapshot
+for every SDK command. It verifies the exact signed Bubblewrap output and
+invokes that executable directly for sandboxed keytool and `apksigner`.
+Before a long build the first separately pinned Mantle executable and
+verifier tools need Nix GC roots: losing the unrooted output invalidates a
+later receipt recheck even when its derivation can recreate identical bytes.
+For an interrupted post-build stage, a second read-only, independently
+pinned full-source verifier snapshot can inspect the persisted original
+build snapshot, original-HTTPS source state and replay, full passing ignored
+test log, three distinct build stores and every APK. Its success receipt
+records both snapshot identities and repeats actual reviewed-tool
+verification and the signed-region tamper control. It never treats a
+missing build as recovered evidence.
+
+The reviewed-to-published source bridge lowers the fetch root using the
+published Android source-v1 records after checking the separate reviewed
+metadata. This preserves the original-HTTPS bundle's exact FOD name, SRI
+SHA-256 and source identity; fetching a second, reviewed-metadata-named
+derivation would incorrectly classify the already imported sources as
+network-required. The retained bundle has four records, including separately
+checked command-line tools; the APK root consumes three. An imported and
+pinned bundle is not enough alone: its three build roots must preflight `ready`
+and realize three fresh uncached outputs through `SourceFetchOverridePlan`.
+
+The reviewed JDK's `jar --update --date` rejects a ZIP entry timestamp of
+`1980-01-01T00:00:00Z`; `1980-01-01T00:00:02Z` is its first valid value.
+Nickel authoring and both Rust APK contracts now use the same two-second
+lower bound before dispatch, rather than admitting a deterministic plan that
+fails only when the real zipalign stage invokes `jar`.
+
 ### Four-tree local admission gate
 
 The signed replay binds four distinct complete source objects: app source,
@@ -50,6 +81,21 @@ on each exact non-CA PathInfo plus matching castore and physical NAR read-back
 can establish `signed-physical`; an observed-only receipt is not an APK build,
 a source-bundle admission, or a signed-ready claim. Disjoint fresh state/store
 roots are required for subsequent A/B replays.
+
+The direct adapter binds the plan's declared `keys/` member beneath a separately
+signed test-only keystore store object, never the app source object. It also
+rejects a signing password stored inside that app source object. Only the
+`apksigner` derivation declares the keystore and password store objects; the
+other five stages cannot read signing material through their common app source
+input. A same-byte key at another member, a collocated app-source key, or an
+escaping symlink is rejected before any SDK stage.
+
+The actual `apksigner` invocation also needs two distinct password file paths:
+one for the keystore and one for its private key. It consumes the stream
+separately for each role, so reusing a one-line file twice fails at EOF.
+The adapter rejects a shared path before dispatch; the fixture admits
+`store.pass` and `key.pass` as independently addressable members of the
+separately signed password object. The test-only bytes can be equal.
 
 The reviewed Google `aapt2` requests an ELF interpreter at `/lib64`, absent
 from the Bubblewrap tmpfs root. The adapter must instead declare the exact

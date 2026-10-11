@@ -190,7 +190,7 @@ let reviewed_toolchain = {
   platform = reviewed_source "android-platform",
 } in
 let default_reproducibility = {
-  entry_timestamp_epoch = 315532800,
+  entry_timestamp_epoch = 315532802,
   locale = "C",
   timezone = "UTC",
 } in
@@ -222,7 +222,7 @@ let mk_apk_impl = fun authored =>
   then std.fail_with "APK toolchain identity is outside the reviewed Android source cohort"
   else if plan.version_code <= 0 || plan.version_code > 4294967295
     || !(std.string.is_match "^[0-9]+$" (std.to_string plan.version_code))
-    || plan.reproducibility.entry_timestamp_epoch < 315532800
+    || plan.reproducibility.entry_timestamp_epoch < 315532802
     || plan.reproducibility.entry_timestamp_epoch > 4354819199
     || !(std.string.is_match "^[0-9]+$" (std.to_string plan.reproducibility.entry_timestamp_epoch))
   then std.fail_with "APK version or entry timestamp is outside the pinned bounds"
@@ -237,7 +237,7 @@ let mk_apk_impl = fun authored =>
 in
 let fetch_reviewed_tool = fun reviewed =>
   let canonical = canonical_source_for reviewed in
-  std.deep_seq canonical (sources.fetch_source reviewed)
+  std.deep_seq canonical (published_sources.source canonical)
 in
 let fetch_reviewed_toolchain = {
   build_tools = fetch_reviewed_tool reviewed_toolchain.build_tools,
@@ -344,11 +344,11 @@ let ValidateApk = fun plan =>
   else if !HasExactly ["entry_timestamp_epoch", "locale", "timezone"] plan.reproducibility
     || !std.is_number plan.reproducibility.entry_timestamp_epoch
     || !std.number.is_integer plan.reproducibility.entry_timestamp_epoch
-    || plan.reproducibility.entry_timestamp_epoch < 315532800
+    || plan.reproducibility.entry_timestamp_epoch < 315532802
     || plan.reproducibility.entry_timestamp_epoch > 4354819199
     || plan.reproducibility.locale != "C"
     || plan.reproducibility.timezone != "UTC"
-  then 'Error (Error "UnpinnedTimestampPolicy" "APK ZIP entry timestamps require 1980-01-01 through 2107-12-31 UTC, locale C, and timezone UTC")
+  then 'Error (Error "UnpinnedTimestampPolicy" "APK ZIP entry timestamps require 1980-01-01 00:00:02 through 2107-12-31 UTC, locale C, and timezone UTC")
   else if plan.signing == null then 'Ok
   else if !HasExactly SigningShape plan.signing
     || !StoreFile plan.signing.keystore

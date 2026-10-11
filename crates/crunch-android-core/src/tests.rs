@@ -75,6 +75,9 @@ fn invalid_plans_return_distinct_rejections_before_lowering() {
     plan.reproducibility.entry_timestamp_epoch = MIN_ZIP_EPOCH - 1;
     cases.push((plan, Rejection::UnpinnedTimestampPolicy));
     let mut plan = valid();
+    plan.reproducibility.entry_timestamp_epoch = 315_532_800;
+    cases.push((plan, Rejection::UnpinnedTimestampPolicy));
+    let mut plan = valid();
     plan.signing.as_mut().unwrap().keystore_member = "keys/../secret".into();
     cases.push((plan, Rejection::KeystorePathEscape));
     let mut plan = valid();

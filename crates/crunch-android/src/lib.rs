@@ -83,6 +83,7 @@ pub struct BuildInputs {
     /// unzip, tar, mkdir, find, sort, cp, and date in the sandbox.
     pub utility: PathBuf,
     pub keystore: Option<PathBuf>,
+    pub store_password_file: Option<PathBuf>,
     pub key_password_file: Option<PathBuf>,
 }
 
@@ -313,16 +314,29 @@ impl PreparedApk {
         verify_archive(&inputs.platform, &plan.toolchain.platform, store_prefix)?;
         if let Some(signing) = &plan.signing {
             let keystore = inputs.keystore.as_ref().ok_or_else(|| Error::InvalidInput("keystore missing".into()))?;
-            if *keystore != inputs.source_root.join(&signing.keystore_member) {
+            let keystore_object = store_object(keystore, store_prefix)?;
+            let source_object = store_object(&inputs.source_root, store_prefix)?;
+            if keystore_object == source_object {
                 return Err(Error::Plan(Rejection::KeystorePathEscape));
             }
-            let password = inputs
-                .key_password_file
-                .as_ref()
-                .ok_or_else(|| Error::InvalidInput("password file missing".into()))?;
+            if keystore.strip_prefix(&keystore_object).ok() != Some(Path::new(&signing.keystore_member)) {
+                return Err(Error::Plan(Rejection::KeystorePathEscape));
+            }
+            for password in [&inputs.store_password_file, &inputs.key_password_file] {
+                let password = password.as_ref().ok_or_else(|| Error::InvalidInput("password file missing".into()))?;
+                if store_object(password, store_prefix)? == source_object {
+                    return Err(Error::InvalidInput("signing password shares the app source object".into()));
+                }
+                declared_regular_file(password, store_prefix)?;
+            }
+            if inputs.store_password_file == inputs.key_password_file {
+                return Err(Error::InvalidInput("store and key password files must be distinct".into()));
+            }
             declared_regular_file(keystore, store_prefix)?;
-            declared_regular_file(password, store_prefix)?;
-        } else if inputs.keystore.is_some() || inputs.key_password_file.is_some() {
+        } else if inputs.keystore.is_some()
+            || inputs.store_password_file.is_some()
+            || inputs.key_password_file.is_some()
+        {
             return Err(Error::InvalidInput("unsigned build carries signing input".into()));
         }
         Ok(Self { plan, lowered, inputs })
@@ -448,12 +462,12 @@ impl PreparedApk {
         if kind == StepKind::Apksigner {
             for (key, path) in [
                 ("KEYSTORE", self.inputs.keystore.as_ref()),
+                ("STORE_PASSWORD_FILE", self.inputs.store_password_file.as_ref()),
                 ("KEY_PASSWORD_FILE", self.inputs.key_password_file.as_ref()),
             ] {
                 let path = path.ok_or_else(|| Error::InvalidInput(format!("{key} missing")))?;
-                let path = store_path(path, store_prefix)?;
-                env.insert(key.into(), path.clone());
-                declared.push(path);
+                declared.push(store_object(path, store_prefix)?);
+                env.insert(key.into(), store_path(path, store_prefix)?);
             }
         }
         declared.sort_unstable();
@@ -515,7 +529,7 @@ impl PreparedApk {
                 for scheme in ["v1", "v2", "v3"] {
                     args.push_str(&format!(" --{scheme}-signing-enabled {}", signing.schemes.iter().any(|enabled| enabled == scheme)));
                 }
-                format!("run_sdk \"$jdk_root/bin/java\" -Xmx1024M -jar \"$build_root/lib/apksigner.jar\" sign --ks \"$KEYSTORE\" --ks-key-alias '{}' --ks-pass \"file:$KEY_PASSWORD_FILE\" --key-pass \"file:$KEY_PASSWORD_FILE\"{args} --out \"$out/signed.apk\" \"$UNSIGNED/unsigned.apk\"\n", signing.key_alias)
+                format!("run_sdk \"$jdk_root/bin/java\" -Xmx1024M -jar \"$build_root/lib/apksigner.jar\" sign --ks \"$KEYSTORE\" --ks-key-alias '{}' --ks-pass \"file:$STORE_PASSWORD_FILE\" --key-pass \"file:$KEY_PASSWORD_FILE\"{args} --out \"$out/signed.apk\" \"$UNSIGNED/unsigned.apk\"\n", signing.key_alias)
             }
         })
     }
@@ -1429,7 +1443,7 @@ pub mod pinned {
                 },
                 signing: None,
                 reproducibility: ReproducibilityPolicy {
-                    entry_timestamp_epoch: 315_532_800,
+                    entry_timestamp_epoch: 315_532_802,
                     locale: "C".into(),
                     timezone: "UTC".into(),
                 },

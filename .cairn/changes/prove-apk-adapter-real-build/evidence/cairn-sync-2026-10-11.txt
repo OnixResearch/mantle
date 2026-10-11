@@ -1,0 +1,117 @@
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/prove-apk-adapter-real-build/specs/android-adapter/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/prove-apk-adapter-real-build/specs/android-adapter/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "prove-apk-adapter-real-build",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/prove-apk-adapter-real-build/specs/android-adapter/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "27bb2cc1fb20e47f5a86aa653fbd0fb30766a24bcb44230d80657f4c9178d9bd",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "e678b44234e4d755a5e1e0a32b663a486156b04cc38347a8579c0913e7f188c7",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "543651fde02d9d24cbb13db6b98d9fc0808213ada03400c06f0e465b4ba9b9f8",
+        "destination": ".cairn/specs/android-adapter/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "33c49d65519cbd6efbe99e06d6f4e95a2e866927dda7854497352502b197129f",
+        "operations": [
+          {
+            "block_hash": "ef3dfa81dfc389dad792162145c9155d0ad1da7a7428348936584be1619e147d",
+            "heading": "### Requirement: android_adapter.real_apk_build_evidence",
+            "kind": "added",
+            "requirement_id": "android_adapter.real_apk_build_evidence"
+          },
+          {
+            "block_hash": "b2798777dff4affd1433f4317005c0da88df50ae5b9af2bc37946e6e0c99567b",
+            "heading": "### Requirement: android_adapter.apk_rebuild_determinism",
+            "kind": "added",
+            "requirement_id": "android_adapter.apk_rebuild_determinism"
+          },
+          {
+            "block_hash": "745dba90c07d3ecfc1121bc785b6de6aa559e159f01d553cb8e43af924192175",
+            "heading": "### Requirement: android_adapter.apk_structure_verification",
+            "kind": "added",
+            "requirement_id": "android_adapter.apk_structure_verification"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "android_adapter.real_apk_build_evidence",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "android_adapter.apk_rebuild_determinism",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "android_adapter.apk_structure_verification",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/prove-apk-adapter-real-build/specs/android-adapter/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "33c49d65519cbd6efbe99e06d6f4e95a2e866927dda7854497352502b197129f",
+          "exists": true,
+          "path": "./.cairn/specs/android-adapter/spec.md"
+        }
+      ],
+      "manifest_hash": "1efcaa26759964f4343bdb86f83c3b007cab684f32ef0c7423141a8b3a558904"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "e678b44234e4d755a5e1e0a32b663a486156b04cc38347a8579c0913e7f188c7",
+          "exists": true,
+          "path": "./.cairn/specs/android-adapter/spec.md"
+        }
+      ],
+      "manifest_hash": "4134aaaa918f2c6d9010efb76bf36d51fd92fd7e4c0fb2b799716aab31a2fc5b"
+    },
+    "kind": "sync",
+    "manifest_hash": "9a355ad7159f851de5ccb189b7538b3afea5a255fd3d17af7991a757f5cfba7d"
+  },
+  "plan_hash": "77c26878e3e0c7a932580c5c0064c6ae481a53fe0ea3088e5c7f228b9ecebc12",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "reasons": [],
+  "receipt_hash": "88a7db214054358bd9c2aa2af868e96b9a221db85b4caa85ee8e9c1c3d32fab1"
+}

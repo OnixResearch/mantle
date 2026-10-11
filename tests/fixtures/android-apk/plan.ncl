@@ -28,5 +28,5 @@ android.mkApk {
     },
   },
   signing = null,
-  reproducibility = { entry_timestamp_epoch = 315532800, locale = "C", timezone = "UTC" },
+  reproducibility = { entry_timestamp_epoch = 315532802, locale = "C", timezone = "UTC" },
 }

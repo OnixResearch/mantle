@@ -16,7 +16,7 @@ let unsigned = {
   },
   signing = null,
   reproducibility = {
-    entry_timestamp_epoch = 315532800,
+    entry_timestamp_epoch = 315532802,
     locale = "C",
     timezone = "UTC",
   },
@@ -49,7 +49,8 @@ let signed_plan = android.mkApk (unsigned & { signing | force = signature }) in
     rejected "EmptySourceSet" (unsigned & { java_sources | force = [] }),
     rejected "UnboundToolchainIdentity" (unsigned & { toolchains.jdk.component | force = commandline.component }),
     rejected "UnboundToolchainIdentity" (unsigned & { toolchains.platform.sha256 | force = jdk_source.sha256 }),
-    rejected "UnpinnedTimestampPolicy" (unsigned & { reproducibility.entry_timestamp_epoch | force = 315532799 }),
+    rejected "UnpinnedTimestampPolicy" (unsigned & { reproducibility.entry_timestamp_epoch | force = 315532800 }),
+    rejected "UnpinnedTimestampPolicy" (unsigned & { reproducibility.entry_timestamp_epoch | force = 315532801 }),
     rejected "UnpinnedTimestampPolicy" (unsigned & { reproducibility.entry_timestamp_epoch | force = 4354819200 }),
     rejected "UnpinnedTimestampPolicy" (unsigned & { reproducibility.locale | force = "en_US.UTF-8" }),
     rejected "UnpinnedTimestampPolicy" (unsigned & { reproducibility.timezone | force = "PST" }),

@@ -631,7 +631,7 @@ mod tests {
                 schemes: vec!["v2".into()],
             }),
             reproducibility: ReproducibilityPolicy {
-                entry_timestamp_epoch: 315_532_800,
+                entry_timestamp_epoch: 315_532_802,
                 locale: "C".into(),
                 timezone: "UTC".into(),
             },
