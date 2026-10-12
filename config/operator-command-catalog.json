@@ -1,6 +1,6 @@
 {
   "schema": "mantle-operator-command-catalog-v1",
-  "identity_blake3": "b0803673530dbe88fcda7ec4fe014e3ef452dafef7f1760685a8cf2d0a0bba35",
+  "identity_blake3": "12e74923e80c41b28cede8a16c566e129a9ebce7b1fa3bbffe2a908b876fb7c7",
   "entries": [
     {
       "descriptor": {
@@ -9967,6 +9967,8 @@
           "--include-bundle",
           "--json",
           "--lock-vendor-output",
+          "--lock-vendor-parent-drv-path",
+          "--lock-vendor-plan-digest",
           "--lock-vendor-producer",
           "--lock-vendor-selected-table",
           "--log-level",
@@ -10014,6 +10016,8 @@
           "--include-bundle",
           "--json",
           "--lock-vendor-output",
+          "--lock-vendor-parent-drv-path",
+          "--lock-vendor-plan-digest",
           "--lock-vendor-producer",
           "--lock-vendor-selected-table",
           "--log-level",
@@ -10131,6 +10135,8 @@
           "--help",
           "--json",
           "--lock-vendor-output",
+          "--lock-vendor-parent-drv-path",
+          "--lock-vendor-plan-digest",
           "--log-level",
           "--nix-compat",
           "--state-dir",
@@ -10166,6 +10172,8 @@
           "--help",
           "--json",
           "--lock-vendor-output",
+          "--lock-vendor-parent-drv-path",
+          "--lock-vendor-plan-digest",
           "--log-level",
           "--nix-compat",
           "--state-dir",

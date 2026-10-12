@@ -1086,9 +1086,10 @@ mod tests {
         fs::create_dir(&source).expect("special-file source should exist");
         let socket_path = source.join("control.sock");
         let _listener = std::os::unix::net::UnixListener::bind(&socket_path).expect("special-file socket should bind");
-        let error = import_frontend_artifact(&source, &temporary.path().join("state"))
-            .expect_err("special files must not enter the frontend CAS");
-        assert!(error.contains("unsupported frontend artifact file type"));
+        let state = temporary.path().join("state");
+        let error =
+            import_frontend_artifact(&source, &state).expect_err("special files must not enter the frontend CAS");
+        assert!(!state.exists(), "rejected special file must not publish CAS state: {error}");
     }
 
     #[test]
