@@ -411,6 +411,7 @@
         # bootstrap blocker inventory gate also needs scripts/ and OpenSpec
         # bootstrap text so flake checks inspect the same repo-controlled sources
         # as the local script.
+        # The lock-vendor stdlib test also reads its two-crate Nickel recipe.
         # crunch-build compiles its loader-audit C source; the remote hexagon
         # parity suite embeds origin observations from scoped Cairn evidence.
         # r[impl mantle.durable_publication_validation.source_closure]
@@ -451,6 +452,7 @@
             || pkgs.lib.hasPrefix "${toString ./config}/" pathString
             || pkgs.lib.hasPrefix "${toString ./contracts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./fixtures/mantle-build-contract}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./fixtures/lock-vendor-two-crate}/" pathString
             || builtins.elem pathString catalogExamplePaths
             || pathString == toString ./examples/catalog.ncl
             || pathString == toString ./examples/README.md

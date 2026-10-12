@@ -130,11 +130,24 @@ On 2026-10-12, the bounded Rust unit-execution and lock-vendor source-flow
 change added `serde_json` to `mantle-lock-vendor-producer` in `Cargo.lock`.
 The remeasured lockfile BLAKE3 is
 `ce93be39bed03654a8d97219b58b00581504e95b4c623790eb4d83673ccc63ad`;
-the other three file bindings remain unchanged. The typed receipt and its
-independent validator bind the current lockfile hash. This maintenance does not
+the other three file bindings were unchanged at that remeasurement.
+The typed receipt and its independent validator bind the current lockfile hash.
+This maintenance does not
 change the reviewed publication source, historical adoption date or outcome,
 or the authority and non-claim boundaries above.
 
-Pinned Nickel 1.17.0 regenerated the adjacent JSON from that typed receipt.
-The JSON and its `.blake3` sidecar bind
-`3dfdf6903c8bec130a8ed21af4e0961b71201278c9b384e8c8e734dde34431ac`.
+The first pinned Nickel 1.17.0 export for this lockfile change produced JSON
+with BLAKE3 `3dfdf6903c8bec130a8ed21af4e0961b71201278c9b384e8c8e734dde34431ac`;
+the sidecar recorded that digest before the Nix source-closure repair below.
+
+The full 2026-10-12 flake gate found the tracked
+`fixtures/lock-vendor-two-crate/mantle.ncl` missing from filtered Nix test
+sources. The `stdlib_tests` lock-vendor evaluation could not import it. Admitting
+that fixture subtree changes the `flake.nix` BLAKE3 to
+`f843962f4198a77939a9c3e6cf6fc64e60971a5172d38a4612cae1a104132cf7`;
+the other three current file bindings remain unchanged. The typed receipt and
+independent validator now bind this flake digest. Pinned Nickel 1.17.0
+regenerated adjacent JSON with BLAKE3
+`d51dce7621f396f4fec96375da411cfd11167e841e4cfd00c74f76be252ad13c`,
+recorded in the `.blake3` sidecar. This source-closure maintenance changes
+neither the original adoption outcome nor its authority and non-claim boundary.
