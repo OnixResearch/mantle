@@ -84,7 +84,8 @@ r[mantle.rust_unit_plan.per_crate_sources] The producer MUST expose each package
 
 - GIVEN a change to a workspace file outside every package source root
 - WHEN the workspace builds again
-- THEN only the producer MUST rerun and every unit MUST be reused
+- THEN the producer MUST rerun and every Rust unit MUST be reused without execution
+- AND a downstream verifier MAY rebuild without causing unchanged Rust units to execute
 
 ### Requirement: Units run through one unit helper
 
