@@ -32,5 +32,5 @@ archive remain open.
 - [x] [serial] T4.2 Build a `-sys` crate against a declared Mantle-built library and prove a native-input change reruns only affected units. r[mantle.rust_unit_plan.build_scripts.native_inputs]
 - [x] [serial] T4.3 Update the matrix rows with named fixtures and extend the drift rail. r[mantle.rust_unit_plan.build_scripts.matrix_evidence]
 - [x] [serial] T4.4 Document build-script support, directives, native declarations, and non-claims in the lane documentation. r[mantle.rust_unit_plan.build_scripts.sandbox_boundary]
-- [ ] [serial] T4.5 Run focused core, lowering, helper, and lane tests, `rust_compatibility_rail`, strict Clippy for touched first-party packages, Cairn validation, and the proposal, design, and tasks gates. Preserve exact output in `evidence/`. r[mantle.rust_unit_plan.build_scripts.run_units]
-- [ ] [serial] T4.6 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.rust_unit_plan.build_scripts.matrix_evidence]
+- [x] [serial] T4.5 Run focused core, lowering, helper, and lane tests, `rust_compatibility_rail`, strict Clippy for touched first-party packages, Cairn validation, and the proposal, design, and tasks gates. Preserve exact output in `evidence/`. r[mantle.rust_unit_plan.build_scripts.run_units]
+- [x] [serial] T4.6 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.rust_unit_plan.build_scripts.matrix_evidence]

@@ -28,5 +28,5 @@ Final lifecycle gates, accepted-spec sync, and archive remain open.
 
 - [x] [serial] T4.1 Prove evaluation never reads the lock and nothing fetches at evaluation time, with a focused test. r[mantle.lock_vendor_fetch.producer_derivation]
 - [x] [serial] T4.2 Run a fresh-clone hydration without vendored trees end to end and record bundle-size reduction and identity parity in the profile receipt. r[mantle.lock_vendor_fetch.bundle_payload_reduction]
-- [ ] [serial] T4.3 Run focused core and shell tests before and after changes, strict Clippy, policy freshness, and relevant Nix checks. Preserve exact blockers. r[mantle.lock_vendor_fetch.producer_derivation]
-- [ ] [serial] T4.4 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.lock_vendor_fetch.bundle_payload_reduction]
+- [x] [serial] T4.3 Run focused core and shell tests before and after changes, strict Clippy, policy freshness, and relevant Nix checks. Preserve exact blockers. r[mantle.lock_vendor_fetch.producer_derivation]
+- [x] [serial] T4.4 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[mantle.lock_vendor_fetch.bundle_payload_reduction]
