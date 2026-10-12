@@ -98,7 +98,7 @@ let receipt | AdoptionReceipt = {
   },
   cargo = {
     manifest_blake3 = "0d016551043ed7884bc783432650c6fa5dce799bf4c14c321812b31b88ab28d6",
-    lock_blake3 = "21eac824a09a21c6f47460ffe2e1e543486b1eef39e1cf37ffe614d075380c0b",
+    lock_blake3 = "ce93be39bed03654a8d97219b58b00581504e95b4c623790eb4d83673ccc63ad",
     lock_source = "git+%{source_url}?rev=%{revision}#%{revision}",
     package = "durable-file-publication",
   },
