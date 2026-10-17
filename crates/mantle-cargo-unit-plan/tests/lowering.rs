@@ -1,5 +1,4 @@
 use mantle_cargo_unit_plan::ExternBinding;
-use mantle_cargo_unit_plan::NativeInput;
 use mantle_cargo_unit_plan::PlanBindings;
 use mantle_cargo_unit_plan::SourceSlice;
 use mantle_cargo_unit_plan::UnitBinding;
@@ -58,12 +57,8 @@ fn bindings() -> PlanBindings {
             source_label: format!("{id}-0.1.0"),
             rustc_metadata_hash: "abcdef1234".into(),
             triple: "x86_64-unknown-linux-gnu".into(),
-            links: None,
-            script_run: None,
-            compiled_script: None,
-            linked_runs: Default::default(),
-            native: NativeInput::default(),
             externs,
+            build_script_run: None,
         });
     }
     PlanBindings {
@@ -88,94 +83,6 @@ fn effects() -> Vec<mantle_rust_plan_core::ExistingUnitEffect> {
         fact("leaf", 0, &[], "lib", "target"),
     ])
     .unwrap()
-}
-fn run_facts(native_path: String) -> (Vec<mantle_rust_plan_core::ExistingUnitEffect>, PlanBindings) {
-    let mut input = bindings();
-    let native = NativeInput {
-        inputs: std::collections::BTreeMap::from([("library".into(), native_path)]),
-        env: std::collections::BTreeMap::from([("LIBRARY_DIR".into(), "{{role:library}}/lib".into())]),
-        path: vec![],
-    };
-    input.units[0].source_entry = "build.rs".into();
-    input.units.push(UnitBinding {
-        unit_id: "run-leaf".into(),
-        source_id: "leaf".into(),
-        source_kind: "path".into(),
-        source_entry: "build.rs".into(),
-        source_label: "leaf-source".into(),
-        rustc_metadata_hash: "abcdef1234".into(),
-        triple: input.target_triple.clone(),
-        links: Some("answer".into()),
-        compiled_script: Some("leaf".into()),
-        script_run: None,
-        linked_runs: Default::default(),
-        native,
-        externs: vec![],
-    });
-    input.units[1].script_run = Some("run-leaf".into());
-    let mut app = fact("app", 3, &["mid"], "bin", "target");
-    let mut middle = fact("mid", 2, &["leaf", "run-leaf"], "lib", "target");
-    middle.arguments = vec!["--crate-type=rlib".into()];
-    app.arguments = vec!["--crate-type=bin".into()];
-    let mut run = fact("run-leaf", 1, &["leaf"], "custom-build", "build-script-run");
-    run.expected_outputs = vec!["out".into(), "flags".into()];
-    let effects =
-        plan_existing_unit_effects(vec![app, middle, run, fact("leaf", 0, &[], "custom-build", "host")]).unwrap();
-    (effects, input)
-}
-
-#[test]
-fn build_script_run_dependencies_bind_flags_target_and_native_inputs() {
-    let native_a = store("native-a");
-    let native_b = store("native-b");
-    let (effects, bindings) = run_facts(native_a.clone());
-    let (bytes, _) = lower(&effects, &bindings).unwrap();
-    let plan: Value = serde_json::from_slice(&bytes).unwrap();
-    let units = plan["units"].as_array().unwrap();
-    let target = units
-        .iter()
-        .filter(|unit| unit["derivation"]["args"] == serde_json::json!(["target-facts"]))
-        .collect::<Vec<_>>();
-    assert_eq!(target.len(), 1);
-    let run = units
-        .iter()
-        .find(|unit| unit["derivation"]["args"] == serde_json::json!(["run-build-script"]))
-        .unwrap();
-    assert_eq!(run["derivation"]["outputs"], serde_json::json!(["out", "flags"]));
-    assert!(
-        run["derivation"]["inputs"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|item| item["kind"] == "store_path" && item["path"] == native_a)
-    );
-    assert!(
-        run["derivation"]["inputs"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|item| item["kind"] == "unit_output" && item["unit"] == target[0]["id"])
-    );
-    let (changed, _) = run_facts(native_b);
-    let mut changed_bindings = bindings.clone();
-    changed_bindings.units.last_mut().unwrap().native.inputs.insert("library".into(), store("native-b"));
-    let (changed_bytes, _) = lower(&changed, &changed_bindings).unwrap();
-    let changed_plan: Value = serde_json::from_slice(&changed_bytes).unwrap();
-    let changed_units = changed_plan["units"].as_array().unwrap();
-    let changed_run = changed_units
-        .iter()
-        .find(|unit| unit["derivation"]["args"] == serde_json::json!(["run-build-script"]))
-        .unwrap();
-    let old_leaf = units
-        .iter()
-        .find(|unit| {
-            unit["derivation"]["env"]["MANTLE_UNIT_SOURCE"] == "{{mantle-source:leaf}}"
-                && unit["derivation"]["args"] != serde_json::json!(["run-build-script"])
-        })
-        .unwrap();
-    let new_leaf = changed_units.iter().find(|unit| unit["id"] == old_leaf["id"]).unwrap();
-    assert_eq!(old_leaf, new_leaf, "native input must not alter compiled script");
-    assert_ne!(run["derivation"]["inputs"], changed_run["derivation"]["inputs"]);
 }
 
 #[test]
@@ -272,8 +179,8 @@ fn multiple_roots_sort_by_wire_identity_not_raw_cargo_identity() {
 fn unsupported_execution_modes_and_unbound_paths_fail_closed() {
     let mut cases = Vec::new();
     let mut script = effects();
-    script[0].execution_kind = "unknown".into();
-    cases.push((script, bindings(), "unit-plan-mode-unsupported"));
+    script[0].execution_kind = "build-script-run".into();
+    cases.push((script, bindings(), "unit-plan-build-script-run-unsupported"));
     let mut mode = effects();
     mode[1].target_kind = "test".into();
     cases.push((mode, bindings(), "unit-plan-mode-unsupported"));

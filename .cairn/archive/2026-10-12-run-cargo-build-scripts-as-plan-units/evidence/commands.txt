@@ -1,0 +1,4 @@
+bash scripts/rust-unit-plan-build-script-replay/check.sh positive "$HOME/mantle-cairn-finish/tmp/rust-efficiency-20261011/rcbs-unit-final-attempt13"
+bash scripts/rust-unit-plan-build-script-replay/check.sh sandbox "$HOME/mantle-cairn-finish/tmp/rust-efficiency-20261011/rcbs-unit-final-attempt13"
+bash scripts/rust-unit-plan-build-script-replay/check.sh negatives "$HOME/mantle-cairn-finish/tmp/rust-efficiency-20261011/rcbs-unit-final-attempt13"
+nickel typecheck examples/rust_compatibility_surface_matrix.ncl

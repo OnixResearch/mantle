@@ -1,0 +1,1971 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: add-dynamic-plan-source-slices",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices"
+    }
+  ],
+  "blocked": false,
+  "change": "add-dynamic-plan-source-slices",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "ff46eae1fe1e5402fbada08c2fa89ce909cc8fb908939186a710e485a88db224",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "58276fc0313e60fecc18247edd3212c986de0825823dd8d2be14d96f0faeb58a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/design.md"
+        },
+        {
+          "content_hash": "9ab36c55cd7207afa69586872a7f8823dd8ef8aa2c11f45adb45503ccb1648a2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/cargo-dyndrv-review.md"
+        },
+        {
+          "content_hash": "6bb3c55ba228240728094806ba26e2a0dda4939fe88d70aa21bd4a8e35ecc1da",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-all-touched-lib-tests.txt"
+        },
+        {
+          "content_hash": "8a263bd7d7540bd89ac1770c9e4f0687e9a3efc2eefeba36e5fff3c1cdd55268",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-before-focused-crunch-build-tests.txt"
+        },
+        {
+          "content_hash": "dc6814c1f500dc7e8575c3fd84a64ae78a70d38313ccbbfff4fbfcf7610f6750",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-before-v1-canonical.json"
+        },
+        {
+          "content_hash": "68a1ccca47dab22864585b35814eba44358733733ac64ce8d89905653922044e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-cairn-tasks-gate.json"
+        },
+        {
+          "content_hash": "ab478d6c9f262e82dd5715017871c24f0f1f46fd5fff60812de9d7d9bb1ee407",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-cli-before-prefix-fix.json"
+        },
+        {
+          "content_hash": "f485220624087961772feebc0bb5f3b97406daed5c5cded033b278dd5768bd08",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-cli-first-accepted.json"
+        },
+        {
+          "content_hash": "71dc74615a207c29d97eca1137161fa2d311d7c9456c4e1bf87a9fe56205108a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-cli-second-accepted.json"
+        },
+        {
+          "content_hash": "be150658fa1ccf56f4af16ec9a6b030a3b6b519cae4f3f847f5ca6112907c8c2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-cli-slice-store-info.json"
+        },
+        {
+          "content_hash": "a9c3588d1f53270a66e3704bba964875d64892a1f61440bae0e511174926fee6",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-cli-two-run-proof.json"
+        },
+        {
+          "content_hash": "eb73483105ca1a0022a2acd65f8078af2c2242050e176bfd0bc51ba5899a8755",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-compatible-cairn-design-gate.json"
+        },
+        {
+          "content_hash": "2ae09e9e02dcf742b66c358484f3b37ce9c175b192904786c2b19f583b3a45d1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-compatible-cairn-proposal-gate.json"
+        },
+        {
+          "content_hash": "e00a301c2d6dd0143ed0234995ff598612a613a0a83e4e26829158a9ca6a36ac",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-compatible-cairn-tasks-gate.json"
+        },
+        {
+          "content_hash": "c7d749b448834f4b14eaa2e41a88bc1f8c163c46d6aeee2b985ac401f190b33d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-final-crunch-build-tests.txt"
+        },
+        {
+          "content_hash": "a9b1a3737a384ffb787229ee50dffbb6f99950db2fbcd8e7c3586e488215159f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-full-after-crunch-build-tests.txt"
+        },
+        {
+          "content_hash": "538d9ffed3b4e8aaabd92936106caa015cee87a3b680d66273c5c315069c3e23",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-full-before-crunch-build-tests.txt"
+        },
+        {
+          "content_hash": "ba39cf0592fe4dd9ce24ddf43e471813af45c49f66072a2d390d6ba61878e508",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-qa-cairn-tasks-parser.txt"
+        },
+        {
+          "content_hash": "ef42ff9461de66e5645b65237d244e58c1b5569335b2a7b19f2abbf6532d14b2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-qa-cli-parity-one.json"
+        },
+        {
+          "content_hash": "8aaadd6e0e4c062e379280e442de7fbbdf431dab4f85d9d55f2ea5443685b8ff",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-qa-cli-parity-two.json"
+        },
+        {
+          "content_hash": "b393ae681f48c8b71c104831e11af0e0bc6f02d2ae3f60fb697120839ba3db9d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-qa-cli-rejected-absent.json"
+        },
+        {
+          "content_hash": "2aeec7131f7d2ca694f5869130408241dc5d76159c8bae7f52c2ac5ef698ec92",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-qa-negative-focused-tests.txt"
+        },
+        {
+          "content_hash": "7ffd161f221d82dff492e719d1395390adbbc0c9c9f1e071d7a6c91b9ac1afd6",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-root-report-json-test.txt"
+        },
+        {
+          "content_hash": "59ae781e10946292e386e4edefc15da797124abcd175dcc58d7a8e4a43713cf1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-root-strict-clippy.txt"
+        },
+        {
+          "content_hash": "134cb262441b92f879a08fb54a7ef2e00f73182f922cff6f8d87b4d7556a59be",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-v2-custom-prefix-test.txt"
+        },
+        {
+          "content_hash": "f52d230c411bfa35f6977726aed2960f302a2a58bf851f238dbaf24807c350b3",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/dev46-vendor-strict-clippy.txt"
+        },
+        {
+          "content_hash": "442280d17b824cfe2b5d1540a443ba00bf83ce9a06502069b377f85058d0d049",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/isolated-candidate-verification.md"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-global.exit"
+        },
+        {
+          "content_hash": "64e19eeee5fd61d87575dd3fedae04281ae04362d5389fc65b6f33055d6f84bb",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-global.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-global.stderr"
+        },
+        {
+          "content_hash": "a8bb62a8a117fa83de3d20049344d28be3ce9cde9d94749ac1f352dca58ee1dd",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-global.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-design.exit"
+        },
+        {
+          "content_hash": "e58f9b8b10d3372358749cc65f2ae9dd5558e76d5cc761932d0017cfc06ae075",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-design.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-design.stderr"
+        },
+        {
+          "content_hash": "e8823cdb8e485c3bc9acd51e4c5ccb451add7b3ababe1ca52a8bb4fb759dba7a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-design.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-proposal.exit"
+        },
+        {
+          "content_hash": "5a36127d4a14f0f06431f6e1ad0e2072928507b190d3517a051e6c6300742b1b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-proposal.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-proposal.stderr"
+        },
+        {
+          "content_hash": "d75e4da1dfc33678421a6e7bbf1d8b017cf7e5cb77e9246eb9ac4d1068a66487",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-proposal.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-tasks.exit"
+        },
+        {
+          "content_hash": "c3dbe4a8e86e22cd3f975af256cac08c52aba7256e5fd52cc8ccf9ceac0df108",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-tasks.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-tasks.stderr"
+        },
+        {
+          "content_hash": "5db41ece28a25c2f6b9f7eb2eb75ced8104603f9de9984d97fe5b97dcb148763",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-tasks.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/absent.exit"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/absent.stderr"
+        },
+        {
+          "content_hash": "88fbb3bc478d16df97540bdaeb896a1316d33047ad8c4ded36d9b8e6a1efc483",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/absent.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/assertions.exit"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/assertions.stderr"
+        },
+        {
+          "content_hash": "b8e16c829341c5a7e3712fafde3a91eed2affbced2c0448719b33a2d1070a736",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/assertions.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/build-cli.exit"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/build-cli.stderr"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/build-cli.stdout"
+        },
+        {
+          "content_hash": "61777e26c7550b281fbe704dbff332a4c72b3d07b94f900493c51da7bcc3858b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/commands.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/fresh-store-info-basename.exit"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/fresh-store-info-basename.stderr"
+        },
+        {
+          "content_hash": "aea9b2cbb1555aabf1018518253e1dd04d6991ad285eeac154f27af4fbc2da21",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/fresh-store-info-basename.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/mkdir-store.exit"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/one.exit"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/one.stderr"
+        },
+        {
+          "content_hash": "dfac751a1692c25f69ccae00567f05c74b91d836a536ac0f614e981c3f47a349",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/one.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/physical-proof.exit"
+        },
+        {
+          "content_hash": "3b02095792c40998dcc395af6afc17e2345d1eaa1065170a4965ef7632c219f4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/physical-proof.py"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/physical-proof.stderr"
+        },
+        {
+          "content_hash": "94410c03e63502a966130861f3e90818318f624b38364710cd7c2f22d9513224",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/physical-proof.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/resume.exit"
+        },
+        {
+          "content_hash": "de820b2d670997ad9ad674dd6848e398c5668483eed535a23fc13a726e7c3166",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/resume.sh"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/resume.stderr"
+        },
+        {
+          "content_hash": "f0ee4a0ce80bd4c0867f707a32cecddf6293e9f97b948d17cbcfdf8a56e2f692",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/resume.stdout"
+        },
+        {
+          "content_hash": "49124bf4f7f37328738ac34216a60dcd5f58bb198c5c3f6719b6becafb7e7882",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/run.exit"
+        },
+        {
+          "content_hash": "39c828e5680e87307af09dc094fc6571a39a8ab72b9e3e434d6ccd64a1c7b4e8",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/run.sh"
+        },
+        {
+          "content_hash": "49124bf4f7f37328738ac34216a60dcd5f58bb198c5c3f6719b6becafb7e7882",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/tool-initial.exit"
+        },
+        {
+          "content_hash": "5bf920b611c5419ed5bb5d2d1452432c9f5ce08e649486f05a838a346ac723b0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/tool-initial.stderr"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/tool-initial.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/tool.exit"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/tool.stderr"
+        },
+        {
+          "content_hash": "65f5f5a2d1128c03da8c0c620811021eabe4cc93fb502ea6cec935e3b737dba8",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/tool.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/two.exit"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/two.stderr"
+        },
+        {
+          "content_hash": "6e9a69d89497b7779f7d57d33e08ac468e7aa8c16e81ec693970b1f206014523",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/two.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-global.exit"
+        },
+        {
+          "content_hash": "18013dbf16e77f8ced0faaa57505da5ea3afa44f2a5a450c24ce6030d37a8f26",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-global.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-global.stderr"
+        },
+        {
+          "content_hash": "55010bd85df873aecb7bff445776a394ddb89d9d59b9d9f468bd38343acf26dc",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-global.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-v2-tasks.exit"
+        },
+        {
+          "content_hash": "61a77fd0bfcc5de9c0bc6841f548efd326aa5ff2596ff8323c57e437afe134c2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-v2-tasks.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-v2-tasks.stderr"
+        },
+        {
+          "content_hash": "fdc7f8be6132b04740cb3042d25af3e73f9b63aa78ef7ce3d896286ca98a5dce",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-v2-tasks.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-global.exit"
+        },
+        {
+          "content_hash": "18013dbf16e77f8ced0faaa57505da5ea3afa44f2a5a450c24ce6030d37a8f26",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-global.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-global.stderr"
+        },
+        {
+          "content_hash": "a8bb62a8a117fa83de3d20049344d28be3ce9cde9d94749ac1f352dca58ee1dd",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-global.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-design.exit"
+        },
+        {
+          "content_hash": "37882e86872d40f73cc4ef886faeaea7f2392de48beb0e419880c920361aebe7",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-design.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-design.stderr"
+        },
+        {
+          "content_hash": "e8823cdb8e485c3bc9acd51e4c5ccb451add7b3ababe1ca52a8bb4fb759dba7a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-design.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-proposal.exit"
+        },
+        {
+          "content_hash": "234f39fc6438754acb0d78c97a1ade7968ba80cd2c6ee27d298c69fe4bc22a63",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-proposal.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-proposal.stderr"
+        },
+        {
+          "content_hash": "d75e4da1dfc33678421a6e7bbf1d8b017cf7e5cb77e9246eb9ac4d1068a66487",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-proposal.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-tasks.exit"
+        },
+        {
+          "content_hash": "61a77fd0bfcc5de9c0bc6841f548efd326aa5ff2596ff8323c57e437afe134c2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-tasks.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-tasks.stderr"
+        },
+        {
+          "content_hash": "5db41ece28a25c2f6b9f7eb2eb75ced8104603f9de9984d97fe5b97dcb148763",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-tasks.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-scan.exit"
+        },
+        {
+          "content_hash": "693824a88d4425c96b1b2b77ee0285cfccdcfa3e7c5f712cbbd31c25db7928fd",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-scan.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-scan.stderr"
+        },
+        {
+          "content_hash": "cba3e7a3d6eca5a8fd5100ee43f23feb96fcd6335abbf2d7215e02de28d5b2a6",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-scan.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-self-test.exit"
+        },
+        {
+          "content_hash": "bd8dc732a0fc779ac4a0e63f627a5c2bbf226edf72f95cbbefbcb05c3692d9d3",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-self-test.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-self-test.stderr"
+        },
+        {
+          "content_hash": "459254665391e6473c8a1d2575e18aa4cda70e65a701bcc231a37106883429a6",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-self-test.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/crunch-build-lib-export-api.exit"
+        },
+        {
+          "content_hash": "beaa7af025595b9d6b7b3914a5c4c3e6463e070aa61637e37bf2c03f4628de7c",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/crunch-build-lib-export-api.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/crunch-build-lib-export-api.stderr"
+        },
+        {
+          "content_hash": "43bd6ce18ee56fefa5c88edfbceae68e5e2d325e8e41e7faaaaf01d50cbd4878",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/crunch-build-lib-export-api.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/first-party-tigerstyle-isolated.exit"
+        },
+        {
+          "content_hash": "c17ceb19ec7651dd430c42e0d142898f48c51e5c448294d34e387be5989f1977",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/first-party-tigerstyle-isolated.invocation"
+        },
+        {
+          "content_hash": "3b5a3d27b26ba8aea7cb6460a8bffdb428f89b9856f9cdd9da3226fcff73c27d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/first-party-tigerstyle-isolated.stderr"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/first-party-tigerstyle-isolated.stdout"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/offline-flake/flake-check.exit"
+        },
+        {
+          "content_hash": "4ecc2c0863671f423c5591721a0fbb09b3f1492387ec68c2c2193c796586bbd0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/offline-flake/flake-check.invocation"
+        },
+        {
+          "content_hash": "e16723a31e5cfac40616bc062aa592a13b143c1548824e53ee34471f88af53b4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/offline-flake/flake-check.stderr"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/offline-flake/flake-check.stdout"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/post-source.diff-check"
+        },
+        {
+          "content_hash": "377318038b573daf91a63bc7625690ec305ea534ae2192fc163dfecfd8de7a27",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/post-source.head"
+        },
+        {
+          "content_hash": "516aa8a7b631a47fac6edee16ffb541aa659d0b56b13a4222cccbb5cade1362d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/post-source.status"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/quality.exit"
+        },
+        {
+          "content_hash": "4a9700fa994300cc275c1110f74405259faf887af39b7e9efc6bc7b663cdc095",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/quality.invocation"
+        },
+        {
+          "content_hash": "57a285e98d30c9ab5cf31866f5abf60b3071b5755f8b36a3e71061dd728f265b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/quality.stderr"
+        },
+        {
+          "content_hash": "5da2e886b46fd462fa5a4bfae345528a5a167446bd42f1a6b0f340948295fd46",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/quality.stdout"
+        },
+        {
+          "content_hash": "b8423662d55dc75d723d7f382a0ada33e587aa1dd20e1879ec3889db6fc47fc1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/quality.test-binaries.tsv"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/source.diff-check"
+        },
+        {
+          "content_hash": "03f19d98789113b72f232c27c4c3f3cdd499adf849ee9b3cfc6a1dcdfb56bdab",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/source.fixture-diff"
+        },
+        {
+          "content_hash": "377318038b573daf91a63bc7625690ec305ea534ae2192fc163dfecfd8de7a27",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/source.head"
+        },
+        {
+          "content_hash": "516aa8a7b631a47fac6edee16ffb541aa659d0b56b13a4222cccbb5cade1362d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/source.status"
+        },
+        {
+          "content_hash": "c275d8e406803250dc3388a25bbcbf6b894ec450562dd25788083397a720cb1b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/source.tracked.diff"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-destination-check.exit"
+        },
+        {
+          "content_hash": "76ec775559851506dc6d76be4cbca4635de492a262715af1b0edbb9c12a98b7f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-destination-check.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-destination-check.stderr"
+        },
+        {
+          "content_hash": "66d6905c4e34d8eb4a3c2b7fb96b4ff2d5041bb6583bd6679796e2b390259cb8",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-destination-check.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-preview.exit"
+        },
+        {
+          "content_hash": "f9b02fd440350139f64df7daa51e9ad49b8cea4236611a9de39a25fc9e839334",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-preview.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-preview.stderr"
+        },
+        {
+          "content_hash": "71bb9e921e9d5fef7d66a36911c3259416af7e6ad3182392d5814538e2b0a6b9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-preview.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-global.exit"
+        },
+        {
+          "content_hash": "9b2238bfd2e9fdf1e129bd10c8bddf2c4a4170a7f6ed2e9990112a24a8213e89",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-global.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-global.stderr"
+        },
+        {
+          "content_hash": "7910ad461612f17ab24020e0b4fa784987a7313499b73385f5ccc32da3bffc0a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-global.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-design.exit"
+        },
+        {
+          "content_hash": "560d48741e1d79aca3c5866e259aa25d579ed48f6d709d33546f6fabefc7f72e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-design.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-design.stderr"
+        },
+        {
+          "content_hash": "564fe823ca4b9bd73774d79e796cc7483eb2d6643374e565a5b64766183a707d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-design.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-proposal.exit"
+        },
+        {
+          "content_hash": "1d47140ce480e82892bb1bb922db4d5f725fe6548572b82ccf56ff1affabc4e1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-proposal.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-proposal.stderr"
+        },
+        {
+          "content_hash": "ccd153c6b3a4a918e50a1a439b64cfa28fbfc157d51e3173cffc3203daf64e17",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-proposal.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-tasks.exit"
+        },
+        {
+          "content_hash": "66e4c759f6a4f0c4692408c9ecd4f5875ef40cfe5ba4ed3e44764a1f69cb6aff",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-tasks.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-tasks.stderr"
+        },
+        {
+          "content_hash": "cabc7825da28dda0eb6320fd9e35dc6be4031c843a264e1687b1b14db8d49df3",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-tasks.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-blake3.exit"
+        },
+        {
+          "content_hash": "cddc724c0540b34756b991b048b6f65480976d3c0c4604b94451156dfa3a1dcb",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-blake3.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-blake3.stderr"
+        },
+        {
+          "content_hash": "2a54ff152097a69c8db0c96f6872f7d6bb2e161908a08bfc6826831e3b6d5a0d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-blake3.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-show.exit"
+        },
+        {
+          "content_hash": "f5b5fffe27c70fa54ff733d73e3c54209334f1e8886708e02b2e214ca8400954",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-show.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-show.stderr"
+        },
+        {
+          "content_hash": "c214d38e9c5ced8a2dc300f8644bbac7ab9805deb79ae9230122657558d6a558",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-show.stdout"
+        },
+        {
+          "content_hash": "c8d4ad5078b0e60a12d0947072e64be624cda3efe4a8276a4002d28982a48f40",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-verification.json"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/post-sync-global.exit"
+        },
+        {
+          "content_hash": "9b2238bfd2e9fdf1e129bd10c8bddf2c4a4170a7f6ed2e9990112a24a8213e89",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/post-sync-global.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/post-sync-global.stderr"
+        },
+        {
+          "content_hash": "feeb430c2d13d8db4b8e40b0f82bce7609e74321fcc45af95989d66103b289b3",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/post-sync-global.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-execute.exit"
+        },
+        {
+          "content_hash": "db80e0a8e25d56d30f0229d54943b438612f0a38df8b4aa8f08dbf3eeaa83c06",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-execute.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-execute.stderr"
+        },
+        {
+          "content_hash": "dcd7c9fe551acf842de2be3b1e145aa6d312f6d9208b96636ba8f25bd88232f5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-execute.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-idempotent-preview.exit"
+        },
+        {
+          "content_hash": "3fecff2586be1533ff39d42d06c8ede02fce4dbc9cd5351e666320f4617c53b1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-idempotent-preview.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-idempotent-preview.stderr"
+        },
+        {
+          "content_hash": "861d373e06d20d028168de11dca01d1cd24a06c0256b114114d721a91e32651e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-idempotent-preview.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-preview.exit"
+        },
+        {
+          "content_hash": "3fecff2586be1533ff39d42d06c8ede02fce4dbc9cd5351e666320f4617c53b1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-preview.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-preview.stderr"
+        },
+        {
+          "content_hash": "ff38e46e8cd0a3b6e8a57df719aacc3deb71a3fcfa808b0523230be68949621d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-preview.stdout"
+        },
+        {
+          "content_hash": "b9c44bd6d1a976da0eeeeeb5b718152a87d4db831d4237b5d634726d6c4ef427",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/evidence/v2-final-acceptance.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/metadata.json"
+        },
+        {
+          "content_hash": "60f36abc10009b32e60465c6ee891f679b511c094e9f6798ed02907ef9485769",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/proposal.md"
+        },
+        {
+          "content_hash": "b08a7c8e01a81fdc1a8e366ab9828a965c3ccce2ac80298160cf7f2742a6317a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/specs/dynamic-plan-source-slices/spec.md"
+        },
+        {
+          "content_hash": "cfacfad8c8ff51bafe07c458b0a634f6bbd77e189833880e29d346da72bdc14c",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-04-add-dynamic-plan-source-slices/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices"
+        }
+      ],
+      "manifest_hash": "3db9dd2b0ec4bb0ed0cf6fa25904811b6b5024086eacaac4371c62d57d94dc04"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "58276fc0313e60fecc18247edd3212c986de0825823dd8d2be14d96f0faeb58a",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/design.md"
+        },
+        {
+          "content_hash": "9ab36c55cd7207afa69586872a7f8823dd8ef8aa2c11f45adb45503ccb1648a2",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/cargo-dyndrv-review.md"
+        },
+        {
+          "content_hash": "6bb3c55ba228240728094806ba26e2a0dda4939fe88d70aa21bd4a8e35ecc1da",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-all-touched-lib-tests.txt"
+        },
+        {
+          "content_hash": "8a263bd7d7540bd89ac1770c9e4f0687e9a3efc2eefeba36e5fff3c1cdd55268",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-before-focused-crunch-build-tests.txt"
+        },
+        {
+          "content_hash": "dc6814c1f500dc7e8575c3fd84a64ae78a70d38313ccbbfff4fbfcf7610f6750",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-before-v1-canonical.json"
+        },
+        {
+          "content_hash": "68a1ccca47dab22864585b35814eba44358733733ac64ce8d89905653922044e",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-cairn-tasks-gate.json"
+        },
+        {
+          "content_hash": "ab478d6c9f262e82dd5715017871c24f0f1f46fd5fff60812de9d7d9bb1ee407",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-cli-before-prefix-fix.json"
+        },
+        {
+          "content_hash": "f485220624087961772feebc0bb5f3b97406daed5c5cded033b278dd5768bd08",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-cli-first-accepted.json"
+        },
+        {
+          "content_hash": "71dc74615a207c29d97eca1137161fa2d311d7c9456c4e1bf87a9fe56205108a",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-cli-second-accepted.json"
+        },
+        {
+          "content_hash": "be150658fa1ccf56f4af16ec9a6b030a3b6b519cae4f3f847f5ca6112907c8c2",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-cli-slice-store-info.json"
+        },
+        {
+          "content_hash": "a9c3588d1f53270a66e3704bba964875d64892a1f61440bae0e511174926fee6",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-cli-two-run-proof.json"
+        },
+        {
+          "content_hash": "eb73483105ca1a0022a2acd65f8078af2c2242050e176bfd0bc51ba5899a8755",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-compatible-cairn-design-gate.json"
+        },
+        {
+          "content_hash": "2ae09e9e02dcf742b66c358484f3b37ce9c175b192904786c2b19f583b3a45d1",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-compatible-cairn-proposal-gate.json"
+        },
+        {
+          "content_hash": "e00a301c2d6dd0143ed0234995ff598612a613a0a83e4e26829158a9ca6a36ac",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-compatible-cairn-tasks-gate.json"
+        },
+        {
+          "content_hash": "c7d749b448834f4b14eaa2e41a88bc1f8c163c46d6aeee2b985ac401f190b33d",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-final-crunch-build-tests.txt"
+        },
+        {
+          "content_hash": "a9b1a3737a384ffb787229ee50dffbb6f99950db2fbcd8e7c3586e488215159f",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-full-after-crunch-build-tests.txt"
+        },
+        {
+          "content_hash": "538d9ffed3b4e8aaabd92936106caa015cee87a3b680d66273c5c315069c3e23",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-full-before-crunch-build-tests.txt"
+        },
+        {
+          "content_hash": "ba39cf0592fe4dd9ce24ddf43e471813af45c49f66072a2d390d6ba61878e508",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-qa-cairn-tasks-parser.txt"
+        },
+        {
+          "content_hash": "ef42ff9461de66e5645b65237d244e58c1b5569335b2a7b19f2abbf6532d14b2",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-qa-cli-parity-one.json"
+        },
+        {
+          "content_hash": "8aaadd6e0e4c062e379280e442de7fbbdf431dab4f85d9d55f2ea5443685b8ff",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-qa-cli-parity-two.json"
+        },
+        {
+          "content_hash": "b393ae681f48c8b71c104831e11af0e0bc6f02d2ae3f60fb697120839ba3db9d",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-qa-cli-rejected-absent.json"
+        },
+        {
+          "content_hash": "2aeec7131f7d2ca694f5869130408241dc5d76159c8bae7f52c2ac5ef698ec92",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-qa-negative-focused-tests.txt"
+        },
+        {
+          "content_hash": "7ffd161f221d82dff492e719d1395390adbbc0c9c9f1e071d7a6c91b9ac1afd6",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-root-report-json-test.txt"
+        },
+        {
+          "content_hash": "59ae781e10946292e386e4edefc15da797124abcd175dcc58d7a8e4a43713cf1",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-root-strict-clippy.txt"
+        },
+        {
+          "content_hash": "134cb262441b92f879a08fb54a7ef2e00f73182f922cff6f8d87b4d7556a59be",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-v2-custom-prefix-test.txt"
+        },
+        {
+          "content_hash": "f52d230c411bfa35f6977726aed2960f302a2a58bf851f238dbaf24807c350b3",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/dev46-vendor-strict-clippy.txt"
+        },
+        {
+          "content_hash": "442280d17b824cfe2b5d1540a443ba00bf83ce9a06502069b377f85058d0d049",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/isolated-candidate-verification.md"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-global.exit"
+        },
+        {
+          "content_hash": "64e19eeee5fd61d87575dd3fedae04281ae04362d5389fc65b6f33055d6f84bb",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-global.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-global.stderr"
+        },
+        {
+          "content_hash": "a8bb62a8a117fa83de3d20049344d28be3ce9cde9d94749ac1f352dca58ee1dd",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-global.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-design.exit"
+        },
+        {
+          "content_hash": "e58f9b8b10d3372358749cc65f2ae9dd5558e76d5cc761932d0017cfc06ae075",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-design.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-design.stderr"
+        },
+        {
+          "content_hash": "e8823cdb8e485c3bc9acd51e4c5ccb451add7b3ababe1ca52a8bb4fb759dba7a",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-design.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-proposal.exit"
+        },
+        {
+          "content_hash": "5a36127d4a14f0f06431f6e1ad0e2072928507b190d3517a051e6c6300742b1b",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-proposal.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-proposal.stderr"
+        },
+        {
+          "content_hash": "d75e4da1dfc33678421a6e7bbf1d8b017cf7e5cb77e9246eb9ac4d1068a66487",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-proposal.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-tasks.exit"
+        },
+        {
+          "content_hash": "c3dbe4a8e86e22cd3f975af256cac08c52aba7256e5fd52cc8ccf9ceac0df108",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-tasks.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-tasks.stderr"
+        },
+        {
+          "content_hash": "5db41ece28a25c2f6b9f7eb2eb75ced8104603f9de9984d97fe5b97dcb148763",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cairn/cairn-v2-tasks.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/absent.exit"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/absent.stderr"
+        },
+        {
+          "content_hash": "88fbb3bc478d16df97540bdaeb896a1316d33047ad8c4ded36d9b8e6a1efc483",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/absent.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/assertions.exit"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/assertions.stderr"
+        },
+        {
+          "content_hash": "b8e16c829341c5a7e3712fafde3a91eed2affbced2c0448719b33a2d1070a736",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/assertions.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/build-cli.exit"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/build-cli.stderr"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/build-cli.stdout"
+        },
+        {
+          "content_hash": "61777e26c7550b281fbe704dbff332a4c72b3d07b94f900493c51da7bcc3858b",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/commands.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/fresh-store-info-basename.exit"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/fresh-store-info-basename.stderr"
+        },
+        {
+          "content_hash": "aea9b2cbb1555aabf1018518253e1dd04d6991ad285eeac154f27af4fbc2da21",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/fresh-store-info-basename.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/mkdir-store.exit"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/one.exit"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/one.stderr"
+        },
+        {
+          "content_hash": "dfac751a1692c25f69ccae00567f05c74b91d836a536ac0f614e981c3f47a349",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/one.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/physical-proof.exit"
+        },
+        {
+          "content_hash": "3b02095792c40998dcc395af6afc17e2345d1eaa1065170a4965ef7632c219f4",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/physical-proof.py"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/physical-proof.stderr"
+        },
+        {
+          "content_hash": "94410c03e63502a966130861f3e90818318f624b38364710cd7c2f22d9513224",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/physical-proof.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/resume.exit"
+        },
+        {
+          "content_hash": "de820b2d670997ad9ad674dd6848e398c5668483eed535a23fc13a726e7c3166",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/resume.sh"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/resume.stderr"
+        },
+        {
+          "content_hash": "f0ee4a0ce80bd4c0867f707a32cecddf6293e9f97b948d17cbcfdf8a56e2f692",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/resume.stdout"
+        },
+        {
+          "content_hash": "49124bf4f7f37328738ac34216a60dcd5f58bb198c5c3f6719b6becafb7e7882",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/run.exit"
+        },
+        {
+          "content_hash": "39c828e5680e87307af09dc094fc6571a39a8ab72b9e3e434d6ccd64a1c7b4e8",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/run.sh"
+        },
+        {
+          "content_hash": "49124bf4f7f37328738ac34216a60dcd5f58bb198c5c3f6719b6becafb7e7882",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/tool-initial.exit"
+        },
+        {
+          "content_hash": "5bf920b611c5419ed5bb5d2d1452432c9f5ce08e649486f05a838a346ac723b0",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/tool-initial.stderr"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/tool-initial.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/tool.exit"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/tool.stderr"
+        },
+        {
+          "content_hash": "65f5f5a2d1128c03da8c0c620811021eabe4cc93fb502ea6cec935e3b737dba8",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/tool.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/two.exit"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/two.stderr"
+        },
+        {
+          "content_hash": "6e9a69d89497b7779f7d57d33e08ac468e7aa8c16e81ec693970b1f206014523",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/cli-smoke/two.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-global.exit"
+        },
+        {
+          "content_hash": "18013dbf16e77f8ced0faaa57505da5ea3afa44f2a5a450c24ce6030d37a8f26",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-global.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-global.stderr"
+        },
+        {
+          "content_hash": "55010bd85df873aecb7bff445776a394ddb89d9d59b9d9f468bd38343acf26dc",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-global.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-v2-tasks.exit"
+        },
+        {
+          "content_hash": "61a77fd0bfcc5de9c0bc6841f548efd326aa5ff2596ff8323c57e437afe134c2",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-v2-tasks.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-v2-tasks.stderr"
+        },
+        {
+          "content_hash": "fdc7f8be6132b04740cb3042d25af3e73f9b63aa78ef7ce3d896286ca98a5dce",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/after-cairn-v2-tasks.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-global.exit"
+        },
+        {
+          "content_hash": "18013dbf16e77f8ced0faaa57505da5ea3afa44f2a5a450c24ce6030d37a8f26",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-global.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-global.stderr"
+        },
+        {
+          "content_hash": "a8bb62a8a117fa83de3d20049344d28be3ce9cde9d94749ac1f352dca58ee1dd",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-global.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-design.exit"
+        },
+        {
+          "content_hash": "37882e86872d40f73cc4ef886faeaea7f2392de48beb0e419880c920361aebe7",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-design.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-design.stderr"
+        },
+        {
+          "content_hash": "e8823cdb8e485c3bc9acd51e4c5ccb451add7b3ababe1ca52a8bb4fb759dba7a",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-design.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-proposal.exit"
+        },
+        {
+          "content_hash": "234f39fc6438754acb0d78c97a1ade7968ba80cd2c6ee27d298c69fe4bc22a63",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-proposal.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-proposal.stderr"
+        },
+        {
+          "content_hash": "d75e4da1dfc33678421a6e7bbf1d8b017cf7e5cb77e9246eb9ac4d1068a66487",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-proposal.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-tasks.exit"
+        },
+        {
+          "content_hash": "61a77fd0bfcc5de9c0bc6841f548efd326aa5ff2596ff8323c57e437afe134c2",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-tasks.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-tasks.stderr"
+        },
+        {
+          "content_hash": "5db41ece28a25c2f6b9f7eb2eb75ced8104603f9de9984d97fe5b97dcb148763",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/closure/before-cairn-v2-tasks.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-scan.exit"
+        },
+        {
+          "content_hash": "693824a88d4425c96b1b2b77ee0285cfccdcfa3e7c5f712cbbd31c25db7928fd",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-scan.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-scan.stderr"
+        },
+        {
+          "content_hash": "cba3e7a3d6eca5a8fd5100ee43f23feb96fcd6335abbf2d7215e02de28d5b2a6",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-scan.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-self-test.exit"
+        },
+        {
+          "content_hash": "bd8dc732a0fc779ac4a0e63f627a5c2bbf226edf72f95cbbefbcb05c3692d9d3",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-self-test.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-self-test.stderr"
+        },
+        {
+          "content_hash": "459254665391e6473c8a1d2575e18aa4cda70e65a701bcc231a37106883429a6",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/architecture-self-test.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/crunch-build-lib-export-api.exit"
+        },
+        {
+          "content_hash": "beaa7af025595b9d6b7b3914a5c4c3e6463e070aa61637e37bf2c03f4628de7c",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/crunch-build-lib-export-api.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/crunch-build-lib-export-api.stderr"
+        },
+        {
+          "content_hash": "43bd6ce18ee56fefa5c88edfbceae68e5e2d325e8e41e7faaaaf01d50cbd4878",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/crunch-build-lib-export-api.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/first-party-tigerstyle-isolated.exit"
+        },
+        {
+          "content_hash": "c17ceb19ec7651dd430c42e0d142898f48c51e5c448294d34e387be5989f1977",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/first-party-tigerstyle-isolated.invocation"
+        },
+        {
+          "content_hash": "3b5a3d27b26ba8aea7cb6460a8bffdb428f89b9856f9cdd9da3226fcff73c27d",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/first-party-tigerstyle-isolated.stderr"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/focused/first-party-tigerstyle-isolated.stdout"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/offline-flake/flake-check.exit"
+        },
+        {
+          "content_hash": "4ecc2c0863671f423c5591721a0fbb09b3f1492387ec68c2c2193c796586bbd0",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/offline-flake/flake-check.invocation"
+        },
+        {
+          "content_hash": "e16723a31e5cfac40616bc062aa592a13b143c1548824e53ee34471f88af53b4",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/offline-flake/flake-check.stderr"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/offline-flake/flake-check.stdout"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/post-source.diff-check"
+        },
+        {
+          "content_hash": "377318038b573daf91a63bc7625690ec305ea534ae2192fc163dfecfd8de7a27",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/post-source.head"
+        },
+        {
+          "content_hash": "516aa8a7b631a47fac6edee16ffb541aa659d0b56b13a4222cccbb5cade1362d",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/post-source.status"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/quality.exit"
+        },
+        {
+          "content_hash": "4a9700fa994300cc275c1110f74405259faf887af39b7e9efc6bc7b663cdc095",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/quality.invocation"
+        },
+        {
+          "content_hash": "57a285e98d30c9ab5cf31866f5abf60b3071b5755f8b36a3e71061dd728f265b",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/quality.stderr"
+        },
+        {
+          "content_hash": "5da2e886b46fd462fa5a4bfae345528a5a167446bd42f1a6b0f340948295fd46",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/quality.stdout"
+        },
+        {
+          "content_hash": "b8423662d55dc75d723d7f382a0ada33e587aa1dd20e1879ec3889db6fc47fc1",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/quality.test-binaries.tsv"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/source.diff-check"
+        },
+        {
+          "content_hash": "03f19d98789113b72f232c27c4c3f3cdd499adf849ee9b3cfc6a1dcdfb56bdab",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/source.fixture-diff"
+        },
+        {
+          "content_hash": "377318038b573daf91a63bc7625690ec305ea534ae2192fc163dfecfd8de7a27",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/source.head"
+        },
+        {
+          "content_hash": "516aa8a7b631a47fac6edee16ffb541aa659d0b56b13a4222cccbb5cade1362d",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/source.status"
+        },
+        {
+          "content_hash": "c275d8e406803250dc3388a25bbcbf6b894ec450562dd25788083397a720cb1b",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/quality/source.tracked.diff"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-destination-check.exit"
+        },
+        {
+          "content_hash": "76ec775559851506dc6d76be4cbca4635de492a262715af1b0edbb9c12a98b7f",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-destination-check.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-destination-check.stderr"
+        },
+        {
+          "content_hash": "66d6905c4e34d8eb4a3c2b7fb96b4ff2d5041bb6583bd6679796e2b390259cb8",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-destination-check.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-preview.exit"
+        },
+        {
+          "content_hash": "f9b02fd440350139f64df7daa51e9ad49b8cea4236611a9de39a25fc9e839334",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-preview.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-preview.stderr"
+        },
+        {
+          "content_hash": "71bb9e921e9d5fef7d66a36911c3259416af7e6ad3182392d5814538e2b0a6b9",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/archive-preview.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-global.exit"
+        },
+        {
+          "content_hash": "9b2238bfd2e9fdf1e129bd10c8bddf2c4a4170a7f6ed2e9990112a24a8213e89",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-global.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-global.stderr"
+        },
+        {
+          "content_hash": "7910ad461612f17ab24020e0b4fa784987a7313499b73385f5ccc32da3bffc0a",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-global.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-design.exit"
+        },
+        {
+          "content_hash": "560d48741e1d79aca3c5866e259aa25d579ed48f6d709d33546f6fabefc7f72e",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-design.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-design.stderr"
+        },
+        {
+          "content_hash": "564fe823ca4b9bd73774d79e796cc7483eb2d6643374e565a5b64766183a707d",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-design.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-proposal.exit"
+        },
+        {
+          "content_hash": "1d47140ce480e82892bb1bb922db4d5f725fe6548572b82ccf56ff1affabc4e1",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-proposal.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-proposal.stderr"
+        },
+        {
+          "content_hash": "ccd153c6b3a4a918e50a1a439b64cfa28fbfc157d51e3173cffc3203daf64e17",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-proposal.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-tasks.exit"
+        },
+        {
+          "content_hash": "66e4c759f6a4f0c4692408c9ecd4f5875ef40cfe5ba4ed3e44764a1f69cb6aff",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-tasks.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-tasks.stderr"
+        },
+        {
+          "content_hash": "cabc7825da28dda0eb6320fd9e35dc6be4031c843a264e1687b1b14db8d49df3",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/ready/ready-cairn-v2-tasks.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-blake3.exit"
+        },
+        {
+          "content_hash": "cddc724c0540b34756b991b048b6f65480976d3c0c4604b94451156dfa3a1dcb",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-blake3.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-blake3.stderr"
+        },
+        {
+          "content_hash": "2a54ff152097a69c8db0c96f6872f7d6bb2e161908a08bfc6826831e3b6d5a0d",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-blake3.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-show.exit"
+        },
+        {
+          "content_hash": "f5b5fffe27c70fa54ff733d73e3c54209334f1e8886708e02b2e214ca8400954",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-show.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-show.stderr"
+        },
+        {
+          "content_hash": "c214d38e9c5ced8a2dc300f8644bbac7ab9805deb79ae9230122657558d6a558",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-show.stdout"
+        },
+        {
+          "content_hash": "c8d4ad5078b0e60a12d0947072e64be624cda3efe4a8276a4002d28982a48f40",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/accepted-spec-verification.json"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/post-sync-global.exit"
+        },
+        {
+          "content_hash": "9b2238bfd2e9fdf1e129bd10c8bddf2c4a4170a7f6ed2e9990112a24a8213e89",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/post-sync-global.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/post-sync-global.stderr"
+        },
+        {
+          "content_hash": "feeb430c2d13d8db4b8e40b0f82bce7609e74321fcc45af95989d66103b289b3",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/post-sync-global.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-execute.exit"
+        },
+        {
+          "content_hash": "db80e0a8e25d56d30f0229d54943b438612f0a38df8b4aa8f08dbf3eeaa83c06",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-execute.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-execute.stderr"
+        },
+        {
+          "content_hash": "dcd7c9fe551acf842de2be3b1e145aa6d312f6d9208b96636ba8f25bd88232f5",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-execute.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-idempotent-preview.exit"
+        },
+        {
+          "content_hash": "3fecff2586be1533ff39d42d06c8ede02fce4dbc9cd5351e666320f4617c53b1",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-idempotent-preview.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-idempotent-preview.stderr"
+        },
+        {
+          "content_hash": "861d373e06d20d028168de11dca01d1cd24a06c0256b114114d721a91e32651e",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-idempotent-preview.stdout"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-preview.exit"
+        },
+        {
+          "content_hash": "3fecff2586be1533ff39d42d06c8ede02fce4dbc9cd5351e666320f4617c53b1",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-preview.invocation"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-preview.stderr"
+        },
+        {
+          "content_hash": "ff38e46e8cd0a3b6e8a57df719aacc3deb71a3fcfa808b0523230be68949621d",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance/sync/sync-preview.stdout"
+        },
+        {
+          "content_hash": "b9c44bd6d1a976da0eeeeeb5b718152a87d4db831d4237b5d634726d6c4ef427",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/evidence/v2-final-acceptance.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/metadata.json"
+        },
+        {
+          "content_hash": "60f36abc10009b32e60465c6ee891f679b511c094e9f6798ed02907ef9485769",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/proposal.md"
+        },
+        {
+          "content_hash": "b08a7c8e01a81fdc1a8e366ab9828a965c3ccce2ac80298160cf7f2742a6317a",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/specs/dynamic-plan-source-slices/spec.md"
+        },
+        {
+          "content_hash": "cfacfad8c8ff51bafe07c458b0a634f6bbd77e189833880e29d346da72bdc14c",
+          "exists": true,
+          "path": "./.cairn/changes/add-dynamic-plan-source-slices/tasks.md"
+        }
+      ],
+      "manifest_hash": "eee71921f98ec448772786cfe28ec701c50b8d3eae2aa7339d894ae54717b9e6"
+    },
+    "kind": "archive",
+    "manifest_hash": "a1409ffe318c82a3be293718500c55351443692954a1189a7161d787556aff08"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "0684fd413fd655bec24cc04148ad75e5f066a3b0e8cf514565da7ff932833748",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "profile_identity_hash": "946383014cd2f1429f62f3eb1f1c42c4493c612e502189cf799677648a6c3e27",
+  "reasons": [],
+  "receipt_hash": "28af1bff10e0392f42b7e26c0641cfc6b2b83094852a93a2e3c08163f5e1bfd8",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

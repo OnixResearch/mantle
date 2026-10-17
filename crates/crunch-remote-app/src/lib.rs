@@ -10,6 +10,7 @@ use crunch_remote_core::attempt::RemoteAttemptApplyPlan;
 use crunch_remote_core::attempt::RemoteAttemptReport;
 use crunch_remote_core::effect::Authority;
 use crunch_remote_core::effect::EffectBlocker;
+use crunch_remote_core::effect::EffectEvent;
 use crunch_remote_core::effect::EffectKind;
 use crunch_remote_core::effect::EffectLimits;
 use crunch_remote_core::effect::EffectSession;
@@ -237,8 +238,10 @@ fn record_observation<'a>(
     match observed {
         Ok(effect) => {
             match session.observe(Observation::Succeeded { id, effect }).map_err(ApplicationError::Decision)? {
-                crunch_remote_core::effect::EffectEvent::Completed(completed) if completed == id => Ok(()),
-                _ => Err(ApplicationError::Decision(EffectBlocker::WrongObservationKind)),
+                EffectEvent::Completed(completed) if completed == id => Ok(()),
+                EffectEvent::Completed(_) | EffectEvent::Failed(_) | EffectEvent::PartiallyFailed { .. } => {
+                    Err(ApplicationError::Decision(EffectBlocker::WrongObservationKind))
+                }
             }
         }
         Err(error) => record_port_failure(session, id, error),
@@ -257,8 +260,10 @@ fn record_port_failure<'a, T>(
         })
         .map_err(ApplicationError::Decision)?
     {
-        crunch_remote_core::effect::EffectEvent::Failed(failed) if failed == id => Err(ApplicationError::Port(error)),
-        _ => Err(ApplicationError::Decision(EffectBlocker::WrongObservationKind)),
+        EffectEvent::Failed(failed) if failed == id => Err(ApplicationError::Port(error)),
+        EffectEvent::Failed(_) | EffectEvent::Completed(_) | EffectEvent::PartiallyFailed { .. } => {
+            Err(ApplicationError::Decision(EffectBlocker::WrongObservationKind))
+        }
     }
 }
 
@@ -273,6 +278,8 @@ fn record_partial_admission<'a, T>(
     if failure.error.capability != Capability::StoreAdmission {
         return Err(ApplicationError::Decision(EffectBlocker::WrongAuthority));
     }
+    debug_assert!(failure.persisted_outputs > 0 || failure.current_output_may_be_durable);
+    debug_assert_eq!(failure.error.capability, Capability::StoreAdmission);
     match session
         .observe(Observation::PartiallyFailed {
             id,
@@ -283,7 +290,7 @@ fn record_partial_admission<'a, T>(
         })
         .map_err(ApplicationError::Decision)?
     {
-        crunch_remote_core::effect::EffectEvent::PartiallyFailed {
+        EffectEvent::PartiallyFailed {
             id: failed,
             outputs,
             current_output_may_be_durable,
@@ -293,7 +300,9 @@ fn record_partial_admission<'a, T>(
         {
             Err(ApplicationError::Port(failure.error))
         }
-        _ => Err(ApplicationError::Decision(EffectBlocker::WrongObservationKind)),
+        EffectEvent::PartiallyFailed { .. } | EffectEvent::Completed(_) | EffectEvent::Failed(_) => {
+            Err(ApplicationError::Decision(EffectBlocker::WrongObservationKind))
+        }
     }
 }
 
@@ -314,14 +323,20 @@ pub fn apply_attempt_transition<'a, P: AttemptTransitionPort>(
             Err(ApplicationError::Decision(EffectBlocker::WrongObservationKind))
         };
     }
-    if session.request_id() != report.identity.attempt_id.as_str()
-        || plan.next_state.job_id != report.identity.job_id
+    let is_wrong_session = session.request_id() != report.identity.attempt_id.as_str();
+    let is_wrong_attempt = plan.next_state.job_id != report.identity.job_id
         || plan.next_state.attempt_id != report.identity.attempt_id
-        || plan.next_state.fence_generation != report.identity.fence_generation
-        || plan.next_state.applied_events.get(&report.identity.event_id) != Some(&report.identity.payload_digest)
-    {
+        || plan.next_state.fence_generation != report.identity.fence_generation;
+    let is_wrong_event =
+        plan.next_state.applied_events.get(&report.identity.event_id) != Some(&report.identity.payload_digest);
+    if is_wrong_session || is_wrong_attempt || is_wrong_event {
         return Err(ApplicationError::Decision(EffectBlocker::WrongEffectId));
     }
+    debug_assert_eq!(session.request_id(), report.identity.attempt_id.as_str());
+    debug_assert_eq!(
+        plan.next_state.applied_events.get(&report.identity.event_id),
+        Some(&report.identity.payload_digest)
+    );
     if session.binding().is_some() {
         session
             .require_attempt(&report.identity.job_id, &report.identity.attempt_id, report.identity.fence_generation)
@@ -364,6 +379,8 @@ pub fn execute<'a, P: ExecutorPort>(
             time_secs_max: command.timeout_secs,
         })
         .map_err(ApplicationError::Decision)?;
+    debug_assert_eq!(effect.id.request_id, command.request_id);
+    debug_assert_eq!(effect.authority, Authority::Executor);
     let expected_outputs = command.expected_outputs;
     match port.launch(command) {
         Ok(facts) if facts.outputs == expected_outputs => {
@@ -396,6 +413,8 @@ pub fn dispatch_external_batch<'a, P: ExternalBatchPort>(
             time_secs_max: command.timeout_secs,
         })
         .map_err(ApplicationError::Decision)?;
+    debug_assert_eq!(effect.id.request_id, command.operation_id_blake3);
+    debug_assert_eq!(effect.authority, Authority::ExternalBatch);
     let expected_digest = command.operation_digest_blake3;
     let expected_unix_s = command.observed_unix_s;
     match port.dispatch(command) {
@@ -425,6 +444,8 @@ pub fn send<'a, P: TransportPort>(
             time_secs_max: 0,
         })
         .map_err(ApplicationError::Decision)?;
+    debug_assert_eq!(effect.authority, Authority::Transport);
+    debug_assert_eq!(effect.limits.bytes_max, bytes_max);
     let observed = port.send(payload).and_then(|bytes| {
         if bytes != bytes_max {
             return Err(PortError {
@@ -454,6 +475,8 @@ pub fn exchange_client<'session, 'command, P: ClientExchangePort>(
             time_secs_max: command.timeout_secs,
         })
         .map_err(ApplicationError::Decision)?;
+    debug_assert_eq!(effect.id.request_id, command.request_id);
+    debug_assert_eq!(effect.authority, Authority::Transport);
     match port.exchange(command) {
         Ok(facts)
             if facts.request_id == command.request_id
@@ -482,24 +505,32 @@ pub fn exchange_client<'session, 'command, P: ClientExchangePort>(
     }
 }
 
+/// Named transfer bounds keep byte and timeout quantities distinct at the
+/// application-owned port boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TransferEffectLimits {
+    pub bytes_max: u64,
+    pub time_secs_max: u64,
+}
 pub fn receive_inputs<'a, P: InputTransferPort>(
     session: &mut EffectSession<'a>,
     port: &mut P,
     request_id: &str,
-    bytes_max: u64,
-    time_secs_max: u64,
+    limits: TransferEffectLimits,
 ) -> Result<u64, ApplicationError> {
     if session.request_id() != request_id {
         return Err(ApplicationError::Decision(EffectBlocker::WrongEffectId));
     }
     let effect = session
         .plan(EffectKind::InputTransfer, EffectLimits {
-            bytes_max,
+            bytes_max: limits.bytes_max,
             items_max: 1,
-            time_secs_max,
+            time_secs_max: limits.time_secs_max,
         })
         .map_err(ApplicationError::Decision)?;
-    let observed = port.receive(request_id, bytes_max);
+    debug_assert_eq!(effect.kind, EffectKind::InputTransfer);
+    debug_assert_eq!(effect.limits.bytes_max, limits.bytes_max);
+    let observed = port.receive(request_id, limits.bytes_max);
     match observed {
         Ok(bytes) => {
             record_observation(session, effect.id, Ok(ObservedEffect::InputsTransferred { bytes }))?;
@@ -513,22 +544,23 @@ pub fn transfer_outputs<'a, P: OutputTransferPort>(
     session: &mut EffectSession<'a>,
     port: &mut P,
     request_id: &str,
-    bytes_max: u64,
-    time_secs_max: u64,
+    limits: TransferEffectLimits,
 ) -> Result<OutputTransferFacts, ApplicationError> {
     if session.request_id() != request_id {
         return Err(ApplicationError::Decision(EffectBlocker::WrongEffectId));
     }
     let effect = session
         .plan(EffectKind::OutputTransfer, EffectLimits {
-            bytes_max,
+            bytes_max: limits.bytes_max,
             items_max: 1,
-            time_secs_max,
+            time_secs_max: limits.time_secs_max,
         })
         .map_err(ApplicationError::Decision)?;
-    match port.transfer(request_id, bytes_max) {
+    debug_assert_eq!(effect.kind, EffectKind::OutputTransfer);
+    debug_assert_eq!(effect.limits.bytes_max, limits.bytes_max);
+    match port.transfer(request_id, limits.bytes_max) {
         Ok(facts) => {
-            if facts.transferred_bytes > bytes_max {
+            if facts.transferred_bytes > limits.bytes_max {
                 return record_port_failure(session, effect.id, PortError {
                     capability: Capability::OutputTransfer,
                     reason: String::from("remote-output-transfer-byte-limit-exceeded"),
@@ -629,6 +661,8 @@ where
             time_secs_max: 0,
         })
         .map_err(ApplicationError::Decision)?;
+    debug_assert_eq!(effect.kind, EffectKind::OutputAdmission);
+    debug_assert_eq!(effect.limits.items_max, items_max);
     let admission = port.admit(request_id, outputs).await.and_then(|facts| {
         if facts.persisted_outputs != items_max {
             Err(StoreAdmissionFailure {
@@ -745,6 +779,8 @@ pub fn publish_event_batch<'a, E, P: TelemetryEventsPort<E>>(
             time_secs_max: 0,
         })
         .map_err(ApplicationError::Decision)?;
+    debug_assert_eq!(effect.kind, EffectKind::TelemetryPublish);
+    debug_assert_eq!(effect.limits.items_max, events_max);
     let observed = port.publish_events(request_id, events).and_then(|published| {
         if published != events_max {
             return Err(PortError {

@@ -141,6 +141,8 @@ const BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_PRODUCER: &str = "lock-vendor-producer
 const BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_SELECTED_TABLE: &str = "lock-vendor-selected-table";
 const BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_ACQUISITION: &str = "lock-vendor-acquisition";
 const LOCK_VENDOR_PRODUCER_IDENTITY_KEY: &str = "lock_vendor_producer_identity";
+const LOCK_VENDOR_PARENT_DRV_PATH_KEY: &str = "lock_vendor_parent_drv_path";
+const LOCK_VENDOR_PLAN_DIGEST_KEY: &str = "lock_vendor_canonical_plan_digest";
 const LOCK_VENDOR_SELECTED_TABLE_IDENTITY_KEY: &str = "lock_vendor_selected_table_identity";
 const LOCK_VENDOR_LOCK_CONTENT_KEY: &str = "lock_vendor_cargo_lock_blake3";
 const LOCK_VENDOR_OUTPUT_STORE_PATH_KEY: &str = "lock_vendor_output_store_path";
@@ -439,6 +441,8 @@ pub struct LockVendorProfileInputs {
     pub producer: PathBuf,
     pub selected_table: PathBuf,
     pub output: PathBuf,
+    pub parent_drv_path: String,
+    pub canonical_plan_digest: String,
     pub excluded_vendor: PathBuf,
 }
 
@@ -468,6 +472,10 @@ pub struct BootstrapSourceBundleProfileReport {
     pub excluded_vendor_payload_bytes: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lock_vendor_producer_identity: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lock_vendor_parent_drv_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lock_vendor_plan_digest: Option<String>,
     pub non_claim: &'static str,
 }
 
@@ -669,6 +677,7 @@ trait SourceBundleEffectPort {
         roots: &[PathBuf],
         imports: &[PathBuf],
         context: &SourceBundleCliContext<'_>,
+        cached_fetches: &[String],
         fetch_missing: bool,
     ) -> Result<(SourceBundleManifest, u32), RunError>;
     fn read(&mut self, path: &Path) -> Result<(SourceBundleManifest, u64), RunError>;
@@ -693,6 +702,8 @@ trait SourceBundleEffectPort {
         checkout: &Path,
         state: &Path,
         producer_output: &Path,
+        parent_drv_path: &str,
+        canonical_plan_digest: &str,
     ) -> Result<SelfBuildHydrationReport, RunError>;
     fn verify_state(
         &mut self,
@@ -748,9 +759,18 @@ impl SourceBundleEffectPort for SourceBundleFilePort {
         roots: &[PathBuf],
         imports: &[PathBuf],
         context: &SourceBundleCliContext<'_>,
+        cached_fetches: &[String],
         fetch_missing: bool,
     ) -> Result<(SourceBundleManifest, u32), RunError> {
-        export_from_cli_inputs(sources, roots, imports, context.store_prefix, context.state_dir, fetch_missing)
+        export_from_cli_inputs(
+            sources,
+            roots,
+            imports,
+            cached_fetches,
+            context.store_prefix,
+            context.state_dir,
+            fetch_missing,
+        )
     }
     fn read(&mut self, path: &Path) -> Result<(SourceBundleManifest, u64), RunError> {
         let manifest = read_source_bundle(path)?;
@@ -788,8 +808,18 @@ impl SourceBundleEffectPort for SourceBundleFilePort {
         checkout: &Path,
         state: &Path,
         producer_output: &Path,
+        parent_drv_path: &str,
+        canonical_plan_digest: &str,
     ) -> Result<SelfBuildHydrationReport, RunError> {
-        hydrate_lock_vendor_source_bundle(manifest, digest, checkout, state, producer_output)
+        hydrate_lock_vendor_source_bundle(
+            manifest,
+            digest,
+            checkout,
+            state,
+            producer_output,
+            parent_drv_path,
+            canonical_plan_digest,
+        )
     }
     fn verify_state(
         &mut self,
@@ -1341,6 +1371,11 @@ fn append_lock_vendor_profile_records(
         provider_metadata: None,
         store_prefix,
     })?;
+    validate_lock_vendor_parent_identity(
+        &lock_vendor.parent_drv_path,
+        &lock_vendor.canonical_plan_digest,
+        store_prefix,
+    )?;
     let prior = lock_vendor_tree_receipt(&lock_vendor.excluded_vendor)?;
     let completed = lock_vendor_tree_receipt(&lock_vendor.output)?;
     crate::self_build::verify_checked_vendor_freshness(source, &lock_vendor.excluded_vendor)?;
@@ -1366,6 +1401,8 @@ fn append_lock_vendor_profile_records(
     );
     metadata.insert(LOCK_VENDOR_PRODUCER_IDENTITY_KEY.to_string(), producer.content_blake3.clone());
     metadata.insert(LOCK_VENDOR_SELECTED_TABLE_IDENTITY_KEY.to_string(), selected_table.content_blake3.clone());
+    metadata.insert(LOCK_VENDOR_PARENT_DRV_PATH_KEY.to_string(), lock_vendor.parent_drv_path.clone());
+    metadata.insert(LOCK_VENDOR_PLAN_DIGEST_KEY.to_string(), lock_vendor.canonical_plan_digest.clone());
     metadata.insert(LOCK_VENDOR_LOCK_CONTENT_KEY.to_string(), blake3::hash(&lock).to_hex().to_string());
     metadata.insert(LOCK_VENDOR_OUTPUT_STORE_PATH_KEY.to_string(), logical_path);
     metadata.insert(LOCK_VENDOR_OUTPUT_CONTENT_KEY.to_string(), completed.content_blake3);
@@ -1412,14 +1449,24 @@ pub fn bootstrap_source_bundle_profile_report(
         .get(RECORD_METADATA_PROVIDER_KIND_KEY)
         .ok_or_else(|| RunError::Internal("bootstrap profile provider manifest missing provider kind".to_string()))?
         .clone();
-    let (excluded_vendor_payload_bytes, lock_vendor_producer_identity) = if mode.is_lock_vendor() {
+    let (
+        excluded_vendor_payload_bytes,
+        lock_vendor_producer_identity,
+        lock_vendor_parent_drv_path,
+        lock_vendor_plan_digest,
+    ) = if mode.is_lock_vendor() {
         let receipt = lock_vendor_acquisition_record(manifest)?;
         let payload = receipt.metadata[LOCK_VENDOR_EXCLUDED_PAYLOAD_KEY]
             .parse::<u64>()
             .map_err(|error| RunError::Internal(format!("invalid excluded vendor payload bytes: {error}")))?;
-        (Some(payload), Some(receipt.metadata[LOCK_VENDOR_PRODUCER_IDENTITY_KEY].clone()))
+        (
+            Some(payload),
+            Some(receipt.metadata[LOCK_VENDOR_PRODUCER_IDENTITY_KEY].clone()),
+            Some(receipt.metadata[LOCK_VENDOR_PARENT_DRV_PATH_KEY].clone()),
+            Some(receipt.metadata[LOCK_VENDOR_PLAN_DIGEST_KEY].clone()),
+        )
     } else {
-        (None, None)
+        (None, None, None, None)
     };
     Ok(BootstrapSourceBundleProfileReport {
         format: BOOTSTRAP_SOURCE_PROFILE_FORMAT,
@@ -1429,6 +1476,8 @@ pub fn bootstrap_source_bundle_profile_report(
         provider_kind,
         excluded_vendor_payload_bytes,
         lock_vendor_producer_identity,
+        lock_vendor_parent_drv_path,
+        lock_vendor_plan_digest,
         non_claim: BOOTSTRAP_SOURCE_PROFILE_NON_CLAIM,
     })
 }
@@ -1808,6 +1857,26 @@ pub(crate) fn assemble_source_bundle(
     Ok(manifest)
 }
 
+fn validate_lock_vendor_parent_identity(
+    parent_drv_path: &str,
+    plan_digest: &str,
+    store_prefix: &str,
+) -> Result<(), RunError> {
+    let parent = nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(
+        parent_drv_path.as_bytes(),
+        store_prefix,
+    )
+    .map_err(|error| RunError::Internal(format!("invalid lock-vendor native parent derivation path: {error}")))?;
+    if !parent.name().ends_with(".drv") {
+        return Err(RunError::Internal(
+            "lock-vendor native parent must be a derivation path ending in .drv".to_string(),
+        ));
+    }
+    validate_blake3_hex(Blake3HexValidation {
+        value: plan_digest,
+        label: "lock-vendor accepted canonical plan digest",
+    })
+}
 fn lock_vendor_acquisition_record(manifest: &SourceBundleManifest) -> Result<&SourceRecord, RunError> {
     let mut matches = manifest.records.iter().filter(|record| {
         record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
@@ -1833,6 +1902,15 @@ fn lock_vendor_acquisition_record(manifest: &SourceBundleManifest) -> Result<&So
     if !mode.is_lock_vendor() {
         return Err(RunError::Internal("lock-vendor receipt has wrong profile mode".to_string()));
     }
+    let parent = receipt
+        .metadata
+        .get(LOCK_VENDOR_PARENT_DRV_PATH_KEY)
+        .ok_or_else(|| RunError::Internal("lock-vendor receipt has no admitted parent derivation".to_string()))?;
+    let digest = receipt
+        .metadata
+        .get(LOCK_VENDOR_PLAN_DIGEST_KEY)
+        .ok_or_else(|| RunError::Internal("lock-vendor receipt has no admitted canonical plan digest".to_string()))?;
+    validate_lock_vendor_parent_identity(parent, digest, &manifest.store_prefix)?;
     for (class, key) in [
         (BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_PRODUCER, LOCK_VENDOR_PRODUCER_IDENTITY_KEY),
         (BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_SELECTED_TABLE, LOCK_VENDOR_SELECTED_TABLE_IDENTITY_KEY),
@@ -2195,6 +2273,8 @@ pub fn hydrate_lock_vendor_source_bundle(
     checkout: &Path,
     state_dir: &Path,
     producer_output: &Path,
+    parent_drv_path: &str,
+    canonical_plan_digest: &str,
 ) -> Result<SelfBuildHydrationReport, RunError> {
     validate_manifest(manifest)?;
     validate_blake3_hex(Blake3HexValidation {
@@ -2205,6 +2285,15 @@ pub fn hydrate_lock_vendor_source_bundle(
         return Err(RunError::Internal("lock-vendor hydration source manifest identity mismatch".to_string()));
     }
     let receipt = lock_vendor_acquisition_record(manifest)?;
+    validate_lock_vendor_parent_identity(parent_drv_path, canonical_plan_digest, &manifest.store_prefix)?;
+    if receipt.metadata[LOCK_VENDOR_PARENT_DRV_PATH_KEY] != parent_drv_path
+        || receipt.metadata[LOCK_VENDOR_PLAN_DIGEST_KEY] != canonical_plan_digest
+    {
+        return Err(RunError::Internal(
+            "lock-vendor hydration parent derivation or accepted plan digest differs from acquisition receipt"
+                .to_string(),
+        ));
+    }
     if manifest.records.iter().any(|record| {
         record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
             == Some(BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS)
@@ -6047,6 +6136,8 @@ struct BootstrapProfileCliInput {
     lock_vendor_producer: Option<PathBuf>,
     lock_vendor_selected_table: Option<PathBuf>,
     lock_vendor_output: Option<PathBuf>,
+    lock_vendor_parent_drv_path: Option<String>,
+    lock_vendor_plan_digest: Option<String>,
     excluded_vendor_deps: Option<PathBuf>,
     proof_inputs: Vec<PathBuf>,
     include_bundles: Vec<PathBuf>,
@@ -6066,13 +6157,27 @@ fn cmd_bootstrap_profile(
         input.lock_vendor_selected_table,
         input.lock_vendor_output,
         input.excluded_vendor_deps,
+        input.lock_vendor_parent_drv_path,
+        input.lock_vendor_plan_digest,
     ) {
-        (None, None, None, None) => None,
-        (Some(producer), Some(selected_table), Some(output), Some(excluded_vendor)) => {
-            Some(LockVendorProfileInputs { producer, selected_table, output, excluded_vendor })
-        }
+        (None, None, None, None, None, None) => None,
+        (
+            Some(producer),
+            Some(selected_table),
+            Some(output),
+            Some(excluded_vendor),
+            Some(parent_drv_path),
+            Some(canonical_plan_digest),
+        ) => Some(LockVendorProfileInputs {
+            producer,
+            selected_table,
+            output,
+            excluded_vendor,
+            parent_drv_path,
+            canonical_plan_digest,
+        }),
         _ => return Err(RunError::Internal(
-            "lock-vendor profile requires --lock-vendor-producer, --lock-vendor-selected-table, --lock-vendor-output and --excluded-vendor-deps together".to_string(),
+            "lock-vendor profile requires --lock-vendor-producer, --lock-vendor-selected-table, --lock-vendor-output, --excluded-vendor-deps, --lock-vendor-parent-drv-path and --lock-vendor-plan-digest together".to_string(),
         )),
     };
     let supplemental_records = port.supplementary(&input.include_bundles, false)?;
@@ -6306,17 +6411,23 @@ fn source_action_declaration(
             build_roots,
             import_paths,
         } => (Action::Plan, sources.len().saturating_add(build_roots.len()).saturating_add(import_paths.len())),
+
         crate::SourceBundleAction::Export {
             sources,
             build_roots,
             import_paths,
+            cached_fetches,
             fetch_missing,
             ..
         } => (
             Action::Export {
                 fetch_missing: *fetch_missing,
             },
-            sources.len().saturating_add(build_roots.len()).saturating_add(import_paths.len()),
+            sources
+                .len()
+                .saturating_add(build_roots.len())
+                .saturating_add(import_paths.len())
+                .saturating_add(cached_fetches.len()),
         ),
         crate::SourceBundleAction::BootstrapProfile {
             bootstrap_sources,
@@ -6488,12 +6599,14 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
             sources,
             build_roots,
             import_paths,
+            cached_fetches,
             to,
             fetch_missing,
         } => cmd_export_source_bundle(
             &sources,
             &build_roots,
             &import_paths,
+            &cached_fetches,
             &to,
             fetch_missing,
             context,
@@ -6512,6 +6625,8 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
             lock_vendor_producer,
             lock_vendor_selected_table,
             lock_vendor_output,
+            lock_vendor_parent_drv_path,
+            lock_vendor_plan_digest,
             excluded_vendor_deps,
             proof_inputs,
             include_bundles,
@@ -6530,6 +6645,8 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
                 lock_vendor_producer,
                 lock_vendor_selected_table,
                 lock_vendor_output,
+                lock_vendor_parent_drv_path,
+                lock_vendor_plan_digest,
                 excluded_vendor_deps,
                 proof_inputs,
                 include_bundles,
@@ -6558,11 +6675,15 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
             expected_manifest_blake3,
             checkout,
             lock_vendor_output,
+            lock_vendor_parent_drv_path,
+            lock_vendor_plan_digest,
         } => cmd_hydrate_self_build_source_bundle(
             &from,
             &expected_manifest_blake3,
             &checkout,
             lock_vendor_output.as_deref(),
+            lock_vendor_parent_drv_path.as_deref(),
+            lock_vendor_plan_digest.as_deref(),
             context,
             &plan,
             &mut port,
@@ -6601,13 +6722,15 @@ fn cmd_export_source_bundle(
     sources: &[String],
     build_roots: &[PathBuf],
     import_paths: &[PathBuf],
+    cached_fetches: &[String],
     to: &Path,
     fetch_missing: bool,
     context: &SourceBundleCliContext<'_>,
     plan: &mantle_application_contract::EffectPlan,
     port: &mut impl SourceBundleEffectPort,
 ) -> Result<(), RunError> {
-    let (manifest, fetch_calls) = port.export(sources, build_roots, import_paths, context, fetch_missing)?;
+    let (manifest, fetch_calls) =
+        port.export(sources, build_roots, import_paths, context, cached_fetches, fetch_missing)?;
     let mut observations = Vec::with_capacity(plan.effects.len());
     observations.push(source_manifest_observation(&manifest, None)?);
     if fetch_missing {
@@ -6783,6 +6906,8 @@ fn cmd_hydrate_self_build_source_bundle(
     expected_manifest_blake3: &str,
     checkout: &Path,
     lock_vendor_output: Option<&Path>,
+    parent_drv_path: Option<&str>,
+    canonical_plan_digest: Option<&str>,
     context: &SourceBundleCliContext<'_>,
     plan: &mantle_application_contract::EffectPlan,
     port: &mut impl SourceBundleEffectPort,
@@ -6799,10 +6924,26 @@ fn cmd_hydrate_self_build_source_bundle(
                     .to_string(),
             )
         })?;
-        port.hydrate_lock_vendor(&manifest, expected_manifest_blake3, checkout, context.state_dir, output)?
+        let (Some(parent_drv_path), Some(canonical_plan_digest)) = (parent_drv_path, canonical_plan_digest) else {
+            return Err(RunError::Internal(
+                "lock-vendor hydration requires --lock-vendor-parent-drv-path and --lock-vendor-plan-digest"
+                    .to_string(),
+            ));
+        };
+        port.hydrate_lock_vendor(
+            &manifest,
+            expected_manifest_blake3,
+            checkout,
+            context.state_dir,
+            output,
+            parent_drv_path,
+            canonical_plan_digest,
+        )?
     } else {
-        if lock_vendor_output.is_some() {
-            return Err(RunError::Internal("--lock-vendor-output requires a lock-vendor profile manifest".to_string()));
+        if lock_vendor_output.is_some() || parent_drv_path.is_some() || canonical_plan_digest.is_some() {
+            return Err(RunError::Internal(
+                "lock-vendor hydration flags require a lock-vendor profile manifest".to_string(),
+            ));
         }
         port.hydrate(&manifest, expected_manifest_blake3, checkout, context.state_dir)?
     };
@@ -6955,19 +7096,72 @@ fn export_from_cli_inputs(
     sources: &[String],
     build_roots: &[PathBuf],
     import_paths: &[PathBuf],
+    cached_fetches: &[String],
     store_prefix: &str,
     state_dir: &Path,
     fetch_missing: bool,
 ) -> Result<(SourceBundleManifest, u32), RunError> {
     let specs = sources.iter().map(|source| parse_source_spec(source)).collect::<Result<Vec<_>, _>>()?;
+    if fetch_missing && !cached_fetches.is_empty() {
+        return Err(RunError::Internal("--cached-fetch cannot be combined with --fetch-missing".to_string()));
+    }
     if build_roots.is_empty() {
+        if !cached_fetches.is_empty() {
+            return Err(RunError::Internal(
+                "--cached-fetch requires --build-root with pinned fetch records".to_string(),
+            ));
+        }
         return Ok((plan_source_bundle(&specs, store_prefix)?, 0));
     }
     let evaluation_paths = crate::build_cmd::build_import_paths(import_paths)?;
     let derived_records = collect_build_source_records_from_files(build_roots, &evaluation_paths, store_prefix)?;
-    let available_sources = read_imported_source_records(state_dir)?;
+    let mut available_sources = read_imported_source_records(state_dir)?;
     let mut records = canonicalize_source_specs(&specs, store_prefix)?;
     let expected = normalize_source_records(derived_records)?;
+    let mut cached = BTreeMap::<String, PathBuf>::new();
+    if !cached_fetches.is_empty() {
+        let expected_urls = expected
+            .iter()
+            .filter(|record| record.kind == SourceRecordKind::FixedUrl)
+            .filter_map(|record| record.metadata.get(RECORD_METADATA_URL_KEY).map(String::as_str))
+            .collect::<BTreeSet<_>>();
+        for mapping in cached_fetches {
+            let (url, filename) = resolve_cached_fetch_mapping(mapping, &expected_urls)?;
+            let parsed = Url::parse(url)
+                .map_err(|error| RunError::Internal(format!("invalid cached fetch URL {url}: {error}")))?;
+            if parsed.scheme() != "https" {
+                return Err(RunError::Internal(format!(
+                    "cached fetch requires a pinned HTTPS URL and an absolute local file: {mapping}"
+                )));
+            }
+            if cached.insert(url.to_string(), PathBuf::from(filename)).is_some() {
+                return Err(RunError::Internal(format!("duplicate cached fetch URL: {url}")));
+            }
+        }
+    }
+    let mut used_cached = BTreeSet::<String>::new();
+    for record in &expected {
+        let Some(url) = record.metadata.get(RECORD_METADATA_URL_KEY) else {
+            continue;
+        };
+        let Some(path) = cached.get(url) else {
+            continue;
+        };
+        if record.kind != SourceRecordKind::FixedUrl {
+            return Err(RunError::Internal(format!(
+                "cached fetch URL {url} does not identify a fixed-output URL source"
+            )));
+        }
+        used_cached.insert(url.clone());
+        let materialized = materialize_cached_fetch_record(record, path)?;
+        available_sources.retain(|existing| existing.identity != record.identity);
+        available_sources.push(materialized);
+    }
+    if let Some(unmatched) = cached.keys().find(|url| !used_cached.contains(*url)) {
+        return Err(RunError::Internal(format!(
+            "cached fetch URL does not match a pinned fixed-output source in --build-root: {unmatched}"
+        )));
+    }
     let mut fetch_calls = 0;
     if fetch_missing {
         records.extend(materialize_export_records_with_connected_fetch(
@@ -6979,6 +7173,64 @@ fn export_from_cli_inputs(
         records.extend(materialize_export_records(&expected, &available_sources)?);
     }
     Ok((assemble_source_bundle(records, store_prefix)?, fetch_calls))
+}
+
+fn resolve_cached_fetch_mapping<'a>(
+    mapping: &'a str,
+    expected_urls: &BTreeSet<&str>,
+) -> Result<(&'a str, &'a str), RunError> {
+    let mut matched = None;
+    let mut invalid_path = false;
+    for (separator, _) in mapping.match_indices('=') {
+        let url = &mapping[..separator];
+        if !expected_urls.contains(url) {
+            continue;
+        }
+        let filename = &mapping[separator + 1..];
+        if filename.is_empty() || !Path::new(filename).is_absolute() {
+            invalid_path = true;
+            continue;
+        }
+        if matched.is_some() {
+            return Err(RunError::Internal(format!("ambiguous --cached-fetch mapping: {mapping}")));
+        }
+        matched = Some((url, filename));
+    }
+    matched.ok_or_else(|| {
+        if invalid_path {
+            RunError::Internal(format!(
+                "cached fetch requires a pinned HTTPS URL and an absolute local file: {mapping}"
+            ))
+        } else if !mapping.contains('=') {
+            RunError::Internal(format!("invalid --cached-fetch mapping (expected URL=ABSOLUTE_FILE): {mapping}"))
+        } else {
+            RunError::Internal(format!(
+                "cached fetch URL does not match a pinned fixed-output source in --build-root: {mapping}"
+            ))
+        }
+    })
+}
+
+fn materialize_cached_fetch_record(record: &SourceRecord, path: &Path) -> Result<SourceRecord, RunError> {
+    let url = record
+        .metadata
+        .get(RECORD_METADATA_URL_KEY)
+        .ok_or_else(|| RunError::Internal(format!("cached fetch {} is missing its pinned URL", record.identity)))?;
+    if record.kind != SourceRecordKind::FixedUrl
+        || record.metadata.get(RECORD_METADATA_HASH_MODE_KEY).map(String::as_str) != Some("flat")
+    {
+        return Err(RunError::Internal(format!("cached fetch URL {url} requires a pinned flat fixed-output URL")));
+    }
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| RunError::Internal(format!("reading cached fetch {}: {error}", path.display())))?;
+    if !metadata.is_file() {
+        return Err(RunError::Internal(format!("cached fetch must be a regular file: {}", path.display())));
+    }
+    let materialized = materialize_source_record_from_path(record, path, false)?;
+    // Hash the captured record, not the caller's path: a changing archive must
+    // not be pinned under the immutable upstream URL after capture.
+    verify_imported_record_fixed_output(record, &materialized)?;
+    Ok(materialized)
 }
 
 fn collect_build_source_records_from_files(
@@ -7637,6 +7889,8 @@ mod tests {
         assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
         (manifest, checkout)
     }
+    const LOCK_VENDOR_TEST_PARENT: &str = "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-lock-vendor-plan.drv";
+    const LOCK_VENDOR_TEST_PLAN_DIGEST: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     fn lock_vendor_hydration_fixture(temp: &Path) -> (SourceBundleManifest, PathBuf, PathBuf, PathBuf) {
         let mut input = bootstrap_profile_fixture(&temp.join("profile"));
         input.mode = BootstrapSourceBundleMode::FreshCloneLockVendorInputs;
@@ -7657,6 +7911,8 @@ mod tests {
             producer,
             selected_table: table,
             output: output.clone(),
+            parent_drv_path: LOCK_VENDOR_TEST_PARENT.to_string(),
+            canonical_plan_digest: LOCK_VENDOR_TEST_PLAN_DIGEST.to_string(),
             excluded_vendor: excluded,
         });
         let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
@@ -7675,6 +7931,7 @@ mod tests {
         let receipt = lock_vendor_acquisition_record(&manifest).unwrap();
         let source_record = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap();
         let initial = manifest.manifest_blake3.clone();
+
         fs::create_dir_all(source.join("bootstrap/pins")).unwrap();
         fs::write(
             source.join("bootstrap/pins/cargo-shared-lock-hashes-v1"),
@@ -7693,6 +7950,8 @@ mod tests {
             producer: temp.path().join("lock-vendor-producer"),
             selected_table: temp.path().join("selected-hashes-v1"),
             output: output.clone(),
+            parent_drv_path: LOCK_VENDOR_TEST_PARENT.to_string(),
+            canonical_plan_digest: LOCK_VENDOR_TEST_PLAN_DIGEST.to_string(),
             excluded_vendor: source.join(VENDOR_DEPS_DIR_NAME),
         });
         // The reviewed B row changes the mutable full table, not the selected
@@ -7707,7 +7966,16 @@ mod tests {
         assert_eq!(receipt.payload_bytes, 0);
         assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
         let state = temp.path().join("state");
-        let hydrated = hydrate_lock_vendor_source_bundle(&manifest, &initial, &checkout, &state, &output).unwrap();
+        let hydrated = hydrate_lock_vendor_source_bundle(
+            &manifest,
+            &initial,
+            &checkout,
+            &state,
+            &output,
+            LOCK_VENDOR_TEST_PARENT,
+            LOCK_VENDOR_TEST_PLAN_DIGEST,
+        )
+        .unwrap();
         assert_eq!(hydrated.vendor_content_blake3, receipt.metadata[LOCK_VENDOR_OUTPUT_CONTENT_KEY]);
         assert_eq!(
             observed_hydrated_vendor_bytes(&manifest, &checkout).unwrap(),
@@ -7725,8 +7993,16 @@ mod tests {
         let state = temp.path().join("state");
         fs::write(output.join("dep-a/src/lib.rs"), b"pub fn tampered() {}\n").unwrap();
         assert!(
-            hydrate_lock_vendor_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state, &output)
-                .is_err()
+            hydrate_lock_vendor_source_bundle(
+                &manifest,
+                &manifest.manifest_blake3,
+                &checkout,
+                &state,
+                &output,
+                LOCK_VENDOR_TEST_PARENT,
+                LOCK_VENDOR_TEST_PLAN_DIGEST,
+            )
+            .is_err()
         );
         assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
         assert!(!source_pins_dir(&state).exists());
@@ -7738,11 +8014,55 @@ mod tests {
             .write_all(b"\n")
             .unwrap();
         assert!(
-            hydrate_lock_vendor_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state, &output)
-                .is_err()
+            hydrate_lock_vendor_source_bundle(
+                &manifest,
+                &manifest.manifest_blake3,
+                &checkout,
+                &state,
+                &output,
+                LOCK_VENDOR_TEST_PARENT,
+                LOCK_VENDOR_TEST_PLAN_DIGEST,
+            )
+            .is_err()
         );
         assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
         assert!(!source_pins_dir(&state).exists());
+    }
+
+    #[test]
+    fn lock_vendor_parent_identity_is_required_and_checked_before_hydration_publication() {
+        let temp = tempfile::tempdir().unwrap();
+        let (manifest, checkout, output, _) = lock_vendor_hydration_fixture(temp.path());
+        let state = temp.path().join("state");
+        for (parent, digest) in [
+            ("/mantle/store/cccccccccccccccccccccccccccccccc-other.drv", LOCK_VENDOR_TEST_PLAN_DIGEST),
+            (LOCK_VENDOR_TEST_PARENT, "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"),
+            ("/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-not-a-derivation", LOCK_VENDOR_TEST_PLAN_DIGEST),
+            (LOCK_VENDOR_TEST_PARENT, "not-a-blake3-digest"),
+        ] {
+            let error = hydrate_lock_vendor_source_bundle(
+                &manifest,
+                &manifest.manifest_blake3,
+                &checkout,
+                &state,
+                &output,
+                parent,
+                digest,
+            )
+            .unwrap_err()
+            .to_string();
+            assert!(error.contains("lock-vendor"), "{error}");
+            assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
+            assert!(!source_pins_dir(&state).exists());
+        }
+        let mut incomplete = manifest.clone();
+        let receipt = incomplete
+            .records
+            .iter_mut()
+            .find(|record| record.identity == BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_ACQUISITION)
+            .unwrap();
+        receipt.metadata.remove(LOCK_VENDOR_PLAN_DIGEST_KEY);
+        assert!(lock_vendor_acquisition_record(&incomplete).is_err());
     }
 
     #[cfg(unix)]
@@ -9453,6 +9773,35 @@ mod tests {
         assert!(diagnostic.contains("validating captured source record"), "unexpected diagnostic: {diagnostic}");
     }
 
+    #[test]
+    fn cached_https_archive_keeps_its_upstream_identity_and_rejects_hash_drift() {
+        use base64::Engine as _;
+        use sha2::Digest as _;
+
+        const URL: &str = "https://example.invalid/pinned-android-tool.zip";
+        const PAYLOAD: &[u8] = b"small pinned tool archive";
+        let temp = tempfile::tempdir().unwrap();
+        let archive = temp.path().join("tool.zip");
+        fs::write(&archive, PAYLOAD).unwrap();
+        let mut fetcher = fixed_fetcher("pinned-android-tool", URL);
+        fetcher.fixed_output.as_mut().unwrap().hash =
+            format!("sha256-{}", base64::engine::general_purpose::STANDARD.encode(sha2::Sha256::digest(PAYLOAD)));
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let roots = [("default".to_string(), root)];
+        let planned = plan_source_bundle_from_derivations(&roots, &[], "/mantle/store").unwrap();
+        let captured = materialize_cached_fetch_record(&planned.records[0], &archive).unwrap();
+        assert_eq!(captured.metadata[RECORD_METADATA_URL_KEY], URL);
+        let manifest = assemble_source_bundle(vec![captured], "/mantle/store").unwrap();
+        let state = temp.path().join("source-state");
+        import_source_bundle(&manifest, &state, true).unwrap();
+        let ready = offline_preflight_for_derivations(&roots, &state, "/mantle/store", None).unwrap();
+        assert_eq!(ready.ready_class, SourceReadiness::Ready);
+
+        fs::write(&archive, b"drifted archive").unwrap();
+        let error = materialize_cached_fetch_record(&planned.records[0], &archive).unwrap_err();
+        assert!(error.to_string().contains("hash mismatch"), "{error}");
+    }
+
     // r[verify source_transports.source_bundle_realizes_fetcher_inputs]
     #[test]
     fn source_fetch_override_plan_materializes_pinned_file_fetcher_payload() {
@@ -9474,6 +9823,141 @@ mod tests {
         assert_eq!(plan.overrides[0].url, file_url(&payload));
         assert_eq!(fs::read(&plan.overrides[0].payload_path).unwrap(), b"payload");
         assert!(plan.overrides[0].source_state_blake3.len() == BLAKE3_HEX_BYTES);
+    }
+
+    #[tokio::test]
+    async fn source_fetch_override_plan_routes_synthetic_file_and_blocks_tool_on_drift() {
+        use base64::Engine as _;
+        use sha2::Digest as _;
+        use snix_build::buildservice::BuildService as _;
+
+        if !(Path::new("/nix/store").exists()
+            && std::process::Command::new("bwrap")
+                .arg("--version")
+                .output()
+                .is_ok_and(|output| output.status.success()))
+        {
+            eprintln!("skipping: /nix/store and bwrap are required");
+            return;
+        }
+
+        const URL: &str = "https://example.invalid/android-synthetic-tool.tar.gz";
+        const BYTES: &[u8] = b"small deterministic synthetic tool archive\n";
+        const DRIFTED: &[u8] = b"changed synthetic tool archive\n";
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("synthetic-tool.tar.gz");
+        fs::write(&payload, BYTES).unwrap();
+        let pinned_sri =
+            format!("sha256-{}", base64::engine::general_purpose::STANDARD.encode(sha2::Sha256::digest(BYTES)));
+        let mut fetcher = fixed_fetcher("synthetic-android-tool-source", URL);
+        fetcher.fixed_output.as_mut().unwrap().hash = pinned_sri.clone();
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let roots = [("default".to_string(), root)];
+        let planned = plan_source_bundle_from_derivations(&roots, &[], "/nix/store").unwrap();
+        assert_eq!(planned.records.len(), 1);
+        assert_eq!(planned.records[0].metadata[RECORD_METADATA_URL_KEY], URL);
+        let record = materialized_record_from_payload(&planned.records[0], &payload, false);
+        let manifest = assemble_source_bundle(vec![record], "/nix/store").unwrap();
+        let state = temp.path().join("source-state");
+        import_source_bundle(&manifest, &state, true).unwrap();
+        let plan = source_fetch_override_plan_for_derivations(&roots, &state, "/nix/store", None).unwrap();
+        assert_eq!(plan.report.ready_class, SourceReadiness::Ready);
+        assert_eq!(plan.overrides.len(), 1);
+        assert_eq!(plan.overrides[0].url, URL);
+        assert_eq!(plan.overrides[0].kind, crunch_build::FetchSourceOverrideKind::File);
+        assert_eq!(fs::read(&plan.overrides[0].payload_path).unwrap(), BYTES);
+
+        let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig::new(
+            crunch_store::StoreBackend::Snix,
+            temp.path().join("fetch-state"),
+            temp.path().join("fetch-store"),
+            "/nix/store".to_string(),
+        ))
+        .await
+        .unwrap();
+        let service = crunch_build::FetchBuildService::new(store.into_pipeline_store_parts().build_service_store)
+            .with_source_overrides(plan.overrides.clone())
+            .with_source_policy(crunch_build::FetchSourcePolicy::RequireOverride);
+        let request = |url: &str| snix_build::buildservice::BuildRequest {
+            command_args: vec!["builtin:fetchurl".to_string()],
+            outputs: vec![PathBuf::from("nix/store/synthetic-android-source")],
+            environment_vars: vec![snix_build::buildservice::EnvVar {
+                key: "url".to_string(),
+                value: url.to_string().into(),
+            }],
+            ..snix_build::buildservice::BuildRequest::default()
+        };
+        let fetched = service.do_build(request(URL)).await.unwrap();
+        match &fetched.outputs[0].node {
+            snix_castore::Node::File { digest, size, .. } => {
+                assert_eq!(*digest, blake3::hash(BYTES).into());
+                assert_eq!(*size, BYTES.len() as u64);
+            }
+            other => panic!("pinned synthetic archive must replay as a flat file: {other:?}"),
+        }
+        let unmatched_url = file_url(&payload);
+        let unmatched = service.do_build(request(&unmatched_url)).await.unwrap_err();
+        assert!(unmatched.to_string().contains("offline source policy rejected unmatched builtin fetch"));
+        assert!(unmatched.to_string().contains(&unmatched_url));
+
+        // Corrupt only the plan's scratch payload after import, never the pinned
+        // source declaration or its original local fixture.
+        fs::write(&plan.overrides[0].payload_path, DRIFTED).unwrap();
+        let root_file = temp.path().join("synthetic-consumer.ncl");
+        fs::write(
+            &root_file,
+            format!(
+                r#"let fetch = import "fetch.ncl" in
+let Derivation = import "derivation.ncl" in
+({{name = "synthetic-android-tool-consumer",
+   builder = "/bin/sh",
+   args = ["-c", "printf TOOL_RAN > $out"],
+   inputs = [fetch.fetchurl {{url = "{URL}", hash = "{pinned_sri}", name = "synthetic-android-tool-source"}}]}} | Derivation)"#
+            ),
+        )
+        .unwrap();
+        let output = tempfile::tempdir().unwrap();
+        let build_state = tempfile::tempdir().unwrap();
+        let keypair = crunch_build::load_keypair(
+            "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==",
+        )
+        .unwrap();
+        let trusted_keys = crunch_build::build_trusted_keys(&keypair, None);
+        let config = crunch_pipeline::BuildConfig {
+            file: root_file,
+            import_paths: vec![PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()],
+            output_dir: output.path().to_path_buf(),
+            state_dir: build_state.path().to_path_buf(),
+            backend: crunch_store::StoreBackend::Snix,
+            base_state_dirs: Vec::new(),
+            store_dir: "/nix/store".to_string(),
+            verbose: false,
+            max_jobs: 2,
+            scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
+            substituter_urls: Vec::new(),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            keypair,
+            trusted_keys,
+            trust_unsigned: false,
+            root_retention_source: None,
+            root_registration: None,
+            source_fetch_overrides: plan.overrides.clone(),
+            remote_enabled: false,
+            interchange_dir: None,
+        };
+        let drifted = crunch_pipeline::build(&config).await.unwrap();
+        assert!(drifted.outcomes.is_empty(), "changed source-plan bytes must not execute a dependent tool");
+        let mismatch = drifted
+            .failed
+            .iter()
+            .find_map(|failure| crunch_pipeline::parse_fod_mismatch_error(&failure.origin_error))
+            .unwrap_or_else(|| panic!("missing fixed-output drift reason: {:?}", drifted.failed));
+        let observed_sri =
+            format!("sha256-{}", base64::engine::general_purpose::STANDARD.encode(sha2::Sha256::digest(DRIFTED)));
+        assert_eq!(mismatch.name, "synthetic-android-tool-source");
+        assert_eq!(mismatch.expected_sri, pinned_sri);
+        assert_eq!(mismatch.actual_sri, observed_sri);
+        assert!(fs::read_dir(output.path()).unwrap().next().is_none(), "tool output marker must remain absent");
     }
 
     #[test]

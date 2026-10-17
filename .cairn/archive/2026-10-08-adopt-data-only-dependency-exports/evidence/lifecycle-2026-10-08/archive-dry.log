@@ -1,0 +1,64 @@
+$ /home/brittonr/mantle-cairn-finish/cairn-result/bin/cairn archive adopt-data-only-dependency-exports --root .
+{
+  "acceptance_ids": [
+    "dependency-exports.admission-review",
+    "dependency-exports.closure",
+    "dependency-exports.decision-record",
+    "dependency-exports.no-accepted-requirement",
+    "dependency-exports.original-scope"
+  ],
+  "actions": [
+    {
+      "description": "move active change to archive: adopt-data-only-dependency-exports",
+      "kind": "archive_change",
+      "path": "./.cairn/changes/adopt-data-only-dependency-exports"
+    }
+  ],
+  "blocked": false,
+  "change": "adopt-data-only-dependency-exports",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": true,
+  "input_hash": "84eb7a280fb21c5c71bb38ef0e994a2183eba8ce0db5f66d5192cca00692bfd7",
+  "layout": "cairn",
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "9b07af3e888c64608b44278a2a585b77f3c6289c814757b2d12b8852f2f918c7",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "profile_identity_hash": "843f77cd244a5f62cb22e4a66ab156f3a06074c6e3321e943ea1b31407aad313",
+  "reasons": [],
+  "receipt_hash": "4d9805c3920b7a87e035859bf3438503e7ecef777bc34dacb8ae42bb9002b5f9",
+  "review_receipt_hashes": [
+    "04e9dcb636eb75a0bd07efc1839cb81915b017273c7afd2420daa9c18c2a008b"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

@@ -269,4 +269,3 @@ def publish_noreplace(source, destination):
     status = libc.renameat2(-100, os.fsencode(source), -100, os.fsencode(destination), 1)
     require(status == 0, f"refusing to replace existing vendor destination (errno={ctypes.get_errno()})")
 
-

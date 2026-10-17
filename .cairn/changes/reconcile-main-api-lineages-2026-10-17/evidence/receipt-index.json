@@ -1,0 +1,256 @@
+{
+  "change": "reconcile-main-api-lineages-2026-10-17",
+  "retention": "Exact UTF-8 original/copy bytes verified pairwise using b3sum; existing original receipts were not rewritten.",
+  "verification": {
+    "method": "Executed b3sum against each exact original and retained path enumerated below; this description is not an argv capture.",
+    "exit_code": 0,
+    "equal_pairs": 29,
+    "total_retained_bytes": 80061,
+    "scope": "Receipt byte identity only; not a native Cairn, product, source snapshot, or gate check."
+  },
+  "subject": {
+    "repo": "/home/brittonr/git/OnixResearch/mantle",
+    "runtime_root": "/datapool/mantle-store/mr.7p88_pl1",
+    "parents": [
+      "d20459c6db6d60ed2b08533911e279cbeadb742e",
+      "d75158b00b080535f2ffea12430665ca3d57ea82"
+    ],
+    "timing": "Selected runtime observations predate final scoped formatting. No complete compiled-source snapshot/digest was captured for every smoke; do not transplant these results to the later root or final integration subject."
+  },
+  "receipts": [
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/manifest.json",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/manifest.json",
+      "bytes": 672,
+      "blake3": "f9c26f88962fa0320fc8d6af383365983aec0dd12dbf616d136dc68b40745317"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/result-cargo-unit-smoke.json",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-cargo-unit-smoke.json",
+      "bytes": 1212,
+      "blake3": "e0ee14f3590235b897093c1af463b03a112f0febb5050029d53be9a501c4a0db"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/cargo-unit-smoke.sh",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/cargo-unit-smoke.sh.source.txt",
+      "bytes": 301,
+      "blake3": "8b6663f0dd72f616a15dc5d41fffb8aa2da2632b5fbcb4a87b4dd1a6c4ddfff6"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/unit-smoke.py",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/unit-smoke.py.source.txt",
+      "bytes": 4525,
+      "blake3": "82a9f72f133be68e87e8fa2312467623e2910409ea092813ce3cfbf38b0c5cb6"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/unit-smoke-steps.json",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/unit-smoke-steps.json",
+      "bytes": 9647,
+      "blake3": "303472bdee8a109ba98ba0b088fdb3ea15b9f0a2bb6e3ed69c5e4d00b1ded189"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/logs/shell-cargo-unit-smoke.log",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/logs--shell-cargo-unit-smoke.log",
+      "bytes": 8810,
+      "blake3": "46514eb531fafef321c1f61573b659403c10181832e2b024efca2a71a8bc7397"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/result-helper-namespace-proof.json",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-helper-namespace-proof.json",
+      "bytes": 1333,
+      "blake3": "b2c9f706c11a4183760e242b177d261fca6435219d8af6cd9bc555d65a7a06d0"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/helper-namespace-proof.sh",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/helper-namespace-proof.sh.source.txt",
+      "bytes": 226,
+      "blake3": "1d68a494337adefa0eb34724cd2b00f4d6281a9b973f8e47c9baae3f51f3d140"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/logs/shell-helper-namespace-proof.log",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/logs--shell-helper-namespace-proof.log",
+      "bytes": 600,
+      "blake3": "d9c7cf68adf2d2d2ca6c17ef44e71f84b5f134826766ab599bb8ac5ad9fd394b"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/result-store-prefix-after.json",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-store-prefix-after.json",
+      "bytes": 1333,
+      "blake3": "502c811d79f9f89b71e8354867ae657bc7563daa802abdd9327a5442bc07759b"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/store-prefix-after.sh",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/store-prefix-after.sh.source.txt",
+      "bytes": 377,
+      "blake3": "dd6c08793091b01d859c66b10489a7fd173d0cf774e6ff4597622bbfe3f4ef8a"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/logs/shell-store-prefix-after.log",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/logs--shell-store-prefix-after.log",
+      "bytes": 8751,
+      "blake3": "62c212a4c5e7319b7faaac05adc0783cc1e89e40599ddcd73be7b854ed815af5"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/result-casita-root-output-after.json",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-casita-root-output-after.json",
+      "bytes": 1341,
+      "blake3": "617194e326cd8b46f6fef2934765dd5d54be2834e75f787e9d48fcbe22652535"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/casita-root-output-after.sh",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/casita-root-output-after.sh.source.txt",
+      "bytes": 210,
+      "blake3": "a032de235f3e3d6145f005f126196b940431c88a5295da5711d5a77fe39cded5"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/logs/shell-casita-root-output-after.log",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/logs--shell-casita-root-output-after.log",
+      "bytes": 1999,
+      "blake3": "cc8ca5a78898b16f27f0f610f235b69a5af6e5a760e4dd6c00526ee019c73fd3"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/result-android-authoring-distinct-after.json",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-android-authoring-distinct-after.json",
+      "bytes": 1350,
+      "blake3": "c0bad13601914af10d4f9c5cb3eb2fcd09bb4bcc3e0d8094947cc5068bbaac95"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/android-authoring-distinct-after.sh",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/android-authoring-distinct-after.sh.source.txt",
+      "bytes": 302,
+      "blake3": "56dbecb223b48397c0e6046972454bbea80d3ae0549b489c85db5318aa96c3d5"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/logs/shell-android-authoring-distinct-after.log",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/logs--shell-android-authoring-distinct-after.log",
+      "bytes": 10262,
+      "blake3": "eabc7306c543bbfc276196a4cf8aee0e7d8f8ecb8a4fa7a731d6b556710c63d2"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/result-jar-route-upper.json",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-jar-route-upper.json",
+      "bytes": 1334,
+      "blake3": "a5f49a6601834e9489c6fbee5275b23dd6c470eb12e1786e7ac24a87536a8b6d"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/jar-route-upper-probe.py",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/jar-route-upper-probe.py.source.txt",
+      "bytes": 3012,
+      "blake3": "e16e93ccae2d465808023a451ed3ec771b491204b0b1f7b31aabc6fb713b7847"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/jar-route-upper-result.json",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/jar-route-upper-result.json",
+      "bytes": 4709,
+      "blake3": "28d40942afb4ed4141a2ebde891e64164bcb68796cff9ab0230b684980f7e1c5"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/logs/shell-jar-route-upper.log",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/logs--shell-jar-route-upper.log",
+      "bytes": 3451,
+      "blake3": "caeb3b96ff3e0e215f8490c6e484c72c5f8f158faf3f6c8438db4bd945527680"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/result-api-smoke-explicit-addressing.json",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-api-smoke-explicit-addressing.json",
+      "bytes": 1204,
+      "blake3": "177ee8ed0df5389c1177b9010ca0f429da79484c1259b73c6ff9f3d0f881b3b4"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/api-smoke.sh",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/api-smoke.sh.source.txt",
+      "bytes": 521,
+      "blake3": "0c19d218cbe85276f2c8332e55a491b5fae39847cae63e11ba8807c106bbaedf"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/logs/shell-api-smoke-explicit-addressing.log",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/logs--shell-api-smoke-explicit-addressing.log",
+      "bytes": 8043,
+      "blake3": "ede94bbec7b182d7b5c8cec5be666ccb45f5a6e64003ac988cd31b61b8ab4cdb"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/before-source-provenance.json",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/before-source-provenance.json",
+      "bytes": 977,
+      "blake3": "8c5feaf41297b5a56c324528232bb894d06b143b251ce671c8d9d7931d65ec8b"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/result-root-and-generators-build.json",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-root-and-generators-build.json",
+      "bytes": 1390,
+      "blake3": "f5ca662efb6337c0fb945a1a182ab841ecc09e7726ac6d8295e70b8b534c44b1"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/owned-format-scope-and-limit.json",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/owned-format-scope-and-limit.json",
+      "bytes": 1473,
+      "blake3": "eb9a4dda96bd2c7d338096d66d9bef2543817151167e9a45b5fb2165045131e9"
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/owned-compiler-settlement-v1-result.json",
+      "retained_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/owned-compiler-settlement-v1-result.json",
+      "bytes": 696,
+      "blake3": "e08b24fc55db21dd499c2de51cec316a03f2f23e30dc5ad2122bea54f7936007"
+    }
+  ],
+  "pending": [
+    "Root and both actual generator build success",
+    "Fresh current CLI/generated capture and installs",
+    "Current operator mode-check/contract and compatibility-matrix smoke",
+    "Ordinary first-party quality and extra affected-package fmt gates",
+    "Final-source Cairn/G3 including tasks; preliminary documentary validate/proposal/design observations are separately recorded",
+    "Required Nix/TigerStyle gates",
+    "Parent semantic review and sole-Git-owner publication evidence"
+  ],
+  "native_cairn": {
+    "available_path": "/etc/profiles/per-user/brittonr/bin/cairn",
+    "resolved_path": "/nix/store/j3ni3lj66ylskpcg78ip531s9lz4z4av-cairn-0.1.0/bin/cairn",
+    "available_derivation": "/nix/store/pw1szwnl80ws1mbw18cd1x5mylm8dxa3-cairn-0.1.0.drv",
+    "available_derivation_src": "/nix/store/6bpdhd8hszl5jgggf0k16yys89wgxhi5-source",
+    "required_revision": "007ba5193dd8fec9067a1c0e0f8ef487807af872",
+    "required_source_nar_hash": "sha256-Kgx8JgsC/+26ETbL3lRaxXAYfzv2cmtG/i9OywPOz0c=",
+    "binding": "Initial PATH package was not bound or used. The exact required cohort was subsequently located from existing source registration and package derivation; direct documentary results and binding are recorded in native-document-validation.json. No Nix invocation, source copy/realization, Cargo or alternate cohort was used."
+  },
+  "current_native_doc_evidence": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/native-document-validation.json",
+  "parent_reported_resource_metadata": {
+    "provenance": "Explicit parent interjection reporting read-only review t19; no raw t19 transcript was fabricated or copied by this writer.",
+    "snapshot_bookmark_query": {
+      "exit_code": 0,
+      "output": "NO OUTPUT",
+      "datasets": [
+        "datapool/nix",
+        "datapool/mantle-store"
+      ],
+      "interpretation": "No retained snapshot/bookmark markers, including pre-F0; metadata route exhausted."
+    },
+    "current_dataset_properties": {
+      "datapool/nix": {
+        "creation": 1777265416,
+        "used": 251465572352,
+        "written": 251465572352,
+        "origin": "-",
+        "usedbychildren": 0,
+        "usedbysnapshots": 0
+      },
+      "datapool/mantle-store": {
+        "creation": 1785958147,
+        "used": 308970061824,
+        "written": 308970061824,
+        "origin": "-",
+        "usedbychildren": 0,
+        "usedbysnapshots": 0
+      }
+    },
+    "frozen_original_F0": 124692987904,
+    "original_F0_unix": 1792210364.526931,
+    "prebaseline": 777650176,
+    "epoch": "E0/Hunknown unchanged",
+    "limit": "Current unqualified written is not an original-epoch delta; Nix absolute total exceeds 16GiB. No root admission or old-observation rewrite follows."
+  },
+  "non_claims": [
+    "No current root/generator/full-quality or lifecycle gate pass",
+    "No universal old compiler-descendant or Nix daemon emptiness proof",
+    "No historical campaign completion or immutable receipt rewrite",
+    "No archive/sync acceptance, main publication, bootstrap, SDK/APK/signing, or release eligibility"
+  ]
+}

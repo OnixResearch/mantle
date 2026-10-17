@@ -279,6 +279,26 @@ fn cache_hit_and_miss_are_observed_without_a_second_lookup() {
 }
 
 #[test]
+fn oversized_execution_fails_before_preparing_a_unit() {
+    let selected = effects();
+    let oversized =
+        vec![selected[0].clone(); usize::try_from(mantle_rust_plan_core::MAX_UNITS).unwrap().saturating_add(1)];
+    let mut executor = Executor {
+        mode: ExecutorMode::HitThenMiss,
+        calls: 0,
+        compiler_calls: 0,
+    };
+    let error = execute_existing_units(&oversized, &mut executor).expect_err("oversized plan cannot execute");
+    assert!(matches!(
+        error,
+        ExecutionError::Blocked(blockers)
+            if blockers.len() == 1 && blockers[0].code == "unit-limit" && blockers[0].subject == "units"
+    ));
+    assert_eq!(executor.calls, 0, "invalid units must not reach a shell adapter");
+    assert_eq!(executor.compiler_calls, 0);
+}
+
+#[test]
 fn wrong_cache_observation_and_cache_fault_never_complete_a_plan() {
     let effects = effects();
     let mut executor = Executor {

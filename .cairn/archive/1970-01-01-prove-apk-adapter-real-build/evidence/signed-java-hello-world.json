@@ -1,0 +1,1150 @@
+{
+  "builds": [
+    {
+      "apk": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/244yl2y583qy8lc8l9k2f5767zi07rgj-hello-world-apksigner/signed.apk",
+      "apk_blake3": "c8dd0a72515e7ccb16aaa996ec35229855f143402c3ac831cc4d799d90151b10",
+      "apksigner_verify": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\n"
+      },
+      "archive_fods": [
+        {
+          "drv": "56gwidrk5dwj8dwppx6i2nj5ci87mi15-android-build-tools-reviewed.drv",
+          "source_identity": {
+            "component": "android-build-tools",
+            "platform": "x86_64-linux",
+            "record_identity_blake3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "sha256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "unpack_shape": {
+              "archive": "zip",
+              "root": "android-15/"
+            },
+            "url": "https://dl.google.com/android/repository/build-tools_r35_linux.zip",
+            "version": "35.0.0"
+          },
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/mls24a59ifcf2gkrxv63ar5kqf13765y-android-build-tools-reviewed"
+        },
+        {
+          "drv": "njnjb8z70gisb0jmm0vwgga7iah2n3am-temurin-jdk-reviewed.drv",
+          "source_identity": {
+            "component": "temurin-jdk",
+            "platform": "x86_64-linux",
+            "record_identity_blake3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+            "sha256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+            "unpack_shape": {
+              "archive": "tar-gz",
+              "root": "jdk-17.0.17+10/"
+            },
+            "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.17%2B10/OpenJDK17U-jdk_x64_linux_hotspot_17.0.17_10.tar.gz",
+            "version": "17.0.17+10"
+          },
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/g29l6x18xd1y9m5k5shchzz510rcmkq2-temurin-jdk-reviewed"
+        },
+        {
+          "drv": "1mwkh0k7vhax0v79pxrhwj6f7g6nhafs-android-platform-reviewed.drv",
+          "source_identity": {
+            "component": "android-platform",
+            "platform": "x86_64-linux",
+            "record_identity_blake3": "d77b395b209a6e6b2becf69a924c19ff2580fb2c2c4113a4b38aa8bb09e126cf",
+            "sha256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+            "unpack_shape": {
+              "archive": "zip",
+              "root": "android-35/"
+            },
+            "url": "https://dl.google.com/android/repository/platform-35_r02.zip",
+            "version": "35_r02"
+          },
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/q3yi681sppm4py36ngayjjbxrja9rh72-android-platform-reviewed"
+        }
+      ],
+      "extractions": [
+        {
+          "archive_sha256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+          "drv": "d666zhzrifnhgpjr8p3gadhvg15r6gzj-android-extract-android-build-tools.drv",
+          "name": "android-extract-android-build-tools",
+          "source_record_identity_blake3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/snjh4zvpccyqwmda8q3iwk5plhw72sqy-android-extract-android-build-tools"
+        },
+        {
+          "archive_sha256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+          "drv": "wmgw01rr5m5b0dzzylg79q880n8v0jy9-android-extract-temurin-jdk.drv",
+          "name": "android-extract-temurin-jdk",
+          "source_record_identity_blake3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/0wci2b5v8m4ra7jis3bfjjr9cad7zv3x-android-extract-temurin-jdk"
+        },
+        {
+          "archive_sha256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+          "drv": "4s1zgjv61sgb3yja648b61plymibjbcb-android-extract-android-platform.drv",
+          "name": "android-extract-android-platform",
+          "source_record_identity_blake3": "d77b395b209a6e6b2becf69a924c19ff2580fb2c2c4113a4b38aa8bb09e126cf",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/9r6lkaf39da3nf36p5gzga62lxm7rgzm-android-extract-android-platform"
+        }
+      ],
+      "run": "clean-one",
+      "steps": [
+        {
+          "drv": "p7vwv82wj4pc77si088q72b5jg2h8ys0-hello-world-aapt2compile.drv",
+          "env": {
+            "EXTRACT_BUILD": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/snjh4zvpccyqwmda8q3iwk5plhw72sqy-android-extract-android-build-tools",
+            "EXTRACT_BUILD_RECORD_IDENTITY_BLAKE3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "EXTRACT_BUILD_SHA256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "LC_ALL": "C",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "TZ": "UTC",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/snjh4zvpccyqwmda8q3iwk5plhw72sqy-android-extract-android-build-tools"
+          ],
+          "kind": "Aapt2Compile",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/a8hx04zwi18k6p3rhyx88kk014xrn48n-hello-world-aapt2compile/compiled-resources",
+          "output_nar_sha256": "8712905cf86f6abc65b3d61ebf6f85e04a28972934e6960e81caa7a2f61a3c8d",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/a8hx04zwi18k6p3rhyx88kk014xrn48n-hello-world-aapt2compile"
+        },
+        {
+          "drv": "js83zswd1s50h1kiwaa1xvl55sixgird-hello-world-aapt2link.drv",
+          "env": {
+            "COMPILED": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/a8hx04zwi18k6p3rhyx88kk014xrn48n-hello-world-aapt2compile",
+            "EXTRACT_BUILD": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/snjh4zvpccyqwmda8q3iwk5plhw72sqy-android-extract-android-build-tools",
+            "EXTRACT_BUILD_RECORD_IDENTITY_BLAKE3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "EXTRACT_BUILD_SHA256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "EXTRACT_PLATFORM": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/9r6lkaf39da3nf36p5gzga62lxm7rgzm-android-extract-android-platform",
+            "EXTRACT_PLATFORM_RECORD_IDENTITY_BLAKE3": "d77b395b209a6e6b2becf69a924c19ff2580fb2c2c4113a4b38aa8bb09e126cf",
+            "EXTRACT_PLATFORM_SHA256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "LC_ALL": "C",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "TZ": "UTC",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/9r6lkaf39da3nf36p5gzga62lxm7rgzm-android-extract-android-platform",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/a8hx04zwi18k6p3rhyx88kk014xrn48n-hello-world-aapt2compile",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/snjh4zvpccyqwmda8q3iwk5plhw72sqy-android-extract-android-build-tools"
+          ],
+          "kind": "Aapt2Link",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ynjvlj25qjpj81bs7fk9hxnb6ks7sp0y-hello-world-aapt2link/linked-resources.apk",
+          "output_nar_sha256": "6d7ac192945e63d508333d6d63198a7c30971a5c66dda7c47db522da9026c3f8",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ynjvlj25qjpj81bs7fk9hxnb6ks7sp0y-hello-world-aapt2link"
+        },
+        {
+          "drv": "91pm61shn8kbm67j332h32c56lrds74d-hello-world-javac.drv",
+          "env": {
+            "EXTRACT_JDK": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/0wci2b5v8m4ra7jis3bfjjr9cad7zv3x-android-extract-temurin-jdk",
+            "EXTRACT_JDK_RECORD_IDENTITY_BLAKE3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+            "EXTRACT_JDK_SHA256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+            "EXTRACT_PLATFORM": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/9r6lkaf39da3nf36p5gzga62lxm7rgzm-android-extract-android-platform",
+            "EXTRACT_PLATFORM_RECORD_IDENTITY_BLAKE3": "d77b395b209a6e6b2becf69a924c19ff2580fb2c2c4113a4b38aa8bb09e126cf",
+            "EXTRACT_PLATFORM_SHA256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "LC_ALL": "C",
+            "LINKED": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ynjvlj25qjpj81bs7fk9hxnb6ks7sp0y-hello-world-aapt2link",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "TZ": "UTC",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/0wci2b5v8m4ra7jis3bfjjr9cad7zv3x-android-extract-temurin-jdk",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/9r6lkaf39da3nf36p5gzga62lxm7rgzm-android-extract-android-platform",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ynjvlj25qjpj81bs7fk9hxnb6ks7sp0y-hello-world-aapt2link"
+          ],
+          "kind": "Javac",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/kzqb21801fvcacyfb8gcjl78b12wscrz-hello-world-javac/classes",
+          "output_nar_sha256": "637aa4a73296ee410171807ffab84b89149795dcf983a46128b3b44c3a14618c",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/kzqb21801fvcacyfb8gcjl78b12wscrz-hello-world-javac"
+        },
+        {
+          "drv": "b7j7p2prwckmb00pkwfmpd0hrc7h6xps-hello-world-d8.drv",
+          "env": {
+            "CLASSES": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/kzqb21801fvcacyfb8gcjl78b12wscrz-hello-world-javac",
+            "EXTRACT_BUILD": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/snjh4zvpccyqwmda8q3iwk5plhw72sqy-android-extract-android-build-tools",
+            "EXTRACT_BUILD_RECORD_IDENTITY_BLAKE3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "EXTRACT_BUILD_SHA256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "EXTRACT_JDK": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/0wci2b5v8m4ra7jis3bfjjr9cad7zv3x-android-extract-temurin-jdk",
+            "EXTRACT_JDK_RECORD_IDENTITY_BLAKE3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+            "EXTRACT_JDK_SHA256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+            "EXTRACT_PLATFORM": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/9r6lkaf39da3nf36p5gzga62lxm7rgzm-android-extract-android-platform",
+            "EXTRACT_PLATFORM_RECORD_IDENTITY_BLAKE3": "d77b395b209a6e6b2becf69a924c19ff2580fb2c2c4113a4b38aa8bb09e126cf",
+            "EXTRACT_PLATFORM_SHA256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "LC_ALL": "C",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "TZ": "UTC",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/0wci2b5v8m4ra7jis3bfjjr9cad7zv3x-android-extract-temurin-jdk",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/9r6lkaf39da3nf36p5gzga62lxm7rgzm-android-extract-android-platform",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/kzqb21801fvcacyfb8gcjl78b12wscrz-hello-world-javac",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/snjh4zvpccyqwmda8q3iwk5plhw72sqy-android-extract-android-build-tools"
+          ],
+          "kind": "D8",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/w91q9qpvvqk5zm1rwvj7kn26i8i6bdfl-hello-world-d8/classes.dex",
+          "output_nar_sha256": "df105730eb0909a4e7cc811a38385c3fbde98aa6b3a0d6de2c2621b54a7d08e1",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/w91q9qpvvqk5zm1rwvj7kn26i8i6bdfl-hello-world-d8"
+        },
+        {
+          "drv": "g0mlf9pzj8xzfslvi46b95j4f9r4i1vn-hello-world-zipalign.drv",
+          "env": {
+            "DEX": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/w91q9qpvvqk5zm1rwvj7kn26i8i6bdfl-hello-world-d8",
+            "EXTRACT_BUILD": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/snjh4zvpccyqwmda8q3iwk5plhw72sqy-android-extract-android-build-tools",
+            "EXTRACT_BUILD_RECORD_IDENTITY_BLAKE3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "EXTRACT_BUILD_SHA256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "EXTRACT_JDK": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/0wci2b5v8m4ra7jis3bfjjr9cad7zv3x-android-extract-temurin-jdk",
+            "EXTRACT_JDK_RECORD_IDENTITY_BLAKE3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+            "EXTRACT_JDK_SHA256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "LC_ALL": "C",
+            "LINKED": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ynjvlj25qjpj81bs7fk9hxnb6ks7sp0y-hello-world-aapt2link",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "TZ": "UTC",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/0wci2b5v8m4ra7jis3bfjjr9cad7zv3x-android-extract-temurin-jdk",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/snjh4zvpccyqwmda8q3iwk5plhw72sqy-android-extract-android-build-tools",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/w91q9qpvvqk5zm1rwvj7kn26i8i6bdfl-hello-world-d8",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ynjvlj25qjpj81bs7fk9hxnb6ks7sp0y-hello-world-aapt2link"
+          ],
+          "kind": "Zipalign",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/k4jl3yfayx732dkq6p4pnk30bki24r9x-hello-world-zipalign/unsigned.apk",
+          "output_nar_sha256": "b51f912d93c92d3be6f97455db4ffb96f14d7b7903685e9b45998870f5a0705b",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/k4jl3yfayx732dkq6p4pnk30bki24r9x-hello-world-zipalign"
+        },
+        {
+          "drv": "fpmw7mf6qhnah2p91masqd9bvl51jihm-hello-world-apksigner.drv",
+          "env": {
+            "EXTRACT_BUILD": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/snjh4zvpccyqwmda8q3iwk5plhw72sqy-android-extract-android-build-tools",
+            "EXTRACT_BUILD_RECORD_IDENTITY_BLAKE3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "EXTRACT_BUILD_SHA256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "EXTRACT_JDK": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/0wci2b5v8m4ra7jis3bfjjr9cad7zv3x-android-extract-temurin-jdk",
+            "EXTRACT_JDK_RECORD_IDENTITY_BLAKE3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+            "EXTRACT_JDK_SHA256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "KEYSTORE": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/gggggggggggggggggggggggggggggggg-proof-keystore/keys/release.jks",
+            "KEY_PASSWORD_FILE": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh-proof-password/key.pass",
+            "LC_ALL": "C",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "STORE_PASSWORD_FILE": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh-proof-password/store.pass",
+            "TZ": "UTC",
+            "UNSIGNED": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/k4jl3yfayx732dkq6p4pnk30bki24r9x-hello-world-zipalign",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/0wci2b5v8m4ra7jis3bfjjr9cad7zv3x-android-extract-temurin-jdk",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/gggggggggggggggggggggggggggggggg-proof-keystore",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh-proof-password",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/k4jl3yfayx732dkq6p4pnk30bki24r9x-hello-world-zipalign",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/snjh4zvpccyqwmda8q3iwk5plhw72sqy-android-extract-android-build-tools"
+          ],
+          "kind": "Apksigner",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/244yl2y583qy8lc8l9k2f5767zi07rgj-hello-world-apksigner/signed.apk",
+          "output_nar_sha256": "109e0d55fca0a74f186c2cb3c4e171eca0a317fbb631f34c815615732591702c",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-one/store/244yl2y583qy8lc8l9k2f5767zi07rgj-hello-world-apksigner"
+        }
+      ],
+      "structure": {
+        "apk_signing_block": true,
+        "compiled_manifest": true,
+        "dex": true,
+        "dex_offset": 1349,
+        "entries": [
+          "AndroidManifest.xml",
+          "resources.arsc",
+          "classes.dex"
+        ]
+      }
+    },
+    {
+      "apk": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/wk1aa4wy7d1p5rz94w00n8621rqwnvi8-hello-world-apksigner/signed.apk",
+      "apk_blake3": "c8dd0a72515e7ccb16aaa996ec35229855f143402c3ac831cc4d799d90151b10",
+      "apksigner_verify": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\n"
+      },
+      "archive_fods": [
+        {
+          "drv": "h35y55h3lglnxcw9k6zjzvr4fhvg6bdq-android-build-tools-reviewed.drv",
+          "source_identity": {
+            "component": "android-build-tools",
+            "platform": "x86_64-linux",
+            "record_identity_blake3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "sha256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "unpack_shape": {
+              "archive": "zip",
+              "root": "android-15/"
+            },
+            "url": "https://dl.google.com/android/repository/build-tools_r35_linux.zip",
+            "version": "35.0.0"
+          },
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/l5cskwk8ylzq5vxsx1dj2fyvr9dypndy-android-build-tools-reviewed"
+        },
+        {
+          "drv": "c16ic7sk4hy8lw151k12yag6y368qj2w-temurin-jdk-reviewed.drv",
+          "source_identity": {
+            "component": "temurin-jdk",
+            "platform": "x86_64-linux",
+            "record_identity_blake3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+            "sha256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+            "unpack_shape": {
+              "archive": "tar-gz",
+              "root": "jdk-17.0.17+10/"
+            },
+            "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.17%2B10/OpenJDK17U-jdk_x64_linux_hotspot_17.0.17_10.tar.gz",
+            "version": "17.0.17+10"
+          },
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/k1biivcr7m3f2bx9ynix3lq0caaddbyw-temurin-jdk-reviewed"
+        },
+        {
+          "drv": "pzf5hjggg5gkvc2snk58lkiw9f27pi06-android-platform-reviewed.drv",
+          "source_identity": {
+            "component": "android-platform",
+            "platform": "x86_64-linux",
+            "record_identity_blake3": "d77b395b209a6e6b2becf69a924c19ff2580fb2c2c4113a4b38aa8bb09e126cf",
+            "sha256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+            "unpack_shape": {
+              "archive": "zip",
+              "root": "android-35/"
+            },
+            "url": "https://dl.google.com/android/repository/platform-35_r02.zip",
+            "version": "35_r02"
+          },
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/x05k55i6cvfxg930ry40nz0yfxdhc8y6-android-platform-reviewed"
+        }
+      ],
+      "extractions": [
+        {
+          "archive_sha256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+          "drv": "0slbrmdm2hjs3lqidid88r8pwfbk8s1w-android-extract-android-build-tools.drv",
+          "name": "android-extract-android-build-tools",
+          "source_record_identity_blake3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ndh964gypbwcqa5f7irlizjhlib2aq43-android-extract-android-build-tools"
+        },
+        {
+          "archive_sha256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+          "drv": "gbmbdi18a6ik411vxkn4rcc66mdx7s6r-android-extract-temurin-jdk.drv",
+          "name": "android-extract-temurin-jdk",
+          "source_record_identity_blake3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/miniv5hsawz6gr00c2ay6k7khvpjm642-android-extract-temurin-jdk"
+        },
+        {
+          "archive_sha256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+          "drv": "24zgag58dihf547iia1c6402i9783ynz-android-extract-android-platform.drv",
+          "name": "android-extract-android-platform",
+          "source_record_identity_blake3": "d77b395b209a6e6b2becf69a924c19ff2580fb2c2c4113a4b38aa8bb09e126cf",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dpsdd0xcqn7dzlxhambf4dk9wy78hf8a-android-extract-android-platform"
+        }
+      ],
+      "run": "clean-two",
+      "steps": [
+        {
+          "drv": "lc5k64m570i1zfa19zc2gz9nhsywap2c-hello-world-aapt2compile.drv",
+          "env": {
+            "EXTRACT_BUILD": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ndh964gypbwcqa5f7irlizjhlib2aq43-android-extract-android-build-tools",
+            "EXTRACT_BUILD_RECORD_IDENTITY_BLAKE3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "EXTRACT_BUILD_SHA256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "LC_ALL": "C",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "TZ": "UTC",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ndh964gypbwcqa5f7irlizjhlib2aq43-android-extract-android-build-tools"
+          ],
+          "kind": "Aapt2Compile",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cr9dv80xj09a26z1h4ns50w8gdar1dkq-hello-world-aapt2compile/compiled-resources",
+          "output_nar_sha256": "7349dd17ea2b9b32a638ab6620f98389e5a7cf89c3a64527ae19fd9d8a73cd75",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cr9dv80xj09a26z1h4ns50w8gdar1dkq-hello-world-aapt2compile"
+        },
+        {
+          "drv": "m06z6vgs6kp0zg5c1kzn9b3m46dgk9zx-hello-world-aapt2link.drv",
+          "env": {
+            "COMPILED": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cr9dv80xj09a26z1h4ns50w8gdar1dkq-hello-world-aapt2compile",
+            "EXTRACT_BUILD": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ndh964gypbwcqa5f7irlizjhlib2aq43-android-extract-android-build-tools",
+            "EXTRACT_BUILD_RECORD_IDENTITY_BLAKE3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "EXTRACT_BUILD_SHA256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "EXTRACT_PLATFORM": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dpsdd0xcqn7dzlxhambf4dk9wy78hf8a-android-extract-android-platform",
+            "EXTRACT_PLATFORM_RECORD_IDENTITY_BLAKE3": "d77b395b209a6e6b2becf69a924c19ff2580fb2c2c4113a4b38aa8bb09e126cf",
+            "EXTRACT_PLATFORM_SHA256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "LC_ALL": "C",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "TZ": "UTC",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cr9dv80xj09a26z1h4ns50w8gdar1dkq-hello-world-aapt2compile",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dpsdd0xcqn7dzlxhambf4dk9wy78hf8a-android-extract-android-platform",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ndh964gypbwcqa5f7irlizjhlib2aq43-android-extract-android-build-tools"
+          ],
+          "kind": "Aapt2Link",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/q4a3zhnpd4pncqzlh6568140jn173s0a-hello-world-aapt2link/linked-resources.apk",
+          "output_nar_sha256": "6d7ac192945e63d508333d6d63198a7c30971a5c66dda7c47db522da9026c3f8",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/q4a3zhnpd4pncqzlh6568140jn173s0a-hello-world-aapt2link"
+        },
+        {
+          "drv": "y3h8wif0slkh90cz75sxqhfix5qxzrzv-hello-world-javac.drv",
+          "env": {
+            "EXTRACT_JDK": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/miniv5hsawz6gr00c2ay6k7khvpjm642-android-extract-temurin-jdk",
+            "EXTRACT_JDK_RECORD_IDENTITY_BLAKE3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+            "EXTRACT_JDK_SHA256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+            "EXTRACT_PLATFORM": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dpsdd0xcqn7dzlxhambf4dk9wy78hf8a-android-extract-android-platform",
+            "EXTRACT_PLATFORM_RECORD_IDENTITY_BLAKE3": "d77b395b209a6e6b2becf69a924c19ff2580fb2c2c4113a4b38aa8bb09e126cf",
+            "EXTRACT_PLATFORM_SHA256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "LC_ALL": "C",
+            "LINKED": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/q4a3zhnpd4pncqzlh6568140jn173s0a-hello-world-aapt2link",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "TZ": "UTC",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dpsdd0xcqn7dzlxhambf4dk9wy78hf8a-android-extract-android-platform",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/miniv5hsawz6gr00c2ay6k7khvpjm642-android-extract-temurin-jdk",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/q4a3zhnpd4pncqzlh6568140jn173s0a-hello-world-aapt2link"
+          ],
+          "kind": "Javac",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/4p7sy3lz2nk1jy4kig95kr2ynflm9125-hello-world-javac/classes",
+          "output_nar_sha256": "637aa4a73296ee410171807ffab84b89149795dcf983a46128b3b44c3a14618c",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/4p7sy3lz2nk1jy4kig95kr2ynflm9125-hello-world-javac"
+        },
+        {
+          "drv": "z4vazdlymfr4hlzhi48j3782mi81h2c7-hello-world-d8.drv",
+          "env": {
+            "CLASSES": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/4p7sy3lz2nk1jy4kig95kr2ynflm9125-hello-world-javac",
+            "EXTRACT_BUILD": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ndh964gypbwcqa5f7irlizjhlib2aq43-android-extract-android-build-tools",
+            "EXTRACT_BUILD_RECORD_IDENTITY_BLAKE3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "EXTRACT_BUILD_SHA256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "EXTRACT_JDK": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/miniv5hsawz6gr00c2ay6k7khvpjm642-android-extract-temurin-jdk",
+            "EXTRACT_JDK_RECORD_IDENTITY_BLAKE3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+            "EXTRACT_JDK_SHA256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+            "EXTRACT_PLATFORM": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dpsdd0xcqn7dzlxhambf4dk9wy78hf8a-android-extract-android-platform",
+            "EXTRACT_PLATFORM_RECORD_IDENTITY_BLAKE3": "d77b395b209a6e6b2becf69a924c19ff2580fb2c2c4113a4b38aa8bb09e126cf",
+            "EXTRACT_PLATFORM_SHA256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "LC_ALL": "C",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "TZ": "UTC",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/4p7sy3lz2nk1jy4kig95kr2ynflm9125-hello-world-javac",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dpsdd0xcqn7dzlxhambf4dk9wy78hf8a-android-extract-android-platform",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/miniv5hsawz6gr00c2ay6k7khvpjm642-android-extract-temurin-jdk",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ndh964gypbwcqa5f7irlizjhlib2aq43-android-extract-android-build-tools"
+          ],
+          "kind": "D8",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/m7hvcf2qg54357mk1fwk03bryn6bmy7n-hello-world-d8/classes.dex",
+          "output_nar_sha256": "df105730eb0909a4e7cc811a38385c3fbde98aa6b3a0d6de2c2621b54a7d08e1",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/m7hvcf2qg54357mk1fwk03bryn6bmy7n-hello-world-d8"
+        },
+        {
+          "drv": "0yiyldd22fy80mfh4i88fnxzabkd4k23-hello-world-zipalign.drv",
+          "env": {
+            "DEX": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/m7hvcf2qg54357mk1fwk03bryn6bmy7n-hello-world-d8",
+            "EXTRACT_BUILD": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ndh964gypbwcqa5f7irlizjhlib2aq43-android-extract-android-build-tools",
+            "EXTRACT_BUILD_RECORD_IDENTITY_BLAKE3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "EXTRACT_BUILD_SHA256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "EXTRACT_JDK": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/miniv5hsawz6gr00c2ay6k7khvpjm642-android-extract-temurin-jdk",
+            "EXTRACT_JDK_RECORD_IDENTITY_BLAKE3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+            "EXTRACT_JDK_SHA256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "LC_ALL": "C",
+            "LINKED": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/q4a3zhnpd4pncqzlh6568140jn173s0a-hello-world-aapt2link",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "TZ": "UTC",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/m7hvcf2qg54357mk1fwk03bryn6bmy7n-hello-world-d8",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/miniv5hsawz6gr00c2ay6k7khvpjm642-android-extract-temurin-jdk",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ndh964gypbwcqa5f7irlizjhlib2aq43-android-extract-android-build-tools",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/q4a3zhnpd4pncqzlh6568140jn173s0a-hello-world-aapt2link"
+          ],
+          "kind": "Zipalign",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/956jn414914my4c55h572b36pjrkri1c-hello-world-zipalign/unsigned.apk",
+          "output_nar_sha256": "b51f912d93c92d3be6f97455db4ffb96f14d7b7903685e9b45998870f5a0705b",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/956jn414914my4c55h572b36pjrkri1c-hello-world-zipalign"
+        },
+        {
+          "drv": "01w14m36v3an1n7f22hkrvy9483pc0cm-hello-world-apksigner.drv",
+          "env": {
+            "EXTRACT_BUILD": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ndh964gypbwcqa5f7irlizjhlib2aq43-android-extract-android-build-tools",
+            "EXTRACT_BUILD_RECORD_IDENTITY_BLAKE3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "EXTRACT_BUILD_SHA256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "EXTRACT_JDK": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/miniv5hsawz6gr00c2ay6k7khvpjm642-android-extract-temurin-jdk",
+            "EXTRACT_JDK_RECORD_IDENTITY_BLAKE3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+            "EXTRACT_JDK_SHA256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "KEYSTORE": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/gggggggggggggggggggggggggggggggg-proof-keystore/keys/release.jks",
+            "KEY_PASSWORD_FILE": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh-proof-password/key.pass",
+            "LC_ALL": "C",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "STORE_PASSWORD_FILE": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh-proof-password/store.pass",
+            "TZ": "UTC",
+            "UNSIGNED": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/956jn414914my4c55h572b36pjrkri1c-hello-world-zipalign",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/956jn414914my4c55h572b36pjrkri1c-hello-world-zipalign",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/gggggggggggggggggggggggggggggggg-proof-keystore",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh-proof-password",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/miniv5hsawz6gr00c2ay6k7khvpjm642-android-extract-temurin-jdk",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/ndh964gypbwcqa5f7irlizjhlib2aq43-android-extract-android-build-tools"
+          ],
+          "kind": "Apksigner",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/wk1aa4wy7d1p5rz94w00n8621rqwnvi8-hello-world-apksigner/signed.apk",
+          "output_nar_sha256": "109e0d55fca0a74f186c2cb3c4e171eca0a317fbb631f34c815615732591702c",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/clean-two/store/wk1aa4wy7d1p5rz94w00n8621rqwnvi8-hello-world-apksigner"
+        }
+      ],
+      "structure": {
+        "apk_signing_block": true,
+        "compiled_manifest": true,
+        "dex": true,
+        "dex_offset": 1349,
+        "entries": [
+          "AndroidManifest.xml",
+          "resources.arsc",
+          "classes.dex"
+        ]
+      }
+    },
+    {
+      "apk": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/bqc9d8pc7iga82jlc48x9gzmmxxiad2l-hello-world-apksigner/signed.apk",
+      "apk_blake3": "a5ec11efe062023eb21e075c941d2fdb38c22b0a6a277a5e45226c6eec4b08f7",
+      "apksigner_verify": {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\n"
+      },
+      "archive_fods": [
+        {
+          "drv": "rpnf77jn6m5hb2x6lgsj6ilzy8rrndbw-android-build-tools-reviewed.drv",
+          "source_identity": {
+            "component": "android-build-tools",
+            "platform": "x86_64-linux",
+            "record_identity_blake3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "sha256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "unpack_shape": {
+              "archive": "zip",
+              "root": "android-15/"
+            },
+            "url": "https://dl.google.com/android/repository/build-tools_r35_linux.zip",
+            "version": "35.0.0"
+          },
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/yhvpj5qhzjzxzrjv33rlpdn0g0pxhjb4-android-build-tools-reviewed"
+        },
+        {
+          "drv": "rvndpbxkpx7220p8m1s9ymagzd5diy9n-temurin-jdk-reviewed.drv",
+          "source_identity": {
+            "component": "temurin-jdk",
+            "platform": "x86_64-linux",
+            "record_identity_blake3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+            "sha256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+            "unpack_shape": {
+              "archive": "tar-gz",
+              "root": "jdk-17.0.17+10/"
+            },
+            "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.17%2B10/OpenJDK17U-jdk_x64_linux_hotspot_17.0.17_10.tar.gz",
+            "version": "17.0.17+10"
+          },
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/smk01bzzi2wiry2y9fpjw50bi1baph5a-temurin-jdk-reviewed"
+        },
+        {
+          "drv": "34rz2ffkj8wq5kzix4bh9ba9hf0gsbbq-android-platform-reviewed.drv",
+          "source_identity": {
+            "component": "android-platform",
+            "platform": "x86_64-linux",
+            "record_identity_blake3": "d77b395b209a6e6b2becf69a924c19ff2580fb2c2c4113a4b38aa8bb09e126cf",
+            "sha256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+            "unpack_shape": {
+              "archive": "zip",
+              "root": "android-35/"
+            },
+            "url": "https://dl.google.com/android/repository/platform-35_r02.zip",
+            "version": "35_r02"
+          },
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/vzh700mh5vrzyp7p6rywnpbyz93nmf5m-android-platform-reviewed"
+        }
+      ],
+      "extractions": [
+        {
+          "archive_sha256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+          "drv": "qyzqbshfaihp3363bjz92qgiyc5ga95r-android-extract-android-build-tools.drv",
+          "name": "android-extract-android-build-tools",
+          "source_record_identity_blake3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/prhv0a42rm3krz36w20llcbahwz5s42w-android-extract-android-build-tools"
+        },
+        {
+          "archive_sha256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+          "drv": "9ydc3d3xsvrf6360nyhk65kkvca3j938-android-extract-temurin-jdk.drv",
+          "name": "android-extract-temurin-jdk",
+          "source_record_identity_blake3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/8mg6pgkdmaiq926278yr7bbn8h50cb2b-android-extract-temurin-jdk"
+        },
+        {
+          "archive_sha256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+          "drv": "369wkkmjm1g4xc25j3jp540z3nc9shmz-android-extract-android-platform.drv",
+          "name": "android-extract-android-platform",
+          "source_record_identity_blake3": "d77b395b209a6e6b2becf69a924c19ff2580fb2c2c4113a4b38aa8bb09e126cf",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/x05l8f2xanxcvb3qdc16ajckvkfxc49k-android-extract-android-platform"
+        }
+      ],
+      "run": "java-perturbed",
+      "steps": [
+        {
+          "drv": "jgbn82iazlr3iy0q1j1mhbw3vgpz4ljd-hello-world-aapt2compile.drv",
+          "env": {
+            "EXTRACT_BUILD": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/prhv0a42rm3krz36w20llcbahwz5s42w-android-extract-android-build-tools",
+            "EXTRACT_BUILD_RECORD_IDENTITY_BLAKE3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "EXTRACT_BUILD_SHA256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "LC_ALL": "C",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "TZ": "UTC",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/prhv0a42rm3krz36w20llcbahwz5s42w-android-extract-android-build-tools"
+          ],
+          "kind": "Aapt2Compile",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/qbn0b7h1m31j9asa33g38bg1kpzwxmia-hello-world-aapt2compile/compiled-resources",
+          "output_nar_sha256": "d925568140c339c8f1b03783be600338b196a27ad66b2469a6f767f962eeb3a9",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/qbn0b7h1m31j9asa33g38bg1kpzwxmia-hello-world-aapt2compile"
+        },
+        {
+          "drv": "1l2x10jmbq6a4flynv9bganmr7jh02mc-hello-world-aapt2link.drv",
+          "env": {
+            "COMPILED": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/qbn0b7h1m31j9asa33g38bg1kpzwxmia-hello-world-aapt2compile",
+            "EXTRACT_BUILD": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/prhv0a42rm3krz36w20llcbahwz5s42w-android-extract-android-build-tools",
+            "EXTRACT_BUILD_RECORD_IDENTITY_BLAKE3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "EXTRACT_BUILD_SHA256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "EXTRACT_PLATFORM": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/x05l8f2xanxcvb3qdc16ajckvkfxc49k-android-extract-android-platform",
+            "EXTRACT_PLATFORM_RECORD_IDENTITY_BLAKE3": "d77b395b209a6e6b2becf69a924c19ff2580fb2c2c4113a4b38aa8bb09e126cf",
+            "EXTRACT_PLATFORM_SHA256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "LC_ALL": "C",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "TZ": "UTC",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/prhv0a42rm3krz36w20llcbahwz5s42w-android-extract-android-build-tools",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/qbn0b7h1m31j9asa33g38bg1kpzwxmia-hello-world-aapt2compile",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/x05l8f2xanxcvb3qdc16ajckvkfxc49k-android-extract-android-platform"
+          ],
+          "kind": "Aapt2Link",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/z6qkjng73dlv0rjlb2kh5wpp05ls8ivp-hello-world-aapt2link/linked-resources.apk",
+          "output_nar_sha256": "6d7ac192945e63d508333d6d63198a7c30971a5c66dda7c47db522da9026c3f8",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/z6qkjng73dlv0rjlb2kh5wpp05ls8ivp-hello-world-aapt2link"
+        },
+        {
+          "drv": "wbz08kqsi9vjnwpkcbhcn8mvcy8rlwqm-hello-world-javac.drv",
+          "env": {
+            "EXTRACT_JDK": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/8mg6pgkdmaiq926278yr7bbn8h50cb2b-android-extract-temurin-jdk",
+            "EXTRACT_JDK_RECORD_IDENTITY_BLAKE3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+            "EXTRACT_JDK_SHA256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+            "EXTRACT_PLATFORM": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/x05l8f2xanxcvb3qdc16ajckvkfxc49k-android-extract-android-platform",
+            "EXTRACT_PLATFORM_RECORD_IDENTITY_BLAKE3": "d77b395b209a6e6b2becf69a924c19ff2580fb2c2c4113a4b38aa8bb09e126cf",
+            "EXTRACT_PLATFORM_SHA256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "LC_ALL": "C",
+            "LINKED": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/z6qkjng73dlv0rjlb2kh5wpp05ls8ivp-hello-world-aapt2link",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "TZ": "UTC",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/8mg6pgkdmaiq926278yr7bbn8h50cb2b-android-extract-temurin-jdk",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/x05l8f2xanxcvb3qdc16ajckvkfxc49k-android-extract-android-platform",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/z6qkjng73dlv0rjlb2kh5wpp05ls8ivp-hello-world-aapt2link"
+          ],
+          "kind": "Javac",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ljk362gij9z50iy97056ffn9k2kdhvgn-hello-world-javac/classes",
+          "output_nar_sha256": "2d05fc67ab61aad9908ceaa80cc954446655e6287070dc8090acf61d8b38668f",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ljk362gij9z50iy97056ffn9k2kdhvgn-hello-world-javac"
+        },
+        {
+          "drv": "7d96kyncmqc143za2n5yv816hs0y79x5-hello-world-d8.drv",
+          "env": {
+            "CLASSES": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ljk362gij9z50iy97056ffn9k2kdhvgn-hello-world-javac",
+            "EXTRACT_BUILD": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/prhv0a42rm3krz36w20llcbahwz5s42w-android-extract-android-build-tools",
+            "EXTRACT_BUILD_RECORD_IDENTITY_BLAKE3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "EXTRACT_BUILD_SHA256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "EXTRACT_JDK": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/8mg6pgkdmaiq926278yr7bbn8h50cb2b-android-extract-temurin-jdk",
+            "EXTRACT_JDK_RECORD_IDENTITY_BLAKE3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+            "EXTRACT_JDK_SHA256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+            "EXTRACT_PLATFORM": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/x05l8f2xanxcvb3qdc16ajckvkfxc49k-android-extract-android-platform",
+            "EXTRACT_PLATFORM_RECORD_IDENTITY_BLAKE3": "d77b395b209a6e6b2becf69a924c19ff2580fb2c2c4113a4b38aa8bb09e126cf",
+            "EXTRACT_PLATFORM_SHA256": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "LC_ALL": "C",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "TZ": "UTC",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/8mg6pgkdmaiq926278yr7bbn8h50cb2b-android-extract-temurin-jdk",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ljk362gij9z50iy97056ffn9k2kdhvgn-hello-world-javac",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/prhv0a42rm3krz36w20llcbahwz5s42w-android-extract-android-build-tools",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/x05l8f2xanxcvb3qdc16ajckvkfxc49k-android-extract-android-platform"
+          ],
+          "kind": "D8",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ak04jh6ccmra35nhjz4mdj7zp70cwqq2-hello-world-d8/classes.dex",
+          "output_nar_sha256": "f5468481920ee8c4c290c2fe4cae41dc880c7b6ec537a719302f63a4d8b20123",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ak04jh6ccmra35nhjz4mdj7zp70cwqq2-hello-world-d8"
+        },
+        {
+          "drv": "qkvl6ylk5wf8x8xixxg3x480ngik8bmr-hello-world-zipalign.drv",
+          "env": {
+            "DEX": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ak04jh6ccmra35nhjz4mdj7zp70cwqq2-hello-world-d8",
+            "EXTRACT_BUILD": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/prhv0a42rm3krz36w20llcbahwz5s42w-android-extract-android-build-tools",
+            "EXTRACT_BUILD_RECORD_IDENTITY_BLAKE3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "EXTRACT_BUILD_SHA256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "EXTRACT_JDK": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/8mg6pgkdmaiq926278yr7bbn8h50cb2b-android-extract-temurin-jdk",
+            "EXTRACT_JDK_RECORD_IDENTITY_BLAKE3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+            "EXTRACT_JDK_SHA256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "LC_ALL": "C",
+            "LINKED": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/z6qkjng73dlv0rjlb2kh5wpp05ls8ivp-hello-world-aapt2link",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "TZ": "UTC",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/8mg6pgkdmaiq926278yr7bbn8h50cb2b-android-extract-temurin-jdk",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ak04jh6ccmra35nhjz4mdj7zp70cwqq2-hello-world-d8",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/prhv0a42rm3krz36w20llcbahwz5s42w-android-extract-android-build-tools",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/z6qkjng73dlv0rjlb2kh5wpp05ls8ivp-hello-world-aapt2link"
+          ],
+          "kind": "Zipalign",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/yn3sh7rwk9z286al8p1fyd6fqr63s4wi-hello-world-zipalign/unsigned.apk",
+          "output_nar_sha256": "3f3c595972a31959f6dff4b2b5615f4ba4e24c7b100a54795ed4cbbb411f4b2c",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/yn3sh7rwk9z286al8p1fyd6fqr63s4wi-hello-world-zipalign"
+        },
+        {
+          "drv": "q9i1a430iylf7pbwb6x2y6yk68q4792s-hello-world-apksigner.drv",
+          "env": {
+            "EXTRACT_BUILD": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/prhv0a42rm3krz36w20llcbahwz5s42w-android-extract-android-build-tools",
+            "EXTRACT_BUILD_RECORD_IDENTITY_BLAKE3": "5bc394f89b8d8f36d1d916873b34021bb142db17107460da180e07c4d0b67e7f",
+            "EXTRACT_BUILD_SHA256": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+            "EXTRACT_JDK": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/8mg6pgkdmaiq926278yr7bbn8h50cb2b-android-extract-temurin-jdk",
+            "EXTRACT_JDK_RECORD_IDENTITY_BLAKE3": "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35",
+            "EXTRACT_JDK_SHA256": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+            "JAVA_TOOL_OPTIONS": "-Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+            "KEYSTORE": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/gggggggggggggggggggggggggggggggg-proof-keystore/keys/release.jks",
+            "KEY_PASSWORD_FILE": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh-proof-password/key.pass",
+            "LC_ALL": "C",
+            "RUNTIME_GLIBC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "RUNTIME_GLIBC_NAR_SHA256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+            "RUNTIME_LIBGCC": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "RUNTIME_LIBGCC_NAR_SHA256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+            "SOURCE_DATE_EPOCH": "315532802",
+            "SOURCE_ROOT": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "STORE_PASSWORD_FILE": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh-proof-password/store.pass",
+            "TZ": "UTC",
+            "UNSIGNED": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/yn3sh7rwk9z286al8p1fyd6fqr63s4wi-hello-world-zipalign",
+            "UTILITY": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility/busybox"
+          },
+          "inputs": [
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/8mg6pgkdmaiq926278yr7bbn8h50cb2b-android-extract-temurin-jdk",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-apk-utility",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/cccccccccccccccccccccccccccccccc-runtime-glibc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/dddddddddddddddddddddddddddddddd-runtime-libgcc",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/ffffffffffffffffffffffffffffffff-android-java-source",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/gggggggggggggggggggggggggggggggg-proof-keystore",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh-proof-password",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/prhv0a42rm3krz36w20llcbahwz5s42w-android-extract-android-build-tools",
+            "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/yn3sh7rwk9z286al8p1fyd6fqr63s4wi-hello-world-zipalign"
+          ],
+          "kind": "Apksigner",
+          "output": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/bqc9d8pc7iga82jlc48x9gzmmxxiad2l-hello-world-apksigner/signed.apk",
+          "output_nar_sha256": "2055845faeee203207551a5df00eb79df1e8d6f14b240c32e1359e71adb9df96",
+          "store_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/java-perturbed/store/bqc9d8pc7iga82jlc48x9gzmmxxiad2l-hello-world-apksigner"
+        }
+      ],
+      "structure": {
+        "apk_signing_block": true,
+        "compiled_manifest": true,
+        "dex": true,
+        "dex_offset": 1349,
+        "entries": [
+          "AndroidManifest.xml",
+          "resources.arsc",
+          "classes.dex"
+        ]
+      }
+    }
+  ],
+  "environment": {
+    "LC_ALL": "C",
+    "SOURCE_DATE_EPOCH": 315532802,
+    "TZ": "UTC",
+    "b3sum_blake3": "3fe837a95031c3506900cccd957e21465f298810dff45a7739ff3abe84ad4ed9",
+    "b3sum_store_path": "/nix/store/s3xn5vw013im0wvm801dvz90xy5rqcy2-b3sum-1.8.4",
+    "busybox_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276",
+    "busybox_store_path": "/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0",
+    "bwrap_blake3": "cd5be4481cfe2e79bbf4183ef9122dd15c3ce379594b67121a4b540ac920864e",
+    "bwrap_store_path": "/nix/store/gr9l6ql3wg70idpqlqhnfdx81hak22c8-bubblewrap-0.11.0",
+    "fresh_store_and_state_count": 3,
+    "host_arch": "x86_64",
+    "host_os": "linux",
+    "python_blake3": "a0c2715cb1cdcdc15aacffb5fb9fe354da30c796eda14fb68103d6ae970d7237",
+    "python_store_path": "/nix/store/pzdalg368npikvpq4ncz2saxnz19v53k-python3-3.13.12",
+    "source_fetch_mode": "offline-pinned-source-bundle-and-sha256-checked-file-overrides",
+    "target_system": "x86_64-linux"
+  },
+  "example": "examples/android-minimal.ncl",
+  "full_build_log": "/home/brittonr/mantle-cairn-finish/wt/real-apk-proof-20261010/.cairn/changes/prove-apk-adapter-real-build/evidence/real-build-full.log",
+  "mantle_binary": {
+    "blake3": "a7cca3a431aa802c8899418e4f6e225bb84d2458d55fc00085bdb2bc33ecb560",
+    "first_executable_sha256_pin": "e6110454a531ec08efcc4672e7e5399bf2df5b861f21f3d3acdc9e16700a5505",
+    "path": "/nix/store/267awm0hnbg8iilmfnbjs52k8wldr9sm-mantle-0.1.0/bin/mantle"
+  },
+  "non_claims": [
+    "No install on a device or emulator",
+    "No launch or runtime-behavior proof",
+    "Test-only keystore, not a production release key"
+  ],
+  "offline_replay": {
+    "advisory_ast_grep_structural_evidence_diagnostics": [
+      {
+        "blocker_class": "ast-grep-evidence-read-error",
+        "evidence_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/source-store/2zy2i572yas9gfpdz7ax1kjs09paal7v-android-build-tools-35.0.0/share/mantle/ast-grep-structural-evidence.json",
+        "label": "build_tools",
+        "message": "opening parent capability for ast-grep structural evidence at /home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/source-store/2zy2i572yas9gfpdz7ax1kjs09paal7v-android-build-tools-35.0.0/share/mantle/ast-grep-structural-evidence.json: capability root path component is not a directory: 2zy2i572yas9gfpdz7ax1kjs09paal7v-android-build-tools-35.0.0",
+        "next_action": "regenerate share/mantle/ast-grep-structural-evidence.json with the pinned ast-grep toolchain and current BLAKE3 identities",
+        "output_name": "out"
+      },
+      {
+        "blocker_class": "ast-grep-evidence-read-error",
+        "evidence_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/source-store/kmc20k4841yb0p7l96f9lysq1zi08dbj-android-jdk-17.0.17+10/share/mantle/ast-grep-structural-evidence.json",
+        "label": "jdk",
+        "message": "opening parent capability for ast-grep structural evidence at /home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/source-store/kmc20k4841yb0p7l96f9lysq1zi08dbj-android-jdk-17.0.17+10/share/mantle/ast-grep-structural-evidence.json: capability root path component is not a directory: kmc20k4841yb0p7l96f9lysq1zi08dbj-android-jdk-17.0.17+10",
+        "next_action": "regenerate share/mantle/ast-grep-structural-evidence.json with the pinned ast-grep toolchain and current BLAKE3 identities",
+        "output_name": "out"
+      },
+      {
+        "blocker_class": "ast-grep-evidence-read-error",
+        "evidence_path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/source-store/w00dv8j2kmm63w95aaw7vji3n3l5fbwv-android-platform-android-jar-35-r02/share/mantle/ast-grep-structural-evidence.json",
+        "label": "platform",
+        "message": "opening parent capability for ast-grep structural evidence at /home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/source-store/w00dv8j2kmm63w95aaw7vji3n3l5fbwv-android-platform-android-jar-35-r02/share/mantle/ast-grep-structural-evidence.json: capability root path component is not a directory: w00dv8j2kmm63w95aaw7vji3n3l5fbwv-android-platform-android-jar-35-r02",
+        "next_action": "regenerate share/mantle/ast-grep-structural-evidence.json with the pinned ast-grep toolchain and current BLAKE3 identities",
+        "output_name": "out"
+      }
+    ],
+    "counts": {
+      "built_total": 3,
+      "cached_total": 0,
+      "failed_total": 0,
+      "succeeded_total": 3
+    },
+    "full_report": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/offline-source-replay.json",
+    "mode": "SourceFetchOverridePlan --offline-source-preflight --no-substitute",
+    "outcomes": [
+      {
+        "cached": false,
+        "drv_key": "/mantle/store/lljpn13s5ybgsy74kazxb8k5v6qvi4lf-android-build-tools-35.0.0.drv",
+        "label": "build_tools",
+        "log_file": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/source-state/logs/lljpn13s5ybgsy74kazxb8k5v6qvi4lf-android-build-tools-35.0.0.drv.log",
+        "outputs": [
+          {
+            "artifact_attestation": {
+              "logical_path": "/mantle/store/2zy2i572yas9gfpdz7ax1kjs09paal7v-android-build-tools-35.0.0",
+              "path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/source-state/attestations/artifacts/62a48c0b7c77033193b512762e945287664ccbbd75fcc58f243af5e7712de4d0.json"
+            },
+            "name": "out",
+            "path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/source-store/2zy2i572yas9gfpdz7ax1kjs09paal7v-android-build-tools-35.0.0"
+          }
+        ]
+      },
+      {
+        "cached": false,
+        "drv_key": "/mantle/store/7mbphz8xkzrw7xa1794rrl56c893f866-android-jdk-17.0.17+10.drv",
+        "label": "jdk",
+        "log_file": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/source-state/logs/7mbphz8xkzrw7xa1794rrl56c893f866-android-jdk-17.0.17+10.drv.log",
+        "outputs": [
+          {
+            "artifact_attestation": {
+              "logical_path": "/mantle/store/kmc20k4841yb0p7l96f9lysq1zi08dbj-android-jdk-17.0.17+10",
+              "path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/source-state/attestations/artifacts/8c20fd81659ce60158548cde3c0c3524ff064a5b8f06d9943a8cb0330220c992.json"
+            },
+            "name": "out",
+            "path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/source-store/kmc20k4841yb0p7l96f9lysq1zi08dbj-android-jdk-17.0.17+10"
+          }
+        ]
+      },
+      {
+        "cached": false,
+        "drv_key": "/mantle/store/1n4f7z5y88f9sih48z42rq8n6c6smfjm-android-platform-android-jar-35-r02.drv",
+        "label": "platform",
+        "log_file": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/source-state/logs/1n4f7z5y88f9sih48z42rq8n6c6smfjm-android-platform-android-jar-35-r02.drv.log",
+        "outputs": [
+          {
+            "artifact_attestation": {
+              "logical_path": "/mantle/store/w00dv8j2kmm63w95aaw7vji3n3l5fbwv-android-platform-android-jar-35-r02",
+              "path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/source-state/attestations/artifacts/c208166eb9612745fb7d7367cb2d08f36ab95efb42c649999c1d0c78ab3f92df.json"
+            },
+            "name": "out",
+            "path": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/proof-run-dual-password/source-store/w00dv8j2kmm63w95aaw7vji3n3l5fbwv-android-platform-android-jar-35-r02"
+          }
+        ]
+      }
+    ]
+  },
+  "offline_source_preflight": {
+    "format": "mantle-source-offline-preflight-v1",
+    "manifest_blake3": "07ec7b584cfff4222c6eb6260469e8ef15ab0f54fb0dd5ae6cc8cab774e6fb4b",
+    "missing_records": [],
+    "network_required_records": [],
+    "next_actions": [],
+    "non_claim": "source bundle evidence proves declared source/input availability and identity only",
+    "ready_class": "ready",
+    "record_count": 3,
+    "records": [
+      {
+        "content_blake3": "3541f00e5ad489cdd4b8d85cc46af739143a9671d8fc216788df12c8e62db2d9",
+        "file_count": 0,
+        "identity": "fixed-url-3541f00e5ad489cdd4b8d85cc46af739143a9671d8fc216788df12c8e62db2d9",
+        "kind": "fixed-url",
+        "payload_bytes": 0
+      },
+      {
+        "content_blake3": "dfcafaff43a292adc8fe8814fca0aaa9022230cae3d13ba9e94d4c5e62af8758",
+        "file_count": 0,
+        "identity": "fixed-url-dfcafaff43a292adc8fe8814fca0aaa9022230cae3d13ba9e94d4c5e62af8758",
+        "kind": "fixed-url",
+        "payload_bytes": 0
+      },
+      {
+        "content_blake3": "eecc5aeef604329c787007ad4ca8c314fd8a2b16dba4f4f88563c41f93a49bfa",
+        "file_count": 0,
+        "identity": "fixed-url-eecc5aeef604329c787007ad4ca8c314fd8a2b16dba4f4f88563c41f93a49bfa",
+        "kind": "fixed-url",
+        "payload_bytes": 0
+      }
+    ],
+    "source_state_blake3": "ebaa12d16102889b98158c965ff26c202dd9557655912dcdb517d216e86c5029",
+    "stale_records": [],
+    "unpinned_records": [],
+    "unsupported_records": [],
+    "untrusted_records": []
+  },
+  "original_reviewed_archives_sha256": {
+    "build_tools": "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88",
+    "commandline_tools": "7ec965280a073311c339e571cd5de778b9975026cfcbe79f2b1cdcb1e15317ee",
+    "jdk": "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75",
+    "platform": "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0"
+  },
+  "schema": "mantle-android-reviewed-signed-java-apk-proof-v1",
+  "signed_runtime_cohort": {
+    "glibc": {
+      "nar_sha256": "428a192cf9765f6fddaa77b31a028e3cda7351bc61c5b2f02f34d2a0e843f47a",
+      "nar_size": 35073128,
+      "source_store_path": "/nix/store/n51dhmdbik1kfrsm62j5knavmigwrl1a-glibc-2.42-84"
+    },
+    "libgcc": {
+      "nar_sha256": "70cbaf1ca29943bbace24a54038d2d3716699104118afb7a7d6b591c03d570af",
+      "nar_size": 197672,
+      "source_store_path": "/nix/store/ssvq1r0xd8f7paf6zqgpfql1a4drwhy2-xgcc-15.3.0-libgcc"
+    }
+  },
+  "source_bundle": "/home/brittonr/mantle-apk-nonsecret-773df10f-20261007T024922Z/offline/android-sources.bundle.json",
+  "source_bundle_blake3": "614586d31f0333ac2b9371f797c7964fc9dec1b8ad3d321f37d664924b57e86c",
+  "source_snapshot": {
+    "file_count": 10424,
+    "ignored_vendor_deps": {
+      "present": false,
+      "reason": "inactive: pinned Nix devshell CARGO_HOME uses Crane-vendored Nix-store sources; proof Cargo uses --offline without opt-in .cargo/vendor-config.toml; active .cargo/config.toml has no source replacement"
+    },
+    "manifest": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/source-manifest-dual-password.json",
+    "manifest_blake3": "b47c91b16c758cb6c2d1218fef5b44c4c050c8b78808c92f1858eadeab8e73e7",
+    "nix_interop_nar_sha256": "7e7ab040d746672b86541aa6c4b35629eecc500ec17964d666c8eecd98d629bb",
+    "profile_blake3": "6a8ed5ebd91944cc3c50ddb02417fbe434b6fb5c18245c5c274bac016f5e5e80",
+    "root": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/source-snapshot-dual-password"
+  },
+  "source_state_blake3": "ebaa12d16102889b98158c965ff26c202dd9557655912dcdb517d216e86c5029",
+  "status": "verified",
+  "tamper_negative": {
+    "apksigner_verify": {
+      "exit_code": 1,
+      "stderr": "DOES NOT VERIFY\nERROR: APK Signature Scheme v2 signer #1: APK integrity check failed. CHUNKED_SHA256 digest mismatch. Expected: <8dc6539b510752c59ca6b28527884983252a3b45a0278469662878c081a3fd97>, actual: <05c951ad47533f0b4d100db58ea841c529232f26b788274256cfcfaa21c14f37>\n",
+      "stdout": ""
+    },
+    "flipped_signed_dex_payload_byte_offset": 1349
+  },
+  "test_result_lines": [
+    "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 3373.47s"
+  ],
+  "verification_mode": "completed-independent-three-build-run",
+  "verification_source_snapshot": {
+    "file_count": 10426,
+    "ignored_vendor_deps": {
+      "present": false,
+      "reason": "inactive: pinned Nix devshell CARGO_HOME uses Crane-vendored Nix-store sources; proof Cargo uses --offline without opt-in .cargo/vendor-config.toml; active .cargo/config.toml has no source replacement"
+    },
+    "manifest": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/source-manifest-verifier-hash-ready.json",
+    "manifest_blake3": "a2875acb547b937c71816ba415b00e76cbddaf585b3aa2ad14c9497a489b93b3",
+    "nix_interop_nar_sha256": "a12662fd7734e1e8b47503f3b071e9c2c52f803452c5e458dfd38a26fefbfdb6",
+    "profile_blake3": "03f7ccd4ade4de7ed4d0152ccdd8d2d7ec8ff608314be3369e493bf8d4c8141d",
+    "root": "/home/brittonr/mantle-cairn-finish/proofs/real-apk-20261010/source-snapshot-verifier-hash-ready"
+  }
+}

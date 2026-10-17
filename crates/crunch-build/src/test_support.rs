@@ -63,6 +63,7 @@ where
 {
     const TEST_STORE_DIR: &str = "/nix/store";
     crunch_store::StoreHandle::from_services_with_store_dir(
+        crunch_store::StoreBackend::Snix,
         crunch_store::StoreHandleServices {
             blob_service: Arc::new(blob_service),
             directory_service: Arc::new(directory_service),
@@ -74,6 +75,7 @@ where
         },
         TEST_STORE_DIR.to_string(),
     )
+    .unwrap()
 }
 
 pub fn pipeline_store_parts<BS, DS>(blob_service: BS, directory_service: DS) -> crunch_store::PipelineStoreParts

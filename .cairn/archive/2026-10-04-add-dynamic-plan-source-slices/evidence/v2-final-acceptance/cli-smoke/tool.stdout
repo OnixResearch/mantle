@@ -1,0 +1,170 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "/home/brittonr/.cargo-target/mantle-v2-integrated-cli-PT7twP1R/fixtures/tool.ncl",
+  "output_dir": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/store",
+  "state_dir": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/state",
+  "store_dir": "/mantle/store",
+  "scheduler_policy": {
+    "schema": "mantle-scheduling-policy-v1",
+    "policy_id": "mantle-lazy-priority-v1",
+    "preference_order": [
+      "known-graph",
+      "resource-fit",
+      "locality-transfer"
+    ],
+    "aged_after_epochs": 4,
+    "protected_after_epochs": 8
+  },
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "build_environment_reports": [
+    {
+      "action_name": "v2-cli-tool",
+      "digest_algorithm": "blake3",
+      "digest_blake3": "4110021ba212e9bbbcc6d8579ad0c4743d7496d2dea2bfe763726f54f5b7c017",
+      "variable_count": 24,
+      "rejections": []
+    }
+  ],
+  "network_policy_reports": [
+    {
+      "action_name": "v2-cli-tool",
+      "mode": "offline",
+      "result": "denied",
+      "capability": null,
+      "policy_basis": "ordinary derivation network access is denied by default",
+      "audit_class": null,
+      "fixed_output": null,
+      "diagnostic": null
+    }
+  ],
+  "workspace_reports": [],
+  "action_result_reports": [
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/0c6f1cf60c62f9083348626e79b4f2a5405a4f6ad0304ae1af7f4782c65d49a7",
+      "disposition": "miss",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "publication",
+      "action_ref": "mantle-action://blake3/0c6f1cf60c62f9083348626e79b4f2a5405a4f6ad0304ae1af7f4782c65d49a7",
+      "disposition": "published",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [
+        "mantle-action-result://blake3/7e9e8bfcd0477e1743769903768c71e4f25c2169fae587be4dc930e72d1192f9"
+      ],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    }
+  ],
+  "native_dynamic_plans": [],
+  "scheduler_priority_decisions": [
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 1,
+      "selected_goal_key_blake3": "80f76b32e67786a39bb93d737a63fe145c4a783b1063ad2278bacd0e651f5309",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "cf623089238f472da06b786ce86b46985ee0121bacfcc495d13acacb48230c08",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 1,
+      "known_critical_path_work_units": 1,
+      "blocked_root_count": 1,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    }
+  ],
+  "overlay_base_generations": [],
+  "store_layer_selections": [],
+  "remote_telemetry_events": [
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    }
+  ],
+  "frontend_artifact_attestations": [],
+  "ast_grep_structural_evidence": [],
+  "ast_grep_structural_evidence_diagnostics": [],
+  "cargo_build_evidence": [],
+  "cargo_build_evidence_diagnostics": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/mantle/store/6qc8vvv1m6rfp5v40j8inf1z3smxic07-v2-cli-tool.drv",
+      "label": "v2-cli-tool",
+      "cached": false,
+      "log_file": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/state/logs/6qc8vvv1m6rfp5v40j8inf1z3smxic07-v2-cli-tool.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/store/pzjzvwsvmia0bpfyhgr3zqcarapc7wcn-v2-cli-tool",
+          "artifact_attestation": {
+            "logical_path": "/mantle/store/pzjzvwsvmia0bpfyhgr3zqcarapc7wcn-v2-cli-tool",
+            "path": "/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/state/attestations/artifacts/ff5652c30330945976486282f931462c3cf95ec512477857eb7f7a8311ab2cfc.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}

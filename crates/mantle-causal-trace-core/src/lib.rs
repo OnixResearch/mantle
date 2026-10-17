@@ -14,6 +14,22 @@ pub const MAX_RECORD_BYTES: usize = 1_024;
 pub const MAX_TRACE_BYTES: usize = 4_194_304;
 pub const MAX_DIAGNOSTIC_BYTES: usize = 256;
 const HASH_HEX_BYTES: usize = 64;
+const DIAGNOSTIC_SECRET_MARKERS: [&[u8]; 14] = [
+    b"secret",
+    b"token",
+    b"password",
+    b"passwd",
+    b"credential",
+    b"authorization",
+    b"bearer",
+    b"api_key",
+    b"api-key",
+    b"access_key",
+    b"access-key",
+    b"private_key",
+    b"private-key",
+    b"cookie",
+];
 
 /// Each edge labels the *decision* that brought this action into being, not
 /// the outcome or a speculative reconstruction from log order.
@@ -263,10 +279,14 @@ pub fn chain_to_root(trace: &Trace, action_id: u32) -> Result<Vec<u32>, InvalidT
 
 /// Redact using the evaluation-stream diagnostic rules: whitespace-tokenized
 /// secret markers, host paths, standalone digests, and bounded UTF-8 text.
+/// A token and its separating space are admitted together; truncation never
+/// leaves trailing whitespace, so bounded diagnostics remain idempotent.
 pub fn redact_diagnostic(input: &str) -> String {
     let mut result = String::new();
     let scan_limit_bytes = input.len().min(MAX_DIAGNOSTIC_BYTES.saturating_mul(2));
     let boundary = input.floor_char_boundary(scan_limit_bytes);
+    debug_assert!(boundary <= input.len());
+    debug_assert!(input.is_char_boundary(boundary));
     for token in input[..boundary].split_whitespace() {
         let bare = token.trim_start_matches(['\'', '"', '(', '[', '{']);
         let is_path = bare.starts_with('/') || bare.starts_with("file://");
@@ -280,41 +300,28 @@ pub fn redact_diagnostic(input: &str) -> String {
         } else {
             token
         };
-        if !result.is_empty() {
-            result.push(' ');
-        }
-        if result.len().saturating_add(rendered.len()) > MAX_DIAGNOSTIC_BYTES {
+        let separator_bytes = usize::from(!result.is_empty());
+        if result.len().saturating_add(separator_bytes).saturating_add(rendered.len()) > MAX_DIAGNOSTIC_BYTES {
             break;
+        }
+        if separator_bytes != 0 {
+            result.push(' ');
         }
         result.push_str(rendered);
     }
+    debug_assert!(result.len() <= MAX_DIAGNOSTIC_BYTES);
     result
 }
 
 fn has_sensitive_marker(token: &[u8]) -> bool {
-    const MARKERS: [&[u8]; 14] = [
-        b"secret",
-        b"token",
-        b"password",
-        b"passwd",
-        b"credential",
-        b"authorization",
-        b"bearer",
-        b"api_key",
-        b"api-key",
-        b"access_key",
-        b"access-key",
-        b"private_key",
-        b"private-key",
-        b"cookie",
-    ];
-    MARKERS
+    DIAGNOSTIC_SECRET_MARKERS
         .iter()
         .any(|marker| token.windows(marker.len()).any(|window| window.eq_ignore_ascii_case(marker)))
 }
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
     use alloc::string::ToString;
     use alloc::vec;
 
@@ -432,6 +439,18 @@ mod tests {
         assert_eq!(validate(&trace), Ok(()));
         trace.records[7].diagnostic = Some("\0".repeat(220));
         assert_eq!(validate(&trace), Err(InvalidTrace::OversizedRecord));
+    }
+
+    #[test]
+    fn bounded_diagnostics_do_not_append_unbudgeted_separators() {
+        for token in ["x".repeat(255), "x".repeat(256), "é".repeat(128)] {
+            let redacted = redact_diagnostic(&format!("{token} y"));
+            assert_eq!(redacted, token);
+            assert_eq!(redact_diagnostic(&redacted), redacted);
+            let mut trace = chain();
+            trace.records[7].diagnostic = Some(redacted);
+            assert_eq!(validate(&trace), Ok(()));
+        }
     }
 
     #[test]

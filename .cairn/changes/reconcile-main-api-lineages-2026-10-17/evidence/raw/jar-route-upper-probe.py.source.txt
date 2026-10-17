@@ -1,0 +1,26 @@
+import json,os,pathlib,shutil,subprocess,zipfile
+R=pathlib.Path('/datapool/mantle-store/mr.7p88_pl1');D=R/'stores/jar-route-upper-current';D.mkdir();F=D/'members';F.mkdir();(F/'classes.dex').write_bytes(b'one-entry timestamp route probe, not a valid DEX or APK\n')
+J=pathlib.Path('/nix/store/1nvk0wvv8rlg5gan36lmd6cj9ipn7xiv-openjdk-headless-17.0.20+2/bin/jar')
+B=pathlib.Path('/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox')
+flags=['-J-Duser.language=en','-J-Duser.country=US','-J-Duser.timezone=UTC','-J-Dfile.encoding=UTF-8'];environment=os.environ.copy();environment.update(TZ='UTC',LC_ALL='C');rows=[]
+def run(args,cwd=None):
+ p=subprocess.run([str(x) for x in args],cwd=cwd,env=environment,capture_output=True,text=True,timeout=30)
+ row=dict(command=[str(x) for x in args],cwd=str(cwd) if cwd else None,exit_code=p.returncode,stdout=p.stdout,stderr=p.stderr);rows.append(row);print(json.dumps(row),flush=True);return p
+def inspect(archive,route,nominal,expected):
+ with zipfile.ZipFile(archive) as z:
+  assert z.namelist()==['classes.dex'];entry=z.getinfo('classes.dex');observed=entry.date_time
+  row=dict(route=route,nominal_epoch=nominal,expected_dos_timestamp=expected,observed_dos_timestamp=observed,representation='ZIP DOS 2-second precision: admitted nominal final second59 is represented as58; expectation specified before observation')
+  rows.append(row);print(json.dumps(row),flush=True);assert observed==expected;assert z.read('classes.dex')==(F/'classes.dex').read_bytes()
+seed=D/'seed.jar';assert run([J,*flags,'--create','--file',seed,'--no-manifest','--no-compress','classes.dex'],cwd=F).returncode==0
+for iso,accepted in [('2099-12-31T23:59:59Z',True),('2100-01-01T00:00:00Z',False)]:
+ archive=D/('reviewed-'+iso[:4]+'.jar');shutil.copyfile(seed,archive)
+ p=run([J,*flags,'--update','--file',archive,'--date',iso,'-C',F,'classes.dex'])
+ if accepted:
+  assert p.returncode==0;inspect(archive,'reviewed actual --update --date upper endpoint',4102444799,(2099,12,31,23,59,58))
+ else:assert p.returncode!=0
+stamp=run([B,'date','-u','-d','@4354819199','+%Y%m%d%H%M.%S']);assert stamp.returncode==0;assert stamp.stdout.strip()=='210712312359.59'
+assert run([B,'touch','-t',stamp.stdout.strip(),F,F/'classes.dex']).returncode==0
+published=D/'published-2107.jar';assert run([J,*flags,'--create','--file',published,'--no-manifest','--no-compress','classes.dex'],cwd=F).returncode==0
+inspect(published,'published actual touch/create without --date upper endpoint',4354819199,(2107,12,31,23,59,58))
+record=dict(scope='CURRENT route-specific option/entry observation using installed OpenJDK17.0.20+2 and current pinned static busybox1.37.0. NOT pinned reviewed Temurin17.0.17+10 or SDK/APK/DEX execution, signing, reproducibility, or publication proof.',cases=rows)
+(R/'jar-route-upper-result.json').write_text(json.dumps(record,indent=2)+'\n');print('INSTALLED_JDK_DISTINCT_UPDATE_2099_AND_TOUCH_CREATE_2107_ENDPOINTS_OBSERVED_NOT_SDK_PROOF')

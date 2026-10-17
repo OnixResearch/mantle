@@ -1,0 +1,170 @@
+{
+  "kind": "Additive final-document validation on stable governed files; not final-product G3 or publication acceptance",
+  "cohort_binding_reference": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/native-document-validation.json",
+  "required_revision": "007ba5193dd8fec9067a1c0e0f8ef487807af872",
+  "executed_native": "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+  "cwd": "/home/brittonr/git/OnixResearch/mantle",
+  "governed_subject": {
+    "paths": [
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/proposal.md",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/design.md",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/tasks.md",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/specs/semantic-reconciliation/spec.md",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/metadata.json"
+    ],
+    "before": {
+      "command": [
+        "b3sum",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/proposal.md",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/design.md",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/tasks.md",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/specs/semantic-reconciliation/spec.md",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/metadata.json"
+      ],
+      "exit_code": 0,
+      "capture_provenance": "Immediate preceding direct b3sum tool output, retained exactly before the three native commands.",
+      "stdout_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-governed-before.blake3",
+      "blake3": {
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/proposal.md": "149707dac6f772947ebd576e7ae73cce3e83f6eecd74af4cfceb09db86ec212f",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/design.md": "ae0adf2e582991482a5d16a8e6cea908dc327f7cccc9a2252713216bf11d3006",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/tasks.md": "da864243448d6b952cfd871fce54497a163485ec41044608e4e92790b8e0f6a9",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/specs/semantic-reconciliation/spec.md": "78bdb39479183973d974dcb247c376fc9ec68d896cf86d912ed80212e89f728a",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/metadata.json": "57be0b3217446d7faf8592ff862a29a21df0e3966b58ec2331c1783abb435429"
+      }
+    },
+    "after": {
+      "command": [
+        "b3sum",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/proposal.md",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/design.md",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/tasks.md",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/specs/semantic-reconciliation/spec.md",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/metadata.json"
+      ],
+      "exit_code": 0,
+      "stdout_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-governed-after.blake3",
+      "stderr": "",
+      "blake3": {
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/proposal.md": "149707dac6f772947ebd576e7ae73cce3e83f6eecd74af4cfceb09db86ec212f",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/design.md": "ae0adf2e582991482a5d16a8e6cea908dc327f7cccc9a2252713216bf11d3006",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/tasks.md": "da864243448d6b952cfd871fce54497a163485ec41044608e4e92790b8e0f6a9",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/specs/semantic-reconciliation/spec.md": "78bdb39479183973d974dcb247c376fc9ec68d896cf86d912ed80212e89f728a",
+        ".cairn/changes/reconcile-main-api-lineages-2026-10-17/metadata.json": "57be0b3217446d7faf8592ff862a29a21df0e3966b58ec2331c1783abb435429"
+      }
+    },
+    "differences": [],
+    "unchanged_during_check": true,
+    "post_check_governed_edit_policy": "No governed-document edits were performed after these checks; outcome is recorded only in new evidence and external impact handoff."
+  },
+  "results": [
+    {
+      "command": [
+        "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+        "validate",
+        "--strict",
+        "--root",
+        "."
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/mantle",
+      "started_unix": 1792216010.6396601,
+      "finished_unix": 1792216010.8945382,
+      "exit_code": 0,
+      "stop_reason": null,
+      "capture_limit_bytes": 524288,
+      "timeout_seconds": 30,
+      "label": "validate",
+      "stdout_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-validate.stdout.txt",
+      "stderr_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-validate.stderr.txt",
+      "observed_status": {
+        "valid": true
+      },
+      "observed_issues": []
+    },
+    {
+      "command": [
+        "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+        "gate",
+        "proposal",
+        "reconcile-main-api-lineages-2026-10-17",
+        "--root",
+        "."
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/mantle",
+      "started_unix": 1792216010.921879,
+      "finished_unix": 1792216010.9479752,
+      "exit_code": 0,
+      "stop_reason": null,
+      "capture_limit_bytes": 524288,
+      "timeout_seconds": 30,
+      "label": "proposal",
+      "stdout_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-proposal.stdout.txt",
+      "stderr_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-proposal.stderr.txt",
+      "observed_status": {
+        "valid": true,
+        "stage": "proposal"
+      },
+      "observed_issues": []
+    },
+    {
+      "command": [
+        "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+        "gate",
+        "design",
+        "reconcile-main-api-lineages-2026-10-17",
+        "--root",
+        "."
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/mantle",
+      "started_unix": 1792216010.9573236,
+      "finished_unix": 1792216010.9837701,
+      "exit_code": 0,
+      "stop_reason": null,
+      "capture_limit_bytes": 524288,
+      "timeout_seconds": 30,
+      "label": "design",
+      "stdout_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-design.stdout.txt",
+      "stderr_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-design.stderr.txt",
+      "observed_status": {
+        "valid": true,
+        "stage": "design"
+      },
+      "observed_issues": []
+    }
+  ],
+  "all_three_exit0_valid_true": true,
+  "capture": {
+    "combined_stdout_stderr_bytes": 127445,
+    "per_command_bound_bytes": 524288,
+    "original_metadata_bound_bytes": 134217728,
+    "actual_output_hash_command": [
+      "b3sum",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-design.stderr.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-design.stdout.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-governed-after.blake3",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-governed-before.blake3",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-proposal.stderr.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-proposal.stdout.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-validate.stderr.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-validate.stdout.txt"
+    ],
+    "actual_output_hash_exit": 0,
+    "actual_output_blake3": {
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-design.stderr.txt": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-design.stdout.txt": "8a49cddadb71e61b28ba70e23a2bd34ab138dc95dbd65f52418af825cde7da57",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-governed-after.blake3": "6df69c63aad8ef77a13cac084e4cd3ef404172cc94ff00f391363ffd49bec63c",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-governed-before.blake3": "6df69c63aad8ef77a13cac084e4cd3ef404172cc94ff00f391363ffd49bec63c",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-proposal.stderr.txt": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-proposal.stdout.txt": "72accaf1c0cba232791e0047a51a2da1c57fc9309a810378f4f3a2f97ba27b18",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-validate.stderr.txt": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-validate.stdout.txt": "7d0be94de5e1927909f45443eba8c929d8995580a3b285487d83a8e7a173e40b"
+    }
+  },
+  "non_claims": [
+    "No tasks/probes/sync/archive command",
+    "No Nix invocation/source copy/realization or Cargo",
+    "No product, formatting, generated-output or Git/index change",
+    "No final-product G3/full-quality/current root/generator success",
+    "No resource admission, baseline/caps/credit/correction change or universal descendant/daemon emptiness claim",
+    "No archive, main publication, bootstrap, SDK/APK/signing, reproducibility or release eligibility"
+  ]
+}

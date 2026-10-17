@@ -2,6 +2,7 @@
 arrayref
 arrayvec
 blake3
+bounded-tree-core
 cfg-if
 constant_time_eq
 crunch-attestation-core

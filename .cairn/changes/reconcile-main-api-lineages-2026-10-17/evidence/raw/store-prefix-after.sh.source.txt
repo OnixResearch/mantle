@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cargo test --locked --offline -p crunch-store --lib handle::tests::overlay_custom_prefix_get_and_list_share_reference_signature_authority -- --exact --test-threads=1
+cargo run --locked --offline --manifest-path /datapool/mantle-store/mr.7p88_pl1/store-api/Cargo.toml -- /datapool/mantle-store/mr.7p88_pl1/stores/store-api-after-prefix-fix

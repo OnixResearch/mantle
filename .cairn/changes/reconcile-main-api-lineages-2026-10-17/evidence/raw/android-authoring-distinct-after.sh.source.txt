@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export XDG_CACHE_HOME=/datapool/mantle-store/mr.7p88_pl1/t/android-authoring-cache
+cargo run --locked --offline --manifest-path /datapool/mantle-store/mr.7p88_pl1/android-api/Cargo.toml -- /datapool/mantle-store/mr.7p88_pl1/stores/android-authoring-distinct-after

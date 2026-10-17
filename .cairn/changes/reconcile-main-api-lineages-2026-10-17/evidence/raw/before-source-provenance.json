@@ -1,0 +1,10 @@
+{
+  "source_commit": "d75158b00b080535f2ffea12430665ca3d57ea82",
+  "materializer": "mantle-main-publication-review (sole Git owner)",
+  "fixtures": [
+    {"path": "causal-before-d751-lib.rs", "git_member": "crates/mantle-causal-trace-core/src/lib.rs", "git_blob": "2a562088f004799748d3a45f86329d8f5fef3db4", "blake3": "99a4480918dacef53ed6ac4359b9d29b03fbd93eb6a4ab75ff0c8eeba093bef4"},
+    {"path": "project-before-d751-bootstrap_pins.rs", "git_member": "crates/crunch-project-core/src/bootstrap_pins.rs", "git_blob": "6d8383b32415f7139285a1c0fc99e3162ed7866f", "blake3": "53713b1f0c291a314b51f1c4a6f8394127a257dc44b6dcd03fca3b8b708db241"}
+  ],
+  "purpose": "Actual public caller before/after reproductions for newly identified current canonical merge bugs only; no private proof inputs.",
+  "integrity": "Materializer supplied exact committed bytes and actual BLAKE3/Git identifiers. Historical SHA256 messages retain their original labels; not reused as Mantle identity."
+}

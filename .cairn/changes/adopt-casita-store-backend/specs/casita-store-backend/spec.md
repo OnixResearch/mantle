@@ -178,7 +178,7 @@ r[mantle.casita_store_backend.atomic_batch_import] An import that requires sever
 
 ### Requirement: Castore-only payloads get Mantle-owned roots once the Rust unit cache is declared
 
-r[mantle.casita_store_backend.castore_payload_roots] PathInfo-backed action-result outputs are core under `casita`: `ActionResultPort` MUST admit them as output roots and rehydrate them in a fresh process like any other output. The standalone Rust unit cache is the optional capability `rust-unit-cache`, and the rest of this requirement applies only while the Casita profile declares it. Then every castore-only payload that Mantle retains, including standalone Rust unit cache nodes and the castore roots that GC receives from the Rust unit retention policy, MUST be published as a permanent root `mantle/castore/<64 lowercase hex of the BLAKE3 digest of the postcard-encoded castore node>` through the same staged conditional publication as outputs. The envelope MUST contain exactly `content` and `node.postcard`, where `node.postcard` records the castore node's kind, digest, size, and executable bit. Before a read uses a payload, Mantle MUST decode `node.postcard`, recompute the root name from it, re-ingest `content`, and require that the reproduced node equals the decoded node and that the recomputed name equals the root name; otherwise it MUST fail with `casita-envelope-invalid`. A retained payload whose root is absent MUST report `casita-root-missing`, and no castore-only payload MUST depend on session scratch after the session ends. While the profile does not declare `rust-unit-cache`, the castore parity gate applies instead.
+r[mantle.casita_store_backend.castore_payload_roots] PathInfo-backed action-result outputs are core under `casita`: `ActionResultPort` MUST admit them as output roots and rehydrate them in a fresh process like any other output. The standalone Rust unit cache is the optional capability `rust-unit-cache`. While the Casita profile declares it, every castore-only payload that Mantle retains, including standalone Rust unit cache nodes and the castore roots that GC receives from the Rust unit retention policy, MUST be published as a permanent root `mantle/castore/<64 lowercase hex of the BLAKE3 digest of the postcard-encoded castore node>` through the same staged conditional publication as outputs. The envelope MUST contain exactly `content` and `node.postcard`, where `node.postcard` records the castore node's kind, digest, size, and executable bit. Before a read uses a payload, Mantle MUST decode `node.postcard`, recompute the root name from it, re-ingest `content`, and require that the reproduced node equals the decoded node and that the recomputed name equals the root name; otherwise it MUST fail with `casita-envelope-invalid`. A retained payload whose root is absent MUST report `casita-root-missing`, and no castore-only payload MUST depend on session scratch after the session ends. A PathInfo-only action result MUST NOT open the Rust unit cache or publish a castore payload root.
 
 #### Scenario: Rust unit cache payload is reused after reopen
 
@@ -196,7 +196,7 @@ r[mantle.casita_store_backend.castore_payload_roots] PathInfo-backed action-resu
 
 #### Scenario: PathInfo-backed action-result output is rehydrated
 
-- GIVEN an action result whose outputs are PathInfo-backed store paths admitted under `casita`, whether or not Rust unit cache state exists
+- GIVEN an action result whose outputs are PathInfo-backed store paths admitted under `casita`, regardless of whether the profile declares `rust-unit-cache` or Rust unit cache state exists
 - WHEN a fresh process resolves the action through `ActionResultPort` after the physical export and session scratch are gone
 - THEN it MUST rehydrate the outputs from their `mantle/outputs/` roots without rebuilding
 - AND it MUST NOT require any `mantle/castore/` root for those PathInfo-backed outputs
@@ -465,9 +465,9 @@ r[mantle.casita_store_backend.pinned_patch] The pinned revision does not pass `c
 
 ### Requirement: Casita Rust cache reuse and GC require durable verified payload roots
 
-r[mantle.casita_store_backend.castore_parity_gate] Standalone Rust unit cache nodes are castore-only and are not equivalent to `ActionResultPort` outputs; PathInfo-backed action-result outputs remain core and use output roots. The Casita profile MUST declare `rust-unit-cache` only when `RustCache::open_async`, the wrapper daemon, `rust-cache serve`, and `rust-plan` local and shared cache modes all use durable `mantle/castore/` roots. A fresh process MUST verify the node postcard, content, and root name before reusing a result. Under the store mutation guard, `store usage` and `store gc` MUST recover any pending Casita GC fence before verifying Rust retention live roots; a removed or repointed retained root MUST fail with `casita-root-missing` or `casita-envelope-invalid` before another root is removed or fenced. If no Rust cache state exists, output GC MUST NOT create it. Integrity failures MUST NOT be converted into a compiler run by a FailOpen cache policy.
+r[mantle.casita_store_backend.castore_parity_gate] Standalone Rust unit cache nodes are castore-only and are not equivalent to `ActionResultPort` outputs; PathInfo-backed action-result outputs remain core and use output roots. The Casita profile MUST declare `rust-unit-cache` only when `RustCache::open_async`, the wrapper daemon, `rust-cache serve`, and `rust-plan` local and shared cache modes all use permanent `mantle/castore/` roots, a fresh process restores a deleted physical unit output without another compiler invocation, and altered or missing retained roots block restore and GC planning. Cache publication MUST root a payload before publishing its result, index, or retention state. A fresh process MUST verify the node postcard, content, and root name before reusing a result. Under the store mutation guard, `store usage` and `store gc` MUST recover a pending Casita GC fence before opening Rust cache retention; both MUST verify payload roots and retain live nodes in their GC plan. A removed or repointed retained root MUST fail with `casita-root-missing` or `casita-envelope-invalid` before a new fence or another root removal. When no Rust unit cache state exists, output GC MUST remain operable without opening or creating the Rust unit cache. Integrity failures MUST NOT be converted into a compiler run by a FailOpen cache policy.
 
-#### Scenario: Rust cache reuses a verified persistent payload
+#### Scenario: Retained Rust unit is restored in a fresh process
 
 - GIVEN a Casita Rust unit cache result with a retained payload root and a permitted local cache policy
 - WHEN a fresh wrapper process requests the same action after session scratch is gone
@@ -481,7 +481,7 @@ r[mantle.casita_store_backend.castore_parity_gate] Standalone Rust unit cache no
 - THEN planning and execution MUST succeed without opening the Rust unit cache
 - AND the unretained output root MUST be removed at its planned target while retained outputs stay verifiable
 
-#### Scenario: Output GC with existing Rust unit cache state
+#### Scenario: Rust retention protects roots and tampering blocks GC
 
 - GIVEN a Casita state directory with signed outputs and an existing Rust cache state directory with no retained nodes
 - WHEN the operator runs `store usage`, `store gc`, and an accepted `store gc --execute --plan-id <id>`

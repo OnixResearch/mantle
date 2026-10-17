@@ -1,0 +1,218 @@
+DEV_SHELL_EXPORT=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
+/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, BuildID[sha1]=5e375e3bc36c55c912006621b0f01c9a229e33f0, not stripped
+     Locking 108 packages to latest Rust 1.96.0-nightly compatible versions
+   Compiling mantle-current-merge-api-smoke v0.0.0 (/datapool/mantle-store/mr.7p88_pl1/api-smoke)
+warning: constant `PIN_SCHEMA` is never used
+  --> ../project-before-d751-bootstrap_pins.rs:11:11
+   |
+11 | pub const PIN_SCHEMA: &str = "mantle-bootstrap-pin-v1";
+   |           ^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `PLAN_SCHEMA` is never used
+  --> ../project-before-d751-bootstrap_pins.rs:12:11
+   |
+12 | pub const PLAN_SCHEMA: &str = "mantle-bootstrap-pin-plan-v1";
+   |           ^^^^^^^^^^^
+
+warning: constant `MAX_PIN_BYTES` is never used
+  --> ../project-before-d751-bootstrap_pins.rs:13:7
+   |
+13 | const MAX_PIN_BYTES: usize = 65_536;
+   |       ^^^^^^^^^^^^^
+
+warning: constant `MAX_PINS` is never used
+  --> ../project-before-d751-bootstrap_pins.rs:14:7
+   |
+14 | const MAX_PINS: usize = 256;
+   |       ^^^^^^^^
+
+warning: constant `MAX_ARTIFACTS` is never used
+  --> ../project-before-d751-bootstrap_pins.rs:15:7
+   |
+15 | const MAX_ARTIFACTS: usize = 8;
+   |       ^^^^^^^^^^^^^
+
+warning: constant `MAX_RECIPES` is never used
+  --> ../project-before-d751-bootstrap_pins.rs:16:7
+   |
+16 | const MAX_RECIPES: usize = 16;
+   |       ^^^^^^^^^^^
+
+warning: constant `MAX_URL_BYTES` is never used
+  --> ../project-before-d751-bootstrap_pins.rs:17:7
+   |
+17 | const MAX_URL_BYTES: usize = 2048;
+   |       ^^^^^^^^^^^^^
+
+warning: constant `MAX_VERSION_BYTES` is never used
+  --> ../project-before-d751-bootstrap_pins.rs:18:7
+   |
+18 | const MAX_VERSION_BYTES: usize = 80;
+   |       ^^^^^^^^^^^^^^^^^
+
+warning: constant `MUTATED_PLAN` is never used
+  --> ../project-before-d751-bootstrap_pins.rs:20:7
+   |
+20 | const MUTATED_PLAN: &str = "mutated or incomplete bootstrap pin plan";
+   |       ^^^^^^^^^^^^
+
+warning: constant `RECORD_KEYS` is never used
+  --> ../project-before-d751-bootstrap_pins.rs:21:7
+   |
+21 | const RECORD_KEYS: &str = "schema, source, package_url, version, release_date, artifacts, resolve, recipes";
+   |       ^^^^^^^^^^^
+
+warning: struct `BootstrapPin` is never constructed
+  --> ../project-before-d751-bootstrap_pins.rs:25:12
+   |
+25 | pub struct BootstrapPin {
+   |            ^^^^^^^^^^^^
+
+warning: struct `PinArtifact` is never constructed
+  --> ../project-before-d751-bootstrap_pins.rs:38:12
+   |
+38 | pub struct PinArtifact {
+   |            ^^^^^^^^^^^
+
+warning: enum `HashKind` is never used
+  --> ../project-before-d751-bootstrap_pins.rs:47:10
+   |
+47 | pub enum HashKind {
+   |          ^^^^^^^^
+
+warning: enum `ResolveHook` is never used
+  --> ../project-before-d751-bootstrap_pins.rs:54:10
+   |
+54 | pub enum ResolveHook {
+   |          ^^^^^^^^^^^
+
+warning: struct `PinCandidate` is never constructed
+  --> ../project-before-d751-bootstrap_pins.rs:64:12
+   |
+64 | pub struct PinCandidate {
+   |            ^^^^^^^^^^^^
+
+warning: enum `PinDecision` is never used
+  --> ../project-before-d751-bootstrap_pins.rs:72:10
+   |
+72 | pub enum PinDecision {
+   |          ^^^^^^^^^^^
+
+warning: struct `PinPlanEntry` is never constructed
+  --> ../project-before-d751-bootstrap_pins.rs:80:12
+   |
+80 | pub struct PinPlanEntry {
+   |            ^^^^^^^^^^^^
+
+warning: struct `PinPlan` is never constructed
+  --> ../project-before-d751-bootstrap_pins.rs:89:12
+   |
+89 | pub struct PinPlan {
+   |            ^^^^^^^
+
+warning: function `parse_pin` is never used
+  --> ../project-before-d751-bootstrap_pins.rs:96:8
+   |
+96 | pub fn parse_pin(bytes: &[u8]) -> Result<BootstrapPin, String> {
+   |        ^^^^^^^^^
+
+warning: function `validate_pin` is never used
+   --> ../project-before-d751-bootstrap_pins.rs:106:8
+    |
+106 | pub fn validate_pin(pin: &BootstrapPin) -> Result<(), String> {
+    |        ^^^^^^^^^^^^
+
+warning: function `valid_artifact` is never used
+   --> ../project-before-d751-bootstrap_pins.rs:138:4
+    |
+138 | fn valid_artifact(role: &str, artifact: &PinArtifact, version: &str) -> Result<bool, String> {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `valid_resolve_hook` is never used
+   --> ../project-before-d751-bootstrap_pins.rs:152:4
+    |
+152 | fn valid_resolve_hook(hook: &ResolveHook) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `render_pin_url` is never used
+   --> ../project-before-d751-bootstrap_pins.rs:164:8
+    |
+164 | pub fn render_pin_url(artifact: &PinArtifact, version: &str) -> Result<String, String> {
+    |        ^^^^^^^^^^^^^^
+
+warning: function `valid_sri` is never used
+   --> ../project-before-d751-bootstrap_pins.rs:175:8
+    |
+175 | pub fn valid_sri(hash: &str) -> bool {
+    |        ^^^^^^^^^
+
+warning: function `valid_source` is never used
+   --> ../project-before-d751-bootstrap_pins.rs:184:4
+    |
+184 | fn valid_source(value: &str) -> bool {
+    |    ^^^^^^^^^^^^
+
+warning: function `valid_date` is never used
+   --> ../project-before-d751-bootstrap_pins.rs:189:4
+    |
+189 | fn valid_date(value: &str) -> bool {
+    |    ^^^^^^^^^^
+
+warning: function `valid_version` is never used
+   --> ../project-before-d751-bootstrap_pins.rs:200:4
+    |
+200 | fn valid_version(value: &str) -> bool {
+    |    ^^^^^^^^^^^^^
+
+warning: function `decide_pin` is never used
+   --> ../project-before-d751-bootstrap_pins.rs:239:8
+    |
+239 | pub fn decide_pin(pin: &BootstrapPin, observation: Result<PinCandidate, String>) -> PinDecision {
+    |        ^^^^^^^^^^
+
+warning: function `pin_preimage` is never used
+   --> ../project-before-d751-bootstrap_pins.rs:268:8
+    |
+268 | pub fn pin_preimage(bytes: &[u8]) -> String {
+    |        ^^^^^^^^^^^^
+
+warning: function `seal_plan` is never used
+   --> ../project-before-d751-bootstrap_pins.rs:272:8
+    |
+272 | pub fn seal_plan(mut entries: Vec<PinPlanEntry>) -> Result<PinPlan, String> {
+    |        ^^^^^^^^^
+
+warning: function `plan_digest` is never used
+   --> ../project-before-d751-bootstrap_pins.rs:287:4
+    |
+287 | fn plan_digest(entries: &[PinPlanEntry]) -> Result<String, String> {
+    |    ^^^^^^^^^^^
+
+warning: function `verify_plan` is never used
+   --> ../project-before-d751-bootstrap_pins.rs:293:8
+    |
+293 | pub fn verify_plan(plan: &PinPlan, pins: &BTreeMap<String, (BootstrapPin, String)>) -> Result<(), String> {
+    |        ^^^^^^^^^^^
+
+warning: function `verify_plan_entry` is never used
+   --> ../project-before-d751-bootstrap_pins.rs:313:4
+    |
+313 | fn verify_plan_entry(entry: &PinPlanEntry, pins: &BTreeMap<String, (BootstrapPin, String)>) -> Result<(), String> {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: `mantle-current-merge-api-smoke` (bin "mantle-current-merge-api-smoke") generated 33 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.92s
+     Running `/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-current-merge-api-smoke`
+
+thread 'main' (1208595) panicked at ../causal-before-d751-lib.rs:309:5:
+assertion failed: result.len() <= MAX_DIAGNOSTIC_BYTES
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+BEFORE_D751_CAUSAL: actual public caller panicked at debug assertion for 256-byte token plus y
+AFTER_CAUSAL: 255/256 ASCII and 256-byte UTF-8 bounded, idempotent, trace validates
+VERSION_BEFORE_D751=Equal; AFTER=Less; valid 65-byte versions differing after 64 empty segments
+REMOTE_CORE checked underflow/fit precedence; REMOTE_APP real UnixStream delivery; WATCH stale/supersede/reject retains admission OK
+COMPOSITION one snapshot/two mounts actual output exact; READINESS dependency blocks app but permits db start; not evidence eligible
+APPLICATION exact limit admitted/over-limit contradicted; GLUE real serde input converted with output environment matching computed path
+NINE_PACKAGE_API_SMOKE_OK

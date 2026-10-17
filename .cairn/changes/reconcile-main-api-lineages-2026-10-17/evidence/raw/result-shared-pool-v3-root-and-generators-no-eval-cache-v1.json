@@ -1,0 +1,96 @@
+{
+  "monitor": "run-leg-shared-pool-v3.py",
+  "amendment": "shared-pool-growth-amendment-v1.json",
+  "original_free_initial": 124692987904,
+  "original_created_unix": 1792210364.526931,
+  "initial_interval_bytes": 777650176,
+  "exclusive_growth_credit": 0,
+  "initial": {
+    "free": 38497157120,
+    "target": 7098629632,
+    "temp": 13560832,
+    "metadata": 2133504,
+    "shared_pool_growth": 86195830784
+  },
+  "start": {
+    "free": 38497157120,
+    "target": 7098629632,
+    "temp": 13560832,
+    "metadata": 2141696,
+    "shared_pool_growth": 86195830784
+  },
+  "owned_target_admission": {
+    "clear": true,
+    "scan_complete_within_5_seconds": true,
+    "unreadable_or_transient": 0,
+    "vanished_proc_entries": 1,
+    "measurement_errors": [],
+    "omitted_measurement_errors": 0,
+    "owned_compilers": [],
+    "existing_target_lock": "available at observation",
+    "scope": "Point owned-root/compiler/exact-target-key check only; no argv/environment persisted, no global/private inventory or descendant/daemon emptiness claim"
+  },
+  "monitor_identity": {
+    "pid": 3450952,
+    "pgid": 3450952,
+    "start_ticks": 19195536
+  },
+  "started": 1792273421.985771,
+  "notice": "Sampling, not hard quota. Shared-pool growth is not Nix-only or gross allocation. No target credit/hidden-free reconstruction. Leader wait does not prove descendant/daemon settlement; legacy /tmp is untouched.",
+  "mode": "offline",
+  "command": [
+    "nix",
+    "develop",
+    "--no-write-lock-file",
+    "--max-jobs",
+    "1",
+    "--cores",
+    "1",
+    "--option",
+    "min-free",
+    "0",
+    "--option",
+    "max-free",
+    "0",
+    "--option",
+    "build-dir",
+    "/datapool/mantle-store/mr.7p88_pl1/t",
+    "--offline",
+    ".",
+    "--command",
+    "bash",
+    "-c",
+    "set -euo pipefail\nexport SNIX_BUILD_SANDBOX_SHELL=\"$1\"\nexport NIX_CONFIG=\"${NIX_CONFIG-}\"$'\\nmin-free = 0\\nmax-free = 0\\n'\nmin_free=\"$(nix config show min-free)\"\nmax_free=\"$(nix config show max-free)\"\nprintf 'no-auto-GC shell: SNIX_BUILD_SANDBOX_SHELL=%s min-free=%s max-free=%s\\n' \"$SNIX_BUILD_SANDBOX_SHELL\" \"$min_free\" \"$max_free\"\n[[ \"$min_free\" == 0 && \"$max_free\" == 0 ]]\nexec bash \"$2\"\n",
+    "mantle-no-auto-gc",
+    "/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox",
+    "/datapool/mantle-store/mr.7p88_pl1/root-and-generators-build.sh"
+  ],
+  "env": {
+    "TMPDIR": "/datapool/mantle-store/mr.7p88_pl1/t",
+    "TMP": "/datapool/mantle-store/mr.7p88_pl1/t",
+    "TEMP": "/datapool/mantle-store/mr.7p88_pl1/t",
+    "CARGO_TARGET_DIR": "/datapool/mantle-store/mr.7p88_pl1/target",
+    "CARGO_BUILD_JOBS": "1",
+    "SNIX_BUILD_SANDBOX_SHELL": "/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox"
+  },
+  "no_auto_gc": {
+    "min-free": 0,
+    "max-free": 0,
+    "inherited": "Original NIX_CONFIG prefix preserved; only newline and the two zero settings appended; existing contents never logged"
+  },
+  "exit_code": null,
+  "child_identity": null,
+  "stop_reason": "shared_pool_growth safety threshold",
+  "cancellation": null,
+  "monitor_termination_signal": null,
+  "final": {
+    "free": 38497157120,
+    "target": 7098629632,
+    "temp": 13560832,
+    "metadata": 2142208,
+    "shared_pool_growth": 86195830784
+  },
+  "finished": 1792273422.1859539,
+  "descendant_settlement": "unknown; leader only",
+  "serialization": "Parent enforces one monitor/one current leg in its serial Pueue group; Cargo lock is point evidence, not concurrency exclusion; SIGKILL of monitor leaves settlement unknown"
+}

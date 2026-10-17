@@ -4,9 +4,9 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use crunch_android_core::SourceIdentity;
-use crunch_android_core::Toolchain;
-use crunch_android_core::UnpackShape;
+use crunch_android_core::reviewed::SourceIdentity;
+use crunch_android_core::reviewed::Toolchain;
+use crunch_android_core::reviewed::UnpackShape;
 use crunch_build::FetchSourceOverride;
 use crunch_build::FetchSourceOverrideKind;
 use crunch_build::FetchSourcePolicy;
@@ -140,7 +140,7 @@ async fn admit_source(
     name: &str,
     key: &crunch_build::KeyPair,
 ) -> snix_store::path_info::PathInfo {
-    store
+    let signed = store
         .source_admission()
         .ingest(VerifiedSourceIngestRequest {
             source_path,
@@ -149,7 +149,24 @@ async fn admit_source(
             signing_key: &key.signing_key,
         })
         .await
-        .unwrap_or_else(|error| panic!("signing {name} source root failed: {error}"))
+        .unwrap_or_else(|error| panic!("signing {name} source root failed: {error}"));
+    let exported = store
+        .export_cached_path_info(&signed.store_path)
+        .await
+        .unwrap_or_else(|error| panic!("exporting {name} signed source failed: {error}"))
+        .unwrap_or_else(|| panic!("{name} signed source lacks complete castore content"));
+    assert_eq!(exported, signed, "{name} PathInfo changed during physical export");
+    let observed = store
+        .adopt_verified_local_output(logical_path.to_str().unwrap(), name, &key.signing_key, None)
+        .await
+        .unwrap_or_else(|error| panic!("{name} physical NAR read-back failed: {error}"));
+    assert_eq!(observed, signed, "{name} physical NAR differs from signed PathInfo");
+    let trust = crunch_build::build_trusted_keys(key, None);
+    assert!(
+        crunch_build::verify_pathinfo_signatures_with_store_dir(&observed, &trust, store.store_dir()).is_trusted(),
+        "{name} physical source must retain a trusted signature"
+    );
+    observed
 }
 
 async fn run_case(
@@ -181,6 +198,15 @@ async fn run_case(
     assert_eq!(example.plan.resources.len(), 1);
     write_member(&source_root, &example.plan.java_sources[0], java.as_bytes());
     write_member(&source_root, &example.plan.resources[0], example.resources_xml.as_bytes());
+    let signing = example.plan.signing.as_ref().expect("signed example");
+    assert_eq!(
+        signing.keystore_member, "keys/release.jks",
+        "proof only admits the reviewed test-only keystore member"
+    );
+    let keystore_root = prefix.join(format!("{}-proof-keystore", "g".repeat(32)));
+    let keystore_member = keystore_root.join(&signing.keystore_member);
+    fs::create_dir_all(keystore_member.parent().expect("declared keystore parent")).unwrap();
+    fs::copy(keystore, &keystore_member).expect("copy test-only keystore into separately signed object");
 
     let utility_root = prefix.join(format!("{}-apk-utility", "b".repeat(32)));
     fs::create_dir(&utility_root).unwrap();
@@ -188,8 +214,10 @@ async fn run_case(
     fs::copy(static_busybox, &utility).unwrap();
     let runtime_glibc_root = prefix.join(format!("{}-runtime-glibc", "c".repeat(32)));
     let runtime_libgcc_root = prefix.join(format!("{}-runtime-libgcc", "d".repeat(32)));
-    let keystore_root = prefix.join(format!("{}-proof-keystore", "g".repeat(32)));
     let password_root = prefix.join(format!("{}-proof-password", "h".repeat(32)));
+    let password_bytes = fs::read(password).expect("test-only password");
+    write_member(&password_root, "store.pass", &password_bytes);
+    write_member(&password_root, "key.pass", &password_bytes);
 
     let prefix_text = prefix.to_str().unwrap();
     let blob = MemoryBlobService::default();
@@ -198,6 +226,7 @@ async fn run_case(
     let pathinfo = LruPathInfoService::with_capacity("official-apk".into(), NonZeroUsize::new(256).unwrap());
     let sandbox = BubblewrapBuildService::new(root.join("sandbox"), blob.clone(), directory.clone());
     let mut store = StoreHandle::from_services_with_store_dir(
+        crunch_store::StoreBackend::Snix,
         StoreHandleServices {
             blob_service: Arc::new(blob),
             directory_service: Arc::new(directory),
@@ -208,7 +237,8 @@ async fn run_case(
             publishers: Vec::new(),
         },
         prefix_text.into(),
-    );
+    )
+    .expect("official APK Snix store fixture");
     let key = crunch_build::load_keypair(TEST_KEY).unwrap();
     let trust = crunch_build::build_trusted_keys(&key, None);
     admit_source(&mut store, &source_root, &source_root, "java-source", &key).await;
@@ -222,8 +252,8 @@ async fn run_case(
         assert_eq!(digest_hex(&admitted.nar_sha256), expected.nar_sha256, "{name} NAR SHA-256 drift");
         assert_eq!(admitted.nar_size, expected.nar_size, "{name} NAR size drift");
     }
-    admit_source(&mut store, keystore, &keystore_root, "proof-keystore", &key).await;
-    admit_source(&mut store, password, &password_root, "proof-password", &key).await;
+    admit_source(&mut store, &keystore_root, &keystore_root, "proof-keystore", &key).await;
+    admit_source(&mut store, &password_root, &password_root, "proof-password", &key).await;
 
     let PipelineStoreParts {
         build_store,
@@ -293,8 +323,9 @@ async fn run_case(
             store_path: runtime_libgcc_root,
         },
         utility,
-        keystore: Some(keystore_root),
-        key_password_file: Some(password_root),
+        keystore: Some(keystore_member),
+        store_password_file: Some(password_root.join("store.pass")),
+        key_password_file: Some(password_root.join("key.pass")),
     };
     let prepared = PreparedApk::bind(example.plan.clone(), inputs, reviewed, runtime, &prefix).unwrap();
     let mut extractions = Vec::new();

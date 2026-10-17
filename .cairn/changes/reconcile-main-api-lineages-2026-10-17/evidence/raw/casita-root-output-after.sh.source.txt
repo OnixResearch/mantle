@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cargo run --locked --offline --manifest-path /datapool/mantle-store/mr.7p88_pl1/casita-api/Cargo.toml -- /datapool/mantle-store/mr.7p88_pl1/stores/casita-root-output-after

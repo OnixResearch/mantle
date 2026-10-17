@@ -2,7 +2,7 @@
 # Each output is still fixed by the reviewed archive SHA-256 in android.ncl.
 let android = import "../lib/android.ncl" in
 {
-  build_tools = android.fetch_toolchain.build_tools,
-  jdk = android.fetch_toolchain.jdk,
-  platform = android.fetch_toolchain.platform,
+  build_tools = android.reviewed.fetch_toolchain.build_tools,
+  jdk = android.reviewed.fetch_toolchain.jdk,
+  platform = android.reviewed.fetch_toolchain.platform,
 }

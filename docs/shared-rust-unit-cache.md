@@ -155,17 +155,19 @@ configuration.
 
 ## Store backend
 
-The local and shared Rust unit caches support both selected store backends.
-With `--store-backend casita`, admitted castore-only cache payloads have durable
-`mantle/castore/` roots; fresh-process reuse verifies the recorded node,
-envelope, and payload before restoring artifacts. Casita `store usage` and
-`store gc` recover a pending fence under the mutation guard, then resolve and
-verify the Rust retention live roots before planning. If another writer
-changes or removes a retained payload root, these operations reject with
-`casita-envelope-invalid` or `casita-root-missing` before root removal.
-FailOpen is not permission to recompile through a known broken retained root:
-the compiler wrapper returns a rejected response without running the
-compiler. See [Store backends](store-backends.md#capability-profiles).
+Local and shared Rust unit caches work with `snix` and `casita`. Casita keeps
+retained castore-only unit payloads under durable `mantle/castore/` roots; a
+fresh process re-ingests each envelope's `content` and verifies its
+`node.postcard` against the recovered node and root name before using it.
+An absent or changed retained root fails closed with `casita-root-missing` or
+`casita-envelope-invalid`; it is not treated as a cache miss that may trigger
+recompilation. `store usage` and `store gc` recover a pending Casita GC fence
+under the mutation guard before loading the Rust retention set and verifying
+payload roots. PathInfo-backed action-result outputs remain independent: they
+rehydrate from `mantle/outputs/` without opening the Rust unit cache or
+publishing a `mantle/castore/` root. See [Store backends](store-backends.md#capability-profiles).
+
+A FailOpen compiler wrapper also rejects a known broken retained Casita payload root without recompiling; FailOpen is not permission to bypass a recorded integrity failure.
 
 ## Non-claims
 

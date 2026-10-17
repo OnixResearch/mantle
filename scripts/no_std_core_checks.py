@@ -507,7 +507,10 @@ def find_matching_delimiter(text: str, start: int, open_char: str, close_char: s
             index += 1
             continue
         if char == "'":
-            if next_char and not (next_char.isalpha() or next_char == "_"):
+            if next_char and (
+                not (next_char.isalpha() or next_char == "_")
+                or text[index + 2 : index + 3] == "'"
+            ):
                 in_char = True
                 index += 1
                 continue

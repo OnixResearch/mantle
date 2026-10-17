@@ -1,0 +1,3 @@
+cwd=/home/brittonr/.cargo-target/mantle-v2-cairn-dev46/source
+HEAD=3dcdfaad7b5c77c0499ff1b4c1b3380c73f29e19
+command=env 'HOME=/home/brittonr/.cargo-target/mantle-v2-cairn-dev46/home' 'TMPDIR=/home/brittonr/.cargo-target/mantle-v2-cairn-dev46/tmp' 'XDG_CACHE_HOME=/home/brittonr/.cargo-target/mantle-v2-cairn-dev46/cache' /home/brittonr/git/OnixResearch/cairn/result-cairn/bin/cairn validate --root .

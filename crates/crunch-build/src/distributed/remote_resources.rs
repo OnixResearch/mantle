@@ -857,24 +857,29 @@ fn capacity_from_totals(totals: &ResourceTotals) -> resource_core::Capacity {
 }
 
 fn resource_fit_class(remaining: &ResourceTotals, requested: &ResourceTotals) -> ResourceFitClass {
-    let named_empty = remaining.accelerators.is_empty() && remaining.named_tokens.is_empty();
-    let named_constrained =
-        if remaining.cpu_units == 0 && remaining.memory_bytes == 0 && remaining.scratch_bytes == 0 && named_empty {
-            false
-        } else {
-            named_remaining_is_constrained(&remaining.accelerators, &requested.accelerators)
-                || named_remaining_is_constrained(&remaining.named_tokens, &requested.named_tokens)
-        };
-    match resource_core::classify_fit(
+    let is_named_empty = remaining.accelerators.is_empty() && remaining.named_tokens.is_empty();
+    let is_primary_set_empty = remaining.cpu_units == 0 && remaining.memory_bytes == 0 && remaining.scratch_bytes == 0;
+    let is_named_constrained = if is_primary_set_empty && is_named_empty {
+        false
+    } else {
+        named_remaining_is_constrained(&remaining.accelerators, &requested.accelerators)
+            || named_remaining_is_constrained(&remaining.named_tokens, &requested.named_tokens)
+    };
+    let class = match resource_core::classify_fit(
         capacity_from_totals(remaining),
         capacity_from_totals(requested),
-        named_empty,
-        named_constrained,
+        resource_core::NamedResourceFit {
+            is_empty: is_named_empty,
+            is_constrained: is_named_constrained,
+        },
     ) {
         resource_core::Fit::Exact => ResourceFitClass::Exact,
         resource_core::Fit::Compatible => ResourceFitClass::Compatible,
         resource_core::Fit::Constrained => ResourceFitClass::Constrained,
-    }
+    };
+    debug_assert_eq!(class == ResourceFitClass::Exact, is_primary_set_empty && is_named_empty);
+    debug_assert!(!is_named_constrained || class == ResourceFitClass::Constrained);
+    class
 }
 
 fn named_remaining_is_constrained(remaining: &BTreeMap<String, u32>, requested: &BTreeMap<String, u32>) -> bool {

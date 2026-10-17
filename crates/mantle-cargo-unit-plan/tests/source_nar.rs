@@ -30,6 +30,43 @@ fn package_slice_digest_matches_nix_nar_bytes() {
 }
 
 #[test]
+fn package_slice_compiles_nested_target_module_without_copying_cargo_build_artifacts() {
+    let root = std::env::temp_dir().join(format!("unit-nar-nested-target-{}", std::process::id()));
+    let copied = root.with_extension("copy");
+    if root.exists() {
+        fs::remove_dir_all(&root).unwrap();
+    }
+    if copied.exists() {
+        fs::remove_dir_all(&copied).unwrap();
+    }
+    fs::create_dir_all(root.join("src/target")).unwrap();
+    fs::create_dir(root.join("target")).unwrap();
+    fs::write(root.join("src/lib.rs"), "mod target; pub fn platform() -> &'static str { target::platform() }\n")
+        .unwrap();
+    fs::write(root.join("src/target.rs"), "mod apple; pub fn platform() -> &'static str { apple::platform() }\n")
+        .unwrap();
+    fs::write(root.join("src/target/apple.rs"), "pub fn platform() -> &'static str { \"apple\" }\n").unwrap();
+    fs::write(root.join("target/generated.out"), "not source").unwrap();
+
+    source_nar::copy_package(&root, &copied, 0).unwrap();
+    assert!(!copied.join("target/generated.out").exists());
+    let compile = Command::new("rustc")
+        .args(["--edition=2024", "--crate-type=lib", "--emit=metadata"])
+        .arg(copied.join("src/lib.rs"))
+        .arg("--out-dir")
+        .arg(&root)
+        .output()
+        .unwrap();
+    assert!(
+        compile.status.success(),
+        "nested module missing from package slice: {}",
+        String::from_utf8_lossy(&compile.stderr)
+    );
+    fs::remove_dir_all(root).unwrap();
+    fs::remove_dir_all(copied).unwrap();
+}
+
+#[test]
 fn source_slice_rejects_symlinks_and_special_files() {
     let root = std::env::temp_dir().join(format!("unit-nar-bad-{}", std::process::id()));
     if root.exists() {

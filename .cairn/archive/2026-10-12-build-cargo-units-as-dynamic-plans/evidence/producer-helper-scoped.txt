@@ -1,0 +1,56 @@
+T3.5 producer/helper scoped behavioral verification (2026-10-01)
+
+Commands used TMPDIR=/home/brittonr/scratch, CARGO_TARGET_DIR=/home/brittonr/scratch/mantle-cargo-unit-quality-target, CARGO_INCREMENTAL=0, NIX_CONFIG='eval-cache = false', and `nix develop --offline -c` from repository root.
+
+$ cargo test --locked --offline -p mantle-cargo-unit-plan --bin mantle-cargo-unit-producer --test producer --test helper
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle-cargo-unit-plan v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-cargo-unit-plan)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.57s
+     Running unittests src/producer.rs (/home/brittonr/scratch/mantle-cargo-unit-quality-target/debug/deps/mantle_cargo_unit_producer-75dab00e978ec768)
+
+running 1 test
+test tests::unknown_cargo_unit_graph_version_blocks_before_lowering ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/helper.rs (/home/brittonr/scratch/mantle-cargo-unit-quality-target/debug/deps/helper-b8316724cd7ed725)
+
+running 2 tests
+test absent_direct_manifest_blocks_before_compilation ... ok
+test three_unit_build_links_transitive_library_through_manifests ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/producer.rs (/home/brittonr/scratch/mantle-cargo-unit-quality-target/debug/deps/producer-f1b7a4b808b9ed97)
+
+running 1 test
+test unavailable_registry_source_cannot_use_network_or_ambient_cargo_home ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+$ cargo clippy --locked --offline -p mantle-cargo-unit-plan --all-targets --no-deps -- -D warnings
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking arrayref v0.3.9
+    Checking itoa v1.0.18
+    Checking constant_time_eq v0.3.1
+    Checking arrayvec v0.7.6
+    Checking cfg-if v1.0.4
+    Checking memchr v2.8.0
+    Checking serde_core v1.0.228
+    Checking zmij v1.0.21
+    Checking blake3 v1.8.2
+    Checking serde v1.0.228
+    Checking serde_json v1.0.149
+    Checking mantle-rust-plan-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-rust-plan-core)
+    Checking mantle-cargo-unit-plan v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-cargo-unit-plan)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.36s
+
+Both commands exited 0. The compiled producer integration test asserts a typed `unit-plan-oracle-failure` with subject `cargo metadata` naming missing package `mantle_unit_absent_460372`, no plan or success evidence, and a loopback listener whose accept returns WouldBlock (zero accepted connections), despite hostile ambient Cargo settings. The helper negative asserts `unit-helper-missing-manifest`; its positive test compiles and executes a real 3-unit transitive graph with declared Cargo package version overriding spoofed ambient values.
+
+Production producer.rs SHA256: 0f7f9ed59e90c34361d2eb7cb177436a02a6622d908e005bafe61e1090221255
+At test/Clippy time tests/producer.rs SHA256: 1f2521c92b5cac4c6a6a2afee7ea8cc12776f69879f6fd85c78e8b8e1e198464
+After those commands, the quality owner applied only rustfmt formatting to tests/producer.rs and reported scoped cargo fmt --check PASS; its formatted SHA256 is e463b02783fd1fdabc8873c0ae200efb3affaa4c6aca171f1265059762d9a16c. Behavioral assertions and production source were unchanged. These focused commands do not establish T4.1/T4.2, signed reuse, archive or release readiness.

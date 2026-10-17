@@ -1,0 +1,46 @@
+{
+  "mode": "offline",
+  "command": [
+    "nix",
+    "develop",
+    "--no-write-lock-file",
+    "--max-jobs",
+    "1",
+    "--cores",
+    "1",
+    "--option",
+    "build-dir",
+    "/datapool/mantle-store/mr.7p88_pl1/t",
+    "--offline",
+    ".",
+    "--command",
+    "bash",
+    "/datapool/mantle-store/mr.7p88_pl1/api-smoke.sh"
+  ],
+  "env": {
+    "TMPDIR": "/datapool/mantle-store/mr.7p88_pl1/t",
+    "TMP": "/datapool/mantle-store/mr.7p88_pl1/t",
+    "TEMP": "/datapool/mantle-store/mr.7p88_pl1/t",
+    "CARGO_TARGET_DIR": "/datapool/mantle-store/mr.7p88_pl1/target",
+    "CARGO_BUILD_JOBS": "1"
+  },
+  "start": {
+    "free": 120919818240,
+    "target": 435460608,
+    "temp": 118272,
+    "metadata": 248832,
+    "conservative_allocation_since_admission": 3773169664
+  },
+  "started": 1792211215.4689827,
+  "notice": "Sampling monitor, not hard quota; daemon work may outlive a cancelled Nix client. Existing legacy /tmp remains preserved/noncompliant.",
+  "exit_code": 0,
+  "stop_reason": null,
+  "finished": 1792211233.587171,
+  "final": {
+    "free": 120887050240,
+    "target": 435436032,
+    "temp": 147456,
+    "metadata": 258048,
+    "conservative_allocation_since_admission": 3805937664
+  }
+}

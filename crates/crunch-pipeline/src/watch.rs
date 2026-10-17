@@ -46,8 +46,9 @@ use crate::validate_build_config;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 const EVALUATION_WINDOW: Duration = Duration::from_secs(60);
-const MAX_SNAPSHOT_BYTES: usize = 16 * 1024 * 1024;
-const MAX_SNAPSHOT_FILE_BYTES: usize = 2 * 1024 * 1024;
+const _: () = assert!(MAX_EVALUATIONS_PER_WINDOW > 0);
+const MAX_SNAPSHOT_BYTES: usize = 16_777_216;
+const MAX_SNAPSHOT_FILE_BYTES: usize = 2_097_152;
 const WORKER_EVENT_CAPACITY: usize = 16;
 
 /// Admission notices describe the actual admitted goal set. A `Settled` notice
@@ -85,9 +86,12 @@ fn source_snapshot(root: &Path, import_paths: &[OsString]) -> Result<SourceSnaps
     let mut sources = Vec::with_capacity(paths.len());
     for path in paths {
         let bound = remaining.min(MAX_SNAPSHOT_FILE_BYTES);
+        let read_limit_bytes = u64::try_from(bound)
+            .map_err(|_| Error::Eval("watched sources exceed snapshot byte limit".to_string()))?
+            .saturating_add(1);
         let mut bytes = Vec::new();
         std::fs::File::open(&path)
-            .and_then(|file| file.take((bound as u64) + 1).read_to_end(&mut bytes))
+            .and_then(|file| file.take(read_limit_bytes).read_to_end(&mut bytes))
             .map_err(|_| Error::Eval("watched source is missing or unreadable".to_string()))?;
         if bytes.len() > bound {
             return Err(Error::Eval("watched sources exceed snapshot byte limit".to_string()));
@@ -129,6 +133,8 @@ async fn evaluate(config: &BuildConfig) -> Result<(GoalSet, Vec<EvalMessage>, So
         }
         return Ok((GoalSet::admit(Vec::new()).map_err(watch_error)?, Vec::new(), after));
     }
+    let max_live_goals = usize::try_from(MAX_LIVE_GOALS)
+        .map_err(|_| Error::Eval("watched root evaluation or conversion failed".to_string()))?;
     let (tx, mut rx) = mpsc::channel(EVAL_MESSAGE_CHANNEL_CAPACITY);
     let (result, roots) = tokio::join!(
         stream_roots_into_worker(EvalStreamRequest {
@@ -146,7 +152,9 @@ async fn evaluate(config: &BuildConfig) -> Result<(GoalSet, Vec<EvalMessage>, So
         async {
             let mut roots = Vec::new();
             while let Some(root) = rx.recv().await {
-                if roots.len() <= MAX_LIVE_GOALS as usize {
+                // Retain one excess root to reject the generation, but drain
+                // the channel so evaluation can finish without growing memory.
+                if roots.len() <= max_live_goals {
                     roots.push(root);
                 }
             }
@@ -154,7 +162,7 @@ async fn evaluate(config: &BuildConfig) -> Result<(GoalSet, Vec<EvalMessage>, So
         },
     );
     let result = result.map_err(|_| Error::Eval("watched root evaluation or conversion failed".to_string()))?;
-    if result.summary.disposition() != RunDisposition::Success || roots.len() > MAX_LIVE_GOALS as usize {
+    if result.summary.disposition() != RunDisposition::Success || roots.len() > max_live_goals {
         return Err(Error::Eval("watched root evaluation or conversion failed".to_string()));
     }
     let after = source_snapshot(&config.file, &config.import_paths)?;
@@ -241,29 +249,281 @@ async fn authorize_candidate(
 }
 
 #[cfg(target_os = "linux")]
+struct WatchCoordinator<'a> {
+    config: &'a BuildConfig,
+    watch_loop: WatchLoop,
+    root_registry: &'a crunch_store::RootRegistry,
+    workspace_evidence_sink: &'a crunch_build::WorkspaceReportCollector,
+    notices: &'a mpsc::Sender<WatchNotice>,
+    updates: mpsc::Sender<WatchWorkerUpdate>,
+    attempts: VecDeque<Instant>,
+    max_evaluations: usize,
+    candidate: Option<SourceSnapshot>,
+    committed_roots: Vec<EvalMessage>,
+    pending_roots: Vec<EvalMessage>,
+    rollback_pending: bool,
+    baseline: Option<SourceSnapshot>,
+    pending: Option<u64>,
+    current_is_rollback: bool,
+    current: Option<u64>,
+    dirty: bool,
+}
+
+#[cfg(target_os = "linux")]
+impl WatchCoordinator<'_> {
+    async fn on_event(&mut self, event: WatchWorkerEvent) -> Result<(), Error> {
+        match event {
+            WatchWorkerEvent::CandidateReady { generation, commit } => self.candidate_ready(generation, commit).await,
+            WatchWorkerEvent::PendingCancellation { generation, stale } => self
+                .notices
+                .send(WatchNotice::PendingCancellation { generation, stale })
+                .await
+                .map_err(|_| Error::Internal("watch notice receiver closed".to_string())),
+            WatchWorkerEvent::Settled {
+                generation,
+                outcomes,
+                failed,
+                source_generation_paths,
+            } => self.on_settled(generation, outcomes, failed, source_generation_paths).await,
+        }
+    }
+
+    async fn candidate_ready(
+        &mut self,
+        generation: u64,
+        commit: tokio::sync::oneshot::Sender<()>,
+    ) -> Result<(), Error> {
+        debug_assert!(!self.rollback_pending || self.pending.is_some());
+        debug_assert!(self.candidate.is_none() || !self.rollback_pending);
+        // No Worker dispatch or PathInfo publication is authorized until this
+        // candidate passes the source and generation gate.
+        match authorize_candidate(
+            self.config,
+            &mut self.watch_loop,
+            self.pending,
+            self.candidate.as_ref(),
+            self.rollback_pending,
+            generation,
+            commit,
+            self.notices,
+        )
+        .await?
+        {
+            CandidateAuthorization::Authorized => {}
+            CandidateAuthorization::Superseded => return Ok(()),
+            CandidateAuthorization::Changed => {
+                self.dirty = true;
+                return Ok(());
+            }
+            CandidateAuthorization::Expired => {
+                self.rollback_pending = false;
+                self.dirty = true;
+                return Ok(());
+            }
+        }
+        if let Some(snapshot) = self.candidate.take() {
+            self.baseline = Some(snapshot);
+        }
+        self.committed_roots = std::mem::take(&mut self.pending_roots);
+        let restoring = self.rollback_pending;
+        self.rollback_pending = false;
+        self.pending = None;
+        self.current = Some(generation);
+        self.current_is_rollback = restoring;
+        if source_snapshot(&self.config.file, &self.config.import_paths).ok().as_ref() != self.baseline.as_ref() {
+            self.dirty = true;
+        }
+        Ok(())
+    }
+
+    async fn on_settled(
+        &mut self,
+        generation: u64,
+        outcomes: Vec<BuildOutcome>,
+        failed: Vec<FailedGoal>,
+        source_generation_paths: Vec<nix_compat::store_path::StorePath<String>>,
+    ) -> Result<(), Error> {
+        debug_assert!(!self.rollback_pending || self.pending.is_some());
+        debug_assert!(self.candidate.is_none() || !self.rollback_pending);
+        // Release retained workspace evidence for every terminal Worker
+        // generation, including stale generations that publish no notice.
+        drop(self.workspace_evidence_sink.take());
+        if self.current != Some(generation) || self.pending.is_some() {
+            return Ok(());
+        }
+        // No roots preceded a rejected first candidate; the internal empty
+        // restoration has no result to publish.
+        if self.current_is_rollback && self.committed_roots.is_empty() {
+            return Ok(());
+        }
+        if !self.current_is_rollback
+            && (source_snapshot(&self.config.file, &self.config.import_paths).ok().as_ref() != self.baseline.as_ref()
+                || self.dirty)
+        {
+            self.dirty = true;
+            return Ok(());
+        }
+        register_managed_generation(
+            self.config.root_registration.as_ref(),
+            self.config.root_retention_source,
+            self.root_registry,
+            &outcomes,
+            &source_generation_paths,
+            failed.is_empty(),
+        )
+        .await?;
+        self.notices
+            .send(WatchNotice::Settled {
+                generation,
+                outcomes,
+                failed,
+            })
+            .await
+            .map_err(|_| Error::Internal("watch notice receiver closed".to_string()))
+    }
+
+    async fn restore_pending(&mut self, diagnostic: &str) -> Result<(), Error> {
+        debug_assert!(self.pending.is_some());
+        debug_assert!(self.attempts.len() <= self.max_evaluations);
+        let generation =
+            restore_committed(&mut self.watch_loop, self.notices, &self.updates, &self.committed_roots, diagnostic)
+                .await?;
+        self.pending = Some(generation);
+        self.pending_roots = self.committed_roots.clone();
+        self.candidate = None;
+        self.rollback_pending = true;
+        self.dirty = true;
+        Ok(())
+    }
+
+    async fn on_tick(&mut self) -> Result<(), Error> {
+        debug_assert!(!self.rollback_pending || self.pending.is_some());
+        debug_assert!(self.attempts.len() <= self.max_evaluations);
+        let observed = source_snapshot(&self.config.file, &self.config.import_paths);
+        if observed.as_ref().ok() != self.candidate.as_ref().or(self.baseline.as_ref()) {
+            self.dirty = true;
+        }
+        if !self.dirty || (self.rollback_pending && observed.is_err()) {
+            return Ok(());
+        }
+        // A failed edit while teardown is underway restores the last committed
+        // roots instead of merely clearing the speculative candidate.
+        if observed.is_err() && self.pending.is_some() {
+            self.restore_pending("watched source scan, evaluation or conversion failed").await?;
+            return Ok(());
+        }
+        let now = watch_clock_now();
+        while self.attempts.front().is_some_and(|start| now.duration_since(*start) >= EVALUATION_WINDOW) {
+            self.attempts.pop_front();
+        }
+        if self.attempts.len() >= self.max_evaluations {
+            if self.pending.is_some() && !self.rollback_pending {
+                self.restore_pending("watched source evaluation rate limit reached").await?;
+            }
+            return Ok(());
+        }
+        let evaluations = u32::try_from(self.attempts.len())
+            .map_err(|_| Error::Internal("watch evaluation count exceeds platform limit".to_string()))?;
+        crunch_watch_core::admit_evaluation(evaluations).map_err(watch_error)?;
+        self.attempts.push_back(now);
+        match evaluate(self.config).await {
+            Ok((goals, roots, snapshot)) => self.offer_evaluation(goals, roots, snapshot).await,
+            Err(_) => self.on_evaluation_failure().await,
+        }
+    }
+
+    async fn offer_evaluation(
+        &mut self,
+        goals: GoalSet,
+        roots: Vec<EvalMessage>,
+        snapshot: SourceSnapshot,
+    ) -> Result<(), Error> {
+        debug_assert!(!self.rollback_pending || self.pending.is_some());
+        debug_assert!(self.attempts.len() <= self.max_evaluations);
+        match self.watch_loop.offer(goals, MAX_TRANSITION_EVENTS) {
+            Ok(generation) => {
+                self.candidate = Some(snapshot);
+                // The Worker may prune stale derivation entries before a
+                // rollback. Retain conversion metadata for each admitted root.
+                self.pending_roots = roots.clone();
+                self.dirty = false;
+                self.rollback_pending = false;
+                self.pending = Some(generation);
+                self.updates
+                    .send(WatchWorkerUpdate { generation, roots })
+                    .await
+                    .map_err(|_| Error::Internal("watch worker closed update channel".to_string()))?;
+            }
+            Err(_) if self.pending.is_some() => {
+                self.restore_pending("watched goals exceed admission limits").await?;
+            }
+            Err(_) => {
+                reject(&mut self.watch_loop, self.notices, "watched goals exceed admission limits").await?;
+                self.dirty = true;
+            }
+        }
+        Ok(())
+    }
+
+    async fn on_evaluation_failure(&mut self) -> Result<(), Error> {
+        if self.pending.is_some() && !self.rollback_pending {
+            self.restore_pending("watched source scan, evaluation or conversion failed").await?;
+        } else if !self.rollback_pending {
+            reject(&mut self.watch_loop, self.notices, "watched source scan, evaluation or conversion failed").await?;
+        }
+        // Keep an in-flight restoration; retry after it is admitted.
+        self.dirty = true;
+        Ok(())
+    }
+}
+
+// This std watch shell owns polling cadence; the deterministic watch core
+// receives the resulting bounded evaluation count, never the ambient clock.
+#[cfg(target_os = "linux")]
+#[allow(
+    tigerstyle::ambient_clock,
+    reason = "watch shell samples the monotonic clock for its local rate-limit window"
+)]
+fn watch_clock_now() -> Instant {
+    Instant::now()
+}
+
+#[cfg(target_os = "linux")]
 async fn coordinate(
     config: &BuildConfig,
-    mut watch_loop: WatchLoop,
+    watch_loop: WatchLoop,
     root_registry: &crunch_store::RootRegistry,
-    workspace_reports: &crunch_build::WorkspaceReportCollector,
+    workspace_evidence_sink: &crunch_build::WorkspaceReportCollector,
     shutdown: &mut watch::Receiver<bool>,
     notices: &mpsc::Sender<WatchNotice>,
     updates: mpsc::Sender<WatchWorkerUpdate>,
     mut worker_events: mpsc::Receiver<WatchWorkerEvent>,
 ) -> Result<(), Error> {
-    let mut attempts = VecDeque::<Instant>::new();
-    let mut candidate: Option<SourceSnapshot> = None;
-    let mut committed_roots = Vec::<EvalMessage>::new();
-    let mut pending_roots = Vec::<EvalMessage>::new();
-    let mut rollback_pending = false;
-    let mut baseline: Option<SourceSnapshot> = None;
-    let mut pending: Option<u64> = None;
-    let mut current_is_rollback = false;
-    let mut current: Option<u64> = None;
-    let mut dirty = true;
+    debug_assert!(EVALUATION_WINDOW > Duration::ZERO);
+    let max_evaluations = usize::try_from(MAX_EVALUATIONS_PER_WINDOW)
+        .map_err(|_| Error::Internal("watch evaluation window exceeds platform limit".to_string()))?;
+    debug_assert!(max_evaluations > 0);
+    let mut coordinator = WatchCoordinator {
+        config,
+        watch_loop,
+        root_registry,
+        workspace_evidence_sink,
+        notices,
+        updates,
+        attempts: VecDeque::new(),
+        max_evaluations,
+        candidate: None,
+        committed_roots: Vec::new(),
+        pending_roots: Vec::new(),
+        rollback_pending: false,
+        baseline: None,
+        pending: None,
+        current_is_rollback: false,
+        current: None,
+        dirty: true,
+    };
     let mut ticker = tokio::time::interval(POLL_INTERVAL);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
     loop {
         if *shutdown.borrow() {
             break;
@@ -277,172 +537,14 @@ async fn coordinate(
             _ = notices.closed() => {
                 return Err(Error::Internal("watch notice receiver closed".to_string()));
             }
-            event = worker_events.recv() => match event {
-                Some(WatchWorkerEvent::CandidateReady { generation, commit }) => {
-                    // No Worker dispatch or PathInfo publication is authorized
-                    // until this candidate passes the source and generation gate.
-                    match authorize_candidate(
-                        config, &mut watch_loop, pending, candidate.as_ref(),
-                        rollback_pending, generation, commit, notices,
-                    ).await? {
-                        CandidateAuthorization::Authorized => {}
-                        CandidateAuthorization::Superseded => continue,
-                        CandidateAuthorization::Changed => {
-                            dirty = true;
-                            continue;
-                        }
-                        CandidateAuthorization::Expired => {
-                            rollback_pending = false;
-                            dirty = true;
-                            continue;
-                        }
-                    }
-                    if let Some(snapshot) = candidate.take() {
-                        baseline = Some(snapshot);
-                    }
-                    committed_roots = std::mem::take(&mut pending_roots);
-                    let restoring = rollback_pending;
-                    rollback_pending = false;
-                    pending = None;
-                    current = Some(generation);
-                    current_is_rollback = restoring;
-                    if source_snapshot(&config.file, &config.import_paths).ok().as_ref() != baseline.as_ref() {
-                        dirty = true;
-                    }
-                }
-                Some(WatchWorkerEvent::PendingCancellation { generation, stale }) => {
-                    notices.send(WatchNotice::PendingCancellation { generation, stale }).await
-                        .map_err(|_| Error::Internal("watch notice receiver closed".to_string()))?;
-                }
-                Some(WatchWorkerEvent::Settled { generation, outcomes, failed, source_generation_paths }) => {
-                    // Watch notices intentionally contain terminal roots, not
-                    // one-shot report vectors. Release retained workspace
-                    // evidence for every terminal Worker generation.
-                    drop(workspace_reports.take());
-                    if current == Some(generation) && pending.is_none() {
-                        // No roots preceded a rejected first candidate; the
-                        // internal empty restoration has no result to publish.
-                        if current_is_rollback && committed_roots.is_empty() {
-                            continue;
-                        }
-                        if current_is_rollback
-                            || (source_snapshot(&config.file, &config.import_paths).ok().as_ref() == baseline.as_ref() && !dirty)
-                        {
-                            register_managed_generation(
-                                config.root_registration.as_ref(),
-                                config.root_retention_source,
-                                root_registry,
-                                &outcomes,
-                                &source_generation_paths,
-                                failed.is_empty(),
-                            ).await?;
-                            notices.send(WatchNotice::Settled { generation, outcomes, failed }).await
-                                .map_err(|_| Error::Internal("watch notice receiver closed".to_string()))?;
-                        } else {
-                            dirty = true;
-                        }
-                    }
-                }
-                None => return Err(Error::Internal("watch worker stopped before shutdown".to_string())),
-            },
-            _ = ticker.tick() => {
-                let observed = source_snapshot(&config.file, &config.import_paths);
-                if observed.as_ref().ok() != candidate.as_ref().or(baseline.as_ref()) {
-                    dirty = true;
-                }
-                if !dirty || (rollback_pending && observed.is_err()) {
-                    continue;
-                }
-                // A failed edit while teardown is underway must restore the
-                // last committed roots, not merely clear the pure candidate.
-                if observed.is_err() && pending.is_some() {
-                    let generation = restore_committed(
-                        &mut watch_loop, notices, &updates, &committed_roots,
-                        "watched source scan, evaluation or conversion failed",
-                    ).await?;
-                    pending = Some(generation);
-                    pending_roots = committed_roots.clone();
-                    candidate = None;
-                    rollback_pending = true;
-                    continue;
-                }
-                let now = Instant::now();
-                while attempts.front().is_some_and(|start| now.duration_since(*start) >= EVALUATION_WINDOW) {
-                    attempts.pop_front();
-                }
-                if attempts.len() >= MAX_EVALUATIONS_PER_WINDOW as usize {
-                    if pending.is_some() && !rollback_pending {
-                        let generation = restore_committed(
-                            &mut watch_loop, notices, &updates, &committed_roots,
-                            "watched source evaluation rate limit reached",
-                        ).await?;
-                        pending = Some(generation);
-                        pending_roots = committed_roots.clone();
-                        candidate = None;
-                        rollback_pending = true;
-                    }
-                    continue;
-                }
-                crunch_watch_core::admit_evaluation(attempts.len() as u32).map_err(watch_error)?;
-                attempts.push_back(now);
-                match evaluate(config).await {
-                    Ok((goals, roots, snapshot)) => {
-                        match watch_loop.offer(goals, MAX_TRANSITION_EVENTS) {
-                            Ok(generation) => {
-                                candidate = Some(snapshot);
-                                // The Worker may prune stale derivation entries
-                                // before a rollback. Keep complete conversion
-                                // metadata for every last-admitted root.
-                                pending_roots = roots.clone();
-                                dirty = false;
-                                rollback_pending = false;
-                                pending = Some(generation);
-                                updates.send(WatchWorkerUpdate { generation, roots }).await
-                                    .map_err(|_| Error::Internal("watch worker closed update channel".to_string()))?;
-                            }
-                            Err(_) if pending.is_some() => {
-                                let generation = restore_committed(
-                                    &mut watch_loop, notices, &updates, &committed_roots,
-                                    "watched goals exceed admission limits",
-                                ).await?;
-                                pending = Some(generation);
-                                pending_roots = committed_roots.clone();
-                                candidate = None;
-                                rollback_pending = true;
-                                dirty = true;
-                            }
-                            Err(_) => {
-                                reject(&mut watch_loop, notices, "watched goals exceed admission limits").await?;
-                                dirty = true;
-                            }
-                        }
-                    }
-                    Err(_) if pending.is_some() && !rollback_pending => {
-                        let generation = restore_committed(
-                            &mut watch_loop, notices, &updates, &committed_roots,
-                            "watched source scan, evaluation or conversion failed",
-                        ).await?;
-                        pending = Some(generation);
-                        pending_roots = committed_roots.clone();
-                        candidate = None;
-                        rollback_pending = true;
-                        dirty = true;
-                    }
-                    Err(_) if rollback_pending => {
-                        // Keep the in-flight restoration; retry after it is
-                        // admitted instead of superseding it with an error.
-                        dirty = true;
-                    }
-                    Err(_) => {
-                        reject(&mut watch_loop, notices, "watched source scan, evaluation or conversion failed").await?;
-                        dirty = true;
-                    }
-                }
+            event = worker_events.recv() => {
+                let event = event.ok_or_else(|| Error::Internal("watch worker stopped before shutdown".to_string()))?;
+                coordinator.on_event(event).await?;
             }
+            _ = ticker.tick() => coordinator.on_tick().await?,
         }
     }
-    drop(updates); // run_watch must cancel and drain sandbox/fetch tasks.
-    // Keep draining the event receiver while the Worker cancels sandboxes.
+    drop(coordinator); // run_watch must cancel and drain sandbox/fetch tasks.
     // A timeout is not terminal: only Worker sender closure proves teardown.
     while worker_events.recv().await.is_some() {}
     Ok(())
@@ -496,7 +598,7 @@ pub async fn watch_build(
     let bundle = create_watch_pipeline_builder(config, store)?;
     let mut builder = bundle.builder;
     let root_registry = bundle.root_registry;
-    let workspace_reports = bundle.workspace_evidence_sink;
+    let workspace_evidence_sink = bundle.workspace_evidence_sink;
     let mut known_paths = DerivationRegistry::new(&config.store_dir);
     let mut worker = Worker::with_scheduling_policy(config.max_jobs, config.scheduling_policy.clone())
         .map_err(|error| Error::Build(format!("scheduler policy: {error}")))?;
@@ -513,7 +615,7 @@ pub async fn watch_build(
             config,
             watch_loop,
             &root_registry,
-            &workspace_reports,
+            &workspace_evidence_sink,
             shutdown,
             notices,
             updates_tx,

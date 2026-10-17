@@ -19,27 +19,36 @@ use crunch_remote_core::attempt::RemoteJobId;
 use crunch_remote_core::transfer::TRANSFER_CHECKPOINT_DOMAIN;
 use crunch_remote_core::transfer::TRANSFER_MANIFEST_DOMAIN;
 use crunch_remote_core::transfer::TRANSFER_POLICY_DOMAIN;
+use crunch_remote_core::transfer::TransferAcknowledgement;
 use crunch_remote_core::transfer::TransferArtifactFacts;
 use crunch_remote_core::transfer::TransferCheckpointCounterFacts;
 use crunch_remote_core::transfer::TransferCheckpointMonotonicFacts;
 use crunch_remote_core::transfer::TransferChunkFacts;
 use crunch_remote_core::transfer::TransferCreditFacts;
 use crunch_remote_core::transfer::TransferCreditLimits;
+use crunch_remote_core::transfer::TransferCreditRequest;
 use crunch_remote_core::transfer::TransferCreditSnapshot;
 use crunch_remote_core::transfer::TransferCutoffAdmissionFacts;
 use crunch_remote_core::transfer::TransferCutoffDisposition;
+use crunch_remote_core::transfer::TransferCutoffFacts;
 use crunch_remote_core::transfer::TransferDemandArtifactFacts;
 use crunch_remote_core::transfer::TransferDemandChunkFacts;
 use crunch_remote_core::transfer::TransferIdentityError;
+use crunch_remote_core::transfer::TransferIdleProgressFacts;
 use crunch_remote_core::transfer::TransferManifestEnvelopeFacts;
 use crunch_remote_core::transfer::TransferManifestError;
+use crunch_remote_core::transfer::TransferManifestLimits;
+use crunch_remote_core::transfer::TransferManifestPrefix;
 use crunch_remote_core::transfer::TransferManifestTotals;
 use crunch_remote_core::transfer::TransferMissingChunkFacts;
 use crunch_remote_core::transfer::TransferPolicyFacts;
 use crunch_remote_core::transfer::TransferProgressError;
 use crunch_remote_core::transfer::TransferRequiredArtifactFacts;
+use crunch_remote_core::transfer::TransferReservationRequest;
+use crunch_remote_core::transfer::TransferReservationScope;
 use crunch_remote_core::transfer::TransferReservedChunkFacts;
 use crunch_remote_core::transfer::TransferScopeFacts;
+use crunch_remote_core::transfer::TransferSessionFacts;
 use crunch_remote_core::transfer::acknowledge_transfer_chunk;
 use crunch_remote_core::transfer::decide_transfer_cutoff;
 use crunch_remote_core::transfer::grant_transfer_credit;
@@ -517,13 +526,13 @@ pub fn derive_remote_transfer_session_id(
     requested_content_blake3: &RemoteTransferDigest,
     policy_digest_blake3: &RemoteTransferDigest,
 ) -> Result<RemoteTransferSessionId, RemoteTransferReasonCode> {
-    let digest = transfer_session_digest(
-        job_id.as_str(),
-        attempt_id.as_str(),
-        fence_generation.get(),
-        requested_content_blake3.as_str(),
-        policy_digest_blake3.as_str(),
-    )
+    let digest = transfer_session_digest(TransferSessionFacts {
+        job_id: job_id.as_str(),
+        attempt_id: attempt_id.as_str(),
+        fence_generation: fence_generation.get(),
+        requested_content_blake3: requested_content_blake3.as_str(),
+        policy_digest_blake3: policy_digest_blake3.as_str(),
+    })
     .map_err(|reason| match reason {
         TransferIdentityError::Invalid => RemoteTransferReasonCode::SessionIdentityInvalid,
         TransferIdentityError::ArithmeticOverflow => RemoteTransferReasonCode::ArithmeticOverflow,
@@ -673,9 +682,11 @@ pub fn grant_remote_transfer_credit(
         transfer_credit_limits(policy),
         transfer_credit_facts(state),
         snapshot,
-        requested.bytes,
-        requested.chunks,
-        available_storage_bytes,
+        TransferCreditRequest {
+            requested_bytes: requested.bytes,
+            requested_chunks: requested.chunks,
+            available_storage_bytes,
+        },
     )
     .map_err(transfer_progress_reason)?;
     let mut next = state.clone();
@@ -695,20 +706,22 @@ pub fn reserve_remote_transfer_chunk(
 ) -> Result<RemoteTransferCreditState, RemoteTransferReasonCode> {
     policy.validate()?;
     validate_credit_state(policy, state)?;
-    let decision = reserve_transfer_chunk(
-        transfer_credit_limits(policy),
-        manifest_scope_facts(manifest),
-        transfer_scope_facts(&demand.scope),
-        transfer_scope_facts(&header.scope),
-        transfer_credit_facts(state),
-        header.sequence,
-        transfer_reserved_chunk_facts(&header.artifact_id, header.artifact_kind, &header.chunk),
-        demand
+    let decision = reserve_transfer_chunk(TransferReservationRequest {
+        limits: transfer_credit_limits(policy),
+        scope: TransferReservationScope {
+            expected: manifest_scope_facts(manifest),
+            demand: transfer_scope_facts(&demand.scope),
+            header: transfer_scope_facts(&header.scope),
+        },
+        state: transfer_credit_facts(state),
+        header_sequence: header.sequence,
+        header: transfer_reserved_chunk_facts(&header.artifact_id, header.artifact_kind, &header.chunk),
+        demanded: demand
             .missing_chunks
             .iter()
             .map(|missing| transfer_reserved_chunk_facts(&missing.artifact_id, missing.artifact_kind, &missing.chunk)),
-        state.in_flight.contains_key(&header.sequence),
-    )
+        already_in_flight: state.in_flight.contains_key(&header.sequence),
+    })
     .map_err(transfer_progress_reason)?;
     let mut next = state.clone();
     next.granted_bytes_remaining = decision.granted_bytes_remaining;
@@ -725,14 +738,25 @@ pub fn reserve_remote_transfer_chunk(
     Ok(next)
 }
 
+/// Verified chunk acknowledgement and the receiver-observed progress point.
+#[derive(Debug, Clone, Copy)]
+pub struct RemoteTransferAcknowledgementFacts<'a> {
+    pub acknowledgement: &'a RemoteTransferAcknowledgement,
+    pub observed_digest_blake3: &'a RemoteTransferDigest,
+    pub progress_step: u64,
+}
+
 pub fn acknowledge_remote_transfer_chunk(
     policy: RemoteTransferPolicy,
     expected_scope: &RemoteTransferScope,
     state: &RemoteTransferCreditState,
-    acknowledgement: &RemoteTransferAcknowledgement,
-    observed_digest_blake3: &RemoteTransferDigest,
-    progress_step: u64,
+    facts: RemoteTransferAcknowledgementFacts<'_>,
 ) -> Result<RemoteTransferCreditState, RemoteTransferReasonCode> {
+    let RemoteTransferAcknowledgementFacts {
+        acknowledgement,
+        observed_digest_blake3,
+        progress_step,
+    } = facts;
     // r[impl remote_builds.transient_handle_introduction]
     // Only the manifest-established in-flight scope can authenticate an ack.
     validate_transfer_scope(transfer_scope_facts(expected_scope), transfer_scope_facts(&acknowledgement.scope))
@@ -741,9 +765,11 @@ pub fn acknowledge_remote_transfer_chunk(
     validate_credit_state(policy, state)?;
     let transferred = acknowledge_transfer_chunk(
         transfer_credit_facts(state),
-        acknowledgement.chunk_digest_blake3.as_str(),
-        observed_digest_blake3.as_str(),
-        acknowledgement.transferred_bytes,
+        TransferAcknowledgement {
+            digest_blake3: acknowledgement.chunk_digest_blake3.as_str(),
+            observed_digest_blake3: observed_digest_blake3.as_str(),
+            transferred_bytes: acknowledgement.transferred_bytes,
+        },
         state
             .in_flight
             .get(&acknowledgement.sequence)
@@ -770,8 +796,12 @@ pub fn validate_remote_transfer_idle_progress(
     current_progress_step: u64,
 ) -> Result<(), RemoteTransferReasonCode> {
     policy.validate()?;
-    validate_transfer_idle_progress(state.last_progress_step, current_progress_step, policy.idle_progress_steps_max)
-        .map_err(transfer_progress_reason)
+    validate_transfer_idle_progress(TransferIdleProgressFacts {
+        last_progress_step: state.last_progress_step,
+        current_progress_step,
+        idle_progress_steps_max: policy.idle_progress_steps_max,
+    })
+    .map_err(transfer_progress_reason)
 }
 
 pub fn decide_remote_transfer_cutoff(
@@ -782,13 +812,18 @@ pub fn decide_remote_transfer_cutoff(
     transferred_bytes: u64,
 ) -> RemoteTransferCompletionDecision {
     let selected = decide_transfer_cutoff(
-        manifest_scope_facts(manifest),
-        transfer_scope_facts(&initial_demand.scope),
-        TransferCutoffAdmissionFacts {
-            receiver_facts_valid: validate_receiver_facts(manifest, receiver).is_ok(),
-            requested_content_identity_verified: receiver.requested_content_identity_verified,
-            required_closure_metadata_verified: receiver.required_closure_metadata_verified,
-            path_info_admitted: receiver.path_info_admitted,
+        TransferCutoffFacts {
+            expected_scope: manifest_scope_facts(manifest),
+            initial_scope: transfer_scope_facts(&initial_demand.scope),
+            admission: TransferCutoffAdmissionFacts {
+                receiver_facts_valid: validate_receiver_facts(manifest, receiver).is_ok(),
+                requested_content_identity_verified: receiver.requested_content_identity_verified,
+                required_closure_metadata_verified: receiver.required_closure_metadata_verified,
+                path_info_admitted: receiver.path_info_admitted,
+            },
+            transferred_bytes,
+            initially_reused_bytes: initial_demand.reused_bytes,
+            manifest_total_bytes: manifest.total_bytes,
         },
         manifest.manifest.artifacts.iter().map(|artifact| TransferRequiredArtifactFacts {
             required_for_completion: artifact.required_for_completion,
@@ -799,9 +834,6 @@ pub fn decide_remote_transfer_cutoff(
             chunk_complete: receiver.complete_chunk_digests.contains(&chunk.chunk.digest_blake3),
             artifact_complete: receiver.complete_artifact_ids.contains(&chunk.artifact_id),
         }),
-        transferred_bytes,
-        initial_demand.reused_bytes,
-        manifest.total_bytes,
     );
     let (disposition, reason_code) = match selected.disposition {
         TransferCutoffDisposition::AlreadyPresent => (
@@ -819,6 +851,18 @@ pub fn decide_remote_transfer_cutoff(
             (RemoteTransferCompletionDisposition::Reject, RemoteTransferReasonCode::TransferRejected)
         }
     };
+    debug_assert!(!selected.output_admission_claimed);
+    if disposition == RemoteTransferCompletionDisposition::AlreadyPresent {
+        debug_assert!(initial_demand.missing_chunks.is_empty());
+    }
+    if matches!(
+        disposition,
+        RemoteTransferCompletionDisposition::AlreadyPresent | RemoteTransferCompletionDisposition::DemandSatisfied
+    ) {
+        debug_assert!(receiver.requested_content_identity_verified);
+        debug_assert!(receiver.required_closure_metadata_verified);
+        debug_assert!(receiver.path_info_admitted);
+    }
     RemoteTransferCompletionDecision {
         disposition,
         reason_code,
@@ -853,7 +897,11 @@ fn validate_manifest_envelope(
     manifest: &RemoteTransferManifest,
     policy: RemoteTransferPolicy,
 ) -> Result<(), RemoteTransferReasonCode> {
-    validate_transfer_manifest_prefix(&manifest.schema, &manifest.store_prefix).map_err(transfer_manifest_reason)?;
+    validate_transfer_manifest_prefix(TransferManifestPrefix {
+        schema: &manifest.schema,
+        store_prefix: &manifest.store_prefix,
+    })
+    .map_err(transfer_manifest_reason)?;
     let digest = canonical_remote_transfer_policy_digest(policy)?;
     validate_transfer_manifest_envelope(TransferManifestEnvelopeFacts {
         policy_digest_matches: manifest.policy_digest_blake3 == digest,
@@ -894,9 +942,11 @@ fn validate_manifest_artifacts(
                 digest_blake3: chunk.digest_blake3.as_str(),
             }),
         }),
-        policy.chunk_bytes_max,
-        policy.chunk_count_max,
-        policy.total_bytes_max,
+        TransferManifestLimits {
+            chunk_bytes_max: policy.chunk_bytes_max,
+            chunk_count_max: policy.chunk_count_max,
+            total_bytes_max: policy.total_bytes_max,
+        },
     )
     .map_err(transfer_manifest_reason)
 }
@@ -1588,35 +1638,33 @@ mod tests {
             transferred_bytes: TEST_TRANSFERRED_BYTES,
         };
         let wrong = digest("wrong-observed-chunk");
-        let wrong_error = acknowledge_remote_transfer_chunk(
-            policy(),
-            &demand.scope,
-            &reserved,
-            &acknowledgement,
-            &wrong,
-            TEST_PROGRESS_STEP,
-        )
-        .unwrap_err();
+        let wrong_error =
+            acknowledge_remote_transfer_chunk(policy(), &demand.scope, &reserved, RemoteTransferAcknowledgementFacts {
+                acknowledgement: &acknowledgement,
+                observed_digest_blake3: &wrong,
+                progress_step: TEST_PROGRESS_STEP,
+            })
+            .unwrap_err();
         let acknowledged = acknowledge_remote_transfer_chunk(
             policy(),
             &remote_transfer_scope(&manifest),
             &reserved,
-            &acknowledgement,
-            &first.chunk.digest_blake3,
-            TEST_PROGRESS_STEP,
+            RemoteTransferAcknowledgementFacts {
+                acknowledgement: &acknowledgement,
+                observed_digest_blake3: &first.chunk.digest_blake3,
+                progress_step: TEST_PROGRESS_STEP,
+            },
         )
         .unwrap();
         let mut unknown_session = acknowledgement.clone();
         unknown_session.scope.session_id = RemoteTransferSessionId::new(digest("unknown-session").as_str()).unwrap();
-        let unknown_error = acknowledge_remote_transfer_chunk(
-            policy(),
-            &demand.scope,
-            &reserved,
-            &unknown_session,
-            &first.chunk.digest_blake3,
-            TEST_PROGRESS_STEP,
-        )
-        .unwrap_err();
+        let unknown_error =
+            acknowledge_remote_transfer_chunk(policy(), &demand.scope, &reserved, RemoteTransferAcknowledgementFacts {
+                acknowledgement: &unknown_session,
+                observed_digest_blake3: &first.chunk.digest_blake3,
+                progress_step: TEST_PROGRESS_STEP,
+            })
+            .unwrap_err();
 
         // r[verify remote_builds.transient_handle_rejection]
         assert_eq!(unknown_error, RemoteTransferReasonCode::CheckpointScopeMismatch);

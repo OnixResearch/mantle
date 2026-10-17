@@ -43,6 +43,7 @@ use mantle_application_contract::ApplicationOutcome;
 use mantle_application_contract::ProjectAuthority;
 use mantle_application_contract::ProjectEffect;
 use mantle_application_contract::ProjectEffectObservation;
+use mantle_application_contract::ProjectEffectPermissions;
 use mantle_application_contract::ProjectEffectPlan;
 use mantle_application_contract::ProjectEffectPort;
 use mantle_application_contract::ProjectEffectStatus;
@@ -214,8 +215,8 @@ struct ProjectRun {
 }
 
 impl ProjectRun {
-    fn new(operation: ProjectOperation, network_allowed: bool, process_allowed: bool) -> Self {
-        let plan = project_effect_plan(operation, network_allowed, process_allowed);
+    fn new(operation: ProjectOperation, permissions: ProjectEffectPermissions) -> Self {
+        let plan = project_effect_plan(operation, permissions);
         let observed = Vec::with_capacity(plan.steps.len());
         Self { plan, observed }
     }
@@ -322,7 +323,10 @@ pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
         selected: &[],
         no_network: true,
     };
-    let mut run = ProjectRun::new(ProjectOperation::Init, false, false);
+    let mut run = ProjectRun::new(ProjectOperation::Init, ProjectEffectPermissions {
+        is_network_allowed: false,
+        is_process_allowed: false,
+    });
     run.call(ProjectEffect::Inspect, ProjectAuthority::ReadFiles, ProjectObservationKind::CallResult, || {
         port.inspect_init()
     })?;
@@ -387,8 +391,10 @@ where
 {
     let should_run_probes = probes.into();
     let should_validate_trust = trust.into();
-    let mut run =
-        ProjectRun::new(ProjectOperation::Check, should_run_probes || should_validate_trust, should_run_probes);
+    let mut run = ProjectRun::new(ProjectOperation::Check, ProjectEffectPermissions {
+        is_network_allowed: should_run_probes || should_validate_trust,
+        is_process_allowed: should_run_probes,
+    });
     let mut port = ProjectFiles {
         dir,
         selected: &[],
@@ -530,7 +536,10 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
         selected: &[],
         no_network: true,
     };
-    let mut run = ProjectRun::new(ProjectOperation::Show, false, false);
+    let mut run = ProjectRun::new(ProjectOperation::Show, ProjectEffectPermissions {
+        is_network_allowed: false,
+        is_process_allowed: false,
+    });
     assert_ne!(MANIFEST_FILE, LOCK_FILE, "project manifest and lockfile names must differ");
     assert_ne!(INPUTS_FILE, RETENTION_STATE_FILE, "generated inputs and retention state names must differ");
     let (manifest, lock) =
@@ -626,7 +635,10 @@ pub fn cmd_refresh(dir: &Path, selected: &[String], no_network: bool) -> Result<
         selected,
         no_network,
     };
-    let mut run = ProjectRun::new(ProjectOperation::Refresh, !no_network, true);
+    let mut run = ProjectRun::new(ProjectOperation::Refresh, ProjectEffectPermissions {
+        is_network_allowed: !no_network,
+        is_process_allowed: true,
+    });
     assert_ne!(MANIFEST_FILE, LOCK_FILE, "project manifest and lockfile names must differ");
     assert_ne!(INPUTS_FILE, RETENTION_STATE_FILE, "generated inputs and retention state names must differ");
     let (manifest, lock) =
@@ -730,7 +742,10 @@ pub fn cmd_list_stale(dir: &Path, no_network: bool) -> Result<(), RunError> {
         selected: &[],
         no_network,
     };
-    let mut run = ProjectRun::new(ProjectOperation::ListStale, !no_network, true);
+    let mut run = ProjectRun::new(ProjectOperation::ListStale, ProjectEffectPermissions {
+        is_network_allowed: !no_network,
+        is_process_allowed: true,
+    });
     assert_ne!(MANIFEST_FILE, LOCK_FILE, "project manifest and lockfile names must differ");
     assert_ne!(INPUTS_FILE, RETENTION_STATE_FILE, "generated inputs and retention state names must differ");
     let (manifest, lock) =
@@ -818,7 +833,10 @@ pub fn cmd_upgrade(dir: &Path) -> Result<(), RunError> {
         selected: &[],
         no_network: true,
     };
-    let mut run = ProjectRun::new(ProjectOperation::Upgrade, false, false);
+    let mut run = ProjectRun::new(ProjectOperation::Upgrade, ProjectEffectPermissions {
+        is_network_allowed: false,
+        is_process_allowed: false,
+    });
     let (lock, manifest) =
         run.call(ProjectEffect::Inspect, ProjectAuthority::ReadFiles, ProjectObservationKind::CallResult, || {
             port.inspect_legacy()?;
@@ -1216,7 +1234,10 @@ mod lifecycle_effect_tests {
     fn wrong_authority_is_rejected_before_port_mutates_the_project() {
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("should-not-exist");
-        let mut run = ProjectRun::new(ProjectOperation::Init, false, false);
+        let mut run = ProjectRun::new(ProjectOperation::Init, ProjectEffectPermissions {
+            is_network_allowed: false,
+            is_process_allowed: false,
+        });
         let error = run
             .call(ProjectEffect::Inspect, ProjectAuthority::WriteFiles, ProjectObservationKind::CallResult, || {
                 std::fs::write(&target, "unexpected write")

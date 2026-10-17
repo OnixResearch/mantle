@@ -27,7 +27,7 @@ use crate::dynamic::RegistryReadyDynamicDerivation;
 use crate::validate_execution_profile;
 use crate::verify_execution_profile_binding;
 
-/// Maximum registered derivation metadata entries before watch admission.
+/// Maximum registry entries. Matches `goal::MAX_GOALS`.
 pub(crate) const MAX_ENTRIES: u32 = 16_384;
 
 /// A derivation registered for building.
@@ -52,6 +52,8 @@ pub struct RegistryEntry {
     /// The original entry and key remain the scheduler's identity.
     pub resolved_derivation: Option<Arc<Derivation>>,
     pub resolved_drv_path: Option<StorePath<String>>,
+    /// Signed action identity selected after binding observed plan roots.
+    pub resolved_action_ref: Option<String>,
 }
 
 struct RegistryInsert {
@@ -291,6 +293,7 @@ impl DerivationRegistry {
             resolved_outputs: HashMap::new(),
             resolved_derivation: None,
             resolved_drv_path: None,
+            resolved_action_ref: None,
         });
     }
 
@@ -349,6 +352,20 @@ impl DerivationRegistry {
             .ok_or_else(|| crate::Error::Store(format!("ca-input-unrealized: derivation not registered: {drv_abs}")))?;
         entry.resolved_derivation = Some(resolved);
         entry.resolved_drv_path = Some(resolved_path);
+        entry.resolved_action_ref = None;
+        Ok(())
+    }
+
+    pub fn record_resolved_action_ref(&mut self, drv_abs: &str, action_ref: String) -> Result<(), crate::Error> {
+        let entry = self.entries.get_mut(drv_abs).ok_or_else(|| {
+            crate::Error::Store(format!("action identity unavailable: derivation not registered: {drv_abs}"))
+        })?;
+        if entry.resolved_derivation.is_none() {
+            return Err(crate::Error::Store(format!(
+                "action identity unavailable: derivation not prepared: {drv_abs}"
+            )));
+        }
+        entry.resolved_action_ref = Some(action_ref);
         Ok(())
     }
 

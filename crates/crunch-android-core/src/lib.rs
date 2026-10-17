@@ -1,89 +1,67 @@
 #![no_std]
+
+//! Pure validation and lowering of a declared Android APK plan. These records
+//! name pinned third-party tool sources; verifying or executing them is the
+//! responsibility of the std-facing adapter, not this crate.
+
 extern crate alloc;
 
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 
 use serde::Deserialize;
 use serde::Serialize;
 
-pub const MAX_MEMBERS: usize = 256;
-pub const MAX_PATH_BYTES: usize = 1024;
-pub const MAX_NAME_BYTES: usize = 128;
-pub const MIN_ZIP_EPOCH: u64 = 315_532_800;
-pub const MAX_ZIP_EPOCH: u64 = 4_354_819_199;
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct UnpackShape {
-    pub archive: String,
-    pub root: String,
+/// Serializable authoring contract. `manifest`, `resources`, and
+/// `java_sources` are declared source-tree members, not host filesystem paths.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApkPlan {
+    pub module: String,
+    pub application_id: String,
+    pub version_code: u32,
+    pub version_name: String,
+    pub manifest: String,
+    pub resources: Vec<String>,
+    pub java_sources: Vec<String>,
+    pub toolchains: ToolchainRefs,
+    pub signing: Option<SigningConfig>,
+    pub reproducibility: ReproducibilityPolicy,
 }
 
-/// Matches the reviewed `lib/android/sources.ncl` source-record wire shape.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct SourceIdentity {
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolchainRefs {
+    pub jdk: ToolchainIdentity,
+    pub build_tools: ToolchainIdentity,
+    pub platform: ToolchainIdentity,
+}
+
+/// A declaration of source-record and downloaded-byte identities, not proof
+/// that the installed executable was built from source or has been verified.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolchainIdentity {
     pub component: String,
-    pub version: String,
-    pub url: String,
+    pub record_blake3: String,
     pub sha256: String,
-    pub record_identity_blake3: String,
-    pub unpack_shape: UnpackShape,
-    pub platform: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct Toolchain {
-    pub build_tools: SourceIdentity,
-    pub jdk: SourceIdentity,
-    pub platform: SourceIdentity,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct Signing {
-    pub keystore_member: String,
-    pub key_alias: String,
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SigningConfig {
+    pub keystore: String,
+    pub store_password_file: String,
+    pub key_password_file: String,
+    pub alias: String,
     pub schemes: Vec<String>,
-    // Passwords are never part of the plan: the signing executable receives a
-    // separately declared password file via the adapter's explicit input.
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct Reproducibility {
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReproducibilityPolicy {
     pub entry_timestamp_epoch: u64,
     pub locale: String,
     pub timezone: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct ApkPlan {
-    pub module: String,
-    pub application_id: String,
-    pub version_code: u32,
-    pub manifest_member: String,
-    pub resources: Vec<String>,
-    pub java_sources: Vec<String>,
-    pub toolchain: Toolchain,
-    pub signing: Option<Signing>,
-    pub reproducibility: Reproducibility,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Rejection {
-    InvalidModule,
-    InvalidApplicationId,
-    InvalidVersion,
-    MissingManifestMember,
-    UnboundToolchainIdentity,
-    UnpinnedTimestampPolicy,
-    KeystorePathEscape,
-    UnknownSignatureScheme,
-    EmptySourceSet,
-    InvalidSourceMember,
-    TooManyMembers,
-}
-
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StepKind {
     Aapt2Compile,
@@ -94,217 +72,810 @@ pub enum StepKind {
     Apksigner,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub enum StepInput {
-    SourceMember(String),
-    ToolchainIdentity(SourceIdentity),
-    PreviousOutput(StepKind),
-    KeystoreMember(String),
+/// Selects a record in `ApkPlan::toolchains`. The adapter must bind each
+/// referenced artifact (including JDK jar and Android platform jar) itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolchainComponent {
+    Jdk,
+    BuildTools,
+    Platform,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+/// Logical output of a step. These are dependencies, not guessed store paths.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StepOutput {
+    CompiledResources,
+    LinkedApk,
+    GeneratedJava,
+    JavaClasses,
+    Dex,
+    AlignedApk,
+    SignedApk,
+}
+
+/// `source_inputs` are declared source-tree members or store-shaped signing
+/// inputs. `prior_outputs` name all step-produced dependencies. Artifact
+/// placement, tool invocation, and sandboxing belong to the adapter.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StepPlan {
     pub kind: StepKind,
-    pub inputs: Vec<StepInput>,
-    pub toolchain_identity: SourceIdentity,
-    pub output: String,
+    pub source_inputs: Vec<String>,
+    pub required_toolchains: Vec<ToolchainComponent>,
+    pub prior_outputs: Vec<StepOutput>,
+    pub outputs: Vec<StepOutput>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct LoweredApk {
-    pub steps: Vec<StepPlan>,
-    pub final_output: StepKind,
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlanRejection {
+    MissingManifestMember,
+    UnboundToolchainIdentity,
+    UnpinnedTimestampPolicy,
+    KeystorePathEscape,
+    UnknownSignatureScheme,
+    EmptySourceSet,
 }
 
-fn safe_member(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= MAX_PATH_BYTES
-        && value.split('/').all(|part| {
-            !part.is_empty()
-                && part != "."
-                && part != ".."
-                && part.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'+'))
-        })
+fn valid_record_blake3(value: &str) -> bool {
+    value.len() == 64
+        && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        && value.bytes().any(|byte| byte != b'0')
 }
 
-fn identity_bound(identity: &SourceIdentity, component: &str) -> bool {
-    identity.component == component
-        && (1..=64).contains(&identity.version.len())
-        && identity.version.bytes().next().is_some_and(|byte| byte.is_ascii_digit())
-        && identity
-            .version
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'+' | b'_' | b'-'))
-        && (identity.url.starts_with("https://") || identity.url.starts_with("file:///"))
-        && identity.url.len() <= MAX_PATH_BYTES
-        && identity.sha256.len() == 64
-        && identity.sha256.bytes().any(|byte| byte != b'0')
-        && identity.sha256.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-        && identity.record_identity_blake3.len() == 64
-        && identity.record_identity_blake3.bytes().any(|byte| byte != b'0')
-        && identity
-            .record_identity_blake3
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-        && (identity.unpack_shape.archive == "zip" || identity.unpack_shape.archive == "tar-gz")
-        && identity.unpack_shape.root.len() <= 256
-        && identity.unpack_shape.root.ends_with('/')
-        && safe_member(&identity.unpack_shape.root[..identity.unpack_shape.root.len() - 1])
-        && identity.platform == "x86_64-linux"
+fn valid_sha256(value: &str) -> bool {
+    let Some(digest) = value.strip_prefix("sha256-") else {
+        return false;
+    };
+    digest.len() == 44
+        && digest.as_bytes()[43] == b'='
+        && digest.as_bytes()[..43]
+            .iter()
+            .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'+' || *byte == b'/')
+        && digest.as_bytes()[..43].iter().any(|byte| *byte != b'A')
 }
 
-fn validate(plan: &ApkPlan) -> Result<(), Rejection> {
-    if plan.module.is_empty()
-        || plan.module.len() > MAX_NAME_BYTES
-        || !plan.module.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
-    {
-        return Err(Rejection::InvalidModule);
+fn bound_record(identity: &ToolchainIdentity, component: &str) -> bool {
+    identity.component == component && valid_record_blake3(&identity.record_blake3) && valid_sha256(&identity.sha256)
+}
+
+// Require a normalized, relative source member. Neither lexical `..` nor an
+// absolute/drive-qualified path may escape the adapter's declared source tree.
+fn safe_member(member: &str) -> bool {
+    !member.is_empty()
+        && !member.starts_with('/')
+        && !member.contains('\\')
+        && !member.contains(':')
+        && member.split('/').all(|part| !part.is_empty() && part != "." && part != "..")
+}
+
+// This only checks lexical store-path shape. The std adapter must verify that
+// the input belongs to its exact configured store prefix and was declared.
+fn safe_store_input(input: &str) -> bool {
+    let Some(rest) = input.strip_prefix('/') else {
+        return false;
+    };
+    let mut parts = rest.split('/');
+    let Some(first) = parts.next() else {
+        return false;
+    };
+    if !safe_store_part(first) || matches!(first, "etc" | "run") {
+        return false;
     }
-    if plan.application_id.len() > MAX_NAME_BYTES
-        || plan.application_id.split('.').count() < 2
-        || !plan
-            .application_id
-            .split('.')
-            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_'))
-    {
-        return Err(Rejection::InvalidApplicationId);
+    let mut has_store_root = false;
+    for part in parts {
+        if !safe_store_part(part) {
+            return false;
+        }
+        has_store_root = has_store_root || is_store_root_part(part);
     }
-    if plan.version_code == 0 {
-        return Err(Rejection::InvalidVersion);
+    debug_assert!(!has_store_root || input.len() > 34, "a store root includes a 32-character hash component");
+    debug_assert!(!input.contains("//"), "accepted store inputs have no empty components");
+    has_store_root
+}
+
+// A store root component is `<32 nix-base32 chars>-<name>` with a visible name.
+fn is_store_root_part(part: &str) -> bool {
+    let Some((hash, name)) = part.split_once('-') else {
+        return false;
+    };
+    if hash.len() != 32 || name.is_empty() {
+        return false;
     }
-    if !safe_member(&plan.manifest_member) {
-        return Err(Rejection::MissingManifestMember);
+    if name.starts_with('.') {
+        return false;
+    }
+    hash.bytes().all(|byte| b"0123456789abcdfghijklmnpqrsvwxyz".contains(&byte))
+}
+
+fn safe_store_part(part: &str) -> bool {
+    !part.is_empty()
+        && part != "."
+        && part != ".."
+        && part.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"+._?=-".contains(&byte))
+}
+
+fn all_safe_members(members: &[String]) -> bool {
+    members.iter().all(|member| safe_member(member))
+}
+
+/// Rejects malformed declarations before constructing a dependency-ordered
+/// plan. No toolchain binding, byte inspection, clock read, or execution occurs.
+pub fn validate_and_lower(plan: &ApkPlan) -> Result<Vec<StepPlan>, PlanRejection> {
+    validate_plan(plan)?;
+    Ok(lower_steps(plan))
+}
+
+fn validate_plan(plan: &ApkPlan) -> Result<(), PlanRejection> {
+    if !safe_member(&plan.manifest) {
+        return Err(PlanRejection::MissingManifestMember);
     }
     if plan.resources.is_empty() || plan.java_sources.is_empty() {
-        return Err(Rejection::EmptySourceSet);
+        return Err(PlanRejection::EmptySourceSet);
     }
-    if plan.resources.len() > MAX_MEMBERS || plan.java_sources.len() > MAX_MEMBERS {
-        return Err(Rejection::TooManyMembers);
+    if !all_safe_members(&plan.resources) || !all_safe_members(&plan.java_sources) {
+        return Err(PlanRejection::EmptySourceSet);
     }
-    if !plan.resources.iter().chain(plan.java_sources.iter()).all(|member| safe_member(member)) {
-        return Err(Rejection::InvalidSourceMember);
-    }
-    if !identity_bound(&plan.toolchain.build_tools, "android-build-tools")
-        || !identity_bound(&plan.toolchain.jdk, "temurin-jdk")
-        || !identity_bound(&plan.toolchain.platform, "android-platform")
+    if !bound_record(&plan.toolchains.jdk, "jdk")
+        || !bound_record(&plan.toolchains.build_tools, "build-tools")
+        || !bound_record(&plan.toolchains.platform, "platform-android-jar")
     {
-        return Err(Rejection::UnboundToolchainIdentity);
+        return Err(PlanRejection::UnboundToolchainIdentity);
     }
-    let policy = &plan.reproducibility;
-    if !(MIN_ZIP_EPOCH..=MAX_ZIP_EPOCH).contains(&policy.entry_timestamp_epoch)
-        || policy.locale != "C"
-        || policy.timezone != "UTC"
-    {
-        return Err(Rejection::UnpinnedTimestampPolicy);
+    if !(315_532_802..=4_354_819_199).contains(&plan.reproducibility.entry_timestamp_epoch) {
+        return Err(PlanRejection::UnpinnedTimestampPolicy);
+    }
+    if plan.reproducibility.locale != "C" || plan.reproducibility.timezone != "UTC" {
+        return Err(PlanRejection::UnpinnedTimestampPolicy);
     }
     if let Some(signing) = &plan.signing {
-        if !safe_member(&signing.keystore_member) || !signing.keystore_member.starts_with("keys/") {
-            return Err(Rejection::KeystorePathEscape);
-        }
-        if signing.key_alias.is_empty()
-            || signing.key_alias.len() > MAX_NAME_BYTES
-            || !signing.key_alias.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
-        {
-            return Err(Rejection::KeystorePathEscape);
-        }
-        if signing.schemes.is_empty()
-            || signing.schemes.len() > 3
-            || !signing.schemes.iter().all(|scheme| matches!(scheme.as_str(), "v1" | "v2" | "v3"))
-        {
-            return Err(Rejection::UnknownSignatureScheme);
-        }
+        validate_signing(signing)?;
+    }
+    debug_assert!(safe_member(&plan.manifest), "accepted plans name a safe manifest member");
+    debug_assert!(!plan.resources.is_empty(), "accepted plans declare at least one resource");
+    Ok(())
+}
+
+fn validate_signing(signing: &SigningConfig) -> Result<(), PlanRejection> {
+    if !safe_store_input(&signing.keystore)
+        || !safe_store_input(&signing.store_password_file)
+        || !safe_store_input(&signing.key_password_file)
+    {
+        return Err(PlanRejection::KeystorePathEscape);
+    }
+    if signing.alias.is_empty()
+        || signing.schemes.is_empty()
+        || signing.schemes.iter().enumerate().any(|(index, scheme)| {
+            !matches!(scheme.as_str(), "v1" | "v2" | "v3") || signing.schemes[..index].contains(scheme)
+        })
+    {
+        return Err(PlanRejection::UnknownSignatureScheme);
     }
     Ok(())
 }
 
-// r[impl android_adapter.apk_plan_functional_core]
-pub fn lower(plan: &ApkPlan) -> Result<LoweredApk, Rejection> {
-    validate(plan)?;
-    let tools = &plan.toolchain.build_tools;
-    let platform = &plan.toolchain.platform;
-    let mut resources = plan.resources.clone();
-    resources.sort_unstable();
-    resources.dedup();
-    let mut java = plan.java_sources.clone();
-    java.sort_unstable();
-    java.dedup();
-    let mut compile_inputs: Vec<_> = resources.into_iter().map(StepInput::SourceMember).collect();
-    compile_inputs.push(StepInput::ToolchainIdentity(tools.clone()));
-    let mut steps = alloc::vec![
+fn lower_steps(plan: &ApkPlan) -> Vec<StepPlan> {
+    let mut steps = vec![
         StepPlan {
             kind: StepKind::Aapt2Compile,
-            inputs: compile_inputs,
-            toolchain_identity: tools.clone(),
-            output: "compiled-resources".into()
+            source_inputs: plan.resources.clone(),
+            required_toolchains: vec![ToolchainComponent::BuildTools],
+            prior_outputs: vec![],
+            outputs: vec![StepOutput::CompiledResources],
         },
         StepPlan {
             kind: StepKind::Aapt2Link,
-            inputs: alloc::vec![
-                StepInput::SourceMember(plan.manifest_member.clone()),
-                StepInput::PreviousOutput(StepKind::Aapt2Compile),
-                StepInput::ToolchainIdentity(tools.clone()),
-                StepInput::ToolchainIdentity(platform.clone())
+            source_inputs: vec![plan.manifest.clone()],
+            required_toolchains: vec![ToolchainComponent::BuildTools, ToolchainComponent::Platform],
+            prior_outputs: vec![StepOutput::CompiledResources],
+            outputs: vec![StepOutput::LinkedApk, StepOutput::GeneratedJava],
+        },
+        StepPlan {
+            kind: StepKind::Javac,
+            source_inputs: plan.java_sources.clone(),
+            required_toolchains: vec![ToolchainComponent::Jdk, ToolchainComponent::Platform],
+            prior_outputs: vec![StepOutput::GeneratedJava],
+            outputs: vec![StepOutput::JavaClasses],
+        },
+        StepPlan {
+            kind: StepKind::D8,
+            source_inputs: vec![],
+            required_toolchains: vec![
+                ToolchainComponent::BuildTools,
+                ToolchainComponent::Jdk,
+                ToolchainComponent::Platform,
             ],
-            toolchain_identity: tools.clone(),
-            output: "linked-resources.apk".into()
+            prior_outputs: vec![StepOutput::JavaClasses],
+            outputs: vec![StepOutput::Dex],
+        },
+        StepPlan {
+            kind: StepKind::Zipalign,
+            source_inputs: vec![],
+            required_toolchains: vec![
+                ToolchainComponent::BuildTools,
+                ToolchainComponent::Jdk,
+                ToolchainComponent::Platform,
+            ],
+            prior_outputs: vec![StepOutput::LinkedApk, StepOutput::Dex],
+            outputs: vec![StepOutput::AlignedApk],
         },
     ];
-    let mut javac_inputs: Vec<_> = java.into_iter().map(StepInput::SourceMember).collect();
-    javac_inputs.extend([
-        StepInput::PreviousOutput(StepKind::Aapt2Link),
-        StepInput::ToolchainIdentity(plan.toolchain.jdk.clone()),
-        StepInput::ToolchainIdentity(platform.clone()),
-    ]);
-    steps.push(StepPlan {
-        kind: StepKind::Javac,
-        inputs: javac_inputs,
-        toolchain_identity: plan.toolchain.jdk.clone(),
-        output: "classes".into(),
-    });
-    steps.push(StepPlan {
-        kind: StepKind::D8,
-        inputs: alloc::vec![
-            StepInput::PreviousOutput(StepKind::Javac),
-            StepInput::ToolchainIdentity(tools.clone()),
-            StepInput::ToolchainIdentity(plan.toolchain.jdk.clone()),
-            StepInput::ToolchainIdentity(platform.clone())
-        ],
-        toolchain_identity: tools.clone(),
-        output: "classes.dex".into(),
-    });
-    steps.push(StepPlan {
-        kind: StepKind::Zipalign,
-        inputs: alloc::vec![
-            StepInput::PreviousOutput(StepKind::D8),
-            StepInput::PreviousOutput(StepKind::Aapt2Link),
-            StepInput::ToolchainIdentity(tools.clone()),
-            StepInput::ToolchainIdentity(plan.toolchain.jdk.clone())
-        ],
-        toolchain_identity: tools.clone(),
-        output: "unsigned.apk".into(),
-    });
     if let Some(signing) = &plan.signing {
         steps.push(StepPlan {
             kind: StepKind::Apksigner,
+            source_inputs: vec![
+                signing.keystore.clone(),
+                signing.store_password_file.clone(),
+                signing.key_password_file.clone(),
+            ],
+            required_toolchains: vec![ToolchainComponent::BuildTools, ToolchainComponent::Jdk],
+            prior_outputs: vec![StepOutput::AlignedApk],
+            outputs: vec![StepOutput::SignedApk],
+        });
+    }
+    debug_assert!(steps.first().is_some_and(|step| step.prior_outputs.is_empty()), "first step has no step inputs");
+    debug_assert!(
+        steps.last().is_some_and(|step| step.kind == StepKind::Apksigner) == plan.signing.is_some(),
+        "a signing step exists exactly when signing is declared"
+    );
+    steps
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::string::ToString;
+
+    use super::*;
+
+    fn toolchain(component: &str) -> ToolchainIdentity {
+        ToolchainIdentity {
+            component: component.to_string(),
+            record_blake3: "a".repeat(64),
+            sha256: "sha256-mS+W55lQdax2NrsajeUrDGHXHtMTf6/JeauWtKt43XU=".to_string(),
+        }
+    }
+
+    fn fixture() -> ApkPlan {
+        ApkPlan {
+            module: "demo".to_string(),
+            application_id: "org.example.demo".to_string(),
+            version_code: 1,
+            version_name: "1.0".to_string(),
+            manifest: "app/AndroidManifest.xml".to_string(),
+            resources: vec!["app/res/values/strings.xml".to_string()],
+            java_sources: vec!["app/src/Main.java".to_string()],
+            toolchains: ToolchainRefs {
+                jdk: toolchain("jdk"),
+                build_tools: toolchain("build-tools"),
+                platform: toolchain("platform-android-jar"),
+            },
+            signing: None,
+            reproducibility: ReproducibilityPolicy {
+                entry_timestamp_epoch: 315_532_802,
+                locale: "C".to_string(),
+                timezone: "UTC".to_string(),
+            },
+        }
+    }
+
+    fn signing() -> SigningConfig {
+        SigningConfig {
+            keystore: "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/release.jks".to_string(),
+            store_password_file: "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/store.pass".to_string(),
+            key_password_file: "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/key.pass".to_string(),
+            alias: "release".to_string(),
+            schemes: vec!["v2".to_string(), "v3".to_string()],
+        }
+    }
+
+    #[test]
+    fn unsigned_steps_require_ordered_predecessors_and_toolchains() {
+        let plan = fixture();
+        let steps = validate_and_lower(&plan).unwrap();
+        assert_eq!(steps.iter().map(|step| step.kind).collect::<Vec<_>>(), vec![
+            StepKind::Aapt2Compile,
+            StepKind::Aapt2Link,
+            StepKind::Javac,
+            StepKind::D8,
+            StepKind::Zipalign,
+        ]);
+        assert_eq!(steps[1].prior_outputs, vec![StepOutput::CompiledResources]);
+        assert_eq!(steps[2].prior_outputs, vec![StepOutput::GeneratedJava]);
+        assert_eq!(steps[3].prior_outputs, vec![StepOutput::JavaClasses]);
+        assert_eq!(steps[4].prior_outputs, vec![StepOutput::LinkedApk, StepOutput::Dex]);
+        assert_eq!(steps[4].outputs, vec![StepOutput::AlignedApk]);
+        for step in &steps[3..=4] {
+            assert_eq!(step.required_toolchains, vec![
+                ToolchainComponent::BuildTools,
+                ToolchainComponent::Jdk,
+                ToolchainComponent::Platform,
+            ]);
+        }
+    }
+
+    #[test]
+    fn signed_step_requires_aligned_apk_and_declared_toolchains() {
+        let mut plan = fixture();
+        plan.signing = Some(signing());
+        let steps = validate_and_lower(&plan).unwrap();
+        assert_eq!(steps.iter().map(|step| step.kind).collect::<Vec<_>>(), vec![
+            StepKind::Aapt2Compile,
+            StepKind::Aapt2Link,
+            StepKind::Javac,
+            StepKind::D8,
+            StepKind::Zipalign,
+            StepKind::Apksigner,
+        ]);
+        assert_eq!(steps[5].prior_outputs, vec![StepOutput::AlignedApk]);
+        assert_eq!(steps[5].outputs, vec![StepOutput::SignedApk]);
+        assert_eq!(steps[5].required_toolchains, vec![ToolchainComponent::BuildTools, ToolchainComponent::Jdk]);
+    }
+
+    #[test]
+    fn accepts_configurable_absolute_store_prefix() {
+        let mut plan = fixture();
+        let mut config = signing();
+        config.keystore = "/crunch/store/0123456789abcdfghijklmnpqrsvwxyz-signing/release.jks".to_string();
+        config.store_password_file = "/crunch/store/0123456789abcdfghijklmnpqrsvwxyz-signing/store.pass".to_string();
+        config.key_password_file = "/crunch/store/0123456789abcdfghijklmnpqrsvwxyz-signing/key.pass".to_string();
+        plan.signing = Some(config);
+        let steps = validate_and_lower(&plan).unwrap();
+        assert_eq!(steps[5].kind, StepKind::Apksigner);
+    }
+
+    #[test]
+    fn missing_or_unsafe_manifest_is_rejected() {
+        for bad in [
+            "",
+            "/tmp/AndroidManifest.xml",
+            "../AndroidManifest.xml",
+            "app//AndroidManifest.xml",
+        ] {
+            let mut plan = fixture();
+            plan.manifest = bad.to_string();
+            assert_eq!(validate_and_lower(&plan), Err(PlanRejection::MissingManifestMember));
+        }
+    }
+
+    #[test]
+    fn missing_or_unusable_source_set_is_rejected() {
+        let mut plan = fixture();
+        plan.resources.clear();
+        assert_eq!(validate_and_lower(&plan), Err(PlanRejection::EmptySourceSet));
+        let mut plan = fixture();
+        plan.java_sources.clear();
+        assert_eq!(validate_and_lower(&plan), Err(PlanRejection::EmptySourceSet));
+        let mut plan = fixture();
+        plan.java_sources[0] = "../Main.java".to_string();
+        assert_eq!(validate_and_lower(&plan), Err(PlanRejection::EmptySourceSet));
+    }
+
+    #[test]
+    fn malformed_or_misassigned_toolchain_records_are_not_bound() {
+        let mut plan = fixture();
+        plan.toolchains.platform.component = "build-tools".to_string();
+        assert_eq!(validate_and_lower(&plan), Err(PlanRejection::UnboundToolchainIdentity));
+        let mut plan = fixture();
+        plan.toolchains.jdk.record_blake3 = "0".repeat(64);
+        assert_eq!(validate_and_lower(&plan), Err(PlanRejection::UnboundToolchainIdentity));
+        let mut plan = fixture();
+        plan.toolchains.build_tools.sha256 = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_string();
+        assert_eq!(validate_and_lower(&plan), Err(PlanRejection::UnboundToolchainIdentity));
+        let mut plan = fixture();
+        plan.toolchains.platform.sha256 = "not-a-digest".to_string();
+        assert_eq!(validate_and_lower(&plan), Err(PlanRejection::UnboundToolchainIdentity));
+    }
+
+    #[test]
+    fn reproducibility_policy_enforces_zip_epoch_and_fixed_locale_timezone() {
+        for epoch in [315_532_800, 315_532_801] {
+            let mut plan = fixture();
+            plan.reproducibility.entry_timestamp_epoch = epoch;
+            assert_eq!(validate_and_lower(&plan), Err(PlanRejection::UnpinnedTimestampPolicy));
+        }
+        for epoch in [315_532_802, 4_354_819_199] {
+            let mut plan = fixture();
+            plan.reproducibility.entry_timestamp_epoch = epoch;
+            assert_eq!(validate_and_lower(&plan).unwrap(), validate_and_lower(&fixture()).unwrap());
+        }
+        let mut plan = fixture();
+        plan.reproducibility.entry_timestamp_epoch = 4_354_819_200;
+        assert_eq!(validate_and_lower(&plan), Err(PlanRejection::UnpinnedTimestampPolicy));
+        let mut plan = fixture();
+        plan.reproducibility.locale = "en_US.UTF-8".to_string();
+        assert_eq!(validate_and_lower(&plan), Err(PlanRejection::UnpinnedTimestampPolicy));
+        let mut plan = fixture();
+        plan.reproducibility.timezone = "GMT".to_string();
+        assert_eq!(validate_and_lower(&plan), Err(PlanRejection::UnpinnedTimestampPolicy));
+    }
+
+    #[test]
+    fn every_signing_file_must_be_store_shaped_and_confined() {
+        for bad in [
+            "../release.jks",
+            "/etc/keys.jks",
+            "/run/keys.jks",
+            "/etc/0123456789abcdfghijklmnpqrsvwxyz-signing/key.jks",
+            "/run/secrets/0123456789abcdfghijklmnpqrsvwxyz-signing/key.jks",
+            "file:///nix/store/keys",
+            "C:/keys.jks",
+            "secrets\\keys.jks",
+            "secrets//key.jks",
+            "/nix/store/short-signing/key.jks",
+            "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/../key.jks",
+            "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/./key.jks",
+            "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/~/key.jks",
+            "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/",
+        ] {
+            for field in 0..3 {
+                let mut plan = fixture();
+                let mut config = signing();
+                let member = match field {
+                    0 => &mut config.keystore,
+                    1 => &mut config.store_password_file,
+                    _ => &mut config.key_password_file,
+                };
+                *member = bad.to_string();
+                plan.signing = Some(config);
+                assert_eq!(validate_and_lower(&plan), Err(PlanRejection::KeystorePathEscape));
+            }
+        }
+    }
+
+    #[test]
+    fn only_unique_known_signing_schemes_are_allowed() {
+        for schemes in [vec![], vec!["v4"], vec!["V2"], vec!["v1", "v1"]] {
+            let mut plan = fixture();
+            let mut config = signing();
+            config.schemes = schemes.into_iter().map(str::to_string).collect();
+            plan.signing = Some(config);
+            assert_eq!(validate_and_lower(&plan), Err(PlanRejection::UnknownSignatureScheme));
+        }
+        let mut plan = fixture();
+        let mut config = signing();
+        config.schemes = vec!["v1".to_string(), "v2".to_string(), "v3".to_string()];
+        plan.signing = Some(config);
+        assert_eq!(validate_and_lower(&plan).unwrap().last().unwrap().kind, StepKind::Apksigner);
+    }
+}
+
+/// The separately reviewed, content-addressed APK plan contract.
+pub mod reviewed {
+
+    use alloc::string::String;
+    use alloc::vec::Vec;
+
+    use serde::Deserialize;
+    use serde::Serialize;
+
+    pub const MAX_MEMBERS: usize = 256;
+    pub const MAX_PATH_BYTES: usize = 1024;
+    pub const MAX_NAME_BYTES: usize = 128;
+    pub const MIN_ZIP_EPOCH: u64 = 315_532_802;
+    // The reviewed renderer uses jar --update --date, whose range ends in 2099.
+    pub const MAX_ZIP_EPOCH: u64 = 4_102_444_799;
+
+    #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+    pub struct UnpackShape {
+        pub archive: String,
+        pub root: String,
+    }
+
+    /// Matches the reviewed `lib/android/sources.ncl` source-record wire shape.
+    #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+    pub struct SourceIdentity {
+        pub component: String,
+        pub version: String,
+        pub url: String,
+        pub sha256: String,
+        pub record_identity_blake3: String,
+        pub unpack_shape: UnpackShape,
+        pub platform: String,
+    }
+
+    #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+    pub struct Toolchain {
+        pub build_tools: SourceIdentity,
+        pub jdk: SourceIdentity,
+        pub platform: SourceIdentity,
+    }
+
+    #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+    pub struct Signing {
+        pub keystore_member: String,
+        pub key_alias: String,
+        pub schemes: Vec<String>,
+        // Passwords are never part of the plan: the signing executable receives a
+        // separately declared password file via the adapter's explicit input.
+    }
+
+    #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+    pub struct Reproducibility {
+        pub entry_timestamp_epoch: u64,
+        pub locale: String,
+        pub timezone: String,
+    }
+
+    #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+    pub struct ApkPlan {
+        pub module: String,
+        pub application_id: String,
+        pub version_code: u32,
+        pub manifest_member: String,
+        pub resources: Vec<String>,
+        pub java_sources: Vec<String>,
+        pub toolchain: Toolchain,
+        pub signing: Option<Signing>,
+        pub reproducibility: Reproducibility,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum Rejection {
+        InvalidModule,
+        InvalidApplicationId,
+        InvalidVersion,
+        MissingManifestMember,
+        UnboundToolchainIdentity,
+        UnpinnedTimestampPolicy,
+        KeystorePathEscape,
+        UnknownSignatureScheme,
+        EmptySourceSet,
+        InvalidSourceMember,
+        TooManyMembers,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum StepKind {
+        Aapt2Compile,
+        Aapt2Link,
+        Javac,
+        D8,
+        Zipalign,
+        Apksigner,
+    }
+
+    #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+    pub enum StepInput {
+        SourceMember(String),
+        ToolchainIdentity(SourceIdentity),
+        PreviousOutput(StepKind),
+        KeystoreMember(String),
+    }
+
+    #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+    pub struct StepPlan {
+        pub kind: StepKind,
+        pub inputs: Vec<StepInput>,
+        pub toolchain_identity: SourceIdentity,
+        pub output: String,
+    }
+
+    #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+    pub struct LoweredApk {
+        pub steps: Vec<StepPlan>,
+        pub final_output: StepKind,
+    }
+
+    fn safe_member(value: &str) -> bool {
+        !value.is_empty()
+            && value.len() <= MAX_PATH_BYTES
+            && value.split('/').all(|part| {
+                !part.is_empty()
+                    && part != "."
+                    && part != ".."
+                    && part
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'+'))
+            })
+    }
+
+    fn identity_bound(identity: &SourceIdentity, component: &str) -> bool {
+        identity.component == component
+            && (1..=64).contains(&identity.version.len())
+            && identity.version.bytes().next().is_some_and(|byte| byte.is_ascii_digit())
+            && identity
+                .version
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'+' | b'_' | b'-'))
+            && (identity.url.starts_with("https://") || identity.url.starts_with("file:///"))
+            && identity.url.len() <= MAX_PATH_BYTES
+            && identity.sha256.len() == 64
+            && identity.sha256.bytes().any(|byte| byte != b'0')
+            && identity.sha256.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            && identity.record_identity_blake3.len() == 64
+            && identity.record_identity_blake3.bytes().any(|byte| byte != b'0')
+            && identity
+                .record_identity_blake3
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            && (identity.unpack_shape.archive == "zip" || identity.unpack_shape.archive == "tar-gz")
+            && identity.unpack_shape.root.len() <= 256
+            && identity.unpack_shape.root.ends_with('/')
+            && identity.unpack_shape.root.strip_suffix('/').is_some_and(safe_member)
+            && identity.platform == "x86_64-linux"
+    }
+
+    fn validate(plan: &ApkPlan) -> Result<(), Rejection> {
+        if plan.module.is_empty()
+            || plan.module.len() > MAX_NAME_BYTES
+            || !plan.module.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        {
+            return Err(Rejection::InvalidModule);
+        }
+        if plan.application_id.len() > MAX_NAME_BYTES
+            || plan.application_id.split('.').count() < 2
+            || !plan
+                .application_id
+                .split('.')
+                .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_'))
+        {
+            return Err(Rejection::InvalidApplicationId);
+        }
+        if plan.version_code == 0 {
+            return Err(Rejection::InvalidVersion);
+        }
+        if !safe_member(&plan.manifest_member) {
+            return Err(Rejection::MissingManifestMember);
+        }
+        if plan.resources.is_empty() || plan.java_sources.is_empty() {
+            return Err(Rejection::EmptySourceSet);
+        }
+        if plan.resources.len() > MAX_MEMBERS || plan.java_sources.len() > MAX_MEMBERS {
+            return Err(Rejection::TooManyMembers);
+        }
+        if !plan.resources.iter().chain(plan.java_sources.iter()).all(|member| safe_member(member)) {
+            return Err(Rejection::InvalidSourceMember);
+        }
+        if !identity_bound(&plan.toolchain.build_tools, "android-build-tools")
+            || !identity_bound(&plan.toolchain.jdk, "temurin-jdk")
+            || !identity_bound(&plan.toolchain.platform, "android-platform")
+        {
+            return Err(Rejection::UnboundToolchainIdentity);
+        }
+        let policy = &plan.reproducibility;
+        if !(MIN_ZIP_EPOCH..=MAX_ZIP_EPOCH).contains(&policy.entry_timestamp_epoch)
+            || policy.locale != "C"
+            || policy.timezone != "UTC"
+        {
+            return Err(Rejection::UnpinnedTimestampPolicy);
+        }
+        if let Some(signing) = &plan.signing {
+            if !safe_member(&signing.keystore_member) || !signing.keystore_member.starts_with("keys/") {
+                return Err(Rejection::KeystorePathEscape);
+            }
+            if signing.key_alias.is_empty()
+                || signing.key_alias.len() > MAX_NAME_BYTES
+                || !signing.key_alias.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+            {
+                return Err(Rejection::KeystorePathEscape);
+            }
+            if signing.schemes.is_empty()
+                || signing.schemes.len() > 3
+                || !signing.schemes.iter().all(|scheme| matches!(scheme.as_str(), "v1" | "v2" | "v3"))
+            {
+                return Err(Rejection::UnknownSignatureScheme);
+            }
+        }
+        debug_assert!(!plan.module.is_empty());
+        debug_assert!(plan.version_code != 0);
+        debug_assert!(plan.resources.len() <= MAX_MEMBERS);
+        debug_assert!(plan.java_sources.len() <= MAX_MEMBERS);
+        Ok(())
+    }
+
+    fn lower_compile_link_java(plan: &ApkPlan, resources: Vec<String>, java: Vec<String>) -> Vec<StepPlan> {
+        debug_assert!(!resources.is_empty());
+        debug_assert!(!java.is_empty());
+        debug_assert!(resources.len() <= MAX_MEMBERS);
+        debug_assert!(java.len() <= MAX_MEMBERS);
+        let tools = &plan.toolchain.build_tools;
+        let platform = &plan.toolchain.platform;
+        let mut compile_inputs: Vec<_> = resources.into_iter().map(StepInput::SourceMember).collect();
+        compile_inputs.push(StepInput::ToolchainIdentity(tools.clone()));
+        let mut steps = alloc::vec![
+            StepPlan {
+                kind: StepKind::Aapt2Compile,
+                inputs: compile_inputs,
+                toolchain_identity: tools.clone(),
+                output: "compiled-resources".into()
+            },
+            StepPlan {
+                kind: StepKind::Aapt2Link,
+                inputs: alloc::vec![
+                    StepInput::SourceMember(plan.manifest_member.clone()),
+                    StepInput::PreviousOutput(StepKind::Aapt2Compile),
+                    StepInput::ToolchainIdentity(tools.clone()),
+                    StepInput::ToolchainIdentity(platform.clone())
+                ],
+                toolchain_identity: tools.clone(),
+                output: "linked-resources.apk".into()
+            },
+        ];
+        let mut javac_inputs: Vec<_> = java.into_iter().map(StepInput::SourceMember).collect();
+        javac_inputs.extend([
+            StepInput::PreviousOutput(StepKind::Aapt2Link),
+            StepInput::ToolchainIdentity(plan.toolchain.jdk.clone()),
+            StepInput::ToolchainIdentity(platform.clone()),
+        ]);
+        steps.push(StepPlan {
+            kind: StepKind::Javac,
+            inputs: javac_inputs,
+            toolchain_identity: plan.toolchain.jdk.clone(),
+            output: "classes".into(),
+        });
+        steps
+    }
+
+    fn lower_dex_package_sign(plan: &ApkPlan, steps: &mut Vec<StepPlan>) -> StepKind {
+        debug_assert_eq!(steps.len(), 3);
+        debug_assert!(matches!(
+            steps.last(),
+            Some(StepPlan {
+                kind: StepKind::Javac,
+                ..
+            })
+        ));
+        let tools = &plan.toolchain.build_tools;
+        let platform = &plan.toolchain.platform;
+        steps.push(StepPlan {
+            kind: StepKind::D8,
             inputs: alloc::vec![
-                StepInput::PreviousOutput(StepKind::Zipalign),
-                StepInput::KeystoreMember(signing.keystore_member.clone()),
+                StepInput::PreviousOutput(StepKind::Javac),
+                StepInput::ToolchainIdentity(tools.clone()),
+                StepInput::ToolchainIdentity(plan.toolchain.jdk.clone()),
+                StepInput::ToolchainIdentity(platform.clone())
+            ],
+            toolchain_identity: tools.clone(),
+            output: "classes.dex".into(),
+        });
+        steps.push(StepPlan {
+            kind: StepKind::Zipalign,
+            inputs: alloc::vec![
+                StepInput::PreviousOutput(StepKind::D8),
+                StepInput::PreviousOutput(StepKind::Aapt2Link),
                 StepInput::ToolchainIdentity(tools.clone()),
                 StepInput::ToolchainIdentity(plan.toolchain.jdk.clone())
             ],
             toolchain_identity: tools.clone(),
-            output: "signed.apk".into(),
+            output: "unsigned.apk".into(),
         });
-    }
-    Ok(LoweredApk {
-        final_output: if plan.signing.is_some() {
+        if let Some(signing) = &plan.signing {
+            steps.push(StepPlan {
+                kind: StepKind::Apksigner,
+                inputs: alloc::vec![
+                    StepInput::PreviousOutput(StepKind::Zipalign),
+                    StepInput::KeystoreMember(signing.keystore_member.clone()),
+                    StepInput::ToolchainIdentity(tools.clone()),
+                    StepInput::ToolchainIdentity(plan.toolchain.jdk.clone())
+                ],
+                toolchain_identity: tools.clone(),
+                output: "signed.apk".into(),
+            });
             StepKind::Apksigner
         } else {
             StepKind::Zipalign
-        },
-        steps,
-    })
-}
+        }
+    }
 
-#[cfg(test)]
-mod tests;
+    // r[impl android_adapter.apk_plan_functional_core]
+    pub fn lower(plan: &ApkPlan) -> Result<LoweredApk, Rejection> {
+        validate(plan)?;
+        let mut resources = plan.resources.clone();
+        resources.sort_unstable();
+        resources.dedup();
+        let mut java = plan.java_sources.clone();
+        java.sort_unstable();
+        java.dedup();
+        let mut steps = lower_compile_link_java(plan, resources, java);
+        let final_output = lower_dex_package_sign(plan, &mut steps);
+        Ok(LoweredApk { steps, final_output })
+    }
+
+    #[cfg(test)]
+    mod tests {
+        include!("tests.rs");
+    }
+}

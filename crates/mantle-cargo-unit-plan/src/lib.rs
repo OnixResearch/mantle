@@ -16,15 +16,19 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use mantle_rust_plan_core::ExistingUnitEffect;
-mod directives;
-pub use directives::BuildScriptFlags;
-pub use directives::parse_directives;
 use serde::Deserialize;
 use serde::Serialize;
 
+mod build_script;
+
+pub use build_script::BUILD_SCRIPT_RUN;
+use build_script::BuildScriptGraph;
+pub use build_script::RUN_BUILD_SCRIPT_MODE;
+pub use build_script::TARGET_FACTS_MODE;
+
 pub const MAX_PLAN_UNITS: usize = 4096;
 pub const MAX_INPUTS_PER_UNIT: usize = 256;
-pub const MAX_PLAN_BYTES: usize = 4 * 1024 * 1024;
+pub const MAX_PLAN_BYTES: usize = 4_194_304;
 pub const MANIFEST_FILE: &str = "share/mantle/unit-dependencies-v1.json";
 
 /// The producer owns these observations, including the source-slice NAR digest.
@@ -44,12 +48,16 @@ pub struct ExternBinding {
     pub name: String,
     pub unit_id: String,
 }
-/// The native paths are admitted by the producer as explicit store inputs.
+
+/// Producer-resolved facts of one build-script execution unit. Native inputs
+/// are whole store roots already resolved from `{{role:<name>}}` markers.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NativeInput {
-    pub inputs: BTreeMap<String, String>,
-    pub env: BTreeMap<String, String>,
-    pub path: Vec<String>,
+pub struct BuildScriptRunBinding {
+    /// The package's Cargo `links` key, if any.
+    pub links: Option<String>,
+    pub native_inputs: Vec<String>,
+    pub native_env: BTreeMap<String, String>,
+    pub native_path: Vec<String>,
 }
 
 /// Side-effect facts not claimed by the pure core: reviewed toolchain and source
@@ -64,13 +72,9 @@ pub struct UnitBinding {
     pub source_label: String,
     pub rustc_metadata_hash: String,
     pub triple: String,
-    /// Run units have a package `links` key and a compiled-script dependency.
-    pub links: Option<String>,
-    pub script_run: Option<String>,
-    pub compiled_script: Option<String>,
-    pub linked_runs: BTreeMap<String, String>,
-    pub native: NativeInput,
     pub externs: Vec<ExternBinding>,
+    /// Present exactly for `build-script-run` effects.
+    pub build_script_run: Option<BuildScriptRunBinding>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -172,23 +176,31 @@ struct UnitPolicy {
     host_paths: &'static str,
 }
 
+#[allow(tigerstyle::ambiguous_params)] // stable code vs subject vs detail: distinct blocker fields
 fn blocked(code: &'static str, subject: &str, detail: &str) -> Vec<Blocker> {
     vec![Blocker::new(code, subject, detail)]
 }
 
+#[allow(tigerstyle::ambiguous_params)] // candidate path vs declared store prefix: distinct domains
 fn validated_store_root<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
     let rest = path.strip_prefix(prefix)?.strip_prefix('/')?;
     let mut parts = rest.splitn(2, '/');
     let root = parts.next()?;
-    if root.len() < 34
-        || root.as_bytes().get(32) != Some(&b'-')
-        || !root.as_bytes()[..32].iter().all(|byte| b"0123456789abcdfghijklmnpqrsvwxyz".contains(byte))
-        || !safe_name(&root[33..])
-        || !parts.next().is_none_or(safe_relative)
-    {
+    if root.len() < 34 || root.as_bytes().get(32) != Some(&b'-') {
         return None;
     }
-    Some(&path[..prefix.len() + 1 + root.len()])
+    let root_checks = [
+        root.as_bytes()[..32].iter().all(|byte| b"0123456789abcdfghijklmnpqrsvwxyz".contains(byte)),
+        safe_name(&root[33..]),
+        parts.next().is_none_or(safe_relative),
+    ];
+    if root_checks.contains(&false) {
+        return None;
+    }
+    let root_end = prefix.len().saturating_add(1).saturating_add(root.len());
+    debug_assert!(root_end <= path.len());
+    debug_assert!(root.len() >= 34);
+    Some(&path[..root_end])
 }
 
 fn safe_name(name: &str) -> bool {
@@ -218,328 +230,52 @@ fn safe_relative(path: &str) -> bool {
 fn source_token(id: &str) -> String {
     format!("{{{{mantle-source:{id}}}}}")
 }
-fn output_token(id: &str, output: &str) -> String {
-    format!("{{{{mantle-unit-output:{}:{output}}}}}", plan_id(id))
+fn output_token(id: &str) -> String {
+    build_script::named_output_token(id, "out")
 }
 /// Cargo unit identities can exceed the generic plan's 128-byte identifier bound.
 fn plan_id(id: &str) -> String {
     format!("u.{}", blake3::hash(id.as_bytes()).to_hex())
 }
 
-fn target_unit_id(plan: &PlanBindings, triple: &str) -> String {
-    format!("target.{}", blake3::hash(format!("{}:{}:{triple}", plan.rustc, plan.toolchain).as_bytes()).to_hex())
-}
-
-fn target_unit(plan: &PlanBindings, triple: &str, tool_roots: &BTreeSet<&str>) -> Unit {
-    let id = target_unit_id(plan, triple);
-    Unit {
-        id: plan_id(&id),
-        derivation: Derivation {
-            name: format!("rust-target-facts-{}", &blake3::hash(id.as_bytes()).to_hex().as_str()[..16]),
-            builder: plan.helper.clone(),
-            system: plan.system.clone(),
-            args: vec!["target-facts".to_string()],
-            outputs: vec!["out"],
-            env: BTreeMap::from([
-                ("MANTLE_UNIT_RUSTC".to_string(), plan.rustc.clone()),
-                ("MANTLE_UNIT_TARGET".to_string(), triple.to_string()),
-                ("MANTLE_UNIT_HOST".to_string(), plan.host_triple.clone()),
-            ]),
-            inputs: tool_roots
-                .iter()
-                .map(|path| Input::StorePath {
-                    path: (*path).to_string(),
-                })
-                .collect(),
-            fixed_output: None,
-            addressing_mode: "input-addressed",
-            sandbox: "native",
-            dynamic_plan_outputs: Vec::new(),
-        },
-        requested_outputs: vec!["out"],
-        policy: UnitPolicy {
-            sandbox: "inherit",
-            substitutions: "inherit",
-            store_prefix: "inherit",
-            host_paths: "none",
-        },
-    }
-}
-
-fn lower_run_unit(
-    effect: &ExistingUnitEffect,
-    binding: &UnitBinding,
-    plan: &PlanBindings,
-    tool_roots: &BTreeSet<&str>,
-    known_units: &BTreeSet<&str>,
-) -> Result<Unit, Vec<Blocker>> {
-    let id = effect.unit_id.0.as_str();
-    let compiled = binding
-        .compiled_script
-        .as_ref()
-        .ok_or_else(|| blocked("unit-plan-mode-unsupported", id, "run unit missing compiled script"))?;
-    let deps = effect.dependency_unit_ids.iter().map(|dep| dep.0.as_str()).collect::<BTreeSet<_>>();
-    if !deps.contains(compiled.as_str())
-        || binding.script_run.is_some()
-        || !binding.externs.is_empty()
-        || effect.expected_outputs.as_slice() != ["out", "flags"]
-        || deps.iter().any(|dep| !known_units.contains(dep))
-    {
-        return Err(blocked("unit-plan-mode-unsupported", id, "invalid run-unit dependencies or outputs"));
-    }
-    let mut inputs = tool_roots
-        .iter()
-        .map(|path| Input::StorePath {
-            path: (*path).to_string(),
-        })
-        .collect::<BTreeSet<_>>();
-    inputs.insert(Input::Source {
-        source: binding.source_id.clone(),
-    });
-    for dep in &deps {
-        inputs.insert(Input::UnitOutput {
-            unit: plan_id(dep),
-            output: "out",
-        });
-    }
-    let mut links = BTreeMap::new();
-    for (key, run) in &binding.linked_runs {
-        if !safe_name(key) || !deps.contains(run.as_str()) || links.insert(key, output_token(run, "flags")).is_some() {
-            return Err(blocked("build-script-links-conflict", id, key));
-        }
-        inputs.insert(Input::UnitOutput {
-            unit: plan_id(run),
-            output: "flags",
-        });
-    }
-    let target = target_unit_id(plan, &binding.triple);
-    inputs.insert(Input::UnitOutput {
-        unit: plan_id(&target),
-        output: "out",
-    });
-    let mut native = BTreeMap::new();
-    for (role, path) in &binding.native.inputs {
-        if !safe_name(role) {
-            return Err(blocked("native-input-role-undeclared", id, role));
-        }
-        let root =
-            validated_store_root(path, &plan.store_prefix).ok_or_else(|| blocked("unit-plan-host-path", id, path))?;
-        native.insert(role, path);
-        inputs.insert(Input::StorePath { path: root.to_string() });
-    }
-    if binding
-        .native
-        .path
-        .iter()
-        .any(|path| !native.values().any(|root| path == *root || path.starts_with(&format!("{root}/"))))
-        || binding.native.env.keys().any(|key| !safe_name(key))
-        || inputs.len() > MAX_INPUTS_PER_UNIT
-    {
-        return Err(blocked("native-input-role-undeclared", id, "invalid native environment or input limit"));
-    }
-    let mut env = BTreeMap::from([
-        ("MANTLE_UNIT_SOURCE".to_string(), source_token(&binding.source_id)),
-        ("MANTLE_UNIT_SCRIPT".to_string(), output_token(compiled, "out")),
-        ("MANTLE_UNIT_TARGET_FACTS".to_string(), output_token(&target, "out")),
-        ("MANTLE_UNIT_LINKS_KEY".to_string(), binding.links.clone().unwrap_or_default()),
-    ]);
-    env.insert("MANTLE_UNIT_RUSTC".to_string(), plan.rustc.clone());
-    env.insert("MANTLE_UNIT_TOOLCHAIN".to_string(), plan.toolchain.clone());
-    for (key, value) in [
-        ("MANTLE_UNIT_LINKED_FLAGS", serde_json::to_string(&links)),
-        ("MANTLE_UNIT_NATIVE", serde_json::to_string(&binding.native)),
-        (
-            "MANTLE_UNIT_COMPILE_ENV",
-            serde_json::to_string(&effect.environment.iter().cloned().collect::<BTreeMap<_, _>>()),
-        ),
-        (
-            "MANTLE_UNIT_DEPENDENCIES",
-            serde_json::to_string(&deps.iter().map(|dep| output_token(dep, "out")).collect::<Vec<_>>()),
-        ),
-    ] {
-        env.insert(key.to_string(), value.map_err(|_| blocked("unit-plan-limit", id, "run unit serialization"))?);
-    }
-    if env.values().any(|value| value.len() > 16_384) {
-        return Err(blocked("unit-plan-limit", id, "run unit environment too large"));
-    }
-    Ok(Unit {
-        id: plan_id(id),
-        derivation: Derivation {
-            name: format!("rust-build-script-{}", &blake3::hash(id.as_bytes()).to_hex().as_str()[..16]),
-            builder: plan.helper.clone(),
-            system: plan.system.clone(),
-            args: vec!["run-build-script".to_string()],
-            outputs: vec!["out", "flags"],
-            env,
-            inputs: inputs.into_iter().collect(),
-            fixed_output: None,
-            addressing_mode: "input-addressed",
-            sandbox: "native",
-            dynamic_plan_outputs: Vec::new(),
-        },
-        requested_outputs: vec!["out", "flags"],
-        policy: UnitPolicy {
-            sandbox: "inherit",
-            substitutions: "inherit",
-            store_prefix: "inherit",
-            host_paths: "none",
-        },
-    })
+/// Plan-wide admitted facts shared by every lowered unit.
+struct LoweringContext<'a> {
+    plan: &'a PlanBindings,
+    tool_roots: BTreeSet<&'a str>,
+    source_ids: BTreeSet<&'a str>,
+    known_units: BTreeSet<&'a str>,
 }
 
 fn lower_unit(
     effect: &ExistingUnitEffect,
     binding: &UnitBinding,
-    plan: &PlanBindings,
-    tool_roots: &BTreeSet<&str>,
-    source_ids: &BTreeSet<&str>,
-    known_units: &BTreeSet<&str>,
+    context: &LoweringContext<'_>,
+    scripts: &BuildScriptGraph<'_>,
 ) -> Result<Unit, Vec<Blocker>> {
     let id = effect.unit_id.0.as_str();
-    if binding.unit_id != id
-        || !source_ids.contains(binding.source_id.as_str())
-        || !safe_relative(&binding.source_entry)
-        || !safe_name(&binding.source_label)
-    {
-        return Err(blocked("unit-plan-source-unsupported", id, "source binding is absent or invalid"));
-    }
-    if binding.source_kind != "path" && binding.source_kind != "registry" {
-        return Err(blocked("unit-plan-source-unsupported", id, &binding.source_kind));
-    }
-    let is_run = effect.execution_kind == "build-script-run";
-    if !is_run && !matches!(effect.execution_kind.as_str(), "host" | "host-dependency" | "target") {
-        return Err(blocked("unit-plan-mode-unsupported", id, &effect.execution_kind));
-    }
-    if is_run && effect.target_kind != "custom-build" {
-        return Err(blocked("unit-plan-mode-unsupported", id, "run unit must target a build script"));
-    }
-    if !matches!(effect.target_kind.as_str(), "lib" | "rlib" | "bin" | "proc-macro" | "custom-build") {
-        return Err(blocked("unit-plan-mode-unsupported", id, &effect.target_kind));
-    }
-    if binding.triple != plan.target_triple && binding.triple != plan.host_triple {
-        return Err(blocked("unit-plan-triple-unsupported", id, &binding.triple));
-    }
-    if effect.execution_kind != "target" && !is_run && binding.triple != plan.host_triple {
-        return Err(blocked("unit-plan-triple-unsupported", id, "host unit has target triple"));
-    }
-    if is_run {
-        return lower_run_unit(effect, binding, plan, tool_roots, known_units);
-    }
-    if binding.rustc_metadata_hash.is_empty()
-        || !binding.rustc_metadata_hash.bytes().all(|byte| byte.is_ascii_hexdigit())
-    {
-        return Err(blocked("unit-plan-mode-unsupported", id, "missing rust-plan metadata hash"));
-    }
-    if effect.arguments.len() > 512
-        || effect.arguments.iter().any(|arg| arg.len() > 16_384)
-        || effect.environment.len() > 256
-        || effect.environment.iter().any(|(key, value)| key.len() > 16_384 || value.len() > 16_384)
-    {
-        return Err(blocked("unit-plan-limit", id, "effect exceeds unit argument or environment limits"));
-    }
-    let mut args = effect.arguments.clone();
-    for arg in &args {
-        if arg.contains('\0')
-            || arg.starts_with('/')
-            || arg.contains("=/")
-            || arg.contains("@/")
-            || arg.contains("{{mantle-")
-            || arg.starts_with("--out-dir")
-            || arg.starts_with("--extern")
-        {
-            return Err(blocked("unit-plan-host-path", id, arg));
-        }
-    }
-    if effect
-        .environment
-        .iter()
-        .any(|(key, value)| !safe_name(key) || value.starts_with('/') || value.contains("=/") || value.contains('\0'))
-    {
-        return Err(blocked("unit-plan-host-path", id, "effect environment contains host paths"));
-    }
-    if effect.expected_outputs.as_slice() != ["out"] {
-        return Err(blocked("unit-plan-mode-unsupported", id, "unit requires exactly the out output"));
-    }
+    check_unit_binding(effect, binding, context)?;
+    check_unit_effect_values(effect)?;
     let source = source_token(&binding.source_id);
+    let mut args = Vec::with_capacity(effect.arguments.len().saturating_add(4));
+    args.extend_from_slice(&effect.arguments);
     args.push(format!("{source}/{}", binding.source_entry));
     args.push("-C".to_string());
     args.push(format!("metadata={}", binding.rustc_metadata_hash));
     args.push(format!("--remap-path-prefix={source}={}", binding.source_label));
-    let mut inputs = tool_roots
-        .iter()
-        .map(|path| Input::StorePath {
-            path: (*path).to_string(),
-        })
-        .collect::<BTreeSet<_>>();
-    inputs.insert(Input::Source {
-        source: binding.source_id.clone(),
-    });
-    let mut deps = BTreeSet::new();
-    for dep in &effect.dependency_unit_ids {
-        if !known_units.contains(dep.0.as_str()) || dep.0 == id {
-            return Err(blocked("unit-plan-mode-unsupported", id, "unknown or self dependency"));
-        }
-        deps.insert(dep.0.as_str());
-        inputs.insert(Input::UnitOutput {
-            unit: plan_id(&dep.0),
-            output: "out",
-        });
-    }
-    let mut externs = BTreeMap::new();
-    for ext in &binding.externs {
-        if !safe_name(&ext.name)
-            || !deps.contains(ext.unit_id.as_str())
-            || externs.insert(ext.name.clone(), output_token(&ext.unit_id, "out")).is_some()
-        {
-            return Err(blocked("unit-plan-mode-unsupported", id, "extern is not a unique direct dependency"));
-        }
-    }
-    if let Some(run) = &binding.script_run {
-        if !deps.contains(run.as_str()) || binding.native != NativeInput::default() {
-            return Err(blocked("unit-plan-mode-unsupported", id, "invalid script-run binding"));
-        }
-        inputs.insert(Input::UnitOutput {
-            unit: plan_id(run),
-            output: "flags",
-        });
-    }
-    if inputs.len() > MAX_INPUTS_PER_UNIT {
-        return Err(blocked("unit-plan-limit", id, "unit inputs exceed 256"));
-    }
-    let compile_env = effect.environment.iter().cloned().collect::<BTreeMap<_, _>>();
-    let mut env: BTreeMap<String, String> = BTreeMap::new();
-    env.insert("MANTLE_UNIT_RUSTC".to_string(), plan.rustc.clone());
-    env.insert("MANTLE_UNIT_LINKER".to_string(), plan.linker.clone());
-    env.insert("MANTLE_UNIT_SOURCE".to_string(), source);
-    env.insert(
-        "MANTLE_UNIT_COMPILE_ENV".to_string(),
-        serde_json::to_string(&compile_env)
-            .map_err(|_| blocked("unit-plan-limit", id, "compile environment serialization"))?,
-    );
-    env.insert(
-        "MANTLE_UNIT_DEPENDENCIES".to_string(),
-        serde_json::to_string(&deps.iter().map(|id| output_token(id, "out")).collect::<Vec<_>>())
-            .map_err(|_| blocked("unit-plan-limit", id, "dependency serialization"))?,
-    );
-    env.insert(
-        "MANTLE_UNIT_EXTERNS".to_string(),
-        serde_json::to_string(&externs).map_err(|_| blocked("unit-plan-limit", id, "extern serialization"))?,
-    );
-    if let Some(run) = &binding.script_run {
-        env.insert("MANTLE_UNIT_FLAGS".to_string(), output_token(run, "flags"));
-        env.insert("MANTLE_UNIT_BUILD_OUT".to_string(), output_token(run, "out"));
-    }
+    let (inputs, deps) = unit_inputs(effect, binding, context, scripts)?;
+    let mut env = unit_environment(effect, binding, context.plan, source, &deps)?;
+    env.extend(build_script::compile_script_env(scripts, effect)?);
     if env.len() > 512 || env.values().any(|value| value.len() > 16_384) {
         return Err(blocked("unit-plan-limit", id, "unit environment exceeds generic plan limits"));
     }
-    let mut inputs = inputs.into_iter().collect::<Vec<_>>();
-    inputs.sort_by(|a, b| a.canonical_key().cmp(&b.canonical_key()));
+    debug_assert!(inputs.len() <= MAX_INPUTS_PER_UNIT);
+    debug_assert_eq!(args.len(), effect.arguments.len().saturating_add(4));
     Ok(Unit {
         id: plan_id(id),
         derivation: Derivation {
             name: format!("rust-unit-{}", &blake3::hash(id.as_bytes()).to_hex().as_str()[..16]),
-            builder: plan.helper.clone(),
-            system: plan.system.clone(),
+            builder: context.plan.helper.clone(),
+            system: context.plan.system.clone(),
             args,
             outputs: vec!["out"],
             env,
@@ -559,6 +295,217 @@ fn lower_unit(
     })
 }
 
+/// Source, mode, triple, and identity admission for one unit binding.
+fn check_unit_binding(
+    effect: &ExistingUnitEffect,
+    binding: &UnitBinding,
+    context: &LoweringContext<'_>,
+) -> Result<(), Vec<Blocker>> {
+    let id = effect.unit_id.0.as_str();
+    let plan = context.plan;
+    let source_checks = [
+        binding.unit_id == id,
+        context.source_ids.contains(binding.source_id.as_str()),
+        safe_relative(&binding.source_entry),
+        safe_name(&binding.source_label),
+    ];
+    if source_checks.contains(&false) {
+        return Err(blocked("unit-plan-source-unsupported", id, "source binding is absent or invalid"));
+    }
+    if binding.source_kind != "path" && binding.source_kind != "registry" {
+        return Err(blocked("unit-plan-source-unsupported", id, &binding.source_kind));
+    }
+    let is_run = effect.execution_kind == build_script::BUILD_SCRIPT_RUN;
+    if is_run != binding.build_script_run.is_some() {
+        return Err(blocked("unit-plan-build-script-run-unsupported", id, &effect.package_id));
+    }
+    if !matches!(effect.execution_kind.as_str(), "host" | "host-dependency" | "target" | "build-script-run") {
+        return Err(blocked("unit-plan-mode-unsupported", id, &effect.execution_kind));
+    }
+    if !matches!(effect.target_kind.as_str(), "lib" | "rlib" | "bin" | "proc-macro" | "custom-build") {
+        return Err(blocked("unit-plan-mode-unsupported", id, &effect.target_kind));
+    }
+    if binding.triple != plan.target_triple && binding.triple != plan.host_triple {
+        return Err(blocked("unit-plan-triple-unsupported", id, &binding.triple));
+    }
+    if matches!(effect.execution_kind.as_str(), "host" | "host-dependency") && binding.triple != plan.host_triple {
+        return Err(blocked("unit-plan-triple-unsupported", id, "host unit has target triple"));
+    }
+    if binding.rustc_metadata_hash.is_empty()
+        || !binding.rustc_metadata_hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Err(blocked("unit-plan-mode-unsupported", id, "missing rust-plan metadata hash"));
+    }
+    debug_assert_eq!(binding.unit_id, id);
+    debug_assert!(!binding.rustc_metadata_hash.is_empty());
+    Ok(())
+}
+
+/// Argument, environment, and output admission for core effect values.
+fn check_unit_effect_values(effect: &ExistingUnitEffect) -> Result<(), Vec<Blocker>> {
+    let id = effect.unit_id.0.as_str();
+    let effect_overflow_checks = [
+        effect.arguments.len() > 512,
+        effect.arguments.iter().any(|arg| arg.len() > 16_384),
+        effect.environment.len() > 256,
+        effect.environment.iter().any(|(key, value)| key.len() > 16_384 || value.len() > 16_384),
+    ];
+    if effect_overflow_checks.contains(&true) {
+        return Err(blocked("unit-plan-limit", id, "effect exceeds unit argument or environment limits"));
+    }
+    if let Some(arg) = effect.arguments.iter().find(|arg| is_host_path_argument(arg)) {
+        return Err(blocked("unit-plan-host-path", id, arg));
+    }
+    if effect.environment.iter().any(|(key, value)| !safe_name(key) || is_host_path_value(value)) {
+        return Err(blocked("unit-plan-host-path", id, "effect environment contains host paths"));
+    }
+    let expected_outputs: &[&str] = if effect.execution_kind == build_script::BUILD_SCRIPT_RUN {
+        &["out", "flags"]
+    } else {
+        &["out"]
+    };
+    if effect.expected_outputs.as_slice() != expected_outputs {
+        return Err(blocked("unit-plan-mode-unsupported", id, "unit requires exactly its declared outputs"));
+    }
+    debug_assert!(effect.arguments.len() <= 512);
+    debug_assert!(effect.environment.len() <= 256);
+    Ok(())
+}
+
+/// Host paths, placeholders, and adapter-owned output or extern flags may not
+/// enter a plan argument; the helper supplies those from its environment.
+fn is_host_path_argument(arg: &str) -> bool {
+    let host_path_markers = [
+        arg.contains('\0'),
+        arg.starts_with('/'),
+        arg.contains("=/"),
+        arg.contains("@/"),
+        arg.contains("{{mantle-"),
+        arg.starts_with("--out-dir"),
+        arg.starts_with("--extern"),
+    ];
+    host_path_markers.contains(&true)
+}
+
+fn is_host_path_value(value: &str) -> bool {
+    value.starts_with('/') || value.contains("=/") || value.contains('\0')
+}
+
+type UnitInputs<'a> = (Vec<Input>, BTreeSet<&'a str>);
+
+/// Direct inputs only: declared tool roots, the owning source slice, and the
+/// outputs of direct dependency units. Transitive reachability is carried by
+/// dependency manifests, not by additional unit inputs.
+#[allow(tigerstyle::unbounded_collection_growth)] // BTree sets cannot reserve; MAX_INPUTS_PER_UNIT bounds the result.
+fn unit_inputs<'a>(
+    effect: &'a ExistingUnitEffect,
+    binding: &UnitBinding,
+    context: &LoweringContext<'_>,
+    scripts: &BuildScriptGraph<'_>,
+) -> Result<UnitInputs<'a>, Vec<Blocker>> {
+    let id = effect.unit_id.0.as_str();
+    let mut inputs = context
+        .tool_roots
+        .iter()
+        .map(|path| Input::StorePath {
+            path: (*path).to_string(),
+        })
+        .collect::<BTreeSet<_>>();
+    inputs.insert(Input::Source {
+        source: binding.source_id.clone(),
+    });
+    let mut deps = BTreeSet::new();
+    for dep in &effect.dependency_unit_ids {
+        if !context.known_units.contains(dep.0.as_str()) || dep.0 == id {
+            return Err(blocked("unit-plan-mode-unsupported", id, "unknown or self dependency"));
+        }
+        if scripts.is_run(dep.0.as_str()) {
+            continue;
+        }
+        deps.insert(dep.0.as_str());
+        inputs.insert(Input::UnitOutput {
+            unit: plan_id(&dep.0),
+            output: "out",
+        });
+    }
+    inputs.extend(build_script::compile_script_inputs(scripts, id));
+    if inputs.len() > MAX_INPUTS_PER_UNIT {
+        return Err(blocked("unit-plan-limit", id, "unit inputs exceed 256"));
+    }
+    let mut inputs = inputs.into_iter().collect::<Vec<_>>();
+    inputs.sort_by(|a, b| a.canonical_key().cmp(&b.canonical_key()));
+    debug_assert!(deps.len() <= effect.dependency_unit_ids.len());
+    debug_assert!(inputs.len() > deps.len());
+    Ok((inputs, deps))
+}
+
+#[allow(tigerstyle::unbounded_collection_growth)] // BTree maps cannot reserve; extern names are unique direct edges.
+fn unit_externs(binding: &UnitBinding, deps: &BTreeSet<&str>) -> Result<BTreeMap<String, String>, Vec<Blocker>> {
+    let mut externs = BTreeMap::new();
+    for ext in &binding.externs {
+        if !safe_name(&ext.name)
+            || !deps.contains(ext.unit_id.as_str())
+            || externs.insert(ext.name.clone(), output_token(&plan_id(&ext.unit_id))).is_some()
+        {
+            return Err(blocked(
+                "unit-plan-mode-unsupported",
+                &binding.unit_id,
+                "extern is not a unique direct dependency",
+            ));
+        }
+    }
+    debug_assert_eq!(externs.len(), binding.externs.len());
+    debug_assert!(externs.values().all(|token| token.starts_with("{{mantle-unit-output:")));
+    Ok(externs)
+}
+
+fn unit_environment(
+    effect: &ExistingUnitEffect,
+    binding: &UnitBinding,
+    plan: &PlanBindings,
+    source: String,
+    deps: &BTreeSet<&str>,
+) -> Result<BTreeMap<String, String>, Vec<Blocker>> {
+    let id = effect.unit_id.0.as_str();
+    let externs = unit_externs(binding, deps)?;
+    let compile_env = effect.environment.iter().cloned().collect::<BTreeMap<_, _>>();
+    let mut env: BTreeMap<String, String> = BTreeMap::new();
+    env.insert("MANTLE_UNIT_RUSTC".to_string(), plan.rustc.clone());
+    env.insert("MANTLE_UNIT_LINKER".to_string(), plan.linker.clone());
+    env.insert("MANTLE_UNIT_SOURCE".to_string(), source);
+    env.insert(
+        "MANTLE_UNIT_COMPILE_ENV".to_string(),
+        serde_json::to_string(&compile_env)
+            .map_err(|_| blocked("unit-plan-limit", id, "compile environment serialization"))?,
+    );
+    env.insert(
+        "MANTLE_UNIT_DEPENDENCIES".to_string(),
+        serde_json::to_string(&deps.iter().map(|id| output_token(&plan_id(id))).collect::<Vec<_>>())
+            .map_err(|_| blocked("unit-plan-limit", id, "dependency serialization"))?,
+    );
+    env.insert(
+        "MANTLE_UNIT_EXTERNS".to_string(),
+        serde_json::to_string(&externs).map_err(|_| blocked("unit-plan-limit", id, "extern serialization"))?,
+    );
+    if env.len() > 512 || env.values().any(|value| value.len() > 16_384) {
+        return Err(blocked("unit-plan-limit", id, "unit environment exceeds generic plan limits"));
+    }
+    debug_assert!(env.len() >= 6);
+    debug_assert!(env.values().all(|value| value.len() <= 16_384));
+    Ok(env)
+}
+
+fn is_valid_source_slice(slice: &SourceSlice) -> bool {
+    let slice_checks = [
+        safe_id(&slice.id),
+        safe_name(&slice.producer_output),
+        safe_name(&slice.store_name),
+        safe_relative(&slice.subpath),
+        slice.nar_blake3.len() == 64,
+        slice.nar_blake3.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()),
+    ];
+    !slice_checks.contains(&false)
+}
 /// Lower only reviewed core effects. No partial plan is returned on any blocker.
 /// The caller must pass producer-observed source digests and existing store paths.
 // r[impl mantle.rust_unit_plan.lowering]
@@ -570,6 +517,82 @@ pub fn lower(effects: &[ExistingUnitEffect], plan: &PlanBindings) -> Result<(Vec
     if plan.sources.len() > 256 || plan.sources.is_empty() {
         return Err(blocked("unit-plan-limit", "sources", "slice count outside 1..256"));
     }
+    let mut slices = plan.sources.clone();
+    slices.sort_by(|a, b| a.id.cmp(&b.id));
+    let context = lowering_context(effects, plan)?;
+    let bindings = unit_bindings(effects, plan, &context)?;
+    let scripts = build_script::build_script_graph(effects, &bindings)?;
+    let units = lower_units(effects, &bindings, &context, &scripts)?;
+    let mut roots = plan.roots.clone();
+    roots.sort();
+    roots.dedup();
+    if roots.is_empty() || roots.iter().any(|root| !context.known_units.contains(root.as_str())) {
+        return Err(blocked("unit-plan-mode-unsupported", "roots", "root is absent from core effects"));
+    }
+    let mut roots = roots.iter().map(|root| plan_id(root)).collect::<Vec<_>>();
+    roots.sort();
+    assert!(units.len() >= effects.len());
+    assert!(!roots.is_empty());
+    let wire = Plan {
+        schema: "mantle-plan-v2",
+        producer: Producer {
+            logical_name: "cargo-unit-graph",
+            goal_hint: None,
+        },
+        sources: &slices,
+        units,
+        roots: &roots,
+        provenance: BTreeMap::new(),
+    };
+    let bytes = serde_json::to_vec(&wire).map_err(|_| blocked("unit-plan-limit", "plan", "plan serialization"))?;
+    if bytes.len() > MAX_PLAN_BYTES {
+        return Err(blocked("unit-plan-limit", "plan", "plan bytes exceed 4 MiB"));
+    }
+    let digest = blake3::hash(&bytes).to_hex().to_string();
+    Ok((bytes, digest))
+}
+
+/// Lower every core effect plus one target-description unit per build-script
+/// triple, sorted by wire identity.
+// r[impl mantle.rust_unit_plan.build_scripts.target_facts]
+fn lower_units(
+    effects: &[ExistingUnitEffect],
+    bindings: &BTreeMap<&str, &UnitBinding>,
+    context: &LoweringContext<'_>,
+    scripts: &BuildScriptGraph<'_>,
+) -> Result<Vec<Unit>, Vec<Blocker>> {
+    let mut units = Vec::with_capacity(effects.len().saturating_add(scripts.triples.len()));
+    for effect in effects {
+        let binding = bindings
+            .get(effect.unit_id.0.as_str())
+            .ok_or_else(|| blocked("unit-plan-mode-unsupported", &effect.unit_id.0, "missing binding"))?;
+        if scripts.is_run(&effect.unit_id.0) {
+            check_unit_binding(effect, binding, context)?;
+            check_unit_effect_values(effect)?;
+            units.push(build_script::lower_run_unit(effect, binding, context, scripts)?);
+        } else {
+            units.push(lower_unit(effect, binding, context, scripts)?);
+        }
+    }
+    for triple in &scripts.triples {
+        units.push(build_script::target_facts_unit(context.plan, triple)?);
+    }
+    if units.len() > MAX_PLAN_UNITS {
+        return Err(blocked("unit-plan-limit", "plan", "lowered units exceed 4096"));
+    }
+    units.sort_by(|a, b| a.id.cmp(&b.id));
+    debug_assert_eq!(units.len(), effects.len().saturating_add(scripts.triples.len()));
+    debug_assert!(units.windows(2).all(|pair| pair[0].id < pair[1].id));
+    Ok(units)
+}
+
+#[allow(tigerstyle::unbounded_collection_growth)] // BTree sets cannot reserve; slice and unit counts were checked.
+fn lowering_context<'a>(
+    effects: &'a [ExistingUnitEffect],
+    plan: &'a PlanBindings,
+) -> Result<LoweringContext<'a>, Vec<Blocker>> {
+    debug_assert!(!effects.is_empty());
+    debug_assert!(plan.sources.len() <= 256);
     let mut tool_roots = BTreeSet::new();
     for path in [&plan.helper, &plan.rustc, &plan.toolchain, &plan.linker] {
         let root = validated_store_root(path, &plan.store_prefix)
@@ -588,71 +611,39 @@ pub fn lower(effects: &[ExistingUnitEffect], plan: &PlanBindings) -> Result<(Vec
         }
         tool_roots.insert(root);
     }
-    let mut slices = plan.sources.clone();
-    slices.sort_by(|a, b| a.id.cmp(&b.id));
+    let mut ordered_slices = plan.sources.iter().collect::<Vec<_>>();
+    ordered_slices.sort_by(|a, b| a.id.cmp(&b.id));
     let mut source_ids = BTreeSet::new();
-    for slice in &slices {
-        if !safe_id(&slice.id)
-            || !safe_name(&slice.producer_output)
-            || !safe_name(&slice.store_name)
-            || !safe_relative(&slice.subpath)
-            || slice.nar_blake3.len() != 64
-            || !slice.nar_blake3.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-            || !source_ids.insert(slice.id.as_str())
-        {
+    for slice in ordered_slices {
+        if !is_valid_source_slice(slice) || !source_ids.insert(slice.id.as_str()) {
             return Err(blocked("unit-plan-source-unsupported", &slice.id, "invalid source slice"));
         }
     }
+    let known_units = effects.iter().map(|effect| effect.unit_id.0.as_str()).collect::<BTreeSet<_>>();
+    Ok(LoweringContext {
+        plan,
+        tool_roots,
+        source_ids,
+        known_units,
+    })
+}
+
+#[allow(tigerstyle::unbounded_collection_growth)] // BTree maps cannot reserve; the binding count must equal effects.
+fn unit_bindings<'a>(
+    effects: &[ExistingUnitEffect],
+    plan: &'a PlanBindings,
+    context: &LoweringContext<'_>,
+) -> Result<BTreeMap<&'a str, &'a UnitBinding>, Vec<Blocker>> {
     let mut bindings = BTreeMap::new();
     for binding in &plan.units {
         if bindings.insert(binding.unit_id.as_str(), binding).is_some() {
             return Err(blocked("unit-plan-mode-unsupported", &binding.unit_id, "duplicate binding"));
         }
     }
-    let known_units = effects.iter().map(|effect| effect.unit_id.0.as_str()).collect::<BTreeSet<_>>();
-    if known_units.len() != effects.len() || bindings.len() != effects.len() {
+    if context.known_units.len() != effects.len() || bindings.len() != effects.len() {
         return Err(blocked("unit-plan-mode-unsupported", "plan", "unit binding set does not match core effects"));
     }
-    let mut units = Vec::with_capacity(effects.len());
-    for effect in effects {
-        let binding = bindings
-            .get(effect.unit_id.0.as_str())
-            .ok_or_else(|| blocked("unit-plan-mode-unsupported", &effect.unit_id.0, "missing binding"))?;
-        units.push(lower_unit(effect, binding, plan, &tool_roots, &source_ids, &known_units)?);
-    }
-    let mut targets = BTreeSet::new();
-    for effect in effects {
-        if effect.execution_kind == "build-script-run" {
-            targets.insert(bindings[effect.unit_id.0.as_str()].triple.as_str());
-        }
-    }
-    for triple in targets {
-        units.push(target_unit(plan, triple, &tool_roots));
-    }
-    units.sort_by(|a, b| a.id.cmp(&b.id));
-    let mut roots = plan.roots.clone();
-    roots.sort();
-    roots.dedup();
-    if roots.is_empty() || roots.iter().any(|root| !known_units.contains(root.as_str())) {
-        return Err(blocked("unit-plan-mode-unsupported", "roots", "root is absent from core effects"));
-    }
-    let mut roots = roots.iter().map(|root| plan_id(root)).collect::<Vec<_>>();
-    roots.sort();
-    let wire = Plan {
-        schema: "mantle-plan-v2",
-        producer: Producer {
-            logical_name: "cargo-unit-graph",
-            goal_hint: None,
-        },
-        sources: &slices,
-        units,
-        roots: &roots,
-        provenance: BTreeMap::new(),
-    };
-    let bytes = serde_json::to_vec(&wire).map_err(|_| blocked("unit-plan-limit", "plan", "plan serialization"))?;
-    if bytes.len() > MAX_PLAN_BYTES {
-        return Err(blocked("unit-plan-limit", "plan", "plan bytes exceed 4 MiB"));
-    }
-    let digest = blake3::hash(&bytes).to_hex().to_string();
-    Ok((bytes, digest))
+    debug_assert_eq!(bindings.len(), plan.units.len());
+    debug_assert_eq!(bindings.len(), context.known_units.len());
+    Ok(bindings)
 }

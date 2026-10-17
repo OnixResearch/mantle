@@ -1,0 +1,14 @@
+2026-10-03 UTC — add-apk-build-adapter, scoped task 5.5 only
+
+Cairn executable (pre-existing Nix store output; no Nix/Cargo invocation):
+/nix/store/j3ni3lj66ylskpcg78ip531s9lz4z4av-cairn-0.1.0/bin/cairn
+SHA-256 41c0147b45a7ae84d1fc8968c609417cb594eed55eb55a1fbba622e18433a852
+Run from the Mantle repository root. Exact commands, complete JSON output, and exit codes are in the adjacent transcripts:
+- cairn-validation-2026-10-03.txt: validate --root .; exit 0, issues/change_issues/findings empty.
+- cairn-proposal-gate-2026-10-03.txt: gate proposal add-apk-build-adapter --root .; PASS, exit 0.
+- cairn-design-gate-2026-10-03.txt: gate design add-apk-build-adapter --root .; PASS, exit 0.
+- cairn-tasks-gate-2026-10-03.txt: gate tasks add-apk-build-adapter --root .; PASS, exit 0 with 22 done/1 todo BEFORE marking 5.5 complete.
+- cairn-tasks-gate-after-5-5-2026-10-03.txt: same tasks gate; PASS, exit 0 with 23 done/0 todo AFTER marking 5.5 complete.
+- cairn-validation-after-5-5-2026-10-03.txt: validate --root .; exit 0, issues/change_issues/findings empty AFTER marking 5.5 complete.
+
+Boundary: task 5.5 requires running these structural Cairn checks, which passed; its checkbox does NOT authorize archiving. The proposal's Dependencies section says `adopt-android-prebuilt-toolchain-sources` MUST archive first. On this run that change remains under .cairn/changes/ and no matching .cairn/archive/*adopt-android-prebuilt-toolchain-sources* exists. `cairn change depend list add-apk-build-adapter --root .` reports dependencies=[], so these passing gates do not enforce the textual upstream archive prerequisite. Keep the adapter change unarchived until that independent prerequisite has actually archived. The separate `prove-apk-adapter-real-build` Cairn still has its actual signed APK build, structure/signature, rebuild-determinism and proof evidence tasks open. This structural Cairn pass is NOT a real signed APK, successful device install/launch, Android runtime claim, release gate, or upstream archive claim. No product source, Git index, protected signed sources, or native build output was changed here.

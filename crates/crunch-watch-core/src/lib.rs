@@ -40,20 +40,20 @@ pub struct GoalSet {
 
 impl GoalSet {
     pub fn admit(mut identities: Vec<String>) -> Result<Self, WatchError> {
-        if identities.len() > MAX_LIVE_GOALS as usize {
+        if u32::try_from(identities.len()).map_err(|_| WatchError::GoalLimit)? > MAX_LIVE_GOALS {
             return Err(WatchError::GoalLimit);
         }
         for identity in &identities {
             if identity.is_empty() {
                 return Err(WatchError::EmptyGoalIdentity);
             }
-            if identity.len() > MAX_GOAL_IDENTITY_BYTES as usize {
+            if u32::try_from(identity.len()).map_err(|_| WatchError::GoalIdentityTooLong)? > MAX_GOAL_IDENTITY_BYTES {
                 return Err(WatchError::GoalIdentityTooLong);
             }
         }
         identities.sort_unstable();
         identities.dedup();
-        debug_assert!(identities.len() <= MAX_LIVE_GOALS as usize);
+        debug_assert!(u32::try_from(identities.len()).is_ok_and(|count| count <= MAX_LIVE_GOALS));
         debug_assert!(identities.windows(2).all(|pair| pair[0] < pair[1]));
         Ok(Self { identities })
     }
@@ -107,7 +107,7 @@ fn checked_run_identity(run_identity: &str) -> Result<(), WatchError> {
     if run_identity.is_empty() {
         return Err(WatchError::EmptyRunIdentity);
     }
-    if run_identity.len() > MAX_RUN_IDENTITY_BYTES as usize {
+    if u32::try_from(run_identity.len()).map_err(|_| WatchError::RunIdentityTooLong)? > MAX_RUN_IDENTITY_BYTES {
         return Err(WatchError::RunIdentityTooLong);
     }
     Ok(())
@@ -117,7 +117,7 @@ fn checked_event_budget(event_count: usize, event_budget: u32) -> Result<(), Wat
     if event_budget > MAX_TRANSITION_EVENTS {
         return Err(WatchError::EventBudget);
     }
-    if event_count > event_budget as usize {
+    if u32::try_from(event_count).map_err(|_| WatchError::EventBudget)? > event_budget {
         return Err(WatchError::EventBudget);
     }
     Ok(())
@@ -137,8 +137,10 @@ pub fn diff(
     // Bound allocation before processing. A retained identity emits only one
     // event; reject an exceeded budget while walking rather than overcounting.
     checked_event_budget(0, event_budget)?;
-    let maximum_count = previous.identities.len() + current.identities.len();
-    let mut events = Vec::with_capacity(maximum_count.min(event_budget as usize));
+    let maximum_count =
+        previous.identities.len().checked_add(current.identities.len()).ok_or(WatchError::EventBudget)?;
+    let event_budget_len = usize::try_from(event_budget).map_err(|_| WatchError::EventBudget)?;
+    let mut events = Vec::with_capacity(maximum_count.min(event_budget_len));
     let (mut old_index, mut new_index) = (0, 0);
     while old_index < previous.identities.len() || new_index < current.identities.len() {
         let old = previous.identities.get(old_index);
@@ -163,7 +165,7 @@ pub fn diff(
             }
             (None, None) => break,
         };
-        if events.len() >= event_budget as usize {
+        if events.len() >= event_budget_len {
             return Err(WatchError::EventBudget);
         }
         events.push(WatchEvent {
@@ -173,7 +175,7 @@ pub fn diff(
         });
     }
     debug_assert!(events.len() <= maximum_count);
-    debug_assert!(events.len() <= event_budget as usize);
+    debug_assert!(events.len() <= event_budget_len);
     Ok(GoalDiff {
         run_identity: run_identity.into(),
         events,
@@ -190,7 +192,7 @@ pub fn reject_generation(run_identity: &str, diagnostic: String, event_budget: u
     if diagnostic.is_empty() {
         return Err(WatchError::EmptyDiagnostic);
     }
-    if diagnostic.len() > MAX_DIAGNOSTIC_BYTES as usize {
+    if u32::try_from(diagnostic.len()).map_err(|_| WatchError::DiagnosticTooLong)? > MAX_DIAGNOSTIC_BYTES {
         return Err(WatchError::DiagnosticTooLong);
     }
     Ok(GoalDiff {
@@ -280,7 +282,9 @@ impl WatchLoop {
         if self.pending.as_ref().map(|candidate| candidate.number) != Some(number) {
             return Err(WatchError::StaleGeneration);
         }
-        let pending = self.pending.take().expect("matching pending generation was checked");
+        let Some(pending) = self.pending.take() else {
+            return Err(WatchError::StaleGeneration);
+        };
         self.admitted = pending.current;
         Ok(())
     }

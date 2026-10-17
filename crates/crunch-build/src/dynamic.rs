@@ -391,7 +391,7 @@ pub(crate) fn admit_native_plan_derivation(
     validate_limits(limits)?;
     validate_store_prefix(logical_store_prefix)?;
     let name = derivation_name(&derivation, limits)?;
-    let parent_requests = derivation
+    let parent_requests: Vec<_> = derivation
         .input_derivations
         .iter()
         .map(|(drv_path, outputs)| DynamicParentRequest {
@@ -400,8 +400,10 @@ pub(crate) fn admit_native_plan_derivation(
             dynamic_outputs: Vec::new(),
         })
         .collect();
+    debug_assert_eq!(parent_requests.len(), derivation.input_derivations.len());
     let source_bytes = derivation.to_aterm_bytes_with_store_dir(logical_store_prefix);
     validate_candidate_size(&source_bytes, limits)?;
+    debug_assert!(u64::try_from(source_bytes.len()).is_ok_and(|length| length <= limits.bytes_max));
     validate_dynamic_candidate(
         ParsedDynamicDerivation {
             candidate_output_path,
@@ -1015,6 +1017,13 @@ fn hash_native_masked_outputs(
         };
         original.push((output.path.take(), std::mem::take(value)));
     }
+    debug_assert_eq!(original.len(), derivation.outputs.len());
+    debug_assert!(
+        derivation
+            .outputs
+            .iter()
+            .all(|(name, output)| output.path.is_none() && derivation.environment[name].is_empty())
+    );
     let hash = derivation.hash_derivation_modulo_with_store_dir(|path| facts[&path.to_owned()], store_prefix);
     for ((name, output), (path, value)) in derivation.outputs.iter_mut().zip(original) {
         output.path = path;

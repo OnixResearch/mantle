@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'DEV_SHELL_EXPORT=%s\n' "${SNIX_BUILD_SANDBOX_SHELL:-}"
+test "${SNIX_BUILD_SANDBOX_SHELL:-}" = /nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
+file "$SNIX_BUILD_SANDBOX_SHELL"
+cargo generate-lockfile --offline --manifest-path /datapool/mantle-store/mr.7p88_pl1/api-smoke/Cargo.toml
+cargo run --locked --offline --manifest-path /datapool/mantle-store/mr.7p88_pl1/api-smoke/Cargo.toml --bin mantle-current-merge-api-smoke

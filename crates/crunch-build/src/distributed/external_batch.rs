@@ -302,11 +302,13 @@ pub fn plan_external_batch_followup(
     external_job_id: Option<String>,
 ) -> Result<ExternalBatchOperation, String> {
     validate_operation(submit)?;
+    let max_identifier_bytes = u64::try_from(MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES)
+        .map_err(|_| "external-batch-identifier-limit-overflow".to_string())?;
     core_batch::validate_followup(
         core_operation_facts(submit),
         core_batch_kind(kind),
         external_job_id.as_deref(),
-        MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES,
+        max_identifier_bytes,
     )
     .map_err(core_batch::BatchError::diagnostic)?;
     let mut followup = submit.clone();
@@ -323,11 +325,17 @@ pub fn validate_external_batch_response(
     response: &ExternalBatchOperationResponse,
 ) -> Result<(), String> {
     validate_operation(request)?;
+    let max_identifier_bytes = u64::try_from(MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES)
+        .map_err(|_| "external-batch-identifier-limit-overflow".to_string())?;
+    let max_reason_bytes = u64::try_from(MAX_EXTERNAL_BATCH_REASON_BYTES)
+        .map_err(|_| "external-batch-reason-limit-overflow".to_string())?;
     core_batch::validate_response(
         core_operation_facts(request),
         core_response_facts(response),
-        MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES,
-        MAX_EXTERNAL_BATCH_REASON_BYTES,
+        core_batch::BatchResponseBounds {
+            max_identifier_bytes,
+            max_reason_bytes,
+        },
     )
     .map_err(core_batch::BatchError::diagnostic)?;
     assert!(response.observed_unix_s > 0);
@@ -352,8 +360,10 @@ pub fn decide_external_batch_reconciliation(
     core_batch::decide_reconciliation(
         core_batch_state(response.state),
         facts.worker_registered,
-        facts.reconcile_attempt,
-        request.limits.max_reconcile_attempts,
+        core_batch::ReconcileAttempt {
+            attempt: facts.reconcile_attempt,
+            max_attempts: request.limits.max_reconcile_attempts,
+        },
         facts.overall_deadline_exceeded,
     )
     .map(host_reconcile_decision)
@@ -361,6 +371,8 @@ pub fn decide_external_batch_reconciliation(
 }
 
 fn validate_operation_input(input: &ExternalBatchOperationInput) -> Result<(), String> {
+    let max_identifier_bytes = u64::try_from(MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES)
+        .map_err(|_| "external-batch-identifier-limit-overflow".to_string())?;
     core_batch::validate_input(
         core_batch::BatchInputFacts {
             kind: core_batch_kind(input.kind),
@@ -375,11 +387,16 @@ fn validate_operation_input(input: &ExternalBatchOperationInput) -> Result<(), S
             limits: core_batch_limits(input.limits),
             external_job_id: input.external_job_id.as_deref(),
         },
-        MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES,
-        MAX_EXTERNAL_BATCH_TIMEOUT_SECS,
-        MAX_EXTERNAL_BATCH_RECONCILE_ATTEMPTS,
+        core_batch::BatchValidationLimits {
+            identifier_bytes_max: max_identifier_bytes,
+            timeout_secs_max: MAX_EXTERNAL_BATCH_TIMEOUT_SECS,
+            reconcile_attempts_max: MAX_EXTERNAL_BATCH_RECONCILE_ATTEMPTS,
+        },
     )
-    .map_err(core_batch::BatchError::diagnostic)
+    .map_err(core_batch::BatchError::diagnostic)?;
+    debug_assert!(input.dispatcher_generation > 0);
+    debug_assert!(!input.adapter_instance_id.is_empty());
+    Ok(())
 }
 
 fn validate_operation(operation: &ExternalBatchOperation) -> Result<(), String> {

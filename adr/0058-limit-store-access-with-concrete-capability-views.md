@@ -85,3 +85,32 @@ closed the remaining application-shell escapes and defined the final owners:
 Evidence scope and non-claims are unchanged: capability reachability and
 observed effects only, not filesystem confinement, publisher honesty, or
 release eligibility.
+
+## Update 2026-10-04: bootstrap raw-seed fetch is a command composition root
+
+The `bootstrap --fetch` raw-seed operation is assembled by
+`src/bootstrap.rs::fetch_raw_seed`, an **owned CLI command shell** under the
+existing declared-composition-root rule above, not a general build subsystem
+or an exception allowing raw-service access. It receives the already
+selected store backend, preflights the identity **before** acquiring the
+mutation guard, opens `StoreHandle` for this command, performs any required
+Casita GC recovery under that guard, and immediately consumes the handle
+into `PipelineStoreParts`. Builder and fetch-service callees receive the
+appropriate concrete capability parts, not the broad handle.
+`tools/check_store_capability_boundary.rs` may therefore name the exact
+`src/bootstrap.rs` path as a **handle-construction** owner; this is a
+maintainer declaration of a real composition root, not a waiver of its
+raw-service or writable-authority guards.
+
+Store sign and verify no longer need CLI-shell access to a raw PathInfo
+service: named `StoreAdmin` sign/verify operations own the access inside
+`crunch-store`; obsolete public query helpers/re-exports are removed. The
+first 2026-10-04 checker run reported three violations (one bootstrap
+handle-construction escape, two `store_cmd.rs` raw PathInfo escapes).
+After the named-capability cutover and exact owner declaration, the
+source-side checker reported zero raw-service, writable-authority, and
+handle-construction escapes across 558 scanned files. The dated commands
+and both results are retained in the selection change's
+`evidence/finish-conformance-2026-10-04.md`. This is an authority-reachability
+check, not proof of all Casita fixtures, store correctness or release
+eligibility.

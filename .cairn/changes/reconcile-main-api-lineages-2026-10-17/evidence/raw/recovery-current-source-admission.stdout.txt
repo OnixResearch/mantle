@@ -1,0 +1,110 @@
+{
+  "method": "Read-only exact impact/documentary manifest path union; Git optional locks disabled; no index/object writes; no excluded bytecode or root shell/jar contents read",
+  "actual_HEAD_and_MERGE_HEAD": [
+    "d20459c6db6d60ed2b08533911e279cbeadb742e",
+    "d75158b00b080535f2ffea12430665ca3d57ea82"
+  ],
+  "expected_parents": {
+    "wip": "d20459c6db6d60ed2b08533911e279cbeadb742e",
+    "upstream": "d75158b00b080535f2ffea12430665ca3d57ea82"
+  },
+  "manifest_path_count": 335,
+  "present_path_count": 332,
+  "classification": {
+    "tracked_present_paths": 277,
+    "untracked_required_paths": [
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/design.md",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/commands.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/current-observations.md",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/final-document-validation.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/native-document-validation.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/android-authoring-distinct-after.sh.source.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/api-smoke.sh.source.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/before-source-provenance.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/cargo-unit-smoke.sh.source.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/casita-root-output-after.sh.source.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/helper-namespace-proof.sh.source.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/jar-route-upper-probe.py.source.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/jar-route-upper-result.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/logs--shell-android-authoring-distinct-after.log",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/logs--shell-api-smoke-explicit-addressing.log",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/logs--shell-cargo-unit-smoke.log",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/logs--shell-casita-root-output-after.log",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/logs--shell-helper-namespace-proof.log",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/logs--shell-jar-route-upper.log",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/logs--shell-store-prefix-after.log",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/manifest.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-design.stderr.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-design.stdout.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-design.stderr.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-design.stdout.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-governed-after.blake3",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-governed-before.blake3",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-proposal.stderr.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-proposal.stdout.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-validate.stderr.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-final-document-validate.stdout.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-proposal.stderr.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-proposal.stdout.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-validate.stderr.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-validate.stdout.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/owned-compiler-settlement-v1-result.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/owned-format-scope-and-limit.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/store-prefix-after.sh.source.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/unit-smoke-steps.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/unit-smoke.py.source.txt",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/receipt-index.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/metadata.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/proposal.md",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/specs/semantic-reconciliation/spec.md",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/tasks.md",
+      "adr/0114-reconcile-lineage-apis-with-explicit-contract-boundaries.md",
+      "docs/release-notes/api-aware-main-reconciliation-2026-10-17.md"
+    ],
+    "missing_manifest_paths": [
+      "adr/0089-bind-static-inputs-to-dynamic-plan-roots.md",
+      "crates/mantle-cargo-unit-plan/src/directives.rs",
+      "crates/mantle-cargo-unit-plan/tests/directives.rs"
+    ],
+    "unclassified_present_paths": [
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-android-authoring-distinct-after.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-api-smoke-explicit-addressing.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-cargo-unit-smoke.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-casita-root-output-after.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-helper-namespace-proof.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-jar-route-upper.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-root-and-generators-build.json",
+      ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/result-store-prefix-after.json"
+    ],
+    "index_stage_row_counts": {
+      "0": 122,
+      "1": 86,
+      "2": 158,
+      "3": 158
+    }
+  },
+  "two_parent_scoped_worktree_deltas": {
+    "wip": {
+      "subject": "d20459c6db6d60ed2b08533911e279cbeadb742e",
+      "counts": {
+        "M": 205,
+        "A": 50,
+        "D": 3
+      }
+    },
+    "upstream": {
+      "subject": "d75158b00b080535f2ffea12430665ca3d57ea82",
+      "counts": {
+        "M": 98,
+        "A": 13
+      }
+    }
+  },
+  "current_source_binding_blake3": "99840c92b30b68e2570cce88439e8cb14cf6a09e95eb0263968529c9fbe7824a",
+  "binding_definition": "BLAKE3 of UTF-8 compact sort_keys JSON array plus LF, rows sorted by manifest path; each row has path, index list(mode,git_blob,stage), working_tree_git_blob from git hash-object --no-filters. Git blob identifiers are Git interoperability metadata, not Mantle content digests.",
+  "binding_payload_bytes": 88163,
+  "qualification": "Point current working-tree/index identity and membership observation, not atomic snapshot, source staging, compilation, gate acceptance or automatic launch authorization"
+}
+
+
+Wall time: 0.28 seconds

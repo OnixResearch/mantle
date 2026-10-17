@@ -3,6 +3,10 @@ use alloc::string::String;
 
 const DELTA_REUSE_PERCENT: u64 = 75;
 const PERCENT_DENOMINATOR: u64 = 100;
+const _: () = {
+    assert!(DELTA_REUSE_PERCENT <= PERCENT_DENOMINATOR);
+    assert!(PERCENT_DENOMINATOR > 0);
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TransferCapabilities {
@@ -75,18 +79,21 @@ pub const fn select_fixture_output_transfer(
     builder: TransferCapabilities,
     output_size_bytes: u64,
 ) -> Result<TransferSelection, TransferBlocker> {
-    let delta_available = client.delta && builder.delta;
-    let simulated_failure = client.simulate_delta_failure || builder.simulate_delta_failure;
-    if delta_available && !simulated_failure {
+    let is_delta_available = client.delta && builder.delta;
+    let is_simulated_failure = client.simulate_delta_failure || builder.simulate_delta_failure;
+    if is_delta_available && !is_simulated_failure {
         let reused_bytes = output_size_bytes.saturating_mul(DELTA_REUSE_PERCENT) / PERCENT_DENOMINATOR;
+        let transferred_bytes = output_size_bytes.saturating_sub(reused_bytes);
+        debug_assert!(reused_bytes <= output_size_bytes);
+        debug_assert!(transferred_bytes.saturating_add(reused_bytes) == output_size_bytes);
         return Ok(TransferSelection {
             mode: TransferMode::Delta,
-            transferred_bytes: output_size_bytes.saturating_sub(reused_bytes),
+            transferred_bytes,
             reused_bytes,
             fallback: None,
         });
     }
-    if delta_available && simulated_failure {
+    if is_delta_available && is_simulated_failure {
         if client.full && builder.full {
             return Ok(full_selection(output_size_bytes, Some(TransferFallback::DeltaTransferFailed)));
         }
@@ -134,6 +141,12 @@ pub const fn select_production_output_transfer(
     Err(TransferBlocker::NoCompatibleProductionOutputMode)
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct UploadByteLimits {
+    pub uploaded_bytes: u64,
+    pub ticket_max_bytes: u64,
+    pub global_max_bytes: u64,
+}
 /// Compare admitted missing/uploaded references after enforcing both the
 /// ticket-supplied and global byte limits. Duplicate refs are intentionally
 /// set-normalized, as in the currently accepted compatibility path.
@@ -141,11 +154,9 @@ pub const fn select_production_output_transfer(
 pub fn admit_missing_uploads(
     missing_refs: &[String],
     uploaded_refs: &[String],
-    uploaded_bytes: u64,
-    max_upload_bytes: u64,
-    global_max_upload_bytes: u64,
+    bytes: UploadByteLimits,
 ) -> Result<(), TransferBlocker> {
-    if !upload_within_ticket_and_global_limit(uploaded_bytes, max_upload_bytes, global_max_upload_bytes) {
+    if !upload_within_ticket_and_global_limit(bytes) {
         return Err(TransferBlocker::UploadByteLimitExceeded);
     }
     let missing = missing_refs.iter().collect::<BTreeSet<_>>();
@@ -200,15 +211,20 @@ pub struct InputUploadArtifactFacts<'a> {
     pub payload: &'a [u8],
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct InputUploadArtifactLimits {
+    pub artifact_count_max: u32,
+    pub total_bytes_max: u64,
+}
 pub fn validate_input_upload_artifacts<'a, 'b, 'c>(
     request_id: &str,
     uploaded_refs: impl IntoIterator<Item = &'a str>,
     source_input_refs: impl IntoIterator<Item = &'b str>,
     artifacts: impl ExactSizeIterator<Item = InputUploadArtifactFacts<'c>>,
-    artifact_count_max: usize,
-    total_bytes_max: u64,
+    limits: InputUploadArtifactLimits,
 ) -> Result<(), InputUploadArtifactBlocker> {
-    if artifacts.len() > artifact_count_max {
+    let artifact_count = u32::try_from(artifacts.len()).map_err(|_| InputUploadArtifactBlocker::CountExceeded)?;
+    if artifact_count > limits.artifact_count_max {
         return Err(InputUploadArtifactBlocker::CountExceeded);
     }
     let source_refs = source_input_refs.into_iter().collect::<BTreeSet<_>>();
@@ -228,9 +244,9 @@ pub fn validate_input_upload_artifacts<'a, 'b, 'c>(
         if !crate::output::is_blake3_hex_digest(artifact.digest_blake3) {
             return Err(InputUploadArtifactBlocker::DigestInvalid);
         }
-        let payload_size =
+        let payload_size_bytes =
             u64::try_from(artifact.payload.len()).map_err(|_| InputUploadArtifactBlocker::PayloadSizeOverflow)?;
-        if payload_size != artifact.size_bytes {
+        if payload_size_bytes != artifact.size_bytes {
             return Err(InputUploadArtifactBlocker::SizeMismatch);
         }
         if blake3::hash(artifact.payload).to_hex().as_str() != artifact.digest_blake3 {
@@ -244,13 +260,16 @@ pub fn validate_input_upload_artifacts<'a, 'b, 'c>(
         }
         total_bytes =
             total_bytes.checked_add(artifact.size_bytes).ok_or(InputUploadArtifactBlocker::TotalBytesOverflow)?;
-        if total_bytes > total_bytes_max {
+        if total_bytes > limits.total_bytes_max {
             return Err(InputUploadArtifactBlocker::TotalBytesExceeded);
         }
     }
-    if expected.iter().any(|input_ref| !seen.contains(input_ref)) {
+    let is_complete = seen == expected;
+    if !is_complete {
         return Err(InputUploadArtifactBlocker::Missing);
     }
+    debug_assert!(is_complete);
+    debug_assert!(total_bytes <= limits.total_bytes_max);
     Ok(())
 }
 
@@ -286,39 +305,45 @@ pub enum TransferIdentityError {
 /// bytes to the no_std digest. Neither sorting nor serialization happens here.
 pub fn transfer_domain_digest(domain: &str, canonical_bytes: &[u8]) -> Result<[u8; 32], TransferIdentityError> {
     let mut hasher = blake3::Hasher::new();
-    let length = u64::try_from(domain.len()).map_err(|_| TransferIdentityError::ArithmeticOverflow)?;
-    hasher.update(&length.to_le_bytes());
+    let domain_length_bytes = u64::try_from(domain.len()).map_err(|_| TransferIdentityError::ArithmeticOverflow)?;
+    hasher.update(&domain_length_bytes.to_le_bytes());
     hasher.update(domain.as_bytes());
     hasher.update(canonical_bytes);
     Ok(*hasher.finalize().as_bytes())
 }
 
 /// Preserve the v1 length-prefixed session preimage, including decimal fence.
-pub fn transfer_session_digest(
-    job_id: &str,
-    attempt_id: &str,
-    fence_generation: u64,
-    requested_content_blake3: &str,
-    policy_digest_blake3: &str,
-) -> Result<[u8; 32], TransferIdentityError> {
+#[derive(Debug, Clone, Copy)]
+pub struct TransferSessionFacts<'a> {
+    pub job_id: &'a str,
+    pub attempt_id: &'a str,
+    pub fence_generation: u64,
+    pub requested_content_blake3: &'a str,
+    pub policy_digest_blake3: &'a str,
+}
+
+pub fn transfer_session_digest(facts: TransferSessionFacts<'_>) -> Result<[u8; 32], TransferIdentityError> {
     let mut hasher = blake3::Hasher::new();
     hash_transfer_part(&mut hasher, TRANSFER_SESSION_DOMAIN)?;
-    hash_transfer_part(&mut hasher, job_id)?;
-    hash_transfer_part(&mut hasher, attempt_id)?;
+    hash_transfer_part(&mut hasher, facts.job_id)?;
+    hash_transfer_part(&mut hasher, facts.attempt_id)?;
     let mut decimal = [0_u8; 20];
-    let mut remaining = fence_generation;
+    let mut remaining = facts.fence_generation;
     let mut start = decimal.len();
     loop {
-        start -= 1;
-        decimal[start] = b'0' + (remaining % 10) as u8;
+        start = start.checked_sub(1).ok_or(TransferIdentityError::ArithmeticOverflow)?;
+        let digit = u8::try_from(remaining % 10).map_err(|_| TransferIdentityError::ArithmeticOverflow)?;
+        decimal[start] = b'0'.checked_add(digit).ok_or(TransferIdentityError::ArithmeticOverflow)?;
         remaining /= 10;
         if remaining == 0 {
             break;
         }
     }
+    debug_assert!(start < decimal.len());
+    debug_assert_eq!(remaining, 0);
     hash_transfer_bytes(&mut hasher, &decimal[start..])?;
-    hash_transfer_part(&mut hasher, requested_content_blake3)?;
-    hash_transfer_part(&mut hasher, policy_digest_blake3)?;
+    hash_transfer_part(&mut hasher, facts.requested_content_blake3)?;
+    hash_transfer_part(&mut hasher, facts.policy_digest_blake3)?;
     Ok(*hasher.finalize().as_bytes())
 }
 
@@ -330,8 +355,8 @@ fn hash_transfer_part(hasher: &mut blake3::Hasher, value: &str) -> Result<(), Tr
 }
 
 fn hash_transfer_bytes(hasher: &mut blake3::Hasher, bytes: &[u8]) -> Result<(), TransferIdentityError> {
-    let length = u64::try_from(bytes.len()).map_err(|_| TransferIdentityError::ArithmeticOverflow)?;
-    hasher.update(&length.to_le_bytes());
+    let length_bytes = u64::try_from(bytes.len()).map_err(|_| TransferIdentityError::ArithmeticOverflow)?;
+    hasher.update(&length_bytes.to_le_bytes());
     hasher.update(bytes);
     Ok(())
 }
@@ -380,8 +405,8 @@ pub fn validate_transfer_policy(facts: TransferPolicyFacts) -> bool {
         && facts.in_flight_chunks_max <= facts.buffered_chunks_max
 }
 
-pub fn upload_within_ticket_and_global_limit(bytes: u64, ticket_max: u64, global_max: u64) -> bool {
-    bytes <= ticket_max && bytes <= global_max
+pub fn upload_within_ticket_and_global_limit(limits: UploadByteLimits) -> bool {
+    limits.uploaded_bytes <= limits.ticket_max_bytes && limits.uploaded_bytes <= limits.global_max_bytes
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -404,13 +429,19 @@ pub enum TransferManifestError {
     TotalBytesExceeded,
 }
 
-pub fn validate_transfer_manifest_prefix(schema: &str, store_prefix: &str) -> Result<(), TransferManifestError> {
-    if schema != TRANSFER_MANIFEST_DOMAIN {
+#[derive(Debug, Clone, Copy)]
+pub struct TransferManifestPrefix<'a> {
+    pub schema: &'a str,
+    pub store_prefix: &'a str,
+}
+
+pub fn validate_transfer_manifest_prefix(prefix: TransferManifestPrefix<'_>) -> Result<(), TransferManifestError> {
+    if prefix.schema != TRANSFER_MANIFEST_DOMAIN {
         return Err(TransferManifestError::SchemaUnsupported);
     }
-    if store_prefix.is_empty()
-        || !store_prefix.starts_with('/')
-        || store_prefix.len() > MAX_REMOTE_TRANSFER_STORE_PREFIX_BYTES
+    if prefix.store_prefix.is_empty()
+        || !prefix.store_prefix.starts_with('/')
+        || prefix.store_prefix.len() > MAX_REMOTE_TRANSFER_STORE_PREFIX_BYTES
     {
         return Err(TransferManifestError::StorePrefixInvalid);
     }
@@ -457,11 +488,16 @@ pub struct TransferManifestTotals {
     pub total_bytes: u64,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct TransferManifestLimits {
+    pub chunk_bytes_max: u32,
+    pub chunk_count_max: u32,
+    pub total_bytes_max: u64,
+}
+
 pub fn validate_transfer_manifest_artifacts<'a, A, C>(
     artifacts: A,
-    chunk_bytes_max: u32,
-    chunk_count_max: u32,
-    total_bytes_max: u64,
+    limits: TransferManifestLimits,
 ) -> Result<TransferManifestTotals, TransferManifestError>
 where
     A: ExactSizeIterator<Item = TransferArtifactFacts<'a, C>>,
@@ -500,7 +536,7 @@ where
             if chunk.offset_bytes != expected_offset_bytes {
                 return Err(TransferManifestError::ChunkOffsetInvalid);
             }
-            if chunk.size_bytes == 0 || chunk.size_bytes > chunk_bytes_max {
+            if chunk.size_bytes == 0 || chunk.size_bytes > limits.chunk_bytes_max {
                 return Err(TransferManifestError::ChunkSizeInvalid);
             }
             if !crate::output::is_blake3_hex_digest(chunk.digest_blake3) {
@@ -522,7 +558,7 @@ where
         debug_assert_eq!(expected_index, artifact_chunk_count);
         chunk_count = chunk_count.checked_add(artifact_chunk_count).ok_or(TransferManifestError::ArithmeticOverflow)?;
         total_bytes = total_bytes.checked_add(artifact.size_bytes).ok_or(TransferManifestError::ArithmeticOverflow)?;
-        if chunk_count > chunk_count_max || total_bytes > total_bytes_max {
+        if chunk_count > limits.chunk_count_max || total_bytes > limits.total_bytes_max {
             return Err(TransferManifestError::TotalBytesExceeded);
         }
     }
@@ -717,15 +753,16 @@ pub fn validate_transfer_checkpoint_counters<'a>(
     if facts.next_sequence > sequence_max {
         return Err(TransferProgressError::CheckpointCursorForged);
     }
-    let mut chunk_sizes = alloc::collections::BTreeMap::new();
+    let mut chunk_sizes_bytes = alloc::collections::BTreeMap::new();
     for chunk in manifest_chunks {
-        chunk_sizes.entry(chunk.digest_blake3).or_insert(chunk.size_bytes);
+        chunk_sizes_bytes.entry(chunk.digest_blake3).or_insert(chunk.size_bytes);
     }
     let mut acknowledged_bytes = 0_u64;
     for digest in acknowledged {
-        let size = chunk_sizes.get(digest).ok_or(TransferProgressError::ChunkUnknown)?;
-        acknowledged_bytes =
-            acknowledged_bytes.checked_add(u64::from(*size)).ok_or(TransferProgressError::ArithmeticOverflow)?;
+        let size_bytes = chunk_sizes_bytes.get(digest).ok_or(TransferProgressError::ChunkUnknown)?;
+        acknowledged_bytes = acknowledged_bytes
+            .checked_add(u64::from(*size_bytes))
+            .ok_or(TransferProgressError::ArithmeticOverflow)?;
     }
     let accounted_bytes = facts
         .transferred_bytes
@@ -734,6 +771,8 @@ pub fn validate_transfer_checkpoint_counters<'a>(
     if acknowledged_bytes > accounted_bytes {
         return Err(TransferProgressError::CheckpointCounterInvalid);
     }
+    debug_assert!(facts.transferred_bytes <= facts.policy_total_bytes_max);
+    debug_assert!(acknowledged_bytes <= accounted_bytes);
     Ok(())
 }
 
@@ -751,9 +790,11 @@ where
         .clone()
         .flat_map(|artifact| artifact.chunks.map(|chunk| chunk.digest_blake3))
         .collect::<BTreeSet<_>>();
-    if !acknowledged.clone().all(|digest| known.contains(digest)) {
+    let is_acknowledgement_known = acknowledged.clone().all(|digest| known.contains(digest));
+    if !is_acknowledgement_known {
         return Err(TransferProgressError::ChunkUnknown);
     }
+    debug_assert!(is_acknowledgement_known);
     let complete_artifacts = complete_artifacts.collect::<BTreeSet<_>>();
     let mut verified = complete_chunks.collect::<BTreeSet<_>>();
     for artifact in artifacts {
@@ -761,9 +802,11 @@ where
             verified.extend(artifact.chunks.map(|chunk| chunk.digest_blake3));
         }
     }
-    if !acknowledged.into_iter().all(|digest| verified.contains(digest)) {
+    let is_acknowledgement_verified = acknowledged.into_iter().all(|digest| verified.contains(digest));
+    if !is_acknowledgement_verified {
         return Err(TransferProgressError::AcknowledgedChunkMissing);
     }
+    debug_assert!(is_acknowledgement_verified);
     Ok(())
 }
 
@@ -860,6 +903,8 @@ pub fn validate_transfer_credit_state(
     if state.transferred_bytes > limits.total_bytes_max {
         return Err(TransferProgressError::TotalBytesExceeded);
     }
+    debug_assert!(snapshot.in_flight_chunks <= limits.buffered_chunks_max);
+    debug_assert!(state.transferred_bytes <= limits.total_bytes_max);
     Ok(snapshot)
 }
 
@@ -869,29 +914,35 @@ pub struct TransferCreditGrantDecision {
     pub granted_chunks_remaining: u32,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct TransferCreditRequest {
+    pub requested_bytes: u64,
+    pub requested_chunks: u32,
+    pub available_storage_bytes: u64,
+}
 pub fn grant_transfer_credit(
     limits: TransferCreditLimits,
     state: TransferCreditFacts,
     snapshot: TransferCreditSnapshot,
-    requested_bytes: u64,
-    requested_chunks: u32,
-    available_storage_bytes: u64,
+    request: TransferCreditRequest,
 ) -> Result<TransferCreditGrantDecision, TransferProgressError> {
-    if requested_bytes == 0 || requested_chunks == 0 {
+    if request.requested_bytes == 0 || request.requested_chunks == 0 {
         return Err(TransferProgressError::CreditGrantInvalid);
     }
     let next_bytes = state
         .granted_bytes_remaining
-        .checked_add(requested_bytes)
+        .checked_add(request.requested_bytes)
         .ok_or(TransferProgressError::ArithmeticOverflow)?;
     let next_chunks = state
         .granted_chunks_remaining
-        .checked_add(requested_chunks)
+        .checked_add(request.requested_chunks)
         .ok_or(TransferProgressError::ArithmeticOverflow)?;
     validate_transfer_credit_headroom(limits, next_bytes, next_chunks, snapshot)?;
-    if requested_bytes > available_storage_bytes {
+    if request.requested_bytes > request.available_storage_bytes {
         return Err(TransferProgressError::CreditExceeded);
     }
+    debug_assert!(request.requested_bytes > 0);
+    debug_assert!(request.requested_chunks > 0);
     Ok(TransferCreditGrantDecision {
         granted_bytes_remaining: next_bytes,
         granted_chunks_remaining: next_chunks,
@@ -915,19 +966,37 @@ pub struct TransferChunkReservation {
     pub next_sequence: u64,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct TransferReservationScope<'a> {
+    pub expected: TransferScopeFacts<'a>,
+    pub demand: TransferScopeFacts<'a>,
+    pub header: TransferScopeFacts<'a>,
+}
+
+pub struct TransferReservationRequest<'a, I> {
+    pub limits: TransferCreditLimits,
+    pub scope: TransferReservationScope<'a>,
+    pub state: TransferCreditFacts,
+    pub header_sequence: u64,
+    pub header: TransferReservedChunkFacts<'a>,
+    pub demanded: I,
+    pub already_in_flight: bool,
+}
+
 pub fn reserve_transfer_chunk<'a>(
-    limits: TransferCreditLimits,
-    expected_scope: TransferScopeFacts<'_>,
-    demand_scope: TransferScopeFacts<'_>,
-    header_scope: TransferScopeFacts<'_>,
-    state: TransferCreditFacts,
-    header_sequence: u64,
-    header: TransferReservedChunkFacts<'a>,
-    demanded: impl Iterator<Item = TransferReservedChunkFacts<'a>>,
-    already_in_flight: bool,
+    request: TransferReservationRequest<'a, impl Iterator<Item = TransferReservedChunkFacts<'a>>>,
 ) -> Result<TransferChunkReservation, TransferProgressError> {
-    validate_transfer_scope(expected_scope, header_scope)?;
-    validate_transfer_scope(demand_scope, header_scope)?;
+    let TransferReservationRequest {
+        limits,
+        scope,
+        state,
+        header_sequence,
+        header,
+        demanded,
+        already_in_flight,
+    } = request;
+    validate_transfer_scope(scope.expected, scope.header)?;
+    validate_transfer_scope(scope.demand, scope.header)?;
     if header_sequence != state.next_sequence {
         return Err(TransferProgressError::ChunkSequenceInvalid);
     }
@@ -935,11 +1004,11 @@ pub fn reserve_transfer_chunk<'a>(
         .into_iter()
         .find(|chunk| chunk.artifact_id == header.artifact_id && chunk.index == header.index)
         .ok_or(TransferProgressError::ChunkNotDemanded)?;
-    if expected.artifact_kind != header.artifact_kind
-        || expected.offset_bytes != header.offset_bytes
-        || expected.size_bytes != header.size_bytes
-        || expected.digest_blake3 != header.digest_blake3
-    {
+    let is_shape_mismatched =
+        expected.artifact_kind != header.artifact_kind || expected.offset_bytes != header.offset_bytes;
+    let is_content_mismatched =
+        expected.size_bytes != header.size_bytes || expected.digest_blake3 != header.digest_blake3;
+    if is_shape_mismatched || is_content_mismatched {
         return Err(TransferProgressError::ChunkDigestMismatch);
     }
     if header.size_bytes > limits.chunk_bytes_max {
@@ -958,49 +1027,66 @@ pub fn reserve_transfer_chunk<'a>(
     if projected_total > limits.total_bytes_max {
         return Err(TransferProgressError::TotalBytesExceeded);
     }
+    debug_assert!(state.granted_bytes_remaining >= u64::from(header.size_bytes));
+    debug_assert!(state.granted_chunks_remaining > 0);
     Ok(TransferChunkReservation {
-        granted_bytes_remaining: state.granted_bytes_remaining - u64::from(header.size_bytes),
-        granted_chunks_remaining: state.granted_chunks_remaining - 1,
+        granted_bytes_remaining: state
+            .granted_bytes_remaining
+            .checked_sub(u64::from(header.size_bytes))
+            .ok_or(TransferProgressError::ArithmeticOverflow)?,
+        granted_chunks_remaining: state
+            .granted_chunks_remaining
+            .checked_sub(1)
+            .ok_or(TransferProgressError::ArithmeticOverflow)?,
         next_sequence: header_sequence.checked_add(1).ok_or(TransferProgressError::ArithmeticOverflow)?,
     })
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct TransferAcknowledgement<'a> {
+    pub digest_blake3: &'a str,
+    pub observed_digest_blake3: &'a str,
+    pub transferred_bytes: u64,
+}
+
 pub fn acknowledge_transfer_chunk(
     state: TransferCreditFacts,
-    acknowledgement_digest: &str,
-    observed_digest: &str,
-    acknowledgement_transferred_bytes: u64,
+    acknowledgement: TransferAcknowledgement<'_>,
     in_flight: Option<(&str, u32)>,
 ) -> Result<u64, TransferProgressError> {
     let (in_flight_digest, in_flight_size) = in_flight.ok_or(TransferProgressError::AcknowledgementUnknown)?;
-    if acknowledgement_digest != in_flight_digest {
+    if acknowledgement.digest_blake3 != in_flight_digest {
         return Err(TransferProgressError::AcknowledgementMismatch);
     }
-    if observed_digest != in_flight_digest {
+    if acknowledgement.observed_digest_blake3 != in_flight_digest {
         return Err(TransferProgressError::ChunkDigestMismatch);
     }
     let transferred = state
         .transferred_bytes
         .checked_add(u64::from(in_flight_size))
         .ok_or(TransferProgressError::ArithmeticOverflow)?;
-    if acknowledgement_transferred_bytes != transferred {
+    if acknowledgement.transferred_bytes != transferred {
         return Err(TransferProgressError::AcknowledgementMismatch);
     }
     Ok(transferred)
 }
 
-pub fn validate_transfer_idle_progress(
-    last_progress_step: u64,
-    current_progress_step: u64,
-    idle_progress_steps_max: u32,
-) -> Result<(), TransferProgressError> {
-    if current_progress_step < last_progress_step {
+#[derive(Debug, Clone, Copy)]
+pub struct TransferIdleProgressFacts {
+    pub last_progress_step: u64,
+    pub current_progress_step: u64,
+    pub idle_progress_steps_max: u32,
+}
+
+pub fn validate_transfer_idle_progress(facts: TransferIdleProgressFacts) -> Result<(), TransferProgressError> {
+    if facts.current_progress_step < facts.last_progress_step {
         return Err(TransferProgressError::ProgressCounterRegressed);
     }
-    let idle_steps = current_progress_step
-        .checked_sub(last_progress_step)
+    let idle_steps = facts
+        .current_progress_step
+        .checked_sub(facts.last_progress_step)
         .ok_or(TransferProgressError::ArithmeticOverflow)?;
-    if idle_steps > u64::from(idle_progress_steps_max) {
+    if idle_steps > u64::from(facts.idle_progress_steps_max) {
         return Err(TransferProgressError::IdleProgressExceeded);
     }
     Ok(())
@@ -1041,18 +1127,31 @@ pub struct TransferCutoffAdmissionFacts {
     pub path_info_admitted: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct TransferCutoffFacts<'a> {
+    pub expected_scope: TransferScopeFacts<'a>,
+    pub initial_scope: TransferScopeFacts<'a>,
+    pub admission: TransferCutoffAdmissionFacts,
+    pub transferred_bytes: u64,
+    pub initially_reused_bytes: u64,
+    pub manifest_total_bytes: u64,
+}
+
 /// Even a complete transfer never claims output admission. Only previously
 /// verified receiver facts and demanded/acknowledged content permit cutoff.
 pub fn decide_transfer_cutoff(
-    expected_scope: TransferScopeFacts<'_>,
-    initial_scope: TransferScopeFacts<'_>,
-    admission: TransferCutoffAdmissionFacts,
+    facts: TransferCutoffFacts<'_>,
     required_artifacts: impl Iterator<Item = TransferRequiredArtifactFacts>,
     missing_chunks: impl ExactSizeIterator<Item = TransferMissingChunkFacts>,
-    transferred_bytes: u64,
-    initially_reused_bytes: u64,
-    manifest_total_bytes: u64,
 ) -> TransferCutoffDecision {
+    let TransferCutoffFacts {
+        expected_scope,
+        initial_scope,
+        admission,
+        transferred_bytes,
+        initially_reused_bytes,
+        manifest_total_bytes,
+    } = facts;
     let decision = |disposition, reused_bytes| TransferCutoffDecision {
         disposition,
         transferred_bytes,
@@ -1062,17 +1161,19 @@ pub fn decide_transfer_cutoff(
     if !admission.receiver_facts_valid || validate_transfer_scope(expected_scope, initial_scope).is_err() {
         return decision(TransferCutoffDisposition::Reject, initially_reused_bytes);
     }
-    let content_admitted = admission.requested_content_identity_verified
+    debug_assert!(admission.receiver_facts_valid);
+    debug_assert_eq!(expected_scope, initial_scope);
+    let is_content_admitted = admission.requested_content_identity_verified
         && admission.required_closure_metadata_verified
         && admission.path_info_admitted
         && required_artifacts
             .into_iter()
             .filter(|artifact| artifact.required_for_completion)
             .all(|artifact| artifact.complete);
-    if content_admitted && missing_chunks.len() == 0 {
+    if is_content_admitted && missing_chunks.len() == 0 {
         return decision(TransferCutoffDisposition::AlreadyPresent, manifest_total_bytes);
     }
-    if content_admitted
+    if is_content_admitted
         && missing_chunks
             .into_iter()
             .all(|chunk| chunk.acknowledged || chunk.chunk_complete || chunk.artifact_complete)
@@ -1180,6 +1281,8 @@ pub fn validate_production_output_manifest_binding(
     if facts.actual_artifact_count != expected_artifact_count {
         return Err(ProductionOutputManifestBlocker::ArtifactCountMismatch);
     }
+    debug_assert_eq!(facts.canonical_digest_blake3, facts.claimed_digest_blake3);
+    debug_assert_eq!(facts.actual_artifact_count, expected_artifact_count);
     Ok(())
 }
 
@@ -1234,21 +1337,25 @@ pub fn validate_production_input_manifest_scope(
     let Some(expected) = facts.expected_attempt else {
         return Err(ProductionInputManifestBlocker::AttemptMissing);
     };
-    if facts.actual_attempt.job_id != expected.job_id
+    let is_attempt_mismatched = facts.actual_attempt.job_id != expected.job_id
         || facts.actual_attempt.attempt_id != expected.attempt_id
-        || facts.actual_attempt.fence_generation != expected.fence_generation
-        || facts.actual_store_prefix != facts.expected_store_prefix
-    {
+        || facts.actual_attempt.fence_generation != expected.fence_generation;
+    if is_attempt_mismatched || facts.actual_store_prefix != facts.expected_store_prefix {
         return Err(ProductionInputManifestBlocker::BindingMismatch);
     }
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ProductionContentBinding<'a> {
+    pub expected_content_blake3: &'a str,
+    pub actual_content_blake3: &'a str,
+}
+
 pub fn validate_production_input_manifest_content_binding(
-    expected_content_blake3: &str,
-    actual_content_blake3: &str,
+    binding: ProductionContentBinding<'_>,
 ) -> Result<(), ProductionInputManifestBlocker> {
-    if actual_content_blake3 != expected_content_blake3 {
+    if binding.actual_content_blake3 != binding.expected_content_blake3 {
         return Err(ProductionInputManifestBlocker::BindingMismatch);
     }
     Ok(())
@@ -1296,26 +1403,31 @@ impl ProductionTransferRuntimeBlocker {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ProductionTransferRuntimeFacts<'a> {
+    pub output_admission_claimed: bool,
+    pub disposition_complete: bool,
+    pub verified_builder_key: &'a str,
+    pub actual_mode: TransferMode,
+    pub has_fallback_reason: bool,
+}
+
 pub fn validate_production_transfer_runtime_report(
-    output_admission_claimed: bool,
-    disposition_complete: bool,
-    verified_builder_key: &str,
-    actual_mode: TransferMode,
-    has_fallback_reason: bool,
+    facts: ProductionTransferRuntimeFacts<'_>,
 ) -> Result<(), ProductionTransferRuntimeBlocker> {
-    if output_admission_claimed {
+    if facts.output_admission_claimed {
         return Err(ProductionTransferRuntimeBlocker::OutputAdmissionOverclaim);
     }
-    if !disposition_complete {
+    if !facts.disposition_complete {
         return Err(ProductionTransferRuntimeBlocker::Incomplete);
     }
-    if verified_builder_key.is_empty() {
+    if facts.verified_builder_key.is_empty() {
         return Err(ProductionTransferRuntimeBlocker::BuilderKeyEmpty);
     }
-    if actual_mode == TransferMode::Delta {
+    if facts.actual_mode == TransferMode::Delta {
         return Err(ProductionTransferRuntimeBlocker::DeltaEvidenceMissing);
     }
-    if actual_mode == TransferMode::Streaming && has_fallback_reason {
+    if facts.actual_mode == TransferMode::Streaming && facts.has_fallback_reason {
         return Err(ProductionTransferRuntimeBlocker::StreamingFallbackInconsistent);
     }
     Ok(())
@@ -1377,9 +1489,9 @@ pub fn validate_production_output_pathinfo_artifact(
     {
         return Err(ProductionOutputManifestBlocker::PathinfoManifestMismatch);
     }
-    let payload_size = u64::try_from(pathinfo_payload.len())
+    let payload_size_bytes = u64::try_from(pathinfo_payload.len())
         .map_err(|_| ProductionOutputManifestBlocker::PathinfoPayloadSizeOverflow)?;
-    if actual.size_bytes != payload_size {
+    if actual.size_bytes != payload_size_bytes {
         return Err(ProductionOutputManifestBlocker::PathinfoManifestMismatch);
     }
     Ok(())
@@ -1401,23 +1513,53 @@ mod tests {
     #[test]
     fn production_runtime_receipt_requires_completed_evidence_without_admission_claim() {
         assert_eq!(
-            validate_production_transfer_runtime_report(false, true, "builder-key", TransferMode::Streaming, false),
+            validate_production_transfer_runtime_report(ProductionTransferRuntimeFacts {
+                output_admission_claimed: false,
+                disposition_complete: true,
+                verified_builder_key: "builder-key",
+                actual_mode: TransferMode::Streaming,
+                has_fallback_reason: false,
+            }),
             Ok(())
         );
         assert_eq!(
-            validate_production_transfer_runtime_report(true, false, "", TransferMode::Delta, true),
+            validate_production_transfer_runtime_report(ProductionTransferRuntimeFacts {
+                output_admission_claimed: true,
+                disposition_complete: false,
+                verified_builder_key: "",
+                actual_mode: TransferMode::Delta,
+                has_fallback_reason: true,
+            }),
             Err(ProductionTransferRuntimeBlocker::OutputAdmissionOverclaim)
         );
         assert_eq!(
-            validate_production_transfer_runtime_report(false, false, "builder-key", TransferMode::Streaming, false),
+            validate_production_transfer_runtime_report(ProductionTransferRuntimeFacts {
+                output_admission_claimed: false,
+                disposition_complete: false,
+                verified_builder_key: "builder-key",
+                actual_mode: TransferMode::Streaming,
+                has_fallback_reason: false,
+            }),
             Err(ProductionTransferRuntimeBlocker::Incomplete)
         );
         assert_eq!(
-            validate_production_transfer_runtime_report(false, true, "builder-key", TransferMode::Delta, false),
+            validate_production_transfer_runtime_report(ProductionTransferRuntimeFacts {
+                output_admission_claimed: false,
+                disposition_complete: true,
+                verified_builder_key: "builder-key",
+                actual_mode: TransferMode::Delta,
+                has_fallback_reason: false,
+            }),
             Err(ProductionTransferRuntimeBlocker::DeltaEvidenceMissing)
         );
         assert_eq!(
-            validate_production_transfer_runtime_report(false, true, "builder-key", TransferMode::Streaming, true),
+            validate_production_transfer_runtime_report(ProductionTransferRuntimeFacts {
+                output_admission_claimed: false,
+                disposition_complete: true,
+                verified_builder_key: "builder-key",
+                actual_mode: TransferMode::Streaming,
+                has_fallback_reason: true,
+            }),
             Err(ProductionTransferRuntimeBlocker::StreamingFallbackInconsistent)
         );
     }
@@ -1433,8 +1575,12 @@ mod tests {
             size_bytes: payload.len() as u64,
             payload,
         };
+        let limits = InputUploadArtifactLimits {
+            artifact_count_max: 2,
+            total_bytes_max: 7,
+        };
         assert_eq!(
-            validate_input_upload_artifacts("req", ["source", "other"], ["source"], [source].into_iter(), 2, 7),
+            validate_input_upload_artifacts("req", ["source", "other"], ["source"], [source].into_iter(), limits),
             Ok(())
         );
         assert_eq!(
@@ -1447,21 +1593,38 @@ mod tests {
                     ..source
                 }]
                 .into_iter(),
-                2,
-                7,
+                limits,
             ),
             Err(InputUploadArtifactBlocker::DigestMismatch)
         );
         assert_eq!(
-            validate_input_upload_artifacts("req", ["source"], ["source"], [source, source].into_iter(), 2, 14),
+            validate_input_upload_artifacts(
+                "req",
+                ["source"],
+                ["source"],
+                [source, source].into_iter(),
+                InputUploadArtifactLimits {
+                    total_bytes_max: 14,
+                    ..limits
+                }
+            ),
             Err(InputUploadArtifactBlocker::Duplicate)
         );
         assert_eq!(
-            validate_input_upload_artifacts("req", ["source"], ["source"], [].into_iter(), 2, 7),
+            validate_input_upload_artifacts("req", ["source"], ["source"], [].into_iter(), limits),
             Err(InputUploadArtifactBlocker::Missing)
         );
         assert_eq!(
-            validate_input_upload_artifacts("req", ["source"], ["source"], [source].into_iter(), 0, 7),
+            validate_input_upload_artifacts(
+                "req",
+                ["source"],
+                ["source"],
+                [source].into_iter(),
+                InputUploadArtifactLimits {
+                    artifact_count_max: 0,
+                    ..limits
+                }
+            ),
             Err(InputUploadArtifactBlocker::CountExceeded)
         );
     }
@@ -1483,9 +1646,18 @@ mod tests {
         };
         assert_eq!(validate_production_input_manifest_mode(true, TransferMode::Streaming, false), Ok(()));
         assert_eq!(validate_production_input_manifest_scope(facts), Ok(()));
-        assert_eq!(validate_production_input_manifest_content_binding("content", "content"), Ok(()));
         assert_eq!(
-            validate_production_input_manifest_content_binding("content", "forged"),
+            validate_production_input_manifest_content_binding(ProductionContentBinding {
+                expected_content_blake3: "content",
+                actual_content_blake3: "content",
+            }),
+            Ok(())
+        );
+        assert_eq!(
+            validate_production_input_manifest_content_binding(ProductionContentBinding {
+                expected_content_blake3: "content",
+                actual_content_blake3: "forged",
+            }),
             Err(ProductionInputManifestBlocker::BindingMismatch)
         );
         assert_eq!(
@@ -1677,17 +1849,36 @@ mod tests {
     #[test]
     fn uploaded_bytes_and_missing_identity_fail_closed() {
         let refs = vec![String::from("a")];
-        assert_eq!(admit_missing_uploads(&refs, &refs, 10, 10, 10), Ok(()));
         assert_eq!(
-            admit_missing_uploads(&refs, &refs, 11, u64::MAX, 10),
+            admit_missing_uploads(&refs, &refs, UploadByteLimits {
+                uploaded_bytes: 10,
+                ticket_max_bytes: 10,
+                global_max_bytes: 10,
+            }),
+            Ok(())
+        );
+        assert_eq!(
+            admit_missing_uploads(&refs, &refs, UploadByteLimits {
+                uploaded_bytes: 11,
+                ticket_max_bytes: u64::MAX,
+                global_max_bytes: 10,
+            }),
             Err(TransferBlocker::UploadByteLimitExceeded)
         );
         assert_eq!(
-            admit_missing_uploads(&refs, &refs, 11, 10, u64::MAX),
+            admit_missing_uploads(&refs, &refs, UploadByteLimits {
+                uploaded_bytes: 11,
+                ticket_max_bytes: 10,
+                global_max_bytes: u64::MAX,
+            }),
             Err(TransferBlocker::UploadByteLimitExceeded)
         );
         assert_eq!(
-            admit_missing_uploads(&refs, &[String::from("b")], 1, 1, 10),
+            admit_missing_uploads(&refs, &[String::from("b")], UploadByteLimits {
+                uploaded_bytes: 1,
+                ticket_max_bytes: 1,
+                global_max_bytes: 10,
+            }),
             Err(TransferBlocker::UploadedInputSetMismatch)
         );
     }
@@ -1774,8 +1965,20 @@ mod tests {
             ..demanded
         };
         assert_eq!(
-            reserve_transfer_chunk(limits, scope, scope, scope, state, 0, unknown, [demanded].into_iter(), false)
-                .map(|_| ()),
+            reserve_transfer_chunk(TransferReservationRequest {
+                limits,
+                scope: TransferReservationScope {
+                    expected: scope,
+                    demand: scope,
+                    header: scope
+                },
+                state,
+                header_sequence: 0,
+                header: unknown,
+                demanded: [demanded].into_iter(),
+                already_in_flight: false,
+            })
+            .map(|_| ()),
             Err(TransferProgressError::ChunkNotDemanded),
         );
         let no_credit = TransferCreditFacts {
@@ -1784,8 +1987,20 @@ mod tests {
             ..state
         };
         assert_eq!(
-            reserve_transfer_chunk(limits, scope, scope, scope, no_credit, 0, demanded, [demanded].into_iter(), false)
-                .map(|_| ()),
+            reserve_transfer_chunk(TransferReservationRequest {
+                limits,
+                scope: TransferReservationScope {
+                    expected: scope,
+                    demand: scope,
+                    header: scope
+                },
+                state: no_credit,
+                header_sequence: 0,
+                header: demanded,
+                demanded: [demanded].into_iter(),
+                already_in_flight: false,
+            })
+            .map(|_| ()),
             Err(TransferProgressError::CreditExceeded),
         );
     }

@@ -147,11 +147,14 @@ pub fn decode_binding_records(
             placeholder: row.placeholder.to_owned(),
         });
     }
+    debug_assert!(records.len() <= MAX_PLAN_OUTPUT_REFERENCES);
+    debug_assert!(records.windows(2).all(|pair| pair[0].name < pair[1].name), "records are strictly name-ordered");
     Ok(records)
 }
 
 /// Resolve a declared root from the accepted plan itself before any unit output
 /// is available. A missing root wins over a missing output or registration fact.
+// r[impl mantle.dynamic_plan_output_inputs.binding_failures]
 pub fn bind_accepted_plan_root(
     record: &PlanOutputBindingRecord,
     plan: &CanonicalNativePlan,
@@ -251,6 +254,7 @@ mod tests {
     }
 
     #[test]
+    // r[verify mantle.dynamic_plan_output_inputs.binding_failures]
     fn missing_root_precedes_missing_output_and_registered_path() {
         let mut record = decode(&[row("app")]).unwrap().remove(0);
         record.root = UnitId::new("unit.other").unwrap();

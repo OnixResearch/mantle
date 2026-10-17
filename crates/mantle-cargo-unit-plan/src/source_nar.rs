@@ -114,7 +114,7 @@ pub fn copy_package(source: &Path, destination: &Path, depth: u32) -> Result<(),
         for entry in entries {
             let name = entry.file_name();
             let name = name.to_str().ok_or("unit-plan-source-unsupported: non-UTF8 source name")?;
-            if name == "target" || name == ".git" {
+            if (depth == 0 && name == "target") || name == ".git" {
                 continue;
             }
             copy_package(&entry.path(), &destination.join(name), depth + 1)?;

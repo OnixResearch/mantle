@@ -57,6 +57,8 @@ pub fn validate_plan_output_ref(reference: &PlanOutputRef) -> Result<(), String>
             reference.plan_output, reference.producer.name
         ));
     }
+    debug_assert!(reference.name.len() <= 64);
+    debug_assert!(reference.producer.outputs.contains(&reference.plan_output));
     Ok(())
 }
 
@@ -311,7 +313,7 @@ struct RawInputRecord {
     plan_output: Option<String>,
     root: Option<String>,
     unit_output: Option<String>,
-    forbidden_plan_fields: bool,
+    has_forbidden_plan_fields: bool,
     derivation_file: Option<String>,
     drv: Option<CrunchDerivation>,
     output: Option<String>,
@@ -441,7 +443,7 @@ impl<'de> Deserialize<'de> for RawInputRecord {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
         let raw = RawInputRecordFields::deserialize(deserializer)?;
-        let forbidden_plan_fields = raw.derivation_file.is_some()
+        let has_forbidden_plan_fields = raw.derivation_file.is_some()
             || raw.drv.is_some()
             || raw.output.is_some()
             || raw.builder.is_some()
@@ -463,7 +465,7 @@ impl<'de> Deserialize<'de> for RawInputRecord {
             plan_output: raw.plan_output,
             root: raw.root,
             unit_output: raw.unit_output,
-            forbidden_plan_fields,
+            has_forbidden_plan_fields,
             derivation_file: raw.derivation_file,
             drv: raw.drv,
             output: raw.output,
@@ -483,11 +485,20 @@ impl<'de> Deserialize<'de> for RawInputRecord {
 }
 
 impl RawInputRecord {
+    fn has_plan_output_fields(&self) -> bool {
+        let present = [
+            self.producer.is_some(),
+            self.plan_output.is_some(),
+            self.root.is_some(),
+            self.unit_output.is_some(),
+        ];
+        present.contains(&true)
+    }
+
     fn into_plan_output<E: de::Error>(self) -> Result<Input, E> {
         // Unlike ordinary derivations, a binding is a closed record: rejecting
         // even harmless extra fields keeps its identity unambiguous.
-        let forbidden = self.forbidden_plan_fields;
-        if forbidden {
+        if self.has_forbidden_plan_fields {
             return Err(E::custom(
                 "plan-output input contains fields outside name, producer, plan_output, root, unit_output",
             ));
@@ -533,7 +544,7 @@ impl RawInputRecord {
     }
 
     fn into_input<E: de::Error>(self) -> Result<Input, E> {
-        if self.producer.is_some() || self.plan_output.is_some() || self.root.is_some() || self.unit_output.is_some() {
+        if self.has_plan_output_fields() {
             return self.into_plan_output();
         }
         if let Some(path) = self.derivation_file.as_ref() {

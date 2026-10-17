@@ -1,0 +1,96 @@
+{
+  "schema": "mantle-store-gc-report-v4",
+  "plan_id": "b3:e948819705335e9e9d9392b4db933266fcd98108f2bb0d3f1ef2ac8ea002403d",
+  "retention_plan_id": "b3:e6d147ef5cf689b0dd984dd77f478370f833f9ac5041f46fb4e109f741804709",
+  "overlay_plan_blake3": null,
+  "is_dry_run": true,
+  "execution_complete": false,
+  "failed_operation": null,
+  "failed_operations": [],
+  "retained_root_count": 1,
+  "retained_castore_root_count": 0,
+  "candidate_path_count": 1,
+  "reclaimable_bytes_total": 27,
+  "reclaim_observations": [
+    {
+      "category": "blob-index",
+      "path": "/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-state-compare/state/blobs/blobs/b3/cf82/cf82193ea2490bd6f3d21503ba3e14a674d25d94ec5c620a950222eb8483ccd7",
+      "path_kind": "file",
+      "bytes": 2,
+      "blocker": null
+    },
+    {
+      "category": "blob-index",
+      "path": "/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-state-compare/state/blobs/blobs/b3/a8cf/a8cf35e3ff6e13646f96c02bc674a94bb8bfe31066846152564bf569008f9201",
+      "path_kind": "file",
+      "bytes": 2,
+      "blocker": null
+    },
+    {
+      "category": "blob-chunk",
+      "path": "/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/fixture-state-compare/state/blobs/chunks/b3/a8cf/a8cf35e3ff6e13646f96c02bc674a94bb8bfe31066846152564bf569008f9201",
+      "path_kind": "file",
+      "bytes": 23,
+      "blocker": null
+    }
+  ],
+  "candidate_paths": [
+    "/mantle/store/0006ax31ciln8vk1ccnnavk9dijp6qb2-baseline-candidate"
+  ],
+  "retention_explanations": [
+    {
+      "path": "/mantle/store/0000000000070rb5dcnnavk9dijp6qb2-baseline-keep",
+      "root_class": "legacy-unmanaged",
+      "owner_scope": "legacy-unmanaged",
+      "policy_blake3": "b3:b31c5911810adfb3b165f1c66b7a710a9716f7ae40cb5045b7abfb520ad14e72",
+      "project_identity": null,
+      "selector": null,
+      "generation": null,
+      "lease_id": null,
+      "transition_id": "b3:a521a4683bf4ca38bb837a4691a6b1d7b62d1e67da195824155eab32130f6951",
+      "transition_reason": "migrated-from-path-only-v1",
+      "disposition": "migrate",
+      "reason": "migrate-legacy-unmanaged-protected"
+    }
+  ],
+  "path_explanations": [
+    {
+      "path": "/mantle/store/0000000000070rb5dcnnavk9dijp6qb2-baseline-keep",
+      "reason": "reachable-from-retained-root",
+      "retaining_roots": [
+        "/mantle/store/0000000000070rb5dcnnavk9dijp6qb2-baseline-keep"
+      ]
+    },
+    {
+      "path": "/mantle/store/0006ax31ciln8vk1ccnnavk9dijp6qb2-baseline-candidate",
+      "reason": "unreachable-from-retained-root",
+      "retaining_roots": []
+    }
+  ],
+  "base_reachability": [],
+  "usage": {
+    "observed_bytes": 256,
+    "retained_bytes": 0,
+    "reclaimable_bytes": 128,
+    "quarantined_bytes": 0,
+    "unclassified_bytes": 128,
+    "shared_bytes": 0,
+    "unknown_object_count": 0,
+    "roots": [
+      {
+        "root": "/mantle/store/0000000000070rb5dcnnavk9dijp6qb2-baseline-keep",
+        "inclusive_bytes": 128,
+        "unique_bytes": 128,
+        "unknown_object_count": 0
+      }
+    ]
+  },
+  "candidate_blob_index_count": 2,
+  "candidate_blob_chunk_count": 1,
+  "candidate_artifact_attestation_count": 0,
+  "candidate_closure_attestation_count": 0,
+  "candidate_exported_output_count": 0,
+  "candidate_action_result_record_count": 0,
+  "candidate_action_result_index_count": 0,
+  "operations": []
+}

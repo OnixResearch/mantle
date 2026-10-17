@@ -1189,6 +1189,7 @@ mod tests {
         let pathinfo_service =
             Arc::new(LruPathInfoService::with_capacity("io-fault-cache".to_string(), NonZeroUsize::new(8).unwrap()));
         StoreHandle::from_services_with_store_dir(
+            crate::StoreBackend::Snix,
             StoreHandleServices {
                 blob_service,
                 directory_service,
@@ -1200,6 +1201,7 @@ mod tests {
             },
             "/mantle/store".to_string(),
         )
+        .expect("fault-injection Snix fixture")
     }
 
     async fn stored_file(handle: &StoreHandle, content: &[u8]) -> Node {

@@ -1,0 +1,120 @@
+{
+  "kind": "Direct current-cohort native read-only documentary observations; not final-source/product/task/publication closure",
+  "cohort_binding": {
+    "required_revision": "007ba5193dd8fec9067a1c0e0f8ef487807af872",
+    "locked_nar_hash": "sha256-Kgx8JgsC/+26ETbL3lRaxXAYfzv2cmtG/i9OywPOz0c=",
+    "existing_database": "/nix/var/nix/db/db.sqlite",
+    "read_only_lookup_sql": "SELECT substr(path,1,16) AS p1,substr(path,17,16) AS p2,substr(path,33,16) AS p3,substr(path,49,16) AS p4 FROM ValidPaths WHERE hash='sha256:2a0c7c260b02ffedba1136cbde545ac570187f3bf6726b46fe2f4ecb03cecf47'",
+    "actual_source_lookup": "| p1               | p2               | p3               | p4  |\n| ---------------- | ---------------- | ---------------- | --- |\n| /nix/store/acchn | 2b5v9r308k3dc49f | mwccalgkkpd-sour | ce  |",
+    "registered_source": "/nix/store/acchn2b5v9r308k3dc49fmwccalgkkpd-source",
+    "pinned_package_definition": "Registered locked source flake.nix:98-108 uses src=self; the existing matching package derivation src equals that source.",
+    "existing_derivation": "/nix/store/qa0d0qjs1x6d6cblq1c9xpmsvh5yvr92-cairn-0.1.0.drv",
+    "observed_output": "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0",
+    "executed_path": "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+    "initial_PATH_package": "/nix/store/j3ni3lj66ylskpcg78ip531s9lz4z4av-cairn-0.1.0/bin/cairn; not selected for validation"
+  },
+  "effect_review": {
+    "native_validate_source": "crates/cairn-cli/src/native/validate.rs:17-40,59-167",
+    "native_gate_source": "crates/cairn-cli/src/lifecycle.rs:26-84",
+    "policy_load_source": "crates/cairn-cli/src/project_policy.rs:25-28,64-105 and support/layout.rs:71-72",
+    "observed_path": "Direct JSON-policy read plus lifecycle scans/pure reports; no --run-probes, tasks/probe/sync/archive mutation or build hook requested."
+  },
+  "original_metadata_bound_bytes": 134217728,
+  "per_command_capture_bound_bytes": 524288,
+  "captured_output_bytes": 127445,
+  "results": [
+    {
+      "command": [
+        "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+        "validate",
+        "--strict",
+        "--root",
+        "."
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/mantle",
+      "started_unix": 1792215707.3791,
+      "finished_unix": 1792215707.5554814,
+      "exit_code": 0,
+      "stop_reason": null,
+      "capture_limit_bytes": 524288,
+      "timeout_seconds": 30,
+      "label": "validate",
+      "stdout_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-validate.stdout.txt",
+      "stderr_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-validate.stderr.txt",
+      "observed_status": {
+        "valid": true
+      },
+      "observed_issues": []
+    },
+    {
+      "command": [
+        "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+        "gate",
+        "proposal",
+        "reconcile-main-api-lineages-2026-10-17",
+        "--root",
+        "."
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/mantle",
+      "started_unix": 1792215707.5761342,
+      "finished_unix": 1792215707.5910513,
+      "exit_code": 0,
+      "stop_reason": null,
+      "capture_limit_bytes": 524288,
+      "timeout_seconds": 30,
+      "label": "proposal",
+      "stdout_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-proposal.stdout.txt",
+      "stderr_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-proposal.stderr.txt",
+      "observed_status": {
+        "valid": true,
+        "stage": "proposal"
+      },
+      "observed_issues": []
+    },
+    {
+      "command": [
+        "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn",
+        "gate",
+        "design",
+        "reconcile-main-api-lineages-2026-10-17",
+        "--root",
+        "."
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/mantle",
+      "started_unix": 1792215707.6046083,
+      "finished_unix": 1792215707.620894,
+      "exit_code": 0,
+      "stop_reason": null,
+      "capture_limit_bytes": 524288,
+      "timeout_seconds": 30,
+      "label": "design",
+      "stdout_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-design.stdout.txt",
+      "stderr_path": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-design.stderr.txt",
+      "observed_status": {
+        "valid": true,
+        "stage": "design"
+      },
+      "observed_issues": []
+    }
+  ],
+  "actual_blake3_command_exit": 0,
+  "actual_blake3": {
+    "/nix/store/qa0d0qjs1x6d6cblq1c9xpmsvh5yvr92-cairn-0.1.0.drv": "28475f32d6d4b401b79e8d6df51e6a684ff9918eacd41582d0e540eaeef4562f",
+    "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn": "a4059806e3478977d3ef3ca5bc3fc4f2ef4d3e066fa03ddcbcbdd0fb786f3cd8",
+    "/nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/.cairn-wrapped": "2b6cc9c3c4e4f7bde3ae362c724ec4cae17ac605bd7dc4bdd37d669e9be28c2a",
+    ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-validate.stdout.txt": "1d5f884371bf2b51214ddf0e1b191808d4dd96068d090f1269b7ade79399c4c7",
+    ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-validate.stderr.txt": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+    ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-proposal.stdout.txt": "1fb183846a054edbd2d55baf722b176eac0728a815f00712c9f176948e514dc5",
+    ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-proposal.stderr.txt": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+    ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-design.stdout.txt": "37b7af22263e91f131fca2675069ed53196a10317709eb11a87a91a97532352e",
+    ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/raw/native-design.stderr.txt": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+  },
+  "non_claims": [
+    "No product execution/resume",
+    "No Nix invocation/source copy/realization or Cargo",
+    "No tasks/full-quality/final-source G3 pass",
+    "No archive/sync/publication acceptance",
+    "No frozen accounting/caps/F0 change",
+    "No inference that old compiler descendants or opaque daemons are empty"
+  ]
+}

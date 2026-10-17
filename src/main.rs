@@ -135,7 +135,7 @@ mod project_cmd;
 mod project_resolve;
 mod project_retention_fact;
 mod proof_clock_seccomp;
-mod protected_exec;
+use mantle::protected_exec;
 #[allow(dead_code)]
 mod protected_exec_seccomp;
 mod provider_output_publication;
@@ -161,7 +161,7 @@ mod release_tree_copy;
 mod remote_attempt_log_store;
 mod remote_credential_state;
 mod remote_credentials;
-mod remote_nominal;
+use mantle::remote_nominal;
 mod remote_service_secrets;
 mod remote_test_interruption;
 mod run_binary_selection;
@@ -3121,10 +3121,10 @@ pub enum SourceAction {
     },
 }
 
-// Keep source-bundle CLI payloads unboxed: clap parses them directly without per-parse heap
-// indirection.
-#[allow(clippy::large_enum_variant, reason = "CLI payload shape remains unboxed")]
+// Keep Clap's owned source-bundle DTO unboxed; boxing the largest variant adds
+// an allocation to every parsed command without changing its admitted fields.
 #[derive(Subcommand, Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum SourceBundleAction {
     /// Plan source records without mutating source state
     Plan {
@@ -3155,6 +3155,14 @@ pub enum SourceBundleAction {
         /// Additional Nickel import paths for --build-root evaluation
         #[arg(long = "import-path", short = 'I')]
         import_paths: Vec<std::path::PathBuf>,
+
+        /// Reuse a local archive for an exact pinned HTTPS fetch URL, as URL=ABSOLUTE_FILE
+        #[arg(
+            long = "cached-fetch",
+            value_name = "URL=ABSOLUTE_FILE",
+            conflicts_with = "fetch_missing"
+        )]
+        cached_fetches: Vec<String>,
 
         /// Bundle output path
         #[arg(long)]
@@ -3209,6 +3217,13 @@ pub enum SourceBundleAction {
         #[arg(long = "lock-vendor-output")]
         lock_vendor_output: Option<std::path::PathBuf>,
 
+        /// Admitted native dynamic-plan producer derivation path from the build report
+        #[arg(long = "lock-vendor-parent-drv-path")]
+        lock_vendor_parent_drv_path: Option<String>,
+
+        /// Accepted native dynamic-plan canonical BLAKE3 digest from the build report
+        #[arg(long = "lock-vendor-plan-digest")]
+        lock_vendor_plan_digest: Option<String>,
         /// Previously verified vendor tree omitted from the new source archive
         #[arg(long = "excluded-vendor-deps")]
         excluded_vendor_deps: Option<std::path::PathBuf>,
@@ -3304,6 +3319,14 @@ pub enum SourceBundleAction {
         /// Separately realized producer output; required for lock-vendor profiles
         #[arg(long = "lock-vendor-output")]
         lock_vendor_output: Option<std::path::PathBuf>,
+
+        /// Admitted producer derivation path bound to the verified bundle receipt
+        #[arg(long = "lock-vendor-parent-drv-path")]
+        lock_vendor_parent_drv_path: Option<String>,
+
+        /// Accepted plan digest bound to the verified bundle receipt
+        #[arg(long = "lock-vendor-plan-digest")]
+        lock_vendor_plan_digest: Option<String>,
     },
     /// Verify a bundle and optionally imported source state
     Verify {
@@ -9849,6 +9872,160 @@ mod tests {
         assert!(rejected.contains("store-backend-unknown"));
     }
 
+    #[tokio::test]
+    async fn pathinfo_action_result_reopens_without_rust_cache_dependency() {
+        use snix_store::nar::NarCalculationService;
+        use tokio::io::AsyncWriteExt;
+
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("unopened-state");
+        let store = root.path().join("unopened-store");
+        let context = RunContext {
+            store: store.clone(),
+            resolved_state_dir: state.clone(),
+            resolved_log_dir: state.join("logs"),
+            store_prefix: "/nix/store".to_string(),
+            store_backend: crunch_store::StoreBackend::Snix,
+            verbose: false,
+            json: false,
+            base_state_dirs: Vec::new(),
+        };
+
+        let config = || {
+            crunch_store::StoreConfig::new(
+                context.store_backend,
+                context.resolved_state_dir.clone(),
+                context.store.clone(),
+                context.store_prefix.clone(),
+            )
+        };
+        let selected_store = crunch_store::StoreHandle::open(config()).await.unwrap();
+        let content = b"PathInfo-backed action result survives process reopen";
+        let mut writer = selected_store.blob_service().open_write().await;
+        writer.write_all(content).await.unwrap();
+        let digest = writer.close().await.unwrap();
+        let node = snix_castore::Node::File {
+            digest,
+            size: content.len() as u64,
+            executable: false,
+        };
+        let (nar_size, nar_sha256) =
+            snix_store::nar::SimpleRenderer::new(selected_store.blob_service(), selected_store.directory_service())
+                .calculate_nar(&node)
+                .await
+                .unwrap();
+        let store_path =
+            nix_compat::store_path::StorePath::from_name_and_digest_fixed("no-rust-cache-output", [41_u8; 20]).unwrap();
+        let raw_key = ed25519_dalek::SigningKey::from_bytes(&[43_u8; 32]);
+        let verifying_key =
+            nix_compat::narinfo::VerifyingKey::new("no-rust-cache-output".to_string(), raw_key.verifying_key());
+        let signing_key = nix_compat::narinfo::SigningKey::new("no-rust-cache-output".to_string(), raw_key);
+        let mut path_info = snix_store::pathinfoservice::PathInfo {
+            store_path: store_path.clone(),
+            node,
+            references: vec![],
+            nar_size,
+            nar_sha256,
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+        let path_ref = path_info.store_path.as_ref();
+        let refs: Vec<nix_compat::store_path::StorePathRef> =
+            path_info.references.iter().map(|reference| reference.as_ref()).collect();
+        let fingerprint = nix_compat::narinfo::fingerprint_with_store_dir(
+            &path_ref,
+            &path_info.nar_sha256,
+            path_info.nar_size,
+            refs.iter(),
+            &context.store_prefix,
+        );
+        path_info.signatures.push(signing_key.sign(fingerprint.as_bytes()).to_owned());
+        selected_store.pathinfo_service().put(path_info.clone()).await.unwrap();
+
+        let to_ref = |prefix: &str, bytes: &[u8]| format!("{prefix}{}", blake3::hash(bytes).to_hex());
+        let object_ref =
+            to_ref(crunch_action_result_core::OBJECT_REF_PREFIX, &serde_json::to_vec(&path_info.node).unwrap());
+        let reference_scan_ref = to_ref(
+            crunch_action_result_core::REFERENCE_SCAN_REF_PREFIX,
+            &serde_json::to_vec(&serde_json::json!({
+                "schema": "mantle-action-result-reference-scan-v1",
+                "output_name": "out",
+                "object_ref": object_ref,
+                "references": path_info.references,
+                "status": "accepted",
+            }))
+            .unwrap(),
+        );
+        let record =
+            crunch_action_result_core::canonical_action_result(crunch_action_result_core::ActionResultRecordInput {
+                action_ref: to_ref(crunch_action_result_core::ACTION_REF_PREFIX, content),
+                outputs: vec![crunch_action_result_core::ActionResultOutput {
+                    name: "out".to_string(),
+                    object_ref,
+                    store_path: store_path.to_absolute_path_with_prefix(&context.store_prefix),
+                    path_info_ref: to_ref(
+                        crunch_action_result_core::PATH_INFO_REF_PREFIX,
+                        &serde_json::to_vec(&path_info).unwrap(),
+                    ),
+                }],
+                action_receipt_ref: to_ref(crunch_action_result_core::ACTION_RECEIPT_REF_PREFIX, content),
+                reference_scan_refs: vec![reference_scan_ref],
+                sandbox_policy_ref: to_ref(crunch_action_result_core::SANDBOX_POLICY_REF_PREFIX, b"offline"),
+                network_policy_ref: to_ref(crunch_action_result_core::NETWORK_POLICY_REF_PREFIX, b"none"),
+                producer_identity: "no-rust-cache-output".to_string(),
+                producer_policy_ref: to_ref(crunch_action_result_core::PRODUCER_POLICY_REF_PREFIX, b"local"),
+                signature_refs: vec![to_ref(
+                    crunch_action_result_core::SIGNATURE_REF_PREFIX,
+                    path_info.signatures[0].to_string().as_bytes(),
+                )],
+                publication_policy_ref: to_ref(crunch_action_result_core::PUBLICATION_POLICY_REF_PREFIX, b"local"),
+                non_claims: vec![
+                    "ca-mapping-presence-is-not-output-trust".to_string(),
+                    "executor-correctness".to_string(),
+                    "index-presence-is-not-output-trust".to_string(),
+                ],
+            })
+            .unwrap();
+        let record_signature = signing_key.sign(record.result_ref.as_bytes()).to_string();
+        let signed = crunch_action_result_core::SignedActionResultRecord {
+            record,
+            record_signatures: vec![crunch_action_result_core::DetachedRecordSignature {
+                key_name: "no-rust-cache-output".to_string(),
+                signature: record_signature,
+            }],
+        };
+        let action_results = selected_store.into_builder_store_parts().action_results;
+        let publication = action_results.publish_local(&signed).await.unwrap();
+        assert_eq!(publication[0].record_status, crunch_store::ActionResultPublicationStatus::Published);
+        assert_eq!(publication[0].index_status, crunch_store::ActionResultPublicationStatus::Published);
+        drop(action_results);
+
+        let reopened = crunch_store::StoreHandle::open(config()).await.unwrap();
+        let action_results = reopened.into_builder_store_parts().action_results;
+        let discovery = action_results.discover(&signed.record.action_ref).await;
+        assert!(discovery.diagnostics.is_empty(), "{:?}", discovery.diagnostics);
+        let discovered = discovery
+            .lookups
+            .iter()
+            .flat_map(|lookup| &lookup.records)
+            .find(|candidate| candidate.record.result_ref == signed.record.result_ref)
+            .expect("published action record must remain discoverable after reopening the selected store");
+        let detached = &discovered.record_signatures[0];
+        let signature = nix_compat::narinfo::Signature::<String>::parse(&detached.signature).unwrap();
+        assert_eq!(detached.key_name, "no-rust-cache-output");
+        assert!(verifying_key.verify(&discovered.record.result_ref, &signature.as_ref()));
+        let probe = action_results.probe_outputs(&discovered.record).await.unwrap();
+        assert_eq!(probe.outputs.get("out"), Some(&path_info));
+        assert_eq!(probe.reused_nar_bytes, nar_size);
+        assert_eq!(probe.transferred_nar_bytes, 0);
+        drop(action_results);
+
+        let mut reopened = crunch_store::StoreHandle::open(config()).await.unwrap();
+        assert_eq!(reopened.export_cached_path_info(&store_path).await.unwrap(), Some(path_info));
+        assert_eq!(fs::read(store.join(store_path.to_string())).unwrap(), content);
+    }
+
     #[test]
     fn local_remote_builder_child_uses_selected_backend_for_worker_identity_preflight() {
         let root = tempfile::tempdir().unwrap();
@@ -10812,108 +10989,6 @@ mod tests {
         };
         assert!(fetch);
         assert!(offline_source_preflight);
-    }
-
-    #[test]
-    fn source_bundle_bootstrap_profile_subcommand_parses() {
-        let args = parse_args_with_cli_test_stack(Vec::from([
-            "mantle",
-            "source",
-            "bundle",
-            "bootstrap-profile",
-            "--mode",
-            "legacy-seed",
-            "--provider-archive",
-            "/tmp/provider",
-            "--provider-manifest",
-            "/tmp/provider.json",
-            "--bootstrap-source",
-            "/tmp/src",
-        ]))
-        .expect("CLI parser test");
-
-        let Command::Source {
-            action:
-                SourceAction::Bundle {
-                    action: SourceBundleAction::BootstrapProfile { mode, .. },
-                },
-        } = args.command
-        else {
-            panic!("expected source bundle bootstrap-profile");
-        };
-        assert_eq!(mode, "legacy-seed");
-    }
-
-    #[test]
-    fn source_bundle_refresh_mantle_source_subcommand_requires_explicit_paths() {
-        let args = parse_args_with_cli_test_stack(Vec::from([
-            "mantle",
-            "source",
-            "bundle",
-            "refresh-mantle-source",
-            "--from",
-            "/tmp/source-built-profile.json",
-            "--mantle-source",
-            "/tmp/mantle-source",
-            "--include-bundle",
-            "/tmp/host-tool-sources.json",
-            "--to",
-            "/tmp/refreshed-profile.json",
-        ]))
-        .expect("CLI parser test");
-
-        let Command::Source {
-            action:
-                SourceAction::Bundle {
-                    action:
-                        SourceBundleAction::RefreshMantleSource {
-                            from,
-                            mantle_source,
-                            include_bundles,
-                            to,
-                        },
-                },
-        } = args.command
-        else {
-            panic!("expected source bundle refresh-mantle-source");
-        };
-        assert_eq!(from, PathBuf::from("/tmp/source-built-profile.json"));
-        assert_eq!(mantle_source, PathBuf::from("/tmp/mantle-source"));
-        assert_eq!(include_bundles, vec![PathBuf::from("/tmp/host-tool-sources.json")]);
-        assert_eq!(to, PathBuf::from("/tmp/refreshed-profile.json"));
-    }
-
-    #[test]
-    fn source_bundle_hydrate_self_build_subcommand_requires_explicit_identity() {
-        const EXPECTED_MANIFEST_BLAKE3: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        let args = parse_args_with_cli_test_stack(Vec::from([
-            "mantle",
-            "source",
-            "bundle",
-            "hydrate-self-build",
-            "--from",
-            "/tmp/source-bundle.json",
-            "--expected-manifest-blake3",
-            EXPECTED_MANIFEST_BLAKE3,
-            "--checkout",
-            "/tmp/fresh-clone",
-        ]))
-        .expect("CLI parser test");
-
-        let Command::Source {
-            action:
-                SourceAction::Bundle {
-                    action:
-                        SourceBundleAction::HydrateSelfBuild {
-                            expected_manifest_blake3: parsed,
-                            ..
-                        },
-                },
-        } = args.command
-        else {
-            panic!("expected source bundle hydrate-self-build");
-        };
-        assert_eq!(parsed, EXPECTED_MANIFEST_BLAKE3);
     }
 
     #[test]

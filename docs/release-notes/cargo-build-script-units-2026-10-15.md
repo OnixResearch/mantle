@@ -14,12 +14,16 @@ labels remain stable; actual input-addressed derivation/output paths change.
 See the T4.1/T4.2 exact-byte manifests and receipts under
 `.cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/`.
 
-The matrix distinguishes this narrow `declared-native-static-link` surface
-from the original full `native-link-metadata` group, which remains blocked:
-pkg-config execution, C compilation inside a build script, and full links
-metadata consumption are not established by a prebuilt static archive.
-Unexercised offline Cargo/no-oracle surfaces no longer cite the retired
-source scanner or fake-Cargo output as compilation/blocker evidence.
+At this retained fixture's source subject, the matrix distinguished its narrow
+`declared-native-static-link` surface from the broader native group: pkg-config
+execution, C compilation inside a build script, and links metadata consumption
+are not established by a prebuilt static archive. Reconciliation also retains
+the independent reviewed links/pkg-config replay against Mantle-built libbz2;
+the current `native-link-metadata` row is scoped to that declared prebuilt
+provider, not C compilation inside `build.rs`. This does not broaden the
+original app42 receipts or validate the reconciled source. Unexercised offline
+Cargo/no-oracle surfaces do not cite the retired scanner or fake-Cargo output
+as compilation/blocker evidence.
 
 Supported `unit_plan` rows without a named fixture now fail the production
 Nickel row contract with the row ID in the error. The drift rail mutates the

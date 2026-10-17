@@ -41,6 +41,15 @@ Notes:
 - Vendored workspace-member test binaries stay on their focused rails because
   some require host capabilities such as a usable FUSE mount. Their libraries
   still compile through first-party consumers.
+- `vendor/fuse-backend-rs/` is the local Cargo patch of the crates.io
+  `fuse-backend-rs` 0.12.0 source. Mantle's local edit to
+  `src/transport/fusedev/linux_session.rs` prevents mount and unmount helper
+  stderr from bypassing the CLI's JSON report; a nonzero helper exit returns
+  `SessionFailure`, including auto-unmount startup that returns no FUSE fd.
+  Run
+  `cargo test -p fuse-backend-rs --lib test_fusermount_failure_stderr_stays_in_helper`
+  to check mount, auto-unmount, and unmount failures with a fake executable,
+  without claiming a working host FUSE mount or pristine upstream source.
 - The wrapper serializes libtest cases so process-global environment, lock,
   and resource-pressure fixtures cannot interfere across otherwise unrelated
   tests. Tests that own concurrency still exercise it internally.
@@ -190,6 +199,15 @@ mantle source bundle export --build-root ./package.ncl --import-path lib --to so
 mantle source bundle verify --from source-bundle.json
 ```
 
+If the root declares pinned flat fixed-output HTTPS fetches and the exact
+archives are already cached locally, repeat `--cached-fetch
+'<pinned HTTPS URL>=<absolute local archive file>'` on the export command for
+each archive. The URL must match the root's original fetch declaration exactly;
+export verifies the captured archive bytes against its declared fixed-output
+hash and keeps that URL in the bundle. This does not download anything, cannot
+be combined with `--fetch-missing`, and proves source availability and identity
+only—not tool binary provenance or a successful downstream build.
+
 Copy `source-bundle.json` to the offline host, then import and pin it into the
 selected state directory:
 
@@ -331,10 +349,16 @@ python3 scripts/vendor-source-bundle.py \
 The sidecar JSON maps **each exact `Cargo.lock` Git source** under `"git"` to
 `"git_db"` and `"checkout"` paths relative to `--git-cache`, plus an explicit
 absolute `"git_tree"` path to its independently fetched pristine source.
-Exporter admission checks every selected Git source against the reviewed
-table, the Git commit and checkout origin/revision, every fetched tree's
-reviewed NAR SHA-256, and pinned Git blobs/modes (including checked-in CRLF
-attributes).
+Exporter admission binds checkout `HEAD` to the locked revision and checkout
+`origin` to the declared **local Cargo Git object database** (`file://`), not
+to the upstream transport URL. The reviewed selected table separately binds
+the upstream fetch URL, commit, and fetched tree NAR SHA-256; pinned Git
+blobs/modes (including checked-in CRLF attributes) must match the fetched
+tree. A forged checkout remote is denied even at the correct revision.
+
+Relative Git checkout symlinks remain in the source archive only when they
+resolve inside that pinned checkout; absolute, escaping and hard links are
+rejected before extraction.
 The archive embeds the bounded Git object databases and checkouts and a
 per-source `git-transports.json` with reviewed fetch URL, revision and NAR
 hash; it does **not** embed the full global table, the fetched source-tree
@@ -344,22 +368,34 @@ offline pinned checkout for an unavailable Git remote does not prove that
 remote is reachable. Selected Git fetches and registry archives remain
 separate fixed-output derivation inputs, not aliases for these sidecars.
 
+The full-lock replay takes an explicit `--registry-cache` directory of
+`.crate` archives. Each present file must be a regular file matching its
+`Cargo.lock` SHA-256; a corrupt or symlinked cache entry is denied. A missing
+entry instead becomes a separate `mantle.fetchurl` for
+`https://static.crates.io/crates/<name>/<name>-<version>.crate`, with that
+same locked fixed-output checksum. Neither an HTTP response nor a host Cargo
+cache entry substitutes for the resulting signed store output.
 ```bash
 mantle --nix-compat source bundle bootstrap-profile \
   --mode fresh-clone-lock-vendor-inputs \
   --provider-archive ./unpacked-legacy-provider \
   --provider-manifest ./provider.json \
   --mantle-source ./mantle-src \
-  --lock-vendor-producer /nix/store/<producer>/bin/lock-vendor-producer \
+  --lock-vendor-producer /nix/store/<producer> \
   --lock-vendor-selected-table /nix/store/<selected-table> \
   --lock-vendor-output /nix/store/<completed-vendor> \
+  --lock-vendor-parent-drv-path /nix/store/<admitted-producer>.drv \
+  --lock-vendor-plan-digest <accepted-canonical-plan-blake3> \
   --excluded-vendor-deps ./previously-verified-vendor-deps \
   --to lock-vendor-inputs.json
 ```
 
 Use the same logical store prefix as the signed producer output PathInfo;
-`--nix-compat` above binds `/nix/store`. A physical export directory under
-`/tmp` is only a carrier for that signed output, not a new logical store path.
+`--nix-compat` above binds `/nix/store`. Supply the parent derivation path and
+canonical digest from the **accepted native plan and bound consumer output**
+in the build report, not from caller-provided metadata alone. A physical export
+directory under `/tmp` is only a carrier for that signed output, not a new
+logical store path.
 
 The excluded tree and new producer output must have the same bounded content
 and bytes and independently match every locked package/checksum. The profile
@@ -371,6 +407,25 @@ store-output trust, compiler correctness, or proof that the producer ran. Send
 the signed output alongside the source bundle and publish the profile's
 `manifest_blake3` over an independent authenticated channel.
 
+For a full-lock acceptance run, use the checked-in
+[`scripts/lock-vendor-replay/run.sh`](../scripts/lock-vendor-replay/run.sh)
+from the repository's Nix development shell. Pass `--mode workspace`, a built
+Mantle `--cli` under this replay's isolated rust-efficiency target directory,
+a fresh `--scratch` and a unique `--publisher-name` under an isolated
+`--store-root`, and explicit `--index`, `--git-cache`, `--git-trees`,
+`--registry-cache`, `--excluded-vendor`, and Nix-store `--b3sum` inputs. The
+replay records its accepted native plan, signed fetch and assembler outputs,
+fresh-checkout hydration, and failed mismatch controls in `report.json` under
+the scratch directory; an existing scratch or publisher store is refused.
+Construct the excluded comparison tree independently with
+[`scripts/vendor-lock-oracle.py`](../scripts/vendor-lock-oracle.py): it checks
+every supplied cached archive against the **current** `Cargo.lock`, requires
+the one missing archive from a separately signed store output with that exact
+lock checksum, runs locked offline `cargo vendor`, applies the repository's
+reviewed Casita patch, and checks the full package inventory. Do not compare
+against an older vendor tree whose lock checksums have drifted. A matching
+vendor NAR digest is content parity for that lock and patch, not a claim of
+general Cargo equivalence, release readiness, or a source-built Mantle binary.
 On a fresh checkout without `vendor-deps/`, provide the separately realized
 output explicitly; no command substitutes a host Cargo cache or network:
 
@@ -380,6 +435,8 @@ mantle --nix-compat --json --state-dir ./offline-state source bundle hydrate-sel
   --expected-manifest-blake3 <manifest-blake3> \
   --checkout . \
   --lock-vendor-output /nix/store/<completed-vendor> \
+  --lock-vendor-parent-drv-path /nix/store/<admitted-producer>.drv \
+  --lock-vendor-plan-digest <accepted-canonical-plan-blake3> \
   > self-build-source-hydration.json
 
 empty_cargo_home="$(mktemp -d)"
@@ -646,8 +703,9 @@ removed. Unexercised offline/no-oracle surfaces are explicitly out of scope;
 real normal-planner fixtures must not be relabelled as no-oracle evidence.
 Separately retained signed `unit_plan` receipts support the bounded executed
 build-script/proc-macro fixture and declared static native-provider linking.
-The full links/pkg-config/native-C group remains blocked without matching
-execution fixtures. This is not full Cargo compatibility.
+The separate reviewed links/pkg-config cohort covers declared prebuilt
+providers, not C compilation inside `build.rs`. Both cohorts retain their own
+receipt subjects; neither is a new merged-source or full Cargo claim.
 
 Structured JSON reports include `cargo_build_evidence[]` when the output
 contains `share/mantle/offline-cargo-build.json`. Current v2 evidence is
@@ -743,6 +801,13 @@ outputs; a declared static verifier consumes the bound app unit root. Ordinary
 `mantle build .#name` remains the project-build path, while `mantle rust-plan`
 is separate native planning evidence, not this Cargo-unit execution lane.
 
+For the reviewed Linux cohort, [`scripts/rust-unit-plan-replay/cu-replay.sh`](../scripts/rust-unit-plan-replay/cu-replay.sh)
+creates a fresh signed input cache and separate publisher/client stores, runs
+the unchanged, package-edit, outside-package-edit, wrong-root, and same-input
+offline Cargo cases, and preserves per-run JSON reports and app stdout/stderr.
+`CU_B` and `CU_STORE_NAMESPACE` select initially absent dedicated scratch and
+store paths. Its Nix toolchain and historical fixture paths are pinned to the
+reviewed cohort; do not run it as a host-independent installer.
 Before running from the repository root, review and provision the example's
 **eight exact static input roots** (the producer's seven declared inputs plus
 the static app verifier) and their transitive closure in the local Nix store.
@@ -802,6 +867,14 @@ sources, so it is outside this bounded lane. Do not infer full Cargo or LLVM
 correctness, compiler correctness, release reproducibility, or bootstrap
 correctness from this example.
 
+The separately retained reviewed two-package replay reported unchanged reuse
+of both Rust units, app-only rebuild after a source edit, and zero Rust-unit
+execution for an unrelated README edit. Its fresh signed client imported six
+PathInfos and rebuilt the static verifier while reusing both Rust units;
+cached counts differ depending on whether the signed producer is listed.
+These observations belong to that replay, not the recovered client above,
+and do not imply byte-identical executables or a zero-build fresh client.
+
 The producer requests RustPlan's exact Cargo-indexed compiler derivations with
 `MANTLE_UNIT_PLAN_CARGO_INDEXED_DERIVATIONS=1`; this opt-in JSON field keeps
 distinct feature and host-dependency units instead of reusing collapsed native
@@ -834,16 +907,21 @@ declare the run output and consume its `rustc-cfg`, `rustc-check-cfg`,
 to direct dependent script runs as `DEP_<LINKS>_<KEY>`; target facts come from
 the declared compiler, not the process host. The script runner receives each
 Cargo unit's own `PROFILE`, `OPT_LEVEL`, and `DEBUG` (including build-override
-profiles), rather than a hard-coded debug profile. Unknown directives, emitted
-`cargo:error`, nonzero script exits, and undeclared link paths fail closed.
+profiles), rather than a hard-coded debug profile. Unknown current-syntax
+directives, emitted `cargo::error`, nonzero script exits, conflicting links
+keys, and undeclared link paths fail closed. Legacy `cargo:KEY=VALUE` keys
+outside reserved Rust/rerun names supply links metadata.
 The supported vocabulary is `rustc-cfg`, `rustc-check-cfg`, `rustc-env`,
 `rustc-link-lib`, `rustc-link-search`, `rustc-link-arg` and scoped
 `rustc-link-arg-*`, `rustc-flags` restricted to `-l`/`-L`, `metadata`,
-`warning`, and `rerun-if-{changed,env-changed}`. Ordinary stdout is ignored.
-The helper drains stdout (at most 4 MiB) and stderr (at most 1 MiB)
-concurrently, killing and reaping a script that exceeds either bound before
-any `flags` output is published. Argument and `rerun-if-*` files in `flags`
-store one directive component per newline; `flags.json` is the typed record.
+`warning`, and `rerun-if-{changed,env-changed}`. Both `cargo:` and `cargo::`
+introduce compile directives; explicit metadata uses `cargo::metadata=KEY=VALUE`.
+Ordinary stdout is ignored. Rerun directives are recorded, not identity or
+scheduling controls. The helper drains stdout (at most 8 MiB and 65,536
+lines) and stderr (at most 1 MiB) concurrently, killing and reaping a script
+that exceeds either stream bound before publishing flags. Directive files
+are `args-immediate`, `args-transitive`, `env`, `links`, `rerun`, and
+`warnings`; downstream units consume them as declared direct inputs.
 
 Rustc response files contain one literal argument per line, not shell-quoted
 tokens. The helper writes validated arguments verbatim: for example, `--cfg`
@@ -870,9 +948,10 @@ compare resolved derivation/input/output bindings and actual build/cache events,
 not labels alone. A source fixture or ordinary offline Cargo reference run is
 not a Mantle sandbox or selective-rebuild result.
 
-The bounded build-script/proc-macro/declared-static-link fixture now has
-retained same-client execution evidence; the broad links/pkg-config/native-C
-matrix row remains blocked. Admission for every new cohort is still mandatory.
+The bounded build-script/proc-macro/declared-static-link fixture has retained
+same-client execution evidence. The separate reviewed links/pkg-config
+cohort below extends that evidence to prebuilt native providers, not C
+compilation inside `build.rs`. Admission for every new cohort is mandatory.
 Keep the prior client store and state when an import is interrupted: signed
 PathInfo by itself is not evidence
 that the physical NAR was fully exported. A resumed `store pull` checks the
@@ -933,11 +1012,41 @@ The fixture's native script reads only `NATIVE_ANSWER_ROOT`, checks a prebuilt
 `lib/libnative_answer.a`, and emits static `rustc-link-search`/`rustc-link-lib`.
 It does not invoke pkg-config, compile C inside `build.rs`, or emit links
 metadata consumed through `DEP_*`. Its narrow supported matrix row is
-`declared-native-static-link`; the original full `native-link-metadata` group
-stays blocked. The helper's separate generated-source/cfg/env consumer
-executes and observes 84; separate pure/helper links-propagation receipts do
-not prove pkg-config execution. Neither fixture accepts full Cargo support,
-global current-source correctness, baseline/archive or release eligibility.
+`declared-native-static-link`. The helper's separate generated-source/cfg/env
+consumer executes and observes 84; pure/helper links-propagation receipts do
+not prove pkg-config execution. The separate reviewed replay below supplies
+that evidence. Neither fixture accepts full Cargo support, global
+current-source correctness, baseline/archive or release eligibility.
+
+The separately retained reviewed Linux cohort is reproducible through
+[`scripts/rust-unit-plan-build-script-replay/replay.sh`](../scripts/rust-unit-plan-build-script-replay/replay.sh).
+It records a signed-client registry graph with `proc_macro2`, `serde_derive`,
+and `libc`, six script-run units among 23 accepted units, plus links metadata
+and `bzip2-sys` against a separately Mantle-built `libbz2`. Its actual app
+stdout is compared with locked offline Cargo, with native-role changes and
+denied host/network/script controls retained separately. `RCBS_B` and
+`RCBS_STORE` must name initially absent paths; the immutable tool/source
+fixtures are host-specific and require review before reuse. This is not a
+request to replay that historical campaign for ordinary merge validation.
+
+The `native-link-metadata` matrix row covers this declared links/pkg-config
+cohort, while `declared-native-static-link` retains the app42/provider-change
+scope. Neither claims native C compilation inside `build.rs`, which remains
+unexercised. The Git-source row stays blocked, and native-rust-plan/offline
+Cargo lanes retain their separate statuses. These retained receipts are not
+new validation of the reconciled source or archive/release acceptance.
+
+For `bzip2-sys@0.1.13+1.0.8`, the exact Cargo package ID includes its source
+and version metadata. Declare separate Mantle-built `bzip2` and signed
+`pkg-config` roles, `PKG_CONFIG_PATH="{{role:bzip2}}/lib/pkgconfig"`, and
+`path=["{{role:pkg-config}}/bin"]` in both Nickel and the normalized producer
+config. Removing the native declaration must deny access despite the
+library remaining physically available. Parent-path escapes fail closed;
+the script has no ambient network, host files, or Cargo execution authority.
+
+For a failed dependent root, inspect its saved build log's
+`origin <drv path>:` line for the failed unit's actual cause; the root's
+`dependency ... failed` message alone is not the script error.
 
 In the preserved-client diagnostic of 2026-10-13, the previously admitted 59
 signed roots, the Mantle-built native library, and the signed native producer's
@@ -1264,6 +1373,15 @@ mantle \
 The current state directory is the only writable overlay.
 A selected base read does not backfill overlay PathInfo, directory, or blob state.
 A higher invalid layer blocks lower-layer fallback.
+
+Signature verification uses the selected logical store prefix for the output
+and every reference, not the physical export directory or an implicit
+`/nix/store`. For example, a `/mantle/store` base must carry signatures made
+for `/mantle/store`, even when a trusted key also signed identical NAR facts
+under `/nix/store`; the latter signature is not authority for the selected
+prefix. This rule applies to direct and composed reads and public layered
+listings. The low-level no-backfill PathInfo service's near-only listing is
+not a complete base inventory; use the public layered listing for enumeration.
 
 The reports identify `overlay`, `base[1]`, `base[2]`, and later declared bases.
 They also include descriptor, generation, trust-policy, signer, shadow, and no-backfill facts.

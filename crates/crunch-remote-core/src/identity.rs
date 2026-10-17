@@ -56,18 +56,18 @@ where
     C: IntoIterator<Item = &'a str>,
 {
     let mut hasher = blake3::Hasher::new();
-    hash_labeled_str(&mut hasher, "kind", BUILD_KEY_DOMAIN);
-    hash_labeled_str(&mut hasher, "store-prefix", facts.store_prefix);
+    hash_labeled_str(&mut hasher, ("kind", BUILD_KEY_DOMAIN));
+    hash_labeled_str(&mut hasher, ("store-prefix", facts.store_prefix));
     match facts.source {
         BuildKeySource::Action {
             action_id,
             schema,
             spec_digest_blake3,
         } => {
-            hash_labeled_str(&mut hasher, "source-kind", "action");
-            hash_labeled_str(&mut hasher, "action-id", action_id);
-            hash_labeled_str(&mut hasher, "schema", schema);
-            hash_labeled_str(&mut hasher, "spec-digest", spec_digest_blake3);
+            hash_labeled_str(&mut hasher, ("source-kind", "action"));
+            hash_labeled_str(&mut hasher, ("action-id", action_id));
+            hash_labeled_str(&mut hasher, ("schema", schema));
+            hash_labeled_str(&mut hasher, ("spec-digest", spec_digest_blake3));
         }
         BuildKeySource::Derivation {
             declared_drv_path,
@@ -75,100 +75,124 @@ where
             drv_name,
             drv_digest_blake3,
         } => {
-            hash_labeled_str(&mut hasher, "source-kind", "derivation");
-            hash_labeled_str(&mut hasher, "declared-drv-path", declared_drv_path);
-            hash_labeled_str(&mut hasher, "computed-drv-path", computed_drv_path);
-            hash_labeled_str(&mut hasher, "drv-name", drv_name);
-            hash_labeled_str(&mut hasher, "drv-digest", drv_digest_blake3);
+            hash_labeled_str(&mut hasher, ("source-kind", "derivation"));
+            hash_labeled_str(&mut hasher, ("declared-drv-path", declared_drv_path));
+            hash_labeled_str(&mut hasher, ("computed-drv-path", computed_drv_path));
+            hash_labeled_str(&mut hasher, ("drv-name", drv_name));
+            hash_labeled_str(&mut hasher, ("drv-digest", drv_digest_blake3));
         }
     }
-    hash_labeled_str(&mut hasher, "system", facts.system);
+    hash_labeled_str(&mut hasher, ("system", facts.system));
     for arg in facts.command_args {
-        hash_labeled_str(&mut hasher, "command-arg", arg);
+        hash_labeled_str(&mut hasher, ("command-arg", arg));
     }
     for (name, value) in facts.command_env {
-        hash_labeled_str(&mut hasher, "env-name", name);
-        hash_labeled_str(&mut hasher, "env-value", value);
+        hash_labeled_str(&mut hasher, ("env-name", name));
+        hash_labeled_str(&mut hasher, ("env-value", value));
     }
     for input_ref in facts.input_refs {
-        hash_labeled_str(&mut hasher, "input-ref", input_ref);
+        hash_labeled_str(&mut hasher, ("input-ref", input_ref));
     }
     for input_ref in facts.source_input_refs {
-        hash_labeled_str(&mut hasher, "source-input-ref", input_ref);
+        hash_labeled_str(&mut hasher, ("source-input-ref", input_ref));
     }
     for output in facts.expected_outputs {
-        hash_labeled_str(&mut hasher, "expected-output-name", output.name);
-        hash_labeled_str(&mut hasher, "expected-output-path", output.logical_path.unwrap_or("<content-addressed>"));
+        hash_labeled_str(&mut hasher, ("expected-output-name", output.name));
+        hash_labeled_str(&mut hasher, ("expected-output-path", output.logical_path.unwrap_or("<content-addressed>")));
     }
     if let Some((source_bundle, execution)) = facts.failure_replay {
-        hash_labeled_str(&mut hasher, "failure-replay-source-bundle", source_bundle);
-        hash_labeled_str(&mut hasher, "failure-replay-execution", execution);
+        hash_labeled_str(&mut hasher, ("failure-replay-source-bundle", source_bundle));
+        hash_labeled_str(&mut hasher, ("failure-replay-execution", execution));
     }
-    hash_labeled_str(&mut hasher, "required-system", facts.required_system);
+    hash_labeled_str(&mut hasher, ("required-system", facts.required_system));
     for feature in facts.required_features {
-        hash_labeled_str(&mut hasher, "required-feature", feature);
+        hash_labeled_str(&mut hasher, ("required-feature", feature));
     }
-    hash_labeled_str(&mut hasher, "required-sandbox", facts.required_sandbox_mode);
-    hash_labeled_str(&mut hasher, "required-network", facts.required_network_mode);
+    hash_labeled_str(&mut hasher, ("required-sandbox", facts.required_sandbox_mode));
+    hash_labeled_str(&mut hasher, ("required-network", facts.required_network_mode));
     for class in facts.semantic_accelerator_classes {
-        hash_labeled_str(&mut hasher, "semantic-accelerator-class", class);
+        hash_labeled_str(&mut hasher, ("semantic-accelerator-class", class));
     }
-    hasher.finalize().to_hex().to_string()
+    let digest = hasher.finalize().to_hex().to_string();
+    debug_assert_eq!(digest.len(), 64);
+    debug_assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+    digest
 }
 
-pub fn external_batch_allocation_identity(
-    normalized_build_key: &str,
-    adapter_instance_id: &str,
-    dispatcher_generation: u64,
-    allocation_attempt: u32,
-) -> String {
+#[derive(Debug, Clone, Copy)]
+pub struct ExternalBatchAllocationFacts<'a> {
+    pub normalized_build_key: &'a str,
+    pub adapter_instance_id: &'a str,
+    pub dispatcher_generation: u64,
+    pub allocation_attempt: u32,
+}
+
+pub fn external_batch_allocation_identity(facts: ExternalBatchAllocationFacts<'_>) -> String {
     let mut hasher = blake3::Hasher::new();
-    hash_labeled_str(&mut hasher, "domain", ALLOCATION_DOMAIN);
-    hash_labeled_str(&mut hasher, "normalized-build-key", normalized_build_key);
-    hash_labeled_str(&mut hasher, "adapter-instance", adapter_instance_id);
+    hash_labeled_str(&mut hasher, ("domain", ALLOCATION_DOMAIN));
+    hash_labeled_str(&mut hasher, ("normalized-build-key", facts.normalized_build_key));
+    hash_labeled_str(&mut hasher, ("adapter-instance", facts.adapter_instance_id));
     let mut generation_digits = [0_u8; 20];
-    hash_labeled_bytes(&mut hasher, "dispatcher-generation", decimal(dispatcher_generation, &mut generation_digits));
+    hash_labeled_bytes(
+        &mut hasher,
+        "dispatcher-generation",
+        decimal(facts.dispatcher_generation, &mut generation_digits),
+    );
     let mut attempt_digits = [0_u8; 20];
-    hash_labeled_bytes(&mut hasher, "allocation-attempt", decimal(u64::from(allocation_attempt), &mut attempt_digits));
+    hash_labeled_bytes(
+        &mut hasher,
+        "allocation-attempt",
+        decimal(u64::from(facts.allocation_attempt), &mut attempt_digits),
+    );
     hasher.finalize().to_hex().to_string()
 }
 
-pub fn external_batch_semantic_capability_class<'a>(
-    required_system: &str,
-    required_features: impl IntoIterator<Item = &'a str>,
-    required_sandbox_mode: &str,
-    required_network_mode: &str,
-) -> String {
+pub struct ExternalBatchSemanticCapabilityFacts<'a, F> {
+    pub required_system: &'a str,
+    pub required_features: F,
+    pub required_sandbox_mode: &'a str,
+    pub required_network_mode: &'a str,
+}
+
+pub fn external_batch_semantic_capability_class<'a, F>(facts: ExternalBatchSemanticCapabilityFacts<'a, F>) -> String
+where F: IntoIterator<Item = &'a str> {
     let mut hasher = blake3::Hasher::new();
-    hash_labeled_str(&mut hasher, "system", required_system);
-    for feature in required_features {
-        hash_labeled_str(&mut hasher, "feature", feature);
+    hash_labeled_str(&mut hasher, ("system", facts.required_system));
+    for feature in facts.required_features {
+        hash_labeled_str(&mut hasher, ("feature", feature));
     }
-    hash_labeled_str(&mut hasher, "sandbox", required_sandbox_mode);
-    hash_labeled_str(&mut hasher, "network", required_network_mode);
+    hash_labeled_str(&mut hasher, ("sandbox", facts.required_sandbox_mode));
+    hash_labeled_str(&mut hasher, ("network", facts.required_network_mode));
     hasher.finalize().to_hex().to_string()
 }
 
-pub fn hashed_transfer_artifact_id(domain: &str, identity: &str) -> String {
-    let mut hasher = blake3::Hasher::new();
-    hash_labeled_str(&mut hasher, "domain", domain);
-    hash_labeled_str(&mut hasher, "identity", identity);
-    alloc::format!("{domain}:{}", hasher.finalize().to_hex())
+pub struct TransferArtifactIdentity<'a> {
+    pub domain: &'a str,
+    pub identity: &'a str,
 }
 
-pub fn hashed_output_transfer_artifact_id(domain: &str, output_name: &str, logical_path: &str) -> String {
+pub fn hashed_transfer_artifact_id(facts: TransferArtifactIdentity<'_>) -> String {
     let mut hasher = blake3::Hasher::new();
-    hash_labeled_str(&mut hasher, "domain", domain);
-    let identity_len = output_name
-        .len()
-        .checked_add(1)
-        .and_then(|len| len.checked_add(logical_path.len()))
-        .expect("an in-memory artifact identity cannot exceed usize");
+    hash_labeled_str(&mut hasher, ("domain", facts.domain));
+    hash_labeled_str(&mut hasher, ("identity", facts.identity));
+    alloc::format!("{}:{}", facts.domain, hasher.finalize().to_hex())
+}
+
+pub struct OutputTransferArtifactIdentity<'a> {
+    pub domain: &'a str,
+    pub output_name: &'a str,
+    pub logical_path: &'a str,
+}
+
+pub fn hashed_output_transfer_artifact_id(facts: OutputTransferArtifactIdentity<'_>) -> Option<String> {
+    let mut hasher = blake3::Hasher::new();
+    hash_labeled_str(&mut hasher, ("domain", facts.domain));
+    let identity_len = facts.output_name.len().checked_add(1)?.checked_add(facts.logical_path.len())?;
     hash_labeled_prefix(&mut hasher, "identity", identity_len);
-    hasher.update(output_name.as_bytes());
+    hasher.update(facts.output_name.as_bytes());
     hasher.update(b"\0");
-    hasher.update(logical_path.as_bytes());
-    alloc::format!("{domain}:{}", hasher.finalize().to_hex())
+    hasher.update(facts.logical_path.as_bytes());
+    Some(alloc::format!("{}:{}", facts.domain, hasher.finalize().to_hex()))
 }
 
 pub fn production_input_requested_content_digest<'a>(
@@ -176,15 +200,15 @@ pub fn production_input_requested_content_digest<'a>(
     input_refs: impl IntoIterator<Item = &'a str>,
 ) -> String {
     let mut hasher = blake3::Hasher::new();
-    hash_labeled_str(&mut hasher, "kind", "production-input-transfer");
-    hash_labeled_str(&mut hasher, "request-id", request_id);
+    hash_labeled_str(&mut hasher, ("kind", "production-input-transfer"));
+    hash_labeled_str(&mut hasher, ("request-id", request_id));
     for input_ref in input_refs {
-        hash_labeled_str(&mut hasher, "input-ref", input_ref);
+        hash_labeled_str(&mut hasher, ("input-ref", input_ref));
     }
     hasher.finalize().to_hex().to_string()
 }
 
-fn hash_labeled_str(hasher: &mut blake3::Hasher, label: &str, value: &str) {
+fn hash_labeled_str(hasher: &mut blake3::Hasher, (label, value): (&str, &str)) {
     hash_labeled_bytes(hasher, label, value.as_bytes());
 }
 
@@ -203,9 +227,9 @@ fn hash_labeled_prefix(hasher: &mut blake3::Hasher, label: &str, len: usize) {
 
 fn decimal(mut number: u64, digits: &mut [u8; 20]) -> &[u8] {
     let mut index = digits.len();
-    loop {
+    for _ in 0..digits.len() {
         index -= 1;
-        digits[index] = b'0' + (number % 10) as u8;
+        digits[index] = b'0'.saturating_add((number % 10).to_le_bytes()[0]);
         number /= 10;
         if number == 0 {
             break;
@@ -265,20 +289,53 @@ mod tests {
     fn output_artifact_id_uses_exact_nul_separated_v1_identity_without_intermediate_allocation() {
         let domain = "remote-output-nar-artifact-v1";
         assert_eq!(
-            hashed_output_transfer_artifact_id(domain, "out", "/store/out"),
-            hashed_transfer_artifact_id(domain, "out\0/store/out"),
+            hashed_output_transfer_artifact_id(OutputTransferArtifactIdentity {
+                domain,
+                output_name: "out",
+                logical_path: "/store/out"
+            }),
+            Some(hashed_transfer_artifact_id(TransferArtifactIdentity {
+                domain,
+                identity: "out\0/store/out"
+            })),
         );
         assert_ne!(
-            hashed_output_transfer_artifact_id(domain, "out", "/store/out"),
-            hashed_output_transfer_artifact_id(domain, "out/", "store/out"),
+            hashed_output_transfer_artifact_id(OutputTransferArtifactIdentity {
+                domain,
+                output_name: "out",
+                logical_path: "/store/out"
+            }),
+            hashed_output_transfer_artifact_id(OutputTransferArtifactIdentity {
+                domain,
+                output_name: "out/",
+                logical_path: "store/out"
+            }),
         );
     }
 
     #[test]
     fn external_allocation_retries_are_distinct_but_reproducible() {
-        let first = external_batch_allocation_identity("key", "adapter", 9, 1);
-        assert_eq!(first, external_batch_allocation_identity("key", "adapter", 9, 1));
-        assert_ne!(first, external_batch_allocation_identity("key", "adapter", 9, 2));
-        assert_ne!(first, external_batch_allocation_identity("key", "adapter", 10, 1));
+        let facts = ExternalBatchAllocationFacts {
+            normalized_build_key: "key",
+            adapter_instance_id: "adapter",
+            dispatcher_generation: 9,
+            allocation_attempt: 1,
+        };
+        let first = external_batch_allocation_identity(facts);
+        assert_eq!(first, external_batch_allocation_identity(facts));
+        assert_ne!(
+            first,
+            external_batch_allocation_identity(ExternalBatchAllocationFacts {
+                allocation_attempt: 2,
+                ..facts
+            })
+        );
+        assert_ne!(
+            first,
+            external_batch_allocation_identity(ExternalBatchAllocationFacts {
+                dispatcher_generation: 10,
+                ..facts
+            })
+        );
     }
 }

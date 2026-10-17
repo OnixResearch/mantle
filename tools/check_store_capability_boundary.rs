@@ -16,12 +16,15 @@ walkdir = "2"
 //! Production first-party sources outside the store shell must not reach raw
 //! Snix services through the compatibility `StoreHandle` accessors, must not
 //! construct a `StoreHandle` outside declared composition roots, and must not
-//! touch writable store bookkeeping outside declared owners. Test modules and
-//! fixtures are excluded; declared adapters are recorded in ADAPTER_ALLOWLIST.
+//! touch writable store bookkeeping outside declared owners. Casita types and
+//! mutation sessions belong only to the store shell, including when another
+//! crate is a declared Snix adapter. Test modules and fixtures are excluded;
+//! declared adapters are recorded in ADAPTER_ALLOWLIST.
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 const MAX_FILES_SCANNED: usize = 20_000;
 const MAX_FILE_BYTES: u64 = 4 * 1024 * 1024;
@@ -34,30 +37,40 @@ const RAW_SERVICE_ACCESSORS: [&str; 4] = [
     ".remote_pathinfo()",
 ];
 
-/// Vendor types and root mutation sessions must remain inside crunch-store,
-/// including when a source file is otherwise a declared Snix adapter.
-const CASITA_TYPE_REFERENCES: [&str; 3] = ["casita::", "LocalRepository", "UnrootedFilesystemImport"];
+/// Root mutation sessions must remain inside crunch-store, including adapters.
 const CASITA_SESSION_MUTATIONS: [&str; 2] = [".mutation_session(", ".publish_if_roots_match("];
 
 /// Writable store bookkeeping reserved to declared owners.
-const WRITABLE_OPERATIONS: [&str; 3] =
-    ["insert_output_node(", "insert_built_output(", "insert_ca_mapping("];
+const WRITABLE_OPERATIONS: [&str; 3] = ["insert_output_node(", "insert_built_output(", "insert_ca_mapping("];
+
+/// Casita types must not cross the store-shell boundary, even through a
+/// declared Snix adapter. The module path also catches qualified type names.
+const CASITA_TYPE_MARKERS: [&str; 5] = [
+    "casita::",
+    "CasitaStore",
+    "LocalRepository",
+    "MutationSession",
+    "UnrootedFilesystemImport",
+];
 
 /// Directories scanned for application-shell violations.
 const SCAN_ROOTS: [&str; 2] = ["src", "crates"];
 
 /// Only the actual store shell may depend directly on Casita.
-const STORE_CRATE_SOURCE_PREFIX: &str = "crates/crunch-store/src/";
+const STORE_CRATE: &str = "crunch-store";
 
-/// Declared store-backed adapter that owns a private store instance.
-/// Recorded per ADR 0058 update; not an application shell.
+/// Declared store-backed adapter that owns a private Snix store instance.
+/// Recorded per ADR 0058 update; not an application shell or Casita owner.
 const ADAPTER_ALLOWLIST: [&str; 1] = ["crunch-rust-cache"];
 
 /// Paths allowed to construct a `StoreHandle`: the CLI composition root,
 /// remote-build/foreign shells that own an executor store, pipeline
 /// orchestration, and the declared cache adapter.
-const HANDLE_CONSTRUCTION_ALLOWLIST: [&str; 11] = [
+const HANDLE_CONSTRUCTION_ALLOWLIST: [&str; 12] = [
     "src/main.rs",
+    // Bootstrap owns a guarded raw-seed store and immediately splits it into
+    // pipeline capabilities; it does not pass the broad handle to build code.
+    "src/bootstrap.rs",
     "src/remote_build.rs",
     "src/foreign_import_cmd.rs",
     "src/foreign_realization_shell.rs",
@@ -93,7 +106,8 @@ fn main() {
         return;
     }
     println!("{}", report);
-    std::process::exit(1);}
+    std::process::exit(1);
+}
 
 #[derive(Debug, Clone)]
 struct Violation {
@@ -171,7 +185,9 @@ fn check_root(root: &Path) -> Report {
             if metadata.len() > MAX_FILE_BYTES {
                 continue;
             }
-            let Ok(source) = std::fs::read_to_string(path) else { continue };
+            let Ok(source) = std::fs::read_to_string(path) else {
+                continue;
+            };
             report.files_scanned += 1;
             check_file(&root, path, &source, &mut report);
         }
@@ -180,20 +196,13 @@ fn check_root(root: &Path) -> Report {
 }
 
 fn is_ignored_dir(name: &std::ffi::OsStr) -> bool {
-    matches!(
-        name.to_str(),
-        Some("tests") | Some("target") | Some("vendor") | Some("fixtures")
-    )
+    matches!(name.to_str(), Some("tests") | Some("target") | Some("vendor") | Some("fixtures"))
 }
 
 fn check_file(root: &Path, path: &Path, source: &str, report: &mut Report) {
-    let relative = path
-        .strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/");
-    let is_store_internal = relative.starts_with(STORE_CRATE_SOURCE_PREFIX);
-    let is_declared_adapter = ADAPTER_ALLOWLIST.iter().any(|adapter| relative.contains(adapter));
+    let relative = path.strip_prefix(root).unwrap_or(path).to_string_lossy().replace('\\', "/");
+    let is_store_internal = is_in_crate(&relative, STORE_CRATE);
+    let is_declared_adapter = ADAPTER_ALLOWLIST.iter().any(|adapter| is_in_crate(&relative, adapter));
     if is_declared_adapter {
         report.adapter_files.push(relative.clone());
     }
@@ -202,25 +211,21 @@ fn check_file(root: &Path, path: &Path, source: &str, report: &mut Report) {
     }
     let production = strip_test_regions(source);
     for (line_index, line) in production.lines().enumerate() {
-        for reference in CASITA_TYPE_REFERENCES {
-            if line.contains(reference) {
-                report.violations.push(Violation {
-                    path: relative.clone(),
-                    line: line_index + 1,
-                    kind: "casita-type-escape",
-                    detail: format!("Casita vendor type `{reference}` outside the store shell"),
-                });
-            }
+        if let Some(marker) = CASITA_TYPE_MARKERS.iter().find(|marker| contains_marker(line, marker)) {
+            report.violations.push(Violation {
+                path: relative.clone(),
+                line: line_index + 1,
+                kind: "casita-type-escape",
+                detail: format!("Casita type `{marker}` outside the store shell"),
+            });
         }
-        for mutation in CASITA_SESSION_MUTATIONS {
-            if line.contains(mutation) {
-                report.violations.push(Violation {
-                    path: relative.clone(),
-                    line: line_index + 1,
-                    kind: "casita-session-escape",
-                    detail: format!("Casita root mutation `{mutation}` outside the store shell"),
-                });
-            }
+        if let Some(mutation) = CASITA_SESSION_MUTATIONS.iter().find(|mutation| contains_marker(line, mutation)) {
+            report.violations.push(Violation {
+                path: relative.clone(),
+                line: line_index + 1,
+                kind: "casita-session-escape",
+                detail: format!("Casita root mutation `{mutation}` outside the store shell"),
+            });
         }
         if is_declared_adapter {
             continue;
@@ -235,7 +240,7 @@ fn check_file(root: &Path, path: &Path, source: &str, report: &mut Report) {
                 });
             }
         }
-        if !is_declared_adapter && !is_writable_owner(&relative) {
+        if !is_writable_owner(&relative) {
             for operation in WRITABLE_OPERATIONS {
                 if line.contains(operation) {
                     report.violations.push(Violation {
@@ -256,6 +261,29 @@ fn check_file(root: &Path, path: &Path, source: &str, report: &mut Report) {
             });
         }
     }
+}
+
+fn is_in_crate(relative: &str, crate_name: &str) -> bool {
+    relative
+        .strip_prefix("crates/")
+        .and_then(|path| path.split_once('/'))
+        .is_some_and(|(name, _)| name == crate_name)
+}
+
+/// Match a Rust path or method call even when its tokens are spaced apart.
+fn contains_marker(line: &str, marker: &str) -> bool {
+    if line.contains(marker) {
+        return true;
+    }
+    let Some(first) = marker.chars().next() else {
+        return false;
+    };
+    line.char_indices().any(|(offset, character)| {
+        character == first
+            && marker
+                .chars()
+                .eq(line[offset..].chars().filter(|character| !character.is_whitespace()).take(marker.len()))
+    })
 }
 
 fn is_composition_root(relative: &str) -> bool {
@@ -306,6 +334,50 @@ fn use_capability(store: &crunch_store::StoreHandle) {
 }
 "#;
 
+const POSITIVE_CASITA_STORE: &str = r#"
+async fn stage(store: &crate::casita::CasitaStore) {
+    let session = store.repository.mutation_session().await.unwrap();
+    let _ = session;
+}
+"#;
+
+const POSITIVE_CASITA_ADAPTER: &str = r#"
+fn adapter(handle: &crunch_store::StoreHandle) {
+    let _ = handle.blob_service();
+}
+"#;
+
+const NEGATIVE_CASITA_SESSION: &str = r#"
+async fn publish_outside_store(state: &std::path::Path) {
+    let repository = casita::experimental::Repository::<
+        casita::experimental::ChunkedBlobStore,
+        casita::experimental::TursoMetadataStore,
+    >::local(state.join("casita")).await.unwrap();
+    let _session = repository.mutation_session().await.unwrap();
+}
+"#;
+
+const NEGATIVE_CASITA_TYPE: &str = r#"
+pub fn leak_root(root: casita::experimental::RootName) -> casita::experimental::RootName {
+    root
+}
+"#;
+
+const TEST_EXEMPT_FIXTURE: &str = r#"
+#[cfg(test)]
+mod tests {
+    fn escape(store: &crunch_store::StoreHandle) {
+        let _ = store.pathinfo_service();
+    }
+    async fn stage(repo: &casita::experimental::Repository<
+        casita::experimental::ChunkedBlobStore,
+        casita::experimental::TursoMetadataStore,
+    >) {
+        let _ = repo.mutation_session().await;
+    }
+}
+"#;
+
 const NEGATIVE_RAW_SERVICE: &str = r#"
 async fn escape(store: &crunch_store::StoreHandle) {
     let mut stream = store.pathinfo_service().list();
@@ -331,14 +403,14 @@ async fn construct() {
 }
 "#;
 
-const NEGATIVE_CASITA_TYPE: &str = r#"
+const NEGATIVE_CASITA_UNQUALIFIED_TYPE: &str = r#"
 use casita::experimental::RootChange;
 fn escape() {
     let _repository = LocalRepository::local("state/casita");
 }
 "#;
 
-const NEGATIVE_CASITA_SESSION: &str = r#"
+const NEGATIVE_CASITA_DIRECT_SESSION: &str = r#"
 async fn escape(repository: &Repository) {
     let session = repository.mutation_session().await;
     session.publish_if_roots_match(vec![], vec![], vec![]).await;
@@ -347,6 +419,7 @@ async fn escape(repository: &Repository) {
 
 fn write_fixture(dir: &Path, name: &str, body: &str) -> PathBuf {
     let path = dir.join(name);
+    std::fs::create_dir_all(path.parent().expect("fixture has parent")).expect("create fixture parent");
     std::fs::write(&path, body).expect("write fixture");
     path
 }
@@ -356,7 +429,8 @@ fn fixture_report(files: BTreeMap<&'static str, &'static str>) -> Report {
     let src = dir.join("src");
     std::fs::create_dir_all(&src).expect("create fixture dir");
     for (name, body) in &files {
-        write_fixture(&src, name, body);
+        let fixture_dir = if name.contains('/') { &dir } else { &src };
+        write_fixture(fixture_dir, name, body);
     }
     let report = check_root(&dir);
     std::fs::remove_dir_all(&dir).expect("clean fixture dir");
@@ -366,6 +440,58 @@ fn fixture_report(files: BTreeMap<&'static str, &'static str>) -> Report {
 fn self_test() {
     let clean = fixture_report(BTreeMap::from([("lib.rs", POSITIVE_FIXTURE)]));
     assert!(clean.is_clean(), "positive fixture must pass: {}", clean);
+    let casita_positive = fixture_report(BTreeMap::from([
+        ("crates/crunch-store/src/casita.rs", POSITIVE_CASITA_STORE),
+        ("crates/crunch-rust-cache/src/lib.rs", POSITIVE_CASITA_ADAPTER),
+    ]));
+    assert!(casita_positive.is_clean(), "store shell and declared adapter must pass: {casita_positive}");
+
+    let casita_session =
+        fixture_report(BTreeMap::from([("crates/crunch-store-outsider/src/lib.rs", NEGATIVE_CASITA_SESSION)]));
+    assert_eq!(
+        count_kind(&casita_session.violations, "casita-session-escape"),
+        1,
+        "sibling crate cannot construct a Casita session: {casita_session}"
+    );
+    assert_eq!(
+        count_kind(&casita_session.violations, "casita-type-escape"),
+        3,
+        "sibling crate cannot name Casita types: {casita_session}"
+    );
+
+    let casita_type =
+        fixture_report(BTreeMap::from([("crates/crunch-rust-cache-outsider/src/lib.rs", NEGATIVE_CASITA_TYPE)]));
+    assert_eq!(
+        count_kind(&casita_type.violations, "casita-type-escape"),
+        1,
+        "adapter-like sibling cannot expose Casita types: {casita_type}"
+    );
+
+    let casita_in_adapter =
+        fixture_report(BTreeMap::from([("crates/crunch-rust-cache/src/session.rs", NEGATIVE_CASITA_SESSION)]));
+    assert_eq!(
+        count_kind(&casita_in_adapter.violations, "casita-session-escape"),
+        1,
+        "declared Snix adapter cannot construct a Casita session: {casita_in_adapter}"
+    );
+    assert_eq!(
+        count_kind(&casita_in_adapter.violations, "casita-type-escape"),
+        3,
+        "declared Snix adapter cannot name Casita types: {casita_in_adapter}"
+    );
+
+    let unqualified_type = fixture_report(BTreeMap::from([("lib.rs", NEGATIVE_CASITA_UNQUALIFIED_TYPE)]));
+    assert_eq!(
+        count_kind(&unqualified_type.violations, "casita-type-escape"),
+        2,
+        "unqualified vendor types must not escape: {unqualified_type}"
+    );
+    let direct_session = fixture_report(BTreeMap::from([("lib.rs", NEGATIVE_CASITA_DIRECT_SESSION)]));
+    assert_eq!(
+        count_kind(&direct_session.violations, "casita-session-escape"),
+        2,
+        "direct root mutation must not escape: {direct_session}"
+    );
 
     let raw = fixture_report(BTreeMap::from([("lib.rs", NEGATIVE_RAW_SERVICE)]));
     assert_eq!(count_kind(&raw.violations, "raw-service-escape"), 1, "raw-service fixture: {raw}");
@@ -380,40 +506,6 @@ fn self_test() {
         "construction fixture: {construction}"
     );
 
-    let casita_type = fixture_report(BTreeMap::from([("lib.rs", NEGATIVE_CASITA_TYPE)]));
-    assert_eq!(count_kind(&casita_type.violations, "casita-type-escape"), 2, "Casita type fixture: {casita_type}");
-
-    let casita_session = fixture_report(BTreeMap::from([("lib.rs", NEGATIVE_CASITA_SESSION)]));
-    assert_eq!(
-        count_kind(&casita_session.violations, "casita-session-escape"),
-        2,
-        "Casita session fixture: {casita_session}"
-    );
-    let mut adapter = Report::default();
-    check_file(
-        Path::new("/fixture"),
-        Path::new("/fixture/crates/crunch-rust-cache/src/lib.rs"),
-        NEGATIVE_CASITA_SESSION,
-        &mut adapter,
-    );
-    assert_eq!(
-        count_kind(&adapter.violations, "casita-session-escape"),
-        2,
-        "declared Snix adapter cannot open Casita sessions: {adapter}"
-    );
-    let mut prefix_impostor = Report::default();
-    check_file(
-        Path::new("/fixture"),
-        Path::new("/fixture/crates/crunch-store-extra/src/lib.rs"),
-        NEGATIVE_CASITA_TYPE,
-        &mut prefix_impostor,
-    );
-    assert_eq!(
-        count_kind(&prefix_impostor.violations, "casita-type-escape"),
-        2,
-        "a similarly named crate must not inherit the store shell exemption: {prefix_impostor}"
-    );
-
-    let test_exempt = fixture_report(BTreeMap::from([("lib.rs", "#[cfg(test)]\nmod tests {\n    fn escape(store: &crunch_store::StoreHandle) {\n        let _ = store.pathinfo_service();\n    }\n}\n")]));
+    let test_exempt = fixture_report(BTreeMap::from([("lib.rs", TEST_EXEMPT_FIXTURE)]));
     assert!(test_exempt.is_clean(), "test regions must be exempt: {test_exempt}");
 }
