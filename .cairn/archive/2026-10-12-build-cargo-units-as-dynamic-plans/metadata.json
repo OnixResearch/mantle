@@ -1,0 +1,11 @@
+{
+  "depends_on": [
+    "add-dynamic-plan-source-slices",
+    "separate-rust-plan-hexagon"
+  ],
+  "workflow_profile": {
+    "id": "spec-driven",
+    "source": "change_create",
+    "version": 1
+  }
+}

@@ -13,8 +13,11 @@
 #   - No protoc needed (pre-generated proto files)
 #   - No clang/mold needed (gcc+ld override in .cargo/config.toml)
 #
-# The source tarball includes vendored Cargo deps (cargo vendor),
-# so no network access is needed during the build.
+# The source tarball includes the exact locked offline Cargo closure under
+# vendor-deps/, including reviewed Casita source patches.
+# The hash below identifies pinned source commit
+# 810c40b8c7ee41c65d6526e16a6bfea17b9130e2 plus its generated
+# vendor-deps/ closure; later recipe/evidence edits are not in that archive.
 #
 # Usage:
 #   crunch build bootstrap/crunch.ncl -I lib --store /tmp/crunch-store
@@ -22,11 +25,16 @@
 # Generate the ignored checkout-local closure with the reviewed exact-pin
 # Casita patch before packing the source archive. Never replace an existing
 # closure: use `check` for a checkout that already contains vendor-deps/.
-#   cd mantle && python3 scripts/vendor-deps.py generate
-#   cd mantle && python3 scripts/vendor-deps.py check
-#   git archive --prefix=crunch-src/ HEAD -o /tmp/crunch-src.tar
+# From the repository's Nix development shell:
+#   python3 scripts/vendor-deps.py generate
+#   python3 scripts/vendor-deps.py check
+# The following recipe reproduces the pinned archive subject, not current HEAD:
+#   git archive --prefix=crunch-src/ 810c40b8c7ee41c65d6526e16a6bfea17b9130e2 -o /tmp/crunch-src.tar
 #   tar rf /tmp/crunch-src.tar --transform='s,^vendor-deps/,crunch-src/vendor-deps/,' vendor-deps/
-#   xz -T0 /tmp/crunch-src.tar
+#   xz -T4 /tmp/crunch-src.tar
+#   mkdir -p /tmp/crunch-src-unpacked
+#   tar -xf /tmp/crunch-src.tar.xz -C /tmp/crunch-src-unpacked
+#   nix hash path --type blake3 --sri /tmp/crunch-src-unpacked/crunch-src
 
 let crunch = import "lib.ncl" in
 
@@ -46,7 +54,7 @@ let rust = (import "rust.ncl") in
 
 let crunch_src = crunch.fetchTarball {
   url = "file:///tmp/crunch-src.tar.xz",
-  hash = "blake3-+Fj/I3X+w8OdwuUACJTD/y6F91Fj7KRERZh+l4kJN24=",
+  hash = "blake3-Lm0DLBYankN8QtflGflSJ52WwnoqJN/m2Cdf1wqQyiU=",
   name = "crunch-src",
 } in
 
@@ -148,10 +156,10 @@ let crunch_src = crunch.fetchTarball {
       chmod -R u+w /tmp/build/crunch
       cd /tmp/build/crunch
 
-      # Keep the checked-in source replacement map: it includes Casita,
-      # turso and the other pinned git sources. The source archive must also
-      # contain the generated, patched vendor-deps closure.
-      # Append only the self-build target/linker settings.
+      # Reuse the tracked exact-pin vendor map; the fixed source archive
+      # supplies the entire locked closure, including Casita and Turso.
+      # Append only the self-hosted musl target and GCC linker settings.
+      # Determine library search path for libgcc_s.so.
       GCC_LIB=""
       if [ -n "$MUSL_GCC" ]; then GCC_LIB="$MUSL_GCC"
       elif [ -f "$GCC/lib/libgcc_s.so" ]; then GCC_LIB="$GCC/lib"
@@ -181,6 +189,7 @@ CARGOEOF
       # Set environment for the Rust build.
       export CARGO_HOME=/tmp/cargo-home
       export CARGO_TARGET_DIR=/tmp/cargo-target
+      export CARGO_NET_OFFLINE=true
       export SNIX_BUILD_SANDBOX_SHELL=/bin/sh
       export CC=gcc
       export AR=ar
@@ -206,6 +215,7 @@ CARGOEOF
       cargo build \
         --release \
         --locked \
+        --offline \
         -j 4 \
         2>&1 || exit 1
 

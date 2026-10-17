@@ -157,11 +157,14 @@ supported by the retired source scanner or manufactured fake-Cargo output.
 
 Retained signed same-client app42 and provider-selective receipts support the
 bounded `unit_plan` build-script/proc-macro fixture and a separately named
-declared-prebuilt-C static-link surface. The full links/pkg-config/native-C
-group remains blocked: the native script did not invoke pkg-config, compile C,
-or consume links metadata through `DEP_*`. The helper's executed generated
-source/cfg/env consumer yields 84; its separate links-propagation fixture is
-not pkg-config execution evidence. Ordinary rails do not replay signed proofs.
+declared-prebuilt-C static-link surface. That fixture did not invoke pkg-config,
+compile C, or consume links metadata through `DEP_*`. The separately retained
+reviewed replay covers links metadata and declared pkg-config against
+Mantle-built libbz2; neither proves C compilation inside `build.rs`. The
+helper's executed generated-source/cfg/env consumer yields 84; its separate
+links-propagation fixture is not pkg-config execution evidence. These receipts
+retain their original subjects and do not validate the reconciled source.
+Ordinary rails do not replay signed proofs.
 
 ## Trust/provenance
 

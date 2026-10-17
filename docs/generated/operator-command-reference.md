@@ -1,6 +1,10 @@
 # Mantle command reference
 
+<<<<<<< HEAD
 Catalog BLAKE3: `a04065236a8688e74bbfcfd40ec6430054f3b6a5fecd9d05bc175c57dab65b38`
+=======
+Catalog BLAKE3: `12e74923e80c41b28cede8a16c566e129a9ebce7b1fa3bbffe2a908b876fb7c7`
+>>>>>>> d75158b00b080535f2ffea12430665ca3d57ea82
 
 ## Daily commands
 
@@ -273,6 +277,15 @@ Report executable and unsupported source-root operations from live host observat
 
 - Mutation: `none`
 - Network: `optional`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle bootstrap elf-relocate`
+
+Rewrite declared dynamic ELF references before a build output is published
+
+- Mutation: `store-state`
+- Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
 
@@ -1344,6 +1357,15 @@ Import a source bundle into Mantle source state
 
 - Mutation: `store-state`
 - Network: `optional`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle source bundle import-store-path`
+
+Attest a pre-existing physical output using its signed PathInfo and actual NAR before pinning source state
+
+- Mutation: `store-state`
+- Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
 

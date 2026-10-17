@@ -202,9 +202,9 @@ leaf files or revert the churn immediately.
 - **Lifecycle**: Cairn is active — change dirs under `.cairn/changes/<name>/`
   (`proposal.md`, `design.md`, `tasks.md`, `metadata.json`, `specs/` delta,
   `evidence/`). Validate with
-  `nix run path:/home/brittonr/git/cairn#cairn -- validate --root .`.
+  `nix develop -c cairn validate --root .` (the pinned flake input).
   Commit implementation *before* `cairn archive`. Capture gate transcripts to
-  files and append them to evidence (avoid piping repeated `nix run` gates
+  files and append them to evidence (avoid piping repeated Cairn gates
   through `tee`). The repo-owned runner is
   `scripts/cairn-lifecycle-evidence.rs` driven by `evidence/commands.txt`.
   OpenSpec is legacy (archive only), but its `specs/functional-core/`
@@ -232,6 +232,9 @@ leaf files or revert the churn immediately.
 - **Rust nightly** via `rust-toolchain.toml` (unpinned channel; required for
   `#![feature(register_tool)]`). Self-built stable toolchains need
   `RUSTC_BOOTSTRAP=1`.
+- **CLI query depth**: `src/main.rs` is shared by the `mantle` and `crunch`
+  binaries. Its 256 recursion limit accommodates the exhaustive async
+  attestation dispatcher when nightly 1.99 lays out that future.
 - **Linker/build env**: clang + mold + `-Wl,--allow-multiple-definition`
   (`.cargo/config.toml`), pkg-config + openssl-dev — all supplied by
   `nix develop`. Bare host cargo typically fails with `linker 'clang' not found`.

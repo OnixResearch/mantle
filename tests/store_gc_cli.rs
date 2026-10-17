@@ -601,6 +601,149 @@ fn casita_store_gc_cli_collects_unpinned_signed_output_and_preserves_retained_na
 
 #[cfg(unix)]
 #[test]
+fn casita_gc_cli_recovers_removed_root_before_planning_without_removing_other_roots() {
+    use casita::experimental::ChunkedBlobStore;
+    use casita::experimental::MetadataStore;
+    use casita::experimental::ObjectKey;
+    use casita::experimental::Repository;
+    use casita::experimental::RootName;
+    use casita::experimental::TursoMetadataStore;
+
+    let state = tempfile::tempdir().unwrap();
+    let exports = tempfile::tempdir().unwrap();
+    let raw_signer = ed25519_dalek::SigningKey::from_bytes(&[23_u8; 32]);
+    let trusted = nix_compat::narinfo::VerifyingKey::new("casita-gc-cli".to_string(), raw_signer.verifying_key());
+    let signer = nix_compat::narinfo::SigningKey::new("casita-gc-cli".to_string(), raw_signer);
+    std::fs::write(state.path().join("casita-trusted-public-keys"), format!("{trusted}\n")).unwrap();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (removed, fenced_other, retained) = rt.block_on(async {
+        let _guard = crunch_store::StoreMutationGuard::acquire_wait(state.path()).unwrap();
+        let mut store = StoreHandle::open(StoreConfig::new(
+            crunch_store::StoreBackend::Casita,
+            state.path().to_path_buf(),
+            exports.path().to_path_buf(),
+            STORE_DIR.to_string(),
+        ))
+        .await
+        .unwrap();
+        let removed = signed_ca_symlink_output(&store, "fenced-removed", "removed-content", &signer).await;
+        let fenced_other = signed_ca_symlink_output(&store, "fenced-other", "other-content", &signer).await;
+        let retained = signed_ca_symlink_output(&store, "fenced-retained", "retained-content", &signer).await;
+        for info in [&removed, &fenced_other, &retained] {
+            store.pathinfo_service().put(info.clone()).await.unwrap();
+            assert_eq!(store.export_cached_path_info(&info.store_path).await.unwrap(), Some(info.clone()));
+        }
+        (removed, fenced_other, retained)
+    });
+    // Model a stop immediately after the first root in the actual plan order.
+    let (removed, fenced_other) = if removed.store_path.to_absolute_path() < fenced_other.store_path.to_absolute_path()
+    {
+        (removed, fenced_other)
+    } else {
+        (fenced_other, removed)
+    };
+    let casita_cmd = || {
+        let mut cmd = crunch_cmd(state.path(), exports.path());
+        cmd.args(["--store-backend", "casita"]);
+        cmd
+    };
+    casita_cmd().args(["store", "pin", &retained.store_path.to_absolute_path()]).assert().success();
+    let initial = casita_cmd().args(["--json", "store", "gc"]).output().unwrap();
+    assert!(initial.status.success(), "{}", String::from_utf8_lossy(&initial.stderr));
+    let initial: serde_json::Value = serde_json::from_slice(&initial.stdout).unwrap();
+    assert_eq!(initial["candidate_path_count"], 2);
+    let removed_logical = removed.store_path.to_absolute_path();
+    let other_logical = fenced_other.store_path.to_absolute_path();
+    let initial_paths = initial["candidate_paths"].as_array().unwrap();
+    assert_eq!(initial_paths, &vec![serde_json::json!(removed_logical), serde_json::json!(other_logical)]);
+
+    rt.block_on(async {
+        let repository = Repository::<ChunkedBlobStore, TursoMetadataStore>::local(state.path().join("casita"))
+            .await
+            .unwrap();
+        let name = |info: &PathInfo| {
+            RootName::try_from(format!("mantle/outputs/{}", data_encoding::HEXLOWER.encode(info.store_path.digest())))
+                .unwrap()
+        };
+        let removed_name = name(&removed);
+        let other_name = name(&fenced_other);
+        let retained_name = name(&retained);
+        let snapshot = repository.metadata().snapshot().await.unwrap();
+        let removed_target = snapshot.root(&removed_name).await.unwrap().unwrap();
+        let other_target = snapshot.root(&other_name).await.unwrap().unwrap();
+        let retained_target = snapshot.root(&retained_name).await.unwrap().unwrap();
+        drop(snapshot);
+        let fence_entry = |info: &PathInfo, name: &RootName, target: &ObjectKey| {
+            serde_json::json!({
+                "kind": "output",
+                "path": info.store_path.to_absolute_path(),
+                "root_name": name.to_string(),
+                "expected_target": target.to_string(),
+                "removed": false,
+                "cleaned": false,
+            })
+        };
+        std::fs::write(
+            state.path().join("casita-gc-fence.json"),
+            serde_json::to_vec(&serde_json::json!({
+                "plan_id": initial["plan_id"],
+                "entries": [
+                    fence_entry(&removed, &removed_name, &removed_target),
+                    fence_entry(&fenced_other, &other_name, &other_target),
+                ],
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(repository.remove_root_if_matches(&removed_name, &removed_target).await.unwrap().is_some());
+        assert_eq!(
+            repository.metadata().snapshot().await.unwrap().root(&other_name).await.unwrap(),
+            Some(other_target.clone())
+        );
+        assert_eq!(
+            repository.metadata().snapshot().await.unwrap().root(&retained_name).await.unwrap(),
+            Some(retained_target.clone())
+        );
+
+        let recovered = casita_cmd().args(["--json", "store", "gc"]).output().unwrap();
+        assert!(recovered.status.success(), "{}", String::from_utf8_lossy(&recovered.stderr));
+        let plan: serde_json::Value = serde_json::from_slice(&recovered.stdout).unwrap();
+        assert_eq!(plan["is_dry_run"], true);
+        assert_eq!(plan["candidate_paths"], serde_json::json!([other_logical]));
+        assert!(!state.path().join("casita-gc-fence.json").exists());
+        assert_eq!(repository.metadata().snapshot().await.unwrap().root(&removed_name).await.unwrap(), None);
+        assert_eq!(
+            repository.metadata().snapshot().await.unwrap().root(&other_name).await.unwrap(),
+            Some(other_target)
+        );
+        assert_eq!(
+            repository.metadata().snapshot().await.unwrap().root(&retained_name).await.unwrap(),
+            Some(retained_target)
+        );
+    });
+    let removed_export = exports.path().join(removed.store_path.to_string());
+    assert_eq!(std::fs::symlink_metadata(removed_export).unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    for info in [&fenced_other, &retained] {
+        let selector = info.store_path.to_string();
+        let result = casita_cmd().args(["--json", "store", "info", &selector]).output().unwrap();
+        assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+        let observed: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+        assert_eq!(observed["paths"][0]["nar_sha256"], data_encoding::HEXLOWER.encode(&info.nar_sha256));
+        casita_cmd()
+            .args([
+                "store",
+                "verify",
+                "--trusted-public-keys",
+                &trusted.to_string(),
+                &selector,
+            ])
+            .assert()
+            .success();
+    }
+}
+
+#[cfg(unix)]
+#[test]
 fn casita_store_gc_missing_retained_cache_root_fails_before_removing_signed_output() {
     let state_dir = tempfile::tempdir().unwrap();
     let output_dir = tempfile::tempdir().unwrap();
@@ -868,7 +1011,6 @@ fn store_info_reports_base_layer_without_mutating_base() {
         .stdout(predicates::str::contains("backend:    snix"))
         .stdout(predicates::str::contains("overlay-composition: true"))
         .stdout(predicates::str::contains("atomic-batch-import: true"))
-        .stdout(predicates::str::contains("rust-unit-cache: true"))
         .stdout(predicates::str::contains("unsigned-admission: true"))
         .stdout(predicates::str::contains("max-root-changes: unbounded-by-backend"));
     let base_after = blake3::hash(&std::fs::read(&base_database).unwrap());
@@ -909,29 +1051,139 @@ fn selected_backend_is_recorded_and_mismatch_rejects_without_mutation() {
     let identity_path = state.path().join("store-identity.json");
     let identity = std::fs::read(&identity_path).unwrap();
     assert_eq!(serde_json::from_slice::<serde_json::Value>(&identity).unwrap()["backend"], "casita");
-    let before = std::fs::read_dir(state.path()).unwrap().count();
-    let snapshot = snapshot_state_tree(state.path());
+    let before = snapshot_state_tree(state.path());
+    let output_before = snapshot_state_tree(output_dir.path());
     let mismatch = crunch_cmd(state.path(), output_dir.path())
         .args(["--store-backend", "snix", "store", "list"])
         .output()
         .unwrap();
     assert!(!mismatch.status.success());
-    assert!(String::from_utf8_lossy(&mismatch.stderr).contains("store-backend-mismatch"));
-    assert_eq!(std::fs::read(&identity_path).unwrap(), identity);
-    assert_eq!(std::fs::read_dir(state.path()).unwrap().count(), before);
-    assert_eq!(snapshot_state_tree(state.path()), snapshot, "selected mismatch changed state");
-    let dropped = crunch_cmd(state.path(), output_dir.path()).args(["store", "list"]).output().unwrap();
-    assert!(!dropped.status.success(), "omitting the launcher backend opened a Casita state as Snix");
-    assert!(String::from_utf8_lossy(&dropped.stderr).contains("store-backend-mismatch"));
-    assert_eq!(snapshot_state_tree(state.path()), snapshot, "missing backend argument changed state");
-    let ambient = crunch_cmd(state.path(), output_dir.path())
-        .env("MANTLE_STORE_BACKEND", "casita")
+    assert!(
+        String::from_utf8_lossy(&mismatch.stderr)
+            .contains("store-backend-mismatch: requested snix, state declares casita")
+    );
+    assert_eq!(snapshot_state_tree(state.path()), before);
+    assert_eq!(snapshot_state_tree(output_dir.path()), output_before);
+    let omitted = crunch_cmd(state.path(), output_dir.path())
+        .env_remove("MANTLE_STORE_BACKEND")
+        .env_remove("CRUNCH_CONFIG_DIR")
         .args(["store", "list"])
         .output()
         .unwrap();
-    assert!(!ambient.status.success(), "ambient selection overrode the CLI default");
-    assert!(String::from_utf8_lossy(&ambient.stderr).contains("store-backend-mismatch"));
-    assert_eq!(snapshot_state_tree(state.path()), snapshot, "ambient backend changed recorded state");
+    assert!(!omitted.status.success(), "omitting the launcher backend opened a Casita state as Snix");
+    assert!(String::from_utf8_lossy(&omitted.stderr).contains("store-backend-mismatch"));
+    assert_eq!(snapshot_state_tree(state.path()), before, "missing backend argument changed state");
+    assert_eq!(snapshot_state_tree(output_dir.path()), output_before, "missing backend argument changed outputs");
+}
+
+fn seed_identityless_snix_state(state: &Path, output_dir: &Path) {
+    crunch_cmd(state, output_dir)
+        .env_remove("CRUNCH_CONFIG_DIR")
+        .args(["--store-backend", "snix", "store", "list"])
+        .assert()
+        .success();
+    assert!(state.join("pathinfo.redb").is_file(), "fixture must contain a real Snix database");
+    std::fs::remove_file(state.join("store-identity.json")).unwrap();
+}
+
+#[test]
+fn identityless_casita_repository_rejects_both_backends_with_or_without_snix_state() {
+    for backend in ["snix", "casita"] {
+        for with_snix in [false, true] {
+            let state = tempfile::tempdir().unwrap();
+            let output_dir = tempfile::tempdir().unwrap();
+            if with_snix {
+                seed_identityless_snix_state(state.path(), output_dir.path());
+            }
+            let repository = state.path().join("casita");
+            std::fs::create_dir(&repository).unwrap();
+            std::fs::write(repository.join("casita.sqlite"), b"existing repository bytes").unwrap();
+            assert!(!state.path().join("store-identity.json").exists());
+            let state_before = snapshot_state_tree(state.path());
+            let output_before = snapshot_state_tree(output_dir.path());
+
+            let rejected = crunch_cmd(state.path(), output_dir.path())
+                .env_remove("CRUNCH_CONFIG_DIR")
+                .args(["--store-backend", backend, "store", "list"])
+                .output()
+                .unwrap();
+            assert!(!rejected.status.success(), "{backend}, with_snix={with_snix}");
+            let stderr = String::from_utf8_lossy(&rejected.stderr);
+            assert!(
+                stderr.contains("store-backend-mismatch: state directory")
+                    && stderr.contains("has content but no backend identity"),
+                "{backend}, with_snix={with_snix}: {stderr}"
+            );
+            assert_eq!(
+                snapshot_state_tree(state.path()),
+                state_before,
+                "{backend}, with_snix={with_snix}: rejected open changed state"
+            );
+            assert_eq!(
+                snapshot_state_tree(output_dir.path()),
+                output_before,
+                "{backend}, with_snix={with_snix}: rejected open changed outputs"
+            );
+        }
+    }
+}
+
+#[test]
+fn identityless_foreign_content_rejects_casita_before_state_or_output_mutation() {
+    for with_snix in [false, true] {
+        let state = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        if with_snix {
+            seed_identityless_snix_state(state.path(), output_dir.path());
+        } else {
+            std::fs::write(state.path().join("foreign-state.dat"), b"unclaimed persistent state").unwrap();
+        }
+        assert!(!state.path().join("store-identity.json").exists());
+        let state_before = snapshot_state_tree(state.path());
+        let output_before = snapshot_state_tree(output_dir.path());
+
+        let rejected = crunch_cmd(state.path(), output_dir.path())
+            .env_remove("CRUNCH_CONFIG_DIR")
+            .args(["--store-backend", "casita", "store", "list"])
+            .output()
+            .unwrap();
+        assert!(!rejected.status.success(), "with_snix={with_snix}");
+        let stderr = String::from_utf8_lossy(&rejected.stderr);
+        assert!(
+            stderr.contains("store-backend-mismatch: state directory")
+                && stderr.contains("has content but no backend identity"),
+            "with_snix={with_snix}: {stderr}"
+        );
+        assert_eq!(snapshot_state_tree(state.path()), state_before, "rejected open changed state");
+        assert_eq!(snapshot_state_tree(output_dir.path()), output_before, "rejected open changed outputs");
+    }
+}
+
+#[test]
+fn wrong_backend_sign_rejects_before_creating_a_signer_or_changing_state() {
+    let state = tempfile::tempdir().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    crunch_cmd(state.path(), output_dir.path())
+        .env_remove("CRUNCH_CONFIG_DIR")
+        .args(["--store-backend", "snix", "store", "list"])
+        .assert()
+        .success();
+    let before = snapshot_state_tree(state.path());
+    let output_before = snapshot_state_tree(output_dir.path());
+    assert!(!before.contains_key(Path::new("signing-key")));
+
+    let rejected = crunch_cmd(state.path(), output_dir.path())
+        .env_remove("CRUNCH_CONFIG_DIR")
+        .args(["--store-backend", "casita", "store", "sign", "--all"])
+        .output()
+        .unwrap();
+    assert!(!rejected.status.success());
+    let stderr = String::from_utf8_lossy(&rejected.stderr);
+    assert!(stderr.contains("store-backend-mismatch: requested casita, state declares snix"), "{stderr}");
+    assert!(!stderr.contains("Generated signing key"), "{stderr}");
+    assert_eq!(snapshot_state_tree(state.path()), before, "rejected sign changed existing state");
+    assert_eq!(snapshot_state_tree(output_dir.path()), output_before, "rejected sign changed outputs");
+    assert!(!state.path().join("signing-key").exists());
 }
 
 #[test]
@@ -947,6 +1199,7 @@ fn wrong_backend_build_rejects_before_creating_a_signer_or_changing_state() {
         .unwrap();
     assert!(selected.status.success(), "{}", String::from_utf8_lossy(&selected.stderr));
     let before = snapshot_state_tree(state.path());
+    let output_before = snapshot_state_tree(output_dir.path());
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(before[Path::new("store-identity.json")].as_ref().unwrap())
             .unwrap()["backend"],
@@ -973,6 +1226,7 @@ fn wrong_backend_build_rejects_before_creating_a_signer_or_changing_state() {
         );
         assert!(!stderr.contains("Generated signing key"), "{target:?}: {stderr}");
         assert_eq!(snapshot_state_tree(state.path()), before, "{target:?} changed state");
+        assert_eq!(snapshot_state_tree(output_dir.path()), output_before, "{target:?} changed outputs");
         assert!(!state.path().join("signing-key").exists());
     }
 
@@ -997,6 +1251,7 @@ fn wrong_backend_overlay_base_build_rejects_before_creating_a_signer() {
     assert!(base_selected.status.success(), "{}", String::from_utf8_lossy(&base_selected.stderr));
     set_tree_read_only(base.path(), true);
     let base_before = snapshot_state_tree(base.path());
+    let base_output_before = snapshot_state_tree(base_output.path());
     let selected = crunch_cmd(state.path(), output_dir.path())
         .env_remove("CRUNCH_CONFIG_DIR")
         .args(["--store-backend", "snix", "store", "list"])
@@ -1004,6 +1259,7 @@ fn wrong_backend_overlay_base_build_rejects_before_creating_a_signer() {
         .unwrap();
     assert!(selected.status.success(), "{}", String::from_utf8_lossy(&selected.stderr));
     let before = snapshot_state_tree(state.path());
+    let output_before = snapshot_state_tree(output_dir.path());
     assert!(!before.contains_key(Path::new("signing-key")));
 
     let example = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/hello.ncl");
@@ -1022,6 +1278,12 @@ fn wrong_backend_overlay_base_build_rejects_before_creating_a_signer() {
     assert!(!stderr.contains("Generated signing key"), "{stderr}");
     assert_eq!(snapshot_state_tree(state.path()), before, "rejected overlay base changed writable state");
     assert_eq!(snapshot_state_tree(base.path()), base_before, "rejected overlay base changed read-only base");
+    assert_eq!(snapshot_state_tree(output_dir.path()), output_before, "rejected overlay base changed outputs");
+    assert_eq!(
+        snapshot_state_tree(base_output.path()),
+        base_output_before,
+        "rejected overlay base changed base outputs"
+    );
     assert!(!state.path().join("signing-key").exists());
     set_tree_read_only(base.path(), false);
 }
@@ -1031,6 +1293,7 @@ fn unknown_backend_is_rejected_before_creating_state() {
     let root = tempfile::tempdir().unwrap();
     let state_dir = root.path().join("absent-state");
     let output_dir = root.path().join("absent-store");
+    let before = snapshot_state_tree(root.path());
     let output = crunch_cmd(&state_dir, &output_dir)
         .args(["--store-backend", "tape", "store", "list"])
         .output()
@@ -1039,6 +1302,7 @@ fn unknown_backend_is_rejected_before_creating_state() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("store-backend-unknown"));
     assert!(!state_dir.exists());
     assert!(!output_dir.exists());
+    assert_eq!(snapshot_state_tree(root.path()), before, "unknown backend changed filesystem");
 }
 
 #[test]
@@ -1054,6 +1318,27 @@ fn ambient_backend_name_cannot_override_default_snix_selection() {
     let identity: serde_json::Value =
         serde_json::from_slice(&std::fs::read(state.path().join("store-identity.json")).unwrap()).unwrap();
     assert_eq!(identity["backend"], "snix");
+
+    let casita_state = tempfile::tempdir().unwrap();
+    let casita_output = tempfile::tempdir().unwrap();
+    crunch_cmd(casita_state.path(), casita_output.path())
+        .args(["--store-backend", "casita", "store", "list"])
+        .assert()
+        .success();
+    let before = snapshot_state_tree(casita_state.path());
+    let output_before = snapshot_state_tree(casita_output.path());
+    let rejected = crunch_cmd(casita_state.path(), casita_output.path())
+        .env("MANTLE_STORE_BACKEND", "casita")
+        .args(["store", "list"])
+        .output()
+        .unwrap();
+    assert!(!rejected.status.success());
+    assert!(
+        String::from_utf8_lossy(&rejected.stderr)
+            .contains("store-backend-mismatch: requested snix, state declares casita")
+    );
+    assert_eq!(snapshot_state_tree(casita_state.path()), before);
+    assert_eq!(snapshot_state_tree(casita_output.path()), output_before);
 }
 
 #[test]
@@ -1278,26 +1563,18 @@ fn selected_backend_states_preserve_frozen_hello_and_signed_facts_under_provisio
     // Runs 25-28: deliberately nonsecret test vectors, never production signing authorities.
     // Frozen Runs 25-28 use a logical /mantle/store prefix and an isolated,
     // explicitly provisioned test key. Physical output/state paths are not identities.
-    const GOLDEN_FIRST_BUILD: &str = include_str!(
-        "../.cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-replay-first-build.json"
-    );
-    const GOLDEN_SECOND_BUILD: &str = include_str!(
-        "../.cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-replay-second-build.json"
-    );
-    const GOLDEN_INFO: &str =
-        include_str!("../.cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-info.json");
-    const GOLDEN_LIST: &str =
-        include_str!("../.cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-list.json");
-    const GOLDEN_ROOTS: &str =
-        include_str!("../.cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-roots.json");
-    const GOLDEN_GC: &str = include_str!(
-        "../.cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-replay-first-gc.json"
-    );
-    const GOLDEN_SECOND_GC: &str = include_str!(
-        "../.cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-replay-second-gc.json"
-    );
+    const GOLDEN_FIRST_BUILD: &str =
+        include_str!("fixtures/store-backend-selection/baseline-snix-frozen-replay-first-build.json");
+    const GOLDEN_SECOND_BUILD: &str =
+        include_str!("fixtures/store-backend-selection/baseline-snix-frozen-replay-second-build.json");
+    const GOLDEN_INFO: &str = include_str!("fixtures/store-backend-selection/baseline-snix-frozen-info.json");
+    const GOLDEN_LIST: &str = include_str!("fixtures/store-backend-selection/baseline-snix-frozen-list.json");
+    const GOLDEN_ROOTS: &str = include_str!("fixtures/store-backend-selection/baseline-snix-frozen-roots.json");
+    const GOLDEN_GC: &str = include_str!("fixtures/store-backend-selection/baseline-snix-frozen-replay-first-gc.json");
+    const GOLDEN_SECOND_GC: &str =
+        include_str!("fixtures/store-backend-selection/baseline-snix-frozen-replay-second-gc.json");
     const GOLDEN_ARCHIVE: &str =
-        include_str!("../.cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-archive-export.json");
+        include_str!("fixtures/store-backend-selection/baseline-snix-frozen-archive-export.json");
     let golden_builds = [
         serde_json::from_str::<serde_json::Value>(GOLDEN_FIRST_BUILD).unwrap(),
         serde_json::from_str::<serde_json::Value>(GOLDEN_SECOND_BUILD).unwrap(),

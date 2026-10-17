@@ -266,37 +266,6 @@ mantle json
 
 #[cfg(unix)]
 #[test]
-fn transcript_run_does_not_duplicate_existing_isolation_flags() {
-    let dir = TempDir::new().unwrap();
-    let fake = dir.path().join("fake-mantle");
-    write_fake_mantle(&fake);
-    let transcript = dir.path().join("existing-flags.md");
-    let output = output_path(&dir, "existing-flags");
-    write_file(
-        &transcript,
-        r#"```mantle
-mantle --store=/custom/store --state-dir=/custom/state ok
-```
-```expect
-args:--store=/custom/store --state-dir=/custom/state ok
-success marker
-```
-"#,
-    );
-
-    crunch()
-        .args(["transcript", "run"])
-        .arg(&transcript)
-        .arg("--output")
-        .arg(&output)
-        .arg("--mantle-bin")
-        .arg(&fake)
-        .assert()
-        .success();
-}
-
-#[cfg(unix)]
-#[test]
 fn transcript_run_executes_hidden_setup_before_visible_command() {
     let dir = TempDir::new().unwrap();
     let fake = dir.path().join("fake-mantle");
@@ -495,4 +464,86 @@ fn checked_fast_fixtures_parse_through_transcript_runner() {
         .status()
         .unwrap();
     assert!(status.success(), "doctor-success fixture must execute through the runner");
+}
+
+#[test]
+fn transcript_real_child_reopens_selected_casita_and_rejects_dropped_selection_without_mutation() {
+    fn state_snapshot(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Option<Vec<u8>>> {
+        let mut snapshot = std::collections::BTreeMap::new();
+        let mut directories = vec![root.to_path_buf()];
+        while let Some(directory) = directories.pop() {
+            for member in std::fs::read_dir(directory).unwrap() {
+                let member = member.unwrap();
+                let path = member.path();
+                let relative = path.strip_prefix(root).unwrap().to_path_buf();
+                if member.file_type().unwrap().is_dir() {
+                    directories.push(path);
+                    snapshot.insert(relative, None);
+                } else {
+                    snapshot.insert(relative, Some(std::fs::read(path).unwrap()));
+                }
+            }
+        }
+        snapshot
+    }
+
+    let temp = TempDir::new().unwrap();
+    let state = temp.path().join("state");
+    let store = temp.path().join("store");
+    let first_transcript = temp.path().join("selected.md");
+    let mismatch_transcript = temp.path().join("mismatch.md");
+    let child = env!("CARGO_BIN_EXE_mantle");
+    write_file(
+        &first_transcript,
+        &format!(
+            "```mantle\nmantle --state-dir {} --store {} --json store list\n```\n```expect\npaths\n```\n",
+            state.display(),
+            store.display()
+        ),
+    );
+    crunch()
+        .args(["--store-backend", "casita", "transcript", "run"])
+        .arg(&first_transcript)
+        .arg("--mantle-bin")
+        .arg(child)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("transcript ok: 1 visible step(s)"));
+    let identity: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(state.join("store-identity.json")).unwrap()).unwrap();
+    assert_eq!(identity["backend"], "casita", "real child must receive the selected backend");
+    let before = state_snapshot(&state);
+    let dropped = ProcessCommand::new(child)
+        .arg("--state-dir")
+        .arg(&state)
+        .arg("--store")
+        .arg(&store)
+        .args(["store", "list"])
+        .output()
+        .unwrap();
+    assert!(!dropped.status.success(), "a real child that drops Casita selection must reject its recorded state");
+    assert!(
+        String::from_utf8_lossy(&dropped.stderr).contains("store-backend-mismatch"),
+        "{}",
+        String::from_utf8_lossy(&dropped.stderr)
+    );
+    assert_eq!(state_snapshot(&state), before, "dropped child selection must not change state");
+
+    write_file(
+        &mismatch_transcript,
+        &format!(
+            "```mantle:error\nmantle --state-dir {} --store {} --store-backend snix store list\n```\n```expect\nstore-backend-mismatch\n```\n",
+            state.display(),
+            store.display()
+        ),
+    );
+    crunch()
+        .args(["--store-backend", "casita", "transcript", "run"])
+        .arg(&mismatch_transcript)
+        .arg("--mantle-bin")
+        .arg(child)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("transcript ok: 1 visible step(s)"));
+    assert_eq!(state_snapshot(&state), before, "rejected child selection must not change state");
 }

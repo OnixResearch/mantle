@@ -37,7 +37,6 @@ its degraded-status transition only replaces a connecting or connected state,
 preserving the first degradation reason. Nightly Rust's `try_update` spelling
 replaces deprecated `fetch_update` at these sites without changing their
 memory orderings or failure behavior.
-
 This view does not change `--evaluation-stream`, `--json build`, stdout framing,
 or the meaning of terminal root states. A live terminal fact is not a build
 receipt or evidence of output trust. The opt-in publisher observes selected

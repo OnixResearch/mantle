@@ -448,6 +448,69 @@ fn capture_causal_trace(worker: &mut Worker, slot: Option<&mut Option<CausalTrac
 }
 
 #[cfg(target_os = "linux")]
+fn live_worker_observer(observation: WorkerLiveObservation) -> impl FnMut(&crunch_build::GoalRegistry) {
+    let mut previous: Option<Arc<WorkerLiveSnapshot>> = None;
+    move |registry: &crunch_build::GoalRegistry| {
+        if observation.degraded.load(Ordering::Acquire) {
+            return;
+        }
+        let goal_count = match usize::try_from(registry.len()) {
+            Ok(count) if count <= MAX_LIVE_WORKER_GOALS => count,
+            _ => {
+                observation.degraded.store(true, Ordering::Release);
+                return;
+            }
+        };
+        if previous.as_ref().is_some_and(|last| {
+            last.goals.len() == goal_count
+                && registry.iter().all(|(drv_key, goal)| {
+                    last.goals
+                        .binary_search_by(|row| row.drv_key.as_str().cmp(drv_key))
+                        .is_ok_and(|index| last.goals[index].state == goal.state)
+                })
+        }) {
+            return;
+        }
+        let mut goals: Vec<_> = registry
+            .iter()
+            .map(|(drv_key, goal)| WorkerLiveGoal {
+                drv_key: drv_key.to_owned(),
+                state: goal.state.clone(),
+            })
+            .collect();
+        goals.sort_unstable_by(|left, right| left.drv_key.cmp(&right.drv_key));
+        let snapshot = Arc::new(WorkerLiveSnapshot { goals });
+        previous = Some(Arc::clone(&snapshot));
+        if observation.sender.try_send(snapshot).is_err() {
+            observation.degraded.store(true, Ordering::Release);
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn collect_pipeline_evidence<S: snix_build::buildservice::BuildService + 'static>(
+    builder: &mut Builder<S>,
+    workspace_evidence_sink: crunch_build::WorkspaceReportCollector,
+    mut hermeticity_audit_events: Vec<HermeticityAuditEvent>,
+) -> Result<PipelineRunEvidence, Error> {
+    let overlay_evidence = builder
+        .overlay_report()
+        .map_err(|error| Error::Build(format!("collecting overlay build evidence: {error}")))?;
+    let store_layer_selections = builder.take_store_layer_selections();
+    hermeticity_audit_events.extend(builder.take_hermeticity_audit_events());
+    Ok(PipelineRunEvidence {
+        hermeticity_audit_events,
+        build_environment_rows: builder.take_build_environment_reports(),
+        finish_gate_rows: builder.take_finish_gate_reports(),
+        network_policy_rows: builder.take_network_policy_reports(),
+        workspace_rows: workspace_evidence_sink.take(),
+        action_result_rows: builder.take_action_result_reports(),
+        overlay_report: overlay_evidence,
+        store_layer_selections,
+    })
+}
+
+#[cfg(target_os = "linux")]
 async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, Error> {
     let config = request.config;
     debug_assert!(!config.store_dir.is_empty());
@@ -466,41 +529,7 @@ async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, E
     if request.causal_trace_slot.is_some() {
         worker.enable_causal_trace(&config.store_dir);
     }
-    let mut worker_observation = request.worker_observation.map(|observation| {
-        let mut previous: Option<Arc<WorkerLiveSnapshot>> = None;
-        move |registry: &crunch_build::GoalRegistry| {
-            if observation.degraded.load(Ordering::Acquire) {
-                return;
-            }
-            if registry.len() as usize > MAX_LIVE_WORKER_GOALS {
-                observation.degraded.store(true, Ordering::Release);
-                return;
-            }
-            if previous.as_ref().is_some_and(|last| {
-                last.goals.len() == registry.len() as usize
-                    && registry.iter().all(|(drv_key, goal)| {
-                        last.goals
-                            .binary_search_by(|row| row.drv_key.as_str().cmp(drv_key))
-                            .is_ok_and(|index| last.goals[index].state == goal.state)
-                    })
-            }) {
-                return;
-            }
-            let mut goals: Vec<_> = registry
-                .iter()
-                .map(|(drv_key, goal)| WorkerLiveGoal {
-                    drv_key: drv_key.to_owned(),
-                    state: goal.state.clone(),
-                })
-                .collect();
-            goals.sort_unstable_by(|left, right| left.drv_key.cmp(&right.drv_key));
-            let snapshot = Arc::new(WorkerLiveSnapshot { goals });
-            previous = Some(Arc::clone(&snapshot));
-            if observation.sender.try_send(snapshot).is_err() {
-                observation.degraded.store(true, Ordering::Release);
-            }
-        }
-    });
+    let mut worker_observation = request.worker_observation.map(live_worker_observer);
     let worker_run = worker.run_streaming_observed(
         &mut builder,
         &mut known_paths,
@@ -527,22 +556,8 @@ async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, E
     let eval_stream = eval_stream?;
     capture_causal_trace(&mut worker, request.causal_trace_slot)?;
     let source_generation_paths = builder.source_generation_paths();
-    let overlay_evidence = builder
-        .overlay_report()
-        .map_err(|error| Error::Build(format!("collecting overlay build evidence: {error}")))?;
-    let store_layer_selections = builder.take_store_layer_selections();
-    let mut hermeticity_audit_events = request.hermeticity_audit_events;
-    hermeticity_audit_events.extend(builder.take_hermeticity_audit_events());
-    let pipeline_evidence = PipelineRunEvidence {
-        hermeticity_audit_events,
-        build_environment_rows: builder.take_build_environment_reports(),
-        finish_gate_rows: builder.take_finish_gate_reports(),
-        network_policy_rows: builder.take_network_policy_reports(),
-        workspace_rows: workspace_evidence_sink.take(),
-        action_result_rows: builder.take_action_result_reports(),
-        overlay_report: overlay_evidence,
-        store_layer_selections,
-    };
+    let pipeline_evidence =
+        collect_pipeline_evidence(&mut builder, workspace_evidence_sink, request.hermeticity_audit_events)?;
     let result = finish_pipeline_result(
         &config.store_dir,
         config.hermeticity_mode,

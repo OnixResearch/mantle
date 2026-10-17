@@ -56,7 +56,7 @@ const GUARD_PART_COUNT: usize = 3;
 
 const _: () = assert!(DIGEST_PART_COUNT > 0);
 
-// CLI variants retain their complete clap payloads to preserve flag and help compatibility.
+// CLI variants retain complete clap payloads to preserve flag and help compatibility.
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand, Debug, Clone)]
 pub(crate) enum NixFreeDemoAction {

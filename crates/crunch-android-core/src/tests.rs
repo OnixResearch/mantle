@@ -63,6 +63,20 @@ fn signed_and_unsigned_order_and_membership() {
 }
 
 #[test]
+fn reviewed_timestamp_policy_rejects_dates_the_jar_update_cannot_execute() {
+    for epoch in [315_532_800, 315_532_801, MAX_ZIP_EPOCH + 1] {
+        let mut plan = valid();
+        plan.reproducibility.entry_timestamp_epoch = epoch;
+        assert_eq!(lower(&plan), Err(Rejection::UnpinnedTimestampPolicy));
+    }
+    for epoch in [315_532_802, MAX_ZIP_EPOCH] {
+        let mut plan = valid();
+        plan.reproducibility.entry_timestamp_epoch = epoch;
+        assert_eq!(lower(&plan).unwrap().final_output, StepKind::Apksigner);
+    }
+}
+
+#[test]
 fn invalid_plans_return_distinct_rejections_before_lowering() {
     let mut cases = Vec::new();
     let mut plan = valid();
@@ -71,9 +85,6 @@ fn invalid_plans_return_distinct_rejections_before_lowering() {
     let mut plan = valid();
     plan.toolchain.build_tools.record_identity_blake3 = "0".repeat(64);
     cases.push((plan, Rejection::UnboundToolchainIdentity));
-    let mut plan = valid();
-    plan.reproducibility.entry_timestamp_epoch = MIN_ZIP_EPOCH - 1;
-    cases.push((plan, Rejection::UnpinnedTimestampPolicy));
     let mut plan = valid();
     plan.signing.as_mut().unwrap().keystore_member = "keys/../secret".into();
     cases.push((plan, Rejection::KeystorePathEscape));

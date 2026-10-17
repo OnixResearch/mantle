@@ -5,8 +5,10 @@ use std::collections::BTreeMap;
 use mantle_rust_plan_core::CompilerRestoreKind;
 use mantle_rust_plan_core::ExistingTopologyUnit;
 use mantle_rust_plan_core::ExistingUnitFacts;
+use mantle_rust_plan_core::NativeCfgEvaluationRequest;
 use mantle_rust_plan_core::NativeFeatureDefinition;
 use mantle_rust_plan_core::NativeFeatureSelectionRequest;
+use mantle_rust_plan_core::NativeHostTarget;
 use mantle_rust_plan_core::NativeInheritedValue;
 use mantle_rust_plan_core::NativeTargetCandidate;
 use mantle_rust_plan_core::NormalizedPackageFacts;
@@ -77,6 +79,55 @@ fn native_effects_derive_topology_and_preserve_actual_derivation_material() {
     assert_eq!(a[1].expected_outputs, host.expected_outputs);
     assert_eq!(a[1].input_identities, host.input_identities);
     assert_eq!(a[1].unit_id.0, host.unit_id);
+}
+
+#[test]
+fn native_effects_admit_build_script_runs_with_only_declared_topology_and_outputs() {
+    let mut compiled = real_unit("script-compiled", 0, &[]);
+    compiled.execution_kind = String::from("host");
+    compiled.target_kind = String::from("custom-build");
+    let mut run = real_unit("script-run", 1, &["script-compiled"]);
+    run.execution_kind = String::from("build-script-run");
+    run.target_kind = String::from("custom-build");
+    run.arguments = vec![String::from("run-build-script")];
+    run.expected_outputs = vec![String::from("out"), String::from("flags")];
+    let effects = plan_existing_unit_effects(vec![run.clone(), compiled]).unwrap();
+    assert_eq!(effects[0].unit_id.0, "script-compiled");
+    assert_eq!(effects[1].unit_id.0, "script-run");
+    assert_eq!(effects[1].dependency_unit_ids, vec![UnitId(String::from("script-compiled"))]);
+    assert_eq!(effects[1].arguments, run.arguments);
+    assert_eq!(effects[1].expected_outputs, run.expected_outputs);
+}
+
+#[test]
+fn native_effects_reject_empty_compiler_arguments_and_unpaired_script_execution() {
+    let mut compile = real_unit("compile", 0, &[]);
+    compile.arguments.clear();
+    assert!(
+        plan_existing_unit_effects(vec![compile])
+            .unwrap_err()
+            .iter()
+            .any(|blocker| blocker.code == "incomplete-unit-effect")
+    );
+    let mut run = real_unit("script-run", 0, &[]);
+    run.target_kind = String::from("custom-build");
+    run.execution_kind = String::from("build-script-run");
+    run.arguments.clear();
+    assert!(
+        plan_existing_unit_effects(vec![run])
+            .unwrap_err()
+            .iter()
+            .any(|blocker| blocker.code == "incomplete-unit-effect")
+    );
+    let mut wrong_kind = real_unit("wrong-kind", 0, &[]);
+    wrong_kind.execution_kind = String::from("build-script-run");
+    wrong_kind.arguments = vec![String::from("run-build-script")];
+    assert!(
+        plan_existing_unit_effects(vec![wrong_kind])
+            .unwrap_err()
+            .iter()
+            .any(|blocker| blocker.code == "unsupported-execution-kind")
+    );
 }
 
 #[test]
@@ -239,9 +290,10 @@ fn native_feature_selection_blocks_unknown_and_malformed_references() {
 fn native_execution_role_selects_declared_host_or_target_triple() {
     let host = "x86_64-unknown-linux-gnu";
     let target = "wasm32-unknown-unknown";
-    assert_eq!(select_native_execution_triple("target", host, target), target);
-    assert_eq!(select_native_execution_triple("host", host, target), host);
-    assert_eq!(select_native_execution_triple("host-dependency", host, target), host);
+    let triples = NativeHostTarget { host, target };
+    assert_eq!(select_native_execution_triple("target", triples), target);
+    assert_eq!(select_native_execution_triple("host", triples), host);
+    assert_eq!(select_native_execution_triple("host-dependency", triples), host);
     let host_cfg = classify_native_target_triple(host);
     assert_eq!((host_cfg.os, host_cfg.arch, host_cfg.vendor, host_cfg.env), ("linux", "x86_64", "unknown", "gnu"));
     assert_eq!((host_cfg.family, host_cfg.pointer_width, host_cfg.features), ("unix", "64", "fxsr,sse,sse2,x87"));
@@ -776,13 +828,49 @@ fn cfg_dependencies_use_selected_triple_once_and_optional_feature_edges() {
     let linux = "x86_64-unknown-linux-gnu";
     let windows = "x86_64-pc-windows-msvc";
     let expression = "cfg(all(target_arch = \"x86_64\", any(unix, not(windows))))";
-    assert_eq!(evaluate_supported_target_cfg(expression, linux), Some(true));
-    assert_eq!(evaluate_supported_target_cfg(expression, windows), Some(false));
-    assert_eq!(evaluate_supported_target_cfg("cfg(unrecognized_predicate)", linux), None);
-    assert_eq!(evaluate_supported_target_cfg("x86_64-unknown-linux-gnu", linux), Some(true));
+    assert_eq!(
+        evaluate_supported_target_cfg(NativeCfgEvaluationRequest {
+            expression,
+            active_target: linux,
+        }),
+        Some(true)
+    );
+    assert_eq!(
+        evaluate_supported_target_cfg(NativeCfgEvaluationRequest {
+            expression,
+            active_target: windows,
+        }),
+        Some(false)
+    );
+    assert_eq!(
+        evaluate_supported_target_cfg(NativeCfgEvaluationRequest {
+            expression: "cfg(unrecognized_predicate)",
+            active_target: linux,
+        }),
+        None
+    );
+    assert_eq!(
+        evaluate_supported_target_cfg(NativeCfgEvaluationRequest {
+            expression: "x86_64-unknown-linux-gnu",
+            active_target: linux,
+        }),
+        Some(true)
+    );
     let oversized = "x".repeat(1024 * 1024 + 1);
-    assert_eq!(evaluate_supported_target_cfg(&oversized, linux), None);
-    assert_eq!(evaluate_supported_target_cfg(expression, &oversized), None);
+    assert_eq!(
+        evaluate_supported_target_cfg(NativeCfgEvaluationRequest {
+            expression: &oversized,
+            active_target: linux,
+        }),
+        None
+    );
+    assert_eq!(
+        evaluate_supported_target_cfg(NativeCfgEvaluationRequest {
+            expression,
+            active_target: &oversized,
+        }),
+        None
+    );
     let definitions = BTreeMap::from([
         (String::from("enabled"), vec![String::from("dep:optional?/serde")]),
         (String::from("disabled"), vec![String::from("other")]),

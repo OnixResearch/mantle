@@ -257,7 +257,6 @@ pub type NarDigest = Blake3Hex<NarDigestRole>;
 #[path = "dynamic_plan/wire.rs"]
 mod wire;
 pub use wire::admit_plan_v1;
-
 #[path = "dynamic_plan/slices.rs"]
 mod slices;
 pub use slices::PlannedSlice;
@@ -752,6 +751,13 @@ fn validate_fetch_builder(derivation: &DynamicDerivation) -> Result<(), DynamicP
     if spec.algo != FixedOutputHashAlgo::Sha256 {
         return reject("fetch hash algorithm", "not sha256", "builtin fetcher requires sha256");
     }
+    debug_assert_eq!(derivation.outputs.len(), 1);
+    debug_assert!(derivation.inputs.is_empty());
+    validate_fetch_source(derivation, spec)
+}
+
+fn validate_fetch_source(derivation: &DynamicDerivation, spec: &FixedOutputSpec) -> Result<(), DynamicPlanError> {
+    let reject = |field, value: &str, reason| invalid_scalar(field, value, reason);
     let hash = if spec.hash.starts_with("sha256-") {
         nix_compat::nixhash::NixHash::from_sri(&spec.hash).ok().filter(|hash| {
             let canonical = format!("sha256-{}", data_encoding::BASE64.encode(hash.digest_as_bytes()));
@@ -781,8 +787,8 @@ fn validate_fetch_builder(derivation: &DynamicDerivation) -> Result<(), DynamicP
     }) {
         return reject("fetch URL", url, "expected an HTTP(S) URL without credentials or fragment");
     }
-    let git = derivation.env.get("type").is_some_and(|value| value == "git");
-    let allowed: &[&str] = if git { &["url", "type", "rev"] } else { &["url"] };
+    let is_git = derivation.env.get("type").is_some_and(|value| value == "git");
+    let allowed: &[&str] = if is_git { &["url", "type", "rev"] } else { &["url"] };
     for (key, value) in &derivation.env {
         if !allowed.contains(&key.as_str()) {
             return reject("fetch environment key", key, "unsupported fetcher parameter");
@@ -791,7 +797,7 @@ fn validate_fetch_builder(derivation: &DynamicDerivation) -> Result<(), DynamicP
             return reject("fetch environment value", value, "fetch parameters must be literal");
         }
     }
-    if git {
+    if is_git {
         if spec.mode != FixedOutputMode::Recursive {
             return reject("fetch fixed output mode", "flat", "git tree requires recursive NAR hash");
         }
@@ -804,6 +810,8 @@ fn validate_fetch_builder(derivation: &DynamicDerivation) -> Result<(), DynamicP
     } else if spec.mode != FixedOutputMode::Flat {
         return reject("fetch fixed output mode", "recursive", "URL archive fetch requires flat hash");
     }
+    debug_assert!(derivation.env.contains_key("url"));
+    debug_assert!(derivation.env.keys().all(|key| allowed.contains(&key.as_str())));
     Ok(())
 }
 

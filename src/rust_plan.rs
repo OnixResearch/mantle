@@ -314,10 +314,6 @@ pub(crate) struct RustPlanReceipt {
     pub(crate) native_host_unit_graph_planning: NativeHostUnitGraphPlanningSummary,
     pub(crate) unit_graph: UnitGraphSummary,
     pub(crate) unit_derivation_graph: UnitDerivationGraphSummary,
-    /// Exact Cargo-indexed compiler units, emitted only for the opt-in unit-plan
-    /// producer; the native topology above retains its existing receipt meaning.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) cargo_unit_derivation_graph: Option<UnitDerivationGraphSummary>,
     pub(crate) receipt_hash: String,
 }
 
@@ -1784,7 +1780,6 @@ struct NativePlanningLayers {
     units: NativeUnitGraphPlanningSummary,
     host_units: NativeHostUnitGraphPlanningSummary,
     derivations: UnitDerivationGraphSummary,
-    cargo_indexed_derivations: Option<UnitDerivationGraphSummary>,
 }
 
 struct NativePlanningInputs<'a> {
@@ -1816,7 +1811,7 @@ fn summarize_native_planning_layers(inputs: NativePlanningInputs<'_>) -> Result<
         &package_targets,
         inputs.options,
     )?;
-    let (host_units, cargo_graph) = summarize_native_host_unit_graph_planning_from_inputs(NativeHostPlanningInputs {
+    let (host_units, _) = summarize_native_host_unit_graph_planning_from_inputs(NativeHostPlanningInputs {
         unit_graph: inputs.unit_graph,
         source_closure: inputs.source_closure,
         registry_sources: inputs.registry_sources,
@@ -1836,9 +1831,6 @@ fn summarize_native_planning_layers(inputs: NativePlanningInputs<'_>) -> Result<
         units,
         host_units,
         derivations,
-        cargo_indexed_derivations: (std::env::var("MANTLE_UNIT_PLAN_CARGO_INDEXED_DERIVATIONS").as_deref() == Ok("1")
-            && !inputs.options.no_cargo_oracle)
-            .then_some(cargo_graph),
     })
 }
 
@@ -1895,7 +1887,6 @@ fn build_rust_plan_receipt(
         native_host_unit_graph_planning: inputs.native_layers.host_units,
         unit_graph: summarize_unit_graph(inputs.unit_graph)?,
         unit_derivation_graph: inputs.native_layers.derivations,
-        cargo_unit_derivation_graph: inputs.native_layers.cargo_indexed_derivations,
         receipt_hash: String::new(),
     };
     receipt.receipt_hash = receipt_hash(&receipt)?;
@@ -5903,8 +5894,12 @@ fn native_target_cfg_dependency(
         }));
     }
     let normalized_manifest_path = manifest_path.as_ref().map(|path| normalize_path_string(path));
-    let decision =
-        mantle_rust_plan_core::classify_target_cfg_dependency(is_dependency_selected, inputs.is_cfg_selected);
+    let cfg_selection = if inputs.is_cfg_selected {
+        mantle_rust_plan_core::TargetCfgSelection::Selected
+    } else {
+        mantle_rust_plan_core::TargetCfgSelection::NotSelected
+    };
+    let decision = mantle_rust_plan_core::classify_target_cfg_dependency(is_dependency_selected, cfg_selection);
     let fact = NativeTargetCfgDependencySummary {
         cfg: inputs.cfg_expr.to_string(),
         active_target: inputs.planning.active_target.to_string(),
@@ -5930,7 +5925,11 @@ fn native_target_cfg_dependencies(
     let mut cfg_facts = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let mut selected_dependencies = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for (cfg_expr, target) in inputs.target_tables {
-        let is_cfg_selected = mantle_rust_plan_core::evaluate_supported_target_cfg(cfg_expr, inputs.active_target)
+        let is_cfg_selected =
+            mantle_rust_plan_core::evaluate_supported_target_cfg(mantle_rust_plan_core::NativeCfgEvaluationRequest {
+                expression: cfg_expr,
+                active_target: inputs.active_target,
+            })
             .ok_or_else(|| {
                 native_blocker(NativePackageBlockerInputs {
                     package_id: inputs.package_id.clone(),
@@ -5965,7 +5964,11 @@ fn selected_triple_for_execution_kind(execution_kind: &str, options: &RustPlanOp
     debug_assert!(!execution_kind.is_empty());
     let host = host_target_triple();
     let target = options.targets.first().map(String::as_str).unwrap_or(&host);
-    mantle_rust_plan_core::select_native_execution_triple(execution_kind, &host, target).to_string()
+    mantle_rust_plan_core::select_native_execution_triple(execution_kind, mantle_rust_plan_core::NativeHostTarget {
+        host: &host,
+        target,
+    })
+    .to_string()
 }
 
 fn host_target_triple() -> String {
@@ -16795,6 +16798,12 @@ fn rust_cache_path_replacements(
         if let Some(parent) = source.parent() {
             replacements.push((normalize_path_string(parent), "@source-root".to_string()));
         }
+        if let Some(manifest_root) = unit.derivation.env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV) {
+            let manifest_root = Path::new(manifest_root);
+            if manifest_root.is_absolute() && source.starts_with(manifest_root) {
+                replacements.push((normalize_path_string(manifest_root), "@manifest-root".to_string()));
+            }
+        }
     }
     replacements.push((normalize_path_string(&options.output_root), "@execution-output".to_string()));
     replacements.push((normalize_path_string(&inputs.output_dir), "@unit-output".to_string()));
@@ -16834,6 +16843,10 @@ fn rust_cache_admitted_environment(
         if name.is_empty() {
             return Err(RunError::Internal("local Rust cache environment name is empty".to_string()));
         }
+        // The effective child-environment digest still binds presence and value, including empty values.
+        if value.is_empty() {
+            continue;
+        }
         let value = normalize_rust_cache_text(value, replacements);
         if contains_absolute_path_text(&value) {
             return Err(RunError::Internal(format!(
@@ -16851,7 +16864,7 @@ fn rust_cache_admitted_environment(
         RUST_CACHE_EFFECTIVE_ENV_DIGEST_KEY.to_string(),
         rust_cache_effective_environment_digest(&effective)?,
     );
-    assert_eq!(normalized.len(), environment.len().saturating_add(1));
+    assert!(normalized.len() <= environment.len().saturating_add(1));
     assert!(normalized.keys().all(|name| !name.is_empty()));
     Ok(normalized)
 }
@@ -16880,7 +16893,15 @@ fn rust_cache_effective_environment_digest(environment: &BTreeMap<String, OsStri
 fn normalize_rust_cache_text(value: &str, replacements: &[(String, String)]) -> String {
     let mut normalized = value.to_string();
     for (source, target) in replacements {
-        normalized = normalized.replace(source, target);
+        if target == "@manifest-root" {
+            if let Some(suffix) = normalized.strip_prefix(source)
+                && (suffix.is_empty() || suffix.starts_with('/'))
+            {
+                normalized.replace_range(..source.len(), target);
+            }
+        } else {
+            normalized = normalized.replace(source, target);
+        }
     }
     assert!(normalized.len() <= value.len().saturating_add(replacements.len().saturating_mul(BLAKE3_HEX_CHARS)));
     normalized
@@ -17109,7 +17130,7 @@ fn finalize_successful_rust_unit_execution(
     }
     if publish_cache_result {
         let published = publish_local_cache_result(options, cache_action.as_ref(), &output_dir, &receipt)?;
-        if let Some(publication) = publish_shared_cache_result(options, published.as_ref()) {
+        if let Some(publication) = publish_shared_cache_result(options, published.as_ref())? {
             let shared_report = receipt
                 .shared_cache
                 .get_or_insert_with(|| SharedRustCacheReport::rejected("shared-cache-lookup-not-recorded"));
@@ -17142,6 +17163,9 @@ fn publish_local_cache_result(
     };
     let result = match selection.cache.publish_blocking(request) {
         Ok(result) => result,
+        Err(crunch_rust_cache::Error::Authority(error)) => {
+            return Err(RunError::Build(format!("publishing retained Rust unit: {error}")));
+        }
         Err(_) => return Ok(None),
     };
     assert_eq!(producer_receipt_ref.len(), RUST_CACHE_RECEIPT_REF_PREFIX.len() + BLAKE3_HEX_CHARS);
@@ -17152,22 +17176,28 @@ fn publish_local_cache_result(
 fn publish_shared_cache_result(
     options: &RustUnitExecutionOptions,
     result: Option<&crunch_rust_cache_core::RustUnitResult>,
-) -> Option<SharedPublicationObservation> {
-    let local = options.local_cache.as_ref()?;
-    let shared = local.shared.as_ref()?;
-    let source = shared.publication_source.as_ref()?;
+) -> Result<Option<SharedPublicationObservation>, RunError> {
+    let Some(local) = options.local_cache.as_ref() else {
+        return Ok(None);
+    };
+    let Some(shared) = local.shared.as_ref() else {
+        return Ok(None);
+    };
+    let Some(source) = shared.publication_source.as_ref() else {
+        return Ok(None);
+    };
     let Some(result) = result else {
-        return Some(SharedPublicationObservation::rejected(
+        return Ok(Some(SharedPublicationObservation::rejected(
             source.source_id().to_string(),
             "shared-local-result-unavailable",
-        ));
+        )));
     };
     let Some(signing_key) = shared.signing_key.as_ref() else {
-        return Some(SharedPublicationObservation::rejected_for_result(
+        return Ok(Some(SharedPublicationObservation::rejected_for_result(
             source.source_id().to_string(),
             result.result_ref.clone(),
             "shared-signing-key-unavailable",
-        ));
+        )));
     };
     let request = SharedPublishRequest {
         result,
@@ -17179,14 +17209,17 @@ fn publish_shared_cache_result(
     let publication = local.cache.publish_shared_blocking(source.as_ref(), request);
     assert!(shared.policy.publishes_enabled);
     assert!(!shared.signer_name.is_empty());
-    Some(match publication {
+    Ok(Some(match publication {
         Ok(report) => SharedPublicationObservation::accepted(report),
+        Err(crunch_rust_cache::Error::Authority(error)) => {
+            return Err(RunError::Build(format!("publishing shared retained Rust unit: {error}")));
+        }
         Err(_) => SharedPublicationObservation::rejected_for_result(
             source.source_id().to_string(),
             result.result_ref.clone(),
             "shared-publication-failed",
         ),
-    })
+    }))
 }
 
 fn try_restore_local_cache_result(
@@ -17208,6 +17241,9 @@ fn try_restore_local_cache_result(
     inputs.local_cache_action = Some(action.clone());
     let report = match selection.cache.restore_blocking(&action, &inputs.output_dir, &selection.policy) {
         Ok(report) => report,
+        Err(crunch_rust_cache::Error::Authority(error)) => {
+            return Err(RunError::Build(format!("restoring retained Rust unit: {error}")));
+        }
         Err(error) => RustCacheReport {
             disposition: crunch_rust_cache::CACHE_DISPOSITION_REJECTED.to_string(),
             reason_codes: vec![format!("local-cache-restore-error:{error}")],
@@ -17238,17 +17274,20 @@ fn try_restore_shared_cache_result(
     let Some(shared) = local_selection.shared.as_ref() else {
         return Ok(None);
     };
-    let report = local_selection
-        .cache
-        .restore_shared_blocking(SharedRestoreRequest {
-            action,
-            output_dir: &inputs.output_dir,
-            local_policy: &local_selection.policy,
-            shared_policy: &shared.policy,
-            trust_policy: &shared.trust_policy,
-            sources: &shared.sources,
-        })
-        .unwrap_or_else(|_| SharedRustCacheReport::rejected("shared-cache-restore-error"));
+    let report = match local_selection.cache.restore_shared_blocking(SharedRestoreRequest {
+        action,
+        output_dir: &inputs.output_dir,
+        local_policy: &local_selection.policy,
+        shared_policy: &shared.policy,
+        trust_policy: &shared.trust_policy,
+        sources: &shared.sources,
+    }) {
+        Ok(report) => report,
+        Err(crunch_rust_cache::Error::Authority(error)) => {
+            return Err(RunError::Build(format!("restoring shared retained Rust unit: {error}")));
+        }
+        Err(_) => SharedRustCacheReport::rejected("shared-cache-restore-error"),
+    };
     let is_hit = report.disposition == crunch_rust_cache::shared::SHARED_CACHE_HIT;
     let is_conflict = report.disposition == crunch_rust_cache::shared::SHARED_CACHE_CONFLICT;
     let must_block =
@@ -26687,19 +26726,35 @@ checksum = "0123456789abcdef"
         assert_ne!(digest_a, digest_b);
         assert_eq!(digest_a.len(), BLAKE3_HEX_CHARS);
 
-        let empty_value = BTreeMap::from([("CARGO_PKG_DESCRIPTION".to_string(), String::new())]);
-        let admitted = rust_cache_admitted_environment(&empty_value, &[]).unwrap();
-        assert_eq!(admitted.get("CARGO_PKG_DESCRIPTION").map(String::as_str), Some(""));
+        let replacements = vec![("/project/unit".to_string(), "@manifest-root".to_string())];
+        let manifest = BTreeMap::from([
+            (BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), "/project/unit".to_string()),
+            ("CARGO_PKG_AUTHORS".to_string(), String::new()),
+        ]);
+        let admitted = rust_cache_admitted_environment(&manifest, &replacements).unwrap();
+        assert_eq!(admitted[BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV], "@manifest-root");
+        assert!(!admitted.contains_key("CARGO_PKG_AUTHORS"));
+        let without_empty =
+            BTreeMap::from([(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), "/project/unit".to_string())]);
+        let admitted_without_empty = rust_cache_admitted_environment(&without_empty, &replacements).unwrap();
+        assert_ne!(
+            admitted[RUST_CACHE_EFFECTIVE_ENV_DIGEST_KEY],
+            admitted_without_empty[RUST_CACHE_EFFECTIVE_ENV_DIGEST_KEY]
+        );
         let empty_key = BTreeMap::from([(String::new(), "value".to_string())]);
         assert!(
-            rust_cache_admitted_environment(&empty_key, &[])
+            rust_cache_admitted_environment(&empty_key, &replacements)
                 .unwrap_err()
                 .to_string()
                 .contains("environment name is empty")
         );
-
-        let unclassified = BTreeMap::from([("CUSTOM_TOOL".to_string(), "/ambient/tool".to_string())]);
-        let error = rust_cache_admitted_environment(&unclassified, &[]).unwrap_err().to_string();
+        let mut unclassified = manifest;
+        unclassified.insert("CUSTOM_TOOL".to_string(), "/ambient/tool".to_string());
+        let error = rust_cache_admitted_environment(&unclassified, &replacements).unwrap_err().to_string();
+        assert!(error.contains("unclassified absolute path"));
+        assert!(error.contains("CUSTOM_TOOL"));
+        unclassified.insert("CUSTOM_TOOL".to_string(), "/project/unit-sibling/tool".to_string());
+        let error = rust_cache_admitted_environment(&unclassified, &replacements).unwrap_err().to_string();
         assert!(error.contains("unclassified absolute path"));
         assert!(error.contains("CUSTOM_TOOL"));
     }

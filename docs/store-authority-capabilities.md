@@ -20,6 +20,13 @@ Mantle splits store authority into concrete Rust values. Each value has private 
 
 The pipeline keeps `OutputLookup` and `RootRegistry`. It uses these values after the builder finishes.
 
+`list_interest_reports` rejects a legacy registry beyond the configured
+`max_roots` policy limit before extending its report map; retained-interest
+records keep their separate record-count bound. The contextual reference
+finish-gate scanner reads castore blobs and symlinks without mutating them,
+consumes EOF at the exact scanned-byte limit, and rejects an additional byte.
+Neither observation admits output content or grants root mutation authority.
+
 The pipeline creates sandbox services through `BuildServiceStore`. It does not receive blob, directory, or `PathInfo` services.
 
 ## Compatibility facade

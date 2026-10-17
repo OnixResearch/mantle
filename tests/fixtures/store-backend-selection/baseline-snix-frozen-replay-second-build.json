@@ -1,0 +1,179 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "examples/hello.ncl",
+  "output_dir": "/home/brittonr/scratch/mantle-selection-baseline-fixtures/store-clock-replay",
+  "state_dir": "/home/brittonr/scratch/mantle-selection-baseline-fixtures/state-clock-replay",
+  "store_dir": "/mantle/store",
+  "scheduler_policy": {
+    "schema": "mantle-scheduling-policy-v1",
+    "policy_id": "mantle-lazy-priority-v1",
+    "preference_order": [
+      "known-graph",
+      "resource-fit",
+      "locality-transfer"
+    ],
+    "aged_after_epochs": 4,
+    "protected_after_epochs": 8
+  },
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "build_environment_reports": [
+    {
+      "action_name": "hello",
+      "digest_algorithm": "blake3",
+      "digest_blake3": "75871cfa9f5d0cd5dcf0f1e473ff76680bb2758409681dc458d924fec3457313",
+      "variable_count": 24,
+      "rejections": []
+    }
+  ],
+  "network_policy_reports": [
+    {
+      "action_name": "hello",
+      "mode": "offline",
+      "result": "denied",
+      "capability": null,
+      "policy_basis": "ordinary derivation network access is denied by default",
+      "audit_class": null,
+      "fixed_output": null,
+      "diagnostic": null
+    }
+  ],
+  "workspace_reports": [],
+  "action_result_reports": [
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/971d600896275bf794dc9c903d863f641c05c1ee4d4444dfcd5c9d9748aa445f",
+      "disposition": "miss",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "publication",
+      "action_ref": "mantle-action://blake3/971d600896275bf794dc9c903d863f641c05c1ee4d4444dfcd5c9d9748aa445f",
+      "disposition": "published",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [
+        "mantle-action-result://blake3/f43db89f7b75434d3ff662446a39d5e7582abe12b63006273644e8929cb6b938"
+      ],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    }
+  ],
+  "native_dynamic_plans": [],
+  "scheduler_priority_decisions": [
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 1,
+      "selected_goal_key_blake3": "255216a580310ede2e8d99963d2e2edfc25359a51428ffb12e79b7e12c3df228",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "5363206e8fe2077ef51c124fe5dac0cdc25650d6bc50f212c5109b558f69492e",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 1,
+      "known_critical_path_work_units": 1,
+      "blocked_root_count": 1,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    }
+  ],
+  "overlay_base_generations": [],
+  "store_layer_selections": [],
+  "remote_telemetry_events": [
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    }
+  ],
+  "frontend_artifact_attestations": [],
+  "ast_grep_structural_evidence": [],
+  "ast_grep_structural_evidence_diagnostics": [
+    {
+      "label": "hello",
+      "output_name": "out",
+      "evidence_path": "/home/brittonr/scratch/mantle-selection-baseline-fixtures/store-clock-replay/z2y3k7267f9kbpfyw9zw0d1adjcn6z62-hello/share/mantle/ast-grep-structural-evidence.json",
+      "blocker_class": "ast-grep-evidence-read-error",
+      "message": "opening parent capability for ast-grep structural evidence at /home/brittonr/scratch/mantle-selection-baseline-fixtures/store-clock-replay/z2y3k7267f9kbpfyw9zw0d1adjcn6z62-hello/share/mantle/ast-grep-structural-evidence.json: capability root path component is not a directory: z2y3k7267f9kbpfyw9zw0d1adjcn6z62-hello",
+      "next_action": "regenerate share/mantle/ast-grep-structural-evidence.json with the pinned ast-grep toolchain and current BLAKE3 identities"
+    }
+  ],
+  "cargo_build_evidence": [],
+  "cargo_build_evidence_diagnostics": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/mantle/store/c575623bccnl26lwry9sdpj0jnawgb47-hello.drv",
+      "label": "hello",
+      "cached": false,
+      "log_file": "/home/brittonr/scratch/mantle-selection-baseline-fixtures/state-clock-replay/logs/c575623bccnl26lwry9sdpj0jnawgb47-hello.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/home/brittonr/scratch/mantle-selection-baseline-fixtures/store-clock-replay/z2y3k7267f9kbpfyw9zw0d1adjcn6z62-hello",
+          "artifact_attestation": {
+            "logical_path": "/mantle/store/z2y3k7267f9kbpfyw9zw0d1adjcn6z62-hello",
+            "path": "/home/brittonr/scratch/mantle-selection-baseline-fixtures/state-clock-replay/attestations/artifacts/5d17828c20cd85cb319cbefa3c495303a034a09e5a5726065698dd8a834d1cf7.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}

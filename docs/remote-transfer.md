@@ -65,6 +65,15 @@ has moved into the core and application ports: those I2/I3 migrations remain
 open. Snix `PathInfo` and substitution reports, credential material, handles,
 and process/network types stay in std adapters, not the portable contracts.
 
+The portable remote core accepts named policy limits and fixed-width count
+facts. Std adapters convert collection lengths with checked `u32`/`u64`
+conversions before passing those observations to the core; a count that cannot
+be represented is an error, not a truncated claim. This does not turn a
+transfer acknowledgement or a worker report into output authority.
+
+Client and worker adapters pass separate `bytes_max` and `time_secs_max`
+fields in `crunch_remote_app::TransferEffectLimits` to input and output
+transfer effects; neither transfer result grants output-admission authority.
 Transfer completion is not store admission: partially published physical
 bytes can remain after a failed attempt without becoming an admitted output.
 

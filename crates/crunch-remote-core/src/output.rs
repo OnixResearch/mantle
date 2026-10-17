@@ -79,34 +79,46 @@ impl OutputBlocker {
 
 /// Compare worker result identities before inspecting host-owned NAR and PathInfo bytes.
 /// The adapter supplies its computed receipt only after reading its concrete outputs.
-pub fn validate_execution_outcome_scope(
-    expected_request_id: &str,
-    actual_request_id: &str,
-    expected_plan_digest_blake3: &str,
-    actual_plan_digest_blake3: &str,
-    reported_output_digest_blake3: &str,
-) -> Result<(), OutputBlocker> {
-    if actual_request_id != expected_request_id {
+pub struct ExecutionOutcomeScopeFacts<'a> {
+    pub expected_request_id: &'a str,
+    pub actual_request_id: &'a str,
+    pub expected_plan_digest_blake3: &'a str,
+    pub actual_plan_digest_blake3: &'a str,
+    pub reported_output_digest_blake3: &'a str,
+}
+
+pub fn validate_execution_outcome_scope(facts: ExecutionOutcomeScopeFacts<'_>) -> Result<(), OutputBlocker> {
+    if facts.actual_request_id != facts.expected_request_id {
         return Err(OutputBlocker::ExecutionRequestMismatch);
     }
-    if actual_plan_digest_blake3 != expected_plan_digest_blake3 {
+    if facts.actual_plan_digest_blake3 != facts.expected_plan_digest_blake3 {
         return Err(OutputBlocker::ExecutionPlanDigestMismatch);
     }
-    if !is_blake3_hex_digest(reported_output_digest_blake3) {
+    if !is_blake3_hex_digest(facts.reported_output_digest_blake3) {
         return Err(OutputBlocker::ExecutionOutputDigestInvalid);
     }
     Ok(())
 }
 
-pub fn validate_execution_output_digest(reported: &str, observed: &str) -> Result<(), OutputBlocker> {
-    if reported != observed {
+pub struct ExecutionOutputDigestFacts<'a> {
+    pub reported: &'a str,
+    pub observed: &'a str,
+}
+
+pub fn validate_execution_output_digest(facts: ExecutionOutputDigestFacts<'_>) -> Result<(), OutputBlocker> {
+    if facts.reported != facts.observed {
         return Err(OutputBlocker::ExecutionOutputDigestMismatch);
     }
     Ok(())
 }
 
-pub fn validate_execution_output_size(reported: u64, observed: u64) -> Result<(), OutputBlocker> {
-    if reported != observed {
+pub struct ExecutionOutputSizeFacts {
+    pub reported: u64,
+    pub observed: u64,
+}
+
+pub fn validate_execution_output_size(facts: ExecutionOutputSizeFacts) -> Result<(), OutputBlocker> {
+    if facts.reported != facts.observed {
         return Err(OutputBlocker::ExecutionOutputSizeMismatch);
     }
     Ok(())
@@ -143,17 +155,20 @@ pub fn validate_execution_output_facts<'a, T, E>(
     if outputs.len() != expected_outputs.len() {
         return Err(ExecutionOutputValidationError::Decision(OutputBlocker::ExecutionOutputCountMismatch));
     }
+    debug_assert_eq!(outputs.len(), expected_outputs.len());
     let expected = expected_outputs.map(|output| (output.name, output.logical_path)).collect::<BTreeMap<_, _>>();
     let mut seen = BTreeSet::new();
     for (output, host_output) in outputs {
         if !seen.insert(output.name) {
             return Err(ExecutionOutputValidationError::Decision(OutputBlocker::ExecutionOutputNameDuplicate));
         }
+        debug_assert!(seen.contains(output.name));
         match expected.get(output.name) {
             Some(Some(path)) if *path == output.logical_path => {}
             Some(None) if !output.logical_path.is_empty() && output.logical_path.starts_with(store_prefix) => {}
             _ => return Err(ExecutionOutputValidationError::Decision(OutputBlocker::ExecutionOutputIdentityMismatch)),
         }
+        debug_assert!(expected.contains_key(output.name));
         if !is_blake3_hex_digest(output.content_digest_blake3)
             || !is_blake3_hex_digest(output.artifact_attestation_digest_blake3)
         {
@@ -241,6 +256,12 @@ impl OutputTransferArtifactBlocker {
 /// A compatibility artifact is accepted only after its payload and its
 /// builder-declared identity match. One result record may contain multiple
 /// artifacts, but it cannot silently omit, duplicate, or overrun a bound.
+#[derive(Debug, Clone, Copy)]
+pub struct ArtifactTransferLimits {
+    pub artifact_count: u64,
+    pub artifact_count_max: u64,
+    pub total_bytes_max: u64,
+}
 pub struct OutputTransferArtifactSequence<'a> {
     request_id: &'a str,
     seen: BTreeSet<(alloc::string::String, OutputTransferArtifactKind)>,
@@ -249,23 +270,18 @@ pub struct OutputTransferArtifactSequence<'a> {
 }
 
 impl<'a> OutputTransferArtifactSequence<'a> {
-    pub fn new(
-        request_id: &'a str,
-        artifact_count: usize,
-        artifact_count_max: usize,
-        total_bytes_max: u64,
-    ) -> Result<Self, OutputTransferArtifactBlocker> {
+    pub fn new(request_id: &'a str, limits: ArtifactTransferLimits) -> Result<Self, OutputTransferArtifactBlocker> {
         if request_id.is_empty() {
             return Err(OutputTransferArtifactBlocker::RequestIdEmpty);
         }
-        if artifact_count > artifact_count_max {
+        if limits.artifact_count > limits.artifact_count_max {
             return Err(OutputTransferArtifactBlocker::ArtifactCountExceeded);
         }
         Ok(Self {
             request_id,
             seen: BTreeSet::new(),
             transferred_bytes: 0,
-            total_bytes_max,
+            total_bytes_max: limits.total_bytes_max,
         })
     }
 
@@ -319,8 +335,10 @@ impl<'a> OutputTransferArtifactSequence<'a> {
         Ok(())
     }
 
-    pub fn finish(self, expected_artifact_count: usize) -> Result<(), OutputTransferArtifactBlocker> {
-        if self.seen.len() != expected_artifact_count {
+    pub fn finish(self, expected_artifact_count: u64) -> Result<(), OutputTransferArtifactBlocker> {
+        let seen_count =
+            u64::try_from(self.seen.len()).map_err(|_| OutputTransferArtifactBlocker::ArtifactCountExceeded)?;
+        if seen_count != expected_artifact_count {
             return Err(OutputTransferArtifactBlocker::Missing);
         }
         Ok(())
@@ -374,6 +392,7 @@ pub fn admit_transfer_report(report: TransferReportFacts<'_>) -> Result<(), Outp
     if report.verified_builder_key.is_empty() {
         return Err(OutputBlocker::TransferBuilderKeyEmpty);
     }
+    debug_assert!(!report.verified_builder_key.is_empty());
     let expected_mode_label = match report.mode {
         TransferMode::Delta => "delta",
         TransferMode::Full => "full",
@@ -382,6 +401,7 @@ pub fn admit_transfer_report(report: TransferReportFacts<'_>) -> Result<(), Outp
     if report.mode_label != expected_mode_label {
         return Err(OutputBlocker::TransferModeLabelMismatch);
     }
+    debug_assert_eq!(report.mode_label, expected_mode_label);
     match report.mode {
         TransferMode::Delta if report.fallback_reason.is_some() => Err(OutputBlocker::TransferDeltaHasFallbackReason),
         TransferMode::Full if report.reused_bytes != 0 => Err(OutputBlocker::TransferFullReusedBytesNonzero),
@@ -416,8 +436,13 @@ pub fn validate_output_scope(facts: OutputScopeFacts<'_>) -> Result<(), OutputBl
 }
 
 /// Binding a transfer report to the builder does not authenticate its output.
-pub fn validate_transfer_builder_key(report_key: &str, result_key: &str) -> Result<(), OutputBlocker> {
-    if report_key != result_key {
+pub struct TransferBuilderKeyFacts<'a> {
+    pub report_key: &'a str,
+    pub result_key: &'a str,
+}
+
+pub fn validate_transfer_builder_key(facts: TransferBuilderKeyFacts<'_>) -> Result<(), OutputBlocker> {
+    if facts.report_key != facts.result_key {
         return Err(OutputBlocker::TransferBuilderKeyMismatch);
     }
     Ok(())
@@ -435,12 +460,16 @@ pub struct ProducedOutputFacts<'a> {
 /// Check the ordered metadata receipt before individual identities, preserving
 /// the existing first-error precedence. Nothing here admits content to a store.
 // r[impl remote_builds.hexagonal_core]
+pub struct ProducedOutputMetadataContext<'a> {
+    pub reported_digest_blake3: &'a str,
+    pub builder_signing_key_id: &'a str,
+    pub store_prefix: &'a str,
+}
+
 pub fn validate_produced_output_metadata<'a, E, O>(
     expected_outputs: E,
     outputs: O,
-    reported_digest_blake3: &str,
-    builder_signing_key_id: &str,
-    store_prefix: &str,
+    context: ProducedOutputMetadataContext<'_>,
 ) -> Result<(), OutputBlocker>
 where
     E: ExactSizeIterator<Item = ExpectedOutputFacts<'a>>,
@@ -449,13 +478,15 @@ where
     if outputs.len() != expected_outputs.len() {
         return Err(OutputBlocker::MetadataCountMismatch);
     }
+    debug_assert_eq!(outputs.len(), expected_outputs.len());
     let mut receipt = OrderedOutputReceipt::new();
     for output in outputs.clone() {
         receipt.append(output.receipt);
     }
-    if blake3::Hash::from_bytes(receipt.finish()).to_hex().as_str() != reported_digest_blake3 {
+    if blake3::Hash::from_bytes(receipt.finish()).to_hex().as_str() != context.reported_digest_blake3 {
         return Err(OutputBlocker::MetadataDigestMismatch);
     }
+    debug_assert!(is_blake3_hex_digest(context.reported_digest_blake3));
     let mut expected = expected_outputs
         .map(|output| (output.name, (output.logical_path, false)))
         .collect::<BTreeMap<_, _>>();
@@ -470,10 +501,10 @@ where
         *seen = true;
         match expected_path {
             Some(path) if *path == fields.logical_path => {}
-            None if !fields.logical_path.is_empty() && fields.logical_path.starts_with(store_prefix) => {}
+            None if !fields.logical_path.is_empty() && fields.logical_path.starts_with(context.store_prefix) => {}
             _ => return Err(OutputBlocker::MetadataIdentityMismatch),
         }
-        if output.path_info_signing_key_id != builder_signing_key_id {
+        if output.path_info_signing_key_id != context.builder_signing_key_id {
             return Err(OutputBlocker::MetadataPathinfoKeyMismatch);
         }
         if !is_blake3_hex_digest(fields.content_digest_blake3)
@@ -525,9 +556,11 @@ pub fn match_output_key<'a>(
         return Err(OutputTrustBlocker::StorePrefixMismatch);
     }
     let (signer_name, signer_material) = split_output_key(signing_key_id);
+    debug_assert!(store_prefix_matches);
     let signer_digest = signer_material.map(|material| *blake3::hash(material.as_bytes()).as_bytes());
-    let mut material_required = false;
-    let mut different_material = false;
+    debug_assert_eq!(signer_material.is_some(), signer_digest.is_some());
+    let mut is_material_required = false;
+    let mut is_different_material = false;
     for trusted_key in trusted_key_ids {
         let (trusted_name, trusted_material) = split_output_key(trusted_key);
         if trusted_name != signer_name {
@@ -539,8 +572,8 @@ pub fn match_output_key<'a>(
                     key_material_digest_blake3: signer_digest,
                 });
             }
-            (Some(_), Some(_)) => different_material = true,
-            (None, Some(_)) => material_required = true,
+            (Some(_), Some(_)) => is_different_material = true,
+            (None, Some(_)) => is_material_required = true,
             (_, None) => {
                 return Ok(MatchedOutputKey {
                     key_material_digest_blake3: signer_digest,
@@ -548,10 +581,10 @@ pub fn match_output_key<'a>(
             }
         }
     }
-    if material_required {
+    if is_material_required {
         return Err(OutputTrustBlocker::KeyMaterialMissing);
     }
-    if different_material {
+    if is_different_material {
         return Err(OutputTrustBlocker::SameNameDifferentMaterial);
     }
     Err(OutputTrustBlocker::UntrustedKey)
@@ -588,11 +621,20 @@ mod tests {
             digest_blake3: artifact.digest_blake3,
             size_bytes: artifact.size_bytes,
         };
-        let mut sequence = OutputTransferArtifactSequence::new("request", 2, 2, 14).unwrap();
+        let limits = ArtifactTransferLimits {
+            artifact_count: 2,
+            artifact_count_max: 2,
+            total_bytes_max: 14,
+        };
+        let mut sequence = OutputTransferArtifactSequence::new("request", limits).unwrap();
         assert_eq!(sequence.observe(artifact, Some(expected)), Ok(()));
         assert_eq!(sequence.observe(artifact, Some(expected)), Err(OutputTransferArtifactBlocker::Duplicate));
         assert_eq!(sequence.finish(2), Err(OutputTransferArtifactBlocker::Missing));
-        let mut tampered = OutputTransferArtifactSequence::new("request", 1, 2, 14).unwrap();
+        let mut tampered = OutputTransferArtifactSequence::new("request", ArtifactTransferLimits {
+            artifact_count: 1,
+            ..limits
+        })
+        .unwrap();
         assert_eq!(
             tampered.observe(
                 OutputTransferArtifactFacts {
@@ -603,7 +645,11 @@ mod tests {
             ),
             Err(OutputTransferArtifactBlocker::DigestMismatch)
         );
-        let mut correct = OutputTransferArtifactSequence::new("request", 1, 2, 14).unwrap();
+        let mut correct = OutputTransferArtifactSequence::new("request", ArtifactTransferLimits {
+            artifact_count: 1,
+            ..limits
+        })
+        .unwrap();
         assert_eq!(correct.observe(artifact, Some(expected)), Ok(()));
         assert_eq!(correct.finish(1), Ok(()));
     }
@@ -775,9 +821,11 @@ mod tests {
             validate_produced_output_metadata(
                 expected.iter().copied(),
                 outputs.iter().copied(),
-                claimed,
-                "builder-key",
-                "/store",
+                ProducedOutputMetadataContext {
+                    reported_digest_blake3: claimed,
+                    builder_signing_key_id: "builder-key",
+                    store_prefix: "/store",
+                },
             )
         };
         assert_eq!(validate(&[output], &expected, receipt.as_str()), Ok(()));
@@ -876,7 +924,10 @@ mod tests {
             Ok(())
         );
         assert_eq!(
-            validate_transfer_builder_key("unrelated", "builder"),
+            validate_transfer_builder_key(TransferBuilderKeyFacts {
+                report_key: "unrelated",
+                result_key: "builder"
+            }),
             Err(OutputBlocker::TransferBuilderKeyMismatch)
         );
     }

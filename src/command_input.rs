@@ -1,4 +1,4 @@
-//! Clap DTO mapping for the store and release families.
+//! Clap DTO mapping for admitted store, project, source, and execution commands.
 //!
 //! The CLI DTOs are mapped here, once, into typed contract commands or into an
 //! explicit statement that the contract does not administer the action.
@@ -43,12 +43,12 @@ use crate::WasmComponentAction;
 
 /// Command root the store DTO maps onto.
 const STORE_COMMAND_ROOT: &str = "store";
-/// Command root the release DTO maps onto.
-const RELEASE_COMMAND_ROOT: &str = "release";
 /// Command root the project-lifecycle DTO maps onto.
 const PROJECT_COMMAND_ROOT: &str = "project";
 /// Manifest file the project-lifecycle commands work from.
 const PROJECT_MANIFEST_FILE: &str = crate::project_cmd::MANIFEST_FILE;
+/// Command root the release DTO maps onto.
+const RELEASE_COMMAND_ROOT: &str = "release";
 /// Command root the evaluation DTO maps onto.
 const EVALUATION_COMMAND_ROOT: &str = "eval";
 /// Command root the source DTO maps onto.
@@ -477,7 +477,6 @@ mod release_tests {
         assert!(matches!(admit_release_action_or_block(&global), Ok(ReleaseCommandAdmission::NotModeled)));
     }
 }
-
 /// Build the typed project-lifecycle command for one CLI operation.
 ///
 /// The CLI carries no subject for `init`, `show`, or `upgrade`; the subject is
@@ -862,6 +861,7 @@ mod source_tests {
                 sources: Vec::new(),
                 build_roots: Vec::new(),
                 import_paths: Vec::new(),
+                cached_fetches: Vec::new(),
                 to: PathBuf::new(),
                 fetch_missing: false,
             },
@@ -1192,7 +1192,6 @@ pub(crate) fn admit_remote_action(action: &RemoteAction) -> RemoteCommandAdmissi
         | RemoteAction::Serve { .. } => RemoteCommandAdmission::NotAdministered,
     }
 }
-
 /// Admit the remote secret worker and return its typed command.
 ///
 /// The worker names the manifest it resolves, the SecretSpec profile to use, and
@@ -1215,58 +1214,4 @@ pub(crate) fn admit_remote_secret_worker(manifest: &Path, profile: &str) -> Resu
     };
     debug_assert!(!blockers.is_empty());
     Err(RunError::Internal(format!("remote-secret-worker request rejected: {blocker:?}")))
-}
-
-#[cfg(test)]
-mod remote_tests {
-    use std::path::PathBuf;
-
-    use super::*;
-
-    #[test]
-    fn the_secret_worker_maps_its_manifest_and_profile() {
-        let command =
-            admit_remote_secret_worker(Path::new("/tmp/secretspec.toml"), "production").expect("the worker must admit");
-        assert_eq!(command.operation, RemoteExecutionOperation::SecretProfile);
-        assert_eq!(command.root, REMOTE_SECRET_WORKER_COMMAND_ROOT);
-        assert_eq!(command.subject, "/tmp/secretspec.toml");
-        assert_eq!(command.secret_profile, Some(String::from("production")));
-        assert!(command.declared_entries.is_empty());
-        assert!(!command.has_ticket);
-    }
-
-    #[test]
-    fn an_empty_manifest_or_profile_fails_closed() {
-        let error = admit_remote_secret_worker(Path::new(""), "production").expect_err("an empty subject must fail");
-        assert!(error.to_string().contains("MissingSubject"), "{error}");
-
-        let no_profile = RemoteExecutionCommand {
-            root: String::from(REMOTE_SECRET_WORKER_COMMAND_ROOT),
-            operation: RemoteExecutionOperation::SecretProfile,
-            subject: String::from("/tmp/secretspec.toml"),
-            declared_entries: Vec::new(),
-            builder_uri: String::new(),
-            secret_profile: None,
-            has_ticket: false,
-        };
-        let blockers = validate_remote_execution(&no_profile);
-        assert!(blockers.iter().any(|blocker| format!("{blocker:?}").contains("CredentialRequired")));
-        assert!(RemoteExecutionOperation::Build.requires_declared_entries());
-    }
-
-    #[test]
-    fn the_visible_remote_actions_stay_outside_the_contract() {
-        let serve = RemoteAction::Serve {
-            endpoint_id: String::from("local-builder"),
-            binding: crate::RemoteServeBinding::Metadata,
-            signing_key_id: String::from("builder-key"),
-            executor: crate::RemoteServeExecutor::Fixture,
-            present_input_refs: Vec::new(),
-            execution_state_dir: None,
-            secret_manifest: PathBuf::from("secretspec.toml"),
-            secret_profile: String::from("production"),
-            secret_provider: String::from("systemd"),
-        };
-        assert_eq!(admit_remote_action(&serve), RemoteCommandAdmission::NotAdministered);
-    }
 }

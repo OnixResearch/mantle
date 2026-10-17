@@ -69,12 +69,17 @@ If the bundle has exactly one binary, `--release-binary` may be omitted. Optiona
 
 A structurally complete failed verification may render as `valid = false`, `verdict = FAIL`, `disposition = invalid`, with the original bounded diagnostics. Cairn rejects that receipt for readiness. Missing required links, malformed BLAKE3 values, partial Kamacite metadata, wrong roles or schemas, unsupported scopes, stale embedded links, weakened boundaries, and receipt-hash drift are rejected before handoff.
 
-## Direct Cairn smoke
+## Direct Cairn intake diagnostic
 
-The stack smoke first exercises the real CLI integration test with `MANTLE_FUNCTION_ADDRESS_CLI_RECEIPT_OUT=/tmp/mantle-function-address-cli-cairn-binding.json`, then passes that generated receipt directly to Cairn:
+After the real CLI integration test emits
+`/tmp/mantle-function-address-cli-cairn-binding.json`, the pinned Cairn CLI
+can inspect it together with Valence and Kamacite receipt inputs. The
+checked-in Valence/Kamacite fixtures below predate the newer Cairn
+evidence-chain admission, so this is an intake diagnostic, not a passing
+readiness smoke:
 
 ```sh
-nix run path:../cairn#cairn -- release-readiness \
+nix develop -c cairn release-readiness \
   --root . \
   --policy cairn-policy/generated/cairn-policy.json \
   --function-address-valence tests/fixtures/function-address-release-binding/valence-receipt.valid.json \
@@ -82,4 +87,16 @@ nix run path:../cairn#cairn -- release-readiness \
   --function-address-kamacite tests/fixtures/function-address-release-binding/kamacite-receipt.valid.json
 ```
 
-The relevant evidence is the resulting `function_address` component: `passed = true`, `disposition = present`, `issues = []`, and logical Valence/Kamacite hashes matching the supplied upstream receipts. Aggregate readiness may still fail for unrelated workspace components.
+With the committed `mantle-binding.valid.json` fixture substituted for the
+generated Mantle receipt, the pinned Cairn revision
+`007ba5193dd8fec9067a1c0e0f8ef487807af872` exited zero but returned
+`valid = false`, `verdict = fail`, and `function_address.passed = false`.
+Its `function_address` issues include missing evidence-chain claim/envelope
+fields, a stale Kamacite receipt hash, and missing Kamacite non-claims.
+The Leviathan diagnostic log
+`mantle-cairn-pin-007ba-function-address-readiness-smoke-20261010.log`
+has BLAKE3 identity `371028832de416914ffd4118c74f8cd0bee12c2e13512990c9ad9775769ba4e2`.
+A positive handoff needs current producer-owned Valence and Kamacite receipts
+and a Mantle binding to those exact receipts; do not promote these old
+fixtures, process exit status, or unrelated aggregate readiness fields into
+a successful function-address claim.

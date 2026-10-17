@@ -69,8 +69,10 @@ capability.
   staging and is never split. r[mantle.casita_store_backend.atomic_batch_import]
 - Keep PathInfo-backed `ActionResultPort` outputs core as output roots with
   fresh-process rehydration. Give castore-only payloads, including standalone
-  Rust unit cache nodes, permanent roots under `mantle/castore/` while the
-  Casita profile declares `rust-unit-cache`.
+  Rust unit cache nodes, permanent roots under `mantle/castore/`; publish
+  each payload root before the result, index, or retention metadata that
+  names it. The Casita profile declares `rust-unit-cache` after verified
+  fresh-process reuse without another compiler invocation.
   r[mantle.casita_store_backend.castore_payload_roots]
 - Declare Casita `rust-unit-cache` in the same cutover as durable payload
   publication, fresh-process verification, and guarded GC retention. A
@@ -110,10 +112,9 @@ capability.
   Casita network profile. r[mantle.casita_store_backend.offline_boundary]
 - Keep Casita types inside the store shell, extend the capability boundary
   checker, and declare the Casita profile: every core capability, bounded
-  atomic batch import and the optional `rust-unit-cache` backed by durable
-  castore roots; no `store-repair-final-nar`, overlay composition, or unsigned
-  admission. `--trust-unsigned` and `store repair-final-nar` fail closed under
-  `casita`.
+  atomic batch import, and `rust-unit-cache` backed by durable payload roots,
+  but no `store-repair-final-nar`, overlay composition, or unsigned admission.
+  `--trust-unsigned` and `store repair-final-nar` fail closed under `casita`.
   r[mantle.casita_store_backend.capability_boundary]
 - Record bounded non-claims. r[mantle.casita_store_backend.claim_boundary]
 
@@ -139,18 +140,17 @@ capability.
   fresh-process reuse after export deletion, root-race, replacement, and
   interrupted-staging fixtures, all-or-none batch fixtures at 1,024 and 1,025
   paths, PathInfo-backed action-result reuse, `store gc` reachability with and
-  without Rust unit cache state, gated castore payload fixtures, missing,
-  invalid, unauthorized, removed-key, and unsigned trust fixtures,
-  NAR-mismatch, envelope-tamper, stale-plan, interrupted-GC, and eviction
-  fixtures, and a clean-source Nix vendor build.
+  without Rust unit cache state, durable castore payload reuse and tamper
+  fixtures, missing, invalid, unauthorized, removed-key, and unsigned trust
+  fixtures, NAR-mismatch, envelope-tamper, stale-plan, interrupted-GC,
+  eviction fixtures, and a clean-source Nix vendor build.
 - **Compatibility**: `snix` stays the default and keeps its formats and trust
   behavior. Store paths, NAR facts, signatures, action refs, source bundles,
   and store archives are identical across backends for the same signing key.
-  Casita mode has no overlay composition, no unsigned admission, and no
-  final-NAR repair until a durable repair fence exists. Rust unit cache
-  payloads use verified castore roots; atomic batches have a 1,024-path bound.
-  Unsupported or over-bound operations fail closed with stable blockers, so
-  `casita` is not fully interchangeable with `snix`.
+  Casita mode has no overlay composition, no unsigned admission, no final-NAR
+  repair until a durable repair fence exists, and a 1,024-path batch bound;
+  missing or changed retained cache payload roots fail closed before compiler
+  fallback or a GC fence. `casita` is not fully interchangeable with `snix`.
 
 ## Scope
 

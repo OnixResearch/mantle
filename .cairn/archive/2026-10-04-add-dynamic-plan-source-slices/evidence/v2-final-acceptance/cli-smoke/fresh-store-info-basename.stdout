@@ -1,0 +1,44 @@
+{
+  "backend": "snix",
+  "backend_capabilities": {
+    "atomic_batch_import": true,
+    "core": [
+      "output-admission",
+      "lookup",
+      "fresh-process-reopen",
+      "closure-resolution",
+      "export",
+      "store-archive-export",
+      "store-archive-import",
+      "gc-plan",
+      "plan-bound-gc",
+      "action-result-pathinfo-output-reuse",
+      "store-sign",
+      "store-repair-final-nar"
+    ],
+    "max_root_changes": null,
+    "overlay_composition": true,
+    "rust_unit_cache": true,
+    "unsigned_admission": true
+  },
+  "overlay": null,
+  "paths": [
+    {
+      "ca": "Nar(Sha256([81, 25, 103, 176, 46, 115, 186, 69, 79, 68, 112, 116, 169, 59, 188, 84, 196, 1, 221, 31, 132, 50, 110, 38, 86, 126, 225, 104, 12, 134, 236, 209]))",
+      "deriver": null,
+      "layer": {
+        "kind": "overlay"
+      },
+      "nar_sha256": "511967b02e73ba454f447074a93bbc54c401dd1f84326e26567ee1680c86ecd1",
+      "nar_size": 312,
+      "node": "Directory { digest: blake3-SsFtL/gu2p3L6R4mTHVQDhp9M87StjoXcB5jJePRDuY=, size: 1 }",
+      "references": [],
+      "shadows": [],
+      "signatures": [
+        "crunch-britton-desktop-1:gVbe5PXwtwiqy1PhqFRUbfDxLuoI87Mzrx0Iyw0hNoteIAkeedpHIVjkZSXCdShhEaChXa4kot3ZgcnVzKZ4Dg=="
+      ],
+      "store_path": "pgr4dlvr8na9ilwi252zhz76pycg82r7-v2-cli-package"
+    }
+  ],
+  "schema": "mantle-store-info-v2"
+}

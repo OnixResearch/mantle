@@ -1,55 +1,95 @@
 #![cfg(target_os = "linux")]
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::io;
 use std::num::NonZeroUsize;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixListener;
-use std::process::{Command, Stdio};
+use std::process::Command;
+use std::process::Stdio;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
-use crunch_build::{HermeticityMode, KeyPair, action_result, signing};
-use crunch_glue::{ConversionCache, CrunchDerivation, Input};
-use crunch_nix_gateway::{handshake, read_request, store::VerifiedStore, write_rejection};
+use crunch_build::HermeticityMode;
+use crunch_build::KeyPair;
+use crunch_build::action_result;
+use crunch_build::signing;
+use crunch_glue::ConversionCache;
+use crunch_glue::CrunchDerivation;
+use crunch_glue::Input;
+use crunch_nix_gateway::handshake;
+use crunch_nix_gateway::read_request;
+use crunch_nix_gateway::store::VerifiedStore;
+use crunch_nix_gateway::write_rejection;
 use crunch_nix_gateway_core::Reject;
-use crunch_store::{StoreHandle, StoreHandleServices};
-use nix_compat::derivation::{Derivation, Output};
-use nix_compat::narinfo::{SigningKey, VerifyingKey, fingerprint_with_store_dir};
-use nix_compat::nixhash::{CAHash, NixHash};
-use nix_compat::store_path::{StorePath, StorePathRef};
-use snix_castore::blobservice::{BlobService, MemoryBlobService};
-use snix_castore::directoryservice::{DirectoryService, RedbDirectoryService, RedbDirectoryServiceConfig};
-use snix_castore::{Node, SymlinkTarget};
-use snix_store::nar::{NarCalculationService, SimpleRenderer};
+use crunch_store::StoreHandle;
+use crunch_store::StoreHandleServices;
+use nix_compat::derivation::Derivation;
+use nix_compat::derivation::Output;
+use nix_compat::narinfo::SigningKey;
+use nix_compat::narinfo::VerifyingKey;
+use nix_compat::narinfo::fingerprint_with_store_dir;
+use nix_compat::nixhash::CAHash;
+use nix_compat::nixhash::NixHash;
+use nix_compat::store_path::StorePath;
+use nix_compat::store_path::StorePathRef;
+use snix_castore::Node;
+use snix_castore::SymlinkTarget;
+use snix_castore::blobservice::BlobService;
+use snix_castore::blobservice::MemoryBlobService;
+use snix_castore::directoryservice::DirectoryService;
+use snix_castore::directoryservice::RedbDirectoryService;
+use snix_castore::directoryservice::RedbDirectoryServiceConfig;
+use snix_store::nar::NarCalculationService;
+use snix_store::nar::SimpleRenderer;
 use snix_store::path_info::PathInfo;
-use snix_store::pathinfoservice::{LruPathInfoService, PathInfoService};
+use snix_store::pathinfoservice::LruPathInfoService;
+use snix_store::pathinfoservice::PathInfoService;
 use tokio::io::AsyncWriteExt;
 
 #[derive(Clone, Copy)]
-enum Case { Signed, Missing, Tampered, SignedWrongNar, WrongCa, IncompleteCas }
+enum Case {
+    Signed,
+    Missing,
+    Tampered,
+    SignedWrongNar,
+    WrongCa,
+    IncompleteCas,
+}
 
 fn fixture(case: Case, temp: &tempfile::TempDir, runtime: &tokio::runtime::Runtime) -> (VerifiedStore, String) {
     let blobs = Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>;
-    let directories = Arc::new(RedbDirectoryService::new_temporary(
-        "gateway-nix-test".to_string(), RedbDirectoryServiceConfig::default(),
-    ).unwrap()) as Arc<dyn DirectoryService>;
-    let infos = Arc::new(LruPathInfoService::with_capacity(
-        "gateway-nix-test".to_string(), NonZeroUsize::new(32).unwrap(),
-    )) as Arc<dyn PathInfoService>;
+    let directories = Arc::new(
+        RedbDirectoryService::new_temporary("gateway-nix-test".to_string(), RedbDirectoryServiceConfig::default())
+            .unwrap(),
+    ) as Arc<dyn DirectoryService>;
+    let infos =
+        Arc::new(LruPathInfoService::with_capacity("gateway-nix-test".to_string(), NonZeroUsize::new(32).unwrap()))
+            as Arc<dyn PathInfoService>;
     let path = StorePath::from_name_and_digest_fixed("gateway-client", [7_u8; 20]).unwrap();
     let absolute_path = path.to_absolute_path();
     let raw_key = ed25519_dalek::SigningKey::from_bytes(&[13_u8; 32]);
     let signer = SigningKey::new("gateway-fixture-1".to_string(), raw_key.clone());
     let trusted = VerifyingKey::new("gateway-fixture-1".to_string(), raw_key.verifying_key());
     if !matches!(case, Case::Missing) {
-        let node = Node::Symlink { target: SymlinkTarget::try_from("actual-content").unwrap() };
-        let (nar_size, nar_sha256) = runtime.block_on(
-            SimpleRenderer::new(blobs.clone(), directories.clone()).calculate_nar(&node),
-        ).unwrap();
+        let node = Node::Symlink {
+            target: SymlinkTarget::try_from("actual-content").unwrap(),
+        };
+        let (nar_size, nar_sha256) = runtime
+            .block_on(SimpleRenderer::new(blobs.clone(), directories.clone()).calculate_nar(&node))
+            .unwrap();
         let mut info = PathInfo {
-            store_path: path, node, references: Vec::new(), nar_size, nar_sha256,
-            signatures: Vec::new(), deriver: None, ca: None,
+            store_path: path,
+            node,
+            references: Vec::new(),
+            nar_size,
+            nar_sha256,
+            signatures: Vec::new(),
+            deriver: None,
+            ca: None,
         };
         if matches!(case, Case::WrongCa) {
             info.ca = Some(CAHash::Nar(NixHash::Sha256(nar_sha256)));
@@ -67,17 +107,32 @@ fn fixture(case: Case, temp: &tempfile::TempDir, runtime: &tokio::runtime::Runti
         }
         let refs: Vec<StorePathRef<'_>> = Vec::new();
         let fingerprint = fingerprint_with_store_dir(
-            &info.store_path.as_ref(), &info.nar_sha256, info.nar_size, refs.iter(), "/nix/store",
+            &info.store_path.as_ref(),
+            &info.nar_sha256,
+            info.nar_size,
+            refs.iter(),
+            "/nix/store",
         );
         info.signatures.push(signer.sign(fingerprint.as_bytes()).to_owned());
-        if matches!(case, Case::Tampered) { info.nar_size += 1; }
+        if matches!(case, Case::Tampered) {
+            info.nar_size += 1;
+        }
         runtime.block_on(infos.put(info)).unwrap();
     }
-    let handle = StoreHandle::from_services_with_store_dir(StoreHandleServices {
-        blob_service: blobs, directory_service: directories, pathinfo_service: infos,
-        remote_pathinfo: None, state_dir: temp.path().to_path_buf(),
-        output_dir_str: temp.path().display().to_string(), publishers: Vec::new(),
-    }, "/nix/store".to_string());
+    let handle = StoreHandle::from_services_with_store_dir(
+        crunch_store::StoreBackend::Snix,
+        StoreHandleServices {
+            blob_service: blobs,
+            directory_service: directories,
+            pathinfo_service: infos,
+            remote_pathinfo: None,
+            state_dir: temp.path().to_path_buf(),
+            output_dir_str: temp.path().display().to_string(),
+            publishers: Vec::new(),
+        },
+        "/nix/store".to_string(),
+    )
+    .expect("gateway Snix fixture");
     (VerifiedStore::new(handle, vec![trusted]).unwrap(), absolute_path)
 }
 
@@ -98,7 +153,6 @@ fn signed_path_info_is_bound_to_measured_cas_content() {
     }
 }
 
-
 #[derive(Clone, Copy)]
 enum CachedCase {
     Signed,
@@ -111,11 +165,16 @@ enum CachedCase {
 
 async fn cached_drv_fixture(case: CachedCase, temp: &tempfile::TempDir) -> (VerifiedStore, String, String) {
     let blobs = Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>;
-    let directories = Arc::new(RedbDirectoryService::new_temporary(
-        "gateway-cached-derivation".to_string(), RedbDirectoryServiceConfig::default(),
-    ).unwrap()) as Arc<dyn DirectoryService>;
+    let directories = Arc::new(
+        RedbDirectoryService::new_temporary(
+            "gateway-cached-derivation".to_string(),
+            RedbDirectoryServiceConfig::default(),
+        )
+        .unwrap(),
+    ) as Arc<dyn DirectoryService>;
     let infos = Arc::new(LruPathInfoService::with_capacity(
-        "gateway-cached-derivation".to_string(), NonZeroUsize::new(16).unwrap(),
+        "gateway-cached-derivation".to_string(),
+        NonZeroUsize::new(16).unwrap(),
     )) as Arc<dyn PathInfoService>;
     let renderer = SimpleRenderer::new(blobs.clone(), directories.clone());
     let raw_key = ed25519_dalek::SigningKey::from_bytes(&[13_u8; 32]);
@@ -131,7 +190,8 @@ async fn cached_drv_fixture(case: CachedCase, temp: &tempfile::TempDir) -> (Veri
         input_derivations: BTreeMap::new(),
         input_sources: BTreeSet::new(),
         outputs: BTreeMap::from([("out".to_string(), Output {
-            path: Some(output_path.clone()), ca_hash: None,
+            path: Some(output_path.clone()),
+            ca_hash: None,
         })]),
         system: "x86_64-linux".to_string(),
     };
@@ -139,13 +199,22 @@ async fn cached_drv_fixture(case: CachedCase, temp: &tempfile::TempDir) -> (Veri
     let mut writer = blobs.open_write().await;
     writer.write_all(&at).await.unwrap();
     let digest = writer.close().await.unwrap();
-    let drv_node = Node::File { digest, size: at.len() as u64, executable: false };
+    let drv_node = Node::File {
+        digest,
+        size: at.len() as u64,
+        executable: false,
+    };
     let (nar_size, nar_sha256) = renderer.calculate_nar(&drv_node).await.unwrap();
     let drv_path = StorePath::from_name_and_digest_fixed("cached-output.drv", [11_u8; 20]).unwrap();
     let mut drv_info = PathInfo {
-        store_path: drv_path.clone(), node: drv_node,
-        references: Vec::new(), nar_size, nar_sha256,
-        signatures: Vec::new(), deriver: None, ca: None,
+        store_path: drv_path.clone(),
+        node: drv_node,
+        references: Vec::new(),
+        nar_size,
+        nar_sha256,
+        signatures: Vec::new(),
+        deriver: None,
+        ca: None,
     };
     signing::sign_pathinfo_with_store_dir(&mut drv_info, &keypair.signing_key, "/nix/store");
     if matches!(case, CachedCase::AlteredDrvBytes) {
@@ -153,7 +222,11 @@ async fn cached_drv_fixture(case: CachedCase, temp: &tempfile::TempDir) -> (Veri
         let altered = b"not-the-signed-aterm";
         writer.write_all(altered).await.unwrap();
         let tampered = writer.close().await.unwrap();
-        drv_info.node = Node::File { digest: tampered, size: altered.len() as u64, executable: false };
+        drv_info.node = Node::File {
+            digest: tampered,
+            size: altered.len() as u64,
+            executable: false,
+        };
     }
     infos.put(drv_info).await.unwrap();
     let output_node = Node::Symlink {
@@ -161,9 +234,14 @@ async fn cached_drv_fixture(case: CachedCase, temp: &tempfile::TempDir) -> (Veri
     };
     let (size, hash) = renderer.calculate_nar(&output_node).await.unwrap();
     let mut output = PathInfo {
-        store_path: output_path.clone(), node: output_node,
-        references: Vec::new(), nar_size: size, nar_sha256: hash,
-        signatures: Vec::new(), deriver: None, ca: None,
+        store_path: output_path.clone(),
+        node: output_node,
+        references: Vec::new(),
+        nar_size: size,
+        nar_sha256: hash,
+        signatures: Vec::new(),
+        deriver: None,
+        ca: None,
     };
     signing::sign_pathinfo_with_store_dir(&mut output, &keypair.signing_key, "/nix/store");
     let second_signer = matches!(case, CachedCase::AmbiguousRecords).then(|| {
@@ -178,17 +256,31 @@ async fn cached_drv_fixture(case: CachedCase, temp: &tempfile::TempDir) -> (Veri
     }
     let original_outputs = BTreeMap::from([("out".to_string(), output.clone())]);
     let signed = action_result::signed_record_for_outputs(
-        &derivation, &original_outputs, "/nix/store", HermeticityMode::Strict, &keypair,
-    ).unwrap();
+        &derivation,
+        &original_outputs,
+        "/nix/store",
+        HermeticityMode::Strict,
+        &keypair,
+    )
+    .unwrap();
     if matches!(case, CachedCase::AlteredOutput) {
         output.nar_size += 1;
     }
     infos.put(output).await.unwrap();
-    let handle = StoreHandle::from_services_with_store_dir(StoreHandleServices {
-        blob_service: blobs, directory_service: directories, pathinfo_service: infos.clone(),
-        remote_pathinfo: None, state_dir: temp.path().to_path_buf(),
-        output_dir_str: temp.path().display().to_string(), publishers: Vec::new(),
-    }, "/nix/store".to_string());
+    let handle = StoreHandle::from_services_with_store_dir(
+        crunch_store::StoreBackend::Snix,
+        StoreHandleServices {
+            blob_service: blobs,
+            directory_service: directories,
+            pathinfo_service: infos.clone(),
+            remote_pathinfo: None,
+            state_dir: temp.path().to_path_buf(),
+            output_dir_str: temp.path().display().to_string(),
+            publishers: Vec::new(),
+        },
+        "/nix/store".to_string(),
+    )
+    .expect("cached gateway Snix fixture");
     if !matches!(case, CachedCase::MissingRecord) {
         let mut signed = signed;
         if matches!(case, CachedCase::ForgedRecordSignature) {
@@ -202,8 +294,13 @@ async fn cached_drv_fixture(case: CachedCase, temp: &tempfile::TempDir) -> (Veri
     }
     if let Some(other) = &second_signer {
         let second = action_result::signed_record_for_outputs(
-            &derivation, &original_outputs, "/nix/store", HermeticityMode::Strict, other,
-        ).unwrap();
+            &derivation,
+            &original_outputs,
+            "/nix/store",
+            HermeticityMode::Strict,
+            other,
+        )
+        .unwrap();
         handle.publish_local_action_result(&second).await.unwrap();
     }
     let drv = drv_path.to_absolute_path();
@@ -235,18 +332,14 @@ fn cached_derived_query_requires_signed_drv_and_unambiguous_complete_output() {
         assert_eq!(actual, expected);
         if matches!(case, CachedCase::Signed) {
             assert!(runtime.block_on(store.query_missing(&[output])).unwrap().is_empty());
-            assert_eq!(
-                runtime.block_on(store.query_missing(&[format!("{drv}!out")])).unwrap(),
-                Vec::<String>::new(),
-            );
-            assert_eq!(
-                runtime.block_on(store.query_missing(&[format!("{drv}!dev")])),
-                Err(Reject::Operation),
-            );
+            assert_eq!(runtime.block_on(store.query_missing(&[format!("{drv}!out")])).unwrap(), Vec::<String>::new(),);
+            assert_eq!(runtime.block_on(store.query_missing(&[format!("{drv}!dev")])), Err(Reject::Operation),);
             let mut wire = Vec::new();
             assert_eq!(
                 runtime.block_on(store.answer(
-                    crunch_nix_gateway::ParsedRequest::BuildPaths { paths: vec![format!("{drv}!*")] },
+                    crunch_nix_gateway::ParsedRequest::BuildPaths {
+                        paths: vec![format!("{drv}!*")]
+                    },
                     &mut wire,
                 )),
                 Err(Reject::Operation),
@@ -257,18 +350,29 @@ fn cached_derived_query_requires_signed_drv_and_unambiguous_complete_output() {
 }
 
 #[derive(Clone, Copy)]
-enum ProjectionCase { SignedIa, MissingSource, ChangedEnv, ChangedOutput, DifferentDrvPath }
+enum ProjectionCase {
+    SignedIa,
+    MissingSource,
+    ChangedEnv,
+    ChangedOutput,
+    DifferentDrvPath,
+}
 
 async fn generated_signed_ia_fixture(
     case: ProjectionCase,
     temp: &tempfile::TempDir,
 ) -> (VerifiedStore, StorePath<String>, StorePath<String>) {
     let blobs = Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>;
-    let directories = Arc::new(RedbDirectoryService::new_temporary(
-        "gateway-remote-projection".to_string(), RedbDirectoryServiceConfig::default(),
-    ).unwrap()) as Arc<dyn DirectoryService>;
+    let directories = Arc::new(
+        RedbDirectoryService::new_temporary(
+            "gateway-remote-projection".to_string(),
+            RedbDirectoryServiceConfig::default(),
+        )
+        .unwrap(),
+    ) as Arc<dyn DirectoryService>;
     let infos = Arc::new(LruPathInfoService::with_capacity(
-        "gateway-remote-projection".to_string(), NonZeroUsize::new(16).unwrap(),
+        "gateway-remote-projection".to_string(),
+        NonZeroUsize::new(16).unwrap(),
     )) as Arc<dyn PathInfoService>;
     let renderer = SimpleRenderer::new(blobs.clone(), directories.clone());
     let raw_key = ed25519_dalek::SigningKey::from_bytes(&[13_u8; 32]);
@@ -305,11 +409,21 @@ async fn generated_signed_ia_fixture(
     let mut writer = blobs.open_write().await;
     writer.write_all(&at).await.unwrap();
     let digest = writer.close().await.unwrap();
-    let node = Node::File { digest, size: at.len() as u64, executable: false };
+    let node = Node::File {
+        digest,
+        size: at.len() as u64,
+        executable: false,
+    };
     let (nar_size, nar_sha256) = renderer.calculate_nar(&node).await.unwrap();
     let mut drv_info = PathInfo {
-        store_path: drv_path.clone(), node, nar_size, nar_sha256,
-        references: Vec::new(), signatures: Vec::new(), deriver: None, ca: None,
+        store_path: drv_path.clone(),
+        node,
+        nar_size,
+        nar_sha256,
+        references: Vec::new(),
+        signatures: Vec::new(),
+        deriver: None,
+        ca: None,
     };
     signing::sign_pathinfo_with_store_dir(&mut drv_info, &signer, "/nix/store");
     infos.put(drv_info).await.unwrap();
@@ -319,17 +433,32 @@ async fn generated_signed_ia_fixture(
         };
         let (nar_size, nar_sha256) = renderer.calculate_nar(&node).await.unwrap();
         let mut info = PathInfo {
-            store_path: source.clone(), node, nar_size, nar_sha256,
-            references: Vec::new(), signatures: Vec::new(), deriver: None, ca: None,
+            store_path: source.clone(),
+            node,
+            nar_size,
+            nar_sha256,
+            references: Vec::new(),
+            signatures: Vec::new(),
+            deriver: None,
+            ca: None,
         };
         signing::sign_pathinfo_with_store_dir(&mut info, &signer, "/nix/store");
         infos.put(info).await.unwrap();
     }
-    let handle = StoreHandle::from_services_with_store_dir(StoreHandleServices {
-        blob_service: blobs, directory_service: directories, pathinfo_service: infos,
-        remote_pathinfo: None, state_dir: temp.path().to_path_buf(),
-        output_dir_str: temp.path().display().to_string(), publishers: Vec::new(),
-    }, "/nix/store".to_string());
+    let handle = StoreHandle::from_services_with_store_dir(
+        crunch_store::StoreBackend::Snix,
+        StoreHandleServices {
+            blob_service: blobs,
+            directory_service: directories,
+            pathinfo_service: infos,
+            remote_pathinfo: None,
+            state_dir: temp.path().to_path_buf(),
+            output_dir_str: temp.path().display().to_string(),
+            publishers: Vec::new(),
+        },
+        "/nix/store".to_string(),
+    )
+    .expect("signed gateway Snix fixture");
     (VerifiedStore::new(handle, vec![verifier]).unwrap(), drv_path, source)
 }
 
@@ -345,14 +474,13 @@ fn signed_ia_projection_requires_exact_remote_derivation_and_measured_inputs() {
     ] {
         let temp = tempfile::tempdir().unwrap();
         let (store, drv_path, source) = runtime.block_on(generated_signed_ia_fixture(case, &temp));
-        let actual = runtime.block_on(store.project_signed_ia_for_remote(&drv_path.to_absolute_path()))
-            .map(|proof| {
-                let (path, crunch, nix) = proof.into_derivations();
-                assert_eq!(path, drv_path);
-                assert_eq!(crunch.name, "signed-input-addressed");
-                assert!(nix.input_sources.contains(&source));
-                assert!(nix.outputs["out"].path.is_some());
-            });
+        let actual = runtime.block_on(store.project_signed_ia_for_remote(&drv_path.to_absolute_path())).map(|proof| {
+            let (path, crunch, nix) = proof.into_derivations();
+            assert_eq!(path, drv_path);
+            assert_eq!(crunch.name, "signed-input-addressed");
+            assert!(nix.input_sources.contains(&source));
+            assert!(nix.outputs["out"].path.is_some());
+        });
         assert_eq!(actual, expected);
     }
     let temp = tempfile::tempdir().unwrap();
@@ -426,21 +554,32 @@ fn installed_nix_cached_drv_never_acks_unauthorized_build_paths() {
         }
         Ok(observed)
     });
-    let mut client = Command::new("nix-store").args(["--realise", "--store"])
-        .arg(format!("unix://{}", socket.display())).arg(&drv)
-        .stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let mut client = Command::new("nix-store")
+        .args(["--realise", "--store"])
+        .arg(format!("unix://{}", socket.display()))
+        .arg(&drv)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
     let deadline = Instant::now() + Duration::from_secs(10);
     while client.try_wait().unwrap().is_none() && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(10));
     }
-    if client.try_wait().unwrap().is_none() { client.kill().unwrap(); }
+    if client.try_wait().unwrap().is_none() {
+        client.kill().unwrap();
+    }
     let output = client.wait_with_output().unwrap();
     let observed = server.join().unwrap().unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(observed.iter().any(|request| request.starts_with("QueryMissing")),
-        "native Nix did not consume a cached derivation query: {observed:?}; {stderr}");
-    assert!(observed.iter().any(|request| request.starts_with("BuildPaths")),
-        "native Nix skipped the Build permission gate: {observed:?}; {stderr}");
+    assert!(
+        observed.iter().any(|request| request.starts_with("QueryMissing")),
+        "native Nix did not consume a cached derivation query: {observed:?}; {stderr}"
+    );
+    assert!(
+        observed.iter().any(|request| request.starts_with("BuildPaths")),
+        "native Nix skipped the Build permission gate: {observed:?}; {stderr}"
+    );
     assert!(!output.status.success(), "unauthorized build succeeded: {observed:?}");
     assert!(stderr.contains(Reject::Operation.code()), "{stderr}; {observed:?}");
 }
@@ -456,8 +595,7 @@ fn private_listener_rejects_shared_socket_directory() {
     std::fs::create_dir(&shared).unwrap();
     std::fs::set_permissions(&shared, std::fs::Permissions::from_mode(0o755)).unwrap();
     let socket = shared.join("worker.sock");
-    let error = crunch_nix_gateway::server::serve_private(&socket, store, &AtomicBool::new(false))
-        .unwrap_err();
+    let error = crunch_nix_gateway::server::serve_private(&socket, store, &AtomicBool::new(false)).unwrap_err();
     assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
     assert!(!socket.exists(), "unauthorized listener left a socket behind");
 }
@@ -468,9 +606,12 @@ fn private_listener_rejects_shared_socket_directory() {
 #[ignore = "requires an installed Nix 2.36 client and private Unix sockets"]
 fn installed_nix_path_info_requires_signed_complete_store() {
     for (case, label) in [
-        (Case::Signed, "signed"), (Case::Missing, "missing"),
-        (Case::Tampered, "tampered"), (Case::SignedWrongNar, "signed-wrong-nar"),
-        (Case::WrongCa, "wrong-ca"), (Case::IncompleteCas, "incomplete-cas"),
+        (Case::Signed, "signed"),
+        (Case::Missing, "missing"),
+        (Case::Tampered, "tampered"),
+        (Case::SignedWrongNar, "signed-wrong-nar"),
+        (Case::WrongCa, "wrong-ca"),
+        (Case::IncompleteCas, "incomplete-cas"),
     ] {
         let temp = tempfile::tempdir().unwrap();
         let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
@@ -498,14 +639,21 @@ fn installed_nix_path_info_requires_signed_complete_store() {
             }
             Ok(operations)
         });
-        let mut client = Command::new("nix").args(["path-info", "--store"])
-            .arg(format!("unix://{}", socket.display())).arg(&path)
-            .stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+        let mut client = Command::new("nix")
+            .args(["path-info", "--store"])
+            .arg(format!("unix://{}", socket.display()))
+            .arg(&path)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
         let deadline = Instant::now() + Duration::from_secs(10);
         while client.try_wait().unwrap().is_none() && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(10));
         }
-        if client.try_wait().unwrap().is_none() { client.kill().unwrap(); }
+        if client.try_wait().unwrap().is_none() {
+            client.kill().unwrap();
+        }
         let output = client.wait_with_output().unwrap();
         let observed = server.join().unwrap().unwrap();
         assert!(!observed.is_empty(), "{label}: Nix did not issue a store request");
@@ -514,8 +662,10 @@ fn installed_nix_path_info_requires_signed_complete_store() {
             Case::Signed => {
                 assert!(output.status.success(), "{label}: {stderr}; requests: {observed:?}");
                 assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), path);
-                assert!(observed.iter().any(|request| request.starts_with("QueryPathInfo")),
-                    "Nix never consumed signed PathInfo: {observed:?}");
+                assert!(
+                    observed.iter().any(|request| request.starts_with("QueryPathInfo")),
+                    "Nix never consumed signed PathInfo: {observed:?}"
+                );
             }
             Case::Missing => assert!(!output.status.success(), "missing PathInfo claimed present"),
             Case::Tampered | Case::SignedWrongNar | Case::WrongCa | Case::IncompleteCas => {
@@ -532,7 +682,8 @@ fn installed_nix_path_info_requires_signed_complete_store() {
 fn private_listener_survives_malformed_peer_before_signed_read() {
     use std::io::Write as _;
     use std::os::unix::net::UnixStream;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
 
     let temp = tempfile::tempdir().unwrap();
     let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
@@ -545,9 +696,8 @@ fn private_listener_survives_malformed_peer_before_signed_read() {
     let stop = Arc::new(AtomicBool::new(false));
     let stop_server = Arc::clone(&stop);
     let server_socket = socket.clone();
-    let server = std::thread::spawn(move || {
-        crunch_nix_gateway::server::serve_private(&server_socket, store, &stop_server)
-    });
+    let server =
+        std::thread::spawn(move || crunch_nix_gateway::server::serve_private(&server_socket, store, &stop_server));
     let deadline = Instant::now() + Duration::from_secs(5);
     while !socket.exists() && Instant::now() < deadline {
         if server.is_finished() {
@@ -560,14 +710,21 @@ fn private_listener_survives_malformed_peer_before_signed_read() {
     let mut invalid = UnixStream::connect(&socket).unwrap();
     invalid.write_all(&[0_u8; 8]).unwrap();
     drop(invalid);
-    let mut client = Command::new("nix").args(["path-info", "--store"])
-        .arg(format!("unix://{}", socket.display())).arg(&path)
-        .stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let mut client = Command::new("nix")
+        .args(["path-info", "--store"])
+        .arg(format!("unix://{}", socket.display()))
+        .arg(&path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
     let deadline = Instant::now() + Duration::from_secs(10);
     while client.try_wait().unwrap().is_none() && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(10));
     }
-    if client.try_wait().unwrap().is_none() { client.kill().unwrap(); }
+    if client.try_wait().unwrap().is_none() {
+        client.kill().unwrap();
+    }
     let output = client.wait_with_output().unwrap();
     stop.store(true, Ordering::Release);
     server.join().unwrap().unwrap();

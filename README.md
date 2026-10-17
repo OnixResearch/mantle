@@ -95,6 +95,10 @@ The command prints admitted, retained, and retracted goals and their settled
 outputs; invalid edits leave the last admitted goals in place. Removing a
 running goal cancels its sandbox and waits for teardown before admitting the
 replacement set. Ctrl-C or SIGTERM also waits for active sandboxes to stop.
+
+The dependency scan follows parsed imports only. It admits at most 256 watched
+files, reads at most 2 MiB per file and 16 MiB in aggregate, and keeps the
+last admitted goals when an import is unreadable, invalid, or over the bound.
 Watch output is human-readable, not the stable `--json` aggregate report;
 `--watch` cannot be combined with remote builders, `--impure`, `--plan`,
 `--causal-trace`, or `--evaluation-stream`.
@@ -177,7 +181,6 @@ does not admit PathInfo or export an output. Inspect `skipped_untrusted` and
 `skipped_hash_mismatch` rather than using `--trust-unsigned` to make a failed
 import appear successful. See the
 [signed file-cache import release note](docs/release-notes/signed-file-cache-import-2026-10-13.md).
-
 Before cache lookup or execution, a direct or transitive dependent of
 content-addressed outputs resolves completed input paths and uses the resulting
 derivation for output, cache, and shared action-result identity. Signed results
@@ -195,6 +198,11 @@ Each state directory records its store backend.
 Mantle rejects a different `--store-backend` before it changes any file.
 `casita` is a pinned, pre-release backend with a smaller capability profile and a destination-owned signer policy.
 See [Store backends](docs/store-backends.md) for profiles, validation, and the Snix-to-Casita migration.
+
+Casita repository types and mutation sessions belong only to the
+`crunch-store` store shell, including when a separate adapter is allowed to
+use private Snix services. The source boundary checker covers named patterns,
+not runtime isolation or a Casita correctness proof.
 
 ### Read-only overlay composition
 
@@ -218,6 +226,11 @@ Mantle also accepts a local `signing-key` when the public-key file is absent.
 Do not distribute a private signing key only to enable base reads.
 
 Mantle rejects writable members, symlinks, special files, prefix mismatches, duplicate bases, and invalid signatures.
+Prefix mismatch admission fails before writable overlay state is created and
+does not write to the rejected base.
+Accepted signatures bind that selected prefix for both the output and its
+references; a trusted signature made under `/nix/store` is not valid for
+the same NAR facts selected under `/mantle/store`.
 Reads do not copy PathInfo, directories, or blobs into the overlay.
 An invalid higher layer blocks fallback to lower layers.
 
@@ -390,6 +403,109 @@ physical bytes before admitting the build.
 Source readiness proves declared input availability and identity only. Build
 success, output trust, compiler correctness, and release eligibility require
 separate evidence.
+Source readiness reports the declared source-bundle mappings; a virtual
+`store-path` record can report Ready without any signed PathInfo or physical
+store object. Treat it as a declaration, not proof of an admitted local input.
+For signed APKs, `crunch-android-admit observe` measures four independent,
+complete trees: app source, native glibc, native libgcc, and test-only signing.
+It creates no state. After independently reviewing each tree's NAR
+SHA-256/BLAKE3/size, `crunch-android-admit admit` requires those exact facts,
+an existing Mantle Ed25519 signing key and matching trusted public key, then
+verifies all four signed PathInfos and physical store objects. Its receipt
+claims only these observed local inputs; the four pinned Android HTTPS archives
+are separate source-bundle inputs. See
+`.cairn/changes/add-apk-build-adapter/design.md` for manifest fields and
+the failure/partial-admission boundary. APK bytes, SDK provenance, compiler
+correctness, and release eligibility require separate evidence.
+
+### Signed Android APK input admission
+
+The ordinary `cargo build -p mantle` and default `nix build` produce the Mantle
+CLI, **not** the APK adapter binaries. On Linux/x86_64, the dedicated
+`nix build .#android-apk-adapter` package installs both
+`bin/crunch-android-apk` and `bin/crunch-android-admit`. In a pinned
+development shell the equivalent local build is
+`cargo build --locked --offline -p crunch-android --bins`, which produces
+`target/debug/crunch-android-{apk,admit}` under the selected target directory.
+Build only after applying the APK replay's resource guards; neither package
+imports source bundles nor performs APK signing at installation time.
+
+For each guarded replay, set `APK_PROOF` to an isolated operator-owned proof
+directory. Create its `apk-stage/signed-plan.ncl`,
+`apk-stage/inputs-separate-libgcc.json`, and reviewed four-entry
+`apk-stage/local-inputs-separate-libgcc.json` manifest from that run's app,
+complete glibc, complete libgcc, and test-only signing trees; these paths are
+per-run artifacts, not checked-in fixtures. Provision the pinned Android
+toolchain archives and Mantle signing/trusted-public keys separately. Once
+the test-only keystore and both native trees exist, use the packaged command:
+
+```bash
+APK_PROOF=${APK_PROOF:?set APK_PROOF to an isolated proof directory}
+./result/bin/crunch-android-admit observe \
+  --plan "$APK_PROOF/apk-stage/signed-plan.ncl" \
+  --inputs "$APK_PROOF/apk-stage/inputs-separate-libgcc.json" \
+  --manifest "$APK_PROOF/apk-stage/local-inputs-separate-libgcc.json" \
+  --store-prefix /mantle/store
+```
+
+Review that observation and add the four matching
+`expected_nar_sha256`/`expected_nar_blake3`/`expected_nar_size` values to
+the same manifest. Only then run `crunch-android-admit admit` with those
+four common flags plus `--store "$APK_PROOF/replay-a/store"`,
+`--state-dir "$APK_PROOF/replay-a/state"`,
+`--signing-key "$MANTLE_SIGNING_KEY"` and
+`--trusted-public-key "$MANTLE_TRUSTED_PUBLIC_KEY"`. Use **new, disjoint**
+`replay-b` state/store for the second run and the *same immutable* inputs.
+`observe` emits `observed-only`; only verified PathInfos and physical objects
+produce a `signed-physical` admission receipt. This is a test signer, not
+production trust. The signed APK still requires the separately pinned four
+HTTPS source records, a `crunch-android-apk` graph render, and a real
+`mantle build --offline-source-preflight --no-substitute` followed by APK
+signature verification and bytewise A/B comparison; no such build is implied
+by input admission.
+
+Render the graph separately with `crunch-android-apk`:
+
+```bash
+./result/bin/crunch-android-apk \
+  --plan "$APK_PROOF/apk-stage/signed-plan.ncl" \
+  --inputs "$APK_PROOF/apk-stage/inputs-separate-libgcc.json" \
+  --store-prefix /mantle/store \
+  --output "$APK_PROOF/apk-stage/render.ncl"
+```
+
+The renderer loads its compile-time embedded Android cohort, checks the three
+local toolchain archives against its pinned SHA-256 records, and creates a new
+`.ncl` file plus an inert `.ncl.json` derivation graph. Its six-stage receipt
+and final store path do **not** establish a signed APK, imported sources, or
+release eligibility.
+
+### Bounded signed APK A/B observation (2026-10-07)
+
+On Leviathan, the pinned Android SDK graph ran with offline source preflight,
+`--no-substitute`, and strict sandbox policy in two independently prepared
+state/store pairs. Each produced the same 12,695-byte **test-signed** APK:
+SHA-256 `aee268f6c7f37746c46999d8fa3f060d12360174578e486195569b18844b652d`;
+BLAKE3 `35930d2eb5e2b57e4b583e5faa26685680b018260c3f365d62b2360b17c6675b`.
+The pinned SDK's `apksigner verify --verbose --print-certs` reported v1, v2,
+and v3 true in both states; a one-byte change in the ZIP central directory
+made the same verifier reject each scratch copy with an integrity digest
+mismatch. Byte comparison, DEX, compiled manifest, packaged application-label
+resource, and APK Signing Block checks passed. The [bounded evidence and failed
+guard history](.cairn/changes/prove-apk-adapter-real-build/evidence/real-apk-2026-10-07.txt)
+name the inputs and receipts. This is **not** a checked-in repeatable proof
+rail or completion of that Cairn change; it establishes neither device
+install/launch/runtime behavior, third-party source provenance, production
+signing trust, nor release eligibility.
+
+Source commands admit bounded read, optional connected-fetch, publication, and
+state-observation effects before executing them. Export, bootstrap-profile
+publication, and profile refresh read back their published bundle; import and
+hydration check durable records and pins, and hydration rechecks the published
+vendor tree. A successful write alone is not a completed source operation.
+These observations cover only the named artifacts and declared limits; they do
+not establish source authenticity beyond admitted metadata or any downstream
+build result.
 
 Source commands admit bounded read, optional connected-fetch, publication, and
 state-observation effects before executing them. Export, bootstrap-profile
@@ -523,10 +639,12 @@ The representative Rust compatibility rail uses
 as its surface matrix. Its ordinary rail exercises production matrix contracts
 and the native `cargo-free-bounded-topology` path-workspace boundary. Separately
 retained signed same-client evidence supports bounded `unit_plan` build-script,
-proc-macro and declared prebuilt-C-provider static-link surfaces; the full
-links/pkg-config/native-C group remains blocked. The retired fake-Cargo output
-and source scanner are not compilation evidence, so unexercised offline Cargo
-surfaces are explicitly out of scope. Supported `unit_plan` rows without a
+proc-macro and declared prebuilt-C-provider static-link surfaces. A separate
+reviewed signed cohort covers links metadata and declared pkg-config against
+a Mantle-built native library, not C compilation inside `build.rs`. Neither
+campaign is new validation of the reconciled source. The retired fake-Cargo
+output and source scanner are not compilation evidence, so unexercised offline
+Cargo surfaces are explicitly out of scope. Supported `unit_plan` rows without a
 named fixture fail actual Nickel evaluation with a row-named error. This is
 not full Cargo compatibility, compiler correctness, release reproducibility,
 or bootstrap correctness.
@@ -679,6 +797,11 @@ symlink at the repository root points to the ZFS dataset `datapool/mantle-store`
 (mounted at `/datapool/mantle-store`). Pass `--store store --state-dir store/state`
 to `mantle build` to keep build outputs on that disk. The symlink is gitignored.
 
+The pinned development shell exports `SNIX_BUILD_SANDBOX_SHELL` from the same
+`sandboxShellPath` used by the package and native checks: static BusyBox on
+Linux, `/bin/sh` on other hosts. `inputsFrom` supplies dependencies but does not
+inherit this environment setting; no ambient host-shell replacement is needed.
+
 Use the repository-owned quality wrappers from the dev shell:
 
 ```bash
@@ -692,6 +815,12 @@ The ordinary first-party gate excludes vendored workspace-member test binaries
 whose focused rails require additional host capabilities. Heavy self-hosting,
 release-determinism, remote-build, and sandbox integration rails remain explicit
 operator actions rather than every-edit checks.
+
+The Tiger Style CLI (`nix run .#tigerstyle -- check`) and the Nix
+`checks.<system>.tigerstyle` gate use the same pinned Crane Cargo source map as
+`nix develop`. That map includes the admitted Casita source patch; an ambient
+Cargo registry or the upstream Tiger Style consumer check's independent
+`Cargo.lock` vendor set is not an equivalent Mantle check.
 
 Useful documentation:
 

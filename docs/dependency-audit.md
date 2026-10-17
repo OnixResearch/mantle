@@ -61,12 +61,13 @@ This run belongs to the Cairn change `adopt-casita-store-backend`. Its results c
 Admitted sources and lock updates:
 
 - `casita` 0.1.0 from `https://github.com/cachix/casita` at revision `90404fcb1cfb3d83f2233715448dfefe913f5fd1`, with default features disabled and exactly `native` and `experimental`
-- `turso` 0.8.0-pre.7, a `casita` dependency, from `https://github.com/cachix/turso.git` at revision `dca55133caa690f90dcdd58d3c4329fb0703659c`
-- `deny.toml` admits both repositories individually; the `casitaSourceAdmitted` assertion in `flake.nix` checks the Casita revision, features, lock source, and `Apache-2.0` license, and `scripts/vendor-deps.py` checks the Casita manifest pin and the locked `casita`, `turso`, and `astral-tokio-tar` entries
+- `turso`, `turso_core`, `turso_ext`, `turso_macros`, `turso_parser`, `turso_sdk_kit`, `turso_sdk_kit_macros`, `turso_sync_engine`, and `turso_sync_sdk_kit`, each locked at 0.8.0-pre.7 from `https://github.com/cachix/turso.git` revision `dca55133caa690f90dcdd58d3c4329fb0703659c` via `casita`
+- `deny.toml` admits both repositories individually; the `casitaSourceAdmitted` assertion in `flake.nix` checks the Casita revision, features, lock source, and `Apache-2.0` license, and `scripts/vendor-deps.py` checks the Casita manifest pin and all nine locked Turso identities plus the `casita`, `astral-tokio-tar`, and `blake3` entries
 - `blake3` stays at `1.8.2`; `astral-tokio-tar` moves from `0.6.3` to `0.6.4`
 - `patches/casita-blake3-finalize.patch` changes one hunk in `crates/casita/src/nar.rs` for this revision only: method resolution in Mantle's graph selects `sha2::Digest::finalize` there, so the patch calls the BLAKE3 method explicitly; the Nix vendor closure and `scripts/vendor-deps.py` both apply it
 - [ADR 0082](../adr/0082-select-store-backends-explicitly-and-admit-casita.md) lists the experimental Casita API that Mantle uses; a new Casita revision or feature set needs its own reviewed change that updates ADR 0082 and this record and reruns the checks below
 
+The [complete admission lock inventory](../.cairn/changes/adopt-casita-store-backend/evidence/dependency-admission-2026-10-04.md#complete-original-casita-lock-admission-inventory) compares the pre-admission lock to the unchanged current lock: ten git and 89 registry identities added (including `astral-tokio-tar 0.6.4`), `astral-tokio-tar 0.6.3` removed, and dependency lists modified on 50 previously present identities. It records every new locked git identity and every changed lock-record identity; none is a passing clean-source closure or audit claim.
 At the pinned revision, `casita` declares `Apache-2.0` and the `turso`
 packages declare `MIT`; both licenses are already admitted in `deny.toml`.
 The transitive `cfg_block 0.1.1` declares a `license-file` rather than an SPDX
@@ -170,39 +171,130 @@ proof: T1.2, T4.6, and T4.7 remain unchecked.
 | RUSTSEC-2026-0247 (unmaintained) | `bitmaps 3.2.1` | in the HEAD lock; not reached from `casita` | open; no waiver |
 | RUSTSEC-2026-0292 (vulnerability) | `imbl-sized-chunks 0.1.3` | in the HEAD lock; not reached from `casita` | open; no waiver |
 | RUSTSEC-2023-0071 (vulnerability) | `rsa 0.9.10` | in the HEAD lock; not reached from `casita` | open; no waiver |
-| source policy | four git sources without `allow-git` | in the HEAD lock and absent from the HEAD policy; not from `casita` | open; predates this change |
+| source policy | four git sources without `allow-git` at the 2026-09-30 run | not from `casita`; independently pinned in manifests, lock, and Nix assertions | exact URLs added to `allow-git` on 2026-10-04; post-change `cargo-deny` execution still unavailable |
 
-At this immutable Casita revision, `native` enables `turso` and `bao-tree`.
-Pinned `turso` depends unconditionally on `turso_sync_sdk_kit`, which depends
-on `genawaiter 0.99.1`; `bao-tree`'s default `validate` feature also enables
-`genawaiter`. The advisory marks `proc-macro-error` unmaintained with no safe
-upgrade. A lockfile-only bump cannot remove either upstream path; addressing it
-requires a separate reviewed Casita/Turso/bao-tree source change, including
-the experimental-API and vendor-closure review in ADR 0082. This is not
-grounds for an advisory waiver.
+The four now allowlisted sources are:
 
-The other unmaintained `bitmaps` and vulnerable `imbl-sized-chunks 0.1.3`
-come through `nickel-lang-vector 0.2.0`; the latter is fixed in
-`imbl-sized-chunks 0.2.0`, but Nickel's older dependency still resolves 0.1.3.
-The `rsa 0.9.10` path comes through `secretspec 0.17.0`; its RustSec
-advisory lists no patched release. These are existing, non-Casita findings,
-not reasons to bypass the complete gate or call T4.7 resolved.
+- `ssh://git@github.com/OnixResearch/onix-artifact.git`
+  (`artifact-auth-core` and `artifact-auth-ed25519`, revision
+  `c932138d880ddf4c2967f4c024b489b5c0022bf1`)
+- `https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git`
+  (`bounded-tree-cap` and `bounded-tree-core`,
+  `b0fd0103bc9eed2c1b6d852045959462d105d8f1`)
+- `https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git`
+  (`durable-file-publication`, `951c27f59003cea9bfdb40ed4d89653d50fada1f`)
+- `https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git`
+  (`transactional-reconciliation-core`,
+  `606489b5f40298181214bb76bc3457b607f225d9`)
 
-The four preexisting unrelated sources are:
+Each origin has an independent exact-revision manifest/lock/input assertion in
+`flake.nix`; `deny.toml` lists each URL individually with
+`unknown-git = "deny"` and no wildcard.
 
-| Repository (exact Cargo source) | Locked revision | Independent source check |
-|---|---|---|
-| `ssh://git@github.com/OnixResearch/onix-artifact.git` | `c932138d880ddf4c2967f4c024b489b5c0022bf1` | `artifactAuthSourceAdmitted` checks manifests, Nix source revision, lock source, package set, and `MIT OR Apache-2.0` license |
-| `https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git` (`bounded-tree`) | `b0fd0103bc9eed2c1b6d852045959462d105d8f1` | `boundedTreeSourceAdmitted` checks manifests, Nix source revision, lock source, package set, Radicle identity, and `AGPL-3.0-or-later` license |
-| `https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git` (`durable-file-publication`) | `951c27f59003cea9bfdb40ed4d89653d50fada1f` | `durablePublicationSourceAdmitted` checks manifest, Nix source revision, lock source, package identity, Radicle identity, and `MIT OR Apache-2.0` license |
-| `https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git` (`transactional-reconciliation-core`, dev-only) | `606489b5f40298181214bb76bc3457b607f225d9` | `transactionalReconciliationSourceAdmitted` checks manifest, Nix source revision, lock source, package identity, Radicle identity, and `MIT` license |
-
-Each is a candidate for an individually reviewed `allow-git` entry, with the
-existing independent immutable-revision checks preserved; none is a Casita or
-Turso source. This change does not admit them or weaken `unknown-git = "deny"`.
+The pinned Casita revision's `native` feature reaches both `turso` and
+`bao-tree`; Turso's `turso_sync_sdk_kit` and bao-tree's default validation
+feature reach `genawaiter 0.99.1` and `proc-macro-error 0.4.12`.
+A lockfile-only patch bump cannot remove both upstream paths. Existing
+`bitmaps` and `imbl-sized-chunks` findings run through `nickel-lang-vector`,
+while `rsa 0.9.10` runs through `secretspec`; these are independent of
+Casita. Exact-URL admission of the four unrelated git sources above does
+not clear these advisories or constitute a passing configured audit.
 
 The dependency gate stays open. This change adds no waiver. This record does not claim a clean `cargo-deny` result, Casita correctness, experimental API stability, or release eligibility.
 
+2026-10-04 bounded admission follow-up (not a passing dependency gate):
+`scripts/vendor-deps.py` now rejects lock-source or version drift for all nine
+locked `turso` workspace packages, not just `turso`, and rejects drift in the
+sole `casita`, `astral-tokio-tar`, and `blake3` entries. The Nix admission
+assertion checks the same locked package family before selecting the patched
+Casita source. The local pin validator accepted the current 987 lock
+identities and rejected a changed `turso_core` source in a scratch lock; Nix
+evaluated the vendor derivation but did **not** build a clean-source closure.
+At the first bounded read, both Rust-from-source self-build plans selected
+final compiler 1.94.0, below Casita's declared `rust-version` 1.94.1. They
+now declare 1.94.1 with the official Rust distribution source SHA-256 and
+matching final-stage/source identities; both typed Nickel plans evaluated
+and passed the bounded identity check recorded in the active change's
+`evidence/dependency-admission-2026-10-04.md`. This does not qualify a
+source-built compiler: its build/requalification and the clean-source vendor
+proof remain unrun. T1.2 and the dependency audit gate remain open.
+
+2026-10-05 clean-source follow-up (still not an audit pass): the Nix
+`casita-vendor-closure` derivation built, and the separate Nix
+`casita-crunch-store-check` built and ran `cargo check`. The default dev
+shell compiled patched pinned Casita without an explicit Cargo config;
+the generated ignored `vendor-deps/` closure compiled in an isolated Cargo
+home, matched a fresh generation (53,491 entries), and passed unpatched,
+hand-edited, mutable-checkout and upstream/patch-drift negative controls.
+An archive of exact source commit
+`2ab0f6dc58eee9978c84667fcb7da490ea7ad702` plus that closure
+resolved 850 external packages offline under its extracted `vendor-deps/`;
+its recursive unpacked source BLAKE3 SRI is
+`blake3-6nOZ9WOsN6DrvnTfKR5/C2DojRZH6cICZlxvNWf8TA8=`.
+The initial archive script exited 127 when ambient Cargo was absent; a
+no-clobber Nix dev-shell metadata proof passed against the unchanged archive.
+Runs 63 and 64 in the active change evidence retain the original failed
+log, passing corrective receipt, exact archive hash and patch digest. The
+source-built Rust 1.90 sidecar in Run 62 does not qualify the final 1.94.1
+source profile, and none of these closures clears the separate unwaived
+`cargo-deny` advisory gate or marks T1.2 complete.
+
+Before those four exact-URL admissions, with `cargo-deny 0.20.2` and its available advisory database, the scoped
+`nix shell --offline nixpkgs#cargo-deny nixpkgs#cargo --command cargo-deny
+--config deny.toml check` exited 9: `advisories FAILED, bans ok, licenses ok,
+sources FAILED`. The six source errors were lock packages from the four
+then-unadmitted repositories above, not the Casita or Turso sources. Its
+advisory output includes the Casita-reached `proc-macro-error 0.4.12`
+unmaintained finding and existing vulnerable `rustls 0.23.37`; it also reports
+`lru 0.16.4` (RUSTSEC-2026-0253, through Snix) and yanked `chacha20 0.10.0`
+and `spin 0.10.0`. No waiver or unrelated dependency update was added.
+
+2026-10-04 no-waiver policy follow-up: a bounded positive/negative fixture
+parsed the four manifest pin sets, all six corresponding lock package
+identities and their full `?rev=...#...` sources, the separate `flake.nix`
+revision/source assertions, and `deny.toml`. All four pinned sets matched;
+an alien repository URL was outside the policy, and a scratch changed
+revision did not match any expected lock source. This is a static guard
+check, **not** a `cargo-deny` pass or proof of Nix build evaluation.
+A post-change attempt to run
+`nix shell --offline nixpkgs#cargo-deny nixpkgs#cargo --command cargo-deny --config deny.toml check`
+scheduled four uncached `cargo-deny 0.20.2` source/vendor/binary derivations
+and reported `failed to start SSH connection to 'aspen1.local'`; it was
+canceled immediately under the no-long-build instruction. There is
+**no post-change `cargo-deny` exit code or category result**. The last
+completed check remains the pre-admission exit 9 above.
+
+The exact Casita revision `90404fcb1cfb3d83f2233715448dfefe913f5fd1`
+locks the following path:
+
+```text
+casita -> bao-tree 0.16.1 -> genawaiter 0.99.1
+  -> genawaiter-proc-macro 0.99.1 -> proc-macro-error 0.4.12
+```
+
+The proc-macro
+manifest requests `proc-macro-error ^0.4`; the local RUSTSEC-2024-0370
+advisory calls it unmaintained and lists `patched = []`. Consequently a
+patch-level lock bump cannot clear this finding. Under the required exact
+Casita pin, no new waiver, no fork/vendor edit, and no uncompiled dependency
+graph changes, there is no proven remediation for this advisory; a reviewed
+upstream/pin or dependency replacement with build proof, or explicit policy
+exception, requires an owner decision. T1.3/T4.7 stay unchecked, as do the
+independent pre-existing advisory and yank findings.
+
+A bounded read-only upstream survey reported on 2026-10-05 found Casita
+main `84ec2920791276cd4ad8c029cd60529810e15705` still declares optional
+`bao-tree = "0.16"`. Bao-tree 0.16.1's default `validate` feature reaches
+genawaiter 0.99.1's default `proc_macro` feature and the same
+`proc-macro-error 0.4.12`. Bao-tree issues
+[#77](https://github.com/n0-computer/bao-tree/issues/77),
+[#69](https://github.com/n0-computer/bao-tree/issues/69), and
+[#62](https://github.com/n0-computer/bao-tree/issues/62) remain open and
+unrelated; the survey found no relevant Casita PR or qualifying reviewed fix.
+The external prerequisite is a n0-computer/bao-tree maintainer-reviewed,
+validation-preserving `genawaiter` `default-features = false` fix and release,
+followed by a Casita-maintainer-reviewed precise revision. Disabling
+validation is not a resolution.
 ## Validation dependency catalog
 
 | Dependency | Pinned revision | Transport | Plane | License choice | Scope |

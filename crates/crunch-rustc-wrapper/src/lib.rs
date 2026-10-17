@@ -1046,6 +1046,16 @@ fn casita_payload_integrity_code(error: &crunch_rust_cache::Error) -> Option<&'s
         crunch_rust_cache::Error::Castore(message) if message.contains(CASITA_ROOT_MISSING) => {
             Some(CASITA_ROOT_MISSING)
         }
+        crunch_rust_cache::Error::Authority(crunch_store::Error::Store(message))
+            if message.starts_with(CASITA_ENVELOPE_INVALID) =>
+        {
+            Some(CASITA_ENVELOPE_INVALID)
+        }
+        crunch_rust_cache::Error::Authority(crunch_store::Error::Store(message))
+            if message.starts_with(CASITA_ROOT_MISSING) =>
+        {
+            Some(CASITA_ROOT_MISSING)
+        }
         _ => None,
     }
 }
@@ -1808,9 +1818,15 @@ fn finish_client_response(
     request: &WrapperRequest,
     response: WrapperResponse,
 ) -> Result<i32, Error> {
+    assert_eq!(response.request_ref, request.request_ref, "daemon response must belong to this request");
     if response.disposition == WrapperDisposition::Bypass {
         return run_direct_compiler_strings(compiler, &request.input.arguments);
     }
+    assert_eq!(
+        response.bypass_class.is_some(),
+        response.disposition == WrapperDisposition::Rejected,
+        "non-bypass responses classify only rejections"
+    );
     std::io::stdout().write_all(&response.stdout).map_err(|source| Error::Io {
         context: "write-wrapper-stdout".to_string(),
         source,
@@ -3282,9 +3298,10 @@ mod tests {
         let mut local_hit_samples = Vec::with_capacity(BENCHMARK_SAMPLE_COUNT);
         for _ in 0..BENCHMARK_SAMPLE_COUNT {
             fs::remove_file(&output_path).unwrap();
-            let hit_started = std::time::Instant::now();
-            let response = run_test_daemon_request(options.clone(), policy.clone(), request.clone());
-            let hit_elapsed = hit_started.elapsed();
+            // The local-hit baseline covers the request round trip to a ready daemon; daemon
+            // startup is bounded separately by STARTUP_BASELINE_MILLIS above.
+            let (response, hit_elapsed) =
+                run_test_daemon_request_timed(options.clone(), policy.clone(), request.clone());
             assert_eq!(response.disposition, WrapperDisposition::LocalHit);
             assert!(response.receipt_ref.is_some());
             assert_eq!(fs::read(&output_path).unwrap(), INPUT_BYTES);
@@ -3299,9 +3316,9 @@ mod tests {
         let bypass_request = seal_wrapper_request(bypass_input).unwrap();
         let mut round_trip_samples = Vec::with_capacity(BENCHMARK_SAMPLE_COUNT);
         for _ in 0..BENCHMARK_SAMPLE_COUNT {
-            let round_trip_started = std::time::Instant::now();
-            let response = run_test_daemon_request(options.clone(), policy.clone(), bypass_request.clone());
-            round_trip_samples.push(round_trip_started.elapsed().as_micros());
+            let (response, round_trip_elapsed) =
+                run_test_daemon_request_timed(options.clone(), policy.clone(), bypass_request.clone());
+            round_trip_samples.push(round_trip_elapsed.as_micros());
             assert_eq!(response.disposition, WrapperDisposition::Bypass);
             assert_eq!(response.bypass_class, Some(WrapperBypassClass::CompilerQuery));
         }
@@ -3498,7 +3515,7 @@ mod tests {
                 );
             });
             let refused = run_test_daemon_request(casita_options.clone(), casita_policy.clone(), request.clone());
-            assert_eq!(refused.disposition, WrapperDisposition::Rejected);
+            assert_eq!(refused.disposition, WrapperDisposition::Rejected, "{refused:?}");
             assert_eq!(refused.compiler_status, EXIT_PROTOCOL_FAILURE);
             assert_eq!(refused.reason_codes, vec![CASITA_ROOT_MISSING.to_string()]);
             assert_eq!(refused.stderr, format!("mantle-rustc-wrapper:rejected:{CASITA_ROOT_MISSING}\n").into_bytes());
@@ -3591,7 +3608,7 @@ mod tests {
                 Arc::new(move || flushed_observer.store(true, Ordering::SeqCst)),
             )
         });
-        wait_for_test_socket(&policy.socket_path);
+        wait_for_test_socket(&policy.socket_path, &daemon);
         for _ in 0..100 {
             if started.load(Ordering::SeqCst) {
                 break;
@@ -3612,18 +3629,30 @@ mod tests {
         policy: WrapperDaemonPolicy,
         request: WrapperRequest,
     ) -> WrapperResponse {
+        run_test_daemon_request_timed(options, policy, request).0
+    }
+
+    /// Returns the response and the elapsed time of the request round trip, measured only
+    /// after the daemon has bound its socket.
+    fn run_test_daemon_request_timed(
+        options: DaemonOptions,
+        policy: WrapperDaemonPolicy,
+        request: WrapperRequest,
+    ) -> (WrapperResponse, Duration) {
         let daemon = thread::spawn(move || run_daemon(options));
-        wait_for_test_socket(&policy.socket_path);
+        wait_for_test_socket(&policy.socket_path, &daemon);
+        let request_started = std::time::Instant::now();
         let response = request_daemon(&policy, &request).unwrap();
+        let request_elapsed = request_started.elapsed();
         daemon.join().unwrap().unwrap();
         assert_eq!(response.request_ref, request.request_ref);
-        response
+        (response, request_elapsed)
     }
 
     fn run_test_daemon_shutdown(mut options: DaemonOptions, policy: &WrapperDaemonPolicy) {
         options.run_once = false;
         let daemon = thread::spawn(move || run_daemon(options));
-        wait_for_test_socket(&policy.socket_path);
+        wait_for_test_socket(&policy.socket_path, &daemon);
         SHUTDOWN_REQUESTED.store(true, Ordering::SeqCst);
         daemon.join().unwrap().unwrap();
         assert!(!path_entry_exists(Path::new(&policy.socket_path)));
@@ -3639,7 +3668,7 @@ mod tests {
                 Arc::new(move || flushed_observer.store(true, Ordering::SeqCst)),
             )
         });
-        wait_for_test_socket(&policy.socket_path);
+        wait_for_test_socket(&policy.socket_path, &daemon);
         let mut stream = UnixStream::connect(&policy.socket_path).unwrap();
         stream.write_all(payload).unwrap();
         stream.shutdown(Shutdown::Write).unwrap();
@@ -3648,17 +3677,27 @@ mod tests {
         assert!(!path_entry_exists(Path::new(&policy.socket_path)));
     }
 
-    fn wait_for_test_socket(socket_path: &str) {
-        const SOCKET_WAIT_ATTEMPTS: usize = 200;
-        const SOCKET_WAIT_MILLIS: u64 = 5;
-        for attempt in 0..SOCKET_WAIT_ATTEMPTS {
+    /// Waits until the daemon has bound its socket. Daemon startup opens the store and the
+    /// Rust cache, which takes well under a second on an idle host but several seconds on a
+    /// saturated shared builder, so the bound is generous; a daemon that exits before binding
+    /// fails immediately with its own error instead of a timeout.
+    fn wait_for_test_socket(socket_path: &str, daemon: &thread::JoinHandle<Result<(), Error>>) {
+        const SOCKET_READY_DEADLINE: Duration = Duration::from_secs(60);
+        const SOCKET_POLL_INTERVAL: Duration = Duration::from_millis(5);
+        let started = std::time::Instant::now();
+        loop {
             if path_entry_exists(Path::new(socket_path)) {
                 return;
             }
-            assert!(attempt < SOCKET_WAIT_ATTEMPTS - 1, "daemon socket did not become ready");
-            thread::sleep(Duration::from_millis(SOCKET_WAIT_MILLIS));
+            assert!(!daemon.is_finished(), "daemon exited before binding {socket_path}");
+            let waited = started.elapsed();
+            assert!(
+                waited < SOCKET_READY_DEADLINE,
+                "daemon socket {socket_path} did not become ready within {} ms",
+                waited.as_millis()
+            );
+            thread::sleep(SOCKET_POLL_INTERVAL);
         }
-        unreachable!("bounded socket wait must return or assert");
     }
 
     fn find_test_executable(name: &str) -> PathBuf {

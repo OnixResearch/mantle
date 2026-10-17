@@ -46,7 +46,7 @@
       flake = false;
     };
     octet.url = "github:OnixResearch/octet/86ee46b3b9257b145d2dbeb6ce9d9897607db99c";
-    cairn.url = "github:OnixResearch/cairn/695124d459574ba7aeba6097310d237f393c243c";
+    cairn.url = "github:OnixResearch/cairn/007ba5193dd8fec9067a1c0e0f8ef487807af872";
     # Pinned Nickel CLI cohort 1.17.0 (tag 1.17.0). Mantle validates sources
     # and runs CLI checks with this exact evaluator, never a floating nixpkgs
     # nickel.
@@ -141,7 +141,14 @@
           else
             null;
 
-        rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+        rustToolchain =
+          let
+            selected = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+          in
+          assert pkgs.lib.assertMsg (
+            builtins.compareVersions selected.version "1.94.1" >= 0
+          ) "Mantle's Rust toolchain must meet Casita's rust-version 1.94.1";
+          selected;
         componentRustVersion = "1.90.0";
         componentRustToolchain = pkgs.rust-bin.stable.${componentRustVersion}.default.override {
           targets = [ "wasm32-wasip2" ];
@@ -307,10 +314,35 @@
           nickelExportCore;
         firstPartyCargoScope = pkgs.lib.concatStringsSep " " cargoManifest.workspace.metadata.tigerstyle.default_scope;
         casitaRevision = "90404fcb1cfb3d83f2233715448dfefe913f5fd1";
+        tursoRevision = "dca55133caa690f90dcdd58d3c4329fb0703659c";
+        casitaNarUpstreamSha256 = "bed3012bed878a81b19348a2b927b95ea7e736b6888229d41a6342918a813e09";
+        casitaPatchSha256 = "c0def0527dcc56beafa8d3f89c418a071b1d93df418245ebcd6a69aeb580840a";
+        tursoPackageNames = [
+          "turso"
+          "turso_core"
+          "turso_ext"
+          "turso_macros"
+          "turso_parser"
+          "turso_sdk_kit"
+          "turso_sdk_kit_macros"
+          "turso_sync_engine"
+          "turso_sync_sdk_kit"
+        ];
+        cargoLockedPackages = (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
         casitaManifest = builtins.fromTOML (builtins.readFile ./crates/crunch-store/Cargo.toml);
-        casitaLocked = builtins.filter (
-          package: package.name == "casita"
-        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        casitaUpstreamManifest = builtins.fromTOML (
+          builtins.readFile (casitaSource + "/crates/casita/Cargo.toml")
+        );
+        casitaLocked = builtins.filter (package: package.name == "casita") cargoLockedPackages;
+        casitaRepositoryLocked = builtins.filter (
+          package: pkgs.lib.hasPrefix "git+https://github.com/cachix/casita?" (package.source or "")
+        ) cargoLockedPackages;
+        tursoLocked = builtins.filter (package: builtins.elem package.name tursoPackageNames) cargoLockedPackages;
+        tursoRepositoryLocked = builtins.filter (
+          package: pkgs.lib.hasPrefix "git+https://github.com/cachix/turso.git?" (package.source or "")
+        ) cargoLockedPackages;
+        blake3Locked = builtins.filter (package: package.name == "blake3") cargoLockedPackages;
+        astralTarLocked = builtins.filter (package: package.name == "astral-tokio-tar") cargoLockedPackages;
         casitaSourceAdmitted =
           assert pkgs.lib.assertMsg (
             casitaManifest.dependencies.casita.git == "https://github.com/cachix/casita"
@@ -319,11 +351,32 @@
             && casitaManifest.dependencies.casita.features == [ "native" "experimental" ]
             && casitaSource.rev == casitaRevision
             && builtins.length casitaLocked == 1
+            && (builtins.head casitaLocked).version == "0.1.0"
             && (builtins.head casitaLocked).source
               == "git+https://github.com/cachix/casita?rev=${casitaRevision}#${casitaRevision}"
-            && (builtins.fromTOML (builtins.readFile (casitaSource + "/crates/casita/Cargo.toml"))).package.license
-              == "Apache-2.0"
-          ) "Mantle Casita source, Cargo lock, Nix pin, or license drifted";
+            && builtins.length casitaRepositoryLocked == 1
+            && builtins.sort builtins.lessThan (map (package: package.name) tursoLocked)
+              == tursoPackageNames
+            && builtins.length tursoRepositoryLocked == builtins.length tursoLocked
+            && builtins.sort builtins.lessThan (map (package: package.name) tursoRepositoryLocked)
+              == tursoPackageNames
+            && builtins.all (
+              package:
+              package.version == "0.8.0-pre.7"
+              && package.source
+                == "git+https://github.com/cachix/turso.git?rev=${tursoRevision}#${tursoRevision}"
+            ) tursoLocked
+            && builtins.length astralTarLocked == 1
+            && (builtins.head astralTarLocked).version == "0.6.4"
+            && builtins.length blake3Locked == 1
+            && (builtins.head blake3Locked).version == "1.8.2"
+            && casitaUpstreamManifest.package.license == "Apache-2.0"
+            && casitaUpstreamManifest.package.rust-version == "1.94.1"
+            && builtins.hashFile "sha256" (casitaSource + "/crates/casita/src/nar.rs")
+              == casitaNarUpstreamSha256
+            && builtins.hashFile "sha256" ./patches/casita-blake3-finalize.patch
+              == casitaPatchSha256
+          ) "Mantle Casita source, lock, Nix pin, license, rust-version, or patch drifted";
           true;
         # Exact-revision upstream compile fix, kept as an auditable tracked patch.
         casitaPatchedSource =
@@ -358,6 +411,9 @@
         # bootstrap blocker inventory gate also needs scripts/ and OpenSpec
         # bootstrap text so flake checks inspect the same repo-controlled sources
         # as the local script.
+        # The lock-vendor stdlib test also reads its two-crate Nickel recipe.
+        # crunch-build compiles its loader-audit C source; the remote hexagon
+        # parity suite embeds origin observations from scoped Cairn evidence.
         # r[impl mantle.durable_publication_validation.source_closure]
         contentBoundRequirementFixtureRoot = toString ./fixtures/content-bound-requirements;
         isContentBoundRequirementFixture =
@@ -375,6 +431,8 @@
           && !pkgs.lib.hasPrefix "${gitMetadataPath}/" pathString
           && (
             (craneLib.filterCargoSources path type)
+            || pathString == toString ./crates/crunch-build/audit
+            || pathString == toString ./crates/crunch-build/audit/finish_dlopen_audit.c
             || pathString == toString ./README.md
             || pathString == toString ./flake.nix
             || pkgs.lib.hasPrefix "${toString ./.github/workflows}/" pathString
@@ -384,11 +442,17 @@
             || pkgs.lib.hasPrefix "${toString ./mantlepkgs}/" pathString
             || pkgs.lib.hasPrefix "${toString ./cairn-policy/evidence}/" pathString
             || pkgs.lib.hasPrefix "${toString ./cairn/archive}/" pathString
+            || pathString == toString ./.cairn
+            || pathString == toString ./.cairn/changes
+            || pathString == toString ./.cairn/changes/separate-remote-build-hexagon
+            || pathString == toString ./.cairn/changes/separate-remote-build-hexagon/evidence
+            || pkgs.lib.hasPrefix "${toString ./.cairn/changes/separate-remote-build-hexagon/evidence}/" pathString
             || pkgs.lib.hasPrefix "${toString ./.cairn/archive}/" pathString
             || pathString == toString ./config
             || pkgs.lib.hasPrefix "${toString ./config}/" pathString
             || pkgs.lib.hasPrefix "${toString ./contracts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./fixtures/mantle-build-contract}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./fixtures/lock-vendor-two-crate}/" pathString
             || builtins.elem pathString catalogExamplePaths
             || pathString == toString ./examples/catalog.ncl
             || pathString == toString ./examples/README.md
@@ -416,7 +480,7 @@
           filter = path: type: sourceFilter path type && !isContentBoundRequirementFixture (toString path);
         };
 
-        cargoVendorDir = craneLib.vendorCargoDeps {
+        cargoVendorDir = assert casitaSourceAdmitted; craneLib.vendorCargoDeps {
           inherit src;
           cargoLock = ./Cargo.lock;
           overrideVendorGitCheckout =
@@ -891,23 +955,17 @@
           inherit cargoVendorDir;
         };
 
-        # Check the real store crate against the patched Crane vendor closure,
-        # without triggering the workspace-wide deps-only build first.
-        casitaStoreCargoCheck = craneLib.mkCargoDerivation {
-          pname = "mantle-casita-store-cargo-check";
+        # Compile the adapter offline against the pinned, patched Crane closure,
+        # using the same dependency artifacts and profile as the package build.
+        casitaCrunchStoreCheck = craneLib.mkCargoDerivation {
+          pname = "mantle-casita-crunch-store-check";
           version = "0.1.0";
-          inherit
-            src
-            cargoVendorDir
-            nativeBuildInputs
-            buildInputs
-            ;
-          cargoArtifacts = null;
-          buildPhaseCargoCommand = "cargo check --locked --offline -p crunch-store --lib";
+          inherit src cargoVendorDir cargoArtifacts nativeBuildInputs buildInputs;
+          buildPhaseCargoCommand = "cargoWithProfile check --locked --offline -p crunch-store --lib";
           doCheck = false;
           doInstallCargoArtifacts = false;
+          SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
         };
-
         # Build the actual package
         crunch = craneLib.buildPackage {
           inherit
@@ -917,6 +975,9 @@
             nativeBuildInputs
             buildInputs
             ;
+          # Match the serialized libtest policy in quality-gate-common.sh.
+          # Each test still exercises its own internal concurrency.
+          cargoTestExtraArgs = "-- --test-threads 1";
           SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
           GIT = "${pkgs.git}/bin/git";
           SSL_CERT_FILE = caCertificateBundlePath;
@@ -927,7 +988,25 @@
           CRUNCH_NO_FUSE = "1";
           SLEEPINESS = "0";
           MANTLE_TEST_OFFLINE = "1";
-          nativeCheckInputs = [ pkgs.git ];
+          nativeCheckInputs = [
+            pkgs.git
+            pkgs.openssh
+          ];
+        };
+
+        # Ship both the typed APK graph renderer and its Android-only signed
+        # local input admission entry point from the same pinned Cargo closure.
+        androidApkAdapter = craneLib.buildPackage {
+          inherit
+            src
+            cargoArtifacts
+            cargoVendorDir
+            nativeBuildInputs
+            buildInputs
+            ;
+          SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
+          cargoExtraArgs = "--locked -p crunch-android --bins";
+          doCheck = false;
         };
 
         rustcWrapper = craneLib.buildPackage {
@@ -948,6 +1027,7 @@
           inherit
             src
             cargoArtifacts
+            cargoVendorDir
             nativeBuildInputs
             buildInputs
             ;
@@ -1117,13 +1197,17 @@
           text = ''
             export PKG_CONFIG_PATH="${pkgs.lib.makeSearchPath "lib/pkgconfig" buildInputs}:''${PKG_CONFIG_PATH:-}"
             export SNIX_BUILD_SANDBOX_SHELL="''${SNIX_BUILD_SANDBOX_SHELL:-/bin/sh}"
-            exec cargo-tigerstyle "$@"
+            CARGO_HOME="$(mktemp -d "''${TMPDIR:-/tmp}/mantle-tigerstyle-cargo-home.XXXXXXXX")"
+            export CARGO_HOME
+            trap 'rm -r -- "$CARGO_HOME"' EXIT
+            ln -s "${cargoVendorDir}/config.toml" "$CARGO_HOME/config.toml"
+            cargo-tigerstyle "$@"
           '';
         };
 
         releaseDeterminismQuality = craneLib.cargoNextest {
           pname = "crunch-release-determinism-quality";
-          inherit src cargoArtifacts buildInputs;
+          inherit src cargoArtifacts cargoVendorDir buildInputs;
           nativeBuildInputs = nativeBuildInputs ++ [ pkgs.git ];
           cargoNextestExtraArgs = "--test release_cli release_reproduce_generated_two_clean_store_proof_verifies_deterministic_release";
           partitions = 1;
@@ -1136,7 +1220,7 @@
 
         releaseNixWitnessQuality = craneLib.cargoNextest {
           pname = "crunch-release-nix-witness-quality";
-          inherit src cargoArtifacts buildInputs;
+          inherit src cargoArtifacts cargoVendorDir buildInputs;
           nativeBuildInputs = nativeBuildInputs ++ [ pkgs.git ];
           cargoNextestExtraArgs = "--test release_cli release_nix_witness";
           partitions = 1;
@@ -1151,6 +1235,7 @@
           inherit
             src
             cargoArtifacts
+            cargoVendorDir
             nativeBuildInputs
             buildInputs
             ;
@@ -1327,6 +1412,7 @@
           check-store-overlay-policy = checkStoreOverlayPolicy;
         }
         // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          android-apk-adapter = androidApkAdapter;
           oci-distribution-registry = pkgs.distribution;
           rustc-wrapper = rustcWrapper;
           kernelscript-compiler = kernelscriptExperiment.compiler;
@@ -1350,9 +1436,9 @@
 
         checks = {
           inherit crunch;
+          casita-crunch-store-check = casitaCrunchStoreCheck;
           # Builds exactly the locked, clean-source Crane dependency closure.
           casita-vendor-closure = cargoVendorDir;
-          casita-store-cargo-check = casitaStoreCargoCheck;
           bounded-tree-source-admission =
             assert boundedTreeSourceAdmitted;
             pkgs.runCommand "mantle-bounded-tree-source-admission"
@@ -1665,26 +1751,39 @@
                 touch "$out"
               '';
 
-          tigerstyle =
-            (tigerstyle.lib.mkConsumerCheck {
-              inherit system nativeBuildInputs buildInputs;
+          # The upstream consumer helper vendors Cargo.lock independently, so it
+          # misses the admitted Casita source patch used by Crane and the dev shell.
+          tigerstyle = pkgs.runCommand "mantle-tigerstyle-check"
+            {
               src = ./.;
-              cargoLock = ./Cargo.lock;
-            }).overrideAttrs
-              (_old: {
-                SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
-              });
+              inherit buildInputs;
+              nativeBuildInputs = nativeBuildInputs ++ [ tigerstyleRunner ];
+              SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+            }
+            ''
+              export HOME="$PWD/home"
+              mkdir -p "$HOME"
+              cp -r "$src" source
+              chmod -R u+w source
+              cd source
+              crunch-tigerstyle check
+              mkdir -p "$out"
+            '';
 
           # Run tests with nextest
           nextest = craneLib.cargoNextest {
             inherit
               src
               cargoArtifacts
-              nativeBuildInputs
+              cargoVendorDir
               buildInputs
               ;
+            # Real stdio remote failure tests exercise ssh, not a fake transport.
+            nativeBuildInputs = nativeBuildInputs ++ [ pkgs.openssh ];
             partitions = 1;
             partitionType = "count";
+            # Report all hermetic release-test failures in one check run.
+            cargoNextestExtraArgs = "--no-fail-fast";
             SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
             GIT = "${pkgs.git}/bin/git";
             SSL_CERT_FILE = caCertificateBundlePath;
@@ -1704,6 +1803,7 @@
             inherit
               src
               cargoArtifacts
+              cargoVendorDir
               nativeBuildInputs
               buildInputs
               ;
@@ -1756,6 +1856,8 @@
             ];
 
           MANTLE_WASM_COMPONENT_TOOLCHAIN = "${wasmComponentToolchain}";
+          # inputsFrom inherits dependencies, not the package's shell environment.
+          SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
           # Crane already maps each registry and pinned git source to its own
           # patched immutable directory; never flatten that map into one vendor root.
           shellHook = ''

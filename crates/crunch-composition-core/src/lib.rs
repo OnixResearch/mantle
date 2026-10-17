@@ -567,6 +567,7 @@ fn index_snapshots(
     let expected = prepared.bindings.iter().map(|binding| binding.root.clone()).collect::<BTreeSet<_>>();
     let expected_root_count = expected.len();
     let mut indexed = BTreeMap::new();
+
     for snapshot in snapshots {
         validate_root_ref(&snapshot.root)?;
         if !expected.contains(&snapshot.root) {

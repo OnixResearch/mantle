@@ -89,22 +89,22 @@ canonical publication owner, the worker projects the content-addressed path
 from the observed NAR SHA256 and declared store name; source ids with identical
 content and name bind to that one projected path without writing a PathInfo.
 Against a read-only view of the live registry plus staged V2 units, it then
-resolves every unit's source and unit dependencies, computes and admits its
-derivation and output paths, checks duplicate identities and registry capacity,
+resolves every unit's source and unit dependencies, computes its derivation
+and output paths, checks complete duplicate identities and registry capacity,
 and preflights the complete root-goal closure and its capacity. A rejection at
 this stage leaves signed slice PathInfos, the live derivation registry, goals,
 scheduler state, and accepted-plan reports unchanged.
 
 Only after that whole-plan preflight does `SliceAdmission` validate the signed
 batch and commit its new PathInfos in one backend transaction. The worker then
-installs the prepared units and root goals. Content-addressed units with
-multiple outputs retain their distinct named outputs: a dependent V2 unit's
-placeholder for `dev`, for example, resolves to the parent's realized `dev`
-path at dispatch, not its `out` path. An ordinary pre-commit failure rejects
-the plan with no admitted source paths. A publication-uncertain result or
+installs the prepared units and root goals. An ordinary pre-commit failure
+rejects the plan with no admitted source paths. A publication-uncertain result or
 post-commit invariant failure aborts the worker instead of claiming a clean
 rejection; the V1 registration path remains separate.
 
+Content-addressed units with multiple outputs retain their distinct named
+outputs: a dependent v2 unit's placeholder for `dev`, for example, resolves
+to the parent's realized `dev` path at dispatch, not its `out` path.
 Native-plan report `source_slices` rows are ordered by source id. Each row
 records `source_id`, `producer_output`, `subpath`, `declared_nar_blake3`,
 `observed_nar_blake3` (when observed), `admitted_store_path` (only after batch

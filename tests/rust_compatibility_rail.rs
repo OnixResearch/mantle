@@ -8,6 +8,19 @@ const EXECUTABLE_MODE: u32 = 0o755;
 const BLAKE3_HEX_BYTES: usize = 64;
 const MATRIX_ID: &str = "representative-rust-compatibility-v1";
 const MATRIX_PATH: &str = "examples/rust_compatibility_surface_matrix.ncl";
+const BLOCKER_MISSING_VENDOR: &str = "missing-vendored-registry-source";
+const BLOCKER_STALE_LOCK: &str = "stale-lockfile-digest";
+const BLOCKER_BUILD_METADATA: &str = "malformed-build-script-metadata";
+const BLOCKER_PROC_MACRO: &str = "missing-proc-macro-host-artifact";
+const BLOCKER_NATIVE_LINK: &str = "unsupported-native-link-metadata";
+const BLOCKER_FEATURE_SURFACE: &str = "missing-feature-surface";
+const BLOCKER_TARGET_CFG_SURFACE: &str = "missing-target-cfg-surface";
+const BLOCKER_WORKSPACE_INHERITANCE: &str = "missing-workspace-inheritance-surface";
+const BLOCKER_MULTI_PACKAGE_BINARY: &str = "missing-multi-package-binary-surface";
+const BLOCKER_VENDORED_GIT: &str = "unsupported-vendored-git-source";
+const BLOCKER_PKG_CONFIG: &str = "unsupported-pkg-config";
+const BLOCKER_LINK_METADATA: &str = "unsupported-rustc-link-metadata";
+const BLOCKER_NATIVE_C: &str = "unsupported-native-c-compile";
 
 fn mantle_cmd() -> Command {
     Command::cargo_bin("mantle").expect("mantle binary should be built")
@@ -284,6 +297,53 @@ fn assert_matrix_binding(cargo_mode: &Value, expected_status: &str, expected_cla
     assert_eq!(matrix["status"], expected_status);
     assert_eq!(matrix["evidence_class"], expected_class);
     assert!(json_array_contains(&matrix["non_claims"], "not-full-cargo-compatibility"));
+}
+
+fn unit_plan_claim_violations(matrix: &Value) -> Vec<String> {
+    let surfaces = matrix["surfaces"].as_array().expect("evaluated Rust compatibility surfaces");
+    let mut issues = Vec::new();
+    for surface in surfaces {
+        if surface["unit_plan"]["status"] != "supported" {
+            continue;
+        }
+        let row = surface["id"].as_str().expect("surface id");
+        let non_claims = &surface["non_claims"];
+        if !json_array_contains(non_claims, "not-full-cargo-compatibility") {
+            issues.push(format!("supported unit_plan row `{row}` lacks full Cargo non-claim"));
+        }
+        if row == "native-link-metadata" && !json_array_contains(non_claims, "not-native-link-probing-correctness") {
+            issues.push(format!("supported unit_plan row `{row}` lacks native probing non-claim"));
+        }
+        for overclaim in [
+            "full-cargo-compatibility",
+            "compiler-correctness",
+            "release-eligibility",
+        ] {
+            if json_array_contains(non_claims, overclaim) {
+                issues.push(format!("supported unit_plan row `{row}` makes overclaim `{overclaim}`"));
+            }
+        }
+    }
+    issues
+}
+
+#[test]
+fn supported_unit_plan_matrix_rows_retain_bounded_non_claims() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let matrix: Value = crunch_eval::evaluate_and_deserialize(&root.join(MATRIX_PATH), &[]).unwrap();
+    let issues = unit_plan_claim_violations(&matrix);
+    assert!(issues.is_empty(), "unit plan claim drift: {}", issues.join("; "));
+
+    let unbounded = serde_json::json!({"surfaces": [{
+        "id": "native-link-metadata",
+        "unit_plan": {"status": "supported"},
+        "non_claims": ["full-cargo-compatibility"]
+    }]});
+    assert_eq!(unit_plan_claim_violations(&unbounded), [
+        "supported unit_plan row `native-link-metadata` lacks full Cargo non-claim",
+        "supported unit_plan row `native-link-metadata` lacks native probing non-claim",
+        "supported unit_plan row `native-link-metadata` makes overclaim `full-cargo-compatibility`",
+    ]);
 }
 
 #[test]

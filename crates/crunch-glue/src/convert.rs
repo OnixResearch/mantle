@@ -21,7 +21,9 @@ use crate::error::Error;
 use crate::types::CrunchDerivation;
 use crate::types::FixedOutput;
 use crate::types::Input;
+use crate::types::MAX_PLAN_OUTPUT_REFERENCES;
 use crate::types::PLAN_OUTPUT_BINDINGS_ENV_KEY;
+use crate::types::PlanOutputRef;
 use crate::types::validate_dynamic_plan_outputs;
 use crate::types::validate_plan_output_inputs;
 
@@ -304,24 +306,14 @@ fn resolve_inputs(
                 input_derivations.entry(nested_drv_path).or_default().insert(output_ref.output.clone());
             }
             Input::PlanOutput(reference) => {
-                if !reference.producer.dynamic_plan_outputs.contains(&reference.plan_output) {
+                if bindings.len() >= MAX_PLAN_OUTPUT_REFERENCES {
                     return Err(Error::InvalidPlanOutputBinding(format!(
-                        "plan-output '{}' is not declared dynamic_plan_outputs of producer '{}'",
-                        reference.plan_output, reference.producer.name
+                        "plan-output references exceed limit of {MAX_PLAN_OUTPUT_REFERENCES}"
                     )));
                 }
-                let (producer_path, _) = convert_with_depth(&reference.producer, known_paths, depth.saturating_add(1))?;
-                let absolute = producer_path.to_absolute_path_with_prefix(store_dir);
+                let (producer_path, record) = resolve_plan_output_input(reference, known_paths, depth, store_dir)?;
                 input_derivations.entry(producer_path).or_default().insert(reference.plan_output.clone());
-                let name = reference.name.clone();
-                bindings.insert(name.clone(), PlanOutputBindingRecord {
-                    placeholder: hash_placeholder(&format!("mantle-plan-output:{name}")),
-                    name,
-                    producer_drv_path: absolute,
-                    plan_output: reference.plan_output.clone(),
-                    root: reference.root.clone(),
-                    unit_output: reference.unit_output.clone(),
-                });
+                bindings.insert(record.name.clone(), record);
             }
             Input::Derivation(nested_drv) => {
                 let (nested_drv_path, _nested_nix_drv) =
@@ -335,39 +327,69 @@ fn resolve_inputs(
     Ok((input_derivations, input_sources, bindings))
 }
 
+/// Convert the inline producer and build the canonical request record for
+/// one late-bound plan-root reference. Only the producer edge and this record
+/// enter the consumer identity; no plan or unit output is consulted.
+// r[impl mantle.dynamic_plan_output_inputs.request_identity]
+fn resolve_plan_output_input(
+    reference: &PlanOutputRef,
+    known_paths: &mut ConversionCache,
+    depth: u32,
+    store_dir: &str,
+) -> Result<(StorePath<String>, PlanOutputBindingRecord), Error> {
+    assert!(depth < MAX_RECURSION_DEPTH, "plan-output producer depth must stay within limit");
+    if !reference.producer.dynamic_plan_outputs.contains(&reference.plan_output) {
+        return Err(Error::InvalidPlanOutputBinding(format!(
+            "plan-output '{}' is not declared dynamic_plan_outputs of producer '{}'",
+            reference.plan_output, reference.producer.name
+        )));
+    }
+    let (producer_path, _) = convert_with_depth(&reference.producer, known_paths, depth.saturating_add(1))?;
+    let record = PlanOutputBindingRecord {
+        placeholder: hash_placeholder(&format!("mantle-plan-output:{}", reference.name)),
+        name: reference.name.clone(),
+        producer_drv_path: producer_path.to_absolute_path_with_prefix(store_dir),
+        plan_output: reference.plan_output.clone(),
+        root: reference.root.clone(),
+        unit_output: reference.unit_output.clone(),
+    };
+    debug_assert!(record.producer_drv_path.ends_with(".drv"));
+    Ok((producer_path, record))
+}
 const PLAN_OUTPUT_MARKER: &str = "{{mantle-plan-output";
 
 fn substitute_plan_output_markers(
     value: &str,
     bindings: &BTreeMap<String, PlanOutputBindingRecord>,
 ) -> Result<String, Error> {
-    let Some(mut start) = value.find(PLAN_OUTPUT_MARKER) else {
-        return Ok(value.to_owned());
-    };
-    let mut result = String::with_capacity(value.len());
+    assert!(!value.is_empty(), "only values containing a marker are substituted");
+    let mut result = String::new();
+    result
+        .try_reserve(value.len())
+        .map_err(|error| Error::InvalidPlanOutputBinding(format!("reserving substituted value: {error}")))?;
     let mut remainder = value;
-    loop {
+    // Every iteration consumes at least one marker, so the value length bounds the loop.
+    for _ in 0..value.len() {
+        let Some(start) = remainder.find(PLAN_OUTPUT_MARKER) else {
+            result.push_str(remainder);
+            debug_assert!(!result.contains(PLAN_OUTPUT_MARKER));
+            return Ok(result);
+        };
         result.push_str(&remainder[..start]);
-        let following = &remainder[start + PLAN_OUTPUT_MARKER.len()..];
-        let following = following
-            .strip_prefix(':')
+        let following = remainder[start..]
+            .strip_prefix(PLAN_OUTPUT_MARKER)
+            .and_then(|tail| tail.strip_prefix(':'))
             .ok_or_else(|| Error::InvalidPlanOutputBinding("malformed plan-output marker".to_string()))?;
-        let end = following
-            .find("}}")
+        let (name, tail) = following
+            .split_once("}}")
             .ok_or_else(|| Error::InvalidPlanOutputBinding("unterminated plan-output marker".to_string()))?;
-        let name = &following[..end];
         let binding = bindings
             .get(name)
             .ok_or_else(|| Error::InvalidPlanOutputBinding(format!("unknown plan-output marker '{name}'")))?;
         result.push_str(&binding.placeholder);
-        remainder = &following[end + 2..];
-        if let Some(next) = remainder.find(PLAN_OUTPUT_MARKER) {
-            start = next;
-        } else {
-            result.push_str(remainder);
-            return Ok(result);
-        }
+        remainder = tail;
     }
+    Err(Error::InvalidPlanOutputBinding("plan-output marker substitution exceeded its bound".to_string()))
 }
 
 fn apply_plan_output_bindings(
@@ -375,6 +397,8 @@ fn apply_plan_output_bindings(
     nix_drv: &mut Derivation,
     bindings: BTreeMap<String, PlanOutputBindingRecord>,
 ) -> Result<(), Error> {
+    assert!(bindings.len() <= MAX_PLAN_OUTPUT_REFERENCES, "binding count was validated at conversion");
+    debug_assert!(bindings.iter().all(|(name, record)| name == &record.name));
     // The legacy derivation builder overwrites these keys. Do not silently
     // discard a binding marker supplied in one of their original values.
     for (key, value) in &drv.env {

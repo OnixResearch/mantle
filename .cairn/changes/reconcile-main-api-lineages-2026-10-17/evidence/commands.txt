@@ -1,0 +1,7 @@
+# PENDING final-source read-only lifecycle gates; preliminary documentary results are captured separately.
+# CAIRN must be an already available executable whose current required cohort binding is reviewed.
+# Product execution remains held; do not run the archive-capable lifecycle runner from this list.
+: "${CAIRN:?bind the repository-required native Cairn cohort before lifecycle validation}"; "$CAIRN" validate --root .
+: "${CAIRN:?bind the repository-required native Cairn cohort before lifecycle validation}"; "$CAIRN" gate proposal reconcile-main-api-lineages-2026-10-17 --root .
+: "${CAIRN:?bind the repository-required native Cairn cohort before lifecycle validation}"; "$CAIRN" gate design reconcile-main-api-lineages-2026-10-17 --root .
+: "${CAIRN:?bind the repository-required native Cairn cohort before lifecycle validation}"; "$CAIRN" gate tasks reconcile-main-api-lineages-2026-10-17 --root .

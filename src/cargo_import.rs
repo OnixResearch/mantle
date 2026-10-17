@@ -1762,7 +1762,9 @@ mod tests {
         use std::ffi::OsString;
         use std::os::unix::ffi::OsStringExt;
 
-        let invalid_root = PathBuf::from(OsString::from_vec(vec![b'/', b't', b'm', b'p', b'/', 0xff]));
+        let scratch = tempfile::tempdir().unwrap();
+        let invalid_root = scratch.path().join(OsString::from_vec(vec![0xff]));
+        std::fs::create_dir(&invalid_root).unwrap();
         let err = run_cargo_import(CargoImportShellOptions {
             root: &invalid_root,
             selected_package: None,
@@ -1776,6 +1778,7 @@ mod tests {
         })
         .unwrap_err();
 
-        assert!(err.to_string().contains("UTF-8 workspace root"));
+        assert!(matches!(err, RunError::Internal(_)), "{err}");
+        assert!(!invalid_root.join(DEFAULT_PROJECT_FILE).exists());
     }
 }

@@ -392,6 +392,8 @@ fn cpu_exhaustion_reaches_the_enforced_cpu_terminal_class() {
 #[cfg_attr(not(debug_assertions), ignore)] // needs the debug-only evaluator worker fixture hook compiled into the binary
 #[test]
 fn process_fixtures_bound_stderr_and_make_late_results_terminal() {
+    // I/O fixtures have a longer finite wall budget; deadline/reap fixtures below retain 100 ms.
+    let io_policy = format!("{FIXTURE_ROOT}/policy-process-io-fixture.json");
     let temporary = tempfile::tempdir().unwrap();
     let stderr_report_path = temporary.path().join("stderr-report.json");
     let stderr_output = mantle()
@@ -400,7 +402,7 @@ fn process_fixtures_bound_stderr_and_make_late_results_terminal() {
             "eval",
             POSITIVE_SOURCE,
             "--budget-policy",
-            &format!("{FIXTURE_ROOT}/policy-process-fixture.json"),
+            &io_policy,
             "--budget-report",
             stderr_report_path.to_str().unwrap(),
         ])
@@ -420,7 +422,7 @@ fn process_fixtures_bound_stderr_and_make_late_results_terminal() {
             "eval",
             POSITIVE_SOURCE,
             "--budget-policy",
-            &format!("{FIXTURE_ROOT}/policy-process-fixture.json"),
+            &io_policy,
             "--budget-report",
             redaction_report_path.to_str().unwrap(),
         ])

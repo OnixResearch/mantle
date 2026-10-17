@@ -63,4 +63,8 @@ allow-git = [
   "https://github.com/tvlfyi/wu-manber.git",
   "https://github.com/cachix/casita",
   "https://github.com/cachix/turso.git",
+  "ssh://git@github.com/OnixResearch/onix-artifact.git",
+  "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git",
+  "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git",
+  "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git",
 ]

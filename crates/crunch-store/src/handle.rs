@@ -81,6 +81,7 @@ use crate::Publisher;
 use crate::StoreAuditEvent;
 use crate::StoreAuditKind;
 use crate::StoreBackend;
+use crate::StoreBackendCapabilityProfile;
 use crate::StoreFallbackMode;
 use crate::StoredArtifactAttestation;
 use crate::StoredClosureAttestation;
@@ -108,7 +109,7 @@ const MAX_REMOTE_TRUSTED_PUBLIC_KEYS: usize = 16;
 const OVERLAY_DIRECTORY_READ_LIMIT: usize = 1_000_000;
 const MAX_LAYERED_CLOSURE_PATHS: usize = 1_000_000;
 const MAX_RECORDED_LAYER_SELECTIONS: usize = 65_536;
-const SOURCE_SLICE_NAR_MAX_BYTES: u64 = 1024 * 1024 * 1024;
+const SOURCE_SLICE_NAR_MAX_BYTES: u64 = 1_073_741_824;
 
 /// Configuration for opening a store.
 pub struct StoreConfig {
@@ -155,20 +156,17 @@ impl StoreConfig {
 
     pub(crate) fn preflight_backend_identity_with_profile(
         backend: StoreBackend,
-        profile: crate::StoreBackendCapabilityProfile,
+        profile: StoreBackendCapabilityProfile,
         state_dir: &Path,
         store_dir: &str,
         base_state_dirs: &[PathBuf],
     ) -> Result<(), Error> {
-        if !profile.overlay_composition && !base_state_dirs.is_empty() {
-            return Err(Error::Store(format!(
-                "{}-overlay-unsupported: backend cannot compose base stores",
-                backend.as_str()
-            )));
+        if !base_state_dirs.is_empty() {
+            backend.require_overlay_composition(profile)?;
         }
-        crate::overlay::preflight_store_identity(state_dir, store_dir, backend)?;
+        crate::overlay::preflight_store_identity(state_dir, store_dir, backend, profile, !base_state_dirs.is_empty())?;
         for base_state_dir in base_state_dirs {
-            crate::overlay::preflight_store_identity(base_state_dir, store_dir, StoreBackend::Snix)?;
+            crate::overlay::preflight_store_identity(base_state_dir, store_dir, backend, profile, true)?;
         }
         Ok(())
     }
@@ -428,10 +426,9 @@ enum DeltaAttemptResult {
     },
 }
 
-/// Bundles all store services behind `Arc<dyn ...>`. The single point of
-/// contact between crunch-build (or any consumer) and the storage layer.
-///
-/// Pre-built services for constructing a StoreHandle in tests.
+/// Pre-built services for the test-only injected Snix handle.
+/// Durable callers open a selected backend with `StoreConfig`.
+#[cfg(any(test, feature = "test-support"))]
 pub struct StoreHandleServices {
     pub blob_service: Arc<dyn BlobService>,
     pub directory_service: Arc<dyn DirectoryService>,
@@ -788,7 +785,7 @@ pub struct StoreHandle {
     /// Selected durable authority; Snix services are only session scratch under Casita.
     backend: StoreBackend,
     pub(crate) casita_store: Option<Arc<crate::casita::CasitaStore>>,
-    pathinfo_service: Arc<dyn PathInfoService>,
+    pub(crate) pathinfo_service: Arc<dyn PathInfoService>,
     /// Raw writable-overlay services retained for mutation and GC isolation.
     overlay_blob_service: Arc<dyn BlobService>,
     overlay_directory_service: Arc<dyn DirectoryService>,
@@ -1016,6 +1013,7 @@ impl StoreHandle {
             Vec::with_capacity(config.base_state_dirs.len());
         let mut base_ca_mappings = Vec::with_capacity(config.base_state_dirs.len());
 
+        let base_store_dir: Arc<str> = Arc::from(config.store_dir.as_str());
         for (declaration_index, base_dir) in config.base_state_dirs.iter().enumerate() {
             if !base_dir.is_dir() {
                 return Err(Error::Store(format!("base state directory does not exist: {}", base_dir.display())));
@@ -1045,9 +1043,12 @@ impl StoreHandle {
             let base_pathinfo = open_pathinfo_service_read_only(base_dir, config.fallback_mode).await?;
             base_pathinfo_inspection_services.push(base_pathinfo.clone());
             base_pathinfo_services.push(crate::overlay::trusted_base_pathinfo_service(
-                base_pathinfo,
-                base_dir,
-                declaration_index,
+                crate::overlay::TrustedBasePathInfoRequest {
+                    inner: base_pathinfo,
+                    base_state_dir: base_dir,
+                    declaration_index,
+                    store_dir: base_store_dir.clone(),
+                },
             )?);
             base_ca_mappings.push(CaMappings::load(base_dir));
         }
@@ -1158,18 +1159,28 @@ impl StoreHandle {
         })
     }
 
-    /// Construct a StoreHandle from pre-built services (for tests).
-    pub fn from_services(services: StoreHandleServices) -> Self {
-        Self::from_services_with_store_dir(services, nix_compat::store_path::STORE_DIR.to_string())
-    }
-
-    /// Like [StoreHandle::from_services] but with a custom store directory prefix.
-    pub fn from_services_with_store_dir(services: StoreHandleServices, store_dir: String) -> Self {
+    /// Construct a Snix handle from pre-built services for focused compatibility tests.
+    /// Injected services are caller-owned; this preflights identity before reading
+    /// shell metadata but does not bind identity or open services. Durable callers
+    /// must use `open`, which also constructs the selected backend's services.
+    /// Casita cannot be injected without its durable repository.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn from_services_with_store_dir(
+        backend: StoreBackend,
+        services: StoreHandleServices,
+        store_dir: String,
+    ) -> Result<Self, Error> {
+        if backend != StoreBackend::Snix {
+            return Err(Error::Store(
+                "casita-store-services-unsupported: open the durable Casita repository".to_string(),
+            ));
+        }
+        StoreConfig::preflight_backend_identity_for(backend, &services.state_dir, &store_dir, &[])?;
         let ca_mappings = CaMappings::load(&services.state_dir);
         let advisory_metadata_cache = AdvisoryMetadataCache::load(&services.state_dir);
         let action_result_stores = configured_action_result_stores(&services.state_dir, &[], &[]);
-        Self {
-            backend: StoreBackend::Snix,
+        Ok(Self {
+            backend,
             casita_store: None,
             blob_service: services.blob_service.clone(),
             directory_service: services.directory_service.clone(),
@@ -1199,7 +1210,7 @@ impl StoreHandle {
             root_registration: None,
             publishers: services.publishers,
             pending_publication_steps: Vec::new(),
-        }
+        })
     }
 
     /// Arc-cloned blob service.
@@ -1236,6 +1247,7 @@ impl StoreHandle {
     pub fn backend(&self) -> StoreBackend {
         self.backend
     }
+
     /// Read-only check before a guarded Casita GC recovery attempt.
     pub fn casita_gc_fence_pending(state_dir: &Path) -> Result<bool, Error> {
         gc::casita_gc_fence_pending(state_dir)
@@ -1374,7 +1386,7 @@ impl StoreHandle {
         }
         if self.overlay_state.is_some() && read.layer_index == 0 {
             let trusted_keys = crate::overlay::load_layer_trust_keys(&self.state_dir)?;
-            crate::overlay::verify_pathinfo_trust(&read.value, &trusted_keys)
+            crate::overlay::verify_pathinfo_trust(&read.value, &trusted_keys, &self.store_dir)
                 .map_err(|error| Error::Store(format!("overlay-layer-trust-failure for {path}: {error}")))?;
         }
         let shadows = self.pathinfo_shadow_observations(read.layer_index, &read.value).await;
@@ -1442,23 +1454,19 @@ impl StoreHandle {
         // Layer 0: the writable overlay. Trust-check entries against the
         // overlay trusted keys exactly as before.
         let mut overlay_stream = self.overlay_pathinfo.list();
-        // Trust material may be absent in a fresh overlay state dir (no
-        // publishers, no auto-generated signing key); skip verification there.
-        let overlay_public_keys = self.state_dir.join(crate::overlay::OVERLAY_TRUSTED_PUBLIC_KEYS_FILE_NAME);
-        let overlay_signing_key = self.state_dir.join(crate::overlay::LOCAL_SIGNING_KEY_FILE_NAME);
-        let has_overlay_trust_material = overlay_public_keys.exists() || overlay_signing_key.exists();
-        let overlay_trusted_keys = if self.overlay_state.is_some() && has_overlay_trust_material {
-            Some(crate::overlay::load_layer_trust_keys(&self.state_dir)?)
-        } else {
-            None
-        };
+        // Empty fresh overlays need no key, but every present record must pass
+        // exactly the same trust check as a direct layered lookup.
+        let mut overlay_trusted_keys = None;
         let mut remaining = LISTED_PATHINFOS_MAX;
         while let Some(result) = overlay_stream.next().await {
             assert!(remaining > 0, "composed PathInfo listing exceeds {LISTED_PATHINFOS_MAX} entries");
             remaining -= 1;
             let path_info = result.map_err(|err| Error::Store(format!("listing overlay PathInfos: {err}")))?;
+            if self.overlay_state.is_some() && overlay_trusted_keys.is_none() {
+                overlay_trusted_keys = Some(crate::overlay::load_layer_trust_keys(&self.state_dir)?);
+            }
             if let Some(trusted_keys) = &overlay_trusted_keys {
-                crate::overlay::verify_pathinfo_trust(&path_info, trusted_keys).map_err(|error| {
+                crate::overlay::verify_pathinfo_trust(&path_info, trusted_keys, &self.store_dir).map_err(|error| {
                     Error::Store(format!("overlay-layer-trust-failure for {}: {error}", path_info.store_path))
                 })?;
             }
@@ -1474,6 +1482,12 @@ impl StoreHandle {
         // present in a nearer layer are shadowed and skipped.
         for (base_index, base) in self.base_pathinfo_inspection_services.iter().enumerate() {
             let service_index = base_index.checked_add(1).ok_or_else(|| Error::Store("base index overflow".into()))?;
+            let base_dir = self
+                .overlay_state
+                .as_ref()
+                .and_then(|state| state.base_state_dirs.get(base_index))
+                .ok_or_else(|| Error::Store("listed base has no declared overlay state".to_string()))?;
+            let trusted_keys = crate::overlay::load_layer_trust_keys(base_dir)?;
             assert!(remaining > 0, "composed PathInfo listing exceeds {LISTED_PATHINFOS_MAX} entries");
             let mut base_stream = base.list();
             while let Some(result) = base_stream.next().await {
@@ -1483,6 +1497,9 @@ impl StoreHandle {
                 if !seen.insert(path_info.store_path.clone()) {
                     continue;
                 }
+                crate::overlay::verify_pathinfo_trust(&path_info, &trusted_keys, &self.store_dir).map_err(|error| {
+                    Error::Store(format!("overlay-layer-trust-failure in base {base_index}: {error}"))
+                })?;
                 let shadows = self.pathinfo_shadow_observations(service_index, &path_info).await;
                 let mut layered = crate::layer::Layered::from_service_index(path_info, service_index)
                     .map_err(|error| Error::Store(format!("mapping listed base PathInfo layer: {error}")))?;
@@ -1965,9 +1982,10 @@ impl StoreHandle {
 
     /// Reuse a previously known castore node for `path` when possible.
     ///
-    /// Checks the session cache first, then local PathInfo. Returns `None`
-    /// when no reusable local node is known or when the referenced castore
-    /// content is missing.
+    /// Snix checks the session cache before local PathInfo. Casita always
+    /// rechecks its durable root, envelope, and trust policy instead of treating
+    /// session nodes as authority. Returns `None` when no reusable local node
+    /// is known or when the referenced castore content is missing.
     pub async fn cached_node_for_path(&mut self, path: &StorePath<String>) -> Result<Option<Node>, Error> {
         Ok(self.cached_node_for_path_with_layer(path).await?.map(|read| read.value))
     }
@@ -1979,7 +1997,9 @@ impl StoreHandle {
         if path.name().is_empty() || !path.to_string().contains('-') {
             return Err(Error::Store(format!("invalid logical store path: {path}")));
         }
-        if let Some(node) = self.output_nodes.get(path).cloned() {
+        if self.backend == StoreBackend::Snix
+            && let Some(node) = self.output_nodes.get(path).cloned()
+        {
             if self.castore_has_complete_content(&node).await? {
                 return Ok(Some(crate::layer::Layered::overlay(node)));
             }
@@ -2003,7 +2023,7 @@ impl StoreHandle {
         self.record_layer_selection(path, &path_info)?;
 
         let layered_node = path_info.map(|value| value.node);
-        if layered_node.layer.is_overlay() {
+        if self.backend == StoreBackend::Snix && layered_node.layer.is_overlay() {
             self.output_nodes.insert(path.clone(), layered_node.value.clone());
         }
         Ok(Some(layered_node))
@@ -3686,7 +3706,7 @@ impl StoreHandle {
             }
             if self.overlay_state.is_some() && read.layer_index == 0 {
                 let trusted_keys = crate::overlay::load_layer_trust_keys(&self.state_dir)?;
-                crate::overlay::verify_pathinfo_trust(&read.value, &trusted_keys)
+                crate::overlay::verify_pathinfo_trust(&read.value, &trusted_keys, &self.store_dir)
                     .map_err(|error| Error::Store(format!("overlay-layer-trust-failure for {path}: {error}")))?;
             }
             let layer = crate::layer::StoreLayer::from_service_index(read.layer_index)
@@ -4231,6 +4251,7 @@ mod tests {
                 as Arc<dyn PathInfoService>;
 
         StoreHandle::from_services_with_store_dir(
+            StoreBackend::Snix,
             StoreHandleServices {
                 blob_service,
                 directory_service,
@@ -4242,6 +4263,7 @@ mod tests {
             },
             store_dir.to_string(),
         )
+        .unwrap()
     }
 
     fn test_handle_with_remote(state_dir: &Path) -> (StoreHandle, Arc<dyn PathInfoService>) {
@@ -4261,6 +4283,7 @@ mod tests {
                 as Arc<dyn PathInfoService>;
 
         let handle = StoreHandle::from_services_with_store_dir(
+            StoreBackend::Snix,
             StoreHandleServices {
                 blob_service,
                 directory_service,
@@ -4271,12 +4294,113 @@ mod tests {
                 publishers: Vec::new(),
             },
             "/nix/store".to_string(),
-        );
+        )
+        .unwrap();
         (handle, remote)
+    }
+
+    #[test]
+    fn synthetic_services_reject_casita_before_opening_state() {
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("state");
+        let output = root.path().join("store");
+        let services = StoreHandleServices {
+            blob_service: Arc::new(MemoryBlobService::default()),
+            directory_service: Arc::new(
+                RedbDirectoryService::new_temporary(
+                    "synthetic-casita-test".to_string(),
+                    RedbDirectoryServiceConfig::default(),
+                )
+                .unwrap(),
+            ),
+            pathinfo_service: Arc::new(LruPathInfoService::with_capacity(
+                "synthetic-casita-test".to_string(),
+                NonZeroUsize::new(32).unwrap(),
+            )),
+            remote_pathinfo: None,
+            state_dir: state.clone(),
+            output_dir_str: output.display().to_string(),
+            publishers: Vec::new(),
+        };
+        let error = StoreHandle::from_services_with_store_dir(StoreBackend::Casita, services, "/nix/store".to_string())
+            .err()
+            .expect("Casita requires its repository, not arbitrary Snix services");
+        assert!(error.to_string().contains("casita-store-services-unsupported"), "{error}");
+        assert!(!state.exists());
+        assert!(!output.exists());
+    }
+
+    #[tokio::test]
+    async fn synthetic_snix_services_reject_recorded_casita_before_loading_foreign_state() {
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("casita-state");
+        let casita_output = root.path().join("casita-output");
+        let synthetic_output = root.path().join("synthetic-output");
+        let casita = StoreHandle::open(StoreConfig::new(
+            StoreBackend::Casita,
+            state.clone(),
+            casita_output,
+            "/nix/store".to_string(),
+        ))
+        .await
+        .unwrap();
+        drop(casita);
+        let mut foreign_mappings = CaMappings::default();
+        foreign_mappings.insert("/nix/store/foreign.drv", "out", "/nix/store/foreign-output");
+        foreign_mappings.save_checked(&state).unwrap();
+        std::fs::write(state.join("advisory-meta-cache.json"), b"[]").unwrap();
+        let before = snapshot_test_repository(&state);
+
+        let services = StoreHandleServices {
+            blob_service: Arc::new(MemoryBlobService::default()),
+            directory_service: Arc::new(
+                RedbDirectoryService::new_temporary(
+                    "synthetic-foreign-state-test".to_string(),
+                    RedbDirectoryServiceConfig::default(),
+                )
+                .unwrap(),
+            ),
+            pathinfo_service: Arc::new(LruPathInfoService::with_capacity(
+                "synthetic-foreign-state-test".to_string(),
+                NonZeroUsize::new(32).unwrap(),
+            )),
+            remote_pathinfo: None,
+            state_dir: state.clone(),
+            output_dir_str: synthetic_output.display().to_string(),
+            publishers: Vec::new(),
+        };
+        let error = StoreHandle::from_services_with_store_dir(StoreBackend::Snix, services, "/nix/store".to_string())
+            .err()
+            .expect("synthetic Snix services must reject recorded Casita state");
+        assert!(
+            error.to_string().contains("store-backend-mismatch: requested snix, state declares casita"),
+            "{error}"
+        );
+        assert_eq!(snapshot_test_repository(&state), before, "wrong-backend synthetic open changed Casita state");
+        assert!(!synthetic_output.exists(), "wrong-backend synthetic open created output");
     }
 
     fn test_output(name: &str, digest_byte: u8) -> StorePath<String> {
         StorePath::from_name_and_digest_fixed(name, [digest_byte; 20]).unwrap()
+    }
+    fn snapshot_test_repository(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
+        let mut files = BTreeMap::new();
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(directory) = pending.pop() {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let path = entry.unwrap().path();
+                let relative = path.strip_prefix(root).unwrap().to_path_buf();
+                let metadata = std::fs::symlink_metadata(&path).unwrap();
+                if metadata.is_dir() {
+                    files.insert(relative, None);
+                    pending.push(path);
+                } else {
+                    assert!(metadata.is_file(), "unexpected Casita repository member: {}", path.display());
+                    files.insert(relative, Some(std::fs::read(path).unwrap()));
+                }
+            }
+        }
+        files
     }
 
     fn test_signing_key() -> SigningKey<ed25519_dalek::SigningKey> {
@@ -6849,6 +6973,7 @@ mod tests {
             .unwrap(),
         ) as Arc<dyn DirectoryService>;
         let mut handle = StoreHandle::from_services_with_store_dir(
+            StoreBackend::Snix,
             StoreHandleServices {
                 blob_service,
                 directory_service,
@@ -6859,7 +6984,8 @@ mod tests {
                 publishers: Vec::new(),
             },
             "/nix/store".to_string(),
-        );
+        )
+        .unwrap();
         let expected_request_error =
             format!("cache: remote-substitution-request-digest-mismatch: output {requested_path}");
         let expected_error = format!(
@@ -7186,6 +7312,80 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn overlay_custom_prefix_get_and_list_share_reference_signature_authority() {
+        use futures::TryStreamExt as _;
+
+        const STORE_DIR: &str = "/mantle/store";
+        for signed_prefix in [STORE_DIR, "/nix/store"] {
+            let base_dir = tempfile::tempdir().unwrap();
+            let overlay_dir = tempfile::tempdir().unwrap();
+            let base = StoreHandle::open(StoreConfig::new(
+                StoreBackend::Snix,
+                base_dir.path().to_path_buf(),
+                base_dir.path().join("export"),
+                STORE_DIR.to_string(),
+            ))
+            .await
+            .unwrap();
+            std::fs::write(base_dir.path().join("overlay-trusted-public-keys"), format!("{}\n", test_verifying_key()))
+                .unwrap();
+            let referenced = test_output("prefix-reference", 61);
+            let primary = test_output("prefix-primary", 62);
+            let mut entries = [signed_pathinfo(referenced.clone()), signed_pathinfo(primary.clone())];
+            entries[1].references.push(referenced);
+            for path_info in &mut entries {
+                let fingerprint = compute_pathinfo_fingerprint(path_info, signed_prefix);
+                path_info.signatures = vec![test_signing_key().sign(fingerprint.as_bytes()).to_owned()];
+                base.pathinfo_service.put(path_info.clone()).await.unwrap();
+            }
+            drop(base);
+            set_test_tree_read_only(base_dir.path(), true);
+            let handle = create_overlay_handle(overlay_dir.path(), base_dir.path(), STORE_DIR).await;
+            let trusted = signed_prefix == STORE_DIR;
+            for expected in &entries {
+                let raw = handle.pathinfo_service.get(*expected.store_path.digest()).await;
+                let layered = handle.path_info_with_layer(&expected.store_path).await;
+                if trusted {
+                    assert_eq!(raw.unwrap(), Some(expected.clone()));
+                    let layered = layered.unwrap().unwrap();
+                    assert_eq!(layered.value, *expected);
+                    assert_eq!(layered.layer, crate::layer::StoreLayer::Base { index: 1 });
+                } else {
+                    assert!(raw.unwrap_err().to_string().contains("overlay-layer-trust-failure"));
+                    assert!(layered.unwrap_err().to_string().contains("overlay-layer-trust-failure"));
+                }
+            }
+            let listed = handle.list_pathinfos_with_layer().await;
+            if trusted {
+                let listed = listed
+                    .unwrap()
+                    .into_iter()
+                    .map(|entry| (entry.value.store_path.clone(), entry.value))
+                    .collect::<BTreeMap<_, _>>();
+                let expected =
+                    entries.iter().map(|entry| (entry.store_path.clone(), entry.clone())).collect::<BTreeMap<_, _>>();
+                assert_eq!(listed, expected);
+            } else {
+                assert!(listed.unwrap_err().to_string().contains("overlay-layer-trust-failure"));
+                let raw_list = handle.pathinfo_service.list().try_collect::<Vec<_>>().await.unwrap();
+                assert!(
+                    raw_list.iter().all(|listed| !entries.contains(listed)),
+                    "raw listing must not expose base records rejected by get"
+                );
+            }
+            let parts = handle.into_pipeline_store_parts();
+            for expected in &entries {
+                let found = parts.output_lookup.find(&expected.store_path).await;
+                if trusted {
+                    assert_eq!(found.unwrap(), Some(expected.clone()));
+                } else {
+                    assert!(found.unwrap_err().to_string().contains("overlay-layer-trust-failure"));
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn overlay_read_through_base_hit_does_not_mutate_overlay() {
         // r[verify store_transports.overlay_composition.scenario.read-through-no-backfill]
         // GIVEN an overlay composed over a base that has PathInfo the overlay lacks
@@ -7392,7 +7592,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn overlay_prefix_mismatch_fails_closed() {
+    async fn overlay_prefix_mismatch_preserves_both_layers() {
         // r[verify store_transports.overlay_composition.scenario.prefix-mismatch]
         // GIVEN an overlay configured with a base whose store_dir differs
         // WHEN opening the composed handle
@@ -7404,6 +7604,10 @@ mod tests {
         // Create base with /nix/store prefix.
         let _base_path_info =
             create_base_store(base_dir.path(), "/nix/store", &test_output("prefix-mismatch", 9)).await;
+        let base_identity_path = base_dir.path().join("store-identity.json");
+        let base_identity_before = std::fs::read(&base_identity_path).unwrap();
+        let base_pathinfo_path = base_dir.path().join("pathinfo.redb");
+        let base_pathinfo_before = std::fs::read(&base_pathinfo_path).unwrap();
 
         // Open overlay with /crunch/store prefix — mismatch must fail.
         let result = StoreHandle::open_overlay(StoreConfig {
@@ -7417,8 +7621,135 @@ mod tests {
         })
         .await;
 
-        assert!(result.is_err(), "prefix mismatch must fail before overlay services open");
-        assert!(!overlay_dir.path().join("pathinfo.redb").exists());
+        let error = match result {
+            Ok(_) => panic!("prefix mismatch must fail before overlay services open"),
+            Err(error) => error,
+        };
+        let Error::Store(message) = error else {
+            panic!("prefix mismatch must be rejected by store identity admission");
+        };
+        assert!(message.contains("/nix/store") && message.contains("/crunch/store"), "{message}");
+        assert_eq!(std::fs::read(&base_identity_path).unwrap(), base_identity_before);
+        assert_eq!(std::fs::read(&base_pathinfo_path).unwrap(), base_pathinfo_before);
+        assert_eq!(std::fs::read_dir(overlay_dir.path()).unwrap().count(), 0);
+    }
+
+    #[tokio::test]
+    async fn overlay_rejects_foreign_base_before_opening_services_or_creating_writable_state() {
+        let root = tempfile::tempdir().unwrap();
+        let writable = root.path().join("writable");
+        let base = root.path().join("foreign-base");
+        std::fs::create_dir(&base).unwrap();
+        crate::overlay::ensure_store_identity(&base, "/nix/store", StoreBackend::Casita).unwrap();
+        let base_identity = std::fs::read(base.join("store-identity.json")).unwrap();
+        std::fs::write(base.join("blobs"), b"not a Snix blob service").unwrap();
+
+        let config =
+            StoreConfig::new(StoreBackend::Snix, writable.clone(), root.path().join("store"), "/nix/store".to_string())
+                .with_base_state_dirs(vec![base.clone()]);
+        let error = StoreHandle::open(config).await.err().expect("foreign base must be rejected");
+        assert!(
+            error.to_string().contains("store-backend-mismatch: requested snix, state declares casita"),
+            "{error}"
+        );
+        assert!(!writable.exists(), "mismatched base created writable state");
+        assert_eq!(std::fs::read(base.join("store-identity.json")).unwrap(), base_identity);
+        assert_eq!(std::fs::read(base.join("blobs")).unwrap(), b"not a Snix blob service");
+
+        let no_overlay_profile = StoreBackendCapabilityProfile {
+            overlay_composition: false,
+            ..StoreBackend::Snix.profile()
+        };
+        let error = StoreConfig::preflight_backend_identity_with_profile(
+            StoreBackend::Snix,
+            no_overlay_profile,
+            &writable,
+            "/nix/store",
+            std::slice::from_ref(&base),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("snix-overlay-unsupported"), "{error}");
+        assert!(!writable.exists(), "disabled profile created writable state");
+        assert_eq!(std::fs::read(base.join("store-identity.json")).unwrap(), base_identity);
+    }
+
+    #[tokio::test]
+    async fn casita_lookup_does_not_fall_back_to_leftover_snix_pathinfo() {
+        let root = tempfile::tempdir().unwrap();
+        let snix_state = tempfile::tempdir().unwrap();
+        let casita_state = root.path().join("casita-state");
+        let output_dir = root.path().join("store");
+        let output_path = test_output("leftover-snix", 91);
+        let legacy_record = create_base_store(snix_state.path(), "/nix/store", &output_path).await;
+
+        let selected = || {
+            StoreConfig::new(StoreBackend::Casita, casita_state.clone(), output_dir.clone(), "/nix/store".to_string())
+        };
+        drop(StoreHandle::open(selected()).await.unwrap());
+        let leftover_path = casita_state.join("pathinfo.redb");
+        std::fs::copy(snix_state.path().join("pathinfo.redb"), &leftover_path).unwrap();
+        let leftover_bytes = std::fs::read(&leftover_path).unwrap();
+        let legacy_reader = RedbPathInfoService::new("legacy-snix-evidence".to_string(), RedbPathInfoServiceConfig {
+            path: Some(leftover_path.clone()),
+            read_only: true,
+            cache_size: None,
+        })
+        .await
+        .unwrap();
+        assert_eq!(legacy_reader.get(*output_path.digest()).await.unwrap(), Some(legacy_record));
+
+        let reopened = StoreHandle::open(selected()).await.unwrap();
+        assert_eq!(reopened.backend(), StoreBackend::Casita);
+        assert!(
+            reopened.pathinfo_service().get(*output_path.digest()).await.unwrap().is_none(),
+            "Casita lookup must not treat the leftover Snix record as selected store content"
+        );
+        assert_eq!(std::fs::read(&leftover_path).unwrap(), leftover_bytes);
+    }
+
+    #[tokio::test]
+    async fn snix_lookup_ignores_readable_casita_repository_left_in_recorded_state() {
+        let root = tempfile::tempdir().unwrap();
+        let snix_state = root.path().join("snix-state");
+        let casita_state = root.path().join("foreign-casita-state");
+        let output_dir = root.path().join("store");
+        std::fs::create_dir(&casita_state).unwrap();
+        std::fs::write(casita_state.join("casita-trusted-public-keys"), format!("{}\n", test_verifying_key())).unwrap();
+        let foreign = StoreHandle::open(StoreConfig::new(
+            StoreBackend::Casita,
+            casita_state.clone(),
+            output_dir.clone(),
+            "/nix/store".to_string(),
+        ))
+        .await
+        .unwrap();
+        let path = test_output("foreign-casita-output", 92);
+        let node = Node::Symlink {
+            target: SymlinkTarget::try_from("foreign-target").unwrap(),
+        };
+        let (nar_size, nar_sha256) = SimpleRenderer::new(foreign.blob_service(), foreign.directory_service())
+            .calculate_nar(&node)
+            .await
+            .unwrap();
+        let record = signed_pathinfo_with_signing_key(path.clone(), node, nar_size, nar_sha256, &test_signing_key());
+        foreign.pathinfo_service().put(record.clone()).await.unwrap();
+        assert_eq!(foreign.path_info_with_layer(&path).await.unwrap().map(|found| found.value), Some(record));
+        drop(foreign);
+
+        let snix_config =
+            || StoreConfig::new(StoreBackend::Snix, snix_state.clone(), output_dir.clone(), "/nix/store".to_string());
+        drop(StoreHandle::open(snix_config()).await.unwrap());
+        let identity_path = snix_state.join("store-identity.json");
+        let identity_before = std::fs::read(&identity_path).unwrap();
+        let leftover = snix_state.join("casita");
+        std::fs::rename(casita_state.join("casita"), &leftover).unwrap();
+        let leftovers_before = snapshot_test_repository(&leftover);
+
+        let selected = StoreHandle::open(snix_config()).await.unwrap();
+        assert_eq!(selected.backend(), StoreBackend::Snix);
+        assert!(selected.path_info_with_layer(&path).await.unwrap().is_none(), "Snix read a leftover Casita root");
+        assert_eq!(snapshot_test_repository(&leftover), leftovers_before, "Snix changed leftover Casita state");
+        assert_eq!(std::fs::read(identity_path).unwrap(), identity_before);
     }
 
     #[tokio::test]

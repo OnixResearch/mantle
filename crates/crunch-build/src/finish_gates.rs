@@ -92,15 +92,17 @@ fn policy() -> Result<(), String> {
     }
     let policy: FinishPolicy =
         serde_json::from_str(POLICY_JSON).map_err(|e| format!("invalid finish-gate policy export: {e}"))?;
-    if policy.schema != "mantle-derivation-finish-policy-v1"
-        || policy.max_command_args != 16
-        || policy.max_command_arg_bytes != 4096
-        || policy.max_scan_hits != 128
-        || policy.max_excerpt_bytes != 160
-        || policy.max_optional_sonames != 32
-    {
+    if policy.schema != "mantle-derivation-finish-policy-v1" {
         return Err("finish-gate policy export has unsupported limits or schema".into());
     }
+    if policy.max_command_args != 16 || policy.max_command_arg_bytes != 4096 {
+        return Err("finish-gate policy export has unsupported limits or schema".into());
+    }
+    if policy.max_scan_hits != 128 || policy.max_excerpt_bytes != 160 || policy.max_optional_sonames != 32 {
+        return Err("finish-gate policy export has unsupported limits or schema".into());
+    }
+    debug_assert_eq!(u32::try_from(MAX_COMMAND_ARGS).ok(), Some(policy.max_command_args));
+    debug_assert_eq!(u32::try_from(MAX_ARG_BYTES).ok(), Some(policy.max_command_arg_bytes));
     Ok(())
 }
 
@@ -116,12 +118,13 @@ pub fn parse_gate(raw: &str) -> Result<GateDeclaration, String> {
     if gates.version.enabled {
         let command = gates.version.command.as_ref().ok_or("finish-gate version command is required")?;
         let expected = gates.version.expected.as_ref().ok_or("finish-gate pinned version is required")?;
-        if command.is_empty()
-            || command.len() > MAX_COMMAND_ARGS
-            || command.iter().any(|arg| arg.is_empty() || arg.len() > MAX_ARG_BYTES || arg.contains('\0'))
-            || expected.is_empty()
-            || expected.len() > MAX_EXPECTED_BYTES
-        {
+        if command.is_empty() || command.len() > MAX_COMMAND_ARGS {
+            return Err("invalid finish-gate version command or pinned version".into());
+        }
+        if command.iter().any(|arg| arg.is_empty() || arg.len() > MAX_ARG_BYTES || arg.contains('\0')) {
+            return Err("invalid finish-gate version command or pinned version".into());
+        }
+        if expected.is_empty() || expected.len() > MAX_EXPECTED_BYTES {
             return Err("invalid finish-gate version command or pinned version".into());
         }
         let path = &command[0];
@@ -161,6 +164,13 @@ pub fn parse_gate(raw: &str) -> Result<GateDeclaration, String> {
     {
         return Err("invalid optional dlopen sonames".into());
     }
+    validate_gate_dependencies(&gates)?;
+    debug_assert!(!gates.dlopen.enabled || gates.version.enabled);
+    debug_assert!(!gates.relocation.enabled || gates.version.enabled);
+    Ok(gates)
+}
+
+fn validate_gate_dependencies(gates: &GateDeclaration) -> Result<(), String> {
     if gates.dlopen.enabled && !gates.version.enabled {
         return Err("dlopen audit requires version gate".into());
     }
@@ -170,7 +180,7 @@ pub fn parse_gate(raw: &str) -> Result<GateDeclaration, String> {
     if gates.relocation.enabled && !gates.version.enabled {
         return Err("relocation rerun requires version gate".into());
     }
-    Ok(gates)
+    Ok(())
 }
 
 /// Candidates for a read-only contextual pass over CAS output bytes.
@@ -193,7 +203,7 @@ pub fn reference_candidates(
     if extra.len() >= 128 {
         return Err("finish-gate reference candidates exceed 128 build-only paths".into());
     }
-    let mut candidates = Vec::with_capacity(extra.len() + 1);
+    let mut candidates = Vec::with_capacity(extra.len().saturating_add(1));
     candidates.push(prefix);
     candidates.extend(extra);
     Ok(candidates)
@@ -207,32 +217,38 @@ pub struct ReferenceObservation {
 }
 
 /// Pure policy decision over observations produced by the existing scanner.
+pub struct ReferenceScanContext<'a> {
+    pub logical_store_prefix: &'a str,
+    pub output: &'a str,
+    pub cross_build: bool,
+}
+
 pub fn evaluate_references(
     gates: &GateDeclaration,
     observed: impl Iterator<Item = ReferenceObservation>,
-    logical_store_prefix: &str,
-    output: &str,
-    cross_build: bool,
+    context: ReferenceScanContext<'_>,
 ) -> Result<Vec<ReferenceFinding>, String> {
     if !gates.reference_leak.enabled {
         return Ok(Vec::new());
     }
     let mut findings = Vec::new();
-    let prefix = format!("{logical_store_prefix}/");
+    let prefix = format!("{}/", context.logical_store_prefix);
     for hit in observed {
         if findings.len() >= 128 {
             return Err("finish-gate reference findings exceed 128".into());
         }
-        let build_only = hit.reference != prefix;
-        let denied = build_only || cross_build || gates.reference_leak.native == "deny";
+        let is_build_only = hit.reference != prefix;
+        let is_denied = is_build_only || context.cross_build || gates.reference_leak.native == "deny";
         findings.push(ReferenceFinding {
-            output: output.to_string(),
+            output: context.output.to_string(),
             file: hit.file,
             reference: hit.reference,
             excerpt: hit.excerpt,
-            denied,
+            denied: is_denied,
         });
+        debug_assert!(findings.len() <= 128);
     }
+    debug_assert!(findings.iter().all(|finding| finding.reference == prefix || finding.denied));
     Ok(findings)
 }
 
@@ -282,10 +298,10 @@ pub fn result_report(
     } else {
         (Vec::new(), None)
     };
-    let denied_dlopen =
+    let is_denied_dlopen =
         audit_error.is_some() || missing_sonames.iter().any(|name| !gates.dlopen.optional_sonames.contains(name));
-    let denied = reference_findings.iter().any(|finding| finding.denied);
-    Ok(FinishGateReport {
+    let is_denied = reference_findings.iter().any(|finding| finding.denied);
+    let gate_result = FinishGateReport {
         schema: "mantle-derivation-finish-gate-report-v1",
         derivation: derivation.to_string(),
         version: if gates.version.enabled { "passed" } else { "opted-out" }.to_string(),
@@ -293,7 +309,7 @@ pub fn result_report(
         expected: gates.version.expected.clone(),
         reference_leak: if !gates.reference_leak.enabled {
             "opted-out"
-        } else if denied {
+        } else if is_denied {
             "denied"
         } else if reference_findings.is_empty() {
             "passed"
@@ -310,7 +326,7 @@ pub fn result_report(
         .to_string(),
         dlopen: if !gates.dlopen.enabled {
             "opted-out"
-        } else if denied_dlopen {
+        } else if is_denied_dlopen {
             "denied"
         } else {
             "passed"
@@ -319,7 +335,10 @@ pub fn result_report(
         optional_sonames: gates.dlopen.optional_sonames.clone(),
         missing_sonames,
         audit_error,
-    })
+    };
+    debug_assert_eq!(gate_result.reference_leak == "denied", gates.reference_leak.enabled && is_denied);
+    debug_assert_eq!(gate_result.dlopen == "denied", gates.dlopen.enabled && is_denied_dlopen);
+    Ok(gate_result)
 }
 /// Builder failures have no output CAS node to inspect. Preserve an explicit
 /// not-run result instead of claiming that a gate silently passed.
@@ -327,26 +346,26 @@ pub fn failed_build_report(derivation: &str, gates: &GateDeclaration, failure: &
     let version_passed_at = failure.rfind("finish-gate version passed:");
     let version_failed_at = failure.rfind("finish-gate version failed:");
     let builder_failed_at = failure.rfind("finish-gate builder failed before gates:");
-    let builder_failed = builder_failed_at.is_some_and(|index| {
+    let is_builder_failed = builder_failed_at.is_some_and(|index| {
         version_passed_at.is_none_or(|passed| index > passed) && version_failed_at.is_none_or(|failed| index > failed)
     });
     let latest_version_failure =
         version_failed_at.filter(|failed| version_passed_at.is_none_or(|passed| *failed > passed));
-    let relocation_failed = !builder_failed
+    let is_relocation_failed = !is_builder_failed
         && gates.relocation.enabled
         && latest_version_failure.is_some_and(|index| {
             failure[index..].starts_with("finish-gate version failed: path=/tmp/mantle-finish-relocated-")
         });
-    let version_failed = !builder_failed && latest_version_failure.is_some() && !relocation_failed;
-    let version_passed = !builder_failed && version_passed_at.is_some() && !version_failed;
-    FinishGateReport {
+    let is_version_failed = !is_builder_failed && latest_version_failure.is_some() && !is_relocation_failed;
+    let is_version_passed = !is_builder_failed && version_passed_at.is_some() && !is_version_failed;
+    let gate_result = FinishGateReport {
         schema: "mantle-derivation-finish-gate-report-v1",
         derivation: derivation.to_string(),
         version: if !gates.version.enabled {
             "opted-out"
-        } else if version_passed {
+        } else if is_version_passed {
             "passed"
-        } else if version_failed {
+        } else if is_version_failed {
             "denied"
         } else {
             "not-run"
@@ -363,7 +382,7 @@ pub fn failed_build_report(derivation: &str, gates: &GateDeclaration, failure: &
         reference_findings: Vec::new(),
         relocation: if !gates.relocation.enabled {
             "opted-out"
-        } else if relocation_failed {
+        } else if is_relocation_failed {
             "denied"
         } else {
             "not-run"
@@ -373,23 +392,26 @@ pub fn failed_build_report(derivation: &str, gates: &GateDeclaration, failure: &
         optional_sonames: gates.dlopen.optional_sonames.clone(),
         missing_sonames: Vec::new(),
         audit_error: None,
-    }
+    };
+    debug_assert_eq!(gate_result.version == "denied", gates.version.enabled && is_version_failed);
+    debug_assert_eq!(gate_result.relocation == "denied", gates.relocation.enabled && is_relocation_failed);
+    gate_result
 }
 
 /// Parse actual glibc loader callbacks. An absent version row, malformed row,
 /// or bounded-log overflow cannot silently turn an unevaluated gate green.
 fn missing_dlopen_sonames(log: &str) -> Result<Vec<String>, String> {
-    let mut audited = false;
+    let mut is_audited = false;
     let mut events = 0usize;
     let mut searched = BTreeSet::new();
     let mut opened = BTreeSet::new();
     for line in log.lines().filter_map(|line| line.strip_prefix(AUDIT_PREFIX)) {
-        events += 1;
+        events = events.saturating_add(1);
         if events > MAX_AUDIT_EVENTS {
             return Err("dlopen audit exceeded event bound".into());
         }
         if line == "V" {
-            audited = true;
+            is_audited = true;
             continue;
         }
         if line == "X" {
@@ -410,10 +432,12 @@ fn missing_dlopen_sonames(log: &str) -> Result<Vec<String>, String> {
             }
             _ => return Err("unknown dlopen audit event".into()),
         }
+        debug_assert!(searched.len() <= events);
     }
-    if !audited {
+    if !is_audited {
         return Err("dlopen audit module did not execute in the version process".into());
     }
+    debug_assert!(opened.len() <= events);
     Ok(searched.into_iter().filter(|name| !opened.contains(name)).collect())
 }
 
@@ -424,6 +448,10 @@ fn shell_quote(value: &str) -> String {
 fn render_version_run(gates: &GateDeclaration, root: &str) -> Result<String, String> {
     let command = gates.version.command.as_ref().ok_or("version command missing")?;
     let expected = gates.version.expected.as_ref().ok_or("expected version missing")?;
+    let executable = command.first().ok_or("version command missing")?;
+    if executable.is_empty() || expected.is_empty() {
+        return Err("invalid finish-gate version command or pinned version".into());
+    }
     let mut run = String::from("/bin/busybox env -i");
     if gates.dlopen.enabled {
         run.push_str(" LD_AUDIT=/build/mantle-finish-dlopen-audit.so");
@@ -432,13 +460,13 @@ fn render_version_run(gates: &GateDeclaration, root: &str) -> Result<String, Str
         run.push(' ');
         run.push_str(&shell_quote(&format!("{name}={value}")));
     }
-    run.push_str(&format!(" \"${{{root}}}/{}\"", command[0]));
+    run.push_str(&format!(" \"${{{root}}}/{executable}\""));
     for arg in command.iter().skip(1) {
         run.push(' ');
         run.push_str(&shell_quote(arg));
     }
     let command_display = command.join(" ");
-    Ok(format!(
+    let rendered = format!(
         "gate_status=0\n\
          gate_output_file=\"/build/.mantle-finish-version-$$\"\n\
          /bin/busybox timeout -s KILL 30 {run} > \"$gate_output_file\" 2>&1 || gate_status=$?\n\
@@ -457,7 +485,10 @@ fn render_version_run(gates: &GateDeclaration, root: &str) -> Result<String, Str
          printf 'finish-gate version passed: command=%s expected=%s\\n' {display} {expected}\n",
         expected = shell_quote(expected),
         display = shell_quote(&command_display),
-    ))
+    );
+    debug_assert!(rendered.contains("/bin/busybox timeout -s KILL 30"));
+    debug_assert!(rendered.contains("if [ \"$gate_bytes\" -gt 65536 ]"));
+    Ok(rendered)
 }
 
 /// Append to an adopted shell derivation's script, after its install and fixup.
@@ -497,6 +528,7 @@ pub fn render_finish_shell(gates: &GateDeclaration) -> Result<String, String> {
              fi\n",
         );
     }
+    debug_assert!(script.starts_with("\n# r[impl mantle.derivation_finish_gates.shared_contract]\nset -eu\n"));
     Ok(script)
 }
 

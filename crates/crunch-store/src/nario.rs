@@ -883,6 +883,8 @@ impl<R: AsyncRead + Unpin> AsyncRead for ArchiveHashReader<R> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use casita::experimental::MetadataStore;
     use futures::TryStreamExt;
     use nix_compat::narinfo::SigningKey;
@@ -1243,6 +1245,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn nario_casita_rechecks_import_policy_before_reading_archive() {
+        let source = tempfile::tempdir().unwrap();
+        let source_handle = test_handle(source.path(), crate::StoreBackend::Snix).await;
+        let (signed, nar) = record_fixture(&source_handle, "casita-unauthorized-import", b"signed content").await;
+        let archive = wire_archive(&[(&signed, &nar)]);
+        let destination = tempfile::tempdir().unwrap();
+        let state = destination.path().join("state");
+        fs::create_dir_all(&state).unwrap();
+        let different = ed25519_dalek::SigningKey::from_bytes(&[31u8; 32]);
+        let same_name_different_key = VerifyingKey::new("nario-casita-test-1".to_string(), different.verifying_key());
+        let policy = state.join("casita-trusted-public-keys");
+        let policy_bytes = format!("{same_name_different_key}\n");
+        fs::write(&policy, &policy_bytes).unwrap();
+        let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        let repository = handle.casita_store.as_ref().unwrap().repository.clone();
+        let before = repository.metadata().snapshot().await.unwrap().revision();
+        let mut input = std::io::Cursor::new(archive);
+        let error = import_nario_v2(&handle, &mut input, &import_options()).await.unwrap_err();
+        assert!(error.to_string().contains("casita-import-key-unauthorized"), "{error}");
+        assert_eq!(input.position(), 0, "an unauthorized import must fail before opening its archive");
+        assert_eq!(fs::read(&policy).unwrap().as_slice(), policy_bytes.as_bytes());
+        assert_eq!(repository.metadata().snapshot().await.unwrap().revision(), before);
+        let archive = input.into_inner();
+        fs::remove_file(&policy).unwrap();
+        let mut input = std::io::Cursor::new(archive.as_slice());
+        let error = import_nario_v2(&handle, &mut input, &import_options()).await.unwrap_err();
+        assert!(error.to_string().contains("casita-trust-policy-missing"), "{error}");
+        assert_eq!(input.position(), 0, "a removed policy must fail before opening its archive");
+        assert!(!policy.exists());
+        assert_eq!(repository.metadata().snapshot().await.unwrap().revision(), before);
+        let malformed = b"not-an-ed25519-key\n";
+        fs::write(&policy, malformed).unwrap();
+        let mut input = std::io::Cursor::new(archive.as_slice());
+        let error = import_nario_v2(&handle, &mut input, &import_options()).await.unwrap_err();
+        assert!(error.to_string().contains("casita-trust-policy-invalid"), "{error}");
+        assert_eq!(input.position(), 0, "a malformed policy must fail before opening its archive");
+        assert_eq!(fs::read(&policy).unwrap().as_slice(), malformed);
+        assert_eq!(repository.metadata().snapshot().await.unwrap().revision(), before);
+        assert!(handle.pathinfo_service().get(*signed.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
     async fn nario_snix_batch_import_accepts_unsigned_record_and_reopens_both_paths() {
         let source = tempfile::tempdir().unwrap();
         let source_handle = test_handle(source.path(), crate::StoreBackend::Snix).await;
@@ -1389,6 +1433,84 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn nario_casita_late_envelope_failure_reclaims_first_staged_path() {
+        let source = tempfile::tempdir().unwrap();
+        let source_handle = test_handle(source.path(), crate::StoreBackend::Snix).await;
+        let (first, first_nar) = record_fixture(&source_handle, "casita-staged-first", b"first staged payload").await;
+        let (mut second, second_nar) =
+            record_fixture(&source_handle, "casita-oversize-second", b"second payload").await;
+        // These extra signatures are syntactically valid Nario metadata; the first signature
+        // still authenticates the record. Only the Casita envelope's JSON size bound rejects it.
+        let padding = Signature::new(format!("padding-{}", "x".repeat(1024)), *second.signatures[0].bytes());
+        second.signatures.extend(std::iter::repeat_n(padding, 1024));
+        assert!(second.signatures.len() <= MAX_SIGNATURES);
+        assert!(serde_json::to_vec(&second).unwrap().len() > crate::archive::MAX_ARCHIVE_METADATA_BYTES);
+        let archive = wire_archive(&[(&first, &first_nar), (&second, &second_nar)]);
+        let listed = list_nario_v2(&mut std::io::Cursor::new(&archive)).await.unwrap();
+        assert_eq!(listed.record_count, 2, "both NARs must parse and verify before Casita staging");
+        assert_eq!(listed.paths[1].store_path, second.store_path.to_absolute_path_with_prefix(NARIO_V2_STORE_PREFIX));
+        assert_eq!(listed.paths[1].signatures.len(), second.signatures.len(), "every padded signature must parse");
+
+        let destination = tempfile::tempdir().unwrap();
+        fs::create_dir_all(destination.path().join("state")).unwrap();
+        fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", test_keys().1)).unwrap();
+        let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        let repository = handle.casita_store.as_ref().unwrap().repository.clone();
+        let before = repository.metadata().snapshot().await.unwrap();
+        let existing =
+            before.objects().map_ok(|record| record.key().clone()).try_collect::<BTreeSet<_>>().await.unwrap();
+        drop(before);
+
+        let error = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap_err();
+        assert!(error.to_string().contains("nario-v2-atomic-publication"), "{error}");
+        assert!(error.to_string().contains("casita-envelope-invalid"), "{error}");
+        assert!(error.to_string().contains(&second.store_path.to_string()), "{error}");
+        let first_name = crate::casita::CasitaStore::root_name(&first.store_path).unwrap();
+        let second_name = crate::casita::CasitaStore::root_name(&second.store_path).unwrap();
+        let after = repository.metadata().snapshot().await.unwrap();
+        assert!(after.roots().try_collect::<Vec<_>>().await.unwrap().is_empty(), "failed batch committed a root");
+        assert!(after.root(&first_name).await.unwrap().is_none());
+        assert!(after.root(&second_name).await.unwrap().is_none());
+        let new_objects = after
+            .objects()
+            .try_collect::<Vec<_>>()
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|record| !existing.contains(record.key()))
+            .collect::<Vec<_>>();
+        let envelopes = new_objects
+            .iter()
+            .filter(|record| record.links().len() == 2)
+            .map(|record| record.key().clone())
+            .collect::<Vec<_>>();
+        assert_eq!(envelopes.len(), 1, "first envelope must be staged, second must fail before import");
+        assert!(after.object(&envelopes[0]).await.unwrap().is_some());
+        drop(after);
+        let checkout = tempfile::tempdir().unwrap();
+        repository.checkout(&envelopes[0], checkout.path().join("envelope")).await.unwrap();
+        assert_eq!(
+            fs::read(checkout.path().join("envelope/pathinfo.json")).unwrap(),
+            serde_json::to_vec(&first).unwrap(),
+            "the durable unrooted object must be the first path's envelope"
+        );
+        assert_eq!(fs::read(checkout.path().join("envelope/content")).unwrap(), b"first staged payload");
+        drop(checkout);
+        assert!(handle.pathinfo_service().get(*first.store_path.digest()).await.unwrap().is_none());
+        assert!(handle.pathinfo_service().get(*second.store_path.digest()).await.unwrap().is_none());
+        drop(handle);
+        casita::experimental::flush_repository_leases().await.unwrap();
+        assert!(repository.preview_collection().await.unwrap().logical_objects > 0);
+        let collected = repository.try_collect().await.unwrap();
+        assert!(collected.removed.logical_objects > 0);
+        let after_collection = repository.metadata().snapshot().await.unwrap();
+        assert!(after_collection.roots().try_collect::<Vec<_>>().await.unwrap().is_empty());
+        for envelope in &envelopes {
+            assert!(after_collection.object(envelope).await.unwrap().is_none(), "unrooted envelope was not reclaimed");
+        }
+    }
+
+    #[tokio::test]
     async fn nario_casita_accepts_configured_1024_root_boundary() {
         const ROOT_COUNT: usize = 1024;
         let source = tempfile::tempdir().unwrap();
@@ -1417,6 +1539,27 @@ mod tests {
         assert_eq!(repository.preview_collection().await.unwrap().logical_objects, 0);
         drop(handle);
         let reopened = test_handle(destination.path(), crate::StoreBackend::Casita).await;
+        let snapshot = reopened.casita_store.as_ref().unwrap().repository.metadata().snapshot().await.unwrap();
+        let published_names = snapshot
+            .roots()
+            .try_collect::<Vec<_>>()
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|root| root.name().as_str().starts_with("mantle/outputs/"))
+            .map(|root| root.name().clone())
+            .collect::<BTreeSet<_>>();
+        let expected_names = paths
+            .iter()
+            .map(|path| crate::casita::CasitaStore::root_name(path).unwrap())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            published_names,
+            expected_names,
+            "all output roots must coexist in Casita revision {}",
+            snapshot.revision()
+        );
+        drop(snapshot);
         for path in &paths {
             let loaded = reopened.pathinfo_service().get(*path.digest()).await.unwrap();
             assert_eq!(loaded.as_ref().map(|info| &info.store_path), Some(path));
@@ -1436,11 +1579,35 @@ mod tests {
         fs::write(destination.path().join("state/casita-trusted-public-keys"), format!("{}\n", test_keys().1)).unwrap();
         let handle = test_handle(destination.path(), crate::StoreBackend::Casita).await;
         assert_eq!(handle.casita_batch_root_change_limit(), Some(ROOT_COUNT - 1));
+        fn snapshot_tree(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
+            let mut snapshot = BTreeMap::new();
+            let mut pending = vec![root.to_path_buf()];
+            while let Some(dir) = pending.pop() {
+                for entry in fs::read_dir(dir).unwrap() {
+                    let entry = entry.unwrap();
+                    let path = entry.path();
+                    let relative = path.strip_prefix(root).unwrap().to_path_buf();
+                    let file_type = entry.file_type().unwrap();
+                    if file_type.is_dir() {
+                        snapshot.insert(relative, None);
+                        pending.push(path);
+                    } else if file_type.is_file() {
+                        snapshot.insert(relative, Some(fs::read(path).unwrap()));
+                    } else {
+                        panic!("unexpected non-file entry in Casita persistent state: {}", path.display());
+                    }
+                }
+            }
+            snapshot
+        }
+
+        let state_before = snapshot_tree(destination.path());
         let repository = &handle.casita_store.as_ref().unwrap().repository;
         let before_revision = repository.metadata().snapshot().await.unwrap().revision();
         let error = import_nario_v2(&handle, &mut std::io::Cursor::new(archive), &import_options()).await.unwrap_err();
         assert!(error.to_string().contains("casita-batch-limit"), "{error}");
         assert!(error.to_string().contains(&paths[ROOT_COUNT - 1].to_string()), "{error}");
+        assert_eq!(snapshot_tree(destination.path()), state_before, "rejected archive mutated persistent state");
         assert_eq!(repository.metadata().snapshot().await.unwrap().revision(), before_revision);
         assert!(published_root_names(&handle).await.is_empty());
         assert_eq!(repository.preview_collection().await.unwrap().logical_objects, 0);
@@ -1448,6 +1615,7 @@ mod tests {
         let reopened = test_handle(destination.path(), crate::StoreBackend::Casita).await;
         for path in &paths {
             assert!(reopened.pathinfo_service().get(*path.digest()).await.unwrap().is_none(), "{path}");
+            assert!(!destination.path().join("store").join(path.to_string()).exists(), "{path}");
         }
     }
 

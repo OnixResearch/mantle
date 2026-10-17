@@ -1,0 +1,15 @@
+$ /nix/store/j3ni3lj66ylskpcg78ip531s9lz4z4av-cairn-0.1.0/bin/cairn change depend list add-apk-build-adapter --root .
+{
+  "change": "add-apk-build-adapter",
+  "command": "change depend list",
+  "dependencies": [
+    "adopt-android-prebuilt-toolchain-sources"
+  ],
+  "issues": [],
+  "layout": "cairn",
+  "mutated": false,
+  "receipt_hash": "baf35fa0c956ca9951e2fc44cd29ee967ef2bf64a8ab6738c46385d55b2da6d4",
+  "root": ".",
+  "valid": true
+}
+depend_list_exit=0

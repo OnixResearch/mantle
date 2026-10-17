@@ -1,0 +1,20 @@
+{
+  "root": "/datapool/mantle-store/mr.7p88_pl1",
+  "created_unix": 1792210364.526931,
+  "repo": "/home/brittonr/git/OnixResearch/mantle",
+  "parents": [
+    "d20459c6db6d60ed2b08533911e279cbeadb742e",
+    "d75158b00b080535f2ffea12430665ca3d57ea82"
+  ],
+  "free_initial": 124692987904,
+  "max_target": 68719476736,
+  "max_temp_and_stores": 4294967296,
+  "max_metadata": 134217728,
+  "max_additional_nix": 17179869184,
+  "min_free": 20000000000,
+  "repo_target_observed": 6463286272,
+  "global_target_cap": 250000000000,
+  "global_temp_cap": 35000000000,
+  "enforcement": "sampling admission and process-group stop; not administrative quota",
+  "shared_target": "frozen"
+}

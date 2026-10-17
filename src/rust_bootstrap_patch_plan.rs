@@ -14,7 +14,7 @@ pub(crate) const MUSL_COMPILER_HOST_TRIPLE: &str = "x86_64-unknown-linux-musl";
 pub(crate) const GNU_COMPILER_HOST_TRIPLE: &str = "x86_64-unknown-linux-gnu";
 pub(crate) const SUPPORTED_MRUSTC_VERSION: &str = "0.12.0";
 pub(crate) const SUPPORTED_FIRST_STAGE_RUST_VERSION: &str = "1.90.0";
-pub(crate) const SUPPORTED_RUST_BOOTSTRAP_VERSIONS: [&str; 4] = ["1.91.1", "1.92.0", "1.93.1", "1.94.0"];
+pub(crate) const SUPPORTED_RUST_BOOTSTRAP_VERSIONS: [&str; 5] = ["1.91.1", "1.92.0", "1.93.1", "1.94.0", "1.94.1"];
 
 const DIGEST_HEX_CHAR_COUNT: usize = 64;
 const PATCH_PLAN_MAX_SOURCE_IDENTITIES: usize = 16;
@@ -619,6 +619,16 @@ mod tests {
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::RustBootstrapRustcPrivateToolRlibLookup));
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::ProviderContractAssertion));
         assert!(plan.receipt_arguments().iter().any(|argument| argument.contains("output-digest=")));
+    }
+
+    #[test]
+    fn rust_1941_bootstrap_plan_accepts_pinned_source_identity() {
+        let input = rust_bootstrap_input("1.94.1", true);
+
+        let plan = derive_rust_bootstrap_patch_plan(input).unwrap();
+
+        assert!(plan.contains_operation(RustBootstrapPatchOperationKind::RustBootstrapRustcPrivateToolRlibLookup));
+        assert!(plan.input.source_identities.iter().any(|source| source.id == "rust-1.94.1"));
     }
 
     #[test]

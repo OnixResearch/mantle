@@ -93,9 +93,9 @@ compatibility surface, crate name, or historical decision.
 | [0084](0084-dynamic-plan-source-slices.md) | Version dynamic plans for output-owned source slices | Proposed |
 | [0085](0085-publish-live-build-facts-outside-build-authority.md) | Publish live build facts outside build authority | Proposed |
 | [0086](0086-separate-bootstrap-source-pins-from-catalog-update-policy.md) | Separate bootstrap source pins from catalog update policy | Proposed |
-| [0087](0087-admit-prebuilt-android-toolchain-through-fixed-output-sources.md) | Admit prebuilt Android toolchain through fixed-output sources | Proposed |
+| [0087](0087-admit-prebuilt-android-toolchain-through-fixed-output-sources.md) | Admit prebuilt Android toolchain through fixed-output sources (reviewed metadata; see ADR 0110) | Proposed |
 | [0088](0088-stage-apk-builds-after-verified-tool-extraction.md) | Stage APK builds after verified tool extraction | Proposed |
-| [0089](0089-bind-static-inputs-to-dynamic-plan-roots.md) | Bind static inputs to dynamic-plan roots by request identity | Proposed |
+| [0089](0089-admit-prebuilt-android-toolchain-through-fixed-output-sources.md) | Admit prebuilt Android tools through pinned fixed-output sources | Proposed |
 | [0090](0090-carry-pattern-caveats-in-ucan-and-enforce-at-mantle-receivers.md) | Carry pattern caveats in UCAN and enforce at Mantle receivers | Proposed |
 | [0091](0091-version-long-lived-service-readiness-states-and-restart-policy.md) | Version long-lived service readiness states and restart policy | Proposed |
 | [0092](0092-lock-driven-vendor-fetches.md) | Acquire Cargo vendor inputs from lock-driven fixed-output fetches | Proposed |
@@ -103,6 +103,13 @@ compatibility surface, crate name, or historical decision.
 | [0095](0095-version-derivation-finish-gates.md) | Version derivation finish gates with explicit adoption | Proposed |
 | [0096](0096-keep-causal-build-traces-outside-evidence.md) | Keep causal build traces outside build evidence | Proposed |
 | [0098](0098-resolve-content-addressed-inputs-before-dispatch.md) | Resolve content-addressed inputs before dispatch under signed realisations | Proposed |
-| [0099](0099-reuse-local-daemon-for-depfile-validated-cc-cache.md) | Reuse the local daemon for depfile-validated C/C++ compilation | Proposed |
+| [0099](0099-reuse-local-daemon-for-depfile-validated-cc-cache.md) | Reuse local daemon for depfile-validated C/C++ compilation | Proposed |
 | [0100](0100-store-retention-interests-per-owner-record.md) | Store retention interests as per-owner records | Proposed |
 | [0101](0101-limit-nix-gateway-to-bounded-concrete-operations.md) | Limit Nix gateway to bounded concrete operations | Proposed |
+| [0103](0103-bind-static-inputs-to-dynamic-plan-roots.md) | Bind static inputs to dynamic-plan roots by request identity | Proposed |
+| [0109](0109-reject-package-layer-design-priors-without-a-consumer.md) | Reject package-layer design priors that have no consumer | Accepted |
+| [0110](0110-separate-reviewed-android-metadata-from-source-identity.md) | Separate reviewed Android metadata from source identity | Accepted |
+| [0111](0111-isolate-apk-signing-input-store-objects.md) | Isolate APK signing inputs in distinct store objects | Proposed |
+| [0112](0112-verify-completed-apk-builds-with-pinned-tools.md) | Verify completed APK builds with pinned tools | Proposed |
+| [0113](0113-select-equivalent-cargo-host-plan-units.md) | Select only equivalent Rust-plan host units for Cargo graphs | Proposed |
+| [0114](0114-reconcile-lineage-apis-with-explicit-contract-boundaries.md) | Reconcile lineage APIs with explicit contract boundaries | Proposed |

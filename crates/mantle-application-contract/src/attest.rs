@@ -233,6 +233,8 @@ pub fn plan_attest(request: AttestRequest) -> Result<AttestPlan, AttestPlanBlock
     if target_kind != expected_target {
         return Err(AttestPlanBlocker::WrongTarget);
     }
+    debug_assert_eq!(target_kind, expected_target);
+    debug_assert_eq!(request.limits.min_result_entries, minimum_results);
     Ok(AttestPlan {
         request,
         effects: [AttestEffect {
@@ -249,21 +251,34 @@ pub fn classify_attest(plan: AttestPlan, observation: AttestObservation) -> Atte
     let Ok(expected) = plan_attest(plan.request) else {
         return AttestOutcome::Rejected;
     };
-    if plan != expected
-        || observation.effect_index != expected.effects[0].index
-        || observation.effect_id != expected.effects[0].effect_id
-        || observation.capability != expected.effects[0].capability
-        || observation.operation != plan.request.operation
-        || observation.authority != plan.request.authority
-        || observation.target != plan.request.target
-        || observation.selected_inputs != plan.request.limits.selected_inputs
+    if plan != expected {
+        return AttestOutcome::Rejected;
+    }
+    let is_expected_effect = observation.effect_index == expected.effects[0].index
+        && observation.effect_id == expected.effects[0].effect_id
+        && observation.capability == expected.effects[0].capability;
+    if !is_expected_effect {
+        return AttestOutcome::Rejected;
+    }
+    if observation.operation != plan.request.operation || observation.authority != plan.request.authority {
+        return AttestOutcome::Rejected;
+    }
+    if observation.target != plan.request.target || observation.output_authority != plan.request.output_authority {
+        return AttestOutcome::Rejected;
+    }
+    if observation.selected_inputs != plan.request.limits.selected_inputs
         || observation.selected_bytes != plan.request.limits.selected_bytes
-        || observation.result_entries > plan.request.limits.max_result_entries
-        || (observation.failure.is_none() && observation.result_entries < plan.request.limits.min_result_entries)
-        || observation.output_authority != plan.request.output_authority
     {
         return AttestOutcome::Rejected;
     }
+    if observation.result_entries > plan.request.limits.max_result_entries {
+        return AttestOutcome::Rejected;
+    }
+    if observation.failure.is_none() && observation.result_entries < plan.request.limits.min_result_entries {
+        return AttestOutcome::Rejected;
+    }
+    debug_assert_eq!(observation.effect_index, expected.effects[0].index);
+    debug_assert!(observation.result_entries <= plan.request.limits.max_result_entries);
     match (observation.capability, observation.progress, observation.failure) {
         (AttestCapability::StoreAccess, AttestProgress::StoreAccessReturned, None)
         | (AttestCapability::ReadFiles, AttestProgress::ReadReturned, None)

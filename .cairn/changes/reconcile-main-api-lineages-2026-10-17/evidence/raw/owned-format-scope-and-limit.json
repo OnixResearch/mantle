@@ -1,0 +1,26 @@
+{
+  "purpose": "Supplemental correction; preserves earlier formatter receipts rather than rewriting their observations",
+  "supersedes_closure_wording_in": [
+    "owned-leaf-format-result.json",
+    "owned-leaf-format-check.json",
+    "owned-root-leaf-format-result.json",
+    "owned-native-script-format-result.json"
+  ],
+  "actual_formatting": {
+    "crate_leaves": 106,
+    "root_plain_leaves": 48,
+    "standalone_cargo_scripts": 2,
+    "format_and_matching_checks": "exit0 for all scoped batches; two initial script style failures retained",
+    "command_policy": "Pinned admitted rustfmt; explicit editions; skip_children=true; no vendor/fixture/module recursion"
+  },
+  "known_task_settlement": "Validator reports Pueue60/61/62/64 settled;64 and61 initial guard before subprocess launch,62 dependency failed",
+  "limit": "Task60 resource-stop record persisted no PID/PGID. Sending process-group SIGTERM plus waiting for leader exit-15 does not independently prove every descendant or Nix daemon settled. Earlier unqualified closure-idle/no-compiler wording relied on a subsequently qualified acknowledgment and is NOT proven.",
+  "no_claims": [
+    "no root binary/generator build success",
+    "no current CLI/mode-check success",
+    "no full fmt/quality success",
+    "no independent descendant emptiness proof",
+    "no historical proof acceptance or replay"
+  ],
+  "source_lease": "Released; further compilation requires parent reviewed accounting admission"
+}

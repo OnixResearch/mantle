@@ -1,0 +1,13 @@
+   Compiling mantle-current-casita-api-smoke v0.0.0 (/datapool/mantle-store/mr.7p88_pl1/casita-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.71s
+     Running `/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-current-casita-api-smoke /datapool/mantle-store/mr.7p88_pl1/stores/casita-root-output-after`
+CASITA_PUBLICATION_OBSERVATIONS=[]
+CASITA_REAL_CONTENT_SIGNED_PERSIST_EXPORT_AND_CACHED_LOOKUP_OK
+ACTION_RESULT_PUBLICATION=[ActionResultPublicationReport { result_ref: "mantle-action-result://blake3/eea6475f095df55c8d769b8d8db71634551fda1de67f209adfa3385de82c4153", record_status: Published, index_status: Published }]; DUPLICATE=[ActionResultPublicationReport { result_ref: "mantle-action-result://blake3/eea6475f095df55c8d769b8d8db71634551fda1de67f209adfa3385de82c4153", record_status: Duplicate, index_status: Duplicate }]
+ACTION_RESULT_REAL_SIGNED_LOCAL_PUBLICATION_DISCOVERY_OK_NOT_REUSE_TRUST
+SAME_HANDLE_REVOKED=store: PathInfo lookup for qjalmhg0zf1ywj3zq6bp1qqb1w6cn1cc-current-casita-output: store: casita-signer-untrusted: qjalmhg0zf1ywj3zq6bp1qqb1w6cn1cc-current-casita-output has no valid signature from destination trust policy
+FRESH_HANDLE_REVOKED=store: casita-signer-untrusted: qjalmhg0zf1ywj3zq6bp1qqb1w6cn1cc-current-casita-output has no valid signature from destination trust policy
+INVALID_POLICY_GC=store: casita-trust-policy-invalid: store: parsing layer trust key in /datapool/mantle-store/mr.7p88_pl1/stores/casita-root-output-after/state/casita-trusted-public-keys: Missing separator
+CASITA_GC_STALE_PLAN=gc: gc-plan-stale: accepted=b3:a6f6cbdaa2e14897da0d911dd51019764027066dd6e0e55aa93674b708897fe9 observed=b3:184b19984d8c88892baeee9fe3fd20f53ec13524cdc60fa3ed702f1bfe09f177
+CASITA_GC_PLAN=b3:a6f6cbdaa2e14897da0d911dd51019764027066dd6e0e55aa93674b708897fe9; CANDIDATES=["/mantle/store/qjalmhg0zf1ywj3zq6bp1qqb1w6cn1cc-current-casita-output"]; EXECUTION_COMPLETE=true
+CURRENT_CASITA_PUBLICATION_REVOCATION_ACTIONRESULT_AND_GC_SMOKE_OK

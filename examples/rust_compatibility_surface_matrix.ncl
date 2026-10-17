@@ -3,8 +3,9 @@
 # This is a bounded evidence inventory, not a full Cargo compatibility claim.
 # Tests in tests/rust_compatibility_rail.rs consume these stable ids and docs
 # cite this file when describing frontier movement.
-# The unit_plan lane includes a retained 34-unit signed build-script fixture;
-# it does not claim Mantle's 925-unit/711-source workspace fits the 256-slice bound.
+# The unit_plan lane retains separate signed app42/provider-change and reviewed
+# links/pkg-config cohorts; neither claims native C compilation inside build.rs
+# or that Mantle's 925-unit/711-source workspace fits the 256-slice bound.
 
 let LaneStatus = [| 'supported, 'blocked, 'out_of_scope |] in
 let Lane = {
@@ -109,6 +110,12 @@ let SignedBuildScriptFixture = [
         fixtures = [],
         blockers = [],
       },
+      unit_plan = {
+        status = 'out_of_scope,
+        evidence_class = "unexercised-cargo-unit-surface",
+        fixtures = [],
+        blockers = [],
+      },
       non_claims = ["not-network-or-ambient-cargo-source-resolution", "not-full-cargo-compatibility"],
     },
     {
@@ -128,11 +135,11 @@ let SignedBuildScriptFixture = [
       },
       unit_plan = {
         status = 'supported,
-        evidence_class = "signed-same-client-build-script-proc-macro-app42",
-        fixtures = SignedBuildScriptFixture,
+        evidence_class = "signed-build-script-proc-macro-cohorts",
+        fixtures = SignedBuildScriptFixture @ ["scripts/rust-unit-plan-build-script-replay/replay.sh"],
         blockers = [],
       },
-      non_claims = ["not-general-cross-host-scheduling", "not-full-cargo-compatibility"],
+      non_claims = ["not-general-cross-host-scheduling", "not-full-host-scheduling-or-execution", "not-full-cargo-compatibility"],
     },
     {
       id = "build-script-env-metadata",
@@ -151,14 +158,15 @@ let SignedBuildScriptFixture = [
       },
       unit_plan = {
         status = 'supported,
-        evidence_class = "real-helper-script-84-and-signed-app42",
+        evidence_class = "real-helper-script-84-and-signed-build-script-cohorts",
         fixtures = [
           "generated_source_cfg_and_env_flow_from_executed_script_to_compiler",
           ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14.md",
+          "scripts/rust-unit-plan-build-script-replay/replay.sh",
         ],
         blockers = [],
       },
-      non_claims = ["not-arbitrary-build-script-directives", "not-full-cargo-compatibility"],
+      non_claims = ["not-arbitrary-build-script-directives", "not-full-host-scheduling-or-execution", "not-full-cargo-compatibility"],
     },
     {
       id = "feature-resolution-default",
@@ -181,6 +189,12 @@ let SignedBuildScriptFixture = [
         fixtures = [],
         blockers = [],
       },
+      unit_plan = {
+        status = 'out_of_scope,
+        evidence_class = "unexercised-cargo-unit-surface",
+        fixtures = [],
+        blockers = [],
+      },
       non_claims = ["not-full-cargo-feature-resolution", "not-full-cargo-compatibility"],
     },
     {
@@ -195,6 +209,12 @@ let SignedBuildScriptFixture = [
       native_rust_plan = {
         status = 'out_of_scope,
         evidence_class = "unexercised-no-cargo-oracle-surface",
+        fixtures = [],
+        blockers = [],
+      },
+      unit_plan = {
+        status = 'out_of_scope,
+        evidence_class = "unexercised-cargo-unit-surface",
         fixtures = [],
         blockers = [],
       },
@@ -250,6 +270,12 @@ let SignedBuildScriptFixture = [
         fixtures = ["examples/cargo_unit_plan.ncl"],
         blockers = [],
       },
+      unit_plan = {
+        status = 'supported,
+        evidence_class = "cargo-unit-graph-dynamic-plan",
+        fixtures = ["examples/cargo_unit_plan.ncl"],
+        blockers = [],
+      },
       non_claims = ["not-general-rust-scheduler", "not-full-cargo-compatibility"],
     },
     {
@@ -273,11 +299,17 @@ let SignedBuildScriptFixture = [
         fixtures = ["proc_macro_host_unit_and_git_source_boundary"],
         blockers = ["unit-plan-source-unsupported"],
       },
+      unit_plan = {
+        status = 'blocked,
+        evidence_class = "blocked-unsupported-surface",
+        fixtures = ["proc_macro_host_unit_and_git_source_boundary"],
+        blockers = ["unit-plan-source-unsupported"],
+      },
       non_claims = ["not-network-or-ambient-cargo-source-resolution", "not-full-cargo-compatibility"],
     },
     {
       id = "native-link-metadata",
-      title = "links/pkg-config/rustc-link/native C metadata",
+      title = "declared links/pkg-config/rustc-link metadata with a prebuilt native provider",
       offline_cargo = {
         status = 'out_of_scope,
         evidence_class = "unexercised-real-cargo-compilation",
@@ -291,12 +323,15 @@ let SignedBuildScriptFixture = [
         blockers = [],
       },
       unit_plan = {
-        status = 'blocked,
-        evidence_class = "unexercised-pkg-config-and-in-script-native-c",
-        fixtures = [],
-        blockers = ["missing-pkg-config-execution-fixture", "missing-native-c-in-script-fixture"],
+        status = 'supported,
+        evidence_class = "cargo-unit-graph-dynamic-plan",
+        fixtures = [
+          "scripts/rust-unit-plan-build-script-replay/replay.sh",
+          "scripts/rust-unit-plan-build-script-replay/libbz2.ncl",
+        ],
+        blockers = [],
       },
-      non_claims = ["not-pkg-config-execution", "not-native-c-in-build-script", "not-native-link-probing-correctness", "not-full-cargo-compatibility"],
+      non_claims = ["not-native-c-in-build-script", "not-native-link-probing-correctness", "not-full-cargo-compatibility"],
     },
     {
       id = "declared-native-static-link",

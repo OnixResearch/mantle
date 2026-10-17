@@ -60,6 +60,7 @@ use crunch_build::distributed::RemoteTelemetryRetryClass;
 use crunch_build::distributed::RemoteTelemetryRouteClass;
 use crunch_build::distributed::RemoteTelemetryTransferClass;
 use crunch_build::distributed::RemoteTransferAcknowledgement;
+use crunch_build::distributed::RemoteTransferAcknowledgementFacts;
 use crunch_build::distributed::RemoteTransferArtifactId;
 use crunch_build::distributed::RemoteTransferArtifactKind;
 use crunch_build::distributed::RemoteTransferChunkDemand;
@@ -2095,9 +2096,11 @@ pub fn validate_concrete_request(request: &ConcreteBuildRequest, ticket: &Remote
     }
     validate_source_input_refs(request)?;
     if !crunch_remote_core::transfer::upload_within_ticket_and_global_limit(
-        request.upload_bytes,
-        admitted_ticket.upload_byte_limit().bytes(),
-        MAX_REMOTE_UPLOAD_BYTES,
+        crunch_remote_core::transfer::UploadByteLimits {
+            uploaded_bytes: request.upload_bytes,
+            ticket_max_bytes: admitted_ticket.upload_byte_limit().bytes(),
+            global_max_bytes: MAX_REMOTE_UPLOAD_BYTES,
+        },
     ) {
         return Err("upload-byte-limit-exceeded".to_string());
     }
@@ -3257,8 +3260,10 @@ async fn prepare_remote_input_nar_artifact(
 
 fn remote_input_nar_artifact_id(input_ref: &str) -> Result<RemoteTransferArtifactId, String> {
     RemoteTransferArtifactId::new(crunch_remote_core::identity::hashed_transfer_artifact_id(
-        REMOTE_INPUT_NAR_ARTIFACT_DOMAIN,
-        input_ref,
+        crunch_remote_core::identity::TransferArtifactIdentity {
+            domain: REMOTE_INPUT_NAR_ARTIFACT_DOMAIN,
+            identity: input_ref,
+        },
     ))
     .map_err(|reason| reason.as_str().to_string())
 }
@@ -3267,24 +3272,30 @@ fn remote_output_nar_artifact_id(
     output_name: &str,
     logical_path: impl AsRef<str>,
 ) -> Result<RemoteTransferArtifactId, String> {
-    RemoteTransferArtifactId::new(crunch_remote_core::identity::hashed_output_transfer_artifact_id(
-        REMOTE_OUTPUT_NAR_ARTIFACT_DOMAIN,
-        output_name,
-        logical_path.as_ref(),
-    ))
-    .map_err(|reason| reason.as_str().to_string())
+    let identity = crunch_remote_core::identity::hashed_output_transfer_artifact_id(
+        crunch_remote_core::identity::OutputTransferArtifactIdentity {
+            domain: REMOTE_OUTPUT_NAR_ARTIFACT_DOMAIN,
+            output_name,
+            logical_path: logical_path.as_ref(),
+        },
+    )
+    .ok_or_else(|| "remote-output-transfer-artifact-identity-length-overflow".to_string())?;
+    RemoteTransferArtifactId::new(identity).map_err(|reason| reason.as_str().to_string())
 }
 
 fn remote_output_pathinfo_artifact_id(
     output_name: &str,
     logical_path: impl AsRef<str>,
 ) -> Result<RemoteTransferArtifactId, String> {
-    RemoteTransferArtifactId::new(crunch_remote_core::identity::hashed_output_transfer_artifact_id(
-        REMOTE_OUTPUT_PATHINFO_ARTIFACT_DOMAIN,
-        output_name,
-        logical_path.as_ref(),
-    ))
-    .map_err(|reason| reason.as_str().to_string())
+    let identity = crunch_remote_core::identity::hashed_output_transfer_artifact_id(
+        crunch_remote_core::identity::OutputTransferArtifactIdentity {
+            domain: REMOTE_OUTPUT_PATHINFO_ARTIFACT_DOMAIN,
+            output_name,
+            logical_path: logical_path.as_ref(),
+        },
+    )
+    .ok_or_else(|| "remote-output-transfer-artifact-identity-length-overflow".to_string())?;
+    RemoteTransferArtifactId::new(identity).map_err(|reason| reason.as_str().to_string())
 }
 
 fn remote_input_requested_content_digest(request: &ConcreteBuildRequest) -> Result<RemoteTransferDigest, String> {
@@ -4324,11 +4335,23 @@ pub fn validate_remote_output_transfer_artifacts(
     artifacts: &[RemoteOutputTransferArtifact],
 ) -> Result<(), String> {
     let expected = expected_remote_output_transfer_artifacts(outputs)?;
+    let artifact_count = u64::try_from(artifacts.len()).map_err(|_| {
+        output_transfer_artifact_blocker(
+            crunch_remote_core::output::OutputTransferArtifactBlocker::ArtifactCountExceeded,
+        )
+    })?;
+    let artifact_count_max = u64::try_from(MAX_REMOTE_TRANSFER_ARTIFACTS).map_err(|_| {
+        output_transfer_artifact_blocker(
+            crunch_remote_core::output::OutputTransferArtifactBlocker::ArtifactCountExceeded,
+        )
+    })?;
     let mut sequence = crunch_remote_core::output::OutputTransferArtifactSequence::new(
         request_id,
-        artifacts.len(),
-        MAX_REMOTE_TRANSFER_ARTIFACTS,
-        MAX_REMOTE_TRANSFER_TOTAL_BYTES,
+        crunch_remote_core::output::ArtifactTransferLimits {
+            artifact_count,
+            artifact_count_max,
+            total_bytes_max: MAX_REMOTE_TRANSFER_TOTAL_BYTES,
+        },
     )
     .map_err(output_transfer_artifact_blocker)?;
     for artifact in artifacts {
@@ -4356,7 +4379,12 @@ pub fn validate_remote_output_transfer_artifacts(
             )
             .map_err(output_transfer_artifact_blocker)?;
     }
-    sequence.finish(expected.len()).map_err(output_transfer_artifact_blocker)
+    let expected_count = u64::try_from(expected.len()).map_err(|_| {
+        output_transfer_artifact_blocker(
+            crunch_remote_core::output::OutputTransferArtifactBlocker::ArtifactCountExceeded,
+        )
+    })?;
+    sequence.finish(expected_count).map_err(output_transfer_artifact_blocker)
 }
 
 fn core_output_transfer_artifact_kind(
@@ -4481,22 +4509,29 @@ fn validate_remote_execution_outcome(
     plan: &RemoteExecutablePlan,
 ) -> Result<(), String> {
     crunch_remote_core::output::validate_execution_outcome_scope(
-        &request.request_id,
-        &outcome.request_id,
-        &plan.plan_digest_blake3,
-        &outcome.plan_digest_blake3,
-        &outcome.output_digest_blake3,
+        crunch_remote_core::output::ExecutionOutcomeScopeFacts {
+            expected_request_id: &request.request_id,
+            actual_request_id: &outcome.request_id,
+            expected_plan_digest_blake3: &plan.plan_digest_blake3,
+            actual_plan_digest_blake3: &outcome.plan_digest_blake3,
+            reported_output_digest_blake3: &outcome.output_digest_blake3,
+        },
     )
     .map_err(|reason| reason.as_str().to_string())?;
     let observed_digest_blake3 = remote_execution_outputs_digest(&outcome.outputs)?;
     crunch_remote_core::output::validate_execution_output_digest(
-        &outcome.output_digest_blake3,
-        &observed_digest_blake3,
+        crunch_remote_core::output::ExecutionOutputDigestFacts {
+            reported: &outcome.output_digest_blake3,
+            observed: &observed_digest_blake3,
+        },
     )
     .map_err(|reason| reason.as_str().to_string())?;
     let observed_size_bytes = sum_remote_execution_output_sizes(&outcome.outputs)?;
-    crunch_remote_core::output::validate_execution_output_size(outcome.output_size_bytes, observed_size_bytes)
-        .map_err(|reason| reason.as_str().to_string())?;
+    crunch_remote_core::output::validate_execution_output_size(crunch_remote_core::output::ExecutionOutputSizeFacts {
+        reported: outcome.output_size_bytes,
+        observed: observed_size_bytes,
+    })
+    .map_err(|reason| reason.as_str().to_string())?;
     crunch_remote_core::output::validate_execution_output_facts(
         request.expected_outputs.iter().map(|expected| crunch_remote_core::receipt::ExpectedOutputFacts {
             name: &expected.name,
@@ -4614,8 +4649,10 @@ pub fn validate_worker_registration(registration: &RemoteWorkerRegistration) -> 
     crunch_remote_core::admission::validate_worker_registration_header(
         registration.protocol_version == REMOTE_PROTOCOL_VERSION,
         registration.worker_generation,
-        registration.concurrency,
-        MAX_REMOTE_WORKER_CONCURRENCY,
+        crunch_remote_core::admission::WorkerConcurrency {
+            concurrency: registration.concurrency,
+            max_concurrency: MAX_REMOTE_WORKER_CONCURRENCY,
+        },
     )
     .map_err(crunch_remote_core::admission::WorkerRegistrationError::diagnostic)?;
     validate_non_empty_bounded_unique_strings("remote-worker-system", &registration.systems, MAX_REMOTE_CAPABILITIES)?;
@@ -4643,10 +4680,15 @@ pub fn validate_worker_registration(registration: &RemoteWorkerRegistration) -> 
     if let Some(inventory) = &registration.resource_inventory {
         canonical_remote_worker_resource_inventory(inventory).map_err(|reason| reason.as_str().to_string())?;
     }
-    crunch_remote_core::admission::validate_worker_resume_count(
-        registration.resumable_jobs.len(),
-        MAX_REMOTE_STATUS_ITEMS,
-    )
+    let max_count = u64::try_from(MAX_REMOTE_STATUS_ITEMS)
+        .map_err(|_| format!("remote-worker-resume-summary-count-exceeds-{MAX_REMOTE_STATUS_ITEMS}"))?;
+    let count = u64::try_from(registration.resumable_jobs.len()).map_err(|_| {
+        crunch_remote_core::admission::WorkerRegistrationError::ResumeSummaryCountExceeded(max_count).diagnostic()
+    })?;
+    crunch_remote_core::admission::validate_worker_resume_count(crunch_remote_core::admission::WorkerResumeCount {
+        count,
+        max_count,
+    })
     .map_err(crunch_remote_core::admission::WorkerRegistrationError::diagnostic)?;
     for summary in &registration.resumable_jobs {
         validate_worker_resume_summary(summary)?;
@@ -4668,18 +4710,24 @@ fn validate_worker_resume_summary(summary: &RemoteWorkerResumeSummary) -> Result
 }
 
 fn validate_bounded_unique_strings(label: &str, values: &[String], max_len: usize) -> Result<(), String> {
-    crunch_remote_core::admission::validate_bounded_unique_strings(values.iter().map(String::as_str), max_len, false)
+    let max_count = u64::try_from(max_len).map_err(|_| format!("{label}-count-exceeds-{max_len}"))?;
+    crunch_remote_core::admission::validate_bounded_unique_strings(values.iter().map(String::as_str), max_count, false)
         .map_err(|reason| reason.diagnostic(label))
 }
 
 fn validate_non_empty_bounded_unique_strings(label: &str, values: &[String], max_len: usize) -> Result<(), String> {
-    crunch_remote_core::admission::validate_bounded_unique_strings(values.iter().map(String::as_str), max_len, true)
+    let max_count = u64::try_from(max_len).map_err(|_| format!("{label}-count-exceeds-{max_len}"))?;
+    crunch_remote_core::admission::validate_bounded_unique_strings(values.iter().map(String::as_str), max_count, true)
         .map_err(|reason| reason.diagnostic(label))
 }
 
 pub fn validate_coordinator_build_request(
     request: &RemoteCoordinatorBuildRequest,
 ) -> Result<RemoteExecutablePlan, String> {
+    let required_features_max = u64::try_from(MAX_REMOTE_CAPABILITIES)
+        .map_err(|_| format!("remote-coordinator-required-feature-count-exceeds-{MAX_REMOTE_CAPABILITIES}"))?;
+    let live_output_claims_max = u64::try_from(MAX_REMOTE_EXPECTED_OUTPUTS)
+        .map_err(|_| format!("remote-coordinator-live-output-claim-count-exceeds-{MAX_REMOTE_EXPECTED_OUTPUTS}"))?;
     crunch_remote_core::admission::validate_coordinator_declaration(
         crunch_remote_core::admission::CoordinatorDeclarationFacts {
             required_system: &request.required_system,
@@ -4687,9 +4735,9 @@ pub fn validate_coordinator_build_request(
             required_network_mode: &request.required_network_mode,
             trusted_output_key_count: request.trusted_output_keys.len(),
             required_features: request.required_features.iter().map(String::as_str),
-            required_features_max: MAX_REMOTE_CAPABILITIES,
+            required_features_max,
             live_output_claims: request.live_output_claims.iter().map(String::as_str),
-            live_output_claims_max: MAX_REMOTE_EXPECTED_OUTPUTS,
+            live_output_claims_max,
         },
     )
     .map_err(crunch_remote_core::admission::CoordinatorRequestError::diagnostic)?;
@@ -4701,14 +4749,16 @@ pub fn validate_coordinator_build_request(
         })
         .transpose()?;
     crunch_remote_core::admission::validate_coordinator_runtime_limits(
-        request
-            .locality_scope
-            .as_ref()
-            .map(|scope| (scope.manifest_digest_blake3.as_str(), scope.policy_digest_blake3.as_str())),
-        request.request.upload_bytes,
-        MAX_REMOTE_UPLOAD_BYTES,
-        request.request.build_time_limit_secs,
-        MAX_REMOTE_BUILD_TIME_SECS,
+        crunch_remote_core::admission::CoordinatorRuntimeLimits {
+            locality_scope: request
+                .locality_scope
+                .as_ref()
+                .map(|scope| (scope.manifest_digest_blake3.as_str(), scope.policy_digest_blake3.as_str())),
+            uploaded_bytes: request.request.upload_bytes,
+            max_uploaded_bytes: MAX_REMOTE_UPLOAD_BYTES,
+            build_time_limit_secs: request.request.build_time_limit_secs,
+            max_build_time_limit_secs: MAX_REMOTE_BUILD_TIME_SECS,
+        },
     )
     .map_err(crunch_remote_core::admission::CoordinatorRequestError::diagnostic)?;
     let plan = plan_remote_executable_request(&request.request)?;
@@ -4943,10 +4993,12 @@ fn plan_external_batch_allocation(
     }
     let normalized_build_key = normalized_remote_build_key(request)?;
     let identity = crunch_remote_core::identity::external_batch_allocation_identity(
-        &normalized_build_key,
-        &profile.instance_id,
-        profile.generation,
-        allocation_attempt,
+        crunch_remote_core::identity::ExternalBatchAllocationFacts {
+            normalized_build_key: &normalized_build_key,
+            adapter_instance_id: &profile.instance_id,
+            dispatcher_generation: profile.generation,
+            allocation_attempt,
+        },
     );
     let job_id =
         RemoteJobId::new(format!("external-batch-{identity}")).map_err(|reason| reason.as_str().to_string())?;
@@ -4986,10 +5038,12 @@ fn plan_external_batch_allocation(
 
 fn external_batch_semantic_capability_class(request: &RemoteCoordinatorBuildRequest) -> String {
     let digest = crunch_remote_core::identity::external_batch_semantic_capability_class(
-        &request.required_system,
-        request.required_features.iter().map(String::as_str),
-        &request.required_sandbox_mode,
-        &request.required_network_mode,
+        crunch_remote_core::identity::ExternalBatchSemanticCapabilityFacts {
+            required_system: &request.required_system,
+            required_features: request.required_features.iter().map(String::as_str),
+            required_sandbox_mode: &request.required_sandbox_mode,
+            required_network_mode: &request.required_network_mode,
+        },
     );
     debug_assert!(is_blake3_hex_digest(&digest));
     debug_assert!(!request.required_system.is_empty());
@@ -8247,12 +8301,12 @@ fn bounded_runtime_count_u32(count: usize) -> Result<u32, String> {
 
 pub const DECIDE_REMOTE_RECONNECT: fn(&str, &str, u32, u32) -> RemoteReconnectDecision =
     |active_session_id, candidate_session_id, attempts, max_attempts| {
-        match crunch_remote_core::recovery::decide_reconnect(
+        match crunch_remote_core::recovery::decide_reconnect(crunch_remote_core::recovery::ReconnectFacts {
             active_session_id,
             candidate_session_id,
             attempts,
             max_attempts,
-        ) {
+        }) {
             crunch_remote_core::recovery::ReconnectDecision::SameSession => RemoteReconnectDecision::SameSession,
             crunch_remote_core::recovery::ReconnectDecision::NewSession => RemoteReconnectDecision::NewSession,
             crunch_remote_core::recovery::ReconnectDecision::BackoffRequired => {
@@ -8844,9 +8898,11 @@ fn send_demanded_remote_chunks(
             input.policy,
             &input.demand.scope,
             &reserved,
-            &acknowledgement,
-            &missing.chunk.digest_blake3,
-            progress_step,
+            RemoteTransferAcknowledgementFacts {
+                acknowledgement: &acknowledgement,
+                observed_digest_blake3: &missing.chunk.digest_blake3,
+                progress_step,
+            },
         )
         .map_err(|reason| reason.as_str().to_string())?;
         sent_chunks =
@@ -9293,8 +9349,10 @@ fn send_remote_production_inputs(
         effect_session,
         &mut port,
         &context.request.request_id,
-        input_transfer.manifest.total_bytes,
-        context.request.build_time_limit_secs,
+        crunch_remote_app::TransferEffectLimits {
+            bytes_max: input_transfer.manifest.total_bytes,
+            time_secs_max: context.request.build_time_limit_secs,
+        },
     )
     .map_err(remote_application_error)?;
     let complete = port.completed.take().ok_or_else(|| "remote-input-transfer-verified-receipt-missing".to_string())?;
@@ -9408,8 +9466,10 @@ fn receive_remote_production_output_transfer(
         effect_session,
         &mut port,
         &context.request.request_id,
-        context.policy.total_bytes_max,
-        context.request.build_time_limit_secs,
+        crunch_remote_app::TransferEffectLimits {
+            bytes_max: context.policy.total_bytes_max,
+            time_secs_max: context.request.build_time_limit_secs,
+        },
     )
     .map_err(remote_application_error)?;
     let (receipt, report) =
@@ -10470,9 +10530,11 @@ pub fn validate_input_manifest(manifest: &RemoteInputManifest, request: &Concret
             input_refs: &manifest.input_refs,
             closure_refs_count: manifest.closure_refs.len(),
         },
-        &request.request_id,
-        &request.store_prefix,
-        &request.input_refs,
+        crunch_remote_core::admission::RequestedManifestFacts {
+            request_id: &request.request_id,
+            store_prefix: &request.store_prefix,
+            input_refs: &request.input_refs,
+        },
     )
     .map_err(crunch_remote_core::admission::InputAdmissionError::diagnostic)
 }
@@ -10501,9 +10563,11 @@ fn validate_missing_uploads_core(input: MissingUploadValidationInput<'_>) -> Res
     crunch_remote_core::transfer::admit_missing_uploads(
         input.missing_refs,
         input.uploaded_refs,
-        input.uploaded_bytes,
-        input.max_upload_bytes,
-        MAX_REMOTE_UPLOAD_BYTES,
+        crunch_remote_core::transfer::UploadByteLimits {
+            uploaded_bytes: input.uploaded_bytes,
+            ticket_max_bytes: input.max_upload_bytes,
+            global_max_bytes: MAX_REMOTE_UPLOAD_BYTES,
+        },
     )
     .map_err(|reason| reason.as_str().to_string())
 }
@@ -10514,6 +10578,8 @@ pub fn validate_remote_input_upload_artifacts(
     source_input_refs: &[String],
     artifacts: &[RemoteInputUploadArtifact],
 ) -> Result<(), String> {
+    let artifact_count_max = u32::try_from(MAX_REMOTE_INPUT_UPLOAD_ARTIFACTS)
+        .map_err(|_| format!("input-upload-artifact-count-exceeds-{MAX_REMOTE_INPUT_UPLOAD_ARTIFACTS}"))?;
     crunch_remote_core::transfer::validate_input_upload_artifacts(
         request_id,
         uploaded_refs.iter().map(String::as_str),
@@ -10525,8 +10591,10 @@ pub fn validate_remote_input_upload_artifacts(
             size_bytes: artifact.size_bytes,
             payload: &artifact.payload,
         }),
-        MAX_REMOTE_INPUT_UPLOAD_ARTIFACTS,
-        MAX_REMOTE_UPLOAD_BYTES,
+        crunch_remote_core::transfer::InputUploadArtifactLimits {
+            artifact_count_max,
+            total_bytes_max: MAX_REMOTE_UPLOAD_BYTES,
+        },
     )
     .map_err(|reason| {
         if reason == crunch_remote_core::transfer::InputUploadArtifactBlocker::CountExceeded {
@@ -10702,10 +10770,10 @@ pub fn validate_remote_output_admission(
     validate_remote_produced_outputs(request, result)?;
     validate_remote_output_transfer_artifacts(&request.request_id, &result.outputs, transfer_artifacts)?;
     validate_transfer_report(transfer)?;
-    crunch_remote_core::output::validate_transfer_builder_key(
-        &transfer.verified_builder_key,
-        &result.builder_signing_key_id,
-    )
+    crunch_remote_core::output::validate_transfer_builder_key(crunch_remote_core::output::TransferBuilderKeyFacts {
+        report_key: &transfer.verified_builder_key,
+        result_key: &result.builder_signing_key_id,
+    })
     .map_err(|reason| reason.as_str().to_string())?;
     match decide_output_trust(&result.builder_signing_key_id, trusted_output_keys, true) {
         OutputTrustDecision::Accept { key_id, trust_basis } => {
@@ -11089,10 +11157,10 @@ pub fn validate_remote_stdio_output_import(
     validate_output_transfer_manifest_frame(request, result, &manifest_frame, policy)?;
     validate_streamed_output_receiver_files(result, streaming, policy)?;
     validate_transfer_report(transfer)?;
-    crunch_remote_core::output::validate_transfer_builder_key(
-        &transfer.verified_builder_key,
-        &result.builder_signing_key_id,
-    )
+    crunch_remote_core::output::validate_transfer_builder_key(crunch_remote_core::output::TransferBuilderKeyFacts {
+        report_key: &transfer.verified_builder_key,
+        result_key: &result.builder_signing_key_id,
+    })
     .map_err(|reason| reason.as_str().to_string())?;
     let OutputTrustDecision::Accept { key_id, trust_basis } =
         decide_output_trust(&result.builder_signing_key_id, trusted_output_keys, true)
@@ -12179,9 +12247,11 @@ fn validate_remote_produced_outputs(
             logical_path: output.logical_path.as_deref(),
         }),
         result.outputs.iter().map(remote_produced_output_facts),
-        &result.output_digest_blake3,
-        &result.builder_signing_key_id,
-        &request.store_prefix,
+        crunch_remote_core::output::ProducedOutputMetadataContext {
+            reported_digest_blake3: &result.output_digest_blake3,
+            builder_signing_key_id: &result.builder_signing_key_id,
+            store_prefix: &request.store_prefix,
+        },
     )
     .map_err(|reason| reason.as_str().to_string())
 }
@@ -12802,14 +12872,16 @@ fn production_transfer_report_from_runtime(
 ) -> Result<RemoteTransferReport, String> {
     use crate::remote_transfer::RemoteTransferShellDisposition;
     crunch_remote_core::transfer::validate_production_transfer_runtime_report(
-        runtime.output_admission_claimed,
-        matches!(
-            runtime.disposition,
-            RemoteTransferShellDisposition::Completed | RemoteTransferShellDisposition::AlreadyPresent
-        ),
-        verified_builder_key,
-        core_transfer_mode(actual_mode),
-        fallback_reason.is_some(),
+        crunch_remote_core::transfer::ProductionTransferRuntimeFacts {
+            output_admission_claimed: runtime.output_admission_claimed,
+            disposition_complete: matches!(
+                runtime.disposition,
+                RemoteTransferShellDisposition::Completed | RemoteTransferShellDisposition::AlreadyPresent
+            ),
+            verified_builder_key,
+            actual_mode: core_transfer_mode(actual_mode),
+            has_fallback_reason: fallback_reason.is_some(),
+        },
     )
     .map_err(|reason| reason.as_str().to_string())?;
     let transfer_receipt = RemoteTransferReport {
@@ -12862,8 +12934,10 @@ fn validate_input_transfer_manifest_frame(
     .map_err(|reason| reason.as_str().to_string())?;
     let expected_content = remote_input_requested_content_digest(request)?;
     crunch_remote_core::transfer::validate_production_input_manifest_content_binding(
-        expected_content.as_str(),
-        canonical.manifest.requested_content_blake3.as_str(),
+        crunch_remote_core::transfer::ProductionContentBinding {
+            expected_content_blake3: expected_content.as_str(),
+            actual_content_blake3: canonical.manifest.requested_content_blake3.as_str(),
+        },
     )
     .map_err(|reason| reason.as_str().to_string())?;
     let expected_ids = request
@@ -13252,8 +13326,16 @@ fn receive_remote_production_inputs(
             opening,
             runtime,
         };
-        crunch_remote_app::receive_inputs(session, &mut port, &opening.request.request_id, max_upload_bytes, 0)
-            .map_err(remote_application_error)?
+        crunch_remote_app::receive_inputs(
+            session,
+            &mut port,
+            &opening.request.request_id,
+            crunch_remote_app::TransferEffectLimits {
+                bytes_max: max_upload_bytes,
+                time_secs_max: 0,
+            },
+        )
+        .map_err(remote_application_error)?
     };
     validate_missing_uploads(&opening.missing, &opening.missing, uploaded_bytes, max_upload_bytes)?;
     debug_assert!(uploaded_bytes <= max_upload_bytes);
@@ -13333,9 +13415,11 @@ fn receive_remote_production_input_transfer(
     };
     let canonical = validate_input_transfer_manifest_frame(&opening.request, &transfer, opening.policy)?;
     if !crunch_remote_core::transfer::upload_within_ticket_and_global_limit(
-        canonical.total_bytes,
-        input.max_upload_bytes,
-        MAX_REMOTE_UPLOAD_BYTES,
+        crunch_remote_core::transfer::UploadByteLimits {
+            uploaded_bytes: canonical.total_bytes,
+            ticket_max_bytes: input.max_upload_bytes,
+            global_max_bytes: MAX_REMOTE_UPLOAD_BYTES,
+        },
     ) {
         return Err("upload-byte-limit-exceeded".to_string());
     }
@@ -13593,8 +13677,10 @@ fn send_remote_production_output_transfer(
         session,
         &mut port,
         &opening.request.request_id,
-        opening.policy.total_bytes_max,
-        0,
+        crunch_remote_app::TransferEffectLimits {
+            bytes_max: opening.policy.total_bytes_max,
+            time_secs_max: 0,
+        },
     )
     .map_err(remote_application_error)?;
     let transfer_receipt = port

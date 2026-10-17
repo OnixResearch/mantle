@@ -30,6 +30,9 @@ pub(crate) struct LoadedAstGrepEvidence {
     pub sidecar_canonical_digest_blake3: String,
 }
 
+// Keep the complete parsed evidence inline: readers consume it once without
+// allocating an extra box just to represent missing or invalid sidecars.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AstGrepEvidenceError {
     pub blocker_class: &'static str,

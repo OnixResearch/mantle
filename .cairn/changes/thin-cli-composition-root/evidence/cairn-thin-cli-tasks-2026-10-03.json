@@ -1,0 +1,319 @@
+{
+  "change": "thin-cli-composition-root",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "8e9d27153b49594ac230d7eb770a34ae66401e87ab43f643c562bbd5ce9dce8d",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "policy_selection": {
+    "blake3": "31d095609943dd430aa8ab172cd1b8f5116550d41e5b1c8463b89875017e0d12",
+    "installation_receipt": false,
+    "locator": "cairn-policy/generated/cairn-policy.json",
+    "source": "legacy_default"
+  },
+  "probe_evidence": {
+    "declarations_present": false,
+    "probes": []
+  },
+  "receipt_hash": "1dc728f409406fb26c27bf73c34e152754b6b30324228aba65a4e4f06f054f38",
+  "stage": "tasks",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/thin-cli-composition-root/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 20,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/thin-cli-composition-root/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 24,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/thin-cli-composition-root/specs/application-architecture/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 10,
+      "substantive_lines": 45,
+      "substantive_requirement_blocks": 5,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 12,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/thin-cli-composition-root/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 89,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 12,
+      "task_done": 6,
+      "task_in_progress": 0,
+      "task_todo": 6
+    }
+  ],
+  "task_ordering": {
+    "active": true,
+    "edges": [
+      {
+        "predecessor": "I2",
+        "task": "I3"
+      },
+      {
+        "predecessor": "I3",
+        "task": "I4"
+      },
+      {
+        "predecessor": "I4",
+        "task": "I5"
+      },
+      {
+        "predecessor": "I5",
+        "task": "I6"
+      },
+      {
+        "predecessor": "I5",
+        "task": "I7"
+      },
+      {
+        "predecessor": "I6",
+        "task": "V1"
+      },
+      {
+        "predecessor": "I7",
+        "task": "V1"
+      },
+      {
+        "predecessor": "V1",
+        "task": "V2"
+      },
+      {
+        "predecessor": "V2",
+        "task": "V3"
+      },
+      {
+        "predecessor": "V3",
+        "task": "V4"
+      },
+      {
+        "predecessor": "V4",
+        "task": "V5"
+      }
+    ],
+    "issues": [],
+    "nodes": [
+      {
+        "blocked_by": [],
+        "blocks": [],
+        "id": "I1",
+        "line": 5,
+        "predecessors": [],
+        "ready": false,
+        "state": "done"
+      },
+      {
+        "blocked_by": [],
+        "blocks": [
+          "I3"
+        ],
+        "id": "I2",
+        "line": 7,
+        "predecessors": [],
+        "ready": false,
+        "state": "done"
+      },
+      {
+        "blocked_by": [],
+        "blocks": [
+          "I4"
+        ],
+        "id": "I3",
+        "line": 10,
+        "predecessors": [
+          "I2"
+        ],
+        "ready": false,
+        "state": "done"
+      },
+      {
+        "blocked_by": [],
+        "blocks": [
+          "I5"
+        ],
+        "id": "I4",
+        "line": 34,
+        "predecessors": [
+          "I3"
+        ],
+        "ready": false,
+        "state": "done"
+      },
+      {
+        "blocked_by": [],
+        "blocks": [
+          "I6",
+          "I7"
+        ],
+        "id": "I5",
+        "line": 58,
+        "predecessors": [
+          "I4"
+        ],
+        "ready": false,
+        "state": "done"
+      },
+      {
+        "blocked_by": [],
+        "blocks": [
+          "V1"
+        ],
+        "id": "I6",
+        "line": 68,
+        "predecessors": [
+          "I5"
+        ],
+        "ready": true,
+        "state": "todo"
+      },
+      {
+        "blocked_by": [],
+        "blocks": [
+          "V1"
+        ],
+        "id": "I7",
+        "line": 88,
+        "predecessors": [
+          "I5"
+        ],
+        "ready": false,
+        "state": "done"
+      },
+      {
+        "blocked_by": [
+          "I6"
+        ],
+        "blocks": [
+          "V2"
+        ],
+        "id": "V1",
+        "line": 96,
+        "predecessors": [
+          "I6",
+          "I7"
+        ],
+        "ready": false,
+        "state": "todo"
+      },
+      {
+        "blocked_by": [
+          "V1"
+        ],
+        "blocks": [
+          "V3"
+        ],
+        "id": "V2",
+        "line": 99,
+        "predecessors": [
+          "V1"
+        ],
+        "ready": false,
+        "state": "todo"
+      },
+      {
+        "blocked_by": [
+          "V2"
+        ],
+        "blocks": [
+          "V4"
+        ],
+        "id": "V3",
+        "line": 101,
+        "predecessors": [
+          "V2"
+        ],
+        "ready": false,
+        "state": "todo"
+      },
+      {
+        "blocked_by": [
+          "V3"
+        ],
+        "blocks": [
+          "V5"
+        ],
+        "id": "V4",
+        "line": 104,
+        "predecessors": [
+          "V3"
+        ],
+        "ready": false,
+        "state": "todo"
+      },
+      {
+        "blocked_by": [
+          "V4"
+        ],
+        "blocks": [],
+        "id": "V5",
+        "line": 106,
+        "predecessors": [
+          "V4"
+        ],
+        "ready": false,
+        "state": "todo"
+      }
+    ],
+    "order": [
+      "I1",
+      "I2",
+      "I3",
+      "I4",
+      "I5",
+      "I6",
+      "I7",
+      "V1",
+      "V2",
+      "V3",
+      "V4",
+      "V5"
+    ],
+    "ready_tasks": [
+      "I6"
+    ],
+    "valid": true
+  },
+  "valid": true,
+  "verdict": "PASS"
+}

@@ -396,7 +396,7 @@ impl GoalRegistry {
             }
         }
         while let Some(key) = pending.pop_front() {
-            if reachable.len() > MAX_GOALS as usize {
+            if u32::try_from(reachable.len()).map_or(true, |count| count > MAX_GOALS) {
                 return Err(Error::Store("watch reachable goal bound exceeded".to_string()));
             }
             let goal = self

@@ -1,0 +1,151 @@
+$ /home/brittonr/mantle-cairn-finish/cairn-result/bin/cairn workflow status adopt-data-only-dependency-exports --root .
+{
+  "acceptance_ids": [
+    "dependency-exports.admission-review",
+    "dependency-exports.closure",
+    "dependency-exports.decision-record",
+    "dependency-exports.no-accepted-requirement",
+    "dependency-exports.original-scope"
+  ],
+  "artifacts": [
+    {
+      "blockers": [],
+      "files": [
+        {
+          "blake3": "03d4a63b6106b0782aa122287266b4f334e94e9861cb35c08f04505fbd71b9a8",
+          "path": ".cairn/changes/adopt-data-only-dependency-exports/proposal.md"
+        }
+      ],
+      "id": "proposal",
+      "missing": [],
+      "output_path": "proposal.md",
+      "path_kind": "file",
+      "requires": [],
+      "stage": "proposal",
+      "state": "done",
+      "structural_admission": "proposal",
+      "unlocks": [
+        "design"
+      ]
+    },
+    {
+      "blockers": [],
+      "files": [
+        {
+          "blake3": "b03e9acc8e304178c062bc74546871fd144cc660c4f9e65161d65fafcb756b73",
+          "path": ".cairn/changes/adopt-data-only-dependency-exports/design.md"
+        }
+      ],
+      "id": "design",
+      "missing": [],
+      "output_path": "design.md",
+      "path_kind": "file",
+      "requires": [
+        "proposal"
+      ],
+      "stage": "design",
+      "state": "done",
+      "structural_admission": "design",
+      "unlocks": [
+        "acceptance"
+      ]
+    },
+    {
+      "blockers": [],
+      "files": [
+        {
+          "blake3": "c2691cc6412c4a35cd86531ca3457ddd72724a42cd2d47f33328dbd413125ac0",
+          "path": ".cairn/changes/adopt-data-only-dependency-exports/acceptance.md"
+        }
+      ],
+      "id": "acceptance",
+      "missing": [],
+      "output_path": "acceptance.md",
+      "path_kind": "file",
+      "requires": [
+        "design"
+      ],
+      "stage": "design",
+      "state": "done",
+      "structural_admission": "acceptance",
+      "unlocks": [
+        "tasks"
+      ]
+    },
+    {
+      "blockers": [],
+      "files": [
+        {
+          "blake3": "eb865af2e9ec2c67e12229d27f25b6559dba77877305d85f9156ef4435857070",
+          "path": ".cairn/changes/adopt-data-only-dependency-exports/tasks.md"
+        }
+      ],
+      "id": "tasks",
+      "missing": [],
+      "output_path": "tasks.md",
+      "path_kind": "file",
+      "requires": [
+        "acceptance"
+      ],
+      "stage": "tasks",
+      "state": "done",
+      "structural_admission": "tasks",
+      "unlocks": [
+        "no-spec-review"
+      ]
+    },
+    {
+      "blockers": [],
+      "files": [
+        {
+          "blake3": "f2cb327aad5e5f5d15902c40a43a0c6540cf8653769e31719bd1b3e70239da45",
+          "path": ".cairn/changes/adopt-data-only-dependency-exports/reviews/no-spec-classification.json"
+        }
+      ],
+      "id": "no-spec-review",
+      "missing": [],
+      "output_path": "reviews/no-spec-classification.json",
+      "path_kind": "file",
+      "requires": [
+        "tasks"
+      ],
+      "stage": "tasks",
+      "state": "done",
+      "structural_admission": "semantic_review",
+      "unlocks": []
+    }
+  ],
+  "change": "adopt-data-only-dependency-exports",
+  "command": "workflow status",
+  "input_hash": "cde3bcdc10878f6f6ea19bf23118a173856495fcd22ded78685b9b2f266fdb91",
+  "issues": [],
+  "layout": "cairn",
+  "mutated": false,
+  "next_actions": [],
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "profile_identity_hash": "843f77cd244a5f62cb22e4a66ab156f3a06074c6e3321e943ea1b31407aad313",
+  "read_only": true,
+  "receipt_hash": "7eddc923f60df4f043e974bd96c585d4841823adef1f88dbec30a9e1668904e5",
+  "review_receipt_hashes": [
+    "04e9dcb636eb75a0bd07efc1839cb81915b017273c7afd2420daa9c18c2a008b"
+  ],
+  "root": ".",
+  "schema_version": "cairn.workflow-status.v1",
+  "spec_effect": "none",
+  "valid": true,
+  "workflow_description": "Reviewed lifecycle for changes declared to have no accepted-spec effect",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1,
+  "workflow_schema": "no-spec-delta"
+}

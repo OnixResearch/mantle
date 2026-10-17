@@ -105,6 +105,8 @@ pub enum Error {
     Json(String),
     #[error("rust-cache-castore:{0}")]
     Castore(String),
+    #[error("rust-cache-authority:{0}")]
+    Authority(#[source] crunch_store::Error),
     #[error("rust-cache-bound:{0}")]
     Bound(String),
     #[error("rust-cache-state:{0}")]
@@ -265,6 +267,13 @@ impl RustCache {
         let handle = crunch_store::StoreHandle::open(config)
             .await
             .map_err(|error| Error::Castore(format!("open-store:{error}")))?;
+        if handle.backend() == crunch_store::StoreBackend::Casita
+            && crunch_store::StoreHandle::casita_gc_fence_pending(handle.state_dir()).map_err(Error::Authority)?
+        {
+            return Err(Error::Authority(crunch_store::Error::Gc(
+                "gc-recovery-required: recover fenced Casita GC before opening the Rust unit cache".to_string(),
+            )));
+        }
         let mut cache = Self::new(handle.state_dir().to_path_buf(), handle.blob_service(), handle.directory_service())?;
         assert_eq!(cache.state_dir(), handle.state_dir());
         assert!(cache.cache_dir.starts_with(handle.state_dir()));
@@ -355,11 +364,13 @@ impl RustCache {
         if !is_complete {
             return Err(Error::Castore("ingested-tree-incomplete".to_string()));
         }
+        // r[impl mantle.casita_store_backend.castore_payload_roots]
         if let Some(store) = &self.durable_store {
-            store
-                .admit_castore_payload_root(&node)
-                .await
-                .map_err(|error| Error::Castore(format!("retain-payload:{error}")))?;
+            if self.retention()?.retained_results.values().any(|retained| retained == &result.input.root_node) {
+                store.rehydrate_castore_payload_root(&node).await.map_err(Error::Authority)?;
+            } else {
+                store.admit_castore_payload_root(&node).await.map_err(Error::Authority)?;
+            }
         }
         self.publish_record_and_index(&result)?;
         assert_eq!(result.input.action_ref, request.action.action_ref);
@@ -604,10 +615,7 @@ impl RustCache {
             let result = self.read_result(result_ref)?;
             let node = node_from_identity(&result.input.root_node)?;
             if let Some(store) = &self.durable_store {
-                store
-                    .rehydrate_castore_payload_root(&node)
-                    .await
-                    .map_err(|error| Error::Castore(format!("restore-payload:{error}")))?;
+                store.rehydrate_castore_payload_root(&node).await.map_err(Error::Authority)?;
             }
             let is_complete =
                 crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
@@ -1539,7 +1547,8 @@ mod tests {
             let raw_signer = ed25519_dalek::SigningKey::from_bytes(&[17_u8; 32]);
             let verifying_key = VerifyingKey::new("cache-fixture-1".to_string(), raw_signer.verifying_key());
             let signing_key = SigningKey::new("cache-fixture-1".to_string(), raw_signer);
-            let config = || crunch_store::StoreConfig::new(backend, state.clone(), output.clone(), STORE_DIR.to_string());
+            let config =
+                || crunch_store::StoreConfig::new(backend, state.clone(), output.clone(), STORE_DIR.to_string());
             fs::create_dir(&output).unwrap();
             let source = root.path().join("signed-output-source");
             fs::write(&source, TEST_OUTPUT).unwrap();
@@ -1547,14 +1556,9 @@ mod tests {
             if backend == crunch_store::StoreBackend::Casita {
                 fs::write(state.join("casita-trusted-public-keys"), format!("{verifying_key}\n")).unwrap();
             }
-            let node = ingest_path::<_, _, _, &[u8]>(
-                store.blob_service(),
-                store.directory_service(),
-                &source,
-                None,
-            )
-            .await
-            .unwrap();
+            let node = ingest_path::<_, _, _, &[u8]>(store.blob_service(), store.directory_service(), &source, None)
+                .await
+                .unwrap();
             let (nar_size, nar_sha256) = SimpleRenderer::new(store.blob_service(), store.directory_service())
                 .calculate_nar(&node)
                 .await
@@ -1649,6 +1653,8 @@ mod tests {
             assert_eq!(report.disposition, CACHE_DISPOSITION_HIT);
             assert!(!report.compiler_executed);
             assert_eq!(fs::read(output_dir.join("libcrate.rlib")).unwrap(), TEST_OUTPUT);
+            let retention = cache.plan_retention_gc_verified().await.unwrap();
+            assert_eq!(retention.live_nodes().len(), 1);
             let retained = cache.retention().unwrap();
             let node = node_from_identity(retained.retained_results.values().next().unwrap()).unwrap();
             cache.durable_store.as_ref().unwrap().rehydrate_castore_payload_root(&node).await.unwrap();
@@ -1694,6 +1700,9 @@ mod tests {
             String::from_utf8_lossy(&child.stdout),
         );
         assert_eq!(fs::read(output_dir.join("libcrate.rlib")).unwrap(), TEST_OUTPUT);
+        for path in ["pathinfo.redb", "directories.redb", "blobs"] {
+            assert!(!root.path().join("state").join(path).exists(), "Casita wrote Snix state at {path}");
+        }
     }
 
     #[tokio::test]

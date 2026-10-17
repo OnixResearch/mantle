@@ -9,6 +9,7 @@ let fetch = import "fetch.ncl" in
 let offline_cargo = import "offline_cargo.ncl" in
 let wasm_component = import "wasm_component.ncl" in
 let kernelscript_experiment = import "kernelscript_experiment.ncl" in
+let android = import "android.ncl" in
 let scheduling = import "scheduling.ncl" in
 let android = import "android.ncl" in
 
@@ -44,6 +45,9 @@ let android = import "android.ncl" in
   Url = fetch.Url,
   Hash = fetch.Hash,
 
+  # Fixed-output Android toolchain cohort and explicit identity binding.
+  AndroidSources = android,
+
   # Project outputs contract. Apply with: record | crunch.Project
   Project = import "project_outputs.ncl",
 
@@ -68,12 +72,13 @@ let android = import "android.ncl" in
   schedulingKnownGraphBounds = scheduling.default_known_graph_bounds,
   schedulingHistoryPolicy = scheduling.default_history_policy,
 
-  # Reviewed prebuilt Android source records and explicit consumer binding.
-  AndroidSources = android,
-  # APK plan authoring; the Rust adapter checks independently admitted bytes
-  # and emits separately sandboxed steps before any tool executes.
-  ApkPlan = android.Plan,
-  mkApk = android.mkApk,
+  # Reviewed APK metadata is a distinct prebuilt-record-v1 domain, not the
+  # published Android source-v1 cohort exposed through AndroidSources above.
+  AndroidReviewedSources = android.reviewed,
+  # APK adapter plan authoring; the Rust adapter checks independently
+  # admitted bytes before any SDK tool executes.
+  ReviewedApkPlan = android.reviewed.Plan,
+  mkReviewedApk = android.reviewed.mkApk,
 
   # Lazy derivation file edge. The pipeline resolves this relative path before
   # conversion, keeping large derivation DAGs out of one Nickel value.

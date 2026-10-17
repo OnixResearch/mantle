@@ -2,7 +2,7 @@
 # members and supplies the separately generated keystore/password as store inputs.
 let android = import "../lib/android.ncl" in
 {
-  plan = android.mkApk {
+  plan = android.reviewed.mkApk {
     module = "hello-world",
     application_id = "org.example.mantlehello",
     version_code = 1,

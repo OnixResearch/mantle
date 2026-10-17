@@ -1,0 +1,47 @@
+{
+  "monitor": "run-leg.py additive generic-script version; identical bounds/original manifest baseline; predecessor run-shell.py retained",
+  "mode": "offline",
+  "command": [
+    "nix",
+    "develop",
+    "--no-write-lock-file",
+    "--max-jobs",
+    "1",
+    "--cores",
+    "1",
+    "--option",
+    "build-dir",
+    "/datapool/mantle-store/mr.7p88_pl1/t",
+    "--offline",
+    ".",
+    "--command",
+    "bash",
+    "/datapool/mantle-store/mr.7p88_pl1/root-and-generators-build.sh"
+  ],
+  "env": {
+    "TMPDIR": "/datapool/mantle-store/mr.7p88_pl1/t",
+    "TMP": "/datapool/mantle-store/mr.7p88_pl1/t",
+    "TEMP": "/datapool/mantle-store/mr.7p88_pl1/t",
+    "CARGO_TARGET_DIR": "/datapool/mantle-store/mr.7p88_pl1/target",
+    "CARGO_BUILD_JOBS": "1"
+  },
+  "start": {
+    "free": 112991404032,
+    "target": 6092269056,
+    "temp": 10615296,
+    "metadata": 1203712,
+    "conservative_allocation_since_admission": 11701583872
+  },
+  "started": 1792213970.698816,
+  "notice": "Sampling stop, not hard quota. Daemon work may outlive cancelled client. Legacy /tmp preserved/noncompliant.",
+  "exit_code": -15,
+  "stop_reason": "conservative Nix/additional-allocation threshold",
+  "finished": 1792214325.6800213,
+  "final": {
+    "free": 109621411840,
+    "target": 7098629632,
+    "temp": 10636288,
+    "metadata": 1249792,
+    "conservative_allocation_since_admission": 15071576064
+  }
+}

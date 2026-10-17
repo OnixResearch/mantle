@@ -13,20 +13,27 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+use mantle_cargo_unit_plan::BUILD_SCRIPT_RUN;
 use mantle_cargo_unit_plan::Blocker;
+use mantle_cargo_unit_plan::BuildScriptRunBinding;
 use mantle_cargo_unit_plan::ExternBinding;
-use mantle_cargo_unit_plan::NativeInput;
 use mantle_cargo_unit_plan::PlanBindings;
+use mantle_cargo_unit_plan::RUN_BUILD_SCRIPT_MODE;
 use mantle_cargo_unit_plan::SourceSlice;
 use mantle_cargo_unit_plan::UnitBinding;
 use mantle_cargo_unit_plan::lower;
 use mantle_rust_plan_core::ExistingUnitFacts;
+use mantle_rust_plan_core::NativeInputDeclaration;
+use mantle_rust_plan_core::ResolvedNativeInputs;
 use mantle_rust_plan_core::plan_existing_unit_effects;
+use mantle_rust_plan_core::resolve_native_inputs;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
 const MAX_ORACLE_BYTES: usize = 32 * 1024 * 1024;
+/// Evaluated Nickel `native_inputs`, serialized by `lib/cargo_unit_plan.ncl`.
+const NATIVE_INPUTS_ENV: &str = "MANTLE_UNIT_NATIVE_INPUTS";
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -39,14 +46,16 @@ struct Config {
     linker: String,
     toolchain: String,
     helper: String,
+    #[serde(default)]
     runtime_inputs: Vec<String>,
     store_prefix: String,
     system: String,
     host_triple: String,
     target_triple: String,
     profile: String,
+    /// Keyed by exact Cargo package id from the admitted graph.
     #[serde(default)]
-    native_inputs: BTreeMap<String, NativeInput>,
+    native_inputs: BTreeMap<String, NativeInputDeclaration>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -59,11 +68,11 @@ struct OracleGraph {
 struct GraphUnit {
     pkg_id: String,
     target: GraphTarget,
+    mode: String,
+    profile: Option<GraphProfile>,
+    dependencies: Vec<GraphEdge>,
     #[serde(default)]
     features: Vec<String>,
-    mode: String,
-    profile: GraphProfile,
-    dependencies: Vec<GraphEdge>,
 }
 #[derive(Debug, Deserialize)]
 struct GraphTarget {
@@ -96,6 +105,7 @@ struct MetadataPackage {
     name: String,
     version: String,
     source: Option<String>,
+    #[serde(default)]
     links: Option<String>,
 }
 
@@ -106,7 +116,6 @@ struct PlannerReceipt {
     lockfile: Lockfile,
     unit_graph: GraphSummary,
     unit_derivation_graph: DerivationGraph,
-    cargo_unit_derivation_graph: DerivationGraph,
 }
 #[derive(Debug, Deserialize)]
 struct CargoMode {
@@ -126,7 +135,7 @@ struct DerivationGraph {
     derivations: Vec<PlannerUnit>,
     blockers: Vec<Value>,
 }
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 struct PlannerUnit {
     unit_id: String,
     package_id: String,
@@ -136,7 +145,7 @@ struct PlannerUnit {
     rustc_metadata_hash: String,
     derivation: PlannerDerivation,
 }
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 struct PlannerDerivation {
     args: Vec<String>,
     env: BTreeMap<String, String>,
@@ -171,6 +180,34 @@ fn store_root(path: &str, prefix: &str) -> bool {
             .next()
             .is_some_and(|name| name.len() >= 34 && name.as_bytes().get(32) == Some(&b'-'))
     })
+}
+/// Maximum path components accepted when lexically normalising Cargo source paths.
+const MAX_SOURCE_PATH_COMPONENTS: usize = 256;
+
+/// Lexically resolve `.` and `..` in an absolute Cargo source path (the unit graph reports
+/// path-dependency sources as e.g. `app/../bar/build.rs`). Returns `None` for relative
+/// paths, paths that climb above the filesystem root, or over-long paths.
+fn normalize_source_path(path: &Path) -> Option<PathBuf> {
+    use std::path::Component;
+    if !path.is_absolute() || path.components().count() > MAX_SOURCE_PATH_COMPONENTS {
+        return None;
+    }
+    let mut normalized = PathBuf::from("/");
+    for component in path.components() {
+        match component {
+            Component::RootDir | Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    return None;
+                }
+            }
+            Component::Normal(part) => normalized.push(part),
+            Component::Prefix(_) => return None,
+        }
+    }
+    debug_assert!(normalized.is_absolute());
+    debug_assert!(!normalized.components().any(|part| part == Component::ParentDir));
+    Some(normalized)
 }
 fn in_declared_source(path: &Path, workspace: &Path, vendor: Option<&Path>) -> bool {
     path.starts_with(workspace) || vendor.is_some_and(|root| path.starts_with(root))
@@ -215,6 +252,9 @@ fn parse_unit_graph(bytes: &[u8]) -> Result<OracleGraph, Vec<Blocker>> {
     if graph.version != 1 {
         return Err(block("unit-plan-oracle-failure", "unit-graph", "unknown unit-graph version"));
     }
+    if graph.units.len() > mantle_cargo_unit_plan::MAX_PLAN_UNITS {
+        return Err(block("unit-plan-limit", "unit-graph", "more than 4096 Cargo units"));
+    }
     Ok(graph)
 }
 
@@ -254,7 +294,7 @@ fn run_oracle(
         &config.profile,
     ]);
     command_env(&mut planner, config, workspace, cargo_home);
-    planner.env("MANTLE_UNIT_PLAN_CARGO_INDEXED_DERIVATIONS", "1");
+
     let receipt_bytes = command_output(&mut planner, "rust-plan")?;
     let receipt: PlannerReceipt = serde_json::from_slice(&receipt_bytes)
         .map_err(|error| block("unit-plan-oracle-failure", "rust-plan", error.to_string()))?;
@@ -262,7 +302,6 @@ fn run_oracle(
         || receipt.cargo_mode.compatibility_class != "cargo-oracle-evidence"
         || receipt.unit_graph.digest_blake3 != graph_digest
         || !receipt.unit_derivation_graph.ready
-        || !receipt.cargo_unit_derivation_graph.ready
     {
         return Err(block(
             "unit-plan-oracle-failure",
@@ -277,6 +316,7 @@ struct PackageSource {
     source_id: String,
     kind: String,
     root: String,
+    links: Option<String>,
 }
 
 struct SourcePaths {
@@ -343,6 +383,7 @@ fn source_paths(
             source_id,
             kind: kind.into(),
             root: package_root.to_string_lossy().into_owned(),
+            links: package.links.clone(),
         });
     }
     if slices.len() > 256 {
@@ -363,7 +404,7 @@ fn normalize_args(unit: &PlannerUnit, graph: &GraphUnit) -> Result<Vec<String>, 
     let mut index = 0;
     while index < unit.derivation.args.len() {
         let word = &unit.derivation.args[index];
-        if word.ends_with(".rs") {
+        if word.ends_with(".rs") && word.starts_with('/') {
             let actual = fs::canonicalize(word)
                 .map_err(|error| block("unit-plan-source-unsupported", &unit.unit_id, error.to_string()))?;
             let expected = fs::canonicalize(&graph.target.src_path)
@@ -386,6 +427,14 @@ fn normalize_args(unit: &PlannerUnit, graph: &GraphUnit) -> Result<Vec<String>, 
             index += 2;
             continue;
         }
+        if word == "--cfg" && unit.derivation.args.get(index + 1).is_some_and(|value| value.starts_with("feature=\"")) {
+            index += 2;
+            continue;
+        }
+        if word.starts_with("--cfg=feature=\"") {
+            index += 1;
+            continue;
+        }
         if word == "-C" {
             let value = unit
                 .derivation
@@ -403,6 +452,12 @@ fn normalize_args(unit: &PlannerUnit, graph: &GraphUnit) -> Result<Vec<String>, 
         args.push(word.clone());
         index += 1;
     }
+    for feature in graph.features.iter().collect::<BTreeSet<_>>() {
+        if feature.contains('\"') || feature.as_bytes().contains(&0) || feature.len() > 128 {
+            return Err(block("unit-plan-mode-unsupported", &unit.unit_id, "invalid Cargo feature name"));
+        }
+        args.extend(["--cfg".to_string(), format!("feature=\"{feature}\"")]);
+    }
     if source_count != 1
         || !args.iter().any(|arg| arg == "--crate-name")
         || !args.iter().any(|arg| arg == "--crate-type")
@@ -417,101 +472,96 @@ fn normalize_args(unit: &PlannerUnit, graph: &GraphUnit) -> Result<Vec<String>, 
     Ok(args)
 }
 
-fn match_planner<'a>(
-    index: usize,
-    graph: &GraphUnit,
-    units: &[GraphUnit],
-    receipt: &'a PlannerReceipt,
-) -> Result<&'a PlannerUnit, Vec<Blocker>> {
-    let compiled_index = if graph.mode == "run-custom-build" {
-        let candidates = graph
-            .dependencies
-            .iter()
-            .filter(|edge| {
-                units.get(edge.index).is_some_and(|candidate| {
-                    candidate.pkg_id == graph.pkg_id
-                        && candidate.mode == "build"
-                        && candidate.target.kind.first().is_some_and(|kind| kind == "custom-build")
-                        && candidate.target.name == graph.target.name
-                        && candidate.features == graph.features
-                })
-            })
-            .map(|edge| edge.index)
-            .collect::<Vec<_>>();
-        if candidates.len() != 1 {
-            return Err(block("unit-plan-mode-unsupported", &graph.pkg_id, "ambiguous compiled build script"));
+/// Cargo's topology, not the target name, decides which resolver-2 host
+/// dependency instance is requested. A package can have host and target
+/// instances with different features even when both triples happen to agree.
+fn host_dependencies(graph: &OracleGraph) -> Result<BTreeSet<usize>, Vec<Blocker>> {
+    let mut pending = graph
+        .units
+        .iter()
+        .enumerate()
+        .filter(|(_, unit)| {
+            unit.mode == "build"
+                && matches!(unit.target.kind.first().map(String::as_str), Some("custom-build" | "proc-macro"))
+        })
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    let mut host = BTreeSet::new();
+    while let Some(index) = pending.pop() {
+        if !host.insert(index) {
+            continue;
         }
-        candidates[0]
-    } else {
-        index
-    };
-    let prefix = format!("{compiled_index}:{}:{}:", graph.pkg_id, graph.target.name);
-    let mut matches = receipt.cargo_unit_derivation_graph.derivations.iter().filter(|unit| {
-        unit.unit_id.strip_prefix(&prefix).is_some_and(|suffix| {
-            suffix == format!("{}:build", unit.target_kind)
-                && graph.target.kind.iter().any(|kind| kind == &unit.target_kind)
-        }) && unit.package_id == graph.pkg_id
-            && unit.target_name == graph.target.name
-    });
-    let found = matches
-        .next()
-        .ok_or_else(|| block("unit-plan-oracle-failure", &graph.pkg_id, "missing Rust-plan unit at Cargo index"))?;
-    if matches.next().is_some() {
-        return Err(block("unit-plan-mode-unsupported", &graph.pkg_id, "ambiguous Rust-plan target identity"));
+        for edge in &graph.units[index].dependencies {
+            let child = graph.units.get(edge.index).ok_or_else(|| {
+                block("unit-plan-oracle-failure", &graph.units[index].pkg_id, "dependency index outside graph")
+            })?;
+            if child.mode == "build" {
+                pending.push(edge.index);
+            }
+        }
     }
-    Ok(found)
+    Ok(host)
 }
 
-fn resolve_native(config: &Config, package_id: &str) -> Result<NativeInput, Vec<Blocker>> {
-    let Some(declaration) = config.native_inputs.get(package_id) else {
-        return Ok(NativeInput::default());
-    };
-    if declaration.inputs.len() > 64 || declaration.env.len() > 128 || declaration.path.len() > 64 {
-        return Err(block("unit-plan-limit", package_id, "native declaration too large"));
-    }
-    for (role, path) in &declaration.inputs {
-        if role.is_empty()
-            || !role.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
-            || !store_root(path, &config.store_prefix)
-            || !Path::new(path).exists()
-        {
-            return Err(block("native-input-role-undeclared", package_id, role));
+fn planned_features(unit: &PlannerUnit) -> BTreeSet<String> {
+    unit.derivation
+        .args
+        .windows(2)
+        .filter(|pair| pair[0] == "--cfg")
+        .filter_map(|pair| pair[1].strip_prefix("feature=\"").and_then(|feature| feature.strip_suffix('\"')))
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn match_planner<'a>(
+    unit: &GraphUnit,
+    role: &str,
+    receipt: &'a PlannerReceipt,
+) -> Result<&'a PlannerUnit, Vec<Blocker>> {
+    let candidates = receipt
+        .unit_derivation_graph
+        .derivations
+        .iter()
+        .filter(|candidate| {
+            candidate.package_id == unit.pkg_id
+                && candidate.target_name.replace('-', "_") == unit.target.name.replace('-', "_")
+                && unit.target.kind.iter().any(|kind| kind == &candidate.target_kind)
+                && candidate.execution_kind == role
+        })
+        .collect::<Vec<_>>();
+    match candidates.as_slice() {
+        [only] => Ok(*only), // Cargo's features replace planner features at the rustc boundary.
+        [] => Err(block("unit-plan-oracle-failure", &unit.pkg_id, format!("missing Rust-plan {role} unit"))),
+        _ => {
+            let features = unit.features.iter().cloned().collect::<BTreeSet<_>>();
+            let exact = candidates
+                .iter()
+                .copied()
+                .filter(|candidate| planned_features(candidate) == features)
+                .collect::<Vec<_>>();
+            if let [only] = exact.as_slice() {
+                return Ok(*only);
+            }
+            // Rust-plan can retain duplicate host instances with unified features.
+            // Cargo's graph owns feature selection and dependency edges; the
+            // remaining planner arguments and package facts must still agree.
+            let first = candidates[0];
+            let args = normalize_args(first, unit)?;
+            for candidate in candidates.iter().skip(1) {
+                let first_package_facts = first.derivation.env.iter().filter(|(key, _)| key.starts_with("CARGO_PKG_"));
+                let candidate_package_facts =
+                    candidate.derivation.env.iter().filter(|(key, _)| key.starts_with("CARGO_PKG_"));
+                if normalize_args(candidate, unit)? != args || !first_package_facts.eq(candidate_package_facts) {
+                    return Err(block(
+                        "unit-plan-mode-unsupported",
+                        &unit.pkg_id,
+                        "ambiguous Rust-plan target identity",
+                    ));
+                }
+            }
+            Ok(*candidates.iter().min_by_key(|candidate| candidate.unit_id.as_str()).unwrap())
         }
     }
-    fn substitute(value: &str, package_id: &str, roots: &BTreeMap<String, String>) -> Result<String, Vec<Blocker>> {
-        let mut resolved = String::new();
-        let mut rest = value;
-        while let Some((prefix, suffix)) = rest.split_once("{{role:") {
-            resolved.push_str(prefix);
-            let (role, after) =
-                suffix.split_once("}}").ok_or_else(|| block("native-input-role-undeclared", package_id, suffix))?;
-            resolved.push_str(roots.get(role).ok_or_else(|| block("native-input-role-undeclared", package_id, role))?);
-            rest = after;
-        }
-        resolved.push_str(rest);
-        let declared_path = |candidate: &str| {
-            !candidate.split('/').any(|part| part == "." || part == "..")
-                && roots.values().any(|root| {
-                    candidate == root || candidate.strip_prefix(root).is_some_and(|rest| rest.starts_with('/'))
-                })
-        };
-        if resolved.contains("{{role:")
-            || resolved.contains('\0')
-            || resolved.len() > 16_384
-            || resolved.split(['=', ':', ',', ';', ' ']).any(|part| part.starts_with('/') && !declared_path(part))
-        {
-            return Err(block("native-input-role-undeclared", package_id, value));
-        }
-        Ok(resolved)
-    }
-    let mut native = declaration.clone();
-    for value in native.env.values_mut() {
-        *value = substitute(value, package_id, &declaration.inputs)?;
-    }
-    for value in &mut native.path {
-        *value = substitute(value, package_id, &declaration.inputs)?;
-    }
-    Ok(native)
 }
 
 struct PlannedUnitFacts {
@@ -520,352 +570,453 @@ struct PlannedUnitFacts {
     roots: Vec<String>,
 }
 
+fn is_run(unit: &GraphUnit) -> bool {
+    unit.mode == "run-custom-build"
+}
+
+fn graph_kind(unit: &GraphUnit) -> Result<&str, Vec<Blocker>> {
+    unit.target
+        .kind
+        .first()
+        .map(String::as_str)
+        .ok_or_else(|| block("unit-plan-mode-unsupported", &unit.pkg_id, "empty target kind"))
+}
+
+fn compile_execution_kind(unit: &GraphUnit, host_dependency: bool) -> &'static str {
+    if matches!(unit.target.kind.first().map(String::as_str), Some("proc-macro" | "custom-build")) {
+        "host"
+    } else if host_dependency {
+        "host-dependency"
+    } else {
+        "target"
+    }
+}
+
+fn script_compiler_index(graph: &OracleGraph, index: usize) -> Result<usize, Vec<Blocker>> {
+    let run = &graph.units[index];
+    let mut matches = run.dependencies.iter().filter(|edge| {
+        graph.units.get(edge.index).is_some_and(|unit| {
+            unit.pkg_id == run.pkg_id
+                && unit.mode == "build"
+                && unit.target.kind.iter().any(|kind| kind == "custom-build")
+        })
+    });
+    let found = matches.next().ok_or_else(|| {
+        block("unit-plan-build-script-run-unsupported", &run.pkg_id, "missing compiled script dependency")
+    })?;
+    if matches.next().is_some() {
+        return Err(block(
+            "unit-plan-build-script-run-unsupported",
+            &run.pkg_id,
+            "ambiguous compiled script dependency",
+        ));
+    }
+    Ok(found.index)
+}
+
+fn select_planned<'a>(graph: &OracleGraph, receipt: &'a PlannerReceipt) -> Result<Vec<&'a PlannerUnit>, Vec<Blocker>> {
+    let host = host_dependencies(graph)?;
+    let mut selected = Vec::with_capacity(graph.units.len());
+    for (index, unit) in graph.units.iter().enumerate() {
+        let kind = graph_kind(unit)?;
+        if is_run(unit) && kind != "custom-build" {
+            return Err(block(
+                "unit-plan-build-script-run-unsupported",
+                &unit.pkg_id,
+                "run of a non build-script target",
+            ));
+        }
+        if !is_run(unit) && unit.mode != "build" {
+            return Err(block("unit-plan-mode-unsupported", &unit.pkg_id, &unit.mode));
+        }
+        if !matches!(kind, "lib" | "bin" | "proc-macro" | "custom-build") {
+            return Err(block("unit-plan-mode-unsupported", &unit.pkg_id, kind));
+        }
+        let compiled = if is_run(unit) {
+            script_compiler_index(graph, index)?
+        } else {
+            index
+        };
+        let candidate = &graph.units[compiled];
+        let role = compile_execution_kind(candidate, host.contains(&compiled));
+        selected.push(match_planner(candidate, role, receipt)?);
+    }
+    Ok(selected)
+}
+
+/// Distinct Cargo feature/role instances must retain distinct compiler unit
+/// identities even when rust-plan currently reports a unified unit id.
+fn graph_unit_ids(graph: &OracleGraph, selected: &[&PlannerUnit]) -> Result<Vec<String>, Vec<Blocker>> {
+    let mut counts = BTreeMap::<&str, u32>::new();
+    for (unit, planned) in graph.units.iter().zip(selected) {
+        if !is_run(unit) {
+            *counts.entry(planned.unit_id.as_str()).or_default() += 1;
+        }
+    }
+    let compiled = graph
+        .units
+        .iter()
+        .zip(selected)
+        .enumerate()
+        .map(|(index, (unit, planned))| {
+            if !is_run(unit) && counts[planned.unit_id.as_str()] > 1 {
+                format!("{}:graph:{index}", planned.unit_id)
+            } else {
+                planned.unit_id.clone()
+            }
+        })
+        .collect::<Vec<_>>();
+    let mut run_counts = BTreeMap::<usize, u32>::new();
+    for (index, unit) in graph.units.iter().enumerate() {
+        if is_run(unit) {
+            *run_counts.entry(script_compiler_index(graph, index)?).or_default() += 1;
+        }
+    }
+    graph
+        .units
+        .iter()
+        .enumerate()
+        .map(|(index, unit)| {
+            if is_run(unit) {
+                let compile = script_compiler_index(graph, index)?;
+                let suffix = if run_counts[&compile] > 1 {
+                    format!(":{index}")
+                } else {
+                    String::new()
+                };
+                Ok(format!("{}:{BUILD_SCRIPT_RUN}{suffix}", compiled[compile]))
+            } else {
+                Ok(compiled[index].clone())
+            }
+        })
+        .collect()
+}
+
+/// A build script's `TARGET` is the triple of the compilation that consumes it.
+fn unit_triple(config: &Config, graph: &OracleGraph, selected: &[&PlannerUnit], index: usize) -> String {
+    let consumer = if is_run(&graph.units[index]) {
+        graph
+            .units
+            .iter()
+            .enumerate()
+            .find(|(_, unit)| !is_run(unit) && unit.dependencies.iter().any(|edge| edge.index == index))
+            .map(|(index, _)| index)
+    } else {
+        Some(index)
+    };
+    if consumer.is_some_and(|index| matches!(selected[index].execution_kind.as_str(), "host" | "host-dependency")) {
+        config.host_triple.clone()
+    } else {
+        config.target_triple.clone()
+    }
+}
+
+fn feature_env_name(feature: &str) -> String {
+    let name = feature
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_uppercase()
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    format!("CARGO_FEATURE_{name}")
+}
+
+/// Cargo package facts for compilation, or the declared build-script environment.
+fn unit_environment(
+    config: &Config,
+    unit: &GraphUnit,
+    planned: &PlannerUnit,
+    source_id: &str,
+) -> Result<Vec<(String, String)>, Vec<Blocker>> {
+    let run = is_run(unit);
+    let mut env = Vec::new();
+    for (key, value) in &planned.derivation.env {
+        let is_package_fact = key.starts_with("CARGO_PKG_");
+        if is_package_fact {
+            if value.starts_with('/') || value.contains("=/") || value.contains('\0') {
+                return Err(block("unit-plan-host-path", &planned.unit_id, key));
+            }
+            env.push((key.clone(), value.clone()));
+        }
+    }
+    env.push(("CARGO_MANIFEST_DIR".into(), format!("{{{{mantle-source:{source_id}}}}}")));
+    env.extend(
+        unit.features
+            .iter()
+            .map(|feature| (feature_env_name(feature), "1".to_string()))
+            .collect::<BTreeMap<_, _>>(),
+    );
+    if run {
+        let profile = unit.profile.as_ref().ok_or_else(|| {
+            block("unit-plan-mode-unsupported", &planned.unit_id, "missing Cargo build-script profile")
+        })?;
+        if profile.name != config.profile
+            || profile.opt_level.len() > 8
+            || !profile.opt_level.bytes().all(|byte| byte.is_ascii_alphanumeric())
+        {
+            return Err(block("unit-plan-mode-unsupported", &planned.unit_id, "invalid Cargo build-script profile"));
+        }
+        env.push(("PROFILE".into(), if config.profile == "dev" { "debug" } else { "release" }.into()));
+        env.push(("OPT_LEVEL".into(), profile.opt_level.clone()));
+        env.push(("DEBUG".into(), (profile.debuginfo.unwrap_or(0) > 0).to_string()));
+        env.push(("NUM_JOBS".into(), "1".into()));
+    }
+    Ok(env)
+}
+
+/// Direct producer edges. Execution units are never rustc externs.
+fn unit_edges(
+    graph: &OracleGraph,
+    ids: &[String],
+    index: usize,
+) -> Result<(Vec<String>, Vec<ExternBinding>), Vec<Blocker>> {
+    let unit = &graph.units[index];
+    let mut dependencies = Vec::with_capacity(unit.dependencies.len());
+    let mut externs = Vec::new();
+    for edge in &unit.dependencies {
+        let dependency = ids
+            .get(edge.index)
+            .ok_or_else(|| block("unit-plan-oracle-failure", &ids[index], "dependency index outside graph"))?;
+        dependencies.push(dependency.clone());
+        let is_compile_edge = !is_run(unit) && !is_run(&graph.units[edge.index]);
+        if let Some(name) = edge.extern_crate_name.as_ref().filter(|_| is_compile_edge) {
+            externs.push(ExternBinding {
+                name: name.clone(),
+                unit_id: dependency.clone(),
+            });
+        }
+    }
+    Ok((dependencies, externs))
+}
+
+struct FactsInputs<'a> {
+    config: &'a Config,
+    graph: &'a OracleGraph,
+    selected: &'a [&'a PlannerUnit],
+    ids: &'a [String],
+    package_sources: &'a BTreeMap<String, PackageSource>,
+    native: &'a BTreeMap<String, ResolvedNativeInputs>,
+}
+
+fn unit_facts(inputs: &FactsInputs<'_>, index: usize) -> Result<(ExistingUnitFacts, UnitBinding), Vec<Blocker>> {
+    let unit = &inputs.graph.units[index];
+    let planned = inputs.selected[index];
+    let unit_id = &inputs.ids[index];
+    let source = inputs
+        .package_sources
+        .get(&unit.pkg_id)
+        .ok_or_else(|| block("unit-plan-source-unsupported", &unit.pkg_id, "missing package slice"))?;
+    let source_path = normalize_source_path(Path::new(&unit.target.src_path)).ok_or_else(|| {
+        block("unit-plan-source-unsupported", &unit.pkg_id, "source path escapes the filesystem root")
+    })?;
+    let entry = source_path
+        .strip_prefix(&source.root)
+        .map_err(|_| block("unit-plan-source-unsupported", &unit.pkg_id, "source path outside package"))?
+        .to_str()
+        .ok_or_else(|| block("unit-plan-source-unsupported", &unit.pkg_id, "non-UTF8 source entry"))?;
+    let (dependencies, externs) = unit_edges(inputs.graph, inputs.ids, index)?;
+    let execution_kind = if is_run(unit) {
+        BUILD_SCRIPT_RUN
+    } else {
+        planned.execution_kind.as_str()
+    };
+    let (arguments, expected_outputs) = if is_run(unit) {
+        (vec![RUN_BUILD_SCRIPT_MODE.to_string()], vec!["out".to_string(), "flags".to_string()])
+    } else {
+        (normalize_args(planned, unit)?, vec!["out".to_string()])
+    };
+    let build_script_run = is_run(unit).then(|| {
+        let native = inputs.native.get(&unit.pkg_id).cloned().unwrap_or_default();
+        BuildScriptRunBinding {
+            links: source.links.clone(),
+            native_inputs: native.inputs,
+            native_env: native.env,
+            native_path: native.path,
+        }
+    });
+    let facts = ExistingUnitFacts {
+        unit_id: unit_id.clone(),
+        package_id: unit.pkg_id.clone(),
+        target_name: unit.target.name.clone(),
+        target_kind: unit.target.kind[0].clone(),
+        execution_kind: execution_kind.into(),
+        dependency_unit_ids: dependencies,
+        arguments,
+        environment: unit_environment(inputs.config, unit, planned, &source.source_id)?,
+        input_identities: vec![format!("source:{}", source.source_id)],
+        expected_outputs,
+        execution_order: u32::try_from(index).map_err(|_| block("unit-plan-limit", "units", "unit index overflow"))?,
+    };
+    let binding = UnitBinding {
+        unit_id: unit_id.clone(),
+        source_id: source.source_id.clone(),
+        source_kind: source.kind.clone(),
+        source_entry: entry.into(),
+        source_label: format!("{}-{}", unit.target.name.replace('_', "-"), "source"),
+        rustc_metadata_hash: if unit_id.contains(":graph:") {
+            blake3::hash(format!("{}:{unit_id}", planned.rustc_metadata_hash).as_bytes()).to_hex().to_string()
+        } else {
+            planned.rustc_metadata_hash.clone()
+        },
+        triple: unit_triple(inputs.config, inputs.graph, inputs.selected, index),
+        externs,
+        build_script_run,
+    };
+    Ok((facts, binding))
+}
 fn build_facts(
     config: &Config,
     graph: &OracleGraph,
     receipt: &PlannerReceipt,
     package_sources: &BTreeMap<String, PackageSource>,
-    metadata: &Metadata,
+    native: &BTreeMap<String, ResolvedNativeInputs>,
 ) -> Result<PlannedUnitFacts, Vec<Blocker>> {
-    let mut selected = Vec::<PlannerUnit>::new();
-    for (index, unit) in graph.units.iter().enumerate() {
-        let kind = unit
-            .target
-            .kind
-            .first()
-            .ok_or_else(|| block("unit-plan-mode-unsupported", &unit.pkg_id, "empty target kind"))?;
-        if unit.mode != "build" && !(kind == "custom-build" && unit.mode == "run-custom-build") {
-            return Err(block("unit-plan-mode-unsupported", &unit.pkg_id, &unit.mode));
-        }
-        if !matches!(kind.as_str(), "lib" | "bin" | "proc-macro" | "custom-build") {
-            return Err(block("unit-plan-mode-unsupported", &unit.pkg_id, kind));
-        }
-        let mut planned = match_planner(index, unit, &graph.units, receipt)?.clone();
-        if unit.mode == "run-custom-build" {
-            planned.unit_id = format!("{index}:{}:{}:custom-build:run-custom-build", unit.pkg_id, unit.target.name);
-            planned.execution_kind = "build-script-run".into();
-        }
-        selected.push(planned);
-    }
-    let mut links_owners = BTreeMap::new();
-    for package in &metadata.packages {
-        if let Some(links) = &package.links {
-            if !links.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-') {
-                return Err(block("build-script-links-conflict", links, "invalid Cargo links key"));
-            }
-            if let Some(existing) = links_owners.insert(links, &package.id)
-                && existing != &package.id
-            {
-                return Err(block("build-script-links-conflict", links, "two packages declare one links key"));
-            }
-        }
-    }
-    for package_id in config.native_inputs.keys() {
-        if !graph.units.iter().any(|unit| unit.pkg_id == *package_id && unit.mode == "run-custom-build") {
-            return Err(block("native-input-role-undeclared", package_id, "no selected build-script execution unit"));
-        }
-    }
-    let mut facts = Vec::new();
-    let mut bindings = Vec::new();
-    for (index, unit) in graph.units.iter().enumerate() {
-        let planned = &selected[index];
-        let source = package_sources
-            .get(&unit.pkg_id)
-            .ok_or_else(|| block("unit-plan-source-unsupported", &unit.pkg_id, "missing package slice"))?;
-        let source_id = &source.source_id;
-        let source_kind = &source.kind;
-        let root = &source.root;
-        let entry = Path::new(&unit.target.src_path)
-            .strip_prefix(root)
-            .map_err(|_| block("unit-plan-source-unsupported", &unit.pkg_id, "source path outside package"))?;
-        let entry = entry
-            .to_str()
-            .ok_or_else(|| block("unit-plan-source-unsupported", &unit.pkg_id, "non-UTF8 source entry"))?;
-        let mut externs = Vec::new();
-        let mut dependencies = Vec::new();
-        let is_run = unit.mode == "run-custom-build";
-        let mut linked_runs = BTreeMap::new();
-        let mut compiled_script = None;
-        let mut script_run = None;
-        for edge in &unit.dependencies {
-            let dependency = selected
-                .get(edge.index)
-                .ok_or_else(|| block("unit-plan-oracle-failure", &planned.unit_id, "dependency index outside graph"))?;
-            dependencies.push(dependency.unit_id.clone());
-            let dep_graph = &graph.units[edge.index];
-            if dep_graph.target.kind.first().is_some_and(|kind| kind == "custom-build") {
-                if is_run && dep_graph.pkg_id == unit.pkg_id && dep_graph.mode == "build" {
-                    compiled_script = Some(dependency.unit_id.clone());
-                }
-                if !is_run && dep_graph.pkg_id == unit.pkg_id && dep_graph.mode == "run-custom-build" {
-                    script_run = Some(dependency.unit_id.clone());
-                }
-                if is_run && dep_graph.mode == "run-custom-build" && dep_graph.pkg_id != unit.pkg_id {
-                    let package =
-                        metadata.packages.iter().find(|pkg| pkg.id == dep_graph.pkg_id).ok_or_else(|| {
-                            block("unit-plan-oracle-failure", &dep_graph.pkg_id, "missing links package")
-                        })?;
-                    if let Some(key) = &package.links
-                        && linked_runs.insert(key.clone(), dependency.unit_id.clone()).is_some()
-                    {
-                        return Err(block("build-script-links-conflict", key, "duplicate links run"));
-                    }
-                }
-            }
-            if is_run
-                && dep_graph.pkg_id != unit.pkg_id
-                && let Some(key) =
-                    metadata.packages.iter().find(|pkg| pkg.id == dep_graph.pkg_id).and_then(|pkg| pkg.links.as_ref())
-            {
-                let runs = graph
-                    .units
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, candidate)| {
-                        candidate.pkg_id == dep_graph.pkg_id && candidate.mode == "run-custom-build"
-                    })
-                    .map(|(index, _)| &selected[index].unit_id)
-                    .collect::<Vec<_>>();
-                if runs.len() != 1 {
-                    return Err(block(
-                        "build-script-links-conflict",
-                        key,
-                        "missing or ambiguous dependency script run",
-                    ));
-                }
-                linked_runs.insert(key.clone(), runs[0].clone());
-                dependencies.push(runs[0].clone());
-            }
-            if !is_run
-                && dep_graph.mode != "run-custom-build"
-                && let Some(name) = &edge.extern_crate_name
-            {
-                externs.push(ExternBinding {
-                    name: name.clone(),
-                    unit_id: dependency.unit_id.clone(),
-                });
-            }
-        }
-        // Cargo's run-custom-build node may not expose the compiled executable as
-        // an edge. Bind it explicitly by exact package/target/features rather
-        // than relying on rust-plan's collapsed host-artifact identity.
-        if is_run && compiled_script.is_none() {
-            let candidates = graph
-                .units
-                .iter()
-                .enumerate()
-                .filter(|(_, candidate)| {
-                    candidate.pkg_id == unit.pkg_id
-                        && candidate.mode == "build"
-                        && candidate.target.kind.first().is_some_and(|kind| kind == "custom-build")
-                        && candidate.target.name == unit.target.name
-                        && candidate.features == unit.features
-                })
-                .map(|(index, _)| &selected[index].unit_id)
-                .collect::<Vec<_>>();
-            if candidates.len() != 1 {
-                return Err(block("unit-plan-mode-unsupported", &planned.unit_id, "ambiguous compiled build script"));
-            }
-            compiled_script = Some(candidates[0].clone());
-            dependencies.push(candidates[0].clone());
-        }
-        if !is_run && unit.target.kind[0] != "custom-build" && script_run.is_none() {
-            let candidates = graph
-                .units
-                .iter()
-                .enumerate()
-                .filter(|(_, candidate)| candidate.pkg_id == unit.pkg_id && candidate.mode == "run-custom-build")
-                .map(|(index, _)| &selected[index].unit_id)
-                .collect::<Vec<_>>();
-            if candidates.len() > 1 {
-                return Err(block("unit-plan-mode-unsupported", &planned.unit_id, "ambiguous script run"));
-            }
-            if let Some(run) = candidates.first() {
-                script_run = Some((*run).clone());
-                dependencies.push((*run).clone());
-            }
-        }
-        dependencies.sort();
-        dependencies.dedup();
-        let execution_kind = if is_run {
-            "build-script-run"
-        } else if matches!(unit.target.kind[0].as_str(), "proc-macro" | "custom-build") {
-            "host"
-        } else {
-            "target"
-        };
-        if planned.execution_kind != execution_kind {
-            return Err(block(
-                "unit-plan-triple-unsupported",
-                &planned.unit_id,
-                "planner and Cargo disagree on execution triple",
-            ));
-        }
-        let arguments = if is_run {
-            vec!["run-build-script".into()]
-        } else {
-            normalize_args(planned, unit)?
-        };
-        let mut compile_env = Vec::new();
-        for (key, value) in &planned.derivation.env {
-            if key.starts_with("CARGO_PKG_") || key.starts_with("CARGO_FEATURE_") {
-                if value.starts_with('/') || value.contains("=/") || value.contains('\0') {
-                    return Err(block("unit-plan-host-path", &planned.unit_id, key));
-                }
-                compile_env.push((key.clone(), value.clone()));
-            }
-        }
-        let package = metadata
-            .packages
-            .iter()
-            .find(|pkg| pkg.id == unit.pkg_id)
-            .ok_or_else(|| block("unit-plan-oracle-failure", &unit.pkg_id, "missing package metadata"))?;
-        let mut version = package.version.splitn(2, '-');
-        let digits = version.next().unwrap_or_default().split('.').collect::<Vec<_>>();
-        if digits.len() != 3 || digits.iter().any(|part| part.parse::<u32>().is_err()) {
-            return Err(block("unit-plan-mode-unsupported", &unit.pkg_id, "invalid package version"));
-        }
-        compile_env.extend([
-            ("CARGO_PKG_NAME".into(), package.name.clone()),
-            ("CARGO_PKG_VERSION".into(), package.version.clone()),
-            ("CARGO_PKG_VERSION_MAJOR".into(), digits[0].into()),
-            ("CARGO_PKG_VERSION_MINOR".into(), digits[1].into()),
-            ("CARGO_PKG_VERSION_PATCH".into(), digits[2].into()),
-            ("CARGO_PKG_VERSION_PRE".into(), version.next().unwrap_or_default().into()),
-        ]);
-        for feature in &unit.features {
-            let name = format!("CARGO_FEATURE_{}", feature.replace('-', "_").to_ascii_uppercase());
-            if name.len() > 128 || !name.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_') {
-                return Err(block("unit-plan-mode-unsupported", &planned.unit_id, "invalid feature name"));
-            }
-            compile_env.push((name, "1".into()));
-        }
-        if is_run {
-            if unit.profile.name != config.profile
-                || unit.profile.opt_level.len() > 8
-                || !unit.profile.opt_level.bytes().all(|byte| byte.is_ascii_alphanumeric())
-            {
-                return Err(block(
-                    "unit-plan-mode-unsupported",
-                    &planned.unit_id,
-                    "invalid Cargo build-script profile",
-                ));
-            }
-            compile_env.extend([
-                ("PROFILE".into(), if config.profile == "dev" { "debug" } else { "release" }.into()),
-                ("OPT_LEVEL".into(), unit.profile.opt_level.clone()),
-                ("DEBUG".into(), (unit.profile.debuginfo.unwrap_or(0) > 0).to_string()),
-            ]);
-        }
-        compile_env.push(("CARGO_MANIFEST_DIR".into(), format!("{{{{mantle-source:{source_id}}}}}")));
-        facts.push(ExistingUnitFacts {
-            unit_id: planned.unit_id.clone(),
-            package_id: unit.pkg_id.clone(),
-            target_name: unit.target.name.clone(),
-            target_kind: unit.target.kind[0].clone(),
-            execution_kind: execution_kind.into(),
-            dependency_unit_ids: dependencies,
-            arguments,
-            environment: compile_env,
-            input_identities: vec![format!("source:{source_id}")],
-            expected_outputs: if is_run {
-                vec!["out".into(), "flags".into()]
-            } else {
-                vec!["out".into()]
-            },
-            execution_order: u32::try_from(index)
-                .map_err(|_| block("unit-plan-limit", "units", "unit index overflow"))?,
-        });
-        bindings.push(UnitBinding {
-            unit_id: planned.unit_id.clone(),
-            source_id: source_id.clone(),
-            source_kind: source_kind.clone(),
-            source_entry: entry.into(),
-            source_label: format!("{}-{}", unit.target.name.replace('_', "-"), "source"),
-            rustc_metadata_hash: planned.rustc_metadata_hash.clone(),
-            triple: if execution_kind == "host" {
-                config.host_triple.clone()
-            } else {
-                config.target_triple.clone()
-            },
-            links: metadata.packages.iter().find(|pkg| pkg.id == unit.pkg_id).and_then(|pkg| pkg.links.clone()),
-            native: if is_run {
-                config.native_inputs.get(&unit.pkg_id).cloned().unwrap_or_default()
-            } else {
-                NativeInput::default()
-            },
-            compiled_script,
-            script_run,
-            linked_runs,
-            externs,
-        });
+    let selected = select_planned(graph, receipt)?;
+    let ids = graph_unit_ids(graph, &selected)?;
+    let inputs = FactsInputs {
+        config,
+        graph,
+        selected: &selected,
+        ids: &ids,
+        package_sources,
+        native,
+    };
+    let mut facts = Vec::with_capacity(graph.units.len());
+    let mut bindings = Vec::with_capacity(graph.units.len());
+    for index in 0..graph.units.len() {
+        let (fact, binding) = unit_facts(&inputs, index)?;
+        facts.push(fact);
+        bindings.push(binding);
     }
     let roots = graph
         .roots
         .iter()
         .map(|index| {
-            selected
-                .get(*index)
-                .map(|unit| unit.unit_id.clone())
+            ids.get(*index)
+                .cloned()
                 .ok_or_else(|| block("unit-plan-oracle-failure", "roots", "root index outside graph"))
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(PlannedUnitFacts { facts, bindings, roots })
 }
 
-fn write_workspace_source_config(workspace: &Path, source_config: &str) -> Result<(), Vec<Blocker>> {
-    let writable = |path: &Path| {
+fn is_store_root(path: &str, prefix: &str) -> bool {
+    store_root(path, prefix) && path.strip_prefix(prefix).is_some_and(|rest| rest.matches('/').count() == 1)
+}
+
+/// Resolve role markers per declaration and bind only an exact Cargo package id.
+// r[impl mantle.rust_unit_plan.build_scripts.native_inputs]
+fn native_bindings(config: &Config) -> Result<BTreeMap<String, ResolvedNativeInputs>, Vec<Blocker>> {
+    let mut bound = BTreeMap::new();
+    for (key, declaration) in &config.native_inputs {
+        let resolved =
+            resolve_native_inputs(declaration).map_err(|error| block(error.code(), key, error.to_string()))?;
+        if let Some(input) = resolved.inputs.iter().find(|input| !is_store_root(input, &config.store_prefix)) {
+            return Err(block("unit-plan-host-path", key, input));
+        }
+        bound.insert(key.clone(), resolved);
+    }
+    Ok(bound)
+}
+
+fn check_native_packages(
+    graph: &OracleGraph,
+    metadata: &Metadata,
+    bound: &BTreeMap<String, ResolvedNativeInputs>,
+) -> Result<(), Vec<Blocker>> {
+    let scripted = graph
+        .units
+        .iter()
+        .filter(|unit| is_run(unit))
+        .map(|unit| unit.pkg_id.as_str())
+        .collect::<BTreeSet<_>>();
+    for key in bound.keys() {
+        let count = metadata
+            .packages
+            .iter()
+            .filter(|package| &package.id == key && scripted.contains(package.id.as_str()))
+            .take(2)
+            .count();
+        if count != 1 {
+            return Err(block(
+                "native-input-invalid",
+                key,
+                "declaration must name exactly one package with a build script",
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The evaluated Nickel declaration (whose role paths are producer inputs)
+/// must be the configuration the producer resolves.
+fn check_declared_native_inputs(config: &Config, declared: Option<&str>) -> Result<(), Vec<Blocker>> {
+    let Some(declared) = declared else {
+        if config.native_inputs.is_empty() {
+            return Ok(());
+        }
+        return Err(block("native-input-invalid", NATIVE_INPUTS_ENV, "native inputs are not declared producer inputs"));
+    };
+    let parsed: BTreeMap<String, NativeInputDeclaration> = serde_json::from_str(declared)
+        .map_err(|error| block("native-input-invalid", NATIVE_INPUTS_ENV, error.to_string()))?;
+    if parsed != config.native_inputs {
+        return Err(block("native-input-invalid", NATIVE_INPUTS_ENV, "declaration differs from the producer config"));
+    }
+    Ok(())
+}
+
+/// rust-plan discovers vendored sources only from the workspace Cargo config,
+/// so the staged workspace declares the vendor directory there.
+fn stage_vendor_config(workspace: &Path, vendor: Option<&Path>) -> Result<(), Vec<Blocker>> {
+    let Some(vendor) = vendor else {
+        return Ok(());
+    };
+    let cargo_dir = workspace.join(".cargo");
+    if cargo_dir.join("config.toml").exists() || cargo_dir.join("config").exists() {
+        return Err(block(
+            "unit-plan-source-unsupported",
+            "workspace",
+            "workspace Cargo config conflicts with the declared vendor directory",
+        ));
+    }
+    let writable = |path: &Path| -> Result<(), Vec<Blocker>> {
         let mut permissions = fs::metadata(path)
-            .map_err(|error| block("unit-plan-oracle-failure", "workspace source config", error.to_string()))?
+            .map_err(|error| block("unit-plan-oracle-failure", "vendor", error.to_string()))?
             .permissions();
         permissions.set_mode(permissions.mode() | 0o200);
         fs::set_permissions(path, permissions)
-            .map_err(|error| block("unit-plan-oracle-failure", "workspace source config", error.to_string()))
+            .map_err(|error| block("unit-plan-oracle-failure", "vendor", error.to_string()))
     };
-    // Only the private workspace copy needs to accept the declared Cargo
-    // source config; keep the immutable input and all other copied files intact.
-    let config_dir = workspace.join(".cargo");
-    if !config_dir.exists() {
+    if !cargo_dir.exists() {
         writable(workspace)?;
     }
-    fs::create_dir_all(&config_dir)
-        .map_err(|error| block("unit-plan-oracle-failure", "workspace source config", error.to_string()))?;
-    writable(&config_dir)?;
-    let config_path = config_dir.join("config.toml");
-    match fs::remove_file(&config_path) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(block("unit-plan-oracle-failure", "workspace source config", error.to_string())),
-    }
-    fs::write(config_path, source_config)
-        .map_err(|error| block("unit-plan-oracle-failure", "workspace source config", error.to_string()))
+    fs::create_dir_all(&cargo_dir).map_err(|error| block("unit-plan-oracle-failure", "vendor", error.to_string()))?;
+    writable(&cargo_dir)?;
+    fs::write(
+        cargo_dir.join("config.toml"),
+        format!("[source.crates-io]\nreplace-with = \"declared-vendor\"\n\n[source.declared-vendor]\ndirectory = {vendor:?}\n"),
+    )
+    .map_err(|error| block("unit-plan-oracle-failure", "vendor", error.to_string()))
 }
 
 fn run() -> Result<(), Vec<Blocker>> {
-    let mut config: Config = serde_json::from_slice(
+    let config: Config = serde_json::from_slice(
         &fs::read(required("MANTLE_UNIT_CONFIG")?)
             .map_err(|error| block("unit-plan-oracle-failure", "config", error.to_string()))?,
     )
     .map_err(|error| block("unit-plan-oracle-failure", "config", error.to_string()))?;
-    if let Ok(declared) = env::var("MANTLE_UNIT_NATIVE_INPUTS") {
-        let native_inputs: BTreeMap<String, NativeInput> = serde_json::from_str(&declared)
-            .map_err(|error| block("native-input-role-undeclared", "native_inputs", error.to_string()))?;
-        if !config.native_inputs.is_empty() && config.native_inputs != native_inputs {
-            return Err(block(
-                "native-input-role-undeclared",
-                "native_inputs",
-                "config and Nickel declarations differ",
-            ));
-        }
-        config.native_inputs = native_inputs;
-    } else if !config.native_inputs.is_empty() {
-        return Err(block("native-input-role-undeclared", "native_inputs", "missing Nickel declaration"));
-    }
     let declared_runtime: Vec<String> = serde_json::from_str(&required("MANTLE_UNIT_RUNTIME_INPUTS")?)
         .map_err(|error| block("unit-plan-host-path", "runtime_inputs", error.to_string()))?;
     if config.runtime_inputs != declared_runtime {
         return Err(block("unit-plan-host-path", "runtime_inputs", "config and Nickel runtime declarations differ"));
     }
+    check_declared_native_inputs(&config, env::var(NATIVE_INPUTS_ENV).ok().as_deref())?;
+    let native = native_bindings(&config)?;
+
     if ![
         &config.workspace,
         &config.planner,
@@ -884,15 +1035,7 @@ fn run() -> Result<(), Vec<Blocker>> {
     if config.profile != "dev" && config.profile != "release" {
         return Err(block("unit-plan-mode-unsupported", "profile", &config.profile));
     }
-    // Resolve declarations once, before copying sources or running the Cargo
-    // oracle. The selected-run check in build_facts still rejects declarations
-    // for packages without a build-script execution unit.
-    let resolved_native = config
-        .native_inputs
-        .keys()
-        .map(|package_id| resolve_native(&config, package_id).map(|native| (package_id.clone(), native)))
-        .collect::<Result<BTreeMap<_, _>, _>>()?;
-    config.native_inputs = resolved_native;
+
     let scratch = PathBuf::from(required("TMPDIR")?).join("cargo-unit-plan-workspace");
     fs::create_dir(&scratch).map_err(|error| block("unit-plan-oracle-failure", "scratch", error.to_string()))?;
     // Nix fixes TMPDIR to /build; copying here keeps Cargo package identities
@@ -903,20 +1046,11 @@ fn run() -> Result<(), Vec<Blocker>> {
     let vendor = config.vendor.as_deref().map(Path::new);
     let cargo_home = scratch.join("cargo-home");
     fs::create_dir(&cargo_home).map_err(|error| block("unit-plan-oracle-failure", "cargo-home", error.to_string()))?;
-    if let Some(vendor) = vendor {
-        let source_config = format!(
-            "[source.crates-io]\nreplace-with='declared-vendor'\n[source.declared-vendor]\ndirectory={:?}\n",
-            vendor
-        );
-        fs::write(cargo_home.join("config.toml"), &source_config)
-            .map_err(|error| block("unit-plan-oracle-failure", "cargo-home", error.to_string()))?;
-        // Cargo sees CARGO_HOME/config.toml; rust-plan deliberately inspects the
-        // copied workspace's declared source config, not ambient Cargo state.
-        write_workspace_source_config(&workspace, &source_config)?;
-    }
+    stage_vendor_config(&workspace, vendor)?;
     let lock_before = fs::read(workspace.join("Cargo.lock"))
         .map_err(|error| block("unit-plan-oracle-failure", "Cargo.lock", error.to_string()))?;
     let (metadata, graph, receipt) = run_oracle(&config, &workspace, &cargo_home)?;
+    check_native_packages(&graph, &metadata, &native)?;
     if blake3::hash(&lock_before).to_hex().as_str() != receipt.lockfile.blake3
         || fs::read(workspace.join("Cargo.lock")).ok().as_deref() != Some(lock_before.as_slice())
     {
@@ -936,7 +1070,7 @@ fn run() -> Result<(), Vec<Blocker>> {
         facts,
         bindings: units,
         roots,
-    } = build_facts(&config, &graph, &receipt, &package_bindings, &metadata)?;
+    } = build_facts(&config, &graph, &receipt, &package_bindings, &native)?;
     let effects = plan_existing_unit_effects(facts).map_err(|blockers| {
         blockers
             .iter()
@@ -1008,43 +1142,149 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::fs;
+
+    use serde_json::json;
+
+    use super::Config;
+    use super::GraphUnit;
+    use super::Metadata;
+    use super::OracleGraph;
+    use super::PlannerReceipt;
+    use super::PlannerUnit;
+    use super::check_declared_native_inputs;
+    use super::check_native_packages;
+    use super::graph_unit_ids;
+    use super::match_planner;
+    use super::native_bindings;
+    use super::normalize_args;
+    use super::normalize_source_path;
+    use super::parse_unit_graph;
+    use super::select_planned;
+    use super::stage_vendor_config;
 
     #[test]
-    fn undeclared_native_role_does_not_become_a_host_path() {
-        let package_id = "path+file:///build/workspace/native-answer-sys#0.1.0";
-        let mut config = Config {
-            workspace: String::new(),
-            vendor: None,
-            planner: String::new(),
-            cargo: String::new(),
-            rustc: String::new(),
-            linker: String::new(),
-            toolchain: String::new(),
-            helper: String::new(),
-            runtime_inputs: Vec::new(),
-            store_prefix: "/nix/store".into(),
-            system: "x86_64-linux".into(),
-            host_triple: "x86_64-unknown-linux-gnu".into(),
-            target_triple: "x86_64-unknown-linux-gnu".into(),
-            profile: "dev".into(),
-            native_inputs: BTreeMap::from([(package_id.into(), NativeInput {
-                inputs: BTreeMap::new(),
-                env: BTreeMap::from([("NATIVE_ANSWER_ROOT".into(), "{{role:missing}}".into())]),
-                path: Vec::new(),
-            })]),
-        };
-        let blockers = resolve_native(&config, package_id).unwrap_err();
+    fn path_dependency_sources_are_normalized_without_escaping_the_root() {
+        let normalized = normalize_source_path(std::path::Path::new("/w/app/../bar/./build.rs"));
+        assert_eq!(normalized.as_deref(), Some(std::path::Path::new("/w/bar/build.rs")));
+        assert_eq!(normalize_source_path(std::path::Path::new("/../etc/passwd")), None);
+        assert_eq!(normalize_source_path(std::path::Path::new("relative/build.rs")), None);
+    }
+
+    const ZLIB: &str = "/nix/store/00000000000000000000000000000000-zlib-1.3";
+
+    fn config(native_inputs: serde_json::Value) -> Config {
+        serde_json::from_value(json!({
+            "workspace": "/nix/store/11111111111111111111111111111111-workspace",
+            "vendor": null,
+            "planner": "/nix/store/22222222222222222222222222222222-mantle/bin/mantle",
+            "cargo": "/nix/store/33333333333333333333333333333333-rust/bin/cargo",
+            "rustc": "/nix/store/33333333333333333333333333333333-rust/bin/rustc",
+            "linker": "/nix/store/44444444444444444444444444444444-cc/bin/cc",
+            "toolchain": "/nix/store/33333333333333333333333333333333-rust",
+            "helper": "/nix/store/55555555555555555555555555555555-helper/bin/helper",
+            "runtime_inputs": [],
+            "store_prefix": "/nix/store",
+            "system": "x86_64-linux",
+            "host_triple": "x86_64-unknown-linux-gnu",
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "profile": "dev",
+            "native_inputs": native_inputs,
+        }))
+        .unwrap()
+    }
+
+    fn graph_and_metadata() -> (OracleGraph, Metadata) {
+        let target = |kind: &str| json!({"kind": [kind], "name": "build-script-build", "src_path": "/w/z-sys/build.rs", "edition": "2021"});
+        let graph = serde_json::from_value(json!({
+            "version": 1,
+            "units": [
+                {"pkg_id": "z-sys 0.1.0", "target": target("custom-build"), "mode": "build", "dependencies": []},
+                {"pkg_id": "z-sys 0.1.0", "target": target("custom-build"), "mode": "run-custom-build",
+                 "dependencies": [{"index": 0, "extern_crate_name": "build_script_build"}], "features": ["static"]},
+                {"pkg_id": "app 0.1.0", "target": target("bin"), "mode": "build", "dependencies": []},
+            ],
+            "roots": [2],
+        }))
+        .unwrap();
+        let metadata = serde_json::from_value(json!({"packages": [
+            {"id": "z-sys 0.1.0", "manifest_path": "/w/z-sys/Cargo.toml", "name": "z-sys", "version": "0.1.0", "source": null, "links": "z"},
+            {"id": "app 0.1.0", "manifest_path": "/w/app/Cargo.toml", "name": "app", "version": "0.1.0", "source": null},
+        ]}))
+        .unwrap();
+        (graph, metadata)
+    }
+
+    #[test]
+    fn native_roles_resolve_to_declared_store_roots_for_the_named_package() {
+        let (graph, metadata) = graph_and_metadata();
+        let config = config(json!({"z-sys 0.1.0": {
+            "inputs": {"zlib": ZLIB},
+            "env": {"PKG_CONFIG_PATH": "{{role:zlib}}/lib/pkgconfig"},
+            "path": [],
+        }}));
+        let bound = native_bindings(&config).unwrap();
+        check_native_packages(&graph, &metadata, &bound).unwrap();
+        assert_eq!(bound.len(), 1);
+        assert_eq!(bound["z-sys 0.1.0"].inputs, vec![ZLIB.to_string()]);
+        assert_eq!(bound["z-sys 0.1.0"].env["PKG_CONFIG_PATH"], format!("{ZLIB}/lib/pkgconfig"));
+    }
+
+    #[test]
+    fn undeclared_role_marker_fails_with_a_stable_code() {
+        let config = config(json!({"z-sys 0.1.0": {"inputs": {"zlib": ZLIB}, "env": {"ZLIB_DIR": "{{role:libz}}"}}}));
+        let blockers = native_bindings(&config).unwrap_err();
         assert_eq!(blockers[0].code, "native-input-role-undeclared");
-        assert_eq!(blockers[0].subject, package_id);
-        config
-            .native_inputs
-            .get_mut(package_id)
-            .unwrap()
-            .env
-            .insert("NATIVE_ANSWER_ROOT".into(), "LIBRARY_DIR=/usr/lib".into());
-        let blockers = resolve_native(&config, package_id).unwrap_err();
-        assert_eq!(blockers[0].code, "native-input-role-undeclared");
+        assert!(blockers[0].detail.contains("libz"));
+    }
+
+    #[test]
+    fn native_declarations_reject_host_paths_and_unknown_packages() {
+        let (graph, metadata) = graph_and_metadata();
+        let subpath = config(json!({"z-sys 0.1.0": {"inputs": {"zlib": format!("{ZLIB}/lib")}}}));
+        assert_eq!(native_bindings(&subpath).unwrap_err()[0].code, "unit-plan-host-path");
+        let host = config(json!({"z-sys 0.1.0": {"inputs": {"zlib": "/usr/lib"}}}));
+        assert_eq!(native_bindings(&host).unwrap_err()[0].code, "unit-plan-host-path");
+        let unscripted = config(json!({"app 0.1.0": {"inputs": {"zlib": ZLIB}}}));
+        assert_eq!(
+            check_native_packages(&graph, &metadata, &native_bindings(&unscripted).unwrap()).unwrap_err()[0].code,
+            "native-input-invalid"
+        );
+        let alias = config(json!({"z-sys": {"inputs": {"zlib": ZLIB}}}));
+        assert_eq!(
+            check_native_packages(&graph, &metadata, &native_bindings(&alias).unwrap()).unwrap_err()[0].code,
+            "native-input-invalid"
+        );
+    }
+
+    #[test]
+    fn config_native_inputs_must_match_the_evaluated_declaration() {
+        let declared = json!({"z-sys 0.1.0": {"inputs": {"zlib": ZLIB}, "env": {}, "path": []}});
+        let config = config(declared.clone());
+        assert!(check_declared_native_inputs(&config, Some(&declared.to_string())).is_ok());
+        assert_eq!(check_declared_native_inputs(&config, None).unwrap_err()[0].code, "native-input-invalid");
+        let other = json!({"z-sys 0.1.0": {"inputs": {}, "env": {}, "path": []}}).to_string();
+        assert_eq!(check_declared_native_inputs(&config, Some(&other)).unwrap_err()[0].code, "native-input-invalid");
+        assert!(check_declared_native_inputs(&super::tests::config(json!({})), None).is_ok());
+    }
+
+    #[test]
+    fn declared_vendor_directory_is_staged_in_the_workspace_cargo_config() {
+        let root = std::env::temp_dir().join(format!("mantle-unit-vendor-stage-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let vendor = std::path::Path::new("/nix/store/66666666666666666666666666666666-vendor");
+        stage_vendor_config(&root, Some(vendor)).unwrap();
+        let staged = fs::read_to_string(root.join(".cargo/config.toml")).unwrap();
+        assert!(staged.contains("replace-with = \"declared-vendor\""));
+        assert!(staged.contains("directory = \"/nix/store/66666666666666666666666666666666-vendor\""));
+        let conflict = stage_vendor_config(&root, Some(vendor)).unwrap_err();
+        assert_eq!(conflict[0].code, "unit-plan-source-unsupported");
+        let untouched = root.join("no-vendor");
+        fs::create_dir_all(&untouched).unwrap();
+        stage_vendor_config(&untouched, None).unwrap();
+        assert!(!untouched.join(".cargo").exists());
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1054,95 +1294,114 @@ mod tests {
         assert_eq!(blockers[0].code, "unit-plan-oracle-failure");
         assert_eq!(blockers[0].subject, "unit-graph");
     }
-
     #[test]
-    fn two_cargo_packages_cannot_claim_the_same_links_key() {
-        let config: Config = serde_json::from_value(serde_json::json!({
-            "workspace": "", "vendor": null, "planner": "", "cargo": "",
-            "rustc": "", "linker": "", "toolchain": "", "helper": "",
-            "runtime_inputs": [], "store_prefix": "/nix/store",
-            "system": "x86_64-linux", "host_triple": "x86_64-unknown-linux-gnu",
-            "target_triple": "x86_64-unknown-linux-gnu", "profile": "dev",
-        }))
-        .unwrap();
-        let graph = OracleGraph {
-            version: 1,
-            units: Vec::new(),
-            roots: Vec::new(),
-        };
-        let receipt: PlannerReceipt = serde_json::from_value(serde_json::json!({
-            "schema_version": 1, "cargo_mode": {"compatibility_class": ""},
-            "lockfile": {"blake3": ""}, "unit_graph": {"digest_blake3": ""},
-            "unit_derivation_graph": {"ready": true, "derivations": [], "blockers": []},
-            "cargo_unit_derivation_graph": {"ready": true, "derivations": [], "blockers": []},
-        }))
-        .unwrap();
-        let metadata: Metadata = serde_json::from_value(serde_json::json!({
-            "packages": [
-                {
-                    "id": "path+file:///workspace/a#0.1.0",
-                    "manifest_path": "/workspace/a/Cargo.toml",
-                    "name": "a", "version": "0.1.0", "source": null,
-                    "links": "shared_native",
-                },
-                {
-                    "id": "path+file:///workspace/b#0.1.0",
-                    "manifest_path": "/workspace/b/Cargo.toml",
-                    "name": "b", "version": "0.1.0", "source": null,
-                    "links": "shared_native",
-                },
+    fn resolver_two_host_and_target_instances_select_distinct_roles_and_features() {
+        let graph: OracleGraph = serde_json::from_value(json!({
+            "version": 1,
+            "units": [
+                {"pkg_id":"macro 1", "target":{"kind":["custom-build"],"name":"build-script-build","src_path":"/w/build.rs","edition":"2021"},
+                 "mode":"build","dependencies":[{"index":1}]},
+                {"pkg_id":"proc-macro2 1", "target":{"kind":["lib"],"name":"proc_macro2","src_path":"/w/src/lib.rs","edition":"2021"},
+                 "mode":"build","features":["proc-macro"],"dependencies":[]},
+                {"pkg_id":"app 1", "target":{"kind":["bin"],"name":"app","src_path":"/w/src/main.rs","edition":"2021"},
+                 "mode":"build","dependencies":[{"index":3}]},
+                {"pkg_id":"proc-macro2 1", "target":{"kind":["lib"],"name":"proc_macro2","src_path":"/w/src/lib.rs","edition":"2021"},
+                 "mode":"build","features":["default","proc-macro"],"dependencies":[]}
             ],
-        }))
-        .unwrap();
-
-        let blockers = build_facts(&config, &graph, &receipt, &BTreeMap::new(), &metadata)
-            .err()
-            .expect("duplicate Cargo links must reject the unit graph");
-        assert_eq!(blockers.len(), 1);
-        assert_eq!(blockers[0].code, "build-script-links-conflict");
-        assert_eq!(blockers[0].subject, "shared_native");
+            "roots":[0,2]
+        })).unwrap();
+        let receipt: PlannerReceipt = serde_json::from_value(json!({
+            "schema_version":1, "cargo_mode":{"compatibility_class":"cargo-oracle-evidence"},
+            "lockfile":{"blake3":"abc"}, "unit_graph":{"digest_blake3":"def"},
+            "unit_derivation_graph":{"ready":true,"blockers":[],"derivations":[
+                {"unit_id":"u.macro","package_id":"macro 1","target_name":"build-script-build","target_kind":"custom-build",
+                 "execution_kind":"host","rustc_metadata_hash":"abc","derivation":{"args":[],"env":{}}},
+                {"unit_id":"u.shared","package_id":"proc-macro2 1","target_name":"proc_macro2","target_kind":"lib",
+                 "execution_kind":"host-dependency","rustc_metadata_hash":"abc","derivation":{"args":["--cfg","feature=\"default\"","--cfg","feature=\"proc-macro\""],"env":{}}},
+                {"unit_id":"u.app","package_id":"app 1","target_name":"app","target_kind":"bin",
+                 "execution_kind":"target","rustc_metadata_hash":"abc","derivation":{"args":[],"env":{}}},
+                {"unit_id":"u.shared","package_id":"proc-macro2 1","target_name":"proc_macro2","target_kind":"lib",
+                 "execution_kind":"target","rustc_metadata_hash":"abc","derivation":{"args":["--cfg","feature=\"default\"","--cfg","feature=\"proc-macro\""],"env":{}}}
+            ]}
+        })).unwrap();
+        let selected = select_planned(&graph, &receipt).unwrap();
+        assert_eq!(selected[1].execution_kind, "host-dependency");
+        assert_eq!(selected[3].execution_kind, "target");
+        let ids = graph_unit_ids(&graph, &selected).unwrap();
+        assert_eq!(ids[1], "u.shared:graph:1");
+        assert_eq!(ids[3], "u.shared:graph:3");
+        assert_ne!(ids[1], ids[3]);
+        let mut wrong_role = receipt;
+        wrong_role.unit_derivation_graph.derivations.retain(|unit| unit.execution_kind != "host-dependency");
+        assert_eq!(select_planned(&graph, &wrong_role).unwrap_err()[0].code, "unit-plan-oracle-failure");
     }
 
     #[test]
-    fn copied_readonly_workspace_accepts_only_declared_source_config() {
-        use std::time::SystemTime;
-        use std::time::UNIX_EPOCH;
+    fn cargo_feature_partition_replaces_unified_planner_cfg_at_rustc_boundary() {
+        let fixture = std::env::temp_dir().join(format!("mantle-unit-features-{}", std::process::id()));
+        fs::create_dir_all(fixture.join("src")).unwrap();
+        let src = fixture.join("src/lib.rs");
+        fs::write(&src, "pub fn feature() {}").unwrap();
+        let graph: GraphUnit = serde_json::from_value(json!({
+            "pkg_id":"proc-macro2 1",
+            "target":{"kind":["lib"],"name":"proc_macro2","src_path":src.to_str().unwrap(),"edition":"2021"},
+            "mode":"build","features":["proc-macro"],"dependencies":[]
+        }))
+        .unwrap();
+        let planner: PlannerUnit = serde_json::from_value(json!({
+            "unit_id":"u.proc","package_id":"proc-macro2 1","target_name":"proc_macro2",
+            "target_kind":"lib","execution_kind":"host-dependency","rustc_metadata_hash":"abc",
+            "derivation":{"args":["--crate-name","proc_macro2","--crate-type","rlib",
+                                  "--edition","2021","--cfg","feature=\"default\"",
+                                  "--cfg","feature=\"proc-macro\"",src.to_str().unwrap()],
+                          "env":{"CARGO_FEATURE_DEFAULT":"1","CARGO_FEATURE_PROC_MACRO":"1"}}
+        }))
+        .unwrap();
+        let args = normalize_args(&planner, &graph).unwrap();
+        assert!(args.windows(2).any(|pair| pair[0] == "--cfg" && pair[1] == "feature=\"proc-macro\""));
+        assert!(!args.iter().any(|arg| arg.contains("feature=\"default\"")));
+        fs::remove_dir_all(fixture).unwrap();
+    }
 
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        let root = std::env::temp_dir().join(format!("unit-plan-workspace-config-{}-{unique}", std::process::id()));
-        fs::create_dir(&root).unwrap();
-        for existing_config in [false, true] {
-            let case = root.join(if existing_config { "existing" } else { "missing" });
-            let source = case.join("immutable");
-            let copied = case.join("workspace");
-            fs::create_dir_all(&source).unwrap();
-            fs::write(source.join("Cargo.toml"), "[package]\nname='readonly'\nversion='0.1.0'\n").unwrap();
-            fs::set_permissions(source.join("Cargo.toml"), fs::Permissions::from_mode(0o444)).unwrap();
-            if existing_config {
-                fs::create_dir(source.join(".cargo")).unwrap();
-                fs::write(source.join(".cargo/config.toml"), "[source.crates-io]\n").unwrap();
-                fs::set_permissions(source.join(".cargo/config.toml"), fs::Permissions::from_mode(0o444)).unwrap();
-                fs::set_permissions(source.join(".cargo"), fs::Permissions::from_mode(0o555)).unwrap();
-            }
-            fs::set_permissions(&source, fs::Permissions::from_mode(0o555)).unwrap();
-            let source_digest = source_nar::nar_blake3(&source).unwrap();
-            source_nar::copy_package(&source, &copied, 0).unwrap();
-            let source_config = "[source.crates-io]\nreplace-with='declared-vendor'\n";
-            write_workspace_source_config(&copied, source_config).unwrap();
-            assert_eq!(fs::read_to_string(copied.join(".cargo/config.toml")).unwrap(), source_config);
-            assert_eq!(source_nar::nar_blake3(&source).unwrap(), source_digest);
-            assert_eq!(fs::metadata(copied.join("Cargo.toml")).unwrap().permissions().mode() & 0o777, 0o444);
-            assert_eq!(fs::metadata(&source).unwrap().permissions().mode() & 0o777, 0o555);
-            if existing_config {
-                assert_eq!(fs::metadata(&copied).unwrap().permissions().mode() & 0o777, 0o555);
-                assert_eq!(fs::read_to_string(source.join(".cargo/config.toml")).unwrap(), "[source.crates-io]\n");
-                fs::set_permissions(source.join(".cargo"), fs::Permissions::from_mode(0o755)).unwrap();
-            } else {
-                assert!(!source.join(".cargo").exists());
-            }
-            fs::set_permissions(&source, fs::Permissions::from_mode(0o755)).unwrap();
-            fs::set_permissions(&copied, fs::Permissions::from_mode(0o755)).unwrap();
-        }
-        fs::remove_dir_all(root).unwrap();
+    #[test]
+    fn duplicate_planner_host_units_require_equivalent_compiler_inputs() {
+        let fixture = std::env::temp_dir().join(format!("mantle-unit-duplicate-host-{}", std::process::id()));
+        fs::create_dir_all(&fixture).unwrap();
+        let src = fixture.join("build.rs");
+        fs::write(&src, "fn main() {}\n").unwrap();
+        let graph: GraphUnit = serde_json::from_value(json!({
+            "pkg_id":"proc-macro2 1",
+            "target":{"kind":["custom-build"],"name":"build-script-build","src_path":src.to_str().unwrap(),"edition":"2021"},
+            "mode":"build","features":["proc-macro"],"dependencies":[]
+        }))
+        .unwrap();
+        let mut receipt: PlannerReceipt = serde_json::from_value(json!({
+            "schema_version":1,"cargo_mode":{"compatibility_class":"cargo-oracle-evidence"},
+            "lockfile":{"blake3":"abc"},"unit_graph":{"digest_blake3":"def"},
+            "unit_derivation_graph":{"ready":true,"blockers":[],"derivations":[
+                {"unit_id":"u.z","package_id":"proc-macro2 1","target_name":"build-script-build",
+                 "target_kind":"custom-build","execution_kind":"host","rustc_metadata_hash":"aaa",
+                 "derivation":{"args":["--crate-name","build_script_build","--crate-type","bin",
+                                       "--edition","2021",src.to_str().unwrap(),"-C","metadata=aaa",
+                                       "--cfg","feature=\"default\"","--cfg","feature=\"proc-macro\""],
+                               "env":{"CARGO_PKG_VERSION":"1"}}},
+                {"unit_id":"u.a","package_id":"proc-macro2 1","target_name":"build-script-build",
+                 "target_kind":"custom-build","execution_kind":"host","rustc_metadata_hash":"bbb",
+                 "derivation":{"args":["--crate-name","build_script_build","--crate-type","bin",
+                                       "--edition","2021",src.to_str().unwrap(),"-C","metadata=bbb",
+                                       "--cfg","feature=\"default\"","--cfg","feature=\"proc-macro\""],
+                               "env":{"CARGO_PKG_VERSION":"1"}}}
+            ]}
+        }))
+        .unwrap();
+        assert_eq!(match_planner(&graph, "host", &receipt).unwrap().unit_id, "u.a");
+        receipt.unit_derivation_graph.derivations.reverse();
+        assert_eq!(match_planner(&graph, "host", &receipt).unwrap().unit_id, "u.a");
+        receipt.unit_derivation_graph.derivations[1]
+            .derivation
+            .env
+            .insert("CARGO_PKG_VERSION".into(), "2".into());
+        assert_eq!(match_planner(&graph, "host", &receipt).unwrap_err()[0].code, "unit-plan-mode-unsupported");
+        fs::remove_dir_all(fixture).unwrap();
     }
 }

@@ -52,66 +52,69 @@ fn substitute(value: &[u8], replacements: &[(Vec<u8>, Vec<u8>)]) -> Result<Optio
     if value.len() > MAX_RESOLVED_VALUE_BYTES {
         return Err(ResolutionFailure::Limit);
     }
+    assert!(value.len() <= MAX_RESOLVED_VALUE_BYTES);
     let mut rewritten: Option<Vec<u8>> = None;
     let mut cursor = 0;
     while cursor < value.len() {
         let next = replacements
             .iter()
-            .filter_map(|(old, new)| value[cursor..].find(old.as_slice()).map(|offset| (cursor + offset, old, new)))
+            .filter_map(|(old, new)| {
+                value[cursor..]
+                    .find(old.as_slice())
+                    .and_then(|offset| cursor.checked_add(offset).map(|start| (start, old, new)))
+            })
             .min_by(|left, right| left.0.cmp(&right.0).then(right.1.len().cmp(&left.1.len())));
         let Some((start, old, new)) = next else {
             break;
         };
+        assert!(start >= cursor);
         let result = rewritten.get_or_insert_with(|| Vec::with_capacity(value.len()));
+        let prefix_bytes = start.checked_sub(cursor).ok_or(ResolutionFailure::Limit)?;
+        let planned_bytes = result
+            .len()
+            .checked_add(prefix_bytes)
+            .and_then(|len| len.checked_add(new.len()))
+            .ok_or(ResolutionFailure::Limit)?;
+        if planned_bytes > MAX_RESOLVED_VALUE_BYTES {
+            return Err(ResolutionFailure::Limit);
+        }
         result.extend_from_slice(&value[cursor..start]);
         result.extend_from_slice(new);
-        if result.len() > MAX_RESOLVED_VALUE_BYTES {
-            return Err(ResolutionFailure::Limit);
-        }
-        cursor = start + old.len();
+        cursor = start.checked_add(old.len()).ok_or(ResolutionFailure::Limit)?;
+        assert!(cursor <= value.len());
     }
     if let Some(result) = &mut rewritten {
-        result.extend_from_slice(&value[cursor..]);
-        if result.len() > MAX_RESOLVED_VALUE_BYTES {
+        let remaining_bytes = value.len().checked_sub(cursor).ok_or(ResolutionFailure::Limit)?;
+        let final_bytes = result.len().checked_add(remaining_bytes).ok_or(ResolutionFailure::Limit)?;
+        if final_bytes > MAX_RESOLVED_VALUE_BYTES {
             return Err(ResolutionFailure::Limit);
         }
+        result.extend_from_slice(&value[cursor..]);
     }
     Ok(rewritten)
 }
 
 fn valid_action_ref(action_ref: &str) -> bool {
     action_ref.strip_prefix(ACTION_REF_PREFIX).is_some_and(|digest| {
-        digest.len() == blake3::OUT_LEN * 2
+        digest.len() == blake3::OUT_LEN.saturating_mul(2)
             && digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
     })
 }
 
-/// Resolve admitted direct CA inputs and previously CA-resolved intermediates.
-/// CA-independent inputs return the same Arc and path, preserving their identities.
-/// The `admitted` facts must be authenticated by the shell before this call.
-// r[impl mantle.ca_input_resolution.resolved_derivation]
-pub fn resolve_ca_inputs(
-    original: Arc<Derivation>,
-    original_path: &StorePath<String>,
+struct CollectedReplacements {
+    replaced_outputs: BTreeMap<StorePath<String>, BTreeSet<String>>,
+    replacements: BTreeMap<String, String>,
+}
+
+fn collect_replacements(
+    original: &Derivation,
     admitted: &[AdmittedResolvedInput],
-    remaining_input_hdms: &BTreeMap<StorePath<&str>, [u8; 32]>,
     store_dir: &str,
-) -> Result<ResolvedDerivation, ResolutionFailure> {
-    assert!(!store_dir.is_empty(), "store prefix must not be empty");
-    assert!(store_dir.starts_with('/'), "store prefix must be absolute");
-    if admitted.is_empty() {
-        return Ok(ResolvedDerivation {
-            derivation: original,
-            path: original_path.clone(),
-            identity: None,
-        });
-    }
-    if admitted.len() > MAX_CA_INPUT_OUTPUTS {
-        return Err(ResolutionFailure::Limit);
-    }
+) -> Result<CollectedReplacements, ResolutionFailure> {
+    assert!(!admitted.is_empty(), "replacement collection requires admitted inputs");
+    assert!(admitted.len() <= MAX_CA_INPUT_OUTPUTS, "admitted inputs must be bounded");
     let mut replaced_outputs = BTreeMap::<StorePath<String>, BTreeSet<String>>::new();
     let mut replacements = BTreeMap::<String, String>::new();
-    let mut resolved = (*original).clone();
     for fact in admitted {
         if !valid_action_ref(&fact.signed_action_ref) {
             return Err(ResolutionFailure::Untrusted);
@@ -135,16 +138,118 @@ pub fn resolve_ca_inputs(
         if !names.contains(&fact.output) {
             return Err(ResolutionFailure::Unrealized);
         }
-        let previous = replacements.insert(fact.provisional.clone(), realized_abs);
-        if previous.is_some_and(|old| old != replacements[&fact.provisional]) {
-            return Err(ResolutionFailure::Conflict);
+        if let Some(previous) = replacements.get(&fact.provisional) {
+            if previous != &realized_abs {
+                return Err(ResolutionFailure::Conflict);
+            }
+        } else {
+            if replacements.len() >= MAX_CA_INPUT_OUTPUTS {
+                return Err(ResolutionFailure::Limit);
+            }
+            replacements.insert(fact.provisional.clone(), realized_abs);
         }
         if !replaced_outputs.contains_key(&fact.derivation) && replaced_outputs.len() >= MAX_CA_INPUT_EDGES {
             return Err(ResolutionFailure::Limit);
         }
-        replaced_outputs.entry(fact.derivation.clone()).or_default().insert(fact.output.clone());
-        resolved.input_sources.insert(fact.realized.clone());
+        let output_names = replaced_outputs.entry(fact.derivation.clone()).or_default();
+        if !output_names.contains(&fact.output) && output_names.len() >= MAX_CA_INPUT_OUTPUTS {
+            return Err(ResolutionFailure::Limit);
+        }
+        output_names.insert(fact.output.clone());
     }
+    Ok(CollectedReplacements {
+        replaced_outputs,
+        replacements,
+    })
+}
+
+fn finalize_resolved_derivation(
+    mut resolved: Derivation,
+    original_path: &StorePath<String>,
+    remaining_input_hdms: &BTreeMap<StorePath<&str>, [u8; 32]>,
+    store_dir: &str,
+) -> Result<ResolvedDerivation, ResolutionFailure> {
+    let is_floating_ca = resolved.outputs.values().all(|output| output.path.is_none() && output.ca_hash.is_none());
+    if !is_floating_ca {
+        for (name, output) in &mut resolved.outputs {
+            output.path = None;
+            resolved.environment.insert(name.clone(), BString::from(""));
+        }
+    } else {
+        // The provisional paths of this CA action also depend on its HDM.
+        for name in resolved.outputs.keys() {
+            resolved.environment.insert(name.clone(), BString::from(""));
+        }
+    }
+    let is_missing_hdm = std::cell::Cell::new(false);
+    let hdm = resolved.hash_derivation_modulo_with_store_dir(
+        |parent| match remaining_input_hdms.get(parent) {
+            Some(hdm) => *hdm,
+            None => {
+                is_missing_hdm.set(true);
+                [0; 32]
+            }
+        },
+        store_dir,
+    );
+    if is_missing_hdm.get() {
+        return Err(ResolutionFailure::Unrealized);
+    }
+    debug_assert!(!is_missing_hdm.get(), "hashing must use authenticated parent HDMs");
+    let name = original_path.name().strip_suffix(".drv").ok_or(ResolutionFailure::Untrusted)?;
+    resolved
+        .calculate_output_paths_with_store_dir(name, &hdm, store_dir)
+        .map_err(|_| ResolutionFailure::Untrusted)?;
+    if is_floating_ca {
+        for output in resolved.outputs.values_mut() {
+            output.path = None;
+        }
+    }
+    let path = resolved
+        .calculate_derivation_path_with_store_dir(name, store_dir)
+        .map_err(|_| ResolutionFailure::Untrusted)?;
+    let mut hash = blake3::Hasher::new();
+    hash.update(RESOLVED_IDENTITY_DOMAIN);
+    hash.update(&[0]);
+    hash.update(&resolved.to_aterm_bytes_with_store_dir(store_dir));
+    let identity = format!("{RESOLVED_IDENTITY_PREFIX}{}", hash.finalize().to_hex());
+    debug_assert!(identity.starts_with(RESOLVED_IDENTITY_PREFIX));
+    Ok(ResolvedDerivation {
+        derivation: Arc::new(resolved),
+        path,
+        identity: Some(identity),
+    })
+}
+/// Resolve admitted direct CA inputs and previously CA-resolved intermediates.
+/// CA-independent inputs return the same Arc and path, preserving their identities.
+/// The `admitted` facts must be authenticated by the shell before this call.
+// r[impl mantle.ca_input_resolution.resolved_derivation]
+pub fn resolve_ca_inputs(
+    original: Arc<Derivation>,
+    original_path: &StorePath<String>,
+    admitted: &[AdmittedResolvedInput],
+    remaining_input_hdms: &BTreeMap<StorePath<&str>, [u8; 32]>,
+    store_dir: &str,
+) -> Result<ResolvedDerivation, ResolutionFailure> {
+    assert!(!store_dir.is_empty(), "store prefix must not be empty");
+    assert!(store_dir.starts_with('/'), "store prefix must be absolute");
+    if admitted.is_empty() {
+        return Ok(ResolvedDerivation {
+            derivation: original,
+            path: original_path.clone(),
+            identity: None,
+        });
+    }
+    if admitted.len() > MAX_CA_INPUT_OUTPUTS {
+        return Err(ResolutionFailure::Limit);
+    }
+    let CollectedReplacements {
+        replaced_outputs,
+        replacements,
+    } = collect_replacements(&original, admitted, store_dir)?;
+    let mut resolved = (*original).clone();
+    // Each new source comes from one of the bounded admitted output facts.
+    resolved.input_sources.extend(admitted.iter().map(|fact| fact.realized.clone()));
     for (drv_path, output_names) in &replaced_outputs {
         if original.input_derivations.get(drv_path) != Some(output_names) {
             return Err(ResolutionFailure::Unrealized);
@@ -171,46 +276,8 @@ pub fn resolve_ca_inputs(
             *value = BString::from(bytes);
         }
     }
-    let is_floating_ca = resolved.outputs.values().all(|output| output.path.is_none() && output.ca_hash.is_none());
-    if !is_floating_ca {
-        for (name, output) in &mut resolved.outputs {
-            output.path = None;
-            resolved.environment.insert(name.clone(), BString::from(""));
-        }
-    } else {
-        // The provisional paths of this CA action also depend on its HDM.
-        for name in resolved.outputs.keys() {
-            resolved.environment.insert(name.clone(), BString::from(""));
-        }
-    }
-    let hdm = resolved.hash_derivation_modulo_with_store_dir(
-        |parent| *remaining_input_hdms.get(parent).expect("remaining input HDMs validated above"),
-        store_dir,
-    );
-    let name = original_path.name().strip_suffix(".drv").ok_or(ResolutionFailure::Untrusted)?;
-    resolved
-        .calculate_output_paths_with_store_dir(name, &hdm, store_dir)
-        .map_err(|_| ResolutionFailure::Untrusted)?;
-    if is_floating_ca {
-        for output in resolved.outputs.values_mut() {
-            output.path = None;
-        }
-    }
-    let path = resolved
-        .calculate_derivation_path_with_store_dir(name, store_dir)
-        .map_err(|_| ResolutionFailure::Untrusted)?;
-    let mut hash = blake3::Hasher::new();
-    hash.update(RESOLVED_IDENTITY_DOMAIN);
-    hash.update(&[0]);
-    hash.update(&resolved.to_aterm_bytes_with_store_dir(store_dir));
-    let identity = format!("{RESOLVED_IDENTITY_PREFIX}{}", hash.finalize().to_hex());
     debug_assert!(resolved.input_derivations.len() < original.input_derivations.len());
-    debug_assert!(identity.starts_with(RESOLVED_IDENTITY_PREFIX));
-    Ok(ResolvedDerivation {
-        derivation: Arc::new(resolved),
-        path,
-        identity: Some(identity),
-    })
+    finalize_resolved_derivation(resolved, original_path, remaining_input_hdms, store_dir)
 }
 
 #[cfg(test)]

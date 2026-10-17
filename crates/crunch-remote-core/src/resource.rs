@@ -50,15 +50,21 @@ pub enum Fit {
 }
 
 /// Named accelerator/token quantities are checked by the existing canonical
-/// adapter. Their two derived booleans participate without dropping them.
-pub fn classify_fit(remaining: Capacity, requested: Capacity, named_empty: bool, named_constrained: bool) -> Fit {
-    if remaining.cpu_units == 0 && remaining.memory_bytes == 0 && remaining.scratch_bytes == 0 && named_empty {
-        Fit::Exact
-    } else if remaining.cpu_units < requested.cpu_units
+/// adapter. Their two derived predicates participate without dropping them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NamedResourceFit {
+    pub is_empty: bool,
+    pub is_constrained: bool,
+}
+
+pub fn classify_fit(remaining: Capacity, requested: Capacity, named: NamedResourceFit) -> Fit {
+    let is_primary_set_empty = remaining.cpu_units == 0 && remaining.memory_bytes == 0 && remaining.scratch_bytes == 0;
+    let has_primary_shortfall = remaining.cpu_units < requested.cpu_units
         || remaining.memory_bytes < requested.memory_bytes
-        || remaining.scratch_bytes < requested.scratch_bytes
-        || named_constrained
-    {
+        || remaining.scratch_bytes < requested.scratch_bytes;
+    if is_primary_set_empty && named.is_empty {
+        Fit::Exact
+    } else if has_primary_shortfall || named.is_constrained {
         Fit::Constrained
     } else {
         Fit::Compatible
@@ -155,9 +161,11 @@ pub fn classify_receiver_locality(
         });
     };
     let present_object_count = demanded_object_count.checked_sub(demand.missing_object_count)?;
+    debug_assert!(demand.missing_object_count <= demanded_object_count);
     if demand.reused_bytes.checked_add(demand.missing_bytes)? != demanded_bytes {
         return None;
     }
+    debug_assert!(demand.reused_bytes <= demanded_bytes);
     let (locality, transfer) = if demand.missing_object_count == 0 && demand.missing_bytes == 0 {
         (LocalityClass::FullyPresent, TransferClass::None)
     } else if present_object_count == 0 && demand.reused_bytes == 0 {
@@ -265,7 +273,13 @@ mod tests {
             scratch_bytes: 8,
         };
         let after = reserve_capacity(available, requested).unwrap();
-        assert_eq!(classify_fit(after, requested, true, false), Fit::Compatible);
+        assert_eq!(
+            classify_fit(after, requested, NamedResourceFit {
+                is_empty: true,
+                is_constrained: false
+            }),
+            Fit::Compatible
+        );
         assert_eq!(
             classify_fit(
                 Capacity {
@@ -274,8 +288,10 @@ mod tests {
                     scratch_bytes: 0
                 },
                 requested,
-                true,
-                false
+                NamedResourceFit {
+                    is_empty: true,
+                    is_constrained: false
+                }
             ),
             Fit::Exact
         );
@@ -286,12 +302,20 @@ mod tests {
                     cpu_units: 5,
                     ..requested
                 },
-                true,
-                false
+                NamedResourceFit {
+                    is_empty: true,
+                    is_constrained: false
+                }
             ),
             Fit::Constrained
         );
-        assert_eq!(classify_fit(after, requested, false, true), Fit::Constrained);
+        assert_eq!(
+            classify_fit(after, requested, NamedResourceFit {
+                is_empty: false,
+                is_constrained: true
+            }),
+            Fit::Constrained
+        );
         assert_eq!(remaining_capacity(used, total), None);
     }
 

@@ -1,0 +1,226 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/cli/producer-absent.ncl",
+  "output_dir": "/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/cli/store",
+  "state_dir": "/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/cli/state",
+  "store_dir": "/mantle/store",
+  "scheduler_policy": {
+    "schema": "mantle-scheduling-policy-v1",
+    "policy_id": "mantle-lazy-priority-v1",
+    "preference_order": [
+      "known-graph",
+      "resource-fit",
+      "locality-transfer"
+    ],
+    "aged_after_epochs": 4,
+    "protected_after_epochs": 8
+  },
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "build_environment_reports": [
+    {
+      "action_name": "v2-cli-producer-one",
+      "digest_algorithm": "blake3",
+      "digest_blake3": "767a9e5fbe3aacc225c46b70c63a0eb8915d775bdf659c3f02065d39b51a18b0",
+      "variable_count": 26,
+      "rejections": []
+    }
+  ],
+  "network_policy_reports": [
+    {
+      "action_name": "v2-cli-producer-one",
+      "mode": "offline",
+      "result": "denied",
+      "capability": null,
+      "policy_basis": "ordinary derivation network access is denied by default",
+      "audit_class": null,
+      "fixed_output": null,
+      "diagnostic": null
+    }
+  ],
+  "workspace_reports": [],
+  "action_result_reports": [
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/ec2dff84e17575637ef1deae5f01c3b13f40af74aaa1aac2f5145d4487c0276d",
+      "disposition": "miss",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "publication",
+      "action_ref": "mantle-action://blake3/ec2dff84e17575637ef1deae5f01c3b13f40af74aaa1aac2f5145d4487c0276d",
+      "disposition": "published",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [
+        "mantle-action-result://blake3/c029a4dbd997d9fa866ead64356a926cacc9efba2cee475adb91201b211b013c"
+      ],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    }
+  ],
+  "native_dynamic_plans": [
+    {
+      "mode": "native",
+      "producer_key": "/nix/store/553wj2j5sfxmslcm741q8v225ykrlh75-v2-cli-producer-one.drv",
+      "output_name": "plan",
+      "plan_artifact_path": "/mantle/store/vmidga7qyvmn9pnxd3sm89vhi993752l-v2-cli-producer-one-plan",
+      "raw_artifact_digest": "8ff313b532d7e2cea33f3e2a79abff92bc87781055ce3280f8e4e5d3fd89b5ca",
+      "canonical_plan_digest": null,
+      "accepted_unit_ids": [],
+      "source_slices": [
+        {
+          "source_id": "src.main",
+          "producer_output": "sources",
+          "subpath": "missing",
+          "declared_nar_blake3": "85b54411643cbcae7a4474c95e91fc66f29b72ccd9411906dac32b04637c6a35",
+          "observed_nar_blake3": null,
+          "admitted_store_path": null,
+          "disposition": "slice-absent"
+        }
+      ],
+      "rejection_reason": "slice-absent: source src.main: subtree is absent",
+      "scheduler_action": "rejected"
+    }
+  ],
+  "scheduler_priority_decisions": [
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 1,
+      "selected_goal_key_blake3": "6551e64345848847a6c808a69df7f0d58d3e96fd4187fc6c383344d01d5e488d",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "cc9c586f58726ec9caa3c91c8767712acb11d512786e67bb12d544a728daad57",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 1,
+      "known_critical_path_work_units": 1,
+      "blocked_root_count": 1,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    }
+  ],
+  "overlay_base_generations": [],
+  "store_layer_selections": [],
+  "remote_telemetry_events": [
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    }
+  ],
+  "frontend_artifact_attestations": [],
+  "ast_grep_structural_evidence": [],
+  "ast_grep_structural_evidence_diagnostics": [
+    {
+      "label": "v2-cli-producer-one",
+      "output_name": "out",
+      "evidence_path": "/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/cli/store/w9snbv3zjwqvsrc0gxv7av57n892gija-v2-cli-producer-one/share/mantle/ast-grep-structural-evidence.json",
+      "blocker_class": "ast-grep-evidence-read-error",
+      "message": "opening parent capability for ast-grep structural evidence at /home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/cli/store/w9snbv3zjwqvsrc0gxv7av57n892gija-v2-cli-producer-one/share/mantle/ast-grep-structural-evidence.json: capability root path component is not a directory: w9snbv3zjwqvsrc0gxv7av57n892gija-v2-cli-producer-one",
+      "next_action": "regenerate share/mantle/ast-grep-structural-evidence.json with the pinned ast-grep toolchain and current BLAKE3 identities"
+    },
+    {
+      "label": "v2-cli-producer-one",
+      "output_name": "plan",
+      "evidence_path": "/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/cli/store/vmidga7qyvmn9pnxd3sm89vhi993752l-v2-cli-producer-one-plan/share/mantle/ast-grep-structural-evidence.json",
+      "blocker_class": "ast-grep-evidence-read-error",
+      "message": "opening parent capability for ast-grep structural evidence at /home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/cli/store/vmidga7qyvmn9pnxd3sm89vhi993752l-v2-cli-producer-one-plan/share/mantle/ast-grep-structural-evidence.json: capability root path component is not a directory: vmidga7qyvmn9pnxd3sm89vhi993752l-v2-cli-producer-one-plan",
+      "next_action": "regenerate share/mantle/ast-grep-structural-evidence.json with the pinned ast-grep toolchain and current BLAKE3 identities"
+    }
+  ],
+  "cargo_build_evidence": [],
+  "cargo_build_evidence_diagnostics": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/mantle/store/553wj2j5sfxmslcm741q8v225ykrlh75-v2-cli-producer-one.drv",
+      "label": "v2-cli-producer-one",
+      "cached": false,
+      "log_file": "/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/cli/state/logs/553wj2j5sfxmslcm741q8v225ykrlh75-v2-cli-producer-one.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/cli/store/w9snbv3zjwqvsrc0gxv7av57n892gija-v2-cli-producer-one",
+          "artifact_attestation": {
+            "logical_path": "/mantle/store/w9snbv3zjwqvsrc0gxv7av57n892gija-v2-cli-producer-one",
+            "path": "/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/cli/state/attestations/artifacts/45bb29df33e7fb2caf4e0ced9c416ec0e3537309fc5d0ae87d34abfcfa42f67a.json"
+          }
+        },
+        {
+          "name": "plan",
+          "path": "/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/cli/store/vmidga7qyvmn9pnxd3sm89vhi993752l-v2-cli-producer-one-plan",
+          "artifact_attestation": {
+            "logical_path": "/mantle/store/vmidga7qyvmn9pnxd3sm89vhi993752l-v2-cli-producer-one-plan",
+            "path": "/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/cli/state/attestations/artifacts/d124f30a4c4cc03a666f44e07df797a3e0b68d87499549486794531da4c4a7ee.json"
+          }
+        },
+        {
+          "name": "sources",
+          "path": "/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/cli/store/cvzg6qv6xmfz7xl63jbwsf8l1hjbh142-v2-cli-producer-one-sources",
+          "artifact_attestation": {
+            "logical_path": "/mantle/store/cvzg6qv6xmfz7xl63jbwsf8l1hjbh142-v2-cli-producer-one-sources",
+            "path": "/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/cli/state/attestations/artifacts/4210bc85e546b1cd06d861a963d8adb2551ca33c1588e4d44aa4981b53c46b42.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}

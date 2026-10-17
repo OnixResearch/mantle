@@ -1655,10 +1655,16 @@ dependencies = [
 name = "crunch-android"
 version = "0.1.0"
 dependencies = [
+ "base64",
+ "blake3",
+ "clap",
  "crunch-android-core",
  "crunch-build",
+ "crunch-eval",
  "crunch-glue",
+ "crunch-nar",
  "crunch-store",
+ "data-encoding",
  "libc",
  "nix-compat",
  "serde",
@@ -5435,6 +5441,7 @@ dependencies = [
  "bstr",
  "cap-fs-ext",
  "cap-std",
+ "casita",
  "chapter-tgz",
  "clap",
  "crunch-action-result-core",
@@ -5555,6 +5562,7 @@ name = "mantle-lock-vendor-producer"
 version = "0.1.0"
 dependencies = [
  "mantle-lock-vendor-core",
+ "serde_json",
 ]
 
 [[package]]

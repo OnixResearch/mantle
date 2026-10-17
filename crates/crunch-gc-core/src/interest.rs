@@ -15,6 +15,12 @@ pub struct InterestFact {
     pub reason: String,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct ReleaseSelector<'a> {
+    pub owner: &'a str,
+    pub path: &'a str,
+    pub reason: Option<&'a str>,
+}
 /// Inputs are validated records sorted by canonical identity. All owners of a
 /// path survive the deterministic grouping. The store adapter selects the
 /// retained policy representative after evaluating every declaration.
@@ -37,33 +43,32 @@ pub fn merge(facts: &[InterestFact]) -> Result<BTreeMap<String, Vec<InterestFact
         prior_identity = Some(&fact.identity);
         by_path.entry(fact.path.clone()).or_default().push(fact.clone());
     }
+    assert_eq!(by_path.is_empty(), facts.is_empty());
+    assert!(by_path.len() <= facts.len());
     Ok(by_path)
 }
 
-pub fn release_identities(
-    facts: &[InterestFact],
-    owner: &str,
-    path: &str,
-    reason: Option<&str>,
-) -> Result<Vec<String>, &'static str> {
-    if owner.is_empty() || path.is_empty() {
+pub fn release_identities(facts: &[InterestFact], selector: ReleaseSelector<'_>) -> Result<Vec<String>, &'static str> {
+    if selector.owner.is_empty() || selector.path.is_empty() {
         return Err("release requires owner and path");
     }
     let grouped = merge(facts)?;
-    let Some(path_facts) = grouped.get(path) else {
+    let Some(path_facts) = grouped.get(selector.path) else {
         return Ok(Vec::new());
     };
-    if path_facts.iter().all(|fact| fact.owner != owner) {
+    if path_facts.iter().all(|fact| fact.owner != selector.owner) {
         return Err("foreign-owner release denied");
     }
     let matching = path_facts
         .iter()
-        .filter(|fact| fact.owner == owner && reason.is_none_or(|wanted| wanted == fact.reason))
+        .filter(|fact| fact.owner == selector.owner && selector.reason.is_none_or(|wanted| wanted == fact.reason))
         .map(|fact| fact.identity.clone())
         .collect::<Vec<_>>();
     if matching.len() > 1 {
         return Err("ambiguous release: specify an exact reason");
     }
+    assert!(matching.len() <= path_facts.len());
+    assert!(matching.len() <= 1);
     Ok(matching)
 }
 
@@ -94,8 +99,23 @@ mod tests {
         };
         let facts = vec![first, second];
         assert_eq!(merge(&facts).unwrap()["p"].len(), 2);
-        assert_eq!(release_identities(&facts, "a", "p", None).unwrap(), vec!["a"]);
-        assert_eq!(release_identities(&facts, "c", "p", None), Err("foreign-owner release denied"));
+        assert_eq!(
+            release_identities(&facts, ReleaseSelector {
+                owner: "a",
+                path: "p",
+                reason: None
+            })
+            .unwrap(),
+            vec!["a"]
+        );
+        assert_eq!(
+            release_identities(&facts, ReleaseSelector {
+                owner: "c",
+                path: "p",
+                reason: None
+            }),
+            Err("foreign-owner release denied")
+        );
         assert!(merge(&[facts[0].clone(), facts[0].clone()]).is_err());
     }
     #[test]

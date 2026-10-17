@@ -519,6 +519,7 @@ pub(crate) fn build_request_from_environment(
 
 /// Substitute accepted root paths only after the worker has observed every
 /// selected root as complete. The record itself never reaches the sandbox.
+// r[impl mantle.dynamic_plan_output_inputs.dispatch_binding]
 pub(crate) fn bind_plan_output_request(
     request: &mut BuildRequest,
     bindings: &[(String, StorePath<String>)],
@@ -896,10 +897,13 @@ fn overlay_derivation_environment(
     assert!(!environment_vars.is_empty(), "sandbox env must be pre-populated");
     let mut audit_events = Vec::with_capacity(derivation.environment.len());
     for (key, value) in &derivation.environment {
-        if key == WORKSPACE_POLICY_ENV
-            || key == WORKSPACE_LEASE_ENV
-            || key == PLAN_OUTPUT_BINDINGS_ENV_KEY
-            || key == finish_gates::POLICY_ENV
+        if [
+            WORKSPACE_POLICY_ENV,
+            WORKSPACE_LEASE_ENV,
+            PLAN_OUTPUT_BINDINGS_ENV_KEY,
+            finish_gates::POLICY_ENV,
+        ]
+        .contains(&key.as_str())
         {
             continue;
         }

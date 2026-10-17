@@ -211,6 +211,7 @@ fn plan_consumer(reference: PlanOutputRef) -> CrunchDerivation {
 }
 
 #[test]
+// r[verify mantle.dynamic_plan_output_inputs.typed_reference]
 fn plan_output_input_deserializes_as_closed_validated_record() {
     let input = Input::PlanOutput(Box::new(plan_reference("app")));
     let encoded = serde_json::to_value(&input).unwrap();
@@ -279,6 +280,7 @@ fn plan_output_conversion_binds_selected_edge_and_canonical_markers() {
 }
 
 #[test]
+// r[verify mantle.dynamic_plan_output_inputs.request_identity]
 fn plan_output_identity_depends_on_each_binding_component() {
     let base = plan_consumer(plan_reference("app"));
     let (base_path, base_nix) = convert(&base, &mut ConversionCache::default()).unwrap();
@@ -312,6 +314,7 @@ fn plan_output_identity_depends_on_each_binding_component() {
 }
 
 #[test]
+// r[verify mantle.dynamic_plan_output_inputs.binding_failures]
 fn plan_output_rejects_unknown_unterminated_duplicate_and_over_limit() {
     let mut consumer = plan_consumer(plan_reference("app"));
     consumer.args[0] = "{{mantle-plan-output:missing}}".to_string();

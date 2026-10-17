@@ -43,9 +43,10 @@ Mantle does not check where unrecorded content came from.
 Any command that selects `snix`, including one that omits `--store-backend`, claims such a directory for `snix`, so run Mantle against an unrecorded directory only when you know that Mantle's Snix backend wrote it.
 
 For signed comparisons between backends or state directories, provision the
-same Ed25519 signing key and use a fixed build environment. With different
-keys, compare only unsigned PathInfo fields and verify each signature under
-its own key; do not expect signed bytes to match.
+same Ed25519 signing key and use a fixed build environment and the same logical
+store prefix. A generated per-state key is not a reproducible signing fixture.
+With different keys, compare only unsigned PathInfo fields and verify each
+signature under its own key; do not expect signed bytes to match.
 
 Root retention metadata is not a signed PathInfo field. Registration reads the
 live wall clock for `GcRootRecord.created_unix_s`; `last_transition_id` includes
@@ -111,22 +112,38 @@ roots before planning. A removed or repointed retained payload fails with
 removed. A compiler wrapper using FailOpen still rejects a broken retained
 Casita root without running the compiler.
 
+The store capability boundary keeps Casita repository types and mutation
+sessions inside the `crunch-store` store shell. The declared
+`crunch-rust-cache` adapter may own private Snix services, but that exception
+does **not** authorize Casita types or sessions in the adapter or any other
+first-party shell. `tools/check_store_capability_boundary.rs` scans production
+Rust sources for known escape patterns and exercises negative fixtures; zero
+reported escapes prove only this bounded source check, not runtime isolation,
+absence of other escape forms, Casita correctness, or release safety.
+The focused local/shared and wrapper fixtures do not establish end-to-end
+daemon traffic.
+
 ## Casita layout and trust
 
 The Casita repository lives in `<state-dir>/casita`, next to Mantle-owned files such as `store-identity.json`, `casita-trusted-public-keys`, and the versioned `retention-interests/` records. An existing `gc-roots.json` remains readable until explicit `store roots --migrate`; migration preserves its entries with `legacy-unmanaged` provenance and archives the legacy file.
 Mantle keeps session Snix blob and directory services in memory as scratch space.
 Each admitted output has one root, `mantle/outputs/<40 lowercase hex of the store-path digest>`.
-The root targets an envelope directory with exactly two entries: `content`, the output file, directory, or symlink; and `pathinfo.json`, the signed PathInfo in canonical serde JSON.
-Mantle reads and writes only this envelope format.
+The output root targets an envelope directory with exactly two entries:
+`content`, the output file, directory, or symlink; and `pathinfo.json`, the
+signed PathInfo in canonical serde JSON. Mantle reads and writes only this
+output envelope format.
 
-Castore-only payloads use permanent roots named
+Retained castore-only payloads use permanent roots named
 `mantle/castore/<64 lowercase hex BLAKE3 of the postcard-encoded node>`.
-Each payload envelope contains `content` and `node.postcard`; reading it
+Each payload envelope contains exactly `content` and `node.postcard`; reading it
 decodes the node, recomputes the root name, re-ingests `content`, and requires
 the reproduced node and name to match. This is separate from signed output
-PathInfo, which remains backed by `mantle/outputs/` roots.
+PathInfo, which remains backed by `mantle/outputs/` roots. A repointed or
+malformed retained payload fails with `casita-envelope-invalid`; a missing
+retained root fails with `casita-root-missing` rather than silently rebuilding.
 
-Mantle releases admitted output roots only through GC and never marks them evictable.
+Mantle releases output and payload roots only through GC and never marks them
+evictable.
 Commands that open the repository can change Casita's own files under `<state-dir>/casita`, even when they fail.
 To check a failed command, compare roots, fence files, and Mantle-owned files, not the whole repository directory.
 
@@ -140,6 +157,7 @@ An empty, malformed, oversized, or over-limit file, or any symlink or other non-
 
 Mantle validates the policy file when it opens the store.
 It then reads the file again, up to 65,536 bytes, for every admission, every read, and every import preflight, and it keeps no cached trust set, so a key added or removed while a process runs takes effect at that process's next check.
+Repeated lookup or reuse within one process also rechecks the Casita root, signed envelope, content, and current policy; the in-memory Snix session-node cache is not an alternate Casita read authority.
 Mantle does not lock the file, so a check that overlaps an edit can see a partial file; write the new file elsewhere and rename it into place.
 Mantle publishes an output only when its PathInfo carries a valid signature from the trust set; otherwise the build fails with `casita-signer-untrusted`.
 After a key leaves the file, reads of outputs signed only by that key fail with `casita-signer-untrusted`, including outputs of the local signer and reads during GC planning.
@@ -159,11 +177,12 @@ Mantle checks the envelope's NAR size and SHA-256 against the signed PathInfo, s
 If the root already targets an identical envelope, the admission succeeds without a write.
 If the root targets anything else, the admission fails with `casita-root-conflict` and leaves that root unchanged.
 
-`store sign` reads the existing root, stages a verified replacement envelope
-with the same `content` and updated signed PathInfo, then conditionally
-replaces only the target it read. A concurrent repoint fails with
-`casita-root-conflict` instead of overwriting another writer's target.
-
+`store sign` reads the current output, stages a replacement envelope with the
+same `content` and updated signed `pathinfo.json`, and conditionally replaces
+the root only if it still targets the envelope that Mantle read. A second
+client repointing that root makes signing fail with `casita-root-conflict`;
+Mantle leaves the second client's target unchanged. A successful replacement
+leaves the old envelope unrooted for later collection, not immediately deleted.
 Native store archive import publishes one path per commit in archive order, so the 1,024 bound does not limit the archive size.
 If a later path fails, the paths before it stay published.
 Nario v2 import publishes all new paths in one commit or none of them; a conflicting root or a later path that fails verification publishes nothing.
@@ -174,15 +193,28 @@ Every read checks out the envelope, re-ingests `content`, and re-measures its NA
 The read checks the root target before and after checkout, the two envelope entries, canonical `pathinfo.json`, the root name against the store path, the content-address identity, a trusted signature, the content node, and the NAR size and SHA-256.
 Failures report `casita-envelope-invalid`, `casita-signer-untrusted`, `casita-nar-mismatch`, or `casita-root-conflict`.
 A retained path without its root reports `casita-root-missing`.
+Before `store archive export` writes any bytes, Mantle verifies the selected
+Casita root and every referenced closure member under the current policy.
+Revoking a reference's sole signer rejects the entire export with
+`casita-signer-untrusted`, without changing either root or writing a partial
+archive. Restoring the policy allows the same signed closure to export again.
 
 Under `casita`, `store verify` also checks signatures against the keys named with `--trusted-public-keys`, in the configured `trusted-public-keys` file, or given with `--signing-key`.
 It never adds or creates the local signing key on its own, so name the signer's public key when you run it.
 
 ## Garbage collection
 
+Under `snix`, the execution plan ID binds the ordered reclaim observations,
+including physical paths. An older plan issued before dead-blob observation
+ordering is made deterministic may be rejected as stale even when its
+candidates are unchanged. This rejection is safe: inspect a new
+`store gc --dry-run` report and execute its newly issued plan ID rather than
+retrying or overriding the old one.
+
 Casita GC keeps the two-step flow: `store gc` writes a plan, and `store gc --execute --plan-id <blake3-plan-id>` runs it.
 Under `casita`, `store usage` and `store gc` take the store mutation lock even when they only plan.
 Execution replans under the lock, and any drift fails with `gc-plan-stale` before Mantle writes a fence or changes a root.
+Casita output and castore payload root targets are bound into the plan ID. GC verifies every payload root before planning and takes the Rust cache retention live nodes into account; an unretained payload can be collected while a retained one remains rooted.
 
 Execution then writes `casita-gc-fence.json`.
 It removes each candidate root only while the root still has its planned target, records each outcome in `casita-gc-fence.progress`, deletes dead exports and index entries, and runs Casita collection.
@@ -195,6 +227,7 @@ While a fence is pending, reads such as `store list` and `store info`, admission
 The next guarded store command, such as `store usage`, `store gc`, `store pin`, or `store unpin`, finishes the pending fence first.
 Recovery never removes a root.
 It cleans up only fenced roots that are already absent, fails with `casita-root-conflict` when a fenced root changed, and then runs collection.
+Recovery checks every fenced root against its expected target before cleaning any removed root; a later repointed root leaves earlier exports and indexes untouched and keeps the fence pending for operator review.
 The retained set comes from the same root records and pins as under `snix`.
 
 ## Migrate from Snix to Casita
@@ -237,27 +270,57 @@ The import keeps the original signatures, adds none, and registers no root, so p
 
 Mantle depends on `casita` 0.1.0 from `https://github.com/cachix/casita` at revision `90404fcb1cfb3d83f2233715448dfefe913f5fd1`, with default features off and only `native` and `experimental` enabled.
 Casita has no release, and upstream says that its `experimental` API may change between revisions.
-The pinned revision does not compile unmodified in Mantle's dependency graph, so the Nix vendor closure and `scripts/vendor-deps.py` both apply the one-line `patches/casita-blake3-finalize.patch`.
+The pinned revision does not compile unmodified in Mantle's dependency graph.
+The tracked one-line `patches/casita-blake3-finalize.patch` is applied to the
+Nix Crane `overrideVendorGitCheckout` source and to the ignored checkout-local
+`vendor-deps/` closure. Nix admission checks the upstream revision, feature
+set, `rust-version = 1.94.1`, original `nar.rs` digest, and patch digest before
+vendoring. The generator checks these inputs and the patched file digest, then
+updates Cargo's per-file vendor checksum. Do not edit a vendor snapshot or use
+a fork.
 
-Run `python3 scripts/vendor-deps.py generate` or `python3 scripts/vendor-deps.py check` from `nix develop` to create or check the checkout-local `vendor-deps/` closure.
-Both commands check the Casita and `turso` pins first.
-`generate` never replaces an existing `vendor-deps/`.
-`check` compares a fresh generation file by file and resolves locked offline Cargo metadata.
-Inside `nix develop`, both commands also verify that the shell's active
-Crane Cargo source map selects the exact patched `nar.rs`; an unpatched
-git checkout cannot pass this guard. A normal
-`cargo check --locked --offline -p crunch-store --lib` in that shell needs no
-extra `--config` argument.
+From `nix develop`, run `python3 scripts/vendor-deps.py generate` to create
+the ignored checkout-local closure, or `python3 scripts/vendor-deps.py check`
+to compare a fresh generation file by file and resolve locked offline Cargo
+metadata. Both commands check the Casita and nine `turso` lock pins before
+use and verify that the shell's active Crane Cargo source map selects the
+exact patched `nar.rs`. `generate` refuses to replace an existing directory.
+Regenerate after changing `Cargo.lock`, preserving any existing closure
+rather than overwriting it.
+
+Run `python3 scripts/vendor-deps.py dev-shell-check` to verify that plain
+Cargo metadata (without `--config`) resolves the pinned, patched Casita from
+Crane's immutable default dev-shell source replacement rather than an
+unpatched git checkout. Compile the immutable default shell source with
+`cargo check --locked --offline -p crunch-store --lib` without `--config`.
+For an explicit checkout-local compile, use a separate empty Cargo home and
+a fresh target directory. Combining both source maps defines the same git
+sources twice; reusing build-script output can also try to overwrite
+read-only copied vendor headers.
+
+```bash
+mkdir -p target
+CARGO_HOME="$(mktemp -d)" \
+CARGO_TARGET_DIR="$(mktemp -d "$PWD/target/checkout-vendor.XXXXXXXX")" \
+  cargo check --locked --offline -p crunch-store --lib --config .cargo/vendor-config.toml
+```
+
+`nix build .#checks.x86_64-linux.casita-vendor-closure` builds the clean-source
+Crane vendor closure, while
+`nix build .#checks.x86_64-linux.casita-crunch-store-check` also runs
+`cargo check --locked -p crunch-store` using that closure. These are separate
+compile and source-admission checks, not substitutes for one another.
+
 For a source bundle that builds Mantle itself, include the generated
-`vendor-deps/` and the tracked `.cargo/vendor-config.toml` unchanged:
-`bootstrap/crunch.ncl` appends only self-build target settings and refuses a
-Casita `nar.rs` other than the reviewed patched content before running Cargo.
-Regenerate the ignored closure after a `Cargo.lock` change; preserve any
-existing closure rather than overwriting it, then run `check` on the new one.
-The source-built Rust bootstrap plans target 1.94.1, Casita's minimum Rust
-version. The legacy fixed-hash `/tmp/crunch-src.tar.xz` source bundle is not
-refreshed by this generator; a new exact source archive and matching hash
-are still required before claiming that self-build path.
+`vendor-deps/` closure and tracked `.cargo/vendor-config.toml` unchanged:
+the bootstrap source recipe applies only self-build target settings and
+rejects a Casita `nar.rs` other than the reviewed patched content before
+running Cargo. Both source-built Rust bootstrap plans target Casita's
+minimum Rust version, 1.94.1. The legacy fixed-hash
+`/tmp/crunch-src.tar.xz` source bundle is not refreshed by this generator;
+a new exact source archive and matching hash are still required before
+claiming that self-build path. Plan values alone do not prove the compiler
+was built or qualified, or that these checks passed.
 
 The [dependency audit](dependency-audit.md#casita-admission-run-2026-09-30) records the check results and the open `cargo-deny` findings.
 
@@ -271,6 +334,10 @@ cargo test -p mantle --test store_gc_cli
 cargo test -p mantle --test integration_build signed_fixed_output_cli_cache_restores_missing_export_in_fresh_processes
 cargo test -p mantle --test integration_build casita_explicit_trust_policy_revokes_local_signer_across_fresh_processes
 cargo test -p mantle --test integration_build casita_legacy_bootstrap_fetch_uses_durable_local_signer_and_exclusive_policy
+cargo test -p mantle --test integration_build casita_external_config_signer_requires_destination_policy_for_build_and_read
+cargo test -p mantle --test integration_build independently_built_backend_closures_have_identical_archives_and_offline_source_reports
+cargo test -p mantle --test store_archive_cli admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail
+cargo test -p mantle --test attest_cli casita_rejects_substituted_output_signed_only_by_cache_key_outside_policy
 cargo test -p mantle --test integration casita_repair_final_nar_rejects_before_creating_or_mutating_state
 cargo test -p mantle --test integration store_repair_final_nar_dry_run_then_execute_is_explicit_and_idempotent
 cargo test -p crunch-store --lib repair::tests::casita_repair_library_entrypoints_reject_without_publishing
@@ -279,7 +346,20 @@ cargo test -p crunch-store --lib overlay::tests::
 cargo test -p crunch-store --lib archive::tests:: -- --test-threads 1
 cargo test -p crunch-store --lib nario::tests:: -- --test-threads 1
 cargo test -p crunch-store --lib gc::tests::casita_ -- --test-threads 1
+cargo test -p mantle --test rust_plan_cli casita_rust_plan_reuses_compiled_unit_in_fresh_process
+cargo test -p mantle --test example_projects casita_local_action_result_reuses_verified_output_after_export_removal
+cargo test -p crunch-rust-cache --lib casita_
 ```
+
+Current-source reconciliation smoke (2026-10-17), separate from the historical
+rails below, exercised signed physical output export/cache and real
+PathInfo-backed action-result publication (`Published`, then `Duplicate`)
+and discovery. Policy revocation rejected reads through the same open handle
+and a newly opened handle; invalid-policy GC failed before fencing, a stale
+GC plan was rejected, and the accepted GC reported execution complete.
+These handle observations are **not fresh-process reuse evidence**. They do
+not complete backend conformance, audit, archive, or release tasks and do not
+replace any failed historical receipt.
 
 The `add-store-backend-selection` and `adopt-casita-store-backend` Cairn evidence records each passing run of these rails with the source snapshot it ran against; those runs cover:
 
@@ -291,14 +371,37 @@ The `add-store-backend-selection` and `adopt-casita-store-backend` Cairn evidenc
 - the migration above with one fixture key: `store info` profile fields and the original signatures, `store roots`, `store verify` with `trusted_signatures=1/1` for the archive signer and `trusted_signatures=0/1` for another key, a byte-identical re-export, an unchanged destination policy, no `signing-key` created in `NEW`, and no change to `OLD` after the export;
 - equal `store usage` and GC plan facts, GC execution, a guarded `store usage` that clears an empty pending fence, `gc-plan-stale` without a fence or root registry change, and removal after `store unpin`;
 - a CLI `store gc` under `casita` with one pinned and one unpinned signed output: the plan lists only the unpinned output, and executing that plan reports `casita-collection`, removes the unpinned output and its export, and leaves the pinned output's NAR SHA-256, NAR size, signatures, export, and `store verify` result of `trusted_signatures=1/1` unchanged;
-- the earlier temporary `rust-unit-cache` refusal under `casita` before castore roots were admitted (historical Runs 26 and 29), superseded by the scoped public-cache fresh-process and real wrapper Compiled→LocalHit→FailOpen retained-root proofs in Casita Run 82; Run 85 exercised the literal selected-Casita CLI missing-retained-root GC rejection and guarded interrupted-output recovery against the first coherent binary. Run 86 planned and executed signed output GC with no cache state in fresh scratch, releasing a build's legacy-unmanaged root first and preserving the pinned signed output. Run 87 passed the signed no-cache current-tree CLI GC fixture in an initial frozen root-test snapshot; the existing-cache fixture and final merged-source checks remain open;
+- historical interim-gate rejection of Rust cache modes under `casita`, before durable castore payload roots were implemented; the current capability profile and focused Rust cache reuse fixtures supersede that gate. The independent local-worktree Casita Runs 82, 85–87, and 89–92 document public-cache fresh-process reuse, real wrapper Compiled→LocalHit and missing-root refusal, guarded CLI interrupted-GC recovery, selected-Casita CLI signed no-cache and retained-cache GC fixtures, and final-source trust fixtures. Those scoped runs do not alone establish merged-source broad package gates, end-to-end daemon traffic, or release eligibility; their recorded source snapshots and limitations apply.
 - a signed fixed-output `file://` fetch under each backend: after only its physical export is deleted, a fresh `mantle --json build` process reports `built_total: 0` and `cached_total: 1`, restores identical bytes with the same store path, NAR SHA-256, NAR size, and signature under both backends, and passes `store verify` with `trusted_signatures=1/1`; under `casita`, the policy file stays byte-identical and no `pathinfo.redb`, `directories.redb`, or `blobs` appears in the state directory;
+- an independently built, signed two-path offline source closure under `snix`
+  and `casita`: one local HTTP response is captured before its server closes;
+  both backends then report equal full source-preflight JSON, build the root
+  with the fetched input, and export byte-identical closure archives with
+  equal listed paths while the source endpoint is unavailable;
+- a real Nix-compatible binary-cache substitute signed by a cache key that
+  transport trusts but the destination Casita policy does not: admission
+  fails with `casita-signer-untrusted` and no output root, then adding the
+  full cache key to that policy admits the same cached bytes without a build;
 - a `casita` build whose policy file omits the local signer, which fails with `casita-signer-untrusted`; after the key is listed, the build publishes; removing the key makes a fresh `store info` fail with `casita-signer-untrusted` while the export stays in place, and listing it again restores the read with the same signature, with Mantle leaving the policy file unchanged throughout;
 - a new OS process that reads a signed output after its physical export was deleted, with an `ActionResultPort::probe_outputs` check that reuses it, and a new process that reads a signed output without a content address;
-- conflicting admissions from a second handle, idempotent batch publication, a batch that fails on a bad NAR without publishing its valid path, also as seen from a new process, and permanent roots that survive a Casita disk-pressure pass;
+- second-client root races across the real batch admission adapter:
+  absent-root publication and identical-root idempotence without a
+  revision-changing write, then a competing client changes the target
+  between unrooted staging and conditional commit; Mantle reports
+  `casita-root-conflict`, publishes neither selected root, preserves
+  the competitor's signed target, and collection reclaims both failed
+  staged envelopes. A separately stopped staging process publishes
+  neither root nor PathInfo, and collection allows a signed retry;
+  a later bad NAR batch also leaves its earlier valid path unpublished
+  from a newly opened process, with permanent roots surviving Casita
+  disk-pressure collection;
 - a second Casita client that replaces content or metadata, writes non-canonical or oversized `pathinfo.json`, writes signed facts that do not match the content, points the root at another path's envelope, or removes the root, each rejected with its blocker, also in a new process;
 - `gc-recovery-required` while a fence is pending, with the root registry unchanged by fenced pin, unpin, and migration attempts;
 - library-level `store sign`, which republishes the envelope with the same content, leaves no root on the old envelope, and verifies in a new process;
+- the `store sign` CLI command in the signed two-backend conformance rail:
+  signing an imported output with an independently provisioned second key
+  adds its signature; `store info` reports both and `store verify` accepts
+  both trusted signatures under each backend;
 - library-level `store sign` against a root that a second client changed after Mantle read it, which fails with `casita-root-conflict` and keeps that client's root;
 - `store repair-final-nar` under `casita`: the dry run and `--execute` fail with `casita-repair-final-nar-unsupported` without creating the state or output directory, and against existing state and output directories each leaves every file and directory entry in both unchanged; the library inspection and execution calls on an open Casita store fail with the same blocker, publish nothing, and leave every file and directory entry in its state and output directories unchanged;
 - default `snix` final-NAR repair: a dry run reports `would-repair` without changes, `--execute` repairs the stale facts, and a second `--execute` reports `current`;
@@ -308,9 +411,27 @@ The `add-store-backend-selection` and `adopt-casita-store-backend` Cairn evidenc
 - `mantle bootstrap --fetch` under `casita` with `CRUNCH_CONFIG_DIR` unset, from a copy of `bootstrap/seed-legacy.ncl` that points at a local fixture tarball instead of the pinned musl.cc tarball: in a new state directory without a policy file, it creates `<state-dir>/signing-key` with mode `0600`, writes a seed file with `/crunch/store/` paths, and publishes one raw seed that `store verify` in a new process accepts with `trusted_signatures=1/1`; a second run reports the raw seed and the reduced provider cached with the key and the seed file unchanged; in a new state directory whose policy file lists only another key, it fails with `casita-signer-untrusted`, writes no seed file, leaves the policy file unchanged, and neither publishes nor exports the raw seed;
 - CLI import rejections for a missing policy, a key that the policy lacks, a policy key with the same name but different bytes, an archive signer that the import does not name, and an unsigned archive record under a valid policy and key, each without changes to the source state directory or to the destination's Mantle-owned state files, output directory, or policy file;
 - library import rejection of unsigned archive and Nario v2 records;
-- Nario v2 batches of 1,024 and 1,025 new paths, a conflicting root, and a later bad NAR;
-- GC plan identity, a GC root inventory that verifies 1,025 signed roots published in two atomic batches, a clean plan-then-execute that collects an unretained signed output and keeps the retained one's PathInfo and NAR facts, stale plans including an output root repointed after planning, a busy collector, recovery after partial root removal, symlinked or oversized outcome journals, and equal candidates with `snix` for identical outputs and retention.
+- Nario v2 batches of 1,024 and 1,025 new paths, a conflicting root,
+  and a later invalid signed envelope after the first was staged: the
+  accepted batch is visible with all 1,024 envelopes verified in one
+  reopened Casita snapshot, while the late failure publishes no root and
+  collection reclaims its unrooted envelope. The pinned Casita
+  `publish_if_roots_match` contract applies all those root changes in
+  **one metadata publication**; the global repository revision may also
+  advance during unrooted staging, and there is no historical per-root
+  revision API (see Cairn Run 61);
+- GC plan identity, a GC root inventory that verifies 1,025 signed roots
+  published in two atomic batches, a clean plan-then-execute that
+  collects an unretained signed output and keeps the retained one's
+  PathInfo and NAR facts, stale plans including an output root repointed
+  after planning, a busy collector, recovery after partial root removal,
+  symlinked or oversized outcome journals, and equal candidates with
+  `snix` for identical outputs; the guarded recovery fixture additionally
+  checks unchanged roots, fence and indexes for unguarded planning and
+  execution, fresh-process read/export/admission/registration blocked by
+  a pending fence, and a real guarded CLI recovery that clears that fence.
 
+The current Rust cache parity fixtures use real `rustc` through a counted wrapper: a fresh `rust-plan` process restores an evicted unit with the same artifact digest and **no new compiler invocation**. A second Casita client can repoint its retained `node.postcard` or remove the root; fresh `rust-plan` and GC processes then reject the payload before recompilation or a GC fence. Local and shared-origin cache library fixtures restore from a fresh process. The PathInfo-only Builder fixture independently reuses a signed action result after its physical export disappears and checks that neither build published a `mantle/castore/` root.
 The `adopt-casita-store-backend` Cairn evidence also keeps the commands and output of these one-off smokes from 2026-09-30, which are not checked-in rails:
 
 - Runs 30 and 31 built `examples/hello.ncl` in the local `bwrap` sandbox under each backend, Run 30 as shipped, which is content-addressed, and Run 31 from a temporary copy with `addressing_mode = 'input-addressed`, each with one explicit signing key and a matching Casita policy: after only the physical output was deleted, a new `mantle --json build` process reported `built_total: 0` and `cached_total: 1` and restored `Hello, mantle!`, and in each smoke both backends produced the same store path, NAR SHA-256, NAR size, and signature, and `store verify` reported `trusted_signatures=1/1`;
@@ -319,10 +440,14 @@ The `adopt-casita-store-backend` Cairn evidence also keeps the commands and outp
 
 These paths have no passing validation yet:
 
-- `mantle build` for derivations other than the fixed-output fetch and the two `examples/hello.ncl` variants above;
-- `mantle bootstrap --fetch` under `snix`, and under `casita` with the pinned musl.cc tarball or with `--offline-source-preflight`;
-- the `store sign` CLI command, `store push`, `store pull`, and remote substitution;
-- deleting the policy file while a process runs;
+- `mantle build` for derivation shapes beyond the fixed-output fetch, the
+  two `examples/hello.ncl` variants, and the signed offline two-path source
+  closure above;
+- `mantle bootstrap --fetch` under `snix`, and under `casita` with the pinned
+  musl.cc tarball rather than the local fixture tarball;
+- `store push`, `store pull`, and remote substitution;
+- a policy replacement concurrent with an in-flight trust check (removal
+  between two operations on one open handle is covered);
 - moves from `casita` back to `snix`.
 
 ## Portability and non-claims

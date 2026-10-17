@@ -1,3 +1,4 @@
+// machine-artifact-public: evaluation.budget-reports
 use std::ffi::OsString;
 use std::fs;
 use std::io;

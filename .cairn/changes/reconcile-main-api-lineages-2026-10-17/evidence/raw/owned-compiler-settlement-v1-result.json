@@ -1,0 +1,16 @@
+{
+  "kind": "One bounded root-scoped Cargo/compiler/linker observation",
+  "observed_unix": 1792214981.7150064,
+  "scan_complete_within_5_seconds": true,
+  "transient_or_unreadable_process_records": 0,
+  "owned_pid_pgid_start_facts": [],
+  "old60_owned_instances": [],
+  "individually_settled_instances": [],
+  "unsettled_instances": [],
+  "existing_cargo_lock": "/datapool/mantle-store/mr.7p88_pl1/target/debug/.cargo-lock",
+  "lock_status": "available at observation",
+  "scope_limit": "Point observation only; no global daemon/opaque-process/descendant-empty claim",
+  "secrets_or_argv_persisted": false,
+  "unrelated_processes_signaled": false,
+  "product_or_nix_realization_started": false
+}

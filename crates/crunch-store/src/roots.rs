@@ -159,8 +159,12 @@ pub struct GcPathInterests {
 
 pub fn list_interest_reports(state_dir: &Path) -> Result<Vec<GcPathInterests>, Error> {
     let legacy = load_registry(state_dir)?;
+    let max_roots = store_retention_runtime_policy().limits.max_roots;
     let mut by_path = BTreeMap::<String, GcPathInterests>::new();
     for (path, root) in legacy {
+        if by_path.len() >= max_roots {
+            return Err(Error::RootRegistry("root report exceeds policy limit".to_string()));
+        }
         by_path.insert(path.clone(), GcPathInterests {
             logical_path: path,
             record_count: 0,
@@ -481,7 +485,11 @@ pub fn unpin_root_for_owner_reason(
     reason: Option<&str>,
 ) -> Result<Option<GcRootRecord>, Error> {
     let normalized_path = normalize_logical_path(path)?;
-    crate::interest_store::release(state_dir, owner, &normalized_path, reason)
+    crate::interest_store::release(state_dir, crunch_gc_core::interest::ReleaseSelector {
+        owner,
+        path: &normalized_path,
+        reason,
+    })
 }
 
 pub(crate) fn load_registry(state_dir: &Path) -> Result<BTreeMap<String, GcRootRecord>, Error> {
@@ -1168,6 +1176,44 @@ mod tests {
             list_roots(state_dir.path()).expect("read migrated roots")[0].root_class,
             GcRootClass::LegacyUnmanaged
         );
+    }
+
+    #[test]
+    fn legacy_interest_report_rejects_a_root_beyond_the_policy_limit() {
+        let state = tempfile::tempdir().expect("report state");
+        let max_roots = store_retention_runtime_policy().limits.max_roots;
+        assert!(max_roots > 0 && max_roots <= 65_536, "keep the policy boundary fixture bounded");
+        let mut registry = BTreeMap::new();
+        for index in 0..max_roots {
+            let path = store_path(&format!("reported-{index}"), 57).to_absolute_path();
+            registry.insert(
+                path.clone(),
+                serde_json::json!({
+                    "logical_path": path,
+                    "source": "build",
+                    "created_unix_s": CREATED_UNIX_S
+                }),
+            );
+        }
+        std::fs::write(roots_path(state.path()), serde_json::to_vec(&registry).expect("registry JSON"))
+            .expect("write bounded registry");
+        let report = list_interest_reports(state.path()).expect("at-limit legacy report");
+        assert_eq!(report.len(), max_roots);
+        assert!(report.iter().all(|entry| entry.legacy_unmanaged && entry.interests.len() == 1));
+
+        let extra = store_path(&format!("reported-{max_roots}"), 57).to_absolute_path();
+        registry.insert(
+            extra.clone(),
+            serde_json::json!({
+                "logical_path": extra,
+                "source": "build",
+                "created_unix_s": CREATED_UNIX_S
+            }),
+        );
+        std::fs::write(roots_path(state.path()), serde_json::to_vec(&registry).expect("overflow JSON"))
+            .expect("write over-limit registry");
+        let error = list_interest_reports(state.path()).expect_err("legacy report must reject the extra root");
+        assert!(matches!(error, Error::RootRegistry(message) if message.contains("root report exceeds policy limit")));
     }
 
     #[test]

@@ -1,0 +1,13 @@
+mkdir-store exit=0
+fixture-tool exit=0
+tool exit=0
+extract-tool exit=0
+verify-proven-tool-path exit=0
+fixture-producers exit=0
+one exit=0
+two exit=0
+absent exit=0
+extract-slice exit=0
+fresh-store-info-basename exit=0
+assertions exit=0
+physical-proof exit=0

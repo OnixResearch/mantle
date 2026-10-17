@@ -1,0 +1,130 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/add-dynamic-plan-source-slices/specs/dynamic-plan-source-slices/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/add-dynamic-plan-source-slices/specs/dynamic-plan-source-slices/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "add-dynamic-plan-source-slices",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/add-dynamic-plan-source-slices/specs/dynamic-plan-source-slices/spec.md"
+  ],
+  "dry_run": true,
+  "input_hash": "1dc7015d0c2f76e74ca5570eeb7e8bb3da1f741bc6899a29d8594ceb8ab71b28",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "ee259a5437a1346b1dc342194db5c30ce7f969f9686d0e51b692a22360019a22",
+        "blocked": false,
+        "changed": false,
+        "delta_hash": "b08a7c8e01a81fdc1a8e366ab9828a965c3ccce2ac80298160cf7f2742a6317a",
+        "destination": ".cairn/specs/dynamic-plan-source-slices/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "ee259a5437a1346b1dc342194db5c30ce7f969f9686d0e51b692a22360019a22",
+        "operations": [
+          {
+            "block_hash": "f9a7c39936dc49d6adf233ecd059ec1a382aedbed554d96c0e68276b1578841f",
+            "heading": "### Requirement: Source slices use a versioned plan schema",
+            "kind": "added",
+            "requirement_id": "mantle.dynamic_plan_source_slices.versioned_schema"
+          },
+          {
+            "block_hash": "8e619276e9d8d4dcf0df2293a16ff1e2e3e649f3079515601b15c842d75fd212",
+            "heading": "### Requirement: Slices are admitted before unit registration",
+            "kind": "added",
+            "requirement_id": "mantle.dynamic_plan_source_slices.content_admission"
+          },
+          {
+            "block_hash": "b44a050f1816ed5e7a335626a7dacdfb467fc6e6dd46cf8bb09165cb5cede0bb",
+            "heading": "### Requirement: Slice identity depends only on content and name",
+            "kind": "added",
+            "requirement_id": "mantle.dynamic_plan_source_slices.content_identity"
+          },
+          {
+            "block_hash": "f2f0b05e5cc2fafbf9fa1a9bb4cfccf0384ca42cab16daa9dfaeda33bb9f08b0",
+            "heading": "### Requirement: Slice admission is bounded and fails closed",
+            "kind": "added",
+            "requirement_id": "mantle.dynamic_plan_source_slices.bounded_rejection"
+          },
+          {
+            "block_hash": "b43b02f067cef3a43aff56e5815a327e332c9c1e5620ee6160c3e02238083c8d",
+            "heading": "### Requirement: Slice admission is reported",
+            "kind": "added",
+            "requirement_id": "mantle.dynamic_plan_source_slices.provenance"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "mantle.dynamic_plan_source_slices.versioned_schema",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.dynamic_plan_source_slices.content_admission",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.dynamic_plan_source_slices.content_identity",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.dynamic_plan_source_slices.bounded_rejection",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.dynamic_plan_source_slices.provenance",
+            "state": "already_applied"
+          }
+        ],
+        "source": ".cairn/changes/add-dynamic-plan-source-slices/specs/dynamic-plan-source-slices/spec.md"
+      }
+    ]
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "e7c35b27accc3672fd0cbd133418af8042bdbe04a60818e02c8a995410a0d782",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "profile_identity_hash": "7d07c6800f23a7b60d2cf073d1c7dc5c8f928a081be2018a891817e0d0d56da3",
+  "reasons": [],
+  "receipt_hash": "be6d529957e5dd080c0d73274a05d6b392acd5c90c410f01839900fbe3d4e896",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

@@ -1526,6 +1526,8 @@ mod linux {
             assert!(events.iter().all(|event| event.policy_decision == "allowed"));
             assert_eq!(events[0].executable_path, current_exe);
             assert_eq!(events[1].executable_path, leaf_executable);
+            assert_eq!(events[1].resolved_host_path, leaf_executable);
+            assert_ne!(events[0].pid, events[1].pid);
             assert_eq!(events[1].inventory_entry_id.as_deref(), Some("sandbox-shell"));
         }
 

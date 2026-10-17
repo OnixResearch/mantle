@@ -280,7 +280,7 @@ impl<'a> EffectSession<'a> {
             {
                 Ok(())
             }
-            _ => Err(EffectBlocker::AttemptBindingMismatch),
+            Some(_) | None => Err(EffectBlocker::AttemptBindingMismatch),
         }
     }
 
@@ -355,14 +355,10 @@ impl<'a> EffectSession<'a> {
                 return Err(EffectBlocker::ObservedLimitExceeded);
             }
         }
-        self.pending = None;
-        self.next_sequence += 1;
-        match observation {
-            Observation::Succeeded { .. } => Ok(EffectEvent::Completed(pending.id)),
-            Observation::Failed { .. } => {
-                self.failed = true;
-                Ok(EffectEvent::Failed(pending.id))
-            }
+        let next_sequence = self.next_sequence.checked_add(1).ok_or(EffectBlocker::EffectCountExceeded)?;
+        let event = match observation {
+            Observation::Succeeded { .. } => EffectEvent::Completed(pending.id),
+            Observation::Failed { .. } => EffectEvent::Failed(pending.id),
             Observation::PartiallyFailed {
                 effect:
                     ObservedEffect::OutputsPartiallyAdmitted {
@@ -370,18 +366,17 @@ impl<'a> EffectSession<'a> {
                         current_output_may_be_durable,
                     },
                 ..
-            } => {
-                self.failed = true;
-                Ok(EffectEvent::PartiallyFailed {
-                    id: pending.id,
-                    outputs,
-                    current_output_may_be_durable,
-                })
-            }
-            Observation::PartiallyFailed { .. } => {
-                unreachable!("partial kind was validated before applying observation")
-            }
-        }
+            } => EffectEvent::PartiallyFailed {
+                id: pending.id,
+                outputs,
+                current_output_may_be_durable,
+            },
+            Observation::PartiallyFailed { .. } => return Err(EffectBlocker::WrongObservationKind),
+        };
+        self.pending = None;
+        self.next_sequence = next_sequence;
+        self.failed |= matches!(event, EffectEvent::Failed(_) | EffectEvent::PartiallyFailed { .. });
+        Ok(event)
     }
 }
 

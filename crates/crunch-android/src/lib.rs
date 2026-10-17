@@ -10,19 +10,19 @@ use std::path::Path;
 use std::path::PathBuf;
 
 pub use authority::verified_same_run_extractions;
-use crunch_android_core::ApkPlan;
-use crunch_android_core::LoweredApk;
-use crunch_android_core::Rejection;
-use crunch_android_core::SourceIdentity;
-use crunch_android_core::StepKind;
-use crunch_android_core::Toolchain;
-use crunch_android_core::lower;
+use crunch_android_core::reviewed::ApkPlan;
+use crunch_android_core::reviewed::LoweredApk;
+use crunch_android_core::reviewed::Rejection;
+use crunch_android_core::reviewed::SourceIdentity;
+use crunch_android_core::reviewed::StepKind;
+use crunch_android_core::reviewed::Toolchain;
+use crunch_android_core::reviewed::lower;
 use serde::Deserialize;
 use serde::Serialize;
 use sha2::Digest;
 use sha2::Sha256;
 
-const MAX_ARCHIVE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const MAX_ARCHIVE_BYTES: u64 = 2_u64 << 30;
 const MAX_SCRIPT_BYTES: usize = 128 * 1024;
 
 #[derive(Debug)]
@@ -83,6 +83,7 @@ pub struct BuildInputs {
     /// unzip, tar, mkdir, find, sort, cp, and date in the sandbox.
     pub utility: PathBuf,
     pub keystore: Option<PathBuf>,
+    pub store_password_file: Option<PathBuf>,
     pub key_password_file: Option<PathBuf>,
 }
 
@@ -135,9 +136,10 @@ pub struct PreparedApk {
 }
 
 fn store_path(path: &Path, store_prefix: &Path) -> Result<String, Error> {
-    if !path.is_absolute()
-        || !path.starts_with(store_prefix)
-        || path == store_prefix
+    if !path.is_absolute() || !path.starts_with(store_prefix) {
+        return Err(Error::InvalidInput(path.display().to_string()));
+    }
+    if path == store_prefix
         || path
             .components()
             .any(|component| !matches!(component, std::path::Component::RootDir | std::path::Component::Normal(_)))
@@ -146,7 +148,7 @@ fn store_path(path: &Path, store_prefix: &Path) -> Result<String, Error> {
     }
     let text = path.to_str().ok_or_else(|| Error::InvalidInput(path.display().to_string()))?;
     if text.bytes().any(|byte| byte == b'\'' || byte == b'\n' || byte == b'\r' || byte == 0)
-        || text.len() > crunch_android_core::MAX_PATH_BYTES
+        || text.len() > crunch_android_core::reviewed::MAX_PATH_BYTES
     {
         return Err(Error::InvalidInput(text.to_string()));
     }
@@ -164,6 +166,8 @@ fn declared_member(root: &Path, member: &str, missing: Rejection) -> Result<(), 
     if !root_meta.is_dir() || root_meta.file_type().is_symlink() {
         return Err(Error::Plan(missing));
     }
+    assert!(root_meta.is_dir());
+    assert!(!root_meta.file_type().is_symlink());
     let mut current = root.to_path_buf();
     let parts: Vec<_> = member.split('/').collect();
     for (index, part) in parts.iter().enumerate() {
@@ -172,7 +176,7 @@ fn declared_member(root: &Path, member: &str, missing: Rejection) -> Result<(), 
         if metadata.file_type().is_symlink() {
             return Err(Error::Plan(missing));
         }
-        if index + 1 == parts.len() {
+        if index.checked_add(1) == Some(parts.len()) {
             if !metadata.is_file() {
                 return Err(Error::Plan(missing));
             }
@@ -180,6 +184,7 @@ fn declared_member(root: &Path, member: &str, missing: Rejection) -> Result<(), 
             return Err(Error::Plan(missing));
         }
     }
+    assert!(!parts.is_empty());
     Ok(())
 }
 
@@ -189,6 +194,8 @@ fn declared_regular_file(path: &Path, store_prefix: &Path) -> Result<File, Error
     if !prefix_meta.is_dir() || prefix_meta.file_type().is_symlink() {
         return Err(Error::InvalidInput(text));
     }
+    assert!(prefix_meta.is_dir());
+    assert!(!prefix_meta.file_type().is_symlink());
     let mut current = store_prefix.to_path_buf();
     let relative = path.strip_prefix(store_prefix).map_err(|_| Error::InvalidInput(text.clone()))?;
     let parts: Vec<_> = relative.components().collect();
@@ -198,10 +205,12 @@ fn declared_regular_file(path: &Path, store_prefix: &Path) -> Result<File, Error
         if metadata.file_type().is_symlink() {
             return Err(Error::InvalidInput(text));
         }
-        if index + 1 == parts.len() {
+        if index.checked_add(1) == Some(parts.len()) {
             if !metadata.is_file() {
                 return Err(Error::InvalidInput(text));
             }
+            assert!(metadata.is_file());
+            assert!(!metadata.file_type().is_symlink());
             let opened = OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW).open(path)?;
             let observed = opened.metadata()?;
             if metadata.dev() != observed.dev() || metadata.ino() != observed.ino() {
@@ -222,17 +231,26 @@ fn verify_archive(archive: &BoundArchive, expected: &SourceIdentity, prefix: &Pa
     }
     let mut file = declared_regular_file(&archive.store_path, prefix)
         .map_err(|_| Error::MissingArchive(archive.store_path.display().to_string()))?;
-    if file.metadata()?.len() > MAX_ARCHIVE_BYTES {
+    let archive_size_bytes = file.metadata()?.len();
+    if archive_size_bytes > MAX_ARCHIVE_BYTES {
         return Err(Error::InvalidInput(expected.component.clone()));
     }
+    assert!(archive_size_bytes <= MAX_ARCHIVE_BYTES);
     let mut hash = Sha256::new();
     let mut buffer = [0_u8; 65_536];
-    loop {
-        let count = file.read(&mut buffer)?;
+    let mut remaining_bytes = archive_size_bytes;
+    while remaining_bytes > 0 {
+        let read_bytes = usize::try_from(remaining_bytes).unwrap_or(buffer.len()).min(buffer.len());
+        let count = file.read(&mut buffer[..read_bytes])?;
         if count == 0 {
-            break;
+            return Err(Error::InvalidInput(expected.component.clone()));
         }
         hash.update(&buffer[..count]);
+        remaining_bytes -= count as u64;
+    }
+    assert_eq!(remaining_bytes, 0);
+    if file.read(&mut buffer[..1])? != 0 {
+        return Err(Error::InvalidInput(expected.component.clone()));
     }
     if format!("{:x}", hash.finalize()) != expected.sha256 {
         return Err(Error::DigestDrift(expected.component.clone()));
@@ -245,6 +263,8 @@ impl PreparedApk {
     /// `reviewed` MUST come from an independently approved source manifest,
     /// never from the plan or the admitted archives themselves.
     /// All source-record and FOD checks finish before any tool invocation.
+    /// This direct adapter accepts the caller's separately reviewed toolchain;
+    /// it does not infer or grant ADR 0089 canonical source-v1 admission.
     pub fn bind(
         plan: ApkPlan,
         inputs: BuildInputs,
@@ -263,12 +283,14 @@ impl PreparedApk {
         }
         for runtime in [&inputs.runtime_glibc, &inputs.runtime_libgcc] {
             store_path(&runtime.store_path, store_prefix)?;
-            if runtime.identity.source_cohort.is_empty()
-                || runtime.identity.source_cohort.len() > 256
-                || runtime.identity.nar_size == 0
-                || runtime.identity.nar_sha256.len() != 64
-                || !runtime.identity.nar_sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
-            {
+            let identity = &runtime.identity;
+            if identity.source_cohort.is_empty() || identity.source_cohort.len() > 256 {
+                return Err(Error::InvalidInput("invalid reviewed runtime identity".into()));
+            }
+            if identity.nar_size == 0 || identity.nar_sha256.len() != 64 {
+                return Err(Error::InvalidInput("invalid reviewed runtime identity".into()));
+            }
+            if !identity.nar_sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
                 return Err(Error::InvalidInput("invalid reviewed runtime identity".into()));
             }
         }
@@ -290,21 +312,37 @@ impl PreparedApk {
         verify_archive(&inputs.build_tools, &plan.toolchain.build_tools, store_prefix)?;
         verify_archive(&inputs.jdk, &plan.toolchain.jdk, store_prefix)?;
         verify_archive(&inputs.platform, &plan.toolchain.platform, store_prefix)?;
-        if plan.signing.is_some() {
+        if let Some(signing) = &plan.signing {
             let keystore = inputs.keystore.as_ref().ok_or_else(|| Error::InvalidInput("keystore missing".into()))?;
-            let password = inputs
-                .key_password_file
-                .as_ref()
-                .ok_or_else(|| Error::InvalidInput("password file missing".into()))?;
+            let keystore_object = store_object(keystore, store_prefix)?;
+            let source_object = store_object(&inputs.source_root, store_prefix)?;
+            if keystore_object == source_object {
+                return Err(Error::Plan(Rejection::KeystorePathEscape));
+            }
+            if keystore.strip_prefix(&keystore_object).ok() != Some(Path::new(&signing.keystore_member)) {
+                return Err(Error::Plan(Rejection::KeystorePathEscape));
+            }
+            for password in [&inputs.store_password_file, &inputs.key_password_file] {
+                let password = password.as_ref().ok_or_else(|| Error::InvalidInput("password file missing".into()))?;
+                if store_object(password, store_prefix)? == source_object {
+                    return Err(Error::InvalidInput("signing password shares the app source object".into()));
+                }
+                declared_regular_file(password, store_prefix)?;
+            }
+            if inputs.store_password_file == inputs.key_password_file {
+                return Err(Error::InvalidInput("store and key password files must be distinct".into()));
+            }
             declared_regular_file(keystore, store_prefix)?;
-            declared_regular_file(password, store_prefix)?;
-        } else if inputs.keystore.is_some() || inputs.key_password_file.is_some() {
+        } else if inputs.keystore.is_some()
+            || inputs.store_password_file.is_some()
+            || inputs.key_password_file.is_some()
+        {
             return Err(Error::InvalidInput("unsigned build carries signing input".into()));
         }
         Ok(Self { plan, lowered, inputs })
     }
 
-    pub fn steps(&self) -> &[crunch_android_core::StepPlan] {
+    pub fn steps(&self) -> &[crunch_android_core::reviewed::StepPlan] {
         &self.lowered.steps
     }
 
@@ -397,7 +435,7 @@ impl PreparedApk {
         ] {
             if step.inputs.iter().any(|input| {
                 matches!(input,
-                crunch_android_core::StepInput::ToolchainIdentity(identity) if identity.component == component)
+                crunch_android_core::reviewed::StepInput::ToolchainIdentity(identity) if identity.component == component)
             }) {
                 env.insert(key.into(), path.clone());
                 declared.push(path.clone());
@@ -413,7 +451,7 @@ impl PreparedApk {
             (StepKind::Zipalign, "UNSIGNED"),
         ] {
             if step.inputs.iter().any(
-                |input| matches!(input, crunch_android_core::StepInput::PreviousOutput(kind) if *kind == previous_kind),
+                |input| matches!(input, crunch_android_core::reviewed::StepInput::PreviousOutput(kind) if *kind == previous_kind),
             ) {
                 let output = previous.get(&previous_kind).ok_or(Error::MissingPreviousOutput(previous_kind))?;
                 let path = store_path(output, store_prefix)?;
@@ -424,12 +462,12 @@ impl PreparedApk {
         if kind == StepKind::Apksigner {
             for (key, path) in [
                 ("KEYSTORE", self.inputs.keystore.as_ref()),
+                ("STORE_PASSWORD_FILE", self.inputs.store_password_file.as_ref()),
                 ("KEY_PASSWORD_FILE", self.inputs.key_password_file.as_ref()),
             ] {
                 let path = path.ok_or_else(|| Error::InvalidInput(format!("{key} missing")))?;
-                let path = store_path(path, store_prefix)?;
-                env.insert(key.into(), path.clone());
-                declared.push(path);
+                declared.push(store_object(path, store_prefix)?);
+                env.insert(key.into(), store_path(path, store_prefix)?);
             }
         }
         declared.sort_unstable();
@@ -458,16 +496,16 @@ impl PreparedApk {
             self.plan.toolchain.jdk.unpack_shape.root.trim_end_matches('/'),
             self.plan.toolchain.platform.unpack_shape.root.trim_end_matches('/')
         );
-        script.push_str(&self.command(kind));
+        script.push_str(&self.command(kind)?);
         Ok(script)
     }
 
-    fn command(&self, kind: StepKind) -> String {
-        match kind {
+    fn command(&self, kind: StepKind) -> Result<String, Error> {
+        Ok(match kind {
             StepKind::Aapt2Compile => {
                 let mut script = String::from("\"$UTILITY\" mkdir -p \"$out/compiled-resources\"\n");
                 for input in &self.lowered.steps[0].inputs {
-                    if let crunch_android_core::StepInput::SourceMember(member) = input {
+                    if let crunch_android_core::reviewed::StepInput::SourceMember(member) = input {
                         script.push_str(&format!("run_sdk \"$build_root/aapt2\" compile -o \"$out/compiled-resources\" \"$SOURCE_ROOT/{member}\"\n"));
                     }
                 }
@@ -477,7 +515,7 @@ impl PreparedApk {
             StepKind::Javac => {
                 let mut script = String::from("\"$UTILITY\" mkdir -p \"$out/classes\"\nset --\n\"$UTILITY\" find \"$LINKED/gen\" -type f -name '*.java' | \"$UTILITY\" sort > \"$PWD/generated-java.list\"\nwhile IFS= read -r item; do set -- \"$@\" \"$item\"; done < \"$PWD/generated-java.list\"\n");
                 for input in &self.lowered.steps[2].inputs {
-                    if let crunch_android_core::StepInput::SourceMember(member) = input {
+                    if let crunch_android_core::reviewed::StepInput::SourceMember(member) = input {
                         script.push_str(&format!("set -- \"$@\" \"$SOURCE_ROOT/{member}\"\n"));
                     }
                 }
@@ -486,14 +524,14 @@ impl PreparedApk {
             StepKind::D8 => "\"$UTILITY\" find \"$CLASSES/classes\" -type f -name '*.class' | \"$UTILITY\" sort > \"$PWD/classes.list\"\nset --\nwhile IFS= read -r item; do set -- \"$@\" \"$item\"; done < \"$PWD/classes.list\"\nrun_sdk \"$jdk_root/bin/java\" -Xmx2G -cp \"$build_root/lib/d8.jar\" com.android.tools.r8.D8 --lib \"$platform_root/android.jar\" --output \"$out\" \"$@\"\n".into(),
             StepKind::Zipalign => "\"$UTILITY\" cp \"$LINKED/linked-resources.apk\" \"$PWD/with-dex.apk\"\nentry_date=$(\"$UTILITY\" date -u -d \"@$SOURCE_DATE_EPOCH\" +%Y-%m-%dT%H:%M:%SZ)\nrun_sdk \"$jdk_root/bin/jar\" --update --file \"$PWD/with-dex.apk\" --date \"$entry_date\" -C \"$DEX\" classes.dex\nrun_sdk \"$build_root/zipalign\" -f 4 \"$PWD/with-dex.apk\" \"$out/unsigned.apk\"\n".into(),
             StepKind::Apksigner => {
-                let signing = self.plan.signing.as_ref().expect("signed step requires signing plan");
+                let signing = self.plan.signing.as_ref().ok_or_else(|| Error::InvalidInput("signed step requires signing plan".into()))?;
                 let mut args = String::new();
                 for scheme in ["v1", "v2", "v3"] {
                     args.push_str(&format!(" --{scheme}-signing-enabled {}", signing.schemes.iter().any(|enabled| enabled == scheme)));
                 }
-                format!("run_sdk \"$jdk_root/bin/java\" -Xmx1024M -jar \"$build_root/lib/apksigner.jar\" sign --ks \"$KEYSTORE\" --ks-key-alias '{}' --ks-pass \"file:$KEY_PASSWORD_FILE\" --key-pass \"file:$KEY_PASSWORD_FILE\"{args} --out \"$out/signed.apk\" \"$UNSIGNED/unsigned.apk\"\n", signing.key_alias)
+                format!("run_sdk \"$jdk_root/bin/java\" -Xmx1024M -jar \"$build_root/lib/apksigner.jar\" sign --ks \"$KEYSTORE\" --ks-key-alias '{}' --ks-pass \"file:$STORE_PASSWORD_FILE\" --key-pass \"file:$KEY_PASSWORD_FILE\"{args} --out \"$out/signed.apk\" \"$UNSIGNED/unsigned.apk\"\n", signing.key_alias)
             }
-        }
+        })
     }
 }
 
@@ -501,3 +539,1091 @@ impl PreparedApk {
 mod integration_tests;
 #[cfg(test)]
 mod tests;
+
+pub mod pinned {
+    //! Adapter for the pinned fixed-output source cohort and input-addressed APK stages.
+    //! Offline preflight and native-sandbox derivations for the pinned Android APK cohort.
+    //! The archive paths are inspected locally, but never used as build inputs: each
+    //! executable is reached through its pinned, flat fixed-output fetch derivation.
+
+    use std::collections::BTreeMap;
+    use std::collections::BTreeSet;
+    use std::collections::HashMap;
+    use std::fmt;
+    use std::fs::File;
+    use std::io::Read;
+    use std::path::Path;
+    use std::path::PathBuf;
+
+    use base64::Engine;
+    use crunch_android_core::ApkPlan;
+    use crunch_android_core::StepKind;
+    use crunch_android_core::ToolchainComponent;
+    use crunch_android_core::validate_and_lower;
+    use crunch_glue::ConversionCache;
+    use crunch_glue::CrunchDerivation;
+    use crunch_glue::FixedOutput;
+    use crunch_glue::Input;
+    use crunch_glue::convert;
+    use serde::Deserialize;
+    use serde::Serialize;
+    use sha2::Digest;
+    use sha2::Sha256;
+
+    #[derive(Clone, Debug, Deserialize, Serialize)]
+    pub struct ApkInputs {
+        pub source_root: String,
+        pub archives: Vec<ArchiveInput>,
+        pub runtime_loader: String,
+        pub native_libgcc_root: String,
+        pub runtime_library_paths: Vec<String>,
+    }
+
+    #[derive(Clone, Debug, Deserialize, Serialize)]
+    pub struct ArchiveInput {
+        pub component: String,
+        pub local_archive: PathBuf,
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct ApkDerivations {
+        /// Ordered APK stages only; the archive fetches and extracts are recursive dependencies.
+        pub stages: Vec<CrunchDerivation>,
+        pub final_derivation: CrunchDerivation,
+        pub final_output_path: String,
+    }
+
+    #[derive(Debug)]
+    pub struct AdapterError(String);
+
+    impl fmt::Display for AdapterError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str(&self.0)
+        }
+    }
+    impl std::error::Error for AdapterError {}
+
+    fn error(message: impl Into<String>) -> AdapterError {
+        AdapterError(message.into())
+    }
+
+    #[derive(Clone, Debug, Deserialize)]
+    struct SourceRecord {
+        component: String,
+        version: String,
+        url: String,
+        sha256: String,
+        record_blake3: String,
+        unpack_shape: String,
+        platform: String,
+    }
+
+    const COMPONENTS: [&str; 3] = ["jdk", "build-tools", "platform-android-jar"];
+
+    /// Evaluate the production Nickel cohort; callers cannot substitute an identity
+    /// or fetch URL, even if a forged `ApkPlan` passes the pure shape validator.
+    pub fn prepare_apk(plan: &ApkPlan, inputs: &ApkInputs, store_prefix: &str) -> Result<ApkDerivations, AdapterError> {
+        let embedded_dir =
+            tempfile::tempdir().map_err(|e| error(format!("creating private Android cohort import directory: {e}")))?;
+        let stdlib_directory = crunch_eval::stdlib::write_stdlib(Some(embedded_dir.path()))
+            .map_err(|e| error(format!("materializing pinned Android cohort imports: {e}")))?;
+        let json = crunch_eval::evaluate_str_to_json("let android = import \"android.ncl\" in android.cohort", &[
+            stdlib_directory.into_os_string(),
+        ])
+        .map_err(|e| error(format!("evaluating pinned Android cohort: {e}")))?;
+        let records: Vec<SourceRecord> =
+            serde_json::from_str(&json).map_err(|e| error(format!("decoding pinned Android cohort: {e}")))?;
+        prepare_with_records(plan, inputs, store_prefix, &records)
+    }
+
+    fn archive_sha256(path: &Path) -> Result<String, AdapterError> {
+        let mut file =
+            File::open(path).map_err(|e| error(format!("opening Android archive {}: {e}", path.display())))?;
+        let archive_size_bytes = file
+            .metadata()
+            .map_err(|e| error(format!("reading Android archive {} metadata: {e}", path.display())))?
+            .len();
+        if archive_size_bytes > super::MAX_ARCHIVE_BYTES {
+            return Err(error(format!("Android archive exceeds 2 GiB: {}", path.display())));
+        }
+        assert!(archive_size_bytes <= super::MAX_ARCHIVE_BYTES);
+        let mut hasher = Sha256::new();
+        let mut buffer = [0_u8; 64 * 1024];
+        let mut remaining_bytes = archive_size_bytes;
+        while remaining_bytes > 0 {
+            let read_bytes = usize::try_from(remaining_bytes).unwrap_or(buffer.len()).min(buffer.len());
+            let count = file
+                .read(&mut buffer[..read_bytes])
+                .map_err(|e| error(format!("reading Android archive {}: {e}", path.display())))?;
+            if count == 0 {
+                return Err(error(format!("Android archive shortened during read: {}", path.display())));
+            }
+            hasher.update(&buffer[..count]);
+            remaining_bytes -= count as u64;
+        }
+        assert_eq!(remaining_bytes, 0);
+        if file
+            .read(&mut buffer[..1])
+            .map_err(|e| error(format!("reading Android archive {}: {e}", path.display())))?
+            != 0
+        {
+            return Err(error(format!("Android archive grew during read: {}", path.display())));
+        }
+        Ok(format!("sha256-{}", base64::engine::general_purpose::STANDARD.encode(hasher.finalize())))
+    }
+
+    fn record_identity(record: &SourceRecord) -> Result<String, AdapterError> {
+        let fields = [
+            record.component.as_str(),
+            record.version.as_str(),
+            record.url.as_str(),
+            record.sha256.as_str(),
+            record.unpack_shape.as_str(),
+            record.platform.as_str(),
+        ];
+        let json = serde_json::to_string(&fields).map_err(|e| error(format!("encoding Android record: {e}")))?;
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(b"mantle-android-source-v1\n");
+        hasher.update(json.as_bytes());
+        Ok(blake3::Hasher::finalize(&hasher).to_hex().to_string())
+    }
+
+    struct StorePrefix<'a>(&'a str);
+
+    /// Extract the store object, not a file within it. Every sandbox path used as
+    /// input must belong to exactly this configured store namespace.
+    fn store_object(path: &str, namespace: StorePrefix<'_>) -> Result<String, AdapterError> {
+        let prefix = namespace.0;
+        if !prefix.starts_with('/') || !prefix.is_ascii() {
+            return Err(error("store prefix must be an absolute normalized directory"));
+        }
+        if prefix == "/" || prefix.ends_with('/') {
+            return Err(error("store prefix must be an absolute normalized directory"));
+        }
+        if prefix[1..].split('/').any(|part| part.is_empty() || part == "." || part == "..") {
+            return Err(error("store prefix must be an absolute normalized directory"));
+        }
+        let rest = path
+            .strip_prefix(prefix)
+            .and_then(|value| value.strip_prefix('/'))
+            .ok_or_else(|| error(format!("path is outside configured store prefix: {path}")))?;
+        let mut parts = rest.split('/');
+        let object = parts.next().unwrap_or_default();
+        if !object.is_ascii() || object.len() < 34 {
+            return Err(error(format!("not a normalized store path: {path}")));
+        }
+        if object.as_bytes().get(32) != Some(&b'-')
+            || !object[..32].bytes().all(|byte| b"0123456789abcdfghijklmnpqrsvwxyz".contains(&byte))
+        {
+            return Err(error(format!("not a normalized store path: {path}")));
+        }
+        let valid_name =
+            |part: &str| part.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"+._?=-".contains(&byte));
+        if !valid_name(&object[33..]) {
+            return Err(error(format!("not a normalized store path: {path}")));
+        }
+        let valid_component = |part: &str| !part.is_empty() && part != "." && part != ".." && valid_name(part);
+        if parts.any(|part| !valid_component(part)) {
+            return Err(error(format!("not a normalized store path: {path}")));
+        }
+        assert!(object.len() >= 34);
+        assert!(prefix.starts_with('/'));
+        Ok(format!("{prefix}/{object}"))
+    }
+
+    fn shell(value: &str) -> Result<String, AdapterError> {
+        if value.contains('\0') {
+            return Err(error("NUL in APK shell argument"));
+        }
+        Ok(format!("'{}'", value.replace('\'', "'\\''")))
+    }
+
+    struct DrvSpec<'a> {
+        name: &'a str,
+        builder: &'a str,
+        args: Vec<String>,
+        inputs: Vec<Input>,
+        env: HashMap<String, String>,
+        fixed: Option<FixedOutput>,
+    }
+
+    fn drv(spec: DrvSpec<'_>) -> CrunchDerivation {
+        let DrvSpec {
+            name,
+            builder,
+            args,
+            inputs,
+            env,
+            fixed,
+        } = spec;
+        debug_assert!(!name.is_empty());
+        debug_assert!(builder.starts_with('/') || builder == "builtin:fetchurl");
+        CrunchDerivation {
+            name: name.to_owned(),
+            builder: builder.to_owned(),
+            system: "x86_64-linux".to_owned(),
+            args,
+            outputs: vec!["out".to_owned()],
+            dynamic_plan_outputs: vec![],
+            env,
+            inputs,
+            fixed_output: fixed,
+            addressing_mode: "input-addressed".to_owned(),
+            provenance: None,
+        }
+    }
+
+    fn output_path(
+        derivation: &CrunchDerivation,
+        cache: &mut ConversionCache,
+        prefix: &str,
+    ) -> Result<String, AdapterError> {
+        let (_, converted) = convert(derivation, cache)
+            .map_err(|e| error(format!("converting Android derivation {}: {e}", derivation.name)))?;
+        converted
+            .outputs
+            .get("out")
+            .and_then(|value| value.path.as_ref())
+            .map(|value| value.to_absolute_path_with_prefix(prefix))
+            .ok_or_else(|| error(format!("missing computed output path for {}", derivation.name)))
+    }
+
+    fn step_name(kind: StepKind) -> &'static str {
+        match kind {
+            StepKind::Aapt2Compile => "android-aapt2-compile",
+            StepKind::Aapt2Link => "android-aapt2-link",
+            StepKind::Javac => "android-javac",
+            StepKind::D8 => "android-d8",
+            StepKind::Zipalign => "android-zipalign-unsigned.apk",
+            StepKind::Apksigner => "android-apksigner-signed.apk",
+        }
+    }
+
+    fn tool_record<'a>(
+        records: &BTreeMap<&str, &'a SourceRecord>,
+        component: ToolchainComponent,
+    ) -> Result<&'a SourceRecord, AdapterError> {
+        let name = match component {
+            ToolchainComponent::Jdk => "jdk",
+            ToolchainComponent::BuildTools => "build-tools",
+            ToolchainComponent::Platform => "platform-android-jar",
+        };
+        records
+            .get(name)
+            .copied()
+            .ok_or_else(|| error(format!("missing pinned Android source record: {name}")))
+    }
+
+    struct StageScript<'a> {
+        kind: StepKind,
+        plan: &'a ApkPlan,
+        source: &'a str,
+        paths: &'a BTreeMap<String, String>,
+        previous: &'a BTreeMap<&'static str, String>,
+        loader: &'a str,
+        libraries: &'a str,
+    }
+
+    fn stage_script(context: StageScript<'_>) -> Result<String, AdapterError> {
+        let StageScript {
+            kind,
+            plan,
+            paths,
+            previous,
+            loader,
+            libraries,
+            ..
+        } = &context;
+        let jdk = paths.get("jdk").map(String::as_str).unwrap_or("");
+        let tools = paths.get("build-tools").map(String::as_str).unwrap_or("");
+        let platform = paths.get("platform-android-jar").map(String::as_str).unwrap_or("");
+        let q = |value: &str| shell(value);
+        let mut libraries = (*libraries).to_owned();
+        if !jdk.is_empty() {
+            libraries.push_str(&format!(":{jdk}/lib:{jdk}/lib/server"));
+        }
+        if !tools.is_empty() {
+            libraries.push_str(&format!(":{tools}/lib64"));
+        }
+        let run = format!("{} --library-path {}", q(loader)?, q(&libraries)?);
+        let java = || -> Result<String, AdapterError> {
+            Ok(format!(
+                "{run} {} -Duser.language=en -Duser.country=US -Duser.timezone=UTC -Dfile.encoding=UTF-8",
+                q(&format!("{jdk}/bin/java"))?
+            ))
+        };
+        let output = |name: &'static str| -> Result<&str, AdapterError> {
+            previous
+                .get(name)
+                .map(String::as_str)
+                .ok_or_else(|| error(format!("missing prior Android step output: {name}")))
+        };
+        let mut script =
+            String::from("set -eu\nexport LC_ALL=C TZ=UTC\nexport JAVA_TOOL_OPTIONS=\"-Djava.io.tmpdir=$TMPDIR\"\n");
+        match kind {
+            StepKind::Aapt2Compile | StepKind::Aapt2Link | StepKind::Javac => {
+                render_early_stage(&context, &run, &mut script)?;
+            }
+            StepKind::D8 => {
+                let java = java()?;
+                script.push_str(&format!("/bin/busybox mkdir -p \"$out\"\n/bin/busybox find {} -type f -name '*.class' -print | /bin/busybox sort > \"$TMPDIR/android-classes\"\nset --\nwhile IFS= read -r path; do set -- \"$@\" \"$path\"; done < \"$TMPDIR/android-classes\"\n",
+                q(output("javac")?)?));
+                script.push_str(&format!(
+                    "{java} -cp {} com.android.tools.r8.D8 --lib {} --min-api 23 --output \"$out\" \"$@\"\n",
+                    q(&format!("{tools}/lib/d8.jar"))?,
+                    q(&format!("{platform}/android.jar"))?
+                ));
+            }
+            StepKind::Zipalign => {
+                script.push_str(&format!("/bin/busybox mkdir -p \"$TMPDIR/android-merge\"\n/bin/busybox unzip -q {} -d \"$TMPDIR/android-merge\"\n/bin/busybox find {} -type f -name 'classes*.dex' -print | /bin/busybox sort > \"$TMPDIR/android-dex\"\nwhile IFS= read -r dex; do /bin/busybox cp \"$dex\" \"$TMPDIR/android-merge/\"; done < \"$TMPDIR/android-dex\"\nstamp=$(/bin/busybox date -u -d \"@$SOURCE_DATE_EPOCH\" '+%Y%m%d%H%M.%S')\n/bin/busybox find \"$TMPDIR/android-merge\" -exec /bin/busybox touch -t \"$stamp\" {{}} +\n(cd \"$TMPDIR/android-merge\" && /bin/busybox find . -type f -print | /bin/busybox sort > \"$TMPDIR/android-zip-members\")\nset --\nwhile IFS= read -r member; do set -- \"$@\" \"${{member#./}}\"; done < \"$TMPDIR/android-zip-members\"\n(cd \"$TMPDIR/android-merge\" && {run} {} -J-Duser.language=en -J-Duser.country=US -J-Duser.timezone=UTC -J-Dfile.encoding=UTF-8 --create --file \"$TMPDIR/android-merged.apk\" --no-manifest --no-compress \"$@\")\n{run} {} -f 4 \"$TMPDIR/android-merged.apk\" \"$out\"\n",
+                q(&format!("{}/base.apk", output("link")?))?, q(output("d8")?)?,
+                q(&format!("{jdk}/bin/jar"))?, q(&format!("{tools}/zipalign"))?));
+            }
+            StepKind::Apksigner => {
+                let java = java()?;
+                let signing =
+                    plan.signing.as_ref().ok_or_else(|| error("signing stage without signing declaration"))?;
+                let flags = signing_flags(&signing.schemes);
+                script.push_str(&format!("{java} -cp {} com.android.apksigner.ApkSignerTool sign --ks {} --ks-key-alias {} --ks-pass {} --key-pass {} {flags} --v4-signing-enabled false --out \"$out\" {}\n",
+                q(&format!("{tools}/lib/apksigner.jar"))?, q(&signing.keystore)?, q(&signing.alias)?,
+                q(&format!("file:{}", signing.store_password_file))?, q(&format!("file:{}", signing.key_password_file))?,
+                q(output("zipalign")?)?));
+            }
+        }
+        assert!(script.starts_with("set -eu\n"));
+        assert!(run.contains("--library-path"));
+        Ok(script)
+    }
+
+    fn signing_flags(schemes: &[String]) -> String {
+        ["v1", "v2", "v3"]
+            .iter()
+            .map(|scheme| format!("--{scheme}-signing-enabled {}", schemes.iter().any(|candidate| candidate == scheme)))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    fn render_early_stage(context: &StageScript<'_>, run: &str, script: &mut String) -> Result<(), AdapterError> {
+        let StageScript {
+            kind,
+            plan,
+            source,
+            paths,
+            previous,
+            ..
+        } = context;
+        let jdk = paths.get("jdk").map(String::as_str).unwrap_or("");
+        let tools = paths.get("build-tools").map(String::as_str).unwrap_or("");
+        let platform = paths.get("platform-android-jar").map(String::as_str).unwrap_or("");
+        let q = |value: &str| shell(value);
+        let output = |name: &'static str| -> Result<&str, AdapterError> {
+            previous
+                .get(name)
+                .map(String::as_str)
+                .ok_or_else(|| error(format!("missing prior Android step output: {name}")))
+        };
+        assert!(!source.is_empty());
+        assert!(run.contains("--library-path"));
+        match kind {
+            StepKind::Aapt2Compile => {
+                script.push_str("/bin/busybox mkdir -p \"$out\"\n");
+                let mut resources: Vec<_> = plan.resources.iter().map(String::as_str).collect();
+                resources.sort_unstable();
+                let executable = q(&format!("{tools}/aapt2"))?;
+                for resource in resources {
+                    script.push_str(&format!(
+                        "{run} {executable} compile -o \"$out\" {}\n",
+                        q(&format!("{source}/{resource}"))?
+                    ));
+                }
+            }
+            StepKind::Aapt2Link => {
+                script.push_str("/bin/busybox mkdir -p \"$out/java\"\nset --\n");
+                script.push_str(&format!("/bin/busybox find {} -type f -name '*.flat' -print | /bin/busybox sort > \"$TMPDIR/android-flats\"\nwhile IFS= read -r path; do set -- \"$@\" \"$path\"; done < \"$TMPDIR/android-flats\"\n",
+                q(output("compile")?)?));
+                script.push_str(&format!("{run} {} link -o \"$out/base.apk\" --manifest {} -I {} --java \"$out/java\" --custom-package {} --rename-manifest-package {} --version-code {} --version-name {} \"$@\"\n",
+                q(&format!("{tools}/aapt2"))?, q(&format!("{source}/{}", plan.manifest))?, q(&format!("{platform}/android.jar"))?,
+                q(&plan.application_id)?, q(&plan.application_id)?, plan.version_code, q(&plan.version_name)?));
+            }
+            StepKind::Javac => {
+                script.push_str(&format!("/bin/busybox mkdir -p \"$out\"\n/bin/busybox find {} -type f -name '*.java' -print | /bin/busybox sort > \"$TMPDIR/android-generated-java\"\nset --\nwhile IFS= read -r path; do set -- \"$@\" \"$path\"; done < \"$TMPDIR/android-generated-java\"\n",
+                q(&format!("{}/java", output("link")?))?));
+                let mut sources: Vec<_> = plan.java_sources.iter().map(String::as_str).collect();
+                sources.sort_unstable();
+                for src in sources {
+                    script.push_str(&format!("set -- \"$@\" {}\n", q(&format!("{source}/{src}"))?));
+                }
+                script.push_str(&format!("{run} {} -J-Duser.language=en -J-Duser.country=US -J-Duser.timezone=UTC -J-Dfile.encoding=UTF-8 -source 8 -target 8 -classpath {} -d \"$out\" \"$@\"\n",
+                q(&format!("{jdk}/bin/javac"))?, q(&format!("{platform}/android.jar"))?));
+            }
+            _ => return Err(error("unexpected early Android stage")),
+        }
+        Ok(())
+    }
+
+    struct PinnedPreflight<'a> {
+        steps: Vec<crunch_android_core::StepPlan>,
+        runtime_inputs: [String; 2],
+        records: BTreeMap<&'a str, &'a SourceRecord>,
+    }
+
+    fn prepare_with_records(
+        plan: &ApkPlan,
+        inputs: &ApkInputs,
+        prefix: &str,
+        cohort: &[SourceRecord],
+    ) -> Result<ApkDerivations, AdapterError> {
+        let PinnedPreflight {
+            steps,
+            runtime_inputs,
+            records,
+        } = preflight(plan, inputs, prefix, cohort)?;
+        let mut cache = ConversionCache::new(prefix);
+        let extraction = prepare_extractions(plan, prefix, &records, &mut cache)?;
+        let context = StageAssembly {
+            plan,
+            inputs,
+            prefix,
+            runtime_inputs: &runtime_inputs,
+            records: &records,
+            extraction: &extraction,
+        };
+        assemble_stages(context, &steps, &mut cache)
+    }
+
+    fn preflight<'a>(
+        plan: &ApkPlan,
+        inputs: &ApkInputs,
+        prefix: &str,
+        cohort: &'a [SourceRecord],
+    ) -> Result<PinnedPreflight<'a>, AdapterError> {
+        let steps = validate_and_lower(plan).map_err(|e| error(format!("invalid Android plan: {e:?}")))?;
+        if store_object(&inputs.source_root, StorePrefix(prefix))? != inputs.source_root {
+            return Err(error("source_root must name a complete store object"));
+        }
+        let runtime_inputs = runtime_roots(inputs, prefix)?;
+        if cohort.iter().map(|r| r.component.as_str()).collect::<BTreeSet<_>>().len() != cohort.len() {
+            return Err(error("duplicate pinned Android source component"));
+        }
+        let records: BTreeMap<&str, &SourceRecord> =
+            cohort.iter().map(|record| (record.component.as_str(), record)).collect();
+        let archives: BTreeMap<_, _> =
+            inputs.archives.iter().map(|r| (r.component.as_str(), &r.local_archive)).collect();
+        if archives.len() != inputs.archives.len()
+            || archives.len() != COMPONENTS.len()
+            || !archives.keys().all(|name| COMPONENTS.contains(name))
+        {
+            return Err(error("exactly one local archive per Android tool component is required"));
+        }
+        // No fetch, extract, or executable script is generated until *all* three
+        // identities and observed archive bytes have passed preflight.
+        verify_pinned_archives(plan, &records, &archives)?;
+        if let Some(signing) = &plan.signing {
+            for file in [
+                &signing.keystore,
+                &signing.store_password_file,
+                &signing.key_password_file,
+            ] {
+                let root = store_object(file, StorePrefix(prefix))?;
+                if root == *file {
+                    return Err(error(format!("signing input must name a file within a store object: {file}")));
+                }
+            }
+        }
+        assert_eq!(records.len(), cohort.len());
+        assert_ne!(runtime_inputs[0], runtime_inputs[1]);
+        Ok(PinnedPreflight {
+            steps,
+            runtime_inputs,
+            records,
+        })
+    }
+
+    fn runtime_roots(inputs: &ApkInputs, prefix: &str) -> Result<[String; 2], AdapterError> {
+        let glibc_root = store_object(&inputs.runtime_loader, StorePrefix(prefix))?;
+        let libgcc_root = store_object(&inputs.native_libgcc_root, StorePrefix(prefix))?;
+        let is_distinct_roots = libgcc_root != glibc_root
+            && inputs.runtime_loader != glibc_root
+            && inputs.source_root != glibc_root
+            && inputs.source_root != libgcc_root;
+        if libgcc_root != inputs.native_libgcc_root || !is_distinct_roots {
+            return Err(error(
+                "Android app, glibc loader and independent libgcc root must name distinct store objects",
+            ));
+        }
+        let [first_path, second_path] = inputs.runtime_library_paths.as_slice() else {
+            return Err(error("Android tools require one library directory from each native runtime root"));
+        };
+        let first_root = store_object(first_path, StorePrefix(prefix))?;
+        let second_root = store_object(second_path, StorePrefix(prefix))?;
+        if first_path == &first_root
+            || second_path == &second_root
+            || !((first_root == glibc_root && second_root == libgcc_root)
+                || (first_root == libgcc_root && second_root == glibc_root))
+        {
+            return Err(error("Android runtime library directories must name distinct glibc and libgcc roots"));
+        }
+        assert_ne!(glibc_root, libgcc_root);
+        assert_ne!(first_root, second_root);
+        Ok([glibc_root, libgcc_root])
+    }
+
+    fn verify_pinned_archives(
+        plan: &ApkPlan,
+        records: &BTreeMap<&str, &SourceRecord>,
+        archives: &BTreeMap<&str, &PathBuf>,
+    ) -> Result<(), AdapterError> {
+        for (identity, component) in [
+            (&plan.toolchains.jdk, "jdk"),
+            (&plan.toolchains.build_tools, "build-tools"),
+            (&plan.toolchains.platform, "platform-android-jar"),
+        ] {
+            let record = records
+                .get(component)
+                .copied()
+                .ok_or_else(|| error(format!("missing pinned Android source record: {component}")))?;
+            let is_pinned_shape = matches!(
+                (component, record.unpack_shape.as_str()),
+                ("jdk", "jdk-17.0.17+10/") | ("build-tools", "android-15/") | ("platform-android-jar", "android-35/")
+            );
+            if record.component != component || record.platform != "x86_64-linux" {
+                return Err(error(format!("invalid pinned Android source declaration: {component}")));
+            }
+            assert_eq!(record.component, component);
+            if !record.url.starts_with("https://")
+                || record_identity(record)? != record.record_blake3
+                || !is_pinned_shape
+            {
+                return Err(error(format!("invalid pinned Android source declaration: {component}")));
+            }
+            if identity.component != component
+                || identity.record_blake3 != record.record_blake3
+                || identity.sha256 != record.sha256
+            {
+                return Err(error(format!("Android plan tool identity differs from pinned cohort: {component}")));
+            }
+            let archive = archives
+                .get(component)
+                .ok_or_else(|| error(format!("missing local Android archive: {component}")))?;
+            let observed = archive_sha256(archive)?;
+            if observed != record.sha256 {
+                return Err(error(format!(
+                    "Android archive SHA-256 drift for {component}: expected {}, observed {observed}",
+                    record.sha256
+                )));
+            }
+            assert_eq!(observed, record.sha256);
+        }
+        Ok(())
+    }
+
+    struct ExtractedCohort {
+        fetches: BTreeMap<String, CrunchDerivation>,
+        extracts: BTreeMap<String, CrunchDerivation>,
+        paths: BTreeMap<String, String>,
+    }
+
+    fn prepare_extractions(
+        plan: &ApkPlan,
+        prefix: &str,
+        records: &BTreeMap<&str, &SourceRecord>,
+        cache: &mut ConversionCache,
+    ) -> Result<ExtractedCohort, AdapterError> {
+        let mut fetches = BTreeMap::new();
+        let mut extracts = BTreeMap::new();
+        let mut extracted_paths = BTreeMap::new();
+        for component in COMPONENTS {
+            let record = records
+                .get(component)
+                .copied()
+                .ok_or_else(|| error(format!("missing pinned Android source record: {component}")))?;
+            let fetched = drv(DrvSpec {
+                name: &format!("android-{}-{}", component, record.version),
+                builder: "builtin:fetchurl",
+                args: vec![],
+                inputs: vec![],
+                env: HashMap::from([("url".to_owned(), record.url.clone())]),
+                fixed: Some(FixedOutput {
+                    hash: record.sha256.clone(),
+                    algo: "sha256".to_owned(),
+                    mode: "flat".to_owned(),
+                }),
+            });
+            let archive_path = output_path(&fetched, cache, prefix)?;
+            let mut env = HashMap::from([
+                ("SOURCE_DATE_EPOCH".to_owned(), plan.reproducibility.entry_timestamp_epoch.to_string()),
+                ("TZ".to_owned(), "UTC".to_owned()),
+            ]);
+            env.insert("MANTLE_ANDROID_TOOLCHAIN_SHA256".to_owned(), record.sha256.clone());
+            env.insert("MANTLE_ANDROID_TOOLCHAIN_RECORD_BLAKE3".to_owned(), record.record_blake3.clone());
+            env.insert("MANTLE_ANDROID_TOOLCHAIN_COMPONENT".to_owned(), component.to_owned());
+            let command = unpack_command(record, &archive_path)?;
+            let extracted = drv(DrvSpec {
+                name: &format!("android-unpack-{component}"),
+                builder: "/bin/sh",
+                args: vec!["-eu".to_owned(), "-c".to_owned(), command],
+                inputs: vec![Input::Derivation(Box::new(fetched.clone()))],
+                env,
+                fixed: None,
+            });
+            if extracted_paths.len() >= COMPONENTS.len() {
+                return Err(error("too many extracted Android components"));
+            }
+            extracted_paths.insert(component.to_owned(), format!("{}/", output_path(&extracted, cache, prefix)?));
+            if fetches.len() >= COMPONENTS.len() {
+                return Err(error("too many extracted Android components"));
+            }
+            fetches.insert(component.to_owned(), fetched);
+            if extracts.len() >= COMPONENTS.len() {
+                return Err(error("too many extracted Android components"));
+            }
+            extracts.insert(component.to_owned(), extracted);
+        }
+        assert_eq!(fetches.len(), COMPONENTS.len());
+        assert_eq!(extracts.len(), extracted_paths.len());
+        for component in COMPONENTS {
+            let path = extracted_paths
+                .get_mut(component)
+                .ok_or_else(|| error(format!("missing extracted Android path: {component}")))?;
+            let record = records
+                .get(component)
+                .ok_or_else(|| error(format!("missing pinned Android source record: {component}")))?;
+            path.push_str(record.unpack_shape.trim_end_matches('/'));
+        }
+        Ok(ExtractedCohort {
+            fetches,
+            extracts,
+            paths: extracted_paths,
+        })
+    }
+
+    fn unpack_command(record: &SourceRecord, archive_path: &str) -> Result<String, AdapterError> {
+        let archive = shell(archive_path)?;
+        if record.component == "jdk" {
+            Ok(format!("set -eu\n/bin/busybox mkdir -p \"$out\"\n/bin/busybox tar -xzf {} -C \"$out\"\n", archive))
+        } else {
+            Ok(format!("set -eu\n/bin/busybox mkdir -p \"$out\"\n/bin/busybox unzip -q {} -d \"$out\"\n", archive))
+        }
+    }
+
+    struct StageAssembly<'a> {
+        plan: &'a ApkPlan,
+        inputs: &'a ApkInputs,
+        prefix: &'a str,
+        runtime_inputs: &'a [String; 2],
+        records: &'a BTreeMap<&'a str, &'a SourceRecord>,
+        extraction: &'a ExtractedCohort,
+    }
+
+    fn assemble_stages(
+        context: StageAssembly<'_>,
+        steps: &[crunch_android_core::StepPlan],
+        cache: &mut ConversionCache,
+    ) -> Result<ApkDerivations, AdapterError> {
+        let StageAssembly {
+            plan, inputs, prefix, ..
+        } = &context;
+        let libraries = inputs.runtime_library_paths.join(":");
+        let mut prior = BTreeMap::new();
+        let mut stages: Vec<CrunchDerivation> = Vec::with_capacity(6);
+        for step in steps {
+            if stages.len() >= 6 {
+                return Err(error("too many Android APK stages"));
+            }
+            let (dependencies, stage_paths) = stage_dependencies(step, &context, &stages)?;
+            let script = stage_script(StageScript {
+                kind: step.kind,
+                plan,
+                source: &inputs.source_root,
+                paths: &stage_paths,
+                previous: &prior,
+                loader: &inputs.runtime_loader,
+                libraries: &libraries,
+            })?;
+            let env = stage_environment(step, &context, &stage_paths)?;
+            let derivation = drv(DrvSpec {
+                name: step_name(step.kind),
+                builder: "/bin/sh",
+                args: vec!["-eu".to_owned(), "-c".to_owned(), script],
+                inputs: dependencies,
+                env,
+                fixed: None,
+            });
+            let path = output_path(&derivation, cache, prefix)?;
+            let key = match step.kind {
+                StepKind::Aapt2Compile => "compile",
+                StepKind::Aapt2Link => "link",
+                StepKind::Javac => "javac",
+                StepKind::D8 => "d8",
+                StepKind::Zipalign => "zipalign",
+                StepKind::Apksigner => "apksigner",
+            };
+            if prior.len() >= 6 {
+                return Err(error("too many Android APK stages"));
+            }
+            prior.insert(key, path);
+            stages.push(derivation);
+        }
+        assert!(stages.len() <= 6);
+        assert_eq!(prior.len(), stages.len());
+        let final_derivation = stages.last().ok_or_else(|| error("Android plan has no APK stages"))?.clone();
+        let last_stage = if plan.signing.is_some() {
+            "apksigner"
+        } else {
+            "zipalign"
+        };
+        let final_output_path = prior
+            .get(last_stage)
+            .ok_or_else(|| error(format!("missing final Android output: {last_stage}")))?
+            .clone();
+        Ok(ApkDerivations {
+            stages,
+            final_derivation,
+            final_output_path,
+        })
+    }
+
+    fn stage_environment(
+        step: &crunch_android_core::StepPlan,
+        context: &StageAssembly<'_>,
+        stage_paths: &BTreeMap<String, String>,
+    ) -> Result<HashMap<String, String>, AdapterError> {
+        let mut env = HashMap::from([
+            ("SOURCE_DATE_EPOCH".to_owned(), context.plan.reproducibility.entry_timestamp_epoch.to_string()),
+            ("TZ".to_owned(), "UTC".to_owned()),
+        ]);
+        if let Some(jdk) = stage_paths.get("jdk") {
+            env.insert("JAVA_HOME".to_owned(), jdk.clone());
+        }
+        for component in step.required_toolchains.iter().copied() {
+            let record = tool_record(context.records, component)?;
+            let key = record.component.to_ascii_uppercase().replace('-', "_");
+            env.insert(format!("MANTLE_ANDROID_{key}_SHA256"), record.sha256.clone());
+            env.insert(format!("MANTLE_ANDROID_{key}_RECORD_BLAKE3"), record.record_blake3.clone());
+        }
+        assert!(env.contains_key("SOURCE_DATE_EPOCH"));
+        assert_eq!(env.get("TZ").map(String::as_str), Some("UTC"));
+        Ok(env)
+    }
+
+    fn stage_dependencies(
+        step: &crunch_android_core::StepPlan,
+        context: &StageAssembly<'_>,
+        stages: &[CrunchDerivation],
+    ) -> Result<(Vec<Input>, BTreeMap<String, String>), AdapterError> {
+        let mut dependencies = vec![Input::Source(context.inputs.source_root.clone())];
+        dependencies.extend(context.runtime_inputs.iter().cloned().map(Input::Source));
+        let mut stage_paths = BTreeMap::new();
+        for component in step.required_toolchains.iter().copied() {
+            if stage_paths.len() >= COMPONENTS.len() {
+                return Err(error("too many required Android toolchains"));
+            }
+            let record = tool_record(context.records, component)?;
+            let path = context
+                .extraction
+                .paths
+                .get(&record.component)
+                .ok_or_else(|| error(format!("missing Android extracted path: {}", record.component)))?;
+            let fetched = context
+                .extraction
+                .fetches
+                .get(&record.component)
+                .ok_or_else(|| error(format!("missing Android fetch derivation: {}", record.component)))?;
+            let extracted = context
+                .extraction
+                .extracts
+                .get(&record.component)
+                .ok_or_else(|| error(format!("missing Android extract derivation: {}", record.component)))?;
+            stage_paths.insert(record.component.clone(), path.clone());
+            dependencies.push(Input::Derivation(Box::new(fetched.clone())));
+            dependencies.push(Input::Derivation(Box::new(extracted.clone())));
+        }
+        let prior_names: &[&str] = match step.kind {
+            StepKind::Aapt2Compile => &[],
+            StepKind::Aapt2Link => &["compile"],
+            StepKind::Javac => &["link"],
+            StepKind::D8 => &["javac"],
+            StepKind::Zipalign => &["link", "d8"],
+            StepKind::Apksigner => &["zipalign"],
+        };
+        for name in prior_names {
+            let kind = match *name {
+                "compile" => StepKind::Aapt2Compile,
+                "link" => StepKind::Aapt2Link,
+                "javac" => StepKind::Javac,
+                "d8" => StepKind::D8,
+                "zipalign" => StepKind::Zipalign,
+                _ => return Err(error(format!("unknown prior Android stage: {name}"))),
+            };
+            let previous = stages
+                .iter()
+                .find(|d| d.name == step_name(kind))
+                .ok_or_else(|| error(format!("missing prior Android derivation: {name}")))?;
+            dependencies.push(Input::Derivation(Box::new(previous.clone())));
+        }
+        if step.kind == StepKind::Apksigner {
+            let signing =
+                context.plan.signing.as_ref().ok_or_else(|| error("signing stage without signing declaration"))?;
+            for path in [
+                &signing.keystore,
+                &signing.store_password_file,
+                &signing.key_password_file,
+            ] {
+                dependencies.push(Input::Source(store_object(path, StorePrefix(context.prefix))?));
+            }
+        }
+        assert!(stage_paths.len() <= COMPONENTS.len());
+        assert!(dependencies.len() >= 3);
+        Ok((dependencies, stage_paths))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use std::io::Write;
+
+        use crunch_android_core::ReproducibilityPolicy;
+        use crunch_android_core::SigningConfig;
+        use crunch_android_core::ToolchainIdentity;
+        use crunch_android_core::ToolchainRefs;
+
+        use super::*;
+
+        const PREFIX: &str = "/nix/store";
+        const ROOT: &str = "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-android-sources";
+        const SIGNING: &str = "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-release";
+
+        fn fixture() -> (tempfile::TempDir, ApkPlan, ApkInputs, Vec<SourceRecord>) {
+            let dir = tempfile::tempdir().unwrap();
+            let mut records = Vec::new();
+            let mut archives = Vec::new();
+            for (component, unpack) in [
+                ("jdk", "jdk-17.0.17+10/"),
+                ("build-tools", "android-15/"),
+                ("platform-android-jar", "android-35/"),
+            ] {
+                let local_archive = dir.path().join(component);
+                let mut file = File::create(&local_archive).unwrap();
+                file.write_all(format!("archive bytes for {component}").as_bytes()).unwrap();
+                let mut record = SourceRecord {
+                    component: component.into(),
+                    version: "synthetic".into(),
+                    url: format!("https://example.invalid/{component}"),
+                    sha256: archive_sha256(&local_archive).unwrap(),
+                    record_blake3: String::new(),
+                    unpack_shape: unpack.into(),
+                    platform: "x86_64-linux".into(),
+                };
+                record.record_blake3 = record_identity(&record).unwrap();
+                records.push(record);
+                archives.push(ArchiveInput {
+                    component: component.into(),
+                    local_archive,
+                });
+            }
+            let identity = |name: &str| {
+                let record = records.iter().find(|record| record.component == name).unwrap();
+                ToolchainIdentity {
+                    component: name.into(),
+                    sha256: record.sha256.clone(),
+                    record_blake3: record.record_blake3.clone(),
+                }
+            };
+            let plan = ApkPlan {
+                module: "app".into(),
+                application_id: "org.example.app".into(),
+                version_code: 7,
+                version_name: "1.0".into(),
+                manifest: "app/AndroidManifest.xml".into(),
+                resources: vec!["app/res/values/strings.xml".into(), "app/res/drawable/icon.xml".into()],
+                java_sources: vec!["app/src/Entry.java".into()],
+                toolchains: ToolchainRefs {
+                    jdk: identity("jdk"),
+                    build_tools: identity("build-tools"),
+                    platform: identity("platform-android-jar"),
+                },
+                signing: None,
+                reproducibility: ReproducibilityPolicy {
+                    entry_timestamp_epoch: 315_532_802,
+                    locale: "C".into(),
+                    timezone: "UTC".into(),
+                },
+            };
+            let inputs = ApkInputs {
+                source_root: ROOT.into(),
+                archives,
+                runtime_loader: "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-loader/lib/ld-linux-x86-64.so.2".into(),
+                native_libgcc_root: "/nix/store/1123456789abcdfghijklmnpqrsvwxyz-libgcc".into(),
+                runtime_library_paths: vec![
+                    "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-loader/lib".into(),
+                    "/nix/store/1123456789abcdfghijklmnpqrsvwxyz-libgcc/lib".into(),
+                ],
+            };
+            (dir, plan, inputs, records)
+        }
+
+        #[test]
+        fn oversized_archive_rejects_before_constructing_extraction_graph() {
+            let (_dir, plan, inputs, records) = fixture();
+            let archive = std::fs::OpenOptions::new().write(true).open(&inputs.archives[0].local_archive).unwrap();
+            archive.set_len(super::super::MAX_ARCHIVE_BYTES + 1).unwrap();
+            let rejection = prepare_with_records(&plan, &inputs, PREFIX, &records).unwrap_err().to_string();
+            assert!(rejection.contains("archive exceeds 2 GiB"), "{rejection}");
+        }
+
+        #[test]
+        fn byte_drift_rejects_entire_graph_before_generating_any_stage() {
+            let (_dir, plan, inputs, records) = fixture();
+            std::fs::write(&inputs.archives[2].local_archive, b"modified platform archive").unwrap();
+            let rejection = prepare_with_records(&plan, &inputs, PREFIX, &records).unwrap_err().to_string();
+            assert!(rejection.contains("SHA-256 drift for platform-android-jar"), "{rejection}");
+            let mut forged = plan.clone();
+            forged.toolchains.jdk.record_blake3 = "b".repeat(64);
+            let rejection = prepare_with_records(&forged, &inputs, PREFIX, &records).unwrap_err().to_string();
+            assert!(rejection.contains("identity differs from pinned cohort"), "{rejection}");
+        }
+
+        #[test]
+        fn final_output_identity_is_stable_and_changes_with_apk_inputs() {
+            let (_dir, mut plan, inputs, records) = fixture();
+            let unsigned = prepare_with_records(&plan, &inputs, PREFIX, &records).unwrap();
+            let replay = prepare_with_records(&plan, &inputs, PREFIX, &records).unwrap();
+            assert_eq!(unsigned.final_output_path, replay.final_output_path);
+
+            plan.resources.reverse();
+            let reordered = prepare_with_records(&plan, &inputs, PREFIX, &records).unwrap();
+            assert_eq!(unsigned.final_output_path, reordered.final_output_path);
+
+            plan.resources[0] = "app/res/values/changed.xml".into();
+            let changed_source = prepare_with_records(&plan, &inputs, PREFIX, &records).unwrap();
+            assert_ne!(unsigned.final_output_path, changed_source.final_output_path);
+
+            plan.signing = Some(SigningConfig {
+                keystore: format!("{SIGNING}/release.jks"),
+                store_password_file: format!("{SIGNING}/store.pass"),
+                key_password_file: format!("{SIGNING}/key.pass"),
+                alias: "release".into(),
+                schemes: vec!["v2".into(), "v3".into()],
+            });
+            let signed = prepare_with_records(&plan, &inputs, PREFIX, &records).unwrap();
+            assert_ne!(changed_source.final_output_path, signed.final_output_path);
+
+            plan.signing.as_mut().unwrap().alias = "next-release".into();
+            let next_signing_identity = prepare_with_records(&plan, &inputs, PREFIX, &records).unwrap();
+            assert_ne!(signed.final_output_path, next_signing_identity.final_output_path);
+        }
+
+        #[test]
+        fn every_sdk_stage_binds_distinct_glibc_and_libgcc_source_objects() {
+            let (_dir, plan, mut inputs, records) = fixture();
+            let original = prepare_with_records(&plan, &inputs, PREFIX, &records).unwrap();
+            let glibc = store_object(&inputs.runtime_loader, StorePrefix(PREFIX)).unwrap();
+            for stage in &original.stages {
+                assert!(
+                    stage.inputs.iter().any(|input| matches!(input, Input::Source(source) if source == &glibc)),
+                    "{} missing glibc",
+                    stage.name
+                );
+                assert!(
+                    stage
+                        .inputs
+                        .iter()
+                        .any(|input| matches!(input, Input::Source(source) if source == &inputs.native_libgcc_root)),
+                    "{} missing libgcc",
+                    stage.name
+                );
+            }
+            inputs.native_libgcc_root = "/nix/store/2123456789abcdfghijklmnpqrsvwxyz-libgcc".into();
+            inputs.runtime_library_paths[1] = format!("{}/lib", inputs.native_libgcc_root);
+            let changed = prepare_with_records(&plan, &inputs, PREFIX, &records).unwrap();
+            assert_ne!(original.final_output_path, changed.final_output_path);
+            inputs.native_libgcc_root = glibc.clone();
+            assert!(prepare_with_records(&plan, &inputs, PREFIX, &records).is_err());
+            inputs.native_libgcc_root = "/usr/lib/libgcc".into();
+            assert!(prepare_with_records(&plan, &inputs, PREFIX, &records).is_err());
+        }
+
+        #[test]
+        fn signed_apk_graph_is_accepted_by_strict_build_environment() {
+            fn check(derivation: &CrunchDerivation) {
+                for key in derivation.env.keys() {
+                    assert!(
+                        crunch_build::classify_denied_environment_variable(key).is_none(),
+                        "{} cannot build in strict mode because of {key}",
+                        derivation.name
+                    );
+                }
+                for input in &derivation.inputs {
+                    match input {
+                        Input::Derivation(child) => check(child),
+                        Input::OutputSelection(output) => check(&output.drv),
+                        _ => {}
+                    }
+                }
+            }
+
+            let locale = crunch_build::classify_denied_environment_variable("LC_ALL").unwrap();
+            assert_eq!(locale.class, crunch_build::ENV_REJECTION_LOCALE);
+            let (_dir, mut plan, inputs, records) = fixture();
+            plan.signing = Some(SigningConfig {
+                keystore: format!("{SIGNING}/release.jks"),
+                store_password_file: format!("{SIGNING}/store.pass"),
+                key_password_file: format!("{SIGNING}/key.pass"),
+                alias: "release".into(),
+                schemes: vec!["v1".into(), "v2".into(), "v3".into()],
+            });
+            let graph = prepare_with_records(&plan, &inputs, PREFIX, &records).unwrap();
+            check(&graph.final_derivation);
+        }
+
+        #[test]
+        fn declared_store_namespace_rejects_ambient_loader_and_foreign_signing() {
+            let (_dir, mut plan, mut inputs, records) = fixture();
+            let declared_loader = inputs.runtime_loader.clone();
+            inputs.runtime_loader = "/usr/lib/ld-linux.so".into();
+            assert!(
+                prepare_with_records(&plan, &inputs, PREFIX, &records)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("outside configured store prefix")
+            );
+            inputs.runtime_loader = format!("{ROOT}/ld.so");
+            assert!(
+                prepare_with_records(&plan, &inputs, PREFIX, &records)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("distinct store objects")
+            );
+            inputs.runtime_loader = declared_loader;
+            plan.signing = Some(SigningConfig {
+                keystore: "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/key.jks".into(),
+                store_password_file: "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/store.pass".into(),
+                key_password_file: "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-signing/key.pass".into(),
+                alias: "release".into(),
+                schemes: vec!["v1".into()],
+            });
+            plan.signing.as_mut().unwrap().keystore =
+                "/alternate/store/0123456789abcdfghijklmnpqrsvwxyz-signing/key.jks".into();
+            assert!(
+                prepare_with_records(&plan, &inputs, PREFIX, &records)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("outside configured store prefix")
+            );
+        }
+
+        #[test]
+        fn malformed_unicode_store_objects_are_rejected_without_panicking() {
+            let split_multibyte = format!("{PREFIX}/{}é-release/key.jks", "a".repeat(31));
+            assert!(store_object(&split_multibyte, StorePrefix(PREFIX)).is_err());
+            let inside_name = format!("{PREFIX}/0123456789abcdfghijklmnpqrsvwxyz-rélease/key.jks");
+            assert!(store_object(&inside_name, StorePrefix(PREFIX)).is_err());
+            assert!(store_object(ROOT, StorePrefix("/nix/störé")).is_err());
+        }
+    }
+}
+
+pub use pinned::AdapterError;
+pub use pinned::ApkDerivations;
+pub use pinned::ApkInputs;
+pub use pinned::ArchiveInput;
+pub use pinned::prepare_apk;

@@ -2,7 +2,12 @@
 
 ## Status
 
-Proposed (2026-09-30). The pure v2 ABI, signed-batch worker/store path, scoped tests, and a real outside-only two-run CLI/sandbox identity fixture are implemented. Final root strict gates and isolated-branch archival remain pending; this decision is not Accepted.
+Proposed (2026-09-30). Both committed lineages retain the pure v2 ABI,
+signed-batch worker/store path, focused regression fixtures, and separate
+bounded two-run CLI/sandbox observations. Those receipts retain their source
+subjects; they are not new validation of the reconciled tree. Final root
+strict gates and isolated-branch acceptance remain pending. This decision is
+not Accepted.
 
 ## Context
 
@@ -23,4 +28,4 @@ The pure planner takes worker-observed tree facts, rejects all failures before e
 
 ## Consequences
 
-The pure ABI can be tested independently while v1 remains byte-for-byte unchanged. Extra NAR hashing and store objects are bounded by count, path length/depth, and aggregate NAR bytes. Focused worker tests prove signed publication, identical-content deduplication, unchanged slice and unit paths across two different producer outputs, and unchanged registry/goal/scheduler/rejection-report state for invalid slices. Store tests prove two-backend batch atomicity for a conflicting candidate. Snix Redb's logical PathInfo batch does **not** guarantee physical castore cleanup or cross-process no-clobber: another signer may overwrite a preflighted digest before its unconditional insert. Even successful slice admission proves only observed subtree identity and publication, not source trust, license, producer correctness, build success, or release eligibility.
+The pure ABI can be exercised independently while v1 remains byte-for-byte unchanged. Extra NAR hashing and store objects are bounded by count, path length/depth, and aggregate NAR bytes. Worker and store regression fixtures cover signed publication, identical-content deduplication, unchanged slice and unit paths across producer reruns, unchanged registry/goal/scheduler/rejection-report state for invalid slices, and two-backend batch atomicity for conflicting candidates. These fixtures do not substitute for executed final reconciled-source gates. Snix Redb's logical PathInfo batch does **not** guarantee physical castore cleanup or cross-process no-clobber: another signer may overwrite a preflighted digest before its unconditional insert. Even successful slice admission proves only observed subtree identity and publication, not source trust, license, producer correctness, build success, or release eligibility.

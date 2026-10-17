@@ -30,7 +30,7 @@ fn scratch() -> tempfile::TempDir {
 #[test]
 fn reviewed_cohort_identity_is_blake3_of_normalized_metadata() {
     let rows = eval(
-        r#"let android = import "android.ncl" in
+        r#"let android = (import "android.ncl").reviewed in
         std.array.map (fun source => {
           component = source.component,
           canonical = android.canonical_record source,
@@ -50,9 +50,78 @@ fn reviewed_cohort_identity_is_blake3_of_normalized_metadata() {
 }
 
 #[test]
+fn published_source_and_reviewed_metadata_cannot_cross_identity_domains() {
+    let result = eval(
+        r#"let android = import "android.ncl" in
+          let published = std.array.last (std.array.filter (fun source => source.component == "jdk") android.cohort) in
+          let reviewed = android.reviewed.reviewed_source "temurin-jdk" in
+          {
+            same_archive = published.url == reviewed.url,
+            published_identity = published.record_blake3,
+            reviewed_metadata = reviewed.record_identity_blake3,
+            published_rejects_reviewed = android.validate_record reviewed |> match {
+              'Ok => false,
+              'Error problem => problem.code == "source-shape",
+            },
+          }"#,
+    )
+    .unwrap();
+    assert_eq!(result["same_archive"], true);
+    assert_eq!(result["published_identity"], "8cbc11f3a5933818ce0db999ee8ddd9f317ea560a375fc92cf87789fff9c1bfb");
+    assert_eq!(result["reviewed_metadata"], "5891c7afb04cf3c783a9294b9033ed22092ce83206c850af8bab79a6d2b49d35");
+    assert_eq!(result["published_rejects_reviewed"], true);
+}
+
+#[test]
+fn reviewed_tool_binding_uses_one_validated_source_v1_fetch_for_each_alias() {
+    use base64::Engine as _;
+
+    let rows = eval(
+        r#"let android = import "android.ncl" in
+          let aliases = [
+            ["temurin-jdk", "jdk"],
+            ["android-cmdline-tools", "sdk-commandline-tools"],
+            ["android-build-tools", "build-tools"],
+            ["android-platform", "platform-android-jar"],
+          ] in
+          std.array.map (fun pair =>
+            let reviewed = android.reviewed.reviewed_source (std.array.first pair) in
+            let published = std.array.last (std.array.filter
+              (fun source => source.component == std.array.last pair) android.cohort) in
+            let bound = android.reviewed.bind_tool (std.array.first pair) reviewed
+              { name = "source-v1-bridge-consumer", builder = "/bin/sh" } in
+            let source_fetch = std.array.first bound.inputs in
+            {
+              reviewed_hex = reviewed.sha256,
+              published_sri = published.sha256,
+              bound_sri = source_fetch.fixed_output.hash,
+              input_count = std.array.length bound.inputs,
+              published_component = bound.env.MANTLE_ANDROID_TOOLCHAIN_COMPONENT,
+              reviewed_component = bound.env.ANDROID_TOOLCHAIN_COMPONENT,
+              published_identity = bound.env.MANTLE_ANDROID_TOOLCHAIN_RECORD_BLAKE3,
+              expected_identity = published.record_blake3,
+            }
+          ) aliases"#,
+    )
+    .unwrap();
+    let rows = rows.as_array().unwrap();
+    assert_eq!(rows.len(), 4);
+    for row in rows {
+        let sri = row["published_sri"].as_str().unwrap().strip_prefix("sha256-").unwrap();
+        let decoded = base64::engine::general_purpose::STANDARD.decode(sri).unwrap();
+        let hex = decoded.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+        assert_eq!(row["reviewed_hex"], hex, "reviewed and published archive bytes must have the same SHA-256");
+        assert_eq!(row["bound_sri"], row["published_sri"]);
+        assert_eq!(row["input_count"], 1);
+        assert_eq!(row["published_identity"], row["expected_identity"]);
+        assert_ne!(row["reviewed_component"], row["published_component"]);
+    }
+}
+
+#[test]
 fn canonical_metadata_ignores_input_field_order() {
     let pair = eval(
-        r#"let android = import "android.ncl" in
+        r#"let android = (import "android.ncl").reviewed in
           let source = std.array.last android.manifest.sources in
           let reordered = {
             platform = source.platform,
@@ -87,17 +156,17 @@ fn malformed_sources_are_rejected_before_fetch_lowering() {
     ];
     for mutation in mutations {
         let expression = format!(
-            "let android = import \"android.ncl\" in let source = std.array.last android.manifest.sources in let invalid = {mutation} in android.fetch_source invalid"
+            "let android = (import \"android.ncl\").reviewed in let source = std.array.last android.manifest.sources in let invalid = {mutation} in android.fetch_source invalid"
         );
         assert!(eval(&expression).is_err(), "must reject: {mutation}");
     }
-    let duplicate = r#"let android = import "android.ncl" in
+    let duplicate = r#"let android = (import "android.ncl").reviewed in
       let manifest = android.manifest in
       android.validate_manifest (std.record.update "sources" (manifest.sources @ [std.array.last manifest.sources]) manifest)"#;
     assert!(eval(duplicate).is_err(), "duplicate component must be rejected");
     let extra = std::iter::repeat_n("source", 17).collect::<Vec<_>>().join(", ");
     let overcount = format!(
-        r#"let android = import "android.ncl" in
+        r#"let android = (import "android.ncl").reviewed in
       let manifest = android.manifest in
       let source = std.array.last manifest.sources in
       android.validate_manifest (std.record.update "sources" [{extra}] manifest)"#
@@ -107,16 +176,19 @@ fn malformed_sources_are_rejected_before_fetch_lowering() {
 
 #[test]
 fn reviewed_binding_declares_fetch_and_rejects_metadata_drift() {
-    let expression = r#"let android = import "android.ncl" in
+    let expression = r#"let android = (import "android.ncl").reviewed in
       let source = std.array.last (std.array.filter (fun item => item.component == "temurin-jdk") android.manifest.sources) in
       android.bind_tool "temurin-jdk" source { name = "consumer", builder = "/bin/sh" }"#;
     let consumer = eval(expression).unwrap();
     assert_eq!(consumer["inputs"][0]["builder"], "builtin:fetchurl");
-    assert_eq!(
-        consumer["inputs"][0]["fixed_output"]["hash"],
-        "992f96e7995075ac7636bb1a8de52b0c61d71ed3137fafc979ab96b4ab78dd75"
-    );
+    assert_eq!(consumer["inputs"][0]["fixed_output"]["hash"], "sha256-mS+W55lQdax2NrsajeUrDGHXHtMTf6/JeauWtKt43XU=");
     assert_eq!(consumer["inputs"][0]["fixed_output"]["mode"], "flat");
+    assert_eq!(consumer["inputs"].as_array().unwrap().len(), 1, "only the validated canonical source is executable");
+    assert_eq!(consumer["env"]["MANTLE_ANDROID_TOOLCHAIN_COMPONENT"], "jdk");
+    assert_eq!(
+        consumer["env"]["MANTLE_ANDROID_TOOLCHAIN_SHA256"],
+        "sha256-mS+W55lQdax2NrsajeUrDGHXHtMTf6/JeauWtKt43XU="
+    );
     assert_eq!(
         consumer["inputs"][0]["env"]["url"],
         "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.17%2B10/OpenJDK17U-jdk_x64_linux_hotspot_17.0.17_10.tar.gz"
@@ -164,7 +236,7 @@ fn embedded_android_module_resolves_nested_imports() {
     let temp = scratch();
     let directory = crunch_eval::stdlib::write_stdlib(Some(temp.path())).unwrap();
     let value: Value = crunch_eval::evaluate_str_and_deserialize(
-        r#"let android = import "android.ncl" in android.fetch_source (std.array.last android.manifest.sources)"#,
+        r#"let android = (import "android.ncl").reviewed in android.fetch_source (std.array.last android.manifest.sources)"#,
         &[directory.into_os_string()],
     )
     .unwrap();
@@ -178,7 +250,7 @@ fn cli_forced_embedded_android_source_resolves_nested_module() {
     let source = temp.path().join("embedded-root.ncl");
     std::fs::write(
         &source,
-        r#"let mantle = import "lib.ncl" in mantle.AndroidSources.fetch_source (std.array.last mantle.AndroidSources.manifest.sources)"#,
+        r#"let mantle = import "lib.ncl" in mantle.AndroidReviewedSources.fetch_source (std.array.last mantle.AndroidReviewedSources.manifest.sources)"#,
     )
     .unwrap();
     let output = Command::cargo_bin("mantle")
@@ -228,7 +300,7 @@ fn file_source_bundle_replays_offline_and_unmatched_request_fails_closed() {
     let fixture = temp.path().join("android-fixture.ncl");
     std::fs::write(
         &fixture,
-        format!("let android = import \"android.ncl\" in android.fetch_source ({record} | android.Source)"),
+        format!("let android = (import \"android.ncl\").reviewed in android.fetch_source ({record} | android.Source)"),
     )
     .unwrap();
     let fixture_str = fixture.to_str().unwrap();
@@ -314,7 +386,9 @@ fn file_source_bundle_replays_offline_and_unmatched_request_fails_closed() {
     let other_record = fixture_record(&other_url, &sha256, &other_digest);
     std::fs::write(
         &unmatched,
-        format!("let android = import \"android.ncl\" in android.fetch_source ({other_record} | android.Source)"),
+        format!(
+            "let android = (import \"android.ncl\").reviewed in android.fetch_source ({other_record} | android.Source)"
+        ),
     )
     .unwrap();
     let output = cli(&[

@@ -1211,7 +1211,15 @@ fn write_failure_logs(
         let label = label_for_key(result, &failed.drv_key)
             .map(str::to_owned)
             .unwrap_or_else(|| drv_path.name().to_string());
-        if let Err(failure) = write_log(logs_dir, &drv_path, &label, false, &failed.error) {
+        let detail = if failed.origin_drv_key == failed.drv_key {
+            std::borrow::Cow::Borrowed(failed.error.as_str())
+        } else {
+            std::borrow::Cow::Owned(format!(
+                "{}\norigin {}: {}",
+                failed.error, failed.origin_drv_key, failed.origin_error
+            ))
+        };
+        if let Err(failure) = write_log(logs_dir, &drv_path, &label, false, &detail) {
             failures.push(failure);
         }
     }

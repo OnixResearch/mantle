@@ -360,16 +360,23 @@ pub fn persisted_remote_attempt_is_valid(
     worker_endpoint_id: Option<&str>,
     attempt: &RemoteAttemptState,
 ) -> bool {
-    if &attempt.job_id != expected_job_id
-        || !persisted_identity_is_valid(attempt.job_id.as_str())
+    if &attempt.job_id != expected_job_id {
+        return false;
+    }
+    if !persisted_identity_is_valid(attempt.job_id.as_str())
         || !persisted_identity_is_valid(attempt.attempt_id.as_str())
         || !is_blake3_hex_digest(attempt.assignment_nonce.as_str())
-        || attempt.fence_generation.get() == 0
+    {
+        return false;
+    }
+    if attempt.fence_generation.get() == 0
         || attempt.attempts_started == 0
         || attempt.attempts_started > MAX_REMOTE_ATTEMPTS
     {
         return false;
     }
+    debug_assert_eq!(&attempt.job_id, expected_job_id);
+    debug_assert!(attempt.attempts_started <= MAX_REMOTE_ATTEMPTS);
     let Some(worker_endpoint_id) = worker_endpoint_id else {
         return false;
     };
@@ -383,7 +390,7 @@ pub fn persisted_remote_attempt_is_valid(
     {
         return false;
     }
-    let result_is_valid = match attempt.phase {
+    let is_result_valid = match attempt.phase {
         RemoteAttemptPhase::FinishedUndelivered | RemoteAttemptPhase::Completed => {
             attempt.result_digest_blake3.as_deref().is_some_and(is_blake3_hex_digest)
         }
@@ -393,7 +400,7 @@ pub fn persisted_remote_attempt_is_valid(
         | RemoteAttemptPhase::Failed
         | RemoteAttemptPhase::Superseded => attempt.result_digest_blake3.is_none(),
     };
-    result_is_valid
+    is_result_valid
         && attempt.started_unix_s < attempt.deadline_unix_s
         && attempt.applied_events.len() <= MAX_REMOTE_ATTEMPT_EVENTS
         && attempt
@@ -682,9 +689,9 @@ impl<'a> PayloadPreimage<'a> {
     fn number(&mut self, mut value: u64) -> Result<(), RemoteAttemptReasonCode> {
         let mut digits = [0_u8; 20];
         let mut start = digits.len();
-        loop {
+        for _ in 0..digits.len() {
             start -= 1;
-            digits[start] = b'0' + (value % 10) as u8;
+            digits[start] = b'0'.saturating_add((value % 10).to_le_bytes()[0]);
             value /= 10;
             if value == 0 {
                 break;
@@ -723,7 +730,7 @@ impl<'a> PayloadPreimage<'a> {
                     HEX[usize::from(byte & 15)],
                 ])?;
             }
-            start = index + 1;
+            start = index.saturating_add(1);
         }
         self.write(&bytes[start..])?;
         self.write(b"\"")
