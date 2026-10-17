@@ -1,0 +1,62 @@
+Bounded same-client singleton controls on SSH host 100.90.108.13, scratch /tmp/mantle-unit-plan-20261013-87lqAtNv. No full application graph was started for these controls. Prior transcripts in current-client-real-sandbox-2026-10-13.txt and current-client-missing-role-bound-2026-10-13.txt remain unchanged. This evidence does not establish a full Rust application result, provider-selective rerun, or T4 acceptance.
+
+Exact local/remote source SHA256: producer.rs e6c1fa3fefe850e08e0be99038a147919f62b36390eeb0ec9268c23a5e5cf517; final formatted tests/producer.rs 23e32d3cdf11477534254a4dfe5544e941d5844108e166c3680aeaf1eaf98863. Only the producer bin was rebuilt remotely with pinned nightly, offline vendor CARGO_HOME, and GCC wrapper; SHA256 e43126557f108e1db11897fc6b702b9b888308fd95ddfcc10b3cb9e631b707e5. It was added to the host store as /nix/store/wqfjxsi8ids7xdrs1d8794hz6p7wrzbs-mantle-cargo-unit-producer-fastfail-87lq, signed with the existing remote private key, verified for the matching trusted public key, and copied to current-signed-cache. The preserved client pulled only that basename:
+PULL wqfjxsi8ids7xdrs1d8794hz6p7wrzbs-mantle-cargo-unit-producer-fastfail-87lq
+imported=1 skipped_present=0 skipped_untrusted=0 skipped_hash_mismatch=0 skipped_missing_nar=0 skipped_parse_error=0 nar_bytes=21842728
+OK wqfjxsi8ids7xdrs1d8794hz6p7wrzbs-mantle-cargo-unit-producer-fastfail-87lq  trusted_signatures=1/1
+1 checked, 0 mismatches
+
+Before the negative, separate same-client physical `store verify --trusted-public-keys <exact local and remote public keys>` calls returned:
+OK 77giqf2dbsvv1sjcmydx9x366s5614fc-native-answer-0.1  trusted_signatures=1/1
+1 checked, 0 mismatches
+OK 5kidg47q3wgkf27xf330m3bshmyvl9mx-mantle-unit-plan-config-missing-87lq  trusted_signatures=1/1
+1 checked, 0 mismatches
+The physical client-store/77giqf2dbsvv1sjcmydx9x366s5614fc-native-answer-0.1/lib/libnative_answer.a passed `test -f`. The signed missing-role config declares NATIVE_ANSWER_ROOT={{role:answer}} with inputs={}, and the Nickel singleton declares identical JSON; its `inputs` contain the signed producer, config, runtime and exact ELF interpreter, not the native provider. `mantle eval` accepted the singleton derivation.
+
+First isolated 120-second-budget diagnostic reached bwrap in 79.08 seconds but failed `bwrap: execvp /nix/store/wqfjxsi8ids7xdrs1d8794hz6p7wrzbs-mantle-cargo-unit-producer-fastfail-87lq: No such file or directory` (saved client-state/logs/pmhf9w0nv9mxkmvsnxls9bvw72mjb5ls-native-role-fastfail-87lq.drv.log). ELF `readelf -l` showed interpreter /nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51/lib/ld-linux-x86-64.so.2. That interpreter root passed separate client `store verify` (trusted_signatures=1/2; 1 checked, 0 mismatches), and its physical loader passed `test -f`. Corrected ONLY the singleton inputs to declare that signed loader and changed the singleton name; no new application graph or producer binary rebuild.
+
+Corrected singleton invocation: the existing CLI `/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/mantle --json --nix-compat --store <same-client-store> --state-dir <same-client-state> build --no-substitute --trusted-public-keys <exact local and remote public keys> -I . -I lib single-native-role-fastfail.ncl` ran from the mirrored source with `CRUNCH_NO_FUSE=1`, `SNIX_BUILD_BWRAP=/nix/store/lqndphylsxqwbwm804n473pb4sqb98sh-bubblewrap-0.11.2/bin/bwrap`, `SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox`; 2300-second timeout, owned setsid PGID and 53,687,091,200-byte free-space guard (not triggered). Remote singleton runner exited 0 after its assertions; its saved `single-native-role-fastfail-summary.log` reads:
+singleton-exit=1
+failure={'root': 'native-role-fastfail-loader-87lq', 'drv_key': '/nix/store/2ynp75zlvcd3v22nllljnrc23pnq3q76-native-role-fastfail-loader-87lq.drv', 'phase': 'build', 'error_class': 'builder', 'message': 'store error: build: nonzero exit code: exit status: 1\n[{"code":"native-input-role-undeclared","subject":"path+file:///build/cargo-unit-plan-workspace/workspace/native-answer-sys#0.1.0","detail":"answer"}]\n', 'saved_log_path': '/tmp/mantle-unit-plan-20261013-87lqAtNv/client-state/logs/2ynp75zlvcd3v22nllljnrc23pnq3q76-native-role-fastfail-loader-87lq.drv.log'}
+The JSON report `single-native-role-fastfail-build.log` recorded built_total=0 failed_total=1, phase=build error_class=builder, and the saved builder log contained:
+# status: failure
+store error: build: nonzero exit code: exit status: 1
+[{"code":"native-input-role-undeclared","subject":"path+file:///build/cargo-unit-plan-workspace/workspace/native-answer-sys#0.1.0","detail":"answer"}]
+This is an actual signed-input, real-bubblewrap, one-node missing-role negative with the native archive physically present. It does not prove full producer-oracle completion or application execution.
+
+For the two prior same-client controls in `current-client-real-sandbox-2026-10-13.txt`, the previously trusted physical outputs remained directly readable: `client-store/jip6ad5a19n02pcdg3wdmfw6nrfhnyh4-sandbox-host-read-control-0.1/result.txt` contained `host-private-file-isolated`, and `client-store/m1nlrzhw0f4slp1fdljkc8i08bxy861a-sandbox-network-control-0.1/result.txt` contained `host-loopback-network-isolated`. That older transcript records trusted physical `store verify` for each (1 checked, 0 mismatches) and host-side positive TCP with the same signed BusyBox; do not treat the earlier pre-no-FUSE descriptor I/O failure as an isolation control.
+
+Compiled-script control inputs: the actual Rust `build.rs` source contains `eprintln!("deliberate compiled build-script exit 7"); std::process::exit(7)`. The existing unit helper compiled it with the signed nightly `rustc`, and `compiled-script-exit/share/mantle/unit-dependencies-v1.json` contained `{"schema":"mantle-unit-dependencies-v1","direct_dependencies":[],"artifacts":["lib/build_script_build"],"flags":null}`. The compiled executable itself returned host exit 7 and printed `deliberate compiled build-script exit 7`; this host observation alone is NOT a sandbox negative. The compiled output and matching source were added to host Nix store, signed with the existing remote key, copied to current-signed-cache, then pulled into the preserved client:
+The source SHA256 was ae52f49299b817cae271ce0ba185013ee54c0558130d169691337e5f66729362; the compiled `lib/build_script_build` SHA256 was 1bc980557e3b43d49cf4dc88abc4b869644ebdfb4c52e0f10c2ced01302a414a.
+PULL s202l3aw1m0fpvndycm05xw82m6llrq8-mantle-build-script-exit-source-87lq
+PULL r8zfqpgfcaapknarwcyd9lj12nr9vwhy-mantle-compiled-build-script-exit-87lq
+imported=2 skipped_present=0 skipped_untrusted=0 skipped_hash_mismatch=0 skipped_missing_nar=0 skipped_parse_error=0 nar_bytes=4474832
+Separate exact trusted physical `store verify` calls returned:
+OK r8zfqpgfcaapknarwcyd9lj12nr9vwhy-mantle-compiled-build-script-exit-87lq  trusted_signatures=1/1
+1 checked, 0 mismatches
+OK s202l3aw1m0fpvndycm05xw82m6llrq8-mantle-build-script-exit-source-87lq  trusted_signatures=1/1
+1 checked, 0 mismatches
+OK hjh2s1wysgp9flc2cbds24ragddbc5wa-rust-target-facts-98d55218104b3a2b  trusted_signatures=1/1
+1 checked, 0 mismatches
+OK vqssk3gwk0cjkcqyzv40ay96iflxfl9l-mantle-cargo-unit-helper-current-87lq  trusted_signatures=1/1
+1 checked, 0 mismatches
+The executable and source were physically checked at their selected `client-store` paths. The compiled script's ELF interpreter is the already-verified and explicitly declared /nix/store/jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51. `mantle eval` accepted `single-build-script-exit.ncl`: exactly one native sandbox derivation calling the signed helper with `args=["run-build-script"]`, the signed compiled script, matching source, signed target facts, and declared runtime. This preparatory input evidence is not itself proof of a sandbox nonzero exit.
+
+The second guarded singleton used `/tmp/mantle-unit-plan-20261013-87lqAtNv/run-single-build-script-exit.sh`: an owned setsid process group, a 2,300-second timeout, a 53,687,091,200-byte free-space floor, `CRUNCH_NO_FUSE=1`, the existing signed BusyBox and real bubblewrap, exact trusted local/remote public keys, and `build --no-substitute` against only `single-build-script-exit.ncl` in the preserved client. The guard did not trigger; available space after the run was 196,584,783,872 bytes. The runner returned exit 0 after checking the typed outcome. Its `single-build-script-exit-summary.log` contains exactly:
+singleton-exit=1
+failure={'root': 'compiled-script-exit-87lq', 'drv_key': '/nix/store/r273jfmls84psam0hl9m66pazn9yvvh9-compiled-script-exit-87lq.drv', 'phase': 'build', 'error_class': 'builder', 'message': 'store error: build: nonzero exit code: exit status: 1\nbuild-script-nonzero-exit: exit status: 7: deliberate compiled build-script exit 7\n\n', 'saved_log_path': '/tmp/mantle-unit-plan-20261013-87lqAtNv/client-state/logs/r273jfmls84psam0hl9m66pazn9yvvh9-compiled-script-exit-87lq.drv.log'}
+The JSON report `single-build-script-exit-build.log` recorded built_total=0 cached_total=0 failed_total=1, phase=build, error_class=builder, and no outcomes. The saved builder log reads:
+# crunch build log
+# derivation: compiled-script-exit-87lq
+# drv_path: r273jfmls84psam0hl9m66pazn9yvvh9-compiled-script-exit-87lq.drv
+# status: failure
+# timestamp: 1791935461
+
+store error: build: nonzero exit code: exit status: 1
+build-script-nonzero-exit: exit status: 7: deliberate compiled build-script exit 7
+
+No normal output path was published under the derivation basename. This is an observed actual signed compiled Rust build-script failure inside real bubblewrap, NOT a host-only helper test and NOT a full application result. Together with the earlier same-client host-file and TCP negatives and the new signed missing-role negative, the four bounded T3.3 controls are observed; the application and provider-selective rerun remain unproven.
+
+Final exact mirrored package regression (offline `cargo test -p mantle-cargo-unit-plan --lib --tests --bins --locked --offline -- --test-threads=1`): producer unit 4 passed, directives 2 passed, helper 8 passed, lowering 8 passed, producer integration 2 passed (including missing role before inaccessible workspace and valid role reaching the source-copy stage), source_nar 2 passed; 26 passed, 0 failed. Final exact mirrored `cargo clippy -p mantle-cargo-unit-plan --lib --bins --tests --locked --offline --no-deps -- -D warnings` finished successfully in 2.57s with offline CARGO_HOME and explicit Nix GCC wrapper. `rustfmt --check --edition 2024 src/producer.rs` passed remotely. Rustfmt check of the whole tests/producer.rs also reported a preexisting diff in the unrelated `runtime-mismatch` assertion at old lines 146-150; those lines were preserved, not restyled. The newly added regression section itself matches rustfmt.
+
+Final local Cairn gates: `cairn gate proposal run-cargo-build-scripts-as-plan-units --root .` returned valid=true verdict=PASS (receipt_hash=54ae677e9a1075314acd4d3bf7133336c7f7d2ec26d4a4896ac367004387e70b); `cairn gate design ...` returned valid=true verdict=PASS (receipt_hash=0b1e6ff57b3facfe5fdf81fbeccf0aa472d6aa348a4eb2e1c716e68d1d3e0c09); after T3.3 was checked, `cairn gate tasks ...` returned valid=true verdict=PASS, 16 tasks, 11 done, 5 todo (receipt_hash=4f2226428fbce20a476b8190378ff9600d4c0b0e73c2f4ceece0e2f4fe6aecd8). `cairn validate --root .` returned valid=true, changes=40, specs_validated=100, all issue lists empty (receipt_hash=d94427d64f00f468fe17aea025312de2b121dab3aa76c2741076711d802802fc). `git diff --check` exited 0. No full application graph, matrix, or archive gate was run.

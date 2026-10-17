@@ -9,6 +9,19 @@ use std::process::Stdio;
 use std::time::Duration;
 use std::time::Instant;
 
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::CommandFamily;
+use mantle_application_contract::EffectId;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::EffectPlan;
+use mantle_application_contract::EffectSpec;
+use mantle_application_contract::ExpectedOutput;
+use mantle_application_contract::Observation;
+use mantle_application_contract::ObservationStatus;
+use mantle_application_contract::classify_observations;
+use mantle_application_contract::plan_effects;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -42,6 +55,16 @@ const BINARY_TOOL_RUNTIME_SMOKE_STEP_COUNT: usize = 12;
 const REJECTION_RUNTIME_SMOKE_STEP_COUNT: usize = 5;
 const RUNTIME_SMOKE_STEP_COUNT: usize =
     COMPILER_RUNTIME_SMOKE_STEP_COUNT + BINARY_TOOL_RUNTIME_SMOKE_STEP_COUNT + REJECTION_RUNTIME_SMOKE_STEP_COUNT;
+const PROVIDER_READ_EFFECT: &str = "bootstrap-full-source-provider-tree-read";
+const SOURCE_CLOSURE_READ_EFFECT: &str = "bootstrap-full-source-provider-closure-read";
+const RUNTIME_FIXTURE_EFFECT: &str = "bootstrap-full-source-provider-smoke-fixture";
+const RUNTIME_SMOKE_EFFECT: &str = "bootstrap-full-source-provider-runtime-smoke";
+const RUNTIME_REJECTION_CLEANUP_EFFECT: &str = "bootstrap-full-source-provider-rejection-cleanup";
+const REPORT_PUBLISH_EFFECT: &str = "bootstrap-full-source-provider-report-publish";
+const REPORT_READBACK_EFFECT: &str = "bootstrap-full-source-provider-report-readback";
+const ADOPTION_STORE_EFFECT: &str = "bootstrap-full-source-provider-store-adopt";
+const ADOPTION_READBACK_EFFECT: &str = "bootstrap-full-source-provider-store-readback";
+const ADOPTION_PREFLIGHT_EFFECT: &str = "bootstrap-full-source-provider-adoption-preflight";
 #[cfg(unix)]
 const EXECUTABLE_PERMISSION_MASK: u32 = 0o111;
 
@@ -173,6 +196,162 @@ struct AdmissionInput {
     expected_output_digest_blake3: String,
     source_closure: SourceClosureObservation,
 }
+struct ProviderReadFacts {
+    metadata_path: PathBuf,
+    metadata_bytes: Vec<u8>,
+    metadata: FullSourceProviderMetadata,
+    files: BTreeMap<String, FileObservation>,
+}
+
+trait ProviderAdmissionPort {
+    fn read_provider(&mut self, provider_dir: &Path) -> Result<ProviderReadFacts, RunError>;
+    fn hash_provider(&mut self, provider_dir: &Path) -> Result<String, RunError>;
+    fn read_closure(&mut self, path: &Path, expected_digest: &str) -> Result<SourceClosureObservation, RunError>;
+    fn prepare_smoke(&mut self) -> Result<tempfile::TempDir, RunError>;
+    fn cleanup_smoke_output(&mut self, path: &Path) -> std::io::Result<()>;
+    fn run_smoke_step(&mut self, step: &RuntimeSmokeStep, spawned: &mut u32) -> Result<(), RunError>;
+    fn publish(&mut self, path: &Path, bytes: &[u8]) -> Result<(), RunError>;
+    fn readback(&mut self, path: &Path) -> Result<Vec<u8>, RunError>;
+}
+
+struct LocalProviderAdmission;
+
+impl ProviderAdmissionPort for LocalProviderAdmission {
+    fn read_provider(&mut self, provider_dir: &Path) -> Result<ProviderReadFacts, RunError> {
+        read_provider_facts(provider_dir)
+    }
+    fn hash_provider(&mut self, provider_dir: &Path) -> Result<String, RunError> {
+        let (_, digest) = crate::release_tree_copy::hash_directory_tree(provider_dir)
+            .map_err(|error| admission_error(format!("hashing provider tree {}: {error}", provider_dir.display())))?;
+        Ok(digest)
+    }
+
+    fn read_closure(&mut self, path: &Path, expected_digest: &str) -> Result<SourceClosureObservation, RunError> {
+        observe_source_closure(path, expected_digest)
+    }
+
+    fn prepare_smoke(&mut self) -> Result<tempfile::TempDir, RunError> {
+        let scratch = tempfile::Builder::new()
+            .prefix("mantle-full-source-provider-admission-")
+            .tempdir()
+            .map_err(|error| admission_error(format!("creating runtime smoke directory: {error}")))?;
+        write_runtime_smoke_sources(scratch.path())?;
+        Ok(scratch)
+    }
+
+    fn cleanup_smoke_output(&mut self, path: &Path) -> std::io::Result<()> {
+        match fs::remove_file(path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            result => result,
+        }
+    }
+
+    fn run_smoke_step(&mut self, step: &RuntimeSmokeStep, spawned: &mut u32) -> Result<(), RunError> {
+        execute_runtime_smoke_step(step, spawned)
+    }
+
+    fn publish(&mut self, path: &Path, bytes: &[u8]) -> Result<(), RunError> {
+        let mut file = fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(path)
+            .map_err(|error| admission_error(format!("creating report {}: {error}", path.display())))?;
+        file.write_all(bytes)
+            .map_err(|error| admission_error(format!("writing report {}: {error}", path.display())))?;
+        file.sync_all()
+            .map_err(|error| admission_error(format!("syncing report {}: {error}", path.display())))
+    }
+
+    fn readback(&mut self, path: &Path) -> Result<Vec<u8>, RunError> {
+        fs::read(path).map_err(|error| admission_error(format!("reading report {}: {error}", path.display())))
+    }
+}
+
+fn effect_observation(id: &str, kind: EffectKind) -> Observation {
+    Observation {
+        effect_id: EffectId(id.to_string()),
+        kind,
+        status: ObservationStatus::Skipped,
+        output: EffectOutput::None,
+        usage: EffectMeasure::Calls(0),
+        diagnostics_code: None,
+    }
+}
+
+fn record_effect<T>(observation: &mut Observation, result: &Result<T, RunError>, identity: Option<&str>) {
+    observation.status = if result.is_ok() {
+        ObservationStatus::Succeeded
+    } else {
+        ObservationStatus::Failed
+    };
+    observation.output = if result.is_ok() {
+        identity.map_or(EffectOutput::None, |value| EffectOutput::Identity(value.to_string()))
+    } else {
+        EffectOutput::None
+    };
+    observation.usage = EffectMeasure::Calls(1);
+    observation.diagnostics_code = result.is_err().then(|| format!("{}-failed", observation.effect_id.0));
+}
+
+const ADMISSION_EFFECTS: [EffectSpec<'static>; 5] = [
+    EffectSpec {
+        effect_id: PROVIDER_READ_EFFECT,
+        kind: EffectKind::ReadFiles,
+        limit: EffectMeasure::Calls(2),
+        expected_output: ExpectedOutput::None,
+    },
+    EffectSpec {
+        effect_id: SOURCE_CLOSURE_READ_EFFECT,
+        kind: EffectKind::ReadFiles,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    },
+    EffectSpec {
+        effect_id: RUNTIME_FIXTURE_EFFECT,
+        kind: EffectKind::WriteFiles,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    },
+    EffectSpec {
+        effect_id: RUNTIME_SMOKE_EFFECT,
+        kind: EffectKind::RunProcess,
+        limit: EffectMeasure::Calls(RUNTIME_SMOKE_STEP_COUNT as u32),
+        expected_output: ExpectedOutput::None,
+    },
+    EffectSpec {
+        effect_id: RUNTIME_REJECTION_CLEANUP_EFFECT,
+        kind: EffectKind::WriteFiles,
+        limit: EffectMeasure::Calls(REJECTION_RUNTIME_SMOKE_STEP_COUNT as u32),
+        expected_output: ExpectedOutput::None,
+    },
+];
+
+fn admission_plan(specs: &[EffectSpec<'_>]) -> Result<EffectPlan, RunError> {
+    plan_effects(CommandFamily::Bootstrap, specs)
+        .map_err(|error| RunError::Internal(format!("planning full-source provider admission: {}", error.code())))
+}
+
+fn admission_observations() -> [Observation; 5] {
+    [
+        effect_observation(PROVIDER_READ_EFFECT, EffectKind::ReadFiles),
+        effect_observation(SOURCE_CLOSURE_READ_EFFECT, EffectKind::ReadFiles),
+        effect_observation(RUNTIME_FIXTURE_EFFECT, EffectKind::WriteFiles),
+        effect_observation(RUNTIME_SMOKE_EFFECT, EffectKind::RunProcess),
+        effect_observation(RUNTIME_REJECTION_CLEANUP_EFFECT, EffectKind::WriteFiles),
+    ]
+}
+
+fn classified_provider_result<T>(
+    plan: &EffectPlan,
+    observed: &[Observation],
+    result: Result<T, RunError>,
+) -> Result<T, RunError> {
+    match (classify_observations(plan, observed), result) {
+        (ApplicationOutcome::Completed, Ok(value)) => Ok(value),
+        (ApplicationOutcome::Failed { .. }, Err(error)) => Err(error),
+        (outcome, _) => Err(RunError::Internal(format!("full-source provider observations inconsistent: {outcome:?}"))),
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct SourceClosureObservation {
@@ -223,6 +402,11 @@ pub(crate) struct FullSourceProviderAdmissionReport {
     pub(crate) non_claims: Vec<String>,
 }
 
+pub(crate) struct PreparedAdmission {
+    pub(crate) report: FullSourceProviderAdmissionReport,
+    report_bytes: Vec<u8>,
+}
+
 pub(crate) fn cmd_admit_full_source_provider(
     provider_dir: &Path,
     expected_output_digest_blake3: &str,
@@ -231,39 +415,105 @@ pub(crate) fn cmd_admit_full_source_provider(
     report_path: &Path,
     json: bool,
 ) -> Result<FullSourceProviderAdmissionReport, RunError> {
-    let report = admit_full_source_provider(
+    let prepared = cmd_admit_full_source_provider_deferred(
         provider_dir,
         expected_output_digest_blake3,
         source_closure_path,
         expected_source_closure_manifest_blake3,
+        report_path,
     )?;
-    let mut report_bytes = serde_json::to_vec_pretty(&report)
-        .map_err(|error| admission_error(format!("serializing admission report: {error}")))?;
-    report_bytes.push(b'\n');
-    let mut report_file = fs::OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(report_path)
-        .map_err(|error| admission_error(format!("creating report {}: {error}", report_path.display())))?;
-    report_file
-        .write_all(&report_bytes)
-        .map_err(|error| admission_error(format!("writing report {}: {error}", report_path.display())))?;
-    report_file
-        .sync_all()
-        .map_err(|error| admission_error(format!("syncing report {}: {error}", report_path.display())))?;
+    render_full_source_provider_admission(&prepared, provider_dir, report_path, json)?;
+    Ok(prepared.report)
+}
+
+/// Persist and verify the report without terminal output; the root may adopt state before
+/// rendering.
+pub(crate) fn cmd_admit_full_source_provider_deferred(
+    provider_dir: &Path,
+    expected_output_digest_blake3: &str,
+    source_closure_path: &Path,
+    expected_source_closure_manifest_blake3: &str,
+    report_path: &Path,
+) -> Result<PreparedAdmission, RunError> {
+    let specs = [
+        ADMISSION_EFFECTS[0],
+        ADMISSION_EFFECTS[1],
+        ADMISSION_EFFECTS[2],
+        ADMISSION_EFFECTS[3],
+        ADMISSION_EFFECTS[4],
+        EffectSpec {
+            effect_id: REPORT_PUBLISH_EFFECT,
+            kind: EffectKind::WriteFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::None,
+        },
+        EffectSpec {
+            effect_id: REPORT_READBACK_EFFECT,
+            kind: EffectKind::ReadFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::None,
+        },
+    ];
+    let plan = admission_plan(&specs)?;
+    let [provider, closure, fixture, smoke, cleanup] = admission_observations();
+    let mut observed = [
+        provider,
+        closure,
+        fixture,
+        smoke,
+        cleanup,
+        effect_observation(REPORT_PUBLISH_EFFECT, EffectKind::WriteFiles),
+        effect_observation(REPORT_READBACK_EFFECT, EffectKind::ReadFiles),
+    ];
+    let mut port = LocalProviderAdmission;
+    let result = (|| {
+        let report = execute_admission(
+            provider_dir,
+            expected_output_digest_blake3,
+            source_closure_path,
+            expected_source_closure_manifest_blake3,
+            &mut port,
+            &mut observed,
+        )?;
+        let mut bytes = serde_json::to_vec_pretty(&report)
+            .map_err(|error| admission_error(format!("serializing admission report: {error}")))?;
+        bytes.push(b'\n');
+        let publish = port.publish(report_path, &bytes);
+        record_effect(&mut observed[5], &publish, None);
+        publish?;
+        let readback = port.readback(report_path);
+        record_effect(&mut observed[6], &readback, None);
+        if readback? != bytes {
+            observed[6].status = ObservationStatus::Failed;
+            observed[6].output = EffectOutput::None;
+            observed[6].diagnostics_code = Some("bootstrap-full-source-provider-report-readback-mismatch".to_string());
+            return Err(admission_error(format!("report readback differs from publication {}", report_path.display())));
+        }
+        Ok(PreparedAdmission {
+            report,
+            report_bytes: bytes,
+        })
+    })();
+    classified_provider_result(&plan, &observed, result)
+}
+
+pub(crate) fn render_full_source_provider_admission(
+    prepared: &PreparedAdmission,
+    provider_dir: &Path,
+    report_path: &Path,
+    json: bool,
+) -> Result<(), RunError> {
     if json {
-        print!("{}", String::from_utf8_lossy(&report_bytes));
+        print!("{}", String::from_utf8_lossy(&prepared.report_bytes));
     } else {
+        let report = &prepared.report;
         eprintln!("Admitted full-source provider {}", provider_dir.display());
         eprintln!("  output_digest_blake3: {}", report.output_digest_blake3);
         eprintln!("  source_closure_blake3: {}", report.source_closure_manifest_blake3);
         eprintln!("  metadata_digest_blake3: {}", report.metadata_digest_blake3);
         eprintln!("  report: {}", report_path.display());
     }
-    assert_eq!(report.output_digest_blake3, expected_output_digest_blake3);
-    assert_eq!(report.source_closure_manifest_blake3, expected_source_closure_manifest_blake3);
-    debug_assert!(!report_bytes.is_empty());
-    Ok(report)
+    Ok(())
 }
 
 pub(crate) fn adopt_admitted_full_source_provider(
@@ -273,14 +523,146 @@ pub(crate) fn adopt_admitted_full_source_provider(
     store_dir: &str,
     backend: crunch_store::StoreBackend,
 ) -> Result<String, RunError> {
-    adopt_verified_local_provider_path_with_mode(
-        &report.provider_path,
-        output_dir,
-        state_dir,
-        store_dir,
-        backend,
-        crunch_store::StoreFallbackMode::Practical,
-    )
+    let declared_path = report
+        .provider_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| format!("{store_dir}/{name}"));
+    let expected = declared_path.as_deref().map_or(ExpectedOutput::None, ExpectedOutput::Identity);
+    let specs = [
+        EffectSpec {
+            effect_id: ADOPTION_PREFLIGHT_EFFECT,
+            kind: EffectKind::ReadFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::None,
+        },
+        EffectSpec {
+            effect_id: ADOPTION_STORE_EFFECT,
+            kind: EffectKind::StoreAccess,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::None,
+        },
+        EffectSpec {
+            effect_id: ADOPTION_READBACK_EFFECT,
+            kind: EffectKind::StoreAccess,
+            limit: EffectMeasure::Calls(1),
+            expected_output: expected,
+        },
+    ];
+    let plan = admission_plan(&specs)?;
+    let mut observed = [
+        effect_observation(ADOPTION_PREFLIGHT_EFFECT, EffectKind::ReadFiles),
+        effect_observation(ADOPTION_STORE_EFFECT, EffectKind::StoreAccess),
+        effect_observation(ADOPTION_READBACK_EFFECT, EffectKind::StoreAccess),
+    ];
+    let mut port = LocalProviderAdoption;
+    let result = (|| {
+        let preflight = port.preflight(&report.provider_path, output_dir, store_dir);
+        record_effect(&mut observed[0], &preflight, None);
+        let logical_path = preflight?;
+        let adopted = port.adopt(&logical_path, output_dir, state_dir, store_dir, backend);
+        record_effect(&mut observed[1], &adopted, None);
+        adopted?;
+        let readback = port.readback(&logical_path, output_dir, state_dir, store_dir, backend);
+        record_effect(&mut observed[2], &readback, readback.as_ref().ok().map(String::as_str));
+        let persisted_path = readback?;
+        if persisted_path != logical_path {
+            observed[2].status = ObservationStatus::Failed;
+            observed[2].output = EffectOutput::None;
+            observed[2].diagnostics_code = Some("bootstrap-full-source-provider-store-readback-mismatch".to_string());
+            return Err(admission_error(format!(
+                "adopted provider PathInfo path differs from adoption: {logical_path}"
+            )));
+        }
+        Ok(logical_path)
+    })();
+    classified_provider_result(&plan, &observed, result)
+}
+
+trait ProviderAdoptionPort {
+    fn preflight(&mut self, provider_path: &Path, output_dir: &Path, store_dir: &str) -> Result<String, RunError>;
+    fn adopt(
+        &mut self,
+        logical_path: &str,
+        output_dir: &Path,
+        state_dir: &Path,
+        store_dir: &str,
+        backend: crunch_store::StoreBackend,
+    ) -> Result<(), RunError>;
+    fn readback(
+        &mut self,
+        logical_path: &str,
+        output_dir: &Path,
+        state_dir: &Path,
+        store_dir: &str,
+        backend: crunch_store::StoreBackend,
+    ) -> Result<String, RunError>;
+}
+
+struct LocalProviderAdoption;
+
+impl ProviderAdoptionPort for LocalProviderAdoption {
+    fn preflight(&mut self, provider_path: &Path, output_dir: &Path, store_dir: &str) -> Result<String, RunError> {
+        preflight_provider_adoption(provider_path, output_dir, store_dir)
+    }
+
+    fn adopt(
+        &mut self,
+        logical_path: &str,
+        output_dir: &Path,
+        state_dir: &Path,
+        store_dir: &str,
+        backend: crunch_store::StoreBackend,
+    ) -> Result<(), RunError> {
+        adopt_provider_after_preflight(
+            logical_path,
+            output_dir,
+            state_dir,
+            store_dir,
+            backend,
+            crunch_store::StoreFallbackMode::Practical,
+        )
+    }
+    fn readback(
+        &mut self,
+        logical_path: &str,
+        output_dir: &Path,
+        state_dir: &Path,
+        store_dir: &str,
+        backend: crunch_store::StoreBackend,
+    ) -> Result<String, RunError> {
+        let parsed =
+            nix_compat::store_path::StorePath::from_absolute_path_with_prefix(logical_path.as_bytes(), store_dir)
+                .map_err(|error| admission_error(format!("reading adopted provider path {logical_path}: {error}")))?;
+        let config = crunch_store::StoreConfig {
+            backend,
+            state_dir: state_dir.to_path_buf(),
+            output_dir: output_dir.to_path_buf(),
+            remote_cache_urls: Vec::new(),
+            fallback_mode: crunch_store::StoreFallbackMode::Practical,
+            store_dir: store_dir.to_string(),
+            base_state_dirs: Vec::new(),
+        };
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|error| admission_error(format!("creating provider adoption readback runtime: {error}")))?;
+        runtime.block_on(async {
+            let store = crunch_store::StoreHandle::open(config)
+                .await
+                .map_err(|error| admission_error(format!("opening provider adoption readback store: {error}")))?;
+            let persisted = store
+                .pathinfo_service()
+                .get(*parsed.digest())
+                .await
+                .map_err(|error| admission_error(format!("reading adopted provider PathInfo: {error}")))?
+                .ok_or_else(|| admission_error(format!("adopted provider PathInfo is missing: {logical_path}")))?;
+            if persisted.store_path != parsed || persisted.signatures.is_empty() {
+                return Err(admission_error(format!(
+                    "adopted provider PathInfo is unsigned or mismatched: {logical_path}"
+                )));
+            }
+            Ok(persisted.store_path.to_absolute_path_with_prefix(store_dir))
+        })
+    }
 }
 
 pub(crate) fn adopt_verified_local_provider_path_strict(
@@ -308,6 +690,12 @@ fn adopt_verified_local_provider_path_with_mode(
     backend: crunch_store::StoreBackend,
     fallback_mode: crunch_store::StoreFallbackMode,
 ) -> Result<String, RunError> {
+    let logical_store_path = preflight_provider_adoption(provider_path, output_dir, store_dir)?;
+    adopt_provider_after_preflight(&logical_store_path, output_dir, state_dir, store_dir, backend, fallback_mode)?;
+    Ok(logical_store_path)
+}
+
+fn preflight_provider_adoption(provider_path: &Path, output_dir: &Path, store_dir: &str) -> Result<String, RunError> {
     assert!(!store_dir.is_empty(), "store_dir must not be empty");
     assert!(Path::new(store_dir).is_absolute(), "store_dir must be absolute");
     let provider_parent = provider_path
@@ -329,7 +717,17 @@ fn adopt_verified_local_provider_path_with_mode(
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| admission_error("admitted provider basename is not UTF-8".to_string()))?;
-    let logical_store_path = format!("{store_dir}/{provider_basename}");
+    Ok(format!("{store_dir}/{provider_basename}"))
+}
+
+fn adopt_provider_after_preflight(
+    logical_store_path: &str,
+    output_dir: &Path,
+    state_dir: &Path,
+    store_dir: &str,
+    backend: crunch_store::StoreBackend,
+    fallback_mode: crunch_store::StoreFallbackMode,
+) -> Result<(), RunError> {
     let store_config = crunch_store::StoreConfig {
         backend,
         state_dir: state_dir.to_path_buf(),
@@ -358,12 +756,12 @@ fn adopt_verified_local_provider_path_with_mode(
                 .map_err(|error| admission_error(format!("recovering Casita GC before provider adoption: {error}")))?;
         }
         store
-            .adopt_verified_local_output(&logical_store_path, "out", &keypair.signing_key, None)
+            .adopt_verified_local_output(logical_store_path, "out", &keypair.signing_key, None)
             .await
             .map_err(|error| admission_error(format!("adopting admitted provider: {error}")))?;
         Ok::<(), RunError>(())
     })?;
-    Ok(logical_store_path)
+    Ok(())
 }
 
 pub(crate) fn admit_full_source_provider(
@@ -372,17 +770,42 @@ pub(crate) fn admit_full_source_provider(
     source_closure_path: &Path,
     expected_source_closure_manifest_blake3: &str,
 ) -> Result<FullSourceProviderAdmissionReport, RunError> {
+    let plan = admission_plan(&ADMISSION_EFFECTS)?;
+    let mut observed = admission_observations();
+    let result = execute_admission(
+        provider_dir,
+        expected_output_digest_blake3,
+        source_closure_path,
+        expected_source_closure_manifest_blake3,
+        &mut LocalProviderAdmission,
+        &mut observed,
+    );
+    classified_provider_result(&plan, &observed, result)
+}
+
+fn execute_admission(
+    provider_dir: &Path,
+    expected_output_digest_blake3: &str,
+    source_closure_path: &Path,
+    expected_source_closure_manifest_blake3: &str,
+    port: &mut impl ProviderAdmissionPort,
+    observed: &mut [Observation],
+) -> Result<FullSourceProviderAdmissionReport, RunError> {
     validate_expected_digest(expected_output_digest_blake3)?;
     validate_expected_digest(expected_source_closure_manifest_blake3)?;
-    let metadata_path = provider_dir.join(PROVIDER_METADATA_RELATIVE_PATH);
-    let metadata_bytes = fs::read(&metadata_path)
-        .map_err(|error| admission_error(format!("reading metadata {}: {error}", metadata_path.display())))?;
-    let metadata: FullSourceProviderMetadata = serde_json::from_slice(&metadata_bytes)
-        .map_err(|error| admission_error(format!("parsing metadata {}: {error}", metadata_path.display())))?;
-    let files = observe_provider_tree(provider_dir)?;
-    let source_closure = observe_source_closure(source_closure_path, expected_source_closure_manifest_blake3)?;
-    let (_, output_digest_blake3) = crate::release_tree_copy::hash_directory_tree(provider_dir)
-        .map_err(|error| admission_error(format!("hashing provider tree {}: {error}", provider_dir.display())))?;
+    let provider = port.read_provider(provider_dir);
+    record_effect(&mut observed[0], &provider, None);
+    let provider = provider?;
+    let closure = port.read_closure(source_closure_path, expected_source_closure_manifest_blake3);
+    record_effect(&mut observed[1], &closure, None);
+    let source_closure = closure?;
+    let hash = port.hash_provider(provider_dir);
+    observed[0].usage = EffectMeasure::Calls(2);
+    if hash.is_err() {
+        observed[0].status = ObservationStatus::Failed;
+        observed[0].diagnostics_code = Some(format!("{PROVIDER_READ_EFFECT}-failed"));
+    }
+    let output_digest_blake3 = hash?;
     let provider_basename = provider_dir
         .file_name()
         .and_then(|name| name.to_str())
@@ -390,18 +813,46 @@ pub(crate) fn admit_full_source_provider(
         .to_string();
     let input = AdmissionInput {
         provider_basename,
-        metadata: metadata.clone(),
-        files,
+        metadata: provider.metadata,
+        files: provider.files,
         output_digest_blake3: output_digest_blake3.clone(),
         expected_output_digest_blake3: expected_output_digest_blake3.to_string(),
         source_closure,
     };
     validate_admission_input(&input).map_err(|blockers| admission_error(blockers.join("; ")))?;
-    let runtime_smoke_steps = execute_provider_runtime_smoke(provider_dir)?;
-    let metadata_digest_blake3 = blake3::hash(&metadata_bytes).to_hex().to_string();
+    let scratch = port.prepare_smoke();
+    record_effect(&mut observed[2], &scratch, None);
+    let scratch = scratch?;
+    let mut spawned = 0;
+    let mut cleanup_attempted = 0;
+    let mut cleanup_failed = false;
+    let smoke = execute_provider_runtime_smoke(
+        provider_dir,
+        scratch.path(),
+        port,
+        &mut spawned,
+        &mut cleanup_attempted,
+        &mut cleanup_failed,
+    );
+    record_effect(&mut observed[3], &smoke, None);
+    observed[3].usage = EffectMeasure::Calls(spawned);
+    observed[4].usage = EffectMeasure::Calls(cleanup_attempted);
+    observed[4].status = if cleanup_failed {
+        ObservationStatus::Failed
+    } else if cleanup_attempted == 0 {
+        ObservationStatus::Skipped
+    } else {
+        ObservationStatus::Succeeded
+    };
+    observed[4].diagnostics_code = cleanup_failed.then(|| format!("{RUNTIME_REJECTION_CLEANUP_EFFECT}-failed"));
+    let runtime_smoke_steps = smoke?;
+    if cleanup_failed {
+        return Err(admission_error("clearing a runtime rejection fixture output failed".to_string()));
+    }
+    let metadata_digest_blake3 = blake3::hash(&provider.metadata_bytes).to_hex().to_string();
     Ok(admission_report(
         provider_dir,
-        metadata_path,
+        provider.metadata_path,
         metadata_digest_blake3,
         output_digest_blake3,
         expected_output_digest_blake3,
@@ -409,6 +860,21 @@ pub(crate) fn admit_full_source_provider(
         &input,
         runtime_smoke_steps,
     ))
+}
+
+fn read_provider_facts(provider_dir: &Path) -> Result<ProviderReadFacts, RunError> {
+    let metadata_path = provider_dir.join(PROVIDER_METADATA_RELATIVE_PATH);
+    let metadata_bytes = fs::read(&metadata_path)
+        .map_err(|error| admission_error(format!("reading metadata {}: {error}", metadata_path.display())))?;
+    let metadata: FullSourceProviderMetadata = serde_json::from_slice(&metadata_bytes)
+        .map_err(|error| admission_error(format!("parsing metadata {}: {error}", metadata_path.display())))?;
+    let files = observe_provider_tree(provider_dir)?;
+    Ok(ProviderReadFacts {
+        metadata_path,
+        metadata_bytes,
+        metadata,
+        files,
+    })
 }
 
 fn observe_source_closure(
@@ -826,13 +1292,15 @@ fn validate_output_digest(input: &AdmissionInput, blockers: &mut Vec<String>) {
     debug_assert_eq!(input.expected_output_digest_blake3.len(), BLAKE3_HEX_LENGTH);
 }
 
-fn execute_provider_runtime_smoke(provider_dir: &Path) -> Result<Vec<String>, RunError> {
-    let scratch = tempfile::Builder::new()
-        .prefix("mantle-full-source-provider-admission-")
-        .tempdir()
-        .map_err(|error| admission_error(format!("creating runtime smoke directory: {error}")))?;
-    write_runtime_smoke_sources(scratch.path())?;
-    let steps = provider_runtime_smoke_plan(provider_dir, scratch.path());
+fn execute_provider_runtime_smoke(
+    provider_dir: &Path,
+    scratch: &Path,
+    port: &mut impl ProviderAdmissionPort,
+    spawned: &mut u32,
+    cleanup_attempted: &mut u32,
+    cleanup_failed: &mut bool,
+) -> Result<Vec<String>, RunError> {
+    let steps = provider_runtime_smoke_plan(provider_dir, scratch);
     if steps.len() != RUNTIME_SMOKE_STEP_COUNT {
         return Err(admission_error(format!(
             "runtime smoke plan expected {RUNTIME_SMOKE_STEP_COUNT} steps, observed {}",
@@ -841,7 +1309,11 @@ fn execute_provider_runtime_smoke(provider_dir: &Path) -> Result<Vec<String>, Ru
     }
     let mut completed = Vec::with_capacity(steps.len());
     for step in &steps {
-        execute_runtime_smoke_step(step)?;
+        if let RuntimeSmokeExpectation::Rejection { absent_output } = &step.expectation {
+            *cleanup_failed |= port.cleanup_smoke_output(absent_output).is_err();
+            *cleanup_attempted = cleanup_attempted.saturating_add(1);
+        }
+        port.run_smoke_step(step, spawned)?;
         completed.push(step.label.to_string());
     }
     assert_eq!(completed.len(), RUNTIME_SMOKE_STEP_COUNT);
@@ -1026,10 +1498,7 @@ fn rejection_step(
     }
 }
 
-fn execute_runtime_smoke_step(step: &RuntimeSmokeStep) -> Result<(), RunError> {
-    if let RuntimeSmokeExpectation::Rejection { absent_output } = &step.expectation {
-        let _ = fs::remove_file(absent_output);
-    }
+fn execute_runtime_smoke_step(step: &RuntimeSmokeStep, spawned: &mut u32) -> Result<(), RunError> {
     let mut child = Command::new(&step.program)
         .args(&step.arguments)
         .stdin(Stdio::null())
@@ -1037,6 +1506,7 @@ fn execute_runtime_smoke_step(step: &RuntimeSmokeStep) -> Result<(), RunError> {
         .stderr(Stdio::null())
         .spawn()
         .map_err(|error| admission_error(format!("launching runtime smoke {}: {error}", step.label)))?;
+    *spawned = spawned.saturating_add(1);
     let deadline = Instant::now() + Duration::from_secs(RUNTIME_SMOKE_TIMEOUT_SECS);
     let status = loop {
         if let Some(status) = child
@@ -1231,6 +1701,7 @@ mod tests {
             payload_bytes: SOURCE_FILE_SIZE_BYTES,
             content_blake3: DIGEST_A.to_string(),
             files,
+            store_path_attestation: None,
         }
     }
 

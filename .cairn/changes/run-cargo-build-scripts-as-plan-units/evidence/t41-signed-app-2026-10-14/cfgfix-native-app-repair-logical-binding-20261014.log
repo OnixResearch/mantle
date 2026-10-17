@@ -1,0 +1,11 @@
+guard-ready task=1051 guard=1052
+phase=trusted-producer-selection-start time=2026-10-14T22:12:58.082055+00:00
+lean-producer-admitted=success app_unit=u.99f32f5ae94f82205ce9acd4a184e1741597862139ddb9246b18f3686f406982 signed_roots=3 accepted_units=34 source_slices=14 app_consumer=/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-app-consumer.ncl
+phase=trusted-producer-selection-done exit=0 time=2026-10-14T22:12:58.147586+00:00
+guard-ready task=1051 guard=1052
+phase=actual-no-substitute-app-start time=2026-10-14T22:12:58.417987+00:00
+phase=actual-no-substitute-app-done exit=0 time=2026-10-14T22:29:04.195958+00:00
+guard-ready task=1051 guard=1052
+phase=trusted-exact-app-42-start time=2026-10-14T22:29:04.434216+00:00
+exact producer and uncached Rust application check required
+phase=trusted-exact-app-42-done exit=1 time=2026-10-14T22:29:04.499979+00:00

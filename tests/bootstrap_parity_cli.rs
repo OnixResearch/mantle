@@ -147,6 +147,52 @@ fn bootstrap_parity_report_emits_json_gap_report() {
 }
 
 #[test]
+fn bootstrap_parity_report_preserves_absolute_missing_derivation_paths() {
+    let root = TempDir::new().unwrap();
+    let report = parity_report(root.path());
+    let seed = row_by_id(&report, "seed.hex0");
+    let expected_path = root.path().join("bootstrap/stage0-posix.ncl");
+
+    assert_eq!(seed["status"], "not-started");
+    assert!(
+        seed["notes"].as_str().unwrap().contains(&format!("missing derivation {}", expected_path.display())),
+        "the root's current-directory read must remain inside the planned parity port without changing report paths",
+    );
+}
+
+#[test]
+fn bootstrap_capabilities_report_missing_host_tools_without_process_path() {
+    let root = TempDir::new().unwrap();
+    let output = crunch().env("PATH", root.path()).args(["--json", "bootstrap", "capabilities"]).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["observations"]["host_make_available"], false);
+    assert_eq!(report["observations"]["host_tar_available"], false);
+    let bootstrap = report["operations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["operation"] == "bootstrap-source-root-materialization")
+        .unwrap();
+    assert_eq!(bootstrap["status"], "unsupported");
+    assert!(bootstrap["command"].is_null());
+    assert!(
+        bootstrap["blockers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item.as_str() == Some("host make is unavailable"))
+    );
+    assert!(
+        bootstrap["blockers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item.as_str() == Some("host tar is unavailable"))
+    );
+}
+
+#[test]
 fn bootstrap_parity_report_accepts_independently_receipted_early_native_rows() {
     let report = parity_report(Path::new(env!("CARGO_MANIFEST_DIR")));
     let binutils = row_by_id(&report, "binutils.tcc");

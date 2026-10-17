@@ -1,0 +1,375 @@
+{
+  "schema": "mantle-source-slices-selected-immutable-binding-v1",
+  "date": "2026-10-16",
+  "owning_change": "add-dynamic-plan-source-slices",
+  "immediate_outcome": "Deliberately selected an existing complete committed implementation and its indivisible prerequisite tree under the user approval. This resolves exact source selection/custody without constructing a partial V2 scaffold or adopting the shared dirty tree. Parent review and final repaired-snapshot semantic/gate acceptance remain outstanding.",
+  "authority": {
+    "utterance": "approve",
+    "scope": "The current conversation explicitly authorizes deliberate selection of an existing immutable prerequisite base and narrow implementation boundary. The historical refs were observations then; this record is the new selection now.",
+    "previous_receipt": "source-owner-approval-boundary-2026-10-16.json",
+    "does_not_authorize": "Canonical checkout/index/commit mutation, accepting a failing gate, snapshot equivalence, product-envelope mutation, publication, archive or cleanup."
+  },
+  "selected_prerequisite_base": {
+    "commit": "d75158b00b080535f2ffea12430665ca3d57ea82",
+    "tree": "2331e6c984b3e0482ccd49d4fc07ab6b2f91e2ab",
+    "object_kind": "Existing local immutable Git commit/tree, not a new working-tree copy or created commit.",
+    "rationale": "This existing frozen ref already contains both V2 bodies, version routing, prospective unit/registry/root-goal preflight, source observations, complete source batch publication, Builder/store capability plumbing, backend batch support and their committed Cargo/vendor context. Reusing the complete committed tree preserves dependency-group atomicity; reconstructing the whole mechanism on historical da00 would unnecessarily reimplement/reassemble already existing work.",
+    "historical_baseline_not_selected": "da00f58425740adea559ef926c9dfa97b2cb8240",
+    "working_tree_and_index_unchanged": true
+  },
+  "selected_existing_implementation": {
+    "commit": "d75158b00b080535f2ffea12430665ca3d57ea82",
+    "tree": "2331e6c984b3e0482ccd49d4fc07ab6b2f91e2ab",
+    "selected_delta": [],
+    "delta_meaning": "No overlay patch. Exact implementation content is already the complete existing committed tree. Every hunk is obtained from immutable commit:path or its listed blob; line numbers and current dirty source are not reconstruction inputs.",
+    "selection_complete_for_committed_base": true,
+    "final_semantic_acceptance_proven": false,
+    "new_build_or_test_run": false,
+    "implementation_commit_created": false
+  },
+  "final_repaired_snapshot": {
+    "identity": null,
+    "accepted": false,
+    "reason": "The final product subject must separately include the already-owned isolated overlay/PathInfoCache repair and independently reviewed no-FUSE doctor repair, receive exact fresh custody, and pass the required gates. Neither is silently folded into this base selection. This receipt does not identify those repairs with the committed base."
+  },
+  "exact_scoped_blob_inventory": [
+    {
+      "path": "Cargo.lock",
+      "git_blob": "f06fedf25bdf8485800665dd8bfedc5bf4991904",
+      "mode": "100644"
+    },
+    {
+      "path": "Cargo.toml",
+      "git_blob": "6fe2ccd91358c25b17418ff812b4b322048552e2",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-build/Cargo.toml",
+      "git_blob": "cdeab4fe66d652218432cf511af64d82c8dc6991",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-build/src/dynamic.rs",
+      "git_blob": "00dd22e697cf1c97f86703931901fcc0306ffc54",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-build/src/dynamic_plan.rs",
+      "git_blob": "7ce7e1632b6e6d261039011f4863b6b228b58da6",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-build/src/dynamic_plan/slices.rs",
+      "git_blob": "106e6157b404943f5c159d3dbf1c70c3b462f7c1",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-build/src/dynamic_plan/v2.rs",
+      "git_blob": "1e1cc333af282d75ddb149511af635b363959e6e",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-build/src/dynamic_plan/wire.rs",
+      "git_blob": "bbea67251d53c5744c99f140488e00db248dfe71",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-build/src/goal.rs",
+      "git_blob": "623088da3660dd240ef7ee2d8a830ed9c73ae969",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-build/src/lib.rs",
+      "git_blob": "0080df40899996d3c73d3dcfaef3d16e46c2ebb9",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-build/src/orchestrate.rs",
+      "git_blob": "5872b8684d068b0fefba8923bfbf213d16fa29d2",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-build/src/plan_output_binding.rs",
+      "git_blob": "20f68084f3d4e9c67454920edfe48f5c82376539",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-build/src/registry.rs",
+      "git_blob": "e16ce68aea826c2d2dadb26d0ec7c14225f11013",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-build/src/worker.rs",
+      "git_blob": "16e7e2fa86e7b5e41037bb7a64f6ab761442f90b",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-store/Cargo.toml",
+      "git_blob": "de4e60f141d27670dbd77dc8f93500d5e510882b",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-store/src/backend.rs",
+      "git_blob": "911857d9f7b87355e9c6348e89d1bd997db9106f",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-store/src/capability.rs",
+      "git_blob": "363856d80357d11229e5a680052b09139ae53e85",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-store/src/casita.rs",
+      "git_blob": "7c2532642267389cd958d82550b8639b99abd679",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-store/src/completeness.rs",
+      "git_blob": "8de02ea1640224d50f4a1a35ec71e35e03d8d689",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-store/src/handle.rs",
+      "git_blob": "0ebc2cec97fae64d8d5a05b515ce6fd28920b089",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-store/src/lib.rs",
+      "git_blob": "41431cd4a90f04ffbe74b4945ba6245444564975",
+      "mode": "100644"
+    },
+    {
+      "path": "crates/crunch-store/src/nario.rs",
+      "git_blob": "422f6bb9920c903060127725e923add6fbbce087",
+      "mode": "100644"
+    }
+  ],
+  "dependency_groups": [
+    {
+      "group": "V2 source-slices mechanism",
+      "paths": [
+        "crates/crunch-build/src/dynamic_plan/v2.rs",
+        "crates/crunch-build/src/dynamic_plan/slices.rs",
+        "crates/crunch-build/src/dynamic_plan.rs",
+        "crates/crunch-build/src/dynamic_plan/wire.rs"
+      ],
+      "selection": "Committed whole bodies and existing module/reexports/wire visibility plus bounded V2 fixtures; no current body refactors."
+    },
+    {
+      "group": "Worker admission and scheduler mutation boundary",
+      "paths": [
+        "crates/crunch-build/src/worker.rs",
+        "crates/crunch-build/src/dynamic.rs",
+        "crates/crunch-build/src/registry.rs",
+        "crates/crunch-build/src/goal.rs",
+        "crates/crunch-build/src/lib.rs"
+      ],
+      "selection": "Committed dependency group retained atomically, including V1/V2 routing, V2 report/rejection rows, future-path unit preparation, registry/goal preflight before publication, and staged commit after successful publication. This is prerequisite context, not ownership of unrelated registration or plan-output features."
+    },
+    {
+      "group": "Builder/store observation and source admission authority",
+      "paths": [
+        "crates/crunch-build/src/orchestrate.rs",
+        "crates/crunch-store/src/capability.rs",
+        "crates/crunch-store/src/handle.rs",
+        "crates/crunch-store/src/lib.rs"
+      ],
+      "selection": "Committed BuilderSourceSlice, observation and batch-admission methods, observed/batch types, SliceAdmission view and capability construction; retained together rather than orphaning callers."
+    },
+    {
+      "group": "Committed backend transaction prerequisites",
+      "paths": [
+        "crates/crunch-store/src/backend.rs",
+        "crates/crunch-store/src/casita.rs",
+        "crates/crunch-store/src/nario.rs",
+        "crates/crunch-store/src/completeness.rs"
+      ],
+      "selection": "Existing backend profiles, Casita logical PathInfo transaction, Nario batch caller and completeness dependency retained as immutable prerequisite context. Does not claim physical payload rollback or repair the separately identified overlay batch gap."
+    },
+    {
+      "group": "Existing plan-output prerequisite",
+      "paths": [
+        "crates/crunch-build/src/plan_output_binding.rs"
+      ],
+      "selection": "Retain its already committed identity for existing preflight/binding imports. No independent plan-output ownership or dirty hunk adoption."
+    },
+    {
+      "group": "Build and dependency closure",
+      "paths": [
+        "Cargo.toml",
+        "Cargo.lock",
+        "crates/crunch-build/Cargo.toml",
+        "crates/crunch-store/Cargo.toml"
+      ],
+      "selection": "Retain entire selected commit tree including committed vendor/Nix/manifests, not just enumerated Rust files. The scoped blob list is an ownership/dependency index, not a claim that unlisted tree files may be omitted."
+    }
+  ],
+  "exclusions": {
+    "dirty_tree": "Every shared staged, unstaged and untracked delta from the selected immutable tree is excluded. None is selected by filename, historical raw hash, current availability, parent review or source-owner approval alone.",
+    "mixed_hunks": "No shared mixed hunk is partially copied. Co-located fetch-builder, plan-output, action-result, backend/trust, Nario and Cargo work that is already committed remains prerequisite context at its existing blob identity; every later/current unselected modification remains excluded and untouched.",
+    "discarded_preparation": "A core-only da00 patch was constructed in memory for boundary investigation, never written or applied, and is NOT the selected implementation.",
+    "other_workers": "No src/operator_diagnostics.rs delta, task-definition change, product payload, or current isolated overlay repair is selected by this record."
+  },
+  "review_validity": {
+    "completed_review": "The retained parent/backend completion referenced by source-owner-approval-boundary-2026-10-16.json concerns the then-current candidate. It is not silently transferred to every differing selected committed blob.",
+    "exact_two_body_difference_summary": [
+      "v2.rs committed code uses numeric1_073_741_824, separate invalid-path checks and shared fallible length validators; current code uses equivalent-limit arithmetic, combined checks, direct length checks and added assertions. Committed code also retains assertion-density annotations/comments omitted in the current candidate.",
+      "slices.rs committed code extracts validate_slice_fact_counts with checked conversions and guarded first() patterns, and binds observed_digest with let-else. Current code inlines count checks, indexes guarded nonempty vectors and expects a previously matched digest. Committed helper/check structure is retained, not rewritten."
+    ],
+    "worker_store_difference_evidence": [
+      "artifact://4403: exact frozen-origin comparison for dynamic_plan.rs/wire.rs/goal.rs/registry.rs. Current changes include independent fetch validation simplification, goal length-conversion change, and removed registry action-reference fields/methods.",
+      "artifact://4405: exact frozen-origin comparison for worker/Builder/capability/handle/backend/Casita/Nario. Current changes include V2 preflight capacity arithmetic and stage_unit extraction/inlining differences; capability/backend profile routing; removal of selected committed safety/test/adapter code and independent action-reference changes. This tracked diff may display the two currently untracked V2 files as deletions: direct exact-body comparison, not that deletion notation, identifies their actual present contents."
+    ],
+    "conclusion": "Selected committed worker/store blobs differ from the reviewed current candidate. Their final semantic acceptance and current gate readiness remain unproven here. Existing review is retained as context only; complete committed identity is custody, not proof that changed blobs were reviewed or tested."
+  },
+  "observed_selection_checks": {
+    "git_objects": "Read-only git show -s, rev-parse commit^{tree}, and ls-tree resolved existing commit/tree and the22 scoped blobs. No fresh source/CLI content hash.",
+    "integration_member_presence": [
+      {
+        "path": "crates/crunch-build/src/dynamic_plan.rs",
+        "selectors": [
+          {
+            "selector": "mod slices;",
+            "present": true
+          },
+          {
+            "selector": "mod v2;",
+            "present": true
+          },
+          {
+            "selector": "v2_slice_canonical_order_and_digest_bind_expected_content",
+            "present": true
+          },
+          {
+            "selector": "slice_planner_accepts_two_and_rejects_without_partial_plan",
+            "present": true
+          }
+        ]
+      },
+      {
+        "path": "crates/crunch-build/src/dynamic_plan/wire.rs",
+        "selectors": [
+          {
+            "selector": "pub(in crate::dynamic_plan) fn admit_unit",
+            "present": true
+          }
+        ]
+      },
+      {
+        "path": "crates/crunch-build/src/worker.rs",
+        "selectors": [
+          {
+            "selector": "enum CanonicalNativePlan",
+            "present": true
+          },
+          {
+            "selector": "struct NativeDynamicSourceSliceReport",
+            "present": true
+          },
+          {
+            "selector": "struct V2Registration",
+            "present": true
+          },
+          {
+            "selector": "struct PreparedV2Registration",
+            "present": true
+          },
+          {
+            "selector": "fn prepare_v2_registration",
+            "present": true
+          },
+          {
+            "selector": "fn preflight_goals",
+            "present": true
+          },
+          {
+            "selector": "async fn admit_v2_source_slices",
+            "present": true
+          },
+          {
+            "selector": "fn register_accepted_native_dynamic_plan",
+            "present": true
+          }
+        ]
+      },
+      {
+        "path": "crates/crunch-build/src/orchestrate.rs",
+        "selectors": [
+          {
+            "selector": "struct BuilderSourceSlice",
+            "present": true
+          },
+          {
+            "selector": "async fn observe_source_slice",
+            "present": true
+          },
+          {
+            "selector": "async fn admit_source_slice_batch",
+            "present": true
+          }
+        ]
+      },
+      {
+        "path": "crates/crunch-store/src/capability.rs",
+        "selectors": [
+          {
+            "selector": "struct SliceAdmission",
+            "present": true
+          },
+          {
+            "selector": "async fn admit_verified_source_batch",
+            "present": true
+          }
+        ]
+      },
+      {
+        "path": "crates/crunch-store/src/handle.rs",
+        "selectors": [
+          {
+            "selector": "struct ObservedSourceSlice",
+            "present": true
+          },
+          {
+            "selector": "struct VerifiedSourceBatchEntry",
+            "present": true
+          },
+          {
+            "selector": "async fn observe_source_slice",
+            "present": true
+          }
+        ]
+      },
+      {
+        "path": "crates/crunch-store/src/casita.rs",
+        "selectors": [
+          {
+            "selector": "async fn put_batch_atomic",
+            "present": true
+          }
+        ]
+      },
+      {
+        "path": "crates/crunch-store/src/nario.rs",
+        "selectors": [
+          {
+            "selector": "async fn finalize_nario_import",
+            "present": true
+          },
+          {
+            "selector": "put_batch_atomic(path_infos)",
+            "present": true
+          }
+        ]
+      }
+    ],
+    "limits": "These are exact committed-source membership/identity checks, not compilation, runtime correctness, source equivalence or product acceptance."
+  },
+  "repeatability": {
+    "reconstruction": "Use the existing commit d75158b00b080535f2ffea12430665ca3d57ea82 and its tree2331e6c984b3e0482ccd49d4fc07ab6b2f91e2ab with an empty patch set. For any scoped file, git show COMMIT:PATH yields exact content, and ls-tree lists its existing blob identity. Do not reconstruct from the shared index or local origin ref name.",
+    "history": "Existing prepublication red/repair receipts keep their original subject/lockfile caveats. Failed1108 terminal settlement and exact owned-empty remain retained evidence, not a passing gate for this commit.",
+    "subject_separation": "No equality asserted with T61, task1108, candidate BLAKE3c8b626..., the16product frozen envelope, isolated overlay repair or future doctor repair."
+  },
+  "reusable_approval_binding_capability": "The same approval now has an exact existing base/tree/implementation selection. Later explicitly selected repair deltas can be bound to a separate final immutable subject without re-requesting source-owner authority or adopting unrelated dirty hunks. New acceptance evidence must identify that actual resulting subject.",
+  "next_action": "Parent reads this manifest and the approval receipt, accepts or rejects this precise custody boundary, and separately directs final repair reconciliation/semantic acceptance against the chosen base. No automatic runtime or canonical adoption follows.",
+  "holds": "T4.5 remains unchecked. No acceptance/sync/archive, new source snapshot copy, source/CLI hash, index/commit/checkout mutation, new runtime owner or gate replay, product publication/envelope mutation, cleanup or historical continuation release."
+}

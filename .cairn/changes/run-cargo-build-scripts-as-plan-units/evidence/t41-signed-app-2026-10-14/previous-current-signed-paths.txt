@@ -1,0 +1,4 @@
+current-producer=/nix/store/gnqz2kr75zgs3qgm4731zq81lhhz622s-mantle-cargo-unit-producer-current-87lq
+current-helper=/nix/store/vqssk3gwk0cjkcqyzv40ay96iflxfl9l-mantle-cargo-unit-helper-current-87lq
+current-planner=/nix/store/bj9455lzkimd538w65l384yxcx3r6wm3-mantle-unit-plan-planner-current-87lq
+current-sandbox-shell=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox

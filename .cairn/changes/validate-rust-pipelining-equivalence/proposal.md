@@ -1,0 +1,52 @@
+## Why
+
+Before Mantle can admit speculative Rust execution, its Rust planning/compiler-policy maintainers need a repeatable answer to a narrower question: did an execution mode change a real compilation's status, diagnostics, accepted artifact identity, or program behavior? The immediate consumer is the maintainer reviewing a compiler-policy or execution-adapter change; the immediate outcome is a bounded, inspectable differential report rather than an inferred correctness claim from a faster build.
+
+The durable capability is an ordinary-compilation failure and incremental regression harness that works with today's supported Cargo or serial/native execution baseline. Its first usable delivery does not require early metadata, Headstart, a replacement scheduler, or the other proposed pipeline changes. Baseline replay and incremental-versus-clean comparisons establish the harness independently; explicitly registered future experimental modes add same-binary off/on comparisons later.
+
+The conceptual references are the pinned [Headstart review revision](https://github.com/PowderworksCode/headstart/tree/ff81bfecda2116d54776a7fec538fc2f4e349d1f), reviewed 2026-10-15: [check-errors](https://github.com/PowderworksCode/headstart/blob/ff81bfecda2116d54776a7fec538fc2f4e349d1f/scripts/check-errors.sh), [check-incremental](https://github.com/PowderworksCode/headstart/blob/ff81bfecda2116d54776a7fec538fc2f4e349d1f/scripts/check-incremental.sh), and [check-swap](https://github.com/PowderworksCode/headstart/blob/ff81bfecda2116d54776a7fec538fc2f4e349d1f/scripts/check-swap.sh). The same revision documents an [UNFIXED incremental SVH panic](https://github.com/PowderworksCode/headstart/blob/ff81bfecda2116d54776a7fec538fc2f4e349d1f/docs/ice-early-metadata-svh.md): freshly re-encoded early metadata can disagree with reused full metadata. This is a required risk to expose, not an accepted exception to equivalence.
+
+Additional concept-only references are DioxusLabs/rustd at pinned [revision 131de832c0035b3214289eb65e6a945342180bd8](https://github.com/DioxusLabs/rustd/tree/131de832c0035b3214289eb65e6a945342180bd8): [invalidation.py](https://github.com/DioxusLabs/rustd/blob/131de832c0035b3214289eb65e6a945342180bd8/harness/invalidation.py) motivates edit classes and fresh-state checks; [stress.py](https://github.com/DioxusLabs/rustd/blob/131de832c0035b3214289eb65e6a945342180bd8/harness/stress.py) motivates cumulative broken/repaired campaigns; [difftest.py](https://github.com/DioxusLabs/rustd/blob/131de832c0035b3214289eb65e6a945342180bd8/harness/difftest.py) motivates independent behavior comparison and visible skipped/nonroot populations; [scoreboard.py](https://github.com/DioxusLabs/rustd/blob/131de832c0035b3214289eb65e6a945342180bd8/harness/scoreboard.py) motivates retained coverage baselines. Their reports, timings and coverage are upstream observations, not Mantle evidence. Borrow concepts only: automatic restart, generic error-as-rejection, compiled-count-only regression checks and baseline rewriting do not satisfy this proposal.
+
+## What Changes
+
+- Add a bounded case manifest, admission policy, deterministic comparison core, and process/filesystem runner using real compiler invocations and executable outputs.
+- Deliver ordinary supported Cargo baseline replay now, with serial/native execution cells admitted only within their existing compatibility boundary. A baseline replay is labelled baseline evidence, never an experimental off/on result.
+- Bind both sides to identical compiler, Cargo, sysroot, source state, options, dependencies, and policy except for an explicitly declared experimental toggle. Give each side separate exact input and artifact trees, including private attempt state and cache roots.
+- Exercise cold/warm/unchanged rebuilds and body-only, interface, opaque-type, generic, const, and async edits; cover break/fix/edit/revert and final incremental-versus-clean comparisons with proofs that edits actually applied.
+- Add cumulative successful -> broken -> still broken -> repaired -> later structural/upstream/include/macro/generated-input edit -> revert/reapply campaigns, with a separately materialized clean reference and independent expected behavior/diagnostics at every applicable step. Recovery is visible, never a concealed state reset.
+- Freeze the bounded population manifest and coverage baseline before execution; retain selected/eligible/attempted/executed/restored-or-reused/unsupported/fallback/excluded/failed/unrun dimensions with role-specific denominators, including nonroots and lost tests. Equal compiled counts cannot excuse disappeared cases, new required skips or denominator loss.
+- Compare exit/signal status, structured diagnostics with per-unit order and duplicates preserved, and successful build behavior/accepted output identities. Keep `check` separate from `build` and timing separate from equivalence.
+- Classify unsupported modes and missing prerequisites as typed outcomes. Never turn a required blocked/unsupported cell into a passing skip.
+- Verify failure/cancellation teardown and absence of provisional publication using isolated private roots, without changing ordinary cache authority.
+
+## Impact
+
+- **Owners:** Rust planning application/adapter and compiler-policy maintainers own the case registry, comparison exclusions, fixture updates, and pinned toolchain compatibility declarations. Cache maintainers review publication assertions; this does not transfer cache authority to the harness.
+- **Likely implementation surfaces:** normalized records in `crates/mantle-rust-plan-core`, orchestration in `crates/mantle-rust-plan-app`, and existing host Rust-plan/fixture tooling. Implementation chooses the narrowest existing host entry point before adding a command; this proposal does not prescribe a new general framework.
+- **Evidence:** bounded retained raw stdout/stderr, structured diagnostics, process status, edit manifests, full identities, per-step comparisons, and teardown/publication observations allow another maintainer to repeat the exact admitted matrix.
+- **Evidence scope:** campaign state lineage, clean-reference identities, explicit rejection oracles, recovery/discarded-state records and population reconciliation accompany existing evidence. Correctness and complete population/skip accounting precede latency, then footprint; no upstream report substitutes for these observations.
+- **Compatibility:** default `offlineCargoPackage` still runs one sandboxed `cargo build --locked --offline`; host Rust-plan evidence does not gain ordinary PathInfo authority. No full-workspace per-unit/self-hosting claim: the documented adapter limit is 256 source slices and the measured Mantle workspace has 711 sources.
+- **Testing:** future implementation proof must compile and, for build cells, execute admitted real fixtures. Fake compiler success, source-text checks, and wiring-only assertions cannot establish equivalence.
+
+## Non-Goals
+
+No pipeline implementation, compiler/Cargo patch import, toolchain replacement, general scheduler, live compiler protocol, canonical specification synchronization, or production cache publication mechanism is introduced by authoring this proposal. No measured Mantle speedup, global Cargo compatibility, release reproducibility, compiler correctness, bootstrap proof, or Headstart support is claimed. Public GitHub visibility is not a copying license: borrow concepts, not upstream scripts, pending license review.
+
+## Dependencies
+
+There is no new hard dependency on the other proposed changes. Existing supported Cargo binaries, declared offline fixture sources, a runnable target, and process-tree isolation are baseline prerequisites. `explain-rust-build-waits` can later supply attempt-bound wait observations for time-to-error reporting; their absence does not block baseline equivalence. `bound-provisional-rust-execution` and `pipeline-rust-interface-readiness` consume this package's reports and may register future experimental cells, but this harness must be independently deliverable before those features. The referenced Headstart checkout pins rustc `6006fd03947bd7b04ae5cb5f7f9bb66b44dc8c6e` and Cargo `4f3fb2428282fb2467c4bb5be0163d2f42a31491`; they are external reference identities, not installed Mantle capabilities.
+
+A future warm-workspace package may consume these campaign and coverage contracts, but neither warm sessions nor rustd are prerequisites here. Any future different-provider reference comparison needs separate qualification admission with explicit provider identities and operation-specific semantic projections; the same-binary pipelining registry does not authorize it. Such evidence is neither an off/on treatment nor artifact-byte equivalence and introduces no compiler-backend integration.
+
+## Success Criteria
+
+1. A maintainer can run the admitted ordinary baseline matrix without an experimental compiler and obtain real cold/warm/edit/clean outcomes and retained replay identities.
+2. Every supported required cell has observed status, ordered semantic diagnostics, edit-application proof, and the applicable executable/output-identity comparisons; any mismatch, ICE, or required incomplete cell prevents a complete-green claim.
+3. Real failure/crash/cancellation cases leave no descendant/waiter alive or provisional result visible. Stale prior output cannot satisfy a failed current attempt.
+4. A repeated run from fresh private roots with the same admitted manifest produces the same semantic verdicts, while raw timing may differ.
+5. Future same-binary off/on cells cannot claim success until actually registered, capability-admitted, and run. Unsupported upstream functionality does not block baseline delivery or make unrun experimental cells green.
+6. Every applicable cumulative step agrees with its independent expectation and clean reference; a wrong negative oracle, hidden reset or infrastructure error presented as expected rejection is observably nonpassing.
+7. Every frozen population member is reconciled with role-labelled coverage evidence, including excluded/nonroot and failed/unrun members. Disappeared cases, lost tests, increased required skips, changed denominators or a silently rewritten baseline prevent coverage acceptance even when absolute compiled counts stay constant.
+
+This package is proposed authoring only. All implementation and evidence-collection tasks remain unchecked; it contains no executed compilation results.

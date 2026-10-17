@@ -4774,6 +4774,19 @@ mod tests {
     }
 
     #[test]
+    fn trellis_proof_optional_mode_rejects_stale_v1_without_observations() {
+        let mut manifest = sample_trellis_proof_manifest();
+        manifest.opaque_evidence_sidecar_bindings[0].binding.profile_version =
+            "kamacite.trellis-proof-evidence-profile.v1".to_string();
+
+        let verification = evaluate_trellis_proof_release_evidence(&manifest, TRELLIS_PROOF_MODE_OPTIONAL, None);
+
+        assert!(!verification.valid);
+        assert_eq!(verification.disposition, TRELLIS_PROOF_DISPOSITION_INVALID);
+        assert!(verification.diagnostics.iter().any(|value| value.contains("binding.profile_version must be")));
+    }
+
+    #[test]
     fn trellis_proof_required_mode_fails_closed_without_accepted_upstream_authority() {
         let manifest = sample_trellis_proof_manifest();
         let observations = sample_trellis_observations(&manifest.opaque_evidence_sidecar_bindings[0].binding);
@@ -4858,11 +4871,14 @@ mod tests {
             "malformed-policy-digest" => binding.policy_hashes[0].digest_blake3 = "not-a-digest".to_string(),
             "wrong-claim-scope" => binding.claim_scope = "proof-acceptance".to_string(),
             "weakened-non-claims" => binding.non_claims.retain(|value| !value.contains("reference input only")),
+            "missing-v2-downstream-non-claim" => {
+                binding.non_claims.retain(|value| value != "not downstream correctness")
+            }
             "overclaiming-text" => binding.non_claims.push("Mantle proves release eligibility".to_string()),
             "wrong-upstream-role" => binding.upstream_validation.role = "octet".to_string(),
             "wrong-canonical-schema" => binding.canonical_envelope.schema = "trellis.proof.v0".to_string(),
-            "unsupported-proof-profile" => {
-                binding.profile_version = "kamacite.trellis-proof-evidence-profile.v2".to_string();
+            "stale-v1-proof-profile" => {
+                binding.profile_version = "kamacite.trellis-proof-evidence-profile.v1".to_string();
             }
             "duplicate-json-projection" => {
                 let duplicate = binding

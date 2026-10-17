@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fs;
@@ -61,6 +62,7 @@ use crate::source_bundle::plan_bound_foreign_source_bundle;
 use crate::source_bundle::plan_empty_source_bundle;
 use crate::source_bundle::write_json_atomically;
 
+const MAX_FOREIGN_READ_CALLS: u32 = 4_096;
 const CLI_REPORT_SCHEMA: &str = "mantle-foreign-import-cli-v1";
 const VALIDATE_COMMAND: &str = "validate";
 const PLAN_COMMAND: &str = "plan";
@@ -564,18 +566,486 @@ struct ForeignRealizeCommandRequest<'a> {
     signing_key_path: Option<&'a Path>,
 }
 
+fn foreign_read_limit(action: &ForeignImportAction) -> Result<Option<u32>, RunError> {
+    let read_limit = match action {
+        ForeignImportAction::Validate {
+            package_index, receipt, ..
+        } => 2 + u32::from(package_index.is_some()) + u32::from(receipt.is_some()),
+        ForeignImportAction::Plan { execution_profile, .. } => 3 + u32::from(execution_profile.is_some()),
+        ForeignImportAction::PrepareSources { .. } => MAX_FOREIGN_READ_CALLS,
+        ForeignImportAction::Realize {
+            execution_profiles,
+            cache_closure_policy,
+            ..
+        } => 7u32
+            .checked_add(
+                u32::try_from(execution_profiles.len())
+                    .map_err(|_| RunError::Internal("foreign execution profile count exceeds u32".to_string()))?,
+            )
+            .and_then(|count| count.checked_add(u32::from(cache_closure_policy.is_some())))
+            .ok_or_else(|| RunError::Internal("foreign realization read count overflow".to_string()))?,
+        ForeignImportAction::Audit { .. } => 5,
+        _ => return Ok(None),
+    };
+    if read_limit > MAX_FOREIGN_READ_CALLS {
+        return Err(RunError::Internal("foreign input read count exceeds limit".to_string()));
+    }
+    Ok(Some(read_limit))
+}
+
+fn foreign_effect_outputs(action: &ForeignImportAction) -> Option<(Vec<(&'static str, &Path)>, bool)> {
+    let outputs = match action {
+        ForeignImportAction::Validate { .. } => (Vec::new(), false),
+        ForeignImportAction::Plan {
+            plan_out, receipt_out, ..
+        } => (
+            plan_out
+                .as_deref()
+                .map(|path| ("foreign-executable-plan", path))
+                .into_iter()
+                .chain(receipt_out.as_deref().map(|path| ("foreign-import-receipt", path)))
+                .collect(),
+            false,
+        ),
+        ForeignImportAction::PrepareSources {
+            nario_evidence_out,
+            out,
+            nario_v2,
+            ..
+        } => (
+            nario_evidence_out
+                .as_deref()
+                .map(|path| ("foreign-nario-evidence", path))
+                .into_iter()
+                .chain(std::iter::once(("foreign-source-bundle", out.as_path())))
+                .collect(),
+            !nario_v2.is_empty(),
+        ),
+        ForeignImportAction::Realize { receipt_out, .. } => {
+            (vec![("foreign-realization-receipt", receipt_out.as_path())], true)
+        }
+        ForeignImportAction::Audit { out, .. } => (vec![("foreign-audit-receipt", out.as_path())], true),
+        _ => return None,
+    };
+    Some(outputs)
+}
+
+// r[impl application_architecture.effect_observation_boundary]
+fn foreign_effect_plan(
+    action: &ForeignImportAction,
+    context: &ForeignImportContext<'_>,
+) -> Result<Option<mantle_application_contract::EffectPlan>, RunError> {
+    use mantle_application_contract::CommandFamily;
+    use mantle_application_contract::EffectKind;
+    use mantle_application_contract::EffectMeasure;
+    use mantle_application_contract::EffectSpec;
+    use mantle_application_contract::ExpectedOutput;
+    let Some(read_limit) = foreign_read_limit(action)? else {
+        return Ok(None);
+    };
+    let Some((writes, store)) = foreign_effect_outputs(action) else {
+        return Ok(None);
+    };
+    let paths = writes.iter().map(|(_, path)| path.display().to_string()).collect::<Vec<_>>();
+    let store_identity = (store && !matches!(action, ForeignImportAction::PrepareSources { .. }))
+        .then(|| context.state_dir.display().to_string());
+    let mut specs = vec![EffectSpec {
+        effect_id: "foreign-input-read",
+        kind: EffectKind::ReadFiles,
+        limit: EffectMeasure::Calls(read_limit),
+        expected_output: ExpectedOutput::None,
+    }];
+    if store {
+        specs.push(EffectSpec {
+            effect_id: "foreign-store-access",
+            kind: EffectKind::StoreAccess,
+            limit: EffectMeasure::Calls(1),
+            expected_output: store_identity.as_deref().map_or(ExpectedOutput::None, ExpectedOutput::Identity),
+        });
+    }
+    for ((id, _), path) in writes.iter().zip(&paths) {
+        specs.push(EffectSpec {
+            effect_id: id,
+            kind: EffectKind::WriteFiles,
+            limit: EffectMeasure::Calls(1),
+            expected_output: ExpectedOutput::Identity(path),
+        });
+    }
+    mantle_application_contract::plan_effects(CommandFamily::SourceProvenance, &specs)
+        .map(Some)
+        .map_err(|error| RunError::Internal(format!("foreign effect plan rejected: {}", error.code())))
+}
+
+fn foreign_observation(
+    id: &str,
+    kind: mantle_application_contract::EffectKind,
+    path: Option<&Path>,
+    success: bool,
+    calls: u32,
+) -> mantle_application_contract::Observation {
+    use mantle_application_contract::EffectId;
+    use mantle_application_contract::EffectMeasure;
+    use mantle_application_contract::EffectOutput;
+    use mantle_application_contract::Observation;
+    use mantle_application_contract::ObservationStatus;
+    Observation {
+        effect_id: EffectId(id.to_string()),
+        kind,
+        status: if success {
+            ObservationStatus::Succeeded
+        } else {
+            ObservationStatus::Failed
+        },
+        output: match (success, path) {
+            (true, Some(path)) => EffectOutput::Identity(path.display().to_string()),
+            _ => EffectOutput::None,
+        },
+        usage: EffectMeasure::Calls(calls),
+        diagnostics_code: (!success).then(|| "foreign-effect-failed".to_string()),
+    }
+}
+
+fn classify_foreign_observations(
+    plan: &mantle_application_contract::EffectPlan,
+    observations: &[mantle_application_contract::Observation],
+    expected_failure: bool,
+) -> Result<(), RunError> {
+    use mantle_application_contract::ApplicationOutcome;
+    match mantle_application_contract::classify_observations(plan, observations) {
+        ApplicationOutcome::Completed if !expected_failure => Ok(()),
+        ApplicationOutcome::Failed { .. } if expected_failure => Ok(()),
+        outcome => Err(RunError::Internal(format!("foreign effect observations contradict plan: {outcome:?}"))),
+    }
+}
+/// A skipped output is an observed non-invocation, never a fabricated write.
+fn foreign_skipped_write(id: &str) -> mantle_application_contract::Observation {
+    use mantle_application_contract::EffectId;
+    use mantle_application_contract::EffectKind;
+    use mantle_application_contract::EffectMeasure;
+    use mantle_application_contract::EffectOutput;
+    use mantle_application_contract::Observation;
+    use mantle_application_contract::ObservationStatus;
+    Observation {
+        effect_id: EffectId(id.to_string()),
+        kind: EffectKind::WriteFiles,
+        status: ObservationStatus::Skipped,
+        output: EffectOutput::None,
+        usage: EffectMeasure::Calls(0),
+        diagnostics_code: Some("foreign-plan-rejected".to_string()),
+    }
+}
+
+fn foreign_finish_effects(
+    plan: &mantle_application_contract::EffectPlan,
+    read_ok: bool,
+    read_calls: u32,
+    store_ok: Option<(Option<&Path>, bool)>,
+    written: &[(&str, &Path)],
+    rejected: bool,
+) -> Result<(), RunError> {
+    use mantle_application_contract::EffectKind;
+    let mut observations = Vec::with_capacity(plan.effects.len());
+    observations.push(foreign_observation("foreign-input-read", EffectKind::ReadFiles, None, read_ok, read_calls));
+    if let Some((state_dir, success)) = store_ok {
+        observations.push(foreign_observation("foreign-store-access", EffectKind::StoreAccess, state_dir, success, 1));
+    } else if plan.effects.iter().any(|effect| effect.kind == EffectKind::StoreAccess) {
+        observations.push(mantle_application_contract::Observation {
+            effect_id: mantle_application_contract::EffectId("foreign-store-access".to_string()),
+            kind: EffectKind::StoreAccess,
+            status: mantle_application_contract::ObservationStatus::Skipped,
+            output: mantle_application_contract::EffectOutput::None,
+            usage: mantle_application_contract::EffectMeasure::Calls(0),
+            diagnostics_code: Some("foreign-input-rejected".to_string()),
+        });
+    }
+    for effect in plan.effects.iter().filter(|effect| effect.kind == EffectKind::WriteFiles) {
+        let id = effect.effect_id.0.as_str();
+        if let Some((_, path)) = written.iter().find(|(observed_id, _)| *observed_id == id) {
+            observations.push(foreign_observation(id, EffectKind::WriteFiles, Some(path), true, 1));
+        } else {
+            observations.push(foreign_skipped_write(id));
+        }
+    }
+    let expected_failure = !read_ok
+        || (rejected
+            && (store_ok.is_some_and(|(_, success)| !success)
+                || observations
+                    .iter()
+                    .any(|observed| observed.status == mantle_application_contract::ObservationStatus::Skipped)));
+    classify_foreign_observations(plan, &observations, expected_failure)
+}
+
+fn emit_foreign_report(
+    plan: &mantle_application_contract::EffectPlan,
+    report: ForeignImportCliReport,
+    json: bool,
+    read_ok: bool,
+    read_calls: u32,
+    written: &[(&str, &Path)],
+) -> Result<(), RunError> {
+    foreign_finish_effects(plan, read_ok, read_calls, None, written, !report.accepted)?;
+    emit_report(report, json)
+}
+/// Effects of the five application operations are mediated by this host port.
+trait ForeignEffectPort {
+    fn read_calls(&self) -> u32;
+    fn output_exists(&self, path: &Path) -> Result<bool, RunError>;
+    fn read<T: DeserializeOwned>(
+        &self,
+        request: JsonReadRequest<'_>,
+    ) -> Result<Result<T, ForeignImportCliReport>, RunError>;
+    fn read_with_limit<T: DeserializeOwned>(
+        &self,
+        request: JsonReadRequest<'_>,
+        max_bytes: u64,
+    ) -> Result<Result<T, ForeignImportCliReport>, RunError>;
+    fn publish<T: Serialize>(&self, path: &Path, value: &T, artifact: &str) -> Result<(), RunError>;
+    fn verify_written<T: DeserializeOwned + PartialEq>(
+        &self,
+        path: &Path,
+        expected: &T,
+        artifact: &str,
+        command: &str,
+    ) -> Result<(), RunError>;
+    fn publish_nario(&self, path: &Path, evidence: &NarioSourcePreparationEvidence) -> Result<(), RunError>;
+    fn verify_nario(&self, path: &Path, evidence: &NarioSourcePreparationEvidence) -> Result<(), RunError>;
+    fn prepare_nario(
+        &self,
+        plan: &ForeignExecutablePlan,
+        paths: &[PathBuf],
+        trust_unsigned: bool,
+        trusted_keys: &[String],
+        backend: crunch_store::StoreBackend,
+    ) -> Result<(tempfile::TempDir, Vec<ForeignSourcePathBinding>, NarioSourcePreparationEvidence), RunError>;
+    fn plan_source_bundle(
+        &self,
+        requirements: &[crate::foreign_graph_compiler::CompiledSourceRequirement],
+        bindings: &[ForeignSourcePathBinding],
+        store_prefix: &str,
+    ) -> Result<SourceBundleManifest, RunError>;
+    fn load_existing_key(
+        &self,
+        explicit_path: Option<&Path>,
+        state_dir: &Path,
+    ) -> Result<(crunch_build::signing::KeyPair, PathBuf), RunError>;
+    fn load_or_generate_key(
+        &self,
+        explicit_path: Option<&Path>,
+        state_dir: &Path,
+        emit_human: bool,
+    ) -> Result<crunch_build::signing::KeyPair, RunError>;
+    fn preflight_store(
+        &self,
+        backend: crunch_store::StoreBackend,
+        state_dir: &Path,
+        store_prefix: &str,
+        base_state_dirs: &[PathBuf],
+    ) -> Result<(), RunError>;
+    fn realize(
+        &self,
+        request: ForeignRealizationRequest<'_>,
+    ) -> Result<crate::foreign_realization_receipt::ForeignRealizationReceipt, RunError>;
+    fn audit(&self, request: ForeignProvenanceAuditRequest<'_>) -> Result<ForeignProvenanceAuditReceipt, RunError>;
+}
+
+struct ForeignHostPort {
+    read_calls: Cell<u32>,
+    read_limit: u32,
+}
+
+impl ForeignHostPort {
+    fn admit_reads(&self, additional: u32) -> Result<(), RunError> {
+        let next = self
+            .read_calls
+            .get()
+            .checked_add(additional)
+            .ok_or_else(|| RunError::Internal("foreign port read count overflow".to_string()))?;
+        if next > self.read_limit {
+            return Err(RunError::Internal("foreign port exceeded admitted read limit".to_string()));
+        }
+        self.read_calls.set(next);
+        Ok(())
+    }
+}
+
+impl ForeignEffectPort for ForeignHostPort {
+    fn read_calls(&self) -> u32 {
+        self.read_calls.get()
+    }
+    fn output_exists(&self, path: &Path) -> Result<bool, RunError> {
+        self.admit_reads(1)?;
+        Ok(path.exists())
+    }
+
+    fn read<T: DeserializeOwned>(
+        &self,
+        request: JsonReadRequest<'_>,
+    ) -> Result<Result<T, ForeignImportCliReport>, RunError> {
+        self.admit_reads(1)?;
+        read_json(request)
+    }
+    fn read_with_limit<T: DeserializeOwned>(
+        &self,
+        request: JsonReadRequest<'_>,
+        max_bytes: u64,
+    ) -> Result<Result<T, ForeignImportCliReport>, RunError> {
+        self.admit_reads(1)?;
+        read_json_with_limit(request, max_bytes)
+    }
+
+    fn publish<T: Serialize>(&self, path: &Path, value: &T, artifact: &str) -> Result<(), RunError> {
+        write_json_atomically(path, value, artifact)
+    }
+    fn verify_written<T: DeserializeOwned + PartialEq>(
+        &self,
+        path: &Path,
+        expected: &T,
+        artifact: &str,
+        command: &str,
+    ) -> Result<(), RunError> {
+        verify_foreign_written(path, expected, artifact, command)
+    }
+    fn publish_nario(&self, path: &Path, evidence: &NarioSourcePreparationEvidence) -> Result<(), RunError> {
+        write_json_atomically(path, evidence, "Nario source preparation evidence")
+    }
+    fn verify_nario(&self, path: &Path, evidence: &NarioSourcePreparationEvidence) -> Result<(), RunError> {
+        verify_foreign_nario_evidence(path, evidence)
+    }
+
+    fn prepare_nario(
+        &self,
+        plan: &ForeignExecutablePlan,
+        paths: &[PathBuf],
+        trust_unsigned: bool,
+        trusted_keys: &[String],
+        backend: crunch_store::StoreBackend,
+    ) -> Result<(tempfile::TempDir, Vec<ForeignSourcePathBinding>, NarioSourcePreparationEvidence), RunError> {
+        self.admit_reads(
+            u32::try_from(paths.len())
+                .map_err(|_| RunError::Internal("foreign Nario archive count exceeds u32".to_string()))?,
+        )?;
+        prepare_nario_sources(plan, paths, trust_unsigned, trusted_keys, backend)
+    }
+    fn plan_source_bundle(
+        &self,
+        requirements: &[crate::foreign_graph_compiler::CompiledSourceRequirement],
+        bindings: &[ForeignSourcePathBinding],
+        store_prefix: &str,
+    ) -> Result<SourceBundleManifest, RunError> {
+        self.admit_reads(
+            u32::try_from(bindings.len())
+                .map_err(|_| RunError::Internal("foreign source binding count exceeds u32".to_string()))?,
+        )?;
+        plan_bound_foreign_source_bundle(requirements, bindings, store_prefix)
+    }
+
+    fn load_existing_key(
+        &self,
+        explicit_path: Option<&Path>,
+        state_dir: &Path,
+    ) -> Result<(crunch_build::signing::KeyPair, PathBuf), RunError> {
+        self.admit_reads(1)?;
+        crate::signing_key::load_existing_signing_keypair(explicit_path, state_dir)
+    }
+
+    fn load_or_generate_key(
+        &self,
+        explicit_path: Option<&Path>,
+        state_dir: &Path,
+        emit_human: bool,
+    ) -> Result<crunch_build::signing::KeyPair, RunError> {
+        let key_path = explicit_path
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| crate::signing_key::default_signing_key_path(state_dir));
+        self.admit_reads(1)?;
+        let existed = key_path.exists();
+        self.admit_reads(1)?;
+        let keypair = crate::signing_key::load_or_generate_signing_keypair(explicit_path, state_dir, emit_human)?;
+        if !existed {
+            self.admit_reads(1)?;
+            let (observed, _) = crate::signing_key::load_existing_signing_keypair(Some(&key_path), state_dir)?;
+            if observed.verifying_key != keypair.verifying_key {
+                return Err(RunError::Internal(format!(
+                    "foreign generated signing key readback differs at {}",
+                    key_path.display()
+                )));
+            }
+        }
+        Ok(keypair)
+    }
+    fn preflight_store(
+        &self,
+        backend: crunch_store::StoreBackend,
+        state_dir: &Path,
+        store_prefix: &str,
+        base_state_dirs: &[PathBuf],
+    ) -> Result<(), RunError> {
+        crunch_store::StoreConfig::preflight_backend_identity_for(backend, state_dir, store_prefix, base_state_dirs)
+            .map_err(|error| RunError::Internal(format!("opening store: {error}")))
+    }
+
+    fn realize(
+        &self,
+        request: ForeignRealizationRequest<'_>,
+    ) -> Result<crate::foreign_realization_receipt::ForeignRealizationReceipt, RunError> {
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|error| RunError::Internal(format!("creating foreign realization runtime: {error}")))?;
+        runtime.block_on(realize_foreign_plan(request))
+    }
+
+    fn audit(&self, request: ForeignProvenanceAuditRequest<'_>) -> Result<ForeignProvenanceAuditReceipt, RunError> {
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|error| RunError::Internal(format!("creating foreign provenance audit runtime: {error}")))?;
+        runtime.block_on(audit_foreign_realization(request))
+    }
+}
+
 pub(crate) fn cmd_foreign_import(
     action: ForeignImportAction,
     context: ForeignImportContext<'_>,
 ) -> Result<(), RunError> {
+    cmd_foreign_import_with_observation(action, context, |_| Ok(()))
+}
+
+/// Observe the persisted realization before either CLI branch reports it.
+pub(crate) fn cmd_foreign_import_with_observation(
+    action: ForeignImportAction,
+    context: ForeignImportContext<'_>,
+    on_realize: impl FnOnce(&crate::foreign_realization_receipt::ForeignRealizationReceipt) -> Result<(), RunError>,
+) -> Result<(), RunError> {
     let json = context.json;
+    let effect_plan = foreign_effect_plan(&action, &context)?;
+    let read_limit = effect_plan
+        .as_ref()
+        .and_then(|plan| {
+            plan.effects.iter().find(|effect| effect.effect_id.0 == "foreign-input-read").and_then(|effect| {
+                if let mantle_application_contract::EffectMeasure::Calls(count) = effect.limit {
+                    Some(count)
+                } else {
+                    None
+                }
+            })
+        })
+        .unwrap_or(1);
+    let port = ForeignHostPort {
+        read_calls: Cell::new(0),
+        read_limit,
+    };
     match action {
         ForeignImportAction::Validate {
             graph,
             package_index,
             policy,
             receipt,
-        } => run_validate(&graph, package_index.as_deref(), &policy, receipt.as_deref(), json),
+        } => run_validate(
+            &graph,
+            package_index.as_deref(),
+            &policy,
+            receipt.as_deref(),
+            json,
+            effect_plan.as_ref().expect("foreign validate effect plan"),
+            &port,
+        ),
         ForeignImportAction::Plan {
             graph,
             package_index,
@@ -585,17 +1055,21 @@ pub(crate) fn cmd_foreign_import(
             execution_profile,
             plan_out,
             receipt_out,
-        } => run_plan(ForeignPlanRequest {
-            graph_path: &graph,
-            index_path: &package_index,
-            policy_path: &policy,
-            package: &package,
-            system: &system,
-            execution_profile_path: execution_profile.as_deref(),
-            plan_out: plan_out.as_deref(),
-            receipt_out: receipt_out.as_deref(),
-            json,
-        }),
+        } => run_plan(
+            ForeignPlanRequest {
+                graph_path: &graph,
+                index_path: &package_index,
+                policy_path: &policy,
+                package: &package,
+                system: &system,
+                execution_profile_path: execution_profile.as_deref(),
+                plan_out: plan_out.as_deref(),
+                receipt_out: receipt_out.as_deref(),
+                json,
+            },
+            effect_plan.as_ref().expect("foreign plan effect plan"),
+            &port,
+        ),
         ForeignImportAction::PrepareSources {
             plan,
             sources,
@@ -614,6 +1088,8 @@ pub(crate) fn cmd_foreign_import(
             &out,
             context.backend,
             json,
+            effect_plan.as_ref().expect("foreign source effect plan"),
+            &port,
         ),
         ForeignImportAction::Realize {
             plan,
@@ -648,6 +1124,9 @@ pub(crate) fn cmd_foreign_import(
                 signing_key_path: signing_key.as_deref(),
             },
             &context,
+            effect_plan.as_ref().expect("foreign realize effect plan"),
+            &port,
+            on_realize,
         ),
         ForeignImportAction::Audit {
             plan,
@@ -666,6 +1145,8 @@ pub(crate) fn cmd_foreign_import(
                 signing_key_path: signing_key.as_deref(),
             },
             &context,
+            effect_plan.as_ref().expect("foreign audit effect plan"),
+            &port,
         ),
         ForeignImportAction::ProduceAterm {
             source_prefix,
@@ -768,72 +1249,80 @@ fn run_validate(
     policy_path: &Path,
     receipt_path: Option<&Path>,
     json: bool,
+    effect_plan: &mantle_application_contract::EffectPlan,
+    port: &impl ForeignEffectPort,
 ) -> Result<(), RunError> {
     assert!(!VALIDATE_COMMAND.is_empty(), "foreign validation command identity must not be empty");
     assert!(!CLI_REPORT_SCHEMA.is_empty(), "foreign import report schema must not be empty");
-    let graph = match read_json::<ForeignDerivationGraph>(JsonReadRequest {
+    let graph = match port.read::<ForeignDerivationGraph>(JsonReadRequest {
         path: graph_path,
         artifact: "graph",
         command: VALIDATE_COMMAND,
     })? {
         Ok(graph) => graph,
-        Err(report) => return emit_report(report, json),
+        Err(report) => return emit_foreign_report(effect_plan, report, json, false, port.read_calls(), &[]),
     };
-    let index = match read_optional_index(index_path, VALIDATE_COMMAND)? {
+    let index = match read_optional_index(index_path, VALIDATE_COMMAND, port)? {
         Ok(index) => index,
-        Err(report) => return emit_report(report, json),
+        Err(report) => return emit_foreign_report(effect_plan, report, json, false, port.read_calls(), &[]),
     };
-    let policy = match read_json::<TranslationPolicy>(JsonReadRequest {
+    let policy = match port.read::<TranslationPolicy>(JsonReadRequest {
         path: policy_path,
         artifact: "policy",
         command: VALIDATE_COMMAND,
     })? {
         Ok(policy) => policy,
-        Err(report) => return emit_report(report, json),
+        Err(report) => return emit_foreign_report(effect_plan, report, json, false, port.read_calls(), &[]),
     };
-    let receipt = match read_optional_receipt(receipt_path, VALIDATE_COMMAND)? {
+    let receipt = match read_optional_receipt(receipt_path, VALIDATE_COMMAND, port)? {
         Ok(receipt) => receipt,
-        Err(report) => return emit_report(report, json),
+        Err(report) => return emit_foreign_report(effect_plan, report, json, false, port.read_calls(), &[]),
     };
     let outcome = validate_inputs(graph, index, policy, receipt);
-    emit_report(outcome, json)
+    emit_foreign_report(effect_plan, outcome, json, true, port.read_calls(), &[])
 }
 
-fn run_plan(request: ForeignPlanRequest<'_>) -> Result<(), RunError> {
+fn run_plan(
+    request: ForeignPlanRequest<'_>,
+    effect_plan: &mantle_application_contract::EffectPlan,
+    port: &impl ForeignEffectPort,
+) -> Result<(), RunError> {
     assert!(!PLAN_COMMAND.is_empty(), "foreign plan command identity must not be empty");
     assert!(!CLI_REPORT_SCHEMA.is_empty(), "foreign plan report schema must not be empty");
-    let graph = match read_json::<ForeignDerivationGraph>(JsonReadRequest {
+    let graph = match port.read::<ForeignDerivationGraph>(JsonReadRequest {
         path: request.graph_path,
         artifact: "graph",
         command: PLAN_COMMAND,
     })? {
         Ok(graph) => graph,
-        Err(report) => return emit_report(report, request.json),
+        Err(report) => return emit_foreign_report(effect_plan, report, request.json, false, port.read_calls(), &[]),
     };
-    let index = match read_json::<PackageIndex>(JsonReadRequest {
+    let index = match port.read::<PackageIndex>(JsonReadRequest {
         path: request.index_path,
         artifact: "package-index",
         command: PLAN_COMMAND,
     })? {
         Ok(index) => index,
-        Err(report) => return emit_report(report, request.json),
+        Err(report) => return emit_foreign_report(effect_plan, report, request.json, false, port.read_calls(), &[]),
     };
-    let policy = match read_json::<TranslationPolicy>(JsonReadRequest {
+    let policy = match port.read::<TranslationPolicy>(JsonReadRequest {
         path: request.policy_path,
         artifact: "policy",
         command: PLAN_COMMAND,
     })? {
         Ok(policy) => policy,
-        Err(report) => return emit_report(report, request.json),
+        Err(report) => return emit_foreign_report(effect_plan, report, request.json, false, port.read_calls(), &[]),
     };
     let outcome = if let Some(path) = request.execution_profile_path {
-        let execution_profile = match read_json::<ExecutionProfile>(JsonReadRequest {
+        let execution_profile = match port.read::<ExecutionProfile>(JsonReadRequest {
             path,
             artifact: "execution-profile",
             command: PLAN_COMMAND,
         })? {
             Ok(profile) => profile,
-            Err(report) => return emit_report(report, request.json),
+            Err(report) => {
+                return emit_foreign_report(effect_plan, report, request.json, false, port.read_calls(), &[]);
+            }
         };
         plan_inputs_with_profile(graph, index, request.package, policy, request.system, &execution_profile)
     } else {
@@ -848,17 +1337,40 @@ fn run_plan(request: ForeignPlanRequest<'_>) -> Result<(), RunError> {
                 .plan
                 .as_ref()
                 .ok_or_else(|| RunError::Internal("accepted foreign plan report has no plan".to_string()))?;
-            write_json_atomically(path, plan, "foreign executable plan")?;
+            port.publish(path, plan, "foreign executable plan")?;
         }
         if let Some(path) = request.receipt_out {
             let receipt = outcome
                 .receipt
                 .as_ref()
                 .ok_or_else(|| RunError::Internal("accepted foreign plan report has no receipt".to_string()))?;
-            write_json_atomically(path, receipt, "foreign import receipt")?;
+            port.publish(path, receipt, "foreign import receipt")?;
+        }
+        if let Some(path) = request.plan_out {
+            let plan = outcome
+                .plan
+                .as_ref()
+                .ok_or_else(|| RunError::Internal("accepted foreign plan report has no plan".to_string()))?;
+            port.verify_written(path, plan, "executable plan", PLAN_COMMAND)?;
+        }
+        if let Some(path) = request.receipt_out {
+            let receipt = outcome
+                .receipt
+                .as_ref()
+                .ok_or_else(|| RunError::Internal("accepted foreign plan report has no receipt".to_string()))?;
+            port.verify_written(path, receipt, "import receipt", PLAN_COMMAND)?;
         }
     }
-    emit_report(outcome, request.json)
+    let mut written = Vec::with_capacity(2);
+    if outcome.accepted {
+        if let Some(path) = request.plan_out {
+            written.push(("foreign-executable-plan", path));
+        }
+        if let Some(path) = request.receipt_out {
+            written.push(("foreign-import-receipt", path));
+        }
+    }
+    emit_foreign_report(effect_plan, outcome, request.json, true, port.read_calls(), &written)
 }
 
 #[derive(Debug, Serialize)]
@@ -904,14 +1416,16 @@ fn run_prepare_sources(
     output_path: &Path,
     backend: crunch_store::StoreBackend,
     json: bool,
+    effect_plan: &mantle_application_contract::EffectPlan,
+    port: &impl ForeignEffectPort,
 ) -> Result<(), RunError> {
-    let plan = match read_json::<ForeignExecutablePlan>(JsonReadRequest {
+    let plan = match port.read::<ForeignExecutablePlan>(JsonReadRequest {
         path: plan_path,
         artifact: "plan",
         command: PREPARE_SOURCES_COMMAND,
     })? {
         Ok(plan) => plan,
-        Err(report) => return emit_report(report, json),
+        Err(report) => return emit_foreign_report(effect_plan, report, json, false, port.read_calls(), &[]),
     };
     crate::foreign_executable_plan::validate_foreign_executable_plan(&plan)
         .map_err(|diagnostic| RunError::Internal(format!("foreign source plan is invalid: {}", diagnostic.class)))?;
@@ -926,7 +1440,7 @@ fn run_prepare_sources(
         let evidence_path = nario_evidence_out
             .ok_or_else(|| RunError::Internal("--nario-evidence-out is required with --nario-v2".to_string()))?;
         let (staging, mut projected, evidence) =
-            prepare_nario_sources(&plan, nario_paths, nario_trust_unsigned, nario_trusted_public_keys, backend)?;
+            port.prepare_nario(&plan, nario_paths, nario_trust_unsigned, nario_trusted_public_keys, backend)?;
         bindings.append(&mut projected);
         nario_evidence = Some((evidence_path.to_path_buf(), evidence));
         Some(staging)
@@ -939,9 +1453,10 @@ fn run_prepare_sources(
         }
         plan_empty_source_bundle(&plan.target_store_prefix)?
     } else {
-        plan_bound_foreign_source_bundle(&plan.source_requirements, &bindings, &plan.target_store_prefix)?
+        port.plan_source_bundle(&plan.source_requirements, &bindings, &plan.target_store_prefix)?
     };
-    if let Some((evidence_path, mut evidence)) = nario_evidence {
+    let imported_archive_count = nario_evidence.as_ref().map_or(0, |(_, evidence)| evidence.archives.len());
+    if let Some((evidence_path, evidence)) = nario_evidence.as_mut() {
         evidence.source_bundle_blake3 = manifest.manifest_blake3.clone();
         for projection in &mut evidence.projections {
             let record =
@@ -954,9 +1469,26 @@ fn run_prepare_sources(
             projection.target_source_identity = record.identity.clone();
             projection.target_content_blake3 = record.content_blake3.clone();
         }
-        write_json_atomically(&evidence_path, &evidence, "Nario source preparation evidence")?;
+        port.publish_nario(evidence_path, evidence)?;
     }
-    write_json_atomically(output_path, &manifest, "foreign source bundle")?;
+    port.publish(output_path, &manifest, "foreign source bundle")?;
+    if let Some((evidence_path, evidence)) = nario_evidence.as_ref() {
+        port.verify_nario(evidence_path, evidence)?;
+    }
+    port.verify_written(output_path, &manifest, "source bundle", PREPARE_SOURCES_COMMAND)?;
+    let mut written = Vec::with_capacity(2);
+    if let Some(path) = nario_evidence_out {
+        written.push(("foreign-nario-evidence", path));
+    }
+    written.push(("foreign-source-bundle", output_path));
+    foreign_finish_effects(
+        effect_plan,
+        true,
+        port.read_calls(),
+        (!nario_paths.is_empty()).then_some((None, imported_archive_count == nario_paths.len())),
+        &written,
+        false,
+    )?;
     if json {
         println!(
             "{}",
@@ -1159,46 +1691,68 @@ fn project_nario_source_records(
     Ok((bindings, projections))
 }
 
-fn run_audit(request: ForeignAuditCommandRequest<'_>, context: &ForeignImportContext<'_>) -> Result<(), RunError> {
+fn run_audit(
+    request: ForeignAuditCommandRequest<'_>,
+    context: &ForeignImportContext<'_>,
+    effect_plan: &mantle_application_contract::EffectPlan,
+    port: &impl ForeignEffectPort,
+) -> Result<(), RunError> {
     assert!(!AUDIT_COMMAND.is_empty(), "foreign audit command identity must not be empty");
-    if request.output_path.exists() {
+    if port.output_exists(request.output_path)? {
         return Err(RunError::Internal(format!(
             "foreign provenance audit output already exists: {}",
             request.output_path.display()
         )));
     }
-    let plan =
-        read_required_foreign_json::<ForeignExecutablePlan>(request.plan_path, "plan", AUDIT_COMMAND, context.json)?;
-    let realization_receipt = read_required_foreign_json::<
-        crate::foreign_realization_receipt::ForeignRealizationReceipt,
-    >(
-        request.realization_receipt_path, "realization-receipt", AUDIT_COMMAND, context.json
+    let plan = read_required_foreign_json::<ForeignExecutablePlan>(
+        request.plan_path,
+        "plan",
+        AUDIT_COMMAND,
+        context.json,
+        effect_plan,
+        port,
     )?;
+    let realization_receipt =
+        read_required_foreign_json::<crate::foreign_realization_receipt::ForeignRealizationReceipt>(
+            request.realization_receipt_path,
+            "realization-receipt",
+            AUDIT_COMMAND,
+            context.json,
+            effect_plan,
+            port,
+        )?;
     let policy = read_required_foreign_json::<crunch_store::ForeignProvenancePolicy>(
         request.policy_path,
         "provenance-policy",
         AUDIT_COMMAND,
         context.json,
+        effect_plan,
+        port,
     )?;
-    let (keypair, _key_path) =
-        crate::signing_key::load_existing_signing_keypair(request.signing_key_path, context.state_dir)?;
+    let (keypair, _key_path) = port.load_existing_key(request.signing_key_path, context.state_dir)?;
     let cache_keys = trusted_cache_keys_from_plan(&plan)?;
     let trusted_keys = crunch_build::build_trusted_keys(&keypair, Some(&cache_keys));
-    let runtime = tokio::runtime::Runtime::new()
-        .map_err(|error| RunError::Internal(format!("creating foreign provenance audit runtime: {error}")))?;
-    let receipt: ForeignProvenanceAuditReceipt =
-        runtime.block_on(audit_foreign_realization(ForeignProvenanceAuditRequest {
-            plan: &plan,
-            realization_receipt: &realization_receipt,
-            policy: &policy,
-            selected_root_node_ids: request.selected_roots,
-            output_dir: context.output_dir,
-            state_dir: context.state_dir,
-            backend: context.backend,
-            base_state_dirs: context.base_state_dirs,
-            trusted_keys: &trusted_keys,
-        }))?;
-    write_json_atomically(request.output_path, &receipt, "foreign provenance audit receipt")?;
+    let receipt: ForeignProvenanceAuditReceipt = port.audit(ForeignProvenanceAuditRequest {
+        plan: &plan,
+        realization_receipt: &realization_receipt,
+        policy: &policy,
+        selected_root_node_ids: request.selected_roots,
+        output_dir: context.output_dir,
+        state_dir: context.state_dir,
+        backend: context.backend,
+        base_state_dirs: context.base_state_dirs,
+        trusted_keys: &trusted_keys,
+    })?;
+    port.publish(request.output_path, &receipt, "foreign provenance audit receipt")?;
+    port.verify_written(request.output_path, &receipt, "provenance audit receipt", AUDIT_COMMAND)?;
+    foreign_finish_effects(
+        effect_plan,
+        true,
+        port.read_calls(),
+        Some((Some(context.state_dir), receipt.status == "pass")),
+        &[("foreign-audit-receipt", request.output_path)],
+        receipt.status != "pass",
+    )?;
     if context.json {
         println!(
             "{}",
@@ -1225,33 +1779,63 @@ fn run_audit(request: ForeignAuditCommandRequest<'_>, context: &ForeignImportCon
     }
 }
 
-fn run_realize(request: ForeignRealizeCommandRequest<'_>, context: &ForeignImportContext<'_>) -> Result<(), RunError> {
+fn run_realize(
+    request: ForeignRealizeCommandRequest<'_>,
+    context: &ForeignImportContext<'_>,
+    effect_plan: &mantle_application_contract::EffectPlan,
+    port: &impl ForeignEffectPort,
+    on_realize: impl FnOnce(&crate::foreign_realization_receipt::ForeignRealizationReceipt) -> Result<(), RunError>,
+) -> Result<(), RunError> {
     assert!(!REALIZE_COMMAND.is_empty(), "foreign realize command identity must not be empty");
-    if request.receipt_out.exists() {
+    if port.output_exists(request.receipt_out)? {
         return Err(RunError::Internal(format!(
             "foreign realization receipt output already exists: {}",
             request.receipt_out.display()
         )));
     }
-    let plan = read_required_realization_json::<ForeignExecutablePlan>(request.plan_path, "plan", context.json)?;
-    let import_receipt =
-        read_required_realization_json::<ImportReceipt>(request.import_receipt_path, "import-receipt", context.json)?;
+    let plan = read_required_realization_json::<ForeignExecutablePlan>(
+        request.plan_path,
+        "plan",
+        context.json,
+        effect_plan,
+        port,
+    )?;
+    let import_receipt = read_required_realization_json::<ImportReceipt>(
+        request.import_receipt_path,
+        "import-receipt",
+        context.json,
+        effect_plan,
+        port,
+    )?;
     let source_bundle = read_required_realization_json_with_limit::<SourceBundleManifest>(
         request.source_bundle_path,
         "source-bundle",
         context.json,
         context.source_bundle_bytes_max,
+        effect_plan,
+        port,
     )?;
     let cache_closure_policy = request
         .cache_closure_policy_path
         .map(|path| {
-            read_required_realization_json::<ForeignCacheClosurePolicy>(path, "cache-closure-policy", context.json)
+            read_required_realization_json::<ForeignCacheClosurePolicy>(
+                path,
+                "cache-closure-policy",
+                context.json,
+                effect_plan,
+                port,
+            )
         })
         .transpose()?;
     let mut execution_profiles = BTreeMap::new();
     for profile_path in request.execution_profile_paths {
-        let profile =
-            read_required_realization_json::<ExecutionProfile>(profile_path, "execution-profile", context.json)?;
+        let profile = read_required_realization_json::<ExecutionProfile>(
+            profile_path,
+            "execution-profile",
+            context.json,
+            effect_plan,
+            port,
+        )?;
         if execution_profiles.insert(profile.profile_id.clone(), profile).is_some() {
             return Err(RunError::Internal("foreign realization repeats an execution profile ID".to_string()));
         }
@@ -1305,23 +1889,11 @@ fn run_realize(request: ForeignRealizeCommandRequest<'_>, context: &ForeignImpor
         })
         .map_err(|error| RunError::Internal(error.to_string()))?;
     }
-    crunch_store::StoreConfig::preflight_backend_identity_for(
-        context.backend,
-        context.state_dir,
-        &plan.target_store_prefix,
-        context.base_state_dirs,
-    )
-    .map_err(|error| RunError::Internal(format!("opening store: {error}")))?;
-    let keypair = crate::signing_key::load_or_generate_signing_keypair(
-        request.signing_key_path,
-        context.state_dir,
-        !context.json,
-    )?;
+    port.preflight_store(context.backend, context.state_dir, &plan.target_store_prefix, context.base_state_dirs)?;
+    let keypair = port.load_or_generate_key(request.signing_key_path, context.state_dir, !context.json)?;
     let cache_keys = trusted_cache_keys_from_plan(&plan)?;
     let trusted_keys = crunch_build::build_trusted_keys(&keypair, Some(&cache_keys));
-    let runtime = tokio::runtime::Runtime::new()
-        .map_err(|error| RunError::Internal(format!("creating foreign realization runtime: {error}")))?;
-    let receipt = runtime.block_on(realize_foreign_plan(ForeignRealizationRequest {
+    let receipt = port.realize(ForeignRealizationRequest {
         plan: &plan,
         import_receipt: &import_receipt,
         source_bundle: &source_bundle,
@@ -1340,8 +1912,22 @@ fn run_realize(request: ForeignRealizeCommandRequest<'_>, context: &ForeignImpor
         offline: request.offline,
         remote_execution_requested: request.remote,
         verbose: context.verbose,
-    }))?;
-    write_json_atomically(request.receipt_out, &receipt, "foreign realization receipt")?;
+    })?;
+    port.publish(request.receipt_out, &receipt, "foreign realization receipt")?;
+    port.verify_written(request.receipt_out, &receipt, "realization receipt", REALIZE_COMMAND)?;
+    foreign_finish_effects(
+        effect_plan,
+        true,
+        port.read_calls(),
+        Some((
+            Some(context.state_dir),
+            receipt.failure.is_none()
+                && receipt.status == crate::foreign_realization_receipt::FOREIGN_REALIZATION_COMPLETE_STATUS,
+        )),
+        &[("foreign-realization-receipt", request.receipt_out)],
+        receipt.failure.is_some(),
+    )?;
+    on_realize(&receipt)?;
     if context.json {
         println!(
             "{}",
@@ -1391,8 +1977,14 @@ fn trusted_cache_keys_from_plan(
     Ok(keys_by_encoding.into_values().collect())
 }
 
-fn read_required_realization_json<T: DeserializeOwned>(path: &Path, artifact: &str, json: bool) -> Result<T, RunError> {
-    read_required_foreign_json(path, artifact, REALIZE_COMMAND, json)
+fn read_required_realization_json<T: DeserializeOwned>(
+    path: &Path,
+    artifact: &str,
+    json: bool,
+    effect_plan: &mantle_application_contract::EffectPlan,
+    port: &impl ForeignEffectPort,
+) -> Result<T, RunError> {
+    read_required_foreign_json(path, artifact, REALIZE_COMMAND, json, effect_plan, port)
 }
 
 fn read_required_realization_json_with_limit<T: DeserializeOwned>(
@@ -1400,8 +1992,10 @@ fn read_required_realization_json_with_limit<T: DeserializeOwned>(
     artifact: &str,
     json: bool,
     max_bytes: u64,
+    effect_plan: &mantle_application_contract::EffectPlan,
+    port: &impl ForeignEffectPort,
 ) -> Result<T, RunError> {
-    read_required_foreign_json_with_limit(path, artifact, REALIZE_COMMAND, json, max_bytes)
+    read_required_foreign_json_with_limit(path, artifact, REALIZE_COMMAND, json, max_bytes, effect_plan, port)
 }
 
 fn read_required_foreign_json<T: DeserializeOwned>(
@@ -1409,8 +2003,18 @@ fn read_required_foreign_json<T: DeserializeOwned>(
     artifact: &str,
     command: &str,
     json: bool,
+    effect_plan: &mantle_application_contract::EffectPlan,
+    port: &impl ForeignEffectPort,
 ) -> Result<T, RunError> {
-    read_required_foreign_json_with_limit(path, artifact, command, json, DEFAULT_FOREIGN_JSON_ARTIFACT_BYTES_MAX)
+    read_required_foreign_json_with_limit(
+        path,
+        artifact,
+        command,
+        json,
+        DEFAULT_FOREIGN_JSON_ARTIFACT_BYTES_MAX,
+        effect_plan,
+        port,
+    )
 }
 
 fn read_required_foreign_json_with_limit<T: DeserializeOwned>(
@@ -1419,8 +2023,10 @@ fn read_required_foreign_json_with_limit<T: DeserializeOwned>(
     command: &str,
     json: bool,
     max_bytes: u64,
+    effect_plan: &mantle_application_contract::EffectPlan,
+    port: &impl ForeignEffectPort,
 ) -> Result<T, RunError> {
-    match read_json_with_limit::<T>(
+    match port.read_with_limit::<T>(
         JsonReadRequest {
             path,
             artifact,
@@ -1429,7 +2035,7 @@ fn read_required_foreign_json_with_limit<T: DeserializeOwned>(
         max_bytes,
     )? {
         Ok(value) => Ok(value),
-        Err(report) => match emit_report(report, json) {
+        Err(report) => match emit_foreign_report(effect_plan, report, json, false, port.read_calls(), &[]) {
             Err(error) => Err(error),
             Ok(()) => {
                 Err(RunError::Internal(format!("rejected foreign {command} input unexpectedly returned success")))
@@ -2130,11 +2736,12 @@ fn plan_inputs_with_profile(
 fn read_optional_index(
     path: Option<&Path>,
     command: &str,
+    port: &impl ForeignEffectPort,
 ) -> Result<Result<Option<PackageIndex>, ForeignImportCliReport>, RunError> {
     let Some(path) = path else {
         return Ok(Ok(None));
     };
-    read_json::<PackageIndex>(JsonReadRequest {
+    port.read::<PackageIndex>(JsonReadRequest {
         path,
         artifact: "package-index",
         command,
@@ -2145,16 +2752,55 @@ fn read_optional_index(
 fn read_optional_receipt(
     path: Option<&Path>,
     command: &str,
+    port: &impl ForeignEffectPort,
 ) -> Result<Result<Option<ImportReceipt>, ForeignImportCliReport>, RunError> {
     let Some(path) = path else {
         return Ok(Ok(None));
     };
-    read_json::<ImportReceipt>(JsonReadRequest {
+    port.read::<ImportReceipt>(JsonReadRequest {
         path,
         artifact: "receipt",
         command,
     })
     .map(|result| result.map(Some))
+}
+
+/// Compare a fresh bounded read of the committed artifact to the submitted value.
+fn verify_foreign_written<T: DeserializeOwned + PartialEq>(
+    path: &Path,
+    expected: &T,
+    artifact: &str,
+    command: &str,
+) -> Result<(), RunError> {
+    let observed = read_json::<T>(JsonReadRequest {
+        path,
+        artifact,
+        command,
+    })?
+    .map_err(|_| RunError::Internal(format!("foreign {artifact} cannot be read back from {}", path.display())))?;
+    if observed != *expected {
+        return Err(RunError::Internal(format!(
+            "foreign {artifact} readback contradicts the written artifact at {}",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
+/// Nario's store metadata intentionally exposes Serialize but not Deserialize.
+fn verify_foreign_nario_evidence(path: &Path, expected: &NarioSourcePreparationEvidence) -> Result<(), RunError> {
+    let observed = read_json::<serde_json::Value>(JsonReadRequest {
+        path,
+        artifact: "Nario preparation evidence",
+        command: PREPARE_SOURCES_COMMAND,
+    })?
+    .map_err(|_| RunError::Internal(format!("foreign Nario evidence cannot be read back from {}", path.display())))?;
+    let expected = serde_json::to_value(expected)
+        .map_err(|error| RunError::Internal(format!("serializing foreign Nario evidence for readback: {error}")))?;
+    if observed != expected {
+        return Err(RunError::Internal(format!("foreign Nario evidence readback contradicts {}", path.display())));
+    }
+    Ok(())
 }
 
 fn read_json<T: DeserializeOwned>(request: JsonReadRequest<'_>) -> Result<Result<T, ForeignImportCliReport>, RunError> {
@@ -2308,6 +2954,191 @@ mod tests {
     use super::*;
 
     const VALID_DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    #[cfg(unix)]
+    #[test]
+    fn realization_callback_observes_committed_complete_and_partial_receipts_before_reporting() {
+        if let Some(case) = std::env::var_os("MANTLE_FOREIGN_CALLBACK_CASE") {
+            run_realization_callback_case(case.to_str().expect("callback scenario must be UTF-8"));
+            return;
+        }
+        for (case, expected_reports) in [("complete", 1), ("partial", 1), ("denied", 0)] {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "foreign_import_cmd::tests::realization_callback_observes_committed_complete_and_partial_receipts_before_reporting",
+                    "--nocapture",
+                    "--test-threads=1",
+                ])
+                .env("MANTLE_FOREIGN_CALLBACK_CASE", case)
+                .output()
+                .expect("callback scenario must launch");
+            assert!(
+                output.status.success(),
+                "callback scenario {case} failed:\nstdout: {}\nstderr: {}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            assert_eq!(
+                stdout.matches("\"schema\":\"mantle-foreign-realization-receipt-v1\"").count(),
+                expected_reports,
+                "callback scenario {case} emitted an unexpected terminal realization report"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    fn run_realization_callback_case(case: &str) {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempfile::tempdir().unwrap();
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/foreign-import");
+        let profile =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("config/foreign-execution-profiles/generated/nix.json");
+        let plan_path = root.path().join("plan.json");
+        let import_receipt_path = root.path().join("import-receipt.json");
+        let source_bundle_path = root.path().join("source-bundle.json");
+        let realization_receipt_path = root.path().join("realization-receipt.json");
+        let output_dir = root.path().join("outputs");
+        let state_dir = root.path().join("state");
+        fs::create_dir(&output_dir).unwrap();
+        let context = || ForeignImportContext {
+            output_dir: &output_dir,
+            state_dir: &state_dir,
+            backend: crunch_store::StoreBackend::Snix,
+            base_state_dirs: &[],
+            source_bundle_bytes_max: DEFAULT_FOREIGN_JSON_ARTIFACT_BYTES_MAX,
+            verbose: false,
+            json: true,
+        };
+        cmd_foreign_import(
+            ForeignImportAction::Plan {
+                graph: fixture.join("realize-two-node.graph.json"),
+                package_index: fixture.join("realize-two-node.index.json"),
+                policy: fixture.join("realize-policy.json"),
+                package: "two-node".to_string(),
+                system: "x86_64-linux".to_string(),
+                execution_profile: Some(profile.clone()),
+                plan_out: Some(plan_path.clone()),
+                receipt_out: Some(import_receipt_path.clone()),
+            },
+            context(),
+        )
+        .unwrap();
+        let builder = if case == "partial" {
+            let failing = root.path().join("failing-builder.sh");
+            fs::write(&failing, b"#!/bin/sh\nexit 9\n").unwrap();
+            let mut permissions = fs::metadata(&failing).unwrap().permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&failing, permissions).unwrap();
+            failing
+        } else {
+            fixture.join("realize-two-node-builder.sh")
+        };
+        cmd_foreign_import(
+            ForeignImportAction::PrepareSources {
+                plan: plan_path.clone(),
+                sources: vec![format!("foreign-builder={}", builder.display())],
+                nario_v2: Vec::new(),
+                nario_trust_unsigned: false,
+                nario_trusted_public_keys: Vec::new(),
+                nario_evidence_out: None,
+                out: source_bundle_path.clone(),
+            },
+            context(),
+        )
+        .unwrap();
+        let bundle: SourceBundleManifest = serde_json::from_slice(&fs::read(&source_bundle_path).unwrap()).unwrap();
+        let called = Cell::new(false);
+        let result = cmd_foreign_import_with_observation(
+            ForeignImportAction::Realize {
+                plan: plan_path,
+                import_receipt: import_receipt_path,
+                source_bundle: source_bundle_path,
+                source_bundle_blake3: bundle.manifest_blake3,
+                execution_profiles: vec![profile],
+                cache_closure_policy: None,
+                roots: Vec::new(),
+                receipt_out: realization_receipt_path.clone(),
+                jobs: Some(2),
+                substitute: false,
+                no_substitute: true,
+                offline: true,
+                remote: false,
+                signing_key: None,
+            },
+            context(),
+            |receipt| {
+                called.set(true);
+                let written: crate::foreign_realization_receipt::ForeignRealizationReceipt =
+                    serde_json::from_slice(&fs::read(&realization_receipt_path).unwrap()).unwrap();
+                assert_eq!(&written, receipt, "callback must see the committed, classified receipt");
+                assert_eq!(receipt.failure.is_some(), case == "partial");
+                if case == "denied" {
+                    Err(RunError::Internal("foreign callback denied report".to_string()))
+                } else {
+                    Ok(())
+                }
+            },
+        );
+        assert!(called.get(), "callback must run on complete and partial receipts");
+        match case {
+            "complete" => result.unwrap(),
+            "partial" => assert!(matches!(result, Err(RunError::Reported(FAILURE_EXIT_CODE)))),
+            "denied" => assert!(
+                matches!(&result, Err(RunError::Internal(message)) if message == "foreign callback denied report")
+            ),
+            _ => panic!("unknown foreign callback scenario: {case}"),
+        }
+    }
+
+    #[test]
+    fn foreign_published_artifact_must_read_back_as_the_written_value() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("receipt.json");
+        let expected = serde_json::json!({"receipt_blake3":"expected"});
+        let port = ForeignHostPort {
+            read_calls: Cell::new(0),
+            read_limit: 1,
+        };
+        port.publish(&path, &expected, "test receipt").unwrap();
+        fs::write(&path, br#"{"receipt_blake3":"contradicted"}"#).unwrap();
+
+        let mismatch = port.verify_written(&path, &expected, "test receipt", PLAN_COMMAND);
+        assert!(mismatch.is_err());
+    }
+
+    #[test]
+    fn foreign_file_port_denies_a_second_read_before_opening_it() {
+        let root = tempfile::tempdir().unwrap();
+        let first = root.path().join("first.json");
+        fs::write(&first, br#"{"first":true}"#).unwrap();
+        let port = ForeignHostPort {
+            read_calls: Cell::new(0),
+            read_limit: 1,
+        };
+        let observed = port
+            .read::<serde_json::Value>(JsonReadRequest {
+                path: &first,
+                artifact: "first",
+                command: VALIDATE_COMMAND,
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(observed["first"], true);
+
+        let second = root.path().join("unreadable.json");
+        let error = port
+            .read::<serde_json::Value>(JsonReadRequest {
+                path: &second,
+                artifact: "second",
+                command: VALIDATE_COMMAND,
+            })
+            .unwrap_err();
+        assert!(error.to_string().contains("admitted read limit"));
+        assert_eq!(port.read_calls(), 1);
+    }
 
     #[test]
     fn human_report_preserves_diagnostics_and_non_claims() {

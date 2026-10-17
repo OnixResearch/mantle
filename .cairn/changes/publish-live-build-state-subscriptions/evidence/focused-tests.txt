@@ -1,0 +1,171 @@
+Live-state scoped test evidence (recorded commands and observations)
+
+Env for each command: CARGO_TARGET_DIR=/home/brittonr/scratch/mantle-live-state-current-target TMPDIR=/home/brittonr/scratch.
+
+  nix develop --offline -c cargo test -p mantle --bin mantle remote_build::live_state:: -- --nocapture --test-threads=1
+Observed: exit 0, 11/11 before subsequent strict unknown-field admission fixture and local Worker scheduler hook. Included eight actual socket daemon tests and three pure fact projection tests. This does not prove newer additions.
+
+  nix develop --offline -c cargo test -p mantle --bin mantle remote_build::tests::live_build_ -- --nocapture --test-threads=1
+Observed: exit 0, 5/5 remote coordinator projection tests before subsequent scheduler hook.
+
+  nix develop --offline -c cargo check -p crunch-pipeline --lib
+Observed: exit 0; compiled first Worker callback/pipeline observer version. Later Arc-backed snapshot optimization has not yet been verified by this run.
+
+  nix develop --offline -c cargo test -p crunch-build --lib streaming_multiple_roots_arrive_incrementally -- --nocapture --test-threads=1
+First observer fixture run: compile failed because two preexisting direct `dispatch_ready` test callers lacked the new observer arg; repaired both. Second and diagnostic reruns compiled but failed at `result.outcomes.len() == 2` (actual 0) because the preexisting cfg(test) Builder::new wrote attestations to hardcoded `/tmp/crunch-test`, and `/tmp` returned `Disk quota exceeded (os error 122)`. Corrected its test-only path to `std::env::temp_dir().join("crunch-test")`, honoring TMPDIR scratch. An intervening rerun was blocked by concurrent crunch-glue moved-value WIP and then Nix vendoring mismatch. After peer source gate and vendor closure repair, `nix develop --offline --no-write-lock-file -c cargo test -p crunch-build --lib streaming_multiple_roots_arrive_incrementally --locked --offline -- --nocapture --test-threads=1` compiled and passed (exit 0, 1/1): two real registry goals each traversed Ready -> Building -> Done and produced two build outcomes.
+
+  nix develop --offline --no-write-lock-file -c cargo test -p crunch-build --lib dispatch_at_capacity_retains_undispatched_ready_goal --locked --offline -- --nocapture --test-threads=1
+Observed: exit 0, 1/1; the actual scheduler dispatched exactly two goals at capacity, the observer recorded Building counts `[1, 2]` after each separate dispatch, and the remaining ready goals were not consumed. Nix emitted an ignored evaluation-cache busy diagnostic from another concurrent shell; Cargo test still passed.
+
+  nix develop --offline -c cargo check -p crunch-pipeline --lib --locked
+After sibling Cargo.lock edits: exit 101 before compilation because workspace lock file needed update and `--locked` forbade it. A later `nix develop --offline --no-write-lock-file -c cargo test -p crunch-build --lib streaming_multiple_roots_arrive_incrementally --locked -- --nocapture --test-threads=1` likewise exited 101 before compilation: lock pinned rustls 0.23.45 while the older Nix vendored offline source contained only rustls 0.23.37. The vendor closure was rebuilt for rustls 0.23.45 and h2 0.4.16; `nix develop --offline --no-write-lock-file -c cargo check -p crunch-store --lib --locked --offline` subsequently compiled successfully (exit 0). The old vendoring failure is resolved. The next scoped Mantle test had to repair preexisting read-only generated headers/grammar under the owned scratch target (`zstd-sys`, `bzip2-sys`, `nickel-lang-parser`) after their build scripts' `fs::copy` failed with `PermissionDenied`; no source failure was established by those interrupted runs.
+
+  nix develop --offline --no-write-lock-file -c cargo test -p mantle --bin mantle remote_build::live_state:: --locked -- --nocapture --test-threads=1
+Observed: exit 101 after dependencies compiled, before any focused test ran. `mantle` bin test compilation exposed 29 concurrent root cutover errors outside the live-state modules: missing `mantle_application_contract` exports in `attest_cmd`, stale `ProjectEffectPort`/observation fields in `project_cmd`, missing `plan_output_bindings` in test report initializers, renamed `ReleaseEffectOperation` in `release_cmd`, and unavailable `Result::is_err_or` in `source_bundle`. Exact compiler result: `artifact://7212`. This is not a passing live-state test claim; rerun when the integration gate is coherent.
+
+  nix develop --offline --no-write-lock-file -c cargo test -p mantle --bin mantle remote_build::live_state:: --locked --offline -- --nocapture --test-threads=1
+After the dynamic Worker gate: exit 101 before tests. The refreshed bin-test compilation had five errors, all in sibling-owned `src/nickel_export.rs` (`effects` undeclared at lines 283/302/316/324; `read_output_identity` missing at line 178). No error was reported in the live-state source, but there is still no passing scoped live-state test result. Routed the exact diagnostics to the Nickel export owner.
+
+  nix develop --offline --no-write-lock-file -c cargo test -p mantle --bin mantle remote_build::live_state:: --locked --offline -- --nocapture --test-threads=1
+After the Nickel export source fix: exit 0, 17/17 (10 real Unix-socket daemon fixtures and 7 pure projection tests). The currently changed code passed two-root-filter snapshot/diffs and unrelated retention; independent local dispatch without remote attempt/fence; duplicate-owner rejection; malformed/oversized filter and fact rejection; slow and disconnected subscribers; worker-loss and graceful owner stop; stale-socket restart; owner-separated identical evaluation runs; local goal Ready -> Building -> Done/Failed diffs and the exact 4,095-goal plus one worker-presence fact cap. All fixture socket paths were under the scratch TMPDIR.
+
+  nix develop --offline --no-write-lock-file -c cargo test -p mantle --bin mantle remote_build::tests::live_build_ --locked --offline -- --nocapture --test-threads=1
+Observed: exit 0, 5/5 in current source: real coordinator discovery -> dispatch -> terminal mapping, worker-loss selective retraction, lease identity/worker/bounds admission, and exclusion of stale prior-owner terminal jobs. This is scoped projection proof; a new integrated binary process proof remains separate.
+
+After the dynamic Worker test-closure Clippy fix, a requested `--locked --offline` retest exited 101 before compiling tests because the backend/APK owner was still atomically updating shared Cargo.toml/Cargo.lock. This is not a Worker test failure or result. After that owner explicitly declared LOCK STABLE and the Worker owner declared SYNTAX READY, both exact scoped callback tests were run once each with isolated CARGO_TARGET_DIR=/home/brittonr/scratch/mantle-live-state-current-target and TMPDIR=/home/brittonr/scratch:
+
+  nix develop --offline --no-write-lock-file -c cargo test -p crunch-build --lib dispatch_at_capacity_retains_undispatched_ready_goal --locked --offline -- --nocapture --test-threads=1
+Observed: exit 0, 1/1; two dispatches at capacity retained the remaining ready goals. Nix emitted an ignored concurrent SQLite evaluation-cache busy warning.
+
+  nix develop --offline --no-write-lock-file -c cargo test -p crunch-build --lib streaming_multiple_roots_arrive_incrementally --locked --offline -- --nocapture --test-threads=1
+Observed: exit 0, 1/1; the two-root streaming Worker callback test passed after the lexical closure fix. Nix emitted another ignored concurrent SQLite evaluation-cache busy warning.
+
+Piped subscriber stdout flush regression (scoped current moving-source binary;
+NOT the final tested implementation commit or second integration gate):
+  User-observed before-fix real CLI pipe withheld snapshot frames until a
+  20-second timeout and daemon SIGINT despite prompt Unix socket writes;
+  this is the failing-before observation, not a synthetic repeat.
+  Replaced `subscribe`'s `io::copy` output pump with fixed 4,096-byte stack
+  reads, `write_all` and `flush` per chunk, retrying interrupted reads;
+  readiness frames/state and live daemon writer are untouched.
+  Command: `env CARGO_TARGET_DIR=/home/brittonr/scratch/mantle-live-pipe-probe-target TMPDIR=/home/brittonr/scratch nix develop --offline --no-write-lock-file -c cargo test -p mantle --test remote_stdio_cli live_subscriber_pipe_flushes_snapshot_and_later_real_goal_before_daemon_stops --locked --offline -- --nocapture --test-threads=1`
+  Observed: exit 0, 1/1 on final test after bounded build-child cleanup. The
+  test starts a REAL daemon and CLI subscriber with piped stdout, receives
+  snapshot-start and snapshot-end while both processes are still alive, then
+  runs an actual Nickel build on that socket and receives a later real goal
+  publish on the SAME subscriber before the daemon stops. `artifact://13910`
+  is the first passing test result; the final test result is the scoped Cargo
+  output after bounded cleanup. The preceding attempt using an older scratch
+  target exited 101 while `zstd-sys` tried copying over a read-only cached
+  generated header, before this integration test ran (`artifact://13842`);
+  a fresh isolated target avoided that build-artifact collision. These scoped
+  passes do not certify later source changes or satisfy T4.3.
+
+Graceful-shutdown retraction ordering regression on the later I4 moving source
+(NOT yet a tested implementation commit):
+  Quality's real `cargo test -p mantle --bin mantle remote_build::` root suite
+  passed 175/176. Its one failure was the existing
+  `live_state::daemon::tests::graceful_shutdown_retracts_and_closes_socket`:
+  the subscriber `read_line` returned OS 11 WouldBlock at daemon.rs:1320
+  under the fixture's bounded two-second read timeout. That common helper
+  does not identify whether snapshot, publish, or shutdown retract timed out;
+  the failed suite was not rerun to reconfirm the report. Source inspection
+  found `serve` joined its readiness probe/exit publisher (each with bounded
+  socket I/O) before it queued owner retractions. The correction closes live
+  facts and queues every retraction before readiness join, while permitting
+  ONLY an already-owned, unchanged readiness component's terminal exited
+  publication through the existing core transition validator. New ready,
+  restart, foreign, and changed-declaration attempts remain rejected; the
+  daemon stops handlers after readiness exits and subscriber writers drain.
+  Final scoped daemon source SHA-256:
+  734214b7bedd4490d17879c9f3d53e278eb5f7e0f39673c3376aaee9849bbde2.
+  All commands used `NIX_CONFIG='eval-cache = false' nix develop --offline
+  --no-write-lock-file . -c env -u NIX_BUILD_TOP
+  TMPDIR=/home/brittonr/scratch/mantle-transient-shutdown-tmp
+  CARGO_TARGET_DIR=/home/brittonr/scratch/mantle-i45-quality-target
+  CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true` before `cargo`:
+    cargo test --locked --offline -p mantle --bin mantle remote_build::live_state::daemon::tests::graceful_shutdown_retracts_and_closes_socket -- --exact --test-threads 1
+  Observed exit 0, 1 passed/0 failed; real daemon subscriber received the
+  published fact, then its retract and EOF on graceful shutdown (`bg_6466`).
+    cargo test --locked --offline -p mantle --bin mantle remote_build::live_state::daemon::tests::shutdown_accepts_only_owned_terminal_readiness_exit -- --exact --test-threads 1
+  Observed exit 0, 1 passed/0 failed; actual readiness wire handler accepted
+  owned terminal exit ACK while denying postshutdown ready, foreign, changed
+  declaration and generation-two restart without mutating the prior record
+  (`bg_6470`).
+    cargo clippy --locked --offline -p mantle --bin mantle --tests --no-deps -- -D warnings
+  Observed exit 0, strict bin/test Clippy (`bg_6471`). Pinned Nix-shell
+  `rustfmt --check --edition 2024 src/remote_build/live_state/daemon.rs`
+  passed, as did `git diff --check --` for that daemon leaf and this change's
+  design. Quality owns the later full-suite PASS-after on a frozen final
+  source; these two targeted tests do not claim 176/176 or complete T4.3.
+
+T4.3/T4.4 final-source gate checklist (PENDING; do not infer a pass or check off
+either task from the historical first integrated binary):
+  First-bin process evidence: live-cli-process.txt, pinned executable SHA-256
+  9bff7a785ac1e74bff7966cf95e8f1501daed8ce39095e16c407b14949409eb0;
+  artifacts artifact://9056, artifact://9343, artifact://9384. Two simultaneous
+  identical-input builds shared content run_id and had disjoint owner/fact IDs,
+  46 subscriber events, byte-identical outputs/receipts, and crash/restart
+  invalidation. This binary is not the final-source/implementation-commit gate.
+  First wait for a frozen, reviewed full-source snapshot. The integration
+  owner's baseline stages ONLY whole reviewed non-mixed paths, including the
+  exact dynamic Cairn dirs `add-dynamic-plan-source-slices` and
+  `bind-static-inputs-to-dynamic-plan-roots`; it leaves the ENTIRE mixed
+  main/build_cmd/remote_build/pipeline/Worker/wrapper files and all three
+  untracked live-state modules unstaged. This intermediate baseline need not
+  compile. The subsequent explicitly JOINT-NAMED integrated implementation
+  commit stages the full final reviewed mixed files, three live modules,
+  reviewed T3.1 readiness socket source, and real CLI pipe regression. It
+  therefore contains other interleaved CA/remote/S0 hunks rather than falsely
+  claiming to be a live-only commit. The resulting tree MUST match the frozen
+  approved full-source snapshot byte-for-byte. The readiness Cairn task is
+  not complete merely because its socket source is committed. Create the
+  isolated Cairn sync/archive worktree LATER from that FINAL tested commit;
+  never archive moving shared main or reuse the historical detached baseline.
+  THEN build the labelled SECOND coherent executable from the actual reviewed
+  JOINT commit and record its SHA-256. From that same commit's
+  executable, run two truly concurrent identical-source live CLI builds using
+  one daemon and subscriber: prove distinct owners, same content run_id, real
+  Worker dispatched/terminal/retracted facts, and outputs/receipts byte-equal
+  to a no-socket run. Record exact frames, statuses, hashes, and provenance;
+  do not transfer the first binary's passing claim to the second. If source
+  changes after this commit, rebuild and repeat the affected proof and tests.
+  Keep build/daemon ownership and restart claims scoped to observations; do
+  not overwrite the immutable first executable.
+  Implementation commit and later isolated archive-worktree check: record
+  `git branch --show-current`, `git rev-parse HEAD`, `git status --short`, and
+  `git show --stat --oneline <joint-implementation-commit> --`; confirm the
+  SHA-labelled final executable was built and exercised from the exact
+  executable source tree represented by that commit, not a later moving
+  shared worktree. A dirty source snapshot or the first binary's SHA cannot
+  substitute for final-source proof.
+  On stable committed source only: run focused live_state, remote coordinator,
+  and Worker callback tests above. Retain the quality owner's ONE final-source
+  checked-in `./scripts/check-first-party-quality.sh` and broad `nix flake
+  check -L` results rather than duplicating root Cargo or a full flake check.
+  Prove the isolated branch's executable source and check inputs match the
+  SHA-labelled tested binary before citing those root results; otherwise run
+  the affected isolated target and report the mismatch. In the isolated
+  branch run `nix build .#checks.x86_64-linux.tigerstyle -L` and
+  `nix build .#checks.x86_64-linux.fmt -L` (the flake exports `fmt`, not
+  `formatting`). Run `git diff --check` and retain exact commands, source
+  revision, outputs, and pass/blocker results.
+  Native Cairn commands, from this repository root, after the source gate:
+    nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .
+    nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate proposal publish-live-build-state-subscriptions --root .
+    nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design publish-live-build-state-subscriptions --root .
+    nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks publish-live-build-state-subscriptions --root .
+    nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- tracey coverage --root .
+  Pre-sync inventory: `.cairn/specs/build-interchange/spec.md` exists but does
+  not yet contain `mantle.build_interchange.live_state_emission`; there is no
+  accepted `.cairn/specs/coordination-service/` directory or
+  `mantle.coordination_service.*` requirement. Both accepted spec destinations
+  must be populated with this change's delta before T4.4 can close.
+  With T4.3 verified and committed in the isolated branch, run native
+  `cairn sync publish-live-build-state-subscriptions --root . --execute`,
+  inspect accepted `build-interchange` and `coordination-service` spec deltas
+  (never assume archive copied them), then native
+  `cairn archive publish-live-build-state-subscriptions --root . --execute`.
+  Retain sync/archive receipts and rerun Cairn validation plus Tracey coverage
+  on the accepted specs. Archive remains forbidden while T4.3 lacks final-source
+  evidence or unrelated in-flight source changes make the snapshot incoherent.

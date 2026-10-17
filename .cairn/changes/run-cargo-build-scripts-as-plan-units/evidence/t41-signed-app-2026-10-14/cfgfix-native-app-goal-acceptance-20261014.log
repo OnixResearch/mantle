@@ -1,0 +1,4 @@
+guard-ready task=1055 guard=1056
+phase=trusted-first-app-acceptance-start time=2026-10-14T22:39:55.474182+00:00
+actual-signed-client-rust-app-42=success result=/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store/zji3d1xmcz226pi4fiv2cbhfxr6xb6yk-cargo-build-script-units-app-check-cfgfix-87lq/result.txt units=34 slices=14 built=1 cached=2 verified_outputs=4
+phase=trusted-first-app-acceptance-done exit=0 time=2026-10-14T22:39:56.692222+00:00

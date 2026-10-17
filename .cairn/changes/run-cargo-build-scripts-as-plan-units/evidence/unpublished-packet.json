@@ -1,0 +1,3219 @@
+{
+  "actual_cli_smoke": {
+    "actual_paths_and_utf8_payloads": {
+      "first/payload": "candidate shared-root payload\n",
+      "second/payload": "candidate shared-root payload\n"
+    },
+    "executables": {
+      "mantle": {
+        "built": {
+          "blake3": "1e7f18bae6c6eafa469a0deff7bf0edbc64dad7e56e32aee189aafa75709c1cd",
+          "bytes": 1555979232,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/mantle"
+        },
+        "retained": {
+          "blake3": "1e7f18bae6c6eafa469a0deff7bf0edbc64dad7e56e32aee189aafa75709c1cd",
+          "bytes": 1555979232,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-bin/mantle"
+        }
+      },
+      "mantle-composition-cli-smoke": {
+        "built": {
+          "blake3": "cbbdf0efeca17a8b07f2310773cd766e087dc8e0a7f8b7f88e8ce389a9be7532",
+          "bytes": 629109960,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/mantle-composition-cli-smoke"
+        },
+        "retained": {
+          "blake3": "cbbdf0efeca17a8b07f2310773cd766e087dc8e0a7f8b7f88e8ce389a9be7532",
+          "bytes": 629109960,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-bin/mantle-composition-cli-smoke"
+        }
+      }
+    },
+    "frozen_executable_manifest": {
+      "blake3": "69dd2ef7dbc9f98b4963ef7feaa0f28378bad931efc2f6e821196b98be5944f6",
+      "bytes": 1488,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-bin/manifest.json"
+    },
+    "read_back_method": "Existing helper opens Snix DirectoryService and BlobService after real CLI realize; checks resulting directory size, mounted file metadata and exact bytes.",
+    "receipt": {
+      "input_roots": [
+        {
+          "digest_blake3": "1a9802b8aaaaf2cc9939404b256aeae892543afd54154eccbca17912da129eca",
+          "size": 1
+        }
+      ],
+      "limit_usage": {
+        "bindings": 2,
+        "collision_decisions": 0,
+        "depth": 2,
+        "entries": 4,
+        "largest_file_bytes": 30,
+        "path_bytes": 14,
+        "total_file_bytes": 60
+      },
+      "merge_outcomes": [
+        {
+          "displaced_binding_refs": [],
+          "kind": "directory-union",
+          "path": ""
+        }
+      ],
+      "merge_policy_version": 1,
+      "non_claim": "composition-does-not-prove-abi-closure-runtime-boot-authorization-deployment-or-release",
+      "plan_ref": "mantle-composition-plan://blake3/962f8848619c59328fd318e372417a53ba4cd13634d8608d5052d4c46d550761",
+      "realization_policy_ref": "mantle-composition-policy://blake3/971482ca096d2d3d0fed33f1db7dfa7df76b6593146c6adeddae632e0fbc82fc",
+      "receipt_ref": "mantle-composition-receipt://blake3/eade809240e46d6f81f1a1ca7dc13aa28974702c3bc4ba8c55ce7b1467dafee8",
+      "resulting_root": {
+        "digest_blake3": "318b2b7df7d4671a04cb1744e6627a98d60f7bdae37469ba6672a2e2ae4762d0",
+        "size": 4
+      },
+      "schema": "mantle-composition-receipt-v1",
+      "unsupported_metadata_classes": [
+        "ownership",
+        "acl",
+        "capability",
+        "security-xattr",
+        "hard-link",
+        "device-node"
+      ]
+    },
+    "receipt_artifact": {
+      "blake3": "f35e2c8b61f78da5170a2e3a7044a8ec0354da02e1e204b99a8f966a72ec8be4",
+      "bytes": 1278,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-realize-smoke/receipt.json"
+    }
+  },
+  "approved_security_fixture_review_transition": {
+    "after": {
+      "blake3": "aea40af67b5d3f90513851f562bb5d347ce8cd00500302d13a081e84af6b778e",
+      "bytes": 75815,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/src/protected_exec_seccomp.rs"
+    },
+    "approved_patch": {
+      "blake3": "73c064ce98dccc772e416b2f0d6980bf9090eaa0deeaf616f878e71a694e382c",
+      "bytes": 2140,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-review-followup/proposed.patch"
+    },
+    "before": {
+      "blake3": "f9de68abb4e2ffd391cc92cad914563e8204083b235ffa4b6840180aa8f2f884",
+      "bytes": 75342,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/src/protected_exec_seccomp.rs"
+    },
+    "canonical_publication": false,
+    "created_utc": "2026-10-15T18:23:26.528889+00:00",
+    "predecessor_settlement": {
+      "blake3": "52f1dc40c690696bbb490b7efd82b86525fdcaca3073943463dc481eeab8019e",
+      "bytes": 735,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/1082-owned-settlement.json"
+    },
+    "prefix_boundary": "bytes before first four-space #[cfg(test)] mod tests marker",
+    "production_prefix": {
+      "blake3": "dd0c277fb8583aae134694f502bd919a8b905b23743e3557c702560952d289d8",
+      "bytes": 38276,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-review-followup/production-prefix.txt"
+    },
+    "production_prefix_identical": true,
+    "schema": "mantle-t45-reviewed-security-fixture-transition-v1",
+    "scope": "Test-only parent-admitted canonical leaf transfer and executable-helper assertions; production policy/deadline/profile/pins unchanged."
+  },
+  "atomic_publication_budget": {
+    "blake3": "e2457a3bfae6601b13f1d08b7e515bcbeaa7e7e7e1a9c5dedf2a5012c32b0cf5",
+    "bytes": 2884,
+    "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/atomic-publication-budget.json"
+  },
+  "base_source_preimage_verification": {
+    "blake3": "52e1db7d5b6627462a7f87e9dca53d008e85d2208e8fc8e6134b28dfb9ffd2cb",
+    "bytes": 476,
+    "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-preimage-verification.json"
+  },
+  "base_subject_manifest": {
+    "blake3": "56af28ceb610aa926bf05b86252101dbdf21549326112bf9b644a01aae1e223a",
+    "bytes": 2571668,
+    "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/packet-base-subject-manifest.json"
+  },
+  "candidate_ordinary_quality_gate_passed": false,
+  "canonical_preimages_and_modes": {
+    "blake3": "adfc429674bf7fba539d23eb9be15c2e5051140ed40278a68a93ba0db709c74a",
+    "bytes": 5298,
+    "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/canonical-preimages-projection.json"
+  },
+  "canonical_publication": false,
+  "changed_product_source_and_docs": [
+    {
+      "after": {
+        "blake3": "f336df248733623d59902bb245a807efde468580be2426428836fc60398d8111",
+        "bytes": 50164,
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/crates/crunch-composition-core/src/lib.rs"
+      },
+      "before": {
+        "blake3": "656d74f44ce614e7de1ea2544cc7891109e5125a05d916783eea6e720da41f99",
+        "bytes": 49585,
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/packet-preimages/composition-core-before.rs"
+      },
+      "relative_path": "crates/crunch-composition-core/src/lib.rs"
+    },
+    {
+      "after": {
+        "blake3": "57abc8ff05be5323788cde411312feeda03562724540bc94b12abe3dfc6f00e8",
+        "bytes": 342478,
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/crates/crunch-store/src/handle.rs"
+      },
+      "before": {
+        "blake3": "3cd10919bc13376721804aa33f062d423cf7b3d5a401ec07bfc1c0d8bba8fa70",
+        "bytes": 342615,
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/prefix-test-correction/handle-before.rs"
+      },
+      "relative_path": "crates/crunch-store/src/handle.rs"
+    },
+    {
+      "after": {
+        "blake3": "aea40af67b5d3f90513851f562bb5d347ce8cd00500302d13a081e84af6b778e",
+        "bytes": 75815,
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/src/protected_exec_seccomp.rs"
+      },
+      "before": {
+        "blake3": "51f7355a45d619a7217487c49ecd004dc86dc8c75de9368618255ceaba69ae42",
+        "bytes": 74073,
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-fixture-correction/protected_exec_seccomp-before.rs"
+      },
+      "relative_path": "src/protected_exec_seccomp.rs"
+    },
+    {
+      "after": {
+        "blake3": "c31347ef5a242cf3bd53c5022bae03542d3551b1808de353b197f02a198ab343",
+        "bytes": 4048,
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/docs/composition-roots.md"
+      },
+      "before": {
+        "blake3": "97fb9cad3c4d0aeaf9be4f242e5742423e394821a443188ae92bd098930ddd1d",
+        "bytes": 3643,
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/packet-preimages/composition-roots.md"
+      },
+      "relative_path": "docs/composition-roots.md"
+    },
+    {
+      "after": {
+        "blake3": "24192ad066f366625a3e924ce24781dbaed00580d10849ba0eb7125f48046411",
+        "bytes": 2540,
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/docs/release-notes/composition-snapshot-invariants-2026-10-15.md"
+      },
+      "before": null,
+      "relative_path": "docs/release-notes/composition-snapshot-invariants-2026-10-15.md"
+    }
+  ],
+  "complete_candidate_source_root": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+  "composition_before_semantic_formatted_chain": {
+    "canonical_publication": false,
+    "core_regression_evidence": [
+      "after-composition-core-tests.log",
+      "candidate-workspace-tests.log:1735-1750"
+    ],
+    "format_only_patch": "candidate-format.diff",
+    "later_test_only_file": "prefix-test-correction/transition.json",
+    "schema": "mantle-t45-composition-source-subject-chain-v1",
+    "semantic_patch": "candidate-semantic.patch",
+    "stages": [
+      {
+        "blake3": "656d74f44ce614e7de1ea2544cc7891109e5125a05d916783eea6e720da41f99",
+        "historical_transport_sha256": "ea20aca5c81f388b3ffe9a5f43b4665cd007a938934c257decaf851fae18dce8",
+        "name": "before",
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-before-lib.rs"
+      },
+      {
+        "blake3": "f0b805856d582333e61d9100705057434e51b447aaa7e370a3a1b3033d1efdc4",
+        "historical_transport_sha256": "7d12cdbd82c7421ff893c06cb3e2c3083c1f092811366acd1d71f6e3ca73978d",
+        "name": "semantic",
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/format-before/crates/crunch-composition-core/src/lib.rs"
+      },
+      {
+        "blake3": "f336df248733623d59902bb245a807efde468580be2426428836fc60398d8111",
+        "historical_transport_sha256": "b1fb2ad7f04b104c21924ccf4b04b6ed3a6d83f010e1abb793401f047afc4bd0",
+        "name": "formatted",
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/crates/crunch-composition-core/src/lib.rs"
+      }
+    ]
+  },
+  "created_utc": "2026-10-15T20:36:30.143290+00:00",
+  "evidence": {
+    "1081-owned-settlement.json": {
+      "blake3": "8024e9756d3868c1fa1196214b0c660a0e8402c1bd3006a4c0c684f91628b50e",
+      "bytes": 734,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/1081-owned-settlement.json"
+    },
+    "1082-owned-settlement.json": {
+      "blake3": "52f1dc40c690696bbb490b7efd82b86525fdcaca3073943463dc481eeab8019e",
+      "bytes": 735,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/1082-owned-settlement.json"
+    },
+    "1083-owned-settlement.json": {
+      "blake3": "9e550144adc6e5b4382bda43ce7c4236256c1a2e9a3cb96b6b97f084d37056bb",
+      "bytes": 736,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/1083-owned-settlement.json"
+    },
+    "after-composition-core-tests-summary.json": {
+      "blake3": "5bf0abaf1cfc48e54725a1abe1bf36705c06358bc1578182bf65a81673b199a1",
+      "bytes": 3497,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/after-composition-core-tests-summary.json"
+    },
+    "after-composition-core-tests.log": {
+      "blake3": "e276b9983f3049d5b586635e5c169b27f6d510301954176922668d87b3cf11b6",
+      "bytes": 7383,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/after-composition-core-tests.log"
+    },
+    "after-consumer-build-summary.json": {
+      "blake3": "dfe560df71d1ff544b4f31638f528504417a9784dc259b962b8f6e0b87105f6b",
+      "bytes": 3570,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/after-consumer-build-summary.json"
+    },
+    "after-consumer-build.log": {
+      "blake3": "5d80b0c871b04a313731f264fd26307b359706513253cbb306a11f3b7a3835ca",
+      "bytes": 27283,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/after-consumer-build.log"
+    },
+    "after-missing-summary.json": {
+      "blake3": "3bf072873a409efa9a6e8b4ff5a8f67b7b21bfce3d9695b8388e435d8266322d",
+      "bytes": 3359,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/after-missing-summary.json"
+    },
+    "after-missing.log": {
+      "blake3": "563c6eda0543e37fa7449a904088a02f1cf56d215cf82d15066fd083c6d78de9",
+      "bytes": 5733,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/after-missing.log"
+    },
+    "after-precedence-summary.json": {
+      "blake3": "acf2e71bd2ba47639df4ec26e7a4420f1564fd005b111449e114e5e313f802f5",
+      "bytes": 3368,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/after-precedence-summary.json"
+    },
+    "after-precedence.log": {
+      "blake3": "679404f639ec0a7d2e1f25f9d332cbe7baf117db05c44411ebca827812b7ef0c",
+      "bytes": 5788,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/after-precedence.log"
+    },
+    "after-shared-root-summary.json": {
+      "blake3": "f58774dcb3404af3a0684af066fb73b5c288ab2f364f7a4ec02a2cbcfdd29618",
+      "bytes": 3371,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/after-shared-root-summary.json"
+    },
+    "after-shared-root.log": {
+      "blake3": "53fce6b40cfab913580ec1fe4cb251a359df3b6455b1f1e6661ba140ea6e7767",
+      "bytes": 5769,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/after-shared-root.log"
+    },
+    "after-valid-summary.json": {
+      "blake3": "366d9c24325a9c8d8fc9a448de8886ad0ccead9c2b684b09a2e1804d8553d401",
+      "bytes": 3353,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/after-valid-summary.json"
+    },
+    "after-valid.log": {
+      "blake3": "39edec6d967c1ed3223b5b11c9a24bb94659bde0aab54d4b10c84e3087e0a6b8",
+      "bytes": 5743,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/after-valid.log"
+    },
+    "apply-reviewed-followup.py": {
+      "blake3": "8e2bacbb2c5383d0147ef8162c308175802cf633b69ce7e1a192efae604954fd",
+      "bytes": 3770,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/apply-reviewed-followup.py"
+    },
+    "atomic-publication-budget.json": {
+      "blake3": "e2457a3bfae6601b13f1d08b7e515bcbeaa7e7e7e1a9c5dedf2a5012c32b0cf5",
+      "bytes": 2884,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/atomic-publication-budget.json"
+    },
+    "before-consumer-build-summary.json": {
+      "blake3": "4c739555a555344a6e1dcf77a75a626aebfe3872c9dbeb267f16c188d63b3a36",
+      "bytes": 3571,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/before-consumer-build-summary.json"
+    },
+    "before-consumer-build.log": {
+      "blake3": "2f065128f9e75b65311a950fa19fe9fa6dc44217abd619cd9ba17701debe02e7",
+      "bytes": 27832,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/before-consumer-build.log"
+    },
+    "before-consumer-executable.json": {
+      "blake3": "6bc3e1f9aa93d36ccce09b70f142ab57c76f1e6f0037283c4d02cde45f791eec",
+      "bytes": 868,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/before-consumer-executable.json"
+    },
+    "before-missing-summary.json": {
+      "blake3": "d9f647ab5dca298e61030017c1cc935c2eb152c6d990d6af3d4bfab96e6c9495",
+      "bytes": 3365,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/before-missing-summary.json"
+    },
+    "before-missing.log": {
+      "blake3": "d241f70859d94cc6035b5ac0158021bb205aa7a963d7dc35f813c478b77012ce",
+      "bytes": 6001,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/before-missing.log"
+    },
+    "before-shared-root-summary.json": {
+      "blake3": "c0ef43124ee8d2195c4e81bf700994351611549eb1f2f9a09b0e4abf03ccd61f",
+      "bytes": 3377,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/before-shared-root-summary.json"
+    },
+    "before-shared-root.log": {
+      "blake3": "f99a154c8ae729778405837b9a45362b59ab37ecff0fda9771f180c4f8896d30",
+      "bytes": 6018,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/before-shared-root.log"
+    },
+    "before-valid-summary.json": {
+      "blake3": "e288c573cea00f0caec0f6067a607ef1b352858a73cfeb0cf190fdbcc21b40e6",
+      "bytes": 3356,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/before-valid-summary.json"
+    },
+    "before-valid.log": {
+      "blake3": "40c016002ca77de5a80536447d14fedb8546079693a6352122bad085e33deee7",
+      "bytes": 5746,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/before-valid.log"
+    },
+    "candidate-boundary.json": {
+      "blake3": "e42e169896f75fe5e0f1edf37e4c62550dc7d7157781472932c614ed98db7438",
+      "bytes": 625,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-boundary.json"
+    },
+    "candidate-cli-build-summary.json": {
+      "blake3": "3558e43bee2fee334f0701ed63bc42a1dadee1eb52827bac42c121e12c8fc6a3",
+      "bytes": 6253,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-cli-build-summary.json"
+    },
+    "candidate-cli-build.log": {
+      "blake3": "ec9b2d0f4a39b19deccd7d0f4fcd19d2cce6a753cf585fd44e30f70eaa466cf6",
+      "bytes": 783975,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-cli-build.log"
+    },
+    "candidate-cli-helper-build-summary.json": {
+      "blake3": "2ab54cee77b96ebc1724b6f8b604681cfd48e66bf211871b55864e7290c312e2",
+      "bytes": 6365,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-cli-helper-build-summary.json"
+    },
+    "candidate-cli-helper-build.log": {
+      "blake3": "067be1bba0c806a9dcac44ed806a26322f2417075881c8d6cf013343b67ee630",
+      "bytes": 11388,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-cli-helper-build.log"
+    },
+    "candidate-clippy-summary.json": {
+      "blake3": "f0028ed70f8e8c8b8a07128fbaf81bce8d834377f1177bb89d89d49e86632d09",
+      "bytes": 3368,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-clippy-summary.json"
+    },
+    "candidate-clippy.log": {
+      "blake3": "dbdad10c7fcaf24bdd151da77d3bdbb94802a8191dcc5ddbff1ab4310d3d15ff",
+      "bytes": 25191,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-clippy.log"
+    },
+    "candidate-core-package-fmt-summary.json": {
+      "blake3": "2a82f18e6ade25078e74e95c4ed5e51465f744078505cb520db7a312b004f160",
+      "bytes": 866,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-core-package-fmt-summary.json"
+    },
+    "candidate-core-package-fmt.log": {
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "bytes": 0,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-core-package-fmt.log"
+    },
+    "candidate-fmt-summary.json": {
+      "blake3": "77923c55199acc3b020a9b561516c988a23d759f3fcb203fd94f77f01d48629c",
+      "bytes": 3359,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-fmt-summary.json"
+    },
+    "candidate-fmt.log": {
+      "blake3": "104cff5b5321aafc8ef267fb18f6d2c80b44cf2baacbcad670de284a79b6da18",
+      "bytes": 5996,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-fmt.log"
+    },
+    "candidate-format-result.json": {
+      "blake3": "56ef2d80b610f7268e6eaaafda52ac6a95196b9831d37efd675d0c68a62e8b0c",
+      "bytes": 1275,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-format-result.json"
+    },
+    "candidate-format.diff": {
+      "blake3": "cecdafedcc65126804df510738a32db82249f23e2db82613a86519ac095d72fb",
+      "bytes": 530,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-format.diff"
+    },
+    "candidate-preimage-verification.json": {
+      "blake3": "52e1db7d5b6627462a7f87e9dca53d008e85d2208e8fc8e6134b28dfb9ffd2cb",
+      "bytes": 476,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-preimage-verification.json"
+    },
+    "candidate-quality-sequence-summary.json": {
+      "blake3": "4e203f315c9ee89f88e420905f9e1b8f927b955826fd8a8b4aa285521bb1bc55",
+      "bytes": 2169,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-quality-sequence-summary.json"
+    },
+    "candidate-semantic-result.json": {
+      "blake3": "3f348f546791e25a82fffeb7b8b0476cd14468474cc4d79195fa7393dcd5d0a0",
+      "bytes": 675,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-semantic-result.json"
+    },
+    "candidate-semantic.patch": {
+      "blake3": "3fa5727d84471ecdaf1c2180098602f4e9eb6e3a9a152adacfedd785ada0e64b",
+      "bytes": 2117,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-semantic.patch"
+    },
+    "candidate-workspace-tests-summary.json": {
+      "blake3": "91c11017205cbbe573bcd1a376b731a81f3f3f522ddda860ab28c45b934359fa",
+      "bytes": 3396,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-workspace-tests-summary.json"
+    },
+    "candidate-workspace-tests.log": {
+      "blake3": "cb1750ccf2a98aea267b57600e784ed7ca2bbcf339aa16f873662ab4ac59a55a",
+      "bytes": 201423,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-workspace-tests.log"
+    },
+    "canonical-preimages-projection.json": {
+      "blake3": "adfc429674bf7fba539d23eb9be15c2e5051140ed40278a68a93ba0db709c74a",
+      "bytes": 5298,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/canonical-preimages-projection.json"
+    },
+    "check-core-package-format.py": {
+      "blake3": "7214269c52e91ee629e4ce2a339ab385c3a7b99339fe0e27b81ab5933f7175ec",
+      "bytes": 1742,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/check-core-package-format.py"
+    },
+    "composition-cli-helper/Cargo.lock": {
+      "blake3": "bef85da23d7aa11fbf259e16819f5d6095f7ebb90061f5e931e1626e11070e70",
+      "bytes": 150974,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/composition-cli-helper/Cargo.lock"
+    },
+    "composition-cli-helper/Cargo.toml": {
+      "blake3": "75179148ac7c17c335f4a2bc9adabfe301edcda321465f9eaa574318129e5219",
+      "bytes": 960,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/composition-cli-helper/Cargo.toml"
+    },
+    "composition-cli-smoke-helper.rs": {
+      "blake3": "8eae9d096cac455500529152a651ed29160344b9094b4028f38e9b8242ccf409",
+      "bytes": 5424,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/composition-cli-smoke-helper.rs"
+    },
+    "composition-subject-chain.json": {
+      "blake3": "c21b3406785f726e68f12f781b1a4cda1ee343e26fc0094ada24cb5df986c62d",
+      "bytes": 1493,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/composition-subject-chain.json"
+    },
+    "final-candidate-cli-build-summary.json": {
+      "blake3": "bd315fa20146bb298137c106aafa32fb0b8ca6da13afdf25bcb06fd282c81471",
+      "bytes": 7183,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-build-summary.json"
+    },
+    "final-candidate-cli-build.log": {
+      "blake3": "492544bde9f5f6e796e6048f9ce4ff97536955b4c13b0dc8936ada70c48ed556",
+      "bytes": 785502,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-build.log"
+    },
+    "final-candidate-cli-helper-build-summary.json": {
+      "blake3": "6820b3de71d4941487dd8581f33d315ce81fdb2a749dfd4f2fd644c4498e2f9f",
+      "bytes": 7293,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-helper-build-summary.json"
+    },
+    "final-candidate-cli-helper-build.log": {
+      "blake3": "188f484b1906da2b55c6ac573b5bc6ec49784bfec4f00deedf385c25f775a1b2",
+      "bytes": 540963,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-helper-build.log"
+    },
+    "final-candidate-cli-inspect-summary.json": {
+      "blake3": "8a79c3cfaf5ae817079a75a4c4c449ca5bdfb53227d6640296bbe549a83678cd",
+      "bytes": 8121,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-inspect-summary.json"
+    },
+    "final-candidate-cli-inspect.log": {
+      "blake3": "e3fe5a50713f428affc6a77a0e3c77dc4e21ddc39fedd744ec35cf9600c0f15d",
+      "bytes": 15034,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-inspect.log"
+    },
+    "final-candidate-cli-realize-summary.json": {
+      "blake3": "bde84468dca85719cf6262d858c32a595bc9dff5c7058eb06f8ea8f3139656f4",
+      "bytes": 8354,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-realize-summary.json"
+    },
+    "final-candidate-cli-realize.log": {
+      "blake3": "40c6fe88598949ee0b7b83773f5b9538f211080096c28fcb5ba9f27ac3d93e39",
+      "bytes": 15168,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-realize.log"
+    },
+    "final-candidate-cli-seed-summary.json": {
+      "blake3": "c9e7ef9070bc5002fdd57f50c43e1ec41c4b629f9df6bdff3ca932daa27ba4d3",
+      "bytes": 8112,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-seed-summary.json"
+    },
+    "final-candidate-cli-seed.log": {
+      "blake3": "7c788c9f378298121c0c037a57ac20c4a08caec2140883175e8bbe7d2cdbbb5e",
+      "bytes": 14076,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-seed.log"
+    },
+    "final-cli-bin/manifest.json": {
+      "blake3": "69dd2ef7dbc9f98b4963ef7feaa0f28378bad931efc2f6e821196b98be5944f6",
+      "bytes": 1488,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-bin/manifest.json"
+    },
+    "final-cli-realize-smoke/receipt.json": {
+      "blake3": "f35e2c8b61f78da5170a2e3a7044a8ec0354da02e1e204b99a8f966a72ec8be4",
+      "bytes": 1278,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-realize-smoke/receipt.json"
+    },
+    "final-cli-realize-smoke/request.json": {
+      "blake3": "59cc9a9677eb9c740e56b0c0f18a0e79609093ac505bf358da1485724e09148d",
+      "bytes": 816,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-realize-smoke/request.json"
+    },
+    "final-cli-realize-smoke/seed-root.json": {
+      "blake3": "a9f0943610b02a27de6e7bf3468e7b76626c5ca62df1673c0d9a5764c51252c1",
+      "bytes": 102,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-realize-smoke/seed-root.json"
+    },
+    "final-deep-descendant-test-summary.json": {
+      "blake3": "97406a7e81d59cae02f4b64a41b87fdc642fc3a13a5f2f80ee84404588c90500",
+      "bytes": 7266,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-deep-descendant-test-summary.json"
+    },
+    "final-deep-descendant-test.log": {
+      "blake3": "385c225e132f991a19e61c5516aa4af5b0f59676e28bc076324eb2474b532d27",
+      "bytes": 36939,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-deep-descendant-test.log"
+    },
+    "final-helper-lock-verification.json": {
+      "blake3": "b96af6a85691ba40b76c6e40ff481ee030a72066f59d3c6c50ef3faeb9436f56",
+      "bytes": 1827,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-helper-lock-verification.json"
+    },
+    "final-negative-orphan-test-summary.json": {
+      "blake3": "b864476c938c830316af3477df080df34b903279c2eb8c886c6e43a7e6ccd4c1",
+      "bytes": 7280,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-negative-orphan-test-summary.json"
+    },
+    "final-negative-orphan-test.log": {
+      "blake3": "f1461743455bbcbd9f33d2f583b578a584d7093db742f2b379670333a05a9d14",
+      "bytes": 13063,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-negative-orphan-test.log"
+    },
+    "final-preserve-cli-executables-summary.json": {
+      "blake3": "1d2f774505a5be0892c40c3c09a5c9802647c667d1505c668969243c5f6416ad",
+      "bytes": 7254,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-preserve-cli-executables-summary.json"
+    },
+    "final-preserve-cli-executables.log": {
+      "blake3": "038bd48b5183644619712e93d1909cbd05c1d0b8a6a7ce32c6b547071c7be6c1",
+      "bytes": 13440,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-preserve-cli-executables.log"
+    },
+    "final-root-clippy-summary.json": {
+      "blake3": "84edefe37ff08f8825eb27fac5db81767cba60960eb65c530195a1fdd5dd8148",
+      "bytes": 7166,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-root-clippy-summary.json"
+    },
+    "final-root-clippy.log": {
+      "blake3": "5452a85647675c4fd7d652c374e87420033c14229c3ee47260e7980d57b9da1a",
+      "bytes": 36447,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-root-clippy.log"
+    },
+    "final-root-fmt-summary.json": {
+      "blake3": "d17d91d95caa97cbb024ce5044dd0bf753030b6feba8c4be12c7ac98ff223196",
+      "bytes": 7080,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-root-fmt-summary.json"
+    },
+    "final-root-fmt.log": {
+      "blake3": "b08619e763c990c0cd00589af7a6033605f204b5b32d9ffbda458b04ea91e430",
+      "bytes": 11612,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-root-fmt.log"
+    },
+    "final-workspace-tests-summary.json": {
+      "blake3": "1b3ad18df26393be15853a9d6c806006356cad1176fb6ca127ec4c5889417d56",
+      "bytes": 7151,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-workspace-tests-summary.json"
+    },
+    "final-workspace-tests.log": {
+      "blake3": "b586a83aaaf4c1445e5402f09aa61cf6c339942939c413f4eb4826aa9c6e34bf",
+      "bytes": 731738,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-workspace-tests.log"
+    },
+    "helper-lock-seed.json": {
+      "blake3": "6560430caffe432706b2b088465d1dd6684d7b9aba4a19e45a483256b840278e",
+      "bytes": 1080,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/helper-lock-seed.json"
+    },
+    "local-publication-headroom-20261015T170324Z.json": {
+      "blake3": "ae399276f64f518108f89725d623fd620672bfe7183d2c7a71d788be16122f52",
+      "bytes": 789,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/local-publication-headroom-20261015T170324Z.json"
+    },
+    "make-unpublished-packet.py": {
+      "blake3": "0a45070bed8abfd8d159bfd8ae906052d652725f0adc51b909064b8260dc761a",
+      "bytes": 24869,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/make-unpublished-packet.py"
+    },
+    "observe-canonical-products.py": {
+      "blake3": "b63195972d612dba27621317f3b73966474f1149b292f3ca57b4d20a9b20576f",
+      "bytes": 7257,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/observe-canonical-products.py"
+    },
+    "package-fmt-initial-summary.json": {
+      "blake3": "767a6ba1c684f858c6f88bd98266d894bdc6532cb1a46cd7fcbeb3109bdc6f29",
+      "bytes": 3440,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/package-fmt-initial-summary.json"
+    },
+    "package-fmt-initial.log": {
+      "blake3": "02f110825f8543f5dce7d99593504fea042f347676d0834946b0d9b0ea1fd0bd",
+      "bytes": 6355,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/package-fmt-initial.log"
+    },
+    "packet-base-copy-manifest.json": {
+      "blake3": "7075335fcd18cd13b736af72f6f20ad268158b8528635c1b350309e4eef91d57",
+      "bytes": 1223,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/packet-base-copy-manifest.json"
+    },
+    "packet-blake3-build.log": {
+      "blake3": "5d5ff855b92389090f331ca8bac73675cece7695fe9865140470ea662bd14f08",
+      "bytes": 665,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/packet-blake3-build.log"
+    },
+    "packet-blake3.rs": {
+      "blake3": "d638ee1e85c39cd81db4a72b9c55622d5d9ca623bfb7f61eaa1e55c782c0e001",
+      "bytes": 514,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/packet-blake3.rs"
+    },
+    "packet-preimages/composition-core-before.rs": {
+      "blake3": "656d74f44ce614e7de1ea2544cc7891109e5125a05d916783eea6e720da41f99",
+      "bytes": 49585,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/packet-preimages/composition-core-before.rs"
+    },
+    "packet-preimages/composition-roots.md": {
+      "blake3": "97fb9cad3c4d0aeaf9be4f242e5742423e394821a443188ae92bd098930ddd1d",
+      "bytes": 3643,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/packet-preimages/composition-roots.md"
+    },
+    "prefix-admission-test-summary.json": {
+      "blake3": "90e8ae2b441484fc49f8c023085ee9c1b101eaf2c223e599c7b639d2ce907da6",
+      "bytes": 5747,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/prefix-admission-test-summary.json"
+    },
+    "prefix-admission-test.log": {
+      "blake3": "db6d86586ce7c15ae815d78cae3426c7852097c786c023b8860a86c45e548f9c",
+      "bytes": 24209,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/prefix-admission-test.log"
+    },
+    "prefix-continuation-summary.json": {
+      "blake3": "ea35eea9142a0cc6f93b1b5fe4e719e9da335ed92ce0bcdbf81ce70df225dcfe",
+      "bytes": 27213,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/prefix-continuation-summary.json"
+    },
+    "prefix-store-clippy-summary.json": {
+      "blake3": "84cc6c9b738459720599bdc932d92b1c751fb93e611582cdfc7ed62e2168a308",
+      "bytes": 5699,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/prefix-store-clippy-summary.json"
+    },
+    "prefix-store-clippy.log": {
+      "blake3": "74ca2d75fde4943aeb1afac8f695ef4e25a958c603c0d7dd69c9e4e9df99ad1b",
+      "bytes": 23845,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/prefix-store-clippy.log"
+    },
+    "prefix-store-fmt-summary.json": {
+      "blake3": "c399c53fc6ea54283c27b4088c637b5bc3140a311d668692b7289d7671c2e494",
+      "bytes": 5613,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/prefix-store-fmt-summary.json"
+    },
+    "prefix-store-fmt.log": {
+      "blake3": "76b54c1d95f2c1ebc98e8091f12e28ee09e4a25ca3610db3874a718dd81981c7",
+      "bytes": 9204,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/prefix-store-fmt.log"
+    },
+    "prefix-test-correction/handle-before.rs": {
+      "blake3": "3cd10919bc13376721804aa33f062d423cf7b3d5a401ec07bfc1c0d8bba8fa70",
+      "bytes": 342615,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/prefix-test-correction/handle-before.rs"
+    },
+    "prefix-test-correction/launch.json": {
+      "blake3": "5a2870cc5925693603434c121362f6ad7a2598b02fb8f43f7fbbf959ec2ae577",
+      "bytes": 851,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/prefix-test-correction/launch.json"
+    },
+    "prefix-test-correction/prefix-invariant.patch": {
+      "blake3": "a89ec6746e15163c97c9a408e6d91e46b22df2de2475236bf2d3ff1171afe6ab",
+      "bytes": 540,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/prefix-test-correction/prefix-invariant.patch"
+    },
+    "prefix-test-correction/transition.json": {
+      "blake3": "02a44b6b16da45ab090a60d8c41311bc71f87cd0cd98e709ea4ebb968368a918",
+      "bytes": 1022,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/prefix-test-correction/transition.json"
+    },
+    "prefix-workspace-tests-summary.json": {
+      "blake3": "d1f423472594f00327a5d7436adc2bcbfee3523f99d5e715d2dbd5e50d45f5a4",
+      "bytes": 5677,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/prefix-workspace-tests-summary.json"
+    },
+    "prefix-workspace-tests.log": {
+      "blake3": "5eea856b69fbec5e019f7aacc8777191c26766ca7a28d37abb8d4ce08ab50fdf",
+      "bytes": 257195,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/prefix-workspace-tests.log"
+    },
+    "prepare-packet-base.py": {
+      "blake3": "707970eed62bdde3af47d886e118cf884c54053139fdea7a5230798a9a79571b",
+      "bytes": 1397,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/prepare-packet-base.py"
+    },
+    "preserve-final-cli-executables.py": {
+      "blake3": "1d441bc43d73a69ab76604f03a5a854954959e70b96a9957316b94a9b3a09c65",
+      "bytes": 2103,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/preserve-final-cli-executables.py"
+    },
+    "pueue1080-terminal.json": {
+      "blake3": "ba5612143041de3e0aec0812e2b41c1a42fb9becc8eb997a944f41dafd70b5f6",
+      "bytes": 618,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/pueue1080-terminal.json"
+    },
+    "pueue1081-terminal.json": {
+      "blake3": "8b5b95ebbbae09f436a55e7073816079675a016155102cc1ff1986d7db533fe5",
+      "bytes": 615,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/pueue1081-terminal.json"
+    },
+    "pueue1083-terminal.json": {
+      "blake3": "e7bc08bafaef659ce130bb54da1e989ac205342183e91369db35853b4b66591d",
+      "bytes": 617,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/pueue1083-terminal.json"
+    },
+    "reviewed-continuation-summary.json": {
+      "blake3": "1217f6d9501e8db598595de96fd0014f1fdaebe767bc323553cbef4ab9648397",
+      "bytes": 93047,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/reviewed-continuation-summary.json"
+    },
+    "run-prefix-continuation.py": {
+      "blake3": "dd0ecfb74568775c19843a4d13830d605b94b2698bced1fa333cb7731776a4f7",
+      "bytes": 8274,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/run-prefix-continuation.py"
+    },
+    "run-quality-sequence.py": {
+      "blake3": "42464d55dd0b91f6921d9e983e9462b00efd1bda2dcdc65a3172e594ab5a8c29",
+      "bytes": 1813,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/run-quality-sequence.py"
+    },
+    "run-reviewed-continuation.py": {
+      "blake3": "67e96de4952ef1d2585dee0617747d0469a7546de014239ae4871ed726be1363",
+      "bytes": 10450,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/run-reviewed-continuation.py"
+    },
+    "run-seccomp-continuation.py": {
+      "blake3": "6971de66207bc652eb55407ad5beca2b5556cf973d1d785aa5c2261cfa54d234",
+      "bytes": 9006,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/run-seccomp-continuation.py"
+    },
+    "run-short-tmp-continuation.py": {
+      "blake3": "f6284e8c9da11efcee002252351dc3ecb04ddaaef3d7dc7ea2e4571d5ccb8178",
+      "bytes": 6802,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/run-short-tmp-continuation.py"
+    },
+    "run-step.py": {
+      "blake3": "98941ac93326288b4c2012c56c5a0db7861b02dd19284610ce12762de13b0a51",
+      "bytes": 3481,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/run-step.py"
+    },
+    "seccomp-continuation-summary.json": {
+      "blake3": "4190f4fb7f1f0d4e19610474c89fbacde0bdad1d978a4a2d3b3f83a2b83dc400",
+      "bytes": 44008,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-continuation-summary.json"
+    },
+    "seccomp-deep-descendant-test-summary.json": {
+      "blake3": "601d0da595f2d6141e333505bcc625bfc109cb803b1dd6dc56e270a91775fc8b",
+      "bytes": 6351,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-deep-descendant-test-summary.json"
+    },
+    "seccomp-deep-descendant-test.log": {
+      "blake3": "2b3f89348c39982fe4556a799e7675e2e31c8785815547f7655a6c9575f5ed46",
+      "bytes": 35427,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-deep-descendant-test.log"
+    },
+    "seccomp-fixture-correction/launch.json": {
+      "blake3": "010cc38e29393dd29192e0fab2bb4696f26d45bd87e0c7d3ca45ed2a1020be4f",
+      "bytes": 773,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-fixture-correction/launch.json"
+    },
+    "seccomp-fixture-correction/native-leaf-prerequisite.json": {
+      "blake3": "b4ae88040d5ece7658ba1568a4b09d55b94f575c52f67533d9e5f1cf14707bc5",
+      "bytes": 852,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-fixture-correction/native-leaf-prerequisite.json"
+    },
+    "seccomp-fixture-correction/proposed.patch": {
+      "blake3": "d7da134fc50fe41cbf276a90672c36d03aef5f3637502d48f19e14724ff23732",
+      "bytes": 4261,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-fixture-correction/proposed.patch"
+    },
+    "seccomp-fixture-correction/protected_exec_seccomp-before.rs": {
+      "blake3": "51f7355a45d619a7217487c49ecd004dc86dc8c75de9368618255ceaba69ae42",
+      "bytes": 74073,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-fixture-correction/protected_exec_seccomp-before.rs"
+    },
+    "seccomp-fixture-correction/transition.json": {
+      "blake3": "196637cc8a32621ccb8b5273704db7973527759b46e356fefa9829b3e9484aaf",
+      "bytes": 1185,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-fixture-correction/transition.json"
+    },
+    "seccomp-negative-orphan-test-summary.json": {
+      "blake3": "7035609a4289355a29727f4dda3b2ed0ce8f0f0bc7725db109996dd59b84f9a1",
+      "bytes": 6366,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-negative-orphan-test-summary.json"
+    },
+    "seccomp-negative-orphan-test.log": {
+      "blake3": "9a92995e47973e7191c8cd67827061407c514ad90bad287caca1f14fb05def37",
+      "bytes": 11552,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-negative-orphan-test.log"
+    },
+    "seccomp-review-followup/after-proposed.rs": {
+      "blake3": "aea40af67b5d3f90513851f562bb5d347ce8cd00500302d13a081e84af6b778e",
+      "bytes": 75815,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-review-followup/after-proposed.rs"
+    },
+    "seccomp-review-followup/before.rs": {
+      "blake3": "f9de68abb4e2ffd391cc92cad914563e8204083b235ffa4b6840180aa8f2f884",
+      "bytes": 75342,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-review-followup/before.rs"
+    },
+    "seccomp-review-followup/format-only.diff": {
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "bytes": 0,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-review-followup/format-only.diff"
+    },
+    "seccomp-review-followup/launch.json": {
+      "blake3": "34cc9176cbc9d78e802953cdc6f8c52fc3fade6ee4f8a931e600c636ffa02bf7",
+      "bytes": 732,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-review-followup/launch.json"
+    },
+    "seccomp-review-followup/production-prefix.txt": {
+      "blake3": "dd0c277fb8583aae134694f502bd919a8b905b23743e3557c702560952d289d8",
+      "bytes": 38276,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-review-followup/production-prefix.txt"
+    },
+    "seccomp-review-followup/proposed.patch": {
+      "blake3": "73c064ce98dccc772e416b2f0d6980bf9090eaa0deeaf616f878e71a694e382c",
+      "bytes": 2140,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-review-followup/proposed.patch"
+    },
+    "seccomp-review-followup/transition.json": {
+      "blake3": "2e03edf2cea9cf24ceca552f3de283f8530cd97868df1c84491793bf07559417",
+      "bytes": 1735,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-review-followup/transition.json"
+    },
+    "seccomp-root-clippy-summary.json": {
+      "blake3": "feb3ea8df12f016f9e877abf3f7f26dfa194894750265ed319d080b34d6223a2",
+      "bytes": 6252,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-root-clippy-summary.json"
+    },
+    "seccomp-root-clippy.log": {
+      "blake3": "df0c0dc746e7e90f4532298c7cf9584258c7f8581547b7ef9e034af174663f41",
+      "bytes": 34986,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-root-clippy.log"
+    },
+    "seccomp-root-fmt-summary.json": {
+      "blake3": "40f79d79d882b955ed3027942068ba5e76ff26f8ab2ddc6ca62af4893c5d8417",
+      "bytes": 6166,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-root-fmt-summary.json"
+    },
+    "seccomp-root-fmt.log": {
+      "blake3": "02d398ec76130c42dc36946ab423409e12dfff0c1f4063fb576b458e50a6c987",
+      "bytes": 10101,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/seccomp-root-fmt.log"
+    },
+    "short-tmp-cache-adoption-summary.json": {
+      "blake3": "5e623d4fb452deda36a8ce451a4bcc5fa1b639736de7f72a5d1b9dd3297fe486",
+      "bytes": 5281,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/short-tmp-cache-adoption-summary.json"
+    },
+    "short-tmp-cache-adoption.log": {
+      "blake3": "3f299877aab292959f6e4f96e398d8734cf323998a77a92494617b4d3681d928",
+      "bytes": 9828,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/short-tmp-cache-adoption.log"
+    },
+    "short-tmp-continuation-launch.json": {
+      "blake3": "0b30925f4c03bc8e37266333dac93b9690361355120004c2dd396727a44619f7",
+      "bytes": 1265,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/short-tmp-continuation-launch.json"
+    },
+    "short-tmp-continuation-summary.json": {
+      "blake3": "4be2477cdae1d0cc951c21326d64f078381c34541346dc50853d7f606fc8984b",
+      "bytes": 19235,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/short-tmp-continuation-summary.json"
+    },
+    "short-tmp-diagnosis.json": {
+      "blake3": "bfcd8d41f178ca3b7935d2a220ab2fb1beae0affc1c9e7aa4e52636e5339ed38",
+      "bytes": 2168,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/short-tmp-diagnosis.json"
+    },
+    "short-tmp-stale-socket-summary.json": {
+      "blake3": "8b6ae9150b5ce016985cb60bcf570785c1a7f01f333a0833cd1aa413671ce579",
+      "bytes": 5273,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/short-tmp-stale-socket-summary.json"
+    },
+    "short-tmp-stale-socket.log": {
+      "blake3": "345d705a37037c718aead778ecb0b9f0f8244ad29ff0c2805c26123675a4ecb9",
+      "bytes": 16961,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/short-tmp-stale-socket.log"
+    },
+    "short-tmp-workspace-tests-summary.json": {
+      "blake3": "6f2af2d5955f6b567e96611b771d945fe5be1b189e6a3775678a437cd4b8aa6a",
+      "bytes": 5175,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/short-tmp-workspace-tests-summary.json"
+    },
+    "short-tmp-workspace-tests.log": {
+      "blake3": "eee6116dce1d7959660f93e6760f0e24a224e856ebdf9393c472e8ad50c82a49",
+      "bytes": 216710,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/short-tmp-workspace-tests.log"
+    },
+    "unpublished-changes.patch": {
+      "blake3": "56b7e2aa34908a5ab4f46810b3f305f2ba2156d82c7459e8740115eaa187b808",
+      "bytes": 11622,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/unpublished-changes.patch"
+    },
+    "verify-final-helper-lock.py": {
+      "blake3": "c80832d9bcd381d02e59a4bb77a7d4e9048f9bd1865433ce84f088f98cb12e9e",
+      "bytes": 2371,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/verify-final-helper-lock.py"
+    }
+  },
+  "identity_policy": "New packet/source/evidence identities use BLAKE3. Historical transport_sha256 fields remain historical byte-transport bridges, not new Mantle-owned identities.",
+  "lifecycle_archive_or_sync": false,
+  "non_claims": [
+    "No canonical writes, publication, commit, cleanup, archive, sync or task acceptance.",
+    "Original-da00 devshell admission/build remains deferred for parent review.",
+    "No proof replay, full Cargo compatibility, compiler correctness, global reproducibility, bootstrap correctness, deployment/boot authorization or release eligibility claim.",
+    "No provider/model/auth/pin/profile changes."
+  ],
+  "ordinary_workspace": {
+    "all_selected_targets_completed": false,
+    "blocker": "Required workspace command failed101 in mantle --bin crunch; remaining selected targets are not proved. No rerun, source/profile/deadline change or failure suppression.",
+    "captured_failed_names": [
+      "test cargo_import::tests::cargo_import_shell_rejects_non_utf8_workspace_roots ... FAILED",
+      "test oci_projection_shell::tests::frontend_cas_rejects_special_files_before_oci_projection ... FAILED",
+      "test source_root_capability::tests::host_probe_budget_rejects_an_observation_larger_than_real_subprocess_capacity ... FAILED"
+    ],
+    "captured_results": {
+      "captured_explicit_skip_messages": [],
+      "captured_failed_names": [
+        "test cargo_import::tests::cargo_import_shell_rejects_non_utf8_workspace_roots ... FAILED",
+        "test oci_projection_shell::tests::frontend_cas_rejects_special_files_before_oci_projection ... FAILED",
+        "test source_root_capability::tests::host_probe_budget_rejects_an_observation_larger_than_real_subprocess_capacity ... FAILED"
+      ],
+      "captured_ignored_names": [
+        "test integration_tests::official_proof::reviewed_signed_java_apk_clean_rebuilds_and_perturbation ... ignored, explicit connected-prefetch and reviewed SDK/signed-runtime proof prerequisites",
+        "test pipeline_determinism_probe_fetcher_root ... ignored",
+        "test pipeline_determinism_probe_normal_derivation ... ignored",
+        "test pipeline_determinism_probe_self_build_friendly_path ... ignored",
+        "test pipeline_determinism_probe_strict_environment_override_blocker ... ignored",
+        "test elf_local_symbol_core::tests::retained_decimal_width_variants_converge ... ignored, requires two retained ELF objects whose decimal local-symbol widths differ",
+        "test release_chapter_transport::tests::representative_release_transport_benchmark ... ignored, representative release transport benchmark",
+        "test source_built_fixed_point_shell::tests::projects_and_imports_retained_stagex_transition_handoff ... ignored, requires retained completed StageX transition",
+        "test stagex_archive_core::tests::reports_canonical_retained_archive_identity ... ignored, requires one retained StageX archive",
+        "test stagex_archive_core::tests::retained_archive_width_variants_converge ... ignored, requires two retained StageX archives whose local-symbol widths differ",
+        "test stagex_bash::tests::derives_retained_bash_inventory ... ignored, requires retained bash source and TinyCC 0.9.27",
+        "test stagex_bash::tests::materializes_retained_bash_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_bash_full::tests::derives_retained_full_shell_inventory ... ignored, requires configured Bash source, TinyCC musl-v2, native musl, GNU Make, and create-new scratch",
+        "test stagex_bash_full::tests::generates_retained_full_builtin_sources ... ignored, requires configured Bash source, TinyCC musl-v2, native musl, and create-new scratch",
+        "test stagex_binutils::tests::builds_authenticated_binutils_components ... ignored, requires retained binutils source and protected tool roots",
+        "test stagex_binutils::tests::builds_authenticated_binutils_components_observing_identities ... ignored, derives canonical identities from retained binutils source and protected tool roots",
+        "test stagex_binutils::tests::configures_declared_matrix_with_regular_file_sed_bridge ... ignored, requires retained binutils source and protected tool roots",
+        "test stagex_binutils::tests::configures_intl_with_regular_file_sed_bridge ... ignored, requires retained binutils source and protected tool roots",
+        "test stagex_binutils::tests::generates_initial_sources_and_runs_second_bfd_configure ... ignored, requires retained binutils source and protected tool roots",
+        "test stagex_binutils::tests::materializes_retained_binutils_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_binutils::tests::observes_authenticated_binutils_exec_inventory ... ignored, requires retained binutils source and protected tool roots",
+        "test stagex_binutils::tests::smokes_authenticated_installed_tools ... ignored, requires a retained authenticated binutils install root",
+        "test stagex_bison::tests::derives_retained_bison_inventory ... ignored, requires retained GNU Bison source, TinyCC musl-v2, native musl, protected M4, and create-new scratch",
+        "test stagex_bison::tests::materializes_retained_bison_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_bzip2::tests::derives_retained_bzip2_inventory ... ignored, requires retained bzip2 source, GNU sed, and TinyCC 0.9.27",
+        "test stagex_bzip2::tests::materializes_retained_bzip2_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_coreutils::tests::derives_retained_coreutils_inventory ... ignored, requires retained coreutils source and TinyCC 0.9.27",
+        "test stagex_coreutils::tests::materializes_retained_coreutils_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_diffutils::tests::derives_retained_diffutils_inventory ... ignored, requires retained GNU diffutils source, TinyCC musl-v2, and native musl",
+        "test stagex_diffutils::tests::materializes_retained_diffutils_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_flex::tests::derives_retained_flex_inventory ... ignored, requires retained GNU Flex source, TinyCC musl-v2, native musl, protected M4, and create-new scratch",
+        "test stagex_flex::tests::materializes_retained_flex_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_gawk::tests::derives_retained_gawk_inventory ... ignored, requires retained GNU Gawk source, TinyCC musl-v2, native musl, and create-new scratch",
+        "test stagex_gawk::tests::materializes_retained_gawk_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_gnu_patch::tests::derives_retained_gnu_patch_inventory ... ignored, requires retained GNU patch source and TinyCC 0.9.27",
+        "test stagex_gnu_patch::tests::materializes_retained_gnu_patch_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_grep::tests::derives_retained_grep_inventory ... ignored, requires retained GNU grep source, TinyCC musl-v2, native musl, and create-new scratch",
+        "test stagex_grep::tests::materializes_retained_grep_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_gzip::tests::derives_retained_gzip_inventory ... ignored, requires retained gzip source and TinyCC 0.9.27",
+        "test stagex_gzip::tests::materializes_retained_gzip_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_m4::tests::derives_retained_m4_inventory ... ignored, requires retained GNU M4 source, TinyCC musl-v2, and native musl",
+        "test stagex_m4::tests::materializes_retained_m4_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_make::tests::applies_retained_make_source_patch ... ignored, requires explicit materialized GNU Make source and create-new scratch",
+        "test stagex_make::tests::derives_retained_make_inventory ... ignored, requires explicit GNU Make source, TinyCC 0.9.27 runtime, and create-new scratch",
+        "test stagex_make::tests::materializes_retained_make_source ... ignored, requires explicit authenticated source bundle and create-new scratch",
+        "test stagex_mes::tests::derives_retained_mes_m2_inventory ... ignored, requires explicit authenticated source bundle, full Stage0 tree, and create-new scratch",
+        "test stagex_mes_lib::tests::derives_retained_mes_runtime_inventory ... ignored, requires explicit Mes, NYACC, full Stage0, and create-new output roots",
+        "test stagex_mes_lib::tests::parses_retained_authenticated_mes_recipe ... ignored, requires an explicit authenticated Mes source root",
+        "test stagex_mes_sources::tests::materializes_retained_mes_sources ... ignored, requires explicit authenticated source bundle and create-new scratch",
+        "test stagex_musl::tests::derives_retained_musl_inventory ... ignored, requires retained musl source and TinyCC musl-prep",
+        "test stagex_musl::tests::derives_retained_musl_pass2_inventory ... ignored, requires retained musl source and musl-linked TinyCC",
+        "test stagex_musl::tests::materializes_retained_musl_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_musl_native::tests::derives_retained_native_musl_inventory ... ignored, requires retained authenticated musl source and protected TinyCC roots",
+        "test stagex_musl_native::tests::retained_native_object_width_variants_converge ... ignored, requires two retained native-musl object trees with different local-symbol widths",
+        "test stagex_oyacc::tests::derives_retained_oyacc_inventory ... ignored, requires retained oyacc source and TinyCC 0.9.27",
+        "test stagex_oyacc::tests::materializes_retained_oyacc_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_sed::tests::derives_retained_sed_inventory ... ignored, requires retained GNU sed source and TinyCC 0.9.27 runtime",
+        "test stagex_sed::tests::materializes_retained_sed_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_sources::tests::materializes_retained_authenticated_stagex_sources ... ignored, requires an explicitly authenticated retained source bundle and create-new scratch",
+        "test stagex_stage0::tests::derives_retained_stage0_mini_executable_inventory ... ignored, derives retained host-orchestrated inventory; not protected-transition evidence",
+        "test stagex_stage0_full::tests::derives_retained_full_stage0_inventory ... ignored, derives retained full Stage0 inventory; not protected-transition evidence",
+        "test stagex_tar::tests::derives_retained_tar_inventory ... ignored, requires retained GNU tar source and TinyCC 0.9.27",
+        "test stagex_tar::tests::materializes_retained_tar_source ... ignored, requires retained authenticated source bundle",
+        "test stagex_tcc_musl::tests::derives_retained_tcc_musl_inventory ... ignored, requires retained TinyCC source, musl-prep, and musl",
+        "test stagex_tcc_musl_prep::tests::derives_retained_tcc_musl_prep_inventory ... ignored, requires retained TinyCC 0.9.27 source and runtime",
+        "test stagex_tcc_musl_v2::tests::derives_retained_inventory ... ignored, requires retained StageX compiler and libc roots",
+        "test stagex_tcc_selfhost::tests::derives_retained_inventory ... ignored, requires retained protected TinyCC musl-v2, TinyCC 0.9.26, and musl pass2 roots",
+        "test stagex_tcc_selfhost::tests::retained_object_tree_width_variants_converge ... ignored, requires two retained TinyCC self-host object trees with different local-symbol widths",
+        "test stagex_tinycc27::tests::applies_retained_tinycc27_source_patch ... ignored, requires explicit materialized TinyCC 0.9.27 source and create-new scratch",
+        "test stagex_tinycc27::tests::derives_retained_tinycc27_inventory ... ignored, requires explicit TinyCC 0.9.27 source, Mes source, TinyCC 0.9.26 runtime, and create-new scratch",
+        "test stagex_tinycc27::tests::materializes_retained_tinycc27_source ... ignored, requires explicit authenticated source bundle and create-new scratch",
+        "test stagex_tinycc::tests::derives_retained_tcc_mes_inventory ... ignored, requires explicit TinyCC, Mes, Stage0, and create-new scratch inputs",
+        "test stagex_tinycc::tests::materializes_retained_tinycc_source ... ignored, requires explicit authenticated source bundle and create-new scratch"
+      ],
+      "skip_visibility": "Ignored counts/names are exact captured harness output. Capability-gated early returns may hide stderr on successful tests; absence of skip messages is not proof that no such skips occurred.",
+      "suites": [
+        {
+          "exact_result_line": "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 12,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_action_result_core-17f0bc1da12f7258)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 1,
+          "target": "Running tests/architecture.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/architecture-ebd0d00a46dbda82)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 6.15s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 1,
+          "measured": 0,
+          "passed": 4,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_android-5d4231e76041b2af)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 2,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_android_core-3ddd1dd7e7b1dd98)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 13,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_attestation-7cba95e0f0406ded)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 82 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 82,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_attestation_core-89bc6495552958cd)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 86 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 86,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_bootstrap_core-43c12557a2fb8a0a)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 728 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.83s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 728,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_build-3b45230b34e998e4)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 1,
+          "target": "Running tests/export_api.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/export_api-4fdb254da1322ed9)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 11,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_composition_core-9208bd9d8960f3c5)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 2,
+          "target": "Running tests/boundary.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/boundary-9b137dfe75d1c7a2)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.71s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 37,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_delta-e31c4e183713d217)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 7,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_delta_core-861573e003176e40)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 85 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.59s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 85,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_eval-dc24f32044e602ac)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 5,
+          "target": "Running tests/nickel_cohort_guard.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/nickel_cohort_guard-8b086529f53d818c)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 9,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_eval_budget_core-c3ae33cade1c21ae)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.19s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 18,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_evaluation_stream_core-bea58a43776e34dd)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 27,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_gc_core-44a116874433ed19)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 89 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 89,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_glue-a131a6ad415fabc8)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 10,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_hardware_simulation-62e144d92edeb36c)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 9,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_hardware_simulation_core-197c4c47d0322193)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 9,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_kernelscript_adapter-f5873ff99814ee42)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "target": "Running unittests src/main.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_kernelscript_core_adapter-69e89e2cff5e9e21)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 20,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_kernelscript_core-95b7c3ef3076eb25)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 6,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_nar-af413c79687b9af6)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 8,
+          "target": "Running tests/parity.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/parity-cfff2927ed443d84)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 8,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_overlay_core-5bfb24c9255ee4cb)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 31.48s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 49,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_pipeline-ae397a9f730e0649)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 19 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 17.74s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 4,
+          "measured": 0,
+          "passed": 19,
+          "target": "Running tests/integration_build.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/integration_build-6aab62cb1986a520)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 7,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_project-ee3dce852e798bdf)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 6,
+          "target": "Running tests/integration_nickel.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/integration_nickel-b426fb4022d27250)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 163 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 163,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_project_core-0aa6cbc3d55c3549)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 242 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 242,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_release_core-118585cef9aa1769)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 9,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_remote_app-f8c83e410ec529a1)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 76 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 76,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_remote_core-407b13758b0c11d7)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.04s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 1,
+          "target": "Running tests/authority.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/authority-bc02f4e77f6f2c9e)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 7,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_repair_core-40bb41c38f4b9877)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.57s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 28,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_rust_cache-909cb2a0659d9eba)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 26,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_rust_cache_core-e1106aa6dbc47ccd)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 1,
+          "target": "Running tests/architecture.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/architecture-5143f94083bf59f7)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.50s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 20,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_rustc_wrapper-a2e8cde778b39023)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 3,
+          "target": "Running unittests src/bin/mantle-rust-cache-daemon.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_rust_cache_daemon-769d554920259e05)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 2,
+          "target": "Running unittests src/bin/mantle-rustc-manifest.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_rustc_manifest-aa3752a7146249df)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "target": "Running unittests src/bin/mantle-rustc-wrapper.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_rustc_wrapper-41eea731fd1d246c)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 20,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_service_readiness_core-efc0c95a53385789)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 5,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_shell-0be35f721f67576b)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 24,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_shell_core-40d779e2e264e4de)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 1,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_source_core-6b01cb2e10dbfe1f)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 6,
+          "target": "Running tests/ingest_fixtures.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/ingest_fixtures-78a46a4d4797b78e)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 9,
+          "target": "Running tests/source_observation_fixtures.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/source_observation_fixtures-f3cb9703ee7ecf0a)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 8,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_spacewasm-95f57175a1a0dba7)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "target": "Running unittests src/main.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_spacewasm_reference-0466fbebb93c2cfa)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 8,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_spacewasm_core-a326ec5724af9d01)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 8,
+          "target": "Running tests/run_record_fixtures.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/run_record_fixtures-8249a191e81f0047)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 2,
+          "target": "Running tests/stable_report_contract_parity.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/stable_report_contract_parity-78f54cdd86d0b9d1)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 12,
+          "target": "Running tests/stable_report_fixtures.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/stable_report_fixtures-87214e67cf3e34f4)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 432 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 530.57s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 432,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_store-17436bce86a542ca)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 2,
+          "target": "Running tests/authority_source_policy.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/authority_source_policy-0d84628586a5fdfe)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 15,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_wasm_component-ab19d6fae2769642)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 36,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_wasm_component_core-1c681eca8c42cf14)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 14,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_watch_core-0fa09c48e45533e7)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: ok. 174 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1831.11s",
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 174,
+          "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle-9dedf710d5702ca2)",
+          "verdict": "ok"
+        },
+        {
+          "exact_result_line": "test result: FAILED. 2602 passed; 3 failed; 68 ignored; 0 measured; 0 filtered out; finished in 3838.50s",
+          "failed": 3,
+          "filtered_out": 0,
+          "ignored": 68,
+          "measured": 0,
+          "passed": 2602,
+          "target": "Running unittests src/main.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch-114ae034e142f532)",
+          "verdict": "FAILED"
+        }
+      ],
+      "totals": {
+        "failed": 3,
+        "filtered_out": 0,
+        "ignored": 73,
+        "measured": 0,
+        "passed": 5326
+      }
+    },
+    "exit": 101
+  },
+  "packet_root": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate",
+  "prefix_test_only_transition": {
+    "after_blake3": "57abc8ff05be5323788cde411312feeda03562724540bc94b12abe3dfc6f00e8",
+    "before_blake3": "3cd10919bc13376721804aa33f062d423cf7b3d5a401ec07bfc1c0d8bba8fa70",
+    "before_transport_sha256": "94816c45d6e4b1a9b1b7d6abfb6aaf072dd4332d619381c2805e7f2fc146075e",
+    "canonical_publication": false,
+    "cause": "Backend identity preflight rejects mismatch before overlay-core internal error formatting; existing fixture writes a real store-identity record.",
+    "failed_evidence": "short-tmp-workspace-tests.log:2844-2853",
+    "path": "crates/crunch-store/src/handle.rs",
+    "production_logic_changed": false,
+    "removed_incidental_assertion": "error.to_string().contains(\"PrefixMismatch\")",
+    "retained_contract": [
+      "mismatched prefix is rejected",
+      "overlay pathinfo.redb is not created"
+    ],
+    "schema": "mantle-t45-prefix-test-invariant-correction-v1",
+    "source_sites": [
+      "handle.rs:169-171,989-997,7048-7052,7394-7426",
+      "overlay.rs:149-153,771-772"
+    ],
+    "verification_marker_preserved": true
+  },
+  "publication_headroom_observation": {
+    "composition_source_stat": {
+      "device": 46,
+      "mode": "0o644",
+      "path": "/home/brittonr/git/OnixResearch/mantle/crates/crunch-composition-core/src/lib.rs",
+      "size_bytes": 49585
+    },
+    "filesystems": {
+      "/home/brittonr/git/OnixResearch/mantle": {
+        "available_bytes": 0,
+        "available_inodes": 0,
+        "publication_budget_restored": false
+      },
+      "/home/brittonr/git/OnixResearch/mantle/crates/crunch-composition-core/src": {
+        "available_bytes": 0,
+        "available_inodes": 0,
+        "publication_budget_restored": false
+      }
+    },
+    "observation_only": true,
+    "observed_utc": "2026-10-15T17:03:24.306681+00:00",
+    "old_publication_budget_bytes": 230242,
+    "publication_authorized": false,
+    "schema": "mantle-local-publication-headroom-observation-v1"
+  },
+  "retained_failures": {
+    "1079": "Original long TMPDIR socket failures; original fmt/Clippy successes retained.",
+    "1080": "Short-TMPDIR wrapper scenarios passed, workspace then exposed stale internal-prefix-error wording assertion; original runner/logs immutable.",
+    "1081": "Store correction passed, workspace mantle lib then failed deep-descendant reaping while orphan authorized an819MB self-executable; original failure retained.",
+    "1082": "Pre-review f9 source root fmt/strict Clippy, positive and no-subreaper negative, and actual mantle build passed. Scratch CLI helper build failed101 because vendored git resolution required a missing lockfile. No CLI realization or workspace stage ran on1082; receipts not relabeled as final aea evidence.",
+    "1083": "Final aea root fmt/strict Clippy, both exact security scenarios, frozen actual CLI seed/realize/readback passed; workspace then failed101 with three captured bin-crunch regression failures. No all-green quality or complete-workspace claim."
+  },
+  "reused_successful_store_checks": [
+    {
+      "command": [
+        "cargo",
+        "fmt",
+        "--check",
+        "-p",
+        "crunch-store"
+      ],
+      "exit": 0,
+      "source_subjects": {
+        "Cargo.lock": {
+          "blake3": "da5a78265339513d5c2b96e537d0951203d390e69632acff25567aee350b523f",
+          "bytes": 257203,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/Cargo.lock"
+        },
+        "Cargo.toml": {
+          "blake3": "75d728e466d09790cf2a6fcbcf04056afc889f66f6274f3807ceeda196b8b3cd",
+          "bytes": 9858,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/Cargo.toml"
+        },
+        "crates/crunch-composition-core/src/lib.rs": {
+          "blake3": "f336df248733623d59902bb245a807efde468580be2426428836fc60398d8111",
+          "bytes": 50164,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/crates/crunch-composition-core/src/lib.rs"
+        },
+        "crates/crunch-rustc-wrapper/src/lib.rs": {
+          "blake3": "586a1838f048c258acfe23fc69b986f0d7e54c8a1577138a5f0455826f787f40",
+          "bytes": 156503,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/crates/crunch-rustc-wrapper/src/lib.rs"
+        },
+        "crates/crunch-store/src/handle.rs": {
+          "blake3": "57abc8ff05be5323788cde411312feeda03562724540bc94b12abe3dfc6f00e8",
+          "bytes": 342478,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/crates/crunch-store/src/handle.rs"
+        },
+        "scripts/quality-gate-common.sh": {
+          "blake3": "15758dcba35e37f7d24579839f79df82b8d25a1c56a8fe438116b4e89041cde4",
+          "bytes": 2629,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/scripts/quality-gate-common.sh"
+        }
+      },
+      "stage": "prefix-store-fmt"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "crunch-store",
+        "--all-targets",
+        "--no-deps",
+        "--offline",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "source_subjects": {
+        "Cargo.lock": {
+          "blake3": "da5a78265339513d5c2b96e537d0951203d390e69632acff25567aee350b523f",
+          "bytes": 257203,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/Cargo.lock"
+        },
+        "Cargo.toml": {
+          "blake3": "75d728e466d09790cf2a6fcbcf04056afc889f66f6274f3807ceeda196b8b3cd",
+          "bytes": 9858,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/Cargo.toml"
+        },
+        "crates/crunch-composition-core/src/lib.rs": {
+          "blake3": "f336df248733623d59902bb245a807efde468580be2426428836fc60398d8111",
+          "bytes": 50164,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/crates/crunch-composition-core/src/lib.rs"
+        },
+        "crates/crunch-rustc-wrapper/src/lib.rs": {
+          "blake3": "586a1838f048c258acfe23fc69b986f0d7e54c8a1577138a5f0455826f787f40",
+          "bytes": 156503,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/crates/crunch-rustc-wrapper/src/lib.rs"
+        },
+        "crates/crunch-store/src/handle.rs": {
+          "blake3": "57abc8ff05be5323788cde411312feeda03562724540bc94b12abe3dfc6f00e8",
+          "bytes": 342478,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/crates/crunch-store/src/handle.rs"
+        },
+        "scripts/quality-gate-common.sh": {
+          "blake3": "15758dcba35e37f7d24579839f79df82b8d25a1c56a8fe438116b4e89041cde4",
+          "bytes": 2629,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/scripts/quality-gate-common.sh"
+        }
+      },
+      "stage": "prefix-store-clippy"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "crunch-store",
+        "--offline",
+        "--lib",
+        "handle::tests::overlay_prefix_mismatch_fails_closed",
+        "--",
+        "--exact",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "source_subjects": {
+        "Cargo.lock": {
+          "blake3": "da5a78265339513d5c2b96e537d0951203d390e69632acff25567aee350b523f",
+          "bytes": 257203,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/Cargo.lock"
+        },
+        "Cargo.toml": {
+          "blake3": "75d728e466d09790cf2a6fcbcf04056afc889f66f6274f3807ceeda196b8b3cd",
+          "bytes": 9858,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/Cargo.toml"
+        },
+        "crates/crunch-composition-core/src/lib.rs": {
+          "blake3": "f336df248733623d59902bb245a807efde468580be2426428836fc60398d8111",
+          "bytes": 50164,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/crates/crunch-composition-core/src/lib.rs"
+        },
+        "crates/crunch-rustc-wrapper/src/lib.rs": {
+          "blake3": "586a1838f048c258acfe23fc69b986f0d7e54c8a1577138a5f0455826f787f40",
+          "bytes": 156503,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/crates/crunch-rustc-wrapper/src/lib.rs"
+        },
+        "crates/crunch-store/src/handle.rs": {
+          "blake3": "57abc8ff05be5323788cde411312feeda03562724540bc94b12abe3dfc6f00e8",
+          "bytes": 342478,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/crates/crunch-store/src/handle.rs"
+        },
+        "scripts/quality-gate-common.sh": {
+          "blake3": "15758dcba35e37f7d24579839f79df82b8d25a1c56a8fe438116b4e89041cde4",
+          "bytes": 2629,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/scripts/quality-gate-common.sh"
+        }
+      },
+      "stage": "prefix-admission-test"
+    }
+  ],
+  "schema": "mantle-t45-unpublished-composition-quality-packet-v1",
+  "scratch_helper_final_lock_pin_comparison": {
+    "canonical_publication": false,
+    "created_utc": "2026-10-15T18:45:28.049848+00:00",
+    "final": {
+      "blake3": "bef85da23d7aa11fbf259e16819f5d6095f7ebb90061f5e931e1626e11070e70",
+      "bytes": 150974,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/composition-cli-helper/Cargo.lock"
+    },
+    "final_package_count": 607,
+    "helper_build_summary": {
+      "blake3": "6820b3de71d4941487dd8581f33d315ce81fdb2a749dfd4f2fd644c4498e2f9f",
+      "bytes": 7293,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-helper-build-summary.json"
+    },
+    "network_product_config_dependency_or_pin_changes": false,
+    "new_helper_root_entry": {
+      "dependencies": [
+        "crunch-composition-core",
+        "crunch-store",
+        "data-encoding",
+        "serde_json",
+        "snix-castore",
+        "tokio"
+      ],
+      "name": "mantle-composition-cli-smoke",
+      "version": "0.0.0"
+    },
+    "pin_tuple_fields": [
+      "name",
+      "version",
+      "source",
+      "checksum"
+    ],
+    "product_lock_unchanged": true,
+    "resolved_external_package_count": 590,
+    "resolved_shared_registry_git_pins_are_unchanged_product_subset": true,
+    "schema": "mantle-t45-final-scratch-helper-lock-pins-v1",
+    "seed": {
+      "blake3": "da5a78265339513d5c2b96e537d0951203d390e69632acff25567aee350b523f",
+      "bytes": 257203,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/composition-cli-helper/Cargo.lock"
+    },
+    "seed_retained_as_unchanged_product_lock": {
+      "blake3": "da5a78265339513d5c2b96e537d0951203d390e69632acff25567aee350b523f",
+      "bytes": 257203,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/Cargo.lock"
+    },
+    "unexpected_new_package_pins": []
+  },
+  "scratch_helper_lock_seed": {
+    "canonical_publication": false,
+    "dependency_pin_or_config_change": false,
+    "existing_product_lock_seed": {
+      "blake3": "da5a78265339513d5c2b96e537d0951203d390e69632acff25567aee350b523f",
+      "bytes": 257203,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source/Cargo.lock"
+    },
+    "product_root_lock_unchanged": true,
+    "reason": "1082 helper build failed before compilation because vendored git resolution requires a lockfile.",
+    "retained_failure": {
+      "blake3": "067be1bba0c806a9dcac44ed806a26322f2417075881c8d6cf013343b67ee630",
+      "bytes": 11388,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-cli-helper-build.log"
+    },
+    "schema": "mantle-t45-scratch-helper-vendor-lock-seed-v1",
+    "scratch_helper_lock_seed": {
+      "blake3": "da5a78265339513d5c2b96e537d0951203d390e69632acff25567aee350b523f",
+      "bytes": 257203,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/composition-cli-helper/Cargo.lock"
+    }
+  },
+  "security_fixture_test_only_transition": {
+    "after_blake3": "f9de68abb4e2ffd391cc92cad914563e8204083b235ffa4b6840180aa8f2f884",
+    "all_shared_helper_callers_migrated": true,
+    "before_blake3": "51f7355a45d619a7217487c49ecd004dc86dc8c75de9368618255ceaba69ae42",
+    "canonical_publication": false,
+    "compilation_profile_changed": false,
+    "deadline_unchanged_ms": 30000,
+    "existing_pattern": "crunch-rustc-wrapper find_test_executable and canonicalized real tools",
+    "native_leaf": "/nix/store/kl3gf8ld3xp638ss3k178r38qn9ywahn-coreutils-full-9.11/bin/coreutils",
+    "native_leaf_bytes": 1736976,
+    "negative_mode": "Retains original self-executable leaf and denial semantics through explicit shared-helper argument",
+    "path": "src/protected_exec_seccomp.rs",
+    "positive_invariants": [
+      "real double fork and orphan adoption",
+      "reaped_count == 1",
+      "exactly two allowed audit events",
+      "exact initial self path and orphan leaf path/entry"
+    ],
+    "production_prefix_before_cfg_test_identical": true,
+    "reaper_modified": false,
+    "retained_failure": "prefix-workspace-tests.log:3393-3428",
+    "schema": "mantle-t45-seccomp-native-leaf-test-transition-v1",
+    "status": "pending exercised correction verification"
+  },
+  "task_acceptance": false,
+  "terminal_queue_tasks": {
+    "1080": {
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/run-short-tmp-continuation.py",
+      "group": "mantle-unit-plan-87lq-build",
+      "id": 1080,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+      "status": {
+        "Done": {
+          "end": "2026-10-15T12:56:50.630090018-04:00",
+          "enqueued_at": "2026-10-15T12:41:37.986622027-04:00",
+          "result": {
+            "Failed": 101
+          },
+          "start": "2026-10-15T12:41:38.226310513-04:00"
+        }
+      }
+    },
+    "1081": {
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/run-prefix-continuation.py",
+      "group": "mantle-unit-plan-87lq-build",
+      "id": 1081,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+      "status": {
+        "Done": {
+          "end": "2026-10-15T13:56:00.092301981-04:00",
+          "enqueued_at": "2026-10-15T13:02:29.359874125-04:00",
+          "result": {
+            "Failed": 101
+          },
+          "start": "2026-10-15T13:02:29.438261248-04:00"
+        }
+      }
+    },
+    "1082": {
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/run-seccomp-continuation.py",
+      "group": "mantle-unit-plan-87lq-build",
+      "id": 1082,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+      "status": {
+        "Done": {
+          "end": "2026-10-15T14:20:51.491369644-04:00",
+          "enqueued_at": "2026-10-15T14:04:51.418906890-04:00",
+          "result": {
+            "Failed": 101
+          },
+          "start": "2026-10-15T14:04:51.573007113-04:00"
+        }
+      }
+    },
+    "1083": {
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/run-reviewed-continuation.py",
+      "group": "mantle-unit-plan-87lq-build",
+      "id": 1083,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+      "status": {
+        "Done": {
+          "end": "2026-10-15T16:28:19.464599541-04:00",
+          "enqueued_at": "2026-10-15T14:23:38.946530639-04:00",
+          "result": {
+            "Failed": 101
+          },
+          "start": "2026-10-15T14:23:39.043122279-04:00"
+        }
+      }
+    }
+  },
+  "verification": {
+    "changed_package_checks_and_actual_cli_stages": [
+      {
+        "command": [
+          "cargo",
+          "fmt",
+          "--check",
+          "-p",
+          "mantle"
+        ],
+        "cwd": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+        "elapsed_seconds": 5.767125149257481,
+        "end_utc": "2026-10-15T18:23:45.137411+00:00",
+        "exit": 0,
+        "log": {
+          "blake3": "b08619e763c990c0cd00589af7a6033605f204b5b32d9ffbda458b04ea91e430",
+          "bytes": 11612,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-root-fmt.log"
+        },
+        "smoke_helper_subjects_unchanged": true,
+        "source_subjects_unchanged": true,
+        "stage": "final-root-fmt",
+        "start_utc": "2026-10-15T18:23:39.125515+00:00",
+        "summary": {
+          "blake3": "d17d91d95caa97cbb024ce5044dd0bf753030b6feba8c4be12c7ac98ff223196",
+          "bytes": 7080,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-root-fmt-summary.json"
+        }
+      },
+      {
+        "command": [
+          "cargo",
+          "clippy",
+          "-p",
+          "mantle",
+          "--all-targets",
+          "--no-deps",
+          "--offline",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "cwd": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+        "elapsed_seconds": 146.03176452312618,
+        "end_utc": "2026-10-15T18:26:11.419069+00:00",
+        "exit": 0,
+        "log": {
+          "blake3": "5452a85647675c4fd7d652c374e87420033c14229c3ee47260e7980d57b9da1a",
+          "bytes": 36447,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-root-clippy.log"
+        },
+        "smoke_helper_subjects_unchanged": true,
+        "source_subjects_unchanged": true,
+        "stage": "final-root-clippy",
+        "start_utc": "2026-10-15T18:23:45.160833+00:00",
+        "summary": {
+          "blake3": "84edefe37ff08f8825eb27fac5db81767cba60960eb65c530195a1fdd5dd8148",
+          "bytes": 7166,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-root-clippy-summary.json"
+        }
+      },
+      {
+        "captured_test_results": {
+          "captured_explicit_skip_messages": [],
+          "captured_failed_names": [],
+          "captured_ignored_names": [],
+          "skip_visibility": "Ignored counts/names are exact captured harness output. Capability-gated early returns may hide stderr on successful tests; absence of skip messages is not proof that no such skips occurred.",
+          "suites": [
+            {
+              "exact_result_line": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 173 filtered out; finished in 174.50s",
+              "failed": 0,
+              "filtered_out": 173,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 1,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle-9dedf710d5702ca2)",
+              "verdict": "ok"
+            }
+          ],
+          "totals": {
+            "failed": 0,
+            "filtered_out": 173,
+            "ignored": 0,
+            "measured": 0,
+            "passed": 1
+          }
+        },
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "mantle",
+          "--offline",
+          "--lib",
+          "protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path",
+          "--",
+          "--exact",
+          "--test-threads=1"
+        ],
+        "cwd": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+        "elapsed_seconds": 397.32147201523185,
+        "end_utc": "2026-10-15T18:32:48.984983+00:00",
+        "exit": 0,
+        "log": {
+          "blake3": "385c225e132f991a19e61c5516aa4af5b0f59676e28bc076324eb2474b532d27",
+          "bytes": 36939,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-deep-descendant-test.log"
+        },
+        "smoke_helper_subjects_unchanged": true,
+        "source_subjects_unchanged": true,
+        "stage": "final-deep-descendant-test",
+        "start_utc": "2026-10-15T18:26:11.442345+00:00",
+        "summary": {
+          "blake3": "97406a7e81d59cae02f4b64a41b87fdc642fc3a13a5f2f80ee84404588c90500",
+          "bytes": 7266,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-deep-descendant-test-summary.json"
+        }
+      },
+      {
+        "captured_test_results": {
+          "captured_explicit_skip_messages": [],
+          "captured_failed_names": [],
+          "captured_ignored_names": [],
+          "skip_visibility": "Ignored counts/names are exact captured harness output. Capability-gated early returns may hide stderr on successful tests; absence of skip messages is not proof that no such skips occurred.",
+          "suites": [
+            {
+              "exact_result_line": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 173 filtered out; finished in 175.09s",
+              "failed": 0,
+              "filtered_out": 173,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 1,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle-9dedf710d5702ca2)",
+              "verdict": "ok"
+            }
+          ],
+          "totals": {
+            "failed": 0,
+            "filtered_out": 173,
+            "ignored": 0,
+            "measured": 0,
+            "passed": 1
+          }
+        },
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "mantle",
+          "--offline",
+          "--lib",
+          "protected_exec_seccomp::linux::tests::seccomp_supervisor_denies_orphan_exec_without_subreaper_adoption",
+          "--",
+          "--exact",
+          "--test-threads=1"
+        ],
+        "cwd": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+        "elapsed_seconds": 178.32507288176566,
+        "end_utc": "2026-10-15T18:35:47.544181+00:00",
+        "exit": 0,
+        "log": {
+          "blake3": "f1461743455bbcbd9f33d2f583b578a584d7093db742f2b379670333a05a9d14",
+          "bytes": 13063,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-negative-orphan-test.log"
+        },
+        "smoke_helper_subjects_unchanged": true,
+        "source_subjects_unchanged": true,
+        "stage": "final-negative-orphan-test",
+        "start_utc": "2026-10-15T18:32:49.007064+00:00",
+        "summary": {
+          "blake3": "b864476c938c830316af3477df080df34b903279c2eb8c886c6e43a7e6ccd4c1",
+          "bytes": 7280,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-negative-orphan-test-summary.json"
+        }
+      },
+      {
+        "command": [
+          "cargo",
+          "build",
+          "-p",
+          "mantle",
+          "--bin",
+          "mantle",
+          "--offline",
+          "--message-format=json-render-diagnostics"
+        ],
+        "cwd": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+        "elapsed_seconds": 114.28381870873272,
+        "end_utc": "2026-10-15T18:37:42.057804+00:00",
+        "exit": 0,
+        "log": {
+          "blake3": "492544bde9f5f6e796e6048f9ce4ff97536955b4c13b0dc8936ada70c48ed556",
+          "bytes": 785502,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-build.log"
+        },
+        "smoke_helper_subjects_unchanged": true,
+        "source_subjects_unchanged": true,
+        "stage": "final-candidate-cli-build",
+        "start_utc": "2026-10-15T18:35:47.563080+00:00",
+        "summary": {
+          "blake3": "bd315fa20146bb298137c106aafa32fb0b8ca6da13afdf25bcb06fd282c81471",
+          "bytes": 7183,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-build-summary.json"
+        }
+      },
+      {
+        "command": [
+          "cargo",
+          "build",
+          "--manifest-path",
+          "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/composition-cli-helper/Cargo.toml",
+          "--offline",
+          "--message-format=json-render-diagnostics"
+        ],
+        "cwd": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+        "elapsed_seconds": 206.88758774194866,
+        "end_utc": "2026-10-15T18:41:09.193094+00:00",
+        "exit": 0,
+        "log": {
+          "blake3": "188f484b1906da2b55c6ac573b5bc6ec49784bfec4f00deedf385c25f775a1b2",
+          "bytes": 540963,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-helper-build.log"
+        },
+        "smoke_helper_subjects_unchanged": true,
+        "source_subjects_unchanged": true,
+        "stage": "final-candidate-cli-helper-build",
+        "start_utc": "2026-10-15T18:37:42.081986+00:00",
+        "summary": {
+          "blake3": "6820b3de71d4941487dd8581f33d315ce81fdb2a749dfd4f2fd644c4498e2f9f",
+          "bytes": 7293,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-helper-build-summary.json"
+        }
+      },
+      {
+        "command": [
+          "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14",
+          "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/preserve-final-cli-executables.py"
+        ],
+        "cwd": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+        "elapsed_seconds": 4.926006435416639,
+        "end_utc": "2026-10-15T18:41:14.332733+00:00",
+        "exit": 0,
+        "log": {
+          "blake3": "038bd48b5183644619712e93d1909cbd05c1d0b8a6a7ce32c6b547071c7be6c1",
+          "bytes": 13440,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-preserve-cli-executables.log"
+        },
+        "smoke_helper_subjects_unchanged": true,
+        "source_subjects_unchanged": true,
+        "stage": "final-preserve-cli-executables",
+        "start_utc": "2026-10-15T18:41:09.216425+00:00",
+        "summary": {
+          "blake3": "1d2f774505a5be0892c40c3c09a5c9802647c667d1505c668969243c5f6416ad",
+          "bytes": 7254,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-preserve-cli-executables-summary.json"
+        }
+      },
+      {
+        "command": [
+          "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-bin/mantle-composition-cli-smoke",
+          "seed",
+          "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-realize-smoke/store",
+          "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-realize-smoke/state",
+          "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-realize-smoke"
+        ],
+        "cwd": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+        "elapsed_seconds": 0.16522645950317383,
+        "end_utc": "2026-10-15T18:41:14.711596+00:00",
+        "executable_subject": {
+          "built": {
+            "blake3": "cbbdf0efeca17a8b07f2310773cd766e087dc8e0a7f8b7f88e8ce389a9be7532",
+            "bytes": 629109960,
+            "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/mantle-composition-cli-smoke"
+          },
+          "retained": {
+            "blake3": "cbbdf0efeca17a8b07f2310773cd766e087dc8e0a7f8b7f88e8ce389a9be7532",
+            "bytes": 629109960,
+            "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-bin/mantle-composition-cli-smoke"
+          }
+        },
+        "executable_subject_stable": true,
+        "exit": 0,
+        "log": {
+          "blake3": "7c788c9f378298121c0c037a57ac20c4a08caec2140883175e8bbe7d2cdbbb5e",
+          "bytes": 14076,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-seed.log"
+        },
+        "smoke_helper_subjects_unchanged": true,
+        "source_subjects_unchanged": true,
+        "stage": "final-candidate-cli-seed",
+        "start_utc": "2026-10-15T18:41:14.353217+00:00",
+        "summary": {
+          "blake3": "c9e7ef9070bc5002fdd57f50c43e1ec41c4b629f9df6bdff3ca932daa27ba4d3",
+          "bytes": 8112,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-seed-summary.json"
+        }
+      },
+      {
+        "command": [
+          "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-bin/mantle",
+          "--json",
+          "--store",
+          "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-realize-smoke/store",
+          "--state-dir",
+          "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-realize-smoke/state",
+          "--store-prefix",
+          "/mantle/store",
+          "store",
+          "composition",
+          "realize",
+          "--from",
+          "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-realize-smoke/request.json",
+          "--receipt-out",
+          "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-realize-smoke/receipt.json"
+        ],
+        "cwd": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+        "elapsed_seconds": 0.1150999404489994,
+        "end_utc": "2026-10-15T18:41:15.051626+00:00",
+        "executable_subject": {
+          "built": {
+            "blake3": "1e7f18bae6c6eafa469a0deff7bf0edbc64dad7e56e32aee189aafa75709c1cd",
+            "bytes": 1555979232,
+            "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/mantle"
+          },
+          "retained": {
+            "blake3": "1e7f18bae6c6eafa469a0deff7bf0edbc64dad7e56e32aee189aafa75709c1cd",
+            "bytes": 1555979232,
+            "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-bin/mantle"
+          }
+        },
+        "executable_subject_stable": true,
+        "exit": 0,
+        "log": {
+          "blake3": "40c6fe88598949ee0b7b83773f5b9538f211080096c28fcb5ba9f27ac3d93e39",
+          "bytes": 15168,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-realize.log"
+        },
+        "smoke_helper_subjects_unchanged": true,
+        "source_subjects_unchanged": true,
+        "stage": "final-candidate-cli-realize",
+        "start_utc": "2026-10-15T18:41:14.730153+00:00",
+        "summary": {
+          "blake3": "bde84468dca85719cf6262d858c32a595bc9dff5c7058eb06f8ea8f3139656f4",
+          "bytes": 8354,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-realize-summary.json"
+        }
+      },
+      {
+        "command": [
+          "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-bin/mantle-composition-cli-smoke",
+          "inspect",
+          "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-realize-smoke/store",
+          "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-realize-smoke/state",
+          "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-realize-smoke"
+        ],
+        "cwd": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+        "elapsed_seconds": 0.11507747787982225,
+        "end_utc": "2026-10-15T18:41:15.389110+00:00",
+        "executable_subject": {
+          "built": {
+            "blake3": "cbbdf0efeca17a8b07f2310773cd766e087dc8e0a7f8b7f88e8ce389a9be7532",
+            "bytes": 629109960,
+            "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/mantle-composition-cli-smoke"
+          },
+          "retained": {
+            "blake3": "cbbdf0efeca17a8b07f2310773cd766e087dc8e0a7f8b7f88e8ce389a9be7532",
+            "bytes": 629109960,
+            "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-cli-bin/mantle-composition-cli-smoke"
+          }
+        },
+        "executable_subject_stable": true,
+        "exit": 0,
+        "log": {
+          "blake3": "e3fe5a50713f428affc6a77a0e3c77dc4e21ddc39fedd744ec35cf9600c0f15d",
+          "bytes": 15034,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-inspect.log"
+        },
+        "smoke_helper_subjects_unchanged": true,
+        "source_subjects_unchanged": true,
+        "stage": "final-candidate-cli-inspect",
+        "start_utc": "2026-10-15T18:41:15.070929+00:00",
+        "summary": {
+          "blake3": "8a79c3cfaf5ae817079a75a4c4c449ca5bdfb53227d6640296bbe549a83678cd",
+          "bytes": 8121,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-candidate-cli-inspect-summary.json"
+        }
+      },
+      {
+        "captured_test_results": {
+          "captured_explicit_skip_messages": [],
+          "captured_failed_names": [
+            "test cargo_import::tests::cargo_import_shell_rejects_non_utf8_workspace_roots ... FAILED",
+            "test oci_projection_shell::tests::frontend_cas_rejects_special_files_before_oci_projection ... FAILED",
+            "test source_root_capability::tests::host_probe_budget_rejects_an_observation_larger_than_real_subprocess_capacity ... FAILED"
+          ],
+          "captured_ignored_names": [
+            "test integration_tests::official_proof::reviewed_signed_java_apk_clean_rebuilds_and_perturbation ... ignored, explicit connected-prefetch and reviewed SDK/signed-runtime proof prerequisites",
+            "test pipeline_determinism_probe_fetcher_root ... ignored",
+            "test pipeline_determinism_probe_normal_derivation ... ignored",
+            "test pipeline_determinism_probe_self_build_friendly_path ... ignored",
+            "test pipeline_determinism_probe_strict_environment_override_blocker ... ignored",
+            "test elf_local_symbol_core::tests::retained_decimal_width_variants_converge ... ignored, requires two retained ELF objects whose decimal local-symbol widths differ",
+            "test release_chapter_transport::tests::representative_release_transport_benchmark ... ignored, representative release transport benchmark",
+            "test source_built_fixed_point_shell::tests::projects_and_imports_retained_stagex_transition_handoff ... ignored, requires retained completed StageX transition",
+            "test stagex_archive_core::tests::reports_canonical_retained_archive_identity ... ignored, requires one retained StageX archive",
+            "test stagex_archive_core::tests::retained_archive_width_variants_converge ... ignored, requires two retained StageX archives whose local-symbol widths differ",
+            "test stagex_bash::tests::derives_retained_bash_inventory ... ignored, requires retained bash source and TinyCC 0.9.27",
+            "test stagex_bash::tests::materializes_retained_bash_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_bash_full::tests::derives_retained_full_shell_inventory ... ignored, requires configured Bash source, TinyCC musl-v2, native musl, GNU Make, and create-new scratch",
+            "test stagex_bash_full::tests::generates_retained_full_builtin_sources ... ignored, requires configured Bash source, TinyCC musl-v2, native musl, and create-new scratch",
+            "test stagex_binutils::tests::builds_authenticated_binutils_components ... ignored, requires retained binutils source and protected tool roots",
+            "test stagex_binutils::tests::builds_authenticated_binutils_components_observing_identities ... ignored, derives canonical identities from retained binutils source and protected tool roots",
+            "test stagex_binutils::tests::configures_declared_matrix_with_regular_file_sed_bridge ... ignored, requires retained binutils source and protected tool roots",
+            "test stagex_binutils::tests::configures_intl_with_regular_file_sed_bridge ... ignored, requires retained binutils source and protected tool roots",
+            "test stagex_binutils::tests::generates_initial_sources_and_runs_second_bfd_configure ... ignored, requires retained binutils source and protected tool roots",
+            "test stagex_binutils::tests::materializes_retained_binutils_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_binutils::tests::observes_authenticated_binutils_exec_inventory ... ignored, requires retained binutils source and protected tool roots",
+            "test stagex_binutils::tests::smokes_authenticated_installed_tools ... ignored, requires a retained authenticated binutils install root",
+            "test stagex_bison::tests::derives_retained_bison_inventory ... ignored, requires retained GNU Bison source, TinyCC musl-v2, native musl, protected M4, and create-new scratch",
+            "test stagex_bison::tests::materializes_retained_bison_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_bzip2::tests::derives_retained_bzip2_inventory ... ignored, requires retained bzip2 source, GNU sed, and TinyCC 0.9.27",
+            "test stagex_bzip2::tests::materializes_retained_bzip2_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_coreutils::tests::derives_retained_coreutils_inventory ... ignored, requires retained coreutils source and TinyCC 0.9.27",
+            "test stagex_coreutils::tests::materializes_retained_coreutils_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_diffutils::tests::derives_retained_diffutils_inventory ... ignored, requires retained GNU diffutils source, TinyCC musl-v2, and native musl",
+            "test stagex_diffutils::tests::materializes_retained_diffutils_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_flex::tests::derives_retained_flex_inventory ... ignored, requires retained GNU Flex source, TinyCC musl-v2, native musl, protected M4, and create-new scratch",
+            "test stagex_flex::tests::materializes_retained_flex_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_gawk::tests::derives_retained_gawk_inventory ... ignored, requires retained GNU Gawk source, TinyCC musl-v2, native musl, and create-new scratch",
+            "test stagex_gawk::tests::materializes_retained_gawk_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_gnu_patch::tests::derives_retained_gnu_patch_inventory ... ignored, requires retained GNU patch source and TinyCC 0.9.27",
+            "test stagex_gnu_patch::tests::materializes_retained_gnu_patch_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_grep::tests::derives_retained_grep_inventory ... ignored, requires retained GNU grep source, TinyCC musl-v2, native musl, and create-new scratch",
+            "test stagex_grep::tests::materializes_retained_grep_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_gzip::tests::derives_retained_gzip_inventory ... ignored, requires retained gzip source and TinyCC 0.9.27",
+            "test stagex_gzip::tests::materializes_retained_gzip_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_m4::tests::derives_retained_m4_inventory ... ignored, requires retained GNU M4 source, TinyCC musl-v2, and native musl",
+            "test stagex_m4::tests::materializes_retained_m4_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_make::tests::applies_retained_make_source_patch ... ignored, requires explicit materialized GNU Make source and create-new scratch",
+            "test stagex_make::tests::derives_retained_make_inventory ... ignored, requires explicit GNU Make source, TinyCC 0.9.27 runtime, and create-new scratch",
+            "test stagex_make::tests::materializes_retained_make_source ... ignored, requires explicit authenticated source bundle and create-new scratch",
+            "test stagex_mes::tests::derives_retained_mes_m2_inventory ... ignored, requires explicit authenticated source bundle, full Stage0 tree, and create-new scratch",
+            "test stagex_mes_lib::tests::derives_retained_mes_runtime_inventory ... ignored, requires explicit Mes, NYACC, full Stage0, and create-new output roots",
+            "test stagex_mes_lib::tests::parses_retained_authenticated_mes_recipe ... ignored, requires an explicit authenticated Mes source root",
+            "test stagex_mes_sources::tests::materializes_retained_mes_sources ... ignored, requires explicit authenticated source bundle and create-new scratch",
+            "test stagex_musl::tests::derives_retained_musl_inventory ... ignored, requires retained musl source and TinyCC musl-prep",
+            "test stagex_musl::tests::derives_retained_musl_pass2_inventory ... ignored, requires retained musl source and musl-linked TinyCC",
+            "test stagex_musl::tests::materializes_retained_musl_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_musl_native::tests::derives_retained_native_musl_inventory ... ignored, requires retained authenticated musl source and protected TinyCC roots",
+            "test stagex_musl_native::tests::retained_native_object_width_variants_converge ... ignored, requires two retained native-musl object trees with different local-symbol widths",
+            "test stagex_oyacc::tests::derives_retained_oyacc_inventory ... ignored, requires retained oyacc source and TinyCC 0.9.27",
+            "test stagex_oyacc::tests::materializes_retained_oyacc_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_sed::tests::derives_retained_sed_inventory ... ignored, requires retained GNU sed source and TinyCC 0.9.27 runtime",
+            "test stagex_sed::tests::materializes_retained_sed_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_sources::tests::materializes_retained_authenticated_stagex_sources ... ignored, requires an explicitly authenticated retained source bundle and create-new scratch",
+            "test stagex_stage0::tests::derives_retained_stage0_mini_executable_inventory ... ignored, derives retained host-orchestrated inventory; not protected-transition evidence",
+            "test stagex_stage0_full::tests::derives_retained_full_stage0_inventory ... ignored, derives retained full Stage0 inventory; not protected-transition evidence",
+            "test stagex_tar::tests::derives_retained_tar_inventory ... ignored, requires retained GNU tar source and TinyCC 0.9.27",
+            "test stagex_tar::tests::materializes_retained_tar_source ... ignored, requires retained authenticated source bundle",
+            "test stagex_tcc_musl::tests::derives_retained_tcc_musl_inventory ... ignored, requires retained TinyCC source, musl-prep, and musl",
+            "test stagex_tcc_musl_prep::tests::derives_retained_tcc_musl_prep_inventory ... ignored, requires retained TinyCC 0.9.27 source and runtime",
+            "test stagex_tcc_musl_v2::tests::derives_retained_inventory ... ignored, requires retained StageX compiler and libc roots",
+            "test stagex_tcc_selfhost::tests::derives_retained_inventory ... ignored, requires retained protected TinyCC musl-v2, TinyCC 0.9.26, and musl pass2 roots",
+            "test stagex_tcc_selfhost::tests::retained_object_tree_width_variants_converge ... ignored, requires two retained TinyCC self-host object trees with different local-symbol widths",
+            "test stagex_tinycc27::tests::applies_retained_tinycc27_source_patch ... ignored, requires explicit materialized TinyCC 0.9.27 source and create-new scratch",
+            "test stagex_tinycc27::tests::derives_retained_tinycc27_inventory ... ignored, requires explicit TinyCC 0.9.27 source, Mes source, TinyCC 0.9.26 runtime, and create-new scratch",
+            "test stagex_tinycc27::tests::materializes_retained_tinycc27_source ... ignored, requires explicit authenticated source bundle and create-new scratch",
+            "test stagex_tinycc::tests::derives_retained_tcc_mes_inventory ... ignored, requires explicit TinyCC, Mes, Stage0, and create-new scratch inputs",
+            "test stagex_tinycc::tests::materializes_retained_tinycc_source ... ignored, requires explicit authenticated source bundle and create-new scratch"
+          ],
+          "skip_visibility": "Ignored counts/names are exact captured harness output. Capability-gated early returns may hide stderr on successful tests; absence of skip messages is not proof that no such skips occurred.",
+          "suites": [
+            {
+              "exact_result_line": "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 12,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_action_result_core-17f0bc1da12f7258)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 1,
+              "target": "Running tests/architecture.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/architecture-ebd0d00a46dbda82)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 6.15s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 1,
+              "measured": 0,
+              "passed": 4,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_android-5d4231e76041b2af)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 2,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_android_core-3ddd1dd7e7b1dd98)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 13,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_attestation-7cba95e0f0406ded)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 82 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 82,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_attestation_core-89bc6495552958cd)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 86 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 86,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_bootstrap_core-43c12557a2fb8a0a)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 728 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.83s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 728,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_build-3b45230b34e998e4)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 1,
+              "target": "Running tests/export_api.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/export_api-4fdb254da1322ed9)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 11,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_composition_core-9208bd9d8960f3c5)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 2,
+              "target": "Running tests/boundary.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/boundary-9b137dfe75d1c7a2)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.71s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 37,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_delta-e31c4e183713d217)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 7,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_delta_core-861573e003176e40)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 85 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.59s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 85,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_eval-dc24f32044e602ac)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 5,
+              "target": "Running tests/nickel_cohort_guard.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/nickel_cohort_guard-8b086529f53d818c)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 9,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_eval_budget_core-c3ae33cade1c21ae)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.19s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 18,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_evaluation_stream_core-bea58a43776e34dd)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 27,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_gc_core-44a116874433ed19)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 89 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 89,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_glue-a131a6ad415fabc8)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 10,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_hardware_simulation-62e144d92edeb36c)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 9,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_hardware_simulation_core-197c4c47d0322193)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 9,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_kernelscript_adapter-f5873ff99814ee42)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 0,
+              "target": "Running unittests src/main.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_kernelscript_core_adapter-69e89e2cff5e9e21)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 20,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_kernelscript_core-95b7c3ef3076eb25)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 6,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_nar-af413c79687b9af6)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 8,
+              "target": "Running tests/parity.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/parity-cfff2927ed443d84)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 8,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_overlay_core-5bfb24c9255ee4cb)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 31.48s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 49,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_pipeline-ae397a9f730e0649)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 19 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 17.74s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 4,
+              "measured": 0,
+              "passed": 19,
+              "target": "Running tests/integration_build.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/integration_build-6aab62cb1986a520)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 7,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_project-ee3dce852e798bdf)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 6,
+              "target": "Running tests/integration_nickel.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/integration_nickel-b426fb4022d27250)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 163 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 163,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_project_core-0aa6cbc3d55c3549)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 242 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 242,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_release_core-118585cef9aa1769)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 9,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_remote_app-f8c83e410ec529a1)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 76 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 76,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_remote_core-407b13758b0c11d7)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.04s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 1,
+              "target": "Running tests/authority.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/authority-bc02f4e77f6f2c9e)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 7,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_repair_core-40bb41c38f4b9877)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.57s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 28,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_rust_cache-909cb2a0659d9eba)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 26,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_rust_cache_core-e1106aa6dbc47ccd)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 1,
+              "target": "Running tests/architecture.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/architecture-5143f94083bf59f7)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.50s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 20,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_rustc_wrapper-a2e8cde778b39023)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 3,
+              "target": "Running unittests src/bin/mantle-rust-cache-daemon.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_rust_cache_daemon-769d554920259e05)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 2,
+              "target": "Running unittests src/bin/mantle-rustc-manifest.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_rustc_manifest-aa3752a7146249df)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 0,
+              "target": "Running unittests src/bin/mantle-rustc-wrapper.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_rustc_wrapper-41eea731fd1d246c)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 20,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_service_readiness_core-efc0c95a53385789)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 5,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_shell-0be35f721f67576b)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 24,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_shell_core-40d779e2e264e4de)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 1,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_source_core-6b01cb2e10dbfe1f)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 6,
+              "target": "Running tests/ingest_fixtures.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/ingest_fixtures-78a46a4d4797b78e)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 9,
+              "target": "Running tests/source_observation_fixtures.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/source_observation_fixtures-f3cb9703ee7ecf0a)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 8,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_spacewasm-95f57175a1a0dba7)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 0,
+              "target": "Running unittests src/main.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_spacewasm_reference-0466fbebb93c2cfa)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 8,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_spacewasm_core-a326ec5724af9d01)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 8,
+              "target": "Running tests/run_record_fixtures.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/run_record_fixtures-8249a191e81f0047)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 2,
+              "target": "Running tests/stable_report_contract_parity.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/stable_report_contract_parity-78f54cdd86d0b9d1)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 12,
+              "target": "Running tests/stable_report_fixtures.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/stable_report_fixtures-87214e67cf3e34f4)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 432 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 530.57s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 432,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_store-17436bce86a542ca)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 2,
+              "target": "Running tests/authority_source_policy.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/authority_source_policy-0d84628586a5fdfe)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 15,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_wasm_component-ab19d6fae2769642)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 36,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_wasm_component_core-1c681eca8c42cf14)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 14,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_watch_core-0fa09c48e45533e7)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: ok. 174 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1831.11s",
+              "failed": 0,
+              "filtered_out": 0,
+              "ignored": 0,
+              "measured": 0,
+              "passed": 174,
+              "target": "Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle-9dedf710d5702ca2)",
+              "verdict": "ok"
+            },
+            {
+              "exact_result_line": "test result: FAILED. 2602 passed; 3 failed; 68 ignored; 0 measured; 0 filtered out; finished in 3838.50s",
+              "failed": 3,
+              "filtered_out": 0,
+              "ignored": 68,
+              "measured": 0,
+              "passed": 2602,
+              "target": "Running unittests src/main.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch-114ae034e142f532)",
+              "verdict": "FAILED"
+            }
+          ],
+          "totals": {
+            "failed": 3,
+            "filtered_out": 0,
+            "ignored": 73,
+            "measured": 0,
+            "passed": 5326
+          }
+        },
+        "command": [
+          "bash",
+          "-c",
+          "set -euo pipefail; source scripts/quality-gate-common.sh; cargo_test_workspace_lib_tests"
+        ],
+        "cwd": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/source",
+        "elapsed_seconds": 6423.62369330693,
+        "end_utc": "2026-10-15T20:28:19.265166+00:00",
+        "exit": 101,
+        "log": {
+          "blake3": "b586a83aaaf4c1445e5402f09aa61cf6c339942939c413f4eb4826aa9c6e34bf",
+          "bytes": 731738,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-workspace-tests.log"
+        },
+        "smoke_helper_subjects_unchanged": true,
+        "source_subjects_unchanged": true,
+        "stage": "final-workspace-tests",
+        "start_utc": "2026-10-15T18:41:15.406731+00:00",
+        "summary": {
+          "blake3": "1b3ad18df26393be15853a9d6c806006356cad1176fb6ca127ec4c5889417d56",
+          "bytes": 7151,
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-workspace-tests-summary.json"
+        }
+      }
+    ],
+    "composition_outside_formatter_selection": {
+      "blake3": "2a82f18e6ade25078e74e95c4ed5e51465f744078505cb520db7a312b004f160",
+      "bytes": 866,
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/candidate-core-package-fmt-summary.json"
+    },
+    "ordinary_quality_gate_passed": false,
+    "ordinary_tests_do_not_replay_signed_build_script_proofs": true,
+    "ordinary_workspace_exit": 101,
+    "reused_unchanged": [
+      "candidate-fmt exit0",
+      "candidate-clippy exit0"
+    ],
+    "workspace_remaining_targets_not_proved": true
+  }
+}

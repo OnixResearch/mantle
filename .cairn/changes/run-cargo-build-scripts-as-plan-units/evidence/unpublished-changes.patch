@@ -1,0 +1,232 @@
+--- a/crates/crunch-composition-core/src/lib.rs
++++ b/crates/crunch-composition-core/src/lib.rs
+@@ -340,7 +340,6 @@
+ ) -> Result<CompositionOutcome, CompositionError> {
+     debug_assert!(!prepared.bindings.is_empty());
+     let snapshots_by_root = index_snapshots(prepared, snapshots)?;
+-    debug_assert_eq!(snapshots_by_root.len(), prepared.bindings.len());
+     let mut usage = LimitUsage {
+         bindings: count_u32(prepared.bindings.len(), "bindings")?,
+         collision_decisions: count_u32(prepared.collision_decisions.len(), "collision-decisions")?,
+@@ -566,8 +565,8 @@
+ ) -> Result<BTreeMap<CastoreRootRef, RootSnapshot>, CompositionError> {
+     debug_assert!(!prepared.bindings.is_empty());
+     let expected = prepared.bindings.iter().map(|binding| binding.root.clone()).collect::<BTreeSet<_>>();
++    let expected_root_count = expected.len();
+     let mut indexed = BTreeMap::new();
+-    debug_assert!(snapshots.len() >= expected.len());
+     for snapshot in snapshots {
+         validate_root_ref(&snapshot.root)?;
+         if !expected.contains(&snapshot.root) {
+@@ -583,6 +582,7 @@
+             return Err(CompositionError::MissingSnapshot(root.digest_blake3));
+         }
+     }
++    debug_assert_eq!(indexed.len(), expected_root_count);
+     Ok(indexed)
+ }
+ 
+@@ -1076,6 +1076,20 @@
+     }
+ 
+     #[test]
++    fn one_snapshot_supports_distinct_mounts_of_the_same_root() {
++        let prepared = prepare_composition(&request(vec![
++            binding(ROOT_A_HEX, "first", "first mount"),
++            binding(ROOT_A_HEX, "second", "second mount"),
++        ]))
++        .unwrap();
++        let tree = directory(&[("payload", file(FILE_A_HEX))]);
++        let outcome = plan_composition(&prepared, vec![snapshot(ROOT_A_HEX, tree.clone())]).unwrap();
++
++        assert_eq!(outcome.root, directory(&[("first", tree.clone()), ("second", tree)]));
++        assert_eq!(outcome.limit_usage.bindings, 2);
++    }
++
++    #[test]
+     fn identical_leaves_deduplicate() {
+         let prepared =
+             prepare_composition(&request(vec![binding(ROOT_A_HEX, "", "a"), binding(ROOT_B_HEX, "", "b")])).unwrap();
+--- a/crates/crunch-store/src/handle.rs
++++ b/crates/crunch-store/src/handle.rs
+@@ -7417,11 +7417,7 @@
+         })
+         .await;
+ 
+-        let error = match result {
+-            Ok(_) => panic!("prefix mismatch must fail before overlay services open"),
+-            Err(error) => error,
+-        };
+-        assert!(error.to_string().contains("PrefixMismatch"));
++        assert!(result.is_err(), "prefix mismatch must fail before overlay services open");
+         assert!(!overlay_dir.path().join("pathinfo.redb").exists());
+     }
+ 
+--- a/src/protected_exec_seccomp.rs
++++ b/src/protected_exec_seccomp.rs
+@@ -943,6 +943,7 @@
+         use crate::protected_exec::Stage0Inventory;
+ 
+         const CHILD_MODE_VAR: &str = "CRUNCH_TEST_SECCOMP_CHILD_MODE";
++        const DEEP_LEAF_PATH_VAR: &str = "CRUNCH_TEST_SECCOMP_DEEP_LEAF_PATH";
+         const LISTENER_ISOLATION_CHILD_MODE: &str = "listener-isolation";
+         const FRESH_LISTENER_WORKER_COUNT: usize = 2;
+         const _: () = assert!(FRESH_LISTENER_WORKER_COUNT > 1);
+@@ -1199,7 +1200,7 @@
+                     return;
+                 }
+                 Some("orphan-without-subreaper-middle") => {
+-                    run_deep_middle_child();
++                    run_deep_middle_child(&std::env::current_exe().unwrap());
+                     return;
+                 }
+                 _ => {}
+@@ -1229,7 +1230,8 @@
+                     return;
+                 }
+                 Some("deep-middle") => {
+-                    run_deep_middle_child();
++                    let leaf = std::env::var_os(DEEP_LEAF_PATH_VAR).expect("parent-admitted leaf path is required");
++                    run_deep_middle_child(Path::new(&leaf));
+                     return;
+                 }
+                 _ => {}
+@@ -1495,12 +1497,24 @@
+         fn run_deep_parent_child() {
+             let current_exe = std::env::current_exe().unwrap();
+             let digest_hex = blake3_file_hex(&current_exe).unwrap();
+-            let supervisor = install_current_thread_exec_supervisor(current_exe_policy(digest_hex)).unwrap();
++            // Bound orphan authorization work independently of the libtest binary's debug size.
++            let leaf_executable = find_test_executable("true");
++            let leaf_digest = blake3_file_hex(&leaf_executable).unwrap();
++            let inventory = Stage0Inventory {
++                executable_entries: vec![
++                    seed_entry("sandbox-entry", "sandbox-entry", &current_exe, digest_hex, true),
++                    seed_entry("sandbox-shell", "sandbox-shell", &leaf_executable, leaf_digest, true),
++                ],
++                source_entries: Vec::new(),
++            };
++            let policy = ProtectedExecPolicy::from_inventory(inventory).unwrap();
++            let supervisor = install_current_thread_exec_supervisor(policy).unwrap();
+             let status = Command::new(&current_exe)
+                 .arg("--exact")
+                 .arg("protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path")
+                 .arg("--nocapture")
+                 .env(CHILD_MODE_VAR, "deep-middle")
++                .env(DEEP_LEAF_PATH_VAR, &leaf_executable)
+                 .status()
+                 .unwrap();
+             let reaped_count = reap_adopted_exec_descendants().unwrap();
+@@ -1510,17 +1524,33 @@
+             assert_eq!(reaped_count, 1);
+             assert_eq!(events.len(), 2);
+             assert!(events.iter().all(|event| event.policy_decision == "allowed"));
+-        }
+-
+-        fn run_deep_middle_child() {
+-            let current_exe = std::env::current_exe().unwrap();
++            assert_eq!(events[0].executable_path, current_exe);
++            assert_eq!(events[1].executable_path, leaf_executable);
++            assert_eq!(events[1].inventory_entry_id.as_deref(), Some("sandbox-shell"));
++        }
++
++        fn find_test_executable(name: &str) -> std::path::PathBuf {
++            assert!(!name.is_empty(), "test executable name must not be empty");
++            let path = std::env::var_os("PATH").unwrap();
++            for directory in std::env::split_paths(&path) {
++                let candidate = directory.join(name);
++                if candidate.is_file() {
++                    let executable = std::fs::canonicalize(candidate).unwrap();
++                    assert!(executable.is_absolute(), "canonical test executable must be absolute");
++                    return executable;
++                }
++            }
++            panic!("test executable is absent: {name}");
++        }
++
++        fn run_deep_middle_child(executable: &Path) {
+             let pid = unsafe { libc::fork() };
+             assert!(pid >= 0, "fork failed: {}", std::io::Error::last_os_error());
+             if pid == 0 {
+                 unsafe {
+                     libc::usleep(ORPHAN_EXEC_DELAY_US);
+                 }
+-                execve_current_exe_help(&current_exe);
++                execve_executable_help(executable);
+             }
+         }
+ 
+@@ -1647,11 +1677,10 @@
+             }
+         }
+ 
+-        fn execve_current_exe_help(current_exe: &Path) -> ! {
+-            let path = CString::new(current_exe.as_os_str().as_encoded_bytes()).unwrap();
+-            let argv0 = CString::new("crunch-seccomp-test").unwrap();
++        fn execve_executable_help(executable: &Path) -> ! {
++            let path = CString::new(executable.as_os_str().as_encoded_bytes()).unwrap();
+             let arg_help = CString::new("--help").unwrap();
+-            let argv = [argv0.as_ptr(), arg_help.as_ptr(), std::ptr::null()];
++            let argv = [path.as_ptr(), arg_help.as_ptr(), std::ptr::null()];
+             let envp = [std::ptr::null::<libc::c_char>()];
+             unsafe {
+                 libc::execve(path.as_ptr(), argv.as_ptr(), envp.as_ptr());
+--- a/docs/composition-roots.md
++++ b/docs/composition-roots.md
+@@ -28,6 +28,8 @@
+ - `realization_policy` uses schema `mantle-composition-policy-v1`.
+ 
+ Each binding contains an exact castore directory digest and size, a normalized relative mount, and an optional input label. An empty mount means the composition root. Mantle derives `binding_ref` from the root and mount. It discards labels before it emits the normalized plan.
++
++Bindings may reuse the same exact root at distinct mounts. Each mount still counts as one binding against the policy bound; repeating the same root and mount remains a duplicate binding. The pure planner API requires one snapshot per distinct root, not one per binding. A missing expected snapshot returns `MissingSnapshot`; malformed, unexpected, and duplicate snapshots retain their validation errors.
+ 
+ A collision decision contains an exact logical path and the winning derived `binding_ref`. Binding order is not precedence.
+ 
+--- /dev/null
++++ b/docs/release-notes/composition-snapshot-invariants-2026-10-15.md
+@@ -0,0 +1,45 @@
++# Composition snapshot invariants and ordinary regression fixtures
++
++## Composition snapshots
++
++The composition planner now indexes snapshots by distinct exact input root before
++checking its postcondition. A missing expected root returns the existing typed
++`MissingSnapshot` error rather than tripping a debug-only snapshot-count assertion.
++Malformed root references, unexpected roots, and duplicate snapshots retain their
++existing validation precedence.
++
++One snapshot can supply the same root at multiple distinct mounts. Each mounted
++binding still counts toward the binding limit. An exact duplicate root-and-mount
++binding is still rejected. The regression checks the complete two-mount tree and
++its binding count. No public composition signature, error variant, identity rule,
++or store-loading policy changes.
++
++## Ordinary regression fixtures
++
++The store-prefix admission regression asserts rejection before overlay database
++creation, rather than matching incidental error-display wording.
++
++The Linux deep-descendant seccomp regression retains real double-fork/orphan
++adoption, one reaped adopted descendant, and exactly two allowed audit events.
++Its orphan leaf is a real small native executable, resolved and canonicalized by
++the parent, content-bound before supervision, and passed explicitly through the
++middle subprocess. The no-subreaper negative scenario retains its explicit
++self-executable leaf and denial behavior. Production policy, the 30-second reap
++deadline, reaper behavior, and compilation profiles are unchanged. Dependency
++pins and configuration are unchanged; the standalone smoke helper seeds its own
++scratch lock from the existing product lock for offline vendored resolution.
++
++## Evidence boundary
++
++Final-source focused security checks and frozen actual CLI composition
++realization/readback succeeded. The captured ordinary workspace command then
++failed in three additional regressions: non-UTF-8 Cargo-import rejection,
++frontend-CAS special-file rejection, and host-probe capacity. Remaining selected
++workspace targets were not completed. This packet is not an all-green ordinary
++quality gate or task-completion claim.
++
++Results are bounded to their recorded candidate source and executable subjects.
++They do not replay signed build-script proofs, establish full Cargo compatibility,
++prove compiler correctness or global reproducibility, or authorize boot,
++deployment, release, canonical publication, or lifecycle acceptance. Historical
++failures and pre-review receipts remain distinct from final-source verification.

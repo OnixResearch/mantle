@@ -1,0 +1,25 @@
+Bounded negative is NOT accepted: no typed native-input-role-undeclared result. Pueue1012 failed after 1,000-second build timeout; guard1013 succeeded and owned PGID2547139 was subsequently absent. Same-client physical C archive is independently verified in current-client-real-sandbox-2026-10-13.txt.
+
+=== missing-config-admit.log (verbatim) ===
+/tmp/mantle-unit-plan-20261013-87lqAtNv/gcroots/missing-config
+added 1 signatures
+checking '/nix/store/5kidg47q3wgkf27xf330m3bshmyvl9mx-mantle-unit-plan-config-missing-87lq'...
+copying 1 paths...
+copying path '/nix/store/5kidg47q3wgkf27xf330m3bshmyvl9mx-mantle-unit-plan-config-missing-87lq' to 'file:///tmp/mantle-unit-plan-20261013-87lqAtNv/current-signed-cache'...
+verified-signed-admission cache=current-signed-cache imported=1 already_present=0 expected=1 rejected=0 nar_bytes=1560
+signed-missing-native-config=/nix/store/5kidg47q3wgkf27xf330m3bshmyvl9mx-mantle-unit-plan-config-missing-87lq
+
+=== client-missing-config-pull.log (verbatim) ===
+PULL 5kidg47q3wgkf27xf330m3bshmyvl9mx-mantle-unit-plan-config-missing-87lq
+imported=1 skipped_present=0 skipped_untrusted=0 skipped_hash_mismatch=0 skipped_missing_nar=0 skipped_parse_error=0 nar_bytes=1560
+
+=== client-missing-config-verify.log (verbatim) ===
+OK 5kidg47q3wgkf27xf330m3bshmyvl9mx-mantle-unit-plan-config-missing-87lq  trusted_signatures=1/1
+1 checked, 0 mismatches
+
+=== missing-native-negative-build.log (verbatim) ===
+timeout: sending signal TERM to command ‘/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/mantle’
+
+=== missing-native-negative-summary.log (verbatim) ===
+missing-native-control-timed-out=124
+

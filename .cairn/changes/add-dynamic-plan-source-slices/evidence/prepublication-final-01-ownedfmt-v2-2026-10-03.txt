@@ -1,0 +1,17 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-build)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 00s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/mantle-v2-prepublication-repair-20261003/debug/deps/crunch_build-ef88f8fb519966e3)
+
+running 6 tests
+test worker::tests::native_v2_goal_capacity_rejects_before_slice_publication ... ok
+test worker::tests::native_v2_late_unit_failure_keeps_slices_unpublished ... ok
+test worker::tests::native_v2_slice_aggregate_byte_limit_preserves_scheduler_and_publication ... ok
+test worker::tests::native_v2_slice_failure_leaves_store_registry_goals_scheduler_and_report_unadmitted ... ok
+test worker::tests::native_v2_slice_publication_survives_two_producer_reruns ... ok
+test worker::tests::native_v2_staged_ca_multioutput_uses_realized_dev_output ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 722 filtered out; finished in 0.45s
+

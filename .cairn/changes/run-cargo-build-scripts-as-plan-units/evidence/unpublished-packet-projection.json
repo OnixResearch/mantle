@@ -1,0 +1,166 @@
+{
+  "actual_paths": {
+    "first/payload": "candidate shared-root payload\n",
+    "second/payload": "candidate shared-root payload\n"
+  },
+  "atomic_publication_budget": {
+    "all_other_artifacts_remote_only": true,
+    "allocation_unit_bytes": 131072,
+    "allocation_unit_observation": "Canonical checkout: stat -f -c %S . returned131072; no free-space check rerun.",
+    "atomic_staging_rounded_bytes": 917504,
+    "bounded_metadata_exports": 3,
+    "bounded_metadata_reserve_bytes": 3145728,
+    "canonical_publication": false,
+    "carrier_destination_policy": "Only these exact basenames are budgeted for a future operator-owned local staging directory. No local destination directory is selected or authorized; any chosen parent must already exist and pass the live guard.",
+    "changed_docs_files": 2,
+    "changed_rust_files": 3,
+    "copied_canonical_preimages": 4,
+    "formula": "Sum individually allocation-unit-rounded final staging files, full copied preimages and unpublished-changes.patch, plus1MiB each for exactly unpublished-packet.json, unpublished-packet-ref.json and unpublished-packet-projection.json. One new inode per reserved file. All destination parent directories must already exist; all unlisted evidence remains remote-only.",
+    "fresh_headroom_or_publication_guard_pass": false,
+    "guard_requirement": "Historical zero-byte/zero-inode observation remains blocking; no in-place rewrite, cleanup or guard bypass. Live guard must also validate exact preimages, modes, absent new target and parent directories; this accounting is not publication admission.",
+    "local_staging_carrier_destination_basenames": [
+      "unpublished-changes.patch",
+      "unpublished-packet.json",
+      "unpublished-packet-ref.json",
+      "unpublished-packet-projection.json"
+    ],
+    "metadata_export_destination_basenames": [
+      "unpublished-packet.json",
+      "unpublished-packet-ref.json",
+      "unpublished-packet-projection.json"
+    ],
+    "metadata_export_limit_bytes_each": 1048576,
+    "patch_files": 1,
+    "patch_rounded_bytes": 131072,
+    "product_destination_inventory": [
+      "crates/crunch-composition-core/src/lib.rs",
+      "crates/crunch-store/src/handle.rs",
+      "src/protected_exec_seccomp.rs",
+      "docs/composition-roots.md",
+      "docs/release-notes/composition-snapshot-invariants-2026-10-15.md"
+    ],
+    "publication_authorized": false,
+    "remote_only_inventory_policy": "Every artifact outside the five named product targets and four named staging carriers stays remote-only. This includes canonical-preimages-projection.json, atomic-publication-budget.json, all full base/preimage/source mirrors, raw logs, frozen executables, helper source/locks, pin-comparison and transition receipts. Exporting any additional artifact requires a new explicit inventory and budget.",
+    "required_available_bytes": 4980736,
+    "required_available_inodes": 13,
+    "rollback_copy_rounded_bytes": 786432,
+    "schema": "mantle-t45-five-file-atomic-publication-budget-v1",
+    "staged_target_files": 5,
+    "unrounded_preimage_bytes": 469916,
+    "unrounded_product_payload_bytes": 475045
+  },
+  "atomic_publication_budget_identity": {
+    "blake3": "e2457a3bfae6601b13f1d08b7e515bcbeaa7e7e7e1a9c5dedf2a5012c32b0cf5",
+    "bytes": 2884,
+    "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/atomic-publication-budget.json"
+  },
+  "bindings": 2,
+  "canonical_preimages_projection": {
+    "blake3": "adfc429674bf7fba539d23eb9be15c2e5051140ed40278a68a93ba0db709c74a",
+    "bytes": 5298,
+    "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/canonical-preimages-projection.json"
+  },
+  "canonical_publication": false,
+  "changed_files": [
+    "crates/crunch-composition-core/src/lib.rs",
+    "crates/crunch-store/src/handle.rs",
+    "src/protected_exec_seccomp.rs",
+    "docs/composition-roots.md",
+    "docs/release-notes/composition-snapshot-invariants-2026-10-15.md"
+  ],
+  "final_security_fixture_blake3": "aea40af67b5d3f90513851f562bb5d347ce8cd00500302d13a081e84af6b778e",
+  "input_root_count": 1,
+  "manifest": {
+    "blake3": "7400ce06b6562b56f95260e8b249f6d3d44493406b45f388491c60840b482500",
+    "bytes": 173937,
+    "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/unpublished-packet.json"
+  },
+  "ordinary_quality_gate_passed": false,
+  "ordinary_workspace_exit": 101,
+  "original_devshell_deferred": true,
+  "packet_ref": "mantle-t45-unpublished-packet://blake3/7400ce06b6562b56f95260e8b249f6d3d44493406b45f388491c60840b482500",
+  "publication_authorized": false,
+  "receipt_ref": "mantle-composition-receipt://blake3/eade809240e46d6f81f1a1ca7dc13aa28974702c3bc4ba8c55ce7b1467dafee8",
+  "schema": "mantle-t45-unpublished-packet-projection-v1",
+  "stages": [
+    {
+      "counts": null,
+      "exit": 0,
+      "name": "final-root-fmt"
+    },
+    {
+      "counts": null,
+      "exit": 0,
+      "name": "final-root-clippy"
+    },
+    {
+      "counts": {
+        "failed": 0,
+        "filtered_out": 173,
+        "ignored": 0,
+        "measured": 0,
+        "passed": 1
+      },
+      "exit": 0,
+      "name": "final-deep-descendant-test"
+    },
+    {
+      "counts": {
+        "failed": 0,
+        "filtered_out": 173,
+        "ignored": 0,
+        "measured": 0,
+        "passed": 1
+      },
+      "exit": 0,
+      "name": "final-negative-orphan-test"
+    },
+    {
+      "counts": null,
+      "exit": 0,
+      "name": "final-candidate-cli-build"
+    },
+    {
+      "counts": null,
+      "exit": 0,
+      "name": "final-candidate-cli-helper-build"
+    },
+    {
+      "counts": null,
+      "exit": 0,
+      "name": "final-preserve-cli-executables"
+    },
+    {
+      "counts": null,
+      "exit": 0,
+      "name": "final-candidate-cli-seed"
+    },
+    {
+      "counts": null,
+      "exit": 0,
+      "name": "final-candidate-cli-realize"
+    },
+    {
+      "counts": null,
+      "exit": 0,
+      "name": "final-candidate-cli-inspect"
+    },
+    {
+      "counts": {
+        "failed": 3,
+        "filtered_out": 0,
+        "ignored": 73,
+        "measured": 0,
+        "passed": 5326
+      },
+      "exit": 101,
+      "name": "final-workspace-tests"
+    }
+  ],
+  "workspace_all_selected_targets_completed": false,
+  "workspace_failed_test_lines": [
+    "test cargo_import::tests::cargo_import_shell_rejects_non_utf8_workspace_roots ... FAILED",
+    "test oci_projection_shell::tests::frontend_cas_rejects_special_files_before_oci_projection ... FAILED",
+    "test source_root_capability::tests::host_probe_budget_rejects_an_observation_larger_than_real_subprocess_capacity ... FAILED"
+  ]
+}

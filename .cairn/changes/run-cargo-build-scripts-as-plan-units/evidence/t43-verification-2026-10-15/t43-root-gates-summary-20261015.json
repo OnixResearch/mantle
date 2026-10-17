@@ -1,0 +1,386 @@
+{
+  "schema": "mantle-t43-fresh-gates-v1",
+  "start_utc": "2026-10-15T01:17:26.427872+00:00",
+  "cwd": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+  "env_overrides": {
+    "PATH": "/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin:/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin:/nix/store/x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44/bin:/nix/store/0v0raqk1qw5g2a21km4xa1hwhaq4s976-pkg-config-wrapper-0.29.2/bin:/nix/store/lqndphylsxqwbwm804n473pb4sqb98sh-bubblewrap-0.11.2/bin:/run/wrappers/bin:/guix/current/bin:/home/brittonr/.guix-home/profile/bin:/home/brittonr/.guix-profile/bin:/home/brittonr/.nix-profile/bin:/nix/profile/bin:/home/brittonr/.local/state/nix/profile/bin:/etc/profiles/per-user/brittonr/bin:/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin",
+    "RUSTC": "/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/rustc",
+    "RUSTFLAGS": "-C link-arg=-Wl,--allow-multiple-definition",
+    "CARGO_HOME": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cargo-home",
+    "CARGO_TARGET_DIR": "/tmp/mantle-unit-plan-20261013-87lqAtNv/target",
+    "TMPDIR": "/tmp/mantle-unit-plan-20261013-87lqAtNv/tmp/t43-root-gates-20261015",
+    "KACHE_CACHE_DIR": "/tmp/mantle-unit-plan-20261013-87lqAtNv/kache",
+    "SNIX_BUILD_SANDBOX_SHELL": "/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox",
+    "SNIX_BUILD_BWRAP": "/nix/store/lqndphylsxqwbwm804n473pb4sqb98sh-bubblewrap-0.11.2/bin/bwrap",
+    "CRUNCH_NO_FUSE": "1",
+    "PKG_CONFIG_PATH": "/nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/lib/pkgconfig",
+    "CARGO_TERM_COLOR": "never"
+  },
+  "inputs_before_format": [
+    {
+      "path": "tests/rust_compatibility_rail.rs",
+      "bytes": 13544,
+      "sha256": "fa563e76acaf0e91a20fcc8aa3708c10bcfdd8706e5af58ce54877fc5bb85263"
+    },
+    {
+      "path": "tests/examples_inventory.rs",
+      "bytes": 35335,
+      "sha256": "3a40123cf98a7b42e75f8c29dcc5b1f06486bc3dad7af4b1f51c0080481509dd"
+    },
+    {
+      "path": "examples/rust_compatibility_rail.rs",
+      "bytes": 1040,
+      "sha256": "42c649871e7e87db0cf2b92c5a42aa99d26d1544c436fc61cd8f4da2f1823bd1"
+    },
+    {
+      "path": "crates/mantle-cargo-unit-plan/tests/helper.rs",
+      "bytes": 20761,
+      "sha256": "5102b381238f4508f823a466844d13fce4838bace0d7db8adb9f366485c9bf7c"
+    },
+    {
+      "path": "examples/rust_compatibility_surface_matrix.ncl",
+      "bytes": 11293,
+      "sha256": "48cb3760460d3ad7e66d00d8d1cce688649a431cf679a186f53a52d9a114f2c0"
+    },
+    {
+      "path": "examples/catalog.ncl",
+      "bytes": 47542,
+      "sha256": "1b4a9c95c6d752dd4fb925126126b5e1b8318cfa5db67c059f11238839d0ef37"
+    },
+    {
+      "path": "examples/README.md",
+      "bytes": 27644,
+      "sha256": "d2cdcfc74f482ca0435d59a31bcd5c1d3ef004a897b43fc4ffb1676eb60f3bd5"
+    },
+    {
+      "path": "README.md",
+      "bytes": 41226,
+      "sha256": "867409686c9983cb5ba327dd5dd85002926205a1429a311206e46347ab4bd6e9"
+    },
+    {
+      "path": "docs/operator-workflows.md",
+      "bytes": 90194,
+      "sha256": "35bf3fd20d5700beb64a8d6c479f59a88cde6325c0f0c3e0b38408dcf3da14f0"
+    },
+    {
+      "path": "docs/release-notes/cargo-build-script-units-2026-10-15.md",
+      "bytes": 2145,
+      "sha256": "9c848165816073498296e25d45a16c22beea5b4fe0b5c0a5a9b98b26f226d496"
+    },
+    {
+      "path": "rustfmt.toml",
+      "bytes": 386,
+      "sha256": "31102c8b15867ea528a139caf7accfe52f1586fb441dc1b2d31d4bbbba41f7e6"
+    },
+    {
+      "path": ".cargo/vendor-config.toml",
+      "bytes": 2008,
+      "sha256": "41a88a4ed2b7570b990b9f8163ce8de47077b1792effcf997daef53b6b7d9182"
+    }
+  ],
+  "steps": [
+    {
+      "name": "format",
+      "command": [
+        "/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/rustfmt",
+        "--config-path",
+        "/tmp/mantle-unit-plan-20261013-87lqAtNv/source/rustfmt.toml",
+        "tests/rust_compatibility_rail.rs",
+        "tests/examples_inventory.rs",
+        "examples/rust_compatibility_rail.rs",
+        "crates/mantle-cargo-unit-plan/tests/helper.rs"
+      ],
+      "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-format-20261015.log",
+      "timeout_seconds": 120,
+      "start_utc": "2026-10-15T01:17:26.430276+00:00",
+      "preflight": {
+        "observed_utc": "2026-10-15T01:17:26.430284+00:00",
+        "root": {
+          "available_bytes": 353194434560,
+          "available_inodes": 210498489
+        },
+        "home": {
+          "available_bytes": 353194434560,
+          "available_inodes": 210498489
+        }
+      },
+      "end_utc": "2026-10-15T01:17:26.495053+00:00",
+      "elapsed_seconds": 0.06472310423851013,
+      "exit": 0,
+      "postflight": {
+        "observed_utc": "2026-10-15T01:17:26.495068+00:00",
+        "root": {
+          "available_bytes": 353194430464,
+          "available_inodes": 210498488
+        },
+        "home": {
+          "available_bytes": 353194430464,
+          "available_inodes": 210498488
+        }
+      },
+      "bytes": 1673,
+      "sha256": "2d4d933f4e6ecc7f612c287b7407c53180653108b98ff27e28f884daa1b03642"
+    },
+    {
+      "name": "format-check",
+      "command": [
+        "/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/rustfmt",
+        "--check",
+        "--config-path",
+        "/tmp/mantle-unit-plan-20261013-87lqAtNv/source/rustfmt.toml",
+        "tests/rust_compatibility_rail.rs",
+        "tests/examples_inventory.rs",
+        "examples/rust_compatibility_rail.rs",
+        "crates/mantle-cargo-unit-plan/tests/helper.rs"
+      ],
+      "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-format-check-20261015.log",
+      "timeout_seconds": 120,
+      "start_utc": "2026-10-15T01:17:26.496386+00:00",
+      "preflight": {
+        "observed_utc": "2026-10-15T01:17:26.496394+00:00",
+        "root": {
+          "available_bytes": 353194418176,
+          "available_inodes": 210498487
+        },
+        "home": {
+          "available_bytes": 353194418176,
+          "available_inodes": 210498487
+        }
+      },
+      "end_utc": "2026-10-15T01:17:26.561142+00:00",
+      "elapsed_seconds": 0.06471558008342981,
+      "exit": 0,
+      "postflight": {
+        "observed_utc": "2026-10-15T01:17:26.561160+00:00",
+        "root": {
+          "available_bytes": 353194414080,
+          "available_inodes": 210498486
+        },
+        "home": {
+          "available_bytes": 353194414080,
+          "available_inodes": 210498486
+        }
+      },
+      "bytes": 1704,
+      "sha256": "5314b126131f688880996bf94e9be26a27378d2c4ab854ab2666483dc139cfd0"
+    },
+    {
+      "name": "rail-inventory",
+      "command": [
+        "/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo",
+        "--config",
+        ".cargo/vendor-config.toml",
+        "--config",
+        "target.x86_64-unknown-linux-gnu.linker=\"/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc\"",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "--test",
+        "rust_compatibility_rail",
+        "--test",
+        "examples_inventory",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-rail-inventory-20261015.log",
+      "timeout_seconds": 1200,
+      "start_utc": "2026-10-15T01:17:26.562615+00:00",
+      "preflight": {
+        "observed_utc": "2026-10-15T01:17:26.562624+00:00",
+        "root": {
+          "available_bytes": 353194409984,
+          "available_inodes": 210498486
+        },
+        "home": {
+          "available_bytes": 353194409984,
+          "available_inodes": 210498486
+        }
+      },
+      "end_utc": "2026-10-15T01:17:36.797697+00:00",
+      "elapsed_seconds": 10.235081497579813,
+      "exit": 0,
+      "postflight": {
+        "observed_utc": "2026-10-15T01:17:36.797744+00:00",
+        "root": {
+          "available_bytes": 352941797376,
+          "available_inodes": 210498347
+        },
+        "home": {
+          "available_bytes": 352941797376,
+          "available_inodes": 210498347
+        }
+      },
+      "bytes": 4613,
+      "sha256": "5e65376234b5d8ed2c4988dc4fe45f5bdd44baa59c02a628d289bda6fb5a46de"
+    },
+    {
+      "name": "no-oracle",
+      "command": [
+        "/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo",
+        "--config",
+        ".cargo/vendor-config.toml",
+        "--config",
+        "target.x86_64-unknown-linux-gnu.linker=\"/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc\"",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "--test",
+        "rust_plan_cli",
+        "no_cargo_oracle",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-no-oracle-20261015.log",
+      "timeout_seconds": 1200,
+      "start_utc": "2026-10-15T01:17:36.799651+00:00",
+      "preflight": {
+        "observed_utc": "2026-10-15T01:17:36.799660+00:00",
+        "root": {
+          "available_bytes": 352941793280,
+          "available_inodes": 210498347
+        },
+        "home": {
+          "available_bytes": 352941793280,
+          "available_inodes": 210498347
+        }
+      },
+      "end_utc": "2026-10-15T01:17:42.776030+00:00",
+      "elapsed_seconds": 5.976378218270838,
+      "exit": 0,
+      "postflight": {
+        "observed_utc": "2026-10-15T01:17:42.776077+00:00",
+        "root": {
+          "available_bytes": 352890781696,
+          "available_inodes": 210498211
+        },
+        "home": {
+          "available_bytes": 352890781696,
+          "available_inodes": 210498211
+        }
+      },
+      "bytes": 3011,
+      "sha256": "79d5bbbab7c6ff1beeaea8dc99075fa0852db94278da8ff8b2c935dd92731fda"
+    },
+    {
+      "name": "clippy-unit",
+      "command": [
+        "/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo",
+        "--config",
+        ".cargo/vendor-config.toml",
+        "--config",
+        "target.x86_64-unknown-linux-gnu.linker=\"/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc\"",
+        "clippy",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle-cargo-unit-plan",
+        "--lib",
+        "--tests",
+        "--bins",
+        "--no-deps",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-clippy-unit-20261015.log",
+      "timeout_seconds": 1500,
+      "start_utc": "2026-10-15T01:17:42.777922+00:00",
+      "preflight": {
+        "observed_utc": "2026-10-15T01:17:42.777930+00:00",
+        "root": {
+          "available_bytes": 352890777600,
+          "available_inodes": 210498211
+        },
+        "home": {
+          "available_bytes": 352890777600,
+          "available_inodes": 210498211
+        }
+      },
+      "end_utc": "2026-10-15T01:17:46.901742+00:00",
+      "elapsed_seconds": 4.123822340741754,
+      "exit": 101,
+      "postflight": {
+        "observed_utc": "2026-10-15T01:17:46.901792+00:00",
+        "root": {
+          "available_bytes": 352890056704,
+          "available_inodes": 210498192
+        },
+        "home": {
+          "available_bytes": 352890056704,
+          "available_inodes": 210498192
+        }
+      },
+      "bytes": 3068,
+      "sha256": "391f8790e89fa96bf5feb822ff8273c41c733077b6ef40714363d321e2923295"
+    }
+  ],
+  "proof_replay": false,
+  "inputs_after_format": [
+    {
+      "path": "tests/rust_compatibility_rail.rs",
+      "bytes": 13542,
+      "sha256": "bc2f3940dbfb8cb6277eadb795e6ec5191fc4c896d941ac06cecf8407d35ca34"
+    },
+    {
+      "path": "tests/examples_inventory.rs",
+      "bytes": 35335,
+      "sha256": "3a40123cf98a7b42e75f8c29dcc5b1f06486bc3dad7af4b1f51c0080481509dd"
+    },
+    {
+      "path": "examples/rust_compatibility_rail.rs",
+      "bytes": 1040,
+      "sha256": "42c649871e7e87db0cf2b92c5a42aa99d26d1544c436fc61cd8f4da2f1823bd1"
+    },
+    {
+      "path": "crates/mantle-cargo-unit-plan/tests/helper.rs",
+      "bytes": 21518,
+      "sha256": "50f37c180edd56622c912aeb26b1ef8897f4d0815e7d6c1495e2f92b609ff623"
+    },
+    {
+      "path": "examples/rust_compatibility_surface_matrix.ncl",
+      "bytes": 11293,
+      "sha256": "48cb3760460d3ad7e66d00d8d1cce688649a431cf679a186f53a52d9a114f2c0"
+    },
+    {
+      "path": "examples/catalog.ncl",
+      "bytes": 47542,
+      "sha256": "1b4a9c95c6d752dd4fb925126126b5e1b8318cfa5db67c059f11238839d0ef37"
+    },
+    {
+      "path": "examples/README.md",
+      "bytes": 27644,
+      "sha256": "d2cdcfc74f482ca0435d59a31bcd5c1d3ef004a897b43fc4ffb1676eb60f3bd5"
+    },
+    {
+      "path": "README.md",
+      "bytes": 41226,
+      "sha256": "867409686c9983cb5ba327dd5dd85002926205a1429a311206e46347ab4bd6e9"
+    },
+    {
+      "path": "docs/operator-workflows.md",
+      "bytes": 90194,
+      "sha256": "35bf3fd20d5700beb64a8d6c479f59a88cde6325c0f0c3e0b38408dcf3da14f0"
+    },
+    {
+      "path": "docs/release-notes/cargo-build-script-units-2026-10-15.md",
+      "bytes": 2145,
+      "sha256": "9c848165816073498296e25d45a16c22beea5b4fe0b5c0a5a9b98b26f226d496"
+    },
+    {
+      "path": "rustfmt.toml",
+      "bytes": 386,
+      "sha256": "31102c8b15867ea528a139caf7accfe52f1586fb441dc1b2d31d4bbbba41f7e6"
+    },
+    {
+      "path": ".cargo/vendor-config.toml",
+      "bytes": 2008,
+      "sha256": "41a88a4ed2b7570b990b9f8163ce8de47077b1792effcf997daef53b6b7d9182"
+    }
+  ]
+}

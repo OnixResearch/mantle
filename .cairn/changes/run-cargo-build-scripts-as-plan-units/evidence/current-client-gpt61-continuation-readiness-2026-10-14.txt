@@ -1,0 +1,201 @@
+Continuation preparation receipt (not T4.1/T4.2 acceptance)
+Owner: mantle-proof-gpt61; parent remains director.
+Remote R = brittonr@100.90.108.13:/tmp/mantle-unit-plan-20261013-87lqAtNv
+
+Scope and preserved boundaries
+- Read AGENTS.md, README.md, active tasks/design, targeted old worker history, and actual current proof runners/receipts before changes.
+- No Mantle Rust source changes, product builds, imports, signing, app/variant execution, target/tmp cleanup, shared CLI rebuild, original job/guard changes, archive, commit, or publication in this preparation slice.
+- Pueue1044 producer and1045 owned guard left untouched. Added only queued supervisor1046 and scratch continuation scripts. Old failed/time-out logs and old variant templates/configs are never overwritten by the new path.
+- Active future variant callers were migrated from old current-native app/plan prerequisites to accepted cfgfix. Historical current/lean proof scripts/logs remain preserved and are not called by this continuation.
+
+Actual scheduling metadata (authenticated SSH pueue status --json; whitelist only)
+{
+  "observed_at": "2026-10-14T19:21:48.158374+00:00",
+  "tasks": {
+    "1044": {
+      "id": 1044,
+      "label": "mantle-unit-plan-87lq-cfgfix-20261014",
+      "command": "bash /tmp/mantle-unit-plan-20261013-87lqAtNv/run-cfgfix-native-producer-20261014.sh",
+      "path": "/home/brittonr",
+      "group": "mantle-unit-plan-87lq-build",
+      "dependencies": [],
+      "status": {
+        "Running": {
+          "enqueued_at": "2026-10-14T06:26:19.913194008-04:00",
+          "start": "2026-10-14T06:26:20.112640606-04:00"
+        }
+      }
+    },
+    "1045": {
+      "id": 1045,
+      "label": "mantle-unit-plan-87lq-cfgfix-guard-20261014",
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/watch-owned-proof-cfgfix.py 1044 mantle-unit-plan-87lq-cfgfix-20261014 65100",
+      "path": "/home/brittonr",
+      "group": "mantle-unit-plan-87lq-guard",
+      "dependencies": [],
+      "status": {
+        "Running": {
+          "enqueued_at": "2026-10-14T06:26:24.207537220-04:00",
+          "start": "2026-10-14T06:26:24.379293308-04:00"
+        }
+      }
+    },
+    "1046": {
+      "id": 1046,
+      "label": "mantle-unit-plan-87lq-cfgfix-supervisor-gpt61-20261014",
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/run-cfgfix-proof-supervisor-gpt61-20261014.py",
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+      "group": "mantle-unit-plan-87lq-build",
+      "dependencies": [
+        1044,
+        1045
+      ],
+      "status": {
+        "Queued": {
+          "enqueued_at": "2026-10-14T15:02:15.993897170-04:00"
+        }
+      }
+    }
+  }
+}
+No app/variant child numeric IDs exist yet: supervisors create them only after their required predecessor AND predecessor guard have Done/Success. Future IDs are printed in each Pueue supervisor log; no speculative IDs/counts.
+Latest actual producer trace inspected: 2026-10-14T19:21:39.768862Z build succeeded rust-build-script-a858f83affef223a; preceding19:21:39.733559Z succeeded rust-build-script-936f68ad3172ce58. Rust unit2c94b2a3e01c6a88 entered actual bwrap/no-FUSE at19:21:39.694259Z, not claimed successful. Producer aggregate report was still empty on final read. No complete graph counts, actual Rust app42, or selective rerun accepted.
+
+Exact controller, checker, and guard paths (all under R)
+NEW run-cfgfix-proof-supervisor-gpt61-20261014.py
+NEW run-cfgfix-app-continuation-gpt61-20261014.py
+NEW run-variant-proof-supervisor-gpt61-20261014.py
+NEW run-variant-proof-phase-gpt61-20261014.py
+NEW prepare-variant-native-config-gpt61-20261014.py
+NEW verify-variant-native-outputs-gpt61-20261014.py
+CHANGED run-native-variant.sh
+CHANGED run-variant-native-app.sh
+CHANGED run-variant-native-consumer.sh
+CHANGED make-variant-native-app-consumer.py
+CHANGED check-native-provider-selective-rerun.py
+UNCHANGED original guard: watch-owned-proof-cfgfix.py (same shared owned-proof-cfgfix.pgid)
+UNCHANGED app execution runner: run-cfgfix-native-app-20261014.sh
+UNCHANGED app producer verifier/selector: make-cfgfix-native-app-consumer-20261014.py
+UNCHANGED exact app checker: check-cfgfix-native-app-20261014.py
+UNCHANGED provider-only graph generator: make-variant-native-plan.py (prior worker migrated it to cfgfix).
+
+Full nonwaiting callback graph and guarded launch boundary
+1044 AND1045 Success -> queued1046:
+  Independently require exact labels and Done/Success for both.
+  Add cfgfix-app task STASHED in existing one-parallel build group.
+  Add its resource guard in existing one-parallel guard group, also after1044 AND1045.
+  Observe exact guard Running plus guard-progress id=<actual app task> before enqueue.
+  Enqueue normally (never --immediate or task-specific start).
+  Queue variant supervisor(provider-config APP_TASK_ID APP_GUARD_ID) after BOTH app and app-guard Success.
+  EXIT; never wait for child occupying the same build group.
+BOTH cfgfix app and app guard Success -> variant supervisor(provider-config):
+  Queue provider/config phase STASHED plus guard after BOTH predecessors.
+  Require Running guard and matching resource tick; enqueue normally.
+  Queue next supervisor(producer PHASE_TASK_ID PHASE_GUARD_ID) after BOTH this phase and guard Success; EXIT.
+BOTH provider/config phase and its guard Success -> variant supervisor(producer):
+  Same guarded readiness; run full provider-only graph, verify actual producer outputs, select exact variant app from admitted plan.
+  Queue next supervisor(app PHASE_TASK_ID PHASE_GUARD_ID) after BOTH this phase and guard Success; EXIT.
+BOTH producer phase and its guard Success -> variant supervisor(app):
+  Same guarded readiness; run actual app, trusted physical verification, then strict entire-independent-unit comparison; EXIT.
+Every app/variant phase additionally rechecks exact running Pueue owner, Running guard, and matching resource tick before EACH real subprocess. A missing/paused/occupied/failed/not-yet-progressing guard never triggers enqueue: real client task remains Stashed and supervisor fails closed. Scheduling readiness is not product success.
+Existing guard can exit Success on any watched task Done: hence every next phase depends on watched TASK Success AND its GUARD Success, never guard alone. This also prevents a prior guard's shared-PGID done cleanup from killing the next stage. No new shared-PGID writer can run before the preceding guard exits.
+
+Mode contracts and evidence callbacks
+- run-variant-proof-supervisor-gpt61-20261014.py provider-config|producer|app PREVIOUS_TASK_ID PREVIOUS_GUARD_ID
+- run-variant-proof-phase-gpt61-20261014.py provider-config|producer|app
+- verify-variant-native-outputs-gpt61-20261014.py producer|app
+- prepare-variant-native-config-gpt61-20261014.py takes no args: derives sole0.2 output from genuine native-variant.log, verifies actual same-client archive, calls existing fail-closed make-variant-native-plan.py, signs/pulls/verifies only new variant config, checks nonzero selected PULL and zero rejection counters, then evaluates generated Nickel.
+- App phase first requires completed non-timeout baseline markers, successful actual JSON, exact physical result.txt text, trusted app receipt, signed helper/config/lean/native/planner receipts, full59-root physical trusted receipt, and named helper/config/lean PULL receipts.
+- Variant phase first requires genuine uncached cfgfix app42 plus trusted physical receipt. Later phases require config equality after replacing only sole provider root, and named variant provider/config trusted receipts.
+- Genuine required variant receipt names: variant-native-provider-verify.log, variant-native-config-pull.log, variant-native-config-verify.log, variant-native-producer-verify.log, variant-native-app-verify.log.
+- Final check stdout is retained in variant-native-phase-app-gpt61-20261014.log; success requires the provider-linked native script/sys/app identity changes and uncached outcomes, entire remaining unit-ID set AND full records unchanged, and EVERY remaining unit outcome cached. Four named crates remain consumer-presence assertions, not the completeness boundary. Actual accepted independent count is printed only from the future fully accepted report. No independent accepted count now.
+- Real0.1 and0.2 providers both return42. This proof does not claim links-metadata fixture behavior: its build.rs does not emit metadata.
+
+Bounded launch and teardown observations
+- Supervisors' guard-readiness loop has a30-second monotonic poll deadline; each status/log call bounded5seconds. A final in-flight status+log pair can add up to10seconds; this is not an unbounded child wait.
+- Cfgfix app stage bounds: producer verification/selection2400s; existing app CLI43200s with owned wrapper43300s; actual output verification3000s. Guard duration argument64800s.
+- Provider/config phase bounds: native CLI7200s with wrapper7300s, config admission3300s (sum10600s). Guard duration argument12000s.
+- Variant producer phase bounds: CLI64800s with wrapper64900s, producer output verification2400s, app selection120s (sum67420s). Guard duration argument69600s.
+- Variant app phase bounds: CLI64800s with wrapper64900s, physical app verification1200s, strict comparison120s (sum66220s). Guard duration argument69600s.
+- Existing guard uses bounded tick counts with5-second sleeps plus status-call elapsed; duration argument is not an exact wall-clock stopwatch. Product subprocess monotonic deadlines and owned cleanup remain separate limits.
+- Scoped wrapper correction: subprocess.run(timeout) killed only the direct child. New run_owned_stage uses a new process session, records its group and live existing app inner session, then TERM/KILLs known groups even after leader exit. Only the new wrappers changed; original job/guard were not altered.
+- Actual throwaway red/green observation: red-before leaked executing grandchild state=S; green-after no executing grandchild state=absent; asynchronous exit observed via pidfd barrier, temporary fixture removed. The child ignored TERM. Exit observed via pidfd barrier; no executing descendant remained in that scenario. This is not exhaustive sandbox/OS/evaluation teardown proof; transient non-leader/session lifetime and scheduler timing remain bounded observations rather than a blanket guarantee.
+
+Exercised focused checks (no unchanged product suite repetition)
+- bash -n passed run-native-variant.sh, run-variant-native-app.sh, run-variant-native-consumer.sh.
+- Remote Python ast.parse passed seven other changed/new Python scripts, then additionally corrected selective checker:8 Python syntax checks. No py_compile cache writes.
+- Final-source isolated app admissions, temporary Path-mapped fixtures and subprocess launch sentinel; all5 refused before any launch or generated proof log:
+missing-baseline: final wrapper REFUSED before subprocess launch: [Errno 2] No such file or directory: '/tmp/mantle-final-admission-s_ehuo4t/cfgfix-native-producer-trace.log'
+failed-producer: final wrapper REFUSED before subprocess launch: producer and its shared-pgid guard must both settle successfully: 1044
+failed-guard: final wrapper REFUSED before subprocess launch: producer and its shared-pgid guard must both settle successfully: 1045
+missing-trust-receipt: final wrapper REFUSED before subprocess launch: [Errno 2] No such file or directory: '/tmp/mantle-final-admission-lffi2i_r/cfgfix-helper-verify.log'
+accidental-overlap: final wrapper REFUSED before subprocess launch: accidental same-client overlap: 9999 another-client-build
+- Isolated exact supervisor code, mocked Pueue task/log responses only (synthetic scheduling controls, not actual app receipts):
+cfgfix/ready: exact Running tick precedes enqueue; stashed client then guard then success-only callback; supervisor returns (no child wait)
+cfgfix/paused: REFUSED with client Stashed; watchdog not observably Running with exact resource tick; client task remains stashed
+cfgfix/failed: REFUSED with client Stashed; watchdog ended before guarded launch; client task remains stashed
+cfgfix/wrong-tick: REFUSED with client Stashed; watchdog not observably Running with exact resource tick; client task remains stashed
+provider-config/ready: exact Running tick precedes enqueue; stashed client then guard then success-only callback; supervisor returns (no child wait)
+provider-config/paused: REFUSED with client Stashed; watchdog not observably Running with exact resource tick; client task remains stashed
+provider-config/failed: REFUSED with client Stashed; watchdog ended before guarded launch; client task remains stashed
+provider-config/wrong-tick: REFUSED with client Stashed; watchdog not observably Running with exact resource tick; client task remains stashed
+producer/ready: exact Running tick precedes enqueue; stashed client then guard then success-only callback; supervisor returns (no child wait)
+producer/paused: REFUSED with client Stashed; watchdog not observably Running with exact resource tick; client task remains stashed
+producer/failed: REFUSED with client Stashed; watchdog ended before guarded launch; client task remains stashed
+producer/wrong-tick: REFUSED with client Stashed; watchdog not observably Running with exact resource tick; client task remains stashed
+app/ready: exact Running tick precedes enqueue; stashed client then guard then success-only callback; supervisor returns (no child wait)
+app/paused: REFUSED with client Stashed; watchdog not observably Running with exact resource tick; client task remains stashed
+app/failed: REFUSED with client Stashed; watchdog ended before guarded launch; client task remains stashed
+app/wrong-tick: REFUSED with client Stashed; watchdog not observably Running with exact resource tick; client task remains stashed
+- Isolated exact final per-stage watchdog gate:
+launch-gate/ready: exact owner+Running guard+resource tick accepted
+launch-gate/queued: REFUSED declared watchdog is not Running; refusing client stage
+launch-gate/failed: REFUSED declared watchdog is not Running; refusing client stage
+launch-gate/wrong-tick: REFUSED exact Running watchdog resource tick missing; refusing client stage
+launch-gate/duplicate-owner: REFUSED one exact running client owner and its declared watchdog required
+- Isolated predecessor/task-and-guard failures:
+cfgfix/failed-previous-task: REFUSED before queue mutation: read-only scheduler refuses unsettled or failed prerequisite: 1044
+cfgfix/failed-previous-guard: REFUSED before queue mutation: read-only scheduler refuses unsettled or failed prerequisite: 1045
+provider-config/failed-previous-task: REFUSED before queue mutation: variant callback refuses unfinished or failed previous task/guard: 2000
+provider-config/failed-previous-guard: REFUSED before queue mutation: variant callback refuses unfinished or failed previous task/guard: 2001
+producer/failed-previous-task: REFUSED before queue mutation: variant callback refuses unfinished or failed previous task/guard: 2000
+producer/failed-previous-guard: REFUSED before queue mutation: variant callback refuses unfinished or failed previous task/guard: 2001
+app/failed-previous-task: REFUSED before queue mutation: variant callback refuses unfinished or failed previous task/guard: 2000
+app/failed-previous-guard: REFUSED before queue mutation: variant callback refuses unfinished or failed previous task/guard: 2001
+- Strict independent reuse regression, old actual named-only AST loop compared with corrected actual helper:
+positive: corrected complete independent-record/cached invariant PASSED (synthetic fixture only)
+unexpected-independent-id: previous named-only check PASSED incorrectly; corrected whole-independent check REFUSED: unexpected independent unit identity change
+unexpected-independent-record: previous named-only check PASSED incorrectly; corrected whole-independent check REFUSED: unexpected independent unit record change
+independent-cached-false: previous named-only check PASSED incorrectly; corrected whole-independent check REFUSED: independent unit was rerun: target-facts
+- Live preserved-client entrypoint refusals, not builds/imports/verifies:
+live-refused run-cfgfix-proof-supervisor-gpt61-20261014.py  exit= 1 reason= read-only scheduler refuses unsettled or failed prerequisite: 1044
+live-refused run-cfgfix-app-continuation-gpt61-20261014.py  exit= 1 reason= producer and its shared-pgid guard must both settle successfully: 1044
+live-refused run-variant-proof-phase-gpt61-20261014.py provider-config exit= 1 reason= variant phase refuses accidental overlap or unfinished prior guard: 1044
+live-refused run-variant-proof-phase-gpt61-20261014.py producer exit= 1 reason= variant phase refuses accidental overlap or unfinished prior guard: 1044
+live-refused run-variant-proof-phase-gpt61-20261014.py app exit= 1 reason= variant phase refuses accidental overlap or unfinished prior guard: 1044
+live-refused prepare-variant-native-config-gpt61-20261014.py  exit= 1 reason= variant admission refuses active same-client task or prior guard: 1044
+live-refused verify-variant-native-outputs-gpt61-20261014.py producer exit= 1 reason= variant verification refuses active same-client task or prior guard: 1044
+live-refused verify-variant-native-outputs-gpt61-20261014.py app exit= 1 reason= variant verification refuses active same-client task or prior guard: 1044
+live-fail-closed-smoke 8/8; no generated client proof artifacts
+These isolated controls synthesize no accepted product evidence. Temporary control directories were removed; no permanent wiring tests were added.
+
+Stable remote source BLAKE3 receipts
+Observed with /run/current-system/sw/bin/b3sum over exact UTF-8 :raw SSH reads of the same final11 source files staged temporarily on the local host. Filenames below identify their original paths under R; temporary copies were removed. This changed only this new Mantle-owned source-receipt section, not historical Nix/Cargo interoperability SHA receipts. No product build or status recheck occurred.
+2fe754bc55a0c292adb5c4512bb7cba9d5b8da14a681190854e62bc9d3fc43fa  /tmp/mantle-unit-plan-20261013-87lqAtNv/run-cfgfix-proof-supervisor-gpt61-20261014.py
+0b3bf5ca30f55daedb2adc1ce1cfea6f0491eabb3f3ab6b044a29b2ec3296a84  /tmp/mantle-unit-plan-20261013-87lqAtNv/run-cfgfix-app-continuation-gpt61-20261014.py
+9aee1dc4fabcb2c969b9cb3156f1254f34d8ee1ae7effb70f45d7d955fbc8e37  /tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-supervisor-gpt61-20261014.py
+060d2f73523a10945f5f7a51a8f9e4d172fd36ee66cfa6a3542f5a3525ef2dc5  /tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-phase-gpt61-20261014.py
+d4208446e22868662d2d480fbdd62ae00609abefc02c6e2ecfc25c0c05cb5fde  /tmp/mantle-unit-plan-20261013-87lqAtNv/prepare-variant-native-config-gpt61-20261014.py
+869966baa1cc86c7e3bead8bf3eb76101f38c2e4c8b739b0e09b51f49be010a0  /tmp/mantle-unit-plan-20261013-87lqAtNv/verify-variant-native-outputs-gpt61-20261014.py
+51944f2031e2288fabcb375a52bfc5dc870ae7b77cd67a1619b9747236e99313  /tmp/mantle-unit-plan-20261013-87lqAtNv/run-native-variant.sh
+a5bb86fcdaf7df10dd4dcb123303fa8ffc7c26fb1d80d1840516bb5d2e678c38  /tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-native-app.sh
+3c51a740a3aeee1fa546a44e15c809bc8176a76b68b74ba476ccd5e24cc8d036  /tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-native-consumer.sh
+f97e31e757e8c67251e5d5749d97a9647c19c6e6d4bfb7ac985aacc192a78610  /tmp/mantle-unit-plan-20261013-87lqAtNv/make-variant-native-app-consumer.py
+61fc5f5f1a9549d6ab83a34cf7ddb3366ab723303f787ec5d58557d81857263a  /tmp/mantle-unit-plan-20261013-87lqAtNv/check-native-provider-selective-rerun.py
+
+Independent review boundary (parent-reported, not an additional owner execution)
+Parent reports the receipt worker's final AST/helper controls passed, including missing/duplicate independent or affected outcomes, affected cached=true, and named-crate disappearance refusal. Parent independently read final original/app and all three variant controllers and confirmed dual-success ordering, Running-guard/resource-tick readiness, and nonwaiting callback return. This does not accept real product reports.
+Preserved limitation: accepted_unit_ids is currently cardinality-checked, not compared as an exact set to plan unit IDs. No exact-set admission claim or extra validation scope is added here; actual product acceptance still requires its named reports/receipts.
+
+Acceptance and next action
+T4.1/T4.2/T4.3 remain open: original producer1044 is Running and report empty, so actual accepted42/selective receipts are still absent. Preparation is complete and the success-only continuation graph is wired; an external original-proof settlement is not application success. Next action is inspect1044/1045 settlement and1046 callback output, then collect actual named app/variant receipts or repair its exact observed failure without restarting originals or overwriting failure history. No tasks/matrix/source docs accepted from this preparation. Existing T3.3 negatives and focused27/27, strict Clippy, rail6/6 receipts remain unchanged and were not rerun. T1.1 unmodified da00 remains unreachable pinned Casita E0599; retrospective patched receipts are not its baseline. T4.6 archive/commit/publication remains unauthorized.

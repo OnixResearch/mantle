@@ -1,0 +1,76 @@
+{
+  "observed_utc": "2026-10-15T01:31:11.677409+00:00",
+  "source": "installed pueue status --json; actual task status, not wait exit",
+  "tasks": [
+    {
+      "id": 1066,
+      "label": "mantle-unit-plan-t43-helper-gpt61-20261015",
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/run-t43-helper-gpt61-20261015.py",
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+      "dependencies": [],
+      "created_at": "2026-10-14T21:15:27.231062243-04:00",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-10-14T21:15:27.231044529-04:00",
+          "start": "2026-10-14T21:15:27.356921699-04:00",
+          "end": "2026-10-14T21:15:37.622577245-04:00",
+          "result": "Success"
+        }
+      }
+    },
+    {
+      "id": 1067,
+      "label": "mantle-unit-plan-t43-root-gates-gpt61-20261015",
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/run-t43-root-gates-20261015.py",
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+      "dependencies": [
+        1066
+      ],
+      "created_at": "2026-10-14T21:17:26.281379214-04:00",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-10-14T21:17:26.281361310-04:00",
+          "start": "2026-10-14T21:17:26.375111148-04:00",
+          "end": "2026-10-14T21:17:47.196069105-04:00",
+          "result": {
+            "Failed": 101
+          }
+        }
+      }
+    },
+    {
+      "id": 1068,
+      "label": "mantle-unit-plan-t43-canonical-quality-gpt61-20261015",
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/run-t43-canonical-quality-20261015.py",
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+      "dependencies": [],
+      "created_at": "2026-10-14T21:20:30.270669740-04:00",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-10-14T21:20:30.270633201-04:00",
+          "start": "2026-10-14T21:20:30.456539946-04:00",
+          "end": "2026-10-14T21:24:05.872405387-04:00",
+          "result": {
+            "Failed": 1
+          }
+        }
+      }
+    },
+    {
+      "id": 1069,
+      "label": "mantle-unit-plan-t43-final-feature-gpt61-20261015",
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/run-t43-final-feature-20261015.py",
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+      "dependencies": [],
+      "created_at": "2026-10-14T21:27:57.138197535-04:00",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-10-14T21:27:57.138178228-04:00",
+          "start": "2026-10-14T21:27:57.199902399-04:00",
+          "end": "2026-10-14T21:29:32.435099386-04:00",
+          "result": "Success"
+        }
+      }
+    }
+  ]
+}

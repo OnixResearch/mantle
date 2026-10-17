@@ -113,6 +113,55 @@ pub struct StoreIdentityRecord {
     pub backend: Option<String>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StoreOpenDecision {
+    BindNew,
+    Reuse,
+}
+
+/// Decide using only observations supplied by the store shell; never inspect state here.
+fn decide_store_open(
+    backend: StoreBackend,
+    logical_prefix: &str,
+    trust_policy_id: &str,
+    identity: Option<&StoreIdentityRecord>,
+    has_casita_marker: bool,
+    has_unclaimed_content: bool,
+) -> Result<StoreOpenDecision, Error> {
+    if let Some(actual) = identity {
+        let actual_backend = match (actual.schema.as_str(), actual.backend.as_deref()) {
+            (STORE_STATE_SCHEMA, None) => StoreBackend::Snix,
+            (STORE_BACKEND_STATE_SCHEMA, Some("snix")) => StoreBackend::Snix,
+            (STORE_BACKEND_STATE_SCHEMA, Some("casita")) => StoreBackend::Casita,
+            _ => {
+                return Err(Error::Store(
+                    "store-backend-mismatch: unsupported store identity schema or backend".to_string(),
+                ));
+            }
+        };
+        if actual_backend != backend {
+            return Err(Error::Store(format!(
+                "store-backend-mismatch: requested {}, state declares {}",
+                backend.as_str(),
+                actual_backend.as_str(),
+            )));
+        }
+        if actual.logical_prefix != logical_prefix || actual.trust_policy_id != trust_policy_id {
+            return Err(Error::Store(format!(
+                "store-identity-mismatch: requested prefix={logical_prefix} trust={trust_policy_id}, observed prefix={} trust={}",
+                actual.logical_prefix, actual.trust_policy_id,
+            )));
+        }
+        return Ok(StoreOpenDecision::Reuse);
+    }
+    if has_casita_marker || (backend == StoreBackend::Casita && has_unclaimed_content) {
+        return Err(Error::Store(
+            "store-backend-mismatch: state directory has content but no backend identity".to_string(),
+        ));
+    }
+    Ok(StoreOpenDecision::BindNew)
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct StoreOverlayState {
     pub plan: OverlayPlan,
@@ -167,42 +216,23 @@ pub(crate) fn preflight_store_identity(
     let policy = store_overlay_runtime_policy()?;
     let path = state_dir.join(STORE_IDENTITY_FILE_NAME);
     if path.exists() {
-        let actual = read_store_identity(&path, policy.limits.max_descriptor_bytes)?;
-        let actual_backend = match (actual.schema.as_str(), actual.backend.as_deref()) {
-            (STORE_STATE_SCHEMA, None) => StoreBackend::Snix,
-            (STORE_BACKEND_STATE_SCHEMA, Some("snix")) => StoreBackend::Snix,
-            (STORE_BACKEND_STATE_SCHEMA, Some("casita")) => StoreBackend::Casita,
-            _ => {
-                return Err(Error::Store(
-                    "store-backend-mismatch: unsupported store identity schema or backend".to_string(),
-                ));
-            }
-        };
-        if actual_backend != backend {
-            return Err(Error::Store(format!(
-                "store-backend-mismatch: requested {}, state declares {}",
-                backend.as_str(),
-                actual_backend.as_str(),
-            )));
-        }
-        if actual.logical_prefix != logical_prefix || actual.trust_policy_id != policy.trust.policy_id {
-            return Err(Error::Store(format!(
-                "store-identity-mismatch: requested prefix={logical_prefix} trust={}, observed prefix={} trust={}",
-                policy.trust.policy_id, actual.logical_prefix, actual.trust_policy_id,
-            )));
-        }
+        let identity = read_store_identity(&path, policy.limits.max_descriptor_bytes)?;
+        decide_store_open(backend, logical_prefix, &policy.trust.policy_id, Some(&identity), false, false)?;
         return Ok(());
     }
+    let mut has_casita_marker = false;
+    let mut has_unclaimed_content = false;
     if state_dir.exists() {
         for entry in fs::read_dir(state_dir)
             .map_err(|error| Error::Store(format!("reading state directory {}: {error}", state_dir.display())))?
         {
             let entry = entry
                 .map_err(|error| Error::Store(format!("reading state directory {}: {error}", state_dir.display())))?;
-            // A Snix-only release claimed populated state without an identity record.
-            // Preserve that path, but never claim a Casita repository as Snix.
             let name = entry.file_name();
-            if matches!(
+            if name == "casita" {
+                has_casita_marker = true;
+                break;
+            } else if !matches!(
                 name.to_str(),
                 Some(
                     "store-mutation.lock"
@@ -211,17 +241,21 @@ pub(crate) fn preflight_store_identity(
                         | "overlay-trusted-public-keys"
                 )
             ) {
-                continue;
+                has_unclaimed_content = true;
+                if backend == StoreBackend::Casita {
+                    break;
+                }
             }
-            if backend == StoreBackend::Snix && name != "casita" && name != STORE_IDENTITY_FILE_NAME {
-                continue;
-            }
-            return Err(Error::Store(format!(
-                "store-backend-mismatch: state directory {} has content but no backend identity",
-                state_dir.display(),
-            )));
         }
     }
+    decide_store_open(
+        backend,
+        logical_prefix,
+        &policy.trust.policy_id,
+        None,
+        has_casita_marker,
+        has_unclaimed_content,
+    )?;
     Ok(())
 }
 
@@ -811,8 +845,8 @@ mod tests {
         assert!(error.to_string().contains("store-identity-mismatch"));
     }
 
-    #[test]
-    fn legacy_v1_identity_remains_snix_only_without_backend_field() {
+    #[tokio::test]
+    async fn legacy_v1_identity_remains_snix_only_without_backend_field() {
         let state = tempfile::tempdir().unwrap();
         let policy = store_overlay_runtime_policy().unwrap();
         let legacy = serde_json::json!({
@@ -820,7 +854,9 @@ mod tests {
             "logical_prefix": "/nix/store",
             "trust_policy_id": policy.trust.policy_id,
         });
-        std::fs::write(state.path().join(STORE_IDENTITY_FILE_NAME), serde_json::to_vec(&legacy).unwrap()).unwrap();
+        let identity_path = state.path().join(STORE_IDENTITY_FILE_NAME);
+        let original = serde_json::to_vec(&legacy).unwrap();
+        std::fs::write(&identity_path, &original).unwrap();
         preflight_store_identity(state.path(), "/nix/store", StoreBackend::Snix).unwrap();
         assert!(
             preflight_store_identity(state.path(), "/nix/store", StoreBackend::Casita)
@@ -828,6 +864,12 @@ mod tests {
                 .to_string()
                 .contains("store-backend-mismatch")
         );
+        let output = state.path().join("physical-store");
+        let config =
+            crate::StoreConfig::new(StoreBackend::Snix, state.path().to_path_buf(), output, "/nix/store".to_string());
+        let reopened = crate::StoreHandle::open(config).await.unwrap();
+        assert_eq!(reopened.backend(), StoreBackend::Snix);
+        assert_eq!(std::fs::read(identity_path).unwrap(), original, "legacy identity was rewritten on open");
     }
 
     #[test]
@@ -861,6 +903,12 @@ mod tests {
             || crate::StoreConfig::new(StoreBackend::Snix, state.clone(), output.clone(), "/nix/store".to_string());
         let first = crate::StoreHandle::open(config()).await.unwrap();
         assert_eq!(first.backend(), StoreBackend::Snix);
+        let new_identity: StoreIdentityRecord =
+            serde_json::from_slice(&std::fs::read(state.join(STORE_IDENTITY_FILE_NAME)).unwrap()).unwrap();
+        assert_eq!(new_identity.schema, STORE_BACKEND_STATE_SCHEMA);
+        assert_eq!(new_identity.logical_prefix, "/nix/store");
+        assert_eq!(new_identity.trust_policy_id, store_overlay_runtime_policy().unwrap().trust.policy_id);
+        assert_eq!(new_identity.backend.as_deref(), Some("snix"));
         assert!(state.join("pathinfo.redb").is_file());
         assert!(state.join("directories.redb").is_file());
         assert!(state.join("blobs").is_dir());
@@ -916,6 +964,18 @@ mod tests {
         assert_eq!(reopened_identity.schema, STORE_BACKEND_STATE_SCHEMA);
         assert_eq!(reopened_identity.backend.as_deref(), Some("snix"));
         assert_eq!(std::fs::read(legacy_file).unwrap(), legacy_bytes);
+        let after_reopen = snapshot_state_tree(&state);
+        for (path, contents) in &before {
+            if path.extension().is_some_and(|extension| extension == "redb" || extension == "lock") {
+                continue;
+            }
+            assert_eq!(
+                after_reopen.get(path),
+                Some(contents),
+                "reopening Snix changed a non-database state member: {}",
+                path.display()
+            );
+        }
         assert_eq!(
             reopened.pathinfo_service().get(*path_info.store_path.digest()).await.unwrap(),
             Some(path_info),
@@ -962,6 +1022,51 @@ mod tests {
         assert!(error.to_string().contains("store-backend-mismatch"), "{error}");
         assert_eq!(snapshot_state_tree(&state), before, "Casita changed unclaimed state");
         assert!(!output.exists(), "Casita created output state");
+    }
+
+    #[test]
+    fn undeclared_overlay_rejects_before_touching_either_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let writable = root.path().join("unopened-state");
+        let base = root.path().join("unopened-base");
+        let error = crate::StoreConfig::preflight_backend_identity_for(
+            StoreBackend::Casita,
+            &writable,
+            "/nix/store",
+            std::slice::from_ref(&base),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("casita-overlay-unsupported"), "{error}");
+        assert!(!writable.exists());
+        assert!(!base.exists());
+    }
+
+    #[tokio::test]
+    async fn mixed_backend_base_rejects_before_opening_any_layer() {
+        let root = tempfile::tempdir().unwrap();
+        let writable = root.path().join("writable");
+        let first_base = root.path().join("first-base");
+        std::fs::create_dir(&first_base).unwrap();
+        ensure_store_identity(&first_base, "/nix/store", StoreBackend::Snix).unwrap();
+        // The missing trust policy would fail if the first base were opened before all identities were
+        // decided.
+        let first_before = snapshot_state_tree(&first_base);
+        let base = root.path().join("second-base");
+        std::fs::create_dir(&base).unwrap();
+        ensure_store_identity(&base, "/nix/store", StoreBackend::Casita).unwrap();
+        std::fs::write(base.join("casita-marker"), b"base must stay unchanged").unwrap();
+        let before = snapshot_state_tree(&base);
+        let output = root.path().join("exports");
+        let config = crate::StoreConfig::new(StoreBackend::Snix, writable.clone(), output.clone(), "/nix/store".into())
+            .add_base_state_dir(first_base.clone())
+            .add_base_state_dir(base.clone());
+
+        let error = crate::StoreHandle::open(config).await.err().expect("foreign backend base must reject");
+        assert!(error.to_string().contains("store-backend-mismatch"), "{error}");
+        assert!(!writable.exists(), "writable state was created before checking base identity");
+        assert!(!output.exists(), "physical export was created before checking base identity");
+        assert_eq!(snapshot_state_tree(&base), before, "foreign base changed during rejection");
+        assert_eq!(snapshot_state_tree(&first_base), first_before, "first base changed during rejection");
     }
 
     #[test]

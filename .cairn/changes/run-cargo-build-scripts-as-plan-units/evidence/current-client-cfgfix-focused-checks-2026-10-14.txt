@@ -1,0 +1,649 @@
+Captured verbatim from pinned offline Leviathan source mirror on 2026-10-14; commands execute on remote Leviathan, NOT the local workstation. The failing-before real-rustc regression and actual signed Rust unit failure are recorded separately in the adjacent correction evidence and preserved client trace.
+
+=== Pinned target environment and passing-after exact real-rustc regression command ===
+set -euo pipefail
+root=/tmp/mantle-unit-plan-20261013-87lqAtNv
+nightly=/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly
+linker=/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0
+binutils=/nix/store/x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44
+pkg=/nix/store/0v0raqk1qw5g2a21km4xa1hwhaq4s976-pkg-config-wrapper-0.29.2
+cd "$root/source"
+export PATH="$nightly/bin:$linker/bin:$binutils/bin:$pkg/bin:$PATH"
+export RUSTC="$nightly/bin/rustc" RUSTFLAGS='-C link-arg=-Wl,--allow-multiple-definition'
+export CARGO_HOME="$root/cargo-home" CARGO_TARGET_DIR="$root/target" TMPDIR="$root/tmp" KACHE_CACHE_DIR="$root/kache"
+export SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
+export PKG_CONFIG_PATH=/nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/lib/pkgconfig
+timeout 600s "$nightly/bin/cargo" --config .cargo/vendor-config.toml --config "target.x86_64-unknown-linux-gnu.linker='${linker}/bin/gcc'" test --locked --offline -p mantle-cargo-unit-plan --test helper cargo_feature_cfg_quotes_reach_rustc_through_response_file -- --exact --nocapture --test-threads=1
+
+=== Passing-after focused regression stdout/stderr ===
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling mantle-cargo-unit-plan v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.56s
+     Running tests/helper.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/helper-e377a523f9680039)
+
+running 1 test
+test cargo_feature_cfg_quotes_reach_rustc_through_response_file ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.04s
+
+=== Focused package 27-test command ===
+set -euo pipefail
+root=/tmp/mantle-unit-plan-20261013-87lqAtNv
+nightly=/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly
+linker=/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0
+binutils=/nix/store/x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44
+pkg=/nix/store/0v0raqk1qw5g2a21km4xa1hwhaq4s976-pkg-config-wrapper-0.29.2
+cd "$root/source"
+export PATH="$nightly/bin:$linker/bin:$binutils/bin:$pkg/bin:$PATH"
+export RUSTC="$nightly/bin/rustc" RUSTFLAGS='-C link-arg=-Wl,--allow-multiple-definition'
+export CARGO_HOME="$root/cargo-home" CARGO_TARGET_DIR="$root/target" TMPDIR="$root/tmp" KACHE_CACHE_DIR="$root/kache"
+export SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
+export PKG_CONFIG_PATH=/nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/lib/pkgconfig
+timeout 600s "$nightly/bin/cargo" --config .cargo/vendor-config.toml --config "target.x86_64-unknown-linux-gnu.linker='${linker}/bin/gcc'" test --locked --offline -p mantle-cargo-unit-plan --lib --tests --bins -- --test-threads=1
+
+=== Focused package stdout/stderr ===
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling mantle-cargo-unit-plan v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.81s
+     Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_cargo_unit_plan-03a008892d1f53ab)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/unit_helper.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_cargo_unit_helper-72eaa3cc4b574ff0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/producer.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_cargo_unit_producer-e61f8cc0b21b3ad8)
+
+running 4 tests
+test tests::copied_readonly_workspace_accepts_only_declared_source_config ... ok
+test tests::two_cargo_packages_cannot_claim_the_same_links_key ... ok
+test tests::undeclared_native_role_does_not_become_a_host_path ... ok
+test tests::unknown_cargo_unit_graph_version_blocks_before_lowering ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test directives_preserve_cfg_env_link_order_and_metadata ... ok
+test rejected_directives_cannot_cross_into_compilation_or_host_paths ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 9 tests
+test absent_direct_manifest_blocks_before_compilation ... ok
+test cargo_feature_cfg_quotes_reach_rustc_through_response_file ...      Running tests/directives.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/directives-33d7484b5705f625)
+     Running tests/helper.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/helper-e377a523f9680039)
+ok
+test declared_native_archive_links_and_missing_declaration_fails_script ... ok
+test error_directive_and_nonzero_script_exit_fail_without_flags ... ok
+test generated_source_cfg_and_env_flow_from_executed_script_to_compiler ... ok
+test links_metadata_from_producer_script_reaches_dependent_script ... ok
+test oversized_stdout_and_stderr_kill_and_reap_scripts_without_flags ... ok
+test run_script_reads_declared_release_profile_instead_of_compiler_defaults ... ok
+test three_unit_build_links_transitive_library_through_manifests ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.92s
+
+     Running tests/lowering.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/lowering-2ad35971b91bee7f)
+
+running 8 tests
+test build_script_run_dependencies_bind_flags_target_and_native_inputs ... ok
+test direct_dependencies_and_manifest_contract_are_canonical ... ok
+test full_digest_source_id_is_distinct_from_bounded_slice_path ... ok
+test generic_plan_unit_input_and_byte_limits_block_before_publication ... ok
+test multiple_roots_sort_by_wire_identity_not_raw_cargo_identity ... ok
+test proc_macro_host_unit_and_git_source_boundary ... ok
+test runtime_tool_roots_are_explicit_unit_inputs_and_change_plan_identity ... ok
+test unsupported_execution_modes_and_unbound_paths_fail_closed ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+     Running tests/producer.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/producer-576f088688663993)
+
+running 2 tests
+test missing_native_role_rejects_before_copying_workspace_or_starting_cargo ... ok
+test unavailable_registry_source_cannot_use_network_or_ambient_cargo_home ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/source_nar.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/source_nar-12d1ad00bc188e27)
+
+running 2 tests
+test package_slice_digest_matches_nix_nar_bytes ... ok
+test source_slice_rejects_symlinks_and_special_files ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+=== Strict Clippy first attempt missing linker environment (not a crate result) ===
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v1.3.0
+   Compiling serde_core v1.0.228
+   Compiling zmij v1.0.21
+   Compiling serde_json v1.0.149
+   Compiling serde v1.0.228
+    Checking cfg-if v1.0.4
+    Checking constant_time_eq v0.3.1
+    Checking arrayvec v0.7.6
+    Checking itoa v1.0.18
+    Checking arrayref v0.3.9
+    Checking memchr v2.8.0
+error: linker `clang` not found
+  |
+  = note: No such file or directory (os error 2)
+
+error: could not compile `proc-macro2` (build script) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `quote` (build script) due to 1 previous error
+error: could not compile `serde_json` (build script) due to 1 previous error
+error: could not compile `serde_core` (build script) due to 1 previous error
+error: could not compile `zmij` (build script) due to 1 previous error
+error: could not compile `serde` (build script) due to 1 previous error
+
+=== Corrected strict Clippy command ===
+set -euo pipefail
+root=/tmp/mantle-unit-plan-20261013-87lqAtNv
+nightly=/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly
+linker=/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0
+binutils=/nix/store/x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44
+pkg=/nix/store/0v0raqk1qw5g2a21km4xa1hwhaq4s976-pkg-config-wrapper-0.29.2
+cd "$root/source"
+export PATH="$nightly/bin:$linker/bin:$binutils/bin:$pkg/bin:$PATH"
+export RUSTC="$nightly/bin/rustc" RUSTFLAGS='-C link-arg=-Wl,--allow-multiple-definition'
+export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="$linker/bin/gcc" CARGO_HOME="$root/cargo-home" CARGO_TARGET_DIR="$root/target" TMPDIR="$root/tmp" KACHE_CACHE_DIR="$root/kache"
+export SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
+export PKG_CONFIG_PATH=/nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/lib/pkgconfig
+timeout 600s "$nightly/bin/cargo" clippy --locked --offline --no-deps -p mantle-cargo-unit-plan --lib --bins --tests -- -D warnings
+
+=== Corrected strict Clippy stdout/stderr ===
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling shlex v1.3.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling serde_core v1.0.228
+   Compiling zmij v1.0.21
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.149
+    Checking arrayref v0.3.9
+    Checking memchr v2.8.0
+    Checking itoa v1.0.18
+    Checking constant_time_eq v0.3.1
+    Checking cfg-if v1.0.4
+    Checking arrayvec v0.7.6
+   Compiling cc v1.2.59
+   Compiling blake3 v1.8.2
+   Compiling syn v2.0.117
+   Compiling serde_derive v1.0.228
+    Checking mantle-rust-plan-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-rust-plan-core)
+    Checking mantle-cargo-unit-plan v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.85s
+
+=== Compatibility rail command ===
+set -euo pipefail
+root=/tmp/mantle-unit-plan-20261013-87lqAtNv
+nightly=/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly
+linker=/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0
+binutils=/nix/store/x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44
+pkg=/nix/store/0v0raqk1qw5g2a21km4xa1hwhaq4s976-pkg-config-wrapper-0.29.2
+cd "$root/source"
+export PATH="$nightly/bin:$linker/bin:$binutils/bin:$pkg/bin:$PATH"
+export RUSTC="$nightly/bin/rustc" RUSTFLAGS='-C link-arg=-Wl,--allow-multiple-definition'
+export CARGO_HOME="$root/cargo-home" CARGO_TARGET_DIR="$root/target" TMPDIR="$root/tmp" KACHE_CACHE_DIR="$root/kache"
+export SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
+export PKG_CONFIG_PATH=/nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/lib/pkgconfig
+export SNIX_BUILD_BWRAP=/nix/store/lqndphylsxqwbwm804n473pb4sqb98sh-bubblewrap-0.11.2/bin/bwrap CRUNCH_NO_FUSE=1
+export PATH="/nix/store/lqndphylsxqwbwm804n473pb4sqb98sh-bubblewrap-0.11.2/bin:$PATH"
+timeout 1200s "$nightly/bin/cargo" --config .cargo/vendor-config.toml --config "target.x86_64-unknown-linux-gnu.linker='${linker}/bin/gcc'" test --locked --offline -p mantle --test rust_compatibility_rail -- --nocapture --test-threads=1
+
+=== Compatibility rail stdout/stderr ===
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling proc-macro2 v1.0.106
+   Compiling encoding_rs v0.8.35
+   Compiling thread_local v1.1.9
+   Compiling libloading v0.8.9
+   Compiling vte v0.15.0
+   Compiling chacha20 v0.10.0
+   Compiling uluru v3.1.0
+   Compiling etcetera v0.11.0
+   Compiling zmij v1.0.21
+   Compiling crc32fast v1.5.0
+   Compiling time v0.3.47
+   Compiling fuzzy-matcher v0.3.7
+   Compiling quote v1.0.45
+   Compiling getrandom v0.2.17
+   Compiling parking_lot_core v0.9.12
+   Compiling getrandom v0.4.2
+   Compiling getrandom v0.3.4
+   Compiling backtrace v0.3.76
+   Compiling filetime v0.2.27
+   Compiling clang-sys v1.9.1
+   Compiling vt100 v0.16.2
+   Compiling polling v3.11.0
+   Compiling io-uring v0.7.15
+   Compiling nix v0.31.3
+   Compiling nix v0.29.0
+   Compiling syn v2.0.117
+   Compiling rand_core v0.6.4
+   Compiling cc v1.2.59
+   Compiling parking_lot v0.12.5
+   Compiling serde_json v1.0.149
+   Compiling tempfile v3.27.0
+   Compiling syn v3.0.3
+   Compiling dashmap v6.1.0
+   Compiling rand_core v0.9.5
+   Compiling syn v1.0.109
+   Compiling uuid v1.23.0
+   Compiling fastbloom v0.14.1
+   Compiling flate2 v1.1.9
+   Compiling rand v0.10.1
+   Compiling nix v0.24.3
+   Compiling proc-macro-error-attr2 v2.0.0
+   Compiling tar v0.4.45
+   Compiling md-5 v0.11.0
+   Compiling bzip2-rs v0.1.2
+   Compiling crypto-common v0.1.7
+   Compiling prodash v31.0.0
+   Compiling rand_chacha v0.9.0
+   Compiling backtrace-ext v0.2.1
+   Compiling indicatif v0.18.4
+   Compiling rand_xoshiro v0.7.0
+   Compiling rand_chacha v0.3.1
+   Compiling digest v0.10.7
+   Compiling cmake v0.1.58
+   Compiling cipher v0.4.4
+   Compiling universal-hash v0.5.1
+   Compiling aead v0.5.2
+   Compiling rand v0.9.3
+   Compiling string_cache v0.8.9
+   Compiling chapter-tgz v0.1.0
+   Compiling sha1 v0.10.6
+   Compiling sha2 v0.10.9
+   Compiling signature v2.2.0
+   Compiling polyval v0.6.2
+   Compiling md-5 v0.10.6
+   Compiling rand v0.8.6
+   Compiling sha-1 v0.10.1
+   Compiling blake3 v1.8.2
+   Compiling sha1-checked v0.10.0
+   Compiling aws-lc-sys v0.45.0
+   Compiling ring v0.17.14
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling libmimalloc-sys v0.1.44
+   Compiling aegis v0.9.8
+   Compiling simsimd v6.5.16
+   Compiling ctr v0.9.2
+   Compiling bzip2-sys v0.1.13+1.0.8
+   Compiling ed25519 v2.2.3
+   Compiling aes v0.8.4
+   Compiling lzma-sys v0.1.20
+   Compiling lalrpop v0.22.2
+   Compiling ghash v0.5.1
+   Compiling twox-hash v2.1.2
+   Compiling num-bigint-dig v0.8.6
+   Compiling bytemuck_derive v1.12.1
+   Compiling linkme-impl v0.3.37
+   Compiling aes-gcm v0.10.3
+   Compiling ruzstd v0.8.2
+   Compiling syn-mid v0.5.4
+   Compiling bzip2 v0.5.2
+   Compiling proc-macro-error-attr v0.4.12
+   Compiling rsa v0.9.10
+   Compiling crunch-repair-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-repair-core)
+   Compiling crunch-gc-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-gc-core)
+   Compiling crunch-overlay-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-overlay-core)
+   Compiling crunch-evaluation-stream-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-evaluation-stream-core)
+   Compiling bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+   Compiling fuse-backend-rs v0.12.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/vendor/fuse-backend-rs)
+   Compiling linkme v0.3.37
+   Compiling synstructure v0.13.2
+   Compiling darling_core v0.23.0
+   Compiling darling_core v0.20.11
+   Compiling prettyplease v0.2.37
+   Compiling proc-macro-error2 v2.0.1
+   Compiling logos-codegen v0.16.1
+   Compiling bytemuck v1.25.0
+   Compiling proc-macro2-diagnostics v0.10.1
+   Compiling xz2 v0.1.7
+   Compiling proc-macro-error v0.4.12
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling zerofrom-derive v0.1.7
+   Compiling tokio-macros v2.7.0
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling futures-macro v0.3.32
+   Compiling displaydoc v0.2.5
+   Compiling tracing-attributes v0.1.31
+   Compiling strum_macros v0.26.4
+   Compiling derive_more-impl v2.1.1
+   Compiling miette-derive v7.6.0
+   Compiling pin-project-internal v1.1.11
+   Compiling async-trait v0.1.89
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling turso_macros v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling clap_derive v4.6.0
+   Compiling aristo-macros v0.4.1
+   Compiling async-stream-impl v0.3.6
+   Compiling roaring v0.11.4
+   Compiling pack1 v1.1.0
+   Compiling prost-derive v0.14.3
+   Compiling thiserror-impl v1.0.69
+   Compiling n0-error-macros v0.1.3
+   Compiling num_enum_derive v0.7.6
+   Compiling spez v0.1.2
+   Compiling safe_arch v1.2.0
+   Compiling auto_impl v1.3.0
+   Compiling nix-compat-derive v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/vendor/nix-compat-derive)
+   Compiling turso_sdk_kit_macros v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling ref-cast-impl v1.0.25
+   Compiling irpc-derive v0.10.0
+   Compiling safe_arch v0.7.4
+   Compiling bindgen v0.69.5
+   Compiling genawaiter-proc-macro v0.99.1
+   Compiling mimalloc v0.1.48
+   Compiling getset v0.1.6
+   Compiling typed-builder-macro v0.22.0
+   Compiling logos-derive v0.16.1
+   Compiling ouroboros_macro v0.18.5
+   Compiling maybe-async v0.2.10
+   Compiling futures-util v0.3.32
+   Compiling aristo v0.4.1
+   Compiling darling_macro v0.20.11
+   Compiling thiserror v2.0.18
+   Compiling zerofrom v0.1.7
+   Compiling darling_macro v0.23.0
+   Compiling curve25519-dalek v4.1.3
+   Compiling wide v1.7.0
+   Compiling wide v0.7.33
+   Compiling async-stream v0.3.6
+   Compiling yoke v0.8.2
+   Compiling tracing v0.1.44
+   Compiling pin-project v1.1.11
+   Compiling cobs v0.3.0
+   Compiling nix-archive v0.1.0
+   Compiling nix-archive v0.6.0
+   Compiling nix-derivation v0.1.0
+   Compiling miette v7.6.0
+   Compiling ref-cast v1.0.25
+   Compiling zerovec v0.11.6
+   Compiling zerotrie v0.2.4
+   Compiling tracing-subscriber v0.3.23
+   Compiling strum v0.26.3
+   Compiling zstd-safe v7.2.4
+   Compiling clap v4.6.0
+   Compiling genawaiter v0.99.1
+   Compiling thiserror v1.0.69
+   Compiling num_enum v0.7.6
+   Compiling n0-error v0.1.3
+   Compiling range-collections v0.4.6
+   Compiling derive_more v2.1.1
+   Compiling darling v0.20.11
+   Compiling clap-verbosity-flag v3.0.4
+   Compiling darling v0.23.0
+   Compiling logos v0.16.1
+   Compiling serde v1.0.228
+   Compiling derive_builder_core v0.20.2
+   Compiling crossterm v0.29.0
+   Compiling turso_parser v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling ed25519-dalek v2.2.0
+   Compiling typed-builder v0.22.0
+   Compiling ouroboros v0.18.5
+   Compiling zstd v0.13.3
+   Compiling imbl v7.0.2
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling serde_with_macros v3.18.0
+   Compiling bytes v1.11.1
+   Compiling bstr v1.12.1
+   Compiling chrono v0.4.44
+   Compiling quick-xml v0.40.1
+   Compiling serde_urlencoded v0.7.1
+   Compiling crunch-attestation-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-attestation-core)
+   Compiling serde_tagged v0.3.0
+   Compiling postcard v1.1.3
+   Compiling serde_qs v0.12.0
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling crunch-composition-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-composition-core)
+   Compiling codespan-reporting v0.13.1
+   Compiling nickel-lang-vector v0.2.0
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling toml_datetime v0.6.11
+   Compiling crunch-remote-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-remote-core)
+   Compiling serde_spanned v0.6.9
+   Compiling crunch-rust-cache-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-rust-cache-core)
+   Compiling mantle-causal-trace-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-causal-trace-core)
+   Compiling mantle-rust-plan-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-rust-plan-core)
+   Compiling crunch-shell-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-shell-core)
+   Compiling crunch-wasm-component-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-wasm-component-core)
+   Compiling secrecy v0.10.3
+   Compiling crunch-source-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-source-core)
+   Compiling mantle-portable-client-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-portable-client-core)
+   Compiling nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+   Compiling crunch-release-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-release-core)
+   Compiling crunch-eval-budget-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-eval-budget-core)
+   Compiling crunch-bootstrap-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-bootstrap-core)
+   Compiling mantlepkgs-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantlepkgs-core)
+   Compiling mantle-build-contract v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-build-contract)
+   Compiling crunch-hardware-simulation-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-hardware-simulation-core)
+   Compiling crunch-kernelscript-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-kernelscript-core)
+   Compiling crunch-android-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-android-core)
+   Compiling gix-validate v0.11.0
+   Compiling gix-utils v0.3.1
+   Compiling tokio v1.51.0
+   Compiling gix-error v0.2.1
+   Compiling icu_locale_core v2.2.0
+   Compiling icu_collections v2.2.0
+   Compiling http v1.4.0
+   Compiling futures-executor v0.3.32
+   Compiling gix-packetline v0.21.2
+   Compiling serde_with v3.18.0
+   Compiling tracing-indicatif v0.3.14
+   Compiling tracing-appender v0.2.5
+   Compiling prost v0.14.3
+   Compiling derive_builder_macro v0.20.2
+   Compiling crunch-attestation v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-attestation)
+   Compiling nickel-lang-parser v0.3.0
+   Compiling crunch-action-result-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-action-result-core)
+   Compiling codespan v0.13.1
+   Compiling nickel-lang-core v0.18.0
+   Compiling toml_edit v0.22.27
+   Compiling artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling inquire v0.9.4
+   Compiling crunch-project-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-project-core)
+   Compiling mantle-rust-plan-app v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-rust-plan-app)
+   Compiling crunch-remote-app v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-remote-app)
+   Compiling crunch-shell v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-shell)
+   Compiling mantle-application-contract v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-application-contract)
+   Compiling assert_cmd v2.2.0
+   Compiling gix-path v0.11.2
+   Compiling gix-date v0.15.1
+   Compiling gix-chunk v0.7.0
+   Compiling gix-quote v0.7.0
+   Compiling futures v0.3.32
+   Compiling turso_ext v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling turso_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling gix-bitmap v0.3.0
+   Compiling crunch-hardware-simulation v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-hardware-simulation)
+   Compiling icu_provider v2.2.0
+   Compiling http-body v1.0.1
+   Compiling ureq-proto v0.6.0
+   Compiling gix-features v0.46.2
+   Compiling gix-actor v0.40.0
+   Compiling gix-config-value v0.17.1
+   Compiling gix-command v0.8.0
+   Compiling derive_builder v0.20.2
+   Compiling gix-url v0.35.2
+   Compiling http-body-util v0.1.3
+   Compiling icu_properties v2.2.0
+   Compiling icu_normalizer v2.2.0
+   Compiling icu_locale v2.2.0
+   Compiling crunch-project v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-project)
+   Compiling gix-mailmap v0.32.0
+   Compiling gix-hash v0.23.0
+   Compiling gix-fs v0.19.2
+   Compiling gix-glob v0.24.0
+   Compiling oci-spec v0.7.1
+   Compiling gix-prompt v0.14.1
+   Compiling gix-hashtable v0.13.0
+   Compiling gix-commitgraph v0.35.0
+   Compiling gix-tempfile v21.0.2
+   Compiling gix-credentials v0.37.1
+   Compiling gix-object v0.58.0
+   Compiling gix-attributes v0.31.0
+   Compiling gix-ignore v0.19.1
+   Compiling toml v0.8.23
+   Compiling gix-lock v21.0.2
+   Compiling aws-lc-rs v1.18.1
+   Compiling idna_adapter v1.2.1
+   Compiling icu_collator v2.2.1
+   Compiling gix-shallow v0.10.0
+   Compiling gix-pathspec v0.16.1
+   Compiling rustls v0.23.45
+   Compiling idna v1.1.0
+   Compiling crunch-wasm-component v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-wasm-component)
+   Compiling malachite-nz v0.9.2
+   Compiling url v2.5.8
+   Compiling gix-revwalk v0.29.0
+   Compiling gix-filter v0.28.0
+   Compiling gix-ref v0.61.0
+   Compiling gix-pack v0.68.0
+   Compiling turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling gix-traverse v0.55.0
+   Compiling gix-revision v0.43.0
+   Compiling gix-negotiate v0.29.0
+   Compiling gix-index v0.49.0
+   Compiling gix-worktree-stream v0.30.0
+   Compiling gix-refspec v0.39.0
+   Compiling gix-archive v0.30.0
+   Compiling tokio-util v0.7.18
+   Compiling tower v0.5.3
+   Compiling async-compression v0.4.19
+   Compiling nix-compat v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/vendor/nix-compat)
+   Compiling iroh-io v0.6.2
+   Compiling secretspec v0.17.0
+   Compiling rustls-webpki v0.103.15
+   Compiling gix-discover v0.49.0
+   Compiling gix-config v0.54.0
+   Compiling gix-odb v0.78.0
+   Compiling tower-http v0.6.8
+   Compiling bao-tree v0.16.1
+   Compiling gix-worktree v0.50.0
+   Compiling h2 v0.4.16
+   Compiling tokio-stream v0.1.18
+   Compiling n0-future v0.3.2
+   Compiling crunch-nar v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-nar)
+   Compiling gix-diff v0.61.0
+   Compiling gix-dir v0.23.0
+   Compiling gix-worktree-state v0.28.0
+   Compiling crunch-glue v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-glue)
+   Compiling irpc v0.13.0
+   Compiling astral-tokio-tar v0.6.4
+   Compiling fastcdc v3.2.1
+   Compiling fastcdc v5.0.0
+   Compiling gix-submodule v0.28.0
+   Compiling gix-blame v0.11.0
+   Compiling gix-status v0.28.0
+   Compiling hyper v1.9.0
+   Compiling hyper-util v0.1.20
+   Compiling tokio-rustls v0.26.4
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling ureq v3.3.0
+   Compiling hyper-rustls v0.27.7
+   Compiling reqwest v0.13.2
+   Compiling reqwest-middleware v0.5.1
+   Compiling object_store v0.14.0
+   Compiling gix-transport v0.55.1
+   Compiling reqwest-tracing v0.6.0
+   Compiling gix-protocol v0.59.0
+   Compiling snix-tracing v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/vendor/snix-tracing)
+   Compiling malachite-q v0.9.2
+   Compiling gix v0.81.0
+   Compiling malachite-float v0.9.2
+   Compiling snix-castore v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/vendor/snix-castore)
+   Compiling malachite v0.9.2
+   Compiling snix-build v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/vendor/snix-build)
+   Compiling snix-store v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/vendor/snix-store)
+   Compiling turso_sync_engine v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling turso_sync_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling nickel-lang v2.2.0
+   Compiling crunch-eval v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-eval)
+   Compiling turso v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling casita v0.1.0 (https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb)
+   Compiling crunch-store v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-store)
+   Compiling crunch-rust-cache v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-rust-cache)
+   Compiling crunch-build v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-build)
+   Compiling crunch-delta v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-rustc-wrapper)
+   Compiling crunch-pipeline v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4m 08s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running tests/rust_compatibility_rail.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/rust_compatibility_rail-f3f21f0895513c10)
+
+running 6 tests
+test native_path_only_surface_reports_matrix_binding_without_cargo_fallback ... ok
+test representative_fixture_contains_required_practical_rust_surfaces ... ok
+test representative_negative_fixtures_report_stable_blockers ... ok
+test representative_offline_cargo_rail_runs_sandbox_smoke_without_network_inputs ... ok
+test representative_rust_plan_receipt_is_bounded_success_or_blocker_without_cargo_fallback ... ok
+test unit_plan_matrix_support_requires_named_fixture ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.83s
+
+=== Offline corrected helper build command ===
+set -euo pipefail
+root=/tmp/mantle-unit-plan-20261013-87lqAtNv
+nightly=/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly
+linker=/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0
+binutils=/nix/store/x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44
+pkg=/nix/store/0v0raqk1qw5g2a21km4xa1hwhaq4s976-pkg-config-wrapper-0.29.2
+cd "$root/source"
+export PATH="$nightly/bin:$linker/bin:$binutils/bin:$pkg/bin:$PATH"
+export RUSTC="$nightly/bin/rustc" RUSTFLAGS='-C link-arg=-Wl,--allow-multiple-definition'
+export CARGO_HOME="$root/cargo-home" CARGO_TARGET_DIR="$root/target" TMPDIR="$root/tmp" KACHE_CACHE_DIR="$root/kache"
+export SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
+export PKG_CONFIG_PATH=/nix/store/79xszwqidf98ag703b5c82q3pwg9lyzq-openssl-3.6.1-dev/lib/pkgconfig
+export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="$linker/bin/gcc"
+timeout 600s "$nightly/bin/cargo" build --locked --offline -p mantle-cargo-unit-plan --bin mantle-cargo-unit-helper
+sha256sum "$root/target/debug/mantle-cargo-unit-helper"
+
+=== Offline corrected helper build stdout/stderr ===
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling serde_core v1.0.228
+   Compiling blake3 v1.8.2
+   Compiling serde_json v1.0.149
+   Compiling serde v1.0.228
+   Compiling mantle-rust-plan-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-rust-plan-core)
+   Compiling mantle-cargo-unit-plan v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.89s
+617cd4c7c98dc7e329ead2e790dbc8938e6515edfb2ccd6b14ea0ed262f33ef9  /tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/mantle-cargo-unit-helper

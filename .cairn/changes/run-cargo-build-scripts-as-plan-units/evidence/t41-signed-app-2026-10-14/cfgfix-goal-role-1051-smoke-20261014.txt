@@ -1,0 +1,9 @@
+check-cfgfix-native-app-20261014.py: actual original+record canonical binding PASS; five role/key negatives REFUSED
+make-variant-native-plan.py: actual original+record canonical binding PASS; five role/key negatives REFUSED
+check-native-provider-selective-rerun.py: actual original+record canonical binding PASS; five role/key negatives REFUSED
+verify-variant-native-outputs-gpt61-20261014.py: actual original+record canonical binding PASS; five role/key negatives REFUSED
+run-variant-proof-phase-gpt61-20261014.py: actual original+record canonical binding PASS; five role/key negatives REFUSED
+ACTUAL corrected acceptance pre-verification PASS: three root outcomes, full producer/root drv-key equality, uncached app, exact42, logical+physical plan binding, exact34 IDs/14 slices. No app/build/store-verify invoked; signed physical verification still pending guarded acceptance.
+
+
+Wall time: 3.49 seconds

@@ -1,0 +1,30 @@
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+store-capability-boundary report
+files_scanned=627
+adapter=crates/crunch-rust-cache/src/lib.rs
+adapter=crates/crunch-rust-cache/src/shared.rs
+adapter=crates/crunch-rust-cache-core/src/lib.rs
+adapter=crates/crunch-rust-cache-core/src/shared.rs
+adapter=crates/crunch-rust-cache-core/src/wrapper.rs
+adapter=crates/crunch-rust-cache-core/src/error.rs
+violation=src/bootstrap.rs:825: handle-construction: StoreHandle construction outside declared composition roots
+violation=src/store_cmd.rs:229: raw-service-escape: raw service accessor `.pathinfo_service()` outside the store shell
+violation=src/store_cmd.rs:454: raw-service-escape: raw service accessor `.pathinfo_service()` outside the store shell
+violation=src/source_bundle.rs:2521: handle-construction: StoreHandle construction outside declared composition roots
+violation=src/source_bundle.rs:2530: raw-service-escape: raw service accessor `.pathinfo_service()` outside the store shell
+violation=src/source_bundle.rs:2745: handle-construction: StoreHandle construction outside declared composition roots
+violation=src/source_bundle.rs:2754: raw-service-escape: raw service accessor `.pathinfo_service()` outside the store shell
+violation=src/full_source_provider.rs:653: raw-service-escape: raw service accessor `.pathinfo_service()` outside the store shell
+violation=crates/crunch-pipeline/src/watch.rs:485: handle-construction: StoreHandle construction outside declared composition roots
+raw_service_escape_count=5
+writable_authority_escape_count=0
+handle_construction_escape_count=4
+casita_type_escape_count=0
+casita_session_escape_count=0
+

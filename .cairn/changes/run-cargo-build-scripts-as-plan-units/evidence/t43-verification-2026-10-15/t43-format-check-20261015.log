@@ -1,0 +1,8 @@
+start_utc=2026-10-15T01:17:26.496386+00:00
+cwd=/tmp/mantle-unit-plan-20261013-87lqAtNv/source
+command=/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/rustfmt --check --config-path /tmp/mantle-unit-plan-20261013-87lqAtNv/source/rustfmt.toml tests/rust_compatibility_rail.rs tests/examples_inventory.rs examples/rust_compatibility_rail.rs crates/mantle-cargo-unit-plan/tests/helper.rs
+preflight={"home": {"available_bytes": 353194418176, "available_inodes": 210498487}, "observed_utc": "2026-10-15T01:17:26.496394+00:00", "root": {"available_bytes": 353194418176, "available_inodes": 210498487}}
+--- stdout+stderr ---
+
+--- end ---
+{"command": ["/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/rustfmt", "--check", "--config-path", "/tmp/mantle-unit-plan-20261013-87lqAtNv/source/rustfmt.toml", "tests/rust_compatibility_rail.rs", "tests/examples_inventory.rs", "examples/rust_compatibility_rail.rs", "crates/mantle-cargo-unit-plan/tests/helper.rs"], "elapsed_seconds": 0.06471558008342981, "end_utc": "2026-10-15T01:17:26.561142+00:00", "exit": 0, "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-format-check-20261015.log", "name": "format-check", "postflight": {"home": {"available_bytes": 353194414080, "available_inodes": 210498486}, "observed_utc": "2026-10-15T01:17:26.561160+00:00", "root": {"available_bytes": 353194414080, "available_inodes": 210498486}}, "preflight": {"home": {"available_bytes": 353194418176, "available_inodes": 210498487}, "observed_utc": "2026-10-15T01:17:26.496394+00:00", "root": {"available_bytes": 353194418176, "available_inodes": 210498487}}, "start_utc": "2026-10-15T01:17:26.496386+00:00", "timeout_seconds": 120}

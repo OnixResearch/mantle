@@ -1,0 +1,48 @@
+start_utc=2026-10-15T01:17:26.562615+00:00
+cwd=/tmp/mantle-unit-plan-20261013-87lqAtNv/source
+command=/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo --config .cargo/vendor-config.toml --config 'target.x86_64-unknown-linux-gnu.linker="/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc"' test --locked --offline -p mantle --test rust_compatibility_rail --test examples_inventory -- --nocapture --test-threads=1
+preflight={"home": {"available_bytes": 353194409984, "available_inodes": 210498486}, "observed_utc": "2026-10-15T01:17:26.562624+00:00", "root": {"available_bytes": 353194409984, "available_inodes": 210498486}}
+--- stdout+stderr ---
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling mantle v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.47s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running tests/examples_inventory.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/examples_inventory-cccc2eb82be245a2)
+
+running 17 tests
+test documented_crunch_ncl_identifier_is_allowed ... ok
+test examples_catalog_covers_checked_in_user_facing_examples ... ok
+test examples_catalog_rejects_duplicate_ids_and_paths ... ok
+test examples_catalog_rejects_fetchers_without_offline_and_negative_rails ... ok
+test examples_catalog_rejects_invalid_tier_and_silent_skip ... ok
+test examples_catalog_rejects_missing_required_workflow_rail ... ok
+test examples_catalog_rejects_readme_lane_order_and_missing_project_outputs ... ok
+test examples_catalog_rejects_readme_omissions_and_stale_paths ... ok
+test examples_catalog_rejects_stale_crunch_branding_in_user_docs ... ok
+test examples_catalog_rejects_trust_docs_without_non_claims ... ok
+test examples_catalog_supports_lane_inventory_for_docs ... ok
+test flake_source_keeps_project_and_transcript_support_trees ... ok
+test only_transcript_markdown_is_a_user_facing_markdown_example ... ok
+test project_indexes_are_documentation_support_files ... ok
+test project_sources_are_grouped_under_their_mantle_entrypoint ... ok
+test registry_oci_workflow_catalog_and_docs_preserve_signed_immutable_admission_boundary ... ok
+test remote_resumable_workflow_catalog_and_docs_name_the_production_boundary ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.10s
+
+     Running tests/rust_compatibility_rail.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/rust_compatibility_rail-f3f21f0895513c10)
+
+running 3 tests
+test native_path_only_surface_reports_matrix_binding_without_cargo_fallback ... ok
+test representative_rust_plan_receipt_is_bounded_success_or_blocker_without_cargo_fallback ... ok
+test unit_plan_matrix_rejects_supported_rows_without_named_fixture ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+
+
+--- end ---
+{"command": ["/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo", "--config", ".cargo/vendor-config.toml", "--config", "target.x86_64-unknown-linux-gnu.linker=\"/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc\"", "test", "--locked", "--offline", "-p", "mantle", "--test", "rust_compatibility_rail", "--test", "examples_inventory", "--", "--nocapture", "--test-threads=1"], "elapsed_seconds": 10.235081497579813, "end_utc": "2026-10-15T01:17:36.797697+00:00", "exit": 0, "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-rail-inventory-20261015.log", "name": "rail-inventory", "postflight": {"home": {"available_bytes": 352941797376, "available_inodes": 210498347}, "observed_utc": "2026-10-15T01:17:36.797744+00:00", "root": {"available_bytes": 352941797376, "available_inodes": 210498347}}, "preflight": {"home": {"available_bytes": 353194409984, "available_inodes": 210498486}, "observed_utc": "2026-10-15T01:17:26.562624+00:00", "root": {"available_bytes": 353194409984, "available_inodes": 210498486}}, "start_utc": "2026-10-15T01:17:26.562615+00:00", "timeout_seconds": 1200}

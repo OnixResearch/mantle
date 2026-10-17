@@ -1,0 +1,4 @@
+[2m2026-10-13T21:40:33.595420Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 9, path: \"/tmp/mantle-unit-plan-20261013-87lqAtNv/client-state/directories.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+[2m2026-10-13T21:40:33.725093Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 10, path: \"/tmp/mantle-unit-plan-20261013-87lqAtNv/client-state/pathinfo.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+OK 77giqf2dbsvv1sjcmydx9x366s5614fc-native-answer-0.1  trusted_signatures=1/1
+1 checked, 0 mismatches

@@ -1,0 +1,79 @@
+{
+  "schema": "mantle-source-owner-approval-boundary-v1",
+  "date": "2026-10-16",
+  "owning_change": "add-dynamic-plan-source-slices",
+  "immediate_outcome": "Recovered the completed parent candidate dependency review and historical custody, then used the user's explicit selection authority to bind the existing complete committed implementation/prerequisite tree in source-slices-selected-immutable-binding-2026-10-16.json. All shared dirty deltas are excluded. Final repaired snapshot, semantic acceptance and gate readiness remain outstanding.",
+  "approval": {
+    "utterance": "approve",
+    "request_context": "The immediately preceding request separated PRE-ARCHIVE readiness from actual mandatory archive/post-validation and requested source-owner authorization binding the source-slices prerequisite to an approved isolated implementation/snapshot and permitted mixed-hunk boundaries.",
+    "recorded_authority": "Define and bind only the reviewed source-slices implementation and its necessary explicitly selected prerequisites. Do not request this same authorization again. Unknown source identities, unknown mixed-hunk selections and an uncreated commit cannot be inferred from this authority.",
+    "approved_dirty_tree_adoption": false,
+    "source_owner_identity": "User in the current conversation; no Git author, filesystem UID or separate identity is inferred.",
+    "archive_wording_receipt": "pre-archive-readiness-approval-2026-10-16.md"
+  },
+  "recovered_review": {
+    "parent_transcript": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12.jsonl",
+    "completed_event": {
+      "line": 49113,
+      "utc": "2026-10-15T23:53:22.100Z",
+      "tool": "todo",
+      "operation": "done",
+      "task": "Review the exact shared V2 core, worker and store dependencies required for source-slice acceptance"
+    },
+    "parent_review_calls": "Original parent transcript lines 48952-49113; recovered call manifest artifact://4386. This is retained review evidence, not a new review or a new test.",
+    "backend_transcript": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/leviathan-offline-storage-safety.jsonl",
+    "backend_completed_result": "Line 353 at 2026-10-15T23:51:33.892Z: actual selected Casita metadata transaction, unrooted import, completeness and composed PathInfoCache callsites reviewed; logical named-PathInfo transaction distinguished from physical payload rollback.",
+    "custody_result": "Line 373 at 2026-10-15T23:54:49.657Z; recovered full result artifact://4389 and exact isolation conclusion artifact://4390:raw.",
+    "partial_worker_is_not_completion": "The mantle-composition-review result was partial. The parent's own subsequent review and backend review completion above are the completed prerequisite; neither constitutes historical source-owner ACK or snapshot acceptance.",
+    "observed_review_finding": "The selected overlay PathInfoCache lacked a nonempty atomic-batch override. That historical finding is not a statement about the later isolated repaired runtime subject, and is not reopened or replayed here."
+  },
+  "historical_comparison_refs": {
+    "observed_head": "da00f58425740adea559ef926c9dfa97b2cb8240",
+    "observed_local_origin_main": "d75158b00b080535f2ffea12430665ca3d57ea82",
+    "source": "Backend transcript line 359, read-only command result at 2026-10-15T23:53:38.321Z.",
+    "approved_base_commit": "d75158b00b080535f2ffea12430665ca3d57ea82",
+    "approved_implementation_commit": "d75158b00b080535f2ffea12430665ca3d57ea82",
+    "accepted_isolated_snapshot": null,
+    "meaning": "These refs were comparison observations historically. Under the current explicit authority, the existing d751 commit/tree2331e6c984b3e0482ccd49d4fc07ab6b2f91e2ab is now deliberately selected as complete immutable prerequisite base and existing implementation, with an empty delta. This is not acceptance of a final repaired snapshot or automatic semantic-review equivalence. See source-slices-selected-immutable-binding-2026-10-16.json."
+  },
+  "exact_recoverable_v2_bodies": [
+    {
+      "path": "crates/crunch-build/src/dynamic_plan/v2.rs",
+      "historical_raw_blake3": "ff1d3a2cc47eae263821b8c0cd9dc153c5d03ddcb36c2932b5d046dc56e2b355",
+      "boundary": "Whole V2 schema/admission/canonical body identified by the retained custody result; untracked relative to observed HEAD, not absent or deleted. This identity is a permitted reviewed input for isolated assembly, not a claim of current freshness or a complete buildable snapshot."
+    },
+    {
+      "path": "crates/crunch-build/src/dynamic_plan/slices.rs",
+      "historical_raw_blake3": "7f08674e0e2876109ba7c4be3534666d1d452bb53b4d5e9b4664a89582978eb0",
+      "boundary": "Whole pure slice-admission planner body identified by the retained custody result; same historical-input and freshness limits as v2.rs."
+    }
+  ],
+  "mixed_hunk_exclusion_boundary": {
+    "inventory": "artifact://3684 retains 22 historical raw BLAKE3 identities and zero-context HEAD/frozen-origin hunk headers. It is custody evidence, not a 22-file adoption manifest or exact selected patch.",
+    "dynamic_plan_rs": "Historical locator: module/reexports around lines261-287. The new selected-immutable binding retains the exact committed d751 body and its whole committed prerequisite context; no current fetch-builder or other dirty hunk is selected. No alternate core-only da00 patch is adopted.",
+    "distinct_plan_output_binding": "crates/crunch-build/src/plan_output_binding.rs is distinct prerequisite-owner work, not automatically source-slices ownership. Its reviewed dependency use does not authorize whole-file adoption.",
+    "mixed_prerequisites": [
+      "Cargo.toml and Cargo.lock",
+      "crates/crunch-build/Cargo.toml and src/lib.rs",
+      "crates/crunch-build/src/dynamic.rs, worker.rs, registry.rs, goal.rs and orchestrate.rs",
+      "crates/crunch-store/Cargo.toml and src/lib.rs",
+      "crates/crunch-store/src/capability.rs, handle.rs, backend.rs, casita.rs and nario.rs"
+    ],
+    "source_admission_candidate_region": "Historical capability.rs locator924-1074 did not select mixed hunks. The new binding avoids partial shared-hunk assembly by selecting the existing complete d751 prerequisite tree and excluding every current delta; differing committed blobs still require final semantic acceptance.",
+    "unchanged_dependency": "crates/crunch-store/src/completeness.rs was unchanged in the historical 22-file scope; review of it does not create a new owned edit.",
+    "default": "Exclude every unselected hunk and unrelated dirty/staged path. Preserve unrelated work and the existing index. Do not reconstruct the missing historical staged-15/protected-18 manifest from the later staged-16 inventory."
+  },
+  "reusable_binding_capability": "The approval is now bound to actual existing commit d75158b00b080535f2ffea12430665ca3d57ea82/tree2331e6c984b3e0482ccd49d4fc07ab6b2f91e2ab and22 scoped blob identities in source-slices-selected-immutable-binding-2026-10-16.json. Necessary integration/prerequisite groups are retained together with no selected overlay patch. Future separately owned repair deltas need an actual resulting immutable subject and fresh semantic/gate evidence; no repeated source-owner approval or shared dirty-tree adoption is implied.",
+  "repeatability_evidence": {
+    "historical": "prepublication-repair-2026-10-03.md records failing-before/passing-after package checks and the real two-run producer/sandbox identity proof. Baseline/current lockfiles differ. Those receipts retain their original subject and bounded non-claims; they are not re-executed or relabeled.",
+    "current_workspace_terminal": {
+      "receipt": "ssh://brittonr@100.90.108.13/tmp/mantle-unit-plan-20261013-87lqAtNv/t66-private-live-find-20261016-Ls23gdJf/task1108-terminal-owned-settlement.json",
+      "receipt_blake3_reported_by_sole_owner": "f6b64e0e6412f69e2ea2c65296afca6a6e628ccf3e9e2ac0c283dda8a9e2ab10",
+      "observed_receipt_fields": "Done Failed101, task elapsed 10271.91988 seconds, terminal_owned_empty=true for the exact service cgroup and seven recorded PIDs, opaque checks empty. Captured ordinary stage exit101; 81 result rows aggregate 8047 passed, 2 failed, 141 ignored. Success-only final source/CLI freshness guards were not reached.",
+      "gate_pass": false
+    },
+    "checks_performed_for_this_receipt": "Read repository guidance, owning spec/evidence, retained review/terminal records, and targeted current/committed source needed for the newly authorized selection. Resolved existing immutable Git objects and verified named committed integration members. No new source/CLI content hash/copy, compile/test/gate replay, index mutation or lifecycle operation. Fresh prose-only Cairn checks are captured separately in source-owner-binding-document-checks-2026-10-16.json."
+  },
+  "next_admissible_action": "Parent reads the exact selected-immutable binding and this updated receipt before accepting the source custody boundary. Final semantic acceptance of differing committed blobs remains unproven; separately reconcile the isolated overlay repair and no-FUSE doctor repair into a newly bound final subject before any eventual quality acceptance/publication. The failed workspace settlement is not a passing gate. T4.5 remains unchecked.",
+  "holds": "No canonical source, index, commit, sync, acceptance, archive, publication, cleanup, pin/feature changes, historical continuation release or prepared expanded cutover. Previously completed five-product/four-historical-carrier landing must not be replayed."
+}

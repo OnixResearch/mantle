@@ -1,0 +1,2 @@
+locked offline metadata: 767 external package names resolved from /home/brittonr/git/OnixResearch/mantle-vendor-2a1ja50d/vendor-deps
+vendor-deps: vendor-deps content drift: addr2line/.cargo-checksum.json

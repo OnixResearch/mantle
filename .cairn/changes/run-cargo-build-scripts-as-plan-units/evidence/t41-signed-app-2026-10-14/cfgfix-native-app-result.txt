@@ -1,0 +1,1 @@
+cargo-build-script-fixture: proc-macro2 serde-derive libc native-sys = 42

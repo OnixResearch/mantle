@@ -1,0 +1,10 @@
+{
+  "canonical_publication": false,
+  "manifest": {
+    "blake3": "7400ce06b6562b56f95260e8b249f6d3d44493406b45f388491c60840b482500",
+    "bytes": 173937,
+    "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/unpublished-packet.json"
+  },
+  "packet_ref": "mantle-t45-unpublished-packet://blake3/7400ce06b6562b56f95260e8b249f6d3d44493406b45f388491c60840b482500",
+  "schema": "mantle-t45-unpublished-packet-reference-v1"
+}

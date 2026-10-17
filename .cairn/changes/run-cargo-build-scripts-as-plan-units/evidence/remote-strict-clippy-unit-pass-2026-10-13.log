@@ -1,0 +1,15 @@
+offline-CARGO_HOME=/tmp/mantle-unit-plan-20261013-87lqAtNv/cargo-home implicit-vendor-config=/tmp/mantle-unit-plan-20261013-87lqAtNv/cargo-home/config.toml
+source-producer-sha256=54066b2f92708dfbefd631864de9a375ba4e619bbfad4898dd7a4ba5f54988c8  crates/mantle-cargo-unit-plan/src/producer.rs
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Checking memchr v2.8.0
+    Checking serde_core v1.0.228
+    Checking blake3 v1.8.2
+    Checking serde v1.0.228
+    Checking serde_json v1.0.149
+    Checking mantle-rust-plan-core v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-rust-plan-core)
+    Checking mantle-cargo-unit-plan v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.89s
+remote-strict-clippy-unit=passed

@@ -29,6 +29,8 @@ The request has two records:
 
 Each binding contains an exact castore directory digest and size, a normalized relative mount, and an optional input label. An empty mount means the composition root. Mantle derives `binding_ref` from the root and mount. It discards labels before it emits the normalized plan.
 
+Bindings may reuse the same exact root at distinct mounts. Each mount still counts as one binding against the policy bound; repeating the same root and mount remains a duplicate binding. The pure planner API requires one snapshot per distinct root, not one per binding. A missing expected snapshot returns `MissingSnapshot`; malformed, unexpected, and duplicate snapshots retain their validation errors.
+
 A collision decision contains an exact logical path and the winning derived `binding_ref`. Binding order is not precedence.
 
 The policy contains named bounds for bindings, decisions, entries, depth, path bytes, one file, and total file bytes. It also states whether symlinks are admitted. The policy has a separate `realization_policy_ref`.

@@ -943,6 +943,7 @@ mod linux {
         use crate::protected_exec::Stage0Inventory;
 
         const CHILD_MODE_VAR: &str = "CRUNCH_TEST_SECCOMP_CHILD_MODE";
+        const DEEP_LEAF_PATH_VAR: &str = "CRUNCH_TEST_SECCOMP_DEEP_LEAF_PATH";
         const LISTENER_ISOLATION_CHILD_MODE: &str = "listener-isolation";
         const FRESH_LISTENER_WORKER_COUNT: usize = 2;
         const _: () = assert!(FRESH_LISTENER_WORKER_COUNT > 1);
@@ -1199,7 +1200,7 @@ mod linux {
                     return;
                 }
                 Some("orphan-without-subreaper-middle") => {
-                    run_deep_middle_child();
+                    run_deep_middle_child(&std::env::current_exe().unwrap());
                     return;
                 }
                 _ => {}
@@ -1229,7 +1230,8 @@ mod linux {
                     return;
                 }
                 Some("deep-middle") => {
-                    run_deep_middle_child();
+                    let leaf = std::env::var_os(DEEP_LEAF_PATH_VAR).expect("parent-admitted leaf path is required");
+                    run_deep_middle_child(Path::new(&leaf));
                     return;
                 }
                 _ => {}
@@ -1495,12 +1497,24 @@ mod linux {
         fn run_deep_parent_child() {
             let current_exe = std::env::current_exe().unwrap();
             let digest_hex = blake3_file_hex(&current_exe).unwrap();
-            let supervisor = install_current_thread_exec_supervisor(current_exe_policy(digest_hex)).unwrap();
+            // Bound orphan authorization work independently of the libtest binary's debug size.
+            let leaf_executable = find_test_executable("true");
+            let leaf_digest = blake3_file_hex(&leaf_executable).unwrap();
+            let inventory = Stage0Inventory {
+                executable_entries: vec![
+                    seed_entry("sandbox-entry", "sandbox-entry", &current_exe, digest_hex, true),
+                    seed_entry("sandbox-shell", "sandbox-shell", &leaf_executable, leaf_digest, true),
+                ],
+                source_entries: Vec::new(),
+            };
+            let policy = ProtectedExecPolicy::from_inventory(inventory).unwrap();
+            let supervisor = install_current_thread_exec_supervisor(policy).unwrap();
             let status = Command::new(&current_exe)
                 .arg("--exact")
                 .arg("protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path")
                 .arg("--nocapture")
                 .env(CHILD_MODE_VAR, "deep-middle")
+                .env(DEEP_LEAF_PATH_VAR, &leaf_executable)
                 .status()
                 .unwrap();
             let reaped_count = reap_adopted_exec_descendants().unwrap();
@@ -1510,17 +1524,33 @@ mod linux {
             assert_eq!(reaped_count, 1);
             assert_eq!(events.len(), 2);
             assert!(events.iter().all(|event| event.policy_decision == "allowed"));
+            assert_eq!(events[0].executable_path, current_exe);
+            assert_eq!(events[1].executable_path, leaf_executable);
+            assert_eq!(events[1].inventory_entry_id.as_deref(), Some("sandbox-shell"));
         }
 
-        fn run_deep_middle_child() {
-            let current_exe = std::env::current_exe().unwrap();
+        fn find_test_executable(name: &str) -> std::path::PathBuf {
+            assert!(!name.is_empty(), "test executable name must not be empty");
+            let path = std::env::var_os("PATH").unwrap();
+            for directory in std::env::split_paths(&path) {
+                let candidate = directory.join(name);
+                if candidate.is_file() {
+                    let executable = std::fs::canonicalize(candidate).unwrap();
+                    assert!(executable.is_absolute(), "canonical test executable must be absolute");
+                    return executable;
+                }
+            }
+            panic!("test executable is absent: {name}");
+        }
+
+        fn run_deep_middle_child(executable: &Path) {
             let pid = unsafe { libc::fork() };
             assert!(pid >= 0, "fork failed: {}", std::io::Error::last_os_error());
             if pid == 0 {
                 unsafe {
                     libc::usleep(ORPHAN_EXEC_DELAY_US);
                 }
-                execve_current_exe_help(&current_exe);
+                execve_executable_help(executable);
             }
         }
 
@@ -1647,11 +1677,10 @@ mod linux {
             }
         }
 
-        fn execve_current_exe_help(current_exe: &Path) -> ! {
-            let path = CString::new(current_exe.as_os_str().as_encoded_bytes()).unwrap();
-            let argv0 = CString::new("crunch-seccomp-test").unwrap();
+        fn execve_executable_help(executable: &Path) -> ! {
+            let path = CString::new(executable.as_os_str().as_encoded_bytes()).unwrap();
             let arg_help = CString::new("--help").unwrap();
-            let argv = [argv0.as_ptr(), arg_help.as_ptr(), std::ptr::null()];
+            let argv = [path.as_ptr(), arg_help.as_ptr(), std::ptr::null()];
             let envp = [std::ptr::null::<libc::c_char>()];
             unsafe {
                 libc::execve(path.as_ptr(), argv.as_ptr(), envp.as_ptr());

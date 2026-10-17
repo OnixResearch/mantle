@@ -1,26 +1,34 @@
 # Native rust-plan validation
 
-This page records the focused validation rails for Mantle's native `rust-plan`
-unit tests. It distinguishes evidence commands from broader Cargo-free proof
-claims: these commands prove test fixture determinism for `src/rust_plan.rs`, not
-full Cargo compatibility, compiler correctness, release reproducibility, or
-bootstrap correctness.
+This page records focused validation rails for the `no_std + alloc`
+`mantle-rust-plan-core`, the `mantle-rust-plan-app` application, and their
+`src/rust_plan.rs` adapter. These rails exercise bounded planning, typed
+observations, and local cache behavior; they do not prove full Cargo
+compatibility, rustc correctness, release reproducibility, or bootstrap
+correctness.
 
 ## Host setup
 
-Use the checked-in Rust toolchain and the same local build prerequisites as the
-ordinary Mantle Rust validation lane. On the current Nix host, the focused rail
-uses this environment shape:
+Use the checked-in Rust toolchain and the Nix development environment.
+Keep temporary files and build products in writable scratch space outside
+the checkout; a full `/tmp` or concurrent Cargo target can invalidate a
+validation run without implicating Rust-plan:
 
 ```bash
-export PATH="$HOME/.cargo/bin:$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/97vplpbajnr7x03fqh9biz5v6960sv22-clang-wrapper-21.1.8/bin:/nix/store/1sw8whfl5gfblp6r9qdkiw1b4j9fgwar-mold-2.40.4/bin:/nix/store/rvp7qlpf5jqvdckjy1afjb6aha6j8dxg-pkg-config-wrapper-0.29.2/bin:$PATH"
-export PKG_CONFIG_PATH=/nix/store/1l5jgzy26hkjz1y3apn1051asvn42sfn-openssl-3.6.1-dev/lib/pkgconfig
-export SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
-export CARGO_TARGET_DIR=/tmp/mantle-rust-plan-validation-target
+export TMPDIR="$HOME/scratch"
+export CARGO_TARGET_DIR="$HOME/scratch/rust-plan-validation-target"
+nix develop --offline --no-write-lock-file -c cargo test \
+  -p mantle-rust-plan-core --locked --offline
+nix develop --offline --no-write-lock-file -c cargo test \
+  -p mantle-rust-plan-app --locked --offline
+nix develop --offline --no-write-lock-file -c cargo check \
+  -p mantle-rust-plan-core --target wasm32-unknown-unknown --locked --offline
 ```
 
-Use a scratch `CARGO_TARGET_DIR` outside the checkout when collecting evidence so
-parallel runs do not share stale build products with unrelated local work.
+The core and application packages test the pure policy and orchestration
+contracts separately. The target check verifies that core policy compiles
+without host filesystem, process, or cache facilities; it does not execute
+Rust code under WebAssembly.
 
 ## Focused rails
 
@@ -58,6 +66,13 @@ cargo test -p mantle --bin mantle \
   rust_plan::tests::process_global_env_mutation_guard_detects_set_and_remove_var_calls \
   -- --exact --nocapture
 ```
+
+Cargo-oracle metadata and unit-graph children are captured with bounded pipe
+readers: at most 64 MiB of stdout and 1 MiB of stderr. If either limit is
+exceeded, the adapter kills and reaps the child and returns a build failure;
+it never waits for an unbounded `Command::output()` capture. The focused
+`cargo test -p mantle --bin mantle rust_plan::tests::cargo_oracle_` rail covers
+a real small `/bin/sh` child and both oversized pipe directions.
 
 ## Local castore cache
 

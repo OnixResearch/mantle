@@ -1,0 +1,7 @@
+guard-ready task=1058 guard=1059
+phase=actual-native-provider-02-start time=2026-10-14T22:40:01.467822+00:00
+phase=actual-native-provider-02-done exit=0 time=2026-10-14T22:43:54.971833+00:00
+guard-ready task=1058 guard=1059
+phase=trusted-provider-only-config-start time=2026-10-14T22:43:55.205818+00:00
+provider-only-variant-config-admitted=success provider=/nix/store/jiwk6cxf281jlsxmlx80d02cmrw7cc1p-native-answer-0.2 config=/nix/store/79dypzq8jbaanaw1mpcq6qvdmmwc8ivm-mantle-unit-plan-config-variant-87lq; not selective rerun proof
+phase=trusted-provider-only-config-done exit=0 time=2026-10-14T22:43:56.724078+00:00

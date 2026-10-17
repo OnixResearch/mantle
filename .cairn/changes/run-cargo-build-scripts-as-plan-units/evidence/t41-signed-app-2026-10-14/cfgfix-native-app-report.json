@@ -1,0 +1,4000 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-app-consumer.ncl",
+  "output_dir": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store",
+  "state_dir": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-state",
+  "store_dir": "/nix/store",
+  "scheduler_policy": {
+    "schema": "mantle-scheduling-policy-v1",
+    "policy_id": "mantle-lazy-priority-v1",
+    "preference_order": [
+      "known-graph",
+      "resource-fit",
+      "locality-transfer"
+    ],
+    "aged_after_epochs": 4,
+    "protected_after_epochs": 8
+  },
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [
+    {
+      "kind": "environment-override",
+      "detail": "PATH: \"/path-not-set\" -> \"/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin\""
+    }
+  ],
+  "build_environment_reports": [
+    {
+      "action_name": "cargo-build-script-units-app-check-cfgfix-87lq",
+      "digest_algorithm": "blake3",
+      "digest_blake3": "8d504dc3862b5518c24bd05aa23378a1f2d62be91e88ccb6aa30e6f73a6fb100",
+      "variable_count": 25,
+      "rejections": []
+    }
+  ],
+  "network_policy_reports": [
+    {
+      "action_name": "cargo-build-script-units-app-check-cfgfix-87lq",
+      "mode": "offline",
+      "result": "denied",
+      "capability": null,
+      "policy_basis": "ordinary derivation network access is denied by default",
+      "audit_class": null,
+      "fixed_output": null,
+      "diagnostic": null
+    }
+  ],
+  "workspace_reports": [],
+  "action_result_reports": [
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/02ffb0f70557d67aba61f5b8978270229e70311d0c3ada3b474da584ba7de6d3",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/ef114716eca2a4d90d3f76104c2ab0a692a3c8ec6181166cc0ff5d4fd760a862",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/ef114716eca2a4d90d3f76104c2ab0a692a3c8ec6181166cc0ff5d4fd760a862",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "c3c6277494c9c5a4bce39bf6a2c70f8f202a9bb1470a6315f5f5e29d379aa477"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 4649376
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/03a32e7820dbd131b427c32e9b103f6488360863fbef40f07e4543077e43d41e",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/3de373efea525daafb9573e21d86668789891ca05278c32511b49c94066a7e45",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/3de373efea525daafb9573e21d86668789891ca05278c32511b49c94066a7e45",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "9aa99c5127a3b1f4cf20e93e33f327d2c7ef3c97b7ed6552fedf087c0f4e8377"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 404240
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/04053d22573ddedae36a6b14080862cc07cebb6dee63b8ac0d6ceff3bbb59a2d",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/a449f006114f206042679d7a5fd2756475c0e9aa2ee64f2f668d9e866fc78244",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/a449f006114f206042679d7a5fd2756475c0e9aa2ee64f2f668d9e866fc78244",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "d2b57b13746f68b68d4cf47bf7aabe273597cc87452c4f4ed23df3ad0b0f61cf"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 3847496
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/089a3b443b69ab4b6544980022660552af4d9bf8985d4ce48df285cab9bc41eb",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/885632af85ccbb8b6d863a5753d4aae9dcfe4fc7ae1001af5ab4b8dce24c4332",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/885632af85ccbb8b6d863a5753d4aae9dcfe4fc7ae1001af5ab4b8dce24c4332",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "5aaa9ef1580907f1fe39707d0793d7af05372131e0c9ebca6575146b5871d75b"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 2,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 3368
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/0e5405ec9315b0d8edb31e9a6d31b350a6d062651f37ec61538d99a6ced4f860",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/d9e71b167cf541b7709ca3ba37283424d7084c0e8cb46d2b5e6e4709f76f2d3f",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/d9e71b167cf541b7709ca3ba37283424d7084c0e8cb46d2b5e6e4709f76f2d3f",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "315c9b5d17e424203c9780a929afb3b57cf3770034886845bf61e54692c5ea29"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 4628920
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/208a13045f44f1f5a6e5d0cd8bbd8ec7442c3e2cfc4876ad6dd081b41177c333",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/4381d6d38b508495892438000b07cb2eba6bf2637b08e70b8567ace81f1d021f",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/4381d6d38b508495892438000b07cb2eba6bf2637b08e70b8567ace81f1d021f",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "fe210cfb6e8f51c38c4bf6c58f17fdd054ce4f6213107bca1cf5db1f98936005"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 3,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 10584104
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/28df20455dab4cdd97ff46b53a96544595c71bd2f0d125872ba4a66220ea186e",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/b6213f0144b0e68bb088f4e2e5a4875b40790e8ddfb553d87b2e96dac6633d18",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/b6213f0144b0e68bb088f4e2e5a4875b40790e8ddfb553d87b2e96dac6633d18",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "ff8588493706f27e2fcd107cc7aba27fc84009871ee50eee63d8f944c0f40f60"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 4128416
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/2ab17fb49145b32dc7503f699225133a2ce92745e8a1a5e630f306ca2b560761",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/097ec720531921e61c31f7f009809886c75d67dac102c029a4151558cd30e70f",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/097ec720531921e61c31f7f009809886c75d67dac102c029a4151558cd30e70f",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "2e2e224fbb047d9fc202cf90b5d271b6c81357845d4a00e96f3fe3d20b900632"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 1280
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/42e009da4090e30296f1dbc2aa1f190c52e533e2bdfd220adc3e2efc271ef69b",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/bc63566dcbeec4a0fe85226551031e4395e416c82a69e8af86d53ebac2d41d57",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/bc63566dcbeec4a0fe85226551031e4395e416c82a69e8af86d53ebac2d41d57",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "fb28b67a414cb7aee4e8e5e4e182f7c8dbe087093a8d6f15fb2badbd2ef96c1e"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 2,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 2784
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/47f9fb31d9b2189d42bd42023d546e40726b74cc09ac47eba6d6b2059e0ea7bc",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/0569f239a44f9ee592c3ebc58fa23525149d5715a6218a1a118d3be7580d1a2c",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/0569f239a44f9ee592c3ebc58fa23525149d5715a6218a1a118d3be7580d1a2c",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "f2601ad6cace5bbb979eecde56843e6c2de39662257264912b45f4fda27ff882"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 6164232
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/4fcabaacf58361fdf9d88c879b4c04a04c8c3d768810a89f7cca0a30c90f98f1",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/d381770b833eb7e002bfe9ec77bac1c1c9a2abe995e7f1cb148147684a44dc2e",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/d381770b833eb7e002bfe9ec77bac1c1c9a2abe995e7f1cb148147684a44dc2e",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "8d19dd34b286ae99df275b4eef8791c64c2e62ef8d0488ab64dd5bca4f791120"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 14519312
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/50e8ee709a1cc5981deac1d03ab028e01a59fc14babda29c4dc7f1018e0b6d5d",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/3fda1b3e4a938fefc7643d84ebd7ef34d5646b5c9401630c510e533f28948473",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/3fda1b3e4a938fefc7643d84ebd7ef34d5646b5c9401630c510e533f28948473",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "4da48fd24d1dae3c6f210f6dd6098d88e24ae089180f867025691f836f54ff9d"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 2,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 3816
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/6558153e18be2ca8b7bf5ec37b830a88ef0d36ec69cf0d4cbf41bb3c2f16065c",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/40e297ef1b2b300a73d2751b0866bafab04ad662412ea68951c5df7d1eb66ef5",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/40e297ef1b2b300a73d2751b0866bafab04ad662412ea68951c5df7d1eb66ef5",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "c918cda666e4ccb4c3591b9250481d31f25e68b6ce124cd53feff5a0a22984b1"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 4591360
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/7c9fbcd2346cf3f219d32ce01f6dd46f032d6b90c7cf3fb30d3602067b553615",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/7a86aef6de21bfb4211337900512d095590b6382c92a387599fac67174ddf16e",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/7a86aef6de21bfb4211337900512d095590b6382c92a387599fac67174ddf16e",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "8f565f145aafc6bc8fba8b32ad065a031200aa417a4d63252ac36323cdf399a1"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 2,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 2512
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/7d82e51bba361ea2fa68473b9ea024c8489618060a34ae0acbc5f17602d7007d",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/7da1de01e7198631155d93d1e4cc91261e9f8275bce42980df52d1d4f0c25c25",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/7da1de01e7198631155d93d1e4cc91261e9f8275bce42980df52d1d4f0c25c25",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "62b933e86f4e86c8ba230d081896a4fd1916a1bfbbb255dba750be33dd3c8ce4"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 4649376
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/7e88130e24a8fcbf9a5a2786899b791d4ad215407f38dbd2b9b814cd66a5221c",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/6aaec2bfd61710906b633f788120439107132e27e77f338d908f32b693ecee47",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/6aaec2bfd61710906b633f788120439107132e27e77f338d908f32b693ecee47",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "aaa78ffca9d5ba03e7f759bd2dadb795a3492fa562ebe3ee540145ca287fb274"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 142800
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/835c573884d1d61595242957c9024b347e26b5536bc02c1c67678bfa0f8e4b78",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/d24586ef2b21988bbe8141bf434d33ec7ee6b9f69b59b3ff674b66ff048ac0f8",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/d24586ef2b21988bbe8141bf434d33ec7ee6b9f69b59b3ff674b66ff048ac0f8",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "bf3da8ae1df0ef6f8e6cd35f14bfeeff05a310f9c37a25ba9ccfc85022711d07"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 28935888
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/88e5ff1bc4d184be204cb0e1a0207fa4c2722b9a04e932de1add7991ef1f6e8d",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/24a8eb5dc58e8e7fdec48b851ead38917030e87752f40b2d50403d0219797ae5",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/24a8eb5dc58e8e7fdec48b851ead38917030e87752f40b2d50403d0219797ae5",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "6c4bde4b1a122c2083a494912a8a20100cc43ab1af69bb067865481eadefe1ce"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 2,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 3584
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/98f40390e5ed73f307c14f0b4cf70bb556085dc49b437f6feb9de9d859cf56ae",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/f8714349cad0906a4850cd9f42928e141aa72319647c8cf00d79afd0ff373b51",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/f8714349cad0906a4850cd9f42928e141aa72319647c8cf00d79afd0ff373b51",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "e94b943970fa5d44929734fa52e28ef562aeec10e05bce73e17e1f1655cb09a8"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 1959728
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/99c12d74e13457b0f401233d88df24809251e527ad77ed24d6a89bea20665552",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/8bc7fb7dece4706675cffc3106b8d2f7b5de79a9ba819b3dfc99fa1a938ddcd5",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/8bc7fb7dece4706675cffc3106b8d2f7b5de79a9ba819b3dfc99fa1a938ddcd5",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "0771901f18af4822ccb34a2e26523a18addb45dd44cc5e4c797783358d7d063a"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 2,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 4696
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/9b4dc54fdd2f8513481a1b28a5fc69f83c90c27ac9cd300b17f1b94b03156daa",
+      "disposition": "miss",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "publication",
+      "action_ref": "mantle-action://blake3/9b4dc54fdd2f8513481a1b28a5fc69f83c90c27ac9cd300b17f1b94b03156daa",
+      "disposition": "published",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [
+        "mantle-action-result://blake3/400d85a0a43b85f5412e168c303494b9abf1c76d92c8e6d74437a2afc40f0f08"
+      ],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/a5b2f957598adda313efcb8f120191a3a9aeb0e2cae1f3f9f40f78c363d741d2",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/7a15f020e910a5823c89733735c3921bf9f733ee1fd4b8db695f8c98ad0e0506",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/7a15f020e910a5823c89733735c3921bf9f733ee1fd4b8db695f8c98ad0e0506",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "eef2996fc38af710a3127e1856a8c7df2e6a3283747cd98ff9373bf9c958181b"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 12568
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/b22617138fd9b3c4f463fb4212b989855e396b0cc50cfb002b6e042376acf2e0",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/94a5c2edac293f7cfc03cdd32b5eab6da3e6239b27a11eb8d02b743a657eb25e",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/94a5c2edac293f7cfc03cdd32b5eab6da3e6239b27a11eb8d02b743a657eb25e",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "c1f60cfbd0fdcddfcba931be9192a6aeaeaf37b2004b3b149cda7e54f6075346"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 9157840
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/b847402a527e7ff284e2910653fef095cf1e0af308a55b9c62144c74750f7d5c",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/0f04ab2e431fc1434c71fa8a6d66c9b79e9db5dacff6773ebdd44b7b9cc30685",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/0f04ab2e431fc1434c71fa8a6d66c9b79e9db5dacff6773ebdd44b7b9cc30685",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "7d17ff55656e4cf3f8b07091c41ba015557ed9be10a087bb394d4f2d10ed989a"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 4672400
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/b9331395cce061cba8dba5cfc27a39e91a850cdb1d9f713f80f310f1739bc8af",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/489b7324193fc9faa783aa418718037d193b2dfb6e8250be944988d224fafd0f",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/489b7324193fc9faa783aa418718037d193b2dfb6e8250be944988d224fafd0f",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "1213396f43d9afd141b5c8454317d9ba552386ae343b9794a6fc3fc7e8af4418"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 2,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 2424
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/bb93ea66183973d3cf10b40879926627198dc688fc76912e0a2da0282391f2d2",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/a13eea8b6daf882fbb4e97288e6e23e9676c45a9256dd900d4d9689a46f19aef",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/a13eea8b6daf882fbb4e97288e6e23e9676c45a9256dd900d4d9689a46f19aef",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "0c9c731a4f6940923cf140bc81c2ea3419f49eb704940f15abb387cb41781268"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 4624336
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/c264829539a4afab57d3d6b2226f45b3907dd7f25a768d5975a10b9fffb8ebbe",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/3919854d42b191f50e66797189090796b87290ee13ccd922a14ca3638301489c",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/3919854d42b191f50e66797189090796b87290ee13ccd922a14ca3638301489c",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "a50c66645e4d5c30fd7f019654f62c065369769fc5fada672e477e6174bf07b8"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 4489704
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/c2b646eca9c4366b6a34d956e4537107d2f33a75a8d044dd12d61016a067a045",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/7d847e094a231e56f6195a73d9f7a4fbce3f46f408e054be6f3df4d01bd3c57b",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/7d847e094a231e56f6195a73d9f7a4fbce3f46f408e054be6f3df4d01bd3c57b",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "2a65113ecbc9821b191608d7dc41e63ec9796fd0c1ddf8672f43cab7abbc586c"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 2,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 2504
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/cb4fe1039c54f4a9b100508687e96d5a77fb7f588774c6c6676d1ea0a9db05ae",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/490afe2e1bd4ce59f536a2c7ebc4793f8b31709d2a25b9195993cbfebc99024b",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/490afe2e1bd4ce59f536a2c7ebc4793f8b31709d2a25b9195993cbfebc99024b",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "a6c70e27d2ec2d607f7cb4aa397c0b23e98a15d4b7f79724182e0272f59f0e24"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 2,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 3816
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/cd1531a505f2dce63baa203a93659993f94ae66ba846e53ae9e34b50e1a70961",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/e786c8f542386d3df42b9096a376acb9d3666a89d90da84d695a0ff615ba6092",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/e786c8f542386d3df42b9096a376acb9d3666a89d90da84d695a0ff615ba6092",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "31402b31c44180911badf25117238cf19ba858ee0880285f140813479a91dc21"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 6163640
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/da789bf3f6f75a42a6d602535cebf6676d5cd205dc32bdd39bc65fd04c8173f1",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/324ef332cbc8d6d1ff63fb9b0a87d25dc53e1394cca74e7fb9a3ac314f4c837a",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/324ef332cbc8d6d1ff63fb9b0a87d25dc53e1394cca74e7fb9a3ac314f4c837a",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "90699afa3cb5574dee25bd505482efd1bb5dbba883c462075e798b1e89f59d12"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 6150808
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/e0990cccc9072a2a24a1e96d48d69ae5618b7c9811cd700c254dfe5ec737a7c8",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/9873fc05b5c9ea12c5a11441900e4965b034c6f232ba858f9f9514ce3d8f5346",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/9873fc05b5c9ea12c5a11441900e4965b034c6f232ba858f9f9514ce3d8f5346",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "910bdb18d550b57ae8945d5d097382a7d3c7159aa0b28067626bdd6095047bcb"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 8574264
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/e1f7d18e6d79bf1afe9c85c96690244c4be873ffcfbeed5a427448e24806b5b1",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/464f6b02c8688f09022c329f74520db74568148118d73e72d21d0a85514f6b88",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/464f6b02c8688f09022c329f74520db74568148118d73e72d21d0a85514f6b88",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "ac8a9971a2f3557cec449e219d887434997b687a2952287a83d46ae9800cbef2"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 4593280
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/e586ffcdf26ce1f08c2255aeaef90720676420565647ef2a70af09c3d4569ec9",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/87cd12df74e599f090e2571d573fa9bc890e4ec6025435807c833ba796e24f88",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/87cd12df74e599f090e2571d573fa9bc890e4ec6025435807c833ba796e24f88",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "709b753c7564e6f4540e95de72f502b1b38d4229632bfe8905f268d49c591a29"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 4477848
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/eb01cd7e136524a28e1771b09ebd44ac986d6df1b5a0649b41d416e0d8cfa91c",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/81c2ecaf0abd9b85b2d0ae8b94ed2f79d72fe2ab3abb95c1772f085d0b2996cd",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/81c2ecaf0abd9b85b2d0ae8b94ed2f79d72fe2ab3abb95c1772f085d0b2996cd",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "7806ff241df02b9dbde6ad0fa15e74801de4e6c8784a8c9db05c01f95ec394e9"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 2474696
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/f7c0516fdc6f1be8b477778e4e68b2250be26872b69f1001a4dc5341db8e4be9",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/286c5d50e18ad9c2b5b797f6c29ee75f774e0da8b753d0127d8d9af7be3f6c55",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": [
+        "crunch-leviathan-1"
+      ],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/286c5d50e18ad9c2b5b797f6c29ee75f774e0da8b753d0127d8d9af7be3f6c55",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": [
+            "crunch-leviathan-1"
+          ],
+          "output_set_digest_blake3": "6b5ef7cdd86134cb7f0bf9fae16eac36852027d2ab6de8f4746b4d570bdbaf63"
+        }
+      ],
+      "publication_result_refs": [],
+      "transfer": {
+        "output_count": 1,
+        "transferred_nar_bytes": 0,
+        "reused_nar_bytes": 982592
+      },
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    }
+  ],
+  "native_dynamic_plans": [
+    {
+      "mode": "native",
+      "producer_key": "/nix/store/hc27k31b2mvhzm3r98na49v9pqpsm50x-cargo-build-script-units-native-cfgfix-87lq.drv",
+      "output_name": "plan",
+      "plan_artifact_path": "/nix/store/w42pw6bqpdv08k3nxkvsbmrq3r0nxmql-cargo-build-script-units-native-cfgfix-87lq-plan",
+      "raw_artifact_digest": "48c6eba1a9053eabf07be3af72ca2a4fac4c8673ca948eae4385bc0a57d47209",
+      "canonical_plan_digest": "a93c3ac23d7a036158ca4fc7d78a585649793c6d171c5b93e22ce8fd9697658c",
+      "accepted_unit_ids": [
+        "u.0384b69e342a5a926c1437070dec3135ce9615ffe948c3c18551ce1b228cf412",
+        "u.07ffa6f11459f512ec5acc214ff32d3adcc188459b96777dc342c997fe4561af",
+        "u.11ced383c4335089f4cd30f8fd19ff092eaf869977a2b176af1abbc74dc65379",
+        "u.17c9e154ef05d4ec19d4ba380d3507c68a06d630164dc31936c2e25244e842ee",
+        "u.2a6e88a2a8a3f2a1aa4877fe621354078dc1abe0de4d7f6e5fb6ba64edad9f47",
+        "u.2c94b2a3e01c6a8880ea6d266ff77c5f00faebd753b2539ab0703122eca0f5b8",
+        "u.3baaea05866db19f842400ae83c42527ed24e4a96da8f04ac9500c86eacedc33",
+        "u.3c8e87bdca89dbca23d6dddd23559d31e8a084a68fd7400f6cfadcec06fe4ef2",
+        "u.3d2854f4a1448c8873253475801bdb32bf4cac0d60000d9798f3ad99fc53f352",
+        "u.45c0f19d0152c02ddd19a39cad627184a9ed4cc15ff2c002dd1bf305c5328476",
+        "u.5391826ba2fde0125881bd9cd181d1d55d4f9d3ee77933035ae276aa1ec1d144",
+        "u.5c6940cea44f4594f34b8298f00b23a93a89f56d9b4a64a51f7952da5091e6a1",
+        "u.647a2889440ee577d661e7999d85c9dae6fa2e0049f61d29ac891595338b4f01",
+        "u.7cd73182b419fc9943fe71ad81414e8291b742efe05f66b95008c7ae1b284712",
+        "u.7e1a37ea047ace9ee9111ff670fe82d1d430eecb6ed3d88f5a60b76857a073bd",
+        "u.7e290789ffed93207f6fe2fe447e8cce75d113d9d8e38e3e8bd3b722b1dd88be",
+        "u.7e8fd3eb4265703c6d9ea223b71d7d0e267f751c9e9b08d59bb0973798ecd394",
+        "u.82a60c0185e05dc288eac77a0f93c74abb70225fc20c3e820561e0c7df53aea3",
+        "u.864db58eee5c53c31c8cc0bac7c92c3c7dd4041bc30441e184862f0205aeb41d",
+        "u.895d1939024a1a810250b4664d2e2661a69980d9ca0e2572f00a258b0b52bf74",
+        "u.936f68ad3172ce581d84bc67799c053889a2dda694394f9d3878837b9da46e31",
+        "u.94d178421dbf12dfc321684a52cca7321d11a0cef98c6b8a524a60c804baaa22",
+        "u.99f32f5ae94f82205ce9acd4a184e1741597862139ddb9246b18f3686f406982",
+        "u.9dc5b6a00be4c0f996b2e2ef6cb81dcd4ab07a4a262efac037cb94843846cecb",
+        "u.9ed1c2e73ff6926f92dbbfd65733065cfb8804118322c8dd032cc6029abef8ff",
+        "u.a25aa98aed7d98efe12f71ac1691caa6e7e7cd84601de5bbaaceec6e1f253249",
+        "u.a46d700b27dd4377dd92753441496e558b6c17f3eab767318b2ec98b21703858",
+        "u.a4d8f41fcb1c20bb81946deb245c52359f76b511fd0e01ef693175308553ff5b",
+        "u.a858f83affef223ab3a1a00677bcd8ee105dc7a4fa8df3bfb21f6fa6eb703fee",
+        "u.b9b5a07a4e0281a1ae26df101bacf4a55d2471e6242bd692f88191cadfd7952d",
+        "u.d17b7bc09aecd9608483099e2db2a137187d5ce6d3f1a6209a39d7ddf3d6e50f",
+        "u.d9f29707191db96b5d510f6726c4a0d927a57942b6af7e75afc20b70a4a169b7",
+        "u.db7f20dad84f467f42243008ed5d4da9c9aee2c3d14b97da9f39627b4f19148c",
+        "u.ecdcc155017b9da28e717acff31391e9c2251a006b755579750186dc23efc681"
+      ],
+      "source_slices": [
+        {
+          "source_id": "s.0859bd256a8e664cdb92dfe18fa82489feb5489d8745e2d3a884054ffe8d321e",
+          "producer_output": "sources",
+          "subpath": "packages/0859bd256a8e664cdb92dfe18fa82489feb5489d8745e2d3a884054ffe8d321e",
+          "declared_nar_blake3": "e3c5b166d83926c459b6b8c335ea14b77e966a6370c90a17867cacfbdd26da3a",
+          "observed_nar_blake3": "e3c5b166d83926c459b6b8c335ea14b77e966a6370c90a17867cacfbdd26da3a",
+          "admitted_store_path": "/nix/store/5imspdi8pbvb2f6gw9qjmah67jg0iyy2-crate-serde-1.0.228",
+          "disposition": "admitted"
+        },
+        {
+          "source_id": "s.26bd2a5b1ab8c59a4491579d7c58609a331f3a28789024857062cc8a32ca9cea",
+          "producer_output": "sources",
+          "subpath": "packages/26bd2a5b1ab8c59a4491579d7c58609a331f3a28789024857062cc8a32ca9cea",
+          "declared_nar_blake3": "f60814246fce79280eeaeee81d88a238829f592c4ccc62f52cd355e29a385e7c",
+          "observed_nar_blake3": "f60814246fce79280eeaeee81d88a238829f592c4ccc62f52cd355e29a385e7c",
+          "admitted_store_path": "/nix/store/w5180lpr7mb00iv1js01jclykrfjy7a2-crate-mantle-cargo-build-script-fixture-0.1.0",
+          "disposition": "admitted"
+        },
+        {
+          "source_id": "s.36dbe358c307eb8a7d3c15a7a73004b21dc38718e6847d2cf69ee1ecf030679a",
+          "producer_output": "sources",
+          "subpath": "packages/36dbe358c307eb8a7d3c15a7a73004b21dc38718e6847d2cf69ee1ecf030679a",
+          "declared_nar_blake3": "2941b906ffcee4e8d3b940ddd3e39b8a48703ed594d04fe0456ba3da4893e2fe",
+          "observed_nar_blake3": "2941b906ffcee4e8d3b940ddd3e39b8a48703ed594d04fe0456ba3da4893e2fe",
+          "admitted_store_path": "/nix/store/4wjs0lgrvv65dw84ywlnz0avbrdnb41g-crate-serde-core-1.0.228",
+          "disposition": "admitted"
+        },
+        {
+          "source_id": "s.421e56f8ce354be7c67d7b02cfef586ab11fbf14909484b0bbb5077665c65d21",
+          "producer_output": "sources",
+          "subpath": "packages/421e56f8ce354be7c67d7b02cfef586ab11fbf14909484b0bbb5077665c65d21",
+          "declared_nar_blake3": "9244d7f16d149e6268fb85324aae52eb519c2917ee95745a89ef05b9d8915046",
+          "observed_nar_blake3": "9244d7f16d149e6268fb85324aae52eb519c2917ee95745a89ef05b9d8915046",
+          "admitted_store_path": "/nix/store/4ragq801j7y9la008vr3124hsrd9ap19-crate-syn-2.0.117",
+          "disposition": "admitted"
+        },
+        {
+          "source_id": "s.5a04d5feedd232ff31691637bb0739afc46e28ab2a379890c4f7f97a4cddcea2",
+          "producer_output": "sources",
+          "subpath": "packages/5a04d5feedd232ff31691637bb0739afc46e28ab2a379890c4f7f97a4cddcea2",
+          "declared_nar_blake3": "cc3156f64c5b1ac49137294d39fad0f4b2e22b46110585e6f135c1986645065d",
+          "observed_nar_blake3": "cc3156f64c5b1ac49137294d39fad0f4b2e22b46110585e6f135c1986645065d",
+          "admitted_store_path": "/nix/store/r32bvcmpvx1cn8lmrv779gf1adying88-crate-serde-derive-1.0.228",
+          "disposition": "admitted"
+        },
+        {
+          "source_id": "s.5c0d90c90833bdf717966e65ceb2700394de01ab287a0a24cbd24d6120bc3a1a",
+          "producer_output": "sources",
+          "subpath": "packages/5c0d90c90833bdf717966e65ceb2700394de01ab287a0a24cbd24d6120bc3a1a",
+          "declared_nar_blake3": "bd2bfa7124fe717f94ddc75dcdf2cb8a9c9097dc455405b50635163f342be439",
+          "observed_nar_blake3": "bd2bfa7124fe717f94ddc75dcdf2cb8a9c9097dc455405b50635163f342be439",
+          "admitted_store_path": "/nix/store/44rhbnc4yzqxrxza70r9lvc3hxxdp10x-crate-zmij-1.0.21",
+          "disposition": "admitted"
+        },
+        {
+          "source_id": "s.5df1cf4134b670b49a32598ffbd821f857a87462ddde65434af2abdc12568522",
+          "producer_output": "sources",
+          "subpath": "packages/5df1cf4134b670b49a32598ffbd821f857a87462ddde65434af2abdc12568522",
+          "declared_nar_blake3": "299f041f27b34cd560b008761238e4bd3051f645f410f3a4c3cd69203ca9c49e",
+          "observed_nar_blake3": "299f041f27b34cd560b008761238e4bd3051f645f410f3a4c3cd69203ca9c49e",
+          "admitted_store_path": "/nix/store/07x1w6b6511nz85d60xwf5jy99r1glqh-crate-unicode-ident-1.0.24",
+          "disposition": "admitted"
+        },
+        {
+          "source_id": "s.7e6477d6d05415cb4b99938df588e09eecc286dd372b7dfd4b59666f01a70e80",
+          "producer_output": "sources",
+          "subpath": "packages/7e6477d6d05415cb4b99938df588e09eecc286dd372b7dfd4b59666f01a70e80",
+          "declared_nar_blake3": "8f7cdbffd7363959f36ac3bde0aa7ffc3bd3bf06fa18b2157e0b468c33bf7bd3",
+          "observed_nar_blake3": "8f7cdbffd7363959f36ac3bde0aa7ffc3bd3bf06fa18b2157e0b468c33bf7bd3",
+          "admitted_store_path": "/nix/store/6626mfmxqcyz4cy9wss52phs47yhkzhv-crate-proc-macro2-1.0.106",
+          "disposition": "admitted"
+        },
+        {
+          "source_id": "s.84b4a01ee5bbecbffb3c46fb189c4e1f5623f3f5ba9768136f85209e14b97c36",
+          "producer_output": "sources",
+          "subpath": "packages/84b4a01ee5bbecbffb3c46fb189c4e1f5623f3f5ba9768136f85209e14b97c36",
+          "declared_nar_blake3": "6a0d7722f59a5de2ecb9c3c9ede36f93d699b8884b652ecdfe02e6d67f39e446",
+          "observed_nar_blake3": "6a0d7722f59a5de2ecb9c3c9ede36f93d699b8884b652ecdfe02e6d67f39e446",
+          "admitted_store_path": "/nix/store/v64qxmnlqy6hlijrxn51a5sn9dgm9jns-crate-itoa-1.0.18",
+          "disposition": "admitted"
+        },
+        {
+          "source_id": "s.a43bb3d55f10e8291c73d23cdb44e013c5fbed02cae29d0cc41bfad4c79c9c1b",
+          "producer_output": "sources",
+          "subpath": "packages/a43bb3d55f10e8291c73d23cdb44e013c5fbed02cae29d0cc41bfad4c79c9c1b",
+          "declared_nar_blake3": "d1a625c8a7a8bb38184cfe30c9564c2b05f234124e5560621a0c84ff18412f1b",
+          "observed_nar_blake3": "d1a625c8a7a8bb38184cfe30c9564c2b05f234124e5560621a0c84ff18412f1b",
+          "admitted_store_path": "/nix/store/sls18qjf042jjqfx58bdbab07wfpmib9-crate-serde-json-1.0.149",
+          "disposition": "admitted"
+        },
+        {
+          "source_id": "s.bced9c713760b05bf3e9ae4eddd8b495a06ff02fd738fad387b0bcd05d0c5cfa",
+          "producer_output": "sources",
+          "subpath": "packages/bced9c713760b05bf3e9ae4eddd8b495a06ff02fd738fad387b0bcd05d0c5cfa",
+          "declared_nar_blake3": "cdd4c19d2f1682cd49cde279c8c727feae226c12c111c78672ee10fb09ab38a9",
+          "observed_nar_blake3": "cdd4c19d2f1682cd49cde279c8c727feae226c12c111c78672ee10fb09ab38a9",
+          "admitted_store_path": "/nix/store/zv1d0ya1cmn58v1ga21ckds2rw55bi98-crate-libc-0.2.186",
+          "disposition": "admitted"
+        },
+        {
+          "source_id": "s.c171f4977491af792c63aa871d190a878b28e90c84d0837d71a59967f420c1f1",
+          "producer_output": "sources",
+          "subpath": "packages/c171f4977491af792c63aa871d190a878b28e90c84d0837d71a59967f420c1f1",
+          "declared_nar_blake3": "b432a85719b2798f3c2d29896bd307582679d3d431d52f7c1310ab25e0e6ec03",
+          "observed_nar_blake3": "b432a85719b2798f3c2d29896bd307582679d3d431d52f7c1310ab25e0e6ec03",
+          "admitted_store_path": "/nix/store/mf1c9hhgwv86yxn743gbmipn13d9z61d-crate-memchr-2.8.0",
+          "disposition": "admitted"
+        },
+        {
+          "source_id": "s.c33edcb885aff779e5111d2cc37a5779602067b8174b88e0a30229efe185cf8f",
+          "producer_output": "sources",
+          "subpath": "packages/c33edcb885aff779e5111d2cc37a5779602067b8174b88e0a30229efe185cf8f",
+          "declared_nar_blake3": "1170b7f3afde58f6836137571d015d17ef57e7039504fbcc1e80b46b4807a9b4",
+          "observed_nar_blake3": "1170b7f3afde58f6836137571d015d17ef57e7039504fbcc1e80b46b4807a9b4",
+          "admitted_store_path": "/nix/store/rd2h1nl66p6l38b6gshmcrg17ghg2gy4-crate-quote-1.0.45",
+          "disposition": "admitted"
+        },
+        {
+          "source_id": "s.fb0c6f106f79d4a221bac3d595a06827df9d2b86111e284a7b96011185f9b3e1",
+          "producer_output": "sources",
+          "subpath": "packages/fb0c6f106f79d4a221bac3d595a06827df9d2b86111e284a7b96011185f9b3e1",
+          "declared_nar_blake3": "231da6c2d9fdef263781acfbdb4d24539ce94827db012efb6ad0a28b6196d8fb",
+          "observed_nar_blake3": "231da6c2d9fdef263781acfbdb4d24539ce94827db012efb6ad0a28b6196d8fb",
+          "admitted_store_path": "/nix/store/9dvkyhss543jrwjn097g5syjkkkifr46-crate-native-answer-sys-0.1.0",
+          "disposition": "admitted"
+        }
+      ],
+      "rejection_reason": null,
+      "scheduler_action": "registered-roots"
+    }
+  ],
+  "plan_output_bindings": [
+    {
+      "consumer_drv_key": "/nix/store/mi85b7m9pm5a1z504m59wr78i8949iry-cargo-build-script-units-app-check-cfgfix-87lq.drv",
+      "name": "app",
+      "producer_drv_path": "/nix/store/hc27k31b2mvhzm3r98na49v9pqpsm50x-cargo-build-script-units-native-cfgfix-87lq.drv",
+      "plan_output": "plan",
+      "root": "u.99f32f5ae94f82205ce9acd4a184e1741597862139ddb9246b18f3686f406982",
+      "unit_output": "out",
+      "plan_digest": "a93c3ac23d7a036158ca4fc7d78a585649793c6d171c5b93e22ce8fd9697658c",
+      "root_drv_path": "/nix/store/byyl9i4d9kjyyz7fhi8j5nngy10rnw81-rust-unit-99f32f5ae94f8220.drv",
+      "output_path": "/nix/store/55l3hmyp9an8h7j57r1s6lv8ih904igk-rust-unit-99f32f5ae94f8220",
+      "status": "bound",
+      "failure_reason": null
+    }
+  ],
+  "scheduler_priority_decisions": [
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 1,
+      "selected_goal_key_blake3": "d5d7e4a9df5b5cbb5cc1be28f8c18af21b49e4f60437bc0a6cbef04bfeadd6da",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "a7d586a0835be20577f5fab8005369e24f874e12597344f6c39e790beab4d194",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 2,
+      "known_critical_path_work_units": 2,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 2,
+      "selected_goal_key_blake3": "2c5de19d312c98d20bc769c5475030282fa2a102bb014af6bbe138c20e077993",
+      "competing_goal_count": 13,
+      "candidate_snapshot_digest_blake3": "5cae9bd53237cb1dadd4947c5bff792f954ffcb300c1cb9cd4470b3acccddcc2",
+      "runner_up": {
+        "goal_key_blake3": "f0f4de965a3fbeeb39617effd2420e4759f1f139d03674906411e703c7231334",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "fresh",
+        "age_epochs": 1,
+        "known_critical_path_nodes": 9,
+        "known_critical_path_work_units": 9,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 9,
+      "known_critical_path_work_units": 9,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 3,
+      "selected_goal_key_blake3": "f0f4de965a3fbeeb39617effd2420e4759f1f139d03674906411e703c7231334",
+      "competing_goal_count": 12,
+      "candidate_snapshot_digest_blake3": "02f1045522effb8bea519fb70c1e2ee0cd94704dcf887cb7882473c2e220a826",
+      "runner_up": {
+        "goal_key_blake3": "aa851bfb5223d5267e0bd6ac10fdac01e77d37e24ddddae11f545b8d689e5284",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "fresh",
+        "age_epochs": 2,
+        "known_critical_path_nodes": 8,
+        "known_critical_path_work_units": 8,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 2,
+      "known_critical_path_nodes": 9,
+      "known_critical_path_work_units": 9,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "known-graph-pressure",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 4,
+      "selected_goal_key_blake3": "aa851bfb5223d5267e0bd6ac10fdac01e77d37e24ddddae11f545b8d689e5284",
+      "competing_goal_count": 12,
+      "candidate_snapshot_digest_blake3": "8ce444926d5451c95434be80bc5772ef7ded472e90020939949eb5519fdd514d",
+      "runner_up": {
+        "goal_key_blake3": "38125617ba895db8f7e89c03d92b7cda3b56a94fc99f038c61fd87705dccc83c",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "fresh",
+        "age_epochs": 3,
+        "known_critical_path_nodes": 8,
+        "known_critical_path_work_units": 8,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 3,
+      "known_critical_path_nodes": 8,
+      "known_critical_path_work_units": 8,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 5,
+      "selected_goal_key_blake3": "38125617ba895db8f7e89c03d92b7cda3b56a94fc99f038c61fd87705dccc83c",
+      "competing_goal_count": 11,
+      "candidate_snapshot_digest_blake3": "f3dbe7ce6ad551427143bfd165c6e7d33e9400205135eda50bf86f812891b4b9",
+      "runner_up": {
+        "goal_key_blake3": "4f2cc106cf60511a49cd4997df04e7568a545fe6b1479a387e4ddae1ad0dbc5d",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "aged",
+        "age_epochs": 4,
+        "known_critical_path_nodes": 6,
+        "known_critical_path_work_units": 6,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "aged",
+      "age_epochs": 4,
+      "known_critical_path_nodes": 8,
+      "known_critical_path_work_units": 8,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "known-graph-pressure",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 6,
+      "selected_goal_key_blake3": "4f2cc106cf60511a49cd4997df04e7568a545fe6b1479a387e4ddae1ad0dbc5d",
+      "competing_goal_count": 11,
+      "candidate_snapshot_digest_blake3": "b3c4f9caf7eb1e5b881601cca5a9224a4081347b4c200284d8cab24fe34ea4bb",
+      "runner_up": {
+        "goal_key_blake3": "f1e6a15ccac25b9e30109cb2ef139b82111e4aa1da6e23aedb59974ced1b5199",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "aged",
+        "age_epochs": 5,
+        "known_critical_path_nodes": 6,
+        "known_critical_path_work_units": 6,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "aged",
+      "age_epochs": 5,
+      "known_critical_path_nodes": 6,
+      "known_critical_path_work_units": 6,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 7,
+      "selected_goal_key_blake3": "aca0725f9157535eca19196fed9377dcd49a3b09ab390117b78bfaa9bde992fb",
+      "competing_goal_count": 11,
+      "candidate_snapshot_digest_blake3": "6353f7a4a2cdeb6aa9b81424d2c0959e686e92fc0f9fdbf2c5f2f0035c73f546",
+      "runner_up": {
+        "goal_key_blake3": "f1e6a15ccac25b9e30109cb2ef139b82111e4aa1da6e23aedb59974ced1b5199",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "aged",
+        "age_epochs": 6,
+        "known_critical_path_nodes": 6,
+        "known_critical_path_work_units": 6,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "aged",
+      "age_epochs": 4,
+      "known_critical_path_nodes": 8,
+      "known_critical_path_work_units": 8,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "known-graph-pressure",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 8,
+      "selected_goal_key_blake3": "f1e6a15ccac25b9e30109cb2ef139b82111e4aa1da6e23aedb59974ced1b5199",
+      "competing_goal_count": 11,
+      "candidate_snapshot_digest_blake3": "800b9ae08d4a9f2eb39be769bd18bb585f68be8ea66f0a6acd90da0250d827c9",
+      "runner_up": {
+        "goal_key_blake3": "531a6162e89c3d0cc5868ccca3a953233b51a0061e96e9ece5f0dc42fa9fc1fc",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "aged",
+        "age_epochs": 7,
+        "known_critical_path_nodes": 5,
+        "known_critical_path_work_units": 5,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "aged",
+      "age_epochs": 7,
+      "known_critical_path_nodes": 6,
+      "known_critical_path_work_units": 6,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "known-graph-pressure",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 9,
+      "selected_goal_key_blake3": "531a6162e89c3d0cc5868ccca3a953233b51a0061e96e9ece5f0dc42fa9fc1fc",
+      "competing_goal_count": 11,
+      "candidate_snapshot_digest_blake3": "2e921b5c948a8f84bd545ffbfff76aa0119d928435a43a52a86d4280d6f15988",
+      "runner_up": {
+        "goal_key_blake3": "d997df7cc01ac980b109f2098813a475ae05b363e571d9adb6c0597dd976cb93",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 8,
+        "known_critical_path_nodes": 5,
+        "known_critical_path_work_units": 5,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 8,
+      "known_critical_path_nodes": 5,
+      "known_critical_path_work_units": 5,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 10,
+      "selected_goal_key_blake3": "d997df7cc01ac980b109f2098813a475ae05b363e571d9adb6c0597dd976cb93",
+      "competing_goal_count": 11,
+      "candidate_snapshot_digest_blake3": "28d6b7fd2c83a07354a5ed4980ef47cbf71f66a67c1b9e6b11a5b57850903f3a",
+      "runner_up": {
+        "goal_key_blake3": "b55eaa4ef22022036dce10cee09df648a1d36f2c33f24a9bac301b1518858ad0",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 9,
+        "known_critical_path_nodes": 5,
+        "known_critical_path_work_units": 5,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 9,
+      "known_critical_path_nodes": 5,
+      "known_critical_path_work_units": 5,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 11,
+      "selected_goal_key_blake3": "b55eaa4ef22022036dce10cee09df648a1d36f2c33f24a9bac301b1518858ad0",
+      "competing_goal_count": 11,
+      "candidate_snapshot_digest_blake3": "34981ab5643a36253ed14955013422661afa17d180cc420dbb5f3ce67c03806a",
+      "runner_up": {
+        "goal_key_blake3": "eb799e911004d6145a8aacea6661102b4b2b0a7fac57b60befbac49575a19f16",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 10,
+        "known_critical_path_nodes": 5,
+        "known_critical_path_work_units": 5,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 10,
+      "known_critical_path_nodes": 5,
+      "known_critical_path_work_units": 5,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 12,
+      "selected_goal_key_blake3": "eb799e911004d6145a8aacea6661102b4b2b0a7fac57b60befbac49575a19f16",
+      "competing_goal_count": 11,
+      "candidate_snapshot_digest_blake3": "271e149e3e1c54a476e1d6d44a56bed2064ef7fc6fd74f4ef5036dfb6667e691",
+      "runner_up": {
+        "goal_key_blake3": "40cf494a32e4c5e9d800cd88c54eb8c081ad8ac6687c743608e0f74c4a25135a",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 11,
+        "known_critical_path_nodes": 5,
+        "known_critical_path_work_units": 5,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 11,
+      "known_critical_path_nodes": 5,
+      "known_critical_path_work_units": 5,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 13,
+      "selected_goal_key_blake3": "fc9098ba5ff908958626b984f918a99561eddfb4b37674d56bfd6f425478e6b7",
+      "competing_goal_count": 11,
+      "candidate_snapshot_digest_blake3": "287c8e5d31b8ae763e5081fefa8a0779a715e9df97e1e6ce9affbfb3e7f1b6a0",
+      "runner_up": {
+        "goal_key_blake3": "40cf494a32e4c5e9d800cd88c54eb8c081ad8ac6687c743608e0f74c4a25135a",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 12,
+        "known_critical_path_nodes": 5,
+        "known_critical_path_work_units": 5,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 8,
+      "known_critical_path_nodes": 7,
+      "known_critical_path_work_units": 7,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "known-graph-pressure",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 14,
+      "selected_goal_key_blake3": "88468af813f098aa9b251ac54ce115879226d7939e8903415de624e663fa805f",
+      "competing_goal_count": 10,
+      "candidate_snapshot_digest_blake3": "3defc54978bb64b813172591e721f29baee761c196df09c1fc9645bc33f63e57",
+      "runner_up": {
+        "goal_key_blake3": "40cf494a32e4c5e9d800cd88c54eb8c081ad8ac6687c743608e0f74c4a25135a",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 13,
+        "known_critical_path_nodes": 5,
+        "known_critical_path_work_units": 5,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 8,
+      "known_critical_path_nodes": 5,
+      "known_critical_path_work_units": 5,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 15,
+      "selected_goal_key_blake3": "1d0cbb1e73b2e42a72dcf9e6c0d2c92e2c08ae62e3d5fb9f1cd4da8719f93a5c",
+      "competing_goal_count": 10,
+      "candidate_snapshot_digest_blake3": "b272c9e3bcf924ef544f4c95df812630aa66ab466d848a11932108787b53830c",
+      "runner_up": {
+        "goal_key_blake3": "40cf494a32e4c5e9d800cd88c54eb8c081ad8ac6687c743608e0f74c4a25135a",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 14,
+        "known_critical_path_nodes": 5,
+        "known_critical_path_work_units": 5,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 8,
+      "known_critical_path_nodes": 7,
+      "known_critical_path_work_units": 7,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "known-graph-pressure",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 16,
+      "selected_goal_key_blake3": "349f2f47d16c05674d0acccb12a7332af1e54bc41763134eb27dc151249baf34",
+      "competing_goal_count": 10,
+      "candidate_snapshot_digest_blake3": "2110a332fbb0effca65be747d201c7c94a6e5540c48a0e91c74dcbeb941fa30d",
+      "runner_up": {
+        "goal_key_blake3": "40cf494a32e4c5e9d800cd88c54eb8c081ad8ac6687c743608e0f74c4a25135a",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 15,
+        "known_critical_path_nodes": 5,
+        "known_critical_path_work_units": 5,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 8,
+      "known_critical_path_nodes": 5,
+      "known_critical_path_work_units": 5,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 17,
+      "selected_goal_key_blake3": "40cf494a32e4c5e9d800cd88c54eb8c081ad8ac6687c743608e0f74c4a25135a",
+      "competing_goal_count": 10,
+      "candidate_snapshot_digest_blake3": "34e902a9bb917190c7fad5d0b6398de240a1820333ce376644ac776ba63459f4",
+      "runner_up": {
+        "goal_key_blake3": "80c61b8ee04e83ef76aa92e037328d5303be2754c29a0adcf9db87713e1a23a8",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 16,
+        "known_critical_path_nodes": 4,
+        "known_critical_path_work_units": 4,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 16,
+      "known_critical_path_nodes": 5,
+      "known_critical_path_work_units": 5,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "known-graph-pressure",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 18,
+      "selected_goal_key_blake3": "80c61b8ee04e83ef76aa92e037328d5303be2754c29a0adcf9db87713e1a23a8",
+      "competing_goal_count": 10,
+      "candidate_snapshot_digest_blake3": "62e5edd7aadeac1a0c5a04ca4fe0f62be199dae76b408454fce27806903b9129",
+      "runner_up": {
+        "goal_key_blake3": "0239f9088425cf72786d63f3c068a8f4b8cebc71bde3708590c916513b8bbdca",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 8,
+        "known_critical_path_nodes": 4,
+        "known_critical_path_work_units": 4,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 17,
+      "known_critical_path_nodes": 4,
+      "known_critical_path_work_units": 4,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 19,
+      "selected_goal_key_blake3": "0239f9088425cf72786d63f3c068a8f4b8cebc71bde3708590c916513b8bbdca",
+      "competing_goal_count": 9,
+      "candidate_snapshot_digest_blake3": "1b8fb34c2f70a258e86c855552ce0ae2f8e4da23c40e9f7716065fdb4d359cad",
+      "runner_up": {
+        "goal_key_blake3": "86fe810cc28417b1a9abc3e2f4215dc425f8877e22fcad847f0206a96a88e0ad",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 18,
+        "known_critical_path_nodes": 4,
+        "known_critical_path_work_units": 4,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 9,
+      "known_critical_path_nodes": 4,
+      "known_critical_path_work_units": 4,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 20,
+      "selected_goal_key_blake3": "86fe810cc28417b1a9abc3e2f4215dc425f8877e22fcad847f0206a96a88e0ad",
+      "competing_goal_count": 9,
+      "candidate_snapshot_digest_blake3": "cbe67f75d4d6064eaf5dcc35398716d07ead14815991aba29c8ee9068c74dcc7",
+      "runner_up": {
+        "goal_key_blake3": "f7bb348e58336a9571a295f7fe702206019ef884a92bbc27682e19df3fdc12dd",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 11,
+        "known_critical_path_nodes": 4,
+        "known_critical_path_work_units": 4,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 19,
+      "known_critical_path_nodes": 4,
+      "known_critical_path_work_units": 4,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 21,
+      "selected_goal_key_blake3": "f7bb348e58336a9571a295f7fe702206019ef884a92bbc27682e19df3fdc12dd",
+      "competing_goal_count": 8,
+      "candidate_snapshot_digest_blake3": "0f828468ded564eb09899c02553a84a5cd39aba3d83e38c1785f0b5e7c0f67a8",
+      "runner_up": {
+        "goal_key_blake3": "d185b1dc565f747d580db79cf1164a32decf8c9fdf2421bfcfc350e8d860fb11",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 9,
+        "known_critical_path_nodes": 4,
+        "known_critical_path_work_units": 4,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 12,
+      "known_critical_path_nodes": 4,
+      "known_critical_path_work_units": 4,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 22,
+      "selected_goal_key_blake3": "f8b89675e17956473902862de0085c298145ce321495c6275c050cea421d73d0",
+      "competing_goal_count": 8,
+      "candidate_snapshot_digest_blake3": "762bf52f8706a4a780afc9614887df2f711470ec17d45b8a461f2b8216872275",
+      "runner_up": {
+        "goal_key_blake3": "d185b1dc565f747d580db79cf1164a32decf8c9fdf2421bfcfc350e8d860fb11",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 10,
+        "known_critical_path_nodes": 4,
+        "known_critical_path_work_units": 4,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 8,
+      "known_critical_path_nodes": 4,
+      "known_critical_path_work_units": 4,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 23,
+      "selected_goal_key_blake3": "d7cecf480aace1a9679244b94d937cf65a4688637e995cba9fe5f92a8b1c7586",
+      "competing_goal_count": 7,
+      "candidate_snapshot_digest_blake3": "bb691ba5271b37fdc2eaa4e2ea5d9d5b0971308f33dc43c109478e04fb2d74f6",
+      "runner_up": {
+        "goal_key_blake3": "d185b1dc565f747d580db79cf1164a32decf8c9fdf2421bfcfc350e8d860fb11",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 11,
+        "known_critical_path_nodes": 4,
+        "known_critical_path_work_units": 4,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 8,
+      "known_critical_path_nodes": 6,
+      "known_critical_path_work_units": 6,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "known-graph-pressure",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 24,
+      "selected_goal_key_blake3": "18829c1553167631df59b5f41576bcfa1a9c8068b894b592b40e41e2ecaa0146",
+      "competing_goal_count": 7,
+      "candidate_snapshot_digest_blake3": "2923605b5abf64d662a0b226420a091ece21b494992c470536200e638128bdb7",
+      "runner_up": {
+        "goal_key_blake3": "d185b1dc565f747d580db79cf1164a32decf8c9fdf2421bfcfc350e8d860fb11",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 12,
+        "known_critical_path_nodes": 4,
+        "known_critical_path_work_units": 4,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 8,
+      "known_critical_path_nodes": 4,
+      "known_critical_path_work_units": 4,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 25,
+      "selected_goal_key_blake3": "a3488117695ba3377988729cb0c9911a8b4dd5509b4422bf0625db1e4a05760f",
+      "competing_goal_count": 6,
+      "candidate_snapshot_digest_blake3": "7718527fc8ef752ae806264978006a8a0e4a2d0b2705ced301362c8c66d8de64",
+      "runner_up": {
+        "goal_key_blake3": "d185b1dc565f747d580db79cf1164a32decf8c9fdf2421bfcfc350e8d860fb11",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 13,
+        "known_critical_path_nodes": 4,
+        "known_critical_path_work_units": 4,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 8,
+      "known_critical_path_nodes": 4,
+      "known_critical_path_work_units": 4,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 26,
+      "selected_goal_key_blake3": "d185b1dc565f747d580db79cf1164a32decf8c9fdf2421bfcfc350e8d860fb11",
+      "competing_goal_count": 5,
+      "candidate_snapshot_digest_blake3": "8de56d6c8a030892e393622ff10cde3636f02bc12527c97f69158e77047c2e79",
+      "runner_up": {
+        "goal_key_blake3": "a8f8944655931feed41bb9593ef69005bfec3cfb22b784520796cc8415a94424",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 15,
+        "known_critical_path_nodes": 4,
+        "known_critical_path_work_units": 4,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 14,
+      "known_critical_path_nodes": 4,
+      "known_critical_path_work_units": 4,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 27,
+      "selected_goal_key_blake3": "a8f8944655931feed41bb9593ef69005bfec3cfb22b784520796cc8415a94424",
+      "competing_goal_count": 5,
+      "candidate_snapshot_digest_blake3": "990d0678b37d547210ef4b32d5d3017a97493adb99943326237e72da3b82eb5a",
+      "runner_up": {
+        "goal_key_blake3": "dc981e269737dda3f695db6c1283ab24abac9ddf6fcc79d2295aa1d0efa4464a",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "protected",
+        "age_epochs": 8,
+        "known_critical_path_nodes": 3,
+        "known_critical_path_work_units": 3,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 16,
+      "known_critical_path_nodes": 4,
+      "known_critical_path_work_units": 4,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "known-graph-pressure",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 28,
+      "selected_goal_key_blake3": "dc981e269737dda3f695db6c1283ab24abac9ddf6fcc79d2295aa1d0efa4464a",
+      "competing_goal_count": 5,
+      "candidate_snapshot_digest_blake3": "46a80441d4e6414f292b4485de52a374e4843c104a933d34fd24465be0116b8b",
+      "runner_up": {
+        "goal_key_blake3": "d15aaaffcc253189cbaa8af61e8cff345e972e09568bb6c0dd2693aeea38cd3e",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "aged",
+        "age_epochs": 5,
+        "known_critical_path_nodes": 5,
+        "known_critical_path_work_units": 5,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 9,
+      "known_critical_path_nodes": 3,
+      "known_critical_path_work_units": 3,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "starvation-class",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 29,
+      "selected_goal_key_blake3": "41563b3243abf60ce00bbfcfb26b1ee817e5bfa7e7b3a40186d66b1f9d5238e1",
+      "competing_goal_count": 4,
+      "candidate_snapshot_digest_blake3": "e05b18207cbd75b9181d53419a9553ff9076b0ee8f2db0b0d21f606a98923e5d",
+      "runner_up": {
+        "goal_key_blake3": "d15aaaffcc253189cbaa8af61e8cff345e972e09568bb6c0dd2693aeea38cd3e",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "aged",
+        "age_epochs": 6,
+        "known_critical_path_nodes": 5,
+        "known_critical_path_work_units": 5,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "protected",
+      "age_epochs": 8,
+      "known_critical_path_nodes": 3,
+      "known_critical_path_work_units": 3,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "starvation-class",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 30,
+      "selected_goal_key_blake3": "d15aaaffcc253189cbaa8af61e8cff345e972e09568bb6c0dd2693aeea38cd3e",
+      "competing_goal_count": 3,
+      "candidate_snapshot_digest_blake3": "e005dda7bfea11f8c0d1ecd2ca607c2c3c1bb94745d28db413d3cffcb4344296",
+      "runner_up": {
+        "goal_key_blake3": "a626706111e4a12a34f6232c1a0fd11062884c63191cd902b7c24f909eeb323e",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "aged",
+        "age_epochs": 4,
+        "known_critical_path_nodes": 3,
+        "known_critical_path_work_units": 3,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "aged",
+      "age_epochs": 7,
+      "known_critical_path_nodes": 5,
+      "known_critical_path_work_units": 5,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "known-graph-pressure",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 31,
+      "selected_goal_key_blake3": "fec36da3dc3b38dca6c088885f229893de02d87d487ad9561fe097890f29c177",
+      "competing_goal_count": 3,
+      "candidate_snapshot_digest_blake3": "e7fc597dfb8910a333cc6ddc376f3d60fe1e21e812350cba6dc66401a55d9c90",
+      "runner_up": {
+        "goal_key_blake3": "a626706111e4a12a34f6232c1a0fd11062884c63191cd902b7c24f909eeb323e",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "aged",
+        "age_epochs": 5,
+        "known_critical_path_nodes": 3,
+        "known_critical_path_work_units": 3,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "aged",
+      "age_epochs": 4,
+      "known_critical_path_nodes": 3,
+      "known_critical_path_work_units": 3,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "stable-goal-key",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 32,
+      "selected_goal_key_blake3": "a626706111e4a12a34f6232c1a0fd11062884c63191cd902b7c24f909eeb323e",
+      "competing_goal_count": 2,
+      "candidate_snapshot_digest_blake3": "2c70a7d8cbd4996c5ef7f4eb6f7093c8f0afda660f8b1cd6da0217b14ff4ec24",
+      "runner_up": {
+        "goal_key_blake3": "d4b7e3dbc123617d92d59394cd8edccf4b307eba0e84fab902ec56905c424d39",
+        "operator_policy_class": "ordinary",
+        "starvation_class": "fresh",
+        "age_epochs": 2,
+        "known_critical_path_nodes": 4,
+        "known_critical_path_work_units": 4,
+        "blocked_root_count": 2,
+        "blocked_root_count_saturated": false,
+        "resource_fit_class": "unknown",
+        "content_locality_class": "unknown",
+        "transfer_cost_class": "unknown"
+      },
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "aged",
+      "age_epochs": 6,
+      "known_critical_path_nodes": 3,
+      "known_critical_path_work_units": 3,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "starvation-class",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 33,
+      "selected_goal_key_blake3": "d4b7e3dbc123617d92d59394cd8edccf4b307eba0e84fab902ec56905c424d39",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "2292176f8ce452140505f7777f97867745999f2d455fbe87991a03899fe48e16",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 3,
+      "known_critical_path_nodes": 4,
+      "known_critical_path_work_units": 4,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 34,
+      "selected_goal_key_blake3": "0756d4912c37af72af89742da4e1b329a8459755d8004dbcf4833f3fd051fe9d",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "36d1c61a67f9b9eb33d0909e075f988a36861a39d36414b6bf9c4865698b06c7",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 3,
+      "known_critical_path_work_units": 3,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 35,
+      "selected_goal_key_blake3": "3009439814d7fd84cfe64d2c3f954f62f38425ae95faebedb493d378202dc77b",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "5cb8a0d69edf2d2cd1b4e82d39ea70948e90a14d48dbbd8b44606982c34aebe1",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 2,
+      "known_critical_path_work_units": 2,
+      "blocked_root_count": 2,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    },
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 36,
+      "selected_goal_key_blake3": "4ad1bd92bab71dc58763ec595fadde41d84a5ff27d4ff5d4dc4e12f3ce1a5726",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "ec591843cc7ca9acaf6ccc7e40771875197d959db4003fe17bc84d05c77e2020",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 1,
+      "known_critical_path_work_units": 1,
+      "blocked_root_count": 1,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    }
+  ],
+  "overlay_base_generations": [],
+  "store_layer_selections": [
+    {
+      "store_path": "0vqb1mcas5j8dv6bhbrshinlgsg6bvgi-gcc-15.3.0-lib",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "1ga782ml07vy0h503ac4cin0h8d7q6yh-libidn2-2.3.8",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "2kdz3m7ic8w226pcvkz1dlg169v91p6a-zlib-1.3.2",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "4sabfgpxkbv6w3mvk0wil50vdi37m9r8-acl-2.3.2",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "4zmr3iw5s719y5zz7h2dnym67x2i6n23-ncurses-6.6",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "68kslg4wrhdxz24saw62fzyqi1kjgcfs-expand-response-params",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "77giqf2dbsvv1sjcmydx9x366s5614fc-native-answer-0.1",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "8kvxvr3pmsypxiypq4g8zy13glnfr7nx-glibc-2.42-67",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "aasbksznz37vw5pb26wq86209q5cmza8-xgcc-15.2.0-libgcc",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "ab3753m6i7isgvzphlar0a8xb84gl96i-gcc-15.2.0-lib",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "ain8qbb840v775dhz1528lvz0syys7sj-mantle-cargo-unit-helper-cfgfix-87lq",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "bhn71wnpahwj10irc2373w1nqw6353pw-mantle-unit-plan-nightly-nodoc-87lq",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "cynwj0s5x0c84hyi879isn8pdpf1iihm-gmp-6.3.0",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "dbz6pb9g67kpgpl95k8d85kzpxm1c32p-zlib-1.3.2",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "dlr3cc27i1mjkqcm9jlp5bjmb0n57q01-gmp-with-cxx-6.3.0",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "h0ip0h6qp7kc2wm7mwjaglkxxbzmjri4-glibc-2.42-51-dev",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "h6hdbgkfh59np7bi7h8qa76pq27ixz8r-gnugrep-3.12",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "hbnbbbx1n96v1waiiaid9fmg4li4i1kp-gcc-15.2.0-libgcc",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "ipz4lbivx3q7gr79130d6g5ix35vibnw-libunistring-1.4.2",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "jg0wzzd657xyhhss3mfqqa1iv5s9r75i-binutils-2.44-lib",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "lvwga6ivl1d4lnw0zis9ajs0rqx9gp4i-gcc-15.2.0",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "n51dhmdbik1kfrsm62j5knavmigwrl1a-glibc-2.42-84",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "nga9d6m9iplygw3iqghk2g840nz7b0gy-libidn2-2.3.8",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "p2yk6q3bhcz1d0wlmk907ysj4l95ak7y-attr-2.5.2",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "p7jg95rzvfalb95k3mskk0jqxc9d724n-libunistring-1.4.1",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "pg99pd2gbwqs9y6z0q2hmx46m3hw9bns-linux-headers-6.18.7",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "pv1yr8fbzs88rpyc61xycwjlx9dakmp2-mantle-unit-plan-app-check",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "qq90p0xx02ydaqv2gv28mx4qx2vk98fq-readline-8.3p3",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "rfp8lhk4dl9syfn64rwb3h3c73426p08-binutils-2.44",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "scabrfc47i7h73kfp4yn7vkw3qkxv8gk-isl-0.20",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "sfvyavxai6qvzmv9p9x6mp4wwdz4v41m-bash-interactive-5.3p9",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "sjlfsbd2lk4a1iva4vjjgvp4r1hga1xg-mpfr-4.2.2",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "ssvq1r0xd8f7paf6zqgpfql1a4drwhy2-xgcc-15.3.0-libgcc",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "v8sa6r6q037ihghxfbwzjj4p59v2x0pv-bash-5.3p9",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "vpxblivamvic1p5r5zny934jvg33m50r-xgcc-15.2.0-libgcc",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "wi6kaycsa2479qrxv9xy6yg3q5ggfs6j-gcc-15.3.0-libgcc",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "ygdgqjzw03k8d05zq3pigzf67b62j7vs-pcre2-10.46",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "yh8rykx8wakl1ccn8rc351f6r2wbg4cn-libunistring-1.4.2",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "zfv59aslcf318vjkjs8zw855cdjcjdvq-libmpc-1.3.1",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "zlvydh6q1rv1jza79b21yhi07ic0dkkg-libidn2-2.3.8",
+      "selected_layer": "overlay",
+      "shadows": []
+    }
+  ],
+  "remote_telemetry_events": [
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 13,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 12,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 12,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 11,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 11,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 11,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 11,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 11,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 11,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 11,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 11,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 11,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 10,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 10,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 10,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 10,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 10,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 9,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 9,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 8,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 8,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 7,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 7,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 6,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 5,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 5,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 5,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 4,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 3,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 3,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 2,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    },
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    }
+  ],
+  "frontend_artifact_attestations": [],
+  "ast_grep_structural_evidence": [],
+  "ast_grep_structural_evidence_diagnostics": [
+    {
+      "label": "producer",
+      "output_name": "plan",
+      "evidence_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store/w42pw6bqpdv08k3nxkvsbmrq3r0nxmql-cargo-build-script-units-native-cfgfix-87lq-plan/share/mantle/ast-grep-structural-evidence.json",
+      "blocker_class": "ast-grep-evidence-read-error",
+      "message": "opening parent capability for ast-grep structural evidence at /tmp/mantle-unit-plan-20261013-87lqAtNv/client-store/w42pw6bqpdv08k3nxkvsbmrq3r0nxmql-cargo-build-script-units-native-cfgfix-87lq-plan/share/mantle/ast-grep-structural-evidence.json: capability root path component is not a directory: w42pw6bqpdv08k3nxkvsbmrq3r0nxmql-cargo-build-script-units-native-cfgfix-87lq-plan",
+      "next_action": "regenerate share/mantle/ast-grep-structural-evidence.json with the pinned ast-grep toolchain and current BLAKE3 identities"
+    }
+  ],
+  "cargo_build_evidence": [],
+  "cargo_build_evidence_diagnostics": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 3,
+    "built_total": 1,
+    "cached_total": 2,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/nix/store/mi85b7m9pm5a1z504m59wr78i8949iry-cargo-build-script-units-app-check-cfgfix-87lq.drv",
+      "label": "app",
+      "cached": false,
+      "log_file": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-state/logs/mi85b7m9pm5a1z504m59wr78i8949iry-cargo-build-script-units-app-check-cfgfix-87lq.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store/zji3d1xmcz226pi4fiv2cbhfxr6xb6yk-cargo-build-script-units-app-check-cfgfix-87lq",
+          "artifact_attestation": {
+            "logical_path": "/nix/store/zji3d1xmcz226pi4fiv2cbhfxr6xb6yk-cargo-build-script-units-app-check-cfgfix-87lq",
+            "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-state/attestations/artifacts/888391ac9060da8335483658184aaca98b7ca32c8920d2018500777535f30554.json"
+          }
+        }
+      ]
+    },
+    {
+      "drv_key": "/nix/store/hc27k31b2mvhzm3r98na49v9pqpsm50x-cargo-build-script-units-native-cfgfix-87lq.drv",
+      "label": "producer",
+      "cached": true,
+      "log_file": null,
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store/zfz0ipkdvs1s9qgaqb627vvyigk0qpwa-cargo-build-script-units-native-cfgfix-87lq",
+          "artifact_attestation": {
+            "logical_path": "/nix/store/zfz0ipkdvs1s9qgaqb627vvyigk0qpwa-cargo-build-script-units-native-cfgfix-87lq",
+            "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-state/attestations/artifacts/6f599c0e8bc92bede60bf0fcae8c060758045491cc4bf72e0c2f76315e2e194d.json"
+          }
+        },
+        {
+          "name": "plan",
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store/w42pw6bqpdv08k3nxkvsbmrq3r0nxmql-cargo-build-script-units-native-cfgfix-87lq-plan",
+          "artifact_attestation": {
+            "logical_path": "/nix/store/w42pw6bqpdv08k3nxkvsbmrq3r0nxmql-cargo-build-script-units-native-cfgfix-87lq-plan",
+            "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-state/attestations/artifacts/be763dfa4bff36922f2cfa334aaab0060854a2561f64899554a5b3853a29196e.json"
+          }
+        },
+        {
+          "name": "sources",
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store/ckiv31zqm7yirab4m8232mh3h093gahc-cargo-build-script-units-native-cfgfix-87lq-sources",
+          "artifact_attestation": {
+            "logical_path": "/nix/store/ckiv31zqm7yirab4m8232mh3h093gahc-cargo-build-script-units-native-cfgfix-87lq-sources",
+            "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-state/attestations/artifacts/7b9d413f8375c34dd65136adcb4f67feac5ddce3a8a4917dbe0361bcf64b0de6.json"
+          }
+        }
+      ]
+    },
+    {
+      "drv_key": "/nix/store/byyl9i4d9kjyyz7fhi8j5nngy10rnw81-rust-unit-99f32f5ae94f8220.drv",
+      "label": "rust-unit-99f32f5ae94f8220.drv",
+      "cached": true,
+      "log_file": null,
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store/55l3hmyp9an8h7j57r1s6lv8ih904igk-rust-unit-99f32f5ae94f8220",
+          "artifact_attestation": {
+            "logical_path": "/nix/store/55l3hmyp9an8h7j57r1s6lv8ih904igk-rust-unit-99f32f5ae94f8220",
+            "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-state/attestations/artifacts/cf2a5f2c392e317960a8cf253442feb3709369cd5c58a862d2720a51f856b8e1.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}

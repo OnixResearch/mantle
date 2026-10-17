@@ -1,0 +1,1 @@
+{"error":"opening store: store: store-backend-mismatch: requested casita, state declares snix","code":3,"kind":"internal"}

@@ -1,0 +1,22 @@
+[package]
+name = "crunch-remote-core"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+blake3 = { version = "=1.8.2", default-features = false }
+serde = { version = "1", default-features = false, features = ["alloc", "derive"], optional = true }
+
+[features]
+serde = ["dep:serde"]
+
+[dev-dependencies]
+proptest = "1.11"
+serde_json = "1.0"

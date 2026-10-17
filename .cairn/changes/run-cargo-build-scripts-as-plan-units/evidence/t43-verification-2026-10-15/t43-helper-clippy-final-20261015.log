@@ -1,0 +1,14 @@
+start_utc=2026-10-15T01:28:10.648404+00:00
+cwd=/tmp/mantle-unit-plan-20261013-87lqAtNv/source
+command=/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo --config .cargo/vendor-config.toml --config 'target.x86_64-unknown-linux-gnu.linker="/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc"' clippy --locked --offline -p mantle-cargo-unit-plan --all-targets --no-deps -- -D warnings
+preflight={"home": {"available_bytes": 350100459520, "available_inodes": 210494355}, "root": {"available_bytes": 350100459520, "available_inodes": 210494355}}
+--- stdout+stderr ---
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Checking mantle-cargo-unit-plan v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.30s
+
+--- end ---
+{"command": ["/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo", "--config", ".cargo/vendor-config.toml", "--config", "target.x86_64-unknown-linux-gnu.linker=\"/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc\"", "clippy", "--locked", "--offline", "-p", "mantle-cargo-unit-plan", "--all-targets", "--no-deps", "--", "-D", "warnings"], "elapsed_seconds": 4.125358822755516, "end_utc": "2026-10-15T01:28:14.776226+00:00", "exit": 0, "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-helper-clippy-final-20261015.log", "name": "helper-clippy-final", "postflight": {"home": {"available_bytes": 350100168704, "available_inodes": 210494353}, "root": {"available_bytes": 350100168704, "available_inodes": 210494353}}, "preflight": {"home": {"available_bytes": 350100459520, "available_inodes": 210494355}, "root": {"available_bytes": 350100459520, "available_inodes": 210494355}}, "start_utc": "2026-10-15T01:28:10.648404+00:00", "timeout_seconds": 1800}

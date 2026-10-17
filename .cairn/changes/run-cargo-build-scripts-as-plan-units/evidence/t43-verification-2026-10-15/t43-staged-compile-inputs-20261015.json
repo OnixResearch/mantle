@@ -1,0 +1,96 @@
+{
+  "schema": "mantle-t43-exact-staged-compile-inputs-v1",
+  "source": "existing canonical repository inputs; copied only into remote source mirror to satisfy compile-time includes",
+  "files": [
+    {
+      "path": ".cairn/changes/separate-remote-build-hexagon/evidence/origin-main-accepted-wire.base64",
+      "bytes": 1533,
+      "transport_sha256": "aa1fe8a5245f5a22e9e3a9df49f51ad4c202780ec244fafb06681baaa8f32e27",
+      "blake3_256": "64a3449d112f8e01f5e0731ed9306e539c29aa5de72ded0aacc8837d8cbd5d9a"
+    },
+    {
+      "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-replay-first-build.json",
+      "bytes": 6785,
+      "transport_sha256": "8d96e094737676bb854ff9cdb3b519cfa26284239728a3b3ade2fa3c80b08e9b",
+      "blake3_256": "b4c3b80afbb1f18e978e42f11f7786966e4e7d4ac199087463e0c6d977c3d927"
+    },
+    {
+      "path": ".cairn/changes/separate-remote-build-hexagon/evidence/origin-main-receipt.json",
+      "bytes": 635,
+      "transport_sha256": "c677a1455cb6e988febd46f880afa25b286c0ab285795bd6b49b30252d945601",
+      "blake3_256": "ac6df1a27803657c6102d37a25b6cc1499b2201639dc1ac7eab59cc008b71673"
+    },
+    {
+      "path": ".cairn/changes/separate-remote-build-hexagon/evidence/origin-main-rejected-stderr.txt",
+      "bytes": 62,
+      "transport_sha256": "b9b6e3e8c6cb5d5018fa8d0680ea2a22f48581ba35926656189591a514ef0a77",
+      "blake3_256": "17c1d26789a1d94e3ac60d50a8cf9241b9729bd0d19477073d2bdbfef775ca43"
+    },
+    {
+      "path": ".cairn/changes/separate-remote-build-hexagon/evidence/origin-main-executable-plan.json",
+      "bytes": 613,
+      "transport_sha256": "3c503e15d7b0299b4561d343cd4e388188a411c94c43b5b0cc6de7e4f6ab1c9d",
+      "blake3_256": "cfdfcbc52f3f2ecb0aff3582792acd9f58f0924e5f50b1b0ae70cb1142ee3a8a"
+    },
+    {
+      "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-replay-second-build.json",
+      "bytes": 6785,
+      "transport_sha256": "8d96e094737676bb854ff9cdb3b519cfa26284239728a3b3ade2fa3c80b08e9b",
+      "blake3_256": "b4c3b80afbb1f18e978e42f11f7786966e4e7d4ac199087463e0c6d977c3d927"
+    },
+    {
+      "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-info.json",
+      "bytes": 1405,
+      "transport_sha256": "35976068609b9dcdd976c626b384d7b812b7b97bd6c24d71e3949c19932647ef",
+      "blake3_256": "1effc5d732a1639e0dad2a642967d0d24edaae7ce98aa536547ce90f7cd309ed"
+    },
+    {
+      "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-list.json",
+      "bytes": 304,
+      "transport_sha256": "9c8671bdca94e8aa725538ab98bcfa775efbffd83d55c621d2d5e690eea7655d",
+      "blake3_256": "c93693ec060d539ba595ea723bd7dc73203d0c1d00ca2c147b7a7eaa95b36a61"
+    },
+    {
+      "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-roots.json",
+      "bytes": 651,
+      "transport_sha256": "9111f161411c1a70b45c0384e1b7e92f1afeebb997e3fa1320bac56d579f8e63",
+      "blake3_256": "3340bb0a4ed631e505eb262fe4006118dce25fc9ca9710324874c56a98ecf185"
+    },
+    {
+      "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-replay-first-gc.json",
+      "bytes": 2472,
+      "transport_sha256": "f77f86a81eb67c4f252d5b5aeb6a6bd0216c16bb9f7b8a0f7e5600995610f764",
+      "blake3_256": "75dba1b725340cedd125b55083a1e4600214f15fc3452290f9c960bde76f4296"
+    },
+    {
+      "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-replay-second-gc.json",
+      "bytes": 2472,
+      "transport_sha256": "f77f86a81eb67c4f252d5b5aeb6a6bd0216c16bb9f7b8a0f7e5600995610f764",
+      "blake3_256": "75dba1b725340cedd125b55083a1e4600214f15fc3452290f9c960bde76f4296"
+    },
+    {
+      "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-archive-export.json",
+      "bytes": 262,
+      "transport_sha256": "67dc7d2ec99419fba2b25fd996ccf89afc121a4bbf0ade184e7e8455ae652e89",
+      "blake3_256": "efd352fbcaf9d7b6409f45c0df6cafb53cb8ca00fbb8841f6e143bfe519b8ec1"
+    },
+    {
+      "path": ".cairn/archive/2026-07-14-prove-hardware-simulation-build-flow/evidence/hardware-evidence.json",
+      "bytes": 15107,
+      "transport_sha256": "0472370ede8888996837827a05a6fc1fa8175bf82c25dd753cfbb5592e0fa8a5",
+      "blake3_256": "392888f4f7e9628ea463eceb064ff3eb57ffc76d5bdb8fc80b648cc1d621e8bd"
+    },
+    {
+      "path": ".cairn/archive/2026-07-14-prove-hardware-simulation-build-flow/evidence/hardware-runtime-summary.json",
+      "bytes": 11656,
+      "transport_sha256": "296204fbc8c4399016a1a5b8889a5d4c8b41460a57b4025c552f8628b4655ed3",
+      "blake3_256": "79dd62116aadbe5906f7cba5e68da9cafa6861fb3810bbb16b009bacbabaffca"
+    },
+    {
+      "path": ".github/workflows/flake-check.yml",
+      "bytes": 383,
+      "transport_sha256": "f2b5cee0ac523262976112d1e27bdb4c8726c1f251ab53ac90624e6f447632f6",
+      "blake3_256": "dbec4a586d8f12804ba65864e8e1d7f79dbcee4841f68b64182d351021d76cf8"
+    }
+  ]
+}

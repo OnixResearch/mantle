@@ -65,7 +65,7 @@ pub(crate) fn read_test_sentinel_path() -> Option<std::ffi::OsString> {
 pub(crate) fn is_trace_log_requested(observed: Option<&std::ffi::OsStr>) -> bool {
     let is_requested = observed.is_some();
     debug_assert!(is_requested || observed.is_none());
-    debug_assert!(!is_requested || observed.as_deref().is_some());
+    debug_assert!(!is_requested || observed.is_some());
     is_requested
 }
 

@@ -1,0 +1,10 @@
+offline-CARGO_HOME=/home/brittonr/.cargo pinned-onix-artifact-checkout=c932138
+source-pull-sha256=50895c6c8da47c8ae49f1baa51ba30beed8a91da3ef2ace92c1f62600c23ba22  crates/crunch-store/src/pull.rs
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+error: failed to download `fault-injection v1.0.10`
+
+Caused by:
+  attempting to make an HTTP request, but --offline was specified

@@ -8,9 +8,9 @@
 
 use crunch_build::distributed::EXTERNAL_BATCH_PROTOCOL_SCHEMA;
 use crunch_build::distributed::ExternalBatchOperationKind;
-use crunch_build::distributed::RemoteAttemptRetryPolicy;
 use crunch_build::distributed::RemoteFailureDebugPolicy;
 use crunch_build::distributed::RemoteTransferPolicy;
+use crunch_remote_core::attempt::RemoteAttemptRetryPolicy;
 use serde::Deserialize;
 use serde::Serialize;
 

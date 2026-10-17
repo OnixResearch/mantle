@@ -1,0 +1,632 @@
+{
+  "schema": "mantle-frozen-sixteen-approved-base-reconciliation-v1",
+  "date": "2026-10-16",
+  "owning_change": "add-dynamic-plan-source-slices",
+  "scope": "Read-only integration-boundary reconciliation requested after parent accepted exact d751 prerequisite/implementation custody. New report only; no source or existing packet mutation, new source/CLI hash/copy, test, runtime, publication, index or commit.",
+  "immediate_outcome": {
+    "prepared_packet_matches_approved_committed_base": false,
+    "conclusion": "The accepted frozen16 packet is a fixed per-leaf transition against the recorded canonical preimage cohort, NOT a delta atop approved d751. Applying its whole-file payloads over d751 would silently replace separately owned committed context and would not establish equality to exercised T61. Its existing operator correctly requires different canonical preimages.",
+    "bounded_proof": "Of14 required existing product preimages,12 have different byte lengths from the selected committed blobs; the2540B existing composition release-note preimage is absent in d751. One existing leaf has equal length only;2 required absences agree. No new source content digest was computed.",
+    "no_final_acceptance": true
+  },
+  "accepted_prerequisite_custody": {
+    "commit": "d75158b00b080535f2ffea12430665ca3d57ea82",
+    "tree": "2331e6c984b3e0482ccd49d4fc07ab6b2f91e2ab",
+    "selected_delta": [],
+    "parent_acceptance": "Parent explicitly accepted precise prerequisite/implementation custody only, not final repaired snapshot, semantic acceptance or current cohort equality.",
+    "manifest": "source-slices-selected-immutable-binding-2026-10-16.json"
+  },
+  "actual_frozen_packet": {
+    "root": "ssh://brittonr@100.90.108.13/tmp/mantle-final-sixteen-cutover-prep-z4o26tkr",
+    "operator": {
+      "path": "ssh://brittonr@100.90.108.13/tmp/mantle-final-sixteen-cutover-prep-z4o26tkr/final-sixteen-landing-operator.py",
+      "retained_blake3": "92f6b3a1f63976d84a79e926f5bb3c0f75906c14fb19f54cdd6a912ef14df674",
+      "identity_source": "Existing parent-authorized retained custody, recovered from original parent journal. No rehash."
+    },
+    "inventory": {
+      "path": "ssh://brittonr@100.90.108.13/tmp/mantle-final-sixteen-cutover-prep-z4o26tkr/preparation-inventory.json",
+      "retained_blake3": "d30195e9b2d1e0076673caef20bf091465520254a012b2e6f6624068d88f09fe"
+    },
+    "positive_retention_index": {
+      "path": "ssh://brittonr@100.90.108.13/tmp/mantle-final-sixteen-cutover-prep-z4o26tkr/positive-retention-index.json",
+      "retained_blake3": "c1da3f9805db2c06b00c1183de6c80ac3047f0faa09f45243f7daa1a5a4fba2e"
+    },
+    "canonical_root": "/home/brittonr/git/OnixResearch/mantle",
+    "contract": {
+      "P": 16,
+      "C": 19,
+      "R": 14,
+      "allocations": 49,
+      "budget": {
+        "unit": 131072,
+        "P": 16,
+        "C": 19,
+        "R": 14,
+        "required_available_inodes": 49,
+        "product_stage_rounded_bytes": 2883584,
+        "rollback_rounded_bytes": 2621440,
+        "carrier_cap_rounded_bytes": 5242880,
+        "metadata_reserve_bytes": 1048576,
+        "required_available_bytes": 11796480
+      },
+      "journal": {
+        "entry_limit": 131072,
+        "entry_count_limit": 75,
+        "total_limit": 9830400,
+        "remote_only": true,
+        "prep_artifact_total_cap": 16777216,
+        "reason": "One initial, all-staged, carrier-readback, source-readback, success/failure checkpoint plus intent/commit for each35 publication. Fixture measures actual serialized entries with49 allocation identities and35 operations."
+      }
+    },
+    "terminal_dependent_files_not_created_in_observed_directory": [
+      "final-sixteen-ordinary-first-party-lib-tests.log.gz",
+      "final-sixteen-mixed-cohort-summary.json",
+      "final-sixteen-mixed-cohort-manifest.json",
+      "final-sixteen-landing-envelope.json"
+    ],
+    "status": "Prepared/frozen, never executed here. Prior five-product/four-carrier landing is completed and must not be replayed."
+  },
+  "actual_canonical_preimage_context": {
+    "identity_kind": "Exact historical per-leaf preimage vector and recorded parent/file filesystem identities, not an immutable whole-tree commit.",
+    "basis": {
+      "inventory_pointer": "ssh://brittonr@100.90.108.13/tmp/mantle-final-sixteen-cutover-prep-z4o26tkr/preparation-inventory.json",
+      "canonical_observation": "artifact://4239",
+      "observation_utc": "2026-10-16T06:47:22.808658+00:00",
+      "historical_head_observed_in_original_source_custody": "da00f58425740adea559ef926c9dfa97b2cb8240",
+      "head_limit": "This historical HEAD locator does not identify the complete dirty/preimage cohort and is not a fresh HEAD observation.",
+      "historical_shared_source_inventory": "artifact://3684",
+      "retained_base_subject_manifest": {
+        "path": "ssh://brittonr@100.90.108.13/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/packet-base-subject-manifest.json",
+        "bytes": 2571668,
+        "retained_blake3": "56af28ceb610aa926bf05b86252101dbdf21549326112bf9b644a01aae1e223a",
+        "basis": "Read packet-base-copy-manifest.json: historical quality-continuation-3-inputs.json retained as exact packet-base-subject-manifest.json. Large subject content was not copied/scanned here. This metadata identity is not a Git tree identity or automatic authority to adopt its contents."
+      },
+      "old_completed_landing": {
+        "envelope": "ssh://brittonr@100.90.108.13/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/canonical-landing-envelope.json",
+        "packet_ref": "mantle-t45-unpublished-packet://blake3/7400ce06b6562b56f95260e8b249f6d3d44493406b45f388491c60840b482500",
+        "read_example": "Its completed handle result342478B/B3=57abc8ff05be5323788cde411312feeda03562724540bc94b12abe3dfc6f00e8 is the new16 packet required handle preimage, not the old342615B preimage or d751354731B blob. The completed2540B composition note is likewise now an existing preimage, not an absent path.",
+        "non_action": "Context evidence only. Never replay completed products/carriers or reuse their obsolete preimages."
+      }
+    },
+    "freshness": "No canonical file/parent freshness check was run in this study. Historical inode/hash observations must not be relabeled fresh. Later authorized action needs its exact existing no-follow/preimage/staging/fsync/atomic-replace/no-clobber controls."
+  },
+  "per_product_existing_identity_comparison": [
+    {
+      "path": "crates/crunch-store/src/capability.rs",
+      "committed_base_blob": "363856d80357d11229e5a680052b09139ae53e85",
+      "committed_base_bytes": 60156,
+      "packet_before": {
+        "bytes": 56344,
+        "blake3": "6cd683099b5928ebfcc7115e0de6aba9758d182edbd1dbdf8960d99c859df7af",
+        "mode": "0o644",
+        "identity": {
+          "device": 46,
+          "inode": 15074829,
+          "mode": "0o644",
+          "uid": 1555,
+          "gid": 998
+        }
+      },
+      "packet_after": {
+        "bytes": 56459,
+        "blake3": "772814355f5d9dd1c9ff75db6302b87119ecb64d7a5ff88b6ecf89569cd04bae",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t61-private-publication-20261016-0QD8WHvd/source/crates/crunch-store/src/capability.rs",
+      "comparison": "PROVEN DIFFERENT: committed blob length differs from required packet preimage"
+    },
+    {
+      "path": "crates/crunch-store/src/gc.rs",
+      "committed_base_blob": "3d6535c9217992882239a2f980f1b60a38533447",
+      "committed_base_bytes": 205056,
+      "packet_before": {
+        "bytes": 176780,
+        "blake3": "3e09001fd47cccb6fd5203cb26b964d291cbf9e40f4cf21ce1bbed79c30918c3",
+        "mode": "0o644",
+        "identity": {
+          "device": 46,
+          "inode": 15074831,
+          "mode": "0o644",
+          "uid": 1555,
+          "gid": 998
+        }
+      },
+      "packet_after": {
+        "bytes": 176791,
+        "blake3": "182c704bb4041931601c64385d202344e3c3ac564f42ea34a1ccca75deb6145e",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t61-private-publication-20261016-0QD8WHvd/source/crates/crunch-store/src/gc.rs",
+      "comparison": "PROVEN DIFFERENT: committed blob length differs from required packet preimage"
+    },
+    {
+      "path": "crates/crunch-store/src/handle.rs",
+      "committed_base_blob": "0ebc2cec97fae64d8d5a05b515ce6fd28920b089",
+      "committed_base_bytes": 354731,
+      "packet_before": {
+        "bytes": 342478,
+        "blake3": "57abc8ff05be5323788cde411312feeda03562724540bc94b12abe3dfc6f00e8",
+        "mode": "0o644",
+        "identity": {
+          "device": 46,
+          "inode": 25669948,
+          "mode": "0o644",
+          "uid": 1555,
+          "gid": 998
+        }
+      },
+      "packet_after": {
+        "bytes": 342755,
+        "blake3": "aee086dad63576cc962508a9502b7317b9fd02bda18436ac36ef4e759d7876b6",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t61-private-publication-20261016-0QD8WHvd/source/crates/crunch-store/src/handle.rs",
+      "comparison": "PROVEN DIFFERENT: committed blob length differs from required packet preimage"
+    },
+    {
+      "path": "crates/crunch-store/src/nario.rs",
+      "committed_base_blob": "422f6bb9920c903060127725e923add6fbbce087",
+      "committed_base_bytes": 81199,
+      "packet_before": {
+        "bytes": 70981,
+        "blake3": "ea33da5613093039e0553019f11175c9810d1093908dcb4f1973a13d19c82340",
+        "mode": "0o644",
+        "identity": {
+          "device": 46,
+          "inode": 15069300,
+          "mode": "0o644",
+          "uid": 1555,
+          "gid": 998
+        }
+      },
+      "packet_after": {
+        "bytes": 96700,
+        "blake3": "731f200a74698be4776710a8edc91f6fb11a337e9616ea428d7d484dda131c16",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t61-private-publication-20261016-0QD8WHvd/source/crates/crunch-store/src/nario.rs",
+      "comparison": "PROVEN DIFFERENT: committed blob length differs from required packet preimage"
+    },
+    {
+      "path": "src/early_native_row_receipt.rs",
+      "committed_base_blob": "3fdadd130f00e3bd0ce0ef7c5d95021a46f9b87c",
+      "committed_base_bytes": 25126,
+      "packet_before": {
+        "bytes": 25126,
+        "blake3": "7ffdc60616523692b2d15e4e2857c971a98662e5c472c8188722b8cf1915eade",
+        "mode": "0o644",
+        "identity": {
+          "device": 46,
+          "inode": 3012074,
+          "mode": "0o644",
+          "uid": 1555,
+          "gid": 998
+        }
+      },
+      "packet_after": {
+        "bytes": 25772,
+        "blake3": "405ab2a1bded5c539902d5d770faad79dc329bb258d6576941cdb2cf3d074169",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t61-private-publication-20261016-0QD8WHvd/source/src/early_native_row_receipt.rs",
+      "comparison": "Equal lengths only; identity equality not established"
+    },
+    {
+      "path": "src/main.rs",
+      "committed_base_blob": "59783eb30800dfca312dae7224e4fbdb4108ecf8",
+      "committed_base_bytes": 478717,
+      "packet_before": {
+        "bytes": 469589,
+        "blake3": "3d07fb9df588824eaf1f8c0768679b9e408e48d664df857e0e1c6959197e52d5",
+        "mode": "0o644",
+        "identity": {
+          "device": 46,
+          "inode": 16666992,
+          "mode": "0o644",
+          "uid": 1555,
+          "gid": 998
+        }
+      },
+      "packet_after": {
+        "bytes": 469633,
+        "blake3": "835fa3b75c6874aad9a984356ddef303fa23803d6e1492955eacd6a5a14ca184",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t61-private-publication-20261016-0QD8WHvd/source/src/main.rs",
+      "comparison": "PROVEN DIFFERENT: committed blob length differs from required packet preimage"
+    },
+    {
+      "path": "tests/bootstrap_parity_cli.rs",
+      "committed_base_blob": "1c4b9b9b5493f046e1c635ece697185508154bed",
+      "committed_base_bytes": 20172,
+      "packet_before": {
+        "bytes": 19583,
+        "blake3": "7687eb4ab38960c00e6bb65971eb2ea8db96bb3dbe0b6c0e4705ef02bbcd5f0f",
+        "mode": "0o644",
+        "identity": {
+          "device": 46,
+          "inode": 3012227,
+          "mode": "0o644",
+          "uid": 1555,
+          "gid": 998
+        }
+      },
+      "packet_after": {
+        "bytes": 17830,
+        "blake3": "f0353a1bc0508fcd8273f27b40c23cc2d34dd7324e03860a1300ad80cb279e85",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t61-private-publication-20261016-0QD8WHvd/source/tests/bootstrap_parity_cli.rs",
+      "comparison": "PROVEN DIFFERENT: committed blob length differs from required packet preimage"
+    },
+    {
+      "path": "tests/integration_build.rs",
+      "committed_base_blob": "130457e26076c3f1b56b9b5ac88fc6a45a255bd0",
+      "committed_base_bytes": 98521,
+      "packet_before": {
+        "bytes": 84247,
+        "blake3": "29b5e7c18f63137e83085c085465833ab314d2bb5faf9648b3e030ece95beecf",
+        "mode": "0o644",
+        "identity": {
+          "device": 46,
+          "inode": 15071732,
+          "mode": "0o644",
+          "uid": 1555,
+          "gid": 998
+        }
+      },
+      "packet_after": {
+        "bytes": 91655,
+        "blake3": "3adae0bfb569ef673d62ae3f4f69983dba9c0aad1288671c8a9b9b3f09f657bc",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t61-private-publication-20261016-0QD8WHvd/source/tests/integration_build.rs",
+      "comparison": "PROVEN DIFFERENT: committed blob length differs from required packet preimage"
+    },
+    {
+      "path": "src/cargo_import.rs",
+      "committed_base_blob": "0b6510a703406e688cff04c17a49f7293b2dc643",
+      "committed_base_bytes": 69169,
+      "packet_before": {
+        "bytes": 69023,
+        "blake3": "975b1f333fb1d901becd9e0f7962c8abfcf7952bdda002f5a6b53d05f733dd8e",
+        "mode": "0o644",
+        "identity": {
+          "device": 46,
+          "inode": 3012070,
+          "mode": "0o644",
+          "uid": 1555,
+          "gid": 998
+        }
+      },
+      "packet_after": {
+        "bytes": 68189,
+        "blake3": "174a38896991b0c3f030f763b5850268dd9f358b99e4cbdaf74502592c8c2b57",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-fourteen-payload-cargo_import.rs",
+      "comparison": "PROVEN DIFFERENT: committed blob length differs from required packet preimage"
+    },
+    {
+      "path": "src/oci_projection_shell.rs",
+      "committed_base_blob": "dcd5bae3e96015f4f3ab82429e05164675fc5c7b",
+      "committed_base_bytes": 54076,
+      "packet_before": {
+        "bytes": 54031,
+        "blake3": "b877452b1dc8debd1faa8fa7555ab8bb7b0ee519553eea930abf0dfc8d8e48c2",
+        "mode": "0o644",
+        "identity": {
+          "device": 46,
+          "inode": 15071720,
+          "mode": "0o644",
+          "uid": 1555,
+          "gid": 998
+        }
+      },
+      "packet_after": {
+        "bytes": 53021,
+        "blake3": "e94020701de6e4e84dba410495751685f54b2834918322b3b6b99dc15d907969",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-fourteen-payload-oci_projection_shell.rs",
+      "comparison": "PROVEN DIFFERENT: committed blob length differs from required packet preimage"
+    },
+    {
+      "path": "src/source_root_capability.rs",
+      "committed_base_blob": "346c59749d68911e3af3815e0abf87da24a54d20",
+      "committed_base_bytes": 8022,
+      "packet_before": {
+        "bytes": 8114,
+        "blake3": "9857f7b5fa085f6ff07946c71be4777249d81a0f1f8e4461967a192e56d11199",
+        "mode": "0o644",
+        "identity": {
+          "device": 46,
+          "inode": 3012166,
+          "mode": "0o644",
+          "uid": 1555,
+          "gid": 998
+        }
+      },
+      "packet_after": {
+        "bytes": 7019,
+        "blake3": "fe1e2729919f469c94cabf1493b8007873c70f87b89bb70abe5c91c254634b0c",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-fourteen-payload-source_root_capability.rs",
+      "comparison": "PROVEN DIFFERENT: committed blob length differs from required packet preimage"
+    },
+    {
+      "path": "adr/0102-publish-overlay-pathinfo-batches-through-the-writable-near-backend.md",
+      "committed_base_blob": null,
+      "committed_base_bytes": null,
+      "packet_before": null,
+      "packet_after": {
+        "bytes": 3335,
+        "blake3": "70ea2b68d302aa1faf21bb2d5862cb8f3f9dc6cc353418a1ec1cc583ac817dbe",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-overlay-batch-documentation-candidate-5fcf7983-9d5a-4519-ae6e-8470c2d680e1.json",
+      "comparison": "both require path absence; no tree equality implied"
+    },
+    {
+      "path": "docs/release-notes/store-overlay-atomic-batches-2026-10-15.md",
+      "committed_base_blob": null,
+      "committed_base_bytes": null,
+      "packet_before": null,
+      "packet_after": {
+        "bytes": 3626,
+        "blake3": "1247c0380d44625a35cd8bcd440a19d42dc2ccbbef975513a32b2576aa071496",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-overlay-batch-documentation-candidate-5fcf7983-9d5a-4519-ae6e-8470c2d680e1.json",
+      "comparison": "both require path absence; no tree equality implied"
+    },
+    {
+      "path": "docs/store-backends.md",
+      "committed_base_blob": "70bd5b9cf300e41c0abdde048b8e6052b00b4000",
+      "committed_base_bytes": 40411,
+      "packet_before": {
+        "bytes": 32434,
+        "blake3": "2d6786b4c644c3a59bdbec9eaf133d52bea2e57f3bb169c65c89e947545dc332",
+        "mode": "0o644",
+        "identity": {
+          "device": 46,
+          "inode": 24543076,
+          "mode": "0o644",
+          "uid": 1555,
+          "gid": 998
+        }
+      },
+      "packet_after": {
+        "bytes": 33875,
+        "blake3": "813f364ff4ffef74951656c8ab874d3cd8283fdb1ad7de9ab1037c7d1bd4c052",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-overlay-batch-documentation-candidate-5fcf7983-9d5a-4519-ae6e-8470c2d680e1.json",
+      "comparison": "PROVEN DIFFERENT: committed blob length differs from required packet preimage"
+    },
+    {
+      "path": "adr/README.md",
+      "committed_base_blob": "169748706a712fb8e531d13a5efc626530adce90",
+      "committed_base_bytes": 14265,
+      "packet_before": {
+        "bytes": 13592,
+        "blake3": "84a6964a12e2b7a17c6e99d7698edc3f90ca38c024e3c5c966dd71dfacb2ed4f",
+        "mode": "0o644",
+        "identity": {
+          "device": 46,
+          "inode": 16668542,
+          "mode": "0o644",
+          "uid": 1555,
+          "gid": 998
+        }
+      },
+      "packet_after": {
+        "bytes": 13759,
+        "blake3": "b6a2ea35aeef11972ccfa9fcf74239765b2d94e1d147c16fde7cc82c7197eb16",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-overlay-batch-documentation-candidate-5fcf7983-9d5a-4519-ae6e-8470c2d680e1.json",
+      "comparison": "PROVEN DIFFERENT: committed blob length differs from required packet preimage"
+    },
+    {
+      "path": "docs/release-notes/composition-snapshot-invariants-2026-10-15.md",
+      "committed_base_blob": null,
+      "committed_base_bytes": null,
+      "packet_before": {
+        "bytes": 2540,
+        "blake3": "24192ad066f366625a3e924ce24781dbaed00580d10849ba0eb7125f48046411",
+        "mode": "0o644",
+        "identity": {
+          "device": 46,
+          "inode": 25674898,
+          "mode": "0o644",
+          "uid": 1555,
+          "gid": 998
+        }
+      },
+      "packet_after": {
+        "bytes": 5397,
+        "blake3": "79cbfd003c6f32ed99216d79181b29839bfd7b001e6e0a3f97333456a05aba03",
+        "mode": "0o644"
+      },
+      "payload": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t45-quality-20261015/composition-candidate/final-fourteen-payload-composition-snapshot-invariants-2026-10-15.md",
+      "comparison": "CONFLICT: committed path missing"
+    }
+  ],
+  "comparison_method": {
+    "argv": [
+      "git",
+      "--no-optional-locks",
+      "-c",
+      "core.fsmonitor=false",
+      "cat-file",
+      "--batch-check=%(objectname) %(objecttype) %(objectsize)"
+    ],
+    "stdin": "The16 exact committed COMMIT:relative-path expressions listed in per_product_existing_identity_comparison.",
+    "result": "Exit0; existing Git object IDs/types/byte lengths only. Existing packet BLAKE3/size/paths came from its frozen metadata. No cross-algorithm hash equivalence is inferred.",
+    "metadata_check": {
+      "fixed_operator_inventory_agreement": [
+        {
+          "key": "prep_root",
+          "equal": true
+        },
+        {
+          "key": "canonical_root",
+          "equal": true
+        },
+        {
+          "key": "products",
+          "equal": true
+        },
+        {
+          "key": "source_order",
+          "equal": true
+        },
+        {
+          "key": "doc_order",
+          "equal": true
+        },
+        {
+          "key": "carriers",
+          "equal": true,
+          "comparison": "Fixed operator contract is ordered name/cap/role; inventory additionally retains per-stage provenance."
+        },
+        {
+          "key": "budget",
+          "equal": true
+        },
+        {
+          "key": "journal",
+          "equal": true
+        },
+        {
+          "key": "docs_packet",
+          "equal": true
+        }
+      ],
+      "runtime_eight_after_bindings": [
+        {
+          "path": "crates/crunch-store/src/capability.rs",
+          "match": true
+        },
+        {
+          "path": "crates/crunch-store/src/gc.rs",
+          "match": true
+        },
+        {
+          "path": "crates/crunch-store/src/handle.rs",
+          "match": true
+        },
+        {
+          "path": "crates/crunch-store/src/nario.rs",
+          "match": true
+        },
+        {
+          "path": "src/early_native_row_receipt.rs",
+          "match": true
+        },
+        {
+          "path": "src/main.rs",
+          "match": true
+        },
+        {
+          "path": "tests/bootstrap_parity_cli.rs",
+          "match": true
+        },
+        {
+          "path": "tests/integration_build.rs",
+          "match": true
+        }
+      ],
+      "base_preimage_mismatch_count": 12,
+      "base_missing_required_preimage_count": 1,
+      "base_equal_lengths_unproven_count": 1,
+      "base_matching_absences_count": 2,
+      "doctor_product_in_frozen_packet": false,
+      "ordinary_terminal_carriers": [
+        {
+          "name": "final-sixteen-ordinary-first-party-lib-tests.log.gz",
+          "cap": 1048576,
+          "role": "pending-stage",
+          "task_id": null,
+          "source": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t61-private-publication-20261016-0QD8WHvd/source",
+          "raw_log": null,
+          "scope": "Future genuinely completed ordinary workspace stage; manifest binds actual successful task/source/command/exit. Parent reports1107 accounting failure; no1107 workspace-success claim."
+        },
+        {
+          "name": "final-sixteen-mixed-cohort-summary.json",
+          "cap": 1048576,
+          "role": "terminal-dependent-summary"
+        },
+        {
+          "name": "final-sixteen-mixed-cohort-manifest.json",
+          "cap": 1048576,
+          "role": "terminal-dependent-manifest"
+        }
+      ],
+      "original_packet_frozen": true
+    },
+    "metadata_projection_note": "The operator freezes ordered carrier name/cap/role. The inventory additionally carries original per-stage provenance. Comparing this exact consumed projection succeeds; those extra provenance fields are retained, not erased or reattributed."
+  },
+  "runtime_subject_separation": {
+    "source": "ssh://brittonr@100.90.108.13/tmp/mantle-unit-plan-20261013-87lqAtNv/t61-private-publication-20261016-0QD8WHvd/source",
+    "candidate_metadata": "ssh://brittonr@100.90.108.13/tmp/mantle-unit-plan-20261013-87lqAtNv/t65-private-live-tmp-20261016-2uOFnqdL/quality-candidate.json",
+    "eight_after_bindings": "All8 source_preimages in the retained T65 candidate metadata match the8 new-source after BLAKE3 values in the frozen16 inventory. This is metadata agreement for those leaves, not whole-tree equality.",
+    "three_composition_payloads": "The remaining3 source rows bind separately retained T45 payloads by exact recorded path/B3; their individual identities remain in the16 product rows. No fresh whole-T61 identity or equality to d751 is established.",
+    "failed_cli": {
+      "path": "ssh://brittonr@100.90.108.13/tmp/mantle-unit-plan-20261013-87lqAtNv/t62-private-accounting-20261016-R4JoNKcX/frozen-cli/mantle",
+      "bytes": 396877856,
+      "retained_blake3": "9905ea34ca841c8c47e3d6ca6ef80df5838bf7adbc0308843d525107ded7641e",
+      "limit": "Retained failed-subject CLI, not a repaired CLI and not d751."
+    },
+    "t66_candidate_digest_limit": "c8b626... identifies retained candidate metadata/custody, not a proven complete Git source-tree hash.",
+    "quality": "Actual1108 completed Failed101 with owned-empty settlement; no successful final workspace gate. Original positive-stage evidence remains exact original provenance, not final-subject success."
+  },
+  "doctor_followup": {
+    "owner": "mantle-materialized-doctor",
+    "root": "ssh://brittonr@100.90.108.13/tmp/mantle-unit-plan-20261013-87lqAtNv/t67-private-doctor-20261016-PVLFS93Q",
+    "historical_v2_manifest": "ssh://brittonr@100.90.108.13/tmp/mantle-unit-plan-20261013-87lqAtNv/t67-private-doctor-20261016-PVLFS93Q/leaf-manifest-v2.json",
+    "historical_v2_patch": {
+      "path": "ssh://brittonr@100.90.108.13/tmp/mantle-unit-plan-20261013-87lqAtNv/t67-private-doctor-20261016-PVLFS93Q/doctor-materialization-v2.patch",
+      "bytes": 5783,
+      "retained_blake3": "3c016241c54baac0c38322f513f8bb1682b2de3f150d8cf1380b28ef7f2a0ec3"
+    },
+    "preimage": {
+      "path": "ssh://brittonr@100.90.108.13/tmp/mantle-unit-plan-20261013-87lqAtNv/t61-private-publication-20261016-0QD8WHvd/source/src/operator_diagnostics.rs",
+      "bytes": 32769,
+      "retained_blake3": "2de5a5029f7dc4f955b1ad89f661846452ccb725aaa13d3ee0385fbed111899f"
+    },
+    "approved_base_doctor_object": {
+      "git_blob": "7f6328a397b7031dbc4c264a65ca1ff8e0d69ec4",
+      "bytes": 32769,
+      "equality_to_T61_preimage": "Not established by equal length; no new content digest or source comparison performed."
+    },
+    "current_state": "Peer reports v3 corrections underway and current candidate leaf already changed/formatted. V2 payload B3/path is historical; do not treat it as current/final. V3 pending parent review; no newly built/repaired CLI identity accepted.",
+    "not_in_frozen16": true,
+    "test_context_limit": "A read-only T61 source mount plus a separately bound doctor leaf is suitable only as an explicitly reviewed diagnostic/test subject. Using it for verification does not authorize adoption of unrelated T61/shared-source differences."
+  },
+  "minimal_reachable_alignment": {
+    "immediate_read_only_use": "Keep d751 custody, frozen16 inventory/operator/carriers and completed historical landing unchanged. Parent can review the final doctor v3 leaf/admission as a distinct overlay on the exact retained T61 input, and authorize only its bounded verification in that context. No final adoption follows.",
+    "committed_base_route": [
+      "Retain d751/tree2331 as the intended final prerequisite context. Treat old16 before->after transitions as scoped repair input, not whole-file replacement payloads on d751.",
+      "In a separately authorized isolated preparation, reconcile only intended repair hunks against the committed blobs/dependency groups. Preserve the committed fetch/plan-output/backend/Cargo and other unrelated context that whole-file old-cohort payload replacement would remove. Reuse existing deltas/preimages rather than reimplementing the fixes.",
+      "Bind the final reviewed doctor v3 change to its actual corresponding committed/assembled preimage; equal32769B sizes are not an identity bridge. Include actual applicable docs/changelog changes as separately selected products.",
+      "Create a new explicitly identified final source subject and its own affected verification/CLI identity. Existing T61/1108 gates cannot be relabeled as tests of this newly assembled subject. This study performs none of these mutation/runtime steps.",
+      "Prepare a new successor cutover contract whose before/after identities and target context match that actual tested subject. Keep original92f6.../d301... artifacts frozen; do not edit their constants/preimages or merely replace envelope success flags."
+    ],
+    "retained_context_route": [
+      "Alternatively, parent may choose the existing exact canonical/T61 lineage as the eventual final context to minimize code porting. That requires an explicit bounded source-ownership/adoption decision for the actual prerequisite differences from d751, based on existing subject/delta manifests; current d751 custody acceptance does not grant it.",
+      "Read-only verification of T61+doctor may proceed under its own scoped release without that adoption decision. It proves only that exact input/leaf/CLI subject.",
+      "Before eventual canonical cutover, reconcile every final product including doctor and applicable docs into a new successor manifest/operator action. Frozen16 omits doctor; a new doctor leaf makes at least17 products, with preimages/carriers/recovery copies/budgets recalculated rather than assuming original P16/C19/R14 limits. Preserve original stage provenance, terminal/owned-empty requirements and publication controls."
+    ],
+    "no_automatic_route": "Do not apply16 whole-file payloads to d751, reset/checkout the canonical tree to d751 to satisfy an invented base, amend the old packet to new preimages, silently adopt the shared dirty tree, or publish16 products while omitting the tested doctor leaf."
+  },
+  "irreducible_ownership_decision": {
+    "decision": "Which exact context is intended for final adoption: committed d751 plus explicitly reconciled repair hunks, or a separately and precisely authorized canonical/T61 prerequisite lineage plus repairs?",
+    "why": "The two contexts are provably different and the old packet only names per-leaf canonical preimages. Neither review of the doctor fix nor successful tests of a read-only T61 overlay grants source ownership of unrelated differences. Metadata cannot choose that adoption policy.",
+    "current_permission": "Read-only report/doctor review can advance; neither final source adoption nor cutover is authorized by this report."
+  },
+  "reusable_binding_capability": "Accepted d751 custody and exact frozen packet/preimage vectors now have an explicit non-equivalence boundary. Future successor assembly can select one actual context and bind its own final source/doctor/CLI/gates without stale-cohort relabeling.",
+  "holds": "No acceptance, sync, archive, task-box/definition edits, mutation of prior packet, canonical/index/source copy/hash/commit, cleanup, test/build/runtime launch or publication."
+}

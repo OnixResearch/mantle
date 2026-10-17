@@ -132,15 +132,6 @@ pub struct ExecDecision {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProtectedSourceFetchPlan {
-    pub entry_id: String,
-    pub url: String,
-    pub digest: DigestSpec,
-    pub extraction_rules: Vec<String>,
-    pub allowed_reason: String,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SeedClosureRiskReport {
     pub entry_id: String,
     pub executable_path: PathBuf,
@@ -173,7 +164,6 @@ type ExecutableVariantsByPath = BTreeMap<PathBuf, BTreeMap<String, ExecutableSee
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectedExecPolicy {
     executables_by_path: ExecutableVariantsByPath,
-    sources_by_url: BTreeMap<String, SourceSeedEntry>,
     allowed_promotion_source_ids: Option<BTreeSet<String>>,
     inventory_digest_blake3: String,
 }
@@ -248,14 +238,6 @@ pub enum ProtectedExecError {
         expected: String,
         actual: String,
     },
-    UndeclaredSourceUrl {
-        url: String,
-    },
-    SourceDigestMismatch {
-        url: String,
-        expected: String,
-        actual: String,
-    },
     InvalidExtractionRule {
         entry_id: String,
         rule: String,
@@ -322,10 +304,6 @@ impl fmt::Display for ProtectedExecError {
             Self::DigestMismatch { path, expected, actual } => {
                 write!(f, "digest mismatch for {}: expected {expected}, got {actual}", path.display())
             }
-            Self::UndeclaredSourceUrl { url } => write!(f, "undeclared protected source url: {url}"),
-            Self::SourceDigestMismatch { url, expected, actual } => {
-                write!(f, "source digest mismatch for {url}: expected {expected}, got {actual}")
-            }
             Self::InvalidExtractionRule { entry_id, rule, reason } => {
                 write!(f, "entry {entry_id} has invalid extraction rule {rule}: {reason}")
             }
@@ -355,14 +333,6 @@ impl std::error::Error for ProtectedExecError {}
 impl ProtectedExecPolicy {
     pub fn from_inventory(inventory: Stage0Inventory) -> Result<Self, ProtectedExecError> {
         Self::from_inventory_with_required_roles(inventory, &[ROLE_SANDBOX_ENTRY, ROLE_SANDBOX_SHELL], None, false)
-    }
-
-    pub fn from_stagex_seed(
-        seed_path: PathBuf,
-        seed_digest_blake3: String,
-        promotion_stage_ids: &[String],
-    ) -> Result<Self, ProtectedExecError> {
-        Self::from_stagex_plan(seed_path, seed_digest_blake3, promotion_stage_ids, &[])
     }
 
     pub fn from_stagex_plan(
@@ -444,11 +414,6 @@ impl ProtectedExecPolicy {
                 limit: MAX_SOURCE_URLS,
             });
         }
-        let max_source_urls =
-            usize::try_from(MAX_SOURCE_URLS).map_err(|_| ProtectedExecError::InventoryCollectionLimitExceeded {
-                collection: "source URLs",
-                limit: MAX_SOURCE_URLS,
-            })?;
         let inventory_digest_blake3 = stage0_inventory_digest_blake3(&inventory);
         if inventory_digest_blake3 == INVALID_INVENTORY_DIGEST {
             return Err(ProtectedExecError::InventorySerializationFailed);
@@ -456,17 +421,11 @@ impl ProtectedExecPolicy {
         let executables_by_path =
             group_executable_entries(inventory.executable_entries, max_executables, allow_digest_variants)?;
 
-        let mut sources_by_url = BTreeMap::new();
-        for entry in inventory.source_entries {
-            validate_source_entry(&entry)?;
+        let mut seen_source_urls = BTreeSet::new();
+        for entry in &inventory.source_entries {
+            validate_source_entry(entry)?;
             for url in &entry.urls {
-                if sources_by_url.len() >= max_source_urls {
-                    return Err(ProtectedExecError::InventoryCollectionLimitExceeded {
-                        collection: "source URLs",
-                        limit: MAX_SOURCE_URLS,
-                    });
-                }
-                if sources_by_url.insert(url.clone(), entry.clone()).is_some() {
+                if !seen_source_urls.insert(url.as_str()) {
                     return Err(ProtectedExecError::DuplicateSourceUrl { url: url.clone() });
                 }
             }
@@ -476,7 +435,6 @@ impl ProtectedExecPolicy {
         assert!(is_valid_hex_digest(&inventory_digest_blake3, BLAKE3_HEX_LEN));
         Ok(Self {
             executables_by_path,
-            sources_by_url,
             allowed_promotion_source_ids,
             inventory_digest_blake3,
         })
@@ -512,38 +470,6 @@ impl ProtectedExecPolicy {
             entry_id: Some(entry.id.clone()),
             reason: entry.allowed_reason.clone(),
         })
-    }
-
-    pub fn source_fetch_plan(&self, url: &str) -> Result<ProtectedSourceFetchPlan, ProtectedExecError> {
-        assert!(!url.is_empty(), "source url check must not be empty");
-        let entry = self
-            .sources_by_url
-            .get(url)
-            .ok_or_else(|| ProtectedExecError::UndeclaredSourceUrl { url: url.to_string() })?;
-        Ok(ProtectedSourceFetchPlan {
-            entry_id: entry.id.clone(),
-            url: url.to_string(),
-            digest: entry.digest.clone(),
-            extraction_rules: entry.extraction_rules.clone(),
-            allowed_reason: entry.allowed_reason.clone(),
-        })
-    }
-
-    pub fn verify_source_digest(&self, url: &str, actual_digest_hex: &str) -> Result<(), ProtectedExecError> {
-        assert!(!actual_digest_hex.is_empty(), "source digest check must not be empty");
-        let plan = self.source_fetch_plan(url)?;
-        if plan.digest.hex == actual_digest_hex {
-            return Ok(());
-        }
-        Err(ProtectedExecError::SourceDigestMismatch {
-            url: url.to_string(),
-            expected: plan.digest.hex,
-            actual: actual_digest_hex.to_string(),
-        })
-    }
-
-    pub fn ensure_source_url_allowed(&self, url: &str) -> Result<(), ProtectedExecError> {
-        self.source_fetch_plan(url).map(|_| ())
     }
 
     pub fn promote_verified_output(
@@ -1256,37 +1182,6 @@ pub struct OutputPromotionRecord {
     pub extraction_rules: Vec<String>,
     pub promoted_executables: Vec<PromotedExecutable>,
     pub promoted_at_policy_size: u32,
-}
-
-pub struct ProtectedProcessLauncher<'policy> {
-    policy: &'policy ProtectedExecPolicy,
-    audit_events: Vec<ProtectedLaunchAuditEvent>,
-}
-
-impl<'policy> ProtectedProcessLauncher<'policy> {
-    pub fn new(policy: &'policy ProtectedExecPolicy) -> Self {
-        Self {
-            policy,
-            audit_events: Vec::new(),
-        }
-    }
-
-    pub fn prepare_command(
-        &mut self,
-        executable_path: &Path,
-    ) -> Result<std::process::Command, Stage0InventoryGenerationError> {
-        let plan = plan_protected_launch(self.policy, executable_path)?;
-        self.audit_events.push(plan.audit_event());
-        Ok(std::process::Command::new(executable_path))
-    }
-
-    pub fn audit_events(&self) -> &[ProtectedLaunchAuditEvent] {
-        &self.audit_events
-    }
-
-    pub fn take_audit_events(&mut self) -> Vec<ProtectedLaunchAuditEvent> {
-        std::mem::take(&mut self.audit_events)
-    }
 }
 
 impl ProtectedLaunchPlan {
@@ -2310,51 +2205,33 @@ mod tests {
     }
 
     #[test]
-    fn protected_launcher_records_allowed_non_shell_command() {
+    fn protected_launch_plan_authorizes_content_bound_executable() {
         let current_exe = std::env::current_exe().unwrap();
         let digest_hex = blake3_file_hex(&current_exe).unwrap();
         let inv = inventory_with_current_exe(&current_exe, digest_hex.clone());
         let policy = ProtectedExecPolicy::from_inventory(inv).unwrap();
-        let mut launcher = ProtectedProcessLauncher::new(&policy);
 
-        let mut cmd = launcher.prepare_command(&current_exe).unwrap();
-        let output = cmd.arg("--help").output().unwrap();
-        let events = launcher.audit_events();
-
-        assert!(output.status.success());
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].executable_path, current_exe);
-        assert_eq!(events[0].digest_hex, digest_hex);
-        assert_eq!(events[0].inventory_entry_id, "stage0-crunch");
-        assert_eq!(events[0].policy_decision, "allowed");
-        assert_eq!(events[0].phase, PHASE_PROTECTED);
+        let plan = plan_protected_launch(&policy, &current_exe).unwrap();
+        let event = plan.audit_event();
+        assert_eq!(event.executable_path, current_exe);
+        assert_eq!(event.digest_hex, digest_hex);
+        assert_eq!(event.inventory_entry_id, "stage0-crunch");
+        assert_eq!(event.policy_decision, "allowed");
+        assert_eq!(event.phase, PHASE_PROTECTED);
     }
 
     #[test]
-    fn protected_launcher_rejects_before_command_is_returned() {
+    fn protected_launch_plan_rejects_changed_executable_before_launch() {
         let current_exe = std::env::current_exe().unwrap();
-        let inv = inventory_with_current_exe(&current_exe, DIGEST_A.to_string());
+        let actual_digest = blake3_file_hex(&current_exe).unwrap();
+        let expected_digest = if actual_digest == DIGEST_A { DIGEST_B } else { DIGEST_A };
+        let inv = inventory_with_current_exe(&current_exe, expected_digest.to_string());
         let policy = ProtectedExecPolicy::from_inventory(inv).unwrap();
-        let mut launcher = ProtectedProcessLauncher::new(&policy);
 
-        let err = launcher.prepare_command(&current_exe).unwrap_err();
-        assert!(matches!(err, Stage0InventoryGenerationError::Policy(ProtectedExecError::DigestMismatch { .. })));
-        assert!(launcher.audit_events().is_empty());
-    }
-
-    #[test]
-    fn protected_launcher_take_audit_events_drains_events() {
-        let current_exe = std::env::current_exe().unwrap();
-        let digest_hex = blake3_file_hex(&current_exe).unwrap();
-        let inv = inventory_with_current_exe(&current_exe, digest_hex);
-        let policy = ProtectedExecPolicy::from_inventory(inv).unwrap();
-        let mut launcher = ProtectedProcessLauncher::new(&policy);
-
-        let _cmd = launcher.prepare_command(&current_exe).unwrap();
-        let events = launcher.take_audit_events();
-
-        assert_eq!(events.len(), 1);
-        assert!(launcher.audit_events().is_empty());
+        let err = plan_protected_launch(&policy, &current_exe).unwrap_err();
+        assert!(matches!(err, Stage0InventoryGenerationError::Policy(
+            ProtectedExecError::DigestMismatch { actual, expected, .. }
+        ) if actual == actual_digest && expected == expected_digest));
     }
 
     #[test]
@@ -2616,28 +2493,11 @@ mod tests {
     }
 
     #[test]
-    fn policy_allows_only_declared_source_urls() {
-        let policy = ProtectedExecPolicy::from_inventory(inventory()).unwrap();
-        let plan = policy.source_fetch_plan("https://example.invalid/musl.tar.xz").unwrap();
-        assert_eq!(plan.entry_id, "musl");
-        assert_eq!(plan.digest.hex, DIGEST_A);
-        assert_eq!(plan.extraction_rules, vec!["strip-components=1".to_string()]);
-        assert!(policy.verify_source_digest("https://example.invalid/musl.tar.xz", DIGEST_A).is_ok());
-
-        let mismatch = policy.verify_source_digest("https://example.invalid/musl.tar.xz", DIGEST_B).unwrap_err();
-        assert!(matches!(mismatch, ProtectedExecError::SourceDigestMismatch { .. }));
-        let err = policy.ensure_source_url_allowed("https://example.invalid/other.tar.xz").unwrap_err();
-        assert_eq!(err, ProtectedExecError::UndeclaredSourceUrl {
-            url: "https://example.invalid/other.tar.xz".to_string()
-        });
-    }
-
-    #[test]
     fn stagex_seed_policy_authorizes_only_the_bound_seed() {
         let seed_path = PathBuf::from("/stagex/seed/hex0-seed");
         let promotion_stage_ids = vec!["hex0-reproduction".to_string()];
         let policy =
-            ProtectedExecPolicy::from_stagex_seed(seed_path.clone(), DIGEST_A.to_string(), &promotion_stage_ids)
+            ProtectedExecPolicy::from_stagex_plan(seed_path.clone(), DIGEST_A.to_string(), &promotion_stage_ids, &[])
                 .unwrap();
         let decision = policy
             .decide_exec(&ExecRequest {
@@ -2809,10 +2669,11 @@ mod tests {
     #[test]
     fn stagex_seed_policy_rejects_undeclared_output_promotion() {
         let promotion_stage_ids = vec!["hex0-reproduction".to_string()];
-        let mut policy = ProtectedExecPolicy::from_stagex_seed(
+        let mut policy = ProtectedExecPolicy::from_stagex_plan(
             PathBuf::from("/stagex/seed/hex0-seed"),
             DIGEST_A.to_string(),
             &promotion_stage_ids,
+            &[],
         )
         .unwrap();
         let result = policy.promote_verified_output("host-tools", &["format=raw".to_string()], &[PromotedExecutable {
@@ -2825,15 +2686,17 @@ mod tests {
     #[test]
     fn stagex_seed_policy_rejects_relative_path_and_bad_digest() {
         let promotion_stage_ids = vec!["hex0-reproduction".to_string()];
-        let relative = ProtectedExecPolicy::from_stagex_seed(
+        let relative = ProtectedExecPolicy::from_stagex_plan(
             PathBuf::from("hex0-seed"),
             DIGEST_A.to_string(),
             &promotion_stage_ids,
+            &[],
         );
-        let malformed = ProtectedExecPolicy::from_stagex_seed(
+        let malformed = ProtectedExecPolicy::from_stagex_plan(
             PathBuf::from("/stagex/seed/hex0-seed"),
             "bad".to_string(),
             &promotion_stage_ids,
+            &[],
         );
         assert!(matches!(relative, Err(ProtectedExecError::RelativeExecutablePath { .. })));
         assert!(matches!(malformed, Err(ProtectedExecError::InvalidBlake3Digest { .. })));
@@ -2852,7 +2715,7 @@ mod tests {
     }
 
     #[test]
-    fn inventory_rejects_malformed_source_entries_before_fetch() {
+    fn inventory_rejects_malformed_source_entries() {
         let mut inv = inventory();
         inv.source_entries[0].urls = vec![String::new()];
         let err = ProtectedExecPolicy::from_inventory(inv).unwrap_err();
@@ -2867,6 +2730,18 @@ mod tests {
         assert_eq!(err, ProtectedExecError::EmptyField {
             entry_id: "musl".to_string(),
             field: "extraction_rules"
+        });
+    }
+
+    #[test]
+    fn inventory_rejects_duplicate_source_urls_across_entries() {
+        let mut inv = inventory();
+        let mut second = inv.source_entries[0].clone();
+        second.id = "musl-copy".to_string();
+        inv.source_entries.push(second);
+
+        assert_eq!(ProtectedExecPolicy::from_inventory(inv).unwrap_err(), ProtectedExecError::DuplicateSourceUrl {
+            url: "https://example.invalid/musl.tar.xz".to_string()
         });
     }
 

@@ -1,6 +1,6 @@
 //! Bounded resumable transfer shell over Mantle's existing content identities.
 //!
-//! Pure protocol decisions live in `crunch_build::distributed::remote_transfer`.
+//! Pure transfer policy lives in `crunch_remote_core::transfer`.
 //! This module owns file, castore, NAR, source, PathInfo, attestation, delta,
 //! receiver-spool, and fenced-checkpoint I/O. Completion never claims admission.
 //!
@@ -25,6 +25,9 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use crunch_build::distributed::*;
+use crunch_remote_core::attempt::RemoteAttemptId;
+use crunch_remote_core::attempt::RemoteFenceGeneration;
+use crunch_remote_core::attempt::RemoteJobId;
 use fs2::FileExt;
 use serde::Deserialize;
 use serde::Serialize;
@@ -351,8 +354,9 @@ fn receive_remote_transfer_data_chunk_request(
         sequence: data_header.chunk.sequence,
         transferred_bytes,
     };
-    let acknowledged = acknowledge_remote_transfer_chunk(policy, &reserved, &acknowledgement, &observed, progress_step)
-        .map_err(reason)?;
+    let acknowledged =
+        acknowledge_remote_transfer_chunk(policy, &demand.scope, &reserved, &acknowledgement, &observed, progress_step)
+            .map_err(reason)?;
     assert!(acknowledged.in_flight.is_empty());
     assert!(acknowledged.acknowledged_chunk_digests.contains(&observed));
     Ok((acknowledged, acknowledgement))
@@ -1393,6 +1397,7 @@ fn transfer_one_chunk(request: TransferChunkRequest<'_>) -> Result<RemoteTransfe
     };
     let acknowledged = acknowledge_remote_transfer_chunk(
         request.policy,
+        &request.demand.scope,
         &reserved,
         &acknowledgement,
         &observed,
@@ -2380,7 +2385,8 @@ mod tests {
         });
         let observed = acknowledgement.chunk_digest_blake3.clone();
         let acknowledged_sender =
-            acknowledge_remote_transfer_chunk(policy, &sender_state, &acknowledgement, &observed, 1).unwrap();
+            acknowledge_remote_transfer_chunk(policy, &demand.scope, &sender_state, &acknowledgement, &observed, 1)
+                .unwrap();
         assert_eq!(acknowledged_sender.acknowledged_chunk_digests, receiver_state.acknowledged_chunk_digests,);
         assert!(receiver_chunk_path(&receiver_root, &observed).is_file());
     }

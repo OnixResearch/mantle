@@ -1,0 +1,3373 @@
+Diff in /home/brittonr/git/OnixResearch/mantle/src/external_batch_dispatch.rs:26:
+ use crunch_build::distributed::MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES;
+ use crunch_build::distributed::RemoteNamedResourceQuantity;
+ use crunch_build::distributed::validate_external_batch_response;
+-
+ use crunch_remote_app::BatchDispatchCommand;
+ use crunch_remote_app::BatchDispatchFacts;
+ use crunch_remote_app::Capability;
+Diff in /home/brittonr/git/OnixResearch/mantle/src/external_batch_dispatch.rs:125:
+         };
+         let digest = blake3::Hash::from_hex(&operation.operation_id_blake3)
+             .map_err(|_| "external-batch-operation-id-malformed".to_string())?;
+-        let mut session = EffectSession::for_attempt(
+-            &operation.operation_id_blake3,
+-            RemoteEffectBinding {
+-                job_id: &operation.job_id,
+-                attempt_id: &operation.attempt_id,
+-                fence_generation: operation.fence_generation,
+-            },
+-        )
++        let mut session = EffectSession::for_attempt(&operation.operation_id_blake3, RemoteEffectBinding {
++            job_id: &operation.job_id,
++            attempt_id: &operation.attempt_id,
++            fence_generation: operation.fence_generation,
++        })
+         .map_err(|error| format!("external-batch-effect-{error:?}"))?;
+         let adapter: &dyn ExternalBatchDispatcher = match self {
+             Self::Direct(adapter) => adapter,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/external_batch_dispatch.rs:145:
+             observed_unix_s,
+             response: None,
+         };
+-        crunch_remote_app::dispatch_external_batch(
+-            &mut session,
+-            &mut port,
+-            BatchDispatchCommand {
+-                operation_id_blake3: &operation.operation_id_blake3,
+-                operation_digest_blake3: *digest.as_bytes(),
+-                job_id: &operation.job_id,
+-                attempt_id: &operation.attempt_id,
+-                fence_generation: operation.fence_generation,
+-                observed_unix_s,
+-                timeout_secs,
+-            },
+-        )
++        crunch_remote_app::dispatch_external_batch(&mut session, &mut port, BatchDispatchCommand {
++            operation_id_blake3: &operation.operation_id_blake3,
++            operation_digest_blake3: *digest.as_bytes(),
++            job_id: &operation.job_id,
++            attempt_id: &operation.attempt_id,
++            fence_generation: operation.fence_generation,
++            observed_unix_s,
++            timeout_secs,
++        })
+         .map_err(|error| match error {
+             crunch_remote_app::ApplicationError::Port(error) => error.reason,
+             crunch_remote_app::ApplicationError::Decision(error) => format!("external-batch-effect-{error:?}"),
+Diff in /home/brittonr/git/OnixResearch/mantle/src/external_batch_dispatch.rs:253:
+     }
+ }
+ 
+-
+ pub struct DirectProcessBatchDispatcher<'a> {
+     profile: &'a RemoteBatchDispatcherProfile,
+ }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/external_batch_dispatch.rs:735:
+         None => (ExternalBatchJobState::Unknown, None, "slurm-comment-observation-unresolved"),
+     }
+ }
+-
+ 
+ fn validate_slurm_job_id(external_job_id: &str) -> Result<(), String> {
+     if external_job_id.is_empty() || external_job_id.len() > MAX_EXTERNAL_BATCH_IDENTIFIER_BYTES {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/main.rs:3263:
+         #[arg(long)]
+         pin: bool,
+     },
+-    /// Attest a pre-existing physical output using its signed PathInfo and actual NAR before pinning source state
++    /// Attest a pre-existing physical output using its signed PathInfo and actual NAR before
++    /// pinning source state
+     ImportStorePath {
+         /// Exact logical store path selected as a build input
+         #[arg(long)]
+Diff in /home/brittonr/git/OnixResearch/mantle/src/main.rs:4448:
+         ),
+         Command::Source { action } => {
+             command_input::admit_source_action_or_block(action)?;
+-            source_bundle::cmd_source(action.clone(), &ctx.resolved_state_dir, &ctx.store, ctx.store_backend, &ctx.store_prefix, ctx.json)
++            source_bundle::cmd_source(
++                action.clone(),
++                &ctx.resolved_state_dir,
++                &ctx.store,
++                ctx.store_backend,
++                &ctx.store_prefix,
++                ctx.json,
++            )
+         }
+         Command::Receipt { action } => {
+             portable_receipt::cmd_receipt(action.clone(), &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
+Diff in /home/brittonr/git/OnixResearch/mantle/src/main.rs:5409:
+     debug_assert!(ctx.store_prefix.starts_with('/'));
+     debug_assert!(!input.substituters.trim().is_empty() || input.no_substitute);
+     if input.offline_source_manifest.is_some() != input.offline_source_manifest_blake3.is_some() {
+-        return Err(RunError::Internal("offline vendor cache requires both manifest path and out-of-band BLAKE3".to_string()));
++        return Err(RunError::Internal(
++            "offline vendor cache requires both manifest path and out-of-band BLAKE3".to_string(),
++        ));
+     }
+     if input.offline_source_manifest.is_some()
+-        && (!input.no_substitute || !input.hermeticity.strict_hermetic || input.trust_unsigned
+-            || input.signing_key.is_none() || input.trusted_public_keys.is_empty()
+-            || !ctx.base_state_dirs.is_empty() || input.fix || input.plan || input.watch
++        && (!input.no_substitute
++            || !input.hermeticity.strict_hermetic
++            || input.trust_unsigned
++            || input.signing_key.is_none()
++            || input.trusted_public_keys.is_empty()
++            || !ctx.base_state_dirs.is_empty()
++            || input.fix
++            || input.plan
++            || input.watch
+             || input.remote_builder.is_some()
+             || input.output_mode == BuildOutputMode::EvaluationStream)
+     {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/main.rs:5478:
+ fn signed_offline_vendor_overrides(
+     prepared: &PreparedBuildCommand<'_>,
+ ) -> Result<Vec<crunch_build::FetchSourceOverride>, RunError> {
+-    let (Some(path), Some(digest)) = (
+-        prepared.offline_source_manifest,
+-        prepared.offline_source_manifest_blake3,
+-    ) else {
++    let (Some(path), Some(digest)) = (prepared.offline_source_manifest, prepared.offline_source_manifest_blake3) else {
+         return Ok(Vec::new());
+     };
+     source_bundle::offline_vendor_cache_overrides(
+Diff in /home/brittonr/git/OnixResearch/mantle/src/main.rs:6671:
+     .expect("validated remote failure observability identity");
+     let immutable_log = if fact == remote_build::RemoteProductionTelemetryFact::StaleFenceRejected {
+         remote_build::append_remote_rejected_production_observability_log(
+-            &mut log_session, request_id, state_dir, attempt, telemetry,
++            &mut log_session,
++            request_id,
++            state_dir,
++            attempt,
++            telemetry,
+         )
+     } else {
+         remote_build::append_remote_production_observability_log(
+Diff in /home/brittonr/git/OnixResearch/mantle/src/main.rs:6678:
+-            &mut log_session, request_id, coordinator, attempt, telemetry,
++            &mut log_session,
++            request_id,
++            coordinator,
++            attempt,
++            telemetry,
+         )
+     };
+     let mut export_session = crunch_remote_core::effect::EffectSession::for_actor_attempt(
+Diff in /home/brittonr/git/OnixResearch/mantle/src/main.rs:6685:
+     )
+     .expect("validated remote failure telemetry identity");
+     let telemetry_delivery = remote_build::export_remote_production_telemetry(
+-        &mut export_session, request_id, export_config, &telemetry.events,
++        &mut export_session,
++        request_id,
++        export_config,
++        &telemetry.events,
+     );
+     let worker_debug = debug_context.as_ref().and_then(|context| context.worker_debug.clone());
+     let failure_debug = debug_context.map(|context| {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/main.rs:6746:
+     } else {
+         remote_build::fail_remote_production_attempt
+     };
+-    Some(fail(
+-        coordinator,
+-        attempt,
+-        telemetry.accepted_events.saturating_add(1),
+-    ))
++    Some(fail(coordinator, attempt, telemetry.accepted_events.saturating_add(1)))
+ }
+ 
+ fn annotate_remote_failure_error(error: RunError, observability: &RemoteFailureObservabilityOutcome) -> RunError {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/main.rs:7273:
+     };
+     let transcript = run_remote_dispatch_child(&mut ports, &prepared.plan.command, &mut session)?;
+     for event in &transcript.telemetry.events {
+-        *ports.telemetry = crunch_build::distributed::record_remote_telemetry(
+-            ports.telemetry,
+-            event.clone(),
+-            ports.telemetry_policy,
+-        );
++        *ports.telemetry =
++            crunch_build::distributed::record_remote_telemetry(ports.telemetry, event.clone(), ports.telemetry_policy);
+     }
+     let (admission, output_admission) = admit_remote_dispatch_outputs(
+         &mut ports,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/main.rs:7435:
+     let (immutable_log, immutable_log_health) = remote_immutable_log_health(immutable_log_result);
+     let telemetry_delivery = if use_root_session {
+         remote_build::export_remote_production_telemetry(
+-            session, &ports.request.request_id, &ports.selection.telemetry, &telemetry.events,
++            session,
++            &ports.request.request_id,
++            &ports.selection.telemetry,
++            &telemetry.events,
+         )
+     } else {
+         let mut export_session = crunch_remote_core::effect::EffectSession::for_actor_attempt(
+Diff in /home/brittonr/git/OnixResearch/mantle/src/main.rs:7449:
+         )
+         .expect("validated remote completed telemetry identity");
+         remote_build::export_remote_production_telemetry(
+-            &mut export_session, &ports.request.request_id, &ports.selection.telemetry, &telemetry.events,
++            &mut export_session,
++            &ports.request.request_id,
++            &ports.selection.telemetry,
++            &telemetry.events,
+         )
+     };
+     let health = remote_build::RemoteAttemptObservabilityHealth {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/main.rs:7459:
+         immutable_log: immutable_log_health,
+         non_claim: remote_build::REMOTE_OBSERVABILITY_NON_CLAIM.to_string(),
+     };
+-    let _health_persistence = remote_build::update_remote_production_observability_health(
+-        ports.coordinator,
+-        ports.attempt,
+-        health.clone(),
+-    );
++    let _health_persistence =
++        remote_build::update_remote_production_observability_health(ports.coordinator, ports.attempt, health.clone());
+     Ok(remote_build::RemoteClientImportedBuild {
+         label: label.to_string(),
+         request_id: ports.request.request_id.clone(),
+Diff in /home/brittonr/git/OnixResearch/mantle/src/main.rs:7744:
+         return Ok(None);
+     }
+     let root = expression_scratch::InlineRoot::stage(expr)?;
+-    source_bundle::source_fetch_override_plan_for_file(root.path(), import_paths, state_dir, store_prefix, trust).map(Some)
++    source_bundle::source_fetch_override_plan_for_file(root.path(), import_paths, state_dir, store_prefix, trust)
++        .map(Some)
+ }
+ 
+ const SOURCE_ROOT_STORE_DIGEST_BYTES: usize = 20;
+Diff in /home/brittonr/git/OnixResearch/mantle/src/release_reproducibility.rs:524:
+         }
+     };
+     #[cfg(not(target_os = "linux"))]
+-    return Err(RunError::Internal(
+-        "bounded release reproducibility process supervision requires Linux".to_string(),
+-    ));
++    return Err(RunError::Internal("bounded release reproducibility process supervision requires Linux".to_string()));
+     #[cfg(target_os = "linux")]
+     {
+         let (status, stdout, stderr) = run_bounded_rebuild_child(
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:4333:
+     .map_err(output_transfer_artifact_blocker)?;
+     for artifact in artifacts {
+         let key = (artifact.output_name.as_str(), artifact.artifact_kind);
+-        let expected_artifact = expected.get(&key).map(|expected| {
+-            crunch_remote_core::output::ExpectedOutputTransferArtifactFacts {
++        let expected_artifact =
++            expected.get(&key).map(|expected| crunch_remote_core::output::ExpectedOutputTransferArtifactFacts {
+                 output_name: &expected.output_name,
+                 logical_path: &expected.logical_path,
+                 kind: core_output_transfer_artifact_kind(expected.artifact_kind),
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:4341:
+                 digest_blake3: &expected.digest_blake3,
+                 size_bytes: expected.size_bytes,
+-            }
+-        });
++            });
+         sequence
+             .observe(
+                 crunch_remote_core::output::OutputTransferArtifactFacts {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:4364:
+     kind: RemoteOutputTransferArtifactKind,
+ ) -> crunch_remote_core::output::OutputTransferArtifactKind {
+     match kind {
+-        RemoteOutputTransferArtifactKind::PathInfoJson => crunch_remote_core::output::OutputTransferArtifactKind::PathInfoJson,
++        RemoteOutputTransferArtifactKind::PathInfoJson => {
++            crunch_remote_core::output::OutputTransferArtifactKind::PathInfoJson
++        }
+         RemoteOutputTransferArtifactKind::Nar => crunch_remote_core::output::OutputTransferArtifactKind::Nar,
+     }
+ }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:4383:
+     let mut expected = BTreeMap::new();
+     for output in outputs {
+         if let Some(path_info) = &output.path_info {
+-            insert_expected_transfer_artifact(&mut expected, output, expected_pathinfo_transfer_artifact(output, path_info)?)?;
++            insert_expected_transfer_artifact(
++                &mut expected,
++                output,
++                expected_pathinfo_transfer_artifact(output, path_info)?,
++            )?;
+         }
+         if output.nar_payload_digest_blake3.is_some() || output.nar_payload_size_bytes.is_some() {
+             insert_expected_transfer_artifact(&mut expected, output, expected_nar_transfer_artifact(output)?)?;
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:4484:
+     )
+     .map_err(|reason| reason.as_str().to_string())?;
+     let observed_digest_blake3 = remote_execution_outputs_digest(&outcome.outputs)?;
+-    crunch_remote_core::output::validate_execution_output_digest(&outcome.output_digest_blake3, &observed_digest_blake3)
+-        .map_err(|reason| reason.as_str().to_string())?;
++    crunch_remote_core::output::validate_execution_output_digest(
++        &outcome.output_digest_blake3,
++        &observed_digest_blake3,
++    )
++    .map_err(|reason| reason.as_str().to_string())?;
+     let observed_size_bytes = sum_remote_execution_output_sizes(&outcome.outputs)?;
+     crunch_remote_core::output::validate_execution_output_size(outcome.output_size_bytes, observed_size_bytes)
+         .map_err(|reason| reason.as_str().to_string())?;
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:4635:
+     if let Some(inventory) = &registration.resource_inventory {
+         canonical_remote_worker_resource_inventory(inventory).map_err(|reason| reason.as_str().to_string())?;
+     }
+-    crunch_remote_core::admission::validate_worker_resume_count(registration.resumable_jobs.len(), MAX_REMOTE_STATUS_ITEMS)
+-        .map_err(crunch_remote_core::admission::WorkerRegistrationError::diagnostic)?;
++    crunch_remote_core::admission::validate_worker_resume_count(
++        registration.resumable_jobs.len(),
++        MAX_REMOTE_STATUS_ITEMS,
++    )
++    .map_err(crunch_remote_core::admission::WorkerRegistrationError::diagnostic)?;
+     for summary in &registration.resumable_jobs {
+         validate_worker_resume_summary(summary)?;
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:4646:
+ }
+ 
+ fn validate_worker_resume_summary(summary: &RemoteWorkerResumeSummary) -> Result<(), String> {
+-    crunch_remote_core::admission::validate_worker_resume_summary(
+-        crunch_remote_core::admission::WorkerResumeFacts {
+-            job_id: summary.job_id.as_str(),
+-            attempt_id: summary.attempt_id.as_str(),
+-            legacy_missing_attempt_id: LEGACY_MISSING_ATTEMPT_ID,
+-            normalized_build_key: &summary.normalized_build_key,
+-            fence_generation: summary.fence_generation.get(),
+-        },
+-    )
++    crunch_remote_core::admission::validate_worker_resume_summary(crunch_remote_core::admission::WorkerResumeFacts {
++        job_id: summary.job_id.as_str(),
++        attempt_id: summary.attempt_id.as_str(),
++        legacy_missing_attempt_id: LEGACY_MISSING_ATTEMPT_ID,
++        normalized_build_key: &summary.normalized_build_key,
++        fence_generation: summary.fence_generation.get(),
++    })
+     .map_err(crunch_remote_core::admission::WorkerRegistrationError::diagnostic)
+ }
+ 
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:4661:
+ fn validate_bounded_unique_strings(label: &str, values: &[String], max_len: usize) -> Result<(), String> {
+-    crunch_remote_core::admission::validate_bounded_unique_strings(
+-        values.iter().map(String::as_str),
+-        max_len,
+-        false,
+-    )
+-    .map_err(|reason| reason.diagnostic(label))
++    crunch_remote_core::admission::validate_bounded_unique_strings(values.iter().map(String::as_str), max_len, false)
++        .map_err(|reason| reason.diagnostic(label))
+ }
+ 
+ fn validate_non_empty_bounded_unique_strings(label: &str, values: &[String], max_len: usize) -> Result<(), String> {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:4671:
+-    crunch_remote_core::admission::validate_bounded_unique_strings(
+-        values.iter().map(String::as_str),
+-        max_len,
+-        true,
+-    )
+-    .map_err(|reason| reason.diagnostic(label))
++    crunch_remote_core::admission::validate_bounded_unique_strings(values.iter().map(String::as_str), max_len, true)
++        .map_err(|reason| reason.diagnostic(label))
+ }
+ 
+ pub fn validate_coordinator_build_request(
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:4758:
+     let canonical_resources = request
+         .resource_requirements
+         .as_ref()
+-        .map(|requirements| canonical_remote_resource_requirements(requirements).map_err(|reason| reason.as_str().to_string()))
++        .map(|requirements| {
++            canonical_remote_resource_requirements(requirements).map_err(|reason| reason.as_str().to_string())
++        })
+         .transpose()?;
+     let normalized_key_blake3 = crunch_remote_core::identity::normalized_remote_build_key(
+         crunch_remote_core::identity::NormalizedBuildKeyFacts {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:4775:
+                     logical_path: output.logical_path.as_deref(),
+                 }
+             }),
+-            failure_replay: request.request.failure_replay.as_ref().map(|replay| {
+-                (replay.source_bundle_blake3.as_str(), replay.execution_blake3.as_str())
+-            }),
++            failure_replay: request
++                .request
++                .failure_replay
++                .as_ref()
++                .map(|replay| (replay.source_bundle_blake3.as_str(), replay.execution_blake3.as_str())),
+             required_system: &request.required_system,
+             required_features: request.required_features.iter().map(String::as_str),
+             required_sandbox_mode: &request.required_sandbox_mode,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:6238:
+             });
+         }
+         let report = crate::remote_telemetry_export::export_remote_telemetry(self.config, events);
+-        let failed = [
+-            report.intake.status,
+-            report.prometheus.status,
+-            report.otlp.status,
+-        ]
+-        .contains(&RemoteTelemetryAdapterStatus::Failed);
++        let failed = [report.intake.status, report.prometheus.status, report.otlp.status]
++            .contains(&RemoteTelemetryAdapterStatus::Failed);
+         self.report = Some(report);
+         if failed {
+             return Err(crunch_remote_app::PortError {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:6273:
+     if let Some(report) = port.report {
+         return report;
+     }
+-    let reason = effect.err().map_or_else(
+-        || "remote-telemetry-export-observation-missing".to_string(),
+-        remote_application_error,
+-    );
++    let reason = effect
++        .err()
++        .map_or_else(|| "remote-telemetry-export-observation-missing".to_string(), remote_application_error);
+     let failed = crate::remote_telemetry_export::RemoteTelemetryAdapterHealth {
+         status: RemoteTelemetryAdapterStatus::Failed,
+         reason_code: reason,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:6294:
+     }
+ }
+ 
+-
+ fn rejected_observability_log_scope(binding: &RemoteProductionAttemptBinding) -> Result<RemoteAttemptLogScope, String> {
+     let mut hasher = blake3::Hasher::new();
+     hasher.update(b"mantle-rejected-remote-observability-v1\0");
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:7166:
+             job.result_available = true;
+             job.output_admission_completed = true;
+         }
+-        RemoteAttemptReportPayload::Failure { reason_code, failure_class } => {
++        RemoteAttemptReportPayload::Failure {
++            reason_code,
++            failure_class,
++        } => {
+             job.result_available = false;
+             job.output_admission_completed = false;
+             job.short_error = Some(reason_code.as_str().to_string());
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:7582:
+                 return Err("external-batch-state-in-flight-operation-mismatch".to_string());
+             }
+         }
+-        if let Some(external_job_id) = record.last_response.as_ref().and_then(|response| response.external_job_id.as_deref()) {
++        if let Some(external_job_id) =
++            record.last_response.as_ref().and_then(|response| response.external_job_id.as_deref())
++        {
+             let external_key = format!(
+                 "{}:{}:{}",
+                 record.submit_operation.adapter_instance_id,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:8059:
+         allocation_job_id: record.submit_operation.job_id.clone(),
+         allocation_attempt_id: record.submit_operation.attempt_id.clone(),
+         allocation_fence_generation: record.submit_operation.fence_generation,
+-        external_job_id: record.last_response.as_ref().and_then(|response| response.external_job_id.as_deref()).map(bounded_untrusted_text),
++        external_job_id: record
++            .last_response
++            .as_ref()
++            .and_then(|response| response.external_job_id.as_deref())
++            .map(bounded_untrusted_text),
+         state: if record.in_flight_operation.is_some() {
+             ExternalBatchJobState::Unknown
+         } else {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:8247:
+         ) {
+             crunch_remote_core::recovery::ReconnectDecision::SameSession => RemoteReconnectDecision::SameSession,
+             crunch_remote_core::recovery::ReconnectDecision::NewSession => RemoteReconnectDecision::NewSession,
+-            crunch_remote_core::recovery::ReconnectDecision::BackoffRequired => RemoteReconnectDecision::BackoffRequired,
++            crunch_remote_core::recovery::ReconnectDecision::BackoffRequired => {
++                RemoteReconnectDecision::BackoffRequired
++            }
+         }
+     };
+ pub use DECIDE_REMOTE_RECONNECT as decide_remote_reconnect;
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:9790:
+         command,
+         transcript: None,
+     };
+-    crunch_remote_app::exchange_client(
+-        session,
+-        &mut port,
+-        crunch_remote_app::ClientExchangeCommand {
+-            request_id,
+-            job_id: binding.job_id,
+-            attempt_id: binding.attempt_id,
+-            fence_generation: binding.fence_generation,
+-            timeout_secs: command.timeout_secs,
+-            frames_max: u32::try_from(MAX_REMOTE_STDIO_FRAME_COUNT).unwrap_or(u32::MAX),
+-        },
+-    )
++    crunch_remote_app::exchange_client(session, &mut port, crunch_remote_app::ClientExchangeCommand {
++        request_id,
++        job_id: binding.job_id,
++        attempt_id: binding.attempt_id,
++        fence_generation: binding.fence_generation,
++        timeout_secs: command.timeout_secs,
++        frames_max: u32::try_from(MAX_REMOTE_STDIO_FRAME_COUNT).unwrap_or(u32::MAX),
++    })
+     .map_err(|error| RunError::Internal(remote_application_error(error)))?;
+     port.transcript
+         .take()
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:10647:
+ ) -> Result<(), String> {
+     let nar_id = remote_output_nar_artifact_id(&output.name, &output.logical_path)?;
+     crunch_remote_core::transfer::validate_production_output_nar_artifact(
+-        artifacts.iter().find(|artifact| artifact.artifact_id == nar_id).map(production_output_manifest_artifact_facts),
++        artifacts
++            .iter()
++            .find(|artifact| artifact.artifact_id == nar_id)
++            .map(production_output_manifest_artifact_facts),
+         output.nar_payload_digest_blake3.as_deref(),
+         output.nar_payload_size_bytes,
+     )
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:10654:
+     .map_err(|reason| reason.as_str().to_string())?;
+     let path_info = output.path_info.as_ref().ok_or_else(|| "remote-output-pathinfo-missing".to_string())?;
+     let pathinfo_id = remote_output_pathinfo_artifact_id(&output.name, &output.logical_path)?;
+-    let pathinfo = artifacts
+-        .iter()
+-        .find(|artifact| artifact.artifact_id == pathinfo_id)
+-        .ok_or_else(|| crunch_remote_core::transfer::ProductionOutputManifestBlocker::PathinfoManifestMissing.as_str().to_string())?;
++    let pathinfo = artifacts.iter().find(|artifact| artifact.artifact_id == pathinfo_id).ok_or_else(|| {
++        crunch_remote_core::transfer::ProductionOutputManifestBlocker::PathinfoManifestMissing
++            .as_str()
++            .to_string()
++    })?;
+     let pathinfo_bytes = serialize_remote_pathinfo_payload(path_info)?;
+     crunch_remote_core::transfer::validate_production_output_pathinfo_artifact(
+         Some(production_output_manifest_artifact_facts(pathinfo)),
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:13166:
+     let mut state =
+         persistence.loaded.take().ok_or_else(|| "remote-ticket-state-loaded-snapshot-missing".to_string())?;
+     state.bind_active_verifier_key(verifier_key);
+-    let server_now_unix_s =
+-        crunch_remote_app::observe_clock(session, &mut ProductionClockPort, &request.request_id)
+-            .map_err(remote_application_error)?;
++    let server_now_unix_s = crunch_remote_app::observe_clock(session, &mut ProductionClockPort, &request.request_id)
++        .map_err(remote_application_error)?;
+     let ticket = state
+         .tickets
+         .get(&auth.ticket_id)
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:13412:
+                 reason: "remote-executor-command-binding-mismatch".to_string(),
+             });
+         }
+-        let output = self.executor.execute_at_unix_s(self.request, self.plan, self.upload, self.created_unix_s).map_err(|reason| {
+-            crunch_remote_app::PortError {
++        let output = self
++            .executor
++            .execute_at_unix_s(self.request, self.plan, self.upload, self.created_unix_s)
++            .map_err(|reason| crunch_remote_app::PortError {
+                 capability: crunch_remote_app::Capability::Executor,
+                 reason,
+-            }
+-        })?;
++            })?;
+         validate_remote_execution_outcome(&output, self.request, self.plan)
+             .and_then(|()| {
+                 validate_remote_execution_output_pathinfos(
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15250:
+         );
+         let frames = decode_remote_frame_stream(&writer).expect("physical worker frames stay valid");
+         let executor_launch_blocked = session
+-            .plan(
+-                crunch_remote_core::effect::EffectKind::ExecutorLaunch,
+-                crunch_remote_core::effect::EffectLimits {
+-                    bytes_max: 0,
+-                    items_max: 1,
+-                    time_secs_max: 0,
+-                },
+-            )
++            .plan(crunch_remote_core::effect::EffectKind::ExecutorLaunch, crunch_remote_core::effect::EffectLimits {
++                bytes_max: 0,
++                items_max: 1,
++                time_secs_max: 0,
++            })
+             .is_err_and(|reason| reason == crunch_remote_core::effect::EffectBlocker::SessionFailed);
+         RealWorkerClockCase {
+             _temp: temp,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15277:
+         assert!(unavailable.outcome.is_err());
+         assert!(unavailable.executor_launch_blocked);
+         assert!(!unavailable.state_dir.exists(), "failed clock must not launch the physical executor");
+-        assert!(unavailable.frames.iter().all(|frame| {
+-            !matches!(frame, RemoteFrame::BuildFinished { .. } | RemoteFrame::Done { .. })
+-        }));
++        assert!(
++            unavailable
++                .frames
++                .iter()
++                .all(|frame| { !matches!(frame, RemoteFrame::BuildFinished { .. } | RemoteFrame::Done { .. }) })
++        );
+ 
+         let failed_build = run_real_worker_clock_case("failed-build", "exit 23", Some(OBSERVED_UNIX_S));
+         assert!(failed_build.outcome.is_err());
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15286:
+         assert!(failed_build.executor_launch_blocked);
+-        assert!(failed_build.frames.iter().all(|frame| {
+-            !matches!(frame, RemoteFrame::BuildFinished { .. } | RemoteFrame::Done { .. })
+-        }));
++        assert!(
++            failed_build
++                .frames
++                .iter()
++                .all(|frame| { !matches!(frame, RemoteFrame::BuildFinished { .. } | RemoteFrame::Done { .. }) })
++        );
+         let bundles = failed_build
+             .state_dir
+             .join(crate::remote_failure_debug::REMOTE_FAILURE_DEBUG_STORE_DIR)
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15300:
+             .expect("real failure bundle validates from disk");
+         assert_eq!(bundle.created_unix_s, OBSERVED_UNIX_S);
+ 
+-        let accepted = run_real_worker_clock_case(
+-            "accepted-build",
+-            "printf 'worker-output\\n' > \"$out\"",
+-            Some(OBSERVED_UNIX_S),
+-        );
++        let accepted =
++            run_real_worker_clock_case("accepted-build", "printf 'worker-output\\n' > \"$out\"", Some(OBSERVED_UNIX_S));
+         assert!(accepted.outcome.is_err(), "no client transfer demand was supplied after the real build");
+         let finished = accepted
+             .frames
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15407:
+                 panic!("physical Worker did not send its manifest");
+             };
+             let transfer = transfer.clone();
+-            let receiver_root =
+-                crate::remote_transfer::remote_transfer_receiver_root(receiver_state_dir, &transfer.manifest.session_id);
++            let receiver_root = crate::remote_transfer::remote_transfer_receiver_root(
++                receiver_state_dir,
++                &transfer.manifest.session_id,
++            );
+             let mut receiver = crate::remote_transfer::begin_remote_transfer_receive(
+                 transfer.manifest.clone(),
+                 &transfer.manifest_digest_blake3,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15442:
+             let report = receiver.finish().expect("real output transfer completes");
+             assert_eq!(report.disposition, crate::remote_transfer::RemoteTransferShellDisposition::Completed);
+             drop(receiver);
+-            write_remote_control_frame(
+-                &mut client,
+-                &RemoteFrame::TransferComplete {
+-                    direction: crate::remote_transfer::RemoteTransferDirection::Download,
+-                    report,
+-                },
+-            )
++            write_remote_control_frame(&mut client, &RemoteFrame::TransferComplete {
++                direction: crate::remote_transfer::RemoteTransferDirection::Download,
++                report,
++            })
+             .expect("acknowledge physical output transfer");
+             frames.push(
+                 read_expected_remote_frame(&mut reader, RemoteFrameKind::OutputTransferDone)
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15455:
+                     .expect("physical Worker confirms transfer"),
+             );
+-            frames.push(read_expected_remote_frame(&mut reader, RemoteFrameKind::Done).expect("physical Worker finishes"));
++            frames.push(
++                read_expected_remote_frame(&mut reader, RemoteFrameKind::Done).expect("physical Worker finishes"),
++            );
+             worker_result.join().expect("physical Worker thread survives").expect("physical Worker succeeds");
+             RemoteStdioTranscript {
+                 binding: RemoteTransportBinding::Stdio,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15493:
+         dispatch_request.request = request.clone();
+         dispatch_request.trusted_output_keys = trusted.clone();
+         dispatch_request.resource_requirements = request.resource_requirements.clone();
+-        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, resource_fit, .. } =
+-            admit_fixture_dispatch(&mut state, &dispatch_request).expect("physical request dispatches")
++        let RemoteCoordinatorDispatchDecision::Dispatch {
++            job_id, resource_fit, ..
++        } = admit_fixture_dispatch(&mut state, &dispatch_request).expect("physical request dispatches")
+         else {
+             panic!("physical request must be assigned");
+         };
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15501:
+         assert_eq!(resource_fit, crunch_build::ResourceFitClass::Exact);
+         let original = state.jobs[&job_id].current_attempt.as_ref().expect("original attempt persists").clone();
+-        let original_lease_id = state.jobs[&job_id].resource_lease_id_blake3.as_ref().expect("original capacity reserved").clone();
++        let original_lease_id =
++            state.jobs[&job_id].resource_lease_id_blake3.as_ref().expect("original capacity reserved").clone();
+         let original_lease = &state.resource_leases[&original_lease_id];
+         assert_eq!(original_lease.scope.worker_endpoint_id, "builder-1");
+         assert_eq!(original_lease.scope.job_id, job_id);
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15522:
+         );
+         validate_remote_stdio_output_import(&original_request, &trusted, &original_transcript)
+             .expect("original signed physical output and completed receiver are valid");
+-        let RemoteFrame::BuildFinished { result: original_result } = &original_transcript.frames[2] else {
++        let RemoteFrame::BuildFinished {
++            result: original_result,
++        } = &original_transcript.frames[2]
++        else {
+             panic!("real original Worker must produce signed BuildFinished");
+         };
+-        let store_path = original_result.outputs[0].path_info.as_ref().expect("signed original PathInfo").store_path.clone();
++        let store_path =
++            original_result.outputs[0].path_info.as_ref().expect("signed original PathInfo").store_path.clone();
+         assert!(!original_result.outputs[0].path_info.as_ref().unwrap().signatures.is_empty());
+         first_worker.endpoint_id = "builder-2".to_string();
+         apply_worker_registration(&mut state, first_worker).expect("successor worker registers");
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15532:
+ 
+         let before_backoff = state.clone();
+-        let persisted_before_backoff = std::fs::read(coordinator_state_path(&coordinator_dir)).expect("original durable lease");
++        let persisted_before_backoff =
++            std::fs::read(coordinator_state_path(&coordinator_dir)).expect("original durable lease");
+         let retry_policy = RemoteAttemptRetryPolicy::default();
+         let backoff = reassign_coordinator_attempt(
+             &mut state,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15551:
+                 if reason == RemoteAttemptReasonCode::RetryBackoffRequired.as_str()
+         ));
+         assert_eq!(state, before_backoff);
+-        assert_eq!(
+-            std::fs::read(coordinator_state_path(&coordinator_dir)).unwrap(),
+-            persisted_before_backoff
+-        );
++        assert_eq!(std::fs::read(coordinator_state_path(&coordinator_dir)).unwrap(), persisted_before_backoff);
+ 
+         reassign_coordinator_attempt(
+             &mut state,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15565:
+             fixture_retry_time(),
+         )
+         .expect("higher-fence successor persists");
+-        let successor_lease_id = state.jobs[&job_id].resource_lease_id_blake3.as_ref().expect("successor capacity reserved").clone();
++        let successor_lease_id =
++            state.jobs[&job_id].resource_lease_id_blake3.as_ref().expect("successor capacity reserved").clone();
+         assert_ne!(successor_lease_id, original_lease_id);
+         assert!(!state.resource_leases.contains_key(&original_lease_id));
+         assert_eq!(state.resource_leases.len(), 1);
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15574:
+         assert_eq!(successor_lease.scope.worker_endpoint_id, "builder-2");
+         assert_eq!(successor_lease.scope.job_id, job_id);
+         assert_eq!(successor_lease.scope.attempt_id, state.jobs[&job_id].current_attempt.as_ref().unwrap().attempt_id);
+-        assert_eq!(successor_lease.scope.fence_generation, state.jobs[&job_id].current_attempt.as_ref().unwrap().fence_generation);
++        assert_eq!(
++            successor_lease.scope.fence_generation,
++            state.jobs[&job_id].current_attempt.as_ref().unwrap().fence_generation
++        );
+         assert_eq!(successor_lease.reserved, request.resource_requirements.as_ref().unwrap().quantities);
+         let mut restarted = load_coordinator_state(&coordinator_dir).expect("durable successor reloads");
+         let successor = restarted.jobs[&job_id].current_attempt.as_ref().expect("successor attempt persists");
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15586:
+             fence_generation: successor.fence_generation,
+         };
+         let before = restarted.clone();
+-        let persisted_before = std::fs::read(coordinator_state_path(&coordinator_dir)).expect("durable successor bytes");
++        let persisted_before =
++            std::fs::read(coordinator_state_path(&coordinator_dir)).expect("durable successor bytes");
+         let client_dir = temp.path().join("client");
+         let mut store = remote_import_store(&client_dir).await;
+         assert!(store.pathinfo_service().get(*store_path.digest()).await.unwrap().is_none());
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15624:
+             &temp.path().join("receiver-successor"),
+         );
+         for transcript in [&original_transcript, &successor_transcript] {
+-            assert_eq!(
+-                transcript.frames.iter().map(RemoteFrame::kind).collect::<Vec<_>>(),
+-                [
+-                    RemoteFrameKind::BuildQueued,
+-                    RemoteFrameKind::BuildStarted,
+-                    RemoteFrameKind::BuildFinished,
+-                    RemoteFrameKind::TransferManifest,
+-                    RemoteFrameKind::OutputTransferDone,
+-                    RemoteFrameKind::Done,
+-                ]
+-            );
++            assert_eq!(transcript.frames.iter().map(RemoteFrame::kind).collect::<Vec<_>>(), [
++                RemoteFrameKind::BuildQueued,
++                RemoteFrameKind::BuildStarted,
++                RemoteFrameKind::BuildFinished,
++                RemoteFrameKind::TransferManifest,
++                RemoteFrameKind::OutputTransferDone,
++                RemoteFrameKind::Done,
++            ]);
+         }
+         let admission = admit_fenced_remote_stdio_output(
+             &mut restarted,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15646:
+             TEST_RETRY_NOW_UNIX_S.saturating_add(1),
+         )
+         .expect("signed current higher-fence output admits");
+-        let RemoteFrame::BuildFinished { result: successor_result } = &successor_transcript.frames[2] else {
++        let RemoteFrame::BuildFinished {
++            result: successor_result,
++        } = &successor_transcript.frames[2]
++        else {
+             panic!("real successor Worker must produce signed BuildFinished");
+         };
+         assert_eq!(successor_result.builder_signing_key_id, signer);
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15676:
+         )
+         .await
+         .expect("real signed current PathInfo and NAR import durably");
+-        let persisted = store.pathinfo_service().get(*store_path.digest()).await.unwrap().expect("signed PathInfo persisted");
++        let persisted = store
++            .pathinfo_service()
++            .get(*store_path.digest())
++            .await
++            .unwrap()
++            .expect("signed PathInfo persisted");
+         assert!(!persisted.signatures.is_empty());
+         assert_eq!(imported.outputs[0].path_info_signing_key_id, signer);
+         assert_eq!(imported.request_id, admission.request_id);
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:15714:
+                 std::thread::spawn(move || {
+                     barrier.wait();
+                     let mut session = crunch_remote_core::effect::EffectSession::new(&request.request_id).unwrap();
+-                    commit_remote_ticket_admission_for_state(&state_dir, &verifier_key, None, &auth, &request, &mut session)
++                    commit_remote_ticket_admission_for_state(
++                        &state_dir,
++                        &verifier_key,
++                        None,
++                        &auth,
++                        &request,
++                        &mut session,
++                    )
+                 })
+             })
+             .collect::<Vec<_>>();
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:16199:
+             crunch_remote_core::effect::EffectActor::Client,
+         )
+         .unwrap();
+-        let err = run_stdio_remote_child(&command, "timeout-ssh", &mut session)
+-            .expect_err("sleeping child times out");
++        let err = run_stdio_remote_child(&command, "timeout-ssh", &mut session).expect_err("sleeping child times out");
+         let rendered = err.to_string();
+ 
+         assert!(rendered.contains("timed out"));
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:16209:
+ 
+     #[test]
+     fn production_child_teardown_preserves_nonzero_exit_for_rejection() {
+-        let mut child = Command::new("/bin/sh")
+-            .args(["-c", "exit 23"])
+-            .spawn()
+-            .expect("spawn real failing child");
++        let mut child = Command::new("/bin/sh").args(["-c", "exit 23"]).spawn().expect("spawn real failing child");
+         let status = wait_for_remote_child_teardown(&mut child).expect("observe real child exit");
+         assert_eq!(status.code(), Some(23));
+         assert!(!status.success());
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:18493:
+         };
+         start_remote_production_attempt_if_queued(&mut state, &binding, TEST_ATTEMPT_NOW_UNIX_S)
+             .expect("fenced attempt starts");
+-        let ready = fixture_attempt_report(&state, &job_id, "terminal-import-result", RemoteAttemptReportPayload::ResultReady {
+-            output_digest_blake3: TEST_ATTEMPT_OUTPUT_DIGEST.to_string(),
+-        });
++        let ready = fixture_attempt_report(
++            &state,
++            &job_id,
++            "terminal-import-result",
++            RemoteAttemptReportPayload::ResultReady {
++                output_digest_blake3: TEST_ATTEMPT_OUTPUT_DIGEST.to_string(),
++            },
++        );
+         apply_fixture_attempt_report(&mut state, &ready);
+         assert_eq!(
+             state.jobs[&job_id].current_attempt.as_ref().unwrap().phase,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:18524:
+             proposed_retry,
+             RemoteCoordinatorDispatchDecision::Reject { reason } if reason == "retry-failure-terminal"
+         ));
+-        let repeated_request = admit_fixture_dispatch(&mut restarted, &request).expect("same build consults terminal job");
++        let repeated_request =
++            admit_fixture_dispatch(&mut restarted, &request).expect("same build consults terminal job");
+         assert!(matches!(repeated_request, RemoteCoordinatorDispatchDecision::Reject { .. }));
+         assert_eq!(restarted, terminal);
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:18989:
+         )
+         .unwrap();
+         let diagnostic = append_remote_rejected_production_observability_log(
+-            &mut session, "stale-fence-log", temp.path(), &rejected_binding, &telemetry,
++            &mut session,
++            "stale-fence-log",
++            temp.path(),
++            &rejected_binding,
++            &telemetry,
+         )
+         .expect("stale-fence rejection diagnostic persists separately");
+ 
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:20694:
+         assert_eq!(lease.scope.attempt_id, binding.attempt_id);
+         assert_eq!(lease.scope.fence_generation, binding.fence_generation);
+         assert_eq!(
+-            durable.external_batch_attempts[&response.dispatch_id_blake3]
+-                .resource_lease_id_blake3
+-                .as_ref(),
++            durable.external_batch_attempts[&response.dispatch_id_blake3].resource_lease_id_blake3.as_ref(),
+             Some(lease_id)
+         );
+         let cancellation = terminate_external_batch_assigned_attempt(
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:20743:
+         assert_eq!(stale_error, "external-batch-response-attempt-fence-mismatch");
+         assert!(stale_record.last_response.is_none());
+         assert_eq!(external_batch_attempt_status(stale_record).state, ExternalBatchJobState::Unknown);
+-        assert!(submit_external_batch_allocation(
+-            &mut stale_state,
+-            &request,
+-            &profile,
+-            "batch-worker-1",
+-            1,
+-            &stale,
+-            fixture_retry_time().now_unix_s,
+-        )
+-        .is_err());
++        assert!(
++            submit_external_batch_allocation(
++                &mut stale_state,
++                &request,
++                &profile,
++                "batch-worker-1",
++                1,
++                &stale,
++                fixture_retry_time().now_unix_s,
++            )
++            .is_err()
++        );
+         assert_eq!(stale.submit_calls.get(), 1, "stale provider request must never be resubmitted");
+ 
+         let temp = tempfile::tempdir().expect("external batch conflicting coordinator state");
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:20784:
+         .expect_err("same scheduler ID cannot bind another dispatch");
+         let restarted = load_coordinator_state(temp.path()).expect("conflict reservation survives restart");
+         assert_eq!(conflict, "external-batch-state-external-job-id-conflict");
+-        assert_eq!(restarted.external_batch_attempts[&accepted.dispatch_id_blake3].last_response.as_ref(), Some(&accepted));
++        assert_eq!(
++            restarted.external_batch_attempts[&accepted.dispatch_id_blake3].last_response.as_ref(),
++            Some(&accepted)
++        );
+         assert_eq!(restarted.external_batch_attempts.len(), 2);
+         assert!(restarted.external_batch_attempts.values().any(|record| record.in_flight_operation.is_some()));
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:20865:
+         .expect_err("provider accepted but response persistence was physically obstructed");
+         assert_eq!(
+             std::fs::read_to_string(temp.path().join("calls")).unwrap_or_else(|error| {
+-                panic!("Slurm submit did not execute before its failed response save ({accepted_but_unpersisted}): {error}")
++                panic!(
++                    "Slurm submit did not execute before its failed response save ({accepted_but_unpersisted}): {error}"
++                )
+             }),
+             "submit\n",
+         );
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:20877:
+             panic!("submit reservation was not durable before the provider call ({accepted_but_unpersisted}): {error}")
+         });
+         let dispatch = restarted.external_batch_attempts.keys().next().expect("reserved dispatch exists").clone();
+-        assert_eq!(external_batch_attempt_status(&restarted.external_batch_attempts[&dispatch]).state, ExternalBatchJobState::Unknown);
++        assert_eq!(
++            external_batch_attempt_status(&restarted.external_batch_attempts[&dispatch]).state,
++            ExternalBatchJobState::Unknown
++        );
+         let duplicate = submit_external_batch_allocation(
+             &mut restarted,
+             &request,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:20925:
+         let recovered = load_coordinator_state(temp.path()).expect("recovered provider job persists");
+         let record = &recovered.external_batch_attempts[&dispatch];
+         assert_eq!(decision, ExternalBatchReconcileDecision::AwaitWorkerRegistration);
+-        assert_eq!(record.last_response.as_ref().and_then(|response| response.external_job_id.as_deref()), Some("4242"));
++        assert_eq!(
++            record.last_response.as_ref().and_then(|response| response.external_job_id.as_deref()),
++            Some("4242")
++        );
+         assert_eq!(external_batch_attempt_status(record).state, ExternalBatchJobState::Running);
+         assert_eq!(record.reconcile_attempts, profile.max_reconcile_attempts);
+         assert_eq!(std::fs::read_to_string(temp.path().join("calls")).unwrap(), "submit\n");
+Diff in /home/brittonr/git/OnixResearch/mantle/src/remote_build.rs:20932:
+     }
+-
+ 
+     #[tokio::test]
+     async fn external_batch_multiprocess_allocation_uses_ordinary_cas_and_output_admission() {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:383:
+ 
+     fn expected_provider_kind(self) -> &'static str {
+         match self {
+-            Self::LegacySeed | Self::SelfBuildProof | Self::FreshCloneInputs | Self::FreshCloneFixedPoint
+-            | Self::FreshCloneLockVendorInputs | Self::FreshCloneLockVendorFixedPoint => BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED,
++            Self::LegacySeed
++            | Self::SelfBuildProof
++            | Self::FreshCloneInputs
++            | Self::FreshCloneFixedPoint
++            | Self::FreshCloneLockVendorInputs
++            | Self::FreshCloneLockVendorFixedPoint => BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED,
+             Self::SourceRoot => BOOTSTRAP_PROVIDER_KIND_SOURCE_ROOT,
+             Self::SourceBuiltFixedPoint => BOOTSTRAP_PROVIDER_KIND_STAGEX_LINEAGE,
+         }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:404:
+     fn requires_bootstrap_sources(self) -> bool {
+         !matches!(
+             self,
+-            Self::FreshCloneInputs | Self::FreshCloneFixedPoint
+-                | Self::FreshCloneLockVendorInputs | Self::FreshCloneLockVendorFixedPoint
++            Self::FreshCloneInputs
++                | Self::FreshCloneFixedPoint
++                | Self::FreshCloneLockVendorInputs
++                | Self::FreshCloneLockVendorFixedPoint
+         )
+     }
+ 
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:798:
+         imports: &[PathBuf],
+         context: &SourceBundleCliContext<'_>,
+     ) -> Result<SourceOfflinePreflightReport, RunError> {
+-        offline_preflight_for_build_roots(roots, imports, context.state_dir, context.store_prefix, context.store_trust.as_ref())
++        offline_preflight_for_build_roots(
++            roots,
++            imports,
++            context.state_dir,
++            context.store_prefix,
++            context.store_trust.as_ref(),
++        )
+     }
+     fn preflight_manifest(
+         &mut self,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:1257:
+ fn read_lock_vendor_bounded(path: &Path, limit: usize) -> Result<Vec<u8>, RunError> {
+     let file = fs::File::open(path)
+         .map_err(|error| RunError::Internal(format!("opening lock-vendor input {}: {error}", path.display())))?;
+-    let size = file.metadata()
++    let size = file
++        .metadata()
+         .map_err(|error| RunError::Internal(format!("reading lock-vendor input {} size: {error}", path.display())))?
+         .len();
+     if size > limit as u64 {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:1264:
+         return Err(RunError::Internal(format!("lock-vendor input {} exceeds {limit} bytes", path.display())));
+     }
+     let mut bytes = Vec::with_capacity(size as usize);
+-    file.take(limit as u64 + 1).read_to_end(&mut bytes)
++    file.take(limit as u64 + 1)
++        .read_to_end(&mut bytes)
+         .map_err(|error| RunError::Internal(format!("reading lock-vendor input {}: {error}", path.display())))?;
+     if bytes.len() > limit {
+         return Err(RunError::Internal(format!("lock-vendor input {} grew beyond {limit} bytes", path.display())));
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:1280:
+     input: &BootstrapSourceBundleProfileInput,
+     store_prefix: &str,
+ ) -> Result<(), RunError> {
+-    let Some(lock_vendor) = input.lock_vendor.as_ref() else { return Ok(()) };
+-    let source = input.mantle_source.as_deref().ok_or_else(|| {
+-        RunError::Internal("lock-vendor profile is missing --mantle-source".to_string())
+-    })?;
++    let Some(lock_vendor) = input.lock_vendor.as_ref() else {
++        return Ok(());
++    };
++    let source = input
++        .mantle_source
++        .as_deref()
++        .ok_or_else(|| RunError::Internal("lock-vendor profile is missing --mantle-source".to_string()))?;
+     let lock_path = source.join("Cargo.lock");
+     let lock = read_lock_vendor_bounded(&lock_path, mantle_lock_vendor_core::MAX_LOCK_BYTES as usize)?;
+     let table = read_lock_vendor_bounded(
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:1298:
+         Some(&parsed),
+     )
+     .map_err(|error| RunError::Internal(format!("lock-vendor Cargo.lock: {error:?}")))?;
+-    let selected = planned.selected_shared_hashes(&parsed)
++    let selected = planned
++        .selected_shared_hashes(&parsed)
+         .map_err(|error| RunError::Internal(format!("selecting lock-vendor hashes: {error:?}")))?;
+     if selected.render().as_bytes() != table.as_slice() {
+         return Err(RunError::Internal(
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:1332:
+             "lock-vendor producer output does not match excluded vendored tree content hashes".to_string(),
+         ));
+     }
+-    let name = lock_vendor.output.file_name().and_then(|name| name.to_str()).ok_or_else(|| {
+-        RunError::Internal("lock-vendor output has no UTF-8 store basename".to_string())
+-    })?;
++    let name = lock_vendor
++        .output
++        .file_name()
++        .and_then(|name| name.to_str())
++        .ok_or_else(|| RunError::Internal("lock-vendor output has no UTF-8 store basename".to_string()))?;
+     let logical_path = format!("{store_prefix}/{name}");
+-    nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(
+-        logical_path.as_bytes(),
+-        store_prefix,
+-    )
+-    .map_err(|error| RunError::Internal(format!("lock-vendor output must be a store path: {error}")))?;
++    nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(logical_path.as_bytes(), store_prefix)
++        .map_err(|error| RunError::Internal(format!("lock-vendor output must be a store path: {error}")))?;
+     let mut metadata = BTreeMap::new();
+     metadata.insert(RECORD_METADATA_PROFILE_MODE_KEY.to_string(), input.mode.as_str().to_string());
+-    metadata.insert(RECORD_METADATA_PROFILE_CLASS_KEY.to_string(), BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_ACQUISITION.to_string());
++    metadata.insert(
++        RECORD_METADATA_PROFILE_CLASS_KEY.to_string(),
++        BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_ACQUISITION.to_string(),
++    );
+     metadata.insert(LOCK_VENDOR_PRODUCER_IDENTITY_KEY.to_string(), producer.content_blake3.clone());
+     metadata.insert(LOCK_VENDOR_SELECTED_TABLE_IDENTITY_KEY.to_string(), selected_table.content_blake3.clone());
+     metadata.insert(LOCK_VENDOR_LOCK_CONTENT_KEY.to_string(), blake3::hash(&lock).to_hex().to_string());
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:1793:
+         record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+             == Some(BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_ACQUISITION)
+     });
+-    let receipt = matches.next().ok_or_else(|| {
+-        RunError::Internal("lock-vendor profile is missing acquisition receipt".to_string())
+-    })?;
+-    if matches.next().is_some() || receipt.kind != SourceRecordKind::PackageMirror
+-        || !receipt.files.is_empty() || receipt.payload_bytes != 0
++    let receipt = matches
++        .next()
++        .ok_or_else(|| RunError::Internal("lock-vendor profile is missing acquisition receipt".to_string()))?;
++    if matches.next().is_some()
++        || receipt.kind != SourceRecordKind::PackageMirror
++        || !receipt.files.is_empty()
++        || receipt.payload_bytes != 0
+     {
+-        return Err(RunError::Internal("lock-vendor acquisition receipt is not a unique virtual package record".to_string()));
++        return Err(RunError::Internal(
++            "lock-vendor acquisition receipt is not a unique virtual package record".to_string(),
++        ));
+     }
+-    let mode = receipt.metadata.get(RECORD_METADATA_PROFILE_MODE_KEY)
++    let mode = receipt
++        .metadata
++        .get(RECORD_METADATA_PROFILE_MODE_KEY)
+         .ok_or_else(|| RunError::Internal("lock-vendor receipt has no profile mode".to_string()))
+         .and_then(|value| BootstrapSourceBundleMode::parse(value))?;
+     if !mode.is_lock_vendor() {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:1820:
+             return Err(RunError::Internal(format!("lock-vendor {class} identity differs from acquisition receipt")));
+         }
+     }
+-    let logical = receipt.metadata.get(LOCK_VENDOR_OUTPUT_STORE_PATH_KEY)
++    let logical = receipt
++        .metadata
++        .get(LOCK_VENDOR_OUTPUT_STORE_PATH_KEY)
+         .ok_or_else(|| RunError::Internal("lock-vendor receipt has no output store path".to_string()))?;
+     nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(
+         logical.as_bytes(),
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:1827:
+         &manifest.store_prefix,
+     )
+     .map_err(|error| RunError::Internal(format!("lock-vendor receipt output is not a store path: {error}")))?;
+-    for key in [LOCK_VENDOR_OUTPUT_CONTENT_KEY, LOCK_VENDOR_EXCLUDED_CONTENT_KEY, LOCK_VENDOR_LOCK_CONTENT_KEY] {
+-        let value = receipt.metadata.get(key)
++    for key in [
++        LOCK_VENDOR_OUTPUT_CONTENT_KEY,
++        LOCK_VENDOR_EXCLUDED_CONTENT_KEY,
++        LOCK_VENDOR_LOCK_CONTENT_KEY,
++    ] {
++        let value = receipt
++            .metadata
++            .get(key)
+             .ok_or_else(|| RunError::Internal(format!("lock-vendor receipt missing {key}")))?;
+-        validate_blake3_hex(Blake3HexValidation { value, label: "lock-vendor tree content BLAKE3" })?;
++        validate_blake3_hex(Blake3HexValidation {
++            value,
++            label: "lock-vendor tree content BLAKE3",
++        })?;
+     }
+-    receipt.metadata.get(LOCK_VENDOR_EXCLUDED_PAYLOAD_KEY)
++    receipt
++        .metadata
++        .get(LOCK_VENDOR_EXCLUDED_PAYLOAD_KEY)
+         .ok_or_else(|| RunError::Internal("lock-vendor receipt missing excluded payload bytes".to_string()))?
+         .parse::<u64>()
+         .map_err(|error| RunError::Internal(format!("invalid excluded payload byte count: {error}")))?;
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2180:
+         if manifest.records[index].metadata.get(RECORD_METADATA_PROFILE_MODE_KEY).map(String::as_str)
+             != Some(mode.as_str())
+         {
+-            return Err(RunError::Internal("lock-vendor hydration provider mode differs from producer receipt".to_string()));
++            return Err(RunError::Internal(
++                "lock-vendor hydration provider mode differs from producer receipt".to_string(),
++            ));
+         }
+     }
+-    let provider_kind = manifest.records[manifest_index].metadata.get(RECORD_METADATA_PROVIDER_KIND_KEY)
+-        .ok_or_else(|| RunError::Internal("lock-vendor hydration provider manifest is missing provider kind".to_string()))?;
++    let provider_kind =
++        manifest.records[manifest_index].metadata.get(RECORD_METADATA_PROVIDER_KIND_KEY).ok_or_else(|| {
++            RunError::Internal("lock-vendor hydration provider manifest is missing provider kind".to_string())
++        })?;
+     validate_bootstrap_provider_kind(mode, provider_kind)?;
+     if manifest.records[archive_index].files.is_empty() || manifest.records[manifest_index].files.is_empty() {
+-        return Err(RunError::Internal("lock-vendor hydration requires materialized provider authority inputs".to_string()));
++        return Err(RunError::Internal(
++            "lock-vendor hydration requires materialized provider authority inputs".to_string(),
++        ));
+     }
+-    let checkout = fs::canonicalize(checkout)
+-        .map_err(|error| RunError::Internal(format!("canonicalizing lock-vendor checkout {}: {error}", checkout.display())))?;
++    let checkout = fs::canonicalize(checkout).map_err(|error| {
++        RunError::Internal(format!("canonicalizing lock-vendor checkout {}: {error}", checkout.display()))
++    })?;
+     if !checkout.is_dir() {
+         return Err(RunError::Internal("lock-vendor hydration checkout is not a directory".to_string()));
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2205:
+             "missing lock-vendor materialization step: producer output path differs from {expected_output}"
+         )));
+     }
+-    let lock = read_lock_vendor_bounded(&checkout.join("Cargo.lock"), mantle_lock_vendor_core::MAX_LOCK_BYTES as usize)?;
++    let lock =
++        read_lock_vendor_bounded(&checkout.join("Cargo.lock"), mantle_lock_vendor_core::MAX_LOCK_BYTES as usize)?;
+     if blake3::hash(&lock).to_hex().as_str() != receipt.metadata[LOCK_VENDOR_LOCK_CONTENT_KEY] {
+-        return Err(RunError::Internal("lock-vendor hydration checkout Cargo.lock differs from selected producer input".to_string()));
++        return Err(RunError::Internal(
++            "lock-vendor hydration checkout Cargo.lock differs from selected producer input".to_string(),
++        ));
+     }
+     let expected = &receipt.metadata[LOCK_VENDOR_OUTPUT_CONTENT_KEY];
+     let measured = lock_vendor_tree_receipt(producer_output)?;
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2214:
+     if &measured.content_blake3 != expected
+-        || measured.payload_bytes != receipt.metadata[LOCK_VENDOR_EXCLUDED_PAYLOAD_KEY]
+-            .parse::<u64>().map_err(|error| RunError::Internal(format!("invalid excluded payload size: {error}")))?
++        || measured.payload_bytes
++            != receipt.metadata[LOCK_VENDOR_EXCLUDED_PAYLOAD_KEY]
++                .parse::<u64>()
++                .map_err(|error| RunError::Internal(format!("invalid excluded payload size: {error}")))?
+     {
+         return Err(RunError::Internal(format!(
+             "lock-vendor producer output content or excluded payload size mismatch: {expected_output}"
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2233:
+     copy_lock_vendor_tree(producer_output, &staged_vendor)?;
+     crate::self_build::require_checked_vendor_inputs(staging.path())?;
+     if lock_vendor_tree_receipt(&staged_vendor)? != measured {
+-        return Err(RunError::Internal("lock-vendor hydrated output changed during per-artifact verification".to_string()));
++        return Err(RunError::Internal(
++            "lock-vendor hydrated output changed during per-artifact verification".to_string(),
++        ));
+     }
+     publish_hydrated_vendor(staging.path(), &destination)?;
+     let import = match import_source_bundle(manifest, state_dir, true) {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2241:
+         Err(error) => return rollback_hydrated_vendor(&destination, error),
+     };
+     if lock_vendor_tree_receipt(&destination)? != measured {
+-        return rollback_hydrated_vendor(&destination, RunError::Internal(
+-            "lock-vendor published vendor tree failed readback verification".to_string(),
+-        ));
++        return rollback_hydrated_vendor(
++            &destination,
++            RunError::Internal("lock-vendor published vendor tree failed readback verification".to_string()),
++        );
+     }
+     Ok(SelfBuildHydrationReport {
+         format: SELF_BUILD_HYDRATION_REPORT_FORMAT,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2383:
+         let receipt = lock_vendor_acquisition_record(manifest)?;
+         let observed = lock_vendor_tree_receipt(&checkout.join(VENDOR_DEPS_DIR_NAME))?;
+         if observed.content_blake3 != receipt.metadata[LOCK_VENDOR_OUTPUT_CONTENT_KEY] {
+-            return Err(RunError::Internal("hydrated lock-vendor output differs from producer content receipt".to_string()));
++            return Err(RunError::Internal(
++                "hydrated lock-vendor output differs from producer content receipt".to_string(),
++            ));
+         }
+         crate::self_build::require_checked_vendor_inputs(checkout)?;
+         return Ok(observed.payload_bytes);
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2531:
+     backend: crunch_store::StoreBackend,
+     trusted_keys: &[nix_compat::narinfo::VerifyingKey],
+ ) -> Result<Vec<crunch_build::FetchSourceOverride>, RunError> {
+-    validate_blake3_hex(Blake3HexValidation { value: expected_blake3, label: "offline vendor catalog BLAKE3" })?;
++    validate_blake3_hex(Blake3HexValidation {
++        value: expected_blake3,
++        label: "offline vendor catalog BLAKE3",
++    })?;
+     if trusted_keys.is_empty() {
+         return Err(RunError::Internal("offline vendor cache requires explicit trusted public keys".to_string()));
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2547:
+             fallback_mode: crunch_store::StoreFallbackMode::Practical,
+             store_dir: store_prefix.to_string(),
+             base_state_dirs: Vec::new(),
+-        }).await.map_err(|error| RunError::Internal(format!("opening offline cache store: {error}")))?;
++        })
++        .await
++        .map_err(|error| RunError::Internal(format!("opening offline cache store: {error}")))?;
+         let service = store.pathinfo_service();
+         verified_offline_cache_path(&*service, catalog_path, &catalog_name, store_prefix, trusted_keys).await?;
+         let metadata = fs::metadata(catalog_path)
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2555:
+         if metadata.len() > MAX_OFFLINE_VENDOR_CACHE_BYTES {
+             return Err(RunError::Internal("offline vendor catalog exceeds bounded read size".to_string()));
+         }
+-        let bytes = fs::read(catalog_path)
+-            .map_err(|error| RunError::Internal(format!("reading offline catalog: {error}")))?;
++        let bytes =
++            fs::read(catalog_path).map_err(|error| RunError::Internal(format!("reading offline catalog: {error}")))?;
+         if blake3::hash(&bytes).to_hex().as_str() != expected_blake3 {
+             return Err(RunError::Internal("offline vendor catalog digest differs from declared BLAKE3".to_string()));
+         }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2563:
+         let catalog: OfflineVendorCache = serde_json::from_slice(&bytes)
+             .map_err(|error| RunError::Internal(format!("parsing offline vendor catalog: {error}")))?;
+-        if catalog.format != OFFLINE_VENDOR_CACHE_FORMAT || catalog.store_prefix != store_prefix
++        if catalog.format != OFFLINE_VENDOR_CACHE_FORMAT
++            || catalog.store_prefix != store_prefix
+             || catalog.provenance != OFFLINE_VENDOR_LOCAL_PROVENANCE
+         {
+-            return Err(RunError::Internal("offline vendor catalog format, local-integrity provenance or logical store prefix differs".to_string()));
++            return Err(RunError::Internal(
++                "offline vendor catalog format, local-integrity provenance or logical store prefix differs".to_string(),
++            ));
+         }
+         let source = offline_cache_physical_path(&catalog.source_bundle_store_path, output_dir, store_prefix)?;
+-        let source_name = source.file_name().and_then(|name| name.to_str())
++        let source_name = source
++            .file_name()
++            .and_then(|name| name.to_str())
+             .ok_or_else(|| RunError::Internal("invalid offline source-bundle store path".to_string()))?;
+         verified_offline_cache_path(&*service, &source, source_name, store_prefix, trusted_keys).await?;
+         let lock_path = source.join("workspace/Cargo.lock");
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2575:
+         if lock_path.is_symlink() || !lock_path.is_file() {
+-            return Err(RunError::Internal("signed offline source bundle lacks a regular workspace/Cargo.lock".to_string()));
++            return Err(RunError::Internal(
++                "signed offline source bundle lacks a regular workspace/Cargo.lock".to_string(),
++            ));
+         }
+         let lock = fs::read(&lock_path)
+             .map_err(|error| RunError::Internal(format!("reading signed offline Cargo.lock: {error}")))?;
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2583:
+         let table = mantle_lock_vendor_core::shared_table::SharedHashTable::parse(catalog.reviewed_table.as_bytes())
+             .map_err(|error| RunError::Internal(format!("offline reviewed table: {error:?}")))?;
+         let planned = mantle_lock_vendor_core::plan_cargo_vendor_with_table(
+-            &lock, mantle_lock_vendor_core::Limits::default(), Some(&table),
+-        ).map_err(|error| RunError::Internal(format!("offline locked artifact plan: {error:?}")))?;
++            &lock,
++            mantle_lock_vendor_core::Limits::default(),
++            Some(&table),
++        )
++        .map_err(|error| RunError::Internal(format!("offline locked artifact plan: {error:?}")))?;
+         if planned.artifacts.is_empty() {
+-            return Err(RunError::Internal("offline vendor catalog requires at least one locked external artifact".to_string()));
++            return Err(RunError::Internal(
++                "offline vendor catalog requires at least one locked external artifact".to_string(),
++            ));
+         }
+         let mut seen_artifacts = BTreeSet::new();
+         for artifact in &catalog.artifacts {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2593:
+             if !seen_artifacts.insert((artifact.name.as_str(), artifact.version.as_str())) {
+                 return Err(RunError::Internal(format!(
+-                    "duplicate offline vendor catalog artifact: {}@{}", artifact.name, artifact.version,
++                    "duplicate offline vendor catalog artifact: {}@{}",
++                    artifact.name, artifact.version,
+                 )));
+             }
+         }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2599:
+         if planned.artifacts.len() != catalog.artifacts.len() {
+-            let offending = planned.artifacts.iter()
++            let offending = planned
++                .artifacts
++                .iter()
+                 .find(|artifact| !seen_artifacts.contains(&(artifact.name.as_str(), artifact.version.as_str())))
+                 .map(|artifact| format!("missing {}@{}", artifact.name, artifact.version))
+-                .or_else(|| catalog.artifacts.iter()
+-                    .find(|declared| !planned.artifacts.iter().any(|expected| {
+-                        declared.name == expected.name && declared.version == expected.version
+-                    }))
+-                    .map(|artifact| format!("unexpected {}@{}", artifact.name, artifact.version)))
+-                .ok_or_else(|| RunError::Internal("offline vendor catalog artifact cardinality is inconsistent".to_string()))?;
++                .or_else(|| {
++                    catalog
++                        .artifacts
++                        .iter()
++                        .find(|declared| {
++                            !planned
++                                .artifacts
++                                .iter()
++                                .any(|expected| declared.name == expected.name && declared.version == expected.version)
++                        })
++                        .map(|artifact| format!("unexpected {}@{}", artifact.name, artifact.version))
++                })
++                .ok_or_else(|| {
++                    RunError::Internal("offline vendor catalog artifact cardinality is inconsistent".to_string())
++                })?;
+             return Err(RunError::Internal(format!(
+                 "offline vendor catalog {offending}; has {} artifacts but signed Cargo.lock requires {}",
+-                catalog.artifacts.len(), planned.artifacts.len(),
++                catalog.artifacts.len(),
++                planned.artifacts.len(),
+             )));
+         }
+         let mut cache_paths = BTreeMap::new();
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2620:
+                 mantle_lock_vendor_core::shared_table::HashMode::FlatSha256 => "flat",
+                 mantle_lock_vendor_core::shared_table::HashMode::RecursiveSha256 => "recursive",
+             };
+-            if declared.name != expected.name || declared.version != expected.version
+-                || declared.sha256 != expected.sha256 || declared.hash_mode != mode
+-                || declared.fetch_url != expected.fetch_url || declared.git_rev != expected.git_rev
++            if declared.name != expected.name
++                || declared.version != expected.version
++                || declared.sha256 != expected.sha256
++                || declared.hash_mode != mode
++                || declared.fetch_url != expected.fetch_url
++                || declared.git_rev != expected.git_rev
+             {
+-                return Err(RunError::Internal(format!("offline vendor catalog identity, hash, mode or transport differs for {identity}")));
++                return Err(RunError::Internal(format!(
++                    "offline vendor catalog identity, hash, mode or transport differs for {identity}"
++                )));
+             }
+             let source_path = offline_cache_physical_path(&declared.store_path, output_dir, store_prefix)?;
+-            let stored_name = source_path.file_name().and_then(|name| name.to_str())
++            let stored_name = source_path
++                .file_name()
++                .and_then(|name| name.to_str())
+                 .ok_or_else(|| RunError::Internal(format!("invalid cache store path for {identity}")))?;
+             let stored_nar = if let Some(nar) = cache_paths.get(stored_name) {
+                 *nar
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2634:
+             } else {
+-                let (nar, _, _) = verified_offline_cache_path(
+-                    &*service, &source_path, stored_name, store_prefix, trusted_keys,
+-                ).await?;
++                let (nar, _, _) =
++                    verified_offline_cache_path(&*service, &source_path, stored_name, store_prefix, trusted_keys)
++                        .await?;
+                 cache_paths.insert(stored_name.to_string(), nar);
+                 nar
+             };
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2648:
+                     .map_err(|error| RunError::Internal(format!("opening offline crate {identity}: {error}")))?;
+                 let mut buffer = [0_u8; 65_536];
+                 loop {
+-                    let read = input.read(&mut buffer)
++                    let read = input
++                        .read(&mut buffer)
+                         .map_err(|error| RunError::Internal(format!("reading offline crate {identity}: {error}")))?;
+-                    if read == 0 { break };
++                    if read == 0 {
++                        break;
++                    };
+                     hasher.update(&buffer[..read]);
+                 }
+                 if HEXLOWER.encode(&hasher.finalize()) != expected.sha256 {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2658:
+                 }
+                 crunch_build::FetchSourceOverrideKind::File
+             } else {
+-                if !source_path.is_dir() || source_path.is_symlink() || HEXLOWER.encode(&stored_nar) != expected.sha256 {
++                if !source_path.is_dir() || source_path.is_symlink() || HEXLOWER.encode(&stored_nar) != expected.sha256
++                {
+                     return Err(RunError::Internal(format!("offline reviewed Git NAR SHA-256 differs for {identity}")));
+                 }
+                 crunch_build::FetchSourceOverrideKind::Git
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2684:
+ 
+ fn offline_cache_store_name<'a>(path: &'a Path, output_dir: &Path, store_prefix: &str) -> Result<&'a str, RunError> {
+     if path.is_symlink() || !path.exists() || path.parent() != Some(output_dir) {
+-        return Err(RunError::Internal(format!("offline artifact must be directly exported from the declared store: {}", path.display())));
++        return Err(RunError::Internal(format!(
++            "offline artifact must be directly exported from the declared store: {}",
++            path.display()
++        )));
+     }
+-    let name = path.file_name().and_then(|entry| entry.to_str())
++    let name = path
++        .file_name()
++        .and_then(|entry| entry.to_str())
+         .ok_or_else(|| RunError::Internal("offline store artifact name is not UTF-8".to_string()))?;
+     let logical = format!("{store_prefix}/{name}");
+-    nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(
+-        logical.as_bytes(), store_prefix,
+-    ).map_err(|error| RunError::Internal(format!("invalid offline store identity {name}: {error}")))?;
++    nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(logical.as_bytes(), store_prefix)
++        .map_err(|error| RunError::Internal(format!("invalid offline store identity {name}: {error}")))?;
+     Ok(name)
+ }
+ 
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2698:
+ fn offline_cache_physical_path(logical: &str, output_dir: &Path, store_prefix: &str) -> Result<PathBuf, RunError> {
+-    let path = nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(
+-        logical.as_bytes(), store_prefix,
+-    ).map_err(|error| RunError::Internal(format!("invalid declared offline store path {logical}: {error}")))?;
++    let path =
++        nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(logical.as_bytes(), store_prefix)
++            .map_err(|error| RunError::Internal(format!("invalid declared offline store path {logical}: {error}")))?;
+     let physical = output_dir.join(path.to_string());
+     offline_cache_store_name(&physical, output_dir, store_prefix)?;
+     Ok(physical)
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2712:
+     trusted_keys: &[nix_compat::narinfo::VerifyingKey],
+ ) -> Result<([u8; 32], u64, String), RunError> {
+     let logical = format!("{store_prefix}/{name}");
+-    let path = nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(
+-        logical.as_bytes(), store_prefix,
+-    ).map_err(|error| RunError::Internal(format!("invalid offline store identity {name}: {error}")))?;
+-    let info = service.get(*path.digest()).await
++    let path =
++        nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(logical.as_bytes(), store_prefix)
++            .map_err(|error| RunError::Internal(format!("invalid offline store identity {name}: {error}")))?;
++    let info = service
++        .get(*path.digest())
++        .await
+         .map_err(|error| RunError::Internal(format!("reading offline PathInfo {name}: {error}")))?
+         .ok_or_else(|| RunError::Internal(format!("missing signed offline PathInfo: {name}")))?;
+     if info.store_path != path {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2723:
+     }
+     let references: Vec<_> = info.references.iter().map(|reference| reference.as_ref()).collect();
+     let fingerprint = nix_compat::narinfo::fingerprint_with_store_dir(
+-        &info.store_path.as_ref(), &info.nar_sha256, info.nar_size, references.iter(), store_prefix,
++        &info.store_path.as_ref(),
++        &info.nar_sha256,
++        info.nar_size,
++        references.iter(),
++        store_prefix,
+     );
+-    if !info.signatures.iter().any(|signature| trusted_keys.iter().any(|key| key.verify(&fingerprint, &signature.as_ref()))) {
++    if !info
++        .signatures
++        .iter()
++        .any(|signature| trusted_keys.iter().any(|key| key.verify(&fingerprint, &signature.as_ref())))
++    {
+         return Err(RunError::Internal(format!("untrusted or unsigned offline PathInfo: {name}")));
+     }
+     let observation = crunch_nar::observe_path_blocking(
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2732:
+         physical.to_path_buf(),
+-        crunch_nar::FilesystemNarRequest::new(HashAlgo::Sha256, crunch_nar::CaseHackPolicy::native(), MAX_SOURCE_TOTAL_BYTES),
+-    ).await.map_err(|error| RunError::Internal(format!("observing offline NAR {name}: {error}")))?;
++        crunch_nar::FilesystemNarRequest::new(
++            HashAlgo::Sha256,
++            crunch_nar::CaseHackPolicy::native(),
++            MAX_SOURCE_TOTAL_BYTES,
++        ),
++    )
++    .await
++    .map_err(|error| RunError::Internal(format!("observing offline NAR {name}: {error}")))?;
+     if observation.digest.digest_as_bytes() != info.nar_sha256 || observation.nar_size != info.nar_size {
+         return Err(RunError::Internal(format!("signed offline NAR differs from physical bytes: {name}")));
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2745:
+     trust: &SourceStoreTrust<'_>,
+ ) -> Result<StorePathAttestation, RunError> {
+     if trust.trusted_keys.is_empty() || !trust.output_dir.is_absolute() {
+-        return Err(RunError::Internal("store-path attestation requires explicit trusted keys and absolute output store".to_string()));
++        return Err(RunError::Internal(
++            "store-path attestation requires explicit trusted keys and absolute output store".to_string(),
++        ));
+     }
+-    let store_metadata = fs::symlink_metadata(trust.output_dir)
+-        .map_err(|error| RunError::Internal(format!("reading attested output store {}: {error}", trust.output_dir.display())))?;
++    let store_metadata = fs::symlink_metadata(trust.output_dir).map_err(|error| {
++        RunError::Internal(format!("reading attested output store {}: {error}", trust.output_dir.display()))
++    })?;
+     if !store_metadata.is_dir() || store_metadata.file_type().is_symlink() {
+         return Err(RunError::Internal("attested output store must be a direct directory".to_string()));
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2756:
+     let metadata = fs::symlink_metadata(&physical)
+         .map_err(|error| RunError::Internal(format!("reading attested store root {}: {error}", physical.display())))?;
+     if metadata.file_type().is_symlink() || !(metadata.is_dir() || metadata.is_file()) {
+-        return Err(RunError::Internal(format!("attested store root is not a direct physical store output: {}", physical.display())));
++        return Err(RunError::Internal(format!(
++            "attested store root is not a direct physical store output: {}",
++            physical.display()
++        )));
+     }
+-    let name = physical.file_name().and_then(|name| name.to_str())
++    let name = physical
++        .file_name()
++        .and_then(|name| name.to_str())
+         .ok_or_else(|| RunError::Internal("attested store path has no UTF-8 basename".to_string()))?;
+     let runtime = tokio::runtime::Runtime::new()
+         .map_err(|error| RunError::Internal(format!("store-root verification runtime: {error}")))?;
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2771:
+             fallback_mode: crunch_store::StoreFallbackMode::Practical,
+             store_dir: store_prefix.to_string(),
+             base_state_dirs: Vec::new(),
+-        }).await.map_err(|error| RunError::Internal(format!("opening attested store: {error}")))?;
++        })
++        .await
++        .map_err(|error| RunError::Internal(format!("opening attested store: {error}")))?;
+         verified_offline_cache_path(&*store.pathinfo_service(), &physical, name, store_prefix, trust.trusted_keys).await
+     })?;
+     Ok(StorePathAttestation {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2805:
+         let hydration_plan = plan_self_build_hydration(&manifest, manifest_blake3)?;
+         hydration_profile_mode(&manifest, &hydration_plan)?
+     };
+-    if !matches!(mode, BootstrapSourceBundleMode::FreshCloneFixedPoint
+-        | BootstrapSourceBundleMode::FreshCloneLockVendorFixedPoint)
+-    {
++    if !matches!(
++        mode,
++        BootstrapSourceBundleMode::FreshCloneFixedPoint | BootstrapSourceBundleMode::FreshCloneLockVendorFixedPoint
++    ) {
+         return Err(RunError::Internal(format!(
+             "self-build offline source policy requires fresh-clone-fixed-point or fresh-clone-lock-vendor-fixed-point profile, got {}",
+             mode.as_str()
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:2937:
+     let manifest = assemble_source_bundle(records, store_prefix)?;
+     let available_sources = read_imported_source_records(state_dir)?;
+     let pinned_sources = read_pinned_source_records(state_dir)?;
+-    let preflight_receipt = classify_offline_preflight(&manifest, &available_sources, &pinned_sources, state_dir, trust)?;
++    let preflight_receipt =
++        classify_offline_preflight(&manifest, &available_sources, &pinned_sources, state_dir, trust)?;
+     if !source_offline_preflight_is_ready(&preflight_receipt) {
+         return Err(RunError::Internal(format!(
+             "offline source preflight is not ready: {:?}",
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:3042:
+             return Err(RunError::Internal("lock-vendor profile excludes --vendor-deps payload; use --excluded-vendor-deps only for parity measurement".to_string()));
+         }
+         if input.mantle_source.is_none() {
+-            return Err(RunError::Internal("lock-vendor profile requires --mantle-source containing Cargo.lock".to_string()));
++            return Err(RunError::Internal(
++                "lock-vendor profile requires --mantle-source containing Cargo.lock".to_string(),
++            ));
+         }
+         if input.lock_vendor.is_none() {
+-            return Err(RunError::Internal("lock-vendor profile requires producer, selected table, output and excluded vendor inputs".to_string()));
++            return Err(RunError::Internal(
++                "lock-vendor profile requires producer, selected table, output and excluded vendor inputs".to_string(),
++            ));
+         }
+     } else if input.lock_vendor.is_some() {
+-        return Err(RunError::Internal("lock-vendor inputs require a fresh-clone-lock-vendor profile mode".to_string()));
++        return Err(RunError::Internal(
++            "lock-vendor inputs require a fresh-clone-lock-vendor profile mode".to_string(),
++        ));
+     }
+     if input.bootstrap_sources.len() > MAX_SOURCE_RECORDS {
+         return Err(RunError::Internal(format!("bootstrap profile source count exceeds {MAX_SOURCE_RECORDS}")));
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:3323:
+     let mut payload_bytes = 0u64;
+     for _ in 0..MAX_SOURCE_FILES_PER_RECORD {
+         let Some(current) = pending.pop() else {
+-            return Ok(LockVendorTreeReceipt { content_blake3: hasher.finalize().to_hex().to_string(), payload_bytes });
++            return Ok(LockVendorTreeReceipt {
++                content_blake3: hasher.finalize().to_hex().to_string(),
++                payload_bytes,
++            });
+         };
+         let metadata = fs::symlink_metadata(&current)
+             .map_err(|error| RunError::Internal(format!("reading lock-vendor entry {}: {error}", current.display())))?;
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:3330:
+-        let relative = current.strip_prefix(&root)
++        let relative = current
++            .strip_prefix(&root)
+             .map_err(|error| RunError::Internal(format!("lock-vendor path escaped root: {error}")))?;
+-        let name = relative.to_str()
++        let name = relative
++            .to_str()
+             .ok_or_else(|| RunError::Internal(format!("lock-vendor path is not UTF-8: {}", relative.display())))?;
+         let name_length = u64::try_from(name.len())
+             .map_err(|_| RunError::Internal("lock-vendor path length exceeds u64".to_string()))?;
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:3347:
+             hasher.update(b"f");
+             hasher.update(&[u8::from(is_executable(&metadata))]);
+             hasher.update(&metadata.len().to_le_bytes());
+-            payload_bytes = payload_bytes.checked_add(metadata.len())
++            payload_bytes = payload_bytes
++                .checked_add(metadata.len())
+                 .ok_or_else(|| RunError::Internal("lock-vendor payload byte count overflow".to_string()))?;
+             if payload_bytes > MAX_SOURCE_TOTAL_BYTES {
+                 return Err(RunError::Internal(format!("lock-vendor payload exceeds {MAX_SOURCE_TOTAL_BYTES} bytes")));
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:3354:
+             }
+-            let mut file = fs::File::open(&current)
+-                .map_err(|error| RunError::Internal(format!("opening lock-vendor file {}: {error}", current.display())))?;
++            let mut file = fs::File::open(&current).map_err(|error| {
++                RunError::Internal(format!("opening lock-vendor file {}: {error}", current.display()))
++            })?;
+             let mut buffer = [0u8; 64 * 1024];
+             let mut observed = 0u64;
+             loop {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:3360:
+-                let bytes = file.read(&mut buffer)
+-                    .map_err(|error| RunError::Internal(format!("reading lock-vendor file {}: {error}", current.display())))?;
+-                if bytes == 0 { break; }
+-                observed = observed.checked_add(bytes as u64)
++                let bytes = file.read(&mut buffer).map_err(|error| {
++                    RunError::Internal(format!("reading lock-vendor file {}: {error}", current.display()))
++                })?;
++                if bytes == 0 {
++                    break;
++                }
++                observed = observed
++                    .checked_add(bytes as u64)
+                     .ok_or_else(|| RunError::Internal("lock-vendor file size overflow".to_string()))?;
+                 if observed > metadata.len() {
+-                    return Err(RunError::Internal(format!("lock-vendor file grew during observation: {}", current.display())));
++                    return Err(RunError::Internal(format!(
++                        "lock-vendor file grew during observation: {}",
++                        current.display()
++                    )));
+                 }
+                 hasher.update(&buffer[..bytes]);
+             }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:3370:
+             if observed != metadata.len() {
+-                return Err(RunError::Internal(format!("lock-vendor file changed during observation: {}", current.display())));
++                return Err(RunError::Internal(format!(
++                    "lock-vendor file changed during observation: {}",
++                    current.display()
++                )));
+             }
+         } else {
+             return Err(RunError::Internal(format!("lock-vendor tree contains a special file: {}", current.display())));
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:3381:
+     let root_metadata = fs::symlink_metadata(source)
+         .map_err(|error| RunError::Internal(format!("reading producer vendor output {}: {error}", source.display())))?;
+     if !root_metadata.is_dir() || root_metadata.file_type().is_symlink() || destination.exists() {
+-        return Err(RunError::Internal("producer vendor output must be an ordinary directory and hydration staging must be absent".to_string()));
++        return Err(RunError::Internal(
++            "producer vendor output must be an ordinary directory and hydration staging must be absent".to_string(),
++        ));
+     }
+     let root = fs::canonicalize(source)
+         .map_err(|error| RunError::Internal(format!("canonicalizing producer vendor output: {error}")))?;
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:3388:
+     let mut pending = vec![root.clone()];
+     for _ in 0..MAX_SOURCE_FILES_PER_RECORD {
+         let Some(current) = pending.pop() else { return Ok(()) };
+-        let metadata = fs::symlink_metadata(&current)
+-            .map_err(|error| RunError::Internal(format!("reading producer vendor entry {}: {error}", current.display())))?;
++        let metadata = fs::symlink_metadata(&current).map_err(|error| {
++            RunError::Internal(format!("reading producer vendor entry {}: {error}", current.display()))
++        })?;
+         if metadata.file_type().is_symlink() {
+-            return Err(RunError::Internal(format!("producer vendor output contains a symlink: {}", current.display())));
++            return Err(RunError::Internal(format!(
++                "producer vendor output contains a symlink: {}",
++                current.display()
++            )));
+         }
+-        let relative = current.strip_prefix(&root)
++        let relative = current
++            .strip_prefix(&root)
+             .map_err(|error| RunError::Internal(format!("producer vendor entry escaped root: {error}")))?;
+         let target = destination.join(relative);
+         if metadata.is_dir() {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:3400:
+-            fs::create_dir(&target)
+-                .map_err(|error| RunError::Internal(format!("creating hydrated vendor directory {}: {error}", target.display())))?;
++            fs::create_dir(&target).map_err(|error| {
++                RunError::Internal(format!("creating hydrated vendor directory {}: {error}", target.display()))
++            })?;
+             let children = read_sorted_source_children(&current, false, None)?;
+             reserve_pending_source_paths(&mut pending, children.len())?;
+             pending.extend(children.into_iter().rev());
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:3405:
+         } else if metadata.is_file() {
+-            fs::copy(&current, &target)
+-                .map_err(|error| RunError::Internal(format!("copying verified vendor file {}: {error}", current.display())))?;
+-            fs::set_permissions(&target, metadata.permissions())
+-                .map_err(|error| RunError::Internal(format!("preserving vendor file mode {}: {error}", target.display())))?;
++            fs::copy(&current, &target).map_err(|error| {
++                RunError::Internal(format!("copying verified vendor file {}: {error}", current.display()))
++            })?;
++            fs::set_permissions(&target, metadata.permissions()).map_err(|error| {
++                RunError::Internal(format!("preserving vendor file mode {}: {error}", target.display()))
++            })?;
+         } else {
+-            return Err(RunError::Internal(format!("producer vendor output contains a special file: {}", current.display())));
++            return Err(RunError::Internal(format!(
++                "producer vendor output contains a special file: {}",
++                current.display()
++            )));
+         }
+     }
+     Err(RunError::Internal(format!("producer vendor output exceeds {MAX_SOURCE_FILES_PER_RECORD} entries")))
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:3952:
+     Ok(())
+ }
+ 
+-fn validate_store_path_attestation(
+-    record: &SourceRecord,
+-    attestation: &StorePathAttestation,
+-) -> Result<(), RunError> {
++fn validate_store_path_attestation(record: &SourceRecord, attestation: &StorePathAttestation) -> Result<(), RunError> {
+     if record.kind != SourceRecordKind::ToolchainSourceRoot
+         || !record.files.is_empty()
+         || record.payload_bytes != 0
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:3962:
+         || record.adapter.is_some()
+         || record.metadata.len() != 2
+         || record.metadata.get(RECORD_METADATA_SOURCE_KIND_KEY).map(String::as_str) != Some("pre-existing-store-path")
+-        || record.metadata.get(RECORD_METADATA_STORE_PATH_KEY).map(String::as_str) != Some(attestation.logical_store_path.as_str())
++        || record.metadata.get(RECORD_METADATA_STORE_PATH_KEY).map(String::as_str)
++            != Some(attestation.logical_store_path.as_str())
+     {
+-        return Err(RunError::Internal("store-path attestation must bind one declared toolchain source root".to_string()));
++        return Err(RunError::Internal(
++            "store-path attestation must bind one declared toolchain source root".to_string(),
++        ));
+     }
+-    let prefix = record.store_prefix.as_deref()
++    let prefix = record
++        .store_prefix
++        .as_deref()
+         .ok_or_else(|| RunError::Internal("store-path attestation has no store prefix".to_string()))?;
+     nix_compat::store_path::StorePath::<String>::from_absolute_path_with_prefix(
+-        attestation.logical_store_path.as_bytes(), prefix,
+-    ).map_err(|error| RunError::Internal(format!("invalid attested store path: {error}")))?;
+-    let expected_identity = format!(
+-        "{DERIVED_STORE_PATH_ID_PREFIX}-{}",
+-        digest_virtual_source_record(&record.kind, &record.metadata)?,
+-    );
++        attestation.logical_store_path.as_bytes(),
++        prefix,
++    )
++    .map_err(|error| RunError::Internal(format!("invalid attested store path: {error}")))?;
++    let expected_identity =
++        format!("{DERIVED_STORE_PATH_ID_PREFIX}-{}", digest_virtual_source_record(&record.kind, &record.metadata)?,);
+     if record.identity != expected_identity
+         || attestation.nar_size == 0
+         || attestation.nar_size > MAX_SOURCE_TOTAL_BYTES
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:3981:
+         || attestation.nar_sha256.len() != NAR_SHA256_HEX_BYTES
+         || !attestation.nar_sha256.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+         || attestation.signed_fingerprint_blake3.len() != BLAKE3_HEX_BYTES
+-        || !attestation.signed_fingerprint_blake3.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
++        || !attestation
++            .signed_fingerprint_blake3
++            .bytes()
++            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+     {
+         return Err(RunError::Internal("store-path attestation identity or NAR bounds differ".to_string()));
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:4306:
+             continue;
+         }
+         if expected.kind == SourceRecordKind::ToolchainSourceRoot
+-            && expected.metadata.get(RECORD_METADATA_SOURCE_KIND_KEY).map(String::as_str) == Some("pre-existing-store-path")
++            && expected.metadata.get(RECORD_METADATA_SOURCE_KIND_KEY).map(String::as_str)
++                == Some("pre-existing-store-path")
+         {
+             if let Some(attestation) = &stored_record.store_path_attestation {
+                 let Some(trust) = trust else {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:4313:
+                     untrusted_source_ids.push(expected.identity.clone());
+                     continue;
+                 };
+-                match verify_signed_store_root(&attestation.logical_store_path, state_dir, &manifest.store_prefix, trust) {
++                match verify_signed_store_root(
++                    &attestation.logical_store_path,
++                    state_dir,
++                    &manifest.store_prefix,
++                    trust,
++                ) {
+                     Ok(observed) if observed == *attestation => {}
+                     _ => {
+                         untrusted_source_ids.push(expected.identity.clone());
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:4527:
+ fn find_matching_source_record<'a>(expected: &SourceRecord, records: &'a [SourceRecord]) -> Option<&'a SourceRecord> {
+     records
+         .iter()
+-        .find(|stored| source_record_metadata_matches_preflight(expected, stored) && stored.store_path_attestation.is_some())
+-        .or_else(|| records.iter().find(|stored| source_record_metadata_matches_preflight(expected, stored) && !stored.files.is_empty()))
++        .find(|stored| {
++            source_record_metadata_matches_preflight(expected, stored) && stored.store_path_attestation.is_some()
++        })
++        .or_else(|| {
++            records
++                .iter()
++                .find(|stored| source_record_metadata_matches_preflight(expected, stored) && !stored.files.is_empty())
++        })
+         .or_else(|| records.iter().find(|stored| source_record_metadata_matches_preflight(expected, stored)))
+         .or_else(|| records.iter().find(|stored| stored.identity == expected.identity))
+ }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:4749:
+         let key = source_fetch_override_key(entry);
+         if !identities.insert(key) {
+             return Err(RunError::Internal(format!(
+-                "duplicate static and offline vendor source override for {}", entry.url,
++                "duplicate static and offline vendor source override for {}",
++                entry.url,
+             )));
+         }
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:5374:
+             is_skipping_git_dir,
+             source_record_uses_canonical_chunks(record),
+             None,
+-            record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str) == Some(BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)
+-                && record.metadata.get(RECORD_METADATA_PROFILE_MODE_KEY)
+-                    .is_some_and(|mode| BootstrapSourceBundleMode::parse(mode).is_ok_and(BootstrapSourceBundleMode::is_lock_vendor)),
++            record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
++                == Some(BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)
++                && record.metadata.get(RECORD_METADATA_PROFILE_MODE_KEY).is_some_and(|mode| {
++                    BootstrapSourceBundleMode::parse(mode).is_ok_and(BootstrapSourceBundleMode::is_lock_vendor)
++                }),
+         )?
+     };
+     let content_blake3 = digest_source_record_content(&record.kind, &record.metadata, &files)?;
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:5823:
+     is_json_output: bool,
+ ) -> Result<(), RunError> {
+     let trusted_input = match &action {
+-        crate::SourceAction::Bundle { action: crate::SourceBundleAction::ImportStorePath { trusted_public_keys, .. }
+-            | crate::SourceBundleAction::Preflight { trusted_public_keys, .. } } => trusted_public_keys.as_slice(),
++        crate::SourceAction::Bundle {
++            action:
++                crate::SourceBundleAction::ImportStorePath {
++                    trusted_public_keys, ..
++                }
++                | crate::SourceBundleAction::Preflight {
++                    trusted_public_keys, ..
++                },
++        } => trusted_public_keys.as_slice(),
+         _ => &[],
+     };
+     let parsed_trusted = crate::trusted_keys::parse_trusted_public_keys(trusted_input)?.unwrap_or_default();
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:5832:
+         state_dir,
+         store_prefix,
+         is_json_output,
+-        store_trust: Some(SourceStoreTrust { output_dir, backend, trusted_keys: &parsed_trusted }),
++        store_trust: Some(SourceStoreTrust {
++            output_dir,
++            backend,
++            trusted_keys: &parsed_trusted,
++        }),
+     };
+     match action {
+         crate::SourceAction::Bundle { action } => cmd_source_bundle(action, &context),
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:6148:
+                 .saturating_add(include_bundles.len())
+                 .saturating_add(
+                     [
+-                        stagex_source_bundle, mantle_source, vendor_deps, toolchain_source_root,
+-                        lock_vendor_producer, lock_vendor_selected_table, lock_vendor_output,
++                        stagex_source_bundle,
++                        mantle_source,
++                        vendor_deps,
++                        toolchain_source_root,
++                        lock_vendor_producer,
++                        lock_vendor_selected_table,
++                        lock_vendor_output,
+                         excluded_vendor_deps,
+                     ]
+                     .iter()
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:6349:
+         crate::SourceBundleAction::Import { from, pin } => {
+             cmd_import_source_bundle(&from, pin, context, &plan, &mut port)
+         }
+-        crate::SourceBundleAction::ImportStorePath { logical, physical, pin, .. } => {
+-            cmd_import_signed_store_path(&logical, &physical, pin, context, &plan, &mut port)
+-        }
++        crate::SourceBundleAction::ImportStorePath {
++            logical, physical, pin, ..
++        } => cmd_import_signed_store_path(&logical, &physical, pin, context, &plan, &mut port),
+         crate::SourceBundleAction::HydrateSelfBuild {
+             from,
+             expected_manifest_blake3,
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:6358:
+             checkout,
+             lock_vendor_output,
+-        } => {
+-            cmd_hydrate_self_build_source_bundle(&from, &expected_manifest_blake3, &checkout, lock_vendor_output.as_deref(), context, &plan, &mut port)
+-        }
++        } => cmd_hydrate_self_build_source_bundle(
++            &from,
++            &expected_manifest_blake3,
++            &checkout,
++            lock_vendor_output.as_deref(),
++            context,
++            &plan,
++            &mut port,
++        ),
+         crate::SourceBundleAction::Verify { from, imported } => {
+             cmd_verify_source_bundle(&from, imported, context, &plan, &mut port)
+         }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:6475:
+     let (manifest, input_bytes) = port.read(from)?;
+     if manifest.records.iter().any(|record| record.store_path_attestation.is_some()) {
+         return Err(RunError::Internal(
+-            "attested store roots require import-store-path with explicit trusted public keys and physical output".to_string(),
++            "attested store roots require import-store-path with explicit trusted public keys and physical output"
++                .to_string(),
+         ));
+     }
+     import_verified_source_manifest(&manifest, input_bytes, pin, context, plan, port)
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:6489:
+     plan: &mantle_application_contract::EffectPlan,
+     port: &mut impl SourceBundleEffectPort,
+ ) -> Result<(), RunError> {
+-    let trust = context.store_trust.as_ref().ok_or_else(|| RunError::Internal("signed store path requires explicit trusted store authority".to_string()))?;
++    let trust = context
++        .store_trust
++        .as_ref()
++        .ok_or_else(|| RunError::Internal("signed store path requires explicit trusted store authority".to_string()))?;
+     let expected_physical = offline_cache_physical_path(logical, trust.output_dir, context.store_prefix)?;
+     if physical != expected_physical {
+         return Err(RunError::Internal(format!(
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:6498:
+         )));
+     }
+     let attestation = verify_signed_store_root(logical, context.state_dir, context.store_prefix, trust)?;
+-    let mut record = store_path_source_record(StorePathSourceRequest { source_path: logical, store_prefix: context.store_prefix })?;
++    let mut record = store_path_source_record(StorePathSourceRequest {
++        source_path: logical,
++        store_prefix: context.store_prefix,
++    })?;
+     record.content_blake3 = digest_attested_store_path_record(&record.kind, &record.metadata, &attestation)?;
+     record.store_path_attestation = Some(attestation.clone());
+     let manifest = assemble_source_bundle(vec![record], context.store_prefix)?;
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:6579:
+         record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+             == Some(BOOTSTRAP_PROFILE_CLASS_LOCK_VENDOR_ACQUISITION)
+     }) {
+-        let output = lock_vendor_output.ok_or_else(|| RunError::Internal(
+-            "lock-vendor hydration requires --lock-vendor-output (the separately realized producer output)".to_string(),
+-        ))?;
++        let output = lock_vendor_output.ok_or_else(|| {
++            RunError::Internal(
++                "lock-vendor hydration requires --lock-vendor-output (the separately realized producer output)"
++                    .to_string(),
++            )
++        })?;
+         port.hydrate_lock_vendor(&manifest, expected_manifest_blake3, checkout, context.state_dir, output)?
+     } else {
+         if lock_vendor_output.is_some() {
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:7452:
+     fn lock_vendor_profile_omits_vendor_bytes_and_hydrates_fresh_checkout_with_verified_packages() {
+         let temp = tempfile::tempdir().unwrap();
+         let (manifest, checkout, output, source) = lock_vendor_hydration_fixture(temp.path());
+-        let report = bootstrap_source_bundle_profile_report(&manifest, BootstrapSourceBundleMode::FreshCloneLockVendorInputs).unwrap();
++        let report =
++            bootstrap_source_bundle_profile_report(&manifest, BootstrapSourceBundleMode::FreshCloneLockVendorInputs)
++                .unwrap();
+         let receipt = lock_vendor_acquisition_record(&manifest).unwrap();
+         let source_record = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap();
+         let initial = manifest.manifest_blake3.clone();
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:7479:
+         // The reviewed B row changes the mutable full table, not the selected
+         // producer input or source snapshot of the locked A package.
+         let with_unrelated_row = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+-        let unchanged_source = require_single_profile_record(&with_unrelated_row, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap();
++        let unchanged_source =
++            require_single_profile_record(&with_unrelated_row, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap();
+         assert_eq!(source_record.content_blake3, unchanged_source.content_blake3);
+         assert_eq!(receipt.content_blake3, lock_vendor_acquisition_record(&with_unrelated_row).unwrap().content_blake3);
+         assert_eq!(initial, with_unrelated_row.manifest_blake3);
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:7489:
+         let state = temp.path().join("state");
+         let hydrated = hydrate_lock_vendor_source_bundle(&manifest, &initial, &checkout, &state, &output).unwrap();
+         assert_eq!(hydrated.vendor_content_blake3, receipt.metadata[LOCK_VENDOR_OUTPUT_CONTENT_KEY]);
+-        assert_eq!(observed_hydrated_vendor_bytes(&manifest, &checkout).unwrap(), report.excluded_vendor_payload_bytes.unwrap());
++        assert_eq!(
++            observed_hydrated_vendor_bytes(&manifest, &checkout).unwrap(),
++            report.excluded_vendor_payload_bytes.unwrap()
++        );
+         assert_eq!(observed_imported_source_state(&manifest, &state, true).unwrap(), manifest.records.len() as u32);
+         fs::write(checkout.join(VENDOR_DEPS_DIR_NAME).join("dep-a/src/lib.rs"), b"pub fn tampered() {}\n").unwrap();
+         assert!(observed_hydrated_vendor_bytes(&manifest, &checkout).is_err());
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:7501:
+         let (manifest, checkout, output, _) = lock_vendor_hydration_fixture(temp.path());
+         let state = temp.path().join("state");
+         fs::write(output.join("dep-a/src/lib.rs"), b"pub fn tampered() {}\n").unwrap();
+-        assert!(hydrate_lock_vendor_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state, &output).is_err());
++        assert!(
++            hydrate_lock_vendor_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state, &output)
++                .is_err()
++        );
+         assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
+         assert!(!source_pins_dir(&state).exists());
+         write_hydration_vendor(&output, false);
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:7508:
+-        fs::OpenOptions::new().append(true).open(checkout.join("Cargo.lock")).unwrap().write_all(b"\n").unwrap();
+-        assert!(hydrate_lock_vendor_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state, &output).is_err());
++        fs::OpenOptions::new()
++            .append(true)
++            .open(checkout.join("Cargo.lock"))
++            .unwrap()
++            .write_all(b"\n")
++            .unwrap();
++        assert!(
++            hydrate_lock_vendor_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state, &output)
++                .is_err()
++        );
+         assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
+         assert!(!source_pins_dir(&state).exists());
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:9023:
+         let logical = format!("/mantle/store/{}-fixture", "0".repeat(32));
+         let root = root_derivation(vec![crunch_glue::Input::Source(logical.clone())]);
+         let roots = [("default".to_string(), root)];
+-        let planned = assemble_source_bundle(
+-            collect_build_source_records(&roots, "/mantle/store").unwrap(),
+-            "/mantle/store",
+-        ).unwrap();
++        let planned =
++            assemble_source_bundle(collect_build_source_records(&roots, "/mantle/store").unwrap(), "/mantle/store")
++                .unwrap();
+         import_source_bundle(&planned, temp.path(), true).unwrap();
+ 
+         let report = offline_preflight_for_derivations(&roots, temp.path(), "/mantle/store", None).unwrap();
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:9041:
+         let mut record = store_path_source_record(StorePathSourceRequest {
+             source_path: &logical,
+             store_prefix: "/mantle/store",
+-        }).unwrap();
++        })
++        .unwrap();
+         let attestation = StorePathAttestation {
+             logical_store_path: logical.clone(),
+             nar_sha256: "a".repeat(NAR_SHA256_HEX_BYTES),
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:9048:
+             nar_size: 1,
+             signed_fingerprint_blake3: "b".repeat(BLAKE3_HEX_BYTES),
+         };
+-        record.content_blake3 = digest_attested_store_path_record(&record.kind, &record.metadata, &attestation).unwrap();
++        record.content_blake3 =
++            digest_attested_store_path_record(&record.kind, &record.metadata, &attestation).unwrap();
+         record.store_path_attestation = Some(attestation);
+         let signed_manifest = assemble_source_bundle(vec![record.clone()], "/mantle/store").unwrap();
+         import_source_bundle(&signed_manifest, temp.path(), true).unwrap();
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:9064:
+             backend: crunch_store::StoreBackend::Snix,
+             trusted_keys: &[],
+         };
+-        let with_no_signer = offline_preflight_for_derivations(&roots, temp.path(), "/mantle/store", Some(&trust)).unwrap();
++        let with_no_signer =
++            offline_preflight_for_derivations(&roots, temp.path(), "/mantle/store", Some(&trust)).unwrap();
+         assert_eq!(with_no_signer.ready_class, SourceReadiness::Untrusted);
+ 
+         let mut wrong_path = record.clone();
+Diff in /home/brittonr/git/OnixResearch/mantle/src/source_bundle.rs:9071:
+-        wrong_path.store_path_attestation.as_mut().unwrap().logical_store_path = format!("/mantle/store/{}-other", "0".repeat(32));
++        wrong_path.store_path_attestation.as_mut().unwrap().logical_store_path =
++            format!("/mantle/store/{}-other", "0".repeat(32));
+         wrong_path.content_blake3 = digest_attested_store_path_record(
+-            &wrong_path.kind, &wrong_path.metadata, wrong_path.store_path_attestation.as_ref().unwrap(),
+-        ).unwrap();
++            &wrong_path.kind,
++            &wrong_path.metadata,
++            wrong_path.store_path_attestation.as_ref().unwrap(),
++        )
++        .unwrap();
+         assert!(validate_source_record(&wrong_path, ManifestPayloadValidation::VerifyPayloads).is_err());
+     }
+ 
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/example_projects.rs:736:
+     plan["schema"] = serde_json::Value::String("mantle-project-filegen-plan-v999".to_string());
+     let unsupported = fixture.path().join("unsupported-plan.json");
+     std::fs::write(&unsupported, serde_json::to_vec_pretty(&plan).unwrap()).unwrap();
+-    let failed = run_project_command(
+-        fixture.path(),
+-        &["--json", "filegen", "apply", "--plan", unsupported.to_str().unwrap()],
+-    );
++    let failed =
++        run_project_command(fixture.path(), &["--json", "filegen", "apply", "--plan", unsupported.to_str().unwrap()]);
+     assert_eq!(failed.status.code(), Some(3));
+     assert!(failed.stderr.is_empty(), "rejected reviewed plan must return a blocker, not panic");
+     let blockers: serde_json::Value = serde_json::from_slice(&failed.stdout).unwrap();
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:1:
+ use std::collections::BTreeMap;
+ use std::fs;
+-use std::io::{Read as _, Seek as _, Write as _};
++use std::io::Read as _;
++use std::io::Seek as _;
++use std::io::Write as _;
+ use std::os::fd::AsRawFd as _;
+ use std::os::unix::fs::PermissionsExt as _;
+ use std::os::unix::process::CommandExt as _;
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:7:
+-use std::path::{Path, PathBuf};
+-use std::process::{Command, Output, Stdio};
++use std::path::Path;
++use std::path::PathBuf;
++use std::process::Command;
++use std::process::Output;
++use std::process::Stdio;
+ 
+ use base64::Engine as _;
+-use crunch_remote_core::protocol::{self, Direction, FrameKind, Phase};
+-use crunch_remote_core::receipt::{
+-    ExecutablePlanFacts, ExecutableSourceFacts, ExpectedOutputFacts, OrderedOutputReceipt, OutputReceiptFields,
+-};
+-use serde_json::{Value, json};
+-use sha2::{Digest as _, Sha256};
++use crunch_remote_core::protocol::Direction;
++use crunch_remote_core::protocol::FrameKind;
++use crunch_remote_core::protocol::Phase;
++use crunch_remote_core::protocol::{self};
++use crunch_remote_core::receipt::ExecutablePlanFacts;
++use crunch_remote_core::receipt::ExecutableSourceFacts;
++use crunch_remote_core::receipt::ExpectedOutputFacts;
++use crunch_remote_core::receipt::OrderedOutputReceipt;
++use crunch_remote_core::receipt::OutputReceiptFields;
++use serde_json::Value;
++use serde_json::json;
++use sha2::Digest as _;
++use sha2::Sha256;
+ 
+ const TICKET_KEY: &str = "ticket-key-1:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE";
+ const SIGNING_KEY: &str =
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:77:
+         .args(["--json", "--state-dir"])
+         .arg(root)
+         .args([
+-            "remote", "ticket", "create", "--display-name", "hexagon-v2-origin-issued",
+-            "--ttl-secs", ttl_secs, "--uses", "1", "--ticket-fd", "9", "--secret-manifest",
++            "remote",
++            "ticket",
++            "create",
++            "--display-name",
++            "hexagon-v2-origin-issued",
++            "--ttl-secs",
++            ttl_secs,
++            "--uses",
++            "1",
++            "--ticket-fd",
++            "9",
++            "--secret-manifest",
+         ])
+         .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("secretspec.toml"))
+-        .args(["--secret-profile", "production", "--secret-provider", "systemd-credential://"])
++        .args([
++            "--secret-profile",
++            "production",
++            "--secret-provider",
++            "systemd-credential://",
++        ])
+         .env("CREDENTIALS_DIRECTORY", credentials);
+     if let Some(limit) = max_upload_bytes {
+         command.args(["--max-build-time-secs", "600", "--max-upload-bytes"]).arg(limit.to_string());
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:124:
+         }}),
+         json!({"kind": "input-upload", "upload": {
+             "request_id": "request-1", "refs": ["input-a"], "byte_count": 10
+-        }})
++        }}),
+     ]
+ }
+ 
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:162:
+         envelope_count += 1;
+         assert!(envelope_count <= 4_096, "physical Worker response frame count exceeded");
+         let header_end = offset.checked_add(4).expect("bounded response header offset");
+-        let header: [u8; 4] = wire.get(offset..header_end).expect("complete response header")
+-            .try_into().expect("four response header bytes");
++        let header: [u8; 4] = wire
++            .get(offset..header_end)
++            .expect("complete response header")
++            .try_into()
++            .expect("four response header bytes");
+         let payload_bytes = usize::try_from(u32::from_be_bytes(header)).expect("bounded response envelope length");
+         assert!(payload_bytes > 0, "empty physical response envelope");
+         let payload_end = header_end.checked_add(payload_bytes).expect("bounded response envelope offset");
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:176:
+             let manifest = &transfer["manifest"];
+             let header = &envelope["chunk"];
+             let scope = &header["scope"];
+-            for field in ["session_id", "job_id", "attempt_id", "fence_generation", "policy_digest_blake3"] {
++            for field in [
++                "session_id",
++                "job_id",
++                "attempt_id",
++                "fence_generation",
++                "policy_digest_blake3",
++            ] {
+                 assert_eq!(scope[field], manifest[field], "raw chunk scope differs from output manifest");
+             }
+             assert_eq!(scope["manifest_digest_blake3"], transfer["manifest_digest_blake3"]);
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:183:
+             let descriptor = &header["chunk"];
+-            let artifact = manifest["artifacts"].as_array().expect("actual output manifest artifacts").iter()
+-                .find(|artifact| artifact["artifact_id"] == header["artifact_id"]
+-                    && artifact["artifact_kind"] == header["artifact_kind"])
++            let artifact = manifest["artifacts"]
++                .as_array()
++                .expect("actual output manifest artifacts")
++                .iter()
++                .find(|artifact| {
++                    artifact["artifact_id"] == header["artifact_id"]
++                        && artifact["artifact_kind"] == header["artifact_kind"]
++                })
+                 .expect("raw chunk artifact belongs to output manifest");
+-            assert!(artifact["chunks"].as_array().expect("manifest chunk descriptors")
+-                .iter().any(|chunk| chunk == descriptor), "raw chunk descriptor not in output manifest");
++            assert!(
++                artifact["chunks"]
++                    .as_array()
++                    .expect("manifest chunk descriptors")
++                    .iter()
++                    .any(|chunk| chunk == descriptor),
++                "raw chunk descriptor not in output manifest"
++            );
+             let raw_bytes = usize::try_from(descriptor["size_bytes"].as_u64().expect("raw chunk byte count"))
+                 .expect("bounded raw chunk length");
+             assert!(raw_bytes > 0, "empty output chunk");
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:193:
+             let raw_end = offset.checked_add(raw_bytes).expect("bounded raw chunk offset");
+             let raw = wire.get(offset..raw_end).expect("complete raw output chunk");
+-            assert_eq!(blake3::hash(raw).to_hex().to_string(),
+-                descriptor["digest_blake3"].as_str().expect("manifest chunk BLAKE3"));
++            assert_eq!(
++                blake3::hash(raw).to_hex().to_string(),
++                descriptor["digest_blake3"].as_str().expect("manifest chunk BLAKE3")
++            );
+             offset = raw_end;
+             data_chunks += 1;
+             continue;
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:204:
+             "transfer-demand" | "transfer-credit" | "transfer-acknowledgement" => {
+                 assert!(output_transfer.is_none(), "input transfer sideband appeared during output");
+             }
+-            "auth-ok" | "missing-inputs" | "transfer-complete" | "build-queued" | "build-started"
+-            | "build-finished" | "output-transfer-done" | "done" => frames.push(envelope),
++            "auth-ok"
++            | "missing-inputs"
++            | "transfer-complete"
++            | "build-queued"
++            | "build-started"
++            | "build-finished"
++            | "output-transfer-done"
++            | "done" => frames.push(envelope),
+             "transfer-manifest" => {
+                 assert_eq!(envelope["transfer"]["direction"], "download", "Worker output manifest direction");
+-                assert!(output_transfer.replace(envelope["transfer"].clone()).is_none(),
+-                    "duplicate Worker output manifest");
++                assert!(
++                    output_transfer.replace(envelope["transfer"].clone()).is_none(),
++                    "duplicate Worker output manifest"
++                );
+                 frames.push(envelope);
+             }
+             other => panic!("unrecognized physical Worker control frame: {other}"),
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:225:
+         .arg("--state-dir")
+         .arg(root)
+         .args([
+-            "remote", "serve", "--endpoint-id", "builder-1", "--binding", "stdio-once",
+-            "--signing-key-id", SIGNING_KEY_ID, "--secret-manifest",
++            "remote",
++            "serve",
++            "--endpoint-id",
++            "builder-1",
++            "--binding",
++            "stdio-once",
++            "--signing-key-id",
++            SIGNING_KEY_ID,
++            "--secret-manifest",
+         ])
+         .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("secretspec.toml"))
+         .env("CREDENTIALS_DIRECTORY", credentials)
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:235:
+         .stderr(Stdio::piped())
+         .spawn()
+         .expect("launch actual mantle stdio server");
+-    child.stdin.take().expect("stdio child input").write_all(input).expect("write framed client request");
++    child
++        .stdin
++        .take()
++        .expect("stdio child input")
++        .write_all(input)
++        .expect("write framed client request");
+     child.wait_with_output().expect("wait for actual stdio server")
+ }
+ 
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:250:
+             logical_path: output["logical_path"].as_str().expect("original output path"),
+             content_digest_blake3: output["content_digest_blake3"].as_str().expect("original content digest"),
+             artifact_attestation_digest_blake3: output["artifact_attestation_digest_blake3"]
+-                .as_str().expect("original artifact digest"),
++                .as_str()
++                .expect("original artifact digest"),
+             size_bytes: output["size_bytes"].as_u64().expect("original output size"),
+             nar_payload_digest_blake3: output["nar_payload_digest_blake3"].as_str(),
+             nar_payload_size_bytes: output["nar_payload_size_bytes"].as_u64(),
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:257:
+         });
+     }
+     let extracted_digest = blake3::Hash::from_bytes(extracted_digest.finish()).to_hex().to_string();
+-    assert_eq!(extracted_digest, original["output_digest_blake3"].as_str().expect("original receipt digest"),
+-        "origin receipt preimage changed");
++    assert_eq!(
++        extracted_digest,
++        original["output_digest_blake3"].as_str().expect("original receipt digest"),
++        "origin receipt preimage changed"
++    );
+ }
+ 
+ #[test]
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:273:
+ 
+     let client_frames = original_request_frames(&ticket_id, &token);
+     let observed = serve_once(root.path(), &credentials, &encode_frames(&client_frames));
+-    assert_eq!(observed.status.code(), old["accepted"]["exit_code"].as_i64()
+-        .map(|code| i32::try_from(code).expect("bounded original exit code")),
+-        "accepted original input rejected: {}", String::from_utf8_lossy(&observed.stderr));
+-    assert_eq!(observed.stderr.len(),
+-        usize::try_from(old["accepted"]["stderr_bytes"].as_u64().expect("original stderr length")).expect("bounded stderr"));
++    assert_eq!(
++        observed.status.code(),
++        old["accepted"]["exit_code"]
++            .as_i64()
++            .map(|code| i32::try_from(code).expect("bounded original exit code")),
++        "accepted original input rejected: {}",
++        String::from_utf8_lossy(&observed.stderr)
++    );
++    assert_eq!(
++        observed.stderr.len(),
++        usize::try_from(old["accepted"]["stderr_bytes"].as_u64().expect("original stderr length"))
++            .expect("bounded stderr")
++    );
+     let origin_wire = base64::engine::general_purpose::STANDARD.decode(ORIGINAL_WIRE.trim()).expect("old wire bytes");
+     assert_eq!(observed.stdout, origin_wire, "actual current output differs from original process bytes");
+-    assert_eq!(observed.stdout.len(),
+-        usize::try_from(old["accepted"]["wire_bytes"].as_u64().expect("original wire length")).expect("bounded wire"));
+-    assert_eq!(format!("{:x}", Sha256::digest(&observed.stdout)),
+-        old["accepted"]["wire_sha256"].as_str().expect("original wire SHA-256"));
++    assert_eq!(
++        observed.stdout.len(),
++        usize::try_from(old["accepted"]["wire_bytes"].as_u64().expect("original wire length")).expect("bounded wire")
++    );
++    assert_eq!(
++        format!("{:x}", Sha256::digest(&observed.stdout)),
++        old["accepted"]["wire_sha256"].as_str().expect("original wire SHA-256")
++    );
+ 
+     let frames = decode_frames(&observed.stdout);
+     let kinds = frames.iter().map(|frame| frame["kind"].as_str().expect("response frame kind")).collect::<Vec<_>>();
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:296:
+     phase = protocol::transition(phase, Direction::ClientToBuilder, FrameKind::AuthTicket)
+         .expect("original client ticket admitted");
+     assert_eq!(phase, Phase::AwaitAuthOk);
+-    for (frame, expected) in frames.iter().zip(old["accepted"]["server_phases_after_response"].as_array().expect("old phases")) {
++    for (frame, expected) in
++        frames.iter().zip(old["accepted"]["server_phases_after_response"].as_array().expect("old phases"))
++    {
+         let kind = match frame["kind"].as_str().expect("response kind") {
+             "auth-ok" => FrameKind::AuthOk,
+             "missing-inputs" => {
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:317:
+             "done" => FrameKind::Done,
+             other => panic!("unrecognized original response kind: {other}"),
+         };
+-        phase = protocol::transition(phase, Direction::BuilderToClient, kind).expect("extracted protocol accepts old frame");
++        phase = protocol::transition(phase, Direction::BuilderToClient, kind)
++            .expect("extracted protocol accepts old frame");
+         assert_eq!(phase.as_str(), expected.as_str().expect("old phase"));
+     }
+     assert_eq!(phase, Phase::Done, "original accepted session completed");
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:324:
+-    let receipt = &frames.iter().find(|frame| frame["kind"] == "build-finished").expect("original result frame")["result"];
++    let receipt =
++        &frames.iter().find(|frame| frame["kind"] == "build-finished").expect("original result frame")["result"];
+     assert_origin_receipt_digests(receipt);
+     assert_eq!(receipt["output_digest_blake3"], old["accepted"]["output_digest_blake3"]);
+-    let after: Value = serde_json::from_slice(&fs::read(ticket_state_path(root.path())).expect("persisted ticket state"))
+-        .expect("persisted ticket JSON");
++    let after: Value =
++        serde_json::from_slice(&fs::read(ticket_state_path(root.path())).expect("persisted ticket state"))
++            .expect("persisted ticket JSON");
+     assert_eq!(after["tickets"][&ticket_id]["uses_remaining"], old["accepted"]["ticket_uses_after"]);
+     assert_eq!(after["tickets"][&ticket_id]["verifier"], before["tickets"][&ticket_id]["verifier"]);
+ }
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:334:
+ fn original_executable_plan_preimage_matches_extracted_receipt_core() {
+     let old: Value = serde_json::from_slice(ORIGINAL_PLAN).expect("independent original plan capture");
+     let args: Vec<String> = serde_json::from_value(old["command_args"].clone()).expect("original builder args");
+-    let env: BTreeMap<String, String> = serde_json::from_value(old["command_env"].clone()).expect("original builder environment");
++    let env: BTreeMap<String, String> =
++        serde_json::from_value(old["command_env"].clone()).expect("original builder environment");
+     let outputs = old["expected_outputs"].as_array().expect("original expected outputs");
+     let extracted = crunch_remote_core::receipt::executable_plan_digest(ExecutablePlanFacts {
+         request_id: old["request_id"].as_str().expect("original request id"),
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:351:
+             name: output["name"].as_str().expect("original output name"),
+             logical_path: output["logical_path"].as_str(),
+         }),
+-    }).expect("extracted plan accepts original action");
+-    assert_eq!(blake3::Hash::from_bytes(extracted).to_hex().to_string(),
+-        old["plan_digest_blake3"].as_str().expect("original digest"));
++    })
++    .expect("extracted plan accepts original action");
++    assert_eq!(
++        blake3::Hash::from_bytes(extracted).to_hex().to_string(),
++        old["plan_digest_blake3"].as_str().expect("original digest")
++    );
+ }
+ 
+ #[test]
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:361:
+     let root = tempfile::tempdir().expect("private malformed fixture root");
+     let credentials = credential_directory(root.path());
+     let old = original_session();
+-    let byte = u8::from_str_radix(old["malformed_header"]["input_bytes_hex"].as_str().expect("old malformed input"), 16)
+-        .expect("one malformed byte");
++    let byte =
++        u8::from_str_radix(old["malformed_header"]["input_bytes_hex"].as_str().expect("old malformed input"), 16)
++            .expect("one malformed byte");
+     let observed = serve_once(root.path(), &credentials, &[byte]);
+-    assert_eq!(observed.status.code(), old["malformed_header"]["exit_code"].as_i64()
+-        .map(|code| i32::try_from(code).expect("bounded original exit code")));
+-    assert_eq!(observed.stdout.len(), usize::try_from(
+-        old["malformed_header"]["wire_bytes"].as_u64().expect("old empty wire")
+-    ).expect("bounded original wire length"));
++    assert_eq!(
++        observed.status.code(),
++        old["malformed_header"]["exit_code"]
++            .as_i64()
++            .map(|code| i32::try_from(code).expect("bounded original exit code"))
++    );
++    assert_eq!(
++        observed.stdout.len(),
++        usize::try_from(old["malformed_header"]["wire_bytes"].as_u64().expect("old empty wire"))
++            .expect("bounded original wire length")
++    );
+     assert_eq!(observed.stderr, ORIGINAL_MALFORMED_STDERR, "wrong original malformed-frame reason");
+     assert_ne!(observed.stderr, ORIGINAL_UNKNOWN_TICKET_STDERR, "distinct rejected authority");
+-    assert_eq!(format!("{:x}", Sha256::digest(&observed.stderr)),
+-        old["malformed_header"]["stderr_sha256"].as_str().expect("original malformed SHA-256"));
+-    assert_eq!(ticket_state_path(root.path()).exists(),
+-        old["malformed_header"]["ticket_state_created"].as_bool().expect("original durable state"));
++    assert_eq!(
++        format!("{:x}", Sha256::digest(&observed.stderr)),
++        old["malformed_header"]["stderr_sha256"].as_str().expect("original malformed SHA-256")
++    );
++    assert_eq!(
++        ticket_state_path(root.path()).exists(),
++        old["malformed_header"]["ticket_state_created"].as_bool().expect("original durable state")
++    );
+ }
+ 
+ const PRODUCTION_INPUT: &str = "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-production-input";
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:419:
+   sandbox = 'native,
+ }} | mantle.Derivation
+ "#,
+-        library.display(), source.display(), PRODUCTION_INPUT, digest
++        library.display(),
++        source.display(),
++        PRODUCTION_INPUT,
++        digest
+     );
+     fs::write(&build_file, expression).expect("write physical production derivation");
+-    ProductionFixture { state, store, build_file, credentials, payload }
++    ProductionFixture {
++        state,
++        store,
++        build_file,
++        credentials,
++        payload,
++    }
+ }
+ 
+ fn production_ticket(fixture: &ProductionFixture, max_upload_bytes: u64) -> (String, String) {
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:449:
+         .args(["--store-prefix", "/mantle/store", "build"])
+         .arg(&fixture.build_file)
+         .args([
+-            "--no-substitute", "--builder", "production-builder",
+-            "--ticket-fd", "9", "--remote-build-time-secs", "600", "--remote-secret-manifest",
++            "--no-substitute",
++            "--builder",
++            "production-builder",
++            "--ticket-fd",
++            "9",
++            "--remote-build-time-secs",
++            "600",
++            "--remote-secret-manifest",
+         ])
+         .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("secretspec.toml"))
+         .env("CREDENTIALS_DIRECTORY", &fixture.credentials)
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:461:
+     }
+     if let Some(program) = builder_program {
+         command.arg("--builder-program").arg(program);
+-        let worker_root = fixture.state.join("remote-workers")
+-            .join(blake3::hash(b"production-builder").to_hex().to_string());
++        let worker_root =
++            fixture.state.join("remote-workers").join(blake3::hash(b"production-builder").to_hex().to_string());
+         let args = [
+             "--state-dir".to_string(),
+             fixture.state.display().to_string(),
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:512:
+ }
+ 
+ fn production_ticket_uses(fixture: &ProductionFixture, ticket_id: &str) -> Value {
+-    let state: Value = serde_json::from_slice(&fs::read(ticket_state_path(&fixture.state)).expect("issued ticket state"))
+-        .expect("durable ticket JSON");
++    let state: Value =
++        serde_json::from_slice(&fs::read(ticket_state_path(&fixture.state)).expect("issued ticket state"))
++            .expect("durable ticket JSON");
+     state["tickets"][ticket_id]["uses_remaining"].clone()
+ }
+ 
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:529:
+ }
+ 
+ fn telemetry_events(events: &Value) -> Value {
+-    Value::Array(events.as_array().expect("ordered telemetry events").iter().map(|event| json!({
+-        "category": event["category"],
+-        "phase": event["phase"],
+-        "reason": event["reason"],
+-        "result": event["result"],
+-        "retry": event["retry"],
+-        "route": event["route"],
+-        "transfer": event["transfer"],
+-        "measurement": event["measurement"],
+-        "value": event["value"],
+-    })).collect())
++    Value::Array(
++        events
++            .as_array()
++            .expect("ordered telemetry events")
++            .iter()
++            .map(|event| {
++                json!({
++                    "category": event["category"],
++                    "phase": event["phase"],
++                    "reason": event["reason"],
++                    "result": event["result"],
++                    "retry": event["retry"],
++                    "route": event["route"],
++                    "transfer": event["transfer"],
++                    "measurement": event["measurement"],
++                    "value": event["value"],
++                })
++            })
++            .collect(),
++    )
+ }
+ 
+ fn physical_observability_log(fixture: &ProductionFixture, attempt: &Value) -> Value {
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:547:
+     let root = fixture.state.join("remote-attempt-logs");
+     for directory in fs::read_dir(root).expect("durable attempt log directories") {
+         let directory = directory.expect("durable attempt log directory").path();
+-        let manifest: Value = serde_json::from_slice(&fs::read(directory.join("manifest.json"))
+-            .expect("durable attempt log manifest")).expect("attempt log manifest JSON");
++        let manifest: Value =
++            serde_json::from_slice(&fs::read(directory.join("manifest.json")).expect("durable attempt log manifest"))
++                .expect("attempt log manifest JSON");
+         if manifest["scope"]["attempt_id"] != attempt["attempt_id"] {
+             continue;
+         }
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:556:
+         assert_eq!(manifest["scope"]["fence_generation"], attempt["fence_generation"]);
+         for reference in manifest["segments"].as_array().expect("immutable log segment references") {
+             let digest = reference["segment_blake3"].as_str().expect("segment digest");
+-            let segment: Value = serde_json::from_slice(&fs::read(directory.join("segments").join(format!("{digest}.json")))
+-                .expect("immutable log segment")).expect("immutable log segment JSON");
++            let segment: Value = serde_json::from_slice(
++                &fs::read(directory.join("segments").join(format!("{digest}.json"))).expect("immutable log segment"),
++            )
++            .expect("immutable log segment JSON");
+             assert_eq!(segment["segment_blake3"], reference["segment_blake3"]);
+             assert_eq!(segment["scope"], manifest["scope"]);
+             for record in segment["records"].as_array().expect("immutable log records") {
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:614:
+     assert_eq!(attempt["attempts_started"], expected["attempts_started"]);
+     assert_eq!(job["output_admission_completed"], expected["output_admission_completed"]);
+     assert_eq!(job["resource_fit"], expected["resource_fit"]);
+-    assert_eq!(coordinator["live_output_claims"].as_object().expect("coordinator claims").len(),
+-        usize::try_from(expected["live_output_claims"].as_u64().expect("old claim count")).expect("bounded claims"));
++    assert_eq!(
++        coordinator["live_output_claims"].as_object().expect("coordinator claims").len(),
++        usize::try_from(expected["live_output_claims"].as_u64().expect("old claim count")).expect("bounded claims")
++    );
+     if let Some(path) = expected_claim {
+         assert!(coordinator["live_output_claims"].get(path).is_some(), "admitted output must have a live claim");
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:622:
+     assert_eq!(job["last_attempt_reason_code"], expected["last_attempt_reason_code"]);
+     let checkpoints = production_checkpoints(fixture);
+-    assert_eq!(checkpoints.len(),
+-        usize::try_from(expected["checkpoint_count"].as_u64().expect("old checkpoint count")).expect("bounded checkpoints"));
++    assert_eq!(
++        checkpoints.len(),
++        usize::try_from(expected["checkpoint_count"].as_u64().expect("old checkpoint count"))
++            .expect("bounded checkpoints")
++    );
+     for (_, checkpoint) in &checkpoints {
+         let scope = &checkpoint["scope"];
+         assert_eq!(scope["job_id"], attempt["job_id"]);
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:631:
+     }
+     for (worker, label) in [(false, "client_transfer"), (true, "worker_transfer")] {
+         if let Some(old_transfer) = expected.get(label) {
+-            let (_, observed) = checkpoints.iter().find(|(side, _)| *side == worker)
+-                .expect("old physically observed transfer side");
+-            assert_eq!(observed["acknowledged_chunk_digests"].as_array().expect("acknowledged chunks").len(),
++            let (_, observed) =
++                checkpoints.iter().find(|(side, _)| *side == worker).expect("old physically observed transfer side");
++            assert_eq!(
++                observed["acknowledged_chunk_digests"].as_array().expect("acknowledged chunks").len(),
+                 usize::try_from(old_transfer["acknowledged_chunks"].as_u64().expect("old chunks"))
+-                    .expect("bounded chunks"));
++                    .expect("bounded chunks")
++            );
+             assert_eq!(observed["transferred_bytes"], old_transfer["transferred_bytes"]);
+         }
+     }
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:647:
+     let expected = &old[case];
+     let root = tempfile::tempdir().expect("private physical production root");
+     let fixture = production_fixture(root.path());
+-    assert_eq!(format!("{:x}", Sha256::digest(&fixture.payload)),
+-        old["payload_sha256"].as_str().expect("old physical payload SHA-256"));
++    assert_eq!(
++        format!("{:x}", Sha256::digest(&fixture.payload)),
++        old["payload_sha256"].as_str().expect("old physical payload SHA-256")
++    );
+     let (ticket_id, bearer) = production_ticket(&fixture, max_upload_bytes);
+     assert_eq!(production_ticket_uses(&fixture, &ticket_id), expected["ticket_uses_before"]);
+     let output = run_production(root.path(), &fixture, &ticket_id, &bearer, trusted_override, None);
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:655:
+-    assert_eq!(output.status.code(), expected["exit_code"].as_i64().map(|code| i32::try_from(code).expect("exit code")),
+-        "rejected physical production unexpectedly returned success");
+-    assert_eq!(output.stdout.len(),
+-        usize::try_from(expected["stdout_bytes"].as_u64().expect("old rejected stdout")).expect("bounded stdout"));
++    assert_eq!(
++        output.status.code(),
++        expected["exit_code"].as_i64().map(|code| i32::try_from(code).expect("exit code")),
++        "rejected physical production unexpectedly returned success"
++    );
++    assert_eq!(
++        output.stdout.len(),
++        usize::try_from(expected["stdout_bytes"].as_u64().expect("old rejected stdout")).expect("bounded stdout")
++    );
+     let stderr = String::from_utf8_lossy(&output.stderr);
+     let reason = expected["reason_code"].as_str().expect("old rejection reason");
+     let anchor = expected["diagnostic_anchor"].as_str().expect("independently observed diagnostic");
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:663:
+     assert_eq!(production_ticket_uses(&fixture, &ticket_id), expected["ticket_uses_after"]);
+     assert_physical_attempt(&fixture, expected, None);
+     let store_paths = fs::read_dir(&fixture.store).expect("client store").count();
+-    assert_eq!(store_paths,
+-        usize::try_from(expected["client_store_paths"].as_u64().expect("old client store count")).expect("bounded paths"));
+-    assert_eq!(fs::read(fixture.store.join(PRODUCTION_INPUT.rsplit('/').next().unwrap())).expect("client input"),
+-        fixture.payload);
++    assert_eq!(
++        store_paths,
++        usize::try_from(expected["client_store_paths"].as_u64().expect("old client store count"))
++            .expect("bounded paths")
++    );
++    assert_eq!(
++        fs::read(fixture.store.join(PRODUCTION_INPUT.rsplit('/').next().unwrap())).expect("client input"),
++        fixture.payload
++    );
+ }
+ 
+ #[test]
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:676:
+     // The independent da00f receipt covers two signed Workers and same-job
+     // fence 1→2/backoff/stale-before-import. This CLI run checks the shared
+     // signed successor surface, not a second CLI retry.
+-    let signed: Value = serde_json::from_slice(ORIGINAL_SIGNED_SUCCESSOR).expect("independent original signed successor");
++    let signed: Value =
++        serde_json::from_slice(ORIGINAL_SIGNED_SUCCESSOR).expect("independent original signed successor");
+     let root = tempfile::tempdir().expect("private accepted production root");
+     let fixture = production_fixture(root.path());
+-    assert_eq!(format!("{:x}", Sha256::digest(&fixture.payload)),
+-        old["payload_sha256"].as_str().expect("old physical payload SHA-256"));
++    assert_eq!(
++        format!("{:x}", Sha256::digest(&fixture.payload)),
++        old["payload_sha256"].as_str().expect("old physical payload SHA-256")
++    );
+     let (ticket_id, bearer) = production_ticket(&fixture, 16 * 1024 * 1024);
+     assert_eq!(production_ticket_uses(&fixture, &ticket_id), expected["ticket_uses_before"]);
+     let wrapper = root.path().join("capture-worker-response.sh");
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:689:
+     fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).expect("private worker wrapper mode");
+     // Dispatch matches the Worker's signer name; full-public-key store verification follows import.
+     let trusted_builder_name = crunch_build::load_keypair(SIGNING_KEY)
+-        .expect("test signing keypair").verifying_key.name().to_string();
+-    let output = run_production(root.path(), &fixture, &ticket_id, &bearer, Some(&trusted_builder_name), Some(&wrapper));
+-    assert_eq!(output.status.code(), expected["exit_code"].as_i64().map(|code| i32::try_from(code).expect("exit code")),
+-        "physical build failed: {}", String::from_utf8_lossy(&output.stderr));
++        .expect("test signing keypair")
++        .verifying_key
++        .name()
++        .to_string();
++    let output =
++        run_production(root.path(), &fixture, &ticket_id, &bearer, Some(&trusted_builder_name), Some(&wrapper));
++    assert_eq!(
++        output.status.code(),
++        expected["exit_code"].as_i64().map(|code| i32::try_from(code).expect("exit code")),
++        "physical build failed: {}",
++        String::from_utf8_lossy(&output.stderr)
++    );
+     let response = root.path().join("worker-response.wire");
+-    assert!(fs::metadata(&response).expect("real Worker response capture").len() <= 512 * 1024,
+-        "response-only frame capture exceeded bound");
++    assert!(
++        fs::metadata(&response).expect("real Worker response capture").len() <= 512 * 1024,
++        "response-only frame capture exceeded bound"
++    );
+     let frames = decode_production_response_frames(&fs::read(&response).expect("actual Worker response bytes"));
+     fs::remove_file(response).expect("remove private response-only frame capture");
+-    let kinds = frames.iter().map(|frame| match frame["kind"].as_str().expect("real Worker frame kind") {
+-        "auth-ok" => "AuthOk",
+-        "missing-inputs" => "MissingInputs",
+-        "transfer-complete" => "TransferComplete",
+-        "build-queued" => "BuildQueued",
+-        "build-started" => "BuildStarted",
+-        "build-finished" => "BuildFinished",
+-        "transfer-manifest" => "TransferManifest",
+-        "output-transfer-done" => "OutputTransferDone",
+-        "done" => "Done",
+-        kind => panic!("unrecognized actual Worker response frame: {kind}"),
+-    }).collect::<Vec<_>>();
++    let kinds = frames
++        .iter()
++        .map(|frame| match frame["kind"].as_str().expect("real Worker frame kind") {
++            "auth-ok" => "AuthOk",
++            "missing-inputs" => "MissingInputs",
++            "transfer-complete" => "TransferComplete",
++            "build-queued" => "BuildQueued",
++            "build-started" => "BuildStarted",
++            "build-finished" => "BuildFinished",
++            "transfer-manifest" => "TransferManifest",
++            "output-transfer-done" => "OutputTransferDone",
++            "done" => "Done",
++            kind => panic!("unrecognized actual Worker response frame: {kind}"),
++        })
++        .collect::<Vec<_>>();
+     for label in ["original_worker_frame_kinds", "successor_worker_frame_kinds"] {
+-        assert_eq!(kinds, signed[label].as_array().expect("original signed Worker frame sequence")
+-            .iter().map(|kind| kind.as_str().expect("original response frame kind")).collect::<Vec<_>>());
++        assert_eq!(
++            kinds,
++            signed[label]
++                .as_array()
++                .expect("original signed Worker frame sequence")
++                .iter()
++                .map(|kind| kind.as_str().expect("original response frame kind"))
++                .collect::<Vec<_>>()
++        );
+     }
+     let report: Value = serde_json::from_slice(&output.stdout).expect("physical build JSON");
+     let imported = PathBuf::from(report["outcomes"][0]["outputs"][0]["path"].as_str().expect("imported store path"));
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:720:
+     let logical = format!("/mantle/store/{}", imported.file_name().expect("store basename").to_string_lossy());
+     assert_eq!(fs::read(&imported).expect("physical imported output"), fixture.payload);
+     assert_eq!(logical, signed["logical_output_path"].as_str().expect("original signed output path"));
+-    assert_eq!(fs::metadata(&imported).expect("imported signed bytes").len(),
+-        signed["output_bytes"].as_u64().expect("original signed physical byte count"));
+-    assert_eq!(format!("{:x}", Sha256::digest(&fixture.payload)),
+-        signed["output_sha256"].as_str().expect("original signed physical output SHA-256"));
+-    assert_eq!(format!("{:x}", Sha256::digest(&fixture.payload)),
+-        expected["output_sha256"].as_str().expect("old signed output SHA-256"));
+-    assert_eq!(fs::metadata(&imported).expect("imported output metadata").len(),
+-        expected["output_bytes"].as_u64().expect("old physical output bytes"));
++    assert_eq!(
++        fs::metadata(&imported).expect("imported signed bytes").len(),
++        signed["output_bytes"].as_u64().expect("original signed physical byte count")
++    );
++    assert_eq!(
++        format!("{:x}", Sha256::digest(&fixture.payload)),
++        signed["output_sha256"].as_str().expect("original signed physical output SHA-256")
++    );
++    assert_eq!(
++        format!("{:x}", Sha256::digest(&fixture.payload)),
++        expected["output_sha256"].as_str().expect("old signed output SHA-256")
++    );
++    assert_eq!(
++        fs::metadata(&imported).expect("imported output metadata").len(),
++        expected["output_bytes"].as_u64().expect("old physical output bytes")
++    );
+     assert_eq!(production_ticket_uses(&fixture, &ticket_id), expected["ticket_uses_after"]);
+     let coordinator = assert_physical_attempt(&fixture, expected, Some(&logical));
+     let job = single_coordinator_job(&coordinator);
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:738:
+     assert_eq!(job["last_attempt_reason_code"], signed["terminal_reason"]);
+     assert_eq!(job["output_admission_completed"], signed["terminal_output_admission_completed"]);
+     let telemetry = physical_observability_log(&fixture, &job["current_attempt"]);
+-    assert_eq!(telemetry["events"], signed["events_after_success"],
+-        "real current accepted phases and admission diverged from independent signed original");
++    assert_eq!(
++        telemetry["events"], signed["events_after_success"],
++        "real current accepted phases and admission diverged from independent signed original"
++    );
+     let selector = imported.file_name().expect("imported store basename").to_str().expect("UTF-8 store path");
+     let info_output = store_command(&fixture, &["info", selector]);
+     assert!(info_output.status.success(), "store info failed: {}", String::from_utf8_lossy(&info_output.stderr));
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:749:
+     assert_eq!(path_info["nar_size"], expected["nar_bytes"]);
+     let signatures = path_info["signatures"].as_array().expect("signed PathInfo signatures");
+     assert_eq!(signatures.len(), 1);
+-    assert!(signatures[0].as_str().expect("PathInfo signature")
+-        .starts_with(&format!("{}:", expected["signing_key_id"].as_str().expect("original builder key"))));
+-    assert!(signatures[0].as_str().expect("signed output PathInfo signature").starts_with(&format!("{}:",
+-        signed["imported_pathinfo_signer"].as_str().expect("original signed output signer"))));
+-    let verifying_key = crunch_build::load_keypair(SIGNING_KEY).expect("test signing keypair").verifying_key.to_string();
++    assert!(
++        signatures[0]
++            .as_str()
++            .expect("PathInfo signature")
++            .starts_with(&format!("{}:", expected["signing_key_id"].as_str().expect("original builder key")))
++    );
++    assert!(signatures[0].as_str().expect("signed output PathInfo signature").starts_with(&format!(
++        "{}:",
++        signed["imported_pathinfo_signer"].as_str().expect("original signed output signer")
++    )));
++    let verifying_key =
++        crunch_build::load_keypair(SIGNING_KEY).expect("test signing keypair").verifying_key.to_string();
+     let verify = store_command(&fixture, &["verify", "--trusted-public-keys", &verifying_key]);
+-    assert_eq!(verify.status.code(), expected["store_verify_exit_code"].as_i64()
+-        .map(|code| i32::try_from(code).expect("bounded verification exit code")),
+-        "imported NAR or signature rejected: {}", String::from_utf8_lossy(&verify.stderr));
+-    assert_eq!(verify.stdout.len(), usize::try_from(expected["store_verify_stdout_bytes"].as_u64()
+-        .expect("old matched verifier output bytes")).expect("bounded verifier stdout"));
++    assert_eq!(
++        verify.status.code(),
++        expected["store_verify_exit_code"]
++            .as_i64()
++            .map(|code| i32::try_from(code).expect("bounded verification exit code")),
++        "imported NAR or signature rejected: {}",
++        String::from_utf8_lossy(&verify.stderr)
++    );
++    assert_eq!(
++        verify.stdout.len(),
++        usize::try_from(expected["store_verify_stdout_bytes"].as_u64().expect("old matched verifier output bytes"))
++            .expect("bounded verifier stdout")
++    );
+     let verified = std::str::from_utf8(&verify.stdout).expect("human-readable signed store verification");
+     let trusted = expected["store_verify_trusted_signatures"].as_u64().expect("old trusted signature count");
+     let expected_row = format!("OK {selector}  trusted_signatures={trusted}/{}", signatures.len());
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:766:
+     let mut rows = verified.lines();
+     assert_eq!(rows.next(), Some(expected_row.as_str()), "the imported output was not cryptographically checked");
+-    assert_eq!(expected_row, signed["signed_worker_verify_row"].as_str()
+-        .expect("independently verified original Worker signed output"));
++    assert_eq!(
++        expected_row,
++        signed["signed_worker_verify_row"]
++            .as_str()
++            .expect("independently verified original Worker signed output")
++    );
+     assert_eq!(rows.next(), None, "unexpected extra verification rows");
+     // The original verifier's signing key already existed after a prior filtered no-op;
+     // a fresh client's first verification can print a local key-creation notice first.
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:773:
+     let verify_diagnostic = std::str::from_utf8(&verify.stderr).expect("store verification diagnostics");
+-    assert_eq!(verify_diagnostic.lines().last(),
+-        Some(expected["store_verify_stderr_summary"].as_str().expect("old matched-path summary")));
+-    assert_eq!(fs::read_dir(&fixture.store).expect("physical client store").count(),
+-        usize::try_from(expected["client_store_paths"].as_u64().expect("old store paths")).expect("bounded paths"));
++    assert_eq!(
++        verify_diagnostic.lines().last(),
++        Some(expected["store_verify_stderr_summary"].as_str().expect("old matched-path summary"))
++    );
++    assert_eq!(
++        fs::read_dir(&fixture.store).expect("physical client store").count(),
++        usize::try_from(expected["client_store_paths"].as_u64().expect("old store paths")).expect("bounded paths")
++    );
+ }
+ 
+ #[test]
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:792:
+ #[test]
+ fn physical_failed_adapter_preserves_original_post_dispatch_failure_semantics() {
+     let old: Value = serde_json::from_slice(ORIGINAL_FAILED_ADAPTER).expect("independent original spawn failure");
+-    let signed: Value = serde_json::from_slice(ORIGINAL_SIGNED_SUCCESSOR).expect("independent signed production output");
++    let signed: Value =
++        serde_json::from_slice(ORIGINAL_SIGNED_SUCCESSOR).expect("independent signed production output");
+     let root = tempfile::tempdir().expect("private failed adapter root");
+     let fixture = production_fixture(root.path());
+-    assert_eq!(format!("{:x}", Sha256::digest(&fixture.payload)),
+-        old["payload_sha256"].as_str().expect("old physical failure payload SHA-256"));
++    assert_eq!(
++        format!("{:x}", Sha256::digest(&fixture.payload)),
++        old["payload_sha256"].as_str().expect("old physical failure payload SHA-256")
++    );
+     let (ticket_id, bearer) = production_ticket(&fixture, 16 * 1024 * 1024);
+     assert_eq!(production_ticket_uses(&fixture, &ticket_id), old["ticket_uses_before"]);
+     let absent = root.path().join("absent-worker");
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:803:
+     assert!(!absent.exists(), "failure must reach a genuinely absent program");
+-    let verifying_key = crunch_build::load_keypair(SIGNING_KEY).expect("test signing keypair").verifying_key.to_string();
++    let verifying_key =
++        crunch_build::load_keypair(SIGNING_KEY).expect("test signing keypair").verifying_key.to_string();
+     let output = run_production(root.path(), &fixture, &ticket_id, &bearer, Some(&verifying_key), Some(&absent));
+-    assert_eq!(output.status.code(), old["exit_code"].as_i64().map(|code| i32::try_from(code).expect("failure exit code")));
+-    assert_eq!(output.stdout.len(), usize::try_from(old["stdout_bytes"].as_u64().expect("old failure stdout"))
+-        .expect("bounded failure stdout"));
++    assert_eq!(
++        output.status.code(),
++        old["exit_code"].as_i64().map(|code| i32::try_from(code).expect("failure exit code"))
++    );
++    assert_eq!(
++        output.stdout.len(),
++        usize::try_from(old["stdout_bytes"].as_u64().expect("old failure stdout")).expect("bounded failure stdout")
++    );
+     let diagnostic = String::from_utf8_lossy(&output.stderr);
+-    assert!(diagnostic.contains("spawning stdio remote child")
+-        && diagnostic.contains("absent-worker")
+-        && (diagnostic.contains("No such file or directory") || diagnostic.contains("os error 2")),
+-        "real failure must be the transport child spawn ENOENT, not earlier admission");
++    assert!(
++        diagnostic.contains("spawning stdio remote child")
++            && diagnostic.contains("absent-worker")
++            && (diagnostic.contains("No such file or directory") || diagnostic.contains("os error 2")),
++        "real failure must be the transport child spawn ENOENT, not earlier admission"
++    );
+     assert_eq!(production_ticket_uses(&fixture, &ticket_id), old["ticket_uses_after"]);
+ 
+     let coordinator = coordinator_state(&fixture);
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:822:
+     assert_eq!(attempt["attempts_started"], old["attempts_started"]);
+     assert_eq!(job["last_attempt_reason_code"], old["last_attempt_reason_code"]);
+     assert_eq!(job["output_admission_completed"], old["output_admission_completed"]);
+-    assert_eq!(coordinator["live_output_claims"].as_object().expect("live claims").len(),
+-        usize::try_from(old["live_output_claims"].as_u64().expect("old live claims")).expect("bounded claims"));
++    assert_eq!(
++        coordinator["live_output_claims"].as_object().expect("live claims").len(),
++        usize::try_from(old["live_output_claims"].as_u64().expect("old live claims")).expect("bounded claims")
++    );
+     let event = physical_observability_log(&fixture, attempt);
+     let old_logs = old["durable_logs"].as_array().expect("independent original durable log");
+     assert_eq!(old_logs.len(), 1);
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:830:
+     assert_eq!(event, old_logs[0], "real failed transport observation lost original event ordering");
+ 
+-    assert_eq!(fs::read_dir(&fixture.store).expect("client store").count(),
++    assert_eq!(
++        fs::read_dir(&fixture.store).expect("client store").count(),
+         usize::try_from(old["client_store_paths"].as_u64().expect("old client store count"))
+-            .expect("bounded store count"));
+-    assert_eq!(fs::read(fixture.store.join(PRODUCTION_INPUT.rsplit('/').next().unwrap())).expect("client input"),
+-        fixture.payload);
++            .expect("bounded store count")
++    );
++    assert_eq!(
++        fs::read(fixture.store.join(PRODUCTION_INPUT.rsplit('/').next().unwrap())).expect("client input"),
++        fixture.payload
++    );
+     let logical = signed["logical_output_path"].as_str().expect("original physical signed output logical path");
+     let selector = logical.rsplit('/').next().expect("output selector");
+     assert!(!fixture.store.join(selector).exists(), "failed attempt exported an output");
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/remote_hexagon_v2_parity.rs:840:
+     let info = store_command(&fixture, &["info", selector]);
+-    assert_eq!(info.status.code(), old["store_info_exit_code"].as_i64()
+-        .map(|code| i32::try_from(code).expect("bounded missing PathInfo exit")));
+-    assert_eq!(info.stdout.len(), usize::try_from(old["store_info_stdout_bytes"].as_u64()
+-        .expect("old absent PathInfo stdout")).expect("bounded PathInfo stdout"));
++    assert_eq!(
++        info.status.code(),
++        old["store_info_exit_code"]
++            .as_i64()
++            .map(|code| i32::try_from(code).expect("bounded missing PathInfo exit"))
++    );
++    assert_eq!(
++        info.stdout.len(),
++        usize::try_from(old["store_info_stdout_bytes"].as_u64().expect("old absent PathInfo stdout"))
++            .expect("bounded PathInfo stdout")
++    );
+     assert!(!fixture.state.join("remote-workers").exists(), "missing adapter launched a Worker");
+     assert!(!fixture.state.join("remote-exports").exists(), "failed adapter exported an output");
+ }
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:126:
+     output_dir: &Path,
+     rust_output_dir: &Path,
+ ) -> crunch_rust_cache_core::RustUnitAction {
++    use crunch_rust_cache::PublishRequest;
+     use crunch_rust_cache_core::LocalCachePolicy;
+     use crunch_rust_cache_core::RustBuildFact;
+     use crunch_rust_cache_core::RustSemanticArgument;
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:132:
+     use crunch_rust_cache_core::RustUnitActionInput;
+     use crunch_rust_cache_core::canonical_rust_action;
+-    use crunch_rust_cache::PublishRequest;
+ 
+     let digest = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+     let action = canonical_rust_action(RustUnitActionInput {
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:636:
+         cmd
+     };
+     casita_cmd().args(["store", "pin", &kept.store_path.to_absolute_path()]).assert().success();
+-    runtime.block_on(seed_casita_rust_cache(
+-        state_dir.path(),
+-        output_dir.path(),
+-        &rust_outputs.path().join("unit"),
+-    ));
+-    let retention_path = state_dir
+-        .path()
+-        .join(crunch_rust_cache::RUST_CACHE_STATE_DIRECTORY)
+-        .join("retained-nodes.json");
++    runtime.block_on(seed_casita_rust_cache(state_dir.path(), output_dir.path(), &rust_outputs.path().join("unit")));
++    let retention_path =
++        state_dir.path().join(crunch_rust_cache::RUST_CACHE_STATE_DIRECTORY).join("retained-nodes.json");
+     let retained_before = std::fs::read(&retention_path).unwrap();
+ 
+     // Deliberate test-only misuse: the raw guarded store GC omits the live Rust cache root.
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:671:
+         let candidate =
+             signed_ca_symlink_output(&store, "missing-cache-candidate", "must-survive-failed-plan", &signer).await;
+         store.pathinfo_service().put(candidate.clone()).await.unwrap();
+-        assert_eq!(
+-            store.export_cached_path_info(&candidate.store_path).await.unwrap(),
+-            Some(candidate.clone())
+-        );
++        assert_eq!(store.export_cached_path_info(&candidate.store_path).await.unwrap(), Some(candidate.clone()));
+         candidate
+     });
+     let kept_selector = kept.store_path.to_string();
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1147:
+             first_info = Some(info.clone());
+         }
+         let signing_key = root.path().join("signing-key");
+-        std::fs::write(
+-            &signing_key,
+-            format!("{signing_name}:{}\n", data_encoding::BASE64.encode(&keypair_bytes)),
+-        )
+-        .unwrap();
++        std::fs::write(&signing_key, format!("{signing_name}:{}\n", data_encoding::BASE64.encode(&keypair_bytes)))
++            .unwrap();
+         // An in-place signature update must preserve the signed PathInfo facts.
+         let signed = command()
+             .args(["store", "sign", "--signing-key"])
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1208:
+         let imported_identity: serde_json::Value =
+             serde_json::from_slice(&std::fs::read(import_state.join("store-identity.json")).unwrap()).unwrap();
+         assert_eq!(imported_identity["backend"], backend.as_str());
+-        for field in ["store_path", "nar_size", "nar_sha256", "node", "references", "signatures", "ca", "deriver"] {
++        for field in [
++            "store_path",
++            "nar_size",
++            "nar_sha256",
++            "node",
++            "references",
++            "signatures",
++            "ca",
++            "deriver",
++        ] {
+             assert_eq!(imported_info["paths"][0][field], info["paths"][0][field], "imported {backend:?} {field}");
+         }
+ 
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1317:
+     let mut observed = Vec::new();
+ 
+     for (index, backend, seed, name, public_token) in [
+-        (0, crunch_store::StoreBackend::Snix, 0x2a, "mantle-baseline-fixture-1", "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE="),
+-        (1, crunch_store::StoreBackend::Snix, 0x2a, "mantle-baseline-fixture-1", "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE="),
+-        (2, crunch_store::StoreBackend::Snix, 0x2b, "mantle-secondary-fixture-1", "RQigeqlBcH8+stuUyIl6gLLBGXR2tt4hOsJz332GxP8="),
+-        (3, crunch_store::StoreBackend::Casita, 0x2a, "mantle-baseline-fixture-1", "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE="),
++        (
++            0,
++            crunch_store::StoreBackend::Snix,
++            0x2a,
++            "mantle-baseline-fixture-1",
++            "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE=",
++        ),
++        (
++            1,
++            crunch_store::StoreBackend::Snix,
++            0x2a,
++            "mantle-baseline-fixture-1",
++            "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE=",
++        ),
++        (
++            2,
++            crunch_store::StoreBackend::Snix,
++            0x2b,
++            "mantle-secondary-fixture-1",
++            "RQigeqlBcH8+stuUyIl6gLLBGXR2tt4hOsJz332GxP8=",
++        ),
++        (
++            3,
++            crunch_store::StoreBackend::Casita,
++            0x2a,
++            "mantle-baseline-fixture-1",
++            "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE=",
++        ),
+     ] {
+         let state = root.path().join(format!("state-{index}"));
+         let output = root.path().join(format!("store-{index}"));
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1410:
+                 assert_eq!(build["outcomes"][0][field], expected_build["outcomes"][0][field], "{field}");
+             }
+             assert_eq!(build["outcomes"][0]["outputs"].as_array().unwrap().len(), 1);
++            assert_eq!(build["outcomes"][0]["outputs"][0]["name"], expected_build["outcomes"][0]["outputs"][0]["name"]);
+             assert_eq!(
+-                build["outcomes"][0]["outputs"][0]["name"],
+-                expected_build["outcomes"][0]["outputs"][0]["name"]
+-            );
+-            assert_eq!(
+                 build["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"],
+                 expected_build["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"]
+             );
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1427:
+                     .strip_prefix(expected_build["state_dir"].as_str().unwrap())
+                     .unwrap()
+             );
+-            let attestation = build["outcomes"][0]["outputs"][0]["artifact_attestation"]["path"]
+-                .as_str()
+-                .unwrap();
++            let attestation = build["outcomes"][0]["outputs"][0]["artifact_attestation"]["path"].as_str().unwrap();
+             if index < 2 {
+                 assert_eq!(
+                     Path::new(attestation).strip_prefix(&state).unwrap(),
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1436:
+-                    Path::new(expected_build["outcomes"][0]["outputs"][0]["artifact_attestation"]["path"].as_str().unwrap())
+-                        .strip_prefix(expected_build["state_dir"].as_str().unwrap())
+-                        .unwrap()
++                    Path::new(
++                        expected_build["outcomes"][0]["outputs"][0]["artifact_attestation"]["path"].as_str().unwrap()
++                    )
++                    .strip_prefix(expected_build["state_dir"].as_str().unwrap())
++                    .unwrap()
+                 );
+             } else {
+                 assert!(
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1478:
+         assert_eq!(info["schema"], "mantle-store-info-v3");
+         if index < 2 {
+             for (field, expected) in golden_info["backend_capabilities"].as_object().unwrap() {
+-                assert_eq!(info["backend_capabilities"].get(field.as_str()).unwrap(), expected, "frozen profile field {field}");
++                assert_eq!(
++                    info["backend_capabilities"].get(field.as_str()).unwrap(),
++                    expected,
++                    "frozen profile field {field}"
++                );
+             }
+         } else if backend == crunch_store::StoreBackend::Casita {
+             assert_eq!(info["backend_capabilities"]["max_root_changes"], 1024);
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1486:
+             assert_eq!(info["backend_capabilities"]["overlay_composition"], false);
+             assert_eq!(info["backend_capabilities"]["rust_unit_cache"], true);
+             assert_eq!(info["backend_capabilities"]["atomic_batch_import"], true);
+-            assert!(info["backend_capabilities"]["core"].as_array().unwrap().iter().any(|capability| capability == "action-result-pathinfo-output-reuse"));
++            assert!(
++                info["backend_capabilities"]["core"]
++                    .as_array()
++                    .unwrap()
++                    .iter()
++                    .any(|capability| capability == "action-result-pathinfo-output-reuse")
++            );
+         }
+         assert_eq!(info["overlay"], golden_info["overlay"]);
+         assert_eq!(info["paths"].as_array().unwrap().len(), 1);
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1494:
+         if index < 2 || backend == crunch_store::StoreBackend::Casita {
+             // v3 adds retention_interests; compare only the v2-declared signed facts.
+             for (field, expected) in golden_info["paths"][0].as_object().unwrap() {
+-                assert_eq!(info["paths"][0].get(field.as_str()).unwrap(), expected, "frozen signed PathInfo field {field}");
++                assert_eq!(
++                    info["paths"][0].get(field.as_str()).unwrap(),
++                    expected,
++                    "frozen signed PathInfo field {field}"
++                );
+             }
+         }
+ 
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1571:
+         }
+         let import_command = || {
+             let mut cmd = Command::cargo_bin("crunch").unwrap();
+-            cmd.arg("--state-dir")
+-                .arg(&imported_state)
+-                .arg("--store")
+-                .arg(&imported_output)
+-                .args(["--store-backend", backend.as_str(), "--json"]);
++            cmd.arg("--state-dir").arg(&imported_state).arg("--store").arg(&imported_output).args([
++                "--store-backend",
++                backend.as_str(),
++                "--json",
++            ]);
+             cmd
+         };
+         let imported = import_command()
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1593:
+         assert!(imported_info.status.success(), "{}", String::from_utf8_lossy(&imported_info.stderr));
+         let imported_info: serde_json::Value = serde_json::from_slice(&imported_info.stdout).unwrap();
+         assert_eq!(imported_info["backend"], backend.as_str());
+-        for field in ["store_path", "nar_size", "nar_sha256", "node", "references", "signatures", "ca", "deriver"] {
++        for field in [
++            "store_path",
++            "nar_size",
++            "nar_sha256",
++            "node",
++            "references",
++            "signatures",
++            "ca",
++            "deriver",
++        ] {
+             assert_eq!(imported_info["paths"][0][field], info["paths"][0][field], "archive-import PathInfo {field}");
+         }
+ 
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1652:
+             // State placement and registration time affect the plan identities;
+             // compare them only across repeated planning in this same state.
+             for (field, expected) in expected_gc.as_object().unwrap() {
+-                if ["plan_id", "retention_plan_id", "reclaim_observations", "retention_explanations"]
+-                    .contains(&field.as_str())
++                if [
++                    "plan_id",
++                    "retention_plan_id",
++                    "reclaim_observations",
++                    "retention_explanations",
++                ]
++                .contains(&field.as_str())
+                 {
+                     continue;
+                 }
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1669:
+                         golden_path.strip_prefix(expected_build["state_dir"].as_str().unwrap()).unwrap()
+                     );
+                 } else {
+-                    assert_eq!(plan["reclaim_observations"][0].get(field.as_str()).unwrap(), expected, "GC reclaim {field}");
++                    assert_eq!(
++                        plan["reclaim_observations"][0].get(field.as_str()).unwrap(),
++                        expected,
++                        "GC reclaim {field}"
++                    );
+                 }
+             }
+         }
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1689:
+                 );
+             }
+             assert_eq!(
+-                explanations[0]["transition_id"],
+-                roots["roots"][0]["last_transition_id"],
++                explanations[0]["transition_id"], roots["roots"][0]["last_transition_id"],
+                 "GC explanation must identify the retained root observed in this state"
+             );
+         }
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1702:
+         let repeated_plan: serde_json::Value = serde_json::from_slice(&repeated.stdout).unwrap();
+         assert_eq!(plan["plan_id"], repeated_plan["plan_id"]);
+         assert_eq!(plan["retention_plan_id"], repeated_plan["retention_plan_id"]);
+-        let signed = command()
+-            .args(["store", "sign", "--signing-key"])
+-            .arg(&key_file)
+-            .arg(selector)
+-            .output()
+-            .unwrap();
++        let signed = command().args(["store", "sign", "--signing-key"]).arg(&key_file).arg(selector).output().unwrap();
+         assert!(signed.status.success(), "{}", String::from_utf8_lossy(&signed.stderr));
+         assert!(String::from_utf8_lossy(&signed.stdout).contains(&format!("REPLACE {selector}")));
+         let after_sign = command().args(["store", "info", selector]).output().unwrap();
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1715:
+         let after_sign: serde_json::Value = serde_json::from_slice(&after_sign.stdout).unwrap();
+         assert_eq!(after_sign["paths"][0]["signatures"], info["paths"][0]["signatures"]);
+         let interests = &info["paths"][0]["retention_interests"];
+-        assert_eq!(interests, &roots["retention_interests"][0], "fresh roots and PathInfo must agree on interest identity");
++        assert_eq!(
++            interests, &roots["retention_interests"][0],
++            "fresh roots and PathInfo must agree on interest identity"
++        );
+         let facts = interests["interests"].as_array().unwrap();
+         assert_eq!(facts.len(), 1);
+         let record_id = facts[0]["record_id"].as_str().unwrap();
+Diff in /home/brittonr/git/OnixResearch/mantle/tests/store_gc_cli.rs:1724:
+             "invalid persisted retention interest identity: {record_id}"
+         );
+         assert_eq!(
+-            after_sign["paths"][0]["retention_interests"],
+-            *interests,
++            after_sign["paths"][0]["retention_interests"], *interests,
+             "signing must not alter the persisted interest identity"
+         );
+         observed.push(info["paths"][0].clone());

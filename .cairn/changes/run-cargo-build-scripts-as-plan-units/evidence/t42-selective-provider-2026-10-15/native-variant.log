@@ -1,0 +1,342 @@
+variant-native-provider-static-shell=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox no-substitute=true
+{
+  "schema": "crunch-build-report-v1",
+  "file": "/tmp/mantle-unit-plan-20261013-87lqAtNv/native-answer-variant.ncl",
+  "output_dir": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store",
+  "state_dir": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-state",
+  "store_dir": "/nix/store",
+  "scheduler_policy": {
+    "schema": "mantle-scheduling-policy-v1",
+    "policy_id": "mantle-lazy-priority-v1",
+    "preference_order": [
+      "known-graph",
+      "resource-fit",
+      "locality-transfer"
+    ],
+    "aged_after_epochs": 4,
+    "protected_after_epochs": 8
+  },
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [
+    {
+      "kind": "environment-override",
+      "detail": "PATH: \"/path-not-set\" -> \"/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin:/nix/store/sfvyavxai6qvzmv9p9x6mp4wwdz4v41m-bash-interactive-5.3p9/bin:/nix/store/74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10/bin\""
+    }
+  ],
+  "build_environment_reports": [
+    {
+      "action_name": "native-answer-0.2",
+      "digest_algorithm": "blake3",
+      "digest_blake3": "655fbbdc967f53847a4194d237ccccddee2117fc2de92dc803e5eb67f4e0dfe2",
+      "variable_count": 24,
+      "rejections": []
+    }
+  ],
+  "finish_gates": [
+    {
+      "schema": "mantle-derivation-finish-gate-report-v1",
+      "derivation": "native-answer-0.2.drv",
+      "version": "opted-out",
+      "command": null,
+      "expected": null,
+      "reference_leak": "passed",
+      "reference_findings": [],
+      "relocation": "opted-out",
+      "dlopen": "opted-out",
+      "optional_sonames": [],
+      "missing_sonames": []
+    }
+  ],
+  "network_policy_reports": [
+    {
+      "action_name": "native-answer-0.2",
+      "mode": "offline",
+      "result": "denied",
+      "capability": null,
+      "policy_basis": "ordinary derivation network access is denied by default",
+      "audit_class": null,
+      "fixed_output": null,
+      "diagnostic": null
+    }
+  ],
+  "workspace_reports": [],
+  "action_result_reports": [
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/8f81db7eed85cf7706edfbabd3c01c48bf29119cd5b137142f1ed652ed2d21d3",
+      "disposition": "miss",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    },
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "publication",
+      "action_ref": "mantle-action://blake3/8f81db7eed85cf7706edfbabd3c01c48bf29119cd5b137142f1ed652ed2d21d3",
+      "disposition": "published",
+      "selected_result_ref": null,
+      "selected_source_id": null,
+      "selected_source_class": null,
+      "trust_basis": [],
+      "conflict_class": null,
+      "candidate_decisions": [],
+      "publication_result_refs": [
+        "mantle-action-result://blake3/c249863d9c22f5d266e5623c682a036cdc77a5d041ef978ec4104e3641028a96"
+      ],
+      "diagnostics": [],
+      "non_claims": [
+        "ca-mapping-presence-is-not-output-trust",
+        "executor-correctness",
+        "index-presence-is-not-output-trust"
+      ]
+    }
+  ],
+  "native_dynamic_plans": [],
+  "scheduler_priority_decisions": [
+    {
+      "schema": "mantle-priority-decision-v1",
+      "policy_id": "mantle-lazy-priority-v1",
+      "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+      "scheduling_epoch": 1,
+      "selected_goal_key_blake3": "12d040c1d87dde8407eaeee29f64d9378b3feeb24a077d00d5677bee325d57dc",
+      "competing_goal_count": 1,
+      "candidate_snapshot_digest_blake3": "3fbd4186403920d2af84afde31dbd935fe8d48a7024334753417c03e46b5482a",
+      "runner_up": null,
+      "known_graph_basis": "known-graph",
+      "history_basis": "structural-fallback-missing",
+      "history_snapshot_digest_blake3": null,
+      "operator_policy_class": "ordinary",
+      "starvation_class": "fresh",
+      "age_epochs": 1,
+      "known_critical_path_nodes": 1,
+      "known_critical_path_work_units": 1,
+      "blocked_root_count": 1,
+      "blocked_root_count_saturated": false,
+      "resource_fit_class": "unknown",
+      "content_locality_class": "unknown",
+      "transfer_cost_class": "unknown",
+      "selection_reason": "sole-candidate",
+      "stable_tie_break_class": "stable-goal-key",
+      "claim_scope": "configured-known-fact-ordering",
+      "non_claims": [
+        "global-optimality",
+        "future-graph-knowledge",
+        "execution-success",
+        "output-trust",
+        "release-reproducibility"
+      ]
+    }
+  ],
+  "overlay_base_generations": [],
+  "store_layer_selections": [
+    {
+      "store_path": "1ga782ml07vy0h503ac4cin0h8d7q6yh-libidn2-2.3.8",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "2kdz3m7ic8w226pcvkz1dlg169v91p6a-zlib-1.3.2",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "4sabfgpxkbv6w3mvk0wil50vdi37m9r8-acl-2.3.2",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "4zmr3iw5s719y5zz7h2dnym67x2i6n23-ncurses-6.6",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "68kslg4wrhdxz24saw62fzyqi1kjgcfs-expand-response-params",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "74sind1d6vf2bfwd7yklg8chsvzqxmmq-coreutils-9.10",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "9hm3jdm6kk4m4ppwjcxz4s1dsdvd6fin-glibc-2.42-51-bin",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "ab3753m6i7isgvzphlar0a8xb84gl96i-gcc-15.2.0-lib",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "cynwj0s5x0c84hyi879isn8pdpf1iihm-gmp-6.3.0",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "dlr3cc27i1mjkqcm9jlp5bjmb0n57q01-gmp-with-cxx-6.3.0",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "h0ip0h6qp7kc2wm7mwjaglkxxbzmjri4-glibc-2.42-51-dev",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "h6hdbgkfh59np7bi7h8qa76pq27ixz8r-gnugrep-3.12",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "hbnbbbx1n96v1waiiaid9fmg4li4i1kp-gcc-15.2.0-libgcc",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "jg0wzzd657xyhhss3mfqqa1iv5s9r75i-binutils-2.44-lib",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "jms7zxzm7w1whczwny5m3gkgdjghmi2r-glibc-2.42-51",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "lvwga6ivl1d4lnw0zis9ajs0rqx9gp4i-gcc-15.2.0",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "p2yk6q3bhcz1d0wlmk907ysj4l95ak7y-attr-2.5.2",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "p7jg95rzvfalb95k3mskk0jqxc9d724n-libunistring-1.4.1",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "pg99pd2gbwqs9y6z0q2hmx46m3hw9bns-linux-headers-6.18.7",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "qq90p0xx02ydaqv2gv28mx4qx2vk98fq-readline-8.3p3",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "rfp8lhk4dl9syfn64rwb3h3c73426p08-binutils-2.44",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "scabrfc47i7h73kfp4yn7vkw3qkxv8gk-isl-0.20",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "sfvyavxai6qvzmv9p9x6mp4wwdz4v41m-bash-interactive-5.3p9",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "sjlfsbd2lk4a1iva4vjjgvp4r1hga1xg-mpfr-4.2.2",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "v8sa6r6q037ihghxfbwzjj4p59v2x0pv-bash-5.3p9",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "vpxblivamvic1p5r5zny934jvg33m50r-xgcc-15.2.0-libgcc",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "x7ikkplbrv5dlihy1bqq32gp6lilkval-binutils-wrapper-2.44",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "ygdgqjzw03k8d05zq3pigzf67b62j7vs-pcre2-10.46",
+      "selected_layer": "overlay",
+      "shadows": []
+    },
+    {
+      "store_path": "zfv59aslcf318vjkjs8zw855cdjcjdvq-libmpc-1.3.1",
+      "selected_layer": "overlay",
+      "shadows": []
+    }
+  ],
+  "remote_telemetry_events": [
+    {
+      "schema": "mantle-remote-telemetry-event-v1",
+      "category": "assignment",
+      "phase": "assigned",
+      "result": "accepted",
+      "route": "not-applicable",
+      "retry": "none",
+      "transfer": "none",
+      "reason": "priority-selected",
+      "capability": "unknown",
+      "measurement": "candidate-count",
+      "value": 1,
+      "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+    }
+  ],
+  "frontend_artifact_attestations": [],
+  "ast_grep_structural_evidence": [],
+  "ast_grep_structural_evidence_diagnostics": [],
+  "cargo_build_evidence": [],
+  "cargo_build_evidence_diagnostics": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/nix/store/q9jngdr7sahk26ma4qf4sj9z6cksha3h-native-answer-0.2.drv",
+      "label": "native-answer-0.2",
+      "cached": false,
+      "log_file": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-state/logs/q9jngdr7sahk26ma4qf4sj9z6cksha3h-native-answer-0.2.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store/jiwk6cxf281jlsxmlx80d02cmrw7cc1p-native-answer-0.2",
+          "artifact_attestation": {
+            "logical_path": "/nix/store/jiwk6cxf281jlsxmlx80d02cmrw7cc1p-native-answer-0.2",
+            "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-state/attestations/artifacts/a49883f2cf3c1e4b35195b1284872577c621266c9b64e29bcf25f5cb55243a94.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}

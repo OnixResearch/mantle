@@ -13,6 +13,7 @@ extern crate alloc;
 extern crate std;
 
 mod attestation;
+pub mod bootstrap_pins;
 mod drift;
 mod error;
 mod fetch_policy;

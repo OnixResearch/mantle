@@ -1,0 +1,4 @@
+guard-ready task=1047 guard=1048
+phase=trusted-producer-selection-start time=2026-10-14T21:52:29.876666+00:00
+lean graph was not admitted as registered roots
+phase=trusted-producer-selection-done exit=1 time=2026-10-14T21:52:31.095102+00:00

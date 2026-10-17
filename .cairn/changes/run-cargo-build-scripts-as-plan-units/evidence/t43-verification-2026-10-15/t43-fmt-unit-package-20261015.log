@@ -1,0 +1,274 @@
+start_utc=2026-10-15T01:20:39.945118+00:00
+cwd=/tmp/mantle-unit-plan-20261013-87lqAtNv/source
+command=/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo fmt --check -p mantle-cargo-unit-plan
+preflight={"home": {"available_bytes": 352889384960, "available_inodes": 210498188}, "root": {"available_bytes": 352889384960, "available_inodes": 210498188}}
+--- stdout+stderr ---
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/src/lib.rs:17:
+ 
+ use mantle_rust_plan_core::ExistingUnitEffect;
+ mod directives;
+-pub use directives::{BuildScriptFlags, parse_directives};
++pub use directives::BuildScriptFlags;
++pub use directives::parse_directives;
+ use serde::Deserialize;
+ use serde::Serialize;
+ 
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/src/lib.rs:244:
+                 ("MANTLE_UNIT_TARGET".to_string(), triple.to_string()),
+                 ("MANTLE_UNIT_HOST".to_string(), plan.host_triple.clone()),
+             ]),
+-            inputs: tool_roots.iter().map(|path| Input::StorePath { path: (*path).to_string() }).collect(),
++            inputs: tool_roots
++                .iter()
++                .map(|path| Input::StorePath {
++                    path: (*path).to_string(),
++                })
++                .collect(),
+             fixed_output: None,
+             addressing_mode: "input-addressed",
+             sandbox: "native",
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/src/lib.rs:251:
+             dynamic_plan_outputs: Vec::new(),
+         },
+         requested_outputs: vec!["out"],
+-        policy: UnitPolicy { sandbox: "inherit", substitutions: "inherit", store_prefix: "inherit", host_paths: "none" },
++        policy: UnitPolicy {
++            sandbox: "inherit",
++            substitutions: "inherit",
++            store_prefix: "inherit",
++            host_paths: "none",
++        },
+     }
+ }
+ 
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/src/lib.rs:263:
+     known_units: &BTreeSet<&str>,
+ ) -> Result<Unit, Vec<Blocker>> {
+     let id = effect.unit_id.0.as_str();
+-    let compiled = binding.compiled_script.as_ref().ok_or_else(|| {
+-        blocked("unit-plan-mode-unsupported", id, "run unit missing compiled script")
+-    })?;
++    let compiled = binding
++        .compiled_script
++        .as_ref()
++        .ok_or_else(|| blocked("unit-plan-mode-unsupported", id, "run unit missing compiled script"))?;
+     let deps = effect.dependency_unit_ids.iter().map(|dep| dep.0.as_str()).collect::<BTreeSet<_>>();
+-    if !deps.contains(compiled.as_str()) || binding.script_run.is_some() || !binding.externs.is_empty()
++    if !deps.contains(compiled.as_str())
++        || binding.script_run.is_some()
++        || !binding.externs.is_empty()
+         || effect.expected_outputs.as_slice() != ["out", "flags"]
+         || deps.iter().any(|dep| !known_units.contains(dep))
+     {
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/src/lib.rs:274:
+         return Err(blocked("unit-plan-mode-unsupported", id, "invalid run-unit dependencies or outputs"));
+     }
+-    let mut inputs = tool_roots.iter().map(|path| Input::StorePath { path: (*path).to_string() }).collect::<BTreeSet<_>>();
+-    inputs.insert(Input::Source { source: binding.source_id.clone() });
++    let mut inputs = tool_roots
++        .iter()
++        .map(|path| Input::StorePath {
++            path: (*path).to_string(),
++        })
++        .collect::<BTreeSet<_>>();
++    inputs.insert(Input::Source {
++        source: binding.source_id.clone(),
++    });
+     for dep in &deps {
+-        inputs.insert(Input::UnitOutput { unit: plan_id(dep), output: "out" });
++        inputs.insert(Input::UnitOutput {
++            unit: plan_id(dep),
++            output: "out",
++        });
+     }
+     let mut links = BTreeMap::new();
+     for (key, run) in &binding.linked_runs {
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/src/lib.rs:283:
+         if !safe_name(key) || !deps.contains(run.as_str()) || links.insert(key, output_token(run, "flags")).is_some() {
+             return Err(blocked("build-script-links-conflict", id, key));
+         }
+-        inputs.insert(Input::UnitOutput { unit: plan_id(run), output: "flags" });
++        inputs.insert(Input::UnitOutput {
++            unit: plan_id(run),
++            output: "flags",
++        });
+     }
+     let target = target_unit_id(plan, &binding.triple);
+-    inputs.insert(Input::UnitOutput { unit: plan_id(&target), output: "out" });
++    inputs.insert(Input::UnitOutput {
++        unit: plan_id(&target),
++        output: "out",
++    });
+     let mut native = BTreeMap::new();
+     for (role, path) in &binding.native.inputs {
+         if !safe_name(role) {
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/src/lib.rs:293:
+             return Err(blocked("native-input-role-undeclared", id, role));
+         }
+-        let root = validated_store_root(path, &plan.store_prefix)
+-            .ok_or_else(|| blocked("unit-plan-host-path", id, path))?;
++        let root =
++            validated_store_root(path, &plan.store_prefix).ok_or_else(|| blocked("unit-plan-host-path", id, path))?;
+         native.insert(role, path);
+         inputs.insert(Input::StorePath { path: root.to_string() });
+     }
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/src/lib.rs:300:
+-    if binding.native.path.iter().any(|path| !native.values().any(|root| path == *root || path.starts_with(&format!("{root}/"))))
++    if binding
++        .native
++        .path
++        .iter()
++        .any(|path| !native.values().any(|root| path == *root || path.starts_with(&format!("{root}/"))))
+         || binding.native.env.keys().any(|key| !safe_name(key))
+         || inputs.len() > MAX_INPUTS_PER_UNIT
+     {
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/src/lib.rs:314:
+     for (key, value) in [
+         ("MANTLE_UNIT_LINKED_FLAGS", serde_json::to_string(&links)),
+         ("MANTLE_UNIT_NATIVE", serde_json::to_string(&binding.native)),
+-        ("MANTLE_UNIT_COMPILE_ENV", serde_json::to_string(&effect.environment.iter().cloned().collect::<BTreeMap<_, _>>())),
+-        ("MANTLE_UNIT_DEPENDENCIES", serde_json::to_string(&deps.iter().map(|dep| output_token(dep, "out")).collect::<Vec<_>>())),
++        (
++            "MANTLE_UNIT_COMPILE_ENV",
++            serde_json::to_string(&effect.environment.iter().cloned().collect::<BTreeMap<_, _>>()),
++        ),
++        (
++            "MANTLE_UNIT_DEPENDENCIES",
++            serde_json::to_string(&deps.iter().map(|dep| output_token(dep, "out")).collect::<Vec<_>>()),
++        ),
+     ] {
+         env.insert(key.to_string(), value.map_err(|_| blocked("unit-plan-limit", id, "run unit serialization"))?);
+     }
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/src/lib.rs:338:
+             dynamic_plan_outputs: Vec::new(),
+         },
+         requested_outputs: vec!["out", "flags"],
+-        policy: UnitPolicy { sandbox: "inherit", substitutions: "inherit", store_prefix: "inherit", host_paths: "none" },
++        policy: UnitPolicy {
++            sandbox: "inherit",
++            substitutions: "inherit",
++            store_prefix: "inherit",
++            host_paths: "none",
++        },
+     })
+ }
+ 
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/src/lib.rs:453:
+         if !deps.contains(run.as_str()) || binding.native != NativeInput::default() {
+             return Err(blocked("unit-plan-mode-unsupported", id, "invalid script-run binding"));
+         }
+-        inputs.insert(Input::UnitOutput { unit: plan_id(run), output: "flags" });
++        inputs.insert(Input::UnitOutput {
++            unit: plan_id(run),
++            output: "flags",
++        });
+     }
+     if inputs.len() > MAX_INPUTS_PER_UNIT {
+         return Err(blocked("unit-plan-limit", id, "unit inputs exceed 256"));
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/tests/lowering.rs:1:
+-use mantle_cargo_unit_plan::NativeInput;
+ use mantle_cargo_unit_plan::ExternBinding;
++use mantle_cargo_unit_plan::NativeInput;
+ use mantle_cargo_unit_plan::PlanBindings;
+ use mantle_cargo_unit_plan::SourceSlice;
+ use mantle_cargo_unit_plan::UnitBinding;
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/tests/lowering.rs:119:
+     app.arguments = vec!["--crate-type=bin".into()];
+     let mut run = fact("run-leaf", 1, &["leaf"], "custom-build", "build-script-run");
+     run.expected_outputs = vec!["out".into(), "flags".into()];
+-    let effects = plan_existing_unit_effects(vec![app, middle, run, fact("leaf", 0, &[], "custom-build", "host")]).unwrap();
++    let effects =
++        plan_existing_unit_effects(vec![app, middle, run, fact("leaf", 0, &[], "custom-build", "host")]).unwrap();
+     (effects, input)
+ }
+ 
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/tests/lowering.rs:131:
+     let (bytes, _) = lower(&effects, &bindings).unwrap();
+     let plan: Value = serde_json::from_slice(&bytes).unwrap();
+     let units = plan["units"].as_array().unwrap();
+-    let target = units.iter().filter(|unit| unit["derivation"]["args"] == serde_json::json!(["target-facts"]))
++    let target = units
++        .iter()
++        .filter(|unit| unit["derivation"]["args"] == serde_json::json!(["target-facts"]))
+         .collect::<Vec<_>>();
+     assert_eq!(target.len(), 1);
+-    let run = units.iter().find(|unit| unit["derivation"]["args"] == serde_json::json!(["run-build-script"]))
++    let run = units
++        .iter()
++        .find(|unit| unit["derivation"]["args"] == serde_json::json!(["run-build-script"]))
+         .unwrap();
+     assert_eq!(run["derivation"]["outputs"], serde_json::json!(["out", "flags"]));
+-    assert!(run["derivation"]["inputs"].as_array().unwrap().iter().any(|item| item["kind"] == "store_path" && item["path"] == native_a));
+-    assert!(run["derivation"]["inputs"].as_array().unwrap().iter().any(|item| item["kind"] == "unit_output" && item["unit"] == target[0]["id"]));
++    assert!(
++        run["derivation"]["inputs"]
++            .as_array()
++            .unwrap()
++            .iter()
++            .any(|item| item["kind"] == "store_path" && item["path"] == native_a)
++    );
++    assert!(
++        run["derivation"]["inputs"]
++            .as_array()
++            .unwrap()
++            .iter()
++            .any(|item| item["kind"] == "unit_output" && item["unit"] == target[0]["id"])
++    );
+     let (changed, _) = run_facts(native_b);
+     let mut changed_bindings = bindings.clone();
+     changed_bindings.units.last_mut().unwrap().native.inputs.insert("library".into(), store("native-b"));
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/tests/lowering.rs:145:
+     let (changed_bytes, _) = lower(&changed, &changed_bindings).unwrap();
+     let changed_plan: Value = serde_json::from_slice(&changed_bytes).unwrap();
+     let changed_units = changed_plan["units"].as_array().unwrap();
+-    let changed_run = changed_units.iter().find(|unit| unit["derivation"]["args"] == serde_json::json!(["run-build-script"])).unwrap();
+-    let old_leaf = units.iter().find(|unit| unit["derivation"]["env"]["MANTLE_UNIT_SOURCE"] == "{{mantle-source:leaf}}"
+-        && unit["derivation"]["args"] != serde_json::json!(["run-build-script"])).unwrap();
++    let changed_run = changed_units
++        .iter()
++        .find(|unit| unit["derivation"]["args"] == serde_json::json!(["run-build-script"]))
++        .unwrap();
++    let old_leaf = units
++        .iter()
++        .find(|unit| {
++            unit["derivation"]["env"]["MANTLE_UNIT_SOURCE"] == "{{mantle-source:leaf}}"
++                && unit["derivation"]["args"] != serde_json::json!(["run-build-script"])
++        })
++        .unwrap();
+     let new_leaf = changed_units.iter().find(|unit| unit["id"] == old_leaf["id"]).unwrap();
+     assert_eq!(old_leaf, new_leaf, "native input must not alter compiled script");
+     assert_ne!(run["derivation"]["inputs"], changed_run["derivation"]["inputs"]);
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/tests/lowering.rs:212:
+     let plan: Value = serde_json::from_slice(&bytes).unwrap();
+     for unit in plan["units"].as_array().unwrap() {
+         assert!(
+-            unit["derivation"]["inputs"].as_array().unwrap().iter()
++            unit["derivation"]["inputs"]
++                .as_array()
++                .unwrap()
++                .iter()
+                 .any(|dependency| dependency["kind"] == "store_path" && dependency["path"] == loader),
+             "runtime loader missing from {}",
+             unit["id"]
+Diff in /tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan/tests/producer.rs:144:
+         .unwrap();
+     assert!(!rejected.status.success(), "undeclared runtime loader was accepted");
+     let runtime_blockers: Vec<Value> =
+-        serde_json::from_slice(&fs::read(fixture.join("runtime-mismatch/cargo-unit-plan-blockers.json")).unwrap()).unwrap();
+-    assert!(runtime_blockers.iter().any(|blocker| {
+-        blocker["code"] == "unit-plan-host-path" && blocker["subject"] == "runtime_inputs"
+-    }), "{runtime_blockers:?}");
++        serde_json::from_slice(&fs::read(fixture.join("runtime-mismatch/cargo-unit-plan-blockers.json")).unwrap())
++            .unwrap();
++    assert!(
++        runtime_blockers
++            .iter()
++            .any(|blocker| { blocker["code"] == "unit-plan-host-path" && blocker["subject"] == "runtime_inputs" }),
++        "{runtime_blockers:?}"
++    );
+     fs::remove_dir_all(fixture).unwrap();
+ }
+ 
+
+--- end ---
+{"command": ["/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo", "fmt", "--check", "-p", "mantle-cargo-unit-plan"], "elapsed_seconds": 0.21521198470145464, "end_utc": "2026-10-15T01:20:40.160355+00:00", "exit": 1, "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-fmt-unit-package-20261015.log", "name": "fmt-unit-package", "postflight": {"home": {"available_bytes": 352889368576, "available_inodes": 210498187}, "root": {"available_bytes": 352889368576, "available_inodes": 210498187}}, "preflight": {"home": {"available_bytes": 352889384960, "available_inodes": 210498188}, "root": {"available_bytes": 352889384960, "available_inodes": 210498188}}, "start_utc": "2026-10-15T01:20:39.945118+00:00", "timeout_seconds": 180}

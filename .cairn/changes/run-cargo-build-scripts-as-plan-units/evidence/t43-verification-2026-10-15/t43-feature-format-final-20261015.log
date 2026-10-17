@@ -1,0 +1,8 @@
+start_utc=2026-10-15T01:27:57.258264+00:00
+cwd=/tmp/mantle-unit-plan-20261013-87lqAtNv/source
+command=/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/rustfmt --config-path /tmp/mantle-unit-plan-20261013-87lqAtNv/source/rustfmt.toml --config skip_children=true crates/mantle-cargo-unit-plan/src/lib.rs crates/mantle-cargo-unit-plan/tests/lowering.rs crates/mantle-cargo-unit-plan/tests/producer.rs
+preflight={"home": {"available_bytes": 350064795648, "available_inodes": 210494042}, "root": {"available_bytes": 350064795648, "available_inodes": 210494042}}
+--- stdout+stderr ---
+
+--- end ---
+{"command": ["/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/rustfmt", "--config-path", "/tmp/mantle-unit-plan-20261013-87lqAtNv/source/rustfmt.toml", "--config", "skip_children=true", "crates/mantle-cargo-unit-plan/src/lib.rs", "crates/mantle-cargo-unit-plan/tests/lowering.rs", "crates/mantle-cargo-unit-plan/tests/producer.rs"], "elapsed_seconds": 0.06463933549821377, "end_utc": "2026-10-15T01:27:57.325519+00:00", "exit": 0, "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-feature-format-final-20261015.log", "name": "feature-format-final", "postflight": {"home": {"available_bytes": 350064791552, "available_inodes": 210494041}, "root": {"available_bytes": 350064791552, "available_inodes": 210494041}}, "preflight": {"home": {"available_bytes": 350064795648, "available_inodes": 210494042}, "root": {"available_bytes": 350064795648, "available_inodes": 210494042}}, "start_utc": "2026-10-15T01:27:57.258264+00:00", "timeout_seconds": 120}

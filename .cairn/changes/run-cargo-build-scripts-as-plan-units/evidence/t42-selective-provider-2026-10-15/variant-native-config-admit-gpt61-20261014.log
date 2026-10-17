@@ -1,0 +1,52 @@
+OK jiwk6cxf281jlsxmlx80d02cmrw7cc1p-native-answer-0.2  trusted_signatures=1/1
+1 checked, 0 mismatches
+variant-plan-prepared cfgfix_app=u.99f32f5ae94f82205ce9acd4a184e1741597862139ddb9246b18f3686f406982 old=/nix/store/77giqf2dbsvv1sjcmydx9x366s5614fc-native-answer-0.1 new=/nix/store/jiwk6cxf281jlsxmlx80d02cmrw7cc1p-native-answer-0.2 changed_only=provider_root config_store_root producer_label; no build or selective proof
+/nix/store/79dypzq8jbaanaw1mpcq6qvdmmwc8ivm-mantle-unit-plan-config-variant-87lq
+/tmp/mantle-unit-plan-20261013-87lqAtNv/gcroots/variant-config
+added 1 signatures
+checking '/nix/store/79dypzq8jbaanaw1mpcq6qvdmmwc8ivm-mantle-unit-plan-config-variant-87lq'...
+copying 1 paths...
+copying path '/nix/store/79dypzq8jbaanaw1mpcq6qvdmmwc8ivm-mantle-unit-plan-config-variant-87lq' to 'file:///tmp/mantle-unit-plan-20261013-87lqAtNv/current-signed-cache'...
+PULL 79dypzq8jbaanaw1mpcq6qvdmmwc8ivm-mantle-unit-plan-config-variant-87lq
+imported=1 skipped_present=0 skipped_untrusted=0 skipped_hash_mismatch=0 skipped_missing_nar=0 skipped_parse_error=0 nar_bytes=1664
+OK 79dypzq8jbaanaw1mpcq6qvdmmwc8ivm-mantle-unit-plan-config-variant-87lq  trusted_signatures=1/1
+1 checked, 0 mismatches
+{
+  "addressing_mode": "input-addressed",
+  "args": [],
+  "builder": "/nix/store/gnqz2kr75zgs3qgm4731zq81lhhz622s-mantle-cargo-unit-producer-current-87lq",
+  "dynamic_plan_outputs": [
+    "plan"
+  ],
+  "env": {
+    "MANTLE_UNIT_CONFIG": "/nix/store/79dypzq8jbaanaw1mpcq6qvdmmwc8ivm-mantle-unit-plan-config-variant-87lq",
+    "MANTLE_UNIT_NATIVE_INPUTS": "{\n  \"path+file:///build/cargo-unit-plan-workspace/workspace/native-answer-sys#0.1.0\": {\n    \"env\": {\n      \"NATIVE_ANSWER_ROOT\": \"{{role:answer}}\"\n    },\n    \"inputs\": {\n      \"answer\": \"/nix/store/jiwk6cxf281jlsxmlx80d02cmrw7cc1p-native-answer-0.2\"\n    },\n    \"path\": []\n  }\n}",
+    "MANTLE_UNIT_RUNTIME_INPUTS": "[\n  \"/nix/store/8kvxvr3pmsypxiypq4g8zy13glnfr7nx-glibc-2.42-67\",\n  \"/nix/store/n51dhmdbik1kfrsm62j5knavmigwrl1a-glibc-2.42-84\",\n  \"/nix/store/ssvq1r0xd8f7paf6zqgpfql1a4drwhy2-xgcc-15.3.0-libgcc\",\n  \"/nix/store/0vqb1mcas5j8dv6bhbrshinlgsg6bvgi-gcc-15.3.0-lib\",\n  \"/nix/store/dbz6pb9g67kpgpl95k8d85kzpxm1c32p-zlib-1.3.2\",\n  \"/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0\"\n]"
+  },
+  "inputs": [
+    "/nix/store/gnqz2kr75zgs3qgm4731zq81lhhz622s-mantle-cargo-unit-producer-current-87lq",
+    "/nix/store/79dypzq8jbaanaw1mpcq6qvdmmwc8ivm-mantle-unit-plan-config-variant-87lq",
+    "/nix/store/n9bqvcqx55qqigwkn6vnjrjkl7xv10z9-mantle-unit-plan-fixture-source",
+    "/nix/store/6df7id3a8zd7mxn7b4hhc3b6ljgn1fzr-mantle-unit-plan-planner-repaired-87lq",
+    "/nix/store/bhn71wnpahwj10irc2373w1nqw6353pw-mantle-unit-plan-nightly-nodoc-87lq",
+    "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0",
+    "/nix/store/ain8qbb840v775dhz1528lvz0syys7sj-mantle-cargo-unit-helper-cfgfix-87lq",
+    "/nix/store/mblpg9zxh86ds777vc7zhrl4dpj4057v-mantle-unit-plan-locked-vendor",
+    "/nix/store/8kvxvr3pmsypxiypq4g8zy13glnfr7nx-glibc-2.42-67",
+    "/nix/store/n51dhmdbik1kfrsm62j5knavmigwrl1a-glibc-2.42-84",
+    "/nix/store/ssvq1r0xd8f7paf6zqgpfql1a4drwhy2-xgcc-15.3.0-libgcc",
+    "/nix/store/0vqb1mcas5j8dv6bhbrshinlgsg6bvgi-gcc-15.3.0-lib",
+    "/nix/store/dbz6pb9g67kpgpl95k8d85kzpxm1c32p-zlib-1.3.2",
+    "/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0",
+    "/nix/store/jiwk6cxf281jlsxmlx80d02cmrw7cc1p-native-answer-0.2"
+  ],
+  "name": "cargo-build-script-units-native-variant-87lq",
+  "outputs": [
+    "out",
+    "plan",
+    "sources"
+  ],
+  "sandbox": "native",
+  "system": "x86_64-linux"
+}
+provider-only-variant-config-admitted=success provider=/nix/store/jiwk6cxf281jlsxmlx80d02cmrw7cc1p-native-answer-0.2 config=/nix/store/79dypzq8jbaanaw1mpcq6qvdmmwc8ivm-mantle-unit-plan-config-variant-87lq; no graph execution or selectivity claim

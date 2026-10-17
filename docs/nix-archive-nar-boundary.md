@@ -43,6 +43,25 @@ This boundary includes these paths:
 
 These paths use `write_nar`, `SimpleRenderer`, or `ingest_nar_and_hash`. They do not collect a complete payload for `nix-archive` decode or restore.
 
+## Signed cache pull materialization
+
+In the signed offline workflow, directory and HTTP cache pulls admit NAR
+metadata under explicit trusted public keys. An existing PathInfo does not
+prove its physical export completed: an interrupted import can persist
+metadata before writing only part of the tree. Before counting a path as
+present, pull observes the physical root's canonical NAR size and SHA-256
+and compares both to the admitted PathInfo. A missing or mismatched root
+needs reimport from a trusted NAR, not a report that it is a healthy skip.
+
+The castore-to-disk export is written under a temporary sibling, checked
+against the admitted NAR, and only then moved to its final root. A previous
+incomplete export is retained under a separate hidden corrupt-export
+directory. A failed staging or publication step remains fatal and cannot
+turn a partial root into an accepted physical path. `store verify` remains
+the operator's independent check of every signed path after a resumed pull.
+This castore export is not an adoption of `nix-archive` as a NAR decoder
+or a general-purpose production restore implementation.
+
 ## Cutover rule
 
 A production filesystem seam moves only after the required parity matrix agrees. The matrix compares bytes, size, hashes, names, modes, symlinks, order, errors, and selected races.

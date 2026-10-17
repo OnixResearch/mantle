@@ -10,14 +10,12 @@ use serde::Deserialize;
 use serde::Serialize;
 
 mod external_batch;
-mod remote_attempt;
 mod remote_attempt_log;
 mod remote_failure_debug;
 mod remote_resources;
 mod remote_telemetry;
 mod remote_transfer;
 pub use external_batch::*;
-pub use remote_attempt::*;
 pub use remote_attempt_log::*;
 pub use remote_failure_debug::*;
 pub use remote_resources::*;
@@ -450,19 +448,14 @@ pub enum RemoteFailureDecision {
 pub fn validate_remote_build_service_request(
     request: &snix_build::buildservice::BuildRequest,
 ) -> Result<(), RemoteBuildServiceDispatchError> {
-    if request.command_args.is_empty() {
-        return Err(RemoteBuildServiceDispatchError::Phase {
-            phase: REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION,
-            reason: "remote-build-service-raw-eval-request".to_string(),
-        });
-    }
-    if request.outputs.is_empty() {
-        return Err(RemoteBuildServiceDispatchError::Phase {
-            phase: REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION,
-            reason: "remote-build-service-outputs-empty".to_string(),
-        });
-    }
-    Ok(())
+    crunch_remote_core::provider::admit_build_service_request(crunch_remote_core::provider::BuildServiceRequestFacts {
+        command_arg_count: request.command_args.len(),
+        output_count: request.outputs.len(),
+    })
+    .map_err(|reason| RemoteBuildServiceDispatchError::Phase {
+        phase: REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION,
+        reason: reason.as_str().to_string(),
+    })
 }
 
 pub fn classify_remote_build_service_failure(
@@ -471,11 +464,19 @@ pub fn classify_remote_build_service_failure(
     reason: impl Into<String>,
 ) -> RemoteFailureDecision {
     let reason = reason.into();
-    match policy {
-        RemoteBuildFallbackPolicy::Never => {
+    let core_policy = match policy {
+        RemoteBuildFallbackPolicy::Never => crunch_remote_core::provider::DispatchFallbackPolicy::Never,
+        RemoteBuildFallbackPolicy::OnRemoteFailure => {
+            crunch_remote_core::provider::DispatchFallbackPolicy::OnRemoteFailure
+        }
+    };
+    match crunch_remote_core::provider::classify_dispatch_failure(core_policy) {
+        crunch_remote_core::provider::DispatchFailureDecision::ReturnFailure => {
             RemoteFailureDecision::ReturnFailure(RemoteBuildServiceDispatchError::Phase { phase, reason })
         }
-        RemoteBuildFallbackPolicy::OnRemoteFailure => RemoteFailureDecision::FallbackToLocal { phase, reason },
+        crunch_remote_core::provider::DispatchFailureDecision::FallbackToLocal => {
+            RemoteFailureDecision::FallbackToLocal { phase, reason }
+        }
     }
 }
 

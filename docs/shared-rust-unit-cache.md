@@ -155,13 +155,17 @@ configuration.
 
 ## Store backend
 
-The local and shared Rust unit caches require the default `snix` store backend.
-Under `--store-backend casita`, `rust-plan` with a local or shared cache mode,
-`rust-cache serve`, and `mantle-rust-cache-daemon` fail with
-`casita-rust-cache-unsupported` before they read policy or create state.
-`store usage` and `store gc` fail with the same blocker when
-`<state-dir>/rust-unit-cache` exists. `casita` has no Rust unit cache parity
-with `snix`. See [Store backends](store-backends.md#capability-profiles).
+The local and shared Rust unit caches support both selected store backends.
+With `--store-backend casita`, admitted castore-only cache payloads have durable
+`mantle/castore/` roots; fresh-process reuse verifies the recorded node,
+envelope, and payload before restoring artifacts. Casita `store usage` and
+`store gc` recover a pending fence under the mutation guard, then resolve and
+verify the Rust retention live roots before planning. If another writer
+changes or removes a retained payload root, these operations reject with
+`casita-envelope-invalid` or `casita-root-missing` before root removal.
+FailOpen is not permission to recompile through a known broken retained root:
+the compiler wrapper returns a rejected response without running the
+compiler. See [Store backends](store-backends.md#capability-profiles).
 
 ## Non-claims
 

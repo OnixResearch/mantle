@@ -1,0 +1,11 @@
+{
+  "depends_on": [
+    "explain-rust-build-waits",
+    "validate-rust-pipelining-equivalence"
+  ],
+  "workflow_profile": {
+    "id": "spec-driven",
+    "source": "change_create",
+    "version": 1
+  }
+}

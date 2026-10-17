@@ -1,0 +1,44 @@
+{
+  "backend": "snix",
+  "backend_capabilities": {
+    "atomic_batch_import": true,
+    "core": [
+      "output-admission",
+      "lookup",
+      "fresh-process-reopen",
+      "closure-resolution",
+      "export",
+      "store-archive-export",
+      "store-archive-import",
+      "gc-plan",
+      "plan-bound-gc",
+      "action-result-pathinfo-output-reuse",
+      "store-sign",
+      "store-repair-final-nar"
+    ],
+    "max_root_changes": null,
+    "overlay_composition": true,
+    "rust_unit_cache": true,
+    "unsigned_admission": true
+  },
+  "overlay": null,
+  "paths": [
+    {
+      "ca": "Nar(Sha256([134, 185, 14, 220, 100, 244, 112, 36, 6, 86, 218, 154, 128, 246, 85, 211, 181, 124, 25, 190, 107, 155, 164, 30, 3, 228, 89, 103, 50, 225, 221, 1]))",
+      "deriver": "c575623bccnl26lwry9sdpj0jnawgb47-hello",
+      "layer": {
+        "kind": "overlay"
+      },
+      "nar_sha256": "86b90edc64f470240656da9a80f655d3b57c19be6b9ba41e03e4596732e1dd01",
+      "nar_size": 128,
+      "node": "File { digest: blake3-yOW6zXFOmd8CaUZF80p2iFRF7FgQYdcWHQmXaGza0/E=, size: 15, executable: false }",
+      "references": [],
+      "shadows": [],
+      "signatures": [
+        "mantle-secondary-fixture-1:gN2PeEIKcz0e1YmbaXWbr9PaEjlBuFaJZI55Kl2t0cpa8ZsrPN9gdvpG6J9RnDpHQtNjuOw8JA5szgOTzHhGBw=="
+      ],
+      "store_path": "z2y3k7267f9kbpfyw9zw0d1adjcn6z62-hello"
+    }
+  ],
+  "schema": "mantle-store-info-v2"
+}

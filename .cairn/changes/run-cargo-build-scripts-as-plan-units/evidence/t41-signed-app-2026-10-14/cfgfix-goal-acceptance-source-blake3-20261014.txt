@@ -1,0 +1,18 @@
+Mantle goal-role acceptance repair: actual source BLAKE3-256 identities
+Existing /run/current-system/sw/bin/b3sum consumed exact remote :raw UTF-8 bytes through stdin; no local copies/staging/build.
+Explicit record roles plus canonical drv_key; no label alias fallback or copied drv hash. Original1051 failure, completed first app, and recovered1047 source preserved.
+5221e7c6d30deeb804c5553462e7c3a318ebe755094209217648bd9762138ecb  bytes=7157  /tmp/mantle-unit-plan-20261013-87lqAtNv/check-cfgfix-native-app-20261014.py
+d70e533e0ad404cbc5ffc8a1ffa39f62e0dda3872bac7b0c2ec985a94c071c68  bytes=7287  /tmp/mantle-unit-plan-20261013-87lqAtNv/make-variant-native-plan.py
+45cc1a6f750f19cc10ef01497f53aafb7ff469cabf938b6c0017c0929c0f680f  bytes=17340  /tmp/mantle-unit-plan-20261013-87lqAtNv/check-native-provider-selective-rerun.py
+d0a1c56818e1d96f6e27d296eb9cb94cfa558ddb97cda356c04bf2f52186b02e  bytes=7280  /tmp/mantle-unit-plan-20261013-87lqAtNv/verify-variant-native-outputs-gpt61-20261014.py
+d9cb49cc5d6e185d535d0b71444a098c3763347a60de25f34b9cc46615f38ec8  bytes=9903  /tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-phase-gpt61-20261014.py
+6120e2c79450adf87d328b9d69d6cf508759cb74b05fdd854161d2ace5670875  bytes=5424  /tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-supervisor-gpt61-20261014.py
+2b835dc61a7154c9fbddf9dc6cc6e7ae037541f3745546d81b816cd4c381f992  bytes=8121  /tmp/mantle-unit-plan-20261013-87lqAtNv/run-cfgfix-app-goal-acceptance-20261014.py
+b3e73189d226a3cdd4965a826aed8662a7ba1bc2810e7a6a8abef9d1e164a976  bytes=5629  /tmp/mantle-unit-plan-20261013-87lqAtNv/queue-cfgfix-app-goal-acceptance-20261014.py
+1090752bc4ff7af9f98eb641e418b024ea057e88bc3440c0c95d80eeb92cfb30  bytes=5775  /tmp/mantle-unit-plan-20261013-87lqAtNv/check-cfgfix-native-app-20261014.pre-goal-role-1051.py
+fb7d656c9eff2208e033d32a5fdab82a6a3732af2c1816b3686d808953d9b4e6  bytes=6595  /tmp/mantle-unit-plan-20261013-87lqAtNv/make-variant-native-plan.pre-goal-role-1051.py
+d5d98aa33b2c41c08c66508390ac1168519e16f19098a788b9d7405aa2691ead  bytes=16765  /tmp/mantle-unit-plan-20261013-87lqAtNv/check-native-provider-selective-rerun.pre-goal-role-1051.py
+49d0f6b8d638f96cd1ddb1e97a0135d46c80aec2221aea10e16f82533fd6ea85  bytes=6614  /tmp/mantle-unit-plan-20261013-87lqAtNv/verify-variant-native-outputs-gpt61-20261014.pre-goal-role-1051.py
+060d2f73523a10945f5f7a51a8f9e4d172fd36ee66cfa6a3542f5a3525ef2dc5  bytes=9270  /tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-phase-gpt61-20261014.pre-goal-role-1051.py
+09722e6b4e807ea95568653038fbc7a77a9eace8924110118531b09f50f04e28  bytes=5422  /tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-supervisor-gpt61-20261014.pre-goal-role-1051.py
+fb60e6247ac96d7b50b76258ea1bb0587aba1cd814531ef8748d5b5d74be270b  bytes=6433  /tmp/mantle-unit-plan-20261013-87lqAtNv/make-cfgfix-native-app-consumer-20261014.pre-logical-binding-1047.py

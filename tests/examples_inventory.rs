@@ -119,7 +119,6 @@ const ALLOWED_RAILS: &[&str] = &[
     "kernel-oci-roundtrip",
     "kernel-oci-registry-roundtrip",
     "transcript-cli",
-    "representative-offline-cargo-rail",
     "representative-rust-plan-rail",
     "representative-claim-non-overreach",
     "representative-surface-matrix-drift",

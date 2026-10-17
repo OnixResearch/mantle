@@ -1,0 +1,291 @@
+{
+  "schema": "mantle-t41-retained-receipts-v1",
+  "captured_at_utc": "2026-10-14T23:15:39.525001+00:00",
+  "source_host": "brittonr@100.90.108.13",
+  "source_root": "/tmp/mantle-unit-plan-20261013-87lqAtNv",
+  "maintenance_owner": "Mantle lane operator",
+  "transport": "specialized SSH raw-selector reads; paginated displayContent reconstruction verified against remote byte sizes and SHA-256; BLAKE3-256 computed separately on exact retained bytes with existing local b3sum",
+  "scope": "T4.1 frozen signed-client app and admission evidence only; no T4.2/T4.3 acceptance",
+  "files": [
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-app-report.json",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-app-report.json",
+      "bytes": 159386,
+      "blake3_256": "d4876b31dab4ce8f3ce423135c6db0a2b9a241a340c8492b5725a8cecc92ffca",
+      "transport_sha256": "cd91660c6787333fc929566359b1cd7b4180a5a285547726ed4221038d0f9c99"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-app-trace.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-app-trace.log",
+      "bytes": 8949,
+      "blake3_256": "d452f3fa5fca7b80844f901a7357af5e5b997df6df00b0b460ef89e8c65ba204",
+      "transport_sha256": "f52ce03d71f782ede1669ea4f26eccf6dc69aed017667a58db02eef0767263e7"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-app-verify.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-app-verify.log",
+      "bytes": 528,
+      "blake3_256": "614be99c4047bf33c7e82f90c72c11682d343138fc6c8ba8c821302461bedbb8",
+      "transport_sha256": "cf6ebdc3d64a9aa081456c83c28d41d21dd795e035425eb05ff19e4b8d1f0f3a"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-app-goal-acceptance-20261014.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-app-goal-acceptance-20261014.log",
+      "bytes": 444,
+      "blake3_256": "aad1df627b4c511a314255aee52be850ec9c5c7607e2f330c18f535ccfdd30d9",
+      "transport_sha256": "b8bb735509fb7428b0c6312aaff9903f5d7c457533ac749aa1228c6c65d8ac9c"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-producer-report.json",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-producer-report.json",
+      "bytes": 166750,
+      "blake3_256": "c1aea1a77a91a3039358d2c6643d6935e00fd801fa3cde44835889b8645880ad",
+      "transport_sha256": "252995f6a49a85cd421f5912f366579b1186647342b8880ceb1882b19ed4f162"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-producer-trace.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-producer-trace.log",
+      "bytes": 41721,
+      "blake3_256": "6dcf97801ad26785bbe6431c07533edbdd20c4297451ef3a742cc5174561cbb4",
+      "transport_sha256": "1372584419e51a2312800ea6f7330de4ad18fb707c8a8807940332f07855c10c"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-producer-verify.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-producer-verify.log",
+      "bytes": 397,
+      "blake3_256": "67cfcf087428b16fc5e6f42c77ddcd88ab7affeb47953da21b9186d8283832fb",
+      "transport_sha256": "19ebf0e5bb3ec18129234639d5ea698b79c6b3ed6ae17311e41694846a2ebe71"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-goal-role-1051-smoke-20261014.txt",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-goal-role-1051-smoke-20261014.txt",
+      "bytes": 904,
+      "blake3_256": "705127a602b9546fc47006ebdd2ba13afe327e60f81d1a8b347210c68e5986ac",
+      "transport_sha256": "0f0af10e7caad46fbc1a06a7ea74273cb127afa713feade498c0496ed3986ff1"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-goal-acceptance-source-blake3-20261014.txt",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-goal-acceptance-source-blake3-20261014.txt",
+      "bytes": 2895,
+      "blake3_256": "70d71567bd9569a6703d5f21b0f76b6a603638dd407b76d83f576d232cd1a1a3",
+      "transport_sha256": "26db68a7288f2003f4861895400a41edefe79bbed4a9e1884ed9b1e4f7358085"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-app-continuation-gpt61-20261014.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-app-continuation-gpt61-20261014.log",
+      "bytes": 241,
+      "blake3_256": "eacc719badd35f1c812ca5f294912c3a134087f2d93046c94d4bf8235df0ad7f",
+      "transport_sha256": "962e1ed40206b1722f6101237680fcb4169858702d20d7d273476d290a69bafe"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-app-repair-logical-binding-20261014.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-app-repair-logical-binding-20261014.log",
+      "bytes": 864,
+      "blake3_256": "68271d35c3ca2d974ab50e96053cf196f6e01465835500dc7eaaeaf70970493c",
+      "transport_sha256": "803f2da87591479d875206fc68f85a6f5b08ef3035d1a48cc7bbc253bad7b564"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-logical-repair-1051-source-blake3-20261014.txt",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-logical-repair-1051-source-blake3-20261014.txt",
+      "bytes": 2084,
+      "blake3_256": "a6d25e5ddf095a93334f4dc7becbb1af71edc9eccb1f114cdd519d941ac98a28",
+      "transport_sha256": "1c57ebe0783571b8818ee9f1049a8492b7013b0d5dde7196bd1222383d7bc762"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/client-old-resume-pull.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-old-resume-pull.log",
+      "bytes": 2627,
+      "blake3_256": "b0a9c21a36ffe8cf32d12067d0a6c73d283900e3865c2614b8e54cc7bf1cced0",
+      "transport_sha256": "db7b088fc4547c8d347cd6f1810e08f5e2c6f2af7fd365ac967a1bf036bbdf4e"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/client-current-resume-pull.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-current-resume-pull.log",
+      "bytes": 454,
+      "blake3_256": "24950577c1c620c9c15d965a59aafe4fcb3a7b06d7dc70b96708a1ac678b2373",
+      "transport_sha256": "fd7d30aed6ff488e1571d8fc7ebf558d40dc677b08f7378e24da503403f1fac7"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/client-nightly-repair-pull-selected.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-nightly-repair-pull-selected.log",
+      "bytes": 201,
+      "blake3_256": "492006be437252cc27365bd36481146d0017931dae456a42f3ecbf0c57242969",
+      "transport_sha256": "4006286a69aaac7d4829a5099a7f6067024a2ac6295eae40c11cbc00322b226c"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/client-store-restored-verify.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store-restored-verify.log",
+      "bytes": 4780,
+      "blake3_256": "9d23c92f974e7d0dee563cabb6849733db0effb829636aaf3ea2414840d8d77d",
+      "transport_sha256": "66f6feef704000bc7a5a0d9806e0115316390dbbfe8674d92ed1b12efb1c888f"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/client-restored-verification-summary.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-restored-verification-summary.log",
+      "bytes": 56,
+      "blake3_256": "03235c5c1eeb5056cbafbeaa278fe74fc6cf1ed62b83b8e8b814368eb8aea5b4",
+      "transport_sha256": "db784f6c4e3ab6eb5370492a9349d7abf3b3cf7d0138e40af3cd0191ed99ac8d"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/client-repaired-planner-pull.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-repaired-planner-pull.log",
+      "bytes": 215,
+      "blake3_256": "0d0d23977e9e4b7b02f2ebb2a68d8a18a569eba680e8647c86f89e4d3d838319",
+      "transport_sha256": "f7794b753e0d7f8bbebd51330c3e4914665da6c479edc36866d9c764c413c016"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/client-repaired-planner-summary.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-repaired-planner-summary.log",
+      "bytes": 265,
+      "blake3_256": "06d54e4c168d3701e5f2428af4ca252c97306c0abc17796557716585806e173c",
+      "transport_sha256": "388385cb768d9f3db5f5808a382bdde14313069baa5760d160390017326a8183"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/client-repaired-planner-verify.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-repaired-planner-verify.log",
+      "bytes": 123,
+      "blake3_256": "8fee8b8f887f16f235099f5cd6c649a6c353990a1d3e8196f27820120ba164ea",
+      "transport_sha256": "624e6fd3622a96a02df8253560784b38e26f48ad01436a0c10165f66b685d940"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-helper-pull.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-helper-pull.log",
+      "bytes": 211,
+      "blake3_256": "1501d9cdf765737b378e8d53942c118b77efea83b614016bd218db74a5a84655",
+      "transport_sha256": "fe7f79d61e45a848369ed4fb4c5ae3af61536b0aedaecdfdaad6b303b70508f8"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-helper-verify.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-helper-verify.log",
+      "bytes": 121,
+      "blake3_256": "f7691eec30cfc02c225044b8886ba852e30881c9522302e987e62c8a5846475a",
+      "transport_sha256": "2adc59c076159984659e65981347ce76e7f85cdb8010fa9fb4ccd55871028339"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-config-pull.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-config-pull.log",
+      "bytes": 206,
+      "blake3_256": "3512ea7217883ff78af670a13bcc891d89b5596a88728c6470bdf303fb7e47f2",
+      "transport_sha256": "35e2f43e634b0785c2ef04067f39046ea7ae21a39abdc87ef1b42d17c566fb99"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-config-verify.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-config-verify.log",
+      "bytes": 120,
+      "blake3_256": "7184711df702f7a0af66dd86583f0c508d2f10c11909925b9513a92706b1fdf0",
+      "transport_sha256": "90e4bd42dcc699991a1a83d935f73670a5a3b4d595a2526987bd0cb1bf53a05d"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/lean-nightly-pull.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/lean-nightly-pull.log",
+      "bytes": 212,
+      "blake3_256": "6eb9d6c132313aa4908afcfcbcffd16d706fb27de73fe074a29f404573caca04",
+      "transport_sha256": "f5474e7b1e04ec05ed4dacde33052c96a1289a2c989c32b7ff6ae33eea817d06"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/lean-nightly-verify.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/lean-nightly-verify.log",
+      "bytes": 120,
+      "blake3_256": "419bddbe6e5638dafbcc934dfdee2f17e05a5e559728fc947f1873cdcc5a1c53",
+      "transport_sha256": "7b44b48fb0582490484b5c754b1c7e34434ebba40f0b0643d9fcda68ffe47105"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/current-native-c-provider-verify.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/current-native-c-provider-verify.log",
+      "bytes": 670,
+      "blake3_256": "c828e5ebf4fb09cbc5d7a89e76def5512fc210256fee7c6a13e0d8cd1cfb2466",
+      "transport_sha256": "730acb421c6b1edcc53f888dfcba0b92e467fb13b753816dcf71376ddcc932bd"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-config.json",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-config.json",
+      "bytes": 1551,
+      "blake3_256": "1c05f8316ff995d1453c131acd3b22b22e8d27951eaeea5a8bb24cbe47d93191",
+      "transport_sha256": "e08bbeddcc477500d35bc41615f0656bf55a70f2d03f106fe00f072543961c72"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-plan.ncl",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-plan.ncl",
+      "bytes": 1632,
+      "blake3_256": "f191b509bdeec2f5d047ef49635cb288cf8f8f5e84352ba87cf74ebc91eb384c",
+      "transport_sha256": "485f7a98964e33a657698ef54eb6ad11496c391d5ba95b08173d8705ca04d3a4"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-app-consumer.ncl",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-app-consumer.ncl",
+      "bytes": 2652,
+      "blake3_256": "a210c170d6e533258f5f121190ce508282f604396a9678f05d3ee81c6b463ace",
+      "transport_sha256": "34983000a513bea002c7cd74d538286c8849a18569db00d2bed0dbf06720a793"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/run-cfgfix-native-app-20261014.sh",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/run-cfgfix-native-app-20261014.sh",
+      "bytes": 2366,
+      "blake3_256": "8df4bd4b75fd11e922951acd2afbfa9bbc5d7eee1c1c4b16665278c591076e55",
+      "transport_sha256": "ae9712bfdff1d677a9952aa66e7672daca6c75794a05d3dd30767ae9c4131e00"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/run-cfgfix-native-producer-20261014.sh",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/run-cfgfix-native-producer-20261014.sh",
+      "bytes": 2271,
+      "blake3_256": "ad51ba0351ac56bdd6fbbd42b2abc3c8dc891f790cf253c6c1f0b30cab9ff6ac",
+      "transport_sha256": "eda2d2edbd8dab7a2093bbeceabeb05c9159fe8edd8ba9ff64316a1705084f68"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/check-cfgfix-native-app-20261014.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/check-cfgfix-native-app-20261014.py",
+      "bytes": 7157,
+      "blake3_256": "5221e7c6d30deeb804c5553462e7c3a318ebe755094209217648bd9762138ecb",
+      "transport_sha256": "26375201224f30537097ac9f7be0679837ecf6483171d100c4310652c0a3601a"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/current-signed-paths.txt",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/current-signed-paths.txt",
+      "bytes": 423,
+      "blake3_256": "48dc7b68557e1942d4b1e5c85c689a54035d81f7a9a88df5123a6964c8bb4848",
+      "transport_sha256": "c47a3917092a43df869370807b66809ad3ce29af38edc4a036fb2221c126e87b"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/previous-current-signed-paths.txt",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/previous-current-signed-paths.txt",
+      "bytes": 422,
+      "blake3_256": "8a309f6c03eeabfb8250d28660ad325cde8afd64c802b22e1b11fcd10fb9dc66",
+      "transport_sha256": "7fa3820db5f3d9d2bb56aef2fac9195bad02c6ef77b576d0bcd90511493a6112"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/native-answer-no-fuse.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/native-answer-no-fuse.log",
+      "bytes": 11099,
+      "blake3_256": "2f700d0679af49ec7e14bae4f3159665e89d74e762868e4d34fe657c431b737c",
+      "transport_sha256": "7ee0cc32efc869f1091c5d259bc47e1e954eabda7b4f7b63ff281bc6f68c7753"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/run-cfgfix-app-goal-acceptance-20261014.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/run-cfgfix-app-goal-acceptance-20261014.py",
+      "bytes": 8121,
+      "blake3_256": "2b835dc61a7154c9fbddf9dc6cc6e7ae037541f3745546d81b816cd4c381f992",
+      "transport_sha256": "be283be5797525ccc8257f87c16bee4f8709cbf82124a84a00aeea8ddca96c4c"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/make-cfgfix-native-app-consumer-20261014.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/make-cfgfix-native-app-consumer-20261014.py",
+      "bytes": 8139,
+      "blake3_256": "237f019025721ea4a0f0881d2812ded4ab5fc3c0eb75994479854eca59fa01b8",
+      "transport_sha256": "5a1c8028175772b61fe4babef6e090be033bf514b598b2e2ca2e10ab7b0076bc"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-app-unit-id.txt",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/cfgfix-native-app-unit-id.txt",
+      "bytes": 67,
+      "blake3_256": "025b290d828a2315c6240f2fe4143ad3197145c7abdda5a545b3cae8c174b0e2",
+      "transport_sha256": "f79db6899d306dba93def327f7a8eea5af9e37741f17e9c26a72521e7f4fec5f"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14/cfgfix-native-app-result.txt",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store/zji3d1xmcz226pi4fiv2cbhfxr6xb6yk-cargo-build-script-units-app-check-cfgfix-87lq/result.txt",
+      "bytes": 74,
+      "blake3_256": "65dbd9dcc863802fe129ff366043c7b608e942fabdd239c7613cac4750b3b9b0",
+      "transport_sha256": "53cc3dc37ff4a46ba8cf52ece5eb1a31cbd05b9b45feebf28ab4abbb9a92f7dd"
+    }
+  ]
+}

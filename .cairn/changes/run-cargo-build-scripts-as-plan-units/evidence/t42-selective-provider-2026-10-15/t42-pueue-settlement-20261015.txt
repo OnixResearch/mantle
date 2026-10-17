@@ -1,0 +1,201 @@
+$ ssh brittonr@100.90.108.13 '/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 -c '\''import subprocess,json,datetime
+state=json.loads(subprocess.check_output(['\''\'\'''\''pueue'\''\'\'''\'','\''\'\'''\''status'\''\'\'''\'','\''\'\'''\''--json'\''\'\'''\''],text=True))['\''\'\'''\''tasks'\''\'\'''\'']
+fields=('\''\'\'''\''id'\''\'\'''\'','\''\'\'''\''command'\''\'\'''\'','\''\'\'''\''label'\''\'\'''\'','\''\'\'''\''path'\''\'\'''\'','\''\'\'''\''dependencies'\''\'\'''\'','\''\'\'''\''status'\''\'\'''\'')
+logs=json.loads(subprocess.check_output(['\''\'\'''\''pueue'\''\'\'''\'','\''\'\'''\''log'\''\'\'''\'','\''\'\'''\''1062'\''\'\'''\'','\''\'\'''\''1065'\''\'\'''\'','\''\'\'''\''--json'\''\'\'''\'','\''\'\'''\''--lines'\''\'\'''\'','\''\'\'''\''4'\''\'\'''\''],text=True))
+print(json.dumps({'\''\'\'''\''observed_utc'\''\'\'''\'':datetime.datetime.now(datetime.timezone.utc).isoformat(),'\''\'\'''\''tasks'\''\'\'''\'':[{k:v for k,v in state[str(i)].items() if k in fields} for i in range(1058,1066)],'\''\'\'''\''guards'\''\'\'''\'':{k:{'\''\'\'''\''task'\''\'\'''\'':{f:v for f,v in x['\''\'\'''\''task'\''\'\'''\''].items() if f in fields},'\''\'\'''\''output'\''\'\'''\'':x.get('\''\'\'''\''output'\''\'\'''\'')} for k,x in logs.items()}},indent=2,sort_keys=True))'\'''
+--- stdout ---
+{
+  "guards": {
+    "1062": {
+      "output": "guard-progress id=1061 root_free=351848648704 home_free=351848648704 tick=1260\nguard-progress id=1061 root_free=351321812992 home_free=351321812992 tick=1272\nguard-progress id=1061 root_free=350795714560 home_free=350795714560 tick=1284\nguard-task-done id=1061 status={'Done': {'enqueued_at': '2026-10-14T18:44:00.326902790-04:00', 'start': '2026-10-14T18:44:00.679195156-04:00', 'end': '2026-10-14T20:35:44.343638047-04:00', 'result': 'Success'}} root_free=353184223232 home_free=353184223232",
+      "task": {
+        "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/watch-owned-proof-cfgfix.py 1061 mantle-unit-plan-87lq-variant-producer-gpt61-20261014 69600",
+        "dependencies": [
+          1058,
+          1059
+        ],
+        "id": 1062,
+        "label": "mantle-unit-plan-87lq-variant-producer-verify-guard-gpt61-20261014",
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+        "status": {
+          "Done": {
+            "end": "2026-10-14T20:35:44.975648501-04:00",
+            "enqueued_at": "2026-10-14T18:43:59.947894331-04:00",
+            "result": "Success",
+            "start": "2026-10-14T18:43:59.994237687-04:00"
+          }
+        }
+      }
+    },
+    "1065": {
+      "output": "guard-progress id=1064 root_free=351847378944 home_free=351847378944 tick=156\nguard-progress id=1064 root_free=351322136576 home_free=351322136576 tick=168\nguard-progress id=1064 root_free=350797492224 home_free=350797492224 tick=180\nguard-task-done id=1064 status={'Done': {'enqueued_at': '2026-10-14T20:35:46.172156499-04:00', 'start': '2026-10-14T20:35:46.347047367-04:00', 'end': '2026-10-14T20:51:53.243341653-04:00', 'result': 'Success'}} root_free=353181945856 home_free=353181945856",
+      "task": {
+        "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/watch-owned-proof-cfgfix.py 1064 mantle-unit-plan-87lq-variant-app-gpt61-20261014 69600",
+        "dependencies": [
+          1061,
+          1062
+        ],
+        "id": 1065,
+        "label": "mantle-unit-plan-87lq-variant-app-verify-guard-gpt61-20261014",
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+        "status": {
+          "Done": {
+            "end": "2026-10-14T20:51:55.973128428-04:00",
+            "enqueued_at": "2026-10-14T20:35:45.330347289-04:00",
+            "result": "Success",
+            "start": "2026-10-14T20:35:45.373898475-04:00"
+          }
+        }
+      }
+    }
+  },
+  "observed_utc": "2026-10-15T00:55:53.452089+00:00",
+  "tasks": [
+    {
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-phase-gpt61-20261014.py provider-config",
+      "dependencies": [
+        1055,
+        1056
+      ],
+      "id": 1058,
+      "label": "mantle-unit-plan-87lq-variant-provider-config-gpt61-20261014",
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+      "status": {
+        "Done": {
+          "end": "2026-10-14T18:43:56.803413935-04:00",
+          "enqueued_at": "2026-10-14T18:40:00.503375831-04:00",
+          "result": "Success",
+          "start": "2026-10-14T18:40:00.896227847-04:00"
+        }
+      }
+    },
+    {
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/watch-owned-proof-cfgfix.py 1058 mantle-unit-plan-87lq-variant-provider-config-gpt61-20261014 12000",
+      "dependencies": [
+        1055,
+        1056
+      ],
+      "id": 1059,
+      "label": "mantle-unit-plan-87lq-variant-config-guard-gpt61-20261014",
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+      "status": {
+        "Done": {
+          "end": "2026-10-14T18:43:59.530195119-04:00",
+          "enqueued_at": "2026-10-14T18:40:00.144768630-04:00",
+          "result": "Success",
+          "start": "2026-10-14T18:40:00.196852397-04:00"
+        }
+      }
+    },
+    {
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-supervisor-gpt61-20261014.py producer 1058 1059",
+      "dependencies": [
+        1058,
+        1059
+      ],
+      "id": 1060,
+      "label": "mantle-unit-plan-87lq-variant-supervisor-producer-gpt61-20261014",
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+      "status": {
+        "Done": {
+          "end": "2026-10-14T18:44:00.620329479-04:00",
+          "enqueued_at": "2026-10-14T18:40:00.511507467-04:00",
+          "result": "Success",
+          "start": "2026-10-14T18:43:59.622314702-04:00"
+        }
+      }
+    },
+    {
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-phase-gpt61-20261014.py producer",
+      "dependencies": [
+        1058,
+        1059
+      ],
+      "id": 1061,
+      "label": "mantle-unit-plan-87lq-variant-producer-gpt61-20261014",
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+      "status": {
+        "Done": {
+          "end": "2026-10-14T20:35:44.343638047-04:00",
+          "enqueued_at": "2026-10-14T18:44:00.326902790-04:00",
+          "result": "Success",
+          "start": "2026-10-14T18:44:00.679195156-04:00"
+        }
+      }
+    },
+    {
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/watch-owned-proof-cfgfix.py 1061 mantle-unit-plan-87lq-variant-producer-gpt61-20261014 69600",
+      "dependencies": [
+        1058,
+        1059
+      ],
+      "id": 1062,
+      "label": "mantle-unit-plan-87lq-variant-producer-verify-guard-gpt61-20261014",
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+      "status": {
+        "Done": {
+          "end": "2026-10-14T20:35:44.975648501-04:00",
+          "enqueued_at": "2026-10-14T18:43:59.947894331-04:00",
+          "result": "Success",
+          "start": "2026-10-14T18:43:59.994237687-04:00"
+        }
+      }
+    },
+    {
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-supervisor-gpt61-20261014.py app 1061 1062",
+      "dependencies": [
+        1061,
+        1062
+      ],
+      "id": 1063,
+      "label": "mantle-unit-plan-87lq-variant-supervisor-app-gpt61-20261014",
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+      "status": {
+        "Done": {
+          "end": "2026-10-14T20:35:46.296753548-04:00",
+          "enqueued_at": "2026-10-14T18:44:00.335326076-04:00",
+          "result": "Success",
+          "start": "2026-10-14T20:35:45.016584416-04:00"
+        }
+      }
+    },
+    {
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-phase-gpt61-20261014.py app",
+      "dependencies": [
+        1061,
+        1062
+      ],
+      "id": 1064,
+      "label": "mantle-unit-plan-87lq-variant-app-gpt61-20261014",
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+      "status": {
+        "Done": {
+          "end": "2026-10-14T20:51:53.243341653-04:00",
+          "enqueued_at": "2026-10-14T20:35:46.172156499-04:00",
+          "result": "Success",
+          "start": "2026-10-14T20:35:46.347047367-04:00"
+        }
+      }
+    },
+    {
+      "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/watch-owned-proof-cfgfix.py 1064 mantle-unit-plan-87lq-variant-app-gpt61-20261014 69600",
+      "dependencies": [
+        1061,
+        1062
+      ],
+      "id": 1065,
+      "label": "mantle-unit-plan-87lq-variant-app-verify-guard-gpt61-20261014",
+      "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+      "status": {
+        "Done": {
+          "end": "2026-10-14T20:51:55.973128428-04:00",
+          "enqueued_at": "2026-10-14T20:35:45.330347289-04:00",
+          "result": "Success",
+          "start": "2026-10-14T20:35:45.373898475-04:00"
+        }
+      }
+    }
+  ]
+}
+--- stderr ---
+--- exit: 0 ---

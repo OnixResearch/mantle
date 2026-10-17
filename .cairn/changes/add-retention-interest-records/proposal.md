@@ -2,9 +2,10 @@
 
 ## Why
 
-`state_dir/gc-roots.json` keeps the retained store paths of the writable store
-in one mutable document. The document names no owner for a path, so two writers
-can lose an update, and releasing one root means editing shared state.
+`state_dir/gc-roots.json` keeps the retained store paths in one mutable
+document with a single provenance slot per path. The operator CLI serializes
+mutations, but it cannot preserve two independent owners' interests in the
+same path; release edits shared state.
 
 The Synit manual stores each user setting as a file named by the canonical
 digest of its content and watches the directory
@@ -43,8 +44,8 @@ coordination daemon may add interests for its own consumers.
 
 - **Immediate consumer**: local build root registration and the operator
   `store roots` / `store usage` / `store gc` workflow.
-- **Immediate outcome**: concurrent writers stop losing retention updates, and
-  every retained path has an owner and a reason.
+- **Immediate outcome**: concurrent owners preserve separate interests in one
+  retained path, each with an owner and reason, and can release them separately.
 - **Durable capability**: an auditable retention ledger that later carries CI,
   remote-layer, and proof retention.
 - **Maintenance owner**: Mantle store lifecycle owner.
@@ -52,7 +53,7 @@ coordination daemon may add interests for its own consumers.
   malformed-record rejection, and GC plan equivalence between the legacy file
   and the merged record set.
 - **Compatibility**: `store roots --migrate` converts existing JSON roots into
-  owner records. Single-owner stores keep working without migration.
+  records. Existing roots stay readable and protective without migration.
 
 ## Scope
 
@@ -63,7 +64,7 @@ migration, and the GC input boundary.
 
 - Changing GC decision rules, ordering, or candidate classification.
 - Deleting or rewriting the legacy roots file during unrelated commands.
-- Retention for a store path that does not exist in the writable layer.
+- Operator pinning of a store path without available PathInfo.
 - Any claim that a retained path is reachable, correct, or trusted.
 
 ## Success Criteria

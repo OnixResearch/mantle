@@ -22,30 +22,18 @@ Run the checked-in wrapper from the repo root:
 ./scripts/check-first-party-quality.sh
 ```
 
-It runs three ordinary edit-time checks in order:
+It runs four ordinary edit-time checks in order: the bounded GCC 4.0
+configure-bridge self-test, package-scoped rustfmt, strict first-party Clippy,
+and serialized first-party workspace lib/tests. The script
+`scripts/quality-gate-common.sh` owns the canonical fmt package selection and
+vendored workspace exclusions. Manual equivalents:
 
 ```bash
-cargo fmt --check \
-  -p mantle \
-  -p crunch-attestation \
-  -p crunch-build \
-  -p crunch-delta \
-  -p crunch-eval \
-  -p crunch-glue \
-  -p crunch-pipeline \
-  -p crunch-project \
-  -p crunch-shell \
-  -p crunch-store
+./scripts/check-gcc40-configure-bridge.rs --self-test
+source scripts/quality-gate-common.sh
+cargo_fmt_first_party
 ./scripts/check-first-party-clippy.sh
-cargo test --workspace --lib --tests \
-  --exclude fuse-backend-rs \
-  --exclude nix-compat \
-  --exclude nix-compat-derive \
-  --exclude snix-build \
-  --exclude snix-castore \
-  --exclude snix-store \
-  --exclude snix-tracing \
-  -- --test-threads 1
+cargo_test_workspace_lib_tests
 ```
 
 Notes:
@@ -57,6 +45,8 @@ Notes:
   and resource-pressure fixtures cannot interfere across otherwise unrelated
   tests. Tests that own concurrency still exercise it internally.
 
+- For any changed first-party package outside the selected fmt packages, also
+  run `cargo fmt --check -p <package>`; the selected fmt leg does not check it.
 - The root `-p mantle` rustfmt leg covers the root package's `src/`,
   `examples/`, and `tests/`, including `tests/benchmark_harness.rs`.
 - `./scripts/check-first-party-clippy.sh` excludes vendored workspace members
@@ -209,6 +199,11 @@ mantle --state-dir ./offline-state source bundle verify --from source-bundle.jso
 mantle --state-dir ./offline-state source bundle preflight --build-root ./package.ncl --import-path lib
 ```
 
+Source-bundle import checks the selected state after publication, including the
+requested pin; a write report alone is not readiness evidence. Offline vendor
+cache admission additionally checks signed PathInfo against physical NAR bytes,
+which establishes local integrity but not upstream source provenance.
+
 Run the build with source preflight and substitute lookup disabled:
 
 ```bash
@@ -308,6 +303,99 @@ merging or replacing it. The JSON report is contracted as
 `mantle-self-build-source-hydration-v1` and binds the manifest, vendor, and
 provider archive BLAKE3 identities without embedding checkout or temporary
 paths.
+
+### Lock-driven vendor acquisition outside the source archive
+
+The `fresh-clone-lock-vendor-inputs` profile keeps the legacy provider
+archive/manifest authority and the ordinary source-bundle v1 format, but **does
+not embed** `vendor-deps/`. Build the bounded lock-vendor producer, its canonical
+selected shared-hash table, and the final vendor output as separate strict,
+fixed-output/store steps first. The selected table contains only rows referenced
+by `Cargo.lock`; the mutable full reviewed table
+`bootstrap/pins/cargo-shared-lock-hashes-v1` is neither copied into the Mantle
+source record nor bound to the producer for unrelated packages.
+
+For the full workspace, create the bounded producer input archive from **declared**
+sources before registering its fixed-output store path:
+
+```bash
+python3 scripts/vendor-source-bundle.py \
+  --profile workspace \
+  --index /declared/locked-sparse-index \
+  --reviewed-table bootstrap/pins/cargo-shared-lock-hashes-v1 \
+  --git-cache /declared/offline-cargo-git \
+  --git-sidecars /declared/locked-git-sidecars.json \
+  --to /handoff/lock-vendor-source.tar.gz
+```
+
+The sidecar JSON maps **each exact `Cargo.lock` Git source** under `"git"` to
+`"git_db"` and `"checkout"` paths relative to `--git-cache`, plus an explicit
+absolute `"git_tree"` path to its independently fetched pristine source.
+Exporter admission checks every selected Git source against the reviewed
+table, the Git commit and checkout origin/revision, every fetched tree's
+reviewed NAR SHA-256, and pinned Git blobs/modes (including checked-in CRLF
+attributes).
+The archive embeds the bounded Git object databases and checkouts and a
+per-source `git-transports.json` with reviewed fetch URL, revision and NAR
+hash; it does **not** embed the full global table, the fetched source-tree
+inputs, ambient Cargo-home paths or `vendor-deps/`. The onix-artifact
+SSH-to-HTTPS fetch route requires its explicit reviewed table row; an
+offline pinned checkout for an unavailable Git remote does not prove that
+remote is reachable. Selected Git fetches and registry archives remain
+separate fixed-output derivation inputs, not aliases for these sidecars.
+
+```bash
+mantle --nix-compat source bundle bootstrap-profile \
+  --mode fresh-clone-lock-vendor-inputs \
+  --provider-archive ./unpacked-legacy-provider \
+  --provider-manifest ./provider.json \
+  --mantle-source ./mantle-src \
+  --lock-vendor-producer /nix/store/<producer>/bin/lock-vendor-producer \
+  --lock-vendor-selected-table /nix/store/<selected-table> \
+  --lock-vendor-output /nix/store/<completed-vendor> \
+  --excluded-vendor-deps ./previously-verified-vendor-deps \
+  --to lock-vendor-inputs.json
+```
+
+Use the same logical store prefix as the signed producer output PathInfo;
+`--nix-compat` above binds `/nix/store`. A physical export directory under
+`/tmp` is only a carrier for that signed output, not a new logical store path.
+
+The excluded tree and new producer output must have the same bounded content
+and bytes and independently match every locked package/checksum. The profile
+records the producer executable identity, selected-table identity, `Cargo.lock`
+identity, output logical store path and vendor-tree content receipt; its acquisition
+record has zero embedded payload bytes. Verify the separate completed output's
+store signature/PathInfo independently: a source manifest receipt is **not**
+store-output trust, compiler correctness, or proof that the producer ran. Send
+the signed output alongside the source bundle and publish the profile's
+`manifest_blake3` over an independent authenticated channel.
+
+On a fresh checkout without `vendor-deps/`, provide the separately realized
+output explicitly; no command substitutes a host Cargo cache or network:
+
+```bash
+mantle --nix-compat --json --state-dir ./offline-state source bundle hydrate-self-build \
+  --from /media/handoff/lock-vendor-inputs.json \
+  --expected-manifest-blake3 <manifest-blake3> \
+  --checkout . \
+  --lock-vendor-output /nix/store/<completed-vendor> \
+  > self-build-source-hydration.json
+
+empty_cargo_home="$(mktemp -d)"
+CARGO_HOME="$empty_cargo_home" CARGO_NET_OFFLINE=true \
+  cargo metadata --offline --locked --format-version 1 \
+  --config .cargo/vendor-config.toml
+```
+
+Hydration refuses an existing tree, checks the checkout lock against the
+producer-bound lock, remeasures the output, verifies each staged vendored
+package/file against `Cargo.lock`, publishes with atomic no-replace, and pins the
+source state. Missing materialization fails before self-build preflight.
+`fresh-clone-lock-vendor-fixed-point` adds ordinary `--proof-input` and
+`--include-bundle` fixed-fetch closure inputs before offline fixed-point
+proof; `fresh-clone-inputs` and `fresh-clone-fixed-point` remain embedded-vendor
+compatibility profiles.
 
 ### Hydrated fresh-clone fixed-point proof
 
@@ -459,6 +547,14 @@ The output path and its two success aliases must be absent. A failed run keeps
 its private staging directory and `attempt-status.json`. A successful run
 publishes with a no-replace rename and updates both aliases atomically.
 
+With global `--verbose`, the source-built attempt also writes
+`mantle-service-readiness-v1` coordination snapshots to stderr. The six
+proof-stage dependencies come from the real output-authority edges. StageX
+may report `started` during isolated execution; the current observer never
+asserts `complete` because accepted action-reconciliation observations and
+the required final receipt are not yet available to its shell boundary.
+These non-evidence snapshots never replace the proof report or receipt.
+
 For a prepared checkout that already has its explicit vendor directory, import,
 pin, and preflight the bundle directly:
 
@@ -522,6 +618,14 @@ reviewing that plan; apply writes only the accepted Mantle-owned files and fails
 before writing if conflicts, missing vendored packages, stale checksums,
 unsupported source replacement, or unsupported Cargo surfaces remain.
 
+Both Cargo and pin import apply keep their output paths under the selected
+workspace using no-follow directory capabilities; symlinked output parents and
+overlapping output targets are refused before writing. A successful apply
+independently reads the opened output files back and checks their actual paths
+and bytes against the plan. A write or read-back failure does **not** roll back
+earlier files: inspect the workspace and re-plan before retrying. A blocked
+plan exits with code 3 and reports its blockers without claiming an apply.
+
 Required inputs are explicit: package source, lockfile identity in the source,
 bootstrap Rust toolchain, seed C toolchain, musl runtime, and optional vendored
 registry/git source material passed as `vendor_src` / `vendor_name`. Missing
@@ -533,14 +637,17 @@ Cargo-free execution, compiler correctness, or full Cargo compatibility.
 The representative Rust compatibility rail (`examples/rust_compatibility_rail.rs`,
 `examples/rust_compatibility_surface_matrix.ncl`, and
 `tests/rust_compatibility_rail.rs`) is the maintained surface matrix for
-practical Rust project claims. It covers a binary, local library, feature
-activation, target-specific dependency declaration, workspace inheritance,
-sibling binary package, vendored registry source, proc macro, and build script
-metadata. Its offline Cargo result is `cargo-inside-mantle-sandbox`; its
-rust-plan result is either `cargo-free-bounded-topology` for the supported
-path-workspace subset or a deterministic `blocked-unsupported-surface` blocker
-for blocked surfaces such as vendored git, pkg-config, rustc-link metadata, or
-native C compilation. It is not proof of full Cargo compatibility.
+practical Rust project claims. The ordinary rail exercises real Nickel
+supported-row/missing-fixture rejection and the no-Cargo path-workspace
+planning boundary. The retired source scanner and fake-Cargo executable only
+manufactured source/output shapes; they did not compile practical Rust
+surfaces. Their matrix references and supported offline Cargo claims are
+removed. Unexercised offline/no-oracle surfaces are explicitly out of scope;
+real normal-planner fixtures must not be relabelled as no-oracle evidence.
+Separately retained signed `unit_plan` receipts support the bounded executed
+build-script/proc-macro fixture and declared static native-provider linking.
+The full links/pkg-config/native-C group remains blocked without matching
+execution fixtures. This is not full Cargo compatibility.
 
 Structured JSON reports include `cargo_build_evidence[]` when the output
 contains `share/mantle/offline-cargo-build.json`. Current v2 evidence is
@@ -627,6 +734,273 @@ The same receipt records `cargo_mode.project_build_status =
 Cargo compatibility, compiler correctness, release reproducibility, or bootstrap
 correctness.
 
+## Cargo unit dynamic-plan lane
+
+[`examples/cargo_unit_plan.ncl`](../examples/cargo_unit_plan.ncl) is an opt-in,
+seed-dependent Linux example: an offline Cargo unit-graph producer emits a
+`mantle-plan-v2` with separately admitted package source slices and Rust unit
+outputs; a declared static verifier consumes the bound app unit root. Ordinary
+`mantle build .#name` remains the project-build path, while `mantle rust-plan`
+is separate native planning evidence, not this Cargo-unit execution lane.
+
+Before running from the repository root, review and provision the example's
+**eight exact static input roots** (the producer's seven declared inputs plus
+the static app verifier) and their transitive closure in the local Nix store.
+The example contains pinned `/nix/store` paths and a producer config JSON for
+one reviewed host; on another host, replace those paths and regenerate the
+declared config and expected app root. Do not treat the checked-in hashes as
+portable seeds or fetch undeclared inputs automatically. Set `CACHE_DIR` to a
+private absolute signed Nix file-cache directory, `SIGNING_KEY` to its reviewed
+local Nix-format secret key, `TRUSTED_PUBLIC_KEY` to the matching
+`name:base64` public key, `INPUT_ROOTS` to a Bash array of those exact eight
+store roots, `CLIENT_STORE` and `CLIENT_STATE` to initially empty dedicated
+absolute client paths, and `BWRAP` and `SANDBOX_SHELL` to reviewed pinned
+Linux bubblewrap and static BusyBox executable paths. These variables require
+operator substitution; the following commands are **not** host-independent:
+
+```bash
+nix copy --offline \
+  --to "file://$CACHE_DIR?compression=none&secret-key=$SIGNING_KEY" \
+  "${INPUT_ROOTS[@]}"
+mantle --nix-compat --store "$CLIENT_STORE" --state-dir "$CLIENT_STATE" \
+  store pull --from "$CACHE_DIR" \
+  --trusted-public-keys "$TRUSTED_PUBLIC_KEY" --all
+SNIX_BUILD_BWRAP="$BWRAP" SNIX_BUILD_SANDBOX_SHELL="$SANDBOX_SHELL" \
+  mantle --json --nix-compat --store "$CLIENT_STORE" --state-dir "$CLIENT_STATE" \
+  build --no-substitute --trusted-public-keys "$TRUSTED_PUBLIC_KEY" \
+  -I lib examples/cargo_unit_plan.ncl
+```
+
+Inspect the import counters: reject untrusted signatures, NAR hash mismatches,
+missing NARs, or parse failures rather than adding `--trust-unsigned`. Inspect
+the build report's `native_dynamic_plans`: raw and canonical plan digests
+must agree, both source slices must have declared and independently observed
+NAR BLAKE3 equality with `disposition=admitted`, and both expected unit IDs
+must be accepted. The `plan_output_bindings` row must bind the requested app
+root to the realized app unit output; inspect the direct dependency manifest,
+execute the app unit binary, and read the static verifier output. On the
+reviewed pinned cohort, the accepted digest was
+`6682e8f14649205c276f91cdd3d8330f58b57daf703d95eb9e16367d6c3ee6af`,
+the app root was
+`u.a1b9ca38f6231fb003fd22ff87350acddc895585f48116b9eaa7162a3800722b`,
+and the physical verifier output was `cargo-unit-app-ok\n`.
+
+For the negative check, make a separate scratch Nickel fixture importing the
+same reviewed producer and verifier; change **only** its requested app root to
+`u.0000000000000000000000000000000000000000000000000000000000000000`.
+Run the same signed-client `build --no-substitute` command against that
+scratch fixture. Expect nonzero exit with `plan_output_bindings` reporting
+`status=rejected`, `failure_reason=plan-output-root-missing`, and null root
+derivation/output paths; the verifier must not run. The current-root
+fresh-import client required one same-state recovery after a 1800-second
+first-command timeout: that recovered positive reported four successes
+(two built, two cached) and zero failures; its wrong-root negative reported
+zero builds and one typed failure. These are not uninterrupted cold-build or
+final immutable SECOND receipts. This adapter caps source slices at 256;
+the measured Mantle workspace has 925 units and 711 distinct package
+sources, so it is outside this bounded lane. Do not infer full Cargo or LLVM
+correctness, compiler correctness, release reproducibility, or bootstrap
+correctness from this example.
+
+The producer requests RustPlan's exact Cargo-indexed compiler derivations with
+`MANTLE_UNIT_PLAN_CARGO_INDEXED_DERIVATIONS=1`; this opt-in JSON field keeps
+distinct feature and host-dependency units instead of reusing collapsed native
+unit identities. Default `rust-plan` receipts remain unchanged at schema 1.
+
+The producer config and `lib/cargo_unit_plan.ncl` must both explicitly list
+`runtime_inputs`: admitted absolute store **roots** for toolchain-wide ELF
+loaders and shared libraries outside the compiler/helper/linker store roots.
+Nickel includes these roots as producer inputs and forwards the exact list to
+the producer; a mismatch is rejected. Every emitted Rust unit, script run,
+and target-facts unit includes the listed roots, so changes affect their
+identities. For a toolchain made with `nix store add-path`, Nix does not infer
+the external ELF interpreter from the binary: inspect and sign its actual
+runtime roots rather than relying on host libraries or a package's
+`native_inputs`. `runtime_inputs = []` is appropriate only when the declared
+tool roots already carry the complete runtime closure.
+
+For declared vendor sources, the producer writes Cargo's source config into
+its private sandbox copy of the workspace so RustPlan observes the same
+config Cargo uses. Only the copied workspace root (when `.cargo` must be
+created) and copied `.cargo` directory gain owner-write permission; a
+read-only copied config is replaced. The signed input root remains untouched,
+and ambient `CARGO_HOME` cannot substitute for this declared config.
+
+Build-script-enabled unit graphs add one target-facts unit per selected
+toolchain/triple, a compiled `custom-build` executable, and a separate
+`build-script-run` unit with `out` and typed `flags` outputs. Downstream units
+declare the run output and consume its `rustc-cfg`, `rustc-check-cfg`,
+`rustc-env`, and native link directives. Package `links` metadata is propagated
+to direct dependent script runs as `DEP_<LINKS>_<KEY>`; target facts come from
+the declared compiler, not the process host. The script runner receives each
+Cargo unit's own `PROFILE`, `OPT_LEVEL`, and `DEBUG` (including build-override
+profiles), rather than a hard-coded debug profile. Unknown directives, emitted
+`cargo:error`, nonzero script exits, and undeclared link paths fail closed.
+The supported vocabulary is `rustc-cfg`, `rustc-check-cfg`, `rustc-env`,
+`rustc-link-lib`, `rustc-link-search`, `rustc-link-arg` and scoped
+`rustc-link-arg-*`, `rustc-flags` restricted to `-l`/`-L`, `metadata`,
+`warning`, and `rerun-if-{changed,env-changed}`. Ordinary stdout is ignored.
+The helper drains stdout (at most 4 MiB) and stderr (at most 1 MiB)
+concurrently, killing and reaping a script that exceeds either bound before
+any `flags` output is published. Argument and `rerun-if-*` files in `flags`
+store one directive component per newline; `flags.json` is the typed record.
+
+Rustc response files contain one literal argument per line, not shell-quoted
+tokens. The helper writes validated arguments verbatim: for example, `--cfg`
+and `feature="proc-macro"` occupy separate lines. Do not add shell wrapping
+or backslash-escape the cfg value; empty, NUL, newline, and CR arguments remain
+unsupported.
+
+For native `-sys` scripts, first build a library as a Mantle derivation (the
+source fixture `fixtures/cargo-build-script-units/native.ncl` builds
+`libnative_answer.a`), then use that derivation's realized output in the
+same client after signed tool-source admission. Bind it under the *exact Cargo
+package ID from the copied workspace* in `native_inputs`, e.g.
+`path+file:///build/cargo-unit-plan-workspace/workspace/native-answer-sys#0.1.0`.
+Each package entry has `inputs = { answer = "/nix/store/<hash>-native-answer" }`,
+`env = { NATIVE_ANSWER_ROOT = "{{role:answer}}" }`, and optional `path = []`.
+Use the same declarations in `MANTLE_UNIT_NATIVE_INPUTS` (serialized by
+`lib/cargo_unit_plan.ncl`) and the producer config; contradictory values are
+rejected. Inputs must be realized, declared store roots; native script PATH
+contains only the declared toolchain and optional native PATH entries, never
+the invoking host PATH. A native-input change must change the affected script
+and dependent effective canonical derivation/output identities, not unrelated
+package units. Nominal `u.<digest>` Cargo-unit labels can stay unchanged:
+compare resolved derivation/input/output bindings and actual build/cache events,
+not labels alone. A source fixture or ordinary offline Cargo reference run is
+not a Mantle sandbox or selective-rebuild result.
+
+The bounded build-script/proc-macro/declared-static-link fixture now has
+retained same-client execution evidence; the broad links/pkg-config/native-C
+matrix row remains blocked. Admission for every new cohort is still mandatory.
+Keep the prior client store and state when an import is interrupted: signed
+PathInfo by itself is not evidence
+that the physical NAR was fully exported. A resumed `store pull` checks the
+existing physical root against the signed NAR size and SHA-256, stages a full
+replacement when they differ, and preserves the incomplete tree separately.
+Use the exact digest-and-name basename as a directory-cache path selector (a
+full `/nix/store/...` string does not match the basename substring filter), or
+use `--all`. Require the expected `imported + skipped_present` count and zero
+untrusted, hash-mismatch, missing-NAR, and parse-error counts; a zero-selection
+report is not admission. Run `store verify --trusted-public-keys` on the
+selected root and then on every previously admitted signed root in the
+**same** client, with zero physical mismatches and trusted signatures. Never
+use `--trust-unsigned`, host symlinks, or a second client to make the missing
+path appear present.
+
+Budget the signed toolchain's uncompressed NAR size (the nightly fixture alone
+is 2,724,361,208 bytes), export staging, castore state, and later compilation
+under monitored disk limits. Sign and admit a CLI rebuilt from the current
+source into that verified client before using it as the plan's `planner`.
+Only then build the native library and the Rust application under real
+bubblewrap with `--no-substitute` and the signed tool/runtime/vendor/source
+roots. The application must execute and produce the fixture's result
+`cargo-build-script-fixture: proc-macro2 serde-derive libc native-sys = 42`.
+
+If `/dev/fuse` exists but the required suid `fusermount3` wrapper does not,
+`bwrap --ro-bind / / -- /bin/true` may still pass while Snix's FUSE input
+setup fails with `descriptor I/O error: No such file or directory`. Set
+`CRUNCH_NO_FUSE=1` for the real build in that environment: Snix materializes
+the same admitted castore input nodes into the bubblewrap mount instead of
+mounting them through FUSE. This needs additional scratch headroom; it does
+not waive signed input admission, `store verify`, sandbox isolation, or
+`--no-substitute`.
+
+Controls must show the host-only marker and TCP endpoint reachable outside
+the sandbox but inaccessible inside it; use a signed, explicitly mounted
+TCP-capable program for both sides of the network probe. Removing only the
+native role must yield `native-input-role-undeclared` despite the library
+remaining physically available. Changing only the Mantle-built native
+provider must rerun the dependent build-script and application units while
+independent Rust units are reused. Package tests, a host Cargo run, signed
+pull counters without `store verify`, or a library built in another client
+cannot substitute for those observations.
+
+The frozen 2026-10-14/15 campaign is retained in
+`.cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14.md`
+and `t42-selective-provider-2026-10-15.md`, with exact-byte manifests and raw
+receipts. T4.1 includes nonzero selected pulls with zero rejection counters,
+all 59 prior trusted physical verifications and actual app42. T4.2 changes
+only the declared native provider: all 34 original units built; the variant
+records 31 positive independent cache-admission events and 3 affected builds,
+followed by executed app42 and trusted physical verification. The three
+affected units are explicitly input-addressed; unchanged nominal unit labels
+coexist with changed actual derivation/output paths. This is not a general
+content-addressed output-inequality rule. Prior failed checker/smoke history
+and the final corrected strict comparison are preserved, not rewritten.
+
+The fixture's native script reads only `NATIVE_ANSWER_ROOT`, checks a prebuilt
+`lib/libnative_answer.a`, and emits static `rustc-link-search`/`rustc-link-lib`.
+It does not invoke pkg-config, compile C inside `build.rs`, or emit links
+metadata consumed through `DEP_*`. Its narrow supported matrix row is
+`declared-native-static-link`; the original full `native-link-metadata` group
+stays blocked. The helper's separate generated-source/cfg/env consumer
+executes and observes 84; separate pure/helper links-propagation receipts do
+not prove pkg-config execution. Neither fixture accepts full Cargo support,
+global current-source correctness, baseline/archive or release eligibility.
+
+In the preserved-client diagnostic of 2026-10-13, the previously admitted 59
+signed roots, the Mantle-built native library, and the signed native producer's
+three output roots passed physical verification with nonzero basename selection
+and trusted signatures. One `rust-target-facts` unit then ran uncached inside
+real bubblewrap with `--no-substitute`; its signed physical output recorded
+the declared `x86_64-unknown-linux-gnu` host and target and Linux/x86_64 cfg.
+The same explicitly declared signed static BusyBox read a host-only file and
+reached a host loopback TCP endpoint outside the sandbox, while separate
+uncached bubblewrap controls observed neither inside it; both control outputs
+were physically verified with trusted signatures. The first host-file attempt
+failed before execution with `descriptor I/O error: No such file or
+directory`; this does not prove which mount setup operation failed.
+Only the subsequent `CRUNCH_NO_FUSE=1` run is isolation evidence.
+
+These are bounded input and isolation observations, **not** an application or
+matrix result. Two bounded full producer attempts ended at their time limits
+without an application report; the isolated target-facts unit took about
+31 minutes. Its causal trace records scheduler transitions but no phase
+durations, so the expensive stage cannot be attributed to a particular
+function from that trace alone. A separately signed missing-role config was
+pulled with zero rejection counters and physically verified, with the native
+library still physically present. Its earlier 1,000-second producer run timed
+out without a typed result. After moving declaration resolution ahead of the
+Cargo oracle and source copy, an isolated **single producer derivation** ran
+uncached with `CRUNCH_NO_FUSE=1`, real bubblewrap, `--no-substitute`, and the
+same signed missing-role config. Its revised producer binary was signed,
+imported into the preserved client with zero pull rejections, and physically
+verified. The builder log returned `native-input-role-undeclared` for `answer`;
+the same client's native library and config separately passed trusted physical
+verification and the library archive remained on disk. This is a bounded
+missing-role sandbox negative, not a full Cargo graph or application result.
+A separate signed Rust `build.rs` executable, compiled with the admitted
+nightly toolchain and signed with its matching source, was then pulled into
+the same preserved client with zero rejection counters. The script, source,
+target-facts output, and helper each passed trusted physical verification.
+An isolated `run-build-script` helper derivation ran uncached in real bubblewrap
+with `CRUNCH_NO_FUSE=1` and `--no-substitute`; its saved builder log reported
+`build-script-nonzero-exit: exit status: 7`, including the script's deliberate
+stderr. The 2,300-second guarded singleton did not trip its disk floor, and
+no output or flags path was published. Together with the previously verified
+host-marker/TCP controls, all four bounded T3.3 negative controls are now
+observed. These negatives alone do **not** establish a successful build-script
+application, full Cargo graph, provider-selective rerun or matrix result; the
+later retained T4.1/T4.2 receipts supply their separate bounded positives.
+Do not accept matrix support or archive from isolated controls alone.
+The earlier transcripts remain in
+`evidence/current-client-real-sandbox-2026-10-13.txt` and
+`evidence/current-client-missing-role-bound-2026-10-13.txt`; the two new
+singleton verdicts are in
+`evidence/current-client-singleton-negatives-2026-10-13.txt`.
+
+The later signed lean-toolchain producer attempt exposed a real rustc
+`invalid --cfg argument` failure: shell-escaped response-file text had turned
+the already-correct `feature="proc-macro"` into an invalid literal argument.
+After correcting the helper, a real-rustc regression failed before and passed
+after for both a quoted Cargo feature and a quoted cfg containing a space.
+The corrected helper and config were separately signed, pulled, and physically
+verified in the preserved client; see
+`evidence/current-client-rustc-response-correction-2026-10-14.txt`. This is a
+bounded compiler regression and input-trust prerequisite, **not** a successful
+full application, provider-selective rerun, or matrix acceptance.
+
 ## Structured refactor sessions
 
 Mantle migrations should be represented as structured refactor session records instead of ad hoc text rewrites. The built-in `crunch-to-mantle-project-identity` session records `mantle` as canonical, `crunch` as a retained compatibility alias, `mantle-project.ncl`/`mantle.lock`/`.mantle/` as canonical project surfaces, `crunch-project.ncl`/`crunch.lock`/`.crunch/` as legacy surfaces, `/mantle/store` as the canonical store prefix, and `/crunch/store` as an explicit compatibility prefix.
@@ -667,13 +1041,23 @@ realization key, recipe digest, root input digests, platform/profile facts, and
 declared capabilities. A worker either reports an unsupported
 profile/capability denial or returns the exact receiver-missing content set.
 
-The supported local production path carries that protocol through framed stdio:
+The checked local production path carries that protocol through framed stdio:
 the client launches `remote serve --binding stdio-once --executor local-build`,
 streams bounded BLAKE3-verified input artifacts before execution, receives the
 output through receiver-issued chunk credit, and admits it only after ordinary
-signed PathInfo/content/store-prefix/attestation checks. Fenced checkpoints are
-receiver-reprobed on retry; equal-content chunks may share a digest while their
-artifact positions remain distinct canonical indices.
+signed PathInfo/content/store-prefix/attestation checks. A failed attempt may
+leave partial physical bytes; it does not report an admitted output. An active
+client/child session is process-local and bound to the assigned job, attempt,
+and fence. There is no automatic effect-loop retry: an explicit reconnect or
+reassignment re-probes receiver-owned bytes before using a fenced checkpoint.
+Equal-content chunks may share a digest while their artifact positions remain
+distinct canonical indices.
+
+Remote chunks, acknowledgements, checkpoints, resource-scoped attempts, and
+sessions cannot introduce their own authority: their manifest, receiver demand,
+lease, assignment, or concrete request must establish the consumed identity
+first. The boundary and rejection fixtures are listed in
+[`remote-transfer.md`](remote-transfer.md#transient-handle-admission).
 
 See [`remote-transfer.md`](remote-transfer.md) and the checked
 [`remote-build-loopback`](../examples/projects/remote-build-loopback/) workflow
@@ -682,6 +1066,45 @@ local stdio fixtures do not prove a production P2P listener, SSH deployment,
 REAPI compatibility, independent-machine behavior, exactly-once delivery,
 worker honesty, or release reproducibility. Provider and cluster-control details
 remain outside the core scheduler contract.
+
+The typed `crunch-remote-core` and `crunch-remote-app` path exercised by these
+fixtures covers bounded attempt, transfer, output/receipt, and selected stdio
+effects. It is not completion of quantified resource/locality migration,
+SSH/local/external-batch application-port cutover, or the remote hexagon
+Cairn validation gates. The std adapters retain signature, frame/digest, and
+physical store checks; a receipt or acknowledgement alone is not output trust.
+
+### Live daemon policy and readiness boundary
+
+`mantle remote live serve --socket PATH` maintains process-local live build
+facts. It has no automatic supervisor: SIGINT/SIGTERM stop it, and SIGKILL
+requires an operator to relaunch it. Its declared service-readiness restart
+policy is therefore `never`; manual relaunch starts with empty facts and must
+establish a fresh `started` observation before any `ready` observation. A
+socket inode or `listening` log is not a successful request: the readiness
+contract requires a subscription to that same daemon to deliver both
+`snapshot-start` and `snapshot-end`. Existing live-build facts are revocable
+coordination state, not a build receipt, PathInfo, or release evidence.
+The opt-in `mantle doctor --readiness-socket PATH` query writes a typed
+`mantle-service-readiness-v1` coordination report to stderr; ordinary doctor
+human and JSON stdout are unchanged. `classification: coordination-state`
+and `evidence_eligible: false` make this diagnostic, not a build receipt,
+PathInfo, or release proof. A live Rust cache listener likewise declares
+`never` until it gains an actual supervisor; it can become ready only after a
+validated compiler request's response is flushed. The one-shot remote stdio
+binding declares `never` and can become ready only after its admitted
+response is flushed, not from metadata-only transport advertising.
+Proposed ADR 0091 records these boundaries; real-process acceptance fixtures
+must pass before using readiness for operational claims.
+
+Run the live daemon before opting in to a service producer by setting
+`MANTLE_LIVE_STATE_SOCKET` to that daemon's socket path. A separate operator
+can query the same path:
+
+```sh
+mantle --json doctor --readiness-socket /run/user/1000/mantle-live.sock \
+  > doctor.json 2> readiness.json
+```
 
 ## Publish and recover an admitted OCI layout
 
@@ -925,6 +1348,16 @@ Selector rules:
 - `project` and `verify project` need at least one selected built root.
 - `diff` accepts either saved attestation JSON or store-path selectors.
 
+Store-backed `attest show`, `closure`, `verify`, `diff`, and `project` open the
+selected state store. Even an unsuccessful lookup can initialize its state
+directory and store identity; closure lookup can persist a reconstructed
+attestation. Do not treat these queries as guaranteed no-write operations.
+Release and witness document reads do not open this store. `attest witness
+create` can initialize a configured signing key when no existing key was
+selected, in addition to publishing witness files. A returned attestation
+command reports its bounded result, not proof of durable writes or builder,
+source, or signer correctness.
+
 ## Package and verify release evidence
 
 Release evidence starts from a full proof run, not from
@@ -982,6 +1415,15 @@ mantle release verify target/release-evidence/<release-id> --require-reproducibl
 # Require Valence stack-provenance sidecar and graph-report evidence for Onix stack releases
 mantle release verify target/release-evidence/<release-id> --release-profile onix-stack
 ```
+
+On Linux, `release reproduce` bounds each rebuild's stdout and stderr
+separately to 16 MiB, with a 24-hour child deadline, a five-second pipe-EOF
+grace after leader exit, and up to five seconds to observe teardown.
+Ordinary rebuild capture/supervision failures occur before the ordinary report
+is written; failed-command diagnostics retain at most the first 512 bytes of
+each stream. Mantle signals its owned rebuild process group with SIGKILL
+before reaping only the leader, even after apparent success. This does not
+guarantee cleanup of detached descendants or separately sessioned bwrap workers.
 
 Repeat `--binary` when one release bundle should carry multiple executables.
 The checked-in proof bundle keeps durable copies of stage1 and stage2 under

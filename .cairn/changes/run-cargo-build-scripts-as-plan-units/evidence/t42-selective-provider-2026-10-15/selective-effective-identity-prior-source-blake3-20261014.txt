@@ -1,0 +1,6 @@
+Preserved prior checker: check-native-provider-selective-rerun.pre-effective-identity-20261014.py
+Exact bytes: 17340
+BLAKE3: 45cc1a6f750f19cc10ef01497f53aafb7ff469cabf938b6c0017c0929c0f680f
+Canonical identity computed with LOCAL /run/current-system/sw/bin/b3sum over exact remote UTF-8 bytes; remote b3sum absent and not invoked.
+SHA256 transport cross-check only (not canonical evidence identity): 1b14414bd6f6be046a73d33823e1f4f8b1e827d176cb2d0ccd51d4df749a3339
+Current and existing preserved copies matched exactly before repair. Retain prior nominal-ID predicate failures as checker history, not a product identity-bug claim.

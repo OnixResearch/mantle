@@ -1,0 +1,802 @@
+{
+  "schema": "mantle-t43-bounded-final-verification-retention-v1",
+  "observed_utc": "2026-10-15T01:36:08.001Z",
+  "maintenance_owner": "Mantle lane operator",
+  "scope": "Existing accepted signed T4.1/T4.2 receipts remain referenced and untouched. Fresh production matrix/drift/helper/runtime and final full all-target strict Clippy receipts; no accepted proof rebuild/import/re-sign/replay. Final Cairn verdicts are structural only.",
+  "digest_policy": {
+    "blake3_256": "canonical artifact/content identity; for encoded receipts decoded.blake3_256 is the full original content identity",
+    "transport_sha256": "separately labeled exact-byte transport check, not Mantle identity"
+  },
+  "acceptance": {
+    "T4_3": "Accepted bounded production-matrix/drift work with retained signed prerequisites and executed consumer",
+    "T4_5": "Open: canonical first-party formatter remains exit 1 for 26 out-of-cutover paths; focused checks pass but whole repository is not green",
+    "T1_1": "Historical baseline boundary unchanged/open",
+    "T4_6": "Isolated lifecycle sync/archive boundary unchanged/open"
+  },
+  "actual_pueue_settlements": {
+    "observed_utc": "2026-10-15T01:31:11.677409+00:00",
+    "source": "installed pueue status --json; actual task status, not wait exit",
+    "tasks": [
+      {
+        "id": 1066,
+        "label": "mantle-unit-plan-t43-helper-gpt61-20261015",
+        "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/run-t43-helper-gpt61-20261015.py",
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+        "dependencies": [],
+        "created_at": "2026-10-14T21:15:27.231062243-04:00",
+        "status": {
+          "Done": {
+            "enqueued_at": "2026-10-14T21:15:27.231044529-04:00",
+            "start": "2026-10-14T21:15:27.356921699-04:00",
+            "end": "2026-10-14T21:15:37.622577245-04:00",
+            "result": "Success"
+          }
+        }
+      },
+      {
+        "id": 1067,
+        "label": "mantle-unit-plan-t43-root-gates-gpt61-20261015",
+        "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/run-t43-root-gates-20261015.py",
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+        "dependencies": [
+          1066
+        ],
+        "created_at": "2026-10-14T21:17:26.281379214-04:00",
+        "status": {
+          "Done": {
+            "enqueued_at": "2026-10-14T21:17:26.281361310-04:00",
+            "start": "2026-10-14T21:17:26.375111148-04:00",
+            "end": "2026-10-14T21:17:47.196069105-04:00",
+            "result": {
+              "Failed": 101
+            }
+          }
+        }
+      },
+      {
+        "id": 1068,
+        "label": "mantle-unit-plan-t43-canonical-quality-gpt61-20261015",
+        "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/run-t43-canonical-quality-20261015.py",
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+        "dependencies": [],
+        "created_at": "2026-10-14T21:20:30.270669740-04:00",
+        "status": {
+          "Done": {
+            "enqueued_at": "2026-10-14T21:20:30.270633201-04:00",
+            "start": "2026-10-14T21:20:30.456539946-04:00",
+            "end": "2026-10-14T21:24:05.872405387-04:00",
+            "result": {
+              "Failed": 1
+            }
+          }
+        }
+      },
+      {
+        "id": 1069,
+        "label": "mantle-unit-plan-t43-final-feature-gpt61-20261015",
+        "command": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 /tmp/mantle-unit-plan-20261013-87lqAtNv/run-t43-final-feature-20261015.py",
+        "path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/source",
+        "dependencies": [],
+        "created_at": "2026-10-14T21:27:57.138197535-04:00",
+        "status": {
+          "Done": {
+            "enqueued_at": "2026-10-14T21:27:57.138178228-04:00",
+            "start": "2026-10-14T21:27:57.199902399-04:00",
+            "end": "2026-10-14T21:29:32.435099386-04:00",
+            "result": "Success"
+          }
+        }
+      }
+    ]
+  },
+  "final_feature_checks": [
+    {
+      "name": "feature-format-final",
+      "command": [
+        "/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/rustfmt",
+        "--config-path",
+        "/tmp/mantle-unit-plan-20261013-87lqAtNv/source/rustfmt.toml",
+        "--config",
+        "skip_children=true",
+        "crates/mantle-cargo-unit-plan/src/lib.rs",
+        "crates/mantle-cargo-unit-plan/tests/lowering.rs",
+        "crates/mantle-cargo-unit-plan/tests/producer.rs"
+      ],
+      "exit": 0,
+      "bytes": 1592,
+      "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-feature-format-final-20261015.log",
+      "start_utc": "2026-10-15T01:27:57.258264+00:00",
+      "end_utc": "2026-10-15T01:27:57.325519+00:00",
+      "elapsed_seconds": 0.06463933549821377
+    },
+    {
+      "name": "helper-fmt-final",
+      "command": [
+        "/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo",
+        "fmt",
+        "--check",
+        "-p",
+        "mantle-cargo-unit-plan"
+      ],
+      "exit": 0,
+      "bytes": 1168,
+      "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-helper-fmt-final-20261015.log",
+      "start_utc": "2026-10-15T01:27:57.328720+00:00",
+      "end_utc": "2026-10-15T01:27:57.546080+00:00",
+      "elapsed_seconds": 0.2149350568652153
+    },
+    {
+      "name": "helper-package-final",
+      "command": [
+        "/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo",
+        "--config",
+        ".cargo/vendor-config.toml",
+        "--config",
+        "target.x86_64-unknown-linux-gnu.linker=\"/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc\"",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle-cargo-unit-plan",
+        "--lib",
+        "--tests",
+        "--bins",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "bytes": 6220,
+      "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-helper-package-final-20261015.log",
+      "start_utc": "2026-10-15T01:27:57.549545+00:00",
+      "end_utc": "2026-10-15T01:28:10.644276+00:00",
+      "elapsed_seconds": 13.092270060442388
+    },
+    {
+      "name": "helper-clippy-final",
+      "command": [
+        "/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo",
+        "--config",
+        ".cargo/vendor-config.toml",
+        "--config",
+        "target.x86_64-unknown-linux-gnu.linker=\"/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc\"",
+        "clippy",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle-cargo-unit-plan",
+        "--all-targets",
+        "--no-deps",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "bytes": 2055,
+      "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-helper-clippy-final-20261015.log",
+      "start_utc": "2026-10-15T01:28:10.648404+00:00",
+      "end_utc": "2026-10-15T01:28:14.776226+00:00",
+      "elapsed_seconds": 4.125358822755516
+    },
+    {
+      "name": "root-clippy-final",
+      "command": [
+        "/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo",
+        "--config",
+        ".cargo/vendor-config.toml",
+        "--config",
+        "target.x86_64-unknown-linux-gnu.linker=\"/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc\"",
+        "clippy",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle",
+        "--all-targets",
+        "--no-deps",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "bytes": 2388,
+      "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-root-clippy-final-20261015.log",
+      "start_utc": "2026-10-15T01:28:14.780192+00:00",
+      "end_utc": "2026-10-15T01:29:32.373071+00:00",
+      "elapsed_seconds": 77.590506141074
+    }
+  ],
+  "final_lifecycle_checks": [
+    {
+      "command": [
+        "/etc/profiles/per-user/brittonr/bin/cairn",
+        "validate",
+        "--root",
+        "."
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/mantle",
+      "start_utc": "2026-10-15T01:35:19.067Z",
+      "end_utc": "2026-10-15T01:35:19.168Z",
+      "elapsed_seconds": 0.101,
+      "exit": 0,
+      "verdict": {
+        "valid": true
+      },
+      "stdout_bytes": 112388,
+      "stderr_bytes": 0
+    },
+    {
+      "command": [
+        "/etc/profiles/per-user/brittonr/bin/cairn",
+        "gate",
+        "proposal",
+        "run-cargo-build-scripts-as-plan-units",
+        "--root",
+        "."
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/mantle",
+      "start_utc": "2026-10-15T01:35:19.169Z",
+      "end_utc": "2026-10-15T01:35:19.178Z",
+      "elapsed_seconds": 0.009,
+      "exit": 0,
+      "verdict": {
+        "verdict": "PASS"
+      },
+      "stdout_bytes": 2109,
+      "stderr_bytes": 0
+    },
+    {
+      "command": [
+        "/etc/profiles/per-user/brittonr/bin/cairn",
+        "gate",
+        "design",
+        "run-cargo-build-scripts-as-plan-units",
+        "--root",
+        "."
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/mantle",
+      "start_utc": "2026-10-15T01:35:19.178Z",
+      "end_utc": "2026-10-15T01:35:19.188Z",
+      "elapsed_seconds": 0.01,
+      "exit": 0,
+      "verdict": {
+        "verdict": "PASS"
+      },
+      "stdout_bytes": 2982,
+      "stderr_bytes": 0
+    },
+    {
+      "command": [
+        "/etc/profiles/per-user/brittonr/bin/cairn",
+        "gate",
+        "tasks",
+        "run-cargo-build-scripts-as-plan-units",
+        "--root",
+        "."
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/mantle",
+      "start_utc": "2026-10-15T01:35:19.188Z",
+      "end_utc": "2026-10-15T01:35:19.197Z",
+      "elapsed_seconds": 0.009,
+      "exit": 0,
+      "verdict": {
+        "verdict": "PASS"
+      },
+      "stdout_bytes": 3589,
+      "stderr_bytes": 0
+    }
+  ],
+  "final_subject_identity": {
+    "basis": "Actual final 1069 pre-command/final subject capture, not historical 1068 inputs_after_format. Canonical local bytes matched actual exercised remote bytes after feature-only synchronization.",
+    "unique_named_final_inputs": 40,
+    "helper_package_inputs": 11,
+    "staged_real_compile_inputs": 15,
+    "overlap_note": "All 15 staged compile-time inputs are members of the final40; these are not 55 unique inputs.",
+    "whole_worktree_identity_claim": false,
+    "inputs": [
+      {
+        "path": ".cairn/archive/2026-07-14-prove-hardware-simulation-build-flow/evidence/hardware-evidence.json",
+        "bytes": 15107,
+        "transport_sha256": "0472370ede8888996837827a05a6fc1fa8175bf82c25dd753cfbb5592e0fa8a5",
+        "blake3_256": "392888f4f7e9628ea463eceb064ff3eb57ffc76d5bdb8fc80b648cc1d621e8bd"
+      },
+      {
+        "path": ".cairn/archive/2026-07-14-prove-hardware-simulation-build-flow/evidence/hardware-runtime-summary.json",
+        "bytes": 11656,
+        "transport_sha256": "296204fbc8c4399016a1a5b8889a5d4c8b41460a57b4025c552f8628b4655ed3",
+        "blake3_256": "79dd62116aadbe5906f7cba5e68da9cafa6861fb3810bbb16b009bacbabaffca"
+      },
+      {
+        "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-archive-export.json",
+        "bytes": 262,
+        "transport_sha256": "67dc7d2ec99419fba2b25fd996ccf89afc121a4bbf0ade184e7e8455ae652e89",
+        "blake3_256": "efd352fbcaf9d7b6409f45c0df6cafb53cb8ca00fbb8841f6e143bfe519b8ec1"
+      },
+      {
+        "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-info.json",
+        "bytes": 1405,
+        "transport_sha256": "35976068609b9dcdd976c626b384d7b812b7b97bd6c24d71e3949c19932647ef",
+        "blake3_256": "1effc5d732a1639e0dad2a642967d0d24edaae7ce98aa536547ce90f7cd309ed"
+      },
+      {
+        "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-list.json",
+        "bytes": 304,
+        "transport_sha256": "9c8671bdca94e8aa725538ab98bcfa775efbffd83d55c621d2d5e690eea7655d",
+        "blake3_256": "c93693ec060d539ba595ea723bd7dc73203d0c1d00ca2c147b7a7eaa95b36a61"
+      },
+      {
+        "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-replay-first-build.json",
+        "bytes": 6785,
+        "transport_sha256": "8d96e094737676bb854ff9cdb3b519cfa26284239728a3b3ade2fa3c80b08e9b",
+        "blake3_256": "b4c3b80afbb1f18e978e42f11f7786966e4e7d4ac199087463e0c6d977c3d927"
+      },
+      {
+        "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-replay-first-gc.json",
+        "bytes": 2472,
+        "transport_sha256": "f77f86a81eb67c4f252d5b5aeb6a6bd0216c16bb9f7b8a0f7e5600995610f764",
+        "blake3_256": "75dba1b725340cedd125b55083a1e4600214f15fc3452290f9c960bde76f4296"
+      },
+      {
+        "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-replay-second-build.json",
+        "bytes": 6785,
+        "transport_sha256": "8d96e094737676bb854ff9cdb3b519cfa26284239728a3b3ade2fa3c80b08e9b",
+        "blake3_256": "b4c3b80afbb1f18e978e42f11f7786966e4e7d4ac199087463e0c6d977c3d927"
+      },
+      {
+        "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-replay-second-gc.json",
+        "bytes": 2472,
+        "transport_sha256": "f77f86a81eb67c4f252d5b5aeb6a6bd0216c16bb9f7b8a0f7e5600995610f764",
+        "blake3_256": "75dba1b725340cedd125b55083a1e4600214f15fc3452290f9c960bde76f4296"
+      },
+      {
+        "path": ".cairn/changes/add-store-backend-selection/evidence/baseline-snix-frozen-roots.json",
+        "bytes": 651,
+        "transport_sha256": "9111f161411c1a70b45c0384e1b7e92f1afeebb997e3fa1320bac56d579f8e63",
+        "blake3_256": "3340bb0a4ed631e505eb262fe4006118dce25fc9ca9710324874c56a98ecf185"
+      },
+      {
+        "path": ".cairn/changes/separate-remote-build-hexagon/evidence/origin-main-accepted-wire.base64",
+        "bytes": 1533,
+        "transport_sha256": "aa1fe8a5245f5a22e9e3a9df49f51ad4c202780ec244fafb06681baaa8f32e27",
+        "blake3_256": "64a3449d112f8e01f5e0731ed9306e539c29aa5de72ded0aacc8837d8cbd5d9a"
+      },
+      {
+        "path": ".cairn/changes/separate-remote-build-hexagon/evidence/origin-main-executable-plan.json",
+        "bytes": 613,
+        "transport_sha256": "3c503e15d7b0299b4561d343cd4e388188a411c94c43b5b0cc6de7e4f6ab1c9d",
+        "blake3_256": "cfdfcbc52f3f2ecb0aff3582792acd9f58f0924e5f50b1b0ae70cb1142ee3a8a"
+      },
+      {
+        "path": ".cairn/changes/separate-remote-build-hexagon/evidence/origin-main-receipt.json",
+        "bytes": 635,
+        "transport_sha256": "c677a1455cb6e988febd46f880afa25b286c0ab285795bd6b49b30252d945601",
+        "blake3_256": "ac6df1a27803657c6102d37a25b6cc1499b2201639dc1ac7eab59cc008b71673"
+      },
+      {
+        "path": ".cairn/changes/separate-remote-build-hexagon/evidence/origin-main-rejected-stderr.txt",
+        "bytes": 62,
+        "transport_sha256": "b9b6e3e8c6cb5d5018fa8d0680ea2a22f48581ba35926656189591a514ef0a77",
+        "blake3_256": "17c1d26789a1d94e3ac60d50a8cf9241b9729bd0d19477073d2bdbfef775ca43"
+      },
+      {
+        "path": ".cargo/vendor-config.toml",
+        "bytes": 2008,
+        "transport_sha256": "41a88a4ed2b7570b990b9f8163ce8de47077b1792effcf997daef53b6b7d9182",
+        "blake3_256": "8b377e96b88d57147a4e0ed5527cdf63f757920299eb814c0b0431b4e4afeffb"
+      },
+      {
+        "path": ".github/workflows/flake-check.yml",
+        "bytes": 383,
+        "transport_sha256": "f2b5cee0ac523262976112d1e27bdb4c8726c1f251ab53ac90624e6f447632f6",
+        "blake3_256": "dbec4a586d8f12804ba65864e8e1d7f79dbcee4841f68b64182d351021d76cf8"
+      },
+      {
+        "path": "Cargo.lock",
+        "bytes": 257203,
+        "transport_sha256": "67ea698e70075b7f100d911d8bcb0f826ed476809ae98ba762b8718911f2e737",
+        "blake3_256": "da5a78265339513d5c2b96e537d0951203d390e69632acff25567aee350b523f"
+      },
+      {
+        "path": "Cargo.toml",
+        "bytes": 9858,
+        "transport_sha256": "d920a0af2aebda658dce05b77432eddd9a9d2dcba7ad7b7d2dbd683f969f4ba2",
+        "blake3_256": "75d728e466d09790cf2a6fcbcf04056afc889f66f6274f3807ceeda196b8b3cd"
+      },
+      {
+        "path": "README.md",
+        "bytes": 41226,
+        "transport_sha256": "867409686c9983cb5ba327dd5dd85002926205a1429a311206e46347ab4bd6e9",
+        "blake3_256": "d8d0af2c6e0c5f037b97774636329cb42ef8eeefb6d0b0b3d0b59e0e762c2dbb"
+      },
+      {
+        "path": "crates/mantle-cargo-unit-plan/Cargo.toml",
+        "bytes": 561,
+        "transport_sha256": "99afd059ea1381ef9f6af4d1b517fc1f39dd2861129fbcfcaead28ff5ee88ef8",
+        "blake3_256": "1248910e87c89b37145e1ee76696c31b5745d42dfeebc15b34feb8fe88d71893"
+      },
+      {
+        "path": "crates/mantle-cargo-unit-plan/src/directives.rs",
+        "bytes": 9198,
+        "transport_sha256": "a97388bf57c399db82d902fef854523040e921f0009c3bc493ffcedb17458b31",
+        "blake3_256": "322589f859ca20db06df7770330da43fd05efe1726f0fa2d8cf2e0267a63d3f4"
+      },
+      {
+        "path": "crates/mantle-cargo-unit-plan/src/lib.rs",
+        "bytes": 25203,
+        "transport_sha256": "43fd7c0403134357a0a5395d68167f385d797876e344189291c38e5bc4416e5d",
+        "blake3_256": "82bcda5bccf10bad077ae7b39e6d62313776cb8a836c9f4b0d66f2cd15402447"
+      },
+      {
+        "path": "crates/mantle-cargo-unit-plan/src/producer.rs",
+        "bytes": 48377,
+        "transport_sha256": "e6c1fa3fefe850e08e0be99038a147919f62b36390eeb0ec9268c23a5e5cf517",
+        "blake3_256": "dfad4c791d5f13859299d211ddb641b334828590aebd757cdc6e1f41fae008d0"
+      },
+      {
+        "path": "crates/mantle-cargo-unit-plan/src/source_nar.rs",
+        "bytes": 6010,
+        "transport_sha256": "200a2747ffcd2309e0f903aee16ea66835fefe2d317aaec93c3ad48da057a819",
+        "blake3_256": "871db5c6395749c32c6707f36f5672730b7d0d1085149c02233427c0c24f33a1"
+      },
+      {
+        "path": "crates/mantle-cargo-unit-plan/src/unit_helper.rs",
+        "bytes": 22195,
+        "transport_sha256": "0034a6143c6b9531a210303e0252bbe2e02fd05af75b1ecf6b318ee49892dab6",
+        "blake3_256": "98f4400f2963ed390b7b3021126a703b4028db4ebf028bfa56bea79563fd7294"
+      },
+      {
+        "path": "crates/mantle-cargo-unit-plan/tests/directives.rs",
+        "bytes": 1754,
+        "transport_sha256": "c553c0556b401201cbfc82c60c4689afb4a4a3cf7a9718eb8963c91fd99da4c9",
+        "blake3_256": "addd24a8a8bd7c17ca5e2736fe515bdf9ff755ab4a7dbe6ea8e97efe7dba8761"
+      },
+      {
+        "path": "crates/mantle-cargo-unit-plan/tests/helper.rs",
+        "bytes": 21518,
+        "transport_sha256": "50f37c180edd56622c912aeb26b1ef8897f4d0815e7d6c1495e2f92b609ff623",
+        "blake3_256": "f2fa46bb2a26d6861fc32c0f27a575ab5e41cc4421721d6ec982684dfae02ba6"
+      },
+      {
+        "path": "crates/mantle-cargo-unit-plan/tests/lowering.rs",
+        "bytes": 15784,
+        "transport_sha256": "6a09515983c41ebc07638660d53968a5838f5a35fbb8aeeb639337182569bc63",
+        "blake3_256": "79ef533c2123e3f494a732416a1ffba90e658d9c2ee2f300f021a3e7fc87b02d"
+      },
+      {
+        "path": "crates/mantle-cargo-unit-plan/tests/producer.rs",
+        "bytes": 10183,
+        "transport_sha256": "6d34297192a84f112704af2c8cd51ab4faf97fcedf7d930bbae10113899b69e0",
+        "blake3_256": "9cefd4fa54dd64d70e781aef516c900c146590015098a2d3bbe4e0eba668c32a"
+      },
+      {
+        "path": "crates/mantle-cargo-unit-plan/tests/source_nar.rs",
+        "bytes": 2194,
+        "transport_sha256": "749acecf96c727a5c3a7ea15af192aeb35079f91f0cc448b7028bf6aab7b0e24",
+        "blake3_256": "c9df2c00a968c005eab448d2050ca12d79717593a73a6764d3cf28a839bcae35"
+      },
+      {
+        "path": "docs/operator-workflows.md",
+        "bytes": 90194,
+        "transport_sha256": "35bf3fd20d5700beb64a8d6c479f59a88cde6325c0f0c3e0b38408dcf3da14f0",
+        "blake3_256": "9a68420c9365b6cd46754d1efb6170c208bb57f0759d917454c36008c34db833"
+      },
+      {
+        "path": "docs/release-notes/cargo-build-script-units-2026-10-15.md",
+        "bytes": 2145,
+        "transport_sha256": "9c848165816073498296e25d45a16c22beea5b4fe0b5c0a5a9b98b26f226d496",
+        "blake3_256": "354c415420230358d9d8c93aa554609c51f79da60b2f89486d486dffdac774b3"
+      },
+      {
+        "path": "examples/README.md",
+        "bytes": 27644,
+        "transport_sha256": "d2cdcfc74f482ca0435d59a31bcd5c1d3ef004a897b43fc4ffb1676eb60f3bd5",
+        "blake3_256": "1eb912b29af6db243b34ca1484b646ad0fa7ab09daa4d705527221ab86e92553"
+      },
+      {
+        "path": "examples/catalog.ncl",
+        "bytes": 47542,
+        "transport_sha256": "1b4a9c95c6d752dd4fb925126126b5e1b8318cfa5db67c059f11238839d0ef37",
+        "blake3_256": "d25fd5cb265e2d1fba0f67c5a174f5000546a977cb3af92e01c4a590a1bf429a"
+      },
+      {
+        "path": "examples/rust_compatibility_rail.rs",
+        "bytes": 1040,
+        "transport_sha256": "42c649871e7e87db0cf2b92c5a42aa99d26d1544c436fc61cd8f4da2f1823bd1",
+        "blake3_256": "3b5c6eea9052fd0073b7eed49ce5fe3cf67188403a38114848da64e590ea9fbc"
+      },
+      {
+        "path": "examples/rust_compatibility_surface_matrix.ncl",
+        "bytes": 11293,
+        "transport_sha256": "48cb3760460d3ad7e66d00d8d1cce688649a431cf679a186f53a52d9a114f2c0",
+        "blake3_256": "8d2d8264294bf1dff40029cca5bd50f7d98eb6a87f8927c94dcbfe5e5848242e"
+      },
+      {
+        "path": "rustfmt.toml",
+        "bytes": 386,
+        "transport_sha256": "31102c8b15867ea528a139caf7accfe52f1586fb441dc1b2d31d4bbbba41f7e6",
+        "blake3_256": "366ca880e683e683ad02a1df968f30f4522c57881aaf1b6b2665754acebfeddf"
+      },
+      {
+        "path": "scripts/quality-gate-common.sh",
+        "bytes": 2629,
+        "transport_sha256": "a6b87ea62304b1d7f9564fa226f3d6e7e99b1d752242794b3e4791f42eb3f5ad",
+        "blake3_256": "15758dcba35e37f7d24579839f79df82b8d25a1c56a8fe438116b4e89041cde4"
+      },
+      {
+        "path": "tests/examples_inventory.rs",
+        "bytes": 35335,
+        "transport_sha256": "3a40123cf98a7b42e75f8c29dcc5b1f06486bc3dad7af4b1f51c0080481509dd",
+        "blake3_256": "9366e1fdca27cd6bb491bf5fe1ae0b8f72515f8277fd7c84c0c288cb11a9813c"
+      },
+      {
+        "path": "tests/rust_compatibility_rail.rs",
+        "bytes": 13542,
+        "transport_sha256": "bc2f3940dbfb8cb6277eadb795e6ec5191fc4c896d941ac06cecf8407d35ca34",
+        "blake3_256": "c0b71c86d6279924049e14a8158bad8e0e4f4de4db31a6583e56e72698cef17a"
+      }
+    ]
+  },
+  "source_cutover": {
+    "formatted_feature_files": [
+      "crates/mantle-cargo-unit-plan/src/lib.rs",
+      "crates/mantle-cargo-unit-plan/tests/lowering.rs",
+      "crates/mantle-cargo-unit-plan/tests/producer.rs"
+    ],
+    "other_source_files_copied_to_local": [],
+    "scope": "Syntax-only formatting of the three feature files; 15 exact pre-existing compiler fixture inputs staged only into remote mirror; no synthetic substitute or narrowing.",
+    "mode_note": "Local lib.rs was restored to preserved remote 0644 after the write tool auto-executable misclassification; reported via report_issue."
+  },
+  "independent_identity_review": {
+    "agent": "mantle-evidence-retention-reader",
+    "source": "Authoritative peer report after synchronization barrier, received 2026-10-15 in this session; read-only no rerun or repair.",
+    "result": "Final40/40 lengths+SHA256 match canonical local; staged15/15 lengths+SHA256+BLAKE3 match, with no missing/mismatch. Observation of declared inputs only, not whole-repository correctness."
+  },
+  "global_format_failure": {
+    "command_scope": "Canonical first-party package formatter; original full transcript retained losslessly",
+    "exit": 1,
+    "out_of_cutover_paths": [
+      "crates/crunch-build/src/distributed/external_batch.rs",
+      "crates/crunch-build/src/distributed/remote_attempt_log.rs",
+      "crates/crunch-build/src/distributed/remote_resources.rs",
+      "crates/crunch-build/src/dynamic.rs",
+      "crates/crunch-build/src/dynamic_plan.rs",
+      "crates/crunch-build/src/worker.rs",
+      "crates/crunch-remote-app/src/lib.rs",
+      "crates/crunch-remote-core/src/admission.rs",
+      "crates/crunch-remote-core/src/attempt.rs",
+      "crates/crunch-remote-core/src/attempt_log.rs",
+      "crates/crunch-remote-core/src/effect.rs",
+      "crates/crunch-remote-core/src/external_batch.rs",
+      "crates/crunch-remote-core/src/identity.rs",
+      "crates/crunch-remote-core/src/output.rs",
+      "crates/crunch-remote-core/src/transfer.rs",
+      "crates/crunch-remote-core/tests/authority.rs",
+      "crates/crunch-store/src/pull.rs",
+      "src/external_batch_dispatch.rs",
+      "src/main.rs",
+      "src/release_reproducibility.rs",
+      "src/remote_build.rs",
+      "src/rust_plan.rs",
+      "src/source_bundle.rs",
+      "tests/example_projects.rs",
+      "tests/remote_hexagon_v2_parity.rs",
+      "tests/store_gc_cli.rs"
+    ],
+    "not_repaired_or_relabelled": true
+  },
+  "historical_subject_boundary": "1066/1067 snapshots, then-tested helper source and 1068 summaries remain original historical subjects. Final1069 metadata refreshes the helper lib/tests and real staged inputs; no byte-equivalence assertion between the old and newly formatted sets.",
+  "signed_prerequisites": [
+    ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14-manifest.json",
+    ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15-manifest.json"
+  ],
+  "retention": {
+    "artifact_count": 27,
+    "raw_and_encoded_artifact_bytes": 340197,
+    "raw_and_cairn_byte_cap": 350000,
+    "manifest_separate_byte_cap": 60000,
+    "large_failure_policy": "Complete original output retained; only the large canonical format failure and final input metadata use lossless gzip. Full final Cairn output is plain text. No fabricated missing logs or excerpt-as-full substitutions."
+  },
+  "files": [
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/helper-tested-source.rs",
+      "source_path": "source/crates/mantle-cargo-unit-plan/tests/helper.rs before rustfmt; task 1066",
+      "bytes": 20761,
+      "transport_sha256": "5102b381238f4508f823a466844d13fce4838bace0d7db8adb9f366485c9bf7c",
+      "blake3_256": "2169b5b5c2ce104829eaa85f52c796908341c1db5a3bfafee8e26c6861475d0a"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-helper-package-20261015.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-helper-package-20261015.log",
+      "bytes": 5085,
+      "transport_sha256": "0df49043c1f405d4e8b07187a0d508aaaa764d14235da3c8b1a929e94c5327ea",
+      "blake3_256": "65c2e291bf41a686a42e3a30d5c190732def2fa625a509b28c9ddf109badb313"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/run-t43-helper-gpt61-20261015.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/run-t43-helper-gpt61-20261015.py",
+      "bytes": 3544,
+      "transport_sha256": "0ab94d73e214fc4caf0b04eadd5933a3bdd01867fb0794af27753487667f54be",
+      "blake3_256": "6cd8b38544f7bd4b28f688d80788535825f0155c5a20db8a3b2a77ee7c75a6b3"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/run-t43-root-gates-20261015.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/run-t43-root-gates-20261015.py",
+      "bytes": 6403,
+      "transport_sha256": "44b7ac87aec587b4e64ebbb6a985d7a936879d5b89db9c66d274da39076be7e1",
+      "blake3_256": "c88c3260e749b7e4558dac9488aa928d231ea67e3a575ecceac34162a8a1488c"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-format-20261015.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-format-20261015.log",
+      "bytes": 1673,
+      "transport_sha256": "2d4d933f4e6ecc7f612c287b7407c53180653108b98ff27e28f884daa1b03642",
+      "blake3_256": "39bacfacbfa71a0926f63fce64e55f089fada946804b20c9c71208f88c5c3a05"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-format-check-20261015.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-format-check-20261015.log",
+      "bytes": 1704,
+      "transport_sha256": "5314b126131f688880996bf94e9be26a27378d2c4ab854ab2666483dc139cfd0",
+      "blake3_256": "01c66b1003e3f9f0af902ffb61abc52385cfb283c5b298a7f198f88d07608886"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-rail-inventory-20261015.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-rail-inventory-20261015.log",
+      "bytes": 4613,
+      "transport_sha256": "5e65376234b5d8ed2c4988dc4fe45f5bdd44baa59c02a628d289bda6fb5a46de",
+      "blake3_256": "6a20277f0cf7c5e7011c06b80a1effe593b8c7b649d5723ef8303032679e96eb"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-no-oracle-20261015.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-no-oracle-20261015.log",
+      "bytes": 3011,
+      "transport_sha256": "79d5bbbab7c6ff1beeaea8dc99075fa0852db94278da8ff8b2c935dd92731fda",
+      "blake3_256": "ab254f3ff1379f0bb0d203430d1109983240169f734822fa8f9f9679b00544b0"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-clippy-unit-20261015.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-clippy-unit-20261015.log",
+      "bytes": 3068,
+      "transport_sha256": "391f8790e89fa96bf5feb822ff8273c41c733077b6ef40714363d321e2923295",
+      "blake3_256": "f4732ef9d84c13eab0589b86fb7b07c1b4557c5b750bfaed328a640153c30732"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-root-gates-summary-20261015.json",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-root-gates-summary-20261015.json",
+      "bytes": 13544,
+      "transport_sha256": "b81407e68958a454a436dfe9bdc92934ad708132780e50d09cff4b27367a279d",
+      "blake3_256": "cdf29cf7dd1ed1f08c1a6990912e98ee9f36d98fead9b3123655cb05b2d06d7b"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-fmt-first-party-20261015.log.gz",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-fmt-first-party-20261015.log",
+      "encoded_source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-fmt-first-party-20261015.log.gz",
+      "encoding": "gzip -n; full decoded stdout+stderr and command/exit/resource facts",
+      "bytes": 50632,
+      "transport_sha256": "527c5c77c82eb581194c8edd0bc2bdce120ca19706e82fecd2f587b092de0829",
+      "decoded": {
+        "bytes": 284650,
+        "blake3_256": "ba0dd9a5881b362f9f867d34e6ccf20f53fbd5447f7df24c54861bf16e000944",
+        "transport_sha256": "777d69a4a6690e4fd7057160ec10b00ad74c22cce8bb322c7ee318a4372b9aa0"
+      },
+      "blake3_256": "eb1c15afced2c58e5c6ae3eb89591aaf7aea166ccc78c532d8f0393e22fbbc45"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-fmt-unit-package-20261015.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-fmt-unit-package-20261015.log",
+      "bytes": 14664,
+      "transport_sha256": "3660a90cb598341abed114264e5f2ba6e5e8dfa0fe37290849c24b7d952da969",
+      "blake3_256": "40259dd2102c01a99fe7fb8cff635a1baaa32285574777e7320ecf0a00f99cfc"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-clippy-unit-all-targets-20261015.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-clippy-unit-all-targets-20261015.log",
+      "bytes": 2748,
+      "transport_sha256": "62129d68bcf40bb9d8b7be2a2bb7404bf3a312faf7f52898294fa3a3aef5409d",
+      "blake3_256": "a9349ea79fd665bce9d8f6b4a23ea75c05fb1cb5374d428f03b5f1dbe2504c0e"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-clippy-root-all-targets-20261015.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-clippy-root-all-targets-20261015.log",
+      "bytes": 33069,
+      "transport_sha256": "c59b66a018e30d906c452f5e324b9917bbb15d2fd29be303c705bda7d1f8c52b",
+      "blake3_256": "6d22f38aa03690b300f10490d1d44ea719cacee11cbe45a2175868afd7768551"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/run-t43-canonical-quality-20261015.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/run-t43-canonical-quality-20261015.py",
+      "bytes": 4404,
+      "transport_sha256": "ad83ea1ce86d05c1bb4f3a61b121596c7a8981e057caa080d2b12e9144e8b99e",
+      "blake3_256": "b29718f5eaa7157cee2f8453503aa9351f0b3c07bd7ddf67868416751a64c48d"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/run-t43-final-feature-20261015.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/run-t43-final-feature-20261015.py",
+      "bytes": 6145,
+      "transport_sha256": "7aa5b51199ec7dd154ff8f2a74f8dd36a014bd25b574b413ea092f64b27bd938",
+      "blake3_256": "546b9556501dfd851971958607ad957091021d8046ebd3c3ad651b222fe82f05"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-staged-compile-inputs-20261015.json",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-staged-compile-inputs-20261015.json",
+      "bytes": 4972,
+      "transport_sha256": "d192bdbab561552d6fa39cfbc685a42ec4ae01130399721d5ce0085d14a19a95",
+      "blake3_256": "7ddb617883b11c4993d2fb3d923ff7ec8c86eff7078f357806ac3f0a7a89f6ab"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-canonical-quality-summary-20261015.json",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-canonical-quality-summary-20261015.json",
+      "bytes": 9324,
+      "transport_sha256": "1f8c491540fc14f7995d9ff6760eb9e492927798b5d49a8c3ae42b026fd903b4",
+      "blake3_256": "b2076c39c021704d8b991791f615f9576b8571f929e336d81b98491cec02a5f1"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-final-feature-summary-20261015.json.gz",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-final-feature-summary-20261015.json",
+      "encoding": "gzip -n; complete actual pre-command/final subject identities and outcomes",
+      "bytes": 7101,
+      "transport_sha256": "2ed3c312291a9be0ce1d5956a4fba6197358b91a1ea65f425d12645d0dda83b4",
+      "decoded": {
+        "bytes": 74317,
+        "blake3_256": "846de8fc42fba89f157973133d6d67fbc6b184e6e355aebc990b5d5a590f1ac1",
+        "transport_sha256": "7876c507d8d356cb663784bf786fa2d9edd325df3e5309655138574662d92d41"
+      },
+      "blake3_256": "2f67d8dd8adf29037cdc208e95cbbdebd9748d4c6b2948a72392673cd7ede100"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-pueue-settlement-20261015.json",
+      "source_path": "pueue status --json on brittonr@100.90.108.13; exact filtered existing task records",
+      "bytes": 2938,
+      "transport_sha256": "8ff37b872092b021cee0c70daf769aee035880696ab3da109bdf6d17c6211c9d",
+      "blake3_256": "ecaf0d0fccd3af2bc2213b44baeffa51dba49a9bcc382c8a2212785e04ccfcc4"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-feature-format-final-20261015.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-feature-format-final-20261015.log",
+      "bytes": 1592,
+      "transport_sha256": "042ab202cba5cba74abd5361225233159c50e37f7104442e508bcedaf1d4b261",
+      "blake3_256": "399c9bd36371e5503d676c70d0ae57f80fcba2091d4593d445128d9728e3c92b"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-helper-fmt-final-20261015.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-helper-fmt-final-20261015.log",
+      "bytes": 1168,
+      "transport_sha256": "9ed50af321ec59157d0b5cea6b9320d87c8e95bd27eb4e2ad451812eab0634a7",
+      "blake3_256": "75ee0b666929507b93dc2f34fe32ae42867db91d25d5a36a254d1a728a5c7fab"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-helper-package-final-20261015.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-helper-package-final-20261015.log",
+      "bytes": 6220,
+      "transport_sha256": "976ffad123ce846ed4f4c430f1f9da34e3cf7417277df131af3e3809d2f82c41",
+      "blake3_256": "9018de78983844c418442cfbef5e9ed61c67e67cab7d3df3d6ffff26bd86d82a"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-helper-clippy-final-20261015.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-helper-clippy-final-20261015.log",
+      "bytes": 2055,
+      "transport_sha256": "f1813b0748aa8f87c726f5c65b2e55f6b0f7af19781cee085b33d2d9e452d1d4",
+      "blake3_256": "9e6e9919d7b8da06d76f51e67142e79a635697f84344a8796592120e85530581"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-root-clippy-final-20261015.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-root-clippy-final-20261015.log",
+      "bytes": 2388,
+      "transport_sha256": "ce70e83e9b17e0282e9a3d937be8957eed88a37a4710e2dd869dbe21c299e6a3",
+      "blake3_256": "ac77eaa665d3893068ef66f5e3a5b55847e3fcee70c03c3ca3ae543b3a0c1c1e"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-matrix-contract-smoke-2026-10-15.json",
+      "source_path": "original actual tool-result records 2026-10-15T01:04:07.172Z and 01:05:07.190Z; full existing error artifact3148; no replay",
+      "bytes": 4869,
+      "transport_sha256": "8f0799e602395e26fed67b50589325b8f69091a878ea45691bf49a1a5291b387",
+      "blake3_256": "5f222011e5d3fefe229582591c4da57da8d017237b1bc6d77b8b39c8734570a9"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t43-verification-2026-10-15/t43-final-cairn-20261015.log",
+      "source_path": "actual local installed Cairn commands after final doc/task edits; exact labeled stdout/stderr",
+      "bytes": 122502,
+      "transport_sha256": "b6513471e7ec209d7465df90bf3360c2bccce1d3551d3764704144c4bb1149a5",
+      "blake3_256": "89f8ff73396b6ddb8e2b970671c162347a5e4e240293df5491636f56de1ef43b"
+    }
+  ]
+}

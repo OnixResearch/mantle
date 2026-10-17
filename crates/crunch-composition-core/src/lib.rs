@@ -340,7 +340,6 @@ pub fn plan_composition(
 ) -> Result<CompositionOutcome, CompositionError> {
     debug_assert!(!prepared.bindings.is_empty());
     let snapshots_by_root = index_snapshots(prepared, snapshots)?;
-    debug_assert_eq!(snapshots_by_root.len(), prepared.bindings.len());
     let mut usage = LimitUsage {
         bindings: count_u32(prepared.bindings.len(), "bindings")?,
         collision_decisions: count_u32(prepared.collision_decisions.len(), "collision-decisions")?,
@@ -566,8 +565,8 @@ fn index_snapshots(
 ) -> Result<BTreeMap<CastoreRootRef, RootSnapshot>, CompositionError> {
     debug_assert!(!prepared.bindings.is_empty());
     let expected = prepared.bindings.iter().map(|binding| binding.root.clone()).collect::<BTreeSet<_>>();
+    let expected_root_count = expected.len();
     let mut indexed = BTreeMap::new();
-    debug_assert!(snapshots.len() >= expected.len());
     for snapshot in snapshots {
         validate_root_ref(&snapshot.root)?;
         if !expected.contains(&snapshot.root) {
@@ -583,6 +582,7 @@ fn index_snapshots(
             return Err(CompositionError::MissingSnapshot(root.digest_blake3));
         }
     }
+    debug_assert_eq!(indexed.len(), expected_root_count);
     Ok(indexed)
 }
 
@@ -1073,6 +1073,20 @@ mod tests {
         assert_eq!(entries.len(), 2);
         assert!(entries.iter().any(|entry| entry.name == "etc"));
         assert!(entries.iter().any(|entry| entry.name == "usr"));
+    }
+
+    #[test]
+    fn one_snapshot_supports_distinct_mounts_of_the_same_root() {
+        let prepared = prepare_composition(&request(vec![
+            binding(ROOT_A_HEX, "first", "first mount"),
+            binding(ROOT_A_HEX, "second", "second mount"),
+        ]))
+        .unwrap();
+        let tree = directory(&[("payload", file(FILE_A_HEX))]);
+        let outcome = plan_composition(&prepared, vec![snapshot(ROOT_A_HEX, tree.clone())]).unwrap();
+
+        assert_eq!(outcome.root, directory(&[("first", tree.clone()), ("second", tree)]));
+        assert_eq!(outcome.limit_usage.bindings, 2);
     }
 
     #[test]

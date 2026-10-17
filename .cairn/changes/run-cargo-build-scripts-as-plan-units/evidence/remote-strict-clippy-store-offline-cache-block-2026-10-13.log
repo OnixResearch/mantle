@@ -1,0 +1,15 @@
+source-pull-sha256=50895c6c8da47c8ae49f1baa51ba30beed8a91da3ef2ace92c1f62600c23ba22  crates/crunch-store/src/pull.rs
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+error: failed to get `artifact-auth-core` as a dependency of package `crunch-build v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-build)`
+
+Caused by:
+  failed to load source for dependency `artifact-auth-core`
+
+Caused by:
+  unable to update ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d
+
+Caused by:
+  can't checkout from 'ssh://git@github.com/OnixResearch/onix-artifact.git': you are in the offline mode (--offline)

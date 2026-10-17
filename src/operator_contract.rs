@@ -479,7 +479,7 @@ pub fn render_canonical_workflow(catalog: &CommandCatalog) -> Result<String, Con
 3. Run `mantle build --plan <root.ncl>`. This command plans realization without store mutation.\n\
 4. Run `mantle build <root.ncl>` for local realization on a supported Linux host. This step can mutate store state and use the network.\n\
 5. If local realization is unsupported, run `mantle build --builder <builder-id> --ticket-fd <fd> <root.ncl>` only for an eligible reviewed remote route. This step mutates store state and requires the network.\n\
-6. Run `mantle attest show <store-path>`. This command reads evidence and does not mutate state.\n",
+6. Run `mantle attest show <store-path>`. This command reads evidence and may initialize the selected store state directory and identity.\n",
     ))
 }
 

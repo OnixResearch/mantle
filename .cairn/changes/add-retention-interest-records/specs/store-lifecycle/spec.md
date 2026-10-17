@@ -28,6 +28,14 @@ malformed, duplicate, or unknown-version record MUST fail closed.
 - WHEN the GC planner runs on each input
 - THEN the plan MUST contain the same candidates and the same ordering
 
+#### Scenario: Automatic lease renewal replaces its previous declaration
+
+- GIVEN two owners retain one path and another owner's interest would be chosen as the merged path representative
+- WHEN the lease owner renews with a changed transition reason
+- THEN the lease owner's old record MUST be replaced without removing the other owner's record
+- AND its renewal count MUST advance monotonically within the configured bound
+- AND a renewal rejected at that bound MUST NOT alter persisted records
+
 ### Requirement: Retention release is owner scoped
 
 r[mantle.store_lifecycle.retention_owner_scope] A release operation MUST remove

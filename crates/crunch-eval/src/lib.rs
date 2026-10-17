@@ -25,6 +25,7 @@ mod backend;
 pub(crate) mod cranelift_proto;
 pub mod session;
 pub mod stdlib;
+pub mod watch_imports;
 
 /// Stable identity for the linked evaluator family.
 pub const EVALUATOR_ID: &str = "nickel-lang";

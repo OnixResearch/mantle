@@ -14,7 +14,7 @@ let hello = stdenv.mkDerivation {
   version = "1.0",
   buildPhase = m%"
     echo '#!/bin/sh' > hello
-    echo 'echo "Hello"' >> hello
+    echo 'if [ "$1" = "--version" ]; then echo "hello 1.0"; else echo "Hello"; fi' >> hello
     chmod +x hello
   "%,
   installPhase = m%"
@@ -29,7 +29,7 @@ hello.overrideAttrs (fun old => {
   version = "1.0-debug",
   buildPhase = m%"
     echo '#!/bin/sh' > hello
-    echo 'echo "Hello (debug build)"' >> hello
+    echo 'if [ "$1" = "--version" ]; then echo "hello 1.0-debug"; else echo "Hello (debug build)"; fi' >> hello
     chmod +x hello
   "%,
 })

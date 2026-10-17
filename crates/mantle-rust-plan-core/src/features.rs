@@ -1,193 +1,224 @@
-//! Deterministic feature resolution over admitted package facts.
-//!
-//! Activation is a bounded fixed point over declared features: seeds are the
-//! requested names plus the implicit `default` feature, and each pass
-//! activates declared features whose references are already activated. The
-//! pass count is bounded by the declared feature bound, so a malformed cycle
-//! ends in a typed blocker instead of unbounded work.
+//! Bounded native Cargo feature selection over adapter-decoded definitions.
+//! The shell owns manifest parsing; the core owns the activation fixed point.
 
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 use alloc::string::String;
-use alloc::vec;
 use alloc::vec::Vec;
 
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::model::FeatureReference;
-use crate::model::MAX_FEATURES_PER_PACKAGE;
-use crate::model::PackageFacts;
 use crate::model::PlanBlocker;
-use crate::model::count_exceeds;
 
 /// The implicit default feature name.
 pub const DEFAULT_FEATURE: &str = "default";
 
-/// Maximum activation passes over the declared feature list.
-pub const MAX_FEATURE_PASSES: u32 = 64;
-
-/// One feature request for a package.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PackageFeatureRequest {
-    /// Package name the request applies to.
-    pub package: String,
-    /// Requested feature names in caller order.
-    pub features: Vec<String>,
-    /// Whether default features are requested.
-    pub include_default_features: bool,
-}
-
-/// Resolved feature activation for one package.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FeatureResolution {
-    pub package: String,
-    /// Activated features in canonical order.
-    pub activated_features: Vec<String>,
-    /// Activated optional-dependency keys in canonical order.
-    pub activated_optional_dependencies: Vec<String>,
-}
-
-impl FeatureResolution {
-    /// Whether one feature is activated.
-    pub fn has_feature(&self, name: &str) -> bool {
-        self.activated_features.iter().any(|feature| feature == name)
-    }
-
-    /// Whether one optional dependency key is activated.
-    pub fn has_optional_dependency(&self, key: &str) -> bool {
-        self.activated_optional_dependencies.iter().any(|dependency| dependency == key)
-    }
-}
-
-/// Resolve feature activation for one package.
-pub fn resolve_package_features(
-    package: &PackageFacts,
-    request: &PackageFeatureRequest,
-) -> Result<FeatureResolution, Vec<PlanBlocker>> {
-    let mut blockers: Vec<PlanBlocker> = Vec::with_capacity(2);
-    if request.package != package.name {
-        blockers.push(PlanBlocker::new(
-            "feature-request-package-mismatch",
-            &request.package,
-            "feature requests must name the package they apply to",
-        ));
-        return Err(blockers);
-    }
-    if count_exceeds(request.features.len(), MAX_FEATURES_PER_PACKAGE) {
-        blockers.push(PlanBlocker::new(
-            "feature-request-limit",
-            &package.name,
-            "feature request exceeds the admitted bound",
-        ));
-        return Err(blockers);
-    }
-    let requested = requested_names(request);
-    let unknown = requested.iter().find(|name| !package.features.iter().any(|declared| &declared.name == *name));
-    if let Some(name) = unknown {
-        blockers.push(PlanBlocker::new(
-            "unknown-feature-request",
-            name,
-            "requested features must be declared by the package",
-        ));
-        return Err(blockers);
-    }
-    let (is_activated, is_stable) = close_activation(package, &requested);
-    if !is_stable {
-        blockers.push(PlanBlocker::new(
-            "feature-propagation-limit",
-            &package.name,
-            "feature activation exceeded the bounded pass limit",
-        ));
-        return Err(blockers);
-    }
-    let activated_features: Vec<String> = package
-        .features
-        .iter()
-        .enumerate()
-        .filter(|(index, _)| is_activated[*index])
-        .map(|(_, feature)| feature.name.clone())
-        .collect();
-    let activated_optional_dependencies = activated_dependency_keys(package, &is_activated);
-    debug_assert!(activated_features.len() <= package.features.len());
-    debug_assert!(activated_optional_dependencies.len() <= package.dependencies.len());
-    Ok(FeatureResolution {
-        package: package.name.clone(),
-        activated_features,
-        activated_optional_dependencies,
+/// Whether a native optional dependency is selected by any activated feature.
+/// Supports direct, `dep:` and weak `?/` references in the accepted fragment.
+pub fn native_optional_dependency_selected(
+    dependency_name: &str,
+    feature_defs: &BTreeMap<String, Vec<String>>,
+    selected_features: &[String],
+) -> bool {
+    selected_features.iter().any(|feature| {
+        feature == dependency_name
+            || feature_defs.get(feature).is_some_and(|entries| {
+                entries.iter().any(|entry| {
+                    if entry == dependency_name || entry.strip_prefix("dep:") == Some(dependency_name) {
+                        return true;
+                    }
+                    entry
+                        .split_once('/')
+                        .is_some_and(|(key, _)| key.trim_start_matches("dep:").trim_end_matches('?') == dependency_name)
+                })
+            })
     })
 }
 
-fn requested_names(request: &PackageFeatureRequest) -> Vec<String> {
-    let mut requested: Vec<String> = Vec::with_capacity(request.features.len().saturating_add(1));
-    if request.include_default_features {
-        requested.push(String::from(DEFAULT_FEATURE));
+/// Preserve the accepted three-way cfg dependency decision.
+pub fn classify_target_cfg_dependency(is_dependency_selected: bool, is_cfg_selected: bool) -> &'static str {
+    if is_dependency_selected {
+        "selected"
+    } else if is_cfg_selected {
+        "not-selected-optional"
+    } else {
+        "not-selected"
     }
-    requested.extend(request.features.iter().cloned());
-    debug_assert!(requested.len() <= request.features.len().saturating_add(1));
-    requested
 }
 
-/// Compute the activation fixed point, returning activation flags and whether
-/// the closure stabilized within the bounded pass count.
-fn close_activation(package: &PackageFacts, requested: &[String]) -> (Vec<bool>, bool) {
-    let mut is_activated: Vec<bool> = vec![false; package.features.len()];
-    for (index, feature) in package.features.iter().enumerate() {
-        if requested.iter().any(|name| name == &feature.name) {
-            is_activated[index] = true;
+/// The accepted native feature fixed-point limit (one dequeue per selected key).
+pub const MAX_NATIVE_FEATURE_STEPS: usize = 4_096;
+
+/// One adapter-decoded Cargo feature definition with semantic feature entries.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeFeatureDefinition {
+    pub name: String,
+    pub entries: Vec<String>,
+}
+
+/// Structural native feature request, independent of manifest bytes or host state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeFeatureSelectionRequest {
+    pub feature_definitions: Vec<NativeFeatureDefinition>,
+    pub optional_dependencies: Vec<String>,
+    pub explicit_features: Vec<String>,
+    pub all_features: bool,
+    pub no_default_features: bool,
+}
+
+/// A dependency feature requested by an activated parent feature.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct NativeDependencyFeatureEdge {
+    pub dependency: String,
+    pub feature: String,
+    pub weak: bool,
+}
+
+/// Accepted native feature selection, including forwarded feature requests.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeFeatureSelection {
+    pub selected_features: Vec<String>,
+    pub activated_optional_dependencies: Vec<String>,
+    pub dependency_feature_edges: Vec<NativeDependencyFeatureEdge>,
+    pub blockers: Vec<PlanBlocker>,
+}
+
+/// Resolve the native planner's bounded feature grammar over supplied definitions.
+/// Explicit features replace, rather than augment, the implicit default seed.
+/// This intentionally leaves unknown explicitly requested keys in `selected_features`
+/// as the accepted native planner does; only malformed definition references block.
+pub fn resolve_native_feature_selection(request: &NativeFeatureSelectionRequest) -> NativeFeatureSelection {
+    let mut definitions = BTreeMap::<&str, &[String]>::new();
+    let mut optional = BTreeSet::new();
+    let mut blockers = BTreeSet::new();
+    if request.feature_definitions.len() > MAX_NATIVE_FEATURE_STEPS
+        || request.optional_dependencies.len() > MAX_NATIVE_FEATURE_STEPS
+        || request.explicit_features.len() > MAX_NATIVE_FEATURE_STEPS
+    {
+        blockers.insert(PlanBlocker::new(
+            "feature-resolution-step-limit",
+            "features",
+            "native feature resolution exceeded bounded fixed-point step limit",
+        ));
+        return NativeFeatureSelection {
+            selected_features: Vec::new(),
+            activated_optional_dependencies: Vec::new(),
+            dependency_feature_edges: Vec::new(),
+            blockers: blockers.into_iter().collect(),
+        };
+    }
+    for feature in &request.feature_definitions {
+        if feature.name.is_empty() || definitions.insert(&feature.name, &feature.entries).is_some() {
+            blockers.insert(PlanBlocker::new(
+                "duplicate-feature",
+                "features",
+                "native feature names must be non-empty and unique",
+            ));
         }
     }
-    let mut is_stable = false;
-    for _pass in 0..MAX_FEATURE_PASSES {
-        let is_progressing = advance_activation(package, &mut is_activated);
-        if !is_progressing {
-            is_stable = true;
+    for key in &request.optional_dependencies {
+        if key.is_empty() || !optional.insert(key.as_str()) {
+            blockers.insert(PlanBlocker::new(
+                "duplicate-optional-dependency",
+                "features",
+                "optional dependency keys must be non-empty and unique",
+            ));
+        }
+    }
+    if !blockers.is_empty() {
+        return NativeFeatureSelection {
+            selected_features: Vec::new(),
+            activated_optional_dependencies: Vec::new(),
+            dependency_feature_edges: Vec::new(),
+            blockers: blockers.into_iter().collect(),
+        };
+    }
+    let mut selected = BTreeSet::<String>::new();
+    let mut queue = Vec::<String>::new();
+    if request.all_features {
+        for name in definitions.keys().chain(optional.iter()) {
+            push_native_feature_key(name, &mut selected, &mut queue);
+        }
+    } else if !request.explicit_features.is_empty() {
+        let mut explicit = request.explicit_features.clone();
+        explicit.sort();
+        explicit.dedup();
+        for name in &explicit {
+            push_native_feature_key(name, &mut selected, &mut queue);
+        }
+    } else if !request.no_default_features && definitions.contains_key(DEFAULT_FEATURE) {
+        push_native_feature_key(DEFAULT_FEATURE, &mut selected, &mut queue);
+    }
+    let mut activated_optional = BTreeSet::<String>::new();
+    let mut edges = BTreeSet::<NativeDependencyFeatureEdge>::new();
+    let mut cursor = 0;
+    while cursor < queue.len() {
+        if cursor >= MAX_NATIVE_FEATURE_STEPS {
+            blockers.insert(PlanBlocker::new(
+                "feature-resolution-step-limit",
+                "features",
+                "native feature resolution exceeded bounded fixed-point step limit",
+            ));
             break;
         }
-    }
-    debug_assert!(is_activated.len() == package.features.len());
-    (is_activated, is_stable)
-}
-
-/// Propagate activation forward: enabling a feature enables its references.
-fn advance_activation(package: &PackageFacts, is_activated: &mut [bool]) -> bool {
-    let referenced: Vec<usize> = package
-        .features
-        .iter()
-        .enumerate()
-        .filter(|(index, _)| is_activated[*index])
-        .flat_map(|(_, feature)| feature.enables.iter())
-        .filter_map(|reference| match reference {
-            FeatureReference::Feature(name) => package.features.iter().position(|declared| &declared.name == name),
-            FeatureReference::Dependency(_) => None,
-        })
-        .collect();
-    let referenced_len = referenced.len();
-    let mut is_advanced = false;
-    for index in referenced {
-        if !is_activated[index] {
-            is_activated[index] = true;
-            is_advanced = true;
+        let feature = queue[cursor].clone();
+        cursor += 1;
+        if let Some(entries) = definitions.get(feature.as_str()) {
+            for entry in *entries {
+                if let Some(dependency) = entry.strip_prefix("dep:") {
+                    if dependency.is_empty() {
+                        blockers.insert(PlanBlocker::new(
+                            "unsupported-feature-entry",
+                            "features",
+                            "empty dep: feature entry",
+                        ));
+                    } else {
+                        activated_optional.insert(String::from(dependency));
+                    }
+                } else if let Some((dependency, enabled_feature)) = entry.split_once('/') {
+                    let (dependency, weak) =
+                        dependency.strip_suffix('?').map_or((dependency, false), |name| (name, true));
+                    if dependency.is_empty() || enabled_feature.is_empty() {
+                        blockers.insert(PlanBlocker::new(
+                            "unsupported-feature-entry",
+                            "features",
+                            &alloc::format!("dependency feature entry `{entry}` is malformed"),
+                        ));
+                    } else {
+                        edges.insert(NativeDependencyFeatureEdge {
+                            dependency: String::from(dependency),
+                            feature: String::from(enabled_feature),
+                            weak,
+                        });
+                    }
+                } else if definitions.contains_key(entry.as_str()) {
+                    push_native_feature_key(entry, &mut selected, &mut queue);
+                } else if optional.contains(entry.as_str()) {
+                    activated_optional.insert(entry.clone());
+                    push_native_feature_key(entry, &mut selected, &mut queue);
+                } else {
+                    blockers.insert(PlanBlocker::new(
+                        "unknown-feature-entry",
+                        "features",
+                        &alloc::format!("feature entry `{entry}` references no known feature or optional dependency"),
+                    ));
+                }
+            }
+        } else if optional.contains(feature.as_str()) {
+            activated_optional.insert(feature.clone());
         }
     }
-    debug_assert!(referenced_len <= package.features.len());
-    is_advanced
+    NativeFeatureSelection {
+        selected_features: selected.into_iter().collect(),
+        activated_optional_dependencies: activated_optional.into_iter().collect(),
+        dependency_feature_edges: edges.into_iter().collect(),
+        blockers: blockers.into_iter().collect(),
+    }
 }
 
-/// Optional dependency keys activated by any activated feature.
-fn activated_dependency_keys(package: &PackageFacts, is_activated: &[bool]) -> Vec<String> {
-    let mut keys: Vec<String> = package
-        .features
-        .iter()
-        .enumerate()
-        .filter(|(index, _)| is_activated[*index])
-        .flat_map(|(_, feature)| feature.enables.iter())
-        .filter_map(|reference| match reference {
-            FeatureReference::Dependency(key) => Some(key.clone()),
-            FeatureReference::Feature(_) => None,
-        })
-        .filter(|key| package.dependencies.iter().any(|dependency| &dependency.key == key && dependency.optional))
-        .collect();
-    keys.sort();
-    keys.dedup();
-    debug_assert!(keys.len() <= package.dependencies.len());
-    keys
+fn push_native_feature_key(key: &str, selected: &mut BTreeSet<String>, queue: &mut Vec<String>) {
+    if selected.insert(String::from(key)) {
+        queue.push(String::from(key));
+    }
 }

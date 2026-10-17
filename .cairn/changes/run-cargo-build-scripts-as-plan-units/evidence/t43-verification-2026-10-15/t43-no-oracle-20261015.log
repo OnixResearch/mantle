@@ -1,0 +1,24 @@
+start_utc=2026-10-15T01:17:36.799651+00:00
+cwd=/tmp/mantle-unit-plan-20261013-87lqAtNv/source
+command=/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo --config .cargo/vendor-config.toml --config 'target.x86_64-unknown-linux-gnu.linker="/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc"' test --locked --offline -p mantle --test rust_plan_cli no_cargo_oracle -- --nocapture --test-threads=1
+preflight={"home": {"available_bytes": 352941793280, "available_inodes": 210498347}, "observed_utc": "2026-10-15T01:17:36.799660+00:00", "root": {"available_bytes": 352941793280, "available_inodes": 210498347}}
+--- stdout+stderr ---
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling mantle v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.75s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running tests/rust_plan_cli.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/rust_plan_cli-2deb9c841e6e33c2)
+
+running 2 tests
+test rust_plan_cli_no_cargo_oracle_blocks_unsupported_surface_without_cargo_fallback ... ok
+test rust_plan_cli_no_cargo_oracle_executes_path_workspace_without_invoking_cargo ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 56 filtered out; finished in 0.24s
+
+
+--- end ---
+{"command": ["/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo", "--config", ".cargo/vendor-config.toml", "--config", "target.x86_64-unknown-linux-gnu.linker=\"/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc\"", "test", "--locked", "--offline", "-p", "mantle", "--test", "rust_plan_cli", "no_cargo_oracle", "--", "--nocapture", "--test-threads=1"], "elapsed_seconds": 5.976378218270838, "end_utc": "2026-10-15T01:17:42.776030+00:00", "exit": 0, "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-no-oracle-20261015.log", "name": "no-oracle", "postflight": {"home": {"available_bytes": 352890781696, "available_inodes": 210498211}, "observed_utc": "2026-10-15T01:17:42.776077+00:00", "root": {"available_bytes": 352890781696, "available_inodes": 210498211}}, "preflight": {"home": {"available_bytes": 352941793280, "available_inodes": 210498347}, "observed_utc": "2026-10-15T01:17:36.799660+00:00", "root": {"available_bytes": 352941793280, "available_inodes": 210498347}}, "start_utc": "2026-10-15T01:17:36.799651+00:00", "timeout_seconds": 1200}

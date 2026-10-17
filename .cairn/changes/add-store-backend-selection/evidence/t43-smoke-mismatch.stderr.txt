@@ -1,0 +1,1 @@
+{"error":"opening store: store: creating state dir /tmp/mantle-store-agent-smoke-20261012: Disk quota exceeded (os error 122)","code":3,"kind":"internal"}

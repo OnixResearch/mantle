@@ -1,0 +1,15 @@
+Mantle guarded logical-binding repair1051: source identities
+captured_at=2026-10-14T22:17:01.468708+00:00
+algorithm=BLAKE3-256; tool=/run/current-system/sw/bin/b3sum; exact raw UTF-8 source bytes via stdin; no local copies/staging/build
+Each byte count matched independent remote stat. Original1047 source recovered from captured tool response2026-10-14T18:55:10.390Z (106 source lines).
+These are Mantle-owned source identities. Previously emitted SHA256 fingerprints are not relabeled; historical interoperability SHA receipts remain untouched.
+fb60e6247ac96d7b50b76258ea1bb0587aba1cd814531ef8748d5b5d74be270b  bytes=6433  /tmp/mantle-unit-plan-20261013-87lqAtNv/make-cfgfix-native-app-consumer-20261014.pre-logical-binding-1047.py
+237f019025721ea4a0f0881d2812ded4ab5fc3c0eb75994479854eca59fa01b8  bytes=8139  /tmp/mantle-unit-plan-20261013-87lqAtNv/make-cfgfix-native-app-consumer-20261014.py
+1090752bc4ff7af9f98eb641e418b024ea057e88bc3440c0c95d80eeb92cfb30  bytes=5775  /tmp/mantle-unit-plan-20261013-87lqAtNv/check-cfgfix-native-app-20261014.py
+49d0f6b8d638f96cd1ddb1e97a0135d46c80aec2221aea10e16f82533fd6ea85  bytes=6614  /tmp/mantle-unit-plan-20261013-87lqAtNv/verify-variant-native-outputs-gpt61-20261014.py
+d5d98aa33b2c41c08c66508390ac1168519e16f19098a788b9d7405aa2691ead  bytes=16765  /tmp/mantle-unit-plan-20261013-87lqAtNv/check-native-provider-selective-rerun.py
+9dcce34fe136d5d74ff5ebc95598bfced9bfe24e7c4f499a1f26c3860573a8d3  bytes=2271  /tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-native-app.sh
+c15a0ac86fa25f4a10945e4570755c327675875ce32959f5c8d52d1c51ffccc9  bytes=5898  /tmp/mantle-unit-plan-20261013-87lqAtNv/queue-cfgfix-app-logical-repair-20261014.py
+1c1211e0545e752614be9fa17740ee37527c091d918a433c0d3b3505180b52b6  bytes=10673  /tmp/mantle-unit-plan-20261013-87lqAtNv/run-cfgfix-app-repair-logical-binding-20261014.py
+09722e6b4e807ea95568653038fbc7a77a9eace8924110118531b09f50f04e28  bytes=5422  /tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-supervisor-gpt61-20261014.py
+No app42 or selective-rerun acceptance follows from source hashing.

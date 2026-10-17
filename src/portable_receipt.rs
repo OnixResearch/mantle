@@ -9,6 +9,19 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use futures::StreamExt;
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::CommandFamily;
+use mantle_application_contract::EffectId;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::EffectPlan;
+use mantle_application_contract::EffectSpec;
+use mantle_application_contract::ExpectedOutput;
+use mantle_application_contract::Observation;
+use mantle_application_contract::ObservationStatus;
+use mantle_application_contract::classify_observations;
+use mantle_application_contract::plan_effects;
 use serde::Deserialize;
 use serde::Serialize;
 use snix_store::path_info::PathInfo;
@@ -1455,17 +1468,22 @@ fn local_output_records_for_outputs(
     Ok(records.into_iter().filter(|record| record.kind == ReceiptRecordKind::OutputRef).collect())
 }
 
-fn archive_output_records_for_outputs(
-    archive: &crunch_store::ArchiveListReport,
-    store_prefix: &str,
-    outputs: &[String],
-) -> Result<Vec<ReceiptRecord>, RunError> {
+fn require_archive_store_prefix(archive: &crunch_store::ArchiveListReport, store_prefix: &str) -> Result<(), RunError> {
     if archive.store_prefix != store_prefix {
         return Err(RunError::Internal(format!(
             "receipt archive store prefix mismatch: archive={} expected={}",
             archive.store_prefix, store_prefix
         )));
     }
+    Ok(())
+}
+
+fn archive_output_records_for_outputs(
+    archive: &crunch_store::ArchiveListReport,
+    store_prefix: &str,
+    outputs: &[String],
+) -> Result<Vec<ReceiptRecord>, RunError> {
+    require_archive_store_prefix(archive, store_prefix)?;
     let mut records = Vec::with_capacity(archive.paths.len());
     for path in &archive.paths {
         if !archive_path_matches_outputs(path, store_prefix, outputs) {
@@ -1897,12 +1915,252 @@ pub fn cmd_receipt(
     state_dir: &Path,
     store_prefix: &str,
     json_output: bool,
-    now_unix_s: u64,
 ) -> Result<(), RunError> {
+    let crate::ReceiptAction::Bundle { action } = action;
+    let plan = receipt_effect_plan(&action, store_prefix)?;
+    let mut progress = ReceiptProgress {
+        observations: Vec::with_capacity(plan.effects.len()),
+        plan,
+    };
+    let port = LocalReceiptPort;
+    let now_unix_s = progress.step("receipt-clock", EffectKind::ReadClock, port.read_clock())?;
+    let context = receipt_command_context(state_dir, store_prefix, json_output, now_unix_s);
+    cmd_receipt_bundle(action, context, &mut progress, &port)
+}
+
+fn receipt_spec<'a>(effect_id: &'static str, kind: EffectKind) -> EffectSpec<'a> {
+    EffectSpec {
+        effect_id,
+        kind,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    }
+}
+
+fn receipt_effect_plan(action: &crate::ReceiptBundleAction, store_prefix: &str) -> Result<EffectPlan, RunError> {
+    let mut effects = vec![receipt_spec("receipt-clock", EffectKind::ReadClock)];
+    let archive_read = EffectSpec {
+        effect_id: "read-receipt-archive",
+        kind: EffectKind::ReadFiles,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::Identity(store_prefix),
+    };
     match action {
-        crate::ReceiptAction::Bundle { action } => {
-            cmd_receipt_bundle(action, state_dir, store_prefix, json_output, now_unix_s)
+        crate::ReceiptBundleAction::Export { outputs, .. } => {
+            if !outputs.is_empty() {
+                effects.push(receipt_spec("assemble-receipt", EffectKind::StoreAccess));
+            }
+            effects.extend([
+                receipt_spec("publish-receipt", EffectKind::WriteFiles),
+                receipt_spec("readback-receipt", EffectKind::ReadFiles),
+            ]);
         }
+        crate::ReceiptBundleAction::List { .. } => effects.push(receipt_spec("read-receipt", EffectKind::ReadFiles)),
+        crate::ReceiptBundleAction::Verify { outputs, archive, .. } => {
+            effects.push(receipt_spec("read-receipt", EffectKind::ReadFiles));
+            if !outputs.is_empty() {
+                if archive.is_some() {
+                    effects.push(archive_read);
+                }
+                effects.push(receipt_spec("verify-receipt", EffectKind::StoreAccess));
+            }
+        }
+        crate::ReceiptBundleAction::Import { archive, .. } => {
+            effects.push(receipt_spec("read-receipt", EffectKind::ReadFiles));
+            if archive.is_some() {
+                effects.push(archive_read);
+            }
+            effects.extend([
+                receipt_spec("verify-and-import-receipt", EffectKind::StoreAccess),
+                receipt_spec("readback-imported-receipt", EffectKind::ReadFiles),
+            ]);
+        }
+    }
+    plan_effects(CommandFamily::StoreAdministration, &effects)
+        .map_err(|error| RunError::Internal(format!("receipt effect plan: {}", error.code())))
+}
+
+struct ReceiptProgress {
+    plan: EffectPlan,
+    observations: Vec<Observation>,
+}
+
+impl ReceiptProgress {
+    fn step<T>(&mut self, effect_id: &str, kind: EffectKind, result: Result<T, RunError>) -> Result<T, RunError> {
+        let status = if result.is_ok() {
+            ObservationStatus::Succeeded
+        } else {
+            ObservationStatus::Failed
+        };
+        self.observations.push(Observation {
+            effect_id: EffectId(effect_id.to_string()),
+            kind,
+            status,
+            output: EffectOutput::None,
+            usage: EffectMeasure::Calls(1),
+            diagnostics_code: (status == ObservationStatus::Failed).then(|| "receipt-port-failed".to_string()),
+        });
+        match result {
+            Ok(value) => Ok(value),
+            Err(error) => self.stop_unexecuted(error),
+        }
+    }
+
+    fn archive_read(
+        &mut self,
+        result: Result<crunch_store::ArchiveListReport, RunError>,
+    ) -> Result<crunch_store::ArchiveListReport, RunError> {
+        let status = if result.is_ok() {
+            ObservationStatus::Succeeded
+        } else {
+            ObservationStatus::Failed
+        };
+        let output = result
+            .as_ref()
+            .map_or(EffectOutput::None, |archive| EffectOutput::Identity(archive.store_prefix.clone()));
+        self.observations.push(Observation {
+            effect_id: EffectId("read-receipt-archive".to_string()),
+            kind: EffectKind::ReadFiles,
+            status,
+            output,
+            usage: EffectMeasure::Calls(1),
+            diagnostics_code: (status == ObservationStatus::Failed).then(|| "receipt-port-failed".to_string()),
+        });
+        match result {
+            Ok(archive) => Ok(archive),
+            Err(error) => self.stop_unexecuted(error),
+        }
+    }
+
+    fn stop_unexecuted<T>(&mut self, error: RunError) -> Result<T, RunError> {
+        for remaining in self.plan.effects.iter().skip(self.observations.len()) {
+            self.observations.push(Observation {
+                effect_id: remaining.effect_id.clone(),
+                kind: remaining.kind,
+                status: ObservationStatus::Skipped,
+                output: EffectOutput::None,
+                usage: EffectMeasure::Calls(0),
+                diagnostics_code: None,
+            });
+        }
+        match classify_observations(&self.plan, &self.observations) {
+            ApplicationOutcome::Failed { .. } => Err(error),
+            outcome => Err(RunError::Internal(format!("receipt observations were inconsistent: {outcome:?}"))),
+        }
+    }
+
+    fn complete(&self) -> Result<(), RunError> {
+        match classify_observations(&self.plan, &self.observations) {
+            ApplicationOutcome::Completed => Ok(()),
+            outcome => Err(RunError::Internal(format!("receipt observations were inconsistent: {outcome:?}"))),
+        }
+    }
+}
+
+trait ReceiptBundlePort {
+    fn read_clock(&self) -> Result<u64, RunError>;
+    fn assemble(
+        &self,
+        command: &ReceiptExportCommand,
+        context: ReceiptCommandContext<'_>,
+    ) -> Result<ReceiptBundle, RunError>;
+    fn publish(&self, path: &Path, bundle: &ReceiptBundle) -> Result<(), RunError>;
+    fn read_bundle(&self, path: &Path) -> Result<ReceiptBundle, RunError>;
+    fn readback_export(&self, path: &Path, bundle: &ReceiptBundle) -> Result<ReceiptBundleReport, RunError>;
+    fn read_archive(&self, path: &Path, store_prefix: &str) -> Result<crunch_store::ArchiveListReport, RunError>;
+    fn verify(
+        &self,
+        command: &ReceiptTrustCommand,
+        context: ReceiptCommandContext<'_>,
+        bundle: &ReceiptBundle,
+        trust: &TrustVerificationContext,
+        archive: Option<&crunch_store::ArchiveListReport>,
+    ) -> Result<ReceiptVerifyReport, RunError>;
+    fn import(
+        &self,
+        command: &ReceiptTrustCommand,
+        context: ReceiptCommandContext<'_>,
+        bundle: &ReceiptBundle,
+        trust: &TrustVerificationContext,
+        archive: Option<&crunch_store::ArchiveListReport>,
+    ) -> Result<ReceiptImportReport, RunError>;
+    fn readback_import(&self, state_dir: &Path, bundle: &ReceiptBundle) -> Result<(), RunError>;
+}
+
+struct LocalReceiptPort;
+
+impl ReceiptBundlePort for LocalReceiptPort {
+    fn read_clock(&self) -> Result<u64, RunError> {
+        crate::unix_time_now_s()
+    }
+
+    fn assemble(
+        &self,
+        command: &ReceiptExportCommand,
+        context: ReceiptCommandContext<'_>,
+    ) -> Result<ReceiptBundle, RunError> {
+        build_from_cli_records(command, context)
+    }
+
+    fn publish(&self, path: &Path, bundle: &ReceiptBundle) -> Result<(), RunError> {
+        write_receipt_bundle(path, bundle)
+    }
+
+    fn read_bundle(&self, path: &Path) -> Result<ReceiptBundle, RunError> {
+        read_receipt_bundle(path)
+    }
+
+    fn readback_export(&self, path: &Path, bundle: &ReceiptBundle) -> Result<ReceiptBundleReport, RunError> {
+        let published = read_receipt_bundle(path)?;
+        if published != *bundle {
+            return Err(RunError::Internal(format!(
+                "receipt bundle publication readback mismatch at {}",
+                path.display()
+            )));
+        }
+        validate_receipt_bundle(&published)
+    }
+
+    fn read_archive(&self, path: &Path, store_prefix: &str) -> Result<crunch_store::ArchiveListReport, RunError> {
+        let archive = read_archive_list_report(path)?;
+        require_archive_store_prefix(&archive, store_prefix)?;
+        Ok(archive)
+    }
+
+    fn verify(
+        &self,
+        command: &ReceiptTrustCommand,
+        context: ReceiptCommandContext<'_>,
+        bundle: &ReceiptBundle,
+        trust: &TrustVerificationContext,
+        archive: Option<&crunch_store::ArchiveListReport>,
+    ) -> Result<ReceiptVerifyReport, RunError> {
+        verify_trusted_receipt(command, context, bundle, trust, archive)
+    }
+
+    fn import(
+        &self,
+        command: &ReceiptTrustCommand,
+        context: ReceiptCommandContext<'_>,
+        bundle: &ReceiptBundle,
+        trust: &TrustVerificationContext,
+        archive: Option<&crunch_store::ArchiveListReport>,
+    ) -> Result<ReceiptImportReport, RunError> {
+        import_trusted_receipt(command, context, bundle, trust, archive)
+    }
+
+    fn readback_import(&self, state_dir: &Path, bundle: &ReceiptBundle) -> Result<(), RunError> {
+        let target = state_dir
+            .join(RECEIPT_STATE_DIR)
+            .join(RECEIPT_RECORDS_DIR)
+            .join(format!("{}.json", bundle.bundle_blake3));
+        if read_receipt_bundle(&target)? != *bundle
+            || plan_semantic_graph_import(bundle, state_dir)?.changed
+            || plan_attestation_sidecar_imports(bundle, state_dir, &bundle.store_prefix)?.changed
+        {
+            return Err(RunError::Internal("receipt bundle import readback mismatch".to_string()));
+        }
+        Ok(())
     }
 }
 
@@ -1936,14 +2194,10 @@ struct ReceiptTrustCommand {
 
 fn cmd_receipt_bundle(
     action: crate::ReceiptBundleAction,
-    state_dir: &Path,
-    store_prefix: &str,
-    json_output: bool,
-    now_unix_s: u64,
+    context: ReceiptCommandContext<'_>,
+    progress: &mut ReceiptProgress,
+    port: &impl ReceiptBundlePort,
 ) -> Result<(), RunError> {
-    let context = receipt_command_context(state_dir, store_prefix, json_output, now_unix_s);
-    debug_assert_eq!(context.store_prefix, store_prefix);
-    debug_assert_eq!(context.now_unix_s, now_unix_s);
     match action {
         crate::ReceiptBundleAction::Export {
             records,
@@ -1962,8 +2216,10 @@ fn cmd_receipt_bundle(
                 trusted_public_keys,
             },
             context,
+            progress,
+            port,
         ),
-        crate::ReceiptBundleAction::List { from } => list_receipt_bundle(&from, context),
+        crate::ReceiptBundleAction::List { from } => list_receipt_bundle(&from, context, progress, port),
         crate::ReceiptBundleAction::Verify {
             from,
             outputs,
@@ -1985,6 +2241,8 @@ fn cmd_receipt_bundle(
                 trusted_public_keys,
             },
             context,
+            progress,
+            port,
         ),
         crate::ReceiptBundleAction::Import {
             from,
@@ -2007,6 +2265,8 @@ fn cmd_receipt_bundle(
                 trusted_public_keys,
             },
             context,
+            progress,
+            port,
         ),
     }
 }
@@ -2025,15 +2285,34 @@ fn receipt_command_context<'a>(
     }
 }
 
-fn export_receipt_bundle(command: ReceiptExportCommand, context: ReceiptCommandContext<'_>) -> Result<(), RunError> {
-    let bundle = build_from_cli_records(&command, context)?;
-    write_receipt_bundle(&command.to, &bundle)?;
-    print_report(&validate_receipt_bundle(&bundle)?, context.json_output)
+fn export_receipt_bundle(
+    command: ReceiptExportCommand,
+    context: ReceiptCommandContext<'_>,
+    progress: &mut ReceiptProgress,
+    port: &impl ReceiptBundlePort,
+) -> Result<(), RunError> {
+    let bundle = if command.outputs.is_empty() {
+        port.assemble(&command, context).or_else(|error| progress.stop_unexecuted(error))?
+    } else {
+        progress.step("assemble-receipt", EffectKind::StoreAccess, port.assemble(&command, context))?
+    };
+    progress.step("publish-receipt", EffectKind::WriteFiles, port.publish(&command.to, &bundle))?;
+    let report =
+        progress.step("readback-receipt", EffectKind::ReadFiles, port.readback_export(&command.to, &bundle))?;
+    progress.complete()?;
+    print_report(&report, context.json_output)
 }
 
-fn list_receipt_bundle(path: &Path, context: ReceiptCommandContext<'_>) -> Result<(), RunError> {
-    let bundle = read_receipt_bundle(path)?;
-    print_report(&validate_receipt_bundle(&bundle)?, context.json_output)
+fn list_receipt_bundle(
+    path: &Path,
+    context: ReceiptCommandContext<'_>,
+    progress: &mut ReceiptProgress,
+    port: &impl ReceiptBundlePort,
+) -> Result<(), RunError> {
+    let bundle = progress.step("read-receipt", EffectKind::ReadFiles, port.read_bundle(path))?;
+    let report = validate_receipt_bundle(&bundle)?;
+    progress.complete()?;
+    print_report(&report, context.json_output)
 }
 
 fn receipt_trust_context(
@@ -2055,61 +2334,108 @@ fn receipt_trust_context(
 fn verify_receipt_bundle_command(
     command: ReceiptTrustCommand,
     context: ReceiptCommandContext<'_>,
+    progress: &mut ReceiptProgress,
+    port: &impl ReceiptBundlePort,
 ) -> Result<(), RunError> {
-    debug_assert!(!command.from.as_os_str().is_empty());
-    debug_assert!(!context.store_prefix.is_empty());
-    let bundle = read_receipt_bundle(&command.from)?;
+    let bundle = progress.step("read-receipt", EffectKind::ReadFiles, port.read_bundle(&command.from))?;
     if command.outputs.is_empty() {
-        return print_report(&validate_receipt_bundle(&bundle)?, context.json_output);
+        let report = validate_receipt_bundle(&bundle)?;
+        progress.complete()?;
+        return print_report(&report, context.json_output);
     }
-    let trust = receipt_trust_context(&command, context, "receipt bundle verify --output requires --policy-hash")?;
-    let verification = if let Some(archive_path) = &command.archive {
-        let archive_listing = read_archive_list_report(archive_path)?;
+    let trust = receipt_trust_context(&command, context, "receipt bundle verify --output requires --policy-hash")
+        .or_else(|error| progress.stop_unexecuted(error))?;
+    let archive = command
+        .archive
+        .as_deref()
+        .map(|path| progress.archive_read(port.read_archive(path, context.store_prefix)))
+        .transpose()?;
+    let verification = progress.step(
+        "verify-receipt",
+        EffectKind::StoreAccess,
+        port.verify(&command, context, &bundle, &trust, archive.as_ref()),
+    )?;
+    progress.complete()?;
+    print_verify(&verification, context.json_output)
+}
+
+fn verify_trusted_receipt(
+    command: &ReceiptTrustCommand,
+    context: ReceiptCommandContext<'_>,
+    bundle: &ReceiptBundle,
+    trust: &TrustVerificationContext,
+    archive: Option<&crunch_store::ArchiveListReport>,
+) -> Result<ReceiptVerifyReport, RunError> {
+    if let Some(archive) = archive {
         verify_receipt_bundle_against_archive_report_with_source_state(&ArchiveReceiptVerificationRequest {
-            bundle: &bundle,
-            archive: &archive_listing,
+            bundle,
+            archive,
             state_dir: context.state_dir,
             store_prefix: context.store_prefix,
-            context: &trust,
+            context: trust,
             outputs: &command.outputs,
-        })?
+        })
     } else {
         verify_receipt_bundle_against_state_with_context(
-            &bundle,
+            bundle,
             context.state_dir,
             context.store_prefix,
-            &trust,
+            trust,
             &command.outputs,
-        )?
-    };
-    print_verify(&verification, context.json_output)
+        )
+    }
 }
 
 fn import_receipt_bundle_command(
     command: ReceiptTrustCommand,
     context: ReceiptCommandContext<'_>,
+    progress: &mut ReceiptProgress,
+    port: &impl ReceiptBundlePort,
 ) -> Result<(), RunError> {
-    debug_assert!(!command.from.as_os_str().is_empty());
-    debug_assert!(!context.store_prefix.is_empty());
-    let bundle = read_receipt_bundle(&command.from)?;
+    let bundle = progress.step("read-receipt", EffectKind::ReadFiles, port.read_bundle(&command.from))?;
     if command.outputs.is_empty() {
-        return Err(RunError::Internal("receipt bundle import requires --output".to_string()));
+        return progress.stop_unexecuted(RunError::Internal("receipt bundle import requires --output".to_string()));
     }
-    let trust = receipt_trust_context(&command, context, "receipt bundle import requires --policy-hash")?;
-    let outcome = if let Some(archive_path) = &command.archive {
-        let archive_listing = read_archive_list_report(archive_path)?;
+    let trust = receipt_trust_context(&command, context, "receipt bundle import requires --policy-hash")
+        .or_else(|error| progress.stop_unexecuted(error))?;
+    let archive = command
+        .archive
+        .as_deref()
+        .map(|path| progress.archive_read(port.read_archive(path, context.store_prefix)))
+        .transpose()?;
+    let outcome = progress.step(
+        "verify-and-import-receipt",
+        EffectKind::StoreAccess,
+        port.import(&command, context, &bundle, &trust, archive.as_ref()),
+    )?;
+    progress.step(
+        "readback-imported-receipt",
+        EffectKind::ReadFiles,
+        port.readback_import(context.state_dir, &bundle),
+    )?;
+    progress.complete()?;
+    print_import(&outcome, context.json_output)
+}
+
+fn import_trusted_receipt(
+    command: &ReceiptTrustCommand,
+    context: ReceiptCommandContext<'_>,
+    bundle: &ReceiptBundle,
+    trust: &TrustVerificationContext,
+    archive: Option<&crunch_store::ArchiveListReport>,
+) -> Result<ReceiptImportReport, RunError> {
+    if let Some(archive) = archive {
         import_verified_receipt_bundle_from_archive_report(ArchiveReceiptVerificationRequest {
-            bundle: &bundle,
-            archive: &archive_listing,
+            bundle,
+            archive,
             state_dir: context.state_dir,
             store_prefix: context.store_prefix,
-            context: &trust,
+            context: trust,
             outputs: &command.outputs,
-        })?
+        })
     } else {
-        import_verified_receipt_bundle(&bundle, context.state_dir, context.store_prefix, &trust, &command.outputs)?
-    };
-    print_import(&outcome, context.json_output)
+        import_verified_receipt_bundle(bundle, context.state_dir, context.store_prefix, trust, &command.outputs)
+    }
 }
 
 fn read_archive_list_report(path: &Path) -> Result<crunch_store::ArchiveListReport, RunError> {
@@ -2556,67 +2882,71 @@ mod tests {
         write_artifact_sidecar(&bundle_state, "/mantle/store", &path_info.store_path, b"artifact-attestation");
         let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
 
-        cmd_receipt_bundle(
-            crate::ReceiptBundleAction::Export {
-                records: Vec::new(),
-                outputs: vec![output.clone()],
-                to: bundle_path.clone(),
-                policy_hash: "policy-v1".to_string(),
-                strong: false,
-                trusted_public_keys: vec![verifying_key_token.clone()],
+        cmd_receipt(
+            crate::ReceiptAction::Bundle {
+                action: crate::ReceiptBundleAction::Export {
+                    records: Vec::new(),
+                    outputs: vec![output.clone()],
+                    to: bundle_path.clone(),
+                    policy_hash: "policy-v1".to_string(),
+                    strong: false,
+                    trusted_public_keys: vec![verifying_key_token.clone()],
+                },
             },
             &bundle_state,
             "/mantle/store",
             false,
-            TEST_VALID_AT_UNIX_S,
         )
         .unwrap();
         let bundle = read_receipt_bundle(&bundle_path).unwrap();
         assert_eq!(bundle.trust_snapshot.public_key_digests, vec![public_key_digest(&verifying_key)]);
         assert!(bundle.records.iter().any(|record| record.kind == ReceiptRecordKind::ArtifactAttestation));
 
-        cmd_receipt_bundle(
-            crate::ReceiptBundleAction::List {
-                from: bundle_path.clone(),
+        cmd_receipt(
+            crate::ReceiptAction::Bundle {
+                action: crate::ReceiptBundleAction::List {
+                    from: bundle_path.clone(),
+                },
             },
             &import_state,
             "/mantle/store",
             true,
-            TEST_VALID_AT_UNIX_S,
         )
         .unwrap();
-        cmd_receipt_bundle(
-            crate::ReceiptBundleAction::Verify {
-                from: bundle_path.clone(),
-                outputs: vec![output.clone()],
-                policy_hash: Some("policy-v1".to_string()),
-                archive: None,
-                valid_at_unix_s: Some(TEST_VALID_AT_UNIX_S),
-                revocation_ref: None,
-                revoked_public_key_digests: Vec::new(),
-                trusted_public_keys: vec![verifying_key_token.clone()],
+        cmd_receipt(
+            crate::ReceiptAction::Bundle {
+                action: crate::ReceiptBundleAction::Verify {
+                    from: bundle_path.clone(),
+                    outputs: vec![output.clone()],
+                    policy_hash: Some("policy-v1".to_string()),
+                    archive: None,
+                    valid_at_unix_s: Some(TEST_VALID_AT_UNIX_S),
+                    revocation_ref: None,
+                    revoked_public_key_digests: Vec::new(),
+                    trusted_public_keys: vec![verifying_key_token.clone()],
+                },
             },
             &import_state,
             "/mantle/store",
             true,
-            TEST_VALID_AT_UNIX_S,
         )
         .unwrap();
-        cmd_receipt_bundle(
-            crate::ReceiptBundleAction::Import {
-                from: bundle_path.clone(),
-                outputs: vec![output.clone()],
-                policy_hash: Some("policy-v1".to_string()),
-                archive: None,
-                valid_at_unix_s: Some(TEST_VALID_AT_UNIX_S),
-                revocation_ref: None,
-                revoked_public_key_digests: Vec::new(),
-                trusted_public_keys: vec![verifying_key_token],
+        cmd_receipt(
+            crate::ReceiptAction::Bundle {
+                action: crate::ReceiptBundleAction::Import {
+                    from: bundle_path.clone(),
+                    outputs: vec![output.clone()],
+                    policy_hash: Some("policy-v1".to_string()),
+                    archive: None,
+                    valid_at_unix_s: Some(TEST_VALID_AT_UNIX_S),
+                    revocation_ref: None,
+                    revoked_public_key_digests: Vec::new(),
+                    trusted_public_keys: vec![verifying_key_token],
+                },
             },
             &import_state,
             "/mantle/store",
             false,
-            TEST_VALID_AT_UNIX_S,
         )
         .unwrap();
 
@@ -2624,6 +2954,74 @@ mod tests {
             crunch_store::artifact_attestation_file_path(&import_state, "/mantle/store", &path_info.store_path);
         assert_eq!(fs::read(imported_sidecar).unwrap(), b"artifact-attestation");
         assert!(receipt_bundle_state_file(&import_state, &bundle).exists());
+    }
+
+    #[test]
+    fn archive_read_failure_blocks_receipt_import_before_publication() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_state = temp.path().join("source");
+        let destination_state = temp.path().join("destination");
+        let bundle_path = temp.path().join("receipt.json");
+        let archive_path = temp.path().join("input.archive");
+        let path_info = test_path_info("archive-failed-read", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        write_pathinfo_db(&source_state, path_info.clone());
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        let bundle = bundle_for_state_output(&source_state, &output, "policy-v1");
+        write_receipt_bundle(&bundle_path, &bundle).unwrap();
+        let import = || crate::ReceiptAction::Bundle {
+            action: crate::ReceiptBundleAction::Import {
+                from: bundle_path.clone(),
+                outputs: vec![output.clone()],
+                policy_hash: Some("policy-v1".to_string()),
+                archive: Some(archive_path.clone()),
+                valid_at_unix_s: Some(TEST_VALID_AT_UNIX_S),
+                revocation_ref: None,
+                revoked_public_key_digests: Vec::new(),
+                trusted_public_keys: Vec::new(),
+            },
+        };
+
+        assert!(cmd_receipt(import(), &destination_state, "/mantle/store", true).is_err());
+        assert!(!receipt_bundle_state_file(&destination_state, &bundle).exists());
+
+        fs::write(&archive_path, b"not a mantle archive").unwrap();
+        assert!(cmd_receipt(import(), &destination_state, "/mantle/store", true).is_err());
+        assert!(!receipt_bundle_state_file(&destination_state, &bundle).exists());
+    }
+
+    #[test]
+    fn receipt_publication_readback_rejects_a_different_persisted_bundle() {
+        let temp = tempfile::tempdir().unwrap();
+        let destination = temp.path().join("receipt.json");
+        let intended =
+            build_receipt_bundle(&complete_specs(), "/mantle/store", "policy-v1", ClaimStrengthRequest::Diagnostic)
+                .unwrap();
+        let different =
+            build_receipt_bundle(&complete_specs(), "/mantle/store", "policy-v2", ClaimStrengthRequest::Diagnostic)
+                .unwrap();
+        write_receipt_bundle(&destination, &different).unwrap();
+
+        assert!(LocalReceiptPort.readback_export(&destination, &intended).is_err());
+        assert_eq!(read_receipt_bundle(&destination).unwrap(), different);
+    }
+
+    #[test]
+    fn receipt_import_readback_rejects_a_missing_published_sidecar() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_state = temp.path().join("source-state");
+        let destination_state = temp.path().join("destination-state");
+        let path_info = test_path_info("readback-sidecar", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        write_pathinfo_db(&source_state, path_info.clone());
+        write_artifact_sidecar(&source_state, "/mantle/store", &path_info.store_path, b"artifact-attestation");
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        let bundle = bundle_for_state_output(&source_state, &output, "policy-v1");
+        import_receipt_bundle(&bundle, &destination_state).unwrap();
+        let sidecar =
+            crunch_store::artifact_attestation_file_path(&destination_state, "/mantle/store", &path_info.store_path);
+        assert!(LocalReceiptPort.readback_import(&destination_state, &bundle).is_ok());
+        fs::remove_file(sidecar).unwrap();
+
+        assert!(LocalReceiptPort.readback_import(&destination_state, &bundle).is_err());
     }
 
     #[test]
@@ -2638,38 +3036,40 @@ mod tests {
         write_artifact_sidecar(&bundle_state, "/mantle/store", &path_info.store_path, b"artifact-attestation");
         write_artifact_sidecar(&import_state, "/mantle/store", &path_info.store_path, b"conflicting-attestation");
         let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
-        cmd_receipt_bundle(
-            crate::ReceiptBundleAction::Export {
-                records: Vec::new(),
-                outputs: vec![output.clone()],
-                to: bundle_path.clone(),
-                policy_hash: "policy-v1".to_string(),
-                strong: false,
-                trusted_public_keys: Vec::new(),
+        cmd_receipt(
+            crate::ReceiptAction::Bundle {
+                action: crate::ReceiptBundleAction::Export {
+                    records: Vec::new(),
+                    outputs: vec![output.clone()],
+                    to: bundle_path.clone(),
+                    policy_hash: "policy-v1".to_string(),
+                    strong: false,
+                    trusted_public_keys: Vec::new(),
+                },
             },
             &bundle_state,
             "/mantle/store",
             true,
-            TEST_VALID_AT_UNIX_S,
         )
         .unwrap();
         let bundle = read_receipt_bundle(&bundle_path).unwrap();
 
-        let err = cmd_receipt_bundle(
-            crate::ReceiptBundleAction::Import {
-                from: bundle_path,
-                outputs: vec![output],
-                policy_hash: Some("policy-v1".to_string()),
-                archive: None,
-                valid_at_unix_s: Some(TEST_VALID_AT_UNIX_S),
-                revocation_ref: None,
-                revoked_public_key_digests: Vec::new(),
-                trusted_public_keys: Vec::new(),
+        let err = cmd_receipt(
+            crate::ReceiptAction::Bundle {
+                action: crate::ReceiptBundleAction::Import {
+                    from: bundle_path,
+                    outputs: vec![output],
+                    policy_hash: Some("policy-v1".to_string()),
+                    archive: None,
+                    valid_at_unix_s: Some(TEST_VALID_AT_UNIX_S),
+                    revocation_ref: None,
+                    revoked_public_key_digests: Vec::new(),
+                    trusted_public_keys: Vec::new(),
+                },
             },
             &import_state,
             "/mantle/store",
             true,
-            TEST_VALID_AT_UNIX_S,
         )
         .unwrap_err();
 
@@ -3212,6 +3612,7 @@ mod tests {
             payload_bytes: 0,
             content_blake3: content_blake3.to_string(),
             files: Vec::new(),
+            store_path_attestation: None,
         };
         let records_dir = state_dir.join(SOURCE_STATE_DIR).join(SOURCE_RECORDS_DIR);
         fs::create_dir_all(&records_dir).unwrap();

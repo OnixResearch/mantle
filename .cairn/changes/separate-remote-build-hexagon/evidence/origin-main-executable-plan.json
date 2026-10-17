@@ -1,0 +1,23 @@
+{
+  "request_id": "request-1",
+  "store_prefix": "/mantle/store",
+  "source": {
+    "kind": "action",
+    "action_id": "action-1",
+    "schema": "mantle-remote-action-v1",
+    "spec_digest_blake3": "0e384d867379130b704093f3a6a5a8c9ab5fa4bb3d62d476816bc671309abba8"
+  },
+  "command_args": [
+    "builtin:fixture",
+    "--emit"
+  ],
+  "command_env": {},
+  "system": "x86_64-linux",
+  "expected_outputs": [
+    {
+      "name": "out",
+      "logical_path": "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-fixture"
+    }
+  ],
+  "plan_digest_blake3": "ffb523566c54d9a2d6ea4be3fbeed00d80df3db4b5a7472f77aca535583dd53b"
+}

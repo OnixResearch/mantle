@@ -1,0 +1,88 @@
+source_bytes=20761 source_sha256=5102b381238f4508f823a466844d13fce4838bace0d7db8adb9f366485c9bf7c
+preflight path=/tmp/mantle-unit-plan-20261013-87lqAtNv available_bytes=353170591744 floor=53687091200
+preflight path=/home/brittonr available_bytes=353170591744 floor=2684354560
+start_utc=2026-10-15T01:15:27.406364+00:00
+command=['/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo', '--config', '.cargo/vendor-config.toml', '--config', 'target.x86_64-unknown-linux-gnu.linker="/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc"', 'test', '--locked', '--offline', '-p', 'mantle-cargo-unit-plan', '--lib', '--tests', '--bins', '--', '--nocapture', '--test-threads=1']
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling mantle-cargo-unit-plan v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/mantle-cargo-unit-plan)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.34s
+     Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_cargo_unit_plan-03a008892d1f53ab)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/unit_helper.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_cargo_unit_helper-72eaa3cc4b574ff0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/producer.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/mantle_cargo_unit_producer-e61f8cc0b21b3ad8)
+
+running 4 tests
+test tests::copied_readonly_workspace_accepts_only_declared_source_config ... ok
+test tests::two_cargo_packages_cannot_claim_the_same_links_key ... ok
+test tests::undeclared_native_role_does_not_become_a_host_path ... ok
+test tests::unknown_cargo_unit_graph_version_blocks_before_lowering ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/directives.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/directives-33d7484b5705f625)
+
+running 2 tests
+test directives_preserve_cfg_env_link_order_and_metadata ... ok
+test rejected_directives_cannot_cross_into_compilation_or_host_paths ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/helper.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/helper-e377a523f9680039)
+
+running 9 tests
+test absent_direct_manifest_blocks_before_compilation ... ok
+test cargo_feature_cfg_quotes_reach_rustc_through_response_file ... ok
+test declared_native_archive_links_and_missing_declaration_fails_script ... ok
+test error_directive_and_nonzero_script_exit_fail_without_flags ... ok
+test generated_source_cfg_and_env_flow_from_executed_script_to_compiler ... ok
+test links_metadata_from_producer_script_reaches_dependent_script ... ok
+test oversized_stdout_and_stderr_kill_and_reap_scripts_without_flags ... ok
+test run_script_reads_declared_release_profile_instead_of_compiler_defaults ... ok
+test three_unit_build_links_transitive_library_through_manifests ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.25s
+
+     Running tests/lowering.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/lowering-2ad35971b91bee7f)
+
+running 8 tests
+test build_script_run_dependencies_bind_flags_target_and_native_inputs ... ok
+test direct_dependencies_and_manifest_contract_are_canonical ... ok
+test full_digest_source_id_is_distinct_from_bounded_slice_path ... ok
+test generic_plan_unit_input_and_byte_limits_block_before_publication ... ok
+test multiple_roots_sort_by_wire_identity_not_raw_cargo_identity ... ok
+test proc_macro_host_unit_and_git_source_boundary ... ok
+test runtime_tool_roots_are_explicit_unit_inputs_and_change_plan_identity ... ok
+test unsupported_execution_modes_and_unbound_paths_fail_closed ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+     Running tests/producer.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/producer-576f088688663993)
+
+running 2 tests
+test missing_native_role_rejects_before_copying_workspace_or_starting_cargo ... ok
+test unavailable_registry_source_cannot_use_network_or_ambient_cargo_home ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/source_nar.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/source_nar-12d1ad00bc188e27)
+
+running 2 tests
+test package_slice_digest_matches_nix_nar_bytes ... ok
+test source_slice_rejects_symlinks_and_special_files ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+end_utc=2026-10-15T01:15:37.552206+00:00
+exit=0 elapsed_seconds=10.146183

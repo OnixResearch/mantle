@@ -1,6 +1,7 @@
 // machine-artifact-public: operator-diagnostics.doctor-report
 // machine-artifact-public: runtime.diagnostic-fingerprint
 use std::ffi::CString;
+use std::ffi::OsString;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -15,7 +16,7 @@ const SANDBOX_SHELL_DEFAULT: &str = match option_env!("SNIX_BUILD_SANDBOX_SHELL"
     Some(path) => path,
     None => SANDBOX_SHELL_PLACEHOLDER,
 };
-const BWRAP_PATH_ENV: &str = "SNIX_BUILD_BWRAP";
+pub(crate) const BWRAP_PATH_ENV: &str = "SNIX_BUILD_BWRAP";
 const MAX_NIX_STORE_SCAN_ENTRIES: u32 = 200_000;
 const MAX_PARENT_ASCENT: u32 = 64;
 const MAX_REDACTED_SUMMARY_COUNT: u32 = 4_096;
@@ -234,7 +235,28 @@ pub struct DoctorRequest<'a> {
     pub state_dir: &'a Path,
 }
 
+/// Only ambient reads inside the doctor collector pass through this boundary.
+/// Filesystem probes and SelfBuild's nightly subprocess checks remain unchanged.
+pub(crate) trait DoctorEnvironmentReader {
+    fn var_os(&mut self, key: &'static str) -> Option<OsString>;
+}
+
+struct ProcessDoctorEnvironment;
+
+impl DoctorEnvironmentReader for ProcessDoctorEnvironment {
+    fn var_os(&mut self, key: &'static str) -> Option<OsString> {
+        std::env::var_os(key)
+    }
+}
+
 pub fn collect_doctor_report(request: DoctorRequest<'_>) -> PreflightReport {
+    collect_doctor_report_with_env(request, &mut ProcessDoctorEnvironment)
+}
+
+pub(crate) fn collect_doctor_report_with_env(
+    request: DoctorRequest<'_>,
+    environment: &mut impl DoctorEnvironmentReader,
+) -> PreflightReport {
     assert!(!request.store_dir.as_os_str().is_empty(), "store_dir must not be empty");
     assert!(!request.state_dir.as_os_str().is_empty(), "state_dir must not be empty");
 
@@ -242,9 +264,9 @@ pub fn collect_doctor_report(request: DoctorRequest<'_>) -> PreflightReport {
     if request.profile.needs_nightly_toolchain() {
         checks.push(check_nightly_toolchain_visibility());
     }
-    checks.push(check_bwrap_visibility());
-    checks.push(check_sandbox_shell_availability());
-    checks.push(check_fusermount3_availability());
+    checks.push(check_bwrap_visibility(environment));
+    checks.push(check_sandbox_shell_availability(environment));
+    checks.push(check_fusermount3_availability(environment));
     checks.push(check_directory_writable("state-dir", request.state_dir, "state directory"));
     checks.push(check_directory_writable("store-dir", request.store_dir, "store directory"));
     let is_ok = checks.iter().all(|check| check.status == PreflightStatus::Ok);
@@ -342,11 +364,11 @@ fn command_supports_nightly(program: &str) -> bool {
     }
 }
 
-fn check_bwrap_visibility() -> PreflightCheck {
-    if let Some(path) = explicit_bwrap_path_from_env() {
+fn check_bwrap_visibility(environment: &mut impl DoctorEnvironmentReader) -> PreflightCheck {
+    if let Some(path) = explicit_bwrap_path_from_env(environment) {
         return check_explicit_bwrap(&path);
     }
-    if let Some(path) = find_bwrap() {
+    if let Some(path) = find_bwrap(environment) {
         return ok_check("bwrap", format!("found {}", path.display()), None);
     }
 
@@ -359,8 +381,8 @@ fn check_bwrap_visibility() -> PreflightCheck {
     )
 }
 
-fn explicit_bwrap_path_from_env() -> Option<PathBuf> {
-    explicit_bwrap_path(std::env::var_os(BWRAP_PATH_ENV))
+fn explicit_bwrap_path_from_env(environment: &mut impl DoctorEnvironmentReader) -> Option<PathBuf> {
+    explicit_bwrap_path(environment.var_os(BWRAP_PATH_ENV))
 }
 
 fn explicit_bwrap_path(value: Option<std::ffi::OsString>) -> Option<PathBuf> {
@@ -383,18 +405,18 @@ fn check_explicit_bwrap(path: &Path) -> PreflightCheck {
     )
 }
 
-fn find_bwrap() -> Option<PathBuf> {
+fn find_bwrap(environment: &mut impl DoctorEnvironmentReader) -> Option<PathBuf> {
     let wrapper = Path::new("/run/wrappers/bin/bwrap");
     if is_executable_file(wrapper) {
         return Some(wrapper.to_path_buf());
     }
-    find_executable_on_path("bwrap")
+    find_executable_on_path("bwrap", environment)
 }
 
-fn check_sandbox_shell_availability() -> PreflightCheck {
+fn check_sandbox_shell_availability(environment: &mut impl DoctorEnvironmentReader) -> PreflightCheck {
     assert!(!SANDBOX_SHELL_PLACEHOLDER.is_empty(), "sandbox shell placeholder must not be empty");
     assert!(!BWRAP_PATH_ENV.is_empty(), "bwrap environment key must not be empty");
-    if let Some(env_shell) = std::env::var_os("SNIX_BUILD_SANDBOX_SHELL")
+    if let Some(env_shell) = environment.var_os("SNIX_BUILD_SANDBOX_SHELL")
         && env_shell != SANDBOX_SHELL_PLACEHOLDER
     {
         let env_path = PathBuf::from(env_shell);
@@ -466,8 +488,8 @@ fn find_busybox_static_in_dir(store_dir: &Path) -> Option<PathBuf> {
     None
 }
 
-fn check_fusermount3_availability() -> PreflightCheck {
-    if let Some(path) = find_fusermount3() {
+fn check_fusermount3_availability(environment: &mut impl DoctorEnvironmentReader) -> PreflightCheck {
+    if let Some(path) = find_fusermount3(environment) {
         return ok_check("fusermount3", format!("found {}", path.display()), None);
     }
 
@@ -478,16 +500,16 @@ fn check_fusermount3_availability() -> PreflightCheck {
     )
 }
 
-fn find_fusermount3() -> Option<PathBuf> {
+fn find_fusermount3(environment: &mut impl DoctorEnvironmentReader) -> Option<PathBuf> {
     let wrapper = Path::new("/run/wrappers/bin/fusermount3");
     if is_executable_file(wrapper) {
         return Some(wrapper.to_path_buf());
     }
-    find_executable_on_path("fusermount3")
+    find_executable_on_path("fusermount3", environment)
 }
 
-fn find_executable_on_path(name: &str) -> Option<PathBuf> {
-    let path_var = std::env::var_os("PATH")?;
+fn find_executable_on_path(name: &str, environment: &mut impl DoctorEnvironmentReader) -> Option<PathBuf> {
+    let path_var = environment.var_os("PATH")?;
     for dir in std::env::split_paths(&path_var) {
         let candidate = dir.join(name);
         if is_executable_file(&candidate) {
@@ -576,6 +598,89 @@ mod tests {
     fn default_profile_is_build() {
         assert_eq!(DoctorProfile::default(), DoctorProfile::Build);
         assert_eq!(DoctorProfile::default().as_str(), "build");
+    }
+    struct FixedDoctorEnvironment {
+        bwrap: Option<OsString>,
+        shell: Option<OsString>,
+        path: Option<OsString>,
+        reads: Vec<&'static str>,
+    }
+
+    impl DoctorEnvironmentReader for FixedDoctorEnvironment {
+        fn var_os(&mut self, key: &'static str) -> Option<OsString> {
+            self.reads.push(key);
+            match key {
+                BWRAP_PATH_ENV => self.bwrap.clone(),
+                "SNIX_BUILD_SANDBOX_SHELL" => self.shell.clone(),
+                "PATH" => self.path.clone(),
+                unexpected => panic!("unplanned doctor environment read: {unexpected}"),
+            }
+        }
+    }
+
+    #[test]
+    fn build_doctor_uses_injected_environment_to_find_real_executables() {
+        let directory = tempfile::tempdir().unwrap();
+        for executable in ["bwrap", "sandbox-shell", "fusermount3"] {
+            let path = directory.path().join(executable);
+            std::fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let mut environment = FixedDoctorEnvironment {
+            bwrap: Some(directory.path().join("bwrap").into_os_string()),
+            shell: Some(directory.path().join("sandbox-shell").into_os_string()),
+            path: Some(directory.path().as_os_str().to_os_string()),
+            reads: Vec::new(),
+        };
+        let report = collect_doctor_report_with_env(
+            DoctorRequest {
+                profile: DoctorProfile::Build,
+                state_dir: directory.path(),
+                store_dir: directory.path(),
+            },
+            &mut environment,
+        );
+        assert!(report.ok, "{report:?}");
+        assert_eq!(environment.reads[0], BWRAP_PATH_ENV);
+        assert_eq!(environment.reads[1], "SNIX_BUILD_SANDBOX_SHELL");
+        assert!(
+            environment
+                .reads
+                .iter()
+                .all(|key| matches!(*key, BWRAP_PATH_ENV | "SNIX_BUILD_SANDBOX_SHELL" | "PATH"))
+        );
+        assert!(environment.reads.len() <= 4);
+        assert_eq!(
+            find_executable_on_path("fusermount3", &mut environment),
+            Some(directory.path().join("fusermount3"))
+        );
+        assert_eq!(environment.reads.last(), Some(&"PATH"));
+    }
+
+    #[test]
+    fn build_doctor_rejects_injected_missing_executables_without_changing_process_environment() {
+        let directory = tempfile::tempdir().unwrap();
+        let absent = directory.path().join("absent");
+        let mut environment = FixedDoctorEnvironment {
+            bwrap: Some(absent.clone().into_os_string()),
+            shell: Some(absent.into_os_string()),
+            path: None,
+            reads: Vec::new(),
+        };
+        let report = collect_doctor_report_with_env(
+            DoctorRequest {
+                profile: DoctorProfile::Build,
+                state_dir: directory.path(),
+                store_dir: directory.path(),
+            },
+            &mut environment,
+        );
+        assert!(!report.ok);
+        assert_eq!(report.checks[0].id, "bwrap");
+        assert_eq!(report.checks[0].status, PreflightStatus::Failed);
+        assert_eq!(report.checks[1].id, "sandbox-shell");
+        assert_eq!(report.checks[1].status, PreflightStatus::Failed);
+        assert_eq!(environment.reads[0..2], [BWRAP_PATH_ENV, "SNIX_BUILD_SANDBOX_SHELL"]);
     }
 
     #[test]

@@ -1,0 +1,10 @@
+{
+  "error": "Historical detached APK task 254 was paused and killed before any APK Cargo compilation: shared crunch-build sources and backend Cargo.lock were changing. CA BUILD SOURCE TYPE READY is type-only, not signed APK proof or source-capture permission. Await BACKEND TEST SNAPSHOT DONE, CA final source-ready, backend's serialized manifest/lock/vendor transaction with stable lock, and S0 B2/root integrator second-source stability; only then capture an isolated verified full-source snapshot and run the real SDK proof from it.",
+  "first_binary_sha256": "9bff7a785ac1e74bff7966cf95e8f1501daed8ce39095e16c407b14949409eb0",
+  "pueue_task": {"id": 254, "result": "Killed", "ended_at": "2026-10-01T01:25:38-04:00"},
+  "schema": "mantle-android-reviewed-signed-java-apk-proof-v1",
+  "source_bundle_blake3": "ca3dd6d4a669eabdc994a9cfe46943f3f16cf9fe69722235aac2cf942a488524",
+  "stage": "immutable-source-snapshot-prerequisite",
+  "status": "blocked",
+  "success_receipt_written": false
+}

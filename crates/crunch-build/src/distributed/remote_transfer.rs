@@ -13,33 +13,58 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use crunch_remote_core::attempt::RemoteAttemptId;
+use crunch_remote_core::attempt::RemoteFenceGeneration;
+use crunch_remote_core::attempt::RemoteJobId;
+use crunch_remote_core::transfer::TRANSFER_CHECKPOINT_DOMAIN;
+use crunch_remote_core::transfer::TRANSFER_MANIFEST_DOMAIN;
+use crunch_remote_core::transfer::TRANSFER_POLICY_DOMAIN;
+use crunch_remote_core::transfer::TransferArtifactFacts;
+use crunch_remote_core::transfer::TransferCheckpointCounterFacts;
+use crunch_remote_core::transfer::TransferCheckpointMonotonicFacts;
+use crunch_remote_core::transfer::TransferChunkFacts;
+use crunch_remote_core::transfer::TransferCreditFacts;
+use crunch_remote_core::transfer::TransferCreditLimits;
+use crunch_remote_core::transfer::TransferCreditSnapshot;
+use crunch_remote_core::transfer::TransferCutoffAdmissionFacts;
+use crunch_remote_core::transfer::TransferCutoffDisposition;
+use crunch_remote_core::transfer::TransferDemandArtifactFacts;
+use crunch_remote_core::transfer::TransferDemandChunkFacts;
+use crunch_remote_core::transfer::TransferIdentityError;
+use crunch_remote_core::transfer::TransferManifestEnvelopeFacts;
+use crunch_remote_core::transfer::TransferManifestError;
+use crunch_remote_core::transfer::TransferManifestTotals;
+use crunch_remote_core::transfer::TransferMissingChunkFacts;
+use crunch_remote_core::transfer::TransferPolicyFacts;
+use crunch_remote_core::transfer::TransferProgressError;
+use crunch_remote_core::transfer::TransferRequiredArtifactFacts;
+use crunch_remote_core::transfer::TransferReservedChunkFacts;
+use crunch_remote_core::transfer::TransferScopeFacts;
+use crunch_remote_core::transfer::acknowledge_transfer_chunk;
+use crunch_remote_core::transfer::decide_transfer_cutoff;
+use crunch_remote_core::transfer::grant_transfer_credit;
+use crunch_remote_core::transfer::is_transfer_artifact_id_valid;
+use crunch_remote_core::transfer::plan_transfer_demand;
+use crunch_remote_core::transfer::reserve_transfer_chunk;
+use crunch_remote_core::transfer::transfer_domain_digest;
+use crunch_remote_core::transfer::transfer_session_digest;
+use crunch_remote_core::transfer::validate_transfer_checkpoint_acknowledgements;
+use crunch_remote_core::transfer::validate_transfer_checkpoint_counters;
+use crunch_remote_core::transfer::validate_transfer_checkpoint_monotonic;
+use crunch_remote_core::transfer::validate_transfer_checkpoint_schema;
+use crunch_remote_core::transfer::validate_transfer_credit_state;
+use crunch_remote_core::transfer::validate_transfer_idle_progress;
+use crunch_remote_core::transfer::validate_transfer_manifest_artifacts;
+use crunch_remote_core::transfer::validate_transfer_manifest_envelope;
+use crunch_remote_core::transfer::validate_transfer_manifest_prefix;
+use crunch_remote_core::transfer::validate_transfer_policy;
+use crunch_remote_core::transfer::validate_transfer_receiver_facts;
+use crunch_remote_core::transfer::validate_transfer_scope;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::remote_attempt::RemoteAttemptId;
-use super::remote_attempt::RemoteFenceGeneration;
-use super::remote_attempt::RemoteJobId;
-
 pub const REMOTE_TRANSFER_MANIFEST_SCHEMA: &str = "mantle-remote-transfer-manifest-v1";
 pub const REMOTE_TRANSFER_CHECKPOINT_SCHEMA: &str = "mantle-remote-transfer-checkpoint-v1";
-pub const REMOTE_TRANSFER_MANIFEST_DOMAIN: &str = "mantle-remote-transfer-manifest-v1";
-pub const REMOTE_TRANSFER_POLICY_DOMAIN: &str = "mantle-remote-transfer-policy-v1";
-pub const REMOTE_TRANSFER_CHECKPOINT_DOMAIN: &str = "mantle-remote-transfer-checkpoint-v1";
-pub const REMOTE_TRANSFER_SESSION_DOMAIN: &str = "mantle-remote-transfer-session-v1";
-
-pub const MAX_REMOTE_TRANSFER_ID_BYTES: usize = 256;
-pub const MAX_REMOTE_TRANSFER_STORE_PREFIX_BYTES: usize = 4_096;
-pub const MAX_REMOTE_TRANSFER_ARTIFACTS_HARD: u32 = 1_000_000;
-pub const MAX_REMOTE_TRANSFER_CHUNKS_HARD: u32 = 4_000_000;
-pub const MAX_REMOTE_TRANSFER_CHUNK_BYTES_HARD: u32 = 1_048_576;
-pub const MAX_REMOTE_TRANSFER_IN_FLIGHT_BYTES_HARD: u64 = 67_108_864;
-pub const MAX_REMOTE_TRANSFER_IN_FLIGHT_CHUNKS_HARD: u32 = 1_024;
-pub const MAX_REMOTE_TRANSFER_BUFFERED_CHUNKS_HARD: u32 = 1_024;
-pub const MAX_REMOTE_TRANSFER_TOTAL_BYTES_HARD: u64 = 1_099_511_627_776;
-pub const MAX_REMOTE_TRANSFER_CHECKPOINT_BYTES_HARD: u32 = 1_048_576;
-pub const MAX_REMOTE_TRANSFER_IDLE_PROGRESS_STEPS_HARD: u32 = 1_000_000;
-pub const MAX_REMOTE_TRANSFER_REPLAY_ROUNDS_HARD: u32 = 32;
-pub const MAX_REMOTE_TRANSFER_CONTROL_BYTES_HARD: u32 = 1_048_576;
 
 pub const DEFAULT_REMOTE_TRANSFER_CHUNK_BYTES: u32 = 65_536;
 pub const DEFAULT_REMOTE_TRANSFER_IN_FLIGHT_BYTES: u64 = 1_048_576;
@@ -53,12 +78,13 @@ pub const DEFAULT_REMOTE_TRANSFER_IDLE_PROGRESS_STEPS: u32 = 1_024;
 pub const DEFAULT_REMOTE_TRANSFER_REPLAY_ROUNDS: u32 = 4;
 pub const DEFAULT_REMOTE_TRANSFER_CONTROL_BYTES: u32 = 1_048_576;
 
-const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
+#[cfg(test)]
 const SHA256_HEX_LENGTH_CHARS: usize = 64;
+#[cfg(test)]
 const INITIAL_CHUNK_INDEX: u32 = 0;
+#[cfg(test)]
 const INITIAL_CHUNK_OFFSET_BYTES: u64 = 0;
 const INITIAL_CHUNK_SEQUENCE: u64 = 0;
-const HASH_LENGTH_PREFIX_BYTES: usize = std::mem::size_of::<u64>();
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -67,7 +93,7 @@ pub struct RemoteTransferDigest(String);
 impl RemoteTransferDigest {
     pub fn new(value: impl Into<String>) -> Result<Self, RemoteTransferReasonCode> {
         let value = value.into();
-        if !is_lower_hex_digest(&value, BLAKE3_HEX_LENGTH_CHARS) {
+        if !crunch_remote_core::output::is_blake3_hex_digest(&value) {
             return Err(RemoteTransferReasonCode::DigestInvalid);
         }
         Ok(Self(value))
@@ -85,7 +111,7 @@ pub struct RemoteTransferSessionId(String);
 impl RemoteTransferSessionId {
     pub fn new(value: impl Into<String>) -> Result<Self, RemoteTransferReasonCode> {
         let value = value.into();
-        if !is_lower_hex_digest(&value, BLAKE3_HEX_LENGTH_CHARS) {
+        if !crunch_remote_core::output::is_blake3_hex_digest(&value) {
             return Err(RemoteTransferReasonCode::SessionIdentityInvalid);
         }
         Ok(Self(value))
@@ -102,7 +128,11 @@ pub struct RemoteTransferArtifactId(String);
 
 impl RemoteTransferArtifactId {
     pub fn new(value: impl Into<String>) -> Result<Self, RemoteTransferReasonCode> {
-        bounded_transfer_identity(value.into()).map(Self)
+        let value = value.into();
+        if !is_transfer_artifact_id_valid(&value) {
+            return Err(RemoteTransferReasonCode::ArtifactIdentityInvalid);
+        }
+        Ok(Self(value))
     }
 
     pub fn as_str(&self) -> &str {
@@ -182,16 +212,21 @@ impl Default for RemoteTransferPolicy {
 
 impl RemoteTransferPolicy {
     pub fn validate(self) -> Result<(), RemoteTransferReasonCode> {
-        validate_nonzero_policy_fields(self)?;
-        validate_hard_policy_limits(self)?;
-        if u64::from(self.chunk_bytes_max) > self.in_flight_bytes_max {
+        if !validate_transfer_policy(TransferPolicyFacts {
+            chunk_bytes_max: self.chunk_bytes_max,
+            in_flight_bytes_max: self.in_flight_bytes_max,
+            in_flight_chunks_max: self.in_flight_chunks_max,
+            buffered_chunks_max: self.buffered_chunks_max,
+            artifact_count_max: self.artifact_count_max,
+            chunk_count_max: self.chunk_count_max,
+            total_bytes_max: self.total_bytes_max,
+            checkpoint_bytes_max: self.checkpoint_bytes_max,
+            idle_progress_steps_max: self.idle_progress_steps_max,
+            replay_rounds_max: self.replay_rounds_max,
+            control_bytes_max: self.control_bytes_max,
+        }) {
             return Err(RemoteTransferReasonCode::PolicyInvalid);
         }
-        if self.in_flight_chunks_max > self.buffered_chunks_max {
-            return Err(RemoteTransferReasonCode::PolicyInvalid);
-        }
-        debug_assert!(self.chunk_bytes_max > 0);
-        debug_assert!(self.total_bytes_max > 0);
         Ok(())
     }
 }
@@ -346,14 +381,6 @@ pub struct RemoteTransferCompletionDecision {
     pub output_admission_claimed: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct TransferCompletionFacts {
-    disposition: RemoteTransferCompletionDisposition,
-    reason_code: RemoteTransferReasonCode,
-    transferred_bytes: u64,
-    reused_bytes: u64,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RemoteTransferReasonCode {
@@ -471,8 +498,14 @@ pub fn canonical_remote_transfer_policy_digest(
 ) -> Result<RemoteTransferDigest, RemoteTransferReasonCode> {
     policy.validate()?;
     let bytes = serde_json::to_vec(&policy).map_err(|_| RemoteTransferReasonCode::PolicySerializationFailed)?;
-    let digest = domain_hash(REMOTE_TRANSFER_POLICY_DOMAIN, &bytes)?;
-    debug_assert_eq!(digest.as_str().len(), BLAKE3_HEX_LENGTH_CHARS);
+    let digest = RemoteTransferDigest(
+        blake3::Hash::from_bytes(
+            transfer_domain_digest(TRANSFER_POLICY_DOMAIN, &bytes)
+                .map_err(|_| RemoteTransferReasonCode::ArithmeticOverflow)?,
+        )
+        .to_hex()
+        .to_string(),
+    );
     debug_assert!(!bytes.is_empty());
     Ok(digest)
 }
@@ -484,15 +517,18 @@ pub fn derive_remote_transfer_session_id(
     requested_content_blake3: &RemoteTransferDigest,
     policy_digest_blake3: &RemoteTransferDigest,
 ) -> Result<RemoteTransferSessionId, RemoteTransferReasonCode> {
-    let mut hasher = blake3::Hasher::new();
-    hash_part(&mut hasher, REMOTE_TRANSFER_SESSION_DOMAIN)?;
-    hash_part(&mut hasher, job_id.as_str())?;
-    hash_part(&mut hasher, attempt_id.as_str())?;
-    hash_part(&mut hasher, &fence_generation.get().to_string())?;
-    hash_part(&mut hasher, requested_content_blake3.as_str())?;
-    hash_part(&mut hasher, policy_digest_blake3.as_str())?;
-    let value = hasher.finalize().to_hex().to_string();
-    debug_assert_eq!(value.len(), BLAKE3_HEX_LENGTH_CHARS);
+    let digest = transfer_session_digest(
+        job_id.as_str(),
+        attempt_id.as_str(),
+        fence_generation.get(),
+        requested_content_blake3.as_str(),
+        policy_digest_blake3.as_str(),
+    )
+    .map_err(|reason| match reason {
+        TransferIdentityError::Invalid => RemoteTransferReasonCode::SessionIdentityInvalid,
+        TransferIdentityError::ArithmeticOverflow => RemoteTransferReasonCode::ArithmeticOverflow,
+    })?;
+    let value = blake3::Hash::from_bytes(digest).to_hex().to_string();
     debug_assert!(fence_generation.get() > 0);
     RemoteTransferSessionId::new(value)
 }
@@ -510,11 +546,17 @@ pub fn canonicalize_remote_transfer_manifest(
     if canonical_bytes.len() > u32_to_usize(policy.control_bytes_max)? {
         return Err(RemoteTransferReasonCode::ManifestBoundsExceeded);
     }
-    let digest_blake3 = domain_hash(REMOTE_TRANSFER_MANIFEST_DOMAIN, &canonical_bytes)?;
+    let digest_blake3 = RemoteTransferDigest(
+        blake3::Hash::from_bytes(
+            transfer_domain_digest(TRANSFER_MANIFEST_DOMAIN, &canonical_bytes)
+                .map_err(|_| RemoteTransferReasonCode::ArithmeticOverflow)?,
+        )
+        .to_hex()
+        .to_string(),
+    );
     let artifact_count =
         u32::try_from(manifest.artifacts.len()).map_err(|_| RemoteTransferReasonCode::ManifestBoundsExceeded)?;
     debug_assert_eq!(artifact_count, totals.artifact_count);
-    debug_assert_eq!(digest_blake3.as_str().len(), BLAKE3_HEX_LENGTH_CHARS);
     Ok(CanonicalRemoteTransferManifest {
         manifest,
         canonical_bytes,
@@ -543,33 +585,36 @@ pub fn plan_remote_transfer_demand(
     manifest: &CanonicalRemoteTransferManifest,
     receiver: &RemoteTransferReceiverFacts,
 ) -> Result<RemoteTransferDemand, RemoteTransferReasonCode> {
-    validate_receiver_facts(manifest, receiver)?;
     let mut missing_chunks = Vec::new();
-    let mut missing_bytes = 0_u64;
-    let mut reused_bytes = 0_u64;
-    let mut available_chunks = receiver.complete_chunk_digests.clone();
-    for artifact in &manifest.manifest.artifacts {
-        if receiver.complete_artifact_ids.contains(&artifact.artifact_id) {
-            reused_bytes = reused_bytes.checked_add_bytes(artifact.size_bytes)?;
-            continue;
-        }
-        append_artifact_demand(
-            artifact,
-            &mut available_chunks,
-            &mut missing_chunks,
-            &mut missing_bytes,
-            &mut reused_bytes,
-        )?;
-    }
-    let missing_chunk_count =
-        u32::try_from(missing_chunks.len()).map_err(|_| RemoteTransferReasonCode::ArithmeticOverflow)?;
-    debug_assert!(missing_chunk_count <= manifest.chunk_count);
-    debug_assert!(missing_bytes <= manifest.total_bytes);
+    let totals = plan_transfer_demand(
+        manifest.manifest.artifacts.iter().map(|artifact| TransferDemandArtifactFacts {
+            artifact_id: artifact.artifact_id.as_str(),
+            size_bytes: artifact.size_bytes,
+            chunks: artifact.chunks.iter().map(|chunk| TransferDemandChunkFacts {
+                digest_blake3: chunk.digest_blake3.as_str(),
+                size_bytes: chunk.size_bytes,
+            }),
+        }),
+        receiver.complete_artifact_ids.iter().map(RemoteTransferArtifactId::as_str),
+        receiver.complete_chunk_digests.iter().map(RemoteTransferDigest::as_str),
+        manifest.chunk_count,
+        |artifact_index, chunk_index| {
+            let artifact = &manifest.manifest.artifacts[artifact_index];
+            missing_chunks.push(RemoteTransferChunkDemand {
+                artifact_id: artifact.artifact_id.clone(),
+                artifact_kind: artifact.artifact_kind,
+                chunk: artifact.chunks[chunk_index].clone(),
+            });
+        },
+    )
+    .map_err(transfer_manifest_reason)?;
+    debug_assert_eq!(u32::try_from(missing_chunks.len()), Ok(totals.missing_chunk_count));
+    debug_assert!(totals.missing_bytes <= manifest.total_bytes);
     Ok(RemoteTransferDemand {
         scope: remote_transfer_scope(manifest),
         missing_chunks,
-        missing_bytes,
-        reused_bytes,
+        missing_bytes: totals.missing_bytes,
+        reused_bytes: totals.reused_bytes,
     })
 }
 
@@ -623,24 +668,19 @@ pub fn grant_remote_transfer_credit(
     available_storage_bytes: u64,
 ) -> Result<RemoteTransferCreditState, RemoteTransferReasonCode> {
     policy.validate()?;
-    validate_credit_state(policy, state)?;
-    if requested.bytes == 0 || requested.chunks == 0 {
-        return Err(RemoteTransferReasonCode::CreditGrantInvalid);
-    }
-    let next_bytes = state.granted_bytes_remaining.checked_add_bytes(requested.bytes)?;
-    let next_chunks = state
-        .granted_chunks_remaining
-        .checked_add(requested.chunks)
-        .ok_or(RemoteTransferReasonCode::ArithmeticOverflow)?;
-    let in_flight_bytes = in_flight_bytes(state)?;
-    let in_flight_chunks = in_flight_chunks(state)?;
-    validate_credit_headroom(policy, next_bytes, next_chunks, in_flight_bytes, in_flight_chunks)?;
-    if requested.bytes > available_storage_bytes {
-        return Err(RemoteTransferReasonCode::CreditExceeded);
-    }
+    let snapshot = validate_credit_state(policy, state)?;
+    let grant = grant_transfer_credit(
+        transfer_credit_limits(policy),
+        transfer_credit_facts(state),
+        snapshot,
+        requested.bytes,
+        requested.chunks,
+        available_storage_bytes,
+    )
+    .map_err(transfer_progress_reason)?;
     let mut next = state.clone();
-    next.granted_bytes_remaining = next_bytes;
-    next.granted_chunks_remaining = next_chunks;
+    next.granted_bytes_remaining = grant.granted_bytes_remaining;
+    next.granted_chunks_remaining = grant.granted_chunks_remaining;
     debug_assert!(next.granted_bytes_remaining <= policy.in_flight_bytes_max);
     debug_assert!(next.granted_chunks_remaining <= policy.in_flight_chunks_max);
     Ok(next)
@@ -655,54 +695,69 @@ pub fn reserve_remote_transfer_chunk(
 ) -> Result<RemoteTransferCreditState, RemoteTransferReasonCode> {
     policy.validate()?;
     validate_credit_state(policy, state)?;
-    validate_chunk_header(manifest, policy, demand, state, header)?;
+    let decision = reserve_transfer_chunk(
+        transfer_credit_limits(policy),
+        manifest_scope_facts(manifest),
+        transfer_scope_facts(&demand.scope),
+        transfer_scope_facts(&header.scope),
+        transfer_credit_facts(state),
+        header.sequence,
+        transfer_reserved_chunk_facts(&header.artifact_id, header.artifact_kind, &header.chunk),
+        demand
+            .missing_chunks
+            .iter()
+            .map(|missing| transfer_reserved_chunk_facts(&missing.artifact_id, missing.artifact_kind, &missing.chunk)),
+        state.in_flight.contains_key(&header.sequence),
+    )
+    .map_err(transfer_progress_reason)?;
     let mut next = state.clone();
-    next.granted_bytes_remaining = next
-        .granted_bytes_remaining
-        .checked_sub(u64::from(header.chunk.size_bytes))
-        .ok_or(RemoteTransferReasonCode::CreditExceeded)?;
-    next.granted_chunks_remaining =
-        next.granted_chunks_remaining.checked_sub(1).ok_or(RemoteTransferReasonCode::CreditExceeded)?;
-    let in_flight = RemoteTransferInFlightChunk {
+    next.granted_bytes_remaining = decision.granted_bytes_remaining;
+    next.granted_chunks_remaining = decision.granted_chunks_remaining;
+    let previous = next.in_flight.insert(header.sequence, RemoteTransferInFlightChunk {
         artifact_id: header.artifact_id.clone(),
         chunk_digest_blake3: header.chunk.digest_blake3.clone(),
         size_bytes: header.chunk.size_bytes,
-    };
-    if next.in_flight.insert(header.sequence, in_flight).is_some() {
-        return Err(RemoteTransferReasonCode::ChunkAlreadyInFlight);
-    }
-    next.next_sequence = header.sequence.checked_add(1).ok_or(RemoteTransferReasonCode::ArithmeticOverflow)?;
+    });
+    debug_assert!(previous.is_none());
+    next.next_sequence = decision.next_sequence;
     validate_credit_state(policy, &next)?;
     debug_assert!(next.in_flight.contains_key(&header.sequence));
-    debug_assert_eq!(next.next_sequence.checked_sub(1), Some(header.sequence));
     Ok(next)
 }
 
 pub fn acknowledge_remote_transfer_chunk(
     policy: RemoteTransferPolicy,
+    expected_scope: &RemoteTransferScope,
     state: &RemoteTransferCreditState,
     acknowledgement: &RemoteTransferAcknowledgement,
     observed_digest_blake3: &RemoteTransferDigest,
     progress_step: u64,
 ) -> Result<RemoteTransferCreditState, RemoteTransferReasonCode> {
+    // r[impl remote_builds.transient_handle_introduction]
+    // Only the manifest-established in-flight scope can authenticate an ack.
+    validate_transfer_scope(transfer_scope_facts(expected_scope), transfer_scope_facts(&acknowledgement.scope))
+        .map_err(transfer_progress_reason)?;
     policy.validate()?;
     validate_credit_state(policy, state)?;
-    let in_flight = state
-        .in_flight
-        .get(&acknowledgement.sequence)
-        .ok_or(RemoteTransferReasonCode::AcknowledgementUnknown)?;
-    validate_acknowledgement(state, acknowledgement, observed_digest_blake3, in_flight)?;
+    let transferred = acknowledge_transfer_chunk(
+        transfer_credit_facts(state),
+        acknowledgement.chunk_digest_blake3.as_str(),
+        observed_digest_blake3.as_str(),
+        acknowledgement.transferred_bytes,
+        state
+            .in_flight
+            .get(&acknowledgement.sequence)
+            .map(|chunk| (chunk.chunk_digest_blake3.as_str(), chunk.size_bytes)),
+    )
+    .map_err(transfer_progress_reason)?;
     let mut next = state.clone();
     let removed = next
         .in_flight
         .remove(&acknowledgement.sequence)
         .ok_or(RemoteTransferReasonCode::AcknowledgementUnknown)?;
-    next.transferred_bytes = next.transferred_bytes.checked_add_bytes(u64::from(removed.size_bytes))?;
+    next.transferred_bytes = transferred;
     next.acknowledged_chunk_digests.insert(removed.chunk_digest_blake3);
     next.last_progress_step = progress_step;
-    if next.transferred_bytes != acknowledgement.transferred_bytes {
-        return Err(RemoteTransferReasonCode::AcknowledgementMismatch);
-    }
     validate_credit_state(policy, &next)?;
     debug_assert!(!next.in_flight.contains_key(&acknowledgement.sequence));
     debug_assert!(next.acknowledged_chunk_digests.contains(observed_digest_blake3));
@@ -715,18 +770,8 @@ pub fn validate_remote_transfer_idle_progress(
     current_progress_step: u64,
 ) -> Result<(), RemoteTransferReasonCode> {
     policy.validate()?;
-    if current_progress_step < state.last_progress_step {
-        return Err(RemoteTransferReasonCode::ProgressCounterRegressed);
-    }
-    let idle_steps = current_progress_step
-        .checked_sub(state.last_progress_step)
-        .ok_or(RemoteTransferReasonCode::ArithmeticOverflow)?;
-    if idle_steps > u64::from(policy.idle_progress_steps_max) {
-        return Err(RemoteTransferReasonCode::IdleProgressExceeded);
-    }
-    debug_assert!(current_progress_step >= state.last_progress_step);
-    debug_assert!(idle_steps <= u64::from(policy.idle_progress_steps_max));
-    Ok(())
+    validate_transfer_idle_progress(state.last_progress_step, current_progress_step, policy.idle_progress_steps_max)
+        .map_err(transfer_progress_reason)
 }
 
 pub fn decide_remote_transfer_cutoff(
@@ -736,113 +781,86 @@ pub fn decide_remote_transfer_cutoff(
     acknowledged_chunk_digests: &BTreeSet<RemoteTransferDigest>,
     transferred_bytes: u64,
 ) -> RemoteTransferCompletionDecision {
-    let expected_scope = remote_transfer_scope(manifest);
-    let is_receiver_fact_set_valid = validate_receiver_facts(manifest, receiver).is_ok();
-    if !is_receiver_fact_set_valid || initial_demand.scope != expected_scope {
-        return transfer_completion(TransferCompletionFacts {
-            disposition: RemoteTransferCompletionDisposition::Reject,
-            reason_code: RemoteTransferReasonCode::TransferRejected,
-            transferred_bytes,
-            reused_bytes: initial_demand.reused_bytes,
-        });
-    }
-    debug_assert!(is_receiver_fact_set_valid);
-    debug_assert_eq!(initial_demand.scope, expected_scope);
-    let is_complete_request_admitted = receiver_has_admitted_complete_request(manifest, receiver);
-    if is_complete_request_admitted && initial_demand.missing_chunks.is_empty() {
-        return transfer_completion(TransferCompletionFacts {
-            disposition: RemoteTransferCompletionDisposition::AlreadyPresent,
-            reason_code: RemoteTransferReasonCode::TransferAlreadyPresent,
-            transferred_bytes,
-            reused_bytes: manifest.total_bytes,
-        });
-    }
-    let is_demand_satisfied = demand_is_satisfied(initial_demand, receiver, acknowledged_chunk_digests);
-    if is_complete_request_admitted && is_demand_satisfied {
-        return transfer_completion(TransferCompletionFacts {
-            disposition: RemoteTransferCompletionDisposition::DemandSatisfied,
-            reason_code: RemoteTransferReasonCode::TransferDemandSatisfied,
-            transferred_bytes,
-            reused_bytes: initial_demand.reused_bytes,
-        });
-    }
-    transfer_completion(TransferCompletionFacts {
-        disposition: RemoteTransferCompletionDisposition::Continue,
-        reason_code: RemoteTransferReasonCode::TransferContinue,
+    let selected = decide_transfer_cutoff(
+        manifest_scope_facts(manifest),
+        transfer_scope_facts(&initial_demand.scope),
+        TransferCutoffAdmissionFacts {
+            receiver_facts_valid: validate_receiver_facts(manifest, receiver).is_ok(),
+            requested_content_identity_verified: receiver.requested_content_identity_verified,
+            required_closure_metadata_verified: receiver.required_closure_metadata_verified,
+            path_info_admitted: receiver.path_info_admitted,
+        },
+        manifest.manifest.artifacts.iter().map(|artifact| TransferRequiredArtifactFacts {
+            required_for_completion: artifact.required_for_completion,
+            complete: receiver.complete_artifact_ids.contains(&artifact.artifact_id),
+        }),
+        initial_demand.missing_chunks.iter().map(|chunk| TransferMissingChunkFacts {
+            acknowledged: acknowledged_chunk_digests.contains(&chunk.chunk.digest_blake3),
+            chunk_complete: receiver.complete_chunk_digests.contains(&chunk.chunk.digest_blake3),
+            artifact_complete: receiver.complete_artifact_ids.contains(&chunk.artifact_id),
+        }),
         transferred_bytes,
-        reused_bytes: initial_demand.reused_bytes,
-    })
+        initial_demand.reused_bytes,
+        manifest.total_bytes,
+    );
+    let (disposition, reason_code) = match selected.disposition {
+        TransferCutoffDisposition::AlreadyPresent => (
+            RemoteTransferCompletionDisposition::AlreadyPresent,
+            RemoteTransferReasonCode::TransferAlreadyPresent,
+        ),
+        TransferCutoffDisposition::DemandSatisfied => (
+            RemoteTransferCompletionDisposition::DemandSatisfied,
+            RemoteTransferReasonCode::TransferDemandSatisfied,
+        ),
+        TransferCutoffDisposition::Continue => {
+            (RemoteTransferCompletionDisposition::Continue, RemoteTransferReasonCode::TransferContinue)
+        }
+        TransferCutoffDisposition::Reject => {
+            (RemoteTransferCompletionDisposition::Reject, RemoteTransferReasonCode::TransferRejected)
+        }
+    };
+    RemoteTransferCompletionDecision {
+        disposition,
+        reason_code,
+        transferred_bytes: selected.transferred_bytes,
+        reused_bytes: selected.reused_bytes,
+        output_admission_claimed: selected.output_admission_claimed,
+    }
 }
 
-fn validate_nonzero_policy_fields(policy: RemoteTransferPolicy) -> Result<(), RemoteTransferReasonCode> {
-    let is_policy_nonzero = policy.chunk_bytes_max > 0
-        && policy.in_flight_bytes_max > 0
-        && policy.in_flight_chunks_max > 0
-        && policy.buffered_chunks_max > 0
-        && policy.artifact_count_max > 0
-        && policy.chunk_count_max > 0
-        && policy.total_bytes_max > 0
-        && policy.checkpoint_bytes_max > 0
-        && policy.idle_progress_steps_max > 0
-        && policy.replay_rounds_max > 0
-        && policy.control_bytes_max > 0;
-    if !is_policy_nonzero {
-        return Err(RemoteTransferReasonCode::PolicyInvalid);
+fn transfer_manifest_reason(error: TransferManifestError) -> RemoteTransferReasonCode {
+    match error {
+        TransferManifestError::SchemaUnsupported => RemoteTransferReasonCode::ManifestSchemaUnsupported,
+        TransferManifestError::StorePrefixInvalid => RemoteTransferReasonCode::StorePrefixInvalid,
+        TransferManifestError::PolicyDigestMismatch => RemoteTransferReasonCode::PolicyDigestMismatch,
+        TransferManifestError::ManifestBoundsExceeded => RemoteTransferReasonCode::ManifestBoundsExceeded,
+        TransferManifestError::ArtifactIdentityInvalid => RemoteTransferReasonCode::ArtifactIdentityInvalid,
+        TransferManifestError::ArtifactDuplicate => RemoteTransferReasonCode::ArtifactDuplicate,
+        TransferManifestError::ArtifactSizeInvalid => RemoteTransferReasonCode::ArtifactSizeInvalid,
+        TransferManifestError::NarSha256Invalid => RemoteTransferReasonCode::NarSha256Invalid,
+        TransferManifestError::ChunkIndexInvalid => RemoteTransferReasonCode::ChunkIndexInvalid,
+        TransferManifestError::ChunkOffsetInvalid => RemoteTransferReasonCode::ChunkOffsetInvalid,
+        TransferManifestError::ChunkSizeInvalid => RemoteTransferReasonCode::ChunkSizeInvalid,
+        TransferManifestError::DigestInvalid => RemoteTransferReasonCode::DigestInvalid,
+        TransferManifestError::ChunkDigestConflict => RemoteTransferReasonCode::ChunkDigestConflict,
+        TransferManifestError::ArithmeticOverflow => RemoteTransferReasonCode::ArithmeticOverflow,
+        TransferManifestError::ReceiverFactsInvalid => RemoteTransferReasonCode::ReceiverFactsInvalid,
+        TransferManifestError::TotalBytesExceeded => RemoteTransferReasonCode::TotalBytesExceeded,
     }
-    Ok(())
-}
-
-fn validate_hard_policy_limits(policy: RemoteTransferPolicy) -> Result<(), RemoteTransferReasonCode> {
-    let is_policy_within_hard_bounds = policy.chunk_bytes_max <= MAX_REMOTE_TRANSFER_CHUNK_BYTES_HARD
-        && policy.in_flight_bytes_max <= MAX_REMOTE_TRANSFER_IN_FLIGHT_BYTES_HARD
-        && policy.in_flight_chunks_max <= MAX_REMOTE_TRANSFER_IN_FLIGHT_CHUNKS_HARD
-        && policy.buffered_chunks_max <= MAX_REMOTE_TRANSFER_BUFFERED_CHUNKS_HARD
-        && policy.artifact_count_max <= MAX_REMOTE_TRANSFER_ARTIFACTS_HARD
-        && policy.chunk_count_max <= MAX_REMOTE_TRANSFER_CHUNKS_HARD
-        && policy.total_bytes_max <= MAX_REMOTE_TRANSFER_TOTAL_BYTES_HARD
-        && policy.checkpoint_bytes_max <= MAX_REMOTE_TRANSFER_CHECKPOINT_BYTES_HARD
-        && policy.idle_progress_steps_max <= MAX_REMOTE_TRANSFER_IDLE_PROGRESS_STEPS_HARD
-        && policy.replay_rounds_max <= MAX_REMOTE_TRANSFER_REPLAY_ROUNDS_HARD
-        && policy.control_bytes_max <= MAX_REMOTE_TRANSFER_CONTROL_BYTES_HARD;
-    if !is_policy_within_hard_bounds {
-        return Err(RemoteTransferReasonCode::PolicyInvalid);
-    }
-    Ok(())
 }
 
 fn validate_manifest_envelope(
     manifest: &RemoteTransferManifest,
     policy: RemoteTransferPolicy,
 ) -> Result<(), RemoteTransferReasonCode> {
-    if manifest.schema != REMOTE_TRANSFER_MANIFEST_SCHEMA {
-        return Err(RemoteTransferReasonCode::ManifestSchemaUnsupported);
-    }
-    if manifest.store_prefix.is_empty()
-        || !manifest.store_prefix.starts_with('/')
-        || manifest.store_prefix.len() > MAX_REMOTE_TRANSFER_STORE_PREFIX_BYTES
-    {
-        return Err(RemoteTransferReasonCode::StorePrefixInvalid);
-    }
-    let policy_digest = canonical_remote_transfer_policy_digest(policy)?;
-    if manifest.policy_digest_blake3 != policy_digest {
-        return Err(RemoteTransferReasonCode::PolicyDigestMismatch);
-    }
-    if manifest.artifacts.is_empty() {
-        return Err(RemoteTransferReasonCode::ManifestBoundsExceeded);
-    }
-    if manifest.artifacts.len() > u32_to_usize(policy.artifact_count_max)? {
-        return Err(RemoteTransferReasonCode::ManifestBoundsExceeded);
-    }
-    debug_assert_eq!(manifest.schema, REMOTE_TRANSFER_MANIFEST_SCHEMA);
-    debug_assert!(!manifest.artifacts.is_empty());
-    Ok(())
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct ManifestTotals {
-    artifact_count: u32,
-    chunk_count: u32,
-    total_bytes: u64,
+    validate_transfer_manifest_prefix(&manifest.schema, &manifest.store_prefix).map_err(transfer_manifest_reason)?;
+    let digest = canonical_remote_transfer_policy_digest(policy)?;
+    validate_transfer_manifest_envelope(TransferManifestEnvelopeFacts {
+        policy_digest_matches: manifest.policy_digest_blake3 == digest,
+        artifact_count: manifest.artifacts.len(),
+        artifact_count_max: policy.artifact_count_max,
+    })
+    .map_err(transfer_manifest_reason)
 }
 
 fn canonicalize_artifacts(artifacts: &mut [RemoteTransferArtifact]) {
@@ -862,142 +880,95 @@ fn canonicalize_artifacts(artifacts: &mut [RemoteTransferArtifact]) {
 fn validate_manifest_artifacts(
     artifacts: &[RemoteTransferArtifact],
     policy: RemoteTransferPolicy,
-) -> Result<ManifestTotals, RemoteTransferReasonCode> {
-    let mut artifact_ids = BTreeSet::new();
-    let mut chunk_shapes = BTreeMap::<RemoteTransferDigest, u32>::new();
-    let mut chunk_count = 0_u32;
-    let mut total_bytes = 0_u64;
-    for artifact in artifacts {
-        if !artifact_ids.insert(artifact.artifact_id.clone()) {
-            return Err(RemoteTransferReasonCode::ArtifactDuplicate);
-        }
-        validate_artifact(artifact, policy, &mut chunk_shapes)?;
-        let artifact_chunks =
-            u32::try_from(artifact.chunks.len()).map_err(|_| RemoteTransferReasonCode::ManifestBoundsExceeded)?;
-        chunk_count = chunk_count.checked_add(artifact_chunks).ok_or(RemoteTransferReasonCode::ArithmeticOverflow)?;
-        total_bytes = total_bytes.checked_add_bytes(artifact.size_bytes)?;
-        if chunk_count > policy.chunk_count_max || total_bytes > policy.total_bytes_max {
-            return Err(RemoteTransferReasonCode::TotalBytesExceeded);
-        }
-    }
-    let artifact_count =
-        u32::try_from(artifacts.len()).map_err(|_| RemoteTransferReasonCode::ManifestBoundsExceeded)?;
-    debug_assert!(artifact_count <= policy.artifact_count_max);
-    debug_assert!(chunk_count <= policy.chunk_count_max);
-    Ok(ManifestTotals {
-        artifact_count,
-        chunk_count,
-        total_bytes,
-    })
-}
-
-fn validate_artifact(
-    artifact: &RemoteTransferArtifact,
-    policy: RemoteTransferPolicy,
-    chunk_shapes: &mut BTreeMap<RemoteTransferDigest, u32>,
-) -> Result<(), RemoteTransferReasonCode> {
-    RemoteTransferArtifactId::new(artifact.artifact_id.as_str().to_string())?;
-    if artifact.size_bytes == 0 || artifact.chunks.is_empty() {
-        return Err(RemoteTransferReasonCode::ArtifactSizeInvalid);
-    }
-    validate_nar_sha256(artifact)?;
-    let mut expected_index = INITIAL_CHUNK_INDEX;
-    let mut expected_offset_bytes = INITIAL_CHUNK_OFFSET_BYTES;
-    for chunk in &artifact.chunks {
-        validate_chunk_descriptor(chunk, policy, expected_index, expected_offset_bytes)?;
-        if let Some(previous_size) = chunk_shapes.insert(chunk.digest_blake3.clone(), chunk.size_bytes)
-            && previous_size != chunk.size_bytes
-        {
-            return Err(RemoteTransferReasonCode::ChunkDigestConflict);
-        }
-        expected_index = expected_index.checked_add(1).ok_or(RemoteTransferReasonCode::ArithmeticOverflow)?;
-        expected_offset_bytes = expected_offset_bytes.checked_add_bytes(u64::from(chunk.size_bytes))?;
-    }
-    if expected_offset_bytes != artifact.size_bytes {
-        return Err(RemoteTransferReasonCode::ArtifactSizeInvalid);
-    }
-    let artifact_chunk_count =
-        u32::try_from(artifact.chunks.len()).map_err(|_| RemoteTransferReasonCode::ManifestBoundsExceeded)?;
-    debug_assert_eq!(expected_index, artifact_chunk_count);
-    debug_assert_eq!(expected_offset_bytes, artifact.size_bytes);
-    Ok(())
-}
-
-fn validate_nar_sha256(artifact: &RemoteTransferArtifact) -> Result<(), RemoteTransferReasonCode> {
-    match (&artifact.artifact_kind, &artifact.nar_sha256_hex) {
-        (RemoteTransferArtifactKind::Nar, Some(value)) => {
-            if !is_lower_hex_digest(value, SHA256_HEX_LENGTH_CHARS) {
-                return Err(RemoteTransferReasonCode::NarSha256Invalid);
-            }
-        }
-        (RemoteTransferArtifactKind::Nar, None) => {}
-        (_, Some(_)) => return Err(RemoteTransferReasonCode::NarSha256Invalid),
-        (_, None) => {}
-    }
-    Ok(())
-}
-
-fn validate_chunk_descriptor(
-    chunk: &RemoteTransferChunkDescriptor,
-    policy: RemoteTransferPolicy,
-    expected_index: u32,
-    expected_offset_bytes: u64,
-) -> Result<(), RemoteTransferReasonCode> {
-    if chunk.index != expected_index {
-        return Err(RemoteTransferReasonCode::ChunkIndexInvalid);
-    }
-    if chunk.offset_bytes != expected_offset_bytes {
-        return Err(RemoteTransferReasonCode::ChunkOffsetInvalid);
-    }
-    if chunk.size_bytes == 0 || chunk.size_bytes > policy.chunk_bytes_max {
-        return Err(RemoteTransferReasonCode::ChunkSizeInvalid);
-    }
-    RemoteTransferDigest::new(chunk.digest_blake3.as_str().to_string())?;
-    Ok(())
+) -> Result<TransferManifestTotals, RemoteTransferReasonCode> {
+    validate_transfer_manifest_artifacts(
+        artifacts.iter().map(|artifact| TransferArtifactFacts {
+            artifact_id: artifact.artifact_id.as_str(),
+            is_nar: artifact.artifact_kind == RemoteTransferArtifactKind::Nar,
+            nar_sha256_hex: artifact.nar_sha256_hex.as_deref(),
+            size_bytes: artifact.size_bytes,
+            chunks: artifact.chunks.iter().map(|chunk| TransferChunkFacts {
+                index: chunk.index,
+                offset_bytes: chunk.offset_bytes,
+                size_bytes: chunk.size_bytes,
+                digest_blake3: chunk.digest_blake3.as_str(),
+            }),
+        }),
+        policy.chunk_bytes_max,
+        policy.chunk_count_max,
+        policy.total_bytes_max,
+    )
+    .map_err(transfer_manifest_reason)
 }
 
 fn validate_receiver_facts(
     manifest: &CanonicalRemoteTransferManifest,
     receiver: &RemoteTransferReceiverFacts,
 ) -> Result<(), RemoteTransferReasonCode> {
-    let artifact_ids = manifest
-        .manifest
-        .artifacts
-        .iter()
-        .map(|artifact| artifact.artifact_id.clone())
-        .collect::<BTreeSet<_>>();
-    let chunk_digests = manifest_chunk_digests(manifest);
-    if !receiver.complete_artifact_ids.is_subset(&artifact_ids) {
-        return Err(RemoteTransferReasonCode::ReceiverFactsInvalid);
-    }
-    if !receiver.complete_chunk_digests.is_subset(&chunk_digests) {
-        return Err(RemoteTransferReasonCode::ReceiverFactsInvalid);
-    }
-    debug_assert!(receiver.complete_artifact_ids.len() <= artifact_ids.len());
-    debug_assert!(receiver.complete_chunk_digests.len() <= chunk_digests.len());
-    Ok(())
+    validate_transfer_receiver_facts(
+        manifest.manifest.artifacts.iter().map(|artifact| TransferDemandArtifactFacts {
+            artifact_id: artifact.artifact_id.as_str(),
+            size_bytes: artifact.size_bytes,
+            chunks: artifact.chunks.iter().map(|chunk| TransferDemandChunkFacts {
+                digest_blake3: chunk.digest_blake3.as_str(),
+                size_bytes: chunk.size_bytes,
+            }),
+        }),
+        receiver.complete_artifact_ids.iter().map(RemoteTransferArtifactId::as_str),
+        receiver.complete_chunk_digests.iter().map(RemoteTransferDigest::as_str),
+    )
+    .map_err(transfer_manifest_reason)
 }
 
-fn append_artifact_demand(
-    artifact: &RemoteTransferArtifact,
-    available_chunks: &mut BTreeSet<RemoteTransferDigest>,
-    missing_chunks: &mut Vec<RemoteTransferChunkDemand>,
-    missing_bytes: &mut u64,
-    reused_bytes: &mut u64,
-) -> Result<(), RemoteTransferReasonCode> {
-    for chunk in &artifact.chunks {
-        if !available_chunks.insert(chunk.digest_blake3.clone()) {
-            *reused_bytes = (*reused_bytes).checked_add_bytes(u64::from(chunk.size_bytes))?;
-            continue;
+fn transfer_progress_reason(error: TransferProgressError) -> RemoteTransferReasonCode {
+    match error {
+        TransferProgressError::CheckpointSchemaUnsupported => RemoteTransferReasonCode::CheckpointSchemaUnsupported,
+        TransferProgressError::CheckpointScopeMismatch => RemoteTransferReasonCode::CheckpointScopeMismatch,
+        TransferProgressError::CheckpointCounterInvalid => RemoteTransferReasonCode::CheckpointCounterInvalid,
+        TransferProgressError::CheckpointCursorForged => RemoteTransferReasonCode::CheckpointCursorForged,
+        TransferProgressError::CheckpointAcknowledgementRegressed => {
+            RemoteTransferReasonCode::CheckpointAcknowledgementRegressed
         }
-        *missing_bytes = (*missing_bytes).checked_add_bytes(u64::from(chunk.size_bytes))?;
-        missing_chunks.push(RemoteTransferChunkDemand {
-            artifact_id: artifact.artifact_id.clone(),
-            artifact_kind: artifact.artifact_kind,
-            chunk: chunk.clone(),
-        });
+        TransferProgressError::CheckpointCounterRegressed => RemoteTransferReasonCode::CheckpointCounterRegressed,
+        TransferProgressError::ChunkUnknown => RemoteTransferReasonCode::ChunkUnknown,
+        TransferProgressError::AcknowledgedChunkMissing => RemoteTransferReasonCode::AcknowledgedChunkMissing,
+        TransferProgressError::ArithmeticOverflow => RemoteTransferReasonCode::ArithmeticOverflow,
+        TransferProgressError::CreditGrantInvalid => RemoteTransferReasonCode::CreditGrantInvalid,
+        TransferProgressError::CreditExceeded => RemoteTransferReasonCode::CreditExceeded,
+        TransferProgressError::BufferedChunkLimitExceeded => RemoteTransferReasonCode::BufferedChunkLimitExceeded,
+        TransferProgressError::TotalBytesExceeded => RemoteTransferReasonCode::TotalBytesExceeded,
+        TransferProgressError::ChunkSequenceInvalid => RemoteTransferReasonCode::ChunkSequenceInvalid,
+        TransferProgressError::ChunkNotDemanded => RemoteTransferReasonCode::ChunkNotDemanded,
+        TransferProgressError::ChunkDigestMismatch => RemoteTransferReasonCode::ChunkDigestMismatch,
+        TransferProgressError::ChunkSizeInvalid => RemoteTransferReasonCode::ChunkSizeInvalid,
+        TransferProgressError::ChunkAlreadyInFlight => RemoteTransferReasonCode::ChunkAlreadyInFlight,
+        TransferProgressError::AcknowledgementUnknown => RemoteTransferReasonCode::AcknowledgementUnknown,
+        TransferProgressError::AcknowledgementMismatch => RemoteTransferReasonCode::AcknowledgementMismatch,
+        TransferProgressError::IdleProgressExceeded => RemoteTransferReasonCode::IdleProgressExceeded,
+        TransferProgressError::ProgressCounterRegressed => RemoteTransferReasonCode::ProgressCounterRegressed,
     }
-    Ok(())
+}
+
+fn transfer_scope_facts(scope: &RemoteTransferScope) -> TransferScopeFacts<'_> {
+    TransferScopeFacts {
+        session_id: scope.session_id.as_str(),
+        job_id: scope.job_id.as_str(),
+        attempt_id: scope.attempt_id.as_str(),
+        fence_generation: scope.fence_generation.get(),
+        manifest_digest_blake3: scope.manifest_digest_blake3.as_str(),
+        policy_digest_blake3: scope.policy_digest_blake3.as_str(),
+    }
+}
+
+fn manifest_scope_facts(manifest: &CanonicalRemoteTransferManifest) -> TransferScopeFacts<'_> {
+    TransferScopeFacts {
+        session_id: manifest.manifest.session_id.as_str(),
+        job_id: manifest.manifest.job_id.as_str(),
+        attempt_id: manifest.manifest.attempt_id.as_str(),
+        fence_generation: manifest.manifest.fence_generation.get(),
+        manifest_digest_blake3: manifest.digest_blake3.as_str(),
+        policy_digest_blake3: manifest.manifest.policy_digest_blake3.as_str(),
+    }
 }
 
 fn validate_checkpoint(
@@ -1007,16 +978,13 @@ fn validate_checkpoint(
     previous: Option<&RemoteTransferCheckpoint>,
     checkpoint: &RemoteTransferCheckpoint,
 ) -> Result<(), RemoteTransferReasonCode> {
-    if checkpoint.schema != REMOTE_TRANSFER_CHECKPOINT_SCHEMA {
-        return Err(RemoteTransferReasonCode::CheckpointSchemaUnsupported);
-    }
+    validate_transfer_checkpoint_schema(&checkpoint.schema).map_err(transfer_progress_reason)?;
     validate_checkpoint_size(checkpoint, policy)?;
     if checkpoint.checkpoint_digest_blake3 != checkpoint_payload_digest(checkpoint)? {
         return Err(RemoteTransferReasonCode::CheckpointDigestMismatch);
     }
-    if checkpoint.scope != remote_transfer_scope(manifest) {
-        return Err(RemoteTransferReasonCode::CheckpointScopeMismatch);
-    }
+    validate_transfer_scope(manifest_scope_facts(manifest), transfer_scope_facts(&checkpoint.scope))
+        .map_err(transfer_progress_reason)?;
     validate_checkpoint_counters(manifest, policy, checkpoint)?;
     validate_checkpoint_acknowledgements(manifest, receiver, checkpoint)?;
     if let Some(previous) = previous {
@@ -1058,7 +1026,14 @@ fn checkpoint_payload_digest(
         reused_bytes: checkpoint.reused_bytes,
     };
     let bytes = serde_json::to_vec(&payload).map_err(|_| RemoteTransferReasonCode::CheckpointSerializationFailed)?;
-    domain_hash(REMOTE_TRANSFER_CHECKPOINT_DOMAIN, &bytes)
+    Ok(RemoteTransferDigest(
+        blake3::Hash::from_bytes(
+            transfer_domain_digest(TRANSFER_CHECKPOINT_DOMAIN, &bytes)
+                .map_err(|_| RemoteTransferReasonCode::ArithmeticOverflow)?,
+        )
+        .to_hex()
+        .to_string(),
+    ))
 }
 
 fn validate_checkpoint_counters(
@@ -1066,21 +1041,25 @@ fn validate_checkpoint_counters(
     policy: RemoteTransferPolicy,
     checkpoint: &RemoteTransferCheckpoint,
 ) -> Result<(), RemoteTransferReasonCode> {
-    if checkpoint.transferred_bytes > policy.total_bytes_max || checkpoint.reused_bytes > manifest.total_bytes {
-        return Err(RemoteTransferReasonCode::CheckpointCounterInvalid);
-    }
-    let sequence_max = u64::from(policy.chunk_count_max)
-        .checked_mul(u64::from(policy.replay_rounds_max))
-        .ok_or(RemoteTransferReasonCode::ArithmeticOverflow)?;
-    if checkpoint.next_sequence > sequence_max {
-        return Err(RemoteTransferReasonCode::CheckpointCursorForged);
-    }
-    let acknowledged_bytes = acknowledged_chunk_bytes(manifest, &checkpoint.acknowledged_chunk_digests)?;
-    let accounted_bytes = checkpoint.transferred_bytes.checked_add_bytes(checkpoint.reused_bytes)?;
-    if acknowledged_bytes > accounted_bytes {
-        return Err(RemoteTransferReasonCode::CheckpointCounterInvalid);
-    }
-    Ok(())
+    validate_transfer_checkpoint_counters(
+        TransferCheckpointCounterFacts {
+            transferred_bytes: checkpoint.transferred_bytes,
+            reused_bytes: checkpoint.reused_bytes,
+            next_sequence: checkpoint.next_sequence,
+            policy_total_bytes_max: policy.total_bytes_max,
+            manifest_total_bytes: manifest.total_bytes,
+            chunk_count_max: policy.chunk_count_max,
+            replay_rounds_max: policy.replay_rounds_max,
+        },
+        manifest.manifest.artifacts.iter().flat_map(|artifact| artifact.chunks.iter()).map(|chunk| {
+            TransferDemandChunkFacts {
+                digest_blake3: chunk.digest_blake3.as_str(),
+                size_bytes: chunk.size_bytes,
+            }
+        }),
+        checkpoint.acknowledged_chunk_digests.iter().map(RemoteTransferDigest::as_str),
+    )
+    .map_err(transfer_progress_reason)
 }
 
 fn validate_checkpoint_acknowledgements(
@@ -1088,283 +1067,91 @@ fn validate_checkpoint_acknowledgements(
     receiver: &RemoteTransferReceiverFacts,
     checkpoint: &RemoteTransferCheckpoint,
 ) -> Result<(), RemoteTransferReasonCode> {
-    let known = manifest_chunk_digests(manifest);
-    if !checkpoint.acknowledged_chunk_digests.is_subset(&known) {
-        return Err(RemoteTransferReasonCode::ChunkUnknown);
-    }
-    let complete_artifact_chunks = complete_artifact_chunk_digests(manifest, &receiver.complete_artifact_ids);
-    let mut verified = receiver.complete_chunk_digests.clone();
-    verified.extend(complete_artifact_chunks);
-    if !checkpoint.acknowledged_chunk_digests.is_subset(&verified) {
-        return Err(RemoteTransferReasonCode::AcknowledgedChunkMissing);
-    }
-    Ok(())
+    validate_transfer_checkpoint_acknowledgements(
+        manifest.manifest.artifacts.iter().map(|artifact| TransferDemandArtifactFacts {
+            artifact_id: artifact.artifact_id.as_str(),
+            size_bytes: artifact.size_bytes,
+            chunks: artifact.chunks.iter().map(|chunk| TransferDemandChunkFacts {
+                digest_blake3: chunk.digest_blake3.as_str(),
+                size_bytes: chunk.size_bytes,
+            }),
+        }),
+        receiver.complete_artifact_ids.iter().map(RemoteTransferArtifactId::as_str),
+        receiver.complete_chunk_digests.iter().map(RemoteTransferDigest::as_str),
+        checkpoint.acknowledged_chunk_digests.iter().map(RemoteTransferDigest::as_str),
+    )
+    .map_err(transfer_progress_reason)
 }
 
 fn validate_checkpoint_monotonic(
     previous: &RemoteTransferCheckpoint,
     checkpoint: &RemoteTransferCheckpoint,
 ) -> Result<(), RemoteTransferReasonCode> {
-    if previous.scope != checkpoint.scope {
-        return Err(RemoteTransferReasonCode::CheckpointScopeMismatch);
+    validate_transfer_checkpoint_monotonic(TransferCheckpointMonotonicFacts {
+        previous_scope: transfer_scope_facts(&previous.scope),
+        current_scope: transfer_scope_facts(&checkpoint.scope),
+        previous_acknowledged_present: previous
+            .acknowledged_chunk_digests
+            .iter()
+            .map(|digest| checkpoint.acknowledged_chunk_digests.contains(digest)),
+        previous_sequence: previous.next_sequence,
+        current_sequence: checkpoint.next_sequence,
+        previous_transferred_bytes: previous.transferred_bytes,
+        current_transferred_bytes: checkpoint.transferred_bytes,
+        previous_reused_bytes: previous.reused_bytes,
+        current_reused_bytes: checkpoint.reused_bytes,
+    })
+    .map_err(transfer_progress_reason)
+}
+
+fn transfer_credit_limits(policy: RemoteTransferPolicy) -> TransferCreditLimits {
+    TransferCreditLimits {
+        in_flight_bytes_max: policy.in_flight_bytes_max,
+        in_flight_chunks_max: policy.in_flight_chunks_max,
+        buffered_chunks_max: policy.buffered_chunks_max,
+        chunk_bytes_max: policy.chunk_bytes_max,
+        total_bytes_max: policy.total_bytes_max,
     }
-    if !previous.acknowledged_chunk_digests.is_subset(&checkpoint.acknowledged_chunk_digests) {
-        return Err(RemoteTransferReasonCode::CheckpointAcknowledgementRegressed);
+}
+
+fn transfer_credit_facts(state: &RemoteTransferCreditState) -> TransferCreditFacts {
+    TransferCreditFacts {
+        granted_bytes_remaining: state.granted_bytes_remaining,
+        granted_chunks_remaining: state.granted_chunks_remaining,
+        transferred_bytes: state.transferred_bytes,
+        next_sequence: state.next_sequence,
     }
-    if checkpoint.next_sequence < previous.next_sequence
-        || checkpoint.transferred_bytes < previous.transferred_bytes
-        || checkpoint.reused_bytes < previous.reused_bytes
-    {
-        return Err(RemoteTransferReasonCode::CheckpointCounterRegressed);
-    }
-    Ok(())
 }
 
 fn validate_credit_state(
     policy: RemoteTransferPolicy,
     state: &RemoteTransferCreditState,
-) -> Result<(), RemoteTransferReasonCode> {
-    let in_flight_bytes = in_flight_bytes(state)?;
-    let in_flight_chunks = in_flight_chunks(state)?;
-    validate_credit_headroom(
-        policy,
-        state.granted_bytes_remaining,
-        state.granted_chunks_remaining,
-        in_flight_bytes,
-        in_flight_chunks,
-    )?;
-    if in_flight_chunks > policy.buffered_chunks_max {
-        return Err(RemoteTransferReasonCode::BufferedChunkLimitExceeded);
-    }
-    if state.transferred_bytes > policy.total_bytes_max {
-        return Err(RemoteTransferReasonCode::TotalBytesExceeded);
-    }
-    Ok(())
+) -> Result<TransferCreditSnapshot, RemoteTransferReasonCode> {
+    validate_transfer_credit_state(
+        transfer_credit_limits(policy),
+        transfer_credit_facts(state),
+        state.in_flight.values().map(|chunk| chunk.size_bytes),
+    )
+    .map_err(transfer_progress_reason)
 }
 
-fn validate_credit_headroom(
-    policy: RemoteTransferPolicy,
-    granted_bytes: u64,
-    granted_chunks: u32,
-    in_flight_bytes: u64,
-    in_flight_chunks: u32,
-) -> Result<(), RemoteTransferReasonCode> {
-    let reserved_bytes = granted_bytes.checked_add_bytes(in_flight_bytes)?;
-    let reserved_chunks =
-        granted_chunks.checked_add(in_flight_chunks).ok_or(RemoteTransferReasonCode::ArithmeticOverflow)?;
-    if reserved_bytes > policy.in_flight_bytes_max || reserved_chunks > policy.in_flight_chunks_max {
-        return Err(RemoteTransferReasonCode::CreditExceeded);
-    }
-    Ok(())
-}
-
-fn validate_chunk_header(
-    manifest: &CanonicalRemoteTransferManifest,
-    policy: RemoteTransferPolicy,
-    demand: &RemoteTransferDemand,
-    state: &RemoteTransferCreditState,
-    header: &RemoteTransferChunkHeader,
-) -> Result<(), RemoteTransferReasonCode> {
-    if header.scope != remote_transfer_scope(manifest) || demand.scope != header.scope {
-        return Err(RemoteTransferReasonCode::CheckpointScopeMismatch);
-    }
-    if header.sequence != state.next_sequence {
-        return Err(RemoteTransferReasonCode::ChunkSequenceInvalid);
-    }
-    let expected = demanded_chunk(demand, header).ok_or(RemoteTransferReasonCode::ChunkNotDemanded)?;
-    if expected.chunk != header.chunk || expected.artifact_kind != header.artifact_kind {
-        return Err(RemoteTransferReasonCode::ChunkDigestMismatch);
-    }
-    if header.chunk.size_bytes > policy.chunk_bytes_max {
-        return Err(RemoteTransferReasonCode::ChunkSizeInvalid);
-    }
-    if u64::from(header.chunk.size_bytes) > state.granted_bytes_remaining || state.granted_chunks_remaining == 0 {
-        return Err(RemoteTransferReasonCode::CreditExceeded);
-    }
-    if state.in_flight.contains_key(&header.sequence) {
-        return Err(RemoteTransferReasonCode::ChunkAlreadyInFlight);
-    }
-    let projected_total = state.transferred_bytes.checked_add_bytes(u64::from(header.chunk.size_bytes))?;
-    if projected_total > policy.total_bytes_max {
-        return Err(RemoteTransferReasonCode::TotalBytesExceeded);
-    }
-    debug_assert_eq!(header.sequence, state.next_sequence);
-    debug_assert!(header.chunk.size_bytes <= policy.chunk_bytes_max);
-    Ok(())
-}
-
-fn validate_acknowledgement(
-    state: &RemoteTransferCreditState,
-    acknowledgement: &RemoteTransferAcknowledgement,
-    observed_digest_blake3: &RemoteTransferDigest,
-    in_flight: &RemoteTransferInFlightChunk,
-) -> Result<(), RemoteTransferReasonCode> {
-    if acknowledgement.chunk_digest_blake3 != in_flight.chunk_digest_blake3 {
-        return Err(RemoteTransferReasonCode::AcknowledgementMismatch);
-    }
-    if observed_digest_blake3 != &in_flight.chunk_digest_blake3 {
-        return Err(RemoteTransferReasonCode::ChunkDigestMismatch);
-    }
-    let expected_transferred = state.transferred_bytes.checked_add_bytes(u64::from(in_flight.size_bytes))?;
-    if acknowledgement.transferred_bytes != expected_transferred {
-        return Err(RemoteTransferReasonCode::AcknowledgementMismatch);
-    }
-    Ok(())
-}
-
-fn demanded_chunk<'a>(
-    demand: &'a RemoteTransferDemand,
-    header: &RemoteTransferChunkHeader,
-) -> Option<&'a RemoteTransferChunkDemand> {
-    // A content digest may occur at multiple offsets in one artifact. The
-    // artifact-local chunk index identifies the occurrence; the caller then
-    // compares the full descriptor and kind before reserving receiver credit.
-    demand
-        .missing_chunks
-        .iter()
-        .find(|candidate| candidate.artifact_id == header.artifact_id && candidate.chunk.index == header.chunk.index)
-}
-
-fn in_flight_bytes(state: &RemoteTransferCreditState) -> Result<u64, RemoteTransferReasonCode> {
-    state
-        .in_flight
-        .values()
-        .try_fold(0_u64, |total, chunk| total.checked_add_bytes(u64::from(chunk.size_bytes)))
-}
-
-fn in_flight_chunks(state: &RemoteTransferCreditState) -> Result<u32, RemoteTransferReasonCode> {
-    u32::try_from(state.in_flight.len()).map_err(|_| RemoteTransferReasonCode::ArithmeticOverflow)
-}
-
-fn receiver_has_admitted_complete_request(
-    manifest: &CanonicalRemoteTransferManifest,
-    receiver: &RemoteTransferReceiverFacts,
-) -> bool {
-    receiver.requested_content_identity_verified
-        && receiver.required_closure_metadata_verified
-        && receiver.path_info_admitted
-        && receiver_has_complete_required_artifacts(manifest, receiver)
-}
-
-fn receiver_has_complete_required_artifacts(
-    manifest: &CanonicalRemoteTransferManifest,
-    receiver: &RemoteTransferReceiverFacts,
-) -> bool {
-    manifest
-        .manifest
-        .artifacts
-        .iter()
-        .filter(|artifact| artifact.required_for_completion)
-        .all(|artifact| receiver.complete_artifact_ids.contains(&artifact.artifact_id))
-}
-
-fn demand_is_satisfied(
-    demand: &RemoteTransferDemand,
-    receiver: &RemoteTransferReceiverFacts,
-    acknowledged_chunk_digests: &BTreeSet<RemoteTransferDigest>,
-) -> bool {
-    demand.missing_chunks.iter().all(|chunk| {
-        acknowledged_chunk_digests.contains(&chunk.chunk.digest_blake3)
-            || receiver.complete_chunk_digests.contains(&chunk.chunk.digest_blake3)
-            || receiver.complete_artifact_ids.contains(&chunk.artifact_id)
-    })
-}
-
-fn transfer_completion(facts: TransferCompletionFacts) -> RemoteTransferCompletionDecision {
-    RemoteTransferCompletionDecision {
-        disposition: facts.disposition,
-        reason_code: facts.reason_code,
-        transferred_bytes: facts.transferred_bytes,
-        reused_bytes: facts.reused_bytes,
-        output_admission_claimed: false,
-    }
-}
-
-fn manifest_chunk_digests(manifest: &CanonicalRemoteTransferManifest) -> BTreeSet<RemoteTransferDigest> {
-    manifest
-        .manifest
-        .artifacts
-        .iter()
-        .flat_map(|artifact| artifact.chunks.iter().map(|chunk| chunk.digest_blake3.clone()))
-        .collect()
-}
-
-fn complete_artifact_chunk_digests(
-    manifest: &CanonicalRemoteTransferManifest,
-    complete_artifact_ids: &BTreeSet<RemoteTransferArtifactId>,
-) -> BTreeSet<RemoteTransferDigest> {
-    manifest
-        .manifest
-        .artifacts
-        .iter()
-        .filter(|artifact| complete_artifact_ids.contains(&artifact.artifact_id))
-        .flat_map(|artifact| artifact.chunks.iter().map(|chunk| chunk.digest_blake3.clone()))
-        .collect()
-}
-
-fn acknowledged_chunk_bytes(
-    manifest: &CanonicalRemoteTransferManifest,
-    acknowledged: &BTreeSet<RemoteTransferDigest>,
-) -> Result<u64, RemoteTransferReasonCode> {
-    let mut sizes_bytes = BTreeMap::<RemoteTransferDigest, u32>::new();
-    for artifact in &manifest.manifest.artifacts {
-        for chunk in &artifact.chunks {
-            sizes_bytes.entry(chunk.digest_blake3.clone()).or_insert(chunk.size_bytes);
-        }
-    }
-    acknowledged.iter().try_fold(0_u64, |total_bytes, digest| {
-        let size_bytes = sizes_bytes.get(digest).ok_or(RemoteTransferReasonCode::ChunkUnknown)?;
-        total_bytes.checked_add_bytes(u64::from(*size_bytes))
-    })
-}
-
-trait CheckedByteAddition {
-    fn checked_add_bytes(self, increment_bytes: u64) -> Result<u64, RemoteTransferReasonCode>;
-}
-
-impl CheckedByteAddition for u64 {
-    fn checked_add_bytes(self, increment_bytes: u64) -> Result<u64, RemoteTransferReasonCode> {
-        self.checked_add(increment_bytes).ok_or(RemoteTransferReasonCode::ArithmeticOverflow)
+fn transfer_reserved_chunk_facts<'a>(
+    artifact_id: &'a RemoteTransferArtifactId,
+    artifact_kind: RemoteTransferArtifactKind,
+    chunk: &'a RemoteTransferChunkDescriptor,
+) -> TransferReservedChunkFacts<'a> {
+    TransferReservedChunkFacts {
+        artifact_id: artifact_id.as_str(),
+        artifact_kind: artifact_kind as u8,
+        index: chunk.index,
+        offset_bytes: chunk.offset_bytes,
+        size_bytes: chunk.size_bytes,
+        digest_blake3: chunk.digest_blake3.as_str(),
     }
 }
 
 fn u32_to_usize(value: u32) -> Result<usize, RemoteTransferReasonCode> {
     usize::try_from(value).map_err(|_| RemoteTransferReasonCode::ArithmeticOverflow)
-}
-
-fn bounded_transfer_identity(value: String) -> Result<String, RemoteTransferReasonCode> {
-    if value.is_empty() || value.len() > MAX_REMOTE_TRANSFER_ID_BYTES {
-        return Err(RemoteTransferReasonCode::ArtifactIdentityInvalid);
-    }
-    if value.chars().any(char::is_control) {
-        return Err(RemoteTransferReasonCode::ArtifactIdentityInvalid);
-    }
-    Ok(value)
-}
-
-fn is_lower_hex_digest(value: &str, expected_len: usize) -> bool {
-    value.len() == expected_len && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
-fn domain_hash(domain: &str, bytes: &[u8]) -> Result<RemoteTransferDigest, RemoteTransferReasonCode> {
-    let mut hasher = blake3::Hasher::new();
-    let domain_length_bytes = u64::try_from(domain.len()).map_err(|_| RemoteTransferReasonCode::ArithmeticOverflow)?;
-    hasher.update(&domain_length_bytes.to_le_bytes());
-    hasher.update(domain.as_bytes());
-    hasher.update(bytes);
-    Ok(RemoteTransferDigest(hasher.finalize().to_hex().to_string()))
-}
-
-fn hash_part(hasher: &mut blake3::Hasher, value: &str) -> Result<(), RemoteTransferReasonCode> {
-    if value.is_empty() || value.len() > MAX_REMOTE_TRANSFER_ID_BYTES {
-        return Err(RemoteTransferReasonCode::SessionIdentityInvalid);
-    }
-    let length_bytes = u64::try_from(value.len()).map_err(|_| RemoteTransferReasonCode::ArithmeticOverflow)?;
-    debug_assert_eq!(length_bytes.to_le_bytes().len(), HASH_LENGTH_PREFIX_BYTES);
-    debug_assert!(!value.is_empty());
-    hasher.update(&length_bytes.to_le_bytes());
-    hasher.update(value.as_bytes());
-    Ok(())
 }
 
 #[cfg(test)]
@@ -1373,7 +1160,6 @@ mod tests {
     // r[verify store_transports.receiver_driven_backpressure]
     // r[verify store_transports.content_presence_early_cutoff]
     // r[verify remote_builds.attempt_scoped_transfer_resume]
-    use proptest::prelude::*;
 
     use super::*;
 
@@ -1389,8 +1175,6 @@ mod tests {
     const TEST_ARTIFACT_COUNT_MAX: u32 = 8;
     const TEST_CHUNK_COUNT_MAX: u32 = 16;
     const TEST_TOTAL_BYTES_MAX: u64 = 64;
-    const PROPERTY_PARITY_DIVISOR: u64 = 2;
-    const PROPERTY_BYTES_MAX_EXCLUSIVE: u64 = 1_000_000;
 
     fn digest(label: &str) -> RemoteTransferDigest {
         RemoteTransferDigest::new(blake3::hash(label.as_bytes()).to_hex().to_string()).unwrap()
@@ -1575,21 +1359,54 @@ mod tests {
     }
 
     #[test]
-    fn receiver_missing_set_is_permutation_invariant_and_resume_requests_only_missing_chunks() {
+    fn resumed_transfer_demands_only_missing_chunks_with_verified_cursor() {
         let manifest = manifest();
         let first = manifest.manifest.artifacts[0].chunks[0].digest_blake3.clone();
         let mut receiver = empty_receiver();
         receiver.complete_chunk_digests.insert(first.clone());
-        let left = plan_remote_transfer_demand(&manifest, &receiver).unwrap();
-        let right = plan_remote_transfer_demand(&manifest, &receiver.clone()).unwrap();
         let current =
             checkpoint(&manifest, BTreeSet::from([first.clone()]), TEST_SEQUENCE_ONE, TEST_TRANSFERRED_BYTES, 0);
         let resumed = plan_remote_transfer_resume(&manifest, policy(), &receiver, None, Some(&current)).unwrap();
 
-        assert_eq!(left, right);
-        assert!(resumed.demand.missing_chunks.iter().all(|demand| demand.chunk.digest_blake3 != first));
+        let expected_missing = manifest
+            .manifest
+            .artifacts
+            .iter()
+            .flat_map(|artifact| artifact.chunks.iter())
+            .map(|chunk| chunk.digest_blake3.as_str())
+            .filter(|digest| *digest != first.as_str())
+            .collect::<BTreeSet<_>>();
+        let actual_missing = resumed
+            .demand
+            .missing_chunks
+            .iter()
+            .map(|chunk| chunk.chunk.digest_blake3.as_str())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(actual_missing, expected_missing);
         assert_eq!(resumed.acknowledged_chunk_digests, BTreeSet::from([first]));
         assert_eq!(resumed.transferred_bytes, TEST_TRANSFERRED_BYTES);
+    }
+
+    #[test]
+    fn malformed_manifest_schema_precedes_store_prefix_and_wrong_policy_digest() {
+        let mut candidate = manifest().manifest;
+        candidate.schema = "unsupported-manifest".to_string();
+        candidate.store_prefix = "relative-store".to_string();
+        candidate.policy_digest_blake3 = digest("wrong-policy");
+        assert_eq!(
+            canonicalize_remote_transfer_manifest(candidate.clone(), policy()).unwrap_err(),
+            RemoteTransferReasonCode::ManifestSchemaUnsupported,
+        );
+        candidate.schema = REMOTE_TRANSFER_MANIFEST_SCHEMA.to_string();
+        assert_eq!(
+            canonicalize_remote_transfer_manifest(candidate.clone(), policy()).unwrap_err(),
+            RemoteTransferReasonCode::StorePrefixInvalid,
+        );
+        candidate.store_prefix = "/mantle/store".to_string();
+        assert_eq!(
+            canonicalize_remote_transfer_manifest(candidate, policy()).unwrap_err(),
+            RemoteTransferReasonCode::PolicyDigestMismatch,
+        );
     }
 
     #[test]
@@ -1610,6 +1427,11 @@ mod tests {
         stale.scope.fence_generation = stale.scope.fence_generation.advance().unwrap();
         stale = seal_remote_transfer_checkpoint(stale, policy()).unwrap();
         let stale_error = plan_remote_transfer_resume(&manifest, policy(), &receiver, None, Some(&stale)).unwrap_err();
+        let mut unknown_session = previous.clone();
+        unknown_session.scope.session_id = RemoteTransferSessionId::new(digest("unknown-session").as_str()).unwrap();
+        let unknown_session = seal_remote_transfer_checkpoint(unknown_session, policy()).unwrap();
+        let unknown_error =
+            plan_remote_transfer_resume(&manifest, policy(), &receiver, None, Some(&unknown_session)).unwrap_err();
 
         let regressed = checkpoint(&manifest, BTreeSet::new(), TEST_SEQUENCE_ONE, TEST_TRANSFERRED_BYTES, 0);
         let regression_error =
@@ -1625,6 +1447,7 @@ mod tests {
 
         assert_eq!(tamper_error, RemoteTransferReasonCode::CheckpointDigestMismatch);
         assert_eq!(stale_error, RemoteTransferReasonCode::CheckpointScopeMismatch);
+        assert_eq!(unknown_error, RemoteTransferReasonCode::CheckpointScopeMismatch);
         assert_eq!(regression_error, RemoteTransferReasonCode::CheckpointAcknowledgementRegressed);
         assert_eq!(missing_error, RemoteTransferReasonCode::AcknowledgedChunkMissing);
         assert_eq!(forged_error, RemoteTransferReasonCode::CheckpointCursorForged);
@@ -1653,7 +1476,17 @@ mod tests {
             chunk: first.chunk.clone(),
             sequence: INITIAL_CHUNK_SEQUENCE,
         };
+        // r[verify remote_builds.transient_handle_introduction]
         let reserved = reserve_remote_transfer_chunk(&manifest, policy(), &demand, &granted, &header).unwrap();
+        let mut unknown_session = header.clone();
+        unknown_session.scope.session_id = RemoteTransferSessionId::new(digest("unknown-session").as_str()).unwrap();
+        // r[verify remote_builds.transient_handle_rejection]
+        let unknown_error =
+            reserve_remote_transfer_chunk(&manifest, policy(), &demand, &granted, &unknown_session).unwrap_err();
+        let mut unknown_artifact = header.clone();
+        unknown_artifact.artifact_id = RemoteTransferArtifactId::new("unknown-artifact").unwrap();
+        let artifact_error =
+            reserve_remote_transfer_chunk(&manifest, policy(), &demand, &granted, &unknown_artifact).unwrap_err();
 
         let second = demand.missing_chunks.get(1).unwrap();
         let over_credit_header = RemoteTransferChunkHeader {
@@ -1667,6 +1500,8 @@ mod tests {
             .expect_err("no second chunk may be accepted without receiver credit");
 
         assert_eq!(error, RemoteTransferReasonCode::CreditExceeded);
+        assert_eq!(unknown_error, RemoteTransferReasonCode::CheckpointScopeMismatch);
+        assert_eq!(artifact_error, RemoteTransferReasonCode::ChunkNotDemanded);
         assert_eq!(reserved.in_flight.len(), 1);
         assert_eq!(reserved.transferred_bytes, 0);
         assert_eq!(reserved.next_sequence, TEST_SEQUENCE_ONE);
@@ -1747,23 +1582,44 @@ mod tests {
         };
         let reserved = reserve_remote_transfer_chunk(&manifest, policy(), &demand, &state, &header).unwrap();
         let acknowledgement = RemoteTransferAcknowledgement {
-            scope: demand.scope,
+            scope: demand.scope.clone(),
             chunk_digest_blake3: first.chunk.digest_blake3.clone(),
             sequence: INITIAL_CHUNK_SEQUENCE,
             transferred_bytes: TEST_TRANSFERRED_BYTES,
         };
         let wrong = digest("wrong-observed-chunk");
-        let wrong_error =
-            acknowledge_remote_transfer_chunk(policy(), &reserved, &acknowledgement, &wrong, TEST_PROGRESS_STEP)
-                .unwrap_err();
+        let wrong_error = acknowledge_remote_transfer_chunk(
+            policy(),
+            &demand.scope,
+            &reserved,
+            &acknowledgement,
+            &wrong,
+            TEST_PROGRESS_STEP,
+        )
+        .unwrap_err();
         let acknowledged = acknowledge_remote_transfer_chunk(
             policy(),
+            &remote_transfer_scope(&manifest),
             &reserved,
             &acknowledgement,
             &first.chunk.digest_blake3,
             TEST_PROGRESS_STEP,
         )
         .unwrap();
+        let mut unknown_session = acknowledgement.clone();
+        unknown_session.scope.session_id = RemoteTransferSessionId::new(digest("unknown-session").as_str()).unwrap();
+        let unknown_error = acknowledge_remote_transfer_chunk(
+            policy(),
+            &demand.scope,
+            &reserved,
+            &unknown_session,
+            &first.chunk.digest_blake3,
+            TEST_PROGRESS_STEP,
+        )
+        .unwrap_err();
+
+        // r[verify remote_builds.transient_handle_rejection]
+        assert_eq!(unknown_error, RemoteTransferReasonCode::CheckpointScopeMismatch);
 
         assert_eq!(wrong_error, RemoteTransferReasonCode::ChunkDigestMismatch);
         assert_eq!(acknowledged.transferred_bytes, TEST_TRANSFERRED_BYTES);
@@ -1796,13 +1652,17 @@ mod tests {
 
         let mut unadmitted = complete;
         unadmitted.path_info_admitted = false;
-        let unadmitted_decision = decide_remote_transfer_cutoff(&manifest, &demand, &unadmitted, &BTreeSet::new(), 0);
+        let acknowledged = BTreeSet::from([manifest.manifest.artifacts[0].chunks[0].digest_blake3.clone()]);
+        let unadmitted_decision =
+            decide_remote_transfer_cutoff(&manifest, &demand, &unadmitted, &acknowledged, TEST_TRANSFERRED_BYTES);
 
         assert_eq!(cutoff.disposition, RemoteTransferCompletionDisposition::AlreadyPresent);
         assert_eq!(cutoff.transferred_bytes, 0);
         assert!(!cutoff.output_admission_claimed);
         assert_eq!(not_cutoff.disposition, RemoteTransferCompletionDisposition::Continue);
         assert_eq!(unadmitted_decision.disposition, RemoteTransferCompletionDisposition::Continue);
+        // r[verify remote_builds.transient_handle_rejection]
+        assert!(!unadmitted_decision.output_admission_claimed);
     }
 
     #[test]
@@ -1820,57 +1680,11 @@ mod tests {
         assert_eq!(regressed, Err(RemoteTransferReasonCode::ProgressCounterRegressed));
         assert_eq!(exceeded, Err(RemoteTransferReasonCode::IdleProgressExceeded));
     }
-
-    proptest! {
-        #[test]
-        fn checked_quota_arithmetic_never_wraps(left in 0_u64..PROPERTY_BYTES_MAX_EXCLUSIVE, right in 0_u64..PROPERTY_BYTES_MAX_EXCLUSIVE) {
-            let result = left.checked_add_bytes(right).unwrap();
-            prop_assert_eq!(result, left + right);
-            prop_assert!(result >= left);
-            prop_assert!(result >= right);
-        }
-
-        #[test]
-        fn acknowledged_sets_are_monotonic_when_extended(index in 0_u32..policy().chunk_count_max) {
-            let mut previous = BTreeSet::new();
-            previous.insert(digest(&format!("chunk-{index}")));
-            let mut next = previous.clone();
-            next.insert(digest(&format!("chunk-next-{index}")));
-            prop_assert!(previous.is_subset(&next));
-            prop_assert!(next.len() >= previous.len());
-        }
-
-        #[test]
-        fn equivalent_receiver_facts_produce_equivalent_demand(seed in 0_u64..PROPERTY_BYTES_MAX_EXCLUSIVE) {
-            let manifest = manifest();
-            let mut receiver = empty_receiver();
-            if seed % PROPERTY_PARITY_DIVISOR == 0 {
-                receiver.complete_chunk_digests.insert(manifest.manifest.artifacts[0].chunks[0].digest_blake3.clone());
-            }
-            let left = plan_remote_transfer_demand(&manifest, &receiver).unwrap();
-            let right = plan_remote_transfer_demand(&manifest, &receiver.clone()).unwrap();
-            prop_assert_eq!(left, right);
-        }
-    }
 }
 
 #[cfg(kani)]
 mod kani_proofs {
     use super::*;
-
-    #[kani::proof]
-    fn checked_add_never_wraps() {
-        let left: u64 = kani::any();
-        let right: u64 = kani::any();
-        match left.checked_add_bytes(right) {
-            Ok(sum) => {
-                assert!(sum >= left);
-                assert!(sum >= right);
-            }
-            Err(reason) => assert_eq!(reason, RemoteTransferReasonCode::ArithmeticOverflow),
-        }
-    }
-
     #[kani::proof]
     fn invalid_credit_never_mutates_state() {
         let bytes: u64 = kani::any();

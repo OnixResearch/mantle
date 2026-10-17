@@ -20,10 +20,13 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crunch_nar::CaseHackPolicy;
+use crunch_nar::FilesystemNarRequest;
 use futures::TryStreamExt;
 use nix_compat::narinfo::NarInfo;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::nixbase32;
+use nix_compat::nixhash::HashAlgo;
 use nix_compat::store_path::StorePath;
 use reqwest::StatusCode;
 use reqwest::redirect::Policy;
@@ -63,6 +66,8 @@ const HTTP_PULL_MAX_REDIRECT_HOPS: usize = 10;
 const HTTP_PULL_USER_AGENT_PREFIX: &str = "crunch";
 /// Cache metadata file name.
 const NIX_CACHE_INFO_FILE_NAME: &str = "nix-cache-info";
+/// Bound the physical NAR observation to the same 16 TiB limit as `store verify`.
+const MAX_PULL_NAR_OBSERVATION_BYTES: u64 = 17_592_186_044_416;
 
 /// Options controlling pull behavior.
 #[derive(Debug, Clone)]
@@ -208,6 +213,21 @@ where R: AsyncBufRead {
     let mut decoder = async_compression::tokio::bufread::ZstdDecoder::new(reader);
     decoder.multiple_members(true);
     decoder
+}
+
+// r[impl cache_substitution.transport_normalization]
+/// Decode cache transport bytes before ingesting and hashing the signed NAR.
+/// NarHash covers the uncompressed NAR, not the URL payload.
+fn decoded_nar_reader<R>(reader: R, compression: Option<&str>) -> Option<Box<dyn AsyncRead + Send + Unpin>>
+where R: AsyncBufRead + Send + Unpin + 'static {
+    match compression {
+        None => Some(Box::new(reader)),
+        Some("bzip2") => Some(Box::new(async_compression::tokio::bufread::BzDecoder::new(reader))),
+        Some("gzip") => Some(Box::new(async_compression::tokio::bufread::GzipDecoder::new(reader))),
+        Some("xz") => Some(Box::new(async_compression::tokio::bufread::XzDecoder::new(reader))),
+        Some("zstd") => Some(Box::new(multi_frame_zstd_decoder(reader))),
+        Some(_) => None,
+    }
 }
 
 // r[impl cache_substitution.transport_normalization]
@@ -666,15 +686,10 @@ async fn ensure_local_member_exported(handle: &StoreHandle, path: &StorePath<Str
     else {
         return Err(Error::Store(format!("http-closure-reusable-member-disappeared: {path}")));
     };
-    let abs_path = path.to_absolute_path_with_prefix(handle.output_dir_str());
-    if !std::path::Path::new(&abs_path).exists() {
-        export_castore_to_disk(&path_info.node, &abs_path, &handle.blob_service(), &handle.directory_service())
-            .await
-            .map_err(|error| Error::Export(format!("exporting reusable closure member {abs_path}: {error}")))?;
+    if path_info.store_path != *path {
+        return Err(Error::Store(format!("http-closure-reusable-member-identity-conflict: {path}")));
     }
-    debug_assert_eq!(path_info.store_path, *path);
-    debug_assert!(!abs_path.is_empty());
-    Ok(())
+    export_admitted_path(handle, &path_info, PullTransport::Http).await
 }
 
 async fn import_planned_http_member(
@@ -801,13 +816,19 @@ async fn pull_single_http_path(
     assert!(!context.handle.store_dir().is_empty());
     let requested_digest: [u8; 20] = *requested_path.digest();
     let requested_path_text = requested_path.to_string();
-    if context
+    if let Some(existing) = context
         .handle
         .pathinfo_service()
         .get(requested_digest)
         .await
         .map_err(|e| Error::PathInfoService(format!("checking existing PathInfo: {e}")))?
-        .is_some()
+        && existing.store_path == *requested_path
+        && verify_pathinfo_signatures(&existing, context.handle.store_dir(), context.options)
+        && materialized_nar_matches(
+            Path::new(context.handle.output_dir_str()).join(&requested_path_text).as_path(),
+            &existing,
+        )
+        .await?
     {
         result.skipped_already_present_count = result.skipped_already_present_count.saturating_add(1);
         return Ok(());
@@ -830,7 +851,7 @@ async fn pull_single_http_path(
     let Some(ingested) = ingest_http_nar(context, &narinfo, &requested_path_text, result).await? else {
         return Ok(());
     };
-    if ingested.nar_sha256 != narinfo.nar_hash {
+    if ingested.nar_sha256 != narinfo.nar_hash || ingested.nar_size_bytes != narinfo.nar_size {
         result.skipped_hash_mismatch_count = result.skipped_hash_mismatch_count.saturating_add(1);
         return Ok(());
     }
@@ -953,17 +974,10 @@ async fn ingest_http_nar(
     };
     let response_stream = nar_response.bytes_stream().map_err(|error| std::io::Error::other(error.to_string()));
     let response_reader = tokio::io::BufReader::new(StreamReader::new(response_stream));
-    let nar_reader: Box<dyn AsyncRead + Send + Unpin> = match narinfo.compression {
-        None => Box::new(response_reader),
-        Some("bzip2") => Box::new(async_compression::tokio::bufread::BzDecoder::new(response_reader)),
-        Some("gzip") => Box::new(async_compression::tokio::bufread::GzipDecoder::new(response_reader)),
-        Some("xz") => Box::new(async_compression::tokio::bufread::XzDecoder::new(response_reader)),
-        Some("zstd") => Box::new(multi_frame_zstd_decoder(response_reader)),
-        Some(compression) => {
-            tracing::warn!(requested_path = %requested_path_text, "unsupported HTTP NAR compression: {compression}");
-            result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
-            return Ok(None);
-        }
+    let Some(nar_reader) = decoded_nar_reader(response_reader, narinfo.compression) else {
+        tracing::warn!(requested_path = %requested_path_text, "unsupported HTTP NAR compression: {:?}", narinfo.compression);
+        result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
+        return Ok(None);
     };
     let nar_read_limit = narinfo.nar_size.saturating_add(1);
     let mut bounded_nar_reader = nar_reader.take(nar_read_limit);
@@ -995,13 +1009,6 @@ enum PullTransport {
 }
 
 impl PullTransport {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Directory => "directory",
-            Self::Http => "HTTP",
-        }
-    }
-
     fn export_error(self, failure: PullExportFailure<'_>) -> Error {
         match self {
             Self::Directory => {
@@ -1024,6 +1031,142 @@ struct PulledPathAdmission {
     transport: PullTransport,
 }
 
+async fn materialized_nar_matches(path: &Path, path_info: &PathInfo) -> Result<bool, Error> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(Error::Export(format!("inspecting imported path {}: {error}", path.display()))),
+    }
+    let request = FilesystemNarRequest::new(HashAlgo::Sha256, CaseHackPolicy::native(), MAX_PULL_NAR_OBSERVATION_BYTES);
+    let observed = crunch_nar::observe_path_blocking(path.to_path_buf(), request)
+        .await
+        .map_err(|error| Error::Export(format!("observing imported path {}: {error}", path.display())))?;
+    Ok(observed.nar_size == path_info.nar_size && observed.digest.digest_as_bytes() == path_info.nar_sha256)
+}
+
+#[cfg(unix)]
+fn make_directory_movable(path: &Path) -> std::io::Result<Option<std::fs::Permissions>> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let metadata = std::fs::symlink_metadata(path)?;
+    if !metadata.is_dir() || metadata.permissions().mode() & 0o200 != 0 {
+        return Ok(None);
+    }
+    let original = metadata.permissions();
+    let mut writable = original.clone();
+    writable.set_mode(writable.mode() | 0o200);
+    std::fs::set_permissions(path, writable)?;
+    Ok(Some(original))
+}
+
+async fn export_admitted_path(
+    handle: &StoreHandle,
+    path_info: &PathInfo,
+    transport: PullTransport,
+) -> Result<(), Error> {
+    let abs_path = path_info.store_path.to_absolute_path_with_prefix(handle.output_dir_str());
+    let destination = Path::new(&abs_path);
+    if materialized_nar_matches(destination, path_info).await? {
+        return Ok(());
+    }
+    let parent = destination.parent().expect("store output has a parent");
+    let failure = |error: String| {
+        transport.export_error(PullExportFailure {
+            abs_path: &abs_path,
+            error: &error,
+        })
+    };
+    let staging = tempfile::Builder::new()
+        .prefix(".mantle-pull-stage-")
+        .tempdir_in(parent)
+        .map_err(|error| failure(format!("creating materialization staging directory: {error}")))?;
+    let staged_path = staging.path().join(path_info.store_path.to_string());
+    export_castore_to_disk(
+        &path_info.node,
+        staged_path.to_str().ok_or_else(|| failure("non-UTF8 staged path".to_string()))?,
+        &handle.blob_service(),
+        &handle.directory_service(),
+    )
+    .await
+    .map_err(failure)?;
+    if !materialized_nar_matches(&staged_path, path_info).await? {
+        return Err(failure("staged export differs from signed NAR".to_string()));
+    }
+    // Some Unix filesystems deny renaming normalized 0555 directories even
+    // when their parent is owned. Only the root mode changes temporarily;
+    // directory modes are not encoded in the authenticated NAR.
+    #[cfg(unix)]
+    let staged_directory_permissions = make_directory_movable(&staged_path)
+        .map_err(|error| failure(format!("making staged directory movable: {error}")))?;
+
+    // Keep an interrupted or corrupt old export as evidence. Only the complete
+    // staged tree becomes the final root; a failed rename restores the old one.
+    #[cfg(unix)]
+    let old_permissions = if std::fs::symlink_metadata(destination).is_ok() {
+        make_directory_movable(destination)
+            .map_err(|error| failure(format!("making corrupt directory movable: {error}")))?
+    } else {
+        None
+    };
+    let quarantine = if std::fs::symlink_metadata(destination).is_ok() {
+        let quarantine = tempfile::Builder::new()
+            .prefix(".mantle-pull-corrupt-")
+            .tempdir_in(parent)
+            .map_err(|error| failure(format!("creating corrupt-export quarantine: {error}")))?;
+        let preserved = quarantine.path().join(path_info.store_path.to_string());
+        if let Err(error) = std::fs::rename(destination, &preserved) {
+            #[cfg(unix)]
+            if let Some(original) = old_permissions {
+                std::fs::set_permissions(destination, original).map_err(|restore| {
+                    failure(format!("preserving corrupt export: {error}; restoring permissions: {restore}"))
+                })?;
+            }
+            return Err(failure(format!("preserving corrupt export: {error}")));
+        }
+        // No failed publication or interrupted follow-up may erase the old
+        // physical tree: keep the quarantine immediately after moving it.
+        let preserved_dir = quarantine.keep();
+        #[cfg(unix)]
+        if let Some(original) = &old_permissions {
+            std::fs::set_permissions(&preserved, original.clone()).map_err(|error| {
+                failure(format!("restoring corrupt export mode at {}: {error}", preserved_dir.display()))
+            })?;
+        }
+        Some((preserved_dir, preserved))
+    } else {
+        None
+    };
+    if let Err(error) = std::fs::rename(&staged_path, destination) {
+        if let Some((_, preserved)) = &quarantine {
+            #[cfg(unix)]
+            if old_permissions.is_some() {
+                make_directory_movable(preserved).map_err(|restore| {
+                    failure(format!("publishing complete export: {error}; making original movable: {restore}"))
+                })?;
+            }
+            std::fs::rename(preserved, destination).map_err(|restore| {
+                failure(format!("publishing complete export: {error}; restoring original: {restore}"))
+            })?;
+            #[cfg(unix)]
+            if let Some(original) = &old_permissions {
+                std::fs::set_permissions(destination, original.clone()).map_err(|restore| {
+                    failure(format!("publishing complete export: {error}; restoring original mode: {restore}"))
+                })?;
+            }
+        }
+        return Err(failure(format!("publishing complete export: {error}")));
+    }
+    #[cfg(unix)]
+    if let Some(original) = staged_directory_permissions {
+        std::fs::set_permissions(destination, original)
+            .map_err(|error| failure(format!("restoring published directory permissions: {error}")))?;
+    }
+    if let Some((preserved_dir, _)) = quarantine {
+        tracing::warn!(path = %abs_path, preserved = %preserved_dir.display(), "replaced incomplete imported NAR root");
+    }
+    Ok(())
+}
+
 async fn persist_pulled_admission(
     handle: &StoreHandle,
     admission: PulledPathAdmission,
@@ -1031,32 +1174,18 @@ async fn persist_pulled_admission(
 ) -> Result<(), Error> {
     assert!(!admission.path_info.store_path.name().is_empty());
     assert_eq!(admission.path_info.store_path.digest().len(), 20);
-    let output_path = admission.path_info.store_path.clone();
-    let node = admission.path_info.node.clone();
     handle
         .pathinfo_service()
         .put(admission.path_info.clone())
         .await
         .map_err(|error| Error::PathInfoService(format!("persisting imported PathInfo: {error}")))?;
-    let abs_path = output_path.to_absolute_path_with_prefix(handle.output_dir_str());
-    if !std::path::Path::new(&abs_path).exists() {
-        match export_castore_to_disk(&node, &abs_path, &handle.blob_service(), &handle.directory_service()).await {
-            Ok(()) => {}
-            Err(error) if error.contains("Read-only file system") || error.contains("Permission denied") => {
-                tracing::warn!(path = %abs_path, source = admission.transport.label(), "could not export imported path to disk (read-only store)");
-            }
-            Err(error) => {
-                return Err(admission.transport.export_error(PullExportFailure {
-                    abs_path: &abs_path,
-                    error: &error,
-                }));
-            }
-        }
-    }
+    // PathInfo can outlive a failed disk export. The next pull checks the
+    // physical NAR instead of treating that metadata as proof of completion.
+    export_admitted_path(handle, &admission.path_info, admission.transport).await?;
     result.imported_count = result.imported_count.saturating_add(1);
     result.total_nar_bytes = result.total_nar_bytes.saturating_add(admission.path_info.nar_size);
     result.paths.push(PulledPath {
-        store_path: output_path.to_string(),
+        store_path: admission.path_info.store_path.to_string(),
         nar_hash_hex: data_encoding::HEXLOWER.encode(&admission.path_info.nar_sha256),
         nar_size: admission.path_info.nar_size,
     });
@@ -1121,7 +1250,7 @@ async fn pull_single_narinfo(
     let Some(ingested) = ingest_directory_nar(context, &narinfo, &nar_file_path, result).await? else {
         return Ok(());
     };
-    if ingested.nar_sha256 != narinfo.nar_hash {
+    if ingested.nar_sha256 != narinfo.nar_hash || ingested.nar_size_bytes != narinfo.nar_size {
         result.skipped_hash_mismatch_count = result.skipped_hash_mismatch_count.saturating_add(1);
         return Ok(());
     }
@@ -1186,20 +1315,39 @@ async fn admitted_directory_nar_path(
     {
         return Ok(None);
     }
-    if context
+    if !verify_narinfo_signatures(narinfo, context.handle.store_dir(), context.options) {
+        result.skipped_untrusted_count = result.skipped_untrusted_count.saturating_add(1);
+        return Ok(None);
+    }
+    if let Some(existing) = context
         .handle
         .pathinfo_service()
         .get(*narinfo.store_path.digest())
         .await
         .map_err(|error| Error::PathInfoService(format!("checking existing PathInfo: {error}")))?
-        .is_some()
     {
-        result.skipped_already_present_count = result.skipped_already_present_count.saturating_add(1);
-        return Ok(None);
-    }
-    if !verify_narinfo_signatures(narinfo, context.handle.store_dir(), context.options) {
-        result.skipped_untrusted_count = result.skipped_untrusted_count.saturating_add(1);
-        return Ok(None);
+        let references_match = existing.references.len() == narinfo.references.len()
+            && existing
+                .references
+                .iter()
+                .zip(&narinfo.references)
+                .all(|(old, signed)| old.digest() == signed.digest() && old.name() == signed.name());
+        if existing.store_path.digest() != narinfo.store_path.digest()
+            || existing.store_path.name() != narinfo.store_path.name()
+            || existing.nar_sha256 != narinfo.nar_hash
+            || existing.nar_size != narinfo.nar_size
+            || !references_match
+        {
+            return Err(Error::Store(format!(
+                "existing PathInfo conflicts with signed NAR for {}",
+                narinfo.store_path
+            )));
+        }
+        let output = Path::new(context.handle.output_dir_str()).join(&store_path_text);
+        if materialized_nar_matches(&output, &existing).await? {
+            result.skipped_already_present_count = result.skipped_already_present_count.saturating_add(1);
+            return Ok(None);
+        }
     }
     let nar_file_path = context.source.join(narinfo.url);
     if !nar_file_path.exists() {
@@ -1220,11 +1368,17 @@ async fn ingest_directory_nar(
     let nar_file = tokio::fs::File::open(nar_file_path)
         .await
         .map_err(|error| Error::Store(format!("opening NAR {}: {error}", nar_file_path.display())))?;
-    let mut nar_reader = tokio::io::BufReader::new(nar_file);
+    let nar_reader = tokio::io::BufReader::new(nar_file);
+    let Some(nar_reader) = decoded_nar_reader(nar_reader, narinfo.compression) else {
+        tracing::warn!(path = %nar_file_path.display(), "unsupported file cache NAR compression: {:?}", narinfo.compression);
+        result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
+        return Ok(None);
+    };
+    let mut bounded_nar_reader = nar_reader.take(narinfo.nar_size.saturating_add(1));
     let ingestion = ingest_nar_and_hash(
         context.handle.blob_service(),
         context.handle.directory_service(),
-        &mut nar_reader,
+        &mut bounded_nar_reader,
         &narinfo.ca,
     )
     .await;
@@ -1266,6 +1420,7 @@ mod tests {
     use async_trait::async_trait;
     use futures::stream::BoxStream;
     use nix_compat::nixbase32;
+    use snix_castore::Directory;
     use snix_castore::Node;
     use snix_castore::blobservice::BlobService;
     use snix_castore::blobservice::MemoryBlobService;
@@ -1687,10 +1842,23 @@ mod tests {
         encoder.write_all(bytes).unwrap();
         encoder.finish().unwrap()
     }
-
     fn compress_zstd(bytes: &[u8]) -> Vec<u8> {
         const ZSTD_COMPRESSION_LEVEL: i32 = 0;
         zstd::stream::encode_all(bytes, ZSTD_COMPRESSION_LEVEL).unwrap()
+    }
+
+    fn set_cache_zstd_nar(cache_dir: &Path, pi: &PathInfo, nar_bytes: &[u8]) {
+        let compressed = compress_zstd(nar_bytes);
+        let file_name = format!("{}.nar.zst", nix_base32_sha256(&compressed));
+        let narinfo_path = cache_dir.join(narinfo_file_name(&pi.store_path));
+        let original = std::fs::read_to_string(&narinfo_path).unwrap();
+        let updated = replace_narinfo_field(&original, "URL", &format!("nar/{file_name}"));
+        let updated = replace_narinfo_field(&updated, "Compression", "zstd");
+        let updated =
+            replace_narinfo_field(&updated, "FileHash", &format!("sha256:{}", nix_base32_sha256(&compressed)));
+        let updated = replace_narinfo_field(&updated, "FileSize", &compressed.len().to_string());
+        std::fs::write(narinfo_path, updated).unwrap();
+        std::fs::write(cache_dir.join("nar").join(file_name), compressed).unwrap();
     }
 
     fn nix_base32_sha256(bytes: &[u8]) -> String {
@@ -1740,6 +1908,62 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn pull_signed_zstd_file_cache_imports_verified_nar_and_exports_output() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push")).await;
+        let pi = make_signed_pathinfo(&push_store, "signed-zstd", b"signed nar payload").await;
+        let cache_dir = tmp.path().join("cache");
+        export_paths_to_cache_dir(&push_store, std::slice::from_ref(&pi), &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let original_nar = render_nar_bytes(&push_store, &pi.node).await;
+        set_cache_zstd_nar(&cache_dir, &pi, &original_nar);
+
+        let pull_store = open_test_store(&tmp.path().join("pull")).await;
+        let report = import_paths_from_cache_dir(&pull_store, &cache_dir, None, &default_pull_options()).await.unwrap();
+        assert_eq!(report.imported_count, 1);
+        assert_eq!(report.skipped_hash_mismatch_count, 0);
+        let imported_pi = pull_store.pathinfo_service().get(*pi.store_path.digest()).await.unwrap().unwrap();
+        assert_eq!(imported_pi.nar_sha256, pi.nar_sha256);
+        assert_eq!(imported_pi.nar_size, pi.nar_size);
+        assert_eq!(imported_pi.signatures, pi.signatures);
+        assert_eq!(render_nar_bytes(&pull_store, &imported_pi.node).await, original_nar);
+        let output_path = pi.store_path.to_absolute_path_with_prefix(pull_store.output_dir_str());
+        assert_eq!(std::fs::read(output_path).unwrap(), b"signed nar payload");
+    }
+
+    #[tokio::test]
+    async fn pull_signed_zstd_file_cache_rejects_valid_nar_with_mutated_content() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push")).await;
+        let pi = make_signed_pathinfo(&push_store, "tampered-zstd", b"signed nar payload").await;
+        let cache_dir = tmp.path().join("cache");
+        export_paths_to_cache_dir(&push_store, std::slice::from_ref(&pi), &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let mut nar_bytes = render_nar_bytes(&push_store, &pi.node).await;
+        let offset = nar_bytes
+            .windows(b"signed nar payload".len())
+            .position(|part| part == b"signed nar payload")
+            .unwrap();
+        nar_bytes[offset] = b'X';
+        set_cache_zstd_nar(&cache_dir, &pi, &nar_bytes);
+
+        let pull_store = open_test_store(&tmp.path().join("pull")).await;
+        let report = import_paths_from_cache_dir(&pull_store, &cache_dir, None, &default_pull_options()).await.unwrap();
+        assert_eq!(report.imported_count, 0);
+        assert_eq!(report.skipped_hash_mismatch_count, 1);
+        assert_eq!(report.skipped_untrusted_count, 0);
+        assert!(pull_store.pathinfo_service().get(*pi.store_path.digest()).await.unwrap().is_none());
+        let output_path = pi.store_path.to_absolute_path_with_prefix(pull_store.output_dir_str());
+        assert!(!Path::new(&output_path).exists());
+    }
+
+    #[tokio::test]
     async fn pull_skips_already_present() {
         let tmp = tempfile::tempdir().unwrap();
         let store = open_test_store(&tmp.path().join("store")).await;
@@ -1759,6 +1983,97 @@ mod tests {
 
         assert_eq!(report.imported_count, 0);
         assert_eq!(report.skipped_already_present_count, 1);
+        let output = pi.store_path.to_absolute_path_with_prefix(pull_store.output_dir_str());
+        assert!(materialized_nar_matches(Path::new(&output), &pi).await.unwrap());
+        assert!(
+            !std::fs::read_dir(pull_store.output_dir_str()).unwrap().any(|entry| entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".mantle-pull-corrupt-"))
+        );
+    }
+
+    #[tokio::test]
+    async fn signed_directory_pull_repairs_interrupted_export_without_trusting_partial_path() {
+        use sha2::Digest;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let source = open_test_store(&tmp.path().join("source")).await;
+        let one = make_signed_pathinfo(&source, "first-child", b"complete source").await;
+        let two = make_signed_pathinfo(&source, "second-child", b"compiler").await;
+        let mut directory = Directory::new();
+        directory.add("lib.rs".try_into().unwrap(), one.node).unwrap();
+        directory.add("rustc".try_into().unwrap(), two.node).unwrap();
+        let node = Node::Directory {
+            digest: directory.digest(),
+            size: directory.size(),
+        };
+        source.directory_service().put(directory).await.unwrap();
+        let nar = render_nar_bytes(&source, &node).await;
+        let mut signed = make_signed_pathinfo(&source, "nightly-interrupted", b"unused").await;
+        signed.node = node;
+        signed.nar_sha256 = sha2::Sha256::digest(&nar).into();
+        signed.nar_size = nar.len() as u64;
+        signed.signatures.clear();
+        sign_pathinfo(&mut signed, source.store_dir());
+        let cache = tmp.path().join("signed-cache");
+        export_paths_to_cache_dir(&source, std::slice::from_ref(&signed), &cache, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+
+        let client = open_test_store(&tmp.path().join("client")).await;
+        client.pathinfo_service().put(signed.clone()).await.unwrap();
+        let output = PathBuf::from(signed.store_path.to_absolute_path_with_prefix(client.output_dir_str()));
+        std::fs::create_dir(&output).unwrap();
+        std::fs::write(output.join("lib.rs"), b"partial").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&output, std::fs::Permissions::from_mode(0o555)).unwrap();
+        }
+        assert!(!materialized_nar_matches(&output, &signed).await.unwrap());
+
+        let report = import_paths_from_cache_dir(&client, &cache, None, &default_pull_options()).await.unwrap();
+        assert_eq!(
+            (report.imported_count, report.skipped_already_present_count, report.skipped_untrusted_count),
+            (1, 0, 0)
+        );
+        assert_eq!(std::fs::read(output.join("lib.rs")).unwrap(), b"complete source");
+        assert_eq!(std::fs::read(output.join("rustc")).unwrap(), b"compiler");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(&output).unwrap().permissions().mode() & 0o777, 0o555);
+        }
+        let selector = signed.store_path.to_string();
+        let verification = crate::query::store_verify(
+            client.pathinfo_service().as_ref(),
+            Some(&selector),
+            Path::new(client.output_dir_str()),
+        )
+        .await
+        .unwrap();
+        assert!(matches!(verification.as_slice(), [crate::query::VerifyResult::Ok(path)] if path == &selector));
+        let stored = client.pathinfo_service().get(*signed.store_path.digest()).await.unwrap().unwrap();
+        assert_eq!(stored.signatures, signed.signatures);
+        let preserved = std::fs::read_dir(client.output_dir_str())
+            .unwrap()
+            .filter_map(Result::ok)
+            .find(|entry| entry.file_name().to_string_lossy().starts_with(".mantle-pull-corrupt-"))
+            .unwrap();
+        assert_eq!(std::fs::read(preserved.path().join(&selector).join("lib.rs")).unwrap(), b"partial");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let original = preserved.path().join(&selector);
+            assert_eq!(std::fs::metadata(original).unwrap().permissions().mode() & 0o777, 0o555);
+        }
+
+        let repeat = import_paths_from_cache_dir(&client, &cache, None, &default_pull_options()).await.unwrap();
+        assert_eq!((repeat.imported_count, repeat.skipped_already_present_count), (0, 1));
     }
 
     #[tokio::test]
@@ -3676,7 +3991,7 @@ mod tests {
             .expect("PathInfo must persist before export fails");
         let imported_path = pi.store_path.to_absolute_path_with_prefix(pull_store.output_dir_str());
 
-        assert!(error.to_string().contains("exporting imported HTTP path"));
+        assert!(matches!(error, Error::Export(_)));
         assert_eq!(imported_pi.store_path, pi.store_path);
         assert!(!std::path::Path::new(&imported_path).exists());
     }

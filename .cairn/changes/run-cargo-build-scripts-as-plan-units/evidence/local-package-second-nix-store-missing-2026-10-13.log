@@ -1,0 +1,96 @@
+command=["/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo", "--config", "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/adopt-casita-store-backend/evidence/t46-isolated-vendor-config-2026-10-12.txt", "--config", "target.x86_64-unknown-linux-gnu.linker=\"gcc\"", "--config", "target.x86_64-unknown-linux-gnu.rustflags=[\"-C\",\"link-arg=-Wl,--allow-multiple-definition\"]", "test", "-p", "mantle-cargo-unit-plan", "--lib", "--tests", "--bins", "--locked", "--offline", "--", "--test-threads=1"]
+cwd=/home/brittonr/git/OnixResearch/mantle
+CARGO_TARGET_DIR=/home/brittonr/mantle-unit-plan-agent-target
+TMPDIR=/run/user/1555/mantle-unit-plan-focused-20261013
+root_free_start=3081109504 tmpfs_free_start=13782167552
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.75s
+     Running unittests src/lib.rs (/home/brittonr/mantle-unit-plan-agent-target/debug/deps/mantle_cargo_unit_plan-d0216f3e395c8da0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/unit_helper.rs (/home/brittonr/mantle-unit-plan-agent-target/debug/deps/mantle_cargo_unit_helper-842478aba00e9d91)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/producer.rs (/home/brittonr/mantle-unit-plan-agent-target/debug/deps/mantle_cargo_unit_producer-e8885a01e612dfef)
+
+running 3 tests
+test tests::copied_readonly_workspace_accepts_only_declared_source_config ... ok
+test tests::undeclared_native_role_does_not_become_a_host_path ... ok
+test tests::unknown_cargo_unit_graph_version_blocks_before_lowering ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/directives.rs (/home/brittonr/mantle-unit-plan-agent-target/debug/deps/directives-56e5d281e1f944f9)
+
+running 2 tests
+test directives_preserve_cfg_env_link_order_and_metadata ... ok
+test rejected_directives_cannot_cross_into_compilation_or_host_paths ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/helper.rs (/home/brittonr/mantle-unit-plan-agent-target/debug/deps/helper-9500fca91ae10e05)
+
+running 8 tests
+test absent_direct_manifest_blocks_before_compilation ... ok
+test declared_native_archive_links_and_missing_declaration_fails_script ... ok
+test error_directive_and_nonzero_script_exit_fail_without_flags ... ok
+test generated_source_cfg_and_env_flow_from_executed_script_to_compiler ... ok
+test links_metadata_from_producer_script_reaches_dependent_script ... ok
+test oversized_stdout_and_stderr_kill_and_reap_scripts_without_flags ... ok
+test run_script_reads_declared_release_profile_instead_of_compiler_defaults ... ok
+test three_unit_build_links_transitive_library_through_manifests ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.90s
+
+     Running tests/lowering.rs (/home/brittonr/mantle-unit-plan-agent-target/debug/deps/lowering-fa36a871b9acefb7)
+
+running 8 tests
+test build_script_run_dependencies_bind_flags_target_and_native_inputs ... ok
+test direct_dependencies_and_manifest_contract_are_canonical ... ok
+test full_digest_source_id_is_distinct_from_bounded_slice_path ... ok
+test generic_plan_unit_input_and_byte_limits_block_before_publication ... ok
+test multiple_roots_sort_by_wire_identity_not_raw_cargo_identity ... ok
+test proc_macro_host_unit_and_git_source_boundary ... ok
+test runtime_tool_roots_are_explicit_unit_inputs_and_change_plan_identity ... ok
+test unsupported_execution_modes_and_unbound_paths_fail_closed ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/producer.rs (/home/brittonr/mantle-unit-plan-agent-target/debug/deps/producer-b720f3d692bdd0f5)
+
+running 1 test
+test unavailable_registry_source_cannot_use_network_or_ambient_cargo_home ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/source_nar.rs (/home/brittonr/mantle-unit-plan-agent-target/debug/deps/source_nar-c12b156633a75e9a)
+
+running 2 tests
+test package_slice_digest_matches_nix_nar_bytes ... FAILED
+test source_slice_rejects_symlinks_and_special_files ... ok
+
+failures:
+
+---- package_slice_digest_matches_nix_nar_bytes stdout ----
+
+thread 'package_slice_digest_matches_nix_nar_bytes' (1815880) panicked at crates/mantle-cargo-unit-plan/tests/source_nar.rs:19:80:
+called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    package_slice_digest_matches_nix_nar_bytes
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p mantle-cargo-unit-plan --test source_nar`
+exit_code=101 stop=none root_free_end=3081109504 tmpfs_free_end=13782147072

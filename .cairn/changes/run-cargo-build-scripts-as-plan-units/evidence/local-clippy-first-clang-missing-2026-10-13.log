@@ -1,0 +1,18 @@
+command=["/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo", "--config", "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/adopt-casita-store-backend/evidence/t46-isolated-vendor-config-2026-10-12.txt", "--config", "target.x86_64-unknown-linux-gnu.linker=\"gcc\"", "--config", "target.x86_64-unknown-linux-gnu.rustflags=[\"-C\",\"link-arg=-Wl,--allow-multiple-definition\"]", "clippy", "-p", "mantle-cargo-unit-plan", "--lib", "--bins", "--tests", "--locked", "--offline", "--no-deps", "--", "-D", "warnings"]
+cwd=/home/brittonr/git/OnixResearch/mantle
+CARGO_TARGET_DIR=/home/brittonr/mantle-unit-plan-agent-target
+TMPDIR=/run/user/1555/mantle-unit-plan-focused-20261013
+root_free_start=3080978432 tmpfs_free_start=13782147072
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+error: linker `clang` not found
+  |
+  = note: No such file or directory (os error 2)
+
+error: could not compile `proc-macro2` (build script) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+exit_code=101 stop=none root_free_end=3080978432 tmpfs_free_end=13781991424

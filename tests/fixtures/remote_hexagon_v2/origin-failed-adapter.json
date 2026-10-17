@@ -1,0 +1,106 @@
+{
+  "attempt_phase": "failed",
+  "attempts_started": 1,
+  "client_store_paths": 1,
+  "coordinator_phase": "lost",
+  "diagnostic_class": "real-process-spawn-ENOENT",
+  "diagnostic_phase": "stdio-remote-child-spawn",
+  "durable_logs": [
+    {
+      "accepted_events": 6,
+      "dropped_events": 0,
+      "events": [
+        {
+          "category": "queue",
+          "measurement": "candidate-count",
+          "phase": "planning",
+          "reason": "priority-selected",
+          "result": "accepted",
+          "retry": "none",
+          "route": "remote-stdio",
+          "transfer": "none",
+          "value": 1
+        },
+        {
+          "category": "route",
+          "measurement": "occurrences",
+          "phase": "planning",
+          "reason": "route-selected",
+          "result": "accepted",
+          "retry": "none",
+          "route": "remote-stdio",
+          "transfer": "none",
+          "value": 1
+        },
+        {
+          "category": "queue",
+          "measurement": "occurrences",
+          "phase": "queued",
+          "reason": "queue-admitted",
+          "result": "accepted",
+          "retry": "none",
+          "route": "remote-stdio",
+          "transfer": "none",
+          "value": 1
+        },
+        {
+          "category": "assignment",
+          "measurement": "occurrences",
+          "phase": "assigned",
+          "reason": "worker-assigned",
+          "result": "accepted",
+          "retry": "none",
+          "route": "remote-stdio",
+          "transfer": "none",
+          "value": 1
+        },
+        {
+          "category": "retry-fencing",
+          "measurement": "occurrences",
+          "phase": "running",
+          "reason": "fence-accepted",
+          "result": "accepted",
+          "retry": "current-fence",
+          "route": "remote-stdio",
+          "transfer": "none",
+          "value": 1
+        },
+        {
+          "category": "execution",
+          "measurement": "occurrences",
+          "phase": "terminal",
+          "reason": "execution-failed",
+          "result": "failed",
+          "retry": "terminal",
+          "route": "remote-stdio",
+          "transfer": "none",
+          "value": 1
+        }
+      ]
+    }
+  ],
+  "exit_code": 3,
+  "fence_generation": 1,
+  "last_attempt_reason_code": "current-attempt-applied",
+  "live_output_claims": 0,
+  "no_output_export_state": true,
+  "no_worker_state": true,
+  "non_claim": "Real original test-only instrumented da00f child-spawn failure, not pristine original, original typed EffectIds, quantified original CLI resources, or whole successor CLI equivalence. Original failure event IDs are not typed EffectIds.",
+  "output_admission_completed": false,
+  "pathinfo_rows": 0,
+  "payload_sha256": "d67c656e01756650d77717b0839985a056ec28ffe174601d690fc407a2ceffca",
+  "provenance": {
+    "independently_observed_current_binary_sha256": "3f631cc7cdf961cb328c7abf7e4d9e06b1faa3d870953d0de74f0d6dcd89c060",
+    "independently_observed_current_main_sha256": "cf51884db4f9e6c86141cdb8eb614724ab169a80cc04306429b13512bc29177e",
+    "independently_observed_current_receipt_sha256": "feba3048bb9ec5f2d3674cca460ee8715cd3195ca1c86384513d2a5289ae77f3",
+    "instrumented_original_binary_sha256": "bfd89198222b62824f60f4050fe9263d864079865eeaff1a06610a1fa6c1d549",
+    "instrumented_original_main_sha256": "3019a4271c3beea06f486fe9ed01110426e118661b91ec4616fc55ebb340c195",
+    "instrumented_original_receipt_sha256": "175ffc0608bd2534f8f45c01b7a8ff69ff10256f82f273752304200e5f0f0e9b"
+  },
+  "schema": "origin-v2-failed-adapter-bounded-v1",
+  "stdout_bytes": 0,
+  "store_info_exit_code": 3,
+  "store_info_stdout_bytes": 0,
+  "ticket_uses_after": 1,
+  "ticket_uses_before": 1
+}

@@ -1,0 +1,8 @@
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+error: failed to create directory `/tmp/mantle-store-agent/debug/.fingerprint/crunch-store-7e61bb03b9cad81b`
+
+Caused by:
+  Disk quota exceeded (os error 122)

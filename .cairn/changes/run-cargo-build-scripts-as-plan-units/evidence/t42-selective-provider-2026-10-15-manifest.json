@@ -1,0 +1,347 @@
+{
+  "schema": "mantle-t42-retained-receipts-v1",
+  "captured_at_utc": "2026-10-15T00:58:41.723Z",
+  "source_host": "brittonr@100.90.108.13",
+  "source_root": "/tmp/mantle-unit-plan-20261013-87lqAtNv",
+  "maintenance_owner": "Mantle lane operator",
+  "transport": "Bounded exact-byte SCP of settled selected files; metadata byte counts and remote SHA-256 checked against local files. Specialized raw SSH reads cannot continue beyond the51200-byte prefix of single-line112513-byte plans, so no JSON reserialization was used. Canonical BLAKE3-256 computed separately with existing LOCAL /run/current-system/sw/bin/b3sum.",
+  "scope": "T4.2 provider-only same-client selective execution/trust acceptance, not T4.3 matrix acceptance, global current-source proof, baseline T1.1 completion or archive",
+  "capture_limit": {
+    "raw_bytes": 750000,
+    "raw_files": 45,
+    "actual_raw_bytes": 738221,
+    "actual_raw_files": 45
+  },
+  "prewrite": {
+    "observed_utc": "2026-10-15T00:56:16.868951+00:00",
+    "available_bytes": 2359296,
+    "available_inodes": 4848,
+    "manifest_prose_allowance": 131072,
+    "future_edit_gate_reserve_bytes": 524288
+  },
+  "baseline_reference": {
+    "manifest": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14-manifest.json",
+    "manifest_blake3_256": "b2d9005b0a08c9aec619cd9f67fc3c7be3f974ff8ed492522094d1fd69479a2c",
+    "summary": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14.md",
+    "raw_bytes": 441518,
+    "raw_files": 40,
+    "policy": "Reference existing frozen receipts rather than duplicate them, including original34 builds, prior59 verified inputs, signed pulls and1047/1051 history."
+  },
+  "files": [
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/check-native-provider-selective-rerun.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/check-native-provider-selective-rerun.py",
+      "bytes": 21648,
+      "blake3_256": "0fd10b4c333c92cb42fbb53186171b65fc9fa3f82357db67dca21b740be67a1c",
+      "transport_sha256": "ea2c7e936080168601cfa1c48b0345fab9933bf4d966d11d1ead065cfb80af19"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/check-native-provider-selective-rerun.pre-effective-identity-20261014.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/check-native-provider-selective-rerun.pre-effective-identity-20261014.py",
+      "bytes": 17340,
+      "blake3_256": "45cc1a6f750f19cc10ef01497f53aafb7ff469cabf938b6c0017c0929c0f680f",
+      "transport_sha256": "1b14414bd6f6be046a73d33823e1f4f8b1e827d176cb2d0ccd51d4df749a3339"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/check-native-provider-selective-rerun.pre-goal-role-1051.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/check-native-provider-selective-rerun.pre-goal-role-1051.py",
+      "bytes": 16765,
+      "blake3_256": "d5d98aa33b2c41c08c66508390ac1168519e16f19098a788b9d7405aa2691ead",
+      "transport_sha256": "01684a6d85f8be1d551b760ea64c761c652bac5142adcaf025ca99ae4d64da0e"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/selective-effective-identity-prior-source-blake3-20261014.txt",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/selective-effective-identity-prior-source-blake3-20261014.txt",
+      "bytes": 630,
+      "blake3_256": "40a0c63d3202d676a0e8252c602dc05a1cc87599a74e1e663e1249f27a5875b6",
+      "transport_sha256": "64ede300f6bb5604065a2529bc8bf0fd72c745945988cee9995efc71cca44b02"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/selective-effective-identity-repair-20261014.txt",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/selective-effective-identity-repair-20261014.txt",
+      "bytes": 1885,
+      "blake3_256": "205d11b39ea8b43777a7b2938c24e5a83b0c66f7f4dcc8900dd59639298d3348",
+      "transport_sha256": "d38137ef5f53fe48f698645cd470142c3189b479766d7b2fcbb1c25e39a1ac59"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/smoke-effective-checker-initial-failed-20261014.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/smoke-effective-checker-initial-failed-20261014.py",
+      "bytes": 4661,
+      "blake3_256": "71626ce171c4e355a917fb99b65e60686f2b624bc9183875ab7390c25ecd5c4a",
+      "transport_sha256": "3254dbb48142dbb39b04e459d441aab6b086302777b79b66f20c651ff1bff538"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/smoke-effective-checker-owned-20261014.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/smoke-effective-checker-owned-20261014.py",
+      "bytes": 4772,
+      "blake3_256": "d6b6726602ae7a032b7fa43f8227563ebd344f5751827bc92157ead36a5241ab",
+      "transport_sha256": "6e4d73fb2f44a3bfaf46bf81ece3730064deb5469f84cf8da7a2ab5811c24056"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/selective-effective-checker-smoke-20261014.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/selective-effective-checker-smoke-20261014.log",
+      "bytes": 2256,
+      "blake3_256": "93041fa52499b324db217b2a15862f17ccc75bdd317829b440163e499e633df6",
+      "transport_sha256": "59a806f837da4ded29b39a7065baadf7f6ed1897f85edf927d41b269a6af54f8"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/selective-effective-checker-smoke-pass-20261014.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/selective-effective-checker-smoke-pass-20261014.log",
+      "bytes": 2620,
+      "blake3_256": "b34cba0299331b7a17eef603262fb7a4c61263fdf03ec203184e0517792f3db9",
+      "transport_sha256": "217d8a32b4503fa7379944288ea4f50459c955eb8103f600238994f6210daf8f"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/native-variant.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/native-variant.log",
+      "bytes": 11041,
+      "blake3_256": "e2424405bb0a1386ddc60a5b2cb3685f52497639134bbf16ee58c5d2221c9991",
+      "transport_sha256": "d10b6a530531383ec869648abbfaf5caeefe8944f345a403c10907c0e233254c"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/native-answer-variant.ncl",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/native-answer-variant.ncl",
+      "bytes": 662,
+      "blake3_256": "b58bfe5aa417775c547453f967750ab40333065000fdbd137a71312b01f42174",
+      "transport_sha256": "4cc16e709d6632c951997872b385bbdcf541cd5c5bec44c1b5efd575fc38bf7f"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-provider-verify.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-provider-verify.log",
+      "bytes": 102,
+      "blake3_256": "e76f3ae0bc5d5c848ef110f6ab6a029eeceb4b92779d70c2d167c9ad79dfe758",
+      "transport_sha256": "52ade157fced4978ff07d88a8a1851e8d76f0f5c5e69e9e85db00d4871efc76e"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-config-admit-gpt61-20261014.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-config-admit-gpt61-20261014.log",
+      "bytes": 3945,
+      "blake3_256": "7ed8a7a413c618b16e64372f017b6a18aee949f8d4f361a0e0463294c0977aaf",
+      "transport_sha256": "c58b6c09bbd356bffec76e9ca467a38bd456fedd4c47c38116bc8a58511665fa"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-config-pull.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-config-pull.log",
+      "bytes": 207,
+      "blake3_256": "db66506b4ce940cfed45b9132f71610936b8556478838b05f0279ffc2372c577",
+      "transport_sha256": "346c2ff1873bf674a83df7fcdd9e206dc8072ff0b4c7bfbce64efd131c9af2b4"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-config-verify.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-config-verify.log",
+      "bytes": 121,
+      "blake3_256": "526800047325cfb06fde1e7e7e33fda94e69f9ee3a5987699817107fcabc1821",
+      "transport_sha256": "65fe54412ca709a78feb2b84dcfad9a9aab45ead5e8162b0ef370f824ab366cc"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-config.json",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-config.json",
+      "bytes": 1551,
+      "blake3_256": "0ec35b2deaccf9cd1e537f9a284e413aa3eef0c363337febdad9d4e39f109550",
+      "transport_sha256": "fe360cc7e6752a7c286bd4d5182dd627f89a1951b1bb7dc2d7e2414edd861c73"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-plan.ncl",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-plan.ncl",
+      "bytes": 1634,
+      "blake3_256": "7d8bae81a4e95462a0852d9857f60a2b2943ee2e8bc3a1c82cdc977036b8783c",
+      "transport_sha256": "745fb39ae9f658c35e0cc14647f3532a012ed932fe0550604c0dad44f3e24e3f"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-plan.template.ncl",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-plan.template.ncl",
+      "bytes": 1581,
+      "blake3_256": "c3d437f29f769d86bc98e25feccb6674b653df194a0c198f86ba9ad2d2f4b493",
+      "transport_sha256": "22ed838b48750ad38fec02e70a1241f523f74eed7aa03aba03d58066240d2a5b"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-phase-provider-config-gpt61-20261014.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-phase-provider-config-gpt61-20261014.log",
+      "bytes": 620,
+      "blake3_256": "0e7b14408f5aff956a517efae77bb8a17164bbf965193075b423d4e8e9012525",
+      "transport_sha256": "4fdde6d825a5df089e2443a15e6c10828137e825fce1e5947473169498354c01"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-phase-producer-gpt61-20261014.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-phase-producer-gpt61-20261014.log",
+      "bytes": 1307,
+      "blake3_256": "58ec487385267ad680d108d8c36a3f10402ba32515a284b7e55d4a6fb53ea88c",
+      "transport_sha256": "589a5ca9e553b6c2b561643bb103ec2e9fa62b1c9e44121ceeea20137e45ff32"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-phase-app-gpt61-20261014.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-phase-app-gpt61-20261014.log",
+      "bytes": 3546,
+      "blake3_256": "1dbb1c63fa663c979d5d6cae9175ed35d47b1bc1408ed91f6e7263f15b4d35e2",
+      "transport_sha256": "e46d197d801538ffe3d3909f3cade808d2dee9b4d482d0bc20fd751294bac956"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-app.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-app.log",
+      "bytes": 156558,
+      "blake3_256": "eb8179ecd5561cff3cddc0af5cfab960881f54dc06531ab1e3f22fe727b18b12",
+      "transport_sha256": "53951e633b849bef323e44ecc35061706bcd7536d419c53abb8992f92e131087"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-producer-trace.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-producer-trace.log",
+      "bytes": 8598,
+      "blake3_256": "d0381e51bfe27ed35e6885be5fd3dd82a695a7144c80c141deee01e94eaa1214",
+      "transport_sha256": "eaf8738814247c927a6cd836dd65665c659f560af742afb50c43216f186973b9"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-producer-verify.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-producer-verify.log",
+      "bytes": 400,
+      "blake3_256": "67fac23570d9a33e881fd9e5f52563ab2e5827bf4993be5ef39a4bc684ca35e2",
+      "transport_sha256": "ed5971fb7e2f11aaad2e38f82629ebccbc779994463aa7bf75a8e441c0081643"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-app-consumer.ncl",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-app-consumer.ncl",
+      "bytes": 2655,
+      "blake3_256": "2547808e3ac4a5da512045a96f9bd4477519e2e9a9c624e45af689bc08627e8f",
+      "transport_sha256": "6bea470617fde74fdce4fa8d98e7dafaf325143d5ae9a54bd84d737e81109c50"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-app-unit-id.txt",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-app-unit-id.txt",
+      "bytes": 67,
+      "blake3_256": "025b290d828a2315c6240f2fe4143ad3197145c7abdda5a545b3cae8c174b0e2",
+      "transport_sha256": "f79db6899d306dba93def327f7a8eea5af9e37741f17e9c26a72521e7f4fec5f"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-app-consumer.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-app-consumer.log",
+      "bytes": 159704,
+      "blake3_256": "05d43e278e3c39cf2dc606d1dfdc3ff96a91a0027a303397176fe648750ae039",
+      "transport_sha256": "b148821763b28b55320bd53fbb11dace85a3ae824bd8b302e711e4f1de252bc4"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/variant-native-app-verify.log",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-app-verify.log",
+      "bytes": 132,
+      "blake3_256": "ae4ee74bb7679aadaa555a1e450cf9dfe8b2ab8e972f2b645fd2219297db1870",
+      "transport_sha256": "e85d0f8b022e308223e536910926576c2625710321d133cdd6d754a496283aea"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/run-variant-proof-phase-gpt61-20261014.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-phase-gpt61-20261014.py",
+      "bytes": 9903,
+      "blake3_256": "d9cb49cc5d6e185d535d0b71444a098c3763347a60de25f34b9cc46615f38ec8",
+      "transport_sha256": "bd27d6745e705f0af782bf6a76d18ff083949f7fbea675d770d48b4b548c7234"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/run-variant-proof-phase-gpt61-20261014.pre-goal-role-1051.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-phase-gpt61-20261014.pre-goal-role-1051.py",
+      "bytes": 9270,
+      "blake3_256": "060d2f73523a10945f5f7a51a8f9e4d172fd36ee66cfa6a3542f5a3525ef2dc5",
+      "transport_sha256": "4b94c15565db5dbb13f88c0c689ceb98cf6bdb361aa5dd3e2355a466374c480d"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/run-variant-proof-supervisor-gpt61-20261014.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-supervisor-gpt61-20261014.py",
+      "bytes": 5424,
+      "blake3_256": "6120e2c79450adf87d328b9d69d6cf508759cb74b05fdd854161d2ace5670875",
+      "transport_sha256": "0dc441381fe8acf6bd048b4532c413e0a9b044a6e3941d6efbe9f8121d12d55e"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/run-variant-proof-supervisor-gpt61-20261014.pre-goal-role-1051.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-proof-supervisor-gpt61-20261014.pre-goal-role-1051.py",
+      "bytes": 5422,
+      "blake3_256": "09722e6b4e807ea95568653038fbc7a77a9eace8924110118531b09f50f04e28",
+      "transport_sha256": "da7b57829e2e7c7e29956ba8b37ada9a1635a8e28e3efd45ceb0eb19e70fba4c"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/run-variant-native-app.sh",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-native-app.sh",
+      "bytes": 2271,
+      "blake3_256": "9dcce34fe136d5d74ff5ebc95598bfced9bfe24e7c4f499a1f26c3860573a8d3",
+      "transport_sha256": "c5abb33a97c1f15838c9220df3f50277c58e2464ee62ef1730a073fdaf6df71c"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/run-variant-native-consumer.sh",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/run-variant-native-consumer.sh",
+      "bytes": 2101,
+      "blake3_256": "3c51a740a3aeee1fa546a44e15c809bc8176a76b68b74ba476ccd5e24cc8d036",
+      "transport_sha256": "ad073d5d3e9eff991a31ba777577fa52c1656d1cd2a745bbb77d21a0109283ce"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/make-variant-native-plan.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/make-variant-native-plan.py",
+      "bytes": 7287,
+      "blake3_256": "d70e533e0ad404cbc5ffc8a1ffa39f62e0dda3872bac7b0c2ec985a94c071c68",
+      "transport_sha256": "6dbb65bf89418f319e1eea80d53276abd96c03d666cddd65fe0ec67e0c7e57d0"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/make-variant-native-plan.pre-goal-role-1051.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/make-variant-native-plan.pre-goal-role-1051.py",
+      "bytes": 6595,
+      "blake3_256": "fb7d656c9eff2208e033d32a5fdab82a6a3732af2c1816b3686d808953d9b4e6",
+      "transport_sha256": "e8ff38cc99c6089fdc956e88af44c7f796ab42521a494bf1f88711960389897e"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/make-variant-native-app-consumer.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/make-variant-native-app-consumer.py",
+      "bytes": 4884,
+      "blake3_256": "f97e31e757e8c67251e5d5749d97a9647c19c6e6d4bfb7ac985aacc192a78610",
+      "transport_sha256": "f49a9605ac3fdfefa972313cbb763a7133d4777fdf9daed8934f01e53a638dac"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/verify-variant-native-outputs-gpt61-20261014.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/verify-variant-native-outputs-gpt61-20261014.py",
+      "bytes": 7280,
+      "blake3_256": "d0a1c56818e1d96f6e27d296eb9cb94cfa558ddb97cda356c04bf2f52186b02e",
+      "transport_sha256": "34f1ce50b55b709cce7cf8f720a072c80dd5f01fd8545db0b389ff8e5531eac8"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/verify-variant-native-outputs-gpt61-20261014.pre-goal-role-1051.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/verify-variant-native-outputs-gpt61-20261014.pre-goal-role-1051.py",
+      "bytes": 6614,
+      "blake3_256": "49d0f6b8d638f96cd1ddb1e97a0135d46c80aec2221aea10e16f82533fd6ea85",
+      "transport_sha256": "2f9520a5108b99c815657cfab5e19a9275b2f99ed1a2715a793569ea929a6cd8"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/prepare-variant-native-config-gpt61-20261014.py",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/prepare-variant-native-config-gpt61-20261014.py",
+      "bytes": 7784,
+      "blake3_256": "d4208446e22868662d2d480fbdd62ae00609abefc02c6e2ecfc25c0c05cb5fde",
+      "transport_sha256": "beb22f00e842cfb16deb4b8033ed281a3a390a3fcf73ca6d5f16266620ecac0f"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/run-native-variant.sh",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/run-native-variant.sh",
+      "bytes": 1634,
+      "blake3_256": "51944f2031e2288fabcb375a52bfc5dc870ae7b77cd67a1619b9747236e99313",
+      "transport_sha256": "56f2cb41481c109b09ba5b20ed65f6ad2ff167083943c02da23bdfe9e261399e"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/w42pw6bqpdv08k3nxkvsbmrq3r0nxmql-cargo-build-script-units-native-cfgfix-87lq-plan",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store/w42pw6bqpdv08k3nxkvsbmrq3r0nxmql-cargo-build-script-units-native-cfgfix-87lq-plan",
+      "bytes": 112513,
+      "blake3_256": "48c6eba1a9053eabf07be3af72ca2a4fac4c8673ca948eae4385bc0a57d47209",
+      "transport_sha256": "2bcb14a9562db1b98bb2f2ec6240f7c5a809d5b3feb6c2378d580582ef6135b3"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/0x1rw7kpynpz10vmf8qr1f76bgf2akq5-cargo-build-script-units-native-variant-87lq-plan",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store/0x1rw7kpynpz10vmf8qr1f76bgf2akq5-cargo-build-script-units-native-variant-87lq-plan",
+      "bytes": 112513,
+      "blake3_256": "e14897e61a97af7ad80ba914c1b39d77bbd12334831db256dfc39c8419047c13",
+      "transport_sha256": "7d64ee7bae0bbf64d5505954edadc6bfbcad32264c84f08bac80d17a29a3b64a"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/result.txt",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store/4mwhnm01ygapwk05fhbi7cafq2nqmjml-cargo-build-script-units-app-check-variant-87lq/result.txt",
+      "bytes": 74,
+      "blake3_256": "65dbd9dcc863802fe129ff366043c7b608e942fabdd239c7613cac4750b3b9b0",
+      "transport_sha256": "53cc3dc37ff4a46ba8cf52ece5eb1a31cbd05b9b45feebf28ab4abbb9a92f7dd"
+    },
+    {
+      "local_path": ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15/t42-pueue-settlement-20261015.txt",
+      "source_path": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t42-pueue-settlement-20261015.txt",
+      "bytes": 9644,
+      "blake3_256": "72a79617a823c767a9f3f8e92efeb94eea75ef427a3b48d37eb4d02deb0fe5d8",
+      "transport_sha256": "e05e3b1588787d61d23a70819b97038b4479452333f917fb72459315c52be28c"
+    }
+  ]
+}

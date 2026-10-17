@@ -1,0 +1,19 @@
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.54s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running tests/rust_compatibility_rail.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/rust_compatibility_rail-f3f21f0895513c10)
+
+running 6 tests
+test native_path_only_surface_reports_matrix_binding_without_cargo_fallback ... ok
+test representative_fixture_contains_required_practical_rust_surfaces ... ok
+test representative_negative_fixtures_report_stable_blockers ... ok
+test representative_offline_cargo_rail_runs_sandbox_smoke_without_network_inputs ... ok
+test representative_rust_plan_receipt_is_bounded_success_or_blocker_without_cargo_fallback ... ok
+test unit_plan_matrix_support_requires_named_fixture ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.79s
+

@@ -1,5 +1,12 @@
 # Evidence: Rust-plan core scaffold (2026-09-11)
 
+> Historical I1 scaffold evidence only. The toy `PlanRequest`,
+> `PlanReceiptPreimage`, and `RustPlanApplication::run` APIs below were
+> removed during the real Rust-plan cutover. Do not use this document's
+> source-text boundary scanner or historical fixture counts as V3 release
+> evidence; compiled authority negatives and current execution proof belong
+> in [`focused-validation.md`](focused-validation.md).
+
 Task-ID: mantle.rust_package_planning.hexagonal_core
 Covers: hexagonal_core, application_owned_ports
 

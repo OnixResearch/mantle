@@ -1,0 +1,73 @@
+Checkpoint: 2026-10-14T18:54:53.279522Z queue / 2026-10-14T18:55:29.274681Z report and resource snapshot
+Maintenance owner: Mantle lane operator.
+Scope: one-shot read-only continuation receipt; only this evidence file written. No builds, tests, imports, signing, source/proof/client mutation, signals, cleanup, credentials access, or task/matrix acceptance. Queue producer 1044 and guard 1045 left untouched. Local AGENTS.md, README.md, active tasks.md and design.md read.
+
+Session provenance (user-reported, not product evidence): parent verified replacements under underclass/gpt-6.1-sol (proof high, receipt worker medium); old failed instances terminated under explicit user exception. Remote Pueue build/guard were not restarted. Preserved old history://mantle-campaign-operational and persisted transcript remain authoritative historical sources, not reread here. No product proof follows from model/session success.
+
+Remote evidence base R = brittonr@100.90.108.13:/tmp/mantle-unit-plan-20261013-87lqAtNv
+Queue observation source: authenticated SSH pueue status --json, whitelisted task fields only.
+1044 label=mantle-unit-plan-87lq-cfgfix-20261014
+  exact status={"Running":{"enqueued_at":"2026-10-14T06:26:19.913194008-04:00","start":"2026-10-14T06:26:20.112640606-04:00"}}
+  command=bash R/run-cfgfix-native-producer-20261014.sh
+  start UTC=2026-10-14T10:26:20.112640606Z; no end/result while Running.
+  elapsed at queue snapshot=30513.166882 seconds (08:28:33.166882; Python microsecond precision).
+1045 label=mantle-unit-plan-87lq-cfgfix-guard-20261014
+  exact status={"Running":{"enqueued_at":"2026-10-14T06:26:24.207537220-04:00","start":"2026-10-14T06:26:24.379293308-04:00"}}
+  command=/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 R/watch-owned-proof-cfgfix.py 1044 mantle-unit-plan-87lq-cfgfix-20261014 65100
+  start UTC=2026-10-14T10:26:24.379293308Z; no end/result while Running.
+  elapsed at queue snapshot=30508.900229 seconds (08:28:28.900229).
+Queue paths=/home/brittonr. Start lives inside status.Running, not a top-level start field.
+
+R/cfgfix-native-producer-report.json observed size=0 bytes, mtime=2026-10-14T10:26:20.144065Z. Empty JSON report: no settled succeeded/built/cached/failed counts, no parseable outcomes. Do not infer terminal success/failure from trace or launch.
+R/cfgfix-native-producer-trace.log observed latest line:
+  2026-10-14T18:44:45.980296Z build succeeded drv=rust-build-script-82a60c0185e05dc2.drv
+Trace observations only:
+  producer cargo-build-script-units-native-cfgfix-87lq.drv build succeeded at 2026-10-14T11:04:34.267011Z;
+  shared rust-target-facts-647a2889440ee577.drv build succeeded at 15:03:36.665117Z;
+  Rust-unit successes observed for identities 94d178421dbf12df, a46d700b27dd4377, 5391826ba2fde012, 7e290789ffed9320, 2a6e88a2a8a3f2a1, 3c8e87bdca89dbca, 864db58eee5c53c3, 07ffa6f11459f512, 895d1939024a1a81, db7f20dad84f467f, 9ed1c2e73ff6926f, 9dc5b6a00be4c0f9;
+  successful build-script identities (each trace records flags and out paths):
+    rust-build-script-ecdcc155017b9da2.drv 2026-10-14T17:49:31.231360Z
+    rust-build-script-0384b69e342a5a92.drv 2026-10-14T18:07:55.811707Z
+    rust-build-script-17c9e154ef05d4ec.drv 2026-10-14T18:07:55.844177Z
+    rust-build-script-45c0f19d0152c02d.drv 2026-10-14T18:26:20.227157Z
+    rust-build-script-82a60c0185e05dc2.drv 2026-10-14T18:44:45.980296Z
+  rust-unit-7e8fd3eb4265703c.drv building at 18:44:45.939693Z is not a success observation.
+No package-name mapping or complete-app claim inferred from hashed identities. Child intermediates may remain in castore without physical exports; absence of a physical child export is not a failure claim.
+
+Guard source: pueue log 1045 --json, output latest line observed at report/resource snapshot:
+  guard-progress id=1044 root_free=359668498432 home_free=359668498432 tick=5880
+Guard output line has no timestamp; do not invent one. R/watch-owned-proof-cfgfix.py defines root_floor=53687091200 bytes (50 GiB), home_floor=2684354560 bytes (2.5 GiB), five-second ticks, duration argument 65100 seconds. Current read-only statvfs at 18:55:29.274681Z reports root_free=359668375552 and home_free=359668375552 bytes, both above those floors. These are observations, not guaranteed future capacity.
+
+T4.1 prerequisite receipts actually read (all filenames below under R; exact roots are digest-and-name PULL selectors, logical prefix /nix/store):
+- client-old-resume-pull.log: 44 actual PULL lines; imported=44 skipped_present=11; expected total=55 in client-old-resume-summary.log; nar_bytes=783176992. Four rejection counters skipped_untrusted, skipped_hash_mismatch, skipped_missing_nar, skipped_parse_error are each 0. Distinguish actual PULL lines from 55 selected/expected rows: 11 already-present rows did not print PULL here.
+- client-current-resume-pull.log: 4 actual PULL lines; imported=4 skipped_present=0; nar_bytes=1601420984; all four rejection counters 0. client-current-resume-summary.log expected=4 rejected=0.
+- client-nightly-repair-pull-selected.log: one PULL 33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly; imported=1 skipped_present=0; nar_bytes=2724361208; all four rejection counters 0.
+- client-store-restored-verify.log: all 59 individual OK rows read, each trusted_signatures has nonzero numerator (1/1, 1/2 or 1/3), final '59 checked, 0 mismatches'. Covers prior planner 039ls6hwfx7sd08h6w3ra4isp6i8ajh0, current planner bj9455lzkimd538w65l384yxcx3r6wm3, fixture source n9bqvcqx55qqigwkn6vnjrjkl7xv10z9, full vendor ha914lx2qdvpq3252n9m62lba4i40ph7, locked vendor mblpg9zxh86ds777vc7zhrl4dpj4057v, producer runtime fva670zlrzg1yl4lyvvkcl3vy4a1hh27, sandbox runtime config y06rl0khqa1214slbmwg8w64rwg39vij, nightly, helpers, producers and all listed tool/runtime roots. Exact full 59-root enumeration remains in this primary receipt.
+- client-restored-verification-summary.log: same-client-all-prior-59-signed-inputs-verified=success; summary alone would not replace above full receipt.
+- client-repaired-planner-pull.log: one PULL 6df7id3a8zd7mxn7b4hhc3b6ljgn1fzr-mantle-unit-plan-planner-repaired-87lq; imported=1 skipped_present=0; nar_bytes=1555466560; all four rejection counters 0. client-repaired-planner-summary.log expected=1 rejected=0. client-repaired-planner-verify.log: trusted_signatures=1/1; 1 checked, 0 mismatches.
+- cfgfix-helper-pull.log: one PULL ain8qbb840v775dhz1528lvz0syys7sj-mantle-cargo-unit-helper-cfgfix-87lq; imported=1 skipped_present=0; nar_bytes=18687096; all four rejection counters 0. cfgfix-helper-verify.log: same root trusted_signatures=1/1; 1 checked, 0 mismatches.
+- cfgfix-native-config-pull.log: one PULL 1cxzrjd337sm2im67xg9jmdgpyls1j05-mantle-unit-plan-config-cfgfix-87lq; imported=1 skipped_present=0; nar_bytes=1664; all four rejection counters 0. cfgfix-native-config-verify.log: same root trusted_signatures=1/1; 1 checked, 0 mismatches.
+- lean-nightly-pull.log: one PULL bhn71wnpahwj10irc2373w1nqw6353pw-mantle-unit-plan-nightly-nodoc-87lq; imported=1 skipped_present=0; nar_bytes=1958851056; all four rejection counters 0. lean-nightly-verify.log: same root trusted_signatures=1/1; 1 checked, 0 mismatches.
+- current-native-c-provider-verify.log: 77giqf2dbsvv1sjcmydx9x366s5614fc-native-answer-0.1 trusted_signatures=1/1; 1 checked, 0 mismatches. Receipt includes historical redb unclean-shutdown/repair warnings; no new store verification command run here.
+No requested helper/config/lean/restored/planner/native verify receipt is missing. Historical client-old-pull.log contains timeout but no settled pull counters; client-import-summary.log exists but is empty. Neither is promoted to a successful receipt. Resumed pulls and full 59-root physical verification above supply separate actual evidence.
+
+Still unaccepted/missing prerequisites at this checkpoint:
+- Settled corrected producer aggregate JSON counts/outcomes (report is empty, queue Running).
+- A retained same-client real no-substitute bubblewrap Rust app result explicitly containing 'proc-macro2 serde-derive libc native-sys = 42', with named app output and trusted admission/verification receipts; hashed unit successes do not prove this.
+- T4.2 provider-only change in the same preserved client, selective identity/outcome comparison proving dependent build-script/app reruns and independent reuse; no such completed comparison inspected or claimed here. Existing variant/checker scripts are not execution proof.
+- Complete fixture/app and selective-rerun evidence required before T4.3 matrix acceptance. Existing T3.3 negative evidence remains bounded as recorded in tasks.md; it is not a substitute for app42/selective proof.
+Tasks/matrix/specs left unchanged and unsupported claims not added. Parent owns bookkeeping; mantle-proof-gpt61 alone owns source/proof/client mutations.
+
+Separate orchestration section: 2026-10-14 follow-up (NOT product proof)
+Read-only installed CLI observation: remote `pueue --version` = pueue 4.0.4. Read `pueue add --help`, `group --help`, `kill --help`, `parallel --help`, and `start --help`; no queue or runtime-state changes/rechecks. Exact help transcripts: artifact://2892 and artifact://2894 in this worker session.
+`add --after <after>...` documentation: "Start the task once all specified tasks have successfully finished. As soon as one of the dependencies fails, this task will fail as well." This is AND, not any-dependency completion.
+Supported invocation template for owner ONLY (not executed):
+  pueue add --after 1044 1045 -- 'bash /absolute/path/to/approved-continuation.sh'
+Optional existing --group GROUP and --working-directory PATH belong before the `--` delimiter. Use owner's actual approved continuation, not a placeholder runner; this is a CLI syntax template, not an executable deliverable. Owner must independently validate settled producer report and all required signed/physical prerequisites before product execution. Queue dependencies prove exit-success ordering only.
+Do not use --immediate or task-specific `pueue start ID` as part of this safe recipe. `start --help` explicitly says force-starting Queued/Stashed tasks ignores group parallelism limits AND dependencies. `--immediate` is documented as immediately starting the task, not a guarded continuation mode.
+Group semantics: groups act as separate queues; all groups run in parallel. `parallel` controls allowed parallel tasks per group; 0 is unlimited, lowering a limit does not stop running tasks and is considered only when scheduling. Therefore group serialization alone cannot establish producer+guard ordering across groups. Explicit dependencies remain necessary; continuation also needs its chosen group running and capacity available.
+Failure/cancellation boundary: the installed add help explicitly promises failure propagation and success-only admission. Kill help documents killing running tasks (group/all killing also pauses groups), but does NOT spell out the dependent terminal status or cascade timing after Killed/cancelled dependencies. Do not describe such exact terminal states as observed. By the success-only documented contract, a killed prerequisite is not eligible for continuation; cancelled-dependency implementation details remain unverified. Upstream documentation lookup attempted: web-search providers failed; https://github.com/Nukesor/pueue/wiki/Task-dependencies returned a nonexistent-page creation surface, not documentation. No cancellation experiment run.
+Shared PGID cleanup race, grounded in R/watch-owned-proof-cfgfix.py lines 15,26-37,40-47,56-59 and R/run-cfgfix-native-{producer,app}-20261014.sh lines 17-21:
+  Both producer and app runners overwrite R/owned-proof-cfgfix.pgid with their new setsid session leader. Guard's producer-Done branch calls kill_owned_group() BEFORE printing guard-task-done and exiting 0. owned_group() rereads that shared file and validates session leadership, cwd under R/source or R, and root in command bytes; it does not bind PGID to the original producer identity. [INFERENCE] If an app starts on producer completion alone and overwrites this file before old guard cleanup, old guard can TERM/KILL the new app group. This is an actual structural race risk, not an observed kill.
+  Safe ordering with existing shared file requires BOTH 1044 and 1045 successfully finished and no other writer replacing the shared PGID before 1045 exits. Guard success alone is insufficient: it exits 0 on any producer Done result, not only producer Success. Depending on producer success plus guard success prevents the known old-guard/new-app overlap; it does not supply app evidence or future guard ownership.
+Read findings delivered directly to mantle-proof-gpt61. All runner/source/client/queue files remain unchanged; only this receipt appended. Maintenance owner remains Mantle lane operator.

@@ -9,15 +9,15 @@ let native_provider = crunch.derivationFile "seed-full-toolchain.ncl" in
 let gnumake = crunch.derivationFile "make-4.4.1-gcc10.ncl" in
 let linux_headers = crunch.derivationFile "linux-headers-6.6-gcc10.ncl" in
 let busybox = crunch.derivationFile "busybox-1.37.0-gcc10.ncl" in
-# Upstream archive SHA-256: e3cde3ca83dc2d3212105326b8f1b565116be808394384007e7ef1c253af6caa.
+let pin = import "pins/generated/cmake.json" in
 let cmake_src = crunch.fetchTarball {
-  url = "https://github.com/Kitware/CMake/releases/download/v3.31.8/cmake-3.31.8.tar.gz",
-  hash = "sha256-1sQqWhxydhTeQ0PUpW/wToX/u4kVmd6YE97O40G2sV8=",
-  name = "cmake-3.31.8-src",
+  url = pin.artifacts.source.url,
+  hash = pin.artifacts.source.hash,
+  name = "cmake-" ++ pin.version ++ "-src",
 } in
 
 {
-  name = "cmake-3.31.8-full-source-gcc10-v1",
+  name = "cmake-" ++ pin.version ++ "-full-source-gcc10-v1",
   builder = "/bin/sh",
   addressing_mode = 'input-addressed,
   args = [
@@ -27,7 +27,7 @@ let cmake_src = crunch.fetchTarball {
       BB=/bin/busybox
       JOB_COUNT=1
       TOOL_PROBE_TIMEOUT_SECONDS=30
-      WORK=/tmp/cmake-3.31.8-full-source
+      WORK=/tmp/cmake-%{pin.version}-full-source
       TARGET=x86_64-linux-musl
 
       find_input() {
@@ -51,10 +51,10 @@ let cmake_src = crunch.fetchTarball {
       MAKE=$(find_input make-4.4.1-full-source-gcc10-v1)
       LINUX_HEADERS=$(find_input linux-headers-6.6-full-source-gcc10-v3)
       BUSYBOX=$(find_input busybox-1.37.0-full-source-gcc10-v1)
-      SRC=$(find_input cmake-3.31.8-src)
+      SRC=$(find_input cmake-%{pin.version}-src)
       SOURCE_ROOT="$SRC"
-      if [ -f "$SRC/cmake-3.31.8/bootstrap" ]; then
-        SOURCE_ROOT="$SRC/cmake-3.31.8"
+      if [ -f "$SRC/cmake-%{pin.version}/bootstrap" ]; then
+        SOURCE_ROOT="$SRC/cmake-%{pin.version}"
       fi
 
       for required_executable in \
@@ -132,7 +132,7 @@ let cmake_src = crunch.fetchTarball {
       test -x "$out/bin/cmake"
       test -x "$out/bin/ctest"
       test -x "$out/bin/cpack"
-      "$out/bin/cmake" --version | "$BUSYBOX/bin/grep" -q 'cmake version 3.31.8'
+      "$out/bin/cmake" --version | "$BUSYBOX/bin/grep" -q 'cmake version %{pin.version}'
 
       $BB mkdir -p "$WORK/positive"
       $BB cat > "$WORK/positive/CMakeLists.txt" <<'EOF'
@@ -161,18 +161,18 @@ EOF
 
       RELOCATED_CMAKE="$WORK/relocated-cmake"
       $BB cp -R "$out" "$RELOCATED_CMAKE"
-      "$RELOCATED_CMAKE/bin/cmake" --version | "$BUSYBOX/bin/grep" -q 'cmake version 3.31.8'
+      "$RELOCATED_CMAKE/bin/cmake" --version | "$BUSYBOX/bin/grep" -q 'cmake version %{pin.version}'
 
       $BB mkdir -p "$out/share/mantle-bootstrap"
       $BB cat > "$out/share/mantle-bootstrap/full-source-rust-host-cmake.txt" <<'EOF'
 claim: bounded source-built CMake host-tool matrix passed
 positive: version, C configure/build/run, bundled static zlib archive, copied-tree version
 negative: malformed CMake project rejected without generated Makefile
-source_authority: authenticated CMake 3.31.8 source
+source_authority: authenticated CMake %{pin.version} source
 native_authority: admitted full-source GCC/musl/binutils provider
 non_claims: CMake correctness, Rust provider completion, whole-bootstrap correctness
 EOF
-      echo "source-built CMake 3.31.8 host-tool matrix passed"
+      echo "source-built CMake %{pin.version} host-tool matrix passed"
     "%
   ],
   inputs = [native_provider, gnumake, linux_headers, busybox, cmake_src],

@@ -1,0 +1,16 @@
+start_utc=2026-10-15T01:28:14.780192+00:00
+cwd=/tmp/mantle-unit-plan-20261013-87lqAtNv/source
+command=/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo --config .cargo/vendor-config.toml --config 'target.x86_64-unknown-linux-gnu.linker="/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc"' clippy --locked --offline -p mantle --all-targets --no-deps -- -D warnings
+preflight={"home": {"available_bytes": 350100156416, "available_inodes": 210494353}, "root": {"available_bytes": 350100156416, "available_inodes": 210494353}}
+--- stdout+stderr ---
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Checking mantle v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 16s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+
+--- end ---
+{"command": ["/nix/store/33vf8n9jip02hlkx1i96pkkgbg3aqc1z-mantle-unit-plan-nightly/bin/cargo", "--config", ".cargo/vendor-config.toml", "--config", "target.x86_64-unknown-linux-gnu.linker=\"/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/gcc\"", "clippy", "--locked", "--offline", "-p", "mantle", "--all-targets", "--no-deps", "--", "-D", "warnings"], "elapsed_seconds": 77.590506141074, "end_utc": "2026-10-15T01:29:32.373071+00:00", "exit": 0, "log": "/tmp/mantle-unit-plan-20261013-87lqAtNv/t43-root-clippy-final-20261015.log", "name": "root-clippy-final", "postflight": {"home": {"available_bytes": 349875740672, "available_inodes": 210494325}, "root": {"available_bytes": 349875740672, "available_inodes": 210494325}}, "preflight": {"home": {"available_bytes": 350100156416, "available_inodes": 210494353}, "root": {"available_bytes": 350100156416, "available_inodes": 210494353}}, "start_utc": "2026-10-15T01:28:14.780192+00:00", "timeout_seconds": 2400}

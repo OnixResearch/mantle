@@ -1,0 +1,11 @@
+guard-ready task=1061 guard=1062
+phase=actual-provider-only-graph-start time=2026-10-14T22:44:01.237835+00:00
+phase=actual-provider-only-graph-done exit=0 time=2026-10-15T00:35:42.356719+00:00
+guard-ready task=1061 guard=1062
+phase=trusted-full-variant-plan-start time=2026-10-15T00:35:42.616066+00:00
+actual-variant-producer-trusted-physical-outputs=success count=3 receipt=/tmp/mantle-unit-plan-20261013-87lqAtNv/variant-native-producer-verify.log; selectivity still requires comparison
+phase=trusted-full-variant-plan-done exit=0 time=2026-10-15T00:35:43.783950+00:00
+guard-ready task=1061 guard=1062
+phase=select-actual-variant-app-start time=2026-10-15T00:35:44.008072+00:00
+accepted-variant-app-unit=u.99f32f5ae94f82205ce9acd4a184e1741597862139ddb9246b18f3686f406982; signed-consumer=/nix/store/pv1yr8fbzs88rpyc61xycwjlx9dakmp2-mantle-unit-plan-app-check; signed-interpreter=/nix/store/sfvyavxai6qvzmv9p9x6mp4wwdz4v41m-bash-interactive-5.3p9; signed-command-PATH=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin; derived-after-producer=/tmp/mantle-unit-plan-20261013-87lqAtNv/client-store/0x1rw7kpynpz10vmf8qr1f76bgf2akq5-cargo-build-script-units-native-variant-87lq-plan
+phase=select-actual-variant-app-done exit=0 time=2026-10-15T00:35:44.073354+00:00

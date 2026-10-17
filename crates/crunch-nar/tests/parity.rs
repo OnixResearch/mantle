@@ -100,7 +100,9 @@ fn decode_hex(source: &str) -> Vec<u8> {
     assert_eq!(digits.len() % 2, 0, "fixture hex digit count must be even");
     assert!(!digits.is_empty(), "fixture hex must not be empty");
     digits
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| {
             let high = (pair[0] as char).to_digit(16).unwrap();
             let low = (pair[1] as char).to_digit(16).unwrap();

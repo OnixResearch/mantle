@@ -1,0 +1,21 @@
+offline-CARGO_HOME=/tmp/mantle-unit-plan-20261013-87lqAtNv/cargo-home implicit-vendor-config=/tmp/mantle-unit-plan-20261013-87lqAtNv/cargo-home/config.toml
+source-gc-sha256=520e999c4fb075b068be2de4e84eca9b232cec6922437e48f2de6184f825872c  crates/crunch-store/src/gc.rs
+warning: Cargo.toml: file `/tmp/mantle-unit-plan-20261013-87lqAtNv/source/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling snix-build v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/vendor/snix-build)
+   Compiling crunch-store v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-store)
+   Compiling crunch-delta v0.1.0 (/tmp/mantle-unit-plan-20261013-87lqAtNv/source/crates/crunch-delta)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 36.82s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1, turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/lib.rs (/tmp/mantle-unit-plan-20261013-87lqAtNv/target/debug/deps/crunch_store-2eda29d0b3a2378d)
+
+running 2 tests
+test gc::tests::casita_fence_recovers_partial_progress_without_marking_other_roots_removed ... ok
+test gc::tests::casita_fence_rejects_symlink_and_oversized_outcome_journal ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 430 filtered out; finished in 0.03s
+
+remote-focused-gc-tests=passed

@@ -132,7 +132,10 @@ Project examples show selector syntax after package composition. See `examples/p
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#hello` | named package store path with `bin/hello` | generated seed |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#goodbye` | named package store path with `bin/goodbye` | generated seed |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#checks.test-hello` | check output with `result` text `ok` | generated seed |
-| `examples/rust_compatibility_rail.rs` + `examples/rust_compatibility_surface_matrix.ncl` | `cargo test -p mantle --test rust_compatibility_rail` | generated representative Rust compatibility matrix with a sandboxed offline Cargo smoke and bounded rust-plan receipt | fast + bwrap |
+| `examples/rust_compatibility_rail.rs` + `examples/rust_compatibility_surface_matrix.ncl` | `cargo test -p mantle --test rust_compatibility_rail` | real Nickel missing-fixture rejection and bounded no-Cargo rust-plan receipts; signed build-script app42/provider-selective evidence is retained separately | fast evaluator/planning; no fake-Cargo compilation or proof replay |
+| `examples/cargo_unit_plan.ncl` | manual: import its exact eight signed store roots with `mantle store pull --trusted-public-keys`, then `mantle --nix-compat build examples/cargo_unit_plan.ncl` | admitted producer + two Cargo-unit outputs, bound app check, and typed missing-root rejection in the separate negative fixture | seed-dependent + heavyweight offline signed cache + Linux bwrap; no automatic fetch or full Cargo claim |
+| `examples/android-minimal.ncl` | `mantle eval examples/android-minimal.ncl` | typed Java-source HelloWorld APK input with manifest, Activity, resources, and optional v2 signing plan; not a built APK or install/launch proof | local typed export; actual signed build requires reviewed prebuilt JDK/SDK tools, separate source materials and signing inputs |
+| `examples/android-reviewed-toolchain-fetch.ncl` | manual: capture the three exact original-HTTPS fixed-output roots with `mantle source bundle export --build-root examples/android-reviewed-toolchain-fetch.ncl --import-path lib --fetch-missing --to android-sources.json`, then import/pin and offline preflight before any build | pinned Temurin JDK 17.0.17+10, build-tools 35.0.0, and platform 35_r02 archive source records; no tool execution or APK proof | one connected acquisition or separately authenticated imported/pinned source state containing reviewed prebuilt archive bytes; not an automatic clean-client build |
 | `examples/hardware_simulation_plan.rs` | `cargo run -p mantle --example hardware_simulation_plan -- request.json plan.json` | bounded generic `mantle-plan-v1` JSON with independent compile, link, and smoke units | fast planning with a heavy real Verilator rail |
 
 The hardware plan generator consumes a JSON `HardwarePlanRequest`. It does not interpret HDL in Mantle core.
@@ -146,14 +149,19 @@ The checked-in Wasm Nickel file proves typed authoring and export only. `tests/w
 The representative Rust compatibility rail is lane-scoped evidence, not proof of
 full Cargo compatibility, compiler correctness, release reproducibility, or
 bootstrap correctness. `examples/rust_compatibility_surface_matrix.ncl` is the
-source-controlled surface matrix. It names supported offline Cargo surfaces,
-native `cargo-free-bounded-topology` path-workspace support, blocked surfaces,
-stable blocker classes, and non-claims. Blocked surfaces include vendored Git
-and native-link metadata.
+source-controlled surface matrix. Its ordinary rail exercises the production
+row contract (including a supported row mutated to have no named fixture) and
+native `cargo-free-bounded-topology` path-workspace receipts without Cargo
+fallback. Unexercised offline Cargo/no-oracle surfaces are out of scope, not
+supported by the retired source scanner or manufactured fake-Cargo output.
 
-The offline rail reports `cargo-inside-mantle-sandbox`. The native rail reports
-either `cargo-free-bounded-topology` or a deterministic
-`blocked-unsupported-surface` receipt.
+Retained signed same-client app42 and provider-selective receipts support the
+bounded `unit_plan` build-script/proc-macro fixture and a separately named
+declared-prebuilt-C static-link surface. The full links/pkg-config/native-C
+group remains blocked: the native script did not invoke pkg-config, compile C,
+or consume links metadata through `DEP_*`. The helper's executed generated
+source/cfg/env consumer yields 84; its separate links-propagation fixture is
+not pkg-config execution evidence. Ordinary rails do not replay signed proofs.
 
 ## Trust/provenance
 

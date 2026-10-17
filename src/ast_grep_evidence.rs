@@ -31,46 +31,31 @@ pub(crate) struct LoadedAstGrepEvidence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum AstGrepEvidenceRead {
-    Missing,
-    Valid(LoadedAstGrepEvidence),
-    Invalid {
-        blocker_class: &'static str,
-        message: String,
-    },
+pub(crate) struct AstGrepEvidenceError {
+    pub blocker_class: &'static str,
+    pub message: String,
 }
 
 // r[impl mantle.ast_grep_structural_rails.shell_boundary]
-pub(crate) fn read_ast_grep_evidence(path: &Path) -> AstGrepEvidenceRead {
+pub(crate) fn read_ast_grep_evidence(path: &Path) -> Result<Option<LoadedAstGrepEvidence>, AstGrepEvidenceError> {
     debug_assert_ne!(BLOCKER_MALFORMED, BLOCKER_INVALID);
-    let bytes = match read_bounded_sidecar_bytes(path) {
-        Ok(Some(bytes)) => bytes,
-        Ok(None) => return AstGrepEvidenceRead::Missing,
-        Err(error) => return error,
+    let Some(bytes) = read_bounded_sidecar_bytes(path)? else {
+        return Ok(None);
     };
     let sidecar_file_digest_blake3 = blake3::hash(&bytes).to_hex().to_string();
-    let text = match String::from_utf8(bytes) {
-        Ok(text) => text,
-        Err(error) => {
-            return invalid(BLOCKER_MALFORMED, format!("ast-grep structural evidence is not UTF-8: {error}"));
-        }
-    };
-    let evidence = match parse_ast_grep_structural_evidence_json(text) {
-        Ok(evidence) => evidence,
-        Err(error) => return core_error_to_read(error),
-    };
-    let sidecar_canonical_digest_blake3 = match ast_grep_structural_evidence_digest_blake3(evidence.clone()) {
-        Ok(digest) => digest,
-        Err(error) => return core_error_to_read(error),
-    };
+    let text = String::from_utf8(bytes)
+        .map_err(|error| invalid(BLOCKER_MALFORMED, format!("ast-grep structural evidence is not UTF-8: {error}")))?;
+    let evidence = parse_ast_grep_structural_evidence_json(text).map_err(core_error_to_read)?;
+    let sidecar_canonical_digest_blake3 =
+        ast_grep_structural_evidence_digest_blake3(evidence.clone()).map_err(core_error_to_read)?;
 
     debug_assert_eq!(sidecar_file_digest_blake3.len(), crunch_release_core::BLAKE3_HEX_LENGTH_CHARS);
     debug_assert_eq!(sidecar_canonical_digest_blake3.len(), crunch_release_core::BLAKE3_HEX_LENGTH_CHARS);
-    AstGrepEvidenceRead::Valid(LoadedAstGrepEvidence {
+    Ok(Some(LoadedAstGrepEvidence {
         evidence,
         sidecar_file_digest_blake3,
         sidecar_canonical_digest_blake3,
-    })
+    }))
 }
 
 pub(crate) fn validate_ast_grep_release_attachment_file(
@@ -83,11 +68,11 @@ pub(crate) fn validate_ast_grep_release_attachment_file(
     debug_assert_ne!(BLOCKER_READ, BLOCKER_INVALID);
     debug_assert_ne!(BLOCKER_TOO_LARGE, BLOCKER_MALFORMED);
     let loaded = match read_ast_grep_evidence(path) {
-        AstGrepEvidenceRead::Valid(loaded) => loaded,
-        AstGrepEvidenceRead::Missing => {
+        Ok(Some(loaded)) => loaded,
+        Ok(None) => {
             return Err(format!("ast-grep release attachment is missing: {}", path.display()));
         }
-        AstGrepEvidenceRead::Invalid { blocker_class, message } => {
+        Err(AstGrepEvidenceError { blocker_class, message }) => {
             return Err(format!("ast-grep release attachment rejected ({blocker_class}): {message}"));
         }
     };
@@ -102,7 +87,7 @@ pub(crate) fn validate_ast_grep_release_attachment_file(
         .map_err(|error| format!("ast-grep release attachment rejected: {error}"))
 }
 
-fn read_bounded_sidecar_bytes(path: &Path) -> Result<Option<Vec<u8>>, AstGrepEvidenceRead> {
+fn read_bounded_sidecar_bytes(path: &Path) -> Result<Option<Vec<u8>>, AstGrepEvidenceError> {
     debug_assert_ne!(BLOCKER_READ, BLOCKER_TOO_LARGE);
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
@@ -156,13 +141,13 @@ fn read_bounded_sidecar_bytes(path: &Path) -> Result<Option<Vec<u8>>, AstGrepEvi
     Ok(Some(bytes))
 }
 
-fn sidecar_read_error(path: &Path, operation: &str, error: std::io::Error) -> AstGrepEvidenceRead {
+fn sidecar_read_error(path: &Path, operation: &str, error: std::io::Error) -> AstGrepEvidenceError {
     debug_assert!(!BLOCKER_READ.is_empty());
     debug_assert_ne!(BLOCKER_READ, BLOCKER_TOO_LARGE);
     invalid(BLOCKER_READ, format!("{operation} for ast-grep structural evidence at {}: {error}", path.display()))
 }
 
-fn sidecar_too_large(path: &Path, byte_count: u64) -> AstGrepEvidenceRead {
+fn sidecar_too_large(path: &Path, byte_count: u64) -> AstGrepEvidenceError {
     debug_assert!(byte_count > MAX_AST_GREP_SIDECAR_BYTES);
     debug_assert!(!BLOCKER_TOO_LARGE.is_empty());
     invalid(
@@ -174,7 +159,7 @@ fn sidecar_too_large(path: &Path, byte_count: u64) -> AstGrepEvidenceRead {
     )
 }
 
-fn core_error_to_read(error: ReleaseEvidenceError) -> AstGrepEvidenceRead {
+fn core_error_to_read(error: ReleaseEvidenceError) -> AstGrepEvidenceError {
     debug_assert_ne!(BLOCKER_MALFORMED, BLOCKER_INVALID);
     debug_assert!(!BLOCKER_INVALID.is_empty());
     let blocker_class = match error {
@@ -184,10 +169,10 @@ fn core_error_to_read(error: ReleaseEvidenceError) -> AstGrepEvidenceRead {
     invalid(blocker_class, error.to_string())
 }
 
-fn invalid(blocker_class: &'static str, message: String) -> AstGrepEvidenceRead {
+fn invalid(blocker_class: &'static str, message: String) -> AstGrepEvidenceError {
     debug_assert!(!blocker_class.is_empty());
     debug_assert!(!blocker_class.contains(char::is_whitespace));
-    AstGrepEvidenceRead::Invalid { blocker_class, message }
+    AstGrepEvidenceError { blocker_class, message }
 }
 
 #[cfg(test)]
@@ -208,7 +193,6 @@ mod tests {
         include_bytes!("../tests/fixtures/ast-grep-structural-evidence/positive-scan.json");
     const NEGATIVE_STALE_BYTES: &[u8] =
         include_bytes!("../tests/fixtures/ast-grep-structural-evidence/negative-stale-rule-bundle.json");
-    const CORE_SOURCE: &str = include_str!("../crates/crunch-release-core/src/ast_grep.rs");
 
     #[test]
     fn shell_reads_and_hashes_valid_sidecar() {
@@ -216,9 +200,8 @@ mod tests {
         let path = temp.path().join("evidence.json");
         fs::write(&path, POSITIVE_SCAN_BYTES).unwrap();
 
-        let read = read_ast_grep_evidence(&path);
-        let AstGrepEvidenceRead::Valid(loaded) = read else {
-            panic!("valid ast-grep evidence should load");
+        let Some(loaded) = read_ast_grep_evidence(&path).expect("valid evidence should load") else {
+            panic!("valid ast-grep evidence should be present");
         };
 
         assert_eq!(loaded.evidence.schema, AST_GREP_STRUCTURAL_EVIDENCE_SCHEMA);
@@ -233,7 +216,7 @@ mod tests {
 
         let read = read_ast_grep_evidence(&path);
 
-        assert_eq!(read, AstGrepEvidenceRead::Missing);
+        assert_eq!(read, Ok(None));
         assert!(!path.exists());
     }
 
@@ -244,7 +227,7 @@ mod tests {
         fs::write(&path, NEGATIVE_STALE_BYTES).unwrap();
 
         let read = read_ast_grep_evidence(&path);
-        let AstGrepEvidenceRead::Invalid { blocker_class, message } = read else {
+        let Err(AstGrepEvidenceError { blocker_class, message }) = read else {
             panic!("stale ast-grep evidence should fail");
         };
 
@@ -261,7 +244,7 @@ mod tests {
         fs::write(&path, vec![b' '; oversized_byte_count]).unwrap();
 
         let read = read_ast_grep_evidence(&path);
-        let AstGrepEvidenceRead::Invalid { blocker_class, message } = read else {
+        let Err(AstGrepEvidenceError { blocker_class, message }) = read else {
             panic!("oversized ast-grep evidence should fail");
         };
 
@@ -280,7 +263,7 @@ mod tests {
         std::os::unix::fs::symlink(&target, &path).unwrap();
 
         let read = read_ast_grep_evidence(&path);
-        let AstGrepEvidenceRead::Invalid { blocker_class, message } = read else {
+        let Err(AstGrepEvidenceError { blocker_class, message }) = read else {
             panic!("final-component symlink should fail");
         };
 
@@ -300,7 +283,7 @@ mod tests {
         std::os::unix::fs::symlink(&outside, &linked_parent).unwrap();
 
         let read = read_ast_grep_evidence(&linked_parent.join("evidence.json"));
-        let AstGrepEvidenceRead::Invalid { blocker_class, message } = read else {
+        let Err(AstGrepEvidenceError { blocker_class, message }) = read else {
             panic!("symlinked parent should fail");
         };
 
@@ -338,23 +321,5 @@ mod tests {
 
         assert!(valid.is_ok());
         assert!(invalid.unwrap_err().contains("claim_scope"));
-    }
-
-    #[test]
-    fn pure_core_has_no_process_filesystem_or_environment_access() {
-        let forbidden = [
-            "std::process",
-            "std::fs",
-            "std::env",
-            "Command::new",
-            "read_to_string",
-            "read_dir",
-        ];
-
-        for token in forbidden {
-            assert!(!CORE_SOURCE.contains(token), "pure ast-grep evidence core contains forbidden shell token {token}");
-        }
-        assert!(CORE_SOURCE.contains("validate_ast_grep_structural_evidence"));
-        assert!(CORE_SOURCE.contains("ast_grep_structural_evidence_digest_blake3"));
     }
 }

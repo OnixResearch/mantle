@@ -44,6 +44,10 @@
     "expected": "binding.non_claims is missing required Trellis boundary"
   },
   {
+    "name": "missing-v2-downstream-non-claim",
+    "expected": "binding.non_claims is missing required Trellis boundary: not downstream correctness"
+  },
+  {
     "name": "overclaiming-text",
     "expected": "binding.non_claims contains an opaque evidence overclaim"
   },
@@ -53,11 +57,11 @@
   },
   {
     "name": "wrong-canonical-schema",
-    "expected": "binding.canonical_envelope.schema must be kamacite.trellis-proof-evidence-profile.v1"
+    "expected": "binding.canonical_envelope.schema must be kamacite.trellis-proof-evidence-profile.v2"
   },
   {
-    "name": "unsupported-proof-profile",
-    "expected": "binding.profile_version must be kamacite.trellis-proof-evidence-profile.v1"
+    "name": "stale-v1-proof-profile",
+    "expected": "binding.profile_version must be kamacite.trellis-proof-evidence-profile.v2"
   },
   {
     "name": "duplicate-json-projection",

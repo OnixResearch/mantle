@@ -891,6 +891,23 @@
           inherit cargoVendorDir;
         };
 
+        # Check the real store crate against the patched Crane vendor closure,
+        # without triggering the workspace-wide deps-only build first.
+        casitaStoreCargoCheck = craneLib.mkCargoDerivation {
+          pname = "mantle-casita-store-cargo-check";
+          version = "0.1.0";
+          inherit
+            src
+            cargoVendorDir
+            nativeBuildInputs
+            buildInputs
+            ;
+          cargoArtifacts = null;
+          buildPhaseCargoCommand = "cargo check --locked --offline -p crunch-store --lib";
+          doCheck = false;
+          doInstallCargoArtifacts = false;
+        };
+
         # Build the actual package
         crunch = craneLib.buildPackage {
           inherit
@@ -908,6 +925,7 @@
           MANTLE_TEST_SCRIPT_SHELL = "${pkgs.bash}/bin/bash";
           MANTLE_WASM_COMPONENT_TOOLCHAIN = "${wasmComponentToolchain}";
           CRUNCH_NO_FUSE = "1";
+          SLEEPINESS = "0";
           MANTLE_TEST_OFFLINE = "1";
           nativeCheckInputs = [ pkgs.git ];
         };
@@ -1334,6 +1352,7 @@
           inherit crunch;
           # Builds exactly the locked, clean-source Crane dependency closure.
           casita-vendor-closure = cargoVendorDir;
+          casita-store-cargo-check = casitaStoreCargoCheck;
           bounded-tree-source-admission =
             assert boundedTreeSourceAdmitted;
             pkgs.runCommand "mantle-bounded-tree-source-admission"
@@ -1674,6 +1693,7 @@
             MANTLE_TEST_SCRIPT_SHELL = "${pkgs.bash}/bin/bash";
             MANTLE_WASM_COMPONENT_TOOLCHAIN = "${wasmComponentToolchain}";
             CRUNCH_NO_FUSE = "1";
+            SLEEPINESS = "0";
             MANTLE_TEST_OFFLINE = "1";
           };
 

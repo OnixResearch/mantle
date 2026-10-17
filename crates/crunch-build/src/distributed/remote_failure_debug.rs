@@ -12,14 +12,14 @@ use std::collections::BTreeSet;
 use std::path::Component;
 use std::path::Path;
 
+use crunch_remote_core::attempt::RemoteAttemptId;
+use crunch_remote_core::attempt::RemoteFenceGeneration;
+use crunch_remote_core::attempt::RemoteJobId;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::RemoteAttemptId;
 use super::RemoteAttemptLogDigest;
 use super::RemoteAttemptLogScope;
-use super::RemoteFenceGeneration;
-use super::RemoteJobId;
 
 pub const REMOTE_FAILURE_DEBUG_BUNDLE_SCHEMA: &str = "mantle-remote-failure-debug-bundle-v1";
 pub const REMOTE_FAILURE_CAPTURE_MANIFEST_SCHEMA: &str = "mantle-remote-failure-captured-artifacts-v1";

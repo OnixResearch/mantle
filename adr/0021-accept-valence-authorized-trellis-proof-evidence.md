@@ -2,7 +2,14 @@
 
 ## Status
 
-Accepted
+Superseded for the Kamacite envelope version by the canonical v2 profile cutover (2026-10-01); role and opaque-authority boundaries retained.
+
+This ADR records the original v1 decision. The active release-core registration
+and acceptance contract are now described in
+[`docs/trellis-proof-release-sidecars.md`](../docs/trellis-proof-release-sidecars.md).
+Kamacite has since published `kamacite.trellis-proof-evidence-profile.v2`;
+v1 proof envelopes, including optional-mode inputs, are rejected rather than
+aliased or interpreted as v2.
 
 ## Context
 
@@ -39,3 +46,17 @@ Rejected because Valence owns proof acceptance and Mantle owns only bounded rele
 ## Consequences
 
 Required mode can pass only with the exact accepted upstream role pair and matching measured artifacts. Optional recorded-only behavior remains compatible. This proves bounded release linkage to a Valence-accepted result; it does not prove verifier soundness, proof truth, semantic equivalence, whole-program correctness, downstream certification, or release eligibility by itself.
+
+## Supersession
+
+The active profile uses Kamacite's canonical v2 Preserves schema and
+`kamacite.trellis-proof-evidence-profile.v2.compat-json` projection. Kamacite
+requires typed source/proof IR/verifier-receipt identities, passed verifier for
+`formal-proof-candidate`, assumption/dependency roots, property and requirement
+IDs, and its three required non-claims. Valence alone accepts
+`AcceptedFormalProof` with a passed, policy-accepted `Property` verification
+and typed digests, spans, and scoped non-claim. Mantle measures canonical
+bytes and Valence artifact bytes separately from the logical receipt hash;
+it binds only opaque metadata and the original role-pair decision. Neither the
+Trellis deterministic proof IR handoff nor synthetic Mantle contract fixtures
+are an actual Valence-accepted property receipt.
