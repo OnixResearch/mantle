@@ -1,5 +1,28 @@
 # Current integration observations (2026-10-17)
 
+Current status is the additive [post-cleanup milestone record](post-cleanup-milestones-v1.md)
+and [dedicated new receipt index](post-cleanup-receipt-index-v1.json): actual
+V2/V3/V4 passed on distinct recorded subjects; native G3 passed on documentary
+binding943cae0a… before additive outcome records. Later tiny G2 scratch mapping
+was PROVEN by actual fresh builder/host kernel mount rows; full G2 remains
+unexecuted. Latest full G1 admission refused exit75 before enqueue, not compiler
+failure: free40903507968B/shared83789479936B,37617664B above unchanged83751862272B
+stop; target9331496960B/temp270171648B/metadata2994176B. G1/G2/P1 remain pending.
+Independent canonical17 v3 clean PASS plus extra12 and edition2024 gateway-leaf
+static PASS retained complete in [final-verification-v1/index.json](final-verification-v1/index.json),
+on unchanged611 declared source/lock/config inputs
+`4df6dbccf81c2c49b7b19b82450e674f720c231b3833e7707af2c74763f4ee91`.
+v1 canonical tool dispatch failed before Cargo; historical cause UNKNOWN, not
+a proven login/BASH_ENV bug. v2 helper-init diagnostics invalidate clean PASS
+despite exit0; v3 used explicit child environment only, no source/profile fix.
+Extra12/gateway passed once, not rerun. Full G1 bridge/Clippy/tests remain absent.
+The original29 and old67 raw pairs/index records are unchanged, not reaudited.
+Unchanged3150 inventory's zero eligible/238 retained and ordinary owned-scaffold
+cleanup's immediate ZERO physical gain remain historical, not second eviction,
+funding or cleanup-causal recovery. Source/manifest/copied-lock snapshots/stdout
+remain retained; repeat needs fresh paths/reconstruction, not exclusive-script
+replay. Exact witness/refusal/resource/provenance facts are in the milestone.
+
 ## Subject and provenance
 
 This is the new `reconcile-main-api-lineages-2026-10-17` subject, not a
@@ -21,7 +44,7 @@ complete compiled-source snapshot/digest was captured for every smoke. These
 results must not be transplanted into a claim about a later root binary,
 generated catalog, final merge or full gate subject.
 
-## Selected exercised paths
+## Historical pre-final-format selected exercised paths
 
 | Observation | Exact retained records | Bounded result |
 | --- | --- | --- |
@@ -37,7 +60,7 @@ Each `result-*.json` retains the actual Nix-shell command, environment, start/
 finish observations and exit code of its already-completed run. These old
 invocations are evidence only; retaining them does not launch or authorize Nix.
 
-## Resource-held root and final-format limit
+## Historical resource-held root and final-format limit
 
 `raw/result-root-and-generators-build.json` records exit -15 and stop reason
 `conservative Nix/additional-allocation threshold`. It is not compiler success
@@ -65,7 +88,7 @@ above 16GiB. Original F0 stays 124692987904 at 1792210364.526931;
 prebaseline stays 777650176; E0/Hunknown and caps remain unchanged. The
 pre-F0 metadata route is exhausted; none of this admits root execution.
 
-## Current native Cairn cohort and documentary results
+## Historical native Cairn cohort and documentary results
 
 Initial PATH discovery found a different package, which was not used. The
 repository-required revision is `007ba5193dd8fec9067a1c0e0f8ef487807af872`.
@@ -94,7 +117,8 @@ Metadata remains manually authored with the actual repository-default
 spec-driven compatibility selection; no `change_create` receipt is invented.
 The initial unbound-PATH discovery is retained in the receipt index but is
 superseded for current documentary availability by the exact bound-cohort
-result above. Root/generator/product gates remain held.
+snapshot above. Root/generator/product gates were held at that historical point;
+the additive post-cleanup record separately reports later V2/V3/V4 outcomes.
 
 ## Independent reviewer-reported receipt integrity
 
@@ -110,20 +134,31 @@ not fabricated raw command capture or a claim of final envelope identity.
 
 ## Pending gates and non-claims
 
-- PENDING: actual successful root + both generators; fresh current root CLI,
-  descriptors/generated output capture and exact installs.
-- PENDING: current operator contract/mode-check and compatibility matrix smoke.
-- PENDING: ordinary first-party GCC4.0 bridge, selected fmt, vendor-excluded
-  strict Clippy and serialized workspace lib/tests; extra affected-package fmt.
-- PENDING: final-source native Cairn/G3 including tasks; preliminary documentary validate/proposal/design results are recorded above.
-- PENDING: required Nix/TigerStyle gates and their separately held scratch route.
-- PENDING: final parent review and sole-Git-owner merge/publication evidence.
+- COMPLETE on recorded subjects: V2 actual root + both generators; V3 actual
+  generator capture/exact installation/root operator contract PASS184 and
+  limited compatibility matrix; V4 current helper/API boundary observations.
+- PENDING full G1: actual admission refused exit75 before enqueue/bridge/Clippy/
+  tests. Independent static canonical17 v3/extra12/gateway-leaf checks passed;
+  complete receipts/streams and declared611-input boundary are retained separately.
+- PENDING full G2: actual tiny host-scratch witness is PROVEN, not full gate PASS.
+  Unchanged full current-system `nix flake check -L` includes TigerStyle; no
+  full rail executed, no fit/hard-quota/successor/daemon-settlement claim.
+- COMPLETE G3 on recorded input: strict native validate plus proposal/design/
+  tasks all exit0/valid:true/issues:[] (gates PASS), declared17-input binding
+  `943cae0a74f58b0b3a526acbe9feec1b6d665f1927765b289157ae4c980c7dac`
+  unchanged across execution, BEFORE additive outcome edits; not a post-edit/
+  full production-tree identity. Full raw streams and entire losslessly compact
+  capture metadata are indexed; original pretty metadata reconstructs exactly.
+  Tasks ordering valid, seven Done/four Todo at capture, no probe declarations
+  or execution; no product/Nix/Cargo/queue/R write/admission/daemon claim.
+  BF95 remains older; verification of these newly edited docs is separate.
+- PENDING P1: parent semantic acceptance and sole-Git-owner follow-on publication.
 
 No older campaign task, accepted-spec sync, archive, main publication,
 bootstrap, compiler correctness, general reproducibility, complete SDK/APK/
 signing execution, trust reuse or release eligibility follows from this record.
 
-## Current recovery and exhausted original guard
+## Historical recovery and exhausted original guard
 
 The [canonical recovery record](recovery-and-guard-refusal-2026-10-17.md)
 retains accepted point-static V1/source-admission evidence, dead-owner custody

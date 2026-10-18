@@ -1,0 +1,49 @@
+{
+  "attempt": "root-and-generators-post-cleanup-no-eval-cache-v1",
+  "task_id": 1,
+  "source_head": "034a2dbb016a925c6afa452efa75dfc423df28d5",
+  "source_binding_blake3": "e7edc03304aa9b35813a5d90495fb42a362f624ad4cd2daa8016405f960371a8",
+  "actual_build_command": "cargo build --locked --offline -p mantle --bin mantle --bin generate-operator-command-contract --bin generate-portable-platform-profiles",
+  "pueue_result": {
+    "Done": {
+      "enqueued_at": "2026-10-17T20:27:30.964152865-04:00",
+      "start": "2026-10-17T20:27:31.204539144-04:00",
+      "end": "2026-10-17T20:35:48.565496259-04:00",
+      "result": "Success"
+    }
+  },
+  "child_exit_code": 0,
+  "resource_stop": null,
+  "resource_final": {
+    "free": 42092724224,
+    "target": 8766187008,
+    "temp": 265408512,
+    "metadata": 2254848,
+    "shared_pool_growth": 82600263680
+  },
+  "remaining_to_unchanged_shared_stop_bytes": 1151598592,
+  "produced_binaries": [
+    {
+      "name": "mantle",
+      "path": "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle",
+      "bytes": 1603360552,
+      "mtime_ns": 1792283742999267117,
+      "blake3": "ac7cd9980a2b107a551fffcd6a3b59172b718d88b7d70905f1cd1a326ab65746"
+    },
+    {
+      "name": "generate-operator-command-contract",
+      "path": "/datapool/mantle-store/mr.7p88_pl1/target/debug/generate-operator-command-contract",
+      "bytes": 7194592,
+      "mtime_ns": 1792283747427271380,
+      "blake3": "47a75dd8408eef7d64f6569d580cf7355072dede89208b6be8c1c6ecdb5e0bee"
+    },
+    {
+      "name": "generate-portable-platform-profiles",
+      "path": "/datapool/mantle-store/mr.7p88_pl1/target/debug/generate-portable-platform-profiles",
+      "bytes": 4894976,
+      "mtime_ns": 1792283649115176719,
+      "blake3": "36b3667037e46a66051ff2e19bc9d415bb61b59e584d33bec86113d0a54d71e5"
+    }
+  ],
+  "qualification": "Filesystem identity after successful exact three-bin build; binaries and generators were not executed. Success does not discharge generator output, product behavior or gate successors."
+}

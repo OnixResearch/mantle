@@ -1,0 +1,207 @@
+{
+  "subject": "reconcile-main-api-lineages-2026-10-17/final-verification-v1",
+  "method": "Explicit filesystem copies; actual new-pair b3sum/cmp/byte comparisons only. Entire original static producer JSON and raw streams retained unchanged, not excerpts. Existing post-cleanup packet untouched by this separate explicitly authorized static/final-native budget.",
+  "raw_file_count": 23,
+  "raw_bytes": 1226477,
+  "capture_bound_bytes": 2097152,
+  "limits": "Fixed combined cap includes all complete raw/producer metadata, this index and any note. No automatic budget expansion or third packet. Final native observations may append here only after separately released execution against frozen documentary inputs.",
+  "static_source_lock_config_binding_blake3": "4df6dbccf81c2c49b7b19b82450e674f720c231b3833e7707af2c74763f4ee91",
+  "scope": "611 declared source/lock/config inputs unchanged across static observations, not whole-tree or post-document-edit identity. v1 canonical tool dispatch failed; v2 helper initialization diagnostics invalidate clean-PASS despite exit0; v3 canonical17 clean PASS. Extra12 and edition2024 gateway leaf passed once in v1, not rerun. Historical v1 cause unknown. Full G1/G2/publication remain pending.",
+  "final_native": {
+    "subject": "Frozen final17 matched authoritative writer rows; identities unchanged before each native command and afterward.",
+    "declared17_binding_blake3": "7e8f275987a56d38f9700a5db69c5e81dd9041ca69a60a3dd13524e8e3f0e2b3",
+    "binding_method": "Ascending repo-relative path rows with path/bytes/blake3; json.dumps(sort_keys=True,separators=(comma,colon),ensure_ascii=True), UTF-8 plus exactly one LF; BLAKE3. Serialized array3060B.",
+    "verdicts": "Strict validate and proposal/design/tasks each exit0, valid:true, issues:[]; gates PASS. All stderr empty, no timeout/overflow.",
+    "tasks": "11 substantive tasks: 8 done, 0 in progress, 3 todo (G1/G2/P1); P1 blocked by G1/G2. Native ready G1/G2 is graph status, not admission.",
+    "probes": "No probe declarations or executions; tasks probe_evidence declarations_present:false, probes:[].",
+    "producer_recovery": "After proposal raw capture/parse, capture classifier raised AttributeError on legitimate probe_evidence:null. Recovered the existing result without native rerun, then continued remaining design/tasks after unchanged-input check. Not an uninterrupted producer run; not a native failure. Original complete metadata preserves disclosure.",
+    "complete_evidence": "native-final-v2-capture.json retains complete native_json/ordering/substance/probe evidence, exact argv/time/exits/limits and hashes; eight native-final-v2 raw streams retained verbatim.",
+    "limits": "Documentary verification only; no whole-Mantle/fullG1/fullG2/publication/release acceptance. Frozen17 and postcleanup packet untouched by this retention."
+  },
+  "entries": [
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-static-format-v1.json",
+      "retained": "static-v1-capture.json",
+      "bytes": 325808,
+      "source_blake3": "85428dcb4e459180da4d7ad04cdf230d9d88a7709f8949795d4edd838d1d1f50",
+      "retained_blake3": "85428dcb4e459180da4d7ad04cdf230d9d88a7709f8949795d4edd838d1d1f50",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-static-format-result-v1.json",
+      "retained": "static-v1-classification.json",
+      "bytes": 1554,
+      "source_blake3": "8a3d7d433233e8ed497d8a8ec33fbe377a240e3eea0f77873961183a4054a536",
+      "retained_blake3": "8a3d7d433233e8ed497d8a8ec33fbe377a240e3eea0f77873961183a4054a536",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-static-format-v1/canonical17.stdout.txt",
+      "retained": "static-v1-canonical17.stdout.txt",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-static-format-v1/canonical17.stderr.txt",
+      "retained": "static-v1-canonical17.stderr.txt",
+      "bytes": 424,
+      "source_blake3": "5bdce3f78ef4e50a06b2995a17e0a163cb04bfc1d704fd7b35511749e8e5a592",
+      "retained_blake3": "5bdce3f78ef4e50a06b2995a17e0a163cb04bfc1d704fd7b35511749e8e5a592",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-static-format-v1/extra12.stdout.txt",
+      "retained": "static-v1-extra12.stdout.txt",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-static-format-v1/extra12.stderr.txt",
+      "retained": "static-v1-extra12.stderr.txt",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-static-format-v1/gateway-leaf.stdout.txt",
+      "retained": "static-v1-gateway-leaf.stdout.txt",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-static-format-v1/gateway-leaf.stderr.txt",
+      "retained": "static-v1-gateway-leaf.stderr.txt",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-static-format-v2.json",
+      "retained": "static-v2-capture.json",
+      "bytes": 323651,
+      "source_blake3": "488d55c3fe6e284053fe359574221980796786247f52b2e389ec7ad18d1e4860",
+      "retained_blake3": "488d55c3fe6e284053fe359574221980796786247f52b2e389ec7ad18d1e4860",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-static-format-v2-canonical17.stdout.txt",
+      "retained": "static-v2-canonical17.stdout.txt",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-static-format-v2-canonical17.stderr.txt",
+      "retained": "static-v2-canonical17.stderr.txt",
+      "bytes": 486,
+      "source_blake3": "592dcf3088c1b81308e6ab89d3b25479e1e5d8cbb5445e716fc78807edc7d7c4",
+      "retained_blake3": "592dcf3088c1b81308e6ab89d3b25479e1e5d8cbb5445e716fc78807edc7d7c4",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-static-format-v3.json",
+      "retained": "static-v3-capture.json",
+      "bytes": 325350,
+      "source_blake3": "aa6fb56eb1c3116ff97a1529390a97ca6edb0ee106e6e01ec7c72bea5711c23c",
+      "retained_blake3": "aa6fb56eb1c3116ff97a1529390a97ca6edb0ee106e6e01ec7c72bea5711c23c",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-static-format-v3-canonical17.stdout.txt",
+      "retained": "static-v3-canonical17.stdout.txt",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-static-format-v3-canonical17.stderr.txt",
+      "retained": "static-v3-canonical17.stderr.txt",
+      "bytes": 356,
+      "source_blake3": "c05680d9fcf0279097ac54d93fea18af820e30f0e0ccfe470cab144010887231",
+      "retained_blake3": "c05680d9fcf0279097ac54d93fea18af820e30f0e0ccfe470cab144010887231",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-final-native-document-gates-v2.json",
+      "retained": "native-final-v2-capture.json",
+      "bytes": 115266,
+      "source_blake3": "eb074edf6415b9d780b3991245f2370ce63bf32ec6f56d257ed368c62d379037",
+      "retained_blake3": "eb074edf6415b9d780b3991245f2370ce63bf32ec6f56d257ed368c62d379037",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-final-native-document-gates-v2-validate.stdout.txt",
+      "retained": "native-final-v2-validate.stdout.txt",
+      "bytes": 123904,
+      "source_blake3": "7e2db8e2187e9baa19acab7560e1152ba12e4a05b38a6ef90b5301ebdff79354",
+      "retained_blake3": "7e2db8e2187e9baa19acab7560e1152ba12e4a05b38a6ef90b5301ebdff79354",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-final-native-document-gates-v2-validate.stderr.txt",
+      "retained": "native-final-v2-validate.stderr.txt",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-final-native-document-gates-v2-proposal.stdout.txt",
+      "retained": "native-final-v2-proposal.stdout.txt",
+      "bytes": 1333,
+      "source_blake3": "73ec5c919705b56550472f86b9660875764a942ab992e1c19858fd50c74270d8",
+      "retained_blake3": "73ec5c919705b56550472f86b9660875764a942ab992e1c19858fd50c74270d8",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-final-native-document-gates-v2-proposal.stderr.txt",
+      "retained": "native-final-v2-proposal.stderr.txt",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-final-native-document-gates-v2-design.stdout.txt",
+      "retained": "native-final-v2-design.stdout.txt",
+      "bytes": 2210,
+      "source_blake3": "903bcd5e03a8286bc5a1c37a5ca1d1962c1dc756b4b928819b5c7d3c3e4e25e0",
+      "retained_blake3": "903bcd5e03a8286bc5a1c37a5ca1d1962c1dc756b4b928819b5c7d3c3e4e25e0",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-final-native-document-gates-v2-design.stderr.txt",
+      "retained": "native-final-v2-design.stderr.txt",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-final-native-document-gates-v2-tasks.stdout.txt",
+      "retained": "native-final-v2-tasks.stdout.txt",
+      "bytes": 6135,
+      "source_blake3": "c65069ba7f630eeefae9915a4e417935b7bd86ed69df9ed437dce2f5366ded8d",
+      "retained_blake3": "c65069ba7f630eeefae9915a4e417935b7bd86ed69df9ed437dce2f5366ded8d",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-final-native-document-gates-v2-tasks.stderr.txt",
+      "retained": "native-final-v2-tasks.stderr.txt",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    }
+  ]
+}

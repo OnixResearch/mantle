@@ -1,0 +1,671 @@
+{
+  "subject": "reconcile-main-api-lineages-2026-10-17/post-cleanup-milestones-v1",
+  "method": "Explicit filesystem copies of selected actual records/streams/source inputs; actual b3sum source/retained identities after copying. Not a product or lifecycle validator. Original 29 pairs and old indexes unchanged.",
+  "raw_file_count": 80,
+  "raw_bytes": 985966,
+  "capture_bound_bytes": 1048576,
+  "limits": "No binaries, target/store trees or whole runtime inventory. Source snapshots are evidence-only .source.txt files, not replay entrypoints. Result records retain their original time/subject/held-successor wording.",
+  "append_verification": "Current append: thirteen exact pairs, eleven witness proof/source snapshots and two actual G1 refusal/admission records. Only new source/copy pairs checked with b3sum, cmp and byte counts. Earlier 67 raw files/pair records, complete G3 metadata representation and original29/historical indexes unchanged and not reaudited. Static/final-native observations use the separately authorized final-verification-v1 packet.",
+  "source_bindings": {
+    "V2": "e7edc03304aa9b35813a5d90495fb42a362f624ad4cd2daa8016405f960371a8",
+    "V3": "8d73114ffd5669121a3a727ca1157b704b0dc6f1f4c56a88221b424f19006209",
+    "V4": "91e664eca5ccbab46b3bfe36d0c826fbc880f346c471d183db7654cc1c6860cc"
+  },
+  "G3_documentary_input_blake3": "943cae0a74f58b0b3a526acbe9feec1b6d665f1927765b289157ae4c980c7dac",
+  "G3_binding_scope": "Seventeen declared documentary/policy inputs unchanged across actual native execution, before these additive outcome records; not a full production-tree or post-edit identity.",
+  "entries": [
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/terminal-post-cleanup-v1.json",
+      "retained": "post-cleanup-raw-v1/terminal-post-cleanup-v1.json",
+      "bytes": 2985,
+      "source_blake3": "ed10c9ec510897059d1da832cfc1e445f63bec86502be688658210de767efa7b",
+      "retained_blake3": "ed10c9ec510897059d1da832cfc1e445f63bec86502be688658210de767efa7b",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/result-shared-pool-v3-root-and-generators-post-cleanup-no-eval-cache-v1.json",
+      "retained": "post-cleanup-raw-v1/result-shared-pool-v3-root-and-generators-post-cleanup-no-eval-cache-v1.json",
+      "bytes": 3652,
+      "source_blake3": "192ecfab37158e43d8f0ec6385e3ce250d5116121addba3d36fc1a820d650808",
+      "retained_blake3": "192ecfab37158e43d8f0ec6385e3ce250d5116121addba3d36fc1a820d650808",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/produced-binaries-post-cleanup-v1.json",
+      "retained": "post-cleanup-raw-v1/produced-binaries-post-cleanup-v1.json",
+      "bytes": 2033,
+      "source_blake3": "67345f168403280260f1ef2e5c91839c65d2b0cf23134c522d35292bce66125d",
+      "retained_blake3": "67345f168403280260f1ef2e5c91839c65d2b0cf23134c522d35292bce66125d",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/terminal-operator-contract-matrix-post-cleanup-v1.json",
+      "retained": "post-cleanup-raw-v1/terminal-operator-contract-matrix-post-cleanup-v1.json",
+      "bytes": 6579,
+      "source_blake3": "16029f38c305b8bf0959aaa1278b5f880f130b6d362eb66e77d1445f764bf516",
+      "retained_blake3": "16029f38c305b8bf0959aaa1278b5f880f130b6d362eb66e77d1445f764bf516",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/result.json",
+      "retained": "post-cleanup-raw-v1/operator-contract-matrix-post-cleanup-v1--result.json",
+      "bytes": 4536,
+      "source_blake3": "3a070541d6e1e82eea2af43ce4a4d557455a40f2570604257dff613c5e16fcd9",
+      "retained_blake3": "3a070541d6e1e82eea2af43ce4a4d557455a40f2570604257dff613c5e16fcd9",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/result.json",
+      "retained": "post-cleanup-raw-v1/V4helper-native-post-cleanup-v1--result.json",
+      "bytes": 2857,
+      "source_blake3": "0a7619f35e13298c7ae2caa364be62859268aeb19566c0003717ce4d6e9eb134",
+      "retained_blake3": "0a7619f35e13298c7ae2caa364be62859268aeb19566c0003717ce4d6e9eb134",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/result.json",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--result.json",
+      "bytes": 6645,
+      "source_blake3": "0976bf0586ff18cf0ebf223421c9da152d5c20d2c527b1c0d1be0be473467664",
+      "retained_blake3": "0976bf0586ff18cf0ebf223421c9da152d5c20d2c527b1c0d1be0be473467664",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/admission-shared-pool-v3-G2-host-scratch-post-cleanup-v1.json",
+      "retained": "post-cleanup-raw-v1/admission-shared-pool-v3-G2-host-scratch-post-cleanup-v1.json",
+      "bytes": 1620,
+      "source_blake3": "2b26dbce28d5eef4de5b4872389b150a9cd42387b6dd2b6533f03531316de08f",
+      "retained_blake3": "2b26dbce28d5eef4de5b4872389b150a9cd42387b6dd2b6533f03531316de08f",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/terminal-V4helper-native-post-cleanup-v1.json",
+      "retained": "post-cleanup-raw-v1/terminal-V4helper-native-post-cleanup-v1.json",
+      "bytes": 4819,
+      "source_blake3": "ad1513b3d0e77a7e8eebb47cd4c19fd88fb9bd84c9112572eded9ab5dd0bd169",
+      "retained_blake3": "ad1513b3d0e77a7e8eebb47cd4c19fd88fb9bd84c9112572eded9ab5dd0bd169",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/terminal-V4android-store-casita-post-cleanup-v1.json",
+      "retained": "post-cleanup-raw-v1/terminal-V4android-store-casita-post-cleanup-v1.json",
+      "bytes": 8783,
+      "source_blake3": "cab3a1f8375f66cee5216b75b520c3db4904ded01de39e3b4676ec7a3088c646",
+      "retained_blake3": "cab3a1f8375f66cee5216b75b520c3db4904ded01de39e3b4676ec7a3088c646",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/result-shared-pool-v3-V4helper-native-post-cleanup-v1.json",
+      "retained": "post-cleanup-raw-v1/result-shared-pool-v3-V4helper-native-post-cleanup-v1.json",
+      "bytes": 3660,
+      "source_blake3": "d2fbdc069cca274b1c14821915b67fbc2e12c77df54790d272618c48a4dcd84b",
+      "retained_blake3": "d2fbdc069cca274b1c14821915b67fbc2e12c77df54790d272618c48a4dcd84b",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/result-shared-pool-v3-V4android-store-casita-post-cleanup-v1.json",
+      "retained": "post-cleanup-raw-v1/result-shared-pool-v3-V4android-store-casita-post-cleanup-v1.json",
+      "bytes": 3666,
+      "source_blake3": "38c4fd5cd41a4b0509968edfb0823d5cd6fbedf45026637d179761bbbbe4b01f",
+      "retained_blake3": "38c4fd5cd41a4b0509968edfb0823d5cd6fbedf45026637d179761bbbbe4b01f",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/capture-result.json",
+      "retained": "post-cleanup-raw-v1/operator-generated-post-cleanup-v1--capture-result.json",
+      "bytes": 10996,
+      "source_blake3": "eda23dedf08757c98587e33503b288948d3ce40c4c0f0a54324a99bc99589a5f",
+      "retained_blake3": "eda23dedf08757c98587e33503b288948d3ce40c4c0f0a54324a99bc99589a5f",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/logs/shell-shared-pool-v3-root-and-generators-post-cleanup-no-eval-cache-v1.log",
+      "retained": "post-cleanup-raw-v1/logs--shell-shared-pool-v3-root-and-generators-post-cleanup-no-eval-cache-v1.log",
+      "bytes": 9351,
+      "source_blake3": "141d3957abec5900f9c45fd6f4d312cc0c2adec75ef273c67564193db5046768",
+      "retained_blake3": "141d3957abec5900f9c45fd6f4d312cc0c2adec75ef273c67564193db5046768",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/root-mode-check.stdout",
+      "retained": "post-cleanup-raw-v1/operator-contract-matrix-post-cleanup-v1--root-mode-check.stdout",
+      "bytes": 47,
+      "source_blake3": "fa4ecf456dc2480cd8be5f848a8c130e0d4af856fea71757708e70d65de3e673",
+      "retained_blake3": "fa4ecf456dc2480cd8be5f848a8c130e0d4af856fea71757708e70d65de3e673",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/root-mode-check.stderr",
+      "retained": "post-cleanup-raw-v1/operator-contract-matrix-post-cleanup-v1--root-mode-check.stderr",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/operator-contract-script.stdout",
+      "retained": "post-cleanup-raw-v1/operator-contract-matrix-post-cleanup-v1--operator-contract-script.stdout",
+      "bytes": 99,
+      "source_blake3": "429e47ba2bab4a121c9ee780ba95e97bc8825b530f9d1c23914a71cff5f53737",
+      "retained_blake3": "429e47ba2bab4a121c9ee780ba95e97bc8825b530f9d1c23914a71cff5f53737",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/operator-contract-script.stderr",
+      "retained": "post-cleanup-raw-v1/operator-contract-matrix-post-cleanup-v1--operator-contract-script.stderr",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/matrix-typecheck.stdout",
+      "retained": "post-cleanup-raw-v1/operator-contract-matrix-post-cleanup-v1--matrix-typecheck.stdout",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/matrix-typecheck.stderr",
+      "retained": "post-cleanup-raw-v1/operator-contract-matrix-post-cleanup-v1--matrix-typecheck.stderr",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/matrix-export.stdout",
+      "retained": "post-cleanup-raw-v1/operator-contract-matrix-post-cleanup-v1--matrix-export.stdout",
+      "bytes": 11282,
+      "source_blake3": "000e56195dd844fc0f49bcd343d85267a8cd0534e0840009ca9fac6cde36c403",
+      "retained_blake3": "000e56195dd844fc0f49bcd343d85267a8cd0534e0840009ca9fac6cde36c403",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/matrix-export.stderr",
+      "retained": "post-cleanup-raw-v1/operator-contract-matrix-post-cleanup-v1--matrix-export.stderr",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/helper-build.stdout",
+      "retained": "post-cleanup-raw-v1/V4helper-native-post-cleanup-v1--helper-build.stdout",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/helper-build.stderr",
+      "retained": "post-cleanup-raw-v1/V4helper-native-post-cleanup-v1--helper-build.stderr",
+      "bytes": 403,
+      "source_blake3": "7b25b5c35ed15ae35a32d8e7b783763d869afae7590f1a179b403bf7f425e884",
+      "retained_blake3": "7b25b5c35ed15ae35a32d8e7b783763d869afae7590f1a179b403bf7f425e884",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/helper-native-smoke.stdout",
+      "retained": "post-cleanup-raw-v1/V4helper-native-post-cleanup-v1--helper-native-smoke.stdout",
+      "bytes": 9879,
+      "source_blake3": "83e7419eddc3ab76f26945455cc1962e0b6bab718bc7aa434a072ee54ecf93e8",
+      "retained_blake3": "83e7419eddc3ab76f26945455cc1962e0b6bab718bc7aa434a072ee54ecf93e8",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/helper-native-smoke.stderr",
+      "retained": "post-cleanup-raw-v1/V4helper-native-post-cleanup-v1--helper-native-smoke.stderr",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/namespace-fixture.stdout",
+      "retained": "post-cleanup-raw-v1/V4helper-native-post-cleanup-v1--namespace-fixture.stdout",
+      "bytes": 202,
+      "source_blake3": "5dfcaf5c38e7c5c54ea49fd6dcd809a4486079e5236475209191acfe6cdd625e",
+      "retained_blake3": "5dfcaf5c38e7c5c54ea49fd6dcd809a4486079e5236475209191acfe6cdd625e",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/namespace-fixture.stderr",
+      "retained": "post-cleanup-raw-v1/V4helper-native-post-cleanup-v1--namespace-fixture.stderr",
+      "bytes": 512,
+      "source_blake3": "4e4ff6ab3f6c248c64b3fb7a238e7cbfb21ef37966837da8efbd0d0d714ae33b",
+      "retained_blake3": "4e4ff6ab3f6c248c64b3fb7a238e7cbfb21ef37966837da8efbd0d0d714ae33b",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/android-authoring.stdout",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--android-authoring.stdout",
+      "bytes": 9997,
+      "source_blake3": "5a9bceec894543f120c64725f08b66e7c7b02fe8d95efdc8514361d6817f3633",
+      "retained_blake3": "5a9bceec894543f120c64725f08b66e7c7b02fe8d95efdc8514361d6817f3633",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/android-authoring.stderr",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--android-authoring.stderr",
+      "bytes": 589,
+      "source_blake3": "9d84a299feea063b0ca3831661071d910f5272dde71e43d6eef53d871d5dbafb",
+      "retained_blake3": "9d84a299feea063b0ca3831661071d910f5272dde71e43d6eef53d871d5dbafb",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/jar-upper-routes.stdout",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--jar-upper-routes.stdout",
+      "bytes": 3901,
+      "source_blake3": "16a487284597e8314d83ef4742c658d9e1c4844cb418ecba52f1a7c43bd7cbbb",
+      "retained_blake3": "16a487284597e8314d83ef4742c658d9e1c4844cb418ecba52f1a7c43bd7cbbb",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/jar-upper-routes.stderr",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--jar-upper-routes.stderr",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/store-list-shadow.stdout",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--store-list-shadow.stdout",
+      "bytes": 8729,
+      "source_blake3": "217b886f542a76577a23e0ad450a4f92676a61724a1c3552493f6e0c1bfc614a",
+      "retained_blake3": "217b886f542a76577a23e0ad450a4f92676a61724a1c3552493f6e0c1bfc614a",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/store-list-shadow.stderr",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--store-list-shadow.stderr",
+      "bytes": 476,
+      "source_blake3": "29199c5027f94f4359758680b26e5b0231855f83937d2252fb9a25a20d98d5f7",
+      "retained_blake3": "29199c5027f94f4359758680b26e5b0231855f83937d2252fb9a25a20d98d5f7",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/casita-publication.stdout",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--casita-publication.stdout",
+      "bytes": 1686,
+      "source_blake3": "9eda1709856753a2fd61fe630b0c3f548e4344e427969e68181272722a3e76c6",
+      "retained_blake3": "9eda1709856753a2fd61fe630b0c3f548e4344e427969e68181272722a3e76c6",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/casita-publication.stderr",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--casita-publication.stderr",
+      "bytes": 355,
+      "source_blake3": "1c2121723101eff0ff1c1b9a86d7466af0658f33183f3c0bd01e7f9eafbf4b32",
+      "retained_blake3": "1c2121723101eff0ff1c1b9a86d7466af0658f33183f3c0bd01e7f9eafbf4b32",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/overlay_custom_prefix_get_and_list_share_reference_signature_authority.stdout",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--overlay_custom_prefix_get_and_list_share_reference_signature_authority.stdout",
+      "bytes": 212,
+      "source_blake3": "de2f1332a8df2ae68dbca2cf31918988463de1929a06a895c0086b518c7f002c",
+      "retained_blake3": "de2f1332a8df2ae68dbca2cf31918988463de1929a06a895c0086b518c7f002c",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/overlay_custom_prefix_get_and_list_share_reference_signature_authority.stderr",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--overlay_custom_prefix_get_and_list_share_reference_signature_authority.stderr",
+      "bytes": 598,
+      "source_blake3": "9c2375e44ec3528d230c2b6ceabe096659b4f03538638ecc2189a791b927cd6b",
+      "retained_blake3": "9c2375e44ec3528d230c2b6ceabe096659b4f03538638ecc2189a791b927cd6b",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/overlay_shadows_base_pathinfo.stdout",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--overlay_shadows_base_pathinfo.stdout",
+      "bytes": 171,
+      "source_blake3": "14c30a23aa1656d57c824110ec2925ccc08f0946ad04aedf3163e3cd751d6889",
+      "retained_blake3": "14c30a23aa1656d57c824110ec2925ccc08f0946ad04aedf3163e3cd751d6889",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/overlay_shadows_base_pathinfo.stderr",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--overlay_shadows_base_pathinfo.stderr",
+      "bytes": 409,
+      "source_blake3": "5a8ef7895854aa964a238d3fde9fcd1a80a284afc2716aab93883788c10b2b5c",
+      "retained_blake3": "5a8ef7895854aa964a238d3fde9fcd1a80a284afc2716aab93883788c10b2b5c",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/overlay_two_bases_stack_in_declaration_order.stdout",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--overlay_two_bases_stack_in_declaration_order.stdout",
+      "bytes": 186,
+      "source_blake3": "c02693d0a4c471ba5ca2cdee32cd162075fd8bac7e7d8e64bc58028786621172",
+      "retained_blake3": "c02693d0a4c471ba5ca2cdee32cd162075fd8bac7e7d8e64bc58028786621172",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/overlay_two_bases_stack_in_declaration_order.stderr",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--overlay_two_bases_stack_in_declaration_order.stderr",
+      "bytes": 409,
+      "source_blake3": "dd891e26f9b087133285103b9feae0311bec11a425385e5136e7c1e994e29ed3",
+      "retained_blake3": "dd891e26f9b087133285103b9feae0311bec11a425385e5136e7c1e994e29ed3",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/catalog.stdout",
+      "retained": "post-cleanup-raw-v1/operator-generated-post-cleanup-v1--catalog.stdout",
+      "bytes": 312982,
+      "source_blake3": "e0e9e0be3dad3fae92997cd757ab3a5071ec770e0d9c22e2e1c73d0c5cc05e38",
+      "retained_blake3": "e0e9e0be3dad3fae92997cd757ab3a5071ec770e0d9c22e2e1c73d0c5cc05e38",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/reference.stdout",
+      "retained": "post-cleanup-raw-v1/operator-generated-post-cleanup-v1--reference.stdout",
+      "bytes": 42562,
+      "source_blake3": "896910d1bc478e2988a7f635cd33c8b11c12ab17692367f20e7ec932f3b96734",
+      "retained_blake3": "896910d1bc478e2988a7f635cd33c8b11c12ab17692367f20e7ec932f3b96734",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/operator-generator-self-test.stdout",
+      "retained": "post-cleanup-raw-v1/operator-generated-post-cleanup-v1--operator-generator-self-test.stdout",
+      "bytes": 52,
+      "source_blake3": "37b56919070451e8bf83fb86313e1edffcf93ff87e86f15bffa7aa93baa3e6d6",
+      "retained_blake3": "37b56919070451e8bf83fb86313e1edffcf93ff87e86f15bffa7aa93baa3e6d6",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/portable-profiles-block.stdout",
+      "retained": "post-cleanup-raw-v1/operator-generated-post-cleanup-v1--portable-profiles-block.stdout",
+      "bytes": 13709,
+      "source_blake3": "b44a01005ab09428b1a88f1459fa5faf349be3356e06b03389406657a9fd1303",
+      "retained_blake3": "b44a01005ab09428b1a88f1459fa5faf349be3356e06b03389406657a9fd1303",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/portable-profiles-export.stdout",
+      "retained": "post-cleanup-raw-v1/operator-generated-post-cleanup-v1--portable-profiles-export.stdout",
+      "bytes": 18058,
+      "source_blake3": "7a10303919c6d0c2a864a73670fce93519e683c598d61fb7709ee04daf08df7f",
+      "retained_blake3": "7a10303919c6d0c2a864a73670fce93519e683c598d61fb7709ee04daf08df7f",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/nickel-version.stdout",
+      "retained": "post-cleanup-raw-v1/operator-generated-post-cleanup-v1--nickel-version.stdout",
+      "bytes": 44,
+      "source_blake3": "73748fe4aedd6b1962d27a6fea04d5a63724b4b37d00e350331e8f3e52b562f7",
+      "retained_blake3": "73748fe4aedd6b1962d27a6fea04d5a63724b4b37d00e350331e8f3e52b562f7",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/unit-smoke-adapted.py",
+      "retained": "post-cleanup-raw-v1/V4helper-native-post-cleanup-v1--unit-smoke-adapted.py.source.txt",
+      "bytes": 4595,
+      "source_blake3": "f250c290c75bd4b1a25389c550392239c4f921dda33d533fdc67bd1349e508b5",
+      "retained_blake3": "f250c290c75bd4b1a25389c550392239c4f921dda33d533fdc67bd1349e508b5",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/unit-smoke-steps.json",
+      "retained": "post-cleanup-raw-v1/t--V4helper-native-post-cleanup-v1--unit-smoke-steps.json",
+      "bytes": 10837,
+      "source_blake3": "2c7cbe9339d35f5f86b0fb87525791761f05fd1cd8bf394e849c271238e1a92b",
+      "retained_blake3": "2c7cbe9339d35f5f86b0fb87525791761f05fd1cd8bf394e849c271238e1a92b",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/jar-route-upper-adapted.py",
+      "retained": "post-cleanup-raw-v1/V4android-store-casita-post-cleanup-v1--jar-route-upper-adapted.py.source.txt",
+      "bytes": 3057,
+      "source_blake3": "535bcd8f729ee191ed1809f429d169c705e17fab43bbf0a4302994fa7da3921b",
+      "retained_blake3": "535bcd8f729ee191ed1809f429d169c705e17fab43bbf0a4302994fa7da3921b",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/t/V4android-store-casita-post-cleanup-v1/jar/jar-route-upper-result.json",
+      "retained": "post-cleanup-raw-v1/t--V4android-store-casita-post-cleanup-v1--jar--jar-route-upper-result.json",
+      "bytes": 5159,
+      "source_blake3": "643bb9203e848be94ec12985e2c8c45931cedac1dffd681a56df1a838979e9ee",
+      "retained_blake3": "643bb9203e848be94ec12985e2c8c45931cedac1dffd681a56df1a838979e9ee",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/t/store-list-shadow-post-cleanup-v1/Cargo.toml",
+      "retained": "post-cleanup-raw-v1/t--store-list-shadow-post-cleanup-v1--Cargo.toml.source.txt",
+      "bytes": 792,
+      "source_blake3": "c9fdd36dd7db9d1de68008fd716815ce67c4a7cdfd7c7cfb62a58c14bd5ecb0c",
+      "retained_blake3": "c9fdd36dd7db9d1de68008fd716815ce67c4a7cdfd7c7cfb62a58c14bd5ecb0c",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/t/store-list-shadow-post-cleanup-v1/Cargo.lock",
+      "retained": "post-cleanup-raw-v1/t--store-list-shadow-post-cleanup-v1--Cargo.lock.source.txt",
+      "bytes": 150959,
+      "source_blake3": "8c55a3ed86cfc30f1ee0dd879960e04a0043c9c40cb8ff30fbbd5b06069aeefc",
+      "retained_blake3": "8c55a3ed86cfc30f1ee0dd879960e04a0043c9c40cb8ff30fbbd5b06069aeefc",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/t/store-list-shadow-post-cleanup-v1/src/main.rs",
+      "retained": "post-cleanup-raw-v1/t--store-list-shadow-post-cleanup-v1--src--main.rs.source.txt",
+      "bytes": 9616,
+      "source_blake3": "e70081a985792a5c03a15777432d698436c4705cbf93ee254cf78bc44e32d152",
+      "retained_blake3": "e70081a985792a5c03a15777432d698436c4705cbf93ee254cf78bc44e32d152",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-post-reconciliation-incremental-summary-v1.json",
+      "retained": "post-cleanup-raw-v1/mantle-post-reconciliation-incremental-summary-v1.json",
+      "bytes": 3503,
+      "source_blake3": "4bda098985b5ea461a90d56f9e7bde958afa2e1fa328cd4de82c57e0a923d9fb",
+      "retained_blake3": "4bda098985b5ea461a90d56f9e7bde958afa2e1fa328cd4de82c57e0a923d9fb",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-owned-store-consumer-artifacts-v1.json",
+      "retained": "post-cleanup-raw-v1/mantle-owned-store-consumer-artifacts-v1.json",
+      "bytes": 7789,
+      "source_blake3": "b1d57269ea858d9b517f05d5709532719203d7a38757b59633ddf5cf8e5fa950",
+      "retained_blake3": "b1d57269ea858d9b517f05d5709532719203d7a38757b59633ddf5cf8e5fa950",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-owned-store-consumer-cleanup-v1.json",
+      "retained": "post-cleanup-raw-v1/mantle-owned-store-consumer-cleanup-v1.json",
+      "bytes": 8166,
+      "source_blake3": "2067c3cb5095e986052071cab2677a05676009ae573320e7faf5f9f2f24d0644",
+      "retained_blake3": "2067c3cb5095e986052071cab2677a05676009ae573320e7faf5f9f2f24d0644",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-native-document-gates-v1/validate.stdout.txt",
+      "retained": "post-cleanup-raw-v1/native-G3-v1-validate.stdout.txt",
+      "bytes": 123904,
+      "source_blake3": "7ac17fad436e6faf4bae337ea743c6f7da75cafb7303eaa4dff48c5284c7a535",
+      "retained_blake3": "7ac17fad436e6faf4bae337ea743c6f7da75cafb7303eaa4dff48c5284c7a535",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-native-document-gates-v1/validate.stderr.txt",
+      "retained": "post-cleanup-raw-v1/native-G3-v1-validate.stderr.txt",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-native-document-gates-v1/proposal.stdout.txt",
+      "retained": "post-cleanup-raw-v1/native-G3-v1-proposal.stdout.txt",
+      "bytes": 1333,
+      "source_blake3": "66f55bbd8bec2379fbbd7dfcbdd00a34c8ef44f1c8e27aa6e51a321551e8d128",
+      "retained_blake3": "66f55bbd8bec2379fbbd7dfcbdd00a34c8ef44f1c8e27aa6e51a321551e8d128",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-native-document-gates-v1/proposal.stderr.txt",
+      "retained": "post-cleanup-raw-v1/native-G3-v1-proposal.stderr.txt",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-native-document-gates-v1/design.stdout.txt",
+      "retained": "post-cleanup-raw-v1/native-G3-v1-design.stdout.txt",
+      "bytes": 2210,
+      "source_blake3": "1200f44233daadfdce37949c8283ac8eb700e6e5fc369d822de9042f1ca738ce",
+      "retained_blake3": "1200f44233daadfdce37949c8283ac8eb700e6e5fc369d822de9042f1ca738ce",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-native-document-gates-v1/design.stderr.txt",
+      "retained": "post-cleanup-raw-v1/native-G3-v1-design.stderr.txt",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-native-document-gates-v1/tasks.stdout.txt",
+      "retained": "post-cleanup-raw-v1/native-G3-v1-tasks.stdout.txt",
+      "bytes": 6162,
+      "source_blake3": "edf7db88db42a857f76c03f3c5400bf98f681187d4494b14e1093b9bb759c236",
+      "retained_blake3": "edf7db88db42a857f76c03f3c5400bf98f681187d4494b14e1093b9bb759c236",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-native-document-gates-v1/tasks.stderr.txt",
+      "retained": "post-cleanup-raw-v1/native-G3-v1-tasks.stderr.txt",
+      "bytes": 0,
+      "source_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "retained_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "byte_identical": true
+    },
+    {
+      "source": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-current-native-document-gates-v1-compact.json",
+      "retained": "post-cleanup-raw-v1/native-G3-v1-capture-compact.json",
+      "bytes": 114818,
+      "source_blake3": "cd3ce4f017a65d6bfcbca85af0546727929483c9ea0fc51da41bf6037686ea0d",
+      "retained_blake3": "cd3ce4f017a65d6bfcbca85af0546727929483c9ea0fc51da41bf6037686ea0d",
+      "byte_identical": true,
+      "derived_from": {
+        "source": "local://mantle-current-native-document-gates-v1.json",
+        "bytes": 172326,
+        "blake3": "6ea6e7463e518ae10d102308801760ca3ce5eaae927a79ba112a6011e78e4b4e"
+      },
+      "representation": "Lossless JSON whitespace compaction; all decoded values, object insertion order and full native_json fields retained. Compact encoded wire identity differs from original pretty wire identity.",
+      "verification": {
+        "decoded_values_equal": true,
+        "original_producer_format": "json.dumps(json.loads(compact), indent=2) + '\\n'",
+        "reconstructed_bytes": 172326,
+        "reconstructed_bytes_equal_original": true,
+        "reconstructed_blake3": "6ea6e7463e518ae10d102308801760ca3ce5eaae927a79ba112a6011e78e4b4e"
+      }
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/t/g2-host-scratch-post-cleanup-v1/observation/result.json",
+      "retained": "post-cleanup-raw-v1/G2-witness-v1-result.json",
+      "bytes": 1333,
+      "source_blake3": "f2a8cf96898a60d35c14f2a6fe256f01c05f0c540c142b2b3606a72fdcf26d95",
+      "retained_blake3": "f2a8cf96898a60d35c14f2a6fe256f01c05f0c540c142b2b3606a72fdcf26d95",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/t/g2-host-scratch-post-cleanup-v1/observation/stdout.txt",
+      "retained": "post-cleanup-raw-v1/G2-witness-v1-stdout.txt",
+      "bytes": 232,
+      "source_blake3": "069c65f3819586941bbd9cd7a2a6fae51c1c1a64185edd823ad5d08d8eca5afd",
+      "retained_blake3": "069c65f3819586941bbd9cd7a2a6fae51c1c1a64185edd823ad5d08d8eca5afd",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/t/g2-host-scratch-post-cleanup-v1/observation/stderr.txt",
+      "retained": "post-cleanup-raw-v1/G2-witness-v1-stderr.txt",
+      "bytes": 247,
+      "source_blake3": "a4993381b8aa89dbfa57118b3c5e97afa6358ae2220275d0dab8c46dab858e20",
+      "retained_blake3": "a4993381b8aa89dbfa57118b3c5e97afa6358ae2220275d0dab8c46dab858e20",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/t/g2-host-scratch-post-cleanup-v1/observation/builder-witness.txt",
+      "retained": "post-cleanup-raw-v1/G2-witness-v1-builder-witness.txt",
+      "bytes": 360,
+      "source_blake3": "8a559122096ef48f6c88df8a29eecc4698fb823bcaad61f0b836a5b58514334d",
+      "retained_blake3": "8a559122096ef48f6c88df8a29eecc4698fb823bcaad61f0b836a5b58514334d",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/admission-shared-pool-v3-G2-host-scratch-after-owned-cleanup-v1.json",
+      "retained": "post-cleanup-raw-v1/admission-shared-pool-v3-G2-host-scratch-after-owned-cleanup-v1.json",
+      "bytes": 1585,
+      "source_blake3": "198ed8b457a6dfbe1d13c0da08483f9a2dae5cc94073323e51c51b6ae0b745e6",
+      "retained_blake3": "198ed8b457a6dfbe1d13c0da08483f9a2dae5cc94073323e51c51b6ae0b745e6",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/terminal-G2-host-scratch-after-owned-cleanup-v1.json",
+      "retained": "post-cleanup-raw-v1/terminal-G2-host-scratch-after-owned-cleanup-v1.json",
+      "bytes": 4349,
+      "source_blake3": "63bc3fa3e69cf7f26e08cb56d29119b8c87d6072e49845445620c4e44478af09",
+      "retained_blake3": "63bc3fa3e69cf7f26e08cb56d29119b8c87d6072e49845445620c4e44478af09",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/result-shared-pool-v3-G2-host-scratch-after-owned-cleanup-v1.json",
+      "retained": "post-cleanup-raw-v1/result-shared-pool-v3-G2-host-scratch-after-owned-cleanup-v1.json",
+      "bytes": 3660,
+      "source_blake3": "9a5f5a1529d89d9a9e7b07cfdc482537033be47bf8970e34f536c014aea652f8",
+      "retained_blake3": "9a5f5a1529d89d9a9e7b07cfdc482537033be47bf8970e34f536c014aea652f8",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/logs/shell-shared-pool-v3-G2-host-scratch-after-owned-cleanup-v1.log",
+      "retained": "post-cleanup-raw-v1/G2-witness-v1-shell.log",
+      "bytes": 252,
+      "source_blake3": "eddcc0681cdefb67be68d703990acf061dfe6042f990cc5e481017a58bd331e3",
+      "retained_blake3": "eddcc0681cdefb67be68d703990acf061dfe6042f990cc5e481017a58bd331e3",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/G2-host-scratch-post-cleanup-v1.sh",
+      "retained": "post-cleanup-raw-v1/G2-witness-v1-entrypoint.sh.source.txt",
+      "bytes": 131,
+      "source_blake3": "bbab1ff54d24e5f4b0ba7afdd2bc797dfca7ded3a81ac0137db5c14db4dee9c0",
+      "retained_blake3": "bbab1ff54d24e5f4b0ba7afdd2bc797dfca7ded3a81ac0137db5c14db4dee9c0",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/t/g2-host-scratch-post-cleanup-v1/observe.py",
+      "retained": "post-cleanup-raw-v1/G2-witness-v1-observe.py.source.txt",
+      "bytes": 6430,
+      "source_blake3": "f3f38a62ab17f9f7ec1a1ef14035ee4dbadb782720470e45d7af04bf20a836df",
+      "retained_blake3": "f3f38a62ab17f9f7ec1a1ef14035ee4dbadb782720470e45d7af04bf20a836df",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/t/g2-host-scratch-post-cleanup-v1/witness.nix",
+      "retained": "post-cleanup-raw-v1/G2-witness-v1-witness.nix.source.txt",
+      "bytes": 1016,
+      "source_blake3": "9dba3142554eaf0866969681fb29bab6451e83da5496251aea50bb9dab8cda78",
+      "retained_blake3": "9dba3142554eaf0866969681fb29bab6451e83da5496251aea50bb9dab8cda78",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/admission-shared-pool-v3-G1-first-party-quality-post-cleanup-v1.json",
+      "retained": "post-cleanup-raw-v1/admission-shared-pool-v3-G1-first-party-quality-post-cleanup-v1.json",
+      "bytes": 1620,
+      "source_blake3": "577c20375aeda1a25644af2b882304e2a58700852fbbb31c4a47b8e57049bbce",
+      "retained_blake3": "577c20375aeda1a25644af2b882304e2a58700852fbbb31c4a47b8e57049bbce",
+      "byte_identical": true
+    },
+    {
+      "source": "/datapool/mantle-store/mr.7p88_pl1/refusal-G1-first-party-quality-post-cleanup-v1.json",
+      "retained": "post-cleanup-raw-v1/refusal-G1-first-party-quality-post-cleanup-v1.json",
+      "bytes": 2120,
+      "source_blake3": "34f285a9238c5a2be3114d3cda02f90d93cfda54707993de2646dfcd3ba5006d",
+      "retained_blake3": "34f285a9238c5a2be3114d3cda02f90d93cfda54707993de2646dfcd3ba5006d",
+      "byte_identical": true
+    }
+  ]
+}

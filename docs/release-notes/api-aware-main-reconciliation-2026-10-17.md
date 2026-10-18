@@ -22,58 +22,113 @@ not a release or acceptance of older proof campaigns.
 See [ADR 0114](../../adr/0114-reconcile-lineage-apis-with-explicit-contract-boundaries.md)
 and the [current integration change](../../.cairn/changes/reconcile-main-api-lineages-2026-10-17/proposal.md).
 
-## Selected observed current behavior
+## Observed post-cleanup milestones
 
-The [current evidence index](../../.cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/current-observations.md)
-retains current helper execution yielding `current-native-answer=42`, native
-namespace denial, both embedded Nickel authoring routes' positive/negative
-boundaries, installed JAR upper-bound/ZIP observations, selected-prefix
-get/list/reference success and wrong-prefix rejection, and Casita signed
-persistence/revocation/action-result publication/stale-GC-plan checks.
+The additive [milestone record](../../.cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/post-cleanup-milestones-v1.md)
+and [dedicated receipt index](../../.cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/post-cleanup-receipt-index-v1.json)
+retain80 post-cleanup source/copy pairs:985966B raw +40305B index; raw/index/note
+remain under unchanged1MiB combined. This append adds only witness11/19595B
+and actual G1 admission/refusal2/3740B; old67 pairs/records and original29/
+historical indexes remain unchanged and not reaudited. Complete static producer
+metadata plus all ten streams use the separately authorized
+[final-verification index](../../.cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/final-verification-v1/index.json):
+14 exact pairs/977629B raw +8171B index =985800B under fixed combined2MiB cap,
+also reserved for separately released final native observations. Nothing from
+the old post-cleanup payload was moved; native G3 lossless metadata is unchanged.
 
-These are API/helper/tool observations on their recorded pre-final-format
-subjects, not fresh root CLI execution, complete APK/SDK/signing execution,
-trusted remote cache reuse, pinned reviewed JDK proof, general Cargo parity,
-compiler correctness, global reproducibility or release eligibility.
+- **V2:** actual current root plus both generators built successfully, child
+  exit0/Pueue Success/no resource stop, compiler finish7m52s, on source
+  `e7edc03304aa9b35813a5d90495fb42a362f624ad4cd2daa8016405f960371a8`.
+- **V3:** actual first-generator self-test and starter output, duplicate-checked
+  portable-profile equality and reviewed Nickel1.17 export succeeded. Only
+  exact captured catalog/reference bytes were installed, with generator-owned
+  identity `12e74923e80c41b28cede8a16c566e129a9ebce7b1fa3bbffe2a908b876fb7c7`.
+  Descriptors, embedded inventory JSON and workflow were already byte-identical
+  and untouched. Actual root mode-check/unmodified operator script PASS184 and
+  limited matrix checks passed on source
+  `8d73114ffd5669121a3a727ca1157b704b0dc6f1f4c56a88221b424f19006209`;
+  referenced historical fixtures were not replayed.
+- **V4:** fresh helper native42/missing-native/quoted-cfg and actual namespace
+  body passed; the existing test now honors invocation TMPDIR via fixture_root
+  instead of writing a crate-local target fixture. Namespace result1passed,
+  0failed,8filtered, no skip; no new test or production API was added.
+  Both Android authoring routes' seven timestamp cases and authority/signing
+  declaration negatives, installed JAR route bounds, selected-prefix
+  get/list/reference and actual composed-list duplicate shadows, and Casita
+  persistence/revocation/policy-GC/stale-plan/local-publication checks passed.
+  Three focused store tests each passed1/0 with453filtered. Both actual V4 legs
+  exited0/no stop on source
+  `91e664eca5ccbab46b3bfe36d0c826fbc880f346c471d183db7654cc1c6860cc`,
+  before this documentary update.
 
-Direct native Cairn validation/proposal/design checks, bound to the repository's
-required existing cohort, each exited 0 with `valid: true` for a documentary
-snapshot. Exact commands/cohort/output identities are in the current evidence
-index's linked native documentary receipt. No tasks/probe/sync/archive command
-ran; these checks do not satisfy final-source G3 or product acceptance.
+The composed-list consumer selected the full good nearer PathInfo/node with
+Overlay layer and Base1 Conflicting shadow despite a wrong-prefix farther
+duplicate; a wrong-prefix nearer record rejected despite a good farther one.
+Layer precedence is selection authority, not output vector sorting. Casita
+local Published→Duplicate/discovery is not trusted remote reuse. Installed
+OpenJDK observations are not pinned reviewed Temurin/SDK/device/APK/signing
+execution. These bounded observations do not prove general Cargo compatibility,
+compiler correctness, global reproducibility, complete Mantle/bootstrap or
+release eligibility. Existing component owners and canonical commands remain
+responsible; repeatability requires fresh paths/current bindings/resource
+admission, not replay of fixed-path historical wrappers.
 
-## Explicitly pending
+## Actual bounded native G3
 
-The actual root plus two-generator attempt was resource-stopped, not successful.
-Fresh root/generator build, current CLI/generated capture and installs,
-operator mode-check/contract/matrix smoke, ordinary quality and extra affected
-format checks, final-source Cairn/tasks and Nix/TigerStyle gates remain PENDING.
-Product execution is held during resource-accounting preparation/review.
-The original pool-availability baseline and caps are unchanged. Proven
-exclusive-growth credit is zero; the correction for uncaptured frees/concurrent
-allocation is unknown. That unknown correction does not impose a new hard-quota
-requirement: the original legacy guard with zero credit already exceeds its
-threshold. The current evidence index records exact values and provenance.
-Process point observations do not establish old compiler-descendant/daemon
-emptiness. No accepted spec sync, archive, main push, bootstrap or release
-success is asserted. Historical raw receipts and older task statuses are
-unchanged by this entry.
+Direct pinned existing Cairn strict validate and proposal/design/tasks all
+exited0/valid:true/issues:[] (gates PASS); declared17 documentary/policy inputs
+were unchanged across execution, binding
+`943cae0a74f58b0b3a526acbe9feec1b6d665f1927765b289157ae4c980c7dac`.
+This input precedes these additive outcome records, not a post-edit or full
+production-tree identity. Tasks ordering was valid, seven Done/four Todo at
+capture; its raw P1 blockers G1/G2/G3 remain historical input facts. After
+recording G3, P1 still awaits G1/G2 and semantic acceptance. Probe declarations
+were absent, probes empty, none executed. The separately released read-only
+document/saved-evidence path was independent of held product/Nix/builds; it
+performed no product launch, queue/R write, admission resample or daemon proof.
+The older BF95 three-command observation is not this actual four-command G3.
 
-## Current recovery outcome
+## Explicitly pending and current resource blocker
 
-The parent accepted V1's point static API review; its original source binding
-does not cover subsequent documentary edits. After the prior runtime owner's
-session died, the existing recovery session received sole current custody.
-Fresh isolated Pueue task0 ended with actual `Failed:75`: unchanged OFFLINE
-shared-pool guard (AE78 result) refused before any Nix child/compiler/product launch. Original
-F0 shared growth86195830784B exceeded the78GiB stop/80GiB cap; free was
-38497157120B. Invocation-local `eval-cache=false` was verified by a value-only
-query, not by successful `nix develop`. Old task5 exit remains UNKNOWN.
+Full G1 GCC4 bridge/strict Clippy/serialized workspace lib-tests, full G2
+Nix/TigerStyle, and P1 semantic acceptance/sole-owner publication remain pending.
+Independent static fmt components passed: canonical17 v3 clean exit0/stdout0/
+stderr356B only expected announcement; extra12 and edition2024 gateway leaf
+each exit0/empty streams once in v1, not rerun. All611 declared inputs remained
+unchanged, binding
+`4df6dbccf81c2c49b7b19b82450e674f720c231b3833e7707af2c74763f4ee91`.
+v1 canonical dispatch failed before Cargo, cause UNKNOWN (not a proven login/
+BASH_ENV bug); v2 exit0 included helper-init diagnostics and is not clean PASS.
+v3 changed only explicit child dispatch environment, not source/profile.
+Full receipts retain all611 rows, timings/argv/environment and raw streams.
 
-The [recovery evidence](../../.cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/recovery-and-guard-refusal-2026-10-17.md)
-retains exact raw identities, resource gap and custody. V2 and every later
-product/gate/publication task remain pending; generated catalog/reference
-identity conflicts remain unresolved. No retry, cleanup, new allocation or
-cap/baseline reset is authorized. Fresh native documentary-only outcomes are
-linked in `evidence/recovery-document-validation.json` within that change;
-they do not confer G3, lifecycle or release acceptance.
+The old tiny-witness admission exit75/no launch remains historical. A later
+separately admitted once-only tiny witness was PROVEN: fresh local builder
+`/build` matched host dev0:47/zfs/datapool/mantle-store and mapped component-wise
+beneath original R/t; task6/controller/inner/monitor child0, stop:null. Final
+free41128689664B/shared83564298240B left187564032B to unchanged shared stop.
+This is actual physical scratch mapping, not full G2 PASS or full-build fit.
+Full current-system flake check already includes pinned TigerStyle; neither
+that full rail nor G1 was replaced by the tiny witness or static formatting.
+
+Latest G1 admission refused exit75 BEFORE enqueue/bridge/Clippy/tests:
+free40903507968B/shared83789479936B,37617664B above unchanged83751862272B stop;
+target9331496960B/temp270171648B/metadata2994176B. No compiler failure, repeat
+admission or space poll is inferred. Witness/latest G1 source binding
+`124ca12d1f1cc1a3a8be252f6d0f12f7f1ca2014d85700b3a8a545633f60bfe3`
+and documentary binding `3cbaaa73105b8fca8e037fb8bbdc23b8a320c769dc2d64c9fcac89102b45fcb2`
+are terminal identifiers, not retained full source rows or atomic snapshot.
+
+Zero-eligible/238-retained inventory/no second apply and CLOSED original436/
+F53A operation remain unchanged. Separate ordinary disposal of only the new
+completed consumer left immediate physical free gain ZERO;267740160B inode
+gross/535475712B target-name shrink are not recovered capacity or causal funding.
+Retained source/manifest/copied-lock/stdout enable reconstruction at fresh
+admitted paths, not replay of exclusive-output scripts. F0/E0/caps/epoch/pins/
+profiles stay frozen; no autochain, hard-quota, successor or daemon-settlement
+claim follows. HEAD034a2dbb preserves both parents, not publication acceptance.
+
+G3 is recorded only on its observed input; separate verification against these
+newly updated documentary inputs is still pending. No accepted-spec sync,
+archive, overall semantic/lifecycle completion or release is asserted.
+ADR0114 remains Proposed; historical pending campaigns retain their subjects.

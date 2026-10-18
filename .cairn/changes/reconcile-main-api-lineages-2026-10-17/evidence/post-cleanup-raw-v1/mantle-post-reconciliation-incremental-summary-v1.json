@@ -1,0 +1,77 @@
+{
+  "operation": "Manual preparation/read-only inventory ONLY; no apply/deletion/admission/proc/queue/build",
+  "argv": [
+    "python3",
+    "-B",
+    "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-incremental-cache-evict.py",
+    "inventory"
+  ],
+  "started_unix": 1792285372.7868648,
+  "finished_unix": 1792285372.9885128,
+  "returncode": 0,
+  "stderr": "",
+  "manifest": "local://mantle-post-reconciliation-incremental-candidates-v1.json",
+  "manifest_bytes": 51801,
+  "manifest_blake3": "e7051e6d65aae2cc119797850fb87b2a7f53d3be9c90724e747f6f72a2d36cb8",
+  "manifest_bound_bytes": 33554432,
+  "script": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-incremental-cache-evict.py",
+  "script_revision": "3150",
+  "script_blake3": "4301ccbb092200b6024af203de9e5fdccbf69460abf6a592c5f8c72c7f6085e8",
+  "approved_canonical_roots": [
+    "/home/brittonr/.cargo-target/debug/incremental",
+    "/home/brittonr/.cargo-target/wasm32-unknown-unknown/wasm-dev/incremental"
+  ],
+  "candidate_sessions": 0,
+  "skipped_entries": 238,
+  "skip_reasons": {
+    "unknown/protected/executable payload": 232,
+    "working or malformed": 6
+  },
+  "total_payload_files": 0,
+  "gross_allocated_estimate_bytes": 0,
+  "multilink_payload_files": 0,
+  "sessions_with_multilink_payloads": 0,
+  "gross_session_estimate_bytes_where_multilink_present": 0,
+  "per_root": {
+    "/home/brittonr/.cargo-target/debug/incremental": {
+      "candidate_sessions": 0,
+      "skipped_entries": 234,
+      "skip_reasons": {
+        "unknown/protected/executable payload": 228,
+        "working or malformed": 6
+      },
+      "payload_files": 0,
+      "gross_allocated_estimate_bytes": 0,
+      "multilink_payload_files": 0
+    },
+    "/home/brittonr/.cargo-target/wasm32-unknown-unknown/wasm-dev/incremental": {
+      "candidate_sessions": 0,
+      "skipped_entries": 4,
+      "skip_reasons": {
+        "unknown/protected/executable payload": 4
+      },
+      "payload_files": 0,
+      "gross_allocated_estimate_bytes": 0,
+      "multilink_payload_files": 0
+    }
+  },
+  "old436_overlap": 0,
+  "new_session_keys": 0,
+  "old_manifest": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-mantle/2026-10-13T02-05-28-711Z_01a13301-f507-7136-acf4-c2bc15fd5d12/local/mantle-incremental-finalized-allowlist.json",
+  "snapshot_quota_reservation_query": {
+    "argv": [
+      "zfs",
+      "get",
+      "-H",
+      "-p",
+      "-o",
+      "property,value",
+      "usedbysnapshots,quota,reservation",
+      "datapool/cargo-target"
+    ],
+    "returncode": 0,
+    "stdout": "usedbysnapshots\t0\nquota\t1610612736000\nreservation\t0\n",
+    "stderr": ""
+  },
+  "qualification": "Metadata-only candidate inventory, NOT inactivity proof; inventory takes no locks. A separately released apply must take nonblocking exclusive per-row flock and skip busy/changed rows. Gross st_blocks estimates do not guarantee physical recovery because hardlinks/snapshots/concurrent allocation may change results. Multilink gross-session figure is NOT exclusively multilink bytes or unique reclaimable storage. Working/malformed/unknown/protected/executable/nonflat/symlink sessions, .dwo/.so/library/binary/source/proof/currentR, lockfiles and parent directories preserved. Native newest/sole inclusion remains only the prior explicitly approved cleanup policy. No automatic apply/repeat."
+}

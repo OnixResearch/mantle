@@ -1,0 +1,3 @@
+building '/nix/store/3q0vpy2x7rjhmk0x9mv8y2nnv02i3w31-nix-shell-env.drv'...
+no-auto-GC shell: SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox min-free=0 max-free=0
+PROVEN

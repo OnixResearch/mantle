@@ -1,0 +1,3 @@
+   Compiling mantle-current-casita-api-smoke v0.0.0 (/datapool/mantle-store/mr.7p88_pl1/casita-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.77s
+     Running `/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-current-casita-api-smoke /datapool/mantle-store/mr.7p88_pl1/stores/casita-V4android-store-casita-post-cleanup-v1`

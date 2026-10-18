@@ -1,0 +1,44 @@
+{
+  "monitor": "run-leg-shared-pool-v3.py",
+  "amendment": "shared-pool-growth-amendment-v1.json",
+  "original_free_initial": 124692987904,
+  "original_created_unix": 1792210364.526931,
+  "initial_interval_bytes": 777650176,
+  "exclusive_growth_credit": 0,
+  "initial": {
+    "free": 40833384448,
+    "target": 9866972672,
+    "temp": 270222848,
+    "metadata": 2900480,
+    "shared_pool_growth": 83859603456
+  },
+  "start": {
+    "free": 40833384448,
+    "target": 9866972672,
+    "temp": 270222848,
+    "metadata": 2900480,
+    "shared_pool_growth": 83859603456
+  },
+  "owned_target_admission": {
+    "clear": true,
+    "scan_complete_within_5_seconds": true,
+    "unreadable_or_transient": 0,
+    "vanished_proc_entries": 0,
+    "measurement_errors": [],
+    "omitted_measurement_errors": 0,
+    "owned_compilers": [],
+    "existing_target_lock": "available at observation",
+    "scope": "Point owned-root/compiler/exact-target-key check only; no argv/environment persisted, no global/private inventory or descendant/daemon emptiness claim"
+  },
+  "monitor_identity": {
+    "pid": 1317992,
+    "pgid": 1000913,
+    "start_ticks": 20370475
+  },
+  "started": 1792285171.2276886,
+  "notice": "Sampling, not hard quota. Shared-pool growth is not Nix-only or gross allocation. No target credit/hidden-free reconstruction. Leader wait does not prove descendant/daemon settlement; legacy /tmp is untouched.",
+  "capacity_admitted": false,
+  "stop_reason": "shared_pool_growth safety threshold",
+  "product_launched": false,
+  "launch_release": "Parent/fast harness review still required; admission is point evidence only"
+}

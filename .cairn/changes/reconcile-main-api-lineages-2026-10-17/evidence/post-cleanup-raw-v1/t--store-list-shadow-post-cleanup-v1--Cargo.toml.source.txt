@@ -1,0 +1,21 @@
+[package]
+name = "mantle-current-store-api-smoke"
+version = "0.0.0"
+edition = "2024"
+autobins = false
+
+[[bin]]
+name = "mantle-current-store-list-shadow-post-cleanup"
+path = "src/main.rs"
+
+[workspace]
+[dependencies]
+crunch-store = { path = "/home/brittonr/git/OnixResearch/mantle/crates/crunch-store" }
+nix-compat = { path = "/home/brittonr/git/OnixResearch/mantle/vendor/nix-compat", features = ["serde"] }
+snix-store = { path = "/home/brittonr/git/OnixResearch/mantle/vendor/snix-store" }
+snix-castore = { path = "/home/brittonr/git/OnixResearch/mantle/vendor/snix-castore" }
+ed25519-dalek = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+futures = "0.3"
+[patch.crates-io]
+fuse-backend-rs = { path = "/home/brittonr/git/OnixResearch/mantle/vendor/fuse-backend-rs" }

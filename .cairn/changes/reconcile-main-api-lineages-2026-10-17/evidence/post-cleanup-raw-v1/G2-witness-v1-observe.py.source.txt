@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""Single guarded G2 candidate; no retry, sandbox change, or debug-path inference.
+
+Requires explicit review of --impure (evaluation only, for builtins.storePath).
+Mount mapping follows proc_pid_mountinfo(5) fields 3/4/5 and post-separator
+filesystem/source. Ambiguous or unmatched mounts are NOTPROVEN.
+"""
+import json
+import os
+from pathlib import Path, PurePosixPath
+import re
+import selectors
+import subprocess
+import sys
+
+HERE = Path(__file__).resolve().parent
+SCRATCH = PurePosixPath('/datapool/mantle-store/mr.7p88_pl1/t')
+EXPR = HERE / 'witness.nix'
+ARGV = [
+    'nix', 'build', '--offline', '--no-link', '--json',
+    '--max-jobs', '1', '--cores', '1',
+    '--option', 'build-dir', str(SCRATCH),
+    '--option', 'min-free', '0', '--option', 'max-free', '0',
+    '--impure', '--file', str(EXPR),
+]
+if len(EXPR.read_bytes()) + sum(len(arg.encode()) + 1 for arg in ARGV) > 16384:
+    raise SystemExit('expression/argv exceed 16KiB; not launched')
+DEST = HERE / 'observation'
+DEST.mkdir()  # Exclusive capture; never reuse a prior attempt.
+record = {
+    'status': 'NOTPROVEN', 'argv': ARGV,
+    'evaluation_flag': '--impure for explicit immutable builtins.storePath only; requires parent approval',
+    'limits': 'combined stdout/stderr 32768B; builder witness 8192B; result 16384B; aggregate <=57344B',
+}
+streams = {'stdout': bytearray(), 'stderr': bytearray()}
+try:
+    process = subprocess.Popen(ARGV, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    selected = selectors.DefaultSelector()
+    selected.register(process.stdout, selectors.EVENT_READ, 'stdout')
+    selected.register(process.stderr, selectors.EVENT_READ, 'stderr')
+    total = 0
+    over_limit = False
+    while selected.get_map():
+        for key, _ in selected.select():
+            chunk = os.read(key.fileobj.fileno(), 4096)
+            if not chunk:
+                selected.unregister(key.fileobj)
+                key.fileobj.close()
+                continue
+            remaining = 32768 - total
+            streams[key.data].extend(chunk[:remaining])
+            total += min(len(chunk), remaining)
+            if len(chunk) > remaining:
+                over_limit = True
+                process.terminate()  # Stop this client only; daemon settlement remains unknown.
+                break
+        if over_limit:
+            break
+    for key in list(selected.get_map().values()):
+        key.fileobj.close()
+    selected.close()
+    record['exit_code'] = process.wait()
+    if over_limit:
+        raise ValueError('command output bound exceeded; no path admission')
+    if record['exit_code'] != 0:
+        raise ValueError('tiny derivation did not complete successfully')
+    outputs = json.loads(streams['stdout'])
+    if len(outputs) != 1:
+        raise ValueError('expected one derivation result')
+    drv = outputs[0]['drvPath']
+    if f"building '{drv}'" not in streams['stderr'].decode(errors='replace'):
+        raise ValueError('no actual fresh build log for returned derivation; cached result is not a witness')
+    record['drv_path'] = drv
+    out = outputs[0]['outputs']['out']
+    record['output_path'] = out
+    with open(out, 'rb') as handle:
+        witness = handle.read(8193)
+    if len(witness) > 8192:
+        raise ValueError('builder witness exceeds 8192B')
+    (DEST / 'builder-witness.txt').write_bytes(witness)
+
+    def unescape(value):
+        return re.sub(r'\\([0-7]{3})', lambda match: chr(int(match[1], 8)), value)
+
+    def mount(line):
+        fields = line.split()
+        separator = fields.index('-')
+        return {
+            'raw': line, 'device': fields[2],
+            'root': PurePosixPath(unescape(fields[3])),
+            'point': PurePosixPath(unescape(fields[4])),
+            'filesystem': fields[separator + 1],
+            'source': unescape(fields[separator + 2]),
+        }
+
+    def effective(rows, path):
+        candidates = [row for row in rows if path.is_relative_to(row['point'])]
+        if not candidates:
+            raise ValueError('no covering mount')
+        depth = max(len(row['point'].parts) for row in candidates)
+        nearest = [row for row in candidates if len(row['point'].parts) == depth]
+        if len(nearest) != 1:
+            raise ValueError('ambiguous stacked effective mount; no path admission')
+        return nearest[0]
+
+    lines = witness.decode().splitlines()
+    if not lines or not lines[0].startswith('cwd\t'):
+        raise ValueError('missing physical builder cwd')
+    cwd = PurePosixPath(lines[0][4:])
+    if not cwd.is_absolute():
+        raise ValueError('builder cwd is not absolute')
+    builder_rows = [mount(line[6:]) for line in lines[1:] if line.startswith('mount\t')]
+    if len(builder_rows) != len(lines) - 1 or any(not cwd.is_relative_to(row['point']) for row in builder_rows):
+        raise ValueError('witness contains unrelated mount rows')
+    builder = effective(builder_rows, cwd)
+    record['builder_cwd'] = str(cwd)
+    record['builder_effective_mount'] = builder['raw']
+    host_rows = []
+    with open('/proc/self/mountinfo') as handle:
+        for line in handle:
+            row = mount(line.rstrip('\n'))
+            if SCRATCH.is_relative_to(row['point']):
+                host_rows.append(row)
+    host = effective(host_rows, SCRATCH)
+    record['host_effective_mount'] = host['raw']  # Only this filtered host row is persisted.
+    if any(builder[key] != host[key] for key in ('device', 'filesystem', 'source')):
+        raise ValueError('builder/host filesystem, device or source mismatch')
+    filesystem_cwd = builder['root'] / cwd.relative_to(builder['point'])
+    mapped = host['point'] / filesystem_cwd.relative_to(host['root'])
+    if not mapped.is_relative_to(SCRATCH):
+        raise ValueError('mapped host cwd is outside the component-bounded owned scratch root')
+    record['mapped_host_cwd'] = str(mapped)
+    record['status'] = 'PROVEN'
+except Exception as error:
+    record['reason'] = str(error)
+finally:
+    for name, content in streams.items():
+        (DEST / (name + '.txt')).write_bytes(content)
+    encoded = (json.dumps(record, indent=2) + '\n').encode()
+    if len(encoded) > 16384:
+        record = {'status': 'NOTPROVEN', 'reason': 'result envelope exceeds 16384B; no path admission'}
+        encoded = (json.dumps(record, indent=2) + '\n').encode()
+    (DEST / 'result.json').write_bytes(encoded)
+print(record['status'])
+sys.exit(0 if record['status'] == 'PROVEN' else 1)

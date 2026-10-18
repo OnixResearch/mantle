@@ -1,0 +1,242 @@
+{
+  "operation": "Exactly parent-released completed one-off consumer scaffold cleanup; separate from closed global incremental cache policy",
+  "started_unix": 1792285822.9004653,
+  "authority": "Parent exact release of77FF three compiled leaves and five-entry copied-source scope; old436 operation finished1792277070.9617834 before current consumer compiled/ran1792284841.2776008..1792284929.717128",
+  "source_snapshot_references": "Parent reports goodT13 retained BLAKE3-identical .source.txt source/manifest/copied-lock and actual stdout/stderr in current Cairn packet; no snapshot bytes or indexes modified",
+  "expected_metadata_receipt": "local://mantle-owned-store-consumer-artifacts-v1.json",
+  "lock": {
+    "path": "/datapool/mantle-store/mr.7p88_pl1/target/debug/.cargo-lock",
+    "nonblocking_exclusive": "acquired",
+    "identity": {
+      "dev": 47,
+      "inode": 6390600
+    },
+    "preserved": true
+  },
+  "validation": [
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-current-store-list-shadow-post-cleanup",
+      "actual": {
+        "dev": 47,
+        "inode": 6482368,
+        "uid": 1555,
+        "gid": 998,
+        "mode": 33261,
+        "nlink": 2,
+        "logical_bytes": 654533024,
+        "mtime_ns": 1792284872632414476,
+        "ctime_ns": 1792284872702414548
+      },
+      "match": true
+    },
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/target/debug/deps/mantle_current_store_list_shadow_post_cleanup-e8a9e9a3b75f3064",
+      "actual": {
+        "dev": 47,
+        "inode": 6482368,
+        "uid": 1555,
+        "gid": 998,
+        "mode": 33261,
+        "nlink": 2,
+        "logical_bytes": 654533024,
+        "mtime_ns": 1792284872632414476,
+        "ctime_ns": 1792284872702414548
+      },
+      "match": true
+    },
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/target/debug/deps/mantle_current_store_list_shadow_post_cleanup-e8a9e9a3b75f3064.d",
+      "actual": {
+        "dev": 47,
+        "inode": 6481136,
+        "uid": 1555,
+        "gid": 998,
+        "mode": 33188,
+        "nlink": 1,
+        "logical_bytes": 275,
+        "mtime_ns": 1792284868631410393,
+        "ctime_ns": 1792284868631410393
+      },
+      "match": true
+    },
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/t/store-list-shadow-post-cleanup-v1",
+      "actual": {
+        "dev": 47,
+        "inode": 6481624,
+        "uid": 1555,
+        "gid": 998,
+        "mode": 16877,
+        "nlink": 3,
+        "logical_bytes": 5,
+        "mtime_ns": 1792284639291176435,
+        "ctime_ns": 1792284639291176435
+      },
+      "match": true
+    },
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/t/store-list-shadow-post-cleanup-v1/Cargo.toml",
+      "actual": {
+        "dev": 47,
+        "inode": 6480238,
+        "uid": 1555,
+        "gid": 998,
+        "mode": 33188,
+        "nlink": 1,
+        "logical_bytes": 792,
+        "mtime_ns": 1792284684164222211,
+        "ctime_ns": 1792284684164222211
+      },
+      "match": true
+    },
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/t/store-list-shadow-post-cleanup-v1/Cargo.lock",
+      "actual": {
+        "dev": 47,
+        "inode": 6480874,
+        "uid": 1555,
+        "gid": 998,
+        "mode": 33188,
+        "nlink": 1,
+        "logical_bytes": 150959,
+        "mtime_ns": 1792284639187176329,
+        "ctime_ns": 1792284639187176329
+      },
+      "match": true
+    },
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/t/store-list-shadow-post-cleanup-v1/src",
+      "actual": {
+        "dev": 47,
+        "inode": 6480489,
+        "uid": 1555,
+        "gid": 998,
+        "mode": 16877,
+        "nlink": 2,
+        "logical_bytes": 3,
+        "mtime_ns": 1792284639291176435,
+        "ctime_ns": 1792284639291176435
+      },
+      "match": true
+    },
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/t/store-list-shadow-post-cleanup-v1/src/main.rs",
+      "actual": {
+        "dev": 47,
+        "inode": 6480490,
+        "uid": 1555,
+        "gid": 998,
+        "mode": 33188,
+        "nlink": 1,
+        "logical_bytes": 9616,
+        "mtime_ns": 1792284670442208212,
+        "ctime_ns": 1792284670442208212
+      },
+      "match": true
+    }
+  ],
+  "unlinks": [
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-current-store-list-shadow-post-cleanup",
+      "success": true
+    },
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/target/debug/deps/mantle_current_store_list_shadow_post_cleanup-e8a9e9a3b75f3064",
+      "success": true
+    },
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/target/debug/deps/mantle_current_store_list_shadow_post_cleanup-e8a9e9a3b75f3064.d",
+      "success": true
+    },
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/t/store-list-shadow-post-cleanup-v1/Cargo.toml",
+      "success": true
+    },
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/t/store-list-shadow-post-cleanup-v1/Cargo.lock",
+      "success": true
+    },
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/t/store-list-shadow-post-cleanup-v1/src/main.rs",
+      "success": true
+    }
+  ],
+  "rmdirs": [
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/t/store-list-shadow-post-cleanup-v1/src",
+      "success": true
+    },
+    {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/t/store-list-shadow-post-cleanup-v1",
+      "success": true
+    }
+  ],
+  "errors": [],
+  "status": "complete",
+  "exclusions": "No other R artifact/source/store/fixture/bin/library/cache/incremental/fingerprint/.dwo/lockfile, old436manifest/script, protected238entry, repo source/docs/Git, snapshot/quota/profile/cap/F0/epoch/credit change",
+  "qualification": "Existing Cargo flock excludes cooperating writers only; not universal idle proof. Guard samples are point changed-storage observations, not quota, causal recovery attribution, build admission or daemon settlement proof.",
+  "guard_context_before": {
+    "root": "/datapool/mantle-store/mr.7p88_pl1",
+    "created_unix": 1792210364.526931,
+    "repo": "/home/brittonr/git/OnixResearch/mantle",
+    "parents": [
+      "d20459c6db6d60ed2b08533911e279cbeadb742e",
+      "d75158b00b080535f2ffea12430665ca3d57ea82"
+    ],
+    "free_initial": 124692987904,
+    "max_target": 68719476736,
+    "max_temp_and_stores": 4294967296,
+    "max_metadata": 134217728,
+    "max_additional_nix": 17179869184,
+    "min_free": 20000000000,
+    "repo_target_observed": 6463286272,
+    "global_target_cap": 250000000000,
+    "global_temp_cap": 35000000000,
+    "enforcement": "sampling admission and process-group stop; not administrative quota",
+    "shared_target": "frozen"
+  },
+  "before": {
+    "free": 40859074560,
+    "target": 9866972672,
+    "temp": 270222848,
+    "metadata": 2909696,
+    "shared_pool_growth": 83833913344
+  },
+  "before_breach": "shared_pool_growth safety threshold",
+  "guard_blake3": "d199ef2c0d1454dd8f0b94687e0fea0d367880bc8d418948a9e586262e717126",
+  "successful_file_unlinks": 6,
+  "successful_directory_removals": 2,
+  "compiled_deduplicated_gross_estimate_bytes": 267740160,
+  "guard_context_after": {
+    "root": "/datapool/mantle-store/mr.7p88_pl1",
+    "created_unix": 1792210364.526931,
+    "repo": "/home/brittonr/git/OnixResearch/mantle",
+    "parents": [
+      "d20459c6db6d60ed2b08533911e279cbeadb742e",
+      "d75158b00b080535f2ffea12430665ca3d57ea82"
+    ],
+    "free_initial": 124692987904,
+    "max_target": 68719476736,
+    "max_temp_and_stores": 4294967296,
+    "max_metadata": 134217728,
+    "max_additional_nix": 17179869184,
+    "min_free": 20000000000,
+    "repo_target_observed": 6463286272,
+    "global_target_cap": 250000000000,
+    "global_temp_cap": 35000000000,
+    "enforcement": "sampling admission and process-group stop; not administrative quota",
+    "shared_target": "frozen"
+  },
+  "context_unchanged": true,
+  "after": {
+    "free": 40859074560,
+    "target": 9331496960,
+    "temp": 270142464,
+    "metadata": 2909696,
+    "shared_pool_growth": 83833913344
+  },
+  "after_breach": "shared_pool_growth safety threshold",
+  "observed_free_gain_bytes": 0,
+  "remaining_to_unchanged_stop_bytes": -82051072,
+  "finished_unix": 1792285823.6565716
+}

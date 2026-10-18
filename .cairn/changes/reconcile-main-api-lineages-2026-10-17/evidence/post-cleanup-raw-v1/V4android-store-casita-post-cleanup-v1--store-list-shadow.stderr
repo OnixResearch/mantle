@@ -1,0 +1,4 @@
+   Compiling crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-store)
+   Compiling mantle-current-store-api-smoke v0.0.0 (/datapool/mantle-store/mr.7p88_pl1/t/store-list-shadow-post-cleanup-v1)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 21.14s
+     Running `/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-current-store-list-shadow-post-cleanup /datapool/mantle-store/mr.7p88_pl1/stores/store-list-shadow-post-cleanup-v1`

@@ -2,12 +2,15 @@
 
 ## Status and profile
 
-Current integration is blocked on executable/generator/gate evidence, not
-accepted or archived. These artifacts were manually authored using the actual
+Current V2/V3/V4 observations have completed on their separately recorded
+post-cleanup subjects; native G3 passed on declared documentary input943cae0a…
+before these additive outcome records. G1/G2/P1 and end-to-end acceptance remain
+pending. A later tiny G2 scratch witness passed, but latest full G1 admission
+refused before enqueue; full G1/G2 remain unexecuted despite static fmt PASS.
+These artifacts were manually authored using the actual
 `cairn-policy/default.ncl` spec-driven v1 template obligations. Metadata omits
-`workflow_profile`: Cairn's compatibility selection uses the repository default
-`spec-driven`. It does not falsely record immutable `source: change_create`.
-No Cairn command-creation receipt or gate result is asserted.
+`workflow_profile`: the repository default remains `spec-driven`; no immutable
+`source: change_create` receipt is invented.
 
 ## Source and component ownership
 
@@ -60,10 +63,12 @@ Local action-result publication/discovery is not trusted remote reuse.
 ### Generated operator authority
 
 Current Clap declarations plus `config/operator-surfaces.ncl` remain source of
-truth. Fresh actual generator output and mode-checks are required before
-installing generated JSON/docs. The completed pinned Nickel inventory export
-alone does not resolve the two remaining generated marker files or establish
-root/generator build success. No catalog identity is hand-spliced.
+truth. Actual fresh generator output was captured before exact catalog/reference
+installation; actual root mode-check and the unmodified contract script then
+passed184 commands. Raw descriptors, reviewed Nickel export and workflow were
+already byte-identical and not rewritten. Portable profile comparison passed.
+The starter remains review-only; no catalog identity was hand-spliced. Exact
+subjects/output limits are in `evidence/post-cleanup-milestones-v1.md`.
 
 ### Evidence and resource epochs
 
@@ -87,6 +92,28 @@ in `evidence/current-observations.md`, not fabricated raw command output.
 Accounting preparation neither admits product execution nor retroactively
 turns a resource stop into a compiler pass.
 
+The fresh unchanged3150 global two-root incremental inventory found zero
+eligible candidates and retained238 protected/working entries; there was no
+second apply. The completed original436 operation under F53A is CLOSED. A
+separate explicit exact-artifact review then disposed only the brand-new,
+completed one-off composed-list consumer created AFTER that operation, under
+the existing preserved Cargo EXLOCK. All eight metadata identities passed
+before six file unlinks and two empty owned-directory removals; no errors.
+Its source/manifest/copied-lock snapshots and stdout remain BLAKE3-retained;
+other R resources and old receipts/manifests remain untouched. Intentional
+disposable-output absence requires reconstruction at fresh admitted paths,
+not replay of the old exclusive-mkdir script.
+
+Immediate cleanup before/after free40859074560B/shared83833913344B was unchanged;
+target changed9866972672→9331496960B, temp270222848→270142464B, metadata2909696B
+unchanged. ZERO physical free gain was observed; the shared stop83751862272B
+remained exceeded by82051072B. Deduplicated gross267740160B and name-accounted
+target shrink535475712B (two hardlink names) are not physical recovery. This is
+ordinary owned-scaffold disposal, not another cache eviction, funding, guard
+clearance or admission. Original F0/E0/caps/epoch remain frozen. Exact receipts
+and scope are in `evidence/post-cleanup-milestones-v1.md`; no delayed resample
+or automatic follow-on is authorized.
+
 ## Rejected alternatives
 
 - Blanket ours/theirs: loses behavior and prerequisites of one parent.
@@ -109,15 +136,61 @@ selected-prefix layered get/list/reference success and wrong-prefix rejection;
 and Casita signed persistence, revocation, action-result publication and stale
 GC-plan rejection. Each receipt's scope and limitations remain explicit.
 
-Direct current-cohort native validation/proposal/design checks returned
-`valid: true` for the authored documentary snapshot; exact cohort binding and
-outputs are in `evidence/native-document-validation.json`. No tasks/probes ran.
+Older current-cohort validate/proposal/design observations in
+`evidence/native-document-validation.json` remain historical; no tasks/probes
+ran in that older BF95 observation. Actual four-command G3 is recorded below.
 
-Fresh root plus two-generator build, fresh CLI/contract/matrix smoke, ordinary
-GCC4.0 bridge → scoped fmt → vendor-excluded strict Clippy → workspace lib/tests,
-extra affected-package fmt, final-source Cairn/G3 including tasks, and
-Nix/TigerStyle gates are PENDING. They require their reviewed bounded execution
-route; documentary checks neither admit product execution nor satisfy G3.
+Actual post-cleanup root plus two-generator build, generator capture/exact
+installation, root CLI/contract/matrix smoke and current helper/Android/store/
+Casita observations passed on their declared subjects, before this documentary
+update. The dedicated public consumer proved composed-list near/far shadow
+selection rather than inferring it from lookup/cache tests. The existing helper
+namespace fixture now honors TMPDIR and its actual body passed without skip.
+See `evidence/post-cleanup-milestones-v1.md` and its separate exact receipt index.
+
+Actual direct pinned native strict validate and proposal/design/tasks all
+exited0 with valid:true/issues:[] (gates PASS), with declared17 documentary/policy
+inputs unchanged across execution, binding
+`943cae0a74f58b0b3a526acbe9feec1b6d665f1927765b289157ae4c980c7dac`.
+This is the input BEFORE these additive outcome records, not a post-edit/full
+production-tree identity. Full native streams and losslessly compacted COMPLETE
+capture metadata are retained with explicit original/reconstructed wire hashes.
+Tasks ordering was valid (seven Done/four Todo at capture); no probe declaration
+or execution. G3's after:V4 ordering is independent of held G1/G2, so read-only
+document/saved-evidence checks required no product/Nix/build admission. The raw
+P1 blockers are not retconned: after recording G3, G1/G2/semantic acceptance
+remain pending. Verification of these new documentary inputs is separate.
+
+The later separately admitted tiny G2 scratch witness actually proved builder
+`/build` mapping beneath original R/t through matching device0:47 and
+zfs/datapool/mantle-store kernel mount rows. Recovery task6/controller/inner/
+monitor child succeeded with no stop; final free41128689664B/shared83564298240B
+left187564032B to frozen stop. This proves that tiny route, not full G2, fit,
+cleanup-causal recovery, successor authority or daemon settlement. Source
+`124ca12d1f1cc1a3a8be252f6d0f12f7f1ca2014d85700b3a8a545633f60bfe3`
+and documentary `3cbaaa73105b8fca8e037fb8bbdc23b8a320c769dc2d64c9fcac89102b45fcb2`
+identify witness/latest G1 subjects; retained terminal bindings are not a full
+source-row snapshot. Earlier failed admission and ZERO immediate cleanup gain
+remain true historical points, not contradictions or funding.
+
+Latest full G1 admission refused exit75 BEFORE enqueue/bridge/Clippy/tests:
+free40903507968B/shared83789479936B,37617664B above unchanged83751862272B stop;
+target9331496960B/temp270171648B/metadata2994176B. No compiler failure is inferred.
+Independent existing-cohort static checks passed: canonical17 v3 clean exit0,
+extra12 and edition2024 gateway leaf once in v1;611 declared source/lock/config
+inputs unchanged, binding
+`4df6dbccf81c2c49b7b19b82450e674f720c231b3833e7707af2c74763f4ee91`.
+Full v1/correction/v2/v3 receipts and ten raw streams are retained separately
+in `evidence/final-verification-v1/index.json`. v1 canonical dispatch failed
+before Cargo; cause unknown, not a proven login/BASH_ENV bug. v2 helper-init
+diagnostics invalidate clean PASS despite exit0; v3's explicit child environment
+resolved dispatch without source/profile edits. Passed extra12/gateway were not
+rerun. Static fmt is not GCC4 bridge, strict Clippy, workspace tests or Nix gates.
+
+Full G1, full G2 current-system flake check (already includes TigerStyle), and
+P1 semantic acceptance/publication remain PENDING. G3 and separately authorized
+static checks do not admit held product/Nix/build actions. Final native checks
+against these newly frozen documentary inputs require separate parent release.
 
 ## Risks and claim boundary
 

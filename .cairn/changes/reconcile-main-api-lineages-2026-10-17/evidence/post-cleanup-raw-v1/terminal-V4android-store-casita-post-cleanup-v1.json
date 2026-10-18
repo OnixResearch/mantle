@@ -1,0 +1,223 @@
+{
+  "attempt": "V4android-store-casita-post-cleanup-v1",
+  "task_id": 5,
+  "source_head": "034a2dbb016a925c6afa452efa75dfc423df28d5",
+  "source_binding_blake3": "91e664eca5ccbab46b3bfe36d0c826fbc880f346c471d183db7654cc1c6860cc",
+  "pueue_task": {
+    "id": 5,
+    "group": "default",
+    "label": "V4android-store-casita-post-cleanup-v1",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-10-17T20:53:42.219918156-04:00",
+        "start": "2026-10-17T20:53:42.272084290-04:00",
+        "end": "2026-10-17T20:55:31.921808313-04:00",
+        "result": "Success"
+      }
+    },
+    "path": "/home/brittonr/git/OnixResearch/mantle",
+    "command": "NIX_CONFIG=\"${NIX_CONFIG-}\"'\neval-cache = false\n' /nix/store/b5bpi6zfajzzrwwpgba2q6li3nnya4bs-python3-3.14.7/bin/python3.14 -I -B -S /datapool/mantle-store/mr.7p88_pl1/run-leg-shared-pool-v3.py offline V4android-store-casita-post-cleanup-v1 V4android-store-casita-post-cleanup-v1.sh"
+  },
+  "resource_stop": null,
+  "child_exit_code": 0,
+  "resource_final": {
+    "free": 41137471488,
+    "target": 9867095552,
+    "temp": 270140928,
+    "metadata": 2869760,
+    "shared_pool_growth": 83555516416
+  },
+  "remaining_to_unchanged_stop_bytes": 196345856,
+  "driver_result": {
+    "attempt": "V4android-store-casita-post-cleanup-v1",
+    "started": 1792284841.2776008,
+    "commands": [
+      {
+        "argv": [
+          "cargo",
+          "run",
+          "--locked",
+          "--offline",
+          "--manifest-path",
+          "/datapool/mantle-store/mr.7p88_pl1/android-api/Cargo.toml",
+          "--",
+          "/datapool/mantle-store/mr.7p88_pl1/stores/android-authoring-V4android-store-casita-post-cleanup-v1"
+        ],
+        "env": {
+          "XDG_CACHE_HOME": "/datapool/mantle-store/mr.7p88_pl1/t/V4android-store-casita-post-cleanup-v1/android-cache"
+        },
+        "exit_code": 0,
+        "stdout": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/android-authoring.stdout",
+        "stderr": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/android-authoring.stderr",
+        "stdout_bytes": 9997,
+        "stderr_bytes": 589,
+        "observed_markers": [
+          "CURRENT_EMBEDDED_ANDROID_BOTH_AUTHORING_ROUTES_SMOKE_OK; NO_SDK_APK_EXECUTION_OR_SIGNING_CLAIM"
+        ],
+        "test_lines": [],
+        "capability_skip_lines": []
+      },
+      {
+        "argv": [
+          "python3",
+          "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/jar-route-upper-adapted.py"
+        ],
+        "env": {},
+        "exit_code": 0,
+        "stdout": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/jar-upper-routes.stdout",
+        "stderr": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/jar-upper-routes.stderr",
+        "stdout_bytes": 3901,
+        "stderr_bytes": 0,
+        "observed_markers": [
+          "INSTALLED_JDK_DISTINCT_UPDATE_2099_AND_TOUCH_CREATE_2107_ENDPOINTS_OBSERVED_NOT_SDK_PROOF"
+        ],
+        "test_lines": [],
+        "capability_skip_lines": []
+      },
+      {
+        "argv": [
+          "cargo",
+          "run",
+          "--locked",
+          "--offline",
+          "--manifest-path",
+          "/datapool/mantle-store/mr.7p88_pl1/t/store-list-shadow-post-cleanup-v1/Cargo.toml",
+          "--bin",
+          "mantle-current-store-list-shadow-post-cleanup",
+          "--",
+          "/datapool/mantle-store/mr.7p88_pl1/stores/store-list-shadow-post-cleanup-v1"
+        ],
+        "env": {},
+        "exit_code": 0,
+        "stdout": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/store-list-shadow.stdout",
+        "stderr": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/store-list-shadow.stderr",
+        "stdout_bytes": 8729,
+        "stderr_bytes": 476,
+        "observed_markers": [
+          "COMPOSED_LIST_GOOD_NEAR_HIDES_WRONG_PREFIX_FAR_OK",
+          "COMPOSED_LIST_WRONG_PREFIX_NEAR_BLOCKS_GOOD_FAR_OK"
+        ],
+        "test_lines": [],
+        "capability_skip_lines": []
+      },
+      {
+        "argv": [
+          "cargo",
+          "run",
+          "--locked",
+          "--offline",
+          "--manifest-path",
+          "/datapool/mantle-store/mr.7p88_pl1/casita-api/Cargo.toml",
+          "--",
+          "/datapool/mantle-store/mr.7p88_pl1/stores/casita-V4android-store-casita-post-cleanup-v1"
+        ],
+        "env": {},
+        "exit_code": 0,
+        "stdout": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/casita-publication.stdout",
+        "stderr": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/casita-publication.stderr",
+        "stdout_bytes": 1686,
+        "stderr_bytes": 355,
+        "observed_markers": [
+          "CURRENT_CASITA_PUBLICATION_REVOCATION_ACTIONRESULT_AND_GC_SMOKE_OK"
+        ],
+        "test_lines": [],
+        "capability_skip_lines": []
+      },
+      {
+        "argv": [
+          "cargo",
+          "test",
+          "--locked",
+          "--offline",
+          "-p",
+          "crunch-store",
+          "--lib",
+          "handle::tests::overlay_custom_prefix_get_and_list_share_reference_signature_authority",
+          "--",
+          "--exact",
+          "--test-threads=1"
+        ],
+        "env": {},
+        "exit_code": 0,
+        "stdout": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/overlay_custom_prefix_get_and_list_share_reference_signature_authority.stdout",
+        "stderr": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/overlay_custom_prefix_get_and_list_share_reference_signature_authority.stderr",
+        "stdout_bytes": 212,
+        "stderr_bytes": 598,
+        "test_lines": [
+          "test handle::tests::overlay_custom_prefix_get_and_list_share_reference_signature_authority ... ok",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 453 filtered out; finished in 0.16s"
+        ],
+        "capability_skip_lines": []
+      },
+      {
+        "argv": [
+          "cargo",
+          "test",
+          "--locked",
+          "--offline",
+          "-p",
+          "crunch-store",
+          "--lib",
+          "handle::tests::overlay_shadows_base_pathinfo",
+          "--",
+          "--exact",
+          "--test-threads=1"
+        ],
+        "env": {},
+        "exit_code": 0,
+        "stdout": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/overlay_shadows_base_pathinfo.stdout",
+        "stderr": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/overlay_shadows_base_pathinfo.stderr",
+        "stdout_bytes": 171,
+        "stderr_bytes": 409,
+        "test_lines": [
+          "test handle::tests::overlay_shadows_base_pathinfo ... ok",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 453 filtered out; finished in 0.06s"
+        ],
+        "capability_skip_lines": []
+      },
+      {
+        "argv": [
+          "cargo",
+          "test",
+          "--locked",
+          "--offline",
+          "-p",
+          "crunch-store",
+          "--lib",
+          "handle::tests::overlay_two_bases_stack_in_declaration_order",
+          "--",
+          "--exact",
+          "--test-threads=1"
+        ],
+        "env": {},
+        "exit_code": 0,
+        "stdout": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/overlay_two_bases_stack_in_declaration_order.stdout",
+        "stderr": "/datapool/mantle-store/mr.7p88_pl1/V4android-store-casita-post-cleanup-v1/overlay_two_bases_stack_in_declaration_order.stderr",
+        "stdout_bytes": 186,
+        "stderr_bytes": 409,
+        "test_lines": [
+          "test handle::tests::overlay_two_bases_stack_in_declaration_order ... ok",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 453 filtered out; finished in 0.13s"
+        ],
+        "capability_skip_lines": []
+      }
+    ],
+    "state": "complete",
+    "canonical_writes": false,
+    "jar_result": "/datapool/mantle-store/mr.7p88_pl1/t/V4android-store-casita-post-cleanup-v1/jar/jar-route-upper-result.json",
+    "finished": 1792284929.717128,
+    "driver_exit_code": 0
+  },
+  "owned_target_settlement": {
+    "clear": true,
+    "scan_complete_within_5_seconds": true,
+    "unreadable_or_transient": 0,
+    "vanished_proc_entries": 0,
+    "measurement_errors": [],
+    "omitted_measurement_errors": 0,
+    "owned_compilers": [],
+    "existing_target_lock": "available at observation",
+    "scope": "Point owned-root/compiler/exact-target-key check only; no argv/environment persisted, no global/private inventory or descendant/daemon emptiness claim"
+  },
+  "successors": "HELD; no retry/source repair/next leg launched"
+}

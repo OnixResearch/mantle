@@ -1,0 +1,6 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle-cargo-unit-plan v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-cargo-unit-plan)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.68s
+     Running tests/helper.rs (/datapool/mantle-store/mr.7p88_pl1/target/debug/deps/helper-ec8a12398fc7c177)

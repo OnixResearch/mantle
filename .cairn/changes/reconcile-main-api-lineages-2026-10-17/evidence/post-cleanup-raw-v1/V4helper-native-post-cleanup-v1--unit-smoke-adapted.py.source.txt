@@ -1,0 +1,45 @@
+import os,json,pathlib,shutil,subprocess
+R=pathlib.Path('/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1')
+S=R/'stores'/'unit-smoke-current'
+S.mkdir()
+source=S/('a'*32+'-source'); source.mkdir()
+native=S/('b'*32+'-native'); (native/'lib').mkdir(parents=True)
+helper=pathlib.Path(os.environ['CARGO_TARGET_DIR'])/'debug/mantle-cargo-unit-helper'
+rustc=shutil.which('rustc');clang=shutil.which('clang');ar=shutil.which('ar')
+assert helper.is_file() and rustc and clang and ar
+steps=[]
+def run(label,args,extra=None,expect=0):
+    env=os.environ.copy();env.update({k:str(v) for k,v in (extra or {}).items()})
+    p=subprocess.run([str(a) for a in args],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=45)
+    (R/'logs'/('unit-smoke-'+label+'.stdout')).write_bytes(p.stdout)
+    (R/'logs'/('unit-smoke-'+label+'.stderr')).write_bytes(p.stderr)
+    row={'step':label,'command':[str(a) for a in args],'env':{k:str(v) for k,v in (extra or {}).items()},'exit':p.returncode,'stdout_bytes':len(p.stdout),'stderr_bytes':len(p.stderr)}
+    steps.append(row);print(json.dumps(row),flush=True)
+    assert (p.returncode==0 if expect==0 else p.returncode!=0),(label,p.returncode,p.stderr.decode(errors='replace'))
+    return p
+
+def compile(label,out,file,crate,kind,extra=None,direct=None,externs=None,args=None):
+    env={'out':out,'MANTLE_UNIT_RUSTC':rustc,'MANTLE_UNIT_LINKER':clang,'MANTLE_UNIT_SOURCE':source,'MANTLE_UNIT_DEPENDENCIES':json.dumps([str(p) for p in (direct or [])]),'MANTLE_UNIT_EXTERNS':json.dumps({k:str(v) for k,v in (externs or {}).items()}),'MANTLE_UNIT_COMPILE_ENV':'{"CARGO_PKG_VERSION":"0.1.0"}'}
+    env.update(extra or {})
+    return run(label,[helper,'--crate-name='+crate,'--crate-type='+kind,'--edition=2024',*(args or []),source/file],env)
+(source/'answer.c').write_text('int answer(void) { return 42; }\n')
+run('clang',[clang,'-c',source/'answer.c','-o',source/'answer.o'])
+run('archive',[ar,'rcs',native/'lib/libanswer.a',source/'answer.o'])
+(source/'build.rs').write_text('fn main(){assert_eq!(std::env::var("PROFILE").unwrap(),"release");let root=std::env::var("LIBRARY_DIR").expect("declared native input");println!("cargo:rustc-link-search=native={root}/lib");println!("cargo:rustc-link-lib=static=answer");}\n')
+script=S/('c'*32+'-script');compile('compile-script',script,'build.rs','build_script_build','bin')
+version=run('rustc-version',[rustc,'-vV']).stdout.decode();host=next(l[6:] for l in version.splitlines() if l.startswith('host: '))
+facts=S/('d'*32+'-facts');run('target-facts',[helper,'target-facts'],{'out':facts,'MANTLE_UNIT_RUSTC':rustc,'MANTLE_UNIT_TARGET':host,'MANTLE_UNIT_HOST':host})
+out=S/('e'*32+'-run');flags=S/('f'*32+'-flags')
+script_env={'out':out,'flags':flags,'MANTLE_UNIT_SOURCE':source,'MANTLE_UNIT_BUILD_SCRIPT':script,'MANTLE_UNIT_TOOLCHAIN':pathlib.Path(rustc).parent.parent,'MANTLE_UNIT_TARGET_FACTS':facts,'MANTLE_UNIT_SCRIPT_ENV':json.dumps({'PROFILE':'release','OPT_LEVEL':'2','DEBUG':'true','LIBRARY_DIR':str(native)}),'MANTLE_UNIT_SCRIPT_PATH':'[]','MANTLE_UNIT_NATIVE_INPUTS':json.dumps([str(native)]),'MANTLE_UNIT_LINKS_DEPENDENCIES':'[]'}
+run('run-build-script',[helper,'run-build-script'],script_env)
+(source/'lib.rs').write_text('unsafe extern "C" {fn answer()->i32;} pub fn value()->i32{unsafe{answer()}}\n')
+lib=S/('1'*32+'-sys');compile('compile-sys',lib,'lib.rs','sys','rlib',{'MANTLE_UNIT_BUILD_SCRIPT_OUT':out,'MANTLE_UNIT_BUILD_SCRIPT_FLAGS':flags,'MANTLE_UNIT_TARGET_KIND':'lib','MANTLE_UNIT_TARGET_NAME':'sys'})
+(source/'app.rs').write_text('fn main(){println!("current-native-answer={}",sys::value());}\n')
+app=S/('2'*32+'-app');compile('compile-app',app,'app.rs','app','bin',{'MANTLE_UNIT_TRANSITIVE_FLAGS':json.dumps([str(flags)])},[lib],{'sys':lib})
+actual=run('execute-app',[app/'lib/app']);assert actual.stdout==b'current-native-answer=42\n';print(actual.stdout.decode(),end='')
+missing=dict(script_env,out=S/('3'*32+'-missing-run'),flags=S/('4'*32+'-missing-flags'),MANTLE_UNIT_NATIVE_INPUTS='[]',MANTLE_UNIT_SCRIPT_ENV='{"PROFILE":"release"}')
+p=run('missing-native',[helper,'run-build-script'],missing,expect=1);assert b'build-script-nonzero-exit' in p.stderr and not pathlib.Path(missing['flags']).exists()
+(source/'quoted.rs').write_text('#[cfg(not(feature="quoted"))] compile_error!("quoted cfg lost");pub fn quoted()->u8{42}\n')
+compile('quoted-response',S/('5'*32+'-quoted'),'quoted.rs','quoted','rlib',args=['--cfg','feature="quoted"'])
+(R/'unit-smoke-steps.json').write_text(json.dumps(steps,indent=2)+'\n')
+print('CURRENT_HELPER_NATIVE_QUOTED_AND_NEGATIVE_SMOKE_OK')

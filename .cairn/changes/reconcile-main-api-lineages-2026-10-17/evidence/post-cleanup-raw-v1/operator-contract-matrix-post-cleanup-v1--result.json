@@ -1,0 +1,127 @@
+{
+  "attempt": "operator-contract-matrix-post-cleanup-v1",
+  "started": 1792284097.7412066,
+  "commands": [
+    {
+      "argv": [
+        "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle",
+        "__operator-contract",
+        "--mode",
+        "check"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/root-mode-check.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/root-mode-check.stderr",
+      "stdout_bytes": 47,
+      "stderr_bytes": 0
+    },
+    {
+      "argv": [
+        "./scripts/check-operator-command-contract.sh"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/operator-contract-script.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/operator-contract-script.stderr",
+      "stdout_bytes": 99,
+      "stderr_bytes": 0
+    },
+    {
+      "argv": [
+        "nickel",
+        "typecheck",
+        "examples/rust_compatibility_surface_matrix.ncl"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/matrix-typecheck.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/matrix-typecheck.stderr",
+      "stdout_bytes": 0,
+      "stderr_bytes": 0
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "examples/rust_compatibility_surface_matrix.ncl"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/matrix-export.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/matrix-export.stderr",
+      "stdout_bytes": 11282,
+      "stderr_bytes": 0
+    }
+  ],
+  "canonical_writes": false,
+  "state": "complete",
+  "CARGO_NET_OFFLINE": "true",
+  "script_stdout": "operator command contract generator self-test: PASS\noperator command contract: PASS (commands=184)\n",
+  "matrix_selected_rows": [
+    {
+      "id": "native-link-metadata",
+      "native_rust_plan": {
+        "blockers": [],
+        "evidence_class": "unexercised-no-cargo-oracle-surface",
+        "fixtures": [],
+        "status": "out_of_scope"
+      },
+      "non_claims": [
+        "not-native-c-in-build-script",
+        "not-native-link-probing-correctness",
+        "not-full-cargo-compatibility"
+      ],
+      "offline_cargo": {
+        "blockers": [],
+        "evidence_class": "unexercised-real-cargo-compilation",
+        "fixtures": [],
+        "status": "out_of_scope"
+      },
+      "title": "declared links/pkg-config/rustc-link metadata with a prebuilt native provider",
+      "unit_plan": {
+        "blockers": [],
+        "evidence_class": "cargo-unit-graph-dynamic-plan",
+        "fixtures": [
+          "scripts/rust-unit-plan-build-script-replay/replay.sh",
+          "scripts/rust-unit-plan-build-script-replay/libbz2.ncl"
+        ],
+        "status": "supported"
+      }
+    },
+    {
+      "id": "declared-native-static-link",
+      "native_rust_plan": {
+        "blockers": [],
+        "evidence_class": "unexercised-declared-native-provider",
+        "fixtures": [],
+        "status": "out_of_scope"
+      },
+      "non_claims": [
+        "not-pkg-config-execution",
+        "not-native-c-in-build-script",
+        "not-links-dep-metadata-consumption",
+        "not-native-link-probing-correctness",
+        "not-full-cargo-compatibility"
+      ],
+      "offline_cargo": {
+        "blockers": [],
+        "evidence_class": "unexercised-real-cargo-compilation",
+        "fixtures": [],
+        "status": "out_of_scope"
+      },
+      "title": "declared prebuilt C-provider static linking through a links package",
+      "unit_plan": {
+        "blockers": [],
+        "evidence_class": "signed-app42-declared-static-provider-selective-rerun",
+        "fixtures": [
+          "fixtures/cargo-build-script-units/Cargo.toml",
+          ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14.md",
+          ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15.md"
+        ],
+        "status": "supported"
+      }
+    }
+  ],
+  "matrix_marker": "CURRENT_PINNED_NICKEL_MATRIX_EVALUATION_AND_CLAIM_CONTRACT_OK; REFERENCED_FIXTURE_REPLAYS_NOT_EXECUTED",
+  "finished": 1792284099.3155475,
+  "driver_exit_code": 0
+}

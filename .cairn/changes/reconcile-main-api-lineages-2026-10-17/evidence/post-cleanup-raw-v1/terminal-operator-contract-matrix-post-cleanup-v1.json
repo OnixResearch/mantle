@@ -1,0 +1,170 @@
+{
+  "attempt": "operator-contract-matrix-post-cleanup-v1",
+  "task_id": 3,
+  "source_head": "034a2dbb016a925c6afa452efa75dfc423df28d5",
+  "source_binding_blake3": "8d73114ffd5669121a3a727ca1157b704b0dc6f1f4c56a88221b424f19006209",
+  "pueue_task": {
+    "id": 3,
+    "group": "default",
+    "label": "operator-contract-matrix-post-cleanup-v1",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-10-17T20:41:17.627295345-04:00",
+        "start": "2026-10-17T20:41:17.842073377-04:00",
+        "end": "2026-10-17T20:41:40.137814736-04:00",
+        "result": "Success"
+      }
+    },
+    "path": "/home/brittonr/git/OnixResearch/mantle",
+    "command": "NIX_CONFIG=\"${NIX_CONFIG-}\"'\neval-cache = false\n' /nix/store/b5bpi6zfajzzrwwpgba2q6li3nnya4bs-python3-3.14.7/bin/python3.14 -I -B -S /datapool/mantle-store/mr.7p88_pl1/run-leg-shared-pool-v3.py offline operator-contract-matrix-post-cleanup-v1 operator-contract-matrix-post-cleanup-v1.sh"
+  },
+  "resource_stop": null,
+  "child_exit_code": 0,
+  "resource_final": {
+    "free": 41798205440,
+    "target": 9331709440,
+    "temp": 265415168,
+    "metadata": 2562048,
+    "shared_pool_growth": 82894782464
+  },
+  "remaining_to_unchanged_stop_bytes": 857079808,
+  "driver_result": {
+    "attempt": "operator-contract-matrix-post-cleanup-v1",
+    "started": 1792284097.7412066,
+    "commands": [
+      {
+        "argv": [
+          "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle",
+          "__operator-contract",
+          "--mode",
+          "check"
+        ],
+        "exit_code": 0,
+        "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/root-mode-check.stdout",
+        "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/root-mode-check.stderr",
+        "stdout_bytes": 47,
+        "stderr_bytes": 0
+      },
+      {
+        "argv": [
+          "./scripts/check-operator-command-contract.sh"
+        ],
+        "exit_code": 0,
+        "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/operator-contract-script.stdout",
+        "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/operator-contract-script.stderr",
+        "stdout_bytes": 99,
+        "stderr_bytes": 0
+      },
+      {
+        "argv": [
+          "nickel",
+          "typecheck",
+          "examples/rust_compatibility_surface_matrix.ncl"
+        ],
+        "exit_code": 0,
+        "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/matrix-typecheck.stdout",
+        "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/matrix-typecheck.stderr",
+        "stdout_bytes": 0,
+        "stderr_bytes": 0
+      },
+      {
+        "argv": [
+          "nickel",
+          "export",
+          "--format",
+          "json",
+          "examples/rust_compatibility_surface_matrix.ncl"
+        ],
+        "exit_code": 0,
+        "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/matrix-export.stdout",
+        "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-contract-matrix-post-cleanup-v1/matrix-export.stderr",
+        "stdout_bytes": 11282,
+        "stderr_bytes": 0
+      }
+    ],
+    "canonical_writes": false,
+    "state": "complete",
+    "CARGO_NET_OFFLINE": "true",
+    "script_stdout": "operator command contract generator self-test: PASS\noperator command contract: PASS (commands=184)\n",
+    "matrix_selected_rows": [
+      {
+        "id": "native-link-metadata",
+        "native_rust_plan": {
+          "blockers": [],
+          "evidence_class": "unexercised-no-cargo-oracle-surface",
+          "fixtures": [],
+          "status": "out_of_scope"
+        },
+        "non_claims": [
+          "not-native-c-in-build-script",
+          "not-native-link-probing-correctness",
+          "not-full-cargo-compatibility"
+        ],
+        "offline_cargo": {
+          "blockers": [],
+          "evidence_class": "unexercised-real-cargo-compilation",
+          "fixtures": [],
+          "status": "out_of_scope"
+        },
+        "title": "declared links/pkg-config/rustc-link metadata with a prebuilt native provider",
+        "unit_plan": {
+          "blockers": [],
+          "evidence_class": "cargo-unit-graph-dynamic-plan",
+          "fixtures": [
+            "scripts/rust-unit-plan-build-script-replay/replay.sh",
+            "scripts/rust-unit-plan-build-script-replay/libbz2.ncl"
+          ],
+          "status": "supported"
+        }
+      },
+      {
+        "id": "declared-native-static-link",
+        "native_rust_plan": {
+          "blockers": [],
+          "evidence_class": "unexercised-declared-native-provider",
+          "fixtures": [],
+          "status": "out_of_scope"
+        },
+        "non_claims": [
+          "not-pkg-config-execution",
+          "not-native-c-in-build-script",
+          "not-links-dep-metadata-consumption",
+          "not-native-link-probing-correctness",
+          "not-full-cargo-compatibility"
+        ],
+        "offline_cargo": {
+          "blockers": [],
+          "evidence_class": "unexercised-real-cargo-compilation",
+          "fixtures": [],
+          "status": "out_of_scope"
+        },
+        "title": "declared prebuilt C-provider static linking through a links package",
+        "unit_plan": {
+          "blockers": [],
+          "evidence_class": "signed-app42-declared-static-provider-selective-rerun",
+          "fixtures": [
+            "fixtures/cargo-build-script-units/Cargo.toml",
+            ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t41-signed-app-2026-10-14.md",
+            ".cairn/changes/run-cargo-build-scripts-as-plan-units/evidence/t42-selective-provider-2026-10-15.md"
+          ],
+          "status": "supported"
+        }
+      }
+    ],
+    "matrix_marker": "CURRENT_PINNED_NICKEL_MATRIX_EVALUATION_AND_CLAIM_CONTRACT_OK; REFERENCED_FIXTURE_REPLAYS_NOT_EXECUTED",
+    "finished": 1792284099.3155475,
+    "driver_exit_code": 0
+  },
+  "owned_target_settlement": {
+    "clear": true,
+    "scan_complete_within_5_seconds": true,
+    "unreadable_or_transient": 0,
+    "vanished_proc_entries": 1,
+    "measurement_errors": [],
+    "omitted_measurement_errors": 0,
+    "owned_compilers": [],
+    "existing_target_lock": "available at observation",
+    "scope": "Point owned-root/compiler/exact-target-key check only; no argv/environment persisted, no global/private inventory or descendant/daemon emptiness claim"
+  },
+  "successors": "HELD; no behavior leg or additional gate launched"
+}

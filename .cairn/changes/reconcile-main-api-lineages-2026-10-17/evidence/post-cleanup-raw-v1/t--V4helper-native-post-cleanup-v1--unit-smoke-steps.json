@@ -1,0 +1,205 @@
+[
+  {
+    "step": "clang",
+    "command": [
+      "/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8/bin/clang",
+      "-c",
+      "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source/answer.c",
+      "-o",
+      "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source/answer.o"
+    ],
+    "env": {},
+    "exit": 0,
+    "stdout_bytes": 0,
+    "stderr_bytes": 0
+  },
+  {
+    "step": "archive",
+    "command": [
+      "/nix/store/hb2bs5fg5wkm04x565737qd5nh2hy5nk-gcc-wrapper-15.2.0/bin/ar",
+      "rcs",
+      "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-native/lib/libanswer.a",
+      "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source/answer.o"
+    ],
+    "env": {},
+    "exit": 0,
+    "stdout_bytes": 0,
+    "stderr_bytes": 0
+  },
+  {
+    "step": "compile-script",
+    "command": [
+      "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-cargo-unit-helper",
+      "--crate-name=build_script_build",
+      "--crate-type=bin",
+      "--edition=2024",
+      "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source/build.rs"
+    ],
+    "env": {
+      "out": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/cccccccccccccccccccccccccccccccc-script",
+      "MANTLE_UNIT_RUSTC": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+      "MANTLE_UNIT_LINKER": "/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8/bin/clang",
+      "MANTLE_UNIT_SOURCE": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source",
+      "MANTLE_UNIT_DEPENDENCIES": "[]",
+      "MANTLE_UNIT_EXTERNS": "{}",
+      "MANTLE_UNIT_COMPILE_ENV": "{\"CARGO_PKG_VERSION\":\"0.1.0\"}"
+    },
+    "exit": 0,
+    "stdout_bytes": 0,
+    "stderr_bytes": 0
+  },
+  {
+    "step": "rustc-version",
+    "command": [
+      "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+      "-vV"
+    ],
+    "env": {},
+    "exit": 0,
+    "stdout_bytes": 212,
+    "stderr_bytes": 0
+  },
+  {
+    "step": "target-facts",
+    "command": [
+      "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-cargo-unit-helper",
+      "target-facts"
+    ],
+    "env": {
+      "out": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/dddddddddddddddddddddddddddddddd-facts",
+      "MANTLE_UNIT_RUSTC": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+      "MANTLE_UNIT_TARGET": "x86_64-unknown-linux-gnu",
+      "MANTLE_UNIT_HOST": "x86_64-unknown-linux-gnu"
+    },
+    "exit": 0,
+    "stdout_bytes": 0,
+    "stderr_bytes": 0
+  },
+  {
+    "step": "run-build-script",
+    "command": [
+      "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-cargo-unit-helper",
+      "run-build-script"
+    ],
+    "env": {
+      "out": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee-run",
+      "flags": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/ffffffffffffffffffffffffffffffff-flags",
+      "MANTLE_UNIT_SOURCE": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source",
+      "MANTLE_UNIT_BUILD_SCRIPT": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/cccccccccccccccccccccccccccccccc-script",
+      "MANTLE_UNIT_TOOLCHAIN": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08",
+      "MANTLE_UNIT_TARGET_FACTS": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/dddddddddddddddddddddddddddddddd-facts",
+      "MANTLE_UNIT_SCRIPT_ENV": "{\"PROFILE\": \"release\", \"OPT_LEVEL\": \"2\", \"DEBUG\": \"true\", \"LIBRARY_DIR\": \"/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-native\"}",
+      "MANTLE_UNIT_SCRIPT_PATH": "[]",
+      "MANTLE_UNIT_NATIVE_INPUTS": "[\"/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-native\"]",
+      "MANTLE_UNIT_LINKS_DEPENDENCIES": "[]"
+    },
+    "exit": 0,
+    "stdout_bytes": 0,
+    "stderr_bytes": 0
+  },
+  {
+    "step": "compile-sys",
+    "command": [
+      "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-cargo-unit-helper",
+      "--crate-name=sys",
+      "--crate-type=rlib",
+      "--edition=2024",
+      "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source/lib.rs"
+    ],
+    "env": {
+      "out": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/11111111111111111111111111111111-sys",
+      "MANTLE_UNIT_RUSTC": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+      "MANTLE_UNIT_LINKER": "/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8/bin/clang",
+      "MANTLE_UNIT_SOURCE": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source",
+      "MANTLE_UNIT_DEPENDENCIES": "[]",
+      "MANTLE_UNIT_EXTERNS": "{}",
+      "MANTLE_UNIT_COMPILE_ENV": "{\"CARGO_PKG_VERSION\":\"0.1.0\"}",
+      "MANTLE_UNIT_BUILD_SCRIPT_OUT": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee-run",
+      "MANTLE_UNIT_BUILD_SCRIPT_FLAGS": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/ffffffffffffffffffffffffffffffff-flags",
+      "MANTLE_UNIT_TARGET_KIND": "lib",
+      "MANTLE_UNIT_TARGET_NAME": "sys"
+    },
+    "exit": 0,
+    "stdout_bytes": 0,
+    "stderr_bytes": 0
+  },
+  {
+    "step": "compile-app",
+    "command": [
+      "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-cargo-unit-helper",
+      "--crate-name=app",
+      "--crate-type=bin",
+      "--edition=2024",
+      "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source/app.rs"
+    ],
+    "env": {
+      "out": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/22222222222222222222222222222222-app",
+      "MANTLE_UNIT_RUSTC": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+      "MANTLE_UNIT_LINKER": "/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8/bin/clang",
+      "MANTLE_UNIT_SOURCE": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source",
+      "MANTLE_UNIT_DEPENDENCIES": "[\"/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/11111111111111111111111111111111-sys\"]",
+      "MANTLE_UNIT_EXTERNS": "{\"sys\": \"/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/11111111111111111111111111111111-sys\"}",
+      "MANTLE_UNIT_COMPILE_ENV": "{\"CARGO_PKG_VERSION\":\"0.1.0\"}",
+      "MANTLE_UNIT_TRANSITIVE_FLAGS": "[\"/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/ffffffffffffffffffffffffffffffff-flags\"]"
+    },
+    "exit": 0,
+    "stdout_bytes": 0,
+    "stderr_bytes": 0
+  },
+  {
+    "step": "execute-app",
+    "command": [
+      "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/22222222222222222222222222222222-app/lib/app"
+    ],
+    "env": {},
+    "exit": 0,
+    "stdout_bytes": 25,
+    "stderr_bytes": 0
+  },
+  {
+    "step": "missing-native",
+    "command": [
+      "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-cargo-unit-helper",
+      "run-build-script"
+    ],
+    "env": {
+      "out": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/33333333333333333333333333333333-missing-run",
+      "flags": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/44444444444444444444444444444444-missing-flags",
+      "MANTLE_UNIT_SOURCE": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source",
+      "MANTLE_UNIT_BUILD_SCRIPT": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/cccccccccccccccccccccccccccccccc-script",
+      "MANTLE_UNIT_TOOLCHAIN": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08",
+      "MANTLE_UNIT_TARGET_FACTS": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/dddddddddddddddddddddddddddddddd-facts",
+      "MANTLE_UNIT_SCRIPT_ENV": "{\"PROFILE\":\"release\"}",
+      "MANTLE_UNIT_SCRIPT_PATH": "[]",
+      "MANTLE_UNIT_NATIVE_INPUTS": "[]",
+      "MANTLE_UNIT_LINKS_DEPENDENCIES": "[]"
+    },
+    "exit": 1,
+    "stdout_bytes": 0,
+    "stderr_bytes": 344
+  },
+  {
+    "step": "quoted-response",
+    "command": [
+      "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-cargo-unit-helper",
+      "--crate-name=quoted",
+      "--crate-type=rlib",
+      "--edition=2024",
+      "--cfg",
+      "feature=\"quoted\"",
+      "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source/quoted.rs"
+    ],
+    "env": {
+      "out": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/55555555555555555555555555555555-quoted",
+      "MANTLE_UNIT_RUSTC": "/nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08/bin/rustc",
+      "MANTLE_UNIT_LINKER": "/nix/store/hh6y3s72d21whp6q98h4dh0valxiaw69-clang-wrapper-21.1.8/bin/clang",
+      "MANTLE_UNIT_SOURCE": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/stores/unit-smoke-current/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source",
+      "MANTLE_UNIT_DEPENDENCIES": "[]",
+      "MANTLE_UNIT_EXTERNS": "{}",
+      "MANTLE_UNIT_COMPILE_ENV": "{\"CARGO_PKG_VERSION\":\"0.1.0\"}"
+    },
+    "exit": 0,
+    "stdout_bytes": 0,
+    "stderr_bytes": 0
+  }
+]

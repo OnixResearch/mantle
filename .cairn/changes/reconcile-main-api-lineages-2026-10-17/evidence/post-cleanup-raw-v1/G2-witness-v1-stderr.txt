@@ -1,0 +1,3 @@
+this derivation will be built:
+  /nix/store/kp5nix21zhcil1lsn2m56scdpphsbmj4-mantle-g2-host-scratch-mount-witness-postcleanup-v1.drv
+building '/nix/store/kp5nix21zhcil1lsn2m56scdpphsbmj4-mantle-g2-host-scratch-mount-witness-postcleanup-v1.drv'...

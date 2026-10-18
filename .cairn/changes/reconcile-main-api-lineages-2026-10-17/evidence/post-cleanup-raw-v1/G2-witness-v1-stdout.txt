@@ -1,0 +1,1 @@
+[{"drvPath":"/nix/store/kp5nix21zhcil1lsn2m56scdpphsbmj4-mantle-g2-host-scratch-mount-witness-postcleanup-v1.drv","outputs":{"out":"/nix/store/pskg5p4rnr97ik6wc1l4wlic9qk66jlr-mantle-g2-host-scratch-mount-witness-postcleanup-v1"}}]

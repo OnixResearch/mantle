@@ -1,0 +1,126 @@
+use std::{path::{Path,PathBuf},error::Error};
+use crunch_store::{StoreHandle,StoreConfig,StoreBackend};
+use nix_compat::{store_path::{StorePath,StorePathRef},narinfo::{SigningKey,VerifyingKey,fingerprint_with_store_dir}};
+use snix_store::{path_info::PathInfo,nar::{SimpleRenderer,NarCalculationService}};
+use snix_castore::{Node,SymlinkTarget};
+use futures::StreamExt;
+const PREFIX:&str="/mantle/store";
+fn freeze(path:&Path)->Result<(),Box<dyn Error+Send+Sync>>{
+    for entry in std::fs::read_dir(path)? {let p=entry?.path();if p.is_dir(){freeze(&p)?;}else{let mut mode=std::fs::metadata(&p)?.permissions();mode.set_readonly(true);std::fs::set_permissions(p,mode)?;}}
+    let mut mode=std::fs::metadata(path)?.permissions();mode.set_readonly(true);std::fs::set_permissions(path,mode)?;Ok(())
+}
+async fn scenario(root:&Path,wrong_prefix:bool)->Result<(),Box<dyn Error+Send+Sync>>{
+    let base=root.join("base-state");let near=root.join("near-state");
+    std::fs::create_dir_all(&base)?;std::fs::create_dir_all(&near)?;
+    let raw=ed25519_dalek::SigningKey::from_bytes(&[71;32]);
+    let verifier=VerifyingKey::new("current-prefix-smoke".into(),raw.verifying_key());
+    let signer=SigningKey::new("current-prefix-smoke".into(),raw);
+    for state in [&base,&near]{std::fs::write(state.join("overlay-trusted-public-keys"),format!("{verifier}\n"))?;}
+    let mut store=StoreHandle::open(StoreConfig::new(StoreBackend::Snix,base.clone(),root.join("base-out"),PREFIX.into())).await?;
+    let reference=StorePath::from_name_and_digest_fixed("current-reference",[32;20])?;
+    let primary=StorePath::from_name_and_digest_fixed("current-primary",[31;20])?;
+    let mut expected=None;
+    for (path,refs) in [(reference.clone(),vec![]),(primary.clone(),vec![reference.clone()])]{
+        let node=Node::Symlink{target:SymlinkTarget::try_from("current-target")?};
+        let (nar_size,nar_sha256)=SimpleRenderer::new(store.blob_service(),store.directory_service()).calculate_nar(&node).await?;
+        let mut info=PathInfo{store_path:path,node,references:refs,nar_size,nar_sha256,signatures:vec![],deriver:None,ca:None};
+        if wrong_prefix{let refs:Vec<StorePathRef>=info.references.iter().map(|r|r.as_ref()).collect();let fp=fingerprint_with_store_dir(&info.store_path.as_ref(),&info.nar_sha256,info.nar_size,refs.iter(),"/nix/store");info.signatures.push(signer.sign(fp.as_bytes()).to_owned());}
+        if info.store_path==primary{expected=Some(info.clone());}
+        store.pathinfo_service().put(info).await?;
+    }
+    if !wrong_prefix{
+        let signed=store.store_admin().sign_pathinfos(&signer,None,true).await?;
+        println!("SELECTED_PREFIX_ADMIN_SIGN={signed:?}");
+        let verified=store.store_admin().verify_pathinfo_signatures(None,&[verifier]).await?;
+        println!("SELECTED_PREFIX_BASE_VERIFY={verified:?}");
+        assert_eq!(verified.len(),2);assert!(verified.iter().all(|r|r.is_trusted()));
+        expected=store.pathinfo_service().get(*primary.digest()).await?;
+    }
+    drop(store);freeze(&base)?;
+    let composed=StoreHandle::open_overlay(StoreConfig::new(StoreBackend::Snix,near,root.join("near-out"),PREFIX.into()).with_base_state_dirs(vec![base])).await?;
+    let raw_get=composed.pathinfo_service().get(*primary.digest()).await;
+    println!("RAW_SERVICE_GET wrong_prefix={wrong_prefix}: {raw_get:?}");
+    let raw_reference_get=composed.pathinfo_service().get(*reference.digest()).await;
+    println!("RAW_REFERENCE_GET wrong_prefix={wrong_prefix}: {raw_reference_get:?}");
+    let raw_list=composed.pathinfo_service().list().collect::<Vec<_>>().await;
+    println!("RAW_SERVICE_LIST wrong_prefix={wrong_prefix}: {raw_list:?}");
+    let layered_get=composed.path_info_with_layer(&primary).await;
+    println!("PUBLIC_LAYERED_GET wrong_prefix={wrong_prefix}: {layered_get:?}");
+    let layered_reference_get=composed.path_info_with_layer(&reference).await;
+    println!("PUBLIC_LAYERED_REFERENCE_GET wrong_prefix={wrong_prefix}: {layered_reference_get:?}");
+    let layered_list=composed.list_pathinfos_with_layer().await;
+    println!("PUBLIC_LAYERED_LIST wrong_prefix={wrong_prefix}: {layered_list:?}");
+    if wrong_prefix{
+        assert!(raw_get.is_err());assert!(raw_reference_get.is_err());assert!(raw_list.is_empty());assert!(layered_get.is_err());assert!(layered_reference_get.is_err());assert!(layered_list.is_err());
+        println!("WRONG_PREFIX_SIGNATURE_REJECTED_AT_GET_AND_LIST");
+    }else{
+        let got=raw_get.map_err(|e|format!("VALID_SAME_PREFIX_RAW_GET_REJECTED: {e}"))?.ok_or("valid same-prefix entry absent")?;
+        assert_eq!(got,expected.ok_or("missing fixture PathInfo")?);
+        assert_eq!(got.references,vec![reference.clone()]);
+        let reference_got=raw_reference_get?.ok_or("valid selected-prefix reference absent")?;assert_eq!(reference_got.store_path,reference);assert!(reference_got.references.is_empty());
+        assert!(raw_list.is_empty(),"raw cache list is intentionally near-only and no-backfill reads must not populate it");
+        let layered=layered_get?.ok_or("layered entry absent")?;assert_eq!(layered.value,got);
+        let layered_reference=layered_reference_get?.ok_or("layered reference absent")?;assert_eq!(layered_reference.value,reference_got);
+        let rows=layered_list?;assert_eq!(rows.len(),2);assert!(rows.iter().any(|r|r.value==got));assert!(rows.iter().any(|r|r.value==reference_got));
+        println!("VALID_SELECTED_PREFIX_GET_LIST_AND_REFERENCES_OK");
+    }
+    Ok(())
+}
+async fn list_shadow_scenario(root:&Path,wrong_near:bool)->Result<(),Box<dyn Error+Send+Sync>>{
+    let base=root.join("base-state");let near=root.join("near-state");
+    std::fs::create_dir_all(&base)?;std::fs::create_dir_all(&near)?;
+    let raw=ed25519_dalek::SigningKey::from_bytes(&[71;32]);
+    let verifier=VerifyingKey::new("current-prefix-smoke".into(),raw.verifying_key());
+    let signer=SigningKey::new("current-prefix-smoke".into(),raw);
+    let primary=StorePath::from_name_and_digest_fixed("current-list-shadow",[33;20])?;
+    let mut expected_near=None;
+    for (state,target,wrong_prefix) in [(&near,"near-current-target",wrong_near),(&base,"far-current-target",!wrong_near)]{
+        std::fs::write(state.join("overlay-trusted-public-keys"),format!("{verifier}\n"))?;
+        let mut store=StoreHandle::open(StoreConfig::new(StoreBackend::Snix,state.clone(),state.join("export"),PREFIX.into())).await?;
+        let node=Node::Symlink{target:SymlinkTarget::try_from(target)?};
+        let (nar_size,nar_sha256)=SimpleRenderer::new(store.blob_service(),store.directory_service()).calculate_nar(&node).await?;
+        let mut info=PathInfo{store_path:primary.clone(),node,references:vec![],nar_size,nar_sha256,signatures:vec![],deriver:None,ca:None};
+        if wrong_prefix{
+            let refs:Vec<StorePathRef>=info.references.iter().map(|r|r.as_ref()).collect();
+            let fp=fingerprint_with_store_dir(&info.store_path.as_ref(),&info.nar_sha256,info.nar_size,refs.iter(),"/nix/store");
+            info.signatures.push(signer.sign(fp.as_bytes()).to_owned());
+        }
+        store.pathinfo_service().put(info).await?;
+        if !wrong_prefix{
+            store.store_admin().sign_pathinfos(&signer,None,true).await?;
+            let verified=store.store_admin().verify_pathinfo_signatures(None,&[verifier.clone()]).await?;
+            assert_eq!(verified.len(),1);assert!(verified[0].is_trusted());
+            if state==&near{expected_near=store.pathinfo_service().get(*primary.digest()).await?;}
+        }
+    }
+    freeze(&base)?;
+    let composed=StoreHandle::open_overlay(StoreConfig::new(StoreBackend::Snix,near,root.join("near-out"),PREFIX.into()).with_base_state_dirs(vec![base])).await?;
+    let listed=composed.list_pathinfos_with_layer().await;
+    if wrong_near{
+        let error=listed.expect_err("visible wrong-prefix near record must block the good far duplicate");
+        assert!(error.to_string().contains(&format!("overlay-layer-trust-failure for {primary}")),"{error}");
+        println!("COMPOSED_LIST_WRONG_PREFIX_NEAR_BLOCKS_GOOD_FAR_OK error={error}");
+    }else{
+        let rows=listed?;
+        let matching:Vec<_>=rows.iter().filter(|row|row.value.store_path==primary).collect();
+        assert_eq!(matching.len(),1);
+        let selected=matching[0];
+        assert_eq!(selected.value,expected_near.ok_or("missing signed near fixture PathInfo")?);
+        assert_eq!(selected.value.node,Node::Symlink{target:SymlinkTarget::try_from("near-current-target")?});
+        assert_eq!(selected.layer,crunch_store::layer::StoreLayer::Overlay);
+        assert_eq!(selected.shadows,vec![crunch_store::layer::LayerShadowObservation{
+            layer:crunch_store::layer::StoreLayer::Base{index:1},
+            status:crunch_store::layer::LayerShadowStatus::Conflicting,
+        }]);
+        println!("COMPOSED_LIST_GOOD_NEAR_HIDES_WRONG_PREFIX_FAR_OK selected={selected:?}");
+    }
+    Ok(())
+}
+
+#[tokio::main]
+async fn main(){
+    let root=PathBuf::from(std::env::args().nth(1).expect("fresh fixture path"));
+    assert!(!root.exists(),"never reuse fixture root");std::fs::create_dir(&root).expect("create fixture");
+    let result=async{scenario(&root.join("same"),false).await?;scenario(&root.join("wrong"),true).await?;list_shadow_scenario(&root.join("good-near"),false).await?;list_shadow_scenario(&root.join("wrong-near"),true).await?;Ok::<(),Box<dyn Error+Send+Sync>>(())}.await;
+    match result{Ok(())=>println!("CURRENT_SELECTED_PREFIX_SERVICE_SMOKE_OK"),Err(e)=>{eprintln!("CURRENT_SELECTED_PREFIX_SERVICE_SMOKE_FAILED: {e:?}");std::process::exit(42);}}
+}

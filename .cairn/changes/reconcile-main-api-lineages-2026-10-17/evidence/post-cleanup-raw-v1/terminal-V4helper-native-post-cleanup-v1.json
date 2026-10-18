@@ -1,0 +1,120 @@
+{
+  "attempt": "V4helper-native-post-cleanup-v1",
+  "task_id": 4,
+  "source_head": "034a2dbb016a925c6afa452efa75dfc423df28d5",
+  "source_binding_blake3": "91e664eca5ccbab46b3bfe36d0c826fbc880f346c471d183db7654cc1c6860cc",
+  "pueue_task": {
+    "id": 4,
+    "group": "default",
+    "label": "V4helper-native-post-cleanup-v1",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-10-17T20:50:03.873840023-04:00",
+        "start": "2026-10-17T20:50:04.149361142-04:00",
+        "end": "2026-10-17T20:50:32.770444710-04:00",
+        "result": "Success"
+      }
+    },
+    "path": "/home/brittonr/git/OnixResearch/mantle",
+    "command": "NIX_CONFIG=\"${NIX_CONFIG-}\"'\neval-cache = false\n' /nix/store/b5bpi6zfajzzrwwpgba2q6li3nnya4bs-python3-3.14.7/bin/python3.14 -I -B -S /datapool/mantle-store/mr.7p88_pl1/run-leg-shared-pool-v3.py offline V4helper-native-post-cleanup-v1 V4helper-native-post-cleanup-v1.sh"
+  },
+  "resource_stop": null,
+  "child_exit_code": 0,
+  "resource_final": {
+    "free": 41806856192,
+    "target": 9310693376,
+    "temp": 268762112,
+    "metadata": 2703872,
+    "shared_pool_growth": 82886131712
+  },
+  "remaining_to_unchanged_stop_bytes": 865730560,
+  "driver_result": {
+    "attempt": "V4helper-native-post-cleanup-v1",
+    "started": 1792284623.356311,
+    "commands": [
+      {
+        "argv": [
+          "cargo",
+          "build",
+          "--locked",
+          "--offline",
+          "-p",
+          "mantle-cargo-unit-plan",
+          "--bin",
+          "mantle-cargo-unit-helper"
+        ],
+        "exit_code": 0,
+        "stdout": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/helper-build.stdout",
+        "stderr": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/helper-build.stderr",
+        "stdout_bytes": 0,
+        "stderr_bytes": 403
+      },
+      {
+        "argv": [
+          "python3",
+          "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/unit-smoke-adapted.py"
+        ],
+        "exit_code": 0,
+        "stdout": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/helper-native-smoke.stdout",
+        "stderr": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/helper-native-smoke.stderr",
+        "stdout_bytes": 9879,
+        "stderr_bytes": 0
+      },
+      {
+        "argv": [
+          "cargo",
+          "test",
+          "--locked",
+          "--offline",
+          "-p",
+          "mantle-cargo-unit-plan",
+          "--test",
+          "helper",
+          "build_script_cannot_probe_network_or_undeclared_host_path_in_native_namespace",
+          "--",
+          "--exact",
+          "--nocapture",
+          "--test-threads",
+          "1"
+        ],
+        "exit_code": 0,
+        "stdout": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/namespace-fixture.stdout",
+        "stderr": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/namespace-fixture.stderr",
+        "stdout_bytes": 202,
+        "stderr_bytes": 512
+      }
+    ],
+    "state": "complete",
+    "payload_root": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1",
+    "canonical_writes": false,
+    "helper_binary": {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-cargo-unit-helper",
+      "bytes": 16724736,
+      "mtime_ns": 1792284627662164572,
+      "blake3": "8b29e07bb2a0a6109fb35be16d67ee3a3b81feb589cf93b7ff3254b9f46f5d09"
+    },
+    "adaptation": "Only R destination and helper binding changed; all original assertions/commands/env retained. Payloads and per-step files stay under original t accounting.",
+    "smoke_steps": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/unit-smoke-steps.json",
+    "smoke_marker": "CURRENT_HELPER_NATIVE_QUOTED_AND_NEGATIVE_SMOKE_OK",
+    "namespace_test_lines": [
+      "test build_script_cannot_probe_network_or_undeclared_host_path_in_native_namespace ... ok",
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.20s"
+    ],
+    "namespace_capability_skipped": false,
+    "namespace_actual_body_passed": true,
+    "finished": 1792284631.084089,
+    "driver_exit_code": 0
+  },
+  "owned_target_settlement": {
+    "clear": true,
+    "scan_complete_within_5_seconds": true,
+    "unreadable_or_transient": 0,
+    "vanished_proc_entries": 1,
+    "measurement_errors": [],
+    "omitted_measurement_errors": 0,
+    "owned_compilers": [],
+    "existing_target_lock": "available at observation",
+    "scope": "Point owned-root/compiler/exact-target-key check only; no argv/environment persisted, no global/private inventory or descendant/daemon emptiness claim"
+  },
+  "successors": "HELD; no additional V4/quality/Cairn leg launched; peer-owned temporary store-list preparation untouched"
+}

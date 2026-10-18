@@ -1,10 +1,6 @@
 {
   "schema": "mantle-operator-command-catalog-v1",
-<<<<<<< HEAD
-  "identity_blake3": "a04065236a8688e74bbfcfd40ec6430054f3b6a5fecd9d05bc175c57dab65b38",
-=======
   "identity_blake3": "12e74923e80c41b28cede8a16c566e129a9ebce7b1fa3bbffe2a908b876fb7c7",
->>>>>>> d75158b00b080535f2ffea12430665ca3d57ea82
   "entries": [
     {
       "descriptor": {

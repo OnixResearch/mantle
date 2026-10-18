@@ -1,0 +1,3 @@
+./scripts/quality-gate-common.sh: line 4: dirname: command not found
+./scripts/quality-gate-common.sh: line 4: cd: null directory
+running: cargo fmt --check -p mantle -p crunch-android-core -p crunch-android -p mantle-causal-trace-core -p crunch-attestation -p crunch-build -p crunch-delta -p crunch-eval -p crunch-glue -p crunch-pipeline -p crunch-project -p crunch-remote-app -p crunch-remote-core -p crunch-service-readiness-core -p crunch-shell -p crunch-store -p crunch-watch-core

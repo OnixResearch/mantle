@@ -1,0 +1,10 @@
+CASITA_PUBLICATION_OBSERVATIONS=[]
+CASITA_REAL_CONTENT_SIGNED_PERSIST_EXPORT_AND_CACHED_LOOKUP_OK
+ACTION_RESULT_PUBLICATION=[ActionResultPublicationReport { result_ref: "mantle-action-result://blake3/eea6475f095df55c8d769b8d8db71634551fda1de67f209adfa3385de82c4153", record_status: Published, index_status: Published }]; DUPLICATE=[ActionResultPublicationReport { result_ref: "mantle-action-result://blake3/eea6475f095df55c8d769b8d8db71634551fda1de67f209adfa3385de82c4153", record_status: Duplicate, index_status: Duplicate }]
+ACTION_RESULT_REAL_SIGNED_LOCAL_PUBLICATION_DISCOVERY_OK_NOT_REUSE_TRUST
+SAME_HANDLE_REVOKED=store: PathInfo lookup for qjalmhg0zf1ywj3zq6bp1qqb1w6cn1cc-current-casita-output: store: casita-signer-untrusted: qjalmhg0zf1ywj3zq6bp1qqb1w6cn1cc-current-casita-output has no valid signature from destination trust policy
+FRESH_HANDLE_REVOKED=store: casita-signer-untrusted: qjalmhg0zf1ywj3zq6bp1qqb1w6cn1cc-current-casita-output has no valid signature from destination trust policy
+INVALID_POLICY_GC=store: casita-trust-policy-invalid: store: parsing layer trust key in /datapool/mantle-store/mr.7p88_pl1/stores/casita-V4android-store-casita-post-cleanup-v1/state/casita-trusted-public-keys: Missing separator
+CASITA_GC_STALE_PLAN=gc: gc-plan-stale: accepted=b3:5d99e03f7f29fbeb63944aa5b66f28653011b487c0e8885bf57fbb1b6ab4a59f observed=b3:7c3571ef0dedec6118bc8dfd277525e1356c760e2a2bf8a3fea35596ab7f785d
+CASITA_GC_PLAN=b3:5d99e03f7f29fbeb63944aa5b66f28653011b487c0e8885bf57fbb1b6ab4a59f; CANDIDATES=["/mantle/store/qjalmhg0zf1ywj3zq6bp1qqb1w6cn1cc-current-casita-output"]; EXECUTION_COMPLETE=true
+CURRENT_CASITA_PUBLICATION_REVOCATION_ACTIONRESULT_AND_GC_SMOKE_OK

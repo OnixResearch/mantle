@@ -1,0 +1,91 @@
+{
+  "attempt": "G2-host-scratch-after-owned-cleanup-v1",
+  "task_id": 6,
+  "source_binding_blake3": "124ca12d1f1cc1a3a8be252f6d0f12f7f1ca2014d85700b3a8a545633f60bfe3",
+  "documentary_input_binding_blake3": "3cbaaa73105b8fca8e037fb8bbdc23b8a320c769dc2d64c9fcac89102b45fcb2",
+  "pueue_task": {
+    "id": 6,
+    "group": "default",
+    "label": "G2-host-scratch-after-owned-cleanup-v1",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-10-17T21:26:22.552785036-04:00",
+        "start": "2026-10-17T21:26:22.603768949-04:00",
+        "end": "2026-10-17T21:26:47.004898568-04:00",
+        "result": "Success"
+      }
+    },
+    "path": "/home/brittonr/git/OnixResearch/mantle",
+    "command": "NIX_CONFIG=\"${NIX_CONFIG-}\"'\neval-cache = false\n' /nix/store/b5bpi6zfajzzrwwpgba2q6li3nnya4bs-python3-3.14.7/bin/python3.14 -I -B -S /datapool/mantle-store/mr.7p88_pl1/run-leg-shared-pool-v3.py offline G2-host-scratch-after-owned-cleanup-v1 G2-host-scratch-post-cleanup-v1.sh"
+  },
+  "child_controller_exit_code": 0,
+  "monitor_stop": null,
+  "inner_nix_exit_code": 0,
+  "observation": {
+    "status": "PROVEN",
+    "argv": [
+      "nix",
+      "build",
+      "--offline",
+      "--no-link",
+      "--json",
+      "--max-jobs",
+      "1",
+      "--cores",
+      "1",
+      "--option",
+      "build-dir",
+      "/datapool/mantle-store/mr.7p88_pl1/t",
+      "--option",
+      "min-free",
+      "0",
+      "--option",
+      "max-free",
+      "0",
+      "--impure",
+      "--file",
+      "/datapool/mantle-store/mr.7p88_pl1/t/g2-host-scratch-post-cleanup-v1/witness.nix"
+    ],
+    "evaluation_flag": "--impure for explicit immutable builtins.storePath only; requires parent approval",
+    "limits": "combined stdout/stderr 32768B; builder witness 8192B; result 16384B; aggregate <=57344B",
+    "exit_code": 0,
+    "drv_path": "/nix/store/kp5nix21zhcil1lsn2m56scdpphsbmj4-mantle-g2-host-scratch-mount-witness-postcleanup-v1.drv",
+    "output_path": "/nix/store/pskg5p4rnr97ik6wc1l4wlic9qk66jlr-mantle-g2-host-scratch-mount-witness-postcleanup-v1",
+    "builder_cwd": "/build",
+    "builder_effective_mount": "3154 2909 0:47 /mr.7p88_pl1/t/nix-1602839-3028938880/build /build rw,noatime - zfs datapool/mantle-store rw,xattr,posixacl,casesensitive",
+    "host_effective_mount": "56 54 0:47 / /datapool/mantle-store rw,noatime shared:61 - zfs datapool/mantle-store rw,xattr,posixacl,casesensitive",
+    "mapped_host_cwd": "/datapool/mantle-store/mr.7p88_pl1/t/nix-1602839-3028938880/build"
+  },
+  "raw_capture_paths": {
+    "stdout.txt": {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/t/g2-host-scratch-post-cleanup-v1/observation/stdout.txt",
+      "bytes": 232,
+      "blake3": "069c65f3819586941bbd9cd7a2a6fae51c1c1a64185edd823ad5d08d8eca5afd"
+    },
+    "stderr.txt": {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/t/g2-host-scratch-post-cleanup-v1/observation/stderr.txt",
+      "bytes": 247,
+      "blake3": "a4993381b8aa89dbfa57118b3c5e97afa6358ae2220275d0dab8c46dab858e20"
+    },
+    "builder-witness.txt": {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/t/g2-host-scratch-post-cleanup-v1/observation/builder-witness.txt",
+      "bytes": 360,
+      "blake3": "8a559122096ef48f6c88df8a29eecc4698fb823bcaad61f0b836a5b58514334d"
+    },
+    "result.json": {
+      "path": "/datapool/mantle-store/mr.7p88_pl1/t/g2-host-scratch-post-cleanup-v1/observation/result.json",
+      "bytes": 1333,
+      "blake3": "f2a8cf96898a60d35c14f2a6fe256f01c05f0c540c142b2b3606a72fdcf26d95"
+    }
+  },
+  "resource_final": {
+    "free": 41128689664,
+    "target": 9331496960,
+    "temp": 270147072,
+    "metadata": 2958336,
+    "shared_pool_growth": 83564298240
+  },
+  "remaining_to_unchanged_stop_bytes": 187564032,
+  "controller_shell_output": "building '/nix/store/3q0vpy2x7rjhmk0x9mv8y2nnv02i3w31-nix-shell-env.drv'...\nno-auto-GC shell: SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox min-free=0 max-free=0\nPROVEN\n",
+  "qualification": "Actual fresh local tiny derivation build and kernel mount mapping only; not full Nix/TigerStyle gate PASS, full-build fit or hard quota. Approved inner impurity scoped only to literal immutable BusyBox storePath. Leader/descendant/daemon settlement remains unknown beyond monitor receipt. No autochain or final native rerun."
+}

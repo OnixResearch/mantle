@@ -1,0 +1,5 @@
+   Compiling crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-eval)
+   Compiling crunch-android-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-android-core)
+   Compiling mantle-current-android-authoring-api-smoke v0.0.0 (/datapool/mantle-store/mr.7p88_pl1/android-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.97s
+     Running `/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-current-android-authoring-api-smoke /datapool/mantle-store/mr.7p88_pl1/stores/android-authoring-V4android-store-casita-post-cleanup-v1`

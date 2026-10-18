@@ -1,0 +1,32 @@
+let
+  bb = builtins.storePath "/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0";
+in builtins.derivation {
+  name = "mantle-g2-host-scratch-mount-witness-postcleanup-v1";
+  system = "x86_64-linux";
+  builder = "${bb}/bin/busybox";
+  preferLocalBuild = true;
+  allowSubstitutes = false;
+  args = [ "sh" "-eu" "-c" ''
+    set -f
+    cwd=$(${bb}/bin/busybox pwd -P)
+    remaining=$((8192 - ''${#cwd} - 5))
+    test "$remaining" -ge 0
+    printf 'cwd\t%s\n' "$cwd" > witness.tmp
+    while IFS= read -r line; do
+      set -- $line
+      point=$(printf '%b' "$5")
+      selected=0
+      if [ "$point" = / ]; then
+        selected=1
+      else
+        case "$cwd" in "$point"|"$point"/*) selected=1 ;; esac
+      fi
+      if [ "$selected" = 1 ]; then
+        remaining=$((remaining - ''${#line} - 7))
+        test "$remaining" -ge 0
+        printf 'mount\t%s\n' "$line" >> witness.tmp
+      fi
+    done < /proc/self/mountinfo
+    ${bb}/bin/busybox cp witness.tmp "$out"
+  '' ];
+}

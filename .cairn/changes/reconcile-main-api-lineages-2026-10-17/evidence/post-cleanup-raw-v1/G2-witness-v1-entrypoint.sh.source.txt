@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+set -euo pipefail
+exec python3 /datapool/mantle-store/mr.7p88_pl1/t/g2-host-scratch-post-cleanup-v1/observe.py

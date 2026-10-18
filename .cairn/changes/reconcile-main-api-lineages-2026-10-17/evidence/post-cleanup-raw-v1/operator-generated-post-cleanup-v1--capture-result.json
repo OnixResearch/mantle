@@ -1,0 +1,263 @@
+{
+  "attempt": "operator-generated-post-cleanup-v1",
+  "started": 1792283923.4183722,
+  "commands": [
+    {
+      "argv": [
+        "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle",
+        "__operator-contract",
+        "--mode",
+        "raw-descriptors"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/raw-descriptors.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/raw-descriptors.stderr",
+      "stdout_bytes": 93857,
+      "stderr_bytes": 0
+    },
+    {
+      "argv": [
+        "/datapool/mantle-store/mr.7p88_pl1/target/debug/generate-operator-command-contract",
+        "--self-test"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/operator-generator-self-test.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/operator-generator-self-test.stderr",
+      "stdout_bytes": 52,
+      "stderr_bytes": 0
+    },
+    {
+      "argv": [
+        "/datapool/mantle-store/mr.7p88_pl1/target/debug/generate-operator-command-contract",
+        "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/raw-descriptors.stdout",
+        "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/operator-surfaces.scratch-starter.ncl"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/operator-generator-real.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/operator-generator-real.stderr",
+      "stdout_bytes": 0,
+      "stderr_bytes": 0
+    },
+    {
+      "argv": [
+        "nickel",
+        "--version"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/nickel-version.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/nickel-version.stderr",
+      "stdout_bytes": 44,
+      "stderr_bytes": 0
+    },
+    {
+      "argv": [
+        "nickel",
+        "typecheck",
+        "config/operator-surfaces.ncl"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/reviewed-policy-typecheck.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/reviewed-policy-typecheck.stderr",
+      "stdout_bytes": 0,
+      "stderr_bytes": 0
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/operator-surfaces.ncl"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/reviewed-policy-export.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/reviewed-policy-export.stderr",
+      "stdout_bytes": 213258,
+      "stderr_bytes": 0
+    },
+    {
+      "argv": [
+        "/datapool/mantle-store/mr.7p88_pl1/target/debug/generate-portable-platform-profiles"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/portable-profiles-block.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/portable-profiles-block.stderr",
+      "stdout_bytes": 13709,
+      "stderr_bytes": 0
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/portable-profiles-wrapped.ncl"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/portable-profiles-export.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/portable-profiles-export.stderr",
+      "stdout_bytes": 18058,
+      "stderr_bytes": 0
+    },
+    {
+      "argv": [
+        "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle",
+        "__operator-contract",
+        "--mode",
+        "catalog"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/catalog.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/catalog.stderr",
+      "stdout_bytes": 312982,
+      "stderr_bytes": 0
+    },
+    {
+      "argv": [
+        "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle",
+        "__operator-contract",
+        "--mode",
+        "reference"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/reference.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/reference.stderr",
+      "stdout_bytes": 42562,
+      "stderr_bytes": 0
+    },
+    {
+      "argv": [
+        "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle",
+        "__operator-contract",
+        "--mode",
+        "workflow"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/workflow.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/workflow.stderr",
+      "stdout_bytes": 770,
+      "stderr_bytes": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "label": "raw-descriptors",
+      "scratch": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/raw-descriptors.stdout",
+      "canonical": "config/operator-command-descriptors.json",
+      "scratch_bytes": 93857,
+      "canonical_bytes": 93857,
+      "scratch_blake3": "abf8bd8afd53dad3ea141df7c6d6103c338a99391911da0eda63f0893849f63f",
+      "canonical_blake3": "abf8bd8afd53dad3ea141df7c6d6103c338a99391911da0eda63f0893849f63f",
+      "byte_identical": true
+    },
+    {
+      "label": "reviewed-inventory",
+      "scratch": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/reviewed-policy-export.stdout",
+      "canonical": "config/operator-surfaces.json",
+      "scratch_bytes": 213258,
+      "canonical_bytes": 213258,
+      "scratch_blake3": "357ae8eae4b4c6c0c10f8f8d67bc3464a8a3e0bb23d7ca90b268af51a7d3c5c6",
+      "canonical_blake3": "357ae8eae4b4c6c0c10f8f8d67bc3464a8a3e0bb23d7ca90b268af51a7d3c5c6",
+      "byte_identical": true
+    },
+    {
+      "label": "catalog",
+      "scratch": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/catalog.stdout",
+      "canonical": "config/operator-command-catalog.json",
+      "scratch_bytes": 312982,
+      "canonical_bytes": 313141,
+      "scratch_blake3": "e0e9e0be3dad3fae92997cd757ab3a5071ec770e0d9c22e2e1c73d0c5cc05e38",
+      "canonical_blake3": "450b12c21137cb63f6c2a7356e9abfa050a32ea75be492752cb8dee90aa5339e",
+      "byte_identical": false,
+      "diff_path": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/catalog.diff",
+      "diff_total_bytes": 500,
+      "diff_truncated": false
+    },
+    {
+      "label": "reference",
+      "scratch": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/reference.stdout",
+      "canonical": "docs/generated/operator-command-reference.md",
+      "scratch_bytes": 42562,
+      "canonical_bytes": 42715,
+      "scratch_blake3": "896910d1bc478e2988a7f635cd33c8b11c12ab17692367f20e7ec932f3b96734",
+      "canonical_blake3": "23b5dfb306d9d5222885e4a08a0b147eaa5091aa1ecd9a52b5fd833e713b3ef5",
+      "byte_identical": false,
+      "diff_path": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/reference.diff",
+      "diff_total_bytes": 451,
+      "diff_truncated": false
+    },
+    {
+      "label": "workflow",
+      "scratch": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/workflow.stdout",
+      "canonical": "docs/generated/canonical-operator-workflow.md",
+      "scratch_bytes": 770,
+      "canonical_bytes": 770,
+      "scratch_blake3": "3c7f1163be77279680d0fe4db13795387ed1c1ead0b377efc48277de0316586c",
+      "canonical_blake3": "3c7f1163be77279680d0fe4db13795387ed1c1ead0b377efc48277de0316586c",
+      "byte_identical": true
+    }
+  ],
+  "state": "capture_complete_no_install_or_mode_check",
+  "canonical_writes": false,
+  "binary_build_identity": {
+    "attempt": "root-and-generators-post-cleanup-no-eval-cache-v1",
+    "task_id": 1,
+    "source_head": "034a2dbb016a925c6afa452efa75dfc423df28d5",
+    "source_binding_blake3": "e7edc03304aa9b35813a5d90495fb42a362f624ad4cd2daa8016405f960371a8",
+    "actual_build_command": "cargo build --locked --offline -p mantle --bin mantle --bin generate-operator-command-contract --bin generate-portable-platform-profiles",
+    "pueue_result": {
+      "Done": {
+        "enqueued_at": "2026-10-17T20:27:30.964152865-04:00",
+        "start": "2026-10-17T20:27:31.204539144-04:00",
+        "end": "2026-10-17T20:35:48.565496259-04:00",
+        "result": "Success"
+      }
+    },
+    "child_exit_code": 0,
+    "resource_stop": null,
+    "resource_final": {
+      "free": 42092724224,
+      "target": 8766187008,
+      "temp": 265408512,
+      "metadata": 2254848,
+      "shared_pool_growth": 82600263680
+    },
+    "remaining_to_unchanged_shared_stop_bytes": 1151598592,
+    "produced_binaries": [
+      {
+        "name": "mantle",
+        "path": "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle",
+        "bytes": 1603360552,
+        "mtime_ns": 1792283742999267117,
+        "blake3": "ac7cd9980a2b107a551fffcd6a3b59172b718d88b7d70905f1cd1a326ab65746"
+      },
+      {
+        "name": "generate-operator-command-contract",
+        "path": "/datapool/mantle-store/mr.7p88_pl1/target/debug/generate-operator-command-contract",
+        "bytes": 7194592,
+        "mtime_ns": 1792283747427271380,
+        "blake3": "47a75dd8408eef7d64f6569d580cf7355072dede89208b6be8c1c6ecdb5e0bee"
+      },
+      {
+        "name": "generate-portable-platform-profiles",
+        "path": "/datapool/mantle-store/mr.7p88_pl1/target/debug/generate-portable-platform-profiles",
+        "bytes": 4894976,
+        "mtime_ns": 1792283649115176719,
+        "blake3": "36b3667037e46a66051ff2e19bc9d415bb61b59e584d33bec86113d0a54d71e5"
+      }
+    ],
+    "qualification": "Filesystem identity after successful exact three-bin build; binaries and generators were not executed. Success does not discharge generator output, product behavior or gate successors."
+  },
+  "scratch_starter": {
+    "path": "/datapool/mantle-store/mr.7p88_pl1/operator-generated-post-cleanup-v1/operator-surfaces.scratch-starter.ncl",
+    "bytes": 127836,
+    "blake3": "79b1736047deafabee5d0270203c04100436fa7b2782ec891c200ead00924ca8",
+    "authority": "Review-only starter, never reviewed policy replacement"
+  },
+  "nickel_version": "nickel-lang-cli nickel 1.17.0 (rev 1320a98)",
+  "portable_profiles_match_reviewed_policy": true,
+  "portable_profile_differences": {},
+  "reviewed_inventory_byte_identical": true,
+  "finished": 1792283923.7130058,
+  "capture_exit_code": 0
+}

@@ -1,0 +1,293 @@
+{
+  "change": "reconcile-main-api-lineages-2026-10-17",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "09092c0dd24eea398486bca5103d29a971a342bff108cad210c090d6fea06217",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "policy_selection": {
+    "blake3": "31d095609943dd430aa8ab172cd1b8f5116550d41e5b1c8463b89875017e0d12",
+    "installation_receipt": false,
+    "locator": "cairn-policy/generated/cairn-policy.json",
+    "source": "legacy_default"
+  },
+  "probe_evidence": {
+    "declarations_present": false,
+    "probes": []
+  },
+  "receipt_hash": "2495beb1ebab5afb5c2b6294d31d856b1e97195a75d580bd6db02582ed3402b4",
+  "stage": "tasks",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/reconcile-main-api-lineages-2026-10-17/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 160,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/reconcile-main-api-lineages-2026-10-17/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 38,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/reconcile-main-api-lineages-2026-10-17/specs/semantic-reconciliation/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 6,
+      "substantive_lines": 29,
+      "substantive_requirement_blocks": 5,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 11,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/reconcile-main-api-lineages-2026-10-17/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 30,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 11,
+      "task_done": 8,
+      "task_in_progress": 0,
+      "task_todo": 3
+    }
+  ],
+  "task_ordering": {
+    "active": true,
+    "edges": [
+      {
+        "predecessor": "C1",
+        "task": "C2"
+      },
+      {
+        "predecessor": "C1",
+        "task": "C3"
+      },
+      {
+        "predecessor": "V3",
+        "task": "G1"
+      },
+      {
+        "predecessor": "V4",
+        "task": "G3"
+      },
+      {
+        "predecessor": "G1",
+        "task": "P1"
+      },
+      {
+        "predecessor": "G2",
+        "task": "P1"
+      },
+      {
+        "predecessor": "G3",
+        "task": "P1"
+      },
+      {
+        "predecessor": "V1",
+        "task": "V2"
+      },
+      {
+        "predecessor": "V2",
+        "task": "V3"
+      },
+      {
+        "predecessor": "V2",
+        "task": "V4"
+      }
+    ],
+    "issues": [],
+    "nodes": [
+      {
+        "blocked_by": [],
+        "blocks": [
+          "C2",
+          "C3"
+        ],
+        "id": "C1",
+        "line": 24,
+        "predecessors": [],
+        "ready": false,
+        "state": "done"
+      },
+      {
+        "blocked_by": [],
+        "blocks": [],
+        "id": "C2",
+        "line": 25,
+        "predecessors": [
+          "C1"
+        ],
+        "ready": false,
+        "state": "done"
+      },
+      {
+        "blocked_by": [],
+        "blocks": [],
+        "id": "C3",
+        "line": 26,
+        "predecessors": [
+          "C1"
+        ],
+        "ready": false,
+        "state": "done"
+      },
+      {
+        "blocked_by": [],
+        "blocks": [
+          "P1"
+        ],
+        "id": "G1",
+        "line": 37,
+        "predecessors": [
+          "V3"
+        ],
+        "ready": true,
+        "state": "todo"
+      },
+      {
+        "blocked_by": [],
+        "blocks": [
+          "P1"
+        ],
+        "id": "G2",
+        "line": 38,
+        "predecessors": [],
+        "ready": true,
+        "state": "todo"
+      },
+      {
+        "blocked_by": [],
+        "blocks": [
+          "P1"
+        ],
+        "id": "G3",
+        "line": 39,
+        "predecessors": [
+          "V4"
+        ],
+        "ready": false,
+        "state": "done"
+      },
+      {
+        "blocked_by": [
+          "G1",
+          "G2"
+        ],
+        "blocks": [],
+        "id": "P1",
+        "line": 40,
+        "predecessors": [
+          "G1",
+          "G2",
+          "G3"
+        ],
+        "ready": false,
+        "state": "todo"
+      },
+      {
+        "blocked_by": [],
+        "blocks": [
+          "V2"
+        ],
+        "id": "V1",
+        "line": 30,
+        "predecessors": [],
+        "ready": false,
+        "state": "done"
+      },
+      {
+        "blocked_by": [],
+        "blocks": [
+          "V3",
+          "V4"
+        ],
+        "id": "V2",
+        "line": 31,
+        "predecessors": [
+          "V1"
+        ],
+        "ready": false,
+        "state": "done"
+      },
+      {
+        "blocked_by": [],
+        "blocks": [
+          "G1"
+        ],
+        "id": "V3",
+        "line": 32,
+        "predecessors": [
+          "V2"
+        ],
+        "ready": false,
+        "state": "done"
+      },
+      {
+        "blocked_by": [],
+        "blocks": [
+          "G3"
+        ],
+        "id": "V4",
+        "line": 33,
+        "predecessors": [
+          "V2"
+        ],
+        "ready": false,
+        "state": "done"
+      }
+    ],
+    "order": [
+      "C1",
+      "C2",
+      "C3",
+      "G2",
+      "V1",
+      "V2",
+      "V3",
+      "G1",
+      "V4",
+      "G3",
+      "P1"
+    ],
+    "ready_tasks": [
+      "G2",
+      "G1"
+    ],
+    "valid": true
+  },
+  "valid": true,
+  "verdict": "PASS"
+}

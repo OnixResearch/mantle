@@ -612,14 +612,8 @@ fn main() {
 
 #[test]
 fn build_script_cannot_probe_network_or_undeclared_host_path_in_native_namespace() {
-    // The native namespace masks /tmp; keep the executable fixture outside it.
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join(format!("sandbox-boundary-{}", std::process::id()));
-    if fixture.exists() {
-        fs::remove_dir_all(&fixture).unwrap();
-    }
-    fs::create_dir_all(&fixture).unwrap();
+    // Rebind the fixture after masking /tmp; the sibling host secret stays unmounted.
+    let fixture = fixture_root("sandbox-boundary");
     let sandbox_helper = fixture.join("unit-helper");
     fs::copy(env!("CARGO_BIN_EXE_mantle-cargo-unit-helper"), &sandbox_helper).unwrap();
     let sandbox_true = fixture.join("true");

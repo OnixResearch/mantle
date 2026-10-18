@@ -1,0 +1,77 @@
+{
+  "attempt": "V4helper-native-post-cleanup-v1",
+  "started": 1792284623.356311,
+  "commands": [
+    {
+      "argv": [
+        "cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle-cargo-unit-plan",
+        "--bin",
+        "mantle-cargo-unit-helper"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/helper-build.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/helper-build.stderr",
+      "stdout_bytes": 0,
+      "stderr_bytes": 403
+    },
+    {
+      "argv": [
+        "python3",
+        "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/unit-smoke-adapted.py"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/helper-native-smoke.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/helper-native-smoke.stderr",
+      "stdout_bytes": 9879,
+      "stderr_bytes": 0
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "mantle-cargo-unit-plan",
+        "--test",
+        "helper",
+        "build_script_cannot_probe_network_or_undeclared_host_path_in_native_namespace",
+        "--",
+        "--exact",
+        "--nocapture",
+        "--test-threads",
+        "1"
+      ],
+      "exit_code": 0,
+      "stdout": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/namespace-fixture.stdout",
+      "stderr": "/datapool/mantle-store/mr.7p88_pl1/V4helper-native-post-cleanup-v1/namespace-fixture.stderr",
+      "stdout_bytes": 202,
+      "stderr_bytes": 512
+    }
+  ],
+  "state": "complete",
+  "payload_root": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1",
+  "canonical_writes": false,
+  "helper_binary": {
+    "path": "/datapool/mantle-store/mr.7p88_pl1/target/debug/mantle-cargo-unit-helper",
+    "bytes": 16724736,
+    "mtime_ns": 1792284627662164572,
+    "blake3": "8b29e07bb2a0a6109fb35be16d67ee3a3b81feb589cf93b7ff3254b9f46f5d09"
+  },
+  "adaptation": "Only R destination and helper binding changed; all original assertions/commands/env retained. Payloads and per-step files stay under original t accounting.",
+  "smoke_steps": "/datapool/mantle-store/mr.7p88_pl1/t/V4helper-native-post-cleanup-v1/unit-smoke-steps.json",
+  "smoke_marker": "CURRENT_HELPER_NATIVE_QUOTED_AND_NEGATIVE_SMOKE_OK",
+  "namespace_test_lines": [
+    "test build_script_cannot_probe_network_or_undeclared_host_path_in_native_namespace ... ok",
+    "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.20s"
+  ],
+  "namespace_capability_skipped": false,
+  "namespace_actual_body_passed": true,
+  "finished": 1792284631.084089,
+  "driver_exit_code": 0
+}

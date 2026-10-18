@@ -1,0 +1,72 @@
+{
+  "attempt": "root-and-generators-post-cleanup-no-eval-cache-v1",
+  "task_id": 1,
+  "source_head": "034a2dbb016a925c6afa452efa75dfc423df28d5",
+  "source_binding_blake3": "e7edc03304aa9b35813a5d90495fb42a362f624ad4cd2daa8016405f960371a8",
+  "observed_unix": 1792283753.6008697,
+  "pueue_task": {
+    "id": 1,
+    "group": "default",
+    "label": "root-and-generators-post-cleanup-no-eval-cache-v1",
+    "status": {
+      "Done": {
+        "enqueued_at": "2026-10-17T20:27:30.964152865-04:00",
+        "start": "2026-10-17T20:27:31.204539144-04:00",
+        "end": "2026-10-17T20:35:48.565496259-04:00",
+        "result": "Success"
+      }
+    },
+    "path": "/home/brittonr/git/OnixResearch/mantle",
+    "command": "NIX_CONFIG=\"${NIX_CONFIG-}\"'\neval-cache = false\n' /nix/store/b5bpi6zfajzzrwwpgba2q6li3nnya4bs-python3-3.14.7/bin/python3.14 -I -B -S /datapool/mantle-store/mr.7p88_pl1/run-leg-shared-pool-v3.py offline root-and-generators-post-cleanup-no-eval-cache-v1 root-and-generators-build.sh"
+  },
+  "resource_result_path": "/datapool/mantle-store/mr.7p88_pl1/result-shared-pool-v3-root-and-generators-post-cleanup-no-eval-cache-v1.json",
+  "resource_stop": null,
+  "child_exit_code": 0,
+  "compiler_log_path": "/datapool/mantle-store/mr.7p88_pl1/logs/shell-shared-pool-v3-root-and-generators-post-cleanup-no-eval-cache-v1.log",
+  "compiler_log_bytes": 9351,
+  "decisive_lines": [
+    {
+      "line": 3,
+      "text": "warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:"
+    },
+    {
+      "line": 160,
+      "text": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7m 52s"
+    }
+  ],
+  "owned_target_settlement": {
+    "clear": true,
+    "scan_complete_within_5_seconds": true,
+    "unreadable_or_transient": 0,
+    "vanished_proc_entries": 1,
+    "measurement_errors": [],
+    "omitted_measurement_errors": 0,
+    "owned_compilers": [],
+    "existing_target_lock": "available at observation",
+    "scope": "Point owned-root/compiler/exact-target-key check only; no argv/environment persisted, no global/private inventory or descendant/daemon emptiness claim"
+  },
+  "successors": "HELD; no generators or next leg launched",
+  "qualification": "Child compiler exit is distinct from Pueue/monitor result. Settlement is fresh scoped point evidence only; descendants and opaque daemon work remain unknown.",
+  "pueue_wait": {
+    "argv": [
+      "/nix/store/mcdxl3mmx2s8zy6gxy4ss5paiaz79qkc-pueue-4.0.4/bin/pueue",
+      "--config",
+      "/datapool/mantle-store/mr.7p88_pl1/pueue-recovery-v1/pueue.yml",
+      "wait",
+      "--quiet",
+      "1"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "pueue_log_argv": [
+    "/nix/store/mcdxl3mmx2s8zy6gxy4ss5paiaz79qkc-pueue-4.0.4/bin/pueue",
+    "--config",
+    "/datapool/mantle-store/mr.7p88_pl1/pueue-recovery-v1/pueue.yml",
+    "log",
+    "--lines",
+    "100",
+    "1"
+  ]
+}

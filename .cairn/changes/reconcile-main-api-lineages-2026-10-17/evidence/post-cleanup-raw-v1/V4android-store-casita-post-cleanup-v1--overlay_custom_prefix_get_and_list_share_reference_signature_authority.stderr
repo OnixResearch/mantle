@@ -1,0 +1,7 @@
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-store)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-delta)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 50.12s
+     Running unittests src/lib.rs (/datapool/mantle-store/mr.7p88_pl1/target/debug/deps/crunch_store-20aeaaa595fde513)
