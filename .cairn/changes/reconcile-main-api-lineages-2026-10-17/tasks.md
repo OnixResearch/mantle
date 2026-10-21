@@ -88,14 +88,16 @@ dependency graph for `crates/crunch-delta`
 (`docs/toolchain-incremental-ice.md`).
 
 A full workspace lib/tests run with `--no-fail-fast` on the same revision
-reports three failing groups, each in a suite that does not evaluate Nickel:
+reports four failing groups, each in a suite that does not evaluate Nickel:
 the Nix gateway admitted-NAR publication (issue 25), two `crunch-store`
 overlay cases that fail while opening the overlay base in the gate
-environment (issue 26), and the verification-bridge fixture, whose pinned
-upstream Trellis revision publishes a receipt whose identity does not match its
-own bundle (issue 27). G1 therefore remains unaccepted: the gate is executed
-and retained, and the remaining failures are pre-existing defects that are
-tracked but not repaired.
+environment (issue 26), the verification-bridge fixture, whose pinned upstream
+Trellis revision publishes a receipt whose identity does not match its own
+bundle (issue 27), and the user-profile install, upgrade, remove, rollback and
+garbage-collection case, which reports `root registry: ambiguous release:
+specify an exact reason` (recorded on issue 18). G1 therefore remains
+unaccepted: the gate is executed and retained, and the remaining failures are
+pre-existing defects that are tracked but not repaired.
 
 P1 stays unchecked: publication is recorded, but G1 and G2 have not been
 accepted, so no lifecycle acceptance follows from the push.
