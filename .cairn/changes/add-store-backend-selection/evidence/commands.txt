@@ -1,6 +1,7 @@
-# Lifecycle gates for add-store-backend-selection. Run from the mantle repository root.
-nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .
-nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate proposal add-store-backend-selection --root .
-nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design add-store-backend-selection --root .
-nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks add-store-backend-selection --root .
-nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- change depend list add-store-backend-selection --root .
+# T4.3 focused verification of the store backend selection seam on the final source.
+cargo test --locked --offline -p crunch-store
+cargo test --locked --offline -p mantle --bin mantle store::
+cargo run --locked --offline --bin check_store_capability_boundary
+cargo clippy --locked --offline -p crunch-store -p mantle --all-targets --no-deps -- -D warnings
+cargo fmt --check -p crunch-store -p mantle
+git diff --check

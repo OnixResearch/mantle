@@ -658,6 +658,41 @@ completeness for undeclared future bootstrap sources, release reproducibility,
 independent rebuild agreement, or full bootstrap correctness. Those claims still
 require the existing proof commands and evidence gates.
 
+### Source-only source-program preparation
+
+The source-built fixed-point proof needs an authenticated cohort that also
+carries the authored source programs. Prepare that cohort with the same
+declaration set, before any proof run:
+
+```bash
+mantle self-build \
+  --source-built-fixed-point \
+  --prepare-source-programs \
+  --source-profile /media/handoff/source-built-fixed-point-sources.json \
+  --expected-source-profile-blake3 "$SOURCE_PROFILE_BLAKE3" \
+  --expected-stagex-lineage-blake3 "$STAGEX_LINEAGE_BLAKE3" \
+  --expected-native-provider-blake3 "$NATIVE_PROVIDER_BLAKE3" \
+  --proof-bwrap /absolute/path/to/bwrap \
+  --proof-sandbox-shell /absolute/path/to/static-busybox \
+  --out /absolute/fresh/path/source-program-cohort
+```
+
+This path reads the declared source profile, authors the inert source programs
+from the authenticated source authority (StageX transition, native host and
+final phases, the Rust provider, and the Mantle recipe leaves), records them
+into the native source record and the profile, writes the cold route selector,
+and publishes a new authenticated cohort under `--out` with a fresh profile
+BLAKE3. The output path must not exist, the source profile must not already
+carry a cold selector, and the declared profile, StageX lineage, and native
+provider digests must match the inputs. Development caches and resume modes are
+rejected.
+
+Preparation changes the source cohort identity, so the expected profile digest
+for a later proof run must be recomputed from the published cohort. The
+preparation report states its own non-claim: inert source preparation only; no
+provider execution, fixed-point proof, compiler correctness, reproducibility,
+or release eligibility. Use the proof command above for those claims.
+
 ## Offline Cargo project-build lane
 
 Use `mantle build .#name` for the supported near-term Rust project workflow.
