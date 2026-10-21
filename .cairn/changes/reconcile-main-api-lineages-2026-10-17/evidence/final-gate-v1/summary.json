@@ -1,0 +1,32 @@
+{
+  "schema": "mantle-first-party-gate-evidence-v1",
+  "revision": "13627a62f4293ec42fab6971cbe67d1350da7f0e",
+  "command": "./scripts/check-first-party-quality.sh",
+  "remote_run_dir": "/home/brittonr/mantle-cairn-finish/logs/final-gate-20261021/gates4-20261021T205341Z",
+  "transcripts": [
+    {
+      "transcript": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/final-gate-v1/first-party-gate.stdout.log",
+      "bytes": 115706,
+      "sha256": "69593ed54756cf5c8f881493facdeb8fccde4c7ddc0140ef51251bc8cbde14d2"
+    },
+    {
+      "transcript": ".cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/final-gate-v1/first-party-gate.guard.log",
+      "bytes": 741,
+      "sha256": "5f64381994864dbba2de5104817019b9ff7c5d78bb22dc3d13b0f4b2d5bf5bf2"
+    }
+  ],
+  "non_claims": [
+    "gate evidence for the recorded revision only",
+    "not a bootstrap, release, or Nickel-parity claim",
+    "the recorded failures are the pre-existing Nickel contract defect, not a reconciliation regression"
+  ],
+  "outcome": {
+    "gcc40_configure_bridge": "pass",
+    "canonical_first_party_rustfmt": "pass",
+    "strict_clippy_vendored_excluded": "pass",
+    "workspace_lib_tests": "failed",
+    "first_failing_suite": "crunch-esp-idf --test nickel_contract",
+    "first_failing_reason": "the pinned Nickel 1.17.0 cannot evaluate the plan contracts; see docs/nickel-stdlib-contract-defect.md and issue 24",
+    "build_strategy": "CARGO_INCREMENTAL=0, because the pinned nightly panics in the incremental dependency graph for crates/crunch-delta; see docs/toolchain-incremental-ice.md"
+  }
+}

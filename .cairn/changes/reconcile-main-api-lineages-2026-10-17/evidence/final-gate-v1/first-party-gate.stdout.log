@@ -1,0 +1,1415 @@
+[1/4] bounded GCC 4.0 configure bridge
+gcc40 configure preprocess bridge: PASS (classes=3, source_spellings=2, source_bytes_max=65536, invocation_count_max=4096)
+[2/4] rustfmt
+running: cargo fmt --check -p mantle -p crunch-android-core -p crunch-android -p crunch-cmake-core -p crunch-cmake -p crunch-esp-idf-core -p crunch-esp-idf -p crunch-fpga-core -p crunch-fpga -p crunch-gpu-core -p crunch-gpu -p crunch-model-conversion-core -p crunch-model-conversion -p crunch-pnpm-core -p crunch-pnpm -p crunch-python-core -p crunch-python -p crunch-test-core -p crunch-test-app -p crunch-test -p crunch-verification-bridge-core -p crunch-verification-bridge -p crunch-zephyr-core -p crunch-zephyr -p mantle-cargo-build-bundle-core -p mantle-causal-trace-core -p crunch-attestation -p crunch-build -p crunch-delta -p crunch-eval -p crunch-glue -p crunch-pipeline -p crunch-project -p crunch-remote-app -p crunch-remote-core -p crunch-service-readiness-core -p crunch-shell -p crunch-store -p crunch-watch-core
+[3/4] clippy
+[clippy] first-party strict gate
+running: cargo clippy --workspace --all-targets --no-deps --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- -D warnings
+warning: /home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/Cargo.toml: file `/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking mantle-rust-plan-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-rust-plan-core)
+    Checking crunch-attestation-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-attestation-core)
+   Compiling nix-compat v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/vendor/nix-compat)
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/vendor/nix-compat-derive)
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/vendor/fuse-backend-rs)
+   Compiling snix-castore v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/vendor/snix-castore)
+    Checking snix-tracing v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/vendor/snix-tracing)
+   Compiling snix-store v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/vendor/snix-store)
+   Compiling snix-build v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/vendor/snix-build)
+    Checking crunch-action-result-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-action-result-core)
+    Checking crunch-composition-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-composition-core)
+    Checking crunch-overlay-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-overlay-core)
+    Checking crunch-repair-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-repair-core)
+    Checking crunch-gc-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-gc-core)
+    Checking crunch-remote-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-remote-core)
+   Compiling crunch-build v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-build)
+    Checking crunch-spacewasm-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-spacewasm-core)
+    Checking mantle-causal-trace-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-causal-trace-core)
+    Checking crunch-rust-cache-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-rust-cache-core)
+    Checking crunch-source-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-source-core)
+    Checking crunch-delta-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-delta-core)
+    Checking crunch-wasm-component-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-wasm-component-core)
+    Checking crunch-eval v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-eval)
+    Checking crunch-nix-gateway-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-nix-gateway-core)
+    Checking crunch-evaluation-stream-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-evaluation-stream-core)
+    Checking crunch-watch-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-watch-core)
+    Checking mantle-build-contract v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-build-contract)
+    Checking crunch-shell-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-shell-core)
+    Checking mantle-lock-vendor-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-lock-vendor-core)
+    Checking crunch-hardware-simulation-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-hardware-simulation-core)
+    Checking crunch-android-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-android-core)
+    Checking crunch-bootstrap-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-bootstrap-core)
+    Checking crunch-eval-budget-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-eval-budget-core)
+    Checking mantlepkgs-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantlepkgs-core)
+    Checking mantle-portable-client-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-portable-client-core)
+    Checking crunch-service-readiness-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-service-readiness-core)
+    Checking crunch-kernelscript-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-kernelscript-core)
+    Checking crunch-cmake-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-cmake-core)
+    Checking crunch-verification-bridge-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-verification-bridge-core)
+    Checking crunch-esp-idf-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-esp-idf-core)
+    Checking crunch-fpga-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-fpga-core)
+    Checking crunch-model-conversion-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-model-conversion-core)
+    Checking crunch-python-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-python-core)
+    Checking mantle-lock-vendor-producer v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-lock-vendor-producer)
+    Checking crunch-shell v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-shell)
+    Checking crunch-release-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-release-core)
+    Checking crunch-pnpm-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-pnpm-core)
+    Checking crunch-verification-bridge v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-verification-bridge)
+    Checking crunch-model-conversion v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-model-conversion)
+    Checking crunch-pnpm v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-pnpm)
+    Checking crunch-gpu-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-gpu-core)
+    Checking crunch-zephyr-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-zephyr-core)
+    Checking crunch-attestation v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-attestation)
+    Checking crunch-project-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-project-core)
+    Checking mantle-application-contract v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-application-contract)
+    Checking mantle-rust-plan-app v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-rust-plan-app)
+    Checking mantle-cargo-build-bundle-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-cargo-build-bundle-core)
+    Checking crunch-cmake v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-cmake)
+    Checking mantle-cargo-unit-plan v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-cargo-unit-plan)
+    Checking mantle-rust-differential-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-rust-differential-core)
+    Checking crunch-python v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-python)
+    Checking crunch-test-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-test-core)
+    Checking crunch-esp-idf v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-esp-idf)
+    Checking crunch-hardware-simulation v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-hardware-simulation)
+    Checking crunch-gpu v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-gpu)
+    Checking crunch-zephyr v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-zephyr)
+    Checking crunch-spacewasm v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-spacewasm)
+    Checking crunch-fpga v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-fpga)
+    Checking crunch-test-app v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-test-app)
+    Checking crunch-kernelscript-adapter v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-kernelscript-adapter)
+    Checking crunch-test v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-test)
+    Checking crunch-nar v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-nar)
+    Checking crunch-glue v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-glue)
+    Checking crunch-remote-app v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-remote-app)
+    Checking crunch-wasm-component v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-wasm-component)
+    Checking mantle-wasm-consumer-verifier v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-wasm-consumer-verifier)
+    Checking mantle-rust-differential v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-rust-differential)
+    Checking crunch-project v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-project)
+    Checking crunch-store v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-store)
+    Checking crunch-rust-cache v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-rust-cache)
+    Checking crunch-delta v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-delta)
+    Checking crunch-rustc-wrapper v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-rustc-wrapper)
+    Checking crunch-nix-gateway v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-nix-gateway)
+    Checking crunch-pipeline v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-pipeline)
+    Checking crunch-android v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-android)
+    Checking mantle v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2m 44s
+[4/4] first-party workspace tests (serialized; vendored members excluded)
+running: cargo test --workspace --lib --tests --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- --test-threads 1
+warning: /home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/Cargo.toml: file `/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle-rust-plan-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-rust-plan-core)
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-attestation-core)
+   Compiling nix-compat v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/vendor/nix-compat)
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/vendor/nix-compat-derive)
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/vendor/fuse-backend-rs)
+   Compiling snix-castore v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/vendor/snix-castore)
+   Compiling snix-tracing v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/vendor/snix-tracing)
+   Compiling snix-store v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/vendor/snix-store)
+   Compiling snix-build v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/vendor/snix-build)
+   Compiling crunch-action-result-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-action-result-core)
+   Compiling crunch-composition-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-composition-core)
+   Compiling crunch-overlay-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-overlay-core)
+   Compiling crunch-gc-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-gc-core)
+   Compiling crunch-repair-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-repair-core)
+   Compiling crunch-remote-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-remote-core)
+   Compiling crunch-build v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-build)
+   Compiling crunch-spacewasm-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-spacewasm-core)
+   Compiling mantle-causal-trace-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-causal-trace-core)
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-source-core)
+   Compiling crunch-rust-cache-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-rust-cache-core)
+   Compiling crunch-eval v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-eval)
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-wasm-component-core)
+   Compiling crunch-nix-gateway-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-nix-gateway-core)
+   Compiling crunch-delta-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-delta-core)
+   Compiling crunch-evaluation-stream-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-evaluation-stream-core)
+   Compiling crunch-watch-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-watch-core)
+   Compiling crunch-shell-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-shell-core)
+   Compiling mantle-build-contract v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-build-contract)
+   Compiling mantle-lock-vendor-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-lock-vendor-core)
+   Compiling crunch-eval-budget-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-eval-budget-core)
+   Compiling mantlepkgs-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantlepkgs-core)
+   Compiling crunch-bootstrap-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-bootstrap-core)
+   Compiling crunch-hardware-simulation-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-hardware-simulation-core)
+   Compiling mantle-portable-client-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-portable-client-core)
+   Compiling crunch-service-readiness-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-service-readiness-core)
+   Compiling crunch-android-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-android-core)
+   Compiling crunch-kernelscript-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-kernelscript-core)
+   Compiling crunch-cmake-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-cmake-core)
+   Compiling crunch-verification-bridge-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-verification-bridge-core)
+   Compiling crunch-esp-idf-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-esp-idf-core)
+   Compiling crunch-fpga-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-fpga-core)
+   Compiling crunch-model-conversion-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-model-conversion-core)
+   Compiling crunch-shell v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-shell)
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-release-core)
+   Compiling crunch-pnpm-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-pnpm-core)
+   Compiling crunch-python-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-python-core)
+   Compiling crunch-verification-bridge v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-verification-bridge)
+   Compiling crunch-model-conversion v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-model-conversion)
+   Compiling crunch-pnpm v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-pnpm)
+   Compiling crunch-gpu-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-gpu-core)
+   Compiling crunch-zephyr-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-zephyr-core)
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-attestation)
+   Compiling crunch-project-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-project-core)
+   Compiling mantle-application-contract v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-application-contract)
+   Compiling mantle-rust-plan-app v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-rust-plan-app)
+   Compiling mantle-cargo-build-bundle-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-cargo-build-bundle-core)
+   Compiling crunch-cmake v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-cmake)
+   Compiling mantle-cargo-unit-plan v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-cargo-unit-plan)
+   Compiling mantle-rust-differential-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-rust-differential-core)
+   Compiling mantle-lock-vendor-producer v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-lock-vendor-producer)
+   Compiling crunch-test-core v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-test-core)
+   Compiling crunch-hardware-simulation v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-hardware-simulation)
+   Compiling crunch-esp-idf v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-esp-idf)
+   Compiling crunch-gpu v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-gpu)
+   Compiling crunch-spacewasm v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-spacewasm)
+   Compiling crunch-zephyr v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-zephyr)
+   Compiling crunch-fpga v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-fpga)
+   Compiling crunch-test-app v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-test-app)
+   Compiling crunch-remote-app v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-remote-app)
+   Compiling crunch-test v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-test)
+   Compiling crunch-kernelscript-adapter v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-kernelscript-adapter)
+   Compiling crunch-wasm-component v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-wasm-component)
+   Compiling mantle-wasm-consumer-verifier v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-wasm-consumer-verifier)
+   Compiling crunch-nar v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-nar)
+   Compiling crunch-glue v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-glue)
+   Compiling mantle-rust-differential v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/mantle-rust-differential)
+   Compiling crunch-project v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-project)
+   Compiling crunch-python v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-python)
+   Compiling crunch-store v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-store)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-rustc-wrapper)
+   Compiling crunch-nix-gateway v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-nix-gateway)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-pipeline)
+   Compiling crunch-android v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021/crates/crunch-android)
+   Compiling mantle v0.1.0 (/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3m 11s
+     Running unittests src/lib.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/crunch_action_result_core-3245421609982d2d)
+
+running 12 tests
+test artifact_auth::tests::duplicate_full_keys_missing_labels_revocation_and_incomplete_oci_pair_fail_closed ... ok
+test artifact_auth::tests::passing_dual_run_preserves_oci_identity_and_product_authority ... ok
+test artifact_auth::tests::signature_tamper_is_mapped_but_unrelated_failure_and_false_parity_block ... ok
+test artifact_auth::tests::standalone_statement_mapping_binds_action_result_key_and_policy_identities ... ok
+test artifact_auth::tests::standalone_statement_mapping_rejects_malformed_key_and_incomplete_oci_pair ... ok
+test tests::admitted_output_digest_is_present_or_fails_closed_without_panicking ... ok
+test tests::ca_mapping_and_index_presence_never_replace_verified_admission_facts ... ok
+test tests::conflicting_admitted_output_sets_fail_strong_reuse_without_source_order_selection ... ok
+test tests::identical_candidates_deduplicate_and_one_matching_signed_result_is_admitted ... ok
+test tests::malformed_refs_partial_records_and_oversized_indexes_are_rejected ... ok
+test tests::permutation_equivalent_records_and_indexes_have_identical_refs ... ok
+test tests::stale_drift_unsigned_policy_and_missing_admission_facts_fail_closed ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/architecture.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/architecture-71512f8bafde187a)
+
+running 1 test
+test adr_0024_core_has_no_cas_executor_or_transport_dependencies ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/crunch_android-c8ef4810d02bb805)
+
+running 14 tests
+test authority::tests::sha256_decoder_accepts_hex_and_rejects_split_multibyte_digest ... ok
+test integration_tests::official_proof::reviewed_signed_java_apk_clean_rebuilds_and_perturbation ... ignored, explicit connected-prefetch and reviewed SDK/signed-runtime proof prerequisites
+test integration_tests::sandbox_rejects_swapped_cached_untrusted_or_drifted_extractions ... ok
+test native::tests::native_and_signing_files_cannot_share_an_object_even_at_different_members ... ok
+test pinned::tests::byte_drift_rejects_entire_graph_before_generating_any_stage ... ok
+test pinned::tests::declared_store_namespace_rejects_ambient_loader_and_foreign_signing ... ok
+test pinned::tests::every_sdk_stage_binds_distinct_glibc_and_libgcc_source_objects ... ok
+test pinned::tests::final_output_identity_is_stable_and_changes_with_apk_inputs ... ok
+test pinned::tests::malformed_unicode_store_objects_are_rejected_without_panicking ... ok
+test pinned::tests::oversized_archive_rejects_before_constructing_extraction_graph ... ok
+test pinned::tests::signed_apk_graph_is_accepted_by_strict_build_environment ... ok
+test tests::invalid_plans_and_archive_drift_reject_before_graph_generation ... ok
+test tests::signing_inputs_require_isolated_store_objects_and_declared_member ... ok
+test tests::symlinked_archive_utility_and_signing_inputs_are_rejected ... ok
+
+test result: ok. 13 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.40s
+
+     Running unittests src/bin/admit.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/crunch_android_admit-aed4d10344e6f300)
+
+running 8 tests
+test tests::cached_sources_fail_on_absent_or_mutated_physical_bytes_and_untrusted_signer ... ok
+test tests::four_native_bindings_reject_missing_duplicate_ambiguous_and_escaped_roots ... ok
+test tests::missing_signing_source_fails_before_any_signed_input_pathinfo ... ok
+test tests::orphan_physical_object_without_signed_pathinfo_is_not_ready ... ok
+test tests::reviewed_nar_mismatch_and_changed_source_reject_before_store_mutation ... ok
+test tests::runtime_members_must_exist_inside_their_own_full_source_trees ... ok
+test tests::signed_input_admission_proves_exact_path_signature_physical_bytes_and_replay ... ok
+test tests::source_members_reject_host_escape_and_preserve_relative_runtime_symlinks ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.74s
+
+     Running unittests src/bin/apk.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/crunch_android_apk-290bc371f4f53489)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/crunch_android_core-428c074e10f81d26)
+
+running 20 tests
+test elf::tests::inspects_jni_exports_and_platform_imports ... ok
+test elf::tests::reads_the_mapped_android_api_note_instead_of_assuming_a_version_label ... ok
+test elf::tests::rejects_host_architecture_and_four_kib_native_loads ... ok
+test elf::tests::rejects_loader_section_disagreement_and_runtime_search_paths ... ok
+test elf::tests::truncated_or_overflowing_tables_fail_without_panicking ... ok
+test native::tests::assets_reject_traversal_and_file_directory_collisions ... ok
+test native::tests::rejects_abi_api_and_ndk_drift_before_execution ... ok
+test native::tests::rejects_host_paths_duplicate_libraries_and_invalid_jni_names ... ok
+test reviewed::tests::invalid_plans_return_distinct_rejections_before_lowering ... ok
+test reviewed::tests::reviewed_timestamp_policy_rejects_dates_the_jar_update_cannot_execute ... ok
+test reviewed::tests::signed_and_unsigned_order_and_membership ... ok
+test tests::accepts_configurable_absolute_store_prefix ... ok
+test tests::every_signing_file_must_be_store_shaped_and_confined ... ok
+test tests::malformed_or_misassigned_toolchain_records_are_not_bound ... ok
+test tests::missing_or_unsafe_manifest_is_rejected ... ok
+test tests::missing_or_unusable_source_set_is_rejected ... ok
+test tests::only_unique_known_signing_schemes_are_allowed ... ok
+test tests::reproducibility_policy_enforces_zip_epoch_and_fixed_locale_timezone ... ok
+test tests::signed_step_requires_aligned_apk_and_declared_toolchains ... ok
+test tests::unsigned_steps_require_ordered_predecessors_and_toolchains ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/crunch_attestation-e4f8d5ea150394ae)
+
+running 13 tests
+test adapter::tests::canonicalize_trait_routes_release_bytes_through_core ... ok
+test adapter::tests::detached_signature_adapter_preserves_borrowed_text_api ... ok
+test adapter::tests::evaluate_policy_adapter_preserves_old_signature ... ok
+test discovery::tests::discovers_release_and_witnesses_from_directory ... ok
+test discovery::tests::discovers_with_zero_witnesses ... ok
+test discovery::tests::discovers_without_revocations_file ... ok
+test discovery::tests::discovers_without_witnesses_directory ... ok
+test discovery::tests::discovery_applies_revocations_before_quorum ... ok
+test discovery::tests::end_to_end_discovery_and_policy_evaluation ... ok
+test discovery::tests::rejects_release_missing_sig_sidecar ... ok
+test discovery::tests::rejects_release_wrong_schema_tag ... ok
+test discovery::tests::rejects_witness_missing_sig_sidecar ... ok
+test discovery::tests::shell_adapter_keeps_discovery_outside_core ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running unittests src/lib.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/crunch_attestation_core-a37c65583e8b2e34)
+
+running 82 tests
+test canonical::tests::artifact_digest_ignores_node_and_edge_insertion_order ... ok
+test canonical::tests::canonicalization_rejects_closure_root_missing_from_members ... ok
+test canonical::tests::canonicalization_rejects_duplicate_node_ids ... ok
+test canonical::tests::canonicalization_rejects_empty_required_field ... ok
+test canonical::tests::canonicalization_rejects_invalid_artifact_subject ... ok
+test canonical::tests::canonicalization_rejects_invalid_closure_root_kind ... ok
+test canonical::tests::canonicalization_rejects_invalid_project_root ... ok
+test canonical::tests::canonicalization_rejects_missing_edge_endpoint ... ok
+test canonical::tests::canonicalization_rejects_oversized_alias_collection ... ok
+test canonical::tests::closure_digest_ignores_discovery_order ... ok
+test canonical::tests::project_digest_changes_when_schema_version_changes ... ok
+test canonical::tests::project_digest_ignores_selection_order ... ok
+test digest::tests::digest_rejects_uppercase_hex ... ok
+test digest::tests::digest_round_trip_hex ... ok
+test policy::tests::compatibility_profiles_keep_canonical_policy_fields ... ok
+test policy::tests::distinct_signer_keys_can_satisfy_signer_key_independence ... ok
+test policy::tests::empty_selected_independence_field_is_rejected ... ok
+test policy::tests::insufficient_quorum_fails_policy_with_technical_success ... ok
+test policy::tests::new_profiles_reject_duplicate_names_and_unbounded_thresholds ... ok
+test policy::tests::one_matching_witness_raises_technical_class ... ok
+test policy::tests::optional_policy_excludes_stale_mismatched_and_revoked_witnesses_without_failure ... ok
+test policy::tests::optional_policy_keeps_one_or_multiple_valid_witnesses_without_quorum_claim ... ok
+test policy::tests::optional_profile_accepts_trusted_witnesses_without_quorum ... ok
+test policy::tests::policy_change_does_not_affect_attestation_digests ... ok
+test policy::tests::policy_json_round_trip ... ok
+test policy::tests::policy_rejects_unsupported_independence_field ... ok
+test policy::tests::policy_rejects_wrong_schema_tag ... ok
+test policy::tests::quorum_profile_accepts_each_supported_selector ... ok
+test policy::tests::quorum_profile_rejects_missing_or_invalid_parameters ... ok
+test policy::tests::quorum_profile_succeeds_under_each_supported_selector ... ok
+test policy::tests::revocations_applied_before_quorum_counting ... ok
+test policy::tests::revocations_json_round_trip ... ok
+test policy::tests::revocations_rejects_wrong_schema_tag ... ok
+test policy::tests::revoked_attestation_digest_degrades_policy ... ok
+test policy::tests::revoked_key_degrades_policy_without_changing_technical_result ... ok
+test policy::tests::same_identity_cannot_satisfy_independence ... ok
+test policy::tests::same_signer_key_cannot_satisfy_signer_key_independence ... ok
+test policy::tests::satisfied_quorum_promotes_final_class ... ok
+test policy::tests::shared_host_class_cannot_satisfy_host_class_independence ... ok
+test policy::tests::witness_with_wrong_rebuilt_digest_does_not_count ... ok
+test policy::tests::witness_with_wrong_release_reference_does_not_count ... ok
+test policy::tests::zero_witnesses_yield_self_proof_valid ... ok
+test release::tests::binary_digests_sorted_regardless_of_insertion_order ... ok
+test release::tests::detached_signature_rejects_empty_key_name ... ok
+test release::tests::detached_signature_rejects_empty_payload ... ok
+test release::tests::detached_signature_rejects_missing_colon ... ok
+test release::tests::detached_signature_rejects_wrong_length ... ok
+test release::tests::detached_signature_round_trip ... ok
+test release::tests::final_class_ordering_matches_spec ... ok
+test release::tests::final_class_serializes_as_kebab ... ok
+test release::tests::independent_agreement_report_classifies_all_skip_reasons ... ok
+test release::tests::independent_agreement_report_counts_skipped_and_failed_witnesses ... ok
+test release::tests::independent_agreement_report_digest_is_stable_across_witness_order ... ok
+test release::tests::independent_agreement_report_marks_zero_threshold_not_required ... ok
+test release::tests::independent_agreement_report_requires_counted_domain ... ok
+test release::tests::insufficient_policy_mirrors_technical_class ... ok
+test release::tests::matching_digest_sets_compare_equal ... ok
+test release::tests::mismatched_digest_sets_compare_unequal ... ok
+test release::tests::not_evaluated_policy_mirrors_technical_class ... ok
+test release::tests::release_attestation_binds_manifest_and_binary_digests ... ok
+test release::tests::release_attestation_digest_is_stable_across_serializations ... ok
+test release::tests::release_attestation_effect_claims_and_facts_affect_digest ... ok
+test release::tests::release_attestation_json_round_trip ... ok
+test release::tests::release_canonical_json_has_correct_key_order ... ok
+test release::tests::release_rejects_empty_binary_digest_name ... ok
+test release::tests::release_rejects_empty_release_id ... ok
+test release::tests::release_rejects_oversized_binary_digests ... ok
+test release::tests::release_rejects_wrong_schema_tag ... ok
+test release::tests::satisfied_policy_promotes_to_quorum_satisfied ... ok
+test release::tests::signature_suite_serializes_as_kebab ... ok
+test release::tests::technical_class_ordering_matches_spec ... ok
+test release::tests::technical_class_serializes_as_kebab ... ok
+test release::tests::trust_tier_separates_all_three_fields ... ok
+test release::tests::witness_accepts_legacy_payload_without_source_mode ... ok
+test release::tests::witness_attestation_binds_to_release_digest ... ok
+test release::tests::witness_attestation_digest_is_stable_across_serializations ... ok
+test release::tests::witness_attestation_json_round_trip ... ok
+test release::tests::witness_canonical_json_has_correct_key_order ... ok
+test release::tests::witness_rejects_empty_witness_identity ... ok
+test release::tests::witness_rejects_oversized_env_field ... ok
+test release::tests::witness_rejects_oversized_source_acquisition_mode ... ok
+test release::tests::witness_rejects_wrong_schema_tag ... ok
+
+test result: ok. 82 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running unittests src/lib.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/crunch_bootstrap_core-cf02c6ae81696cf9)
+
+running 86 tests
+test lineage::tests::all_node_ids_collects_all ... ok
+test lineage::tests::blake3_hex_constructor_and_deserializer_enforce_format ... ok
+test lineage::tests::control_bearing_lineage_identifier_fails_nominal_admission ... ok
+test lineage::tests::default_seed_budget_is_4096 ... ok
+test lineage::tests::digest_entry_blake3_constructor ... ok
+test lineage::tests::digest_entry_non_blake3_requires_reason ... ok
+test lineage::tests::environment_assumptions_not_in_node_ids ... ok
+test lineage::tests::missing_and_wrong_role_lineage_references_fail_closed ... ok
+test lineage::tests::reachable_from_seed_traverses_graph ... ok
+test lineage::tests::seed_class_display ... ok
+test lineage::tests::serde_roundtrip ... ok
+test lineage::tests::valid_lineage_admission_resolves_node_roles_without_wire_drift ... ok
+test nominal::tests::empty_oversized_control_path_and_limit_values_fail_closed ... ok
+test nominal::tests::role_specific_identifiers_and_limits_admit_valid_values ... ok
+test profile::tests::empty_artifact_set_digest_rejected ... ok
+test profile::tests::empty_release_id_rejected ... ok
+test profile::tests::incomplete_proof_block_rejected ... ok
+test profile::tests::missing_bundle_verification_rejected ... ok
+test profile::tests::missing_proof_block_rejected ... ok
+test profile::tests::missing_reproducibility_rejected ... ok
+test profile::tests::multiple_failures_all_reported ... ok
+test profile::tests::satisfied_result_has_correct_fields ... ok
+test profile::tests::satisfied_result_never_says_quorum_satisfied ... ok
+test profile::tests::serde_roundtrip ... ok
+test profile::tests::unsatisfied_result_binds_class ... ok
+test provider_boundary::tests::full_roles_pass_boundary_check ... ok
+test provider_boundary::tests::legacy_fetch_classified_as_seed_assisted ... ok
+test provider_boundary::tests::live_bootstrap_raw_path_rejected ... ok
+test provider_boundary::tests::missing_all_required_roles_detected ... ok
+test provider_boundary::tests::missing_headers_role_detected ... ok
+test provider_boundary::tests::normalized_provider_paths_accepted ... ok
+test provider_boundary::tests::oci_unpack_raw_path_rejected ... ok
+test provider_boundary::tests::source_root_classified_as_intermediate ... ok
+test provider_boundary::tests::stage0_posix_raw_path_rejected ... ok
+test provider_boundary::tests::stagex_lineage_satisfies_requirement ... ok
+test provider_boundary::tests::unknown_provider_does_not_satisfy ... ok
+test source_root_capability::tests::bootstrap_is_reported_as_host_assisted_and_self_build_is_unsupported ... ok
+test source_root_capability::tests::missing_host_compiler_removes_bootstrap_command ... ok
+test stagex::tests::cyclic_or_missing_predecessor_fails ... ok
+test stagex::tests::fallback_or_scaffold_receipt_fails ... ok
+test stagex::tests::future_or_same_stage_executable_source_fails ... ok
+test stagex::tests::malformed_digest_and_undeclared_input_fail ... ok
+test stagex::tests::nominal_admission_rejects_control_oversized_and_over_limit_values ... ok
+test stagex::tests::relative_or_substituted_executable_fails ... ok
+test stagex::tests::stage_digest_is_deterministic_and_sensitive ... ok
+test stagex::tests::stale_stage_digest_or_missing_observation_fails ... ok
+test stagex::tests::valid_plan_admits_role_specific_scalars_without_wire_changes ... ok
+test stagex::tests::valid_plan_and_complete_receipt_pass ... ok
+test stagex::tests::zero_limits_and_missing_protected_exec_fail ... ok
+test validate::tests::complete_accepted_lineage_fixture ... ok
+test validate::tests::duplicate_node_id_rejected ... ok
+test validate::tests::empty_digest_rejected ... ok
+test validate::tests::environment_assumptions_reported_separately ... ok
+test validate::tests::exact_budget_seed_accepted ... ok
+test validate::tests::forbidden_ar_transition_tool_rejected ... ok
+test validate::tests::forbidden_host_cc_rejected ... ok
+test validate::tests::forbidden_host_gpp_rejected ... ok
+test validate::tests::forbidden_host_make_rejected ... ok
+test validate::tests::forbidden_legacy_fetched_source_rejected ... ok
+test validate::tests::forbidden_musl_cc_source_rejected ... ok
+test validate::tests::forbidden_nix_env_rejected ... ok
+test validate::tests::forbidden_nix_store_provenance_rejected ... ok
+test validate::tests::forbidden_nix_transition_tool_rejected ... ok
+test validate::tests::forbidden_ranlib_transition_tool_rejected ... ok
+test validate::tests::missing_seed_audit_note_rejected ... ok
+test validate::tests::missing_seed_entry_point_rejected ... ok
+test validate::tests::missing_seed_host_interface_rejected ... ok
+test validate::tests::missing_seed_instruction_set_rejected ... ok
+test validate::tests::missing_seed_io_contract_rejected ... ok
+test validate::tests::missing_seed_source_rejected ... ok
+test validate::tests::missing_seed_transcript_rejected ... ok
+test validate::tests::mixed_hex_case_blake3_rejected ... ok
+test validate::tests::multiple_missing_seed_fields_all_reported ... ok
+test validate::tests::non_blake3_interop_reason_names_upstream_format ... ok
+test validate::tests::non_blake3_with_empty_reason_rejected ... ok
+test validate::tests::non_blake3_with_reason_accepted ... ok
+test validate::tests::non_blake3_without_reason_rejected ... ok
+test validate::tests::oversized_seed_rejected ... ok
+test validate::tests::provider_output_reachable_but_not_in_nodes_rejected ... ok
+test validate::tests::seed_budget_stored_next_to_digest_in_manifest ... ok
+test validate::tests::short_blake3_rejected ... ok
+test validate::tests::undeclared_generated_artifact_rejected ... ok
+test validate::tests::unreachable_provider_output_rejected ... ok
+test validate::tests::unsupported_seed_class_rejected_with_guidance ... ok
+test validate::tests::uppercase_blake3_rejected ... ok
+test validate::tests::valid_manifest_passes ... ok
+
+test result: ok. 86 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/lib.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/crunch_build-2c9185596a190b18)
+
+running 762 tests
+test action_result::tests::action_result_display_name_cannot_replace_trusted_public_key_material ... ok
+test action_result::tests::altered_drv_cas_bytes_cannot_reuse_a_signed_action_result ... ok
+test action_result::tests::candidate_facts_reject_object_pathinfo_receipt_and_signature_drift ... ok
+test action_result::tests::derivation_adapter_record_and_signature_are_deterministic_and_verifiable ... ok
+test action_result::tests::record_construction_rejects_output_path_not_declared_by_action ... ok
+test action_result::tests::signed_bound_result_admits_only_the_original_action_and_exact_roots ... ok
+test action_result::tests::signed_drv_bytes_and_result_prove_exact_present_output ... ok
+test action_result::tests::signed_result_rejects_forged_key_output_and_ambiguity ... ok
+test action_result::tests::trust_policy_never_promotes_source_or_ca_mapping_presence ... ok
+test action_result::tests::trusted_signer_cannot_impersonate_a_different_producer_identity ... ok
+test action_result::tests::unresolved_ca_output_from_signed_cas_is_rejected_by_strict_aterm_parser ... ok
+test artifact_auth::tests::ambiguous_legacy_signature_and_producer_substitution_are_rejected ... ok
+test artifact_auth::tests::carrier_statement_signature_encoding_and_authorization_drift_fail_closed ... ok
+test artifact_auth::tests::changed_statement_preimage_is_rejected_by_carrier_identity ... ok
+test artifact_auth::tests::exact_statement_round_trip_preserves_product_authority ... ok
+test artifact_auth::tests::legacy_result_signature_cannot_verify_as_standalone_statement ... ok
+test artifact_auth::tests::malformed_and_relabeled_public_key_carriers_are_rejected ... ok
+test artifact_auth::tests::operational_receipt_denies_unknown_revoked_stale_and_symlinked_trust ... ok
+test artifact_auth::tests::operational_receipt_persists_replays_and_rejects_trust_drift ... ok
+test artifact_auth::tests::protocol_pass_standalone_fail_and_reverse_drift_are_blocked ... ok
+test artifact_auth::tests::signing_rejects_legacy_authorization_and_currentness_failures ... ok
+test artifact_auth::tests::signing_rejects_tampered_legacy_signature_and_wrong_full_key ... ok
+test artifact_auth::tests::unknown_and_revoked_currentness_remain_explicit_standalone_failures ... ok
+test artifact_auth::tests::unrelated_dual_rejections_are_not_false_parity ... ok
+test artifact_auth::tests::wrong_public_key_is_rejected_before_malformed_signature_is_classified ... ok
+test build_request::tests::build_request_has_correct_builder ... ok
+test build_request::tests::build_request_has_refscan_needles ... ok
+test build_request::tests::build_request_has_sandbox_env ... ok
+test build_request::tests::build_request_has_system_constraint ... ok
+test build_request::tests::build_request_materializes_pass_as_file_payload ... ok
+test build_request::tests::build_request_outputs_are_relative ... ok
+test build_request::tests::build_request_rejects_wrong_foreign_profile ... ok
+test build_request::tests::collect_inputs_derivation_only ... ok
+test build_request::tests::collect_inputs_missing_drv_returns_error ... ok
+test build_request::tests::collect_inputs_mixed ... ok
+test build_request::tests::collect_inputs_source_only ... ok
+test build_request::tests::custom_fixed_output_builder_does_not_gain_network_access ... ok
+test build_request::tests::declared_mutable_workspace_becomes_runtime_request_without_environment_leak ... ok
+test build_request::tests::declared_network_capability_is_rejected_before_build_request ... ok
+test build_request::tests::fetcher_build_request_has_builtin_builder ... ok
+test build_request::tests::fetcher_build_request_is_recognized_by_is_fetch_request ... ok
+test build_request::tests::fetcher_build_request_outputs_contain_fetch_output_path ... ok
+test build_request::tests::fetcher_build_request_preserves_all_fetch_env_vars ... ok
+test build_request::tests::fetcher_build_request_preserves_url_env_var ... ok
+test build_request::tests::foreign_guix_profile_controls_shell_environment_and_working_paths ... ok
+test build_request::tests::foreign_nix_profile_supplies_protocol_environment_for_active_store ... ok
+test build_request::tests::foreign_nix_protocol_environment_prevents_declared_build_top_escape ... ok
+test build_request::tests::foreign_profile_rejects_undeclared_network_authority ... ok
+test build_request::tests::invalid_workspace_policy_fails_closed ... ok
+test build_request::tests::non_mutable_workspace_rejects_declared_lease ... ok
+test build_request::tests::ordinary_build_request_denies_network_by_default ... ok
+test build_request::tests::output_selection_coalescing_both_in_sandbox ... ok
+test build_request::tests::output_selection_only_selected_output_in_sandbox_inputs ... ok
+test build_request::tests::pass_as_file_expansion_matches_nix_protocol_paths_and_contents ... ok
+test build_request::tests::pass_as_file_expansion_rejects_missing_environment_variable ... ok
+test build_request::tests::pass_as_file_expansion_rejects_non_utf8_name_list ... ok
+test build_request::tests::pass_as_file_payload_preserves_unknown_placeholder ... ok
+test build_request::tests::pass_as_file_payload_rewrites_nix_output_placeholder_for_active_store ... ok
+test build_request::tests::practical_mode_allows_nix_build_cores_override_without_audit ... ok
+test build_request::tests::practical_mode_allows_source_date_epoch_override_without_audit ... ok
+test build_request::tests::practical_mode_audits_protected_environment_override ... ok
+test build_request::tests::replace_placeholders_bstr_matches_string_variant ... ok
+test build_request::tests::replace_placeholders_multi_output ... ok
+test build_request::tests::replace_placeholders_noop_without_known_placeholder ... ok
+test build_request::tests::replace_placeholders_substitutes_nix_compatible_output_at_selected_store_prefix ... ok
+test build_request::tests::replace_placeholders_substitutes_output_path ... ok
+test build_request::tests::sandbox_build_request_is_not_fetch_request ... ok
+test build_request::tests::strict_mode_accepts_declared_store_path_and_reports_tool_refs ... ok
+test build_request::tests::strict_mode_allows_source_date_epoch_override_without_audit ... ok
+test build_request::tests::strict_mode_determinism_policy_changes_with_declared_time_override ... ok
+test build_request::tests::strict_mode_rejects_ambient_path_poisoning_with_receipt_bound_report ... ok
+test build_request::tests::strict_mode_rejects_protected_environment_override ... ok
+test build_request::tests::strict_mode_rejects_secret_environment_variable_with_redacted_report ... ok
+test build_request::tests::strict_mode_reports_stable_environment_digest ... ok
+test build_request::tests::structured_attrs_materialization_matches_nix_shell_and_json_protocols ... ok
+test build_request::tests::structured_attrs_materialization_rejects_malformed_protocol_json ... ok
+test build_request::tests::structured_attrs_materialization_rejects_output_identity_mismatch ... ok
+test build_request::tests::structured_attrs_payload_rewrites_output_placeholders_before_materialization ... ok
+test ca_plan::tests::compute_ca_store_path_deterministic ... ok
+test ca_plan::tests::compute_ca_store_path_different_hash ... ok
+test ca_plan::tests::different_names_different_markers ... ok
+test ca_plan::tests::marker_is_deterministic ... ok
+test ca_plan::tests::marker_length_matches_provisional ... ok
+test ca_plan::tests::marker_not_all_zeros ... ok
+test ca_plan::tests::marker_too_long_panics - should panic ... ok
+test ca_plan::tests::marker_zero_len_panics - should panic ... ok
+test ca_plan::tests::path_name_no_drv_suffix ... ok
+test ca_plan::tests::path_name_non_out_appends ... ok
+test ca_plan::tests::path_name_out_uses_base ... ok
+test ca_plan::tests::plan_ca_outputs_collects_all ... ok
+test causal_trace::store_identity_tests::scheduler_goal_key_hashes_configured_logical_identity ... ok
+test causal_trace::tests::cache_hit_names_admission_and_retry_cancellation_cleanup_are_typed ... ok
+test causal_trace::tests::emitted_action_cap_fails_closed_without_wrapping_identity ... ok
+test causal_trace::tests::failed_retry_uses_latest_attempt_or_recheck_cause ... ok
+test causal_trace::tests::multi_hop_failure_names_immediate_failed_dependency ... ok
+test causal_trace::tests::real_collector_keeps_interleaved_failure_chain_and_redacts ... ok
+test compile_driver::tests::declared_runtime_cannot_be_overridden_by_derivation_cache_or_slot_keys ... ok
+test compile_driver::tests::exact_builder_admission_rejects_similar_path_and_receipt_output_overlap ... ok
+test compile_driver::tests::runtime_loader_rejects_oversize_and_unknown_authority_fields ... ok
+test compile_driver::tests::runtime_paths_and_inventory_are_bounded_and_unambiguous ... ok
+test dispatch_build_service::tests::dispatch_never_sends_fetch_to_sandbox ... ok
+test dispatch_build_service::tests::dispatch_never_sends_sandbox_to_fetch ... ok
+test dispatch_build_service::tests::dispatch_propagates_fetch_error ... ok
+test dispatch_build_service::tests::dispatch_propagates_sandbox_error ... ok
+test dispatch_build_service::tests::dispatch_routes_fetch_to_fetch_service ... ok
+test dispatch_build_service::tests::dispatch_routes_sandbox_to_sandbox_service ... ok
+test dispatch_build_service::tests::watch_fetch_dispatch_pre_cancel_skips_cas_and_sandbox ... ok
+test dispatch_build_service::tests::watch_sandbox_dispatch_reaches_owned_bwrap_pre_cancel ... ok
+test distributed::external_batch::tests::canonical_submit_is_deterministic_and_secret_free ... ok
+test distributed::external_batch::tests::equivalent_resource_order_produces_identical_dispatch_identity ... ok
+test distributed::external_batch::tests::followup_preserves_dispatch_identity_and_requires_scheduler_identity_except_reconcile ... ok
+test distributed::external_batch::tests::invalid_limits_and_missing_job_identity_are_rejected ... ok
+test distributed::external_batch::tests::malformed_and_stale_responses_fail_closed ... ok
+test distributed::external_batch::tests::malformed_operation_enum_and_oversized_response_reason_are_rejected ... ok
+test distributed::external_batch::tests::operation_kind_changes_operation_identity_not_dispatch_identity ... ok
+test distributed::external_batch::tests::reconciliation_reattaches_waits_preserves_unknown_resubmits_and_marks_lost ... ok
+test distributed::external_batch::tests::terminal_state_conflicts_and_backwards_transitions_are_rejected ... ok
+test distributed::remote_attempt_log::tests::append_is_idempotent_and_changed_payload_under_event_id_conflicts ... ok
+test distributed::remote_attempt_log::tests::bounded_segment_accepts_multiple_contiguous_records ... ok
+test distributed::remote_attempt_log::tests::chain_validation_rejects_payload_previous_digest_and_segment_tamper ... ok
+test distributed::remote_attempt_log::tests::changing_payload_changes_record_and_segment_identities ... ok
+test distributed::remote_attempt_log::tests::cursor_decision_table_distinguishes_retained_head_and_after_head ... ok
+test distributed::remote_attempt_log::tests::malformed_policy_position_and_overflow_arithmetic_fail_closed ... ok
+test distributed::remote_attempt_log::tests::redaction_escapes_control_data_redacts_secrets_and_truncates_deterministically ... ok
+test distributed::remote_attempt_log::tests::replay_is_bounded_and_rejects_after_head_or_too_small_limit ... ok
+test distributed::remote_attempt_log::tests::retention_creates_verifiable_anchor_and_distinguishes_truncated_cursor ... ok
+test distributed::remote_attempt_log::tests::stale_future_and_wrong_attempt_scopes_fail_before_manifest_change ... ok
+test distributed::remote_attempt_log::tests::tampered_truncation_anchor_fails_closed ... ok
+test distributed::remote_failure_debug::tests::capture_accounting_detects_overflow_before_publication ... ok
+test distributed::remote_failure_debug::tests::capture_observation_admission_is_bounded_and_regular_file_only ... ok
+test distributed::remote_failure_debug::tests::capture_plan_rejects_traversal_secrets_host_paths_and_duplicates ... ok
+test distributed::remote_failure_debug::tests::malformed_and_mismatched_bundle_facts_fail_closed ... ok
+test distributed::remote_failure_debug::tests::metadata_only_bundle_validates_inspects_and_plans_new_authority_replay ... ok
+test distributed::remote_failure_debug::tests::permutation_equivalent_bundle_facts_have_one_identity ... ok
+test distributed::remote_failure_debug::tests::redaction_never_returns_raw_secret_host_path_or_control_text ... ok
+test distributed::remote_failure_debug::tests::replay_comparison_reports_match_and_divergence_without_rewriting_truth ... ok
+test distributed::remote_failure_debug::tests::retention_preserves_active_lease_and_deletes_only_expired_debug_roots ... ok
+test distributed::remote_failure_debug::tests::retention_rejects_ordinary_build_output_deletion_authority ... ok
+test distributed::remote_resources::tests::aggregate_reservations_prevent_every_overcommit_class ... ok
+test distributed::remote_resources::tests::checked_cpu_reservations_preserve_capacity_invariant ... ok
+test distributed::remote_resources::tests::compatible_vectors_reserve_release_and_replay_deterministically ... ok
+test distributed::remote_resources::tests::invalid_resource_shapes_fail_closed ... ok
+test distributed::remote_resources::tests::lease_snapshot_rejects_corruption_and_overcommit ... ok
+test distributed::remote_resources::tests::locality_cannot_create_eligibility_and_starvation_remains_authoritative ... ok
+test distributed::remote_resources::tests::placement_uses_classes_and_stable_identity_not_input_order ... ok
+test distributed::remote_resources::tests::restart_recovery_preserves_only_current_live_lease ... ok
+test distributed::remote_resources::tests::stale_attempt_cannot_renew_release_or_resize_current_lease ... ok
+test distributed::remote_resources::tests::stale_wrong_scope_and_unverified_locality_never_claim_zero_transfer ... ok
+test distributed::remote_resources::tests::verified_full_partial_and_missing_locality_are_derived_from_receiver_facts ... ok
+test distributed::remote_telemetry::tests::bounded_buffer_drops_without_rewriting_existing_events ... ok
+test distributed::remote_telemetry::tests::equivalent_facts_normalize_to_provider_neutral_event_and_metric ... ok
+test distributed::remote_telemetry::tests::invalid_policy_and_zero_value_fail_closed ... ok
+test distributed::remote_telemetry::tests::raw_identifiers_paths_outputs_traces_credentials_and_errors_are_rejected ... ok
+test distributed::remote_transfer::tests::acknowledgement_is_monotonic_and_digest_checked ... ok
+test distributed::remote_transfer::tests::canonical_manifest_is_permutation_invariant_and_covers_existing_identity_classes ... ok
+test distributed::remote_transfer::tests::checkpoint_tamper_scope_regression_missing_object_and_forged_cursor_fail_closed ... ok
+test distributed::remote_transfer::tests::credit_and_chunk_validation_reject_before_payload_allocation ... ok
+test distributed::remote_transfer::tests::early_cutoff_requires_verified_identity_complete_closure_and_admitted_pathinfo ... ok
+test distributed::remote_transfer::tests::idle_progress_is_bounded_and_regression_fails ... ok
+test distributed::remote_transfer::tests::malformed_manifest_schema_precedes_store_prefix_and_wrong_policy_digest ... ok
+test distributed::remote_transfer::tests::manifest_rejects_chunk_bounds_digest_conflicts_and_non_nar_sha256 ... ok
+test distributed::remote_transfer::tests::repeated_chunk_digests_are_disambiguated_by_artifact_local_index ... ok
+test distributed::remote_transfer::tests::resumed_transfer_demands_only_missing_chunks_with_verified_cursor ... ok
+test distributed::resource_policy::tests::callable_adapter_rechecks_live_capacity_and_canonicalizes_replay ... ok
+test distributed::resource_policy::tests::declared_minima_never_decrease_and_input_order_is_irrelevant ... ok
+test distributed::resource_policy::tests::history_enlarges_without_weakening_requirements_and_order_is_stable ... ok
+test distributed::resource_policy::tests::missing_dimensions_and_sampled_scratch_never_become_resource_measurements ... ok
+test distributed::resource_policy::tests::observe_only_and_retry_rollback_are_independent ... ok
+test distributed::resource_policy::tests::oom_retry_needs_positive_current_fenced_evidence_and_all_limits ... ok
+test distributed::resource_policy::tests::sample_threshold_applies_independently_to_each_known_dimension ... ok
+test distributed::resource_policy::tests::sharing_never_skips_existing_signed_result_admission ... ok
+test distributed::resource_policy::tests::unknown_untrusted_stale_incompatible_and_outlier_history_fall_back ... ok
+test distributed::resource_quota_store::tests::admitted_context_and_observation_survive_reopen_without_cross_attempt_authority ... ok
+test distributed::resource_quota_store::tests::corrupt_missing_overflow_and_oversized_usage_fail_closed ... ok
+test distributed::resource_quota_store::tests::durable_duplicate_reservation_and_completion_charge_once_across_reopen ... ok
+test distributed::resource_quota_store::tests::interrupted_mutations_recover_idempotently_and_do_not_grant_quota ... ok
+test distributed::resource_quota_store::tests::only_verified_never_started_cancellation_can_release_zero ... ok
+test distributed::resource_quota_store::tests::project_and_shared_account_limits_both_block_admission ... ok
+test distributed::resource_quota_store::tests::quota_busy_lock_returns_without_waiting_for_owner_release ... ok
+test distributed::resource_quota_store::tests::quota_rejects_symlinks_public_directories_and_duplicate_ledger_keys ... ok
+test distributed::resource_quota_store::tests::worker_loss_partial_and_cancellation_hold_quota_until_final_observation ... ok
+test distributed::tests::derivation_identity_changes_key ... ok
+test distributed::tests::diagnostic_receipts_cover_operator_events_and_redact_secrets ... ok
+test distributed::tests::distributed_profile_config_round_trips_capabilities_and_parameters ... ok
+test distributed::tests::distributed_profile_default_is_provider_neutral_local_only ... ok
+test distributed::tests::empty_resolver_chain_preserves_local_build_decision ... ok
+test distributed::tests::environment_changes_key ... ok
+test distributed::tests::equivalent_requests_have_stable_keys ... ok
+test distributed::tests::fake_remote_realizer_can_satisfy_contract_tests_without_local_service ... ok
+test distributed::tests::hash_negotiated_remote_realization_all_present_executes_without_transfer ... ok
+test distributed::tests::hash_negotiated_remote_realization_rejects_digest_mismatch_before_execution ... ok
+test distributed::tests::hash_negotiated_remote_realization_rejects_unsupported_capability_and_profile ... ok
+test distributed::tests::hash_negotiated_remote_realization_requests_missing_hashes_then_verifies_transfer ... ok
+test distributed::tests::in_memory_adapter_reports_miss_then_hit_after_publish ... ok
+test distributed::tests::in_memory_publisher_reports_idempotent_skip ... ok
+test distributed::tests::input_closure_changes_key ... ok
+test distributed::tests::input_closure_order_is_validated ... ok
+test distributed::tests::local_build_service_realizer_delegates_to_build_service ... ok
+test distributed::tests::local_only_policy_requires_local_realizer ... ok
+test distributed::tests::platform_changes_key ... ok
+test distributed::tests::realizer_profile_changes_key ... ok
+test distributed::tests::remote_allowed_policy_allows_remote_realizer ... ok
+test distributed::tests::remote_build_service_adapter_dispatches_concrete_ready_goal ... ok
+test distributed::tests::remote_build_service_rejects_raw_or_incomplete_requests ... ok
+test distributed::tests::remote_candidate_verification_accepts_verified_outputs ... ok
+test distributed::tests::remote_candidate_verification_rejects_key_mismatch ... ok
+test distributed::tests::remote_candidate_verification_rejects_missing_log_or_metadata ... ok
+test distributed::tests::remote_candidate_verification_rejects_output_mismatch ... ok
+test distributed::tests::remote_candidate_verification_rejects_unverified_status ... ok
+test distributed::tests::remote_first_fallback_requires_explicit_policy ... ok
+test distributed::tests::remote_goal_attachments_reject_unbounded_ready_sets ... ok
+test distributed::tests::remote_goal_attachments_start_once_and_attach_duplicate_key ... ok
+test distributed::tests::resolver_chain_skips_unavailable_resolvers ... ok
+test distributed::tests::resolver_chain_uses_first_hit_before_local_build ... ok
+test distributed::tests::sandbox_changes_key ... ok
+test distributed::tests::scheduler_route_facts_normalize_only_after_every_hard_check ... ok
+test distributed::tests::scheduler_route_preference_cannot_bypass_any_hard_blocker ... ok
+test distributed::tests::scheduler_selection_does_not_schedule_when_at_capacity ... ok
+test distributed::tests::scheduler_selection_keeps_goal_dedup_owned_by_scheduler ... ok
+test distributed::tests::scheduler_selection_preserves_max_jobs_budget ... ok
+test distributed::tests::store_prefix_changes_key ... ok
+test distributed::tests::toolchain_changes_key ... ok
+test distributed::tests::verified_artifact_rejects_empty_outputs ... ok
+test distributed::tests::verified_artifact_rejects_substitution_for_unknown_output ... ok
+test dynamic::tests::batch_deduplicates_exact_identity_and_rejects_collision ... ok
+test dynamic::tests::byte_and_policy_limits_fail_closed ... ok
+test dynamic::tests::custom_prefix_changes_identity_without_mixing_prefixes ... ok
+test dynamic::tests::drv_output_detection_is_bounded_and_shape_aware ... ok
+test dynamic::tests::duplicate_conflicting_and_unexpected_parent_facts_fail_closed ... ok
+test dynamic::tests::exact_duplicate_is_idempotent_and_collision_fails ... ok
+test dynamic::tests::malformed_name_and_non_candidate_are_distinct ... ok
+test dynamic::tests::missing_parent_fails_before_registry_ready_state ... ok
+test dynamic::tests::mixed_prefix_candidate_is_rejected ... ok
+test dynamic::tests::native_output_mask_keeps_parent_hash_and_finished_bytes_for_both_store_prefixes ... ok
+test dynamic::tests::over_depth_versioned_tree_fails_without_recursive_traversal ... ok
+test dynamic::tests::supported_versioned_tree_is_flattened_in_preorder ... ok
+test dynamic::tests::traditional_candidate_reaches_registry_ready_state ... ok
+test dynamic::tests::traditional_identity_matches_covered_native_algorithm ... ok
+test dynamic::tests::unknown_version_and_truncated_forms_fail_closed ... ok
+test dynamic::tests::versioned_empty_request_and_unsupported_output_fail_closed ... ok
+test dynamic::tests::versioned_form_accepts_one_explicit_custom_prefix ... ok
+test dynamic::tests::wrong_prefix_and_hash_domain_fail_before_identity ... ok
+test dynamic_plan::tests::admission_rejects_invalid_output_name_and_store_prefix_reference ... ok
+test dynamic_plan::tests::admission_rejects_malformed_source_digest_and_absolute_host_path ... ok
+test dynamic_plan::tests::blake3_hex_accepts_lowercase_hex ... ok
+test dynamic_plan::tests::blake3_hex_rejects_wrong_length_or_uppercase ... ok
+test dynamic_plan::tests::canonical_bytes_are_compact_json ... ok
+test dynamic_plan::tests::canonical_digest_ignores_formatting_and_object_key_order ... ok
+test dynamic_plan::tests::canonicalization_sorts_set_like_collections ... ok
+test dynamic_plan::tests::decode_accepts_present_null_nullable_fields ... ok
+test dynamic_plan::tests::decode_accepts_valid_plan_shape ... ok
+test dynamic_plan::tests::decode_canonical_plan_returns_canonical_plan_bytes_and_digest ... ok
+test dynamic_plan::tests::decode_rejects_missing_required_field ... ok
+test dynamic_plan::tests::decode_rejects_non_native_derivation_sandbox ... ok
+test dynamic_plan::tests::decode_rejects_over_limit_json_nesting_depth ... ok
+test dynamic_plan::tests::decode_rejects_oversized_plan_before_json_parse ... ok
+test dynamic_plan::tests::decode_rejects_unknown_nested_field ... ok
+test dynamic_plan::tests::decode_rejects_unknown_top_level_field ... ok
+test dynamic_plan::tests::decode_requires_nullable_fixed_output_field ... ok
+test dynamic_plan::tests::decode_requires_nullable_goal_hint_field ... ok
+test dynamic_plan::tests::decode_requires_nullable_source_digest_field ... ok
+test dynamic_plan::tests::dynamic_placeholder_validation_rejects_malformed_unknown_and_undeclared_tokens ... ok
+test dynamic_plan::tests::dynamic_placeholder_validation_rejects_wrong_role_tokens ... ok
+test dynamic_plan::tests::dynamic_placeholders_resolve_declared_source_and_unit_output_paths ... ok
+test dynamic_plan::tests::native_fetch_admits_pinned_archive_and_recursive_git_tree ... ok
+test dynamic_plan::tests::native_fetch_denies_unpinned_or_unsafe_artifact_requests ... ok
+test dynamic_plan::tests::nominal_constructors_admit_valid_distinct_values ... ok
+test dynamic_plan::tests::nominal_constructors_reject_empty_oversized_control_and_malformed_values ... ok
+test dynamic_plan::tests::output_name_accepts_expected_grammar ... ok
+test dynamic_plan::tests::output_name_rejects_invalid_grammar ... ok
+test dynamic_plan::tests::slice_planner_accepts_two_and_rejects_without_partial_plan ... ok
+test dynamic_plan::tests::source_id_uses_unit_id_grammar ... ok
+test dynamic_plan::tests::store_path_string_accepts_store_path_and_suffix ... ok
+test dynamic_plan::tests::store_path_string_rejects_non_normal_suffix ... ok
+test dynamic_plan::tests::store_path_string_rejects_wrong_prefix_and_bad_component ... ok
+test dynamic_plan::tests::store_prefix_must_be_absolute_and_normalized ... ok
+test dynamic_plan::tests::unit_id_accepts_expected_grammar ... ok
+test dynamic_plan::tests::unit_id_rejects_invalid_grammar ... ok
+test dynamic_plan::tests::v2_enforces_slice_count_depth_and_canonical_byte_ceiling ... ok
+test dynamic_plan::tests::v2_rejects_bad_subpaths_undeclared_output_and_source_conflict ... ok
+test dynamic_plan::tests::v2_slice_canonical_order_and_digest_bind_expected_content ... ok
+test dynamic_plan::tests::validate_accepts_valid_plan_and_decode_validated_returns_canonical_digest ... ok
+test dynamic_plan::tests::validate_rejects_duplicate_output_names ... ok
+test dynamic_plan::tests::validate_rejects_duplicate_unit_and_source_ids ... ok
+test dynamic_plan::tests::validate_rejects_empty_duplicate_and_unknown_roots ... ok
+test dynamic_plan::tests::validate_rejects_over_limit_string_field ... ok
+test dynamic_plan::tests::validate_rejects_over_limit_units_dependencies_outputs_and_env ... ok
+test dynamic_plan::tests::validate_rejects_policy_widening ... ok
+test dynamic_plan::tests::validate_rejects_undeclared_source_and_unit_output_refs ... ok
+test dynamic_plan::tests::validate_rejects_unit_output_dependency_cycles ... ok
+test dynamic_plan::tests::validate_rejects_unknown_schema_version ... ok
+test dynamic_plan::tests::wire_projection_preserves_frozen_canonical_bytes_and_plan_digest ... ok
+test environment_policy::tests::classifier_accepts_declared_build_variables ... ok
+test environment_policy::tests::classifier_rejects_poison_and_redacts_secrets ... ok
+test environment_policy::tests::determinism_normalization_plan_blocks_unsupported_controls_and_divergence ... ok
+test environment_policy::tests::determinism_normalization_plan_records_stable_policy_digest ... ok
+test environment_policy::tests::digest_is_stable_for_ordered_environment_content ... ok
+test environment_policy::tests::receipt_bound_search_path_plan_records_ordered_digest_aliases_and_real_refs ... ok
+test environment_policy::tests::receipt_bound_search_path_plan_rejects_ambient_entries_and_alias_drift ... ok
+test error::tests::build_failed_display ... ok
+test error::tests::derivation_not_found_display ... ok
+test error::tests::error_is_send_and_sync ... ok
+test error::tests::fod_flat_not_file_display ... ok
+test error::tests::fod_hash_mismatch_display ... ok
+test error::tests::io_error_converts_via_from ... ok
+test error::tests::nar_calculation_display ... ok
+test error::tests::output_missing_display ... ok
+test error::tests::output_no_path_display ... ok
+test error::tests::source_not_found_display_keeps_nix_compatibility ... ok
+test error::tests::source_not_found_display_uses_configured_store_prefix ... ok
+test error::tests::store_error_display ... ok
+test error::tests::unsafe_env_override_display ... ok
+test execution_profile::tests::guix_profile_binds_and_strips_reserved_field_from_declared_environment ... ok
+test execution_profile::tests::nickel_exports_match_rust_profile_defaults ... ok
+test execution_profile::tests::profile_digest_changes_when_shell_policy_changes ... ok
+test execution_profile::tests::profile_rejects_bad_writable_prefix_and_environment_override ... ok
+test execution_profile::tests::profile_rejects_limits_and_unsupported_authority ... ok
+test execution_profile::tests::profile_rejects_reserved_collision_stale_digest_and_bin_sh ... ok
+test execution_profile::tests::profile_rejects_unknown_json_field ... ok
+test fetch_build_service::tests::cancelled_watch_fetch_drains_blocking_download_before_reporting_without_cas ... ok
+test fetch_build_service::tests::do_build_executable_sets_mode ... ok
+test fetch_build_service::tests::do_build_fetches_local_file ... ok
+test fetch_build_service::tests::do_build_fetches_tarball ... ok
+test fetch_build_service::tests::do_build_rejects_missing_url ... ok
+test fetch_build_service::tests::do_build_rejects_non_fetch ... ok
+test fetch_build_service::tests::do_build_uses_matching_source_override_without_network ... ok
+test fetch_build_service::tests::is_fetch_request_false_for_empty_args ... ok
+test fetch_build_service::tests::is_fetch_request_false_for_sandbox ... ok
+test fetch_build_service::tests::is_fetch_request_true_for_builtin ... ok
+test fetch_build_service::tests::ordered_foreign_candidates_preserve_declared_order_and_kind ... ok
+test fetch_build_service::tests::ordered_foreign_candidates_reject_malformed_duplicate_and_stale_primary ... ok
+test fetch_build_service::tests::ordered_foreign_candidates_report_exhaustion_before_network ... ok
+test fetch_build_service::tests::ordered_foreign_candidates_select_first_available_source_state ... ok
+test fetch_build_service::tests::parse_executable_fetch ... ok
+test fetch_build_service::tests::parse_file_fetch ... ok
+test fetch_build_service::tests::parse_git_fetch ... ok
+test fetch_build_service::tests::parse_git_missing_rev ... ok
+test fetch_build_service::tests::parse_invalid_url ... ok
+test fetch_build_service::tests::parse_missing_url ... ok
+test fetch_build_service::tests::parse_rejects_non_fetcher ... ok
+test fetch_build_service::tests::parse_tarball_fetch ... ok
+test fetch_build_service::tests::parse_unpack_takes_priority_over_executable ... ok
+test fetch_build_service::tests::required_source_override_rejects_unmatched_fetch_before_network ... ok
+test fetch_build_service::tests::source_override_requires_matching_git_revision ... ok
+test fetch_build_service::tests::successful_watch_fetch_returns_ingested_content ... ok
+test fetcher::tests::decompress_gzip ... ok
+test fetcher::tests::decompress_lzma ... ok
+test fetcher::tests::decompress_lzma_rejects_invalid_stream ... ok
+test fetcher::tests::decompress_raw_tar ... ok
+test fetcher::tests::decompress_unknown_raw_fallback ... ok
+test fetcher::tests::decompress_unknown_with_gzip_magic ... ok
+test fetcher::tests::decompress_xz ... ok
+test fetcher::tests::decompress_zstd ... ok
+test fetcher::tests::extract_tar_directory_entry_replaces_symlink ... ok
+test fetcher::tests::extract_tar_empty ... ok
+test fetcher::tests::extract_tar_prefix_stripping ... ok
+test fetcher::tests::extract_tar_preserves_basic_direct_hardlink ... ok
+test fetcher::tests::extract_tar_preserves_basic_directory_entry ... ok
+test fetcher::tests::extract_tar_preserves_chained_forward_reference_hardlink ... ok
+test fetcher::tests::extract_tar_preserves_chained_prefixed_hardlink_target ... ok
+test fetcher::tests::extract_tar_preserves_chained_prefixed_hardlink_via_symlink_target ... ok
+test fetcher::tests::extract_tar_preserves_directory_alias_symlink_parent ... ok
+test fetcher::tests::extract_tar_preserves_directory_creation_under_boundary_chain ... ok
+test fetcher::tests::extract_tar_preserves_flat_archive_without_wrapper_directory ... ok
+test fetcher::tests::extract_tar_preserves_forward_hardlink_overridden_by_later_regular ... ok
+test fetcher::tests::extract_tar_preserves_forward_hardlink_via_symlink_target ... ok
+test fetcher::tests::extract_tar_preserves_forward_prefixed_hardlink_target ... ok
+test fetcher::tests::extract_tar_preserves_forward_prefixed_hardlink_via_symlink_target ... ok
+test fetcher::tests::extract_tar_preserves_forward_reference_hardlink ... ok
+test fetcher::tests::extract_tar_preserves_hardlink_creation_under_boundary_chain ... ok
+test fetcher::tests::extract_tar_preserves_hardlink_target_normalization_under_boundary_chain ... ok
+test fetcher::tests::extract_tar_preserves_hardlink_target_traversal_under_boundary_chain ... ok
+test fetcher::tests::extract_tar_preserves_hardlink_target_via_existing_symlink_with_dotdot ... ok
+test fetcher::tests::extract_tar_preserves_hardlink_via_symlink_target ... ok
+test fetcher::tests::extract_tar_preserves_in_tree_relative_dotdot_hardlink ... ok
+test fetcher::tests::extract_tar_preserves_in_tree_relative_dotdot_symlink ... ok
+test fetcher::tests::extract_tar_preserves_mixed_top_level_archive_without_stripping ... ok
+test fetcher::tests::extract_tar_preserves_multi_hop_in_tree_symlink_parent ... ok
+test fetcher::tests::extract_tar_preserves_prefixed_hardlink_target ... ok
+test fetcher::tests::extract_tar_preserves_symlink_chain_at_expansion_boundary ... ok
+test fetcher::tests::extract_tar_preserves_symlink_creation_under_boundary_chain ... ok
+test fetcher::tests::extract_tar_preserves_symlink_target_traversal_under_short_chain ... ok
+test fetcher::tests::extract_tar_preserves_symlink_target_via_existing_symlink_with_dotdot ... ok
+test fetcher::tests::extract_tar_preserves_valid_in_tree_symlink ... ok
+test fetcher::tests::extract_tar_preserves_wrapper_prefix_without_explicit_directory_entry ... ok
+test fetcher::tests::extract_tar_rebases_absolute_symlink_target_within_output_root ... ok
+test fetcher::tests::extract_tar_regular_entry_replaces_symlink ... ok
+test fetcher::tests::extract_tar_rejects_absolute_entry_path ... ok
+test fetcher::tests::extract_tar_rejects_hardlink_absolute_target ... ok
+test fetcher::tests::extract_tar_rejects_hardlink_escape ... ok
+test fetcher::tests::extract_tar_rejects_hardlink_target_escape_via_existing_symlink_with_dotdot ... ok
+test fetcher::tests::extract_tar_rejects_symlink_chain_past_expansion_boundary ... ok
+test fetcher::tests::extract_tar_rejects_symlink_cycle_parent ... ok
+test fetcher::tests::extract_tar_rejects_symlink_parent_escape ... ok
+test fetcher::tests::extract_tar_rejects_symlink_target_escape_after_parent_resolution ... ok
+test fetcher::tests::extract_tar_rejects_symlink_target_escape_via_existing_symlink_with_dotdot ... ok
+test fetcher::tests::extract_tar_single_file ... ok
+test fetcher::tests::extract_tar_symlink ... ok
+test fetcher::tests::fetch_boundaries_reject_empty_and_control_bearing_roles_before_io ... ok
+test fetcher::tests::fetch_git_git_transport_ignores_fake_git_versions_and_keeps_errors_crunch_owned ... ok
+test fetcher::tests::fetch_git_ignores_fake_git_binary_on_path ... ok
+test fetcher::tests::fetch_git_invalid_revision_reports_crunch_owned_error ... ok
+test fetcher::tests::fetch_git_materializes_requested_revision_without_dot_git ... ok
+test fetcher::tests::fetch_git_missing_repo_reports_crunch_owned_error ... ok
+test fetcher::tests::fetch_git_non_test_implementation_has_no_host_git_discovery_patterns ... ok
+test fetcher::tests::fetch_git_succeeds_with_empty_path ... ok
+test fetcher::tests::fetch_retry_classifies_transient_and_permanent_failures ... ok
+test fetcher::tests::fetch_retry_core_retries_then_returns_success_without_sleeping_in_tests ... ok
+test fetcher::tests::fetch_retry_core_stops_on_permanent_failure ... ok
+test fetcher::tests::file_fetch_decodes_pinned_archive_path_and_rejects_remote_host ... ok
+test fetcher::tests::parse_fetch_executable ... ok
+test fetcher::tests::parse_fetch_git ... ok
+test fetcher::tests::parse_fetch_git_missing_rev ... ok
+test fetcher::tests::parse_fetch_missing_url ... ok
+test fetcher::tests::parse_fetch_nar ... ok
+test fetcher::tests::parse_fetch_not_a_fetcher ... ok
+test fetcher::tests::parse_fetch_tarball_unpack ... ok
+test fetcher::tests::parse_fetch_url_flat ... ok
+test fetcher::tests::parse_fetch_url_no_hash ... ok
+test fetcher::tests::resolve_relative_within_root_allows_in_tree_dotdot_target ... ok
+test fetcher::tests::sri_format ... ok
+test fetcher::tests::tar_entry_limit_fits_recursive_castore_completeness_bound ... ok
+test fetcher::tests::unpack_archive_file_rejects_malformed_acquisition_bytes ... ok
+test fetcher::tests::unpack_archive_file_replays_acquired_tar_bytes ... ok
+test fetcher::tests::validate_entry_not_absolute_rejects_root_component ... ok
+test fetcher::tests::verify_flat_hash_sha256_mismatch ... ok
+test fetcher::tests::verify_flat_hash_sha256_ok ... ok
+test fetcher::tests::verify_recursive_hash_blake3_ok ... ok
+test fetcher::tests::verify_recursive_hash_mismatch_removes_bad_output ... ok
+test fetcher::tests::wait_for_inetd_child_kills_on_stop_signal ... ok
+test fetcher::tests::wait_for_inetd_child_times_out_and_reaps_child ... ok
+test finish_gates::tests::real_glibc_audit_distinguishes_missing_and_opened_sonames ... ok
+test finish_gates::tests::rejects_unbounded_gate_input ... ok
+test fod::tests::flat_empty_blob ... ok
+test fod::tests::flat_large_blob ... ok
+test fod::tests::flat_md5_match ... ok
+test fod::tests::flat_rejects_directory_node ... ok
+test fod::tests::flat_rejects_symlink_node ... ok
+test fod::tests::flat_sha1_match ... ok
+test fod::tests::flat_sha256_match ... ok
+test fod::tests::flat_sha256_mismatch ... ok
+test fod::tests::flat_sha512_match ... ok
+test fod::tests::nar_md5_match ... ok
+test fod::tests::nar_md5_mismatch ... ok
+test fod::tests::nar_sha1_directory_node ... ok
+test fod::tests::nar_sha1_match ... ok
+test fod::tests::nar_sha1_mismatch ... ok
+test fod::tests::nar_sha256_match ... ok
+test fod::tests::nar_sha256_mismatch ... ok
+test fod::tests::nar_sha512_match ... ok
+test fod::tests::nar_sha512_mismatch ... ok
+test fod::tests::text_sha256_match ... ok
+test goal::tests::awaiting_dep_failure_goes_failed ... ok
+test goal::tests::awaiting_full_lifecycle ... ok
+test goal::tests::awaiting_rejects_inspect_before_set_derivation ... ok
+test goal::tests::awaiting_rejects_mark_building ... ok
+test goal::tests::awaiting_with_deps_lifecycle ... ok
+test goal::tests::done_goal_rejects_further_transitions ... ok
+test goal::tests::failed_goal_rejects_further_transitions ... ok
+test goal::tests::full_lifecycle_build_failure ... ok
+test goal::tests::full_lifecycle_dep_failure ... ok
+test goal::tests::full_lifecycle_leaf ... ok
+test goal::tests::full_lifecycle_with_deps ... ok
+test goal::tests::get_or_insert_existing_returns_same_goal ... ok
+test goal::tests::get_or_insert_returns_correct_goal_with_multiple_entries ... ok
+test goal::tests::inspect_no_deps_goes_ready ... ok
+test goal::tests::inspect_not_pending_errors ... ok
+test goal::tests::inspect_with_deps_goes_waiting ... ok
+test goal::tests::mark_build_failed_from_building ... ok
+test goal::tests::mark_build_failed_from_ready ... ok
+test goal::tests::mark_build_failed_not_building_or_ready_errors ... ok
+test goal::tests::mark_building_from_ready ... ok
+test goal::tests::mark_building_not_ready_errors ... ok
+test goal::tests::mark_done_from_building ... ok
+test goal::tests::mark_done_not_building_errors ... ok
+test goal::tests::new_awaiting_goal_state ... ok
+test goal::tests::new_goal_is_pending ... ok
+test goal::tests::new_root_goal_is_pending_and_root ... ok
+test goal::tests::notify_dep_done_decrements ... ok
+test goal::tests::notify_dep_done_not_waiting_errors ... ok
+test goal::tests::notify_dep_failed_goes_failed ... ok
+test goal::tests::notify_dep_failed_not_waiting_errors ... ok
+test goal::tests::registry_all_roots_terminal ... ok
+test goal::tests::registry_awaiting_not_terminal ... ok
+test goal::tests::registry_awaiting_producer_finds_matching ... ok
+test goal::tests::registry_count_in_state ... ok
+test goal::tests::registry_duplicate_insert_errors ... ok
+test goal::tests::registry_empty_is_terminal ... ok
+test goal::tests::registry_get_or_insert_dedup ... ok
+test goal::tests::registry_get_or_insert_respects_limit ... ok
+test goal::tests::registry_insert_and_get ... ok
+test goal::tests::registry_max_goals_enforced ... ok
+test goal::tests::registry_root_done_and_failed_keys ... ok
+test goal::tests::registry_roots_not_terminal_when_building ... ok
+test goal::tests::set_derivation_not_awaiting_errors ... ok
+test goal::tests::set_derivation_transitions_to_pending ... ok
+test goal::tests::watch_retraction_keeps_completed_shared_dependency_and_rejects_unsafe_removal ... ok
+test hermeticity::tests::hermeticity_audit_event_preserves_kind_and_detail ... ok
+test hermeticity::tests::hermeticity_mode_display_uses_stable_strings ... ok
+test hermeticity::tests::store_audit_kinds_map_to_public_hermeticity_kinds ... ok
+test network_policy::tests::allowed_compatibility_capability_reports_scope ... ok
+test network_policy::tests::compatibility_capability_requires_policy_basis ... ok
+test network_policy::tests::custom_fixed_output_builder_stays_offline ... ok
+test network_policy::tests::declared_network_capability_is_denied_without_compatibility_policy ... ok
+test network_policy::tests::fixed_output_fetcher_reports_declared_network_boundary ... ok
+test network_policy::tests::invalid_utf8_network_policy_field_fails_closed ... ok
+test network_policy::tests::ordinary_derivation_is_offline_by_default ... ok
+test orchestrate::ca_input_resolution::tests::identical_realized_ca_content_unifies_distinct_unresolved_derivations ... ok
+test orchestrate::ca_input_resolution::tests::missing_wrong_domain_and_over_limit_facts_fail_closed ... ok
+test orchestrate::ca_input_resolution::tests::substitution_uses_original_bytes_and_prefers_longest_overlapping_path ... ok
+test orchestrate::ca_input_resolution::tests::unresolved_ia_input_keeps_its_hdm_when_ca_sibling_is_resolved ... ok
+test orchestrate::tests::bound_ca_parent_requires_its_recorded_signed_action_identity ... ok
+test orchestrate::tests::build_all_disjoint_trees ... ok
+test orchestrate::tests::build_all_empty_roots ... ok
+test orchestrate::tests::build_all_multiple_roots_shared_dep ... ok
+test orchestrate::tests::build_all_ordering_deps_before_dependents ... ok
+test orchestrate::tests::build_outcome_outputs_iterate_by_output_name ... ok
+test orchestrate::tests::build_persists_attestation_with_declared_inputs ... ok
+test orchestrate::tests::build_persists_signed_pathinfo_that_verifies_on_reread ... ok
+test orchestrate::tests::builder_chain_builds_dep_first ... ok
+test orchestrate::tests::builder_diamond_builds_shared_dep_once ... ok
+test orchestrate::tests::builder_single_drv_calls_do_build_once ... ok
+test orchestrate::tests::builder_skips_build_when_castore_cached ... ok
+test orchestrate::tests::ca_derivation_gets_content_based_path ... ok
+test orchestrate::tests::ca_identical_outputs_same_path ... ok
+test orchestrate::tests::ca_mapping_and_signed_pathinfo_without_signed_action_result_cannot_skip_producer ... ok
+test orchestrate::tests::ca_resolved_parent_still_attests_as_artifact ... ok
+test orchestrate::tests::ca_same_name_same_content_same_path ... ok
+test orchestrate::tests::cache_miss_when_no_pathinfo ... ok
+test orchestrate::tests::cache_miss_when_pathinfo_but_no_castore_content ... ok
+test orchestrate::tests::cached_ca_dependency_records_resolved_output_for_later_builds ... ok
+test orchestrate::tests::changed_ca_producer_with_identical_realized_bytes_reuses_every_dependent_before_dispatch ... ok
+test orchestrate::tests::clean_http_client_reuses_signed_ca_chain_without_execution ... ok
+test orchestrate::tests::collect_sandbox_inputs_reuses_pathinfo_node_before_disk_ingest ... ok
+test orchestrate::tests::conflicting_signed_ca_realizations_block_dependent_and_report_both_candidates ... ok
+test orchestrate::tests::corrupted_local_signature_triggers_rebuild ... ok
+test orchestrate::tests::current_session_source_skips_closure_resolution ... ok
+test orchestrate::tests::custom_logical_store_prefix_controls_source_lookup_and_diagnostics ... ok
+test orchestrate::tests::custom_logical_store_prefix_controls_transitive_source_inputs ... ok
+test orchestrate::tests::custom_output_dir_cache_hit_via_castore ... ok
+test orchestrate::tests::custom_output_dir_writes_output_there ... ok
+test orchestrate::tests::failed_build_never_publishes_an_action_result ... ok
+test orchestrate::tests::fetcher_recursive_through_dispatch_hash_match ... ok
+test orchestrate::tests::fetcher_recursive_through_dispatch_hash_mismatch ... ok
+test orchestrate::tests::fetcher_through_dispatch_service_hash_match ... ok
+test orchestrate::tests::fetcher_through_dispatch_service_hash_mismatch ... ok
+test orchestrate::tests::final_ca_path_info_facts_separate_path_identity_from_final_nar ... ok
+test orchestrate::tests::fod_skips_remote_cache ... ok
+test orchestrate::tests::fresh_input_addressed_client_prefers_http_action_result_and_objects_without_execution ... ok
+test orchestrate::tests::multi_ca_outputs_persist_final_nar_facts_and_marker_path_identities ... ok
+test orchestrate::tests::multi_output_build_returns_all_outputs ... ok
+test orchestrate::tests::multi_output_cache_requires_all_outputs ... ok
+test orchestrate::tests::multi_output_dep_mounts_all_outputs ... ok
+test orchestrate::tests::multi_output_distinct_store_paths ... ok
+test orchestrate::tests::multi_output_env_has_outputs_var ... ok
+test orchestrate::tests::mutable_workspace_bypasses_strong_cache_discovery_and_publication ... ok
+test orchestrate::tests::only_root_output_exported_to_disk ... ok
+test orchestrate::tests::path_info_deriver_rejects_empty_name_after_suffix_removal ... ok
+test orchestrate::tests::path_info_deriver_removes_only_the_outer_suffix ... ok
+test orchestrate::tests::path_info_deriver_uses_suffix_free_internal_identity ... ok
+test orchestrate::tests::persistent_blob_cache_hit_across_builder_instances ... ok
+test orchestrate::tests::physical_store_source_with_pathinfo_resolves_transitive_closure ... ok
+test orchestrate::tests::plan_root_binding_mapping_distinguishes_strong_reuse_identity ... ok
+test orchestrate::tests::read_only_output_dir_still_succeeds ... ok
+test orchestrate::tests::realized_plan_root_is_artifact_provenance_not_source_provenance ... ok
+test orchestrate::tests::remote_cache_hit_skips_build ... ok
+test orchestrate::tests::remote_error_treated_as_miss ... ok
+test orchestrate::tests::remote_hit_persisted_to_local ... ok
+test orchestrate::tests::remote_miss_falls_through_to_build ... ok
+test orchestrate::tests::remote_signed_cache_hit_verifies_and_skips_build ... ok
+test orchestrate::tests::replaced_untrusted_resolved_child_record_cannot_authorize_grandchild_reuse ... ok
+test orchestrate::tests::sandbox_input_merge_includes_transitive_dependency_references ... ok
+test orchestrate::tests::sandbox_input_merge_keeps_direct_input_when_closures_are_empty ... ok
+test orchestrate::tests::self_referential_ca_persists_final_nar_facts_and_marker_path_identity ... ok
+test orchestrate::tests::shared_action_result_reuses_ca_output_without_ca_mapping_or_execution ... ok
+test orchestrate::tests::source_closure_disposition_only_reuses_current_session_outputs ... ok
+test orchestrate::tests::source_closure_resolution_is_memoized_and_watch_prunes_only_unreferenced_sources ... ok
+test orchestrate::tests::strict_physical_store_source_without_pathinfo_fails_closed ... ok
+test orchestrate::tests::unrealized_ca_parent_fails_before_dependent_dispatch ... ok
+test orchestrate::tests::unsigned_remote_path_rejected_without_trust_unsigned ... ok
+test plan_output_binding::tests::binds_selected_output_of_accepted_root_in_v1_and_v2_before_output_exists ... ok
+test plan_output_binding::tests::missing_output_precedes_missing_registered_path ... ok
+test plan_output_binding::tests::missing_root_precedes_missing_output_and_registered_path ... ok
+test plan_output_binding::tests::records_reject_count_and_byte_bound_before_large_json_parse ... ok
+test plan_output_binding::tests::records_require_sorted_unique_names_and_exact_closed_scalar_fields ... ok
+test references::tests::resolve_refs_empty_needles ... ok
+test references::tests::resolve_refs_index_past_outputs_maps_to_input ... ok
+test references::tests::resolve_refs_index_zero_maps_to_output ... ok
+test references::tests::resolve_refs_out_of_range_ignored ... ok
+test registry::tests::ca_resolved_input_addressed_output_path_uses_completed_derivation ... ok
+test registry::tests::default_store_dir ... ok
+test registry::tests::explicit_execution_profile_is_verified_and_stored ... ok
+test registry::tests::explicit_execution_profile_rejects_stale_binding ... ok
+test registry::tests::get_by_drv_path_mut_modifies ... ok
+test registry::tests::get_hdm_by_drv_path ... ok
+test registry::tests::get_output_path_input_addressed ... ok
+test registry::tests::insert_and_get_by_drv_path ... ok
+test registry::tests::insert_with_dynamic_plan_outputs_preserves_metadata ... ok
+test registry::tests::is_empty_and_len ... ok
+test registry::tests::multiple_entries ... ok
+test registry::tests::overwrite_updates_entry ... ok
+test registry::tests::populate_registry_from_iterator ... ok
+test registry::tests::resolve_output_ca ... ok
+test registry::tests::resolve_output_non_ca_returns_error ... ok
+test registry::tests::resolve_output_unknown_drv_returns_error ... ok
+test registry::tests::store_dir_custom ... ok
+test registry::tests::unknown_drv_returns_none ... ok
+test registry::tests::watch_prune_bounds_registry_through_more_than_max_entries_of_edits ... ok
+test registry::tests::watch_prune_preserves_referenced_parent_ca_output_and_rejects_orphaning ... ok
+test scheduling::tests::affected_recompute_leaves_disjoint_component_unchanged ... ok
+test scheduling::tests::age_classes_are_bounded_and_future_ready_epoch_is_rejected ... ok
+test scheduling::tests::chain_pressure_increases_toward_the_ready_leaf ... ok
+test scheduling::tests::comparator_totality_and_antisymmetry_hold_for_bounded_fact_matrix ... ok
+test scheduling::tests::comparator_transitivity_holds_for_bounded_fact_matrix ... ok
+test scheduling::tests::configured_preference_order_changes_named_field_precedence ... ok
+test scheduling::tests::continuously_ready_goal_becomes_protected_and_outranks_ordinary_pressure ... ok
+test scheduling::tests::default_policy_is_valid_and_digest_stable ... ok
+test scheduling::tests::dynamic_graph_extension_recomputes_only_connected_known_component ... ok
+test scheduling::tests::edge_budget_rejects_oversize_and_overflow_without_allocation ... ok
+test scheduling::tests::eligible_resource_and_locality_facts_improve_preference ... ok
+test scheduling::tests::epoch_advance_is_checked_and_bounded ... ok
+test scheduling::tests::equivalent_asynchronous_arrival_orders_replay_identically ... ok
+test scheduling::tests::every_hard_blocker_remains_ineligible_regardless_of_preference ... ok
+test scheduling::tests::evidence_is_replay_stable_and_redacts_raw_goal_and_sensitive_route_text ... ok
+test scheduling::tests::evidence_rejects_internally_inconsistent_ranked_snapshots ... ok
+test scheduling::tests::graph_validation_rejects_unknown_duplicate_and_cyclic_facts ... ok
+test scheduling::tests::history_fresh_changes_work_basis_while_missing_stale_and_incompatible_fall_back ... ok
+test scheduling::tests::ineligible_goal_does_not_age_into_dispatch ... ok
+test scheduling::tests::invalid_policy_rejects_duplicate_fields_and_bad_thresholds ... ok
+test scheduling::tests::malformed_previous_pressure_cache_is_not_reused ... ok
+test scheduling::tests::oversized_and_unknown_history_snapshots_fall_back_without_partial_admission ... ok
+test scheduling::tests::oversized_graph_rejects_before_pressure_output ... ok
+test scheduling::tests::pressure_arithmetic_overflow_rejects_without_partial_mutation ... ok
+test scheduling::tests::priority_fixture_improves_first_dispatch_pressure_relative_to_fifo ... ok
+test scheduling::tests::ranking_is_permutation_invariant_and_uses_stable_ties ... ok
+test scheduling::tests::ranking_rejects_malformed_pressure_facts ... ok
+test scheduling::tests::recurring_higher_pressure_arrivals_lose_at_the_aged_epoch ... ok
+test scheduling::tests::shared_dependency_counts_unique_blocked_roots_and_diamond_paths ... ok
+test signing::tests::default_trusted_includes_local_and_nixos_cache ... ok
+test signing::tests::fingerprint_matches_nix_compat ... ok
+test signing::tests::generate_keypair_produces_valid_pair ... ok
+test signing::tests::generate_keypair_sign_and_verify ... ok
+test signing::tests::load_keypair_rejects_garbage ... ok
+test signing::tests::sign_produces_one_signature ... ok
+test signing::tests::sign_replaces_same_key_name ... ok
+test signing::tests::sign_round_trip_honors_custom_store_prefix ... ok
+test signing::tests::sign_round_trip_verifies ... ok
+test signing::tests::user_keys_dedup_local ... ok
+test signing::tests::user_keys_keep_same_name_with_different_material ... ok
+test signing::tests::user_keys_override_defaults ... ok
+test signing::tests::verify_no_signatures_is_untrusted ... ok
+test signing::tests::verify_with_references ... ok
+test signing::tests::verify_wrong_key_is_untrusted ... ok
+test trust_boundary_nominal::tests::fetch_and_store_roles_admit_valid_values ... ok
+test trust_boundary_nominal::tests::malformed_fetch_and_store_roles_fail_closed ... ok
+test worker::tests::bound_consumer_waits_on_registered_root_and_reports_root_failure ... ok
+test worker::tests::committed_candidate_builds_once_and_publishes_signed_pathinfo ... ok
+test worker::tests::complete_diamond_shared_dep_unblocks_both ... ok
+test worker::tests::complete_goal_collects_root_outcome ... ok
+test worker::tests::complete_goal_notifies_waiters ... ok
+test worker::tests::consumer_arriving_after_failed_producer_is_ready_to_reject_not_stuck_waiting ... ok
+test worker::tests::declared_native_dynamic_output_is_not_compat_drv_discovery ... ok
+test worker::tests::dispatch_at_capacity_retains_undispatched_ready_goal ... ok
+test worker::tests::dispatch_rejects_running_count_over_budget_before_ready_mutation ... ok
+test worker::tests::duplicate_ready_admission_preserves_oldest_epoch ... ok
+test worker::tests::dynamic_drv_detected_and_built ... ok
+test worker::tests::dynamic_drv_streaming ... ok
+test worker::tests::dynamic_exact_duplicate_batch_inserts_one_registry_entry ... ok
+test worker::tests::dynamic_missing_parent_leaves_registry_scheduler_and_reports_unchanged ... ok
+test worker::tests::dynamic_registry_collision_changes_no_worker_or_registry_state ... ok
+test worker::tests::fail_goal_only_propagates_to_waiting ... ok
+test worker::tests::fail_goal_propagates_to_waiters ... ok
+test worker::tests::failed_build_log_retention_is_bounded ... ok
+test worker::tests::failed_producer_marks_static_binding_before_consumer_dispatch ... ok
+test worker::tests::late_consumer_after_native_root_completed_binds_from_retained_plan ... ok
+test worker::tests::late_consumer_after_plan_rejection_fails_without_deadlock ... ok
+test worker::tests::later_graph_arrival_does_not_relabel_prior_priority_evidence ... ok
+test worker::tests::malformed_graph_rejects_before_ready_set_mutation ... ok
+test worker::tests::native_binding_distinguishes_missing_root_from_missing_unit_output ... ok
+test worker::tests::native_dynamic_plan_declared_output_is_accepted ... ok
+test worker::tests::native_dynamic_plan_declared_output_rejections_are_structured ... ok
+test worker::tests::native_dynamic_plan_registers_all_units_but_wants_only_roots ... ok
+test worker::tests::native_dynamic_plan_rejected_output_schedules_no_units ... ok
+test worker::tests::native_dynamic_plan_reports_are_deterministically_sorted ... ok
+test worker::tests::native_dynamic_plan_undeclared_output_is_ignored ... ok
+test worker::tests::native_dynamic_plan_valid_output_schedules_root_unit_in_same_run ... ok
+test worker::tests::native_dynamic_registration_resolves_declared_placeholders_and_defers_ca_realization ... ok
+test worker::tests::native_plan_ca_unit_placeholder_dispatches_realized_path ... ok
+test worker::tests::native_v2_atomic_pathinfo_batch_rejection_keeps_both_slices_unpublished ... ok
+test worker::tests::native_v2_custom_store_prefix_admits_declared_producer_output ... ok
+test worker::tests::native_v2_goal_capacity_rejects_before_slice_publication ... ok
+test worker::tests::native_v2_late_unit_failure_keeps_slices_unpublished ... ok
+test worker::tests::native_v2_registry_capacity_rejects_before_slice_publication ... ok
+test worker::tests::native_v2_registry_collision_rejects_before_slice_publication ... ok
+test worker::tests::native_v2_slice_aggregate_byte_limit_preserves_scheduler_and_publication ... ok
+test worker::tests::native_v2_slice_failure_leaves_store_registry_goals_scheduler_and_report_unadmitted ... ok
+test worker::tests::native_v2_slice_publication_survives_two_producer_reruns ... ok
+test worker::tests::native_v2_staged_ca_multioutput_uses_realized_dev_output ... ok
+test worker::tests::non_drv_output_not_treated_as_dynamic ... ok
+test worker::tests::observed_binding_claim_preserves_other_claims_and_rejects_collision ... ok
+test worker::tests::partial_failure_all_fail ... ok
+test worker::tests::partial_failure_dep_fails_propagates ... ok
+test worker::tests::partial_failure_one_fails_one_succeeds ... ok
+test worker::tests::partial_failure_streaming ... ok
+test worker::tests::ready_goal_inputs_reuses_shared_derivation_arc ... ok
+test worker::tests::rejected_native_plan_fails_static_consumer_without_dispatch ... ok
+test worker::tests::run_chain_builds_in_order ... ok
+test worker::tests::run_diamond_builds_shared_once ... ok
+test worker::tests::run_disjoint_trees ... ok
+test worker::tests::run_empty_worker_panics - should panic ... ok
+test worker::tests::run_single_leaf_builds_once ... ok
+test worker::tests::stale_success_is_not_finished_or_admitted ... ok
+test worker::tests::static_consumer_waits_for_native_ca_root_and_uses_realized_output ... ok
+test worker::tests::streaming_builds_start_before_channel_closes ... ok
+test worker::tests::streaming_cancellation_waits_for_owned_teardown_and_rejects_late_success ... ok
+test worker::tests::streaming_chain_with_shared_deps ... ok
+test worker::tests::streaming_consumer_after_native_root_completed_binds_from_retained_plan ... ok
+test worker::tests::streaming_consumer_after_plan_rejection_fails_without_deadlock ... ok
+test worker::tests::streaming_empty_channel_returns_empty ... ok
+test worker::tests::streaming_entries_populate_registry_on_arrival ... ok
+test worker::tests::streaming_entries_with_deps_arrive_incrementally ... ok
+test worker::tests::streaming_multiple_roots_arrive_incrementally ... ok
+test worker::tests::streaming_single_root ... ok
+test worker::tests::superseded_candidate_token_cannot_dispatch_or_publish_stale_output ... ok
+test worker::tests::unknown_scheduling_preference_rejects_without_raw_identity_or_mutation ... ok
+test worker::tests::want_chain_creates_all_goals ... ok
+test worker::tests::want_diamond_deduplicates ... ok
+test worker::tests::want_disjoint_trees ... ok
+test worker::tests::want_duplicate_is_noop ... ok
+test worker::tests::want_single_leaf ... ok
+test worker::tests::want_unknown_drv_errors ... ok
+test worker::tests::want_upgrades_to_root ... ok
+test worker::tests::watch_empty_generation_commits_and_settles_before_shutdown ... ok
+test worker::tests::watch_retraction_keeps_completed_shared_dependency_and_releases_stale_ready_goals ... ok
+test worker::tests::watch_rollback_reinserts_pruned_derivation_without_erasing_retained_ca_resolution ... ok
+test worker::tests::watch_sequential_replacements_beyond_total_goal_limit_remain_bounded ... ok
+test worker::tests::worker_consumes_only_normalized_eligible_preference_facts ... ok
+test worker::tests::worker_rejects_zero_and_over_limit_job_budgets ... ok
+test worker::tests::worker_selects_shared_root_pressure_before_fifo_insertion ... ok
+test workspace::tests::clean_comparison_records_only_output_set_agreement_and_divergence ... ok
+test workspace::tests::compatibility_digest_is_stable_and_order_is_explicitly_validated ... ok
+test workspace::tests::compatible_lease_acquire_renew_release_is_deterministic ... ok
+test workspace::tests::explicit_modes_validate_and_missing_mode_never_silently_falls_back ... ok
+test workspace::tests::immutable_snapshot_manifest_is_order_independent_and_content_addressed ... ok
+test workspace::tests::invalid_guest_paths_quota_overflow_symlink_escape_secret_and_host_paths_quarantine ... ok
+test workspace::tests::mutable_claim_never_publishes_or_satisfies_strong_reuse_even_after_clean_match ... ok
+test workspace::tests::retention_preserves_active_workspaces_and_evicts_old_idle_and_bounded_quarantine ... ok
+test workspace::tests::stale_cross_worker_cross_authority_and_concurrent_owners_are_rejected_without_mutation ... ok
+test workspace::tests::unknown_mode_and_overflow_are_rejected ... ok
+test workspace_shell::tests::abandoned_cleanup_quarantines_instead_of_reusing_unknown_state ... ok
+test workspace_shell::tests::cancelled_mutable_watch_quarantines_without_clean_retry_or_success_report ... ok
+test workspace_shell::tests::clean_comparison_never_relabels_or_publishes_original_mutable_execution ... ok
+test workspace_shell::tests::completed_mutable_watch_compares_clean_output_and_releases_workspace ... ok
+test workspace_shell::tests::concurrent_and_foreign_attempts_are_rejected_and_restart_record_survives ... ok
+test workspace_shell::tests::immutable_snapshot_is_content_addressed_and_secret_input_is_rejected ... ok
+test workspace_shell::tests::mutable_workspace_persists_warm_state_and_scrubs_sensitive_paths ... ok
+test workspace_shell::tests::path_escape_and_symlinked_state_root_are_rejected ... ok
+test workspace_shell::tests::production_workspace_local_dispatch_stack_reaches_owned_watch_cancel ... ok
+test workspace_shell::tests::quota_failure_quarantines_and_reports_no_host_path ... ok
+test workspace_shell::tests::retention_eviction_is_applied_before_new_workspace_admission ... ok
+test workspace_shell::tests::symlink_escape_and_secret_content_quarantine_without_following_target ... ok
+test workspace_shell::tests::tool_fixture_reuses_warm_state_at_stable_guest_path_with_downgraded_claim ... ok
+
+test result: ok. 762 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.50s
+
+     Running tests/export_api.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/export_api-8876e6961ddab822)
+
+running 1 test
+test export_api_is_public ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/crunch_cmake-2f6f4aa6795cf2a7)
+
+running 1 test
+test stage_tests::absolute_install_destinations_outside_prefix_are_not_silently_discarded ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/mantle_cmake-dc9d5b51818daefe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/artifacts.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/artifacts-2e80c456534a933b)
+
+running 4 tests
+test cargo_native_exports_reuse_role_validation_and_reject_reserved_environment ... ok
+test cross_architecture_elf_is_rejected_without_executing_it ... ok
+test static_archive_members_are_checked_not_just_the_outer_magic ... ok
+test thin_archives_cannot_smuggle_external_file_references ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/crunch_cmake_core-3c786d7363755e02)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/validation.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/validation-2c6494aae8a8f53b)
+
+running 4 tests
+test platform_mismatch_and_unbounded_outputs_fail_before_execution ... ok
+test tool_and_source_members_cannot_escape_admitted_roots ... ok
+test undeclared_roles_never_acquire_ambient_authority ... ok
+test user_definitions_cannot_override_isolation_or_inject_host_roots ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/crunch_composition_core-dd295f0016446e26)
+
+running 13 tests
+test tests::explicit_leaf_replacement_uses_derived_binding_ref ... ok
+test tests::identical_leaves_deduplicate ... ok
+test tests::missing_duplicate_stale_and_non_contributing_decisions_fail ... ok
+test tests::missing_extra_and_non_directory_snapshots_fail ... ok
+test tests::one_snapshot_supports_distinct_mounts_of_the_same_root ... ok
+test tests::plan_identity_ignores_binding_order_and_labels ... ok
+test tests::policy_identity_changes_without_changing_plan_identity ... ok
+test tests::root_and_nested_mounts_merge_recursively ... ok
+test tests::snapshot_and_all_named_limits_fail_closed ... ok
+test tests::symlink_policy_and_receipt_non_claims_are_explicit ... ok
+test tests::unsafe_paths_and_duplicate_bindings_fail ... ok
+test user_profile::tests::directories_merge_without_binary_precedence ... ok
+test user_profile::tests::rejects_identical_binary_and_directory_leaf_conflicts ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/boundary.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/boundary-a56f263a9ad0bceb)
+
+running 2 tests
+test boundary_validator_rejects_shell_and_frontend_dependencies ... ok
+test composition_core_has_no_shell_or_frontend_dependencies ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/crunch_delta-55f48f3cd9d20977)
+
+running 37 tests
+test fixtures::tests::benchmark_suite_is_fixed ... ok
+test fixtures::tests::chunk_hit_case_keeps_one_chunk_missing ... ok
+test fixtures::tests::frontier_metadata_is_present_for_nested_cases ... ok
+test fixtures::tests::probabilistic_filter_payload_bytes_match_config ... ok
+test fixtures::tests::probabilistic_wire_bytes_match_layout ... ok
+test manifest::tests::lossy_manifest_probe_totals_are_fixed ... ok
+test manifest::tests::manifest_matches_oracle_wire_bytes ... ok
+test manifest::tests::manifest_uses_chunk_metadata_without_opening_blob_content ... ok
+test manifest::tests::optimized_manifest_probe_totals_are_fixed ... ok
+test manifest::tests::prefix_mismatch_is_rejected_for_all_manifest_builders ... ok
+test manifest::tests::probabilistic_manifest_probe_totals_are_fixed ... ok
+test manifest::tests::stale_missing_blob_is_treated_as_absent ... ok
+test manifest::tests::stale_missing_directory_is_treated_as_absent ... ok
+test model::tests::blob_validate_rejects_wrong_chunk_total ... ok
+test model::tests::chunk_profile_v1_matches_spec ... ok
+test model::tests::receiver_manifest_conversion_preserves_facade_sets ... ok
+test negotiation::tests::negotiation_agrees_on_protocol_version_one ... ok
+test negotiation::tests::negotiation_error_keeps_std_error_in_facade ... ok
+test negotiation::tests::negotiation_rejects_version_mismatch ... ok
+test negotiation::tests::protocol_v1_wire_profile_matches_spec ... ok
+test negotiation::tests::validate_method_matches_free_function ... ok
+test planner::tests::borrowed_facade_accepts_std_receiver_manifest ... ok
+test planner::tests::chunk_case_sends_only_missing_chunk ... ok
+test planner::tests::cross_output_case_sends_shared_blob_once ... ok
+test planner::tests::delta_facade_reexports_core_planner_types ... ok
+test planner::tests::plan_error_keeps_std_error_in_facade ... ok
+test planner::tests::planner_matches_fixed_suite_targets ... ok
+test planner::tests::prefix_mismatch_is_rejected ... ok
+test planner::tests::whole_output_case_reuses_entire_output ... ok
+test substitution::tests::delta_transfer_reuses_v1_content_and_sends_only_missing_bytes ... ok
+test substitution::tests::finalized_ca_planning_uses_post_rewrite_bytes_only ... ok
+test substitution::tests::http_endpoints_share_cache_authority ... ok
+test substitution::tests::interrupted_transfer_keeps_verified_chunks_and_discards_session_state ... ok
+test substitution::tests::large_closure_streams_without_whole_closure_buffering ... ok
+test substitution::tests::legacy_cache_without_delta_endpoints_falls_back_to_full_artifact ... ok
+test substitution::tests::substitution_adapter_keeps_async_store_and_network_in_shell ... ok
+test substitution::tests::untrusted_delta_pathinfo_falls_back_per_policy ... ok
+
+test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.83s
+
+     Running unittests src/lib.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/crunch_delta_core-c3c26ec5936b32b6)
+
+running 7 tests
+test model::tests::blob_validation_rejects_mismatched_chunk_total ... ok
+test model::tests::chunk_profile_v1_matches_spec ... ok
+test negotiation::tests::chunk_profile_wire_v1_matches_runtime_profile ... ok
+test negotiation::tests::duplicate_version_offer_is_rejected ... ok
+test planner::tests::known_output_reuses_whole_output ... ok
+test planner::tests::planner_matches_fixed_suite_targets ... ok
+test planner::tests::prefix_mismatch_is_rejected ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/crunch_esp_idf-d465a3185d182695)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/mantle_esp_idf-6fb09f14886c4496)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/nickel_contract.rs (/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021/debug/deps/nickel_contract-1ba85dd3c967be73)
+
+running 2 tests
+test authoring_rejects_escaping_members_unpinned_bytes_and_unlocked_managed_inputs ... FAILED
+test authoring_rejects_unsupported_cohorts_and_undeclared_sources ... FAILED
+
+failures:
+
+---- authoring_rejects_escaping_members_unpinned_bytes_and_unlocked_managed_inputs stdout ----
+
+thread 'authoring_rejects_escaping_members_unpinned_bytes_and_unlocked_managed_inputs' (1834920) panicked at crates/crunch-esp-idf/tests/nickel_contract.rs:43:5:
+assertion failed: accepted(&baseline)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- authoring_rejects_unsupported_cohorts_and_undeclared_sources stdout ----
+
+thread 'authoring_rejects_unsupported_cohorts_and_undeclared_sources' (1834924) panicked at crates/crunch-esp-idf/tests/nickel_contract.rs:30:5:
+assertion failed: accepted(&baseline)
+
+
+failures:
+    authoring_rejects_escaping_members_unpinned_bytes_and_unlocked_managed_inputs
+    authoring_rejects_unsupported_cohorts_and_undeclared_sources
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+error: test failed, to rerun pass `-p crunch-esp-idf --test nickel_contract`

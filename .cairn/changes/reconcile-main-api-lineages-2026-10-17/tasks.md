@@ -54,7 +54,19 @@ ra-jit feasibility report, the removed accidental shell artifacts, and the
 recorded Nickel standard-library defect.
 
 G1 is blocked by a pre-existing defect rather than by a reconciliation
-regression. The pinned Nickel 1.17.0 does not evaluate the standard library:
+regression.
+
+The authoritative gate transcript for the published revision
+`13627a62f4293ec42fab6971cbe67d1350da7f0e` is retained in
+`evidence/final-gate-v1/`: the bounded GCC 4.0 configure bridge passed, the
+canonical first-party rustfmt passed, strict Clippy with the vendored members
+excluded passed, and the serialized workspace lib/tests phase failed in the
+Nickel-evaluating suites. The first failing suite is
+`crunch-esp-idf --test nickel_contract`, which rejects even its baseline
+plan because the pinned Nickel cannot evaluate the plan contracts. The gate ran
+with `CARGO_INCREMENTAL=0` because the pinned nightly panics in its
+incremental dependency graph for `crates/crunch-delta`
+(`docs/toolchain-incremental-ice.md`). The pinned Nickel 1.17.0 does not evaluate the standard library:
 record contracts may carry at most one field without a definition, and a
 contract field may only be annotated with a builtin or enum type. The same
 failure is present in the published baseline `43ccd6884`, so every
