@@ -4060,6 +4060,7 @@ mod tests {
             nix_compat::store_path::STORE_DIR.to_string(),
         );
         store_config.remote_cache_urls = vec![format!("{}?trusted_public_keys[0]={trusted_token}", server.base_url)];
+        store_config.source_admission = Some(crate::test_support::test_source_admission());
         let consumer_store = crunch_store::StoreHandle::open(store_config).await.unwrap();
         let mut consumer = Builder::from_store_parts(
             consumer_store.into_builder_store_parts(),
@@ -4171,6 +4172,7 @@ mod tests {
             nix_compat::store_path::STORE_DIR.to_string(),
         );
         config.remote_cache_urls = vec![format!("{}?trusted_public_keys[0]={trusted_token}", server.base_url)];
+        config.source_admission = Some(crate::test_support::test_source_admission());
         let client_store = crunch_store::StoreHandle::open(config).await.unwrap();
         let own_secret = ed25519_dalek::SigningKey::from_bytes(&[24u8; 32]);
         let client_key = KeyPair {

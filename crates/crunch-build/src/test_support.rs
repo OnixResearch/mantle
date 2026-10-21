@@ -36,6 +36,31 @@ pub fn tmp_ds() -> RedbDirectoryService {
     RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default()).unwrap()
 }
 
+/// Test source admission for store sources that the operator already selected.
+///
+/// The store refuses a substituter or overlay base without an admission
+/// authority, so tests that open a store with a remote cache URL or a base
+/// layer install this implementation instead of weakening that boundary.
+#[derive(Debug)]
+pub struct TestSourceAdmission;
+
+impl crunch_store::StoreSourceLease for TestSourceAdmission {}
+
+impl crunch_store::StoreSourceAdmission for TestSourceAdmission {
+    fn admit(
+        &self,
+        _source: crunch_store::StoreSource<'_>,
+        _store_prefix: &str,
+    ) -> Result<Arc<dyn crunch_store::StoreSourceLease>, crunch_store::Error> {
+        Ok(Arc::new(TestSourceAdmission))
+    }
+}
+
+/// A source admission authority for one store configuration.
+pub fn test_source_admission() -> Arc<dyn crunch_store::StoreSourceAdmission> {
+    Arc::new(TestSourceAdmission)
+}
+
 /// A test keypair (same as nix-compat's DUMMY_KEYPAIR).
 pub fn test_keypair() -> signing::KeyPair {
     signing::load_keypair(

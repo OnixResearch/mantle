@@ -7,6 +7,17 @@ use crunch_remote_core::resource_quota::UnitSchedule;
 use crunch_remote_core::resource_quota::Usage;
 
 use super::*;
+/// The quota store admits a private directory only, so the fixture creates one
+/// with owner-only permissions instead of the default temporary mode.
+fn private_tempdir() -> tempfile::TempDir {
+    let directory = tempfile::tempdir().unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    directory
+}
 fn reservation(name: &str, project: &str) -> Reservation {
     Reservation {
         job: RemoteJobId::new("job").unwrap(),
@@ -47,7 +58,7 @@ fn completion() -> UsageEvent {
 }
 #[test]
 fn durable_duplicate_reservation_and_completion_charge_once_across_reopen() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = private_tempdir();
     let store = ResourceQuotaStore::provision(directory.path()).unwrap();
     let r = reservation("one", "project");
     let reserved = store.reserve(r.clone(), limits()).unwrap();
@@ -128,7 +139,7 @@ fn only_verified_never_started_cancellation_can_release_zero() {
 }
 #[test]
 fn interrupted_mutations_recover_idempotently_and_do_not_grant_quota() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = private_tempdir();
     let store = ResourceQuotaStore::provision(directory.path()).unwrap();
     let r = reservation("one", "project");
     let report = run_quota_fault_fixture(directory.path(), &[
@@ -172,7 +183,7 @@ fn interrupted_mutations_recover_idempotently_and_do_not_grant_quota() {
 }
 #[test]
 fn corrupt_missing_overflow_and_oversized_usage_fail_closed() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = private_tempdir();
     assert!(matches!(ResourceQuotaStore::open(directory.path()), Err(QuotaError::StoreUnavailable)));
     let store = ResourceQuotaStore::provision(directory.path()).unwrap();
     let r = reservation("one", "project");
@@ -207,7 +218,7 @@ fn corrupt_missing_overflow_and_oversized_usage_fail_closed() {
 fn quota_rejects_symlinks_public_directories_and_duplicate_ledger_keys() {
     use std::os::unix::fs::PermissionsExt;
     use std::os::unix::fs::symlink;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = private_tempdir();
     let store = ResourceQuotaStore::provision(directory.path()).unwrap();
     let original = fs::read(store.state_path()).unwrap();
     let duplicate =
@@ -237,7 +248,7 @@ fn quota_rejects_symlinks_public_directories_and_duplicate_ledger_keys() {
 #[cfg(unix)]
 #[test]
 fn quota_busy_lock_returns_without_waiting_for_owner_release() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = private_tempdir();
     let store = ResourceQuotaStore::provision(directory.path()).unwrap();
     let held = OpenOptions::new()
         .read(true)
@@ -256,7 +267,7 @@ fn admitted_context_and_observation_survive_reopen_without_cross_attempt_authori
     use crunch_remote_core::resource_policy as policy;
     use crunch_remote_core::resource_quota::ObservationRecord;
     use crunch_remote_core::resource_quota::ResourceContext;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = private_tempdir();
     let store = ResourceQuotaStore::provision(directory.path()).unwrap();
     let r = reservation("observed", "project");
     let quantities = policy::Quantities {
