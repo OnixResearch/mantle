@@ -1,0 +1,17 @@
+$ git rev-parse HEAD
+82e4d67eca62efb70ee82d2686404dee54308f18
+
+$ git push --porcelain origin HEAD:refs/heads/main
+To github.com:OnixResearch/mantle.git
+=	HEAD:refs/heads/main	[up to date]
+Done
+exit=0
+
+$ git ls-remote --exit-code origin refs/heads/main
+82e4d67eca62efb70ee82d2686404dee54308f18	refs/heads/main
+exit=0
+
+$ git log --oneline -3 origin/main
+82e4d67ec docs: publish the ra-jit feasibility report and its adoption decision
+ef1e5956b Land the source-bound API reconciliation baseline
+43ccd6884 docs: retain approved blocked Darwin disposition (#17)
