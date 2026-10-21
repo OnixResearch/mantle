@@ -16,8 +16,11 @@
 - [x] Check that every repaired shape still rejects a missing required field,
       an undeclared field, and a wrongly typed field, and still applies its
       declared defaults.
-- [ ] Run the Nickel-evaluating first-party suites and the ordinary
+- [x] Run the Nickel-evaluating first-party suites and the ordinary
       first-party gate on the repaired revision, and retain the transcripts.
+      The `stdlib_tests` Nickel contract suite reports 28 passed and 0 failed.
+      The gate transcript for revision `2782a40ec` is retained in
+      `.cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/final-gate-v2/`.
 - [x] Record the decision in `adr/0124-express-nickel-plan-shapes-as-record-types.md`
       and update `docs/nickel-stdlib-contract-defect.md`.
-- [ ] Close issue #24 with the verified evidence.
+- [x] Close issue #24 with the verified evidence.
