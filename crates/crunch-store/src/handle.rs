@@ -179,8 +179,21 @@ impl StoreConfig {
         base_state_dirs: &[PathBuf],
         source_admission: Option<&dyn StoreSourceAdmission>,
     ) -> Result<(), Error> {
+        // An unsupported overlay composition is refused before any declared base is
+        // inspected, so a rejected configuration never touches a caller-declared
+        // directory and the refusal does not depend on the base being readable.
+        if !base_state_dirs.is_empty() {
+            backend.require_overlay_composition(profile)?;
+        }
+        // The writable state identity is read before any declared base is opened, so a
+        // rejected writable state never causes a declared base to be touched. The base
+        // identity reads still happen only after the source-session witnesses exist.
+        crate::overlay::preflight_store_identity(state_dir, store_dir, backend, profile, !base_state_dirs.is_empty())?;
         let sources = Self::admit_base_sources(base_state_dirs, store_dir, source_admission)?;
-        Self::preflight_admitted_backend_identity(backend, profile, state_dir, store_dir, &sources.base_dirs)
+        for base_state_dir in &sources.base_dirs {
+            crate::overlay::preflight_store_identity(base_state_dir, store_dir, backend, profile, true)?;
+        }
+        Ok(())
     }
 
     // Only callers retaining the source-session witnesses may reach raw identity I/O.
