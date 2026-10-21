@@ -89,13 +89,11 @@ dependency graph for `crates/crunch-delta`
 
 A full workspace lib/tests run with `--no-fail-fast` on the same revision
 reports four failing groups, each in a suite that does not evaluate Nickel:
-the Nix gateway admitted-NAR publication (issue 25), two `crunch-store`
-overlay cases that opened a declared base before the overlay capability
-refusal, the verification-bridge fixture, whose pinned upstream Trellis
-revision publishes a receipt whose identity does not match its own bundle
-(issue 27), and the user-profile install, upgrade, remove, rollback and
-garbage-collection case, which reports `root registry: ambiguous release:
-specify an exact reason` (recorded on issue 18).
+the Nix gateway admitted-NAR publication, two `crunch-store` overlay cases
+that opened a declared base before the overlay capability refusal, the
+verification-bridge fixture, whose pinned upstream Trellis revision publishes
+a receipt whose identity does not match its own bundle, and the user-profile
+install, upgrade, remove, rollback and garbage-collection case.
 
 The two `crunch-store` overlay cases are a reconciliation regression and are
 now repaired and published at `ca13e11b9`: the source-admission step opened
@@ -107,8 +105,21 @@ read last, with the base identity reads still after the source-session
 witnesses exist. Both cases pass on the repaired tree, and issue 26 is closed
 with that evidence.
 
-The remaining failures are pre-existing defects that are tracked but not
-repaired, so G1 remains unaccepted: the gate is executed and retained.
+The Nix gateway admitted-NAR publication is also repaired and published at
+`b125ca36a`: the import persisted its signed PathInfo but never materialized
+the path, so the imported store path was not readable at its path. The store
+gains a narrow method that materializes one already persisted local store
+path, and the gateway calls it after the import persists its PathInfo. The
+imported path is published for its clients and is not a retained
+garbage-collection root, so it is materialized without root registration.
+Issue 25 is closed with that evidence.
+
+The remaining failures are defects that are tracked but not repaired, so G1
+remains unaccepted: the gate is executed and retained. The verification-bridge
+fixture is faithful to the pinned upstream revision, so its repair belongs
+upstream (issue 27). The user-profile removal of a retained generation has no
+exact release reason after the rollback path re-retains that generation
+(issue 18).
 
 P1 stays unchecked: publication is recorded, but G1 and G2 have not been
 accepted, so no lifecycle acceptance follows from the push.
