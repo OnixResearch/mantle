@@ -1,0 +1,6 @@
+{
+  "name": "mantle-pnpm-proof",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "pnpm": { "patchedDependencies": { "@fixture/consumer@1.0.0": "patches/consumer.patch" } }
+}

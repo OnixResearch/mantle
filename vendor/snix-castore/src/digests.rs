@@ -45,11 +45,6 @@ impl From<blake3::Hash> for B3Digest {
         Self(*value.as_bytes())
     }
 }
-impl From<digest::Output<blake3::Hasher>> for B3Digest {
-    fn from(value: digest::Output<blake3::Hasher>) -> Self {
-        Self(value.into())
-    }
-}
 
 impl TryFrom<&[u8]> for B3Digest {
     type Error = Error;

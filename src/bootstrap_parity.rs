@@ -730,7 +730,7 @@ fn row_notes(
     }
     if let Some(details) = proof_details {
         notes.push(format!(
-            "genuine release rebuild evidence accepted as partial bootstrap-parity evidence for provider_kind={} release_id={} proof_digest={} rebuild_descriptor={} rebuild_authority_plan={} verify_status={}; bounded claim: {}",
+            "genuine release rebuild evidence and source-built action reconciliation accepted for this independent bootstrap-parity row with provider_kind={} release_id={} proof_digest={} rebuild_descriptor={} rebuild_authority_plan={} verify_status={}; bounded claim: {}",
             details.selected_provider_kind,
             details.release_id,
             details.deterministic_proof_digest_blake3,
@@ -2506,6 +2506,7 @@ fn validate_real_self_build_proof_parity_evidence(project_root: &Path) -> Result
         field: "vendor_blake3",
         expected: &deterministic.vendor_blake3,
     })?;
+    validate_source_built_parity_bundle(project_root, &value, selected_provider_kind, &deterministic)?;
     assert_eq!(evidence_digest_blake3.len(), BLAKE3_HEX_LENGTH);
     assert!(path.starts_with(project_root));
     Ok(EvidenceValidation::with_proof(ParityProofDetails {
@@ -2525,6 +2526,42 @@ fn validate_real_self_build_proof_parity_evidence(project_root: &Path) -> Result
         sandbox_profile_identity: sandbox.profile_identity,
         bounded_claim: summary.bounded_claim,
     }))
+}
+
+/// Full-bootstrap parity consumes the independently checked portable bundle,
+/// never another row's receipt or a release summary's success booleans.
+fn validate_source_built_parity_bundle(
+    project_root: &Path,
+    value: &serde_json::Value,
+    provider_kind: ProviderKind,
+    expected: &DeterministicProofValidation,
+) -> Result<(), String> {
+    if provider_kind != ProviderKind::FullSource {
+        return Err("full-bootstrap self-build parity requires full-source provider construction".into());
+    }
+    let relative = require_real_proof_non_empty_string(value, "proof_bundle_path")?;
+    let bundle = crate::source_built_fixed_point_trust_report::evidence_path(project_root, relative)
+        .map_err(|error| error.to_string())?;
+    let receipt_name = crate::source_built_fixed_point_trust_report::FINAL_RECEIPT_FILE;
+    crate::source_built_fixed_point_trust_report::verify_source_built_fixed_point_receipt(
+        &bundle,
+        &bundle.join(receipt_name),
+    )
+    .map(|_| ())
+    .map_err(|error| error.to_string())?;
+    let (receipt, _) = crate::source_built_fixed_point_trust_report::read_bound_json::<
+        crunch_release_core::DeterministicBuildProofReceipt,
+    >(&bundle, receipt_name)
+    .map_err(|error| error.to_string())?;
+    if receipt.receipt_blake3.as_deref() != Some(expected.digest_blake3.as_str())
+        || receipt.rebuild_descriptor_blake3.as_deref() != Some(expected.rebuild_descriptor_blake3.as_str())
+        || receipt.rebuild_authority_plan_blake3.as_deref() != Some(expected.rebuild_authority_plan_blake3.as_str())
+        || receipt.source_blake3 != expected.source_blake3
+        || receipt.vendor_blake3 != expected.vendor_blake3
+    {
+        return Err("self-build parity descriptor differs from the verified source-built proof bundle".into());
+    }
+    Ok(())
 }
 
 fn validate_real_proof_identity(value: &serde_json::Value) -> Result<(String, ProviderKind), String> {
@@ -3563,15 +3600,15 @@ const BOOTSTRAP_PROOF_STAGE_SPECS: &[StageSpec] = &[
     },
     StageSpec {
         id: "crunch.self-build",
-        title: "Crunch self-build proof",
+        title: "Mantle source-built self-build proof",
         axes: GUIX_STAGEX,
         lineage: "crunch",
         derivation: Some("crunch.ncl"),
-        expected_complete: false,
-        graph_evidence: "crunch derivation present",
+        expected_complete: true,
+        graph_evidence: "Mantle self-build derivation present",
         semantic_evidence: "stage1/stage2 binary comparison required",
-        proof_evidence: "full proof bundle required",
-        notes: "release evidence must bind selected provider kind; checked receipt at bootstrap/evidence/crunch-self-build-provider-kind-linkage.json validates proof_identity/proof_linkage/prerequisites provider-kind equality but does not prove full self-build",
+        proof_evidence: "independently verified full-source v2 receipt and complete action reconciliation required",
+        notes: "this row consumes only its root-relative verified source-built proof_bundle_path; it cannot complete native or StageX lineage rows, and a source-root or release summary alone cannot complete this row",
         evidence_check: EvidenceCheck::RealSelfBuildProof,
     },
 ];
@@ -3693,19 +3730,7 @@ mod tests {
     }
 
     fn self_build_spec() -> StageSpec {
-        StageSpec {
-            id: "crunch.self-build",
-            title: "Crunch self-build proof",
-            axes: GUIX_STAGEX,
-            lineage: "crunch",
-            derivation: Some("crunch.ncl"),
-            expected_complete: false,
-            graph_evidence: "crunch derivation present",
-            semantic_evidence: "stage1/stage2 binary comparison required",
-            proof_evidence: "full proof bundle required",
-            notes: "release evidence must bind selected provider kind; checked receipt at bootstrap/evidence/crunch-self-build-provider-kind-linkage.json validates proof_identity/proof_linkage/prerequisites provider-kind equality but does not prove full self-build",
-            evidence_check: EvidenceCheck::RealSelfBuildProof,
-        }
+        *BOOTSTRAP_PROOF_STAGE_SPECS.iter().find(|spec| spec.id == "crunch.self-build").unwrap()
     }
 
     fn stagex_lineage_spec() -> StageSpec {
@@ -5805,25 +5830,33 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     }
 
     #[test]
-    fn self_build_valid_real_proof_descriptor_is_evidence_backed_partial() {
+    fn source_root_release_summary_cannot_authorize_full_source_parity() {
         let dir = tempdir().unwrap();
         write_stage(dir.path(), "crunch.ncl", "# real crunch derivation body\n");
         write_self_build_provider_kind_linkage(dir.path(), "source-root", "source-root", "source-root");
         write_real_self_build_proof_parity(dir.path(), "");
-
         let row = evaluate_stage(dir.path(), &self_build_spec());
+        assert_eq!(row.status, StageStatus::Blocked);
+        assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert!(row.proof_details.is_none());
+    }
 
-        assert_eq!(row.status, StageStatus::Partial);
-        assert_eq!(row.provider_kind, ProviderKind::SourceRoot);
-        assert!(row.status.blocks_parity());
-        let proof = row.proof_details.as_ref().unwrap();
-        assert_eq!(proof.release_id, "test-release");
-        assert_eq!(proof.selected_provider_kind, ProviderKind::SourceRoot);
-        assert_eq!(proof.verdict, "self-rebuild-match");
-        assert_eq!(proof.verify_status, "eligible");
-        assert!(proof.bounded_claim.contains("rebuilt twice"));
-        assert!(row.notes.contains("genuine release rebuild evidence accepted as partial bootstrap-parity evidence"));
-        assert!(!row.notes.contains("evidence check failed"));
+    #[test]
+    fn full_source_success_metadata_without_actual_bundle_stays_blocked() {
+        let dir = tempdir().unwrap();
+        write_stage(dir.path(), "crunch.ncl", "# real Mantle derivation body\n");
+        write_self_build_provider_kind_linkage(dir.path(), "full-source", "full-source", "full-source");
+        write_real_self_build_proof_parity(dir.path(), "source-root=>full-source");
+        let metadata_path = dir.path().join(REAL_SELF_BUILD_PROOF_PARITY_RECEIPT);
+        let mut metadata: serde_json::Value = serde_json::from_slice(&fs::read(&metadata_path).unwrap()).unwrap();
+        let bundle = "bootstrap/evidence/copied-source-built-proof";
+        metadata["proof_bundle_path"] = serde_json::json!(bundle);
+        fs::create_dir_all(dir.path().join(bundle)).unwrap();
+        fs::write(metadata_path, serde_json::to_vec(&metadata).unwrap()).unwrap();
+        let row = evaluate_stage(dir.path(), &self_build_spec());
+        assert_eq!(row.status, StageStatus::Blocked);
+        assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert!(row.proof_details.is_none());
     }
 
     #[test]

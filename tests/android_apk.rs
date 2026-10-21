@@ -133,3 +133,45 @@ fn forced_embedded_stdlib_authors_the_reviewed_apk_plan() {
     assert_eq!(plan["toolchain"]["build_tools"]["version"], "35.0.0");
     assert_eq!(plan["toolchain"]["platform"]["version"], "35_r02");
 }
+
+#[test]
+fn native_authoring_rejects_unsupported_abi_api_toolchain_and_asset_collisions() {
+    let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/android-apk/plan.ncl");
+    let published = serde_json::to_string(fixture.to_str().unwrap()).unwrap();
+    let native = r#"{
+      abi = "arm64-v8a", api_level = 24, ndk_revision = "28.2.13676358",
+      ndk_sysroot = "/mantle/store/0123456789abcdfghijklmnpqrsvwxyz-ndk/sysroot",
+      libraries = [{ store_file = "/mantle/store/1123456789abcdfghijklmnpqrsvwxyz-native/lib/libdemo.so",
+        filename = "libdemo.so", required_jni_exports = ["JNI_OnLoad"] }],
+    }"#;
+    for (author, base) in [
+        ("android.mkApk", format!("import {published}")),
+        ("android.reviewed.mkApk", PLAN.into()),
+    ] {
+        let prefix = format!(
+            "let android = import \"android.ncl\" in let native = {native} in let plan = std.record.insert \"native\" native ({base}) in"
+        );
+        assert!(
+            evaluate(&format!("{prefix} {author} plan")).is_ok(),
+            "supported native declaration must be admitted"
+        );
+        for mutation in [
+            "std.record.update \"abi\" \"x86_64\" native",
+            "std.record.update \"api_level\" 23 native",
+            "std.record.update \"api_level\" 36 native",
+            "std.record.update \"api_level\" 24.5 native",
+            "std.record.update \"ndk_revision\" \"28\" native",
+            "std.record.update \"ndk_sysroot\" \"/home/user/ndk/sysroot\" native",
+            "std.record.update \"libraries\" [std.array.first native.libraries, std.array.first native.libraries] native",
+        ] {
+            assert!(evaluate(&format!("{prefix} {author} (std.record.update \"native\" ({mutation}) plan)")).is_err());
+        }
+        for assets in [
+            r#"[{ source_member = "data/a", destination = "../outside" }]"#,
+            r#"[{ source_member = "data/a", destination = "data" }, { source_member = "data/b", destination = "data/b" }]"#,
+            r#"[{ source_member = "data/a", destination = "same" }, { source_member = "data/b", destination = "same" }]"#,
+        ] {
+            assert!(evaluate(&format!("{prefix} {author} (std.record.insert \"assets\" {assets} plan)")).is_err());
+        }
+    }
+}

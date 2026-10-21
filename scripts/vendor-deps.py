@@ -88,7 +88,7 @@ def check_pins():
     tar = [p for p in packages if p["name"] == "astral-tokio-tar"]
     require(len(tar) == 1 and tar[0]["version"] == "0.6.4", "astral-tokio-tar: Cargo.lock version drift")
     blake3 = [p for p in packages if p["name"] == "blake3"]
-    require(len(blake3) == 1 and blake3[0]["version"] == "1.8.2", "blake3: Cargo.lock version drift")
+    require(len(blake3) == 1 and blake3[0]["version"] == "1.8.5", "blake3: Cargo.lock version drift")
     return {(p["name"], p["version"], p.get("source")) for p in packages}
 
 

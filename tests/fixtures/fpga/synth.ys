@@ -1,0 +1,5 @@
+read_verilog -sv -DFPGA_BUILD=1 -Iinclude tiny_adder.sv registered_adder.sv
+chparam -set WIDTH 2 registered_adder
+check
+synth_ice40 -top registered_adder -json netlist.json
+check -assert

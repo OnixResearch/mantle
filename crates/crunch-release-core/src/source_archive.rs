@@ -66,7 +66,11 @@ pub fn plan_release_source_archive_members(
     Ok(members.into_values().collect())
 }
 
-pub fn release_source_path_is_releasable(path: &str) -> Result<bool, ReleaseEvidenceError> {
+pub fn release_source_path_is_releasable(path: String) -> Result<bool, ReleaseEvidenceError> {
+    release_source_path_is_releasable_borrowed(&path)
+}
+
+fn release_source_path_is_releasable_borrowed(path: &str) -> Result<bool, ReleaseEvidenceError> {
     let components = normalized_relative_components(RelativePathInput {
         path,
         field_name: "release source path",
@@ -83,7 +87,13 @@ pub fn release_source_path_is_releasable(path: &str) -> Result<bool, ReleaseEvid
     Ok(true)
 }
 
-pub fn validate_release_source_symlink_target(target: &str) -> Result<(), ReleaseEvidenceError> {
+/// Validate and return an owned target without copying its bytes.
+pub fn validate_release_source_symlink_target(target: String) -> Result<String, ReleaseEvidenceError> {
+    validate_release_source_symlink_target_borrowed(&target)?;
+    Ok(target)
+}
+
+fn validate_release_source_symlink_target_borrowed(target: &str) -> Result<(), ReleaseEvidenceError> {
     normalized_relative_components(RelativePathInput {
         path: target,
         field_name: "release source symlink target",
@@ -100,7 +110,7 @@ fn normalize_release_source_candidate(
             candidate.relative_path
         )));
     }
-    if !release_source_path_is_releasable(&candidate.relative_path)? {
+    if !release_source_path_is_releasable_borrowed(&candidate.relative_path)? {
         return Ok(None);
     }
     validate_release_source_candidate_symlink(&candidate)?;
@@ -124,7 +134,7 @@ fn validate_release_source_candidate_symlink(candidate: &ReleaseSourceCandidate)
             candidate.relative_path
         )));
     };
-    validate_release_source_symlink_target(target)
+    validate_release_source_symlink_target_borrowed(target)
 }
 
 fn normalized_relative_components(input: RelativePathInput<'_>) -> Result<Vec<String>, ReleaseEvidenceError> {

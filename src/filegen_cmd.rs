@@ -353,7 +353,7 @@ fn run_filegen_plan(port: &impl FilegenPlanPort, options: FilegenPlanOptions<'_>
     }
     complete_filegen(&effects, &observations)?;
     render_filegen_plan(&plan, options.json)?;
-    if plan.has_blockers() {
+    if !plan.blockers.is_empty() {
         Err(RunError::Reported(APPLY_FAILURE_EXIT_CODE).into())
     } else {
         Ok(())
@@ -385,10 +385,13 @@ fn run_filegen_apply(
         declarations: inputs.declarations,
         current_files: inputs.facts,
     });
-    if let Err(blockers) = verify_filegen_apply_plan(&reviewed_plan, &current_plan) {
-        render_filegen_blockers(&blockers, options.json)?;
-        return Err(RunError::Reported(APPLY_FAILURE_EXIT_CODE).into());
-    }
+    let current_plan = match verify_filegen_apply_plan(reviewed_plan, current_plan) {
+        Ok(current_plan) => current_plan,
+        Err(blockers) => {
+            render_filegen_blockers(&blockers, options.json)?;
+            return Err(RunError::Reported(APPLY_FAILURE_EXIT_CODE).into());
+        }
+    };
     let mut write_observations = Vec::with_capacity(writes.effects.len());
     observe_filegen(&writes, &mut write_observations, port.apply(options.root, &current_plan))?;
     observe_filegen(&writes, &mut write_observations, port.read_back(options.root, &current_plan))?;

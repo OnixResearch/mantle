@@ -31,6 +31,8 @@ const UNIX_OWNER_DIRECTORY_ACCESS_MODE: u32 = 0o700;
 /// Resolve packages to store paths using the given resolver function.
 ///
 /// `resolve` takes a package name and returns its store path or an error.
+// Pending wiring in the source-only preparation path (Cairn prove-source-built-mantle-fixed-point I3).
+#[allow(dead_code)]
 pub fn resolve_packages<F>(packages: &[String], resolve: F) -> Result<Vec<(String, String)>, RunError>
 where F: Fn(&str) -> Result<String, RunError> {
     let mut entries = Vec::with_capacity(packages.len());
@@ -924,49 +926,66 @@ pub struct BootstrapSeedFetchRequest<'a> {
 pub async fn bootstrap_fetch(request: BootstrapSeedFetchRequest<'_>) -> Result<(), RunError> {
     debug_assert!(request.store_dir.is_absolute());
     debug_assert!(!request.output.as_os_str().is_empty());
-    let provider = load_fetch_seed_provider()?;
-    let raw_fetch = make_raw_fetch_derivation(&provider.provider.raw);
+    use mantle_application_contract::bootstrap_effects::BootstrapEffect::*;
+    let mut port = crate::bootstrap_effect_port::BootstrapPort::new(&[
+        (ReadInput, 1),
+        (FetchSeed, 1),
+        (WriteOutput, 2),
+        (VerifyOutput, 2),
+    ])?;
+    let result = async {
+        let provider = port.call(ReadInput, load_fetch_seed_provider)?;
+        let raw_fetch = make_raw_fetch_derivation(&provider.provider.raw);
 
-    eprintln!("Fetching bootstrap seed provider {}...", provider.provider.id);
+        eprintln!("Fetching bootstrap seed provider {}...", provider.provider.id);
 
-    // 1. Convert the raw fetch derivation and download it through the normal fetch pipeline.
-    let mut cache = crunch_glue::ConversionCache::new(LOGICAL_STORE_DIR);
-    let (drv_path, nix_drv) = crunch_glue::convert(&raw_fetch, &mut cache)
-        .map_err(|e| RunError::Build(format!("converting {}: {e}", raw_fetch.name)))?;
+        // 1. Convert the raw fetch derivation and download it through the normal fetch pipeline.
+        let mut cache = crunch_glue::ConversionCache::new(LOGICAL_STORE_DIR);
+        let (drv_path, nix_drv) = crunch_glue::convert(&raw_fetch, &mut cache)
+            .map_err(|e| RunError::Build(format!("converting {}: {e}", raw_fetch.name)))?;
 
-    let display_prefix = request.store_dir.to_str().unwrap_or(LOGICAL_STORE_DIR);
-    if let Some(planned_output) = nix_drv.outputs.get("out").and_then(|o| o.path.as_ref()) {
-        eprintln!("  raw {} -> {}", raw_fetch.name, planned_output.to_absolute_path_with_prefix(display_prefix));
+        let display_prefix = request.store_dir.to_str().unwrap_or(LOGICAL_STORE_DIR);
+        if let Some(planned_output) = nix_drv.outputs.get("out").and_then(|o| o.path.as_ref()) {
+            eprintln!("  raw {} -> {}", raw_fetch.name, planned_output.to_absolute_path_with_prefix(display_prefix));
+        }
+
+        // 2-3. Set up services, build the raw tarball, and extract its output path.
+        let raw_display_path = port
+            .call_async(
+                FetchSeed,
+                fetch_raw_seed(FetchRawSeedRequest {
+                    drv_path: &drv_path,
+                    cache: &cache,
+                    store_dir: request.store_dir,
+                    state_dir: request.state_dir,
+                    backend: request.backend,
+                    is_verbose: request.is_verbose,
+                    display_prefix,
+                    source_fetch_overrides: request.source_fetch_overrides,
+                }),
+            )
+            .await?;
+
+        // 4. Reduce the raw tree on the host into the normalized provider layout.
+        let (logical_path, physical_path, reduced_cached) = port.call(WriteOutput, || {
+            materialize_reduced_seed_provider(&provider, Path::new(&raw_display_path), request.store_dir)
+        })?;
+        port.call(VerifyOutput, || validate_reduced_seed_output(Path::new(&physical_path), &provider))?;
+        // 5. Generate seed.ncl.
+        let ncl = generate_fetch_seed_ncl(&provider, &logical_path);
+        port.call(WriteOutput, || std::fs::write(request.output, &ncl))
+            .map_err(|e| RunError::Internal(format!("writing {}: {e}", request.output.display())))?;
+        port.verify_bytes(request.output, ncl.as_bytes())?;
+        Ok((physical_path, reduced_cached))
     }
-
-    // 2-3. Set up services, build the raw tarball, and extract its output path.
-    let raw_display_path = fetch_raw_seed(FetchRawSeedRequest {
-        drv_path: &drv_path,
-        cache: &cache,
-        store_dir: request.store_dir,
-        state_dir: request.state_dir,
-        backend: request.backend,
-        is_verbose: request.is_verbose,
-        display_prefix,
-        source_fetch_overrides: request.source_fetch_overrides,
-    })
-    .await?;
-
-    // 4. Reduce the raw tree on the host into the normalized provider layout.
-    let (logical_path, physical_path, reduced_cached) =
-        materialize_reduced_seed_provider(&provider, Path::new(&raw_display_path), request.store_dir)?;
+    .await;
+    let (physical_path, reduced_cached) = port.finish(result)?;
     if reduced_cached {
         eprintln!("  {} (reduced provider cached)", physical_path);
     } else {
         eprintln!("  {} (reduced provider built)", physical_path);
     }
     eprintln!("  provider metadata -> {}/share/crunch-bootstrap/provider.json", physical_path);
-
-    // 5. Generate seed.ncl.
-    let ncl = generate_fetch_seed_ncl(&provider, &logical_path);
-    std::fs::write(request.output, &ncl)
-        .map_err(|e| RunError::Internal(format!("writing {}: {e}", request.output.display())))?;
-
     eprintln!("Wrote {}", request.output.display());
     Ok(())
 }

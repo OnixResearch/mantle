@@ -164,6 +164,8 @@ impl Drop for RemoteServiceKeyWire {
 pub fn resolve_remote_service_keys_bounded(
     request: &RemoteServiceSecretRequest,
 ) -> Result<RemoteServiceKeys, RunError> {
+    let operation_plan =
+        crate::remote_build::operation::plan(crate::remote_build::operation::RemoteOperation::SecretResolve)?;
     validate_remote_secret_request(request).map_err(secret_error)?;
     let current_exe = std::env::current_exe().map_err(|_| secret_error("worker-executable-unavailable"))?;
     let mut command = Command::new(&current_exe);
@@ -190,10 +192,20 @@ pub fn resolve_remote_service_keys_bounded(
     }
     let wire: RemoteServiceKeyWire =
         serde_json::from_slice(&output.stdout).map_err(|_| secret_error("worker-response-malformed"))?;
-    parse_remote_service_keys(&wire).map_err(secret_error)
+    let keys = parse_remote_service_keys(&wire).map_err(secret_error)?;
+    crate::remote_build::operation::classify(
+        &operation_plan,
+        crate::remote_build::operation::RemoteOperationFacts::Keys {
+            verifier_id: keys.verifier_key.id(),
+            signer_id: keys.result_signing_key.verifying_key.name(),
+        },
+    )?;
+    Ok(keys)
 }
 
 pub fn run_remote_secret_worker(manifest_path: &Path, profile: &str, provider: &str) -> Result<(), RunError> {
+    let operation_plan =
+        crate::remote_build::operation::plan(crate::remote_build::operation::RemoteOperation::SecretWorker)?;
     if std::env::var(REMOTE_SECRET_WORKER_ENV).as_deref() != Ok(REMOTE_SECRET_WORKER_ENV_VALUE) {
         return Err(secret_error("worker-invocation-rejected"));
     }
@@ -204,6 +216,14 @@ pub fn run_remote_secret_worker(manifest_path: &Path, profile: &str, provider: &
     };
     validate_remote_secret_request(&request).map_err(secret_error)?;
     let wire = resolve_remote_service_key_wire(&request).map_err(secret_error)?;
+    let keys = parse_remote_service_keys(&wire).map_err(secret_error)?;
+    crate::remote_build::operation::classify(
+        &operation_plan,
+        crate::remote_build::operation::RemoteOperationFacts::Keys {
+            verifier_id: keys.verifier_key.id(),
+            signer_id: keys.result_signing_key.verifying_key.name(),
+        },
+    )?;
     let stdout = std::io::stdout();
     let mut locked = stdout.lock();
     serde_json::to_writer(&mut locked, &wire).map_err(|_| secret_error("worker-response-serialization-failed"))?;
@@ -234,7 +254,6 @@ fn resolve_remote_service_key_wire(request: &RemoteServiceSecretRequest) -> Resu
         ticket_verifier_key: ticket_verifier_key.take(),
         result_signing_key: result_signing_key.take(),
     };
-    parse_remote_service_keys(&wire)?;
     Ok(wire)
 }
 

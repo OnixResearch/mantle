@@ -1,0 +1,11 @@
+[package]
+name = "mantle-cargo-build-bundle-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+blake3 = { version = "=1.8.5", default-features = false }
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+mantle-rust-plan-core = { path = "../mantle-rust-plan-core" }

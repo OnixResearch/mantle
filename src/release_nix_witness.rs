@@ -88,7 +88,7 @@ pub(crate) fn write_release_nix_cross_builder_witness(
     validate_witness_request(request)?;
     let manifest = verify_release_evidence_bundle(&request.bundle_dir)?;
     let deterministic_proof = load_canonical_deterministic_proof(&request.deterministic_proof_path)?;
-    ensure_deterministic_proof_promotes(&deterministic_proof, &manifest)?;
+    let deterministic_proof = ensure_deterministic_proof_promotes(deterministic_proof, &manifest)?;
 
     let (mantle_artifact_digests, nix_artifact_digests) =
         cross_builder_artifact_digests(&manifest, &request.nix_output_dir)?;
@@ -226,13 +226,14 @@ fn load_canonical_deterministic_proof(path: &Path) -> Result<VerifiedDeterminist
 }
 
 fn ensure_deterministic_proof_promotes(
-    proof: &VerifiedDeterministicProof,
+    mut proof: VerifiedDeterministicProof,
     manifest: &crunch_release_core::ReleaseEvidenceManifest,
-) -> Result<(), RunError> {
+) -> Result<VerifiedDeterministicProof, RunError> {
     debug_assert!(!DEFAULT_WITNESS_RELATIVE_PATH.is_empty());
-    let is_genuine_rebuild = deterministic_build_proof_has_genuine_rebuild_authority(proof.receipt.clone())
+    let authority = deterministic_build_proof_has_genuine_rebuild_authority(proof.receipt)
         .map_err(|err| RunError::Internal(format!("validating deterministic proof rebuild authority: {err}")))?;
-    if !is_genuine_rebuild {
+    proof.receipt = authority.receipt;
+    if !authority.eligible {
         return Err(RunError::Internal(
             "nix cross-builder witness requires content-bound genuine rebuild authority; legacy path-bound evidence is non-promoting"
                 .to_string(),
@@ -270,7 +271,7 @@ fn ensure_deterministic_proof_promotes(
             ));
         }
     }
-    Ok(())
+    Ok(proof)
 }
 
 fn observed_artifact(path: &Path) -> Result<ObservedArtifact, RunError> {

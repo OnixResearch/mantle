@@ -1,0 +1,4 @@
+# Focused acceptance for prebuilt Android toolchain source admission.
+cargo test --locked --offline -p mantle --test android_sources
+cargo test --locked --offline -p mantle --test android_sources_offline
+cargo fmt --check -p mantle -p crunch-eval

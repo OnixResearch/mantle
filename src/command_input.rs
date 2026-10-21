@@ -35,7 +35,6 @@ use crate::FilegenCommandAction;
 use crate::ReleaseAction;
 use crate::RemoteAction;
 use crate::RunError;
-use crate::SemanticGraphQueryKind;
 use crate::SourceAction;
 use crate::SourceBundleAction;
 use crate::StoreAction;
@@ -171,14 +170,14 @@ pub(crate) mod test_support {
     }
 
     /// Parse one argument vector on a thread with room for the CLI enum.
-    pub(crate) fn parse_args_on_cli_test_stack(args: Vec<&'static str>) -> Result<Args, String> {
+    pub(crate) fn parse_args_on_cli_test_stack(args: Vec<&'static str>) -> Result<Args, clap::Error> {
         debug_assert!(!args.is_empty());
         std::thread::Builder::new()
             .stack_size(CLI_PARSE_TEST_STACK_BYTES)
-            .spawn(move || Args::try_parse_from(args).map_err(|error| error.to_string()))
-            .map_err(|error| format!("starting CLI parser test thread: {error}"))?
+            .spawn(move || Args::try_parse_from(args))
+            .expect("starting CLI parser test thread")
             .join()
-            .map_err(|_| "CLI parser test thread panicked".to_string())?
+            .expect("CLI parser test thread panicked")
     }
 }
 
@@ -588,62 +587,40 @@ mod project_tests {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct SemanticGraphCommandInput<'a> {
-    pub(crate) query: SemanticGraphQueryKind,
+    pub(crate) query: mantle_application_contract::GraphQueryKind,
     pub(crate) target: &'a str,
+    pub(crate) other_target: Option<&'a str>,
+    pub(crate) limits: mantle_application_contract::inspection::QueryLimits,
     pub(crate) graph_file: Option<&'a Path>,
 }
 
 impl<'a> SemanticGraphCommandInput<'a> {
     /// Map the parsed CLI DTO into the typed application command.
     pub(crate) fn command_request(&self) -> mantle_application_contract::GraphQueryRequest {
-        let kind = match self.query {
-            SemanticGraphQueryKind::Graph => mantle_application_contract::GraphQueryKind::Graph,
-            SemanticGraphQueryKind::Why => mantle_application_contract::GraphQueryKind::Why,
-            SemanticGraphQueryKind::Dependents => mantle_application_contract::GraphQueryKind::Dependents,
-        };
         debug_assert!(!self.target.is_empty());
-        debug_assert!(!kind.as_str().is_empty());
+        debug_assert!(!self.query.as_str().is_empty());
         mantle_application_contract::GraphQueryRequest {
-            kind,
+            kind: self.query,
             target: self.target.to_string(),
+            other_target: self.other_target.map(str::to_string),
+            limits: self.limits,
         }
     }
 
-    pub(crate) fn new(query: SemanticGraphQueryKind, target: &'a str, graph_file: Option<&'a Path>) -> Self {
+    pub(crate) fn new(
+        query: mantle_application_contract::GraphQueryKind,
+        target: &'a str,
+        other_target: Option<&'a str>,
+        limits: mantle_application_contract::inspection::QueryLimits,
+        graph_file: Option<&'a Path>,
+    ) -> Self {
         Self {
             query,
             target,
+            other_target,
+            limits,
             graph_file,
         }
-    }
-}
-
-/// Map a parsed semantic-graph DTO into its typed request.
-#[cfg(test)]
-mod graph_tests {
-    use super::*;
-
-    #[test]
-    fn each_graph_query_kind_maps_to_its_contract_kind() {
-        for (query, expected) in [
-            (crate::SemanticGraphQueryKind::Graph, "graph"),
-            (crate::SemanticGraphQueryKind::Why, "why"),
-            (crate::SemanticGraphQueryKind::Dependents, "dependents"),
-        ] {
-            let input = SemanticGraphCommandInput::new(query, "target-name", None);
-            let request = input.command_request();
-            assert_eq!(request.target, "target-name");
-            assert_eq!(request.kind.as_str(), expected);
-        }
-    }
-
-    #[test]
-    fn the_graph_file_stays_optional_and_is_kept_verbatim() {
-        let path = Path::new("/tmp/semantic-graph.json");
-        let with_file = SemanticGraphCommandInput::new(crate::SemanticGraphQueryKind::Graph, "root", Some(path));
-        assert_eq!(with_file.graph_file, Some(path));
-        let without_file = SemanticGraphCommandInput::new(crate::SemanticGraphQueryKind::Graph, "root", None);
-        assert!(without_file.graph_file.is_none());
     }
 }
 
@@ -1185,10 +1162,13 @@ pub(crate) enum RemoteCommandAdmission {
 /// these actions stay outside the contract.
 pub(crate) fn admit_remote_action(action: &RemoteAction) -> RemoteCommandAdmission {
     match action {
+        #[cfg(target_os = "linux")]
+        RemoteAction::Gateway { .. } => RemoteCommandAdmission::NotAdministered,
         RemoteAction::Ticket { .. }
         | RemoteAction::Status { .. }
         | RemoteAction::Debug { .. }
         | RemoteAction::Live { .. }
+        | RemoteAction::UsageExecutor
         | RemoteAction::Serve { .. } => RemoteCommandAdmission::NotAdministered,
     }
 }

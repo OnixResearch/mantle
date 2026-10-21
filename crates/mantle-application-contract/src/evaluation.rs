@@ -153,6 +153,53 @@ pub fn validate_evaluation(request: &EvaluationCommand) -> Vec<EvaluationBlocker
     blockers
 }
 
+/// Evaluation capability phases. Observe-only evaluation never declares a worker process.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EvaluationEffect {
+    /// Read and validate the operator's budget policy.
+    Policy,
+    /// Read and confine the actual source/import request.
+    Inputs,
+    /// Evaluate in process, or observe a native evaluation/conversion ledger.
+    Output,
+    /// Execute the enforced evaluator worker and observe teardown/output facts.
+    Worker,
+    /// Publish and read back the budget report.
+    Report,
+}
+
+impl EvaluationEffect {
+    /// Stable identity used by the native capability observation.
+    pub const fn identity(self) -> &'static str {
+        match self {
+            Self::Policy => "evaluation-policy",
+            Self::Inputs => "evaluation-inputs",
+            Self::Output => "evaluation-output",
+            Self::Worker => "evaluation-worker",
+            Self::Report => "evaluation-report",
+        }
+    }
+
+    /// Authority granted to this native capability port.
+    pub const fn kind(self) -> crate::EffectKind {
+        match self {
+            Self::Policy | Self::Inputs | Self::Output => crate::EffectKind::ReadFiles,
+            Self::Worker => crate::EffectKind::RunProcess,
+            Self::Report => crate::EffectKind::WriteFiles,
+        }
+    }
+}
+
+/// Declare the exact next evaluator capability before dispatch.
+pub fn evaluation_effect_plan(effect: EvaluationEffect) -> Result<crate::EffectPlan, crate::PlanError> {
+    crate::plan_effects(crate::CommandFamily::Evaluation, &[crate::EffectSpec {
+        effect_id: effect.identity(),
+        kind: effect.kind(),
+        limit: crate::EffectMeasure::Calls(1),
+        expected_output: crate::ExpectedOutput::None,
+    }])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

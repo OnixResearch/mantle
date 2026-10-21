@@ -18,6 +18,7 @@
 mod derivation_file;
 mod evaluation_stream;
 mod jobs_policy;
+pub mod native_preflight;
 mod watch;
 
 use std::collections::BTreeSet;
@@ -80,6 +81,7 @@ use nix_compat::store_path::StorePath;
 use tokio::sync::mpsc;
 pub use watch::WatchNotice;
 pub use watch::watch_build;
+pub use watch::watch_build_incremental;
 
 const EVAL_MESSAGE_CHANNEL_CAPACITY: usize = 16;
 /// Live observation is bounded separately from the build scheduler's goal cap.
@@ -128,6 +130,8 @@ pub struct BuildConfig {
     /// Ordered list of read-only base store state directories for overlay
     /// composition.  Empty = no overlay composition (default single-store).
     pub base_state_dirs: Vec<PathBuf>,
+    /// Operator-loaded authority for remote caches and read-only base stores.
+    pub source_admission: Option<Arc<dyn crunch_store::StoreSourceAdmission>>,
     /// Signing keypair — every build output gets signed.
     pub keypair: KeyPair,
     /// Trusted public keys for signature verification on cache hits.
@@ -143,6 +147,9 @@ pub struct BuildConfig {
     /// When true, wrap the sandbox service in RemoteFirstBuildService
     /// to exercise the remote-build dispatch path through the scheduler.
     pub remote_enabled: bool,
+    /// Explicit local execution-only driver policy. Proof and self-build callers
+    /// must use None; this never participates in derivation/action identity.
+    pub compile_driver_runtime: Option<crunch_build::compile_driver::CompileDriverRuntime>,
     /// Optional directory for owner-emitted interchange records.
     pub interchange_dir: Option<PathBuf>,
 }
@@ -285,7 +292,8 @@ pub enum CausalTraceObservation {
 pub async fn build_with_causal_trace(config: &BuildConfig) -> Result<(PipelineResult, CausalTraceObservation), Error> {
     let mut observation = None;
     let result =
-        build_with_stream_sender(config, EvaluationCancellation::new(), None, None, Some(&mut observation)).await?;
+        build_with_stream_sender(config, EvaluationCancellation::new(), None, None, Some(&mut observation), false)
+            .await?;
     Ok((result, observation.ok_or_else(|| Error::Internal("causal trace was not captured".to_string()))?))
 }
 
@@ -303,20 +311,21 @@ pub async fn build_with_causal_trace_live(
         Some(stream_tx),
         Some(worker_observation),
         Some(&mut observation),
+        false,
     )
     .await?;
     Ok((result, observation.ok_or_else(|| Error::Internal("causal trace was not captured".to_string()))?))
 }
 
 pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
-    build_with_stream_sender(config, EvaluationCancellation::new(), None, None, None).await
+    build_with_stream_sender(config, EvaluationCancellation::new(), None, None, None, false).await
 }
 
 pub async fn build_with_evaluation_cancellation(
     config: &BuildConfig,
     cancellation: EvaluationCancellation,
 ) -> Result<PipelineResult, Error> {
-    build_with_stream_sender(config, cancellation, None, None, None).await
+    build_with_stream_sender(config, cancellation, None, None, None, false).await
 }
 
 pub async fn build_with_evaluation_stream(
@@ -324,7 +333,7 @@ pub async fn build_with_evaluation_stream(
     cancellation: EvaluationCancellation,
     stream_tx: mpsc::Sender<crunch_evaluation_stream_core::StreamRecordValue>,
 ) -> Result<PipelineResult, Error> {
-    build_with_stream_sender(config, cancellation, Some(stream_tx), None, None).await
+    build_with_stream_sender(config, cancellation, Some(stream_tx), None, None, false).await
 }
 
 pub async fn build_with_live_observation(
@@ -333,7 +342,18 @@ pub async fn build_with_live_observation(
     stream_tx: mpsc::Sender<crunch_evaluation_stream_core::StreamRecordValue>,
     worker_observation: WorkerLiveObservation,
 ) -> Result<PipelineResult, Error> {
-    build_with_stream_sender(config, cancellation, Some(stream_tx), Some(worker_observation), None).await
+    build_with_stream_sender(config, cancellation, Some(stream_tx), Some(worker_observation), None, false).await
+}
+
+/// Cancel evaluation and ordinary scheduled builds, returning only after every
+/// cancellable BuildService has acknowledged owned sandbox/fetch teardown.
+pub async fn build_with_owned_cancellation(
+    config: &BuildConfig,
+    cancellation: EvaluationCancellation,
+    stream_tx: mpsc::Sender<crunch_evaluation_stream_core::StreamRecordValue>,
+    worker_observation: Option<WorkerLiveObservation>,
+) -> Result<PipelineResult, Error> {
+    build_with_stream_sender(config, cancellation, Some(stream_tx), worker_observation, None, true).await
 }
 
 async fn build_with_stream_sender(
@@ -342,6 +362,7 @@ async fn build_with_stream_sender(
     stream_tx: Option<mpsc::Sender<crunch_evaluation_stream_core::StreamRecordValue>>,
     worker_observation: Option<WorkerLiveObservation>,
     causal_trace_slot: Option<&mut Option<CausalTraceObservation>>,
+    owned_cancellation: bool,
 ) -> Result<PipelineResult, Error> {
     validate_build_config(config)?;
     let store_config = crunch_store::StoreConfig {
@@ -352,6 +373,7 @@ async fn build_with_stream_sender(
         fallback_mode: store_fallback_mode(config.hermeticity_mode),
         store_dir: config.store_dir.clone(),
         base_state_dirs: config.base_state_dirs.clone(),
+        source_admission: config.source_admission.clone(),
     };
     store_config
         .preflight_backend_identity()
@@ -401,6 +423,7 @@ async fn build_with_stream_sender(
             session,
             hermeticity_audit_events,
             cancellation,
+            owned_cancellation,
             stream_tx,
             worker_observation,
             causal_trace_slot,
@@ -410,7 +433,7 @@ async fn build_with_stream_sender(
 
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = (store, cancellation, stream_tx, worker_observation, causal_trace_slot);
+        let _ = (store, cancellation, stream_tx, worker_observation, causal_trace_slot, owned_cancellation);
         Err(Error::Build("building is only supported on Linux (requires bwrap)".to_string()))
     }
 }
@@ -430,6 +453,7 @@ struct LinuxBuildRequest<'a> {
     session: crunch_eval::session::EvaluationSession,
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
     cancellation: EvaluationCancellation,
+    owned_cancellation: bool,
     stream_tx: Option<mpsc::Sender<crunch_evaluation_stream_core::StreamRecordValue>>,
     worker_observation: Option<WorkerLiveObservation>,
     causal_trace_slot: Option<&'a mut Option<CausalTraceObservation>>,
@@ -530,12 +554,30 @@ async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, E
         worker.enable_causal_trace(&config.store_dir);
     }
     let mut worker_observation = request.worker_observation.map(live_worker_observer);
-    let worker_run = worker.run_streaming_observed(
-        &mut builder,
-        &mut known_paths,
-        &mut rx,
-        worker_observation.as_mut().map(|observe| observe as &mut dyn FnMut(&crunch_build::GoalRegistry)),
-    );
+    let cancellation = request.cancellation.clone();
+    let worker_run = async {
+        let observer =
+            worker_observation.as_mut().map(|observe| observe as &mut dyn FnMut(&crunch_build::GoalRegistry));
+        if request.owned_cancellation {
+            let (shutdown, receiver) = tokio::sync::watch::channel(cancellation.is_requested());
+            let run = worker.run_streaming_cancellable(&mut builder, &mut known_paths, &mut rx, observer, receiver);
+            tokio::pin!(run);
+            let result = tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => {
+                    shutdown.send_replace(true);
+                    run.await
+                }
+                result = &mut run => result,
+            };
+            if result.is_err() {
+                cancellation.request();
+            }
+            result
+        } else {
+            worker.run_streaming_observed(&mut builder, &mut known_paths, &mut rx, observer).await
+        }
+    };
     let eval_stream = stream_roots_into_worker(EvalStreamRequest {
         max_jobs: config.max_jobs,
         store_dir: &config.store_dir,
@@ -565,15 +607,17 @@ async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, E
         eval_stream,
         pipeline_evidence,
     );
-    register_managed_generation(
-        config.root_registration.as_ref(),
-        config.root_retention_source,
-        &root_registry,
-        &result.outcomes,
-        &source_generation_paths,
-        result.failed.is_empty(),
-    )
-    .await?;
+    if !request.owned_cancellation || !cancellation.is_requested() {
+        register_managed_generation(
+            config.root_registration.as_ref(),
+            config.root_retention_source,
+            &root_registry,
+            &result.outcomes,
+            &source_generation_paths,
+            result.failed.is_empty(),
+        )
+        .await?;
+    }
     Ok(result)
 }
 
@@ -794,7 +838,28 @@ fn create_pipeline_builder_with_source_policy(
     store: crunch_store::StoreHandle,
     source_policy: FetchSourcePolicy,
 ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
-    create_pipeline_builder_with_sandbox(config, store, source_policy, |build_service_store| {
+    let runtime = config.compile_driver_runtime.clone();
+    let runtime_forbidden = config.remote_enabled || config.hermeticity_mode == HermeticityMode::Strict;
+    create_pipeline_builder_with_sandbox(config, store, source_policy, move |build_service_store| {
+        use crunch_build::compile_driver::CompileDriverBuildService;
+        use crunch_build::compile_driver::CompileDriverExecutionService;
+        if let Some(runtime) = runtime {
+            if runtime_forbidden {
+                return Err(Error::Build("compile driver runtime requires non-proof local execution".into()));
+            }
+            crunch_build::compile_driver::reject_inherited_runtime_environment()
+                .map_err(|error| Error::Build(error.to_string()))?;
+            runtime.validate().map_err(|error| Error::Build(error.to_string()))?;
+            let local = build_service_store
+                .bubblewrap_build_service_with_compile_socket(
+                    std::env::temp_dir().join("crunch-builds-local"),
+                    runtime.host_socket.clone(),
+                )
+                .map_err(|error| Error::Build(format!("compile driver socket: {error}")))?;
+            return CompileDriverBuildService::new(local, Some(runtime))
+                .map(CompileDriverExecutionService::Enabled)
+                .map_err(|error| Error::Build(error.to_string()));
+        }
         let workdir = std::env::temp_dir().join("crunch-builds");
         std::fs::create_dir_all(&workdir).map_err(|error| Error::Internal(format!("create workdir: {error}")))?;
         // Keep remote dispatch inside the lazy scheduler so dedupe, waiter
@@ -810,11 +875,11 @@ fn create_pipeline_builder_with_source_policy(
             build_service_store.bubblewrap_build_service(std::env::temp_dir().join("crunch-builds-local"), None);
         let remote_bwrap = build_service_store.bubblewrap_build_service(workdir, None);
         let remote_realizer = LocalBuildServiceRealizer::new(remote_bwrap, profile);
-        Ok(RemoteFirstBuildService::new(
+        Ok(CompileDriverExecutionService::Default(RemoteFirstBuildService::new(
             remote_realizer,
             local_bwrap,
             RemoteBuildFallbackPolicy::OnRemoteFailure,
-        ))
+        )))
     })
 }
 
@@ -825,6 +890,9 @@ fn create_watch_pipeline_builder(
     config: &BuildConfig,
     store: crunch_store::StoreHandle,
 ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
+    if config.compile_driver_runtime.is_some() {
+        return Err(Error::Build("compile driver runtime is unsupported for watch execution".into()));
+    }
     create_pipeline_builder_with_sandbox(config, store, source_policy_for_config(config), |build_service_store| {
         Ok(build_service_store.bubblewrap_build_service(std::env::temp_dir().join("crunch-builds-local"), None))
     })

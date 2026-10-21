@@ -20,16 +20,16 @@
     "artifactAuthSource": {
       "flake": false,
       "locked": {
-        "lastModified": 1785173333,
-        "narHash": "sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU=",
+        "lastModified": 1792547389,
+        "narHash": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY=",
         "ref": "refs/heads/main",
-        "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
-        "revCount": 17,
+        "rev": "5f3962d7471d1547e044f57daeda72f56621fd52",
+        "revCount": 21,
         "type": "git",
         "url": "ssh://git@github.com/OnixResearch/onix-artifact.git"
       },
       "original": {
-        "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
+        "rev": "5f3962d7471d1547e044f57daeda72f56621fd52",
         "type": "git",
         "url": "ssh://git@github.com/OnixResearch/onix-artifact.git"
       }
@@ -54,16 +54,16 @@
     "boundedTreeSource": {
       "flake": false,
       "locked": {
-        "lastModified": 1785813402,
-        "narHash": "sha256-NQZJIfiq8dLW0rHrxZWrs5z6yTsSjMHiapNv7tTT1LY=",
+        "lastModified": 1792557289,
+        "narHash": "sha256-/InZ7QUxLE/BVcWWGoa7A2PmhMaoPKYDS6vfuhVaTrU=",
         "ref": "refs/heads/main",
-        "rev": "b0fd0103bc9eed2c1b6d852045959462d105d8f1",
-        "revCount": 4,
+        "rev": "cc9e0fb611e75bb2d7f662435d1918653c93ce07",
+        "revCount": 8,
         "type": "git",
         "url": "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git"
       },
       "original": {
-        "rev": "b0fd0103bc9eed2c1b6d852045959462d105d8f1",
+        "rev": "cc9e0fb611e75bb2d7f662435d1918653c93ce07",
         "type": "git",
         "url": "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git"
       }

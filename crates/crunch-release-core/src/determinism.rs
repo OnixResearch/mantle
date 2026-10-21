@@ -217,6 +217,22 @@ pub struct DeterministicBuildProofReceiptInit {
     pub rebuild_authority_plan_blake3: String,
 }
 
+/// A claim decision retaining its evidence for subsequent shell processing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeterministicReleaseClaimAssessment {
+    pub eligible: bool,
+    pub release_digest_set: Vec<String>,
+    pub receipts: Vec<DeterministicBuildProofReceipt>,
+    pub isolation_evidence: Option<DeterministicSandboxIsolationEvidence>,
+}
+
+/// A genuine-rebuild authority decision retaining the inspected receipt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeterministicRebuildAuthorityAssessment {
+    pub eligible: bool,
+    pub receipt: DeterministicBuildProofReceipt,
+}
+
 impl DeterministicBuildProofReceipt {
     pub fn new(init: DeterministicBuildProofReceiptInit) -> Self {
         let mut receipt = Self {
@@ -257,8 +273,15 @@ impl DeterministicBuildProofReceipt {
 pub fn canonical_deterministic_build_proof_receipt(
     mut receipt: DeterministicBuildProofReceipt,
 ) -> Result<DeterministicBuildProofReceipt, ReleaseEvidenceError> {
+    canonicalize_deterministic_build_proof_receipt(&mut receipt)?;
+    Ok(receipt)
+}
+
+fn canonicalize_deterministic_build_proof_receipt(
+    receipt: &mut DeterministicBuildProofReceipt,
+) -> Result<(), ReleaseEvidenceError> {
     let provided_receipt_blake3 = receipt.receipt_blake3.take();
-    validate_receipt_header(&receipt)?;
+    validate_receipt_header(receipt)?;
     let is_legacy_receipt = receipt.schema == LEGACY_DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;
     if !is_legacy_receipt {
         receipt.schema = DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.to_string();
@@ -290,8 +313,8 @@ pub fn canonical_deterministic_build_proof_receipt(
         run.output_digests.sort_by(|left, right| left.name.cmp(&right.name));
     }
     receipt.runs.sort_by(|left, right| left.run_id.cmp(&right.run_id));
-    validate_receipt_evidence(&receipt)?;
-    let (expected_verdict, expected_reasons) = classify_deterministic_build_proof(&receipt);
+    validate_receipt_evidence(receipt)?;
+    let (expected_verdict, expected_reasons) = classify_deterministic_build_proof(receipt);
     if !is_legacy_receipt && receipt.verdict != expected_verdict {
         return Err(validation_error(format!(
             "deterministic build proof receipt verdict {:?} does not match classified verdict {:?}",
@@ -308,7 +331,7 @@ pub fn canonical_deterministic_build_proof_receipt(
     debug_assert!(receipt.declared_effects.windows(2).all(|pair| pair[0] < pair[1]));
     debug_assert!(receipt.runs.windows(2).all(|pair| pair[0].run_id <= pair[1].run_id));
     if let Some(provided) = provided_receipt_blake3 {
-        let digest = blake3::hash(&serde_json::to_vec(&receipt).map_err(|err| {
+        let digest = blake3::hash(&serde_json::to_vec(receipt).map_err(|err| {
             ReleaseEvidenceError::Parse(format!("serializing deterministic build proof receipt: {err}"))
         })?)
         .to_hex()
@@ -320,7 +343,7 @@ pub fn canonical_deterministic_build_proof_receipt(
         }
         receipt.receipt_blake3 = Some(provided);
     }
-    Ok(receipt)
+    Ok(())
 }
 
 pub fn deterministic_build_proof_receipt_canonical_bytes(
@@ -342,9 +365,15 @@ pub fn deterministic_build_proof_receipt_digest_blake3(
     Ok(blake3::hash(&bytes).to_hex().to_string())
 }
 
+/// Validate already-loaded isolation facts and return the admitted owned evidence.
 pub fn validate_deterministic_sandbox_isolation_evidence(
-    evidence: &DeterministicSandboxIsolationEvidence,
-) -> Result<(), ReleaseEvidenceError> {
+    evidence: DeterministicSandboxIsolationEvidence,
+) -> Result<DeterministicSandboxIsolationEvidence, ReleaseEvidenceError> {
+    validate_isolation_evidence(&evidence)?;
+    Ok(evidence)
+}
+
+fn validate_isolation_evidence(evidence: &DeterministicSandboxIsolationEvidence) -> Result<(), ReleaseEvidenceError> {
     debug_assert!(!REQUIRED_ISOLATION_CHECKS.is_empty());
     debug_assert!(!SUPPORTED_SANDBOX_PROFILE_FAMILY.is_empty());
     if evidence.schema != DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA {
@@ -392,7 +421,7 @@ pub fn deterministic_sandbox_isolation_evidence_canonical_bytes(
     mut evidence: DeterministicSandboxIsolationEvidence,
 ) -> Result<Vec<u8>, ReleaseEvidenceError> {
     evidence.checks.sort();
-    validate_deterministic_sandbox_isolation_evidence(&evidence)?;
+    validate_isolation_evidence(&evidence)?;
     serde_json::to_vec(&evidence).map_err(|err| {
         ReleaseEvidenceError::Parse(format!("serializing deterministic sandbox isolation evidence: {err}"))
     })
@@ -405,21 +434,43 @@ pub fn deterministic_sandbox_isolation_evidence_digest_blake3(
     Ok(blake3::hash(&bytes).to_hex().to_string())
 }
 
+/// Assess the bounded release claim while retaining all owned inputs.
+/// Receipt normalization is performed in place; a non-promoting result still
+/// retains every receipt and the supplied isolation evidence.
 pub fn deterministic_release_claim_eligible(
-    release_digest_set: &[String],
-    receipts: &[DeterministicBuildProofReceipt],
-    isolation_evidence: Option<&DeterministicSandboxIsolationEvidence>,
+    release_digest_set: Vec<String>,
+    receipts: Vec<DeterministicBuildProofReceipt>,
+    isolation_evidence: Option<DeterministicSandboxIsolationEvidence>,
+) -> Result<DeterministicReleaseClaimAssessment, ReleaseEvidenceError> {
+    let mut assessment = DeterministicReleaseClaimAssessment {
+        eligible: false,
+        release_digest_set,
+        receipts,
+        isolation_evidence,
+    };
+    assessment.eligible = assess_deterministic_release_claim(&mut assessment)?;
+    Ok(assessment)
+}
+
+fn assess_deterministic_release_claim(
+    assessment: &mut DeterministicReleaseClaimAssessment,
 ) -> Result<bool, ReleaseEvidenceError> {
-    let Some(isolation_evidence) = isolation_evidence else {
+    let Some(isolation_evidence) = &assessment.isolation_evidence else {
         return Ok(false);
     };
-    validate_deterministic_sandbox_isolation_evidence(isolation_evidence)?;
-    let mut release_digests = canonical_digest_set(release_digest_set, "release_digest_set")?;
+    validate_isolation_evidence(isolation_evidence)?;
+    let release_digests = &mut assessment.release_digest_set;
+    for digest in release_digests.iter() {
+        validate_blake3_hex(digest, "release_digest_set")?;
+    }
     release_digests.sort();
+    if let Some(pair) = release_digests.windows(2).find(|pair| pair[0] == pair[1]) {
+        return Err(validation_error(format!("release_digest_set contains duplicate digest {}", pair[0])));
+    }
     let mut receipt_digests = Vec::with_capacity(release_digests.len());
-    for receipt in receipts {
-        let receipt = canonical_deterministic_build_proof_receipt(receipt.clone())?;
-        if !deterministic_build_proof_has_genuine_rebuild_authority(receipt.clone())? {
+    for receipt in &mut assessment.receipts {
+        canonicalize_deterministic_build_proof_receipt(receipt)?;
+        if !has_genuine_rebuild_authority(receipt)? {
             return Ok(false);
         }
         for profile in &receipt.sandbox_profile_identities {
@@ -448,19 +499,27 @@ pub fn deterministic_release_claim_eligible(
     receipt_digests.dedup();
     debug_assert!(release_digests.windows(2).all(|pair| pair[0] < pair[1]));
     debug_assert!(receipt_digests.windows(2).all(|pair| pair[0] < pair[1]));
-    Ok(!release_digests.is_empty() && release_digests == receipt_digests)
+    Ok(!release_digests.is_empty() && *release_digests == receipt_digests)
 }
 
+/// Assess genuine-rebuild authority without discarding or copying the receipt.
 // r[impl mantle.release_provenance.deterministic_rebuild_admission.contract]
 // r[impl mantle.release_provenance.deterministic_rebuild_admission.validation]
 pub fn deterministic_build_proof_has_genuine_rebuild_authority(
     receipt: DeterministicBuildProofReceipt,
-) -> Result<bool, ReleaseEvidenceError> {
-    validate_receipt_header(&receipt)?;
+) -> Result<DeterministicRebuildAuthorityAssessment, ReleaseEvidenceError> {
+    Ok(DeterministicRebuildAuthorityAssessment {
+        eligible: has_genuine_rebuild_authority(&receipt)?,
+        receipt,
+    })
+}
+
+fn has_genuine_rebuild_authority(receipt: &DeterministicBuildProofReceipt) -> Result<bool, ReleaseEvidenceError> {
+    validate_receipt_header(receipt)?;
     if receipt.schema != DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA {
         return Ok(false);
     }
-    Ok(genuine_rebuild_admission_reasons(&receipt).is_empty())
+    Ok(genuine_rebuild_admission_reasons(receipt).is_empty())
 }
 
 fn validate_receipt_header(receipt: &DeterministicBuildProofReceipt) -> Result<(), ReleaseEvidenceError> {
@@ -1033,17 +1092,6 @@ fn canonical_run_digest_map(run: &DeterministicBuildRunReceipt) -> BTreeMap<Stri
         .collect()
 }
 
-fn canonical_digest_set(values: &[String], field: &str) -> Result<Vec<String>, ReleaseEvidenceError> {
-    let mut seen = BTreeSet::new();
-    for value in values {
-        validate_blake3_hex(value, field)?;
-        if !seen.insert(value.clone()) {
-            return Err(validation_error(format!("{field} contains duplicate digest {value}")));
-        }
-    }
-    Ok(seen.into_iter().collect())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1132,7 +1180,9 @@ mod tests {
             ordinary_output_path: "/tmp/ordinary".to_string(),
             proof_root_path: "/tmp/proof".to_string(),
         });
-        assert!(plan.eligible(), "{:?}", plan.blockers);
+        let assessment = plan.assess_eligibility();
+        assert!(assessment.eligible, "{:?}", assessment.plan.blockers);
+        let plan = assessment.plan;
         let plan_blake3 = crate::rebuild_authority_plan_digest_blake3(plan.clone()).unwrap();
         (descriptor, descriptor_blake3, plan, plan_blake3)
     }
@@ -1446,28 +1496,42 @@ mod tests {
         let evidence = isolation_evidence();
 
         assert_eq!(parsed.schema, LEGACY_DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA);
-        assert!(!deterministic_build_proof_has_genuine_rebuild_authority(parsed.clone()).unwrap());
-        assert!(!deterministic_release_claim_eligible(&[digest(1)], &[parsed], Some(&evidence)).unwrap());
+        let authority = deterministic_build_proof_has_genuine_rebuild_authority(parsed).unwrap();
+        assert!(!authority.eligible);
+        assert!(
+            !deterministic_release_claim_eligible(vec![digest(1)], vec![authority.receipt], Some(evidence))
+                .unwrap()
+                .eligible
+        );
     }
 
     #[test]
     fn deterministic_release_claim_requires_exact_digest_set() {
         let receipt = receipt();
         let evidence = isolation_evidence();
-        assert!(deterministic_release_claim_eligible(&[digest(1)], &[receipt], Some(&evidence)).unwrap());
-        assert!(!deterministic_release_claim_eligible(&[digest(2)], &[self::receipt()], Some(&evidence)).unwrap());
+        let assessment = deterministic_release_claim_eligible(vec![digest(1)], vec![receipt], Some(evidence)).unwrap();
+        assert!(assessment.eligible);
+        assert!(
+            !deterministic_release_claim_eligible(
+                vec![digest(2)],
+                vec![self::receipt()],
+                assessment.isolation_evidence
+            )
+            .unwrap()
+            .eligible
+        );
     }
 
     #[test]
     fn deterministic_release_claim_requires_isolation_evidence() {
-        assert!(!deterministic_release_claim_eligible(&[digest(1)], &[receipt()], None).unwrap());
+        assert!(!deterministic_release_claim_eligible(vec![digest(1)], vec![receipt()], None).unwrap().eligible);
     }
 
     #[test]
     fn deterministic_release_claim_rejects_failed_isolation_evidence() {
         let mut evidence = isolation_evidence();
         evidence.status = DeterministicSandboxIsolationEvidenceStatus::Failed;
-        let err = deterministic_release_claim_eligible(&[digest(1)], &[receipt()], Some(&evidence)).unwrap_err();
+        let err = deterministic_release_claim_eligible(vec![digest(1)], vec![receipt()], Some(evidence)).unwrap_err();
         assert!(err.to_string().contains("status must be passed"));
     }
 
@@ -1475,7 +1539,7 @@ mod tests {
     fn deterministic_release_claim_rejects_profile_family_mismatch() {
         let mut evidence = isolation_evidence();
         evidence.profile_family = "mantle-proof-sandbox-v2".to_string();
-        let err = deterministic_release_claim_eligible(&[digest(1)], &[receipt()], Some(&evidence)).unwrap_err();
+        let err = deterministic_release_claim_eligible(vec![digest(1)], vec![receipt()], Some(evidence)).unwrap_err();
         assert!(err.to_string().contains("profile_family"));
     }
 
@@ -1484,10 +1548,11 @@ mod tests {
         for missing_check in ["denies-host-network-by-default", "denies-clock-syscalls"] {
             let mut evidence = isolation_evidence();
             evidence.checks.retain(|check| check != missing_check);
-            let err = deterministic_release_claim_eligible(&[digest(1)], &[receipt()], Some(&evidence)).unwrap_err();
+            assert!(!evidence.checks.iter().any(|check| check == missing_check));
+            let err =
+                deterministic_release_claim_eligible(vec![digest(1)], vec![receipt()], Some(evidence)).unwrap_err();
 
             assert!(err.to_string().contains(&format!("missing required check {missing_check}")));
-            assert!(!evidence.checks.iter().any(|check| check == missing_check));
         }
     }
 }

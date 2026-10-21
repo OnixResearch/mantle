@@ -6,6 +6,8 @@
 //! Individual roots are forced on demand through
 //! [`EvaluationSession::force_root`].
 
+pub mod incremental;
+
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::ffi::OsString;

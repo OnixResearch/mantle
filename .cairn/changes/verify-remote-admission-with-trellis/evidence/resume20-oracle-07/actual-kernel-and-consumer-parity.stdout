@@ -1,0 +1,24 @@
+
+running 13 tests
+test trellis_projection::tests::authority_precedes_replay_and_replay_precedes_capacity_and_terminal ... ok
+test trellis_projection::tests::complete_finite_matrix_matches_actual_trellis_admit ... actual Trellis admit / Mantle plan parity: 26460 finite fixtures
+ok
+test trellis_projection::tests::complete_retained_history_classifies_the_last_entry ... ok
+test trellis_projection::tests::exhausted_identity_domain_never_aliases_or_forgets_existing_values ... ok
+test trellis_projection::tests::full_identity_equality_is_stable_across_a_trace ... ok
+test trellis_projection::tests::out_of_model_progress_and_malformed_payloads_do_not_receive_coverage ... ok
+test trellis_projection::tests::trellis::verified_negative::duplicate_and_conflicting_events_preserve_terminal_state ... ok
+test trellis_projection::tests::trellis::verified_negative::early_or_unlinked_completion_never_exposes_a_result ... ok
+test trellis_projection::tests::trellis::verified_negative::fences_authority_events_history_and_linkage_reject_without_output_authority ... ok
+test trellis_projection::tests::trellis::verified_negative::invalid_status_tags_reject_before_any_transition ... ok
+test trellis_projection::tests::trellis::verified_positive::accepted_transitions_retain_exact_result_linkage ... ok
+test trellis_projection::tests::trellis::verified_positive::every_phase_kind_pair_has_the_named_transition ... ok
+test trellis_projection::tests::trellis::verified_positive::queued_and_ready_failure_close_without_output_authority ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 101.98s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+

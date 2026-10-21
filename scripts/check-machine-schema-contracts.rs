@@ -4,7 +4,7 @@
 edition = "2024"
 
 [dependencies]
-blake3 = "=1.8.2"
+blake3 = "=1.8.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 syn = { version = "=2.0.117", features = ["full", "parsing"] }

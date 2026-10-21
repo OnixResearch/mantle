@@ -113,3 +113,11 @@ compatibility surface, crate name, or historical decision.
 | [0112](0112-verify-completed-apk-builds-with-pinned-tools.md) | Verify completed APK builds with pinned tools | Proposed |
 | [0113](0113-select-equivalent-cargo-host-plan-units.md) | Select only equivalent Rust-plan host units for Cargo graphs | Proposed |
 | [0114](0114-reconcile-lineage-apis-with-explicit-contract-boundaries.md) | Reconcile lineage APIs with explicit contract boundaries | Proposed |
+| [0115](0115-bound-offline-model-conversion-to-inert-inputs.md) | Bound offline model conversion to inert inputs | Proposed |
+| [0116](0116-share-local-compile-cache-and-slot-authority.md) | Share local compile-cache and slot authority | Proposed |
+| [0118](0118-keep-reapi-transport-separate-from-mantle-output-authority.md) | Keep REAPI transport separate from Mantle output authority | Proposed |
+| [0119](0119-declare-native-inputs-for-the-offline-cargo-oracle.md) | Declare native inputs for the offline Cargo oracle | Proposed |
+| [0120](0120-isolate-blocking-proof-notifications-in-an-owned-process.md) | Isolate blocking proof notifications in an owned process | Proposed |
+| [0121](0121-bind-cold-continuations-to-actual-producer-outcomes.md) | Bind cold command continuations to actual producer outcomes | Proposed |
+| [0122](0122-use-native-blake3-streaming-at-snix-boundary.md) | Use native BLAKE3 streaming at the Snix boundary | Proposed |
+| [0123](0123-retain-unwired-source-program-authors-behind-item-scoped-dead-code-allows.md) | Retain unwired source-program authors behind item-scoped dead-code allows | Accepted |

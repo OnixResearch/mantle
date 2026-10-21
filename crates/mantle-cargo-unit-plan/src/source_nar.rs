@@ -93,7 +93,27 @@ pub fn nar_blake3(path: &Path) -> Result<String, String> {
     Ok(writer.0.finalize().to_hex().to_string())
 }
 
+/// Copy the planning workspace without package-boundary filtering.
 pub fn copy_package(source: &Path, destination: &Path, depth: u32) -> Result<(), String> {
+    copy_tree(source, destination, depth, &[])
+}
+
+/// Copy one package without exposing any independently described nested package.
+/// The producer supplies all metadata package roots, including inactive members.
+pub fn copy_package_slice(
+    source: &Path,
+    destination: &Path,
+    package_roots: &[std::path::PathBuf],
+) -> Result<(), String> {
+    copy_tree(source, destination, 0, package_roots)
+}
+
+fn copy_tree(
+    source: &Path,
+    destination: &Path,
+    depth: u32,
+    package_roots: &[std::path::PathBuf],
+) -> Result<(), String> {
     if depth > 32 {
         return Err("unit-plan-limit: package source nesting exceeds 32".into());
     }
@@ -117,7 +137,11 @@ pub fn copy_package(source: &Path, destination: &Path, depth: u32) -> Result<(),
             if (depth == 0 && name == "target") || name == ".git" {
                 continue;
             }
-            copy_package(&entry.path(), &destination.join(name), depth + 1)?;
+            let path = entry.path();
+            if package_roots.iter().any(|root| root == &path) {
+                continue;
+            }
+            copy_tree(&path, &destination.join(name), depth + 1, package_roots)?;
         }
         fs::set_permissions(destination, metadata.permissions()).map_err(|error| error.to_string())?;
     } else if metadata.is_file() {

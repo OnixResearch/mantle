@@ -90,7 +90,9 @@ pub fn prepare_cairn_handoff_for_bundle(
         rows.push(prepare_row(row, index_u32, descriptor_parent, bundle_dir)?);
     }
     let handoff = CairnReleaseEvidenceHandoff { authentication, rows };
-    let validation_result = crunch_release_core::validate_cairn_release_evidence_handoff(&handoff);
+    let validation = crunch_release_core::validate_cairn_release_evidence_handoff(handoff);
+    let handoff = validation.handoff;
+    let validation_result = validation.report;
     if !validation_result.valid {
         return Err(RunError::Internal(format!(
             "Cairn handoff descriptor failed measured validation: {}",
@@ -145,7 +147,9 @@ pub fn remeasure_cairn_handoff_from_bundle(
         row.artifact = remeasure_artifact(bundle_dir, &row.artifact)?;
         row.cairn_policy = remeasure_artifact(bundle_dir, &row.cairn_policy)?;
     }
-    let validation_result = crunch_release_core::validate_cairn_release_evidence_handoff(&handoff);
+    let validation = crunch_release_core::validate_cairn_release_evidence_handoff(handoff);
+    let handoff = validation.handoff;
+    let validation_result = validation.report;
     if !validation_result.valid {
         return Err(RunError::Internal(format!(
             "bundle-local Cairn handoff bytes failed validation: {}",
@@ -211,7 +215,9 @@ fn preflight_handoff(
         });
     }
     let handoff = CairnReleaseEvidenceHandoff { authentication, rows };
-    let validation_result = crunch_release_core::validate_cairn_release_evidence_handoff(&handoff);
+    let validation = crunch_release_core::validate_cairn_release_evidence_handoff(handoff);
+    let handoff = validation.handoff;
+    let validation_result = validation.report;
     if !validation_result.valid {
         return Err(RunError::Internal(format!(
             "Cairn handoff descriptor failed preflight validation: {}",

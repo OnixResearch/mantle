@@ -55,6 +55,7 @@ where F: FnOnce(&tokio::runtime::Runtime, &Path, &Path) {
 
 async fn open_store(state_dir: &Path, output_dir: &Path) -> StoreHandle {
     StoreHandle::open(StoreConfig {
+        source_admission: None,
         backend: crunch_store::StoreBackend::Snix,
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),

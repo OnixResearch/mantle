@@ -1,0 +1,7 @@
+diff --git a/index.js b/index.js
+index 0000000..1111111 100644
+--- a/index.js
++++ b/index.js
+@@ -1 +1 @@
+-module.exports = require('@fixture/peer') + ':unpatched';
++module.exports = require('@fixture/peer') + ':patched';

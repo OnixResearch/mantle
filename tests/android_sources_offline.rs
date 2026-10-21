@@ -133,6 +133,7 @@ fn pipeline_config(
         state_dir: state_dir.to_path_buf(),
         backend: StoreBackend::Snix,
         base_state_dirs: Vec::new(),
+        source_admission: None,
         store_dir: "/nix/store".to_string(),
         verbose: false,
         max_jobs: 2,
@@ -146,6 +147,7 @@ fn pipeline_config(
         root_registration: None,
         source_fetch_overrides: Vec::new(),
         remote_enabled: false,
+        compile_driver_runtime: None,
         interchange_dir: None,
     }
 }

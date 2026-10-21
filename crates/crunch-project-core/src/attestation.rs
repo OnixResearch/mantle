@@ -251,7 +251,7 @@ fn source_kind_attributes(kind: &LockedKind) -> BTreeMap<String, String> {
         } => {
             attributes.insert("kind".to_string(), "darcs".to_string());
             attributes.insert("repository".to_string(), repository.clone());
-            attributes.insert("selector".to_string(), selector.identity_fragment());
+            attributes.insert("selector".to_string(), selector.to_string());
             if let Some(context) = context {
                 attributes.insert("context".to_string(), context.clone());
             }
@@ -267,7 +267,7 @@ fn source_kind_attributes(kind: &LockedKind) -> BTreeMap<String, String> {
         } => {
             attributes.insert("kind".to_string(), "pijul".to_string());
             attributes.insert("repository".to_string(), repository.clone());
-            attributes.insert("selector".to_string(), selector.identity_fragment());
+            attributes.insert("selector".to_string(), selector.to_string());
             attributes.insert("state".to_string(), state.clone());
             if let Some(change) = change {
                 attributes.insert("change".to_string(), change.clone());
@@ -280,7 +280,7 @@ fn source_kind_attributes(kind: &LockedKind) -> BTreeMap<String, String> {
         } => {
             attributes.insert("kind".to_string(), "fossil".to_string());
             attributes.insert("repository".to_string(), repository.clone());
-            attributes.insert("selector".to_string(), selector.identity_fragment());
+            attributes.insert("selector".to_string(), selector.to_string());
             attributes.insert("checkin".to_string(), checkin.clone());
         }
     }

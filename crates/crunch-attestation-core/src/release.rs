@@ -391,15 +391,18 @@ impl IndependentAgreementReport {
             artifact_digest_sets,
         })
     }
+}
 
-    pub fn status(&self) -> IndependentAgreementStatus {
-        if self.required_witness_count == 0 {
-            return IndependentAgreementStatus::NotRequired;
+impl IndependentAgreementStatus {
+    /// Classifies the report's scalar counts without consuming or copying its evidence.
+    pub fn from_counts(required_witness_count: u32, counted_witness_count: u32) -> Self {
+        if required_witness_count == 0 {
+            return Self::NotRequired;
         }
-        if self.counted_witness_count >= self.required_witness_count {
-            IndependentAgreementStatus::Satisfied
+        if counted_witness_count >= required_witness_count {
+            Self::Satisfied
         } else {
-            IndependentAgreementStatus::Insufficient
+            Self::Insufficient
         }
     }
 }
@@ -1153,7 +1156,10 @@ mod tests {
         })
         .unwrap();
 
-        assert_eq!(report.status(), IndependentAgreementStatus::NotRequired);
+        assert_eq!(
+            IndependentAgreementStatus::from_counts(report.required_witness_count, report.counted_witness_count),
+            IndependentAgreementStatus::NotRequired
+        );
     }
 
     #[test]
@@ -1173,7 +1179,10 @@ mod tests {
         assert_eq!(report.counted_witness_count, 1);
         assert_eq!(report.skipped_witness_count, 1);
         assert_eq!(report.failed_witness_count, 1);
-        assert_eq!(report.status(), IndependentAgreementStatus::Insufficient);
+        assert_eq!(
+            IndependentAgreementStatus::from_counts(report.required_witness_count, report.counted_witness_count),
+            IndependentAgreementStatus::Insufficient
+        );
     }
 
     #[test]
@@ -1213,7 +1222,10 @@ mod tests {
         assert_eq!(report.counted_witness_count, 0);
         assert_eq!(report.skipped_witness_count, 4);
         assert_eq!(report.failed_witness_count, 1);
-        assert_eq!(report.status(), IndependentAgreementStatus::Insufficient);
+        assert_eq!(
+            IndependentAgreementStatus::from_counts(report.required_witness_count, report.counted_witness_count),
+            IndependentAgreementStatus::Insufficient
+        );
     }
 
     #[test]

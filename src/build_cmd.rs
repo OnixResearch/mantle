@@ -161,6 +161,8 @@ pub fn cmd_build(
     output_mode: BuildOutputMode,
     interchange_dir: Option<&Path>,
     causal_trace: bool,
+    compile_driver_runtime: Option<crunch_build::compile_driver::CompileDriverRuntime>,
+    source_admission: Option<std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
 ) -> Result<(), RunError> {
     cmd_build_with_source_fetch_overrides(
         file,
@@ -184,6 +186,8 @@ pub fn cmd_build(
         Vec::new(),
         Vec::new(),
         None,
+        compile_driver_runtime,
+        source_admission,
     )
 }
 
@@ -216,8 +220,17 @@ pub fn cmd_build_with_source_fetch_overrides(
     source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
     base_state_dirs: Vec<PathBuf>,
     root_registration: Option<crunch_store::RootRegistration>,
+    compile_driver_runtime: Option<crunch_build::compile_driver::CompileDriverRuntime>,
+    source_admission: Option<std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
 ) -> Result<(), RunError> {
-    let config = prepare_local_build_config(
+    if let Some(runtime) = &compile_driver_runtime {
+        runtime.validate().map_err(|error| RunError::Build(error.to_string()))?;
+        crate::build_application::admit_compile_driver_environment()?;
+        if hermeticity_mode == HermeticityMode::Strict {
+            return Err(RunError::Build("compile driver runtime is excluded from strict proof execution".into()));
+        }
+    }
+    let mut config = prepare_local_build_config(
         LocalBuildCommandConfig {
             file,
             import_paths,
@@ -233,22 +246,23 @@ pub fn cmd_build_with_source_fetch_overrides(
             trust_unsigned,
             hermeticity_mode,
             base_state_dirs,
+            source_admission,
         },
         output_mode,
         interchange_dir,
         source_fetch_overrides,
         root_registration,
     )?;
+    config.compile_driver_runtime = compile_driver_runtime;
     if output_mode.is_evaluation_stream() {
-        let completion = run_build_with_evaluation_stream(&config)?;
-        report_build_result(&config, &completion.result, fix, output_mode, logs_dir)?;
+        let completion = run_build_with_evaluation_stream(&config, StreamReporting { fix, logs_dir })?;
         return evaluation_stream_process_result(&completion);
     }
     if causal_trace {
         let (result, observation) = run_build_with_causal_trace(&config)?;
         match observation {
             CausalTraceObservation::Recorded(trace) => {
-                crate::causal_trace_diagnostic::write_trace(state_dir, &trace).map_err(RunError::Internal)?;
+                crate::build_application::persist_causal_trace(state_dir, &trace)?;
             }
             CausalTraceObservation::WorkerNotStarted => {
                 eprintln!("causal trace unavailable: worker not started (store preflight failed)");
@@ -277,81 +291,133 @@ pub struct LocalBuildCommandConfig<'a> {
     pub trust_unsigned: bool,
     pub hermeticity_mode: HermeticityMode,
     pub base_state_dirs: Vec<PathBuf>,
+    pub source_admission: Option<std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
 }
 
-fn prepare_local_build_config(
+pub(crate) fn prepare_local_build_config(
     input: LocalBuildCommandConfig<'_>,
     output_mode: BuildOutputMode,
     interchange_dir: Option<&Path>,
     source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
     root_registration: Option<crunch_store::RootRegistration>,
 ) -> Result<BuildConfig, RunError> {
-    let LocalBuildCommandConfig {
-        file,
-        import_paths,
-        output_dir,
-        state_dir,
-        store_dir,
-        backend,
-        verbose,
-        max_jobs,
-        substituter_urls,
-        signing_key_path,
-        trusted_public_keys,
-        trust_unsigned,
-        hermeticity_mode,
-        base_state_dirs,
-    } = input;
-    crunch_store::StoreConfig::preflight_backend_identity_for(backend, state_dir, store_dir, &base_state_dirs)
+    let effects =
+        crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::Preparation)?;
+    let prepared: Result<BuildConfig, RunError> = (|| {
+        let LocalBuildCommandConfig {
+            file,
+            import_paths,
+            output_dir,
+            state_dir,
+            store_dir,
+            backend,
+            verbose,
+            max_jobs,
+            substituter_urls,
+            signing_key_path,
+            trusted_public_keys,
+            trust_unsigned,
+            hermeticity_mode,
+            base_state_dirs,
+            source_admission,
+        } = input;
+        crunch_store::StoreConfig::preflight_backend_identity_for(
+            backend,
+            state_dir,
+            store_dir,
+            &base_state_dirs,
+            source_admission.as_deref(),
+        )
         .map_err(|error| RunError::Internal(format!("opening store: {error}")))?;
-    let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, output_mode.is_human())?;
-    let configured_trusted_keys = load_configured_trusted_public_keys(trusted_public_keys, state_dir)?;
-    let trusted_keys = signing::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
+        let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, output_mode.is_human())?;
+        let configured_trusted_keys = load_configured_trusted_public_keys(trusted_public_keys, state_dir)?;
+        let trusted_keys = signing::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
 
-    let config = BuildConfig {
-        file: file.to_path_buf(),
-        import_paths: import_paths.to_vec(),
-        output_dir: output_dir.to_path_buf(),
-        state_dir: state_dir.to_path_buf(),
-        backend,
-        store_dir: store_dir.to_string(),
-        verbose,
-        max_jobs,
-        scheduling_policy: crunch_pipeline::SchedulingPolicy {
-            schema: crunch_build::scheduling::SCHEDULING_POLICY_SCHEMA.to_string(),
-            policy_id: crunch_build::scheduling::DEFAULT_SCHEDULING_POLICY_ID.to_string(),
-            preference_order: vec![
-                crunch_build::PreferenceField::KnownGraph,
-                crunch_build::PreferenceField::ResourceFit,
-                crunch_build::PreferenceField::LocalityTransfer,
-            ],
-            aged_after_epochs: crunch_build::scheduling::DEFAULT_AGED_AFTER_EPOCHS,
-            protected_after_epochs: crunch_build::scheduling::DEFAULT_PROTECTED_AFTER_EPOCHS,
-        },
-        substituter_urls: substituter_urls.to_vec(),
-        hermeticity_mode,
-        keypair,
-        trusted_keys,
-        trust_unsigned,
-        root_retention_source: Some(GcRootSource::Build),
-        root_registration,
-        source_fetch_overrides,
-        remote_enabled: false,
-        interchange_dir: interchange_dir.map(Path::to_path_buf),
-        base_state_dirs,
-    };
+        let config = BuildConfig {
+            file: file.to_path_buf(),
+            import_paths: import_paths.to_vec(),
+            output_dir: output_dir.to_path_buf(),
+            state_dir: state_dir.to_path_buf(),
+            backend,
+            store_dir: store_dir.to_string(),
+            verbose,
+            max_jobs,
+            scheduling_policy: crunch_pipeline::SchedulingPolicy {
+                schema: crunch_build::scheduling::SCHEDULING_POLICY_SCHEMA.to_string(),
+                policy_id: crunch_build::scheduling::DEFAULT_SCHEDULING_POLICY_ID.to_string(),
+                preference_order: vec![
+                    crunch_build::PreferenceField::KnownGraph,
+                    crunch_build::PreferenceField::ResourceFit,
+                    crunch_build::PreferenceField::LocalityTransfer,
+                ],
+                aged_after_epochs: crunch_build::scheduling::DEFAULT_AGED_AFTER_EPOCHS,
+                protected_after_epochs: crunch_build::scheduling::DEFAULT_PROTECTED_AFTER_EPOCHS,
+            },
+            substituter_urls: substituter_urls.to_vec(),
+            hermeticity_mode,
+            keypair,
+            trusted_keys,
+            trust_unsigned,
+            root_retention_source: Some(GcRootSource::Build),
+            root_registration,
+            source_fetch_overrides,
+            remote_enabled: false,
+            compile_driver_runtime: None,
+            interchange_dir: interchange_dir.map(Path::to_path_buf),
+            base_state_dirs,
+            source_admission,
+        };
 
-    debug_assert_eq!(config.file.as_path(), file);
-    debug_assert_eq!(config.hermeticity_mode, hermeticity_mode);
+        debug_assert_eq!(config.file.as_path(), file);
+        debug_assert_eq!(config.hermeticity_mode, hermeticity_mode);
+        Ok(config)
+    })();
+    let signing_admitted =
+        matches!(&prepared, Ok(config) if config.trusted_keys.contains(&config.keypair.verifying_key));
+    crate::build_observation::classify(
+        &effects,
+        "realization-preparation",
+        mantle_application_contract::EffectKind::StoreAccess,
+        signing_admitted,
+    )?;
+    let config = prepared?;
+    if !signing_admitted {
+        return Err(RunError::Build(
+            "local signing identity was not admitted by the build trust configuration".to_string(),
+        ));
+    }
     Ok(config)
 }
 
-fn print_watch_notice(config: &BuildConfig, notice: crunch_pipeline::WatchNotice) -> std::io::Result<()> {
+fn print_evaluation_notice(
+    output: &mut impl std::io::Write,
+    mode: &str,
+    diagnostics: crunch_eval::session::incremental::ReuseDiagnostics,
+) -> std::io::Result<()> {
+    writeln!(
+        output,
+        "watch evaluation {mode}: executed={:?}, reused={:?}, invalidated={:?}, evicted={:?}, retained_bytes={} (candidate observation only)",
+        diagnostics.executed_roots,
+        diagnostics.reused_roots,
+        diagnostics.invalidated_roots,
+        diagnostics.evicted_roots,
+        diagnostics.retained_value_bytes,
+    )
+}
+
+fn print_watch_notice(
+    config: &BuildConfig,
+    effects: &mantle_application_contract::EffectPlan,
+    notice: crunch_pipeline::WatchNotice,
+) -> std::io::Result<()> {
     use std::io::Write;
 
     let stdout = std::io::stdout();
     let mut output = stdout.lock();
     match notice {
+        crunch_pipeline::WatchNotice::Evaluation { mode, diagnostics } => {
+            print_evaluation_notice(&mut output, mode, diagnostics)?;
+        }
         crunch_pipeline::WatchNotice::Goals { generation, diff } => {
             writeln!(output, "watch generation {generation}: {} admitted goal event(s)", diff.events.len())?;
             for event in diff.events.iter().take(32) {
@@ -381,6 +447,15 @@ fn print_watch_notice(config: &BuildConfig, notice: crunch_pipeline::WatchNotice
             outcomes,
             failed,
         } => {
+            let verified = crate::build_observation::verify_outputs(&outcomes, &config.output_dir);
+            crate::build_observation::classify(
+                effects,
+                "realization-build",
+                mantle_application_contract::EffectKind::StoreAccess,
+                verified.is_ok() && failed.is_empty(),
+            )
+            .map_err(|error| std::io::Error::other(error.to_string()))?;
+            verified.map_err(|error| std::io::Error::other(error.to_string()))?;
             writeln!(
                 output,
                 "watch generation {generation}: settled {} successful, {} failed root(s)",
@@ -405,11 +480,11 @@ fn print_watch_notice(config: &BuildConfig, notice: crunch_pipeline::WatchNotice
 
 /// Run the persistent local Worker until a signal has requested and completed
 /// owned teardown. A second signal never drops a still-running sandbox future.
-pub fn cmd_build_watch(input: LocalBuildCommandConfig<'_>) -> Result<(), RunError> {
+pub fn cmd_build_watch(input: LocalBuildCommandConfig<'_>, incremental: bool) -> Result<(), RunError> {
+    let effects = crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::Build)?;
+    let lifecycle = crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::Watch)?;
     let config = prepare_local_build_config(input, BuildOutputMode::Human, None, Vec::new(), None)?;
-    let started = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|error| RunError::Internal(format!("watch run clock: {error}")))?;
+    let started = crate::build_application::watch_time()?;
     let run_identity = format!("watch-{}-{}", std::process::id(), started.as_nanos());
     let runtime =
         tokio::runtime::Runtime::new().map_err(|error| RunError::Internal(format!("watch runtime: {error}")))?;
@@ -417,7 +492,13 @@ pub fn cmd_build_watch(input: LocalBuildCommandConfig<'_>) -> Result<(), RunErro
         let mut signals = OperatorSignalMonitor::new()?;
         let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(false);
         let (notice_tx, mut notice_rx) = tokio::sync::mpsc::channel(16);
-        let watch = crunch_pipeline::watch_build(&config, run_identity, &mut shutdown_rx, &notice_tx);
+        let watch = async {
+            if incremental {
+                crunch_pipeline::watch_build_incremental(&config, run_identity, &mut shutdown_rx, &notice_tx).await
+            } else {
+                crunch_pipeline::watch_build(&config, run_identity, &mut shutdown_rx, &notice_tx).await
+            }
+        };
         tokio::pin!(watch);
         let mut requested_shutdown = false;
         let mut receiving_notices = true;
@@ -436,7 +517,7 @@ pub fn cmd_build_watch(input: LocalBuildCommandConfig<'_>) -> Result<(), RunErro
                 notice = notice_rx.recv(), if receiving_notices => {
                     match notice {
                         Some(notice) if output_error.is_none() => {
-                            if let Err(error) = print_watch_notice(&config, notice) {
+                            if let Err(error) = print_watch_notice(&config, &effects, notice) {
                                 output_error = Some(RunError::Internal(format!("writing watch notice: {error}")));
                                 requested_shutdown = true;
                                 let _ = shutdown_tx.send(true);
@@ -456,39 +537,203 @@ pub fn cmd_build_watch(input: LocalBuildCommandConfig<'_>) -> Result<(), RunErro
         };
         if output_error.is_none() {
             while let Ok(notice) = notice_rx.try_recv() {
-                if let Err(error) = print_watch_notice(&config, notice) {
+                if let Err(error) = print_watch_notice(&config, &effects, notice) {
                     output_error = Some(RunError::Internal(format!("writing watch notice: {error}")));
                     break;
                 }
             }
         }
+        let teardown_observed = requested_shutdown && result.is_ok() && output_error.is_none();
+        crate::build_observation::classify(
+            &lifecycle,
+            "realization-watch",
+            mantle_application_contract::EffectKind::StoreAccess,
+            teardown_observed,
+        )?;
         if let Some(error) = output_error {
             return Err(error);
         }
-        result.map_err(Into::into)
+        result.map_err(RunError::from)?;
+        if !teardown_observed {
+            return Err(RunError::Build("watch worker returned without requested shutdown".to_string()));
+        }
+        Ok(())
     })
 }
 
 pub fn run_build(config: &BuildConfig) -> Result<PipelineResult, RunError> {
-    let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
-    if let Some(socket_path) = configured_live_socket() {
-        return rt.block_on(run_build_with_live_observation(config, &socket_path, false)).map(|(result, _)| result);
+    let plan = crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::Build)?;
+    let result = (|| {
+        let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
+        if let Some(socket_path) = configured_live_socket()? {
+            return rt.block_on(run_build_with_live_observation(config, &socket_path, false)).map(|(result, _)| result);
+        }
+        rt.block_on(crunch_pipeline::build(config)).map_err(Into::into)
+    })();
+    crate::build_observation::pipeline(&plan, config, result)
+}
+
+// Keep the completed pipeline inline rather than allocating on every successful test build.
+#[allow(clippy::large_enum_variant)]
+pub(crate) enum TestBuildCompletion {
+    Completed(PipelineResult),
+    CancelledAfterTeardown,
+}
+
+/// The synchronous test command owns one runtime. Unlike evaluation-stream
+/// interruption, even repeated operator signals must retain the teardown owner.
+pub(crate) fn run_test_build(config: &BuildConfig) -> Result<TestBuildCompletion, RunError> {
+    let runtime =
+        tokio::runtime::Runtime::new().map_err(|error| RunError::Internal(format!("tokio runtime: {error}")))?;
+    runtime.block_on(run_test_build_owned(config))
+}
+
+async fn run_test_build_owned(config: &BuildConfig) -> Result<TestBuildCompletion, RunError> {
+    let effects = crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::Build)?;
+    let evaluation_effects = crate::evaluation_cmd::stream_plan()?;
+    let mut signals = OperatorSignalMonitor::new()?;
+    let cancellation = crunch_pipeline::EvaluationCancellation::new();
+    let (stream_tx, mut stream_rx) = tokio::sync::mpsc::channel(STREAM_EVENT_CHANNEL_CAPACITY);
+    let socket_path = configured_live_socket()?;
+    let mut worker_rx = None;
+    let worker_degraded = socket_path.as_ref().map(|_| Arc::new(AtomicBool::new(false)));
+    let worker_observation = worker_degraded.as_ref().map(|degraded| {
+        let (worker_tx, receiver) = tokio::sync::mpsc::channel(16);
+        worker_rx = Some(receiver);
+        crunch_pipeline::WorkerLiveObservation::new(worker_tx, Arc::clone(degraded))
+    });
+    let build =
+        crunch_pipeline::build_with_owned_cancellation(config, cancellation.clone(), stream_tx, worker_observation);
+    tokio::pin!(build);
+    let mut result = None;
+    let mut stream_open = true;
+    let mut worker_open = worker_rx.is_some();
+    let mut observer = None;
+    let mut signal_error = None;
+    let mut listen_signals = true;
+    let mut summary = None;
+    while stream_open || worker_open || result.is_none() {
+        tokio::select! {
+            biased;
+            signal = signals.receive(), if listen_signals => {
+                // Tokio retains the installed handlers; repeated signals cannot
+                // force-drop the owner or starve its teardown acknowledgements.
+                listen_signals = false;
+                cancellation.request();
+                match signal {
+                    Ok(signal) => eprintln!("received {}; requesting owned test build cancellation", signal.name()),
+                    Err(error) => { signal_error = Some(error); }
+                }
+            }
+            record = stream_rx.recv(), if stream_open => {
+                match record {
+                    Some(record) => {
+                        if let crunch_evaluation_stream_core::StreamRecordValue::RunSummary(run) = &record {
+                            summary = Some(run.counts());
+                        }
+                        if let Err(error) = crate::evaluation_cmd::classify_stream_record(&evaluation_effects, &record) {
+                            cancellation.request();
+                            signal_error = Some(error);
+                            continue;
+                        }
+                        observe_live_stream_record(&mut observer, socket_path.as_deref(), &record);
+                    }
+                    None => stream_open = false,
+                }
+            }
+            snapshot = async {
+                match worker_rx.as_mut() {
+                    Some(receiver) => receiver.recv().await,
+                    None => None,
+                }
+            }, if worker_open => {
+                match snapshot {
+                    Some(snapshot) => observe_live_worker_snapshot(&mut observer, &snapshot),
+                    None => worker_open = false,
+                }
+            }
+            completed = &mut build, if result.is_none() => { result = Some(completed); }
+        }
     }
-    rt.block_on(crunch_pipeline::build(config)).map_err(Into::into)
+    if let Some(degraded) = &worker_degraded {
+        report_live_worker_degradation(&mut observer, degraded);
+    }
+    report_live_publisher_degradation(&mut observer);
+    // None of these errors can abandon a still-running build: the driver has
+    // drained both observation channels and awaited the pipeline above.
+    if let Some(error) = signal_error {
+        crate::build_observation::classify(
+            &effects,
+            "realization-build",
+            mantle_application_contract::EffectKind::StoreAccess,
+            false,
+        )?;
+        return Err(error);
+    }
+    let result = result.expect("owned test build completed").map_err(RunError::from);
+    let result = if cancellation.is_requested() {
+        crate::build_observation::classify(
+            &effects,
+            "realization-build",
+            mantle_application_contract::EffectKind::StoreAccess,
+            false,
+        )?;
+        result?
+    } else {
+        crate::build_observation::pipeline(&effects, config, result)?
+    };
+    let counts = summary.ok_or_else(|| RunError::Internal("test build ended without evaluation summary".into()))?;
+    if counts.worker_lost != 0 {
+        return Err(RunError::Internal(
+            "test evaluation worker lost; cancellation teardown is not a test report".into(),
+        ));
+    }
+    if cancellation.is_requested() {
+        return Ok(TestBuildCompletion::CancelledAfterTeardown);
+    }
+    Ok(TestBuildCompletion::Completed(result))
 }
 
 fn run_build_with_causal_trace(config: &BuildConfig) -> Result<(PipelineResult, CausalTraceObservation), RunError> {
-    let rt = tokio::runtime::Runtime::new().map_err(|error| RunError::Internal(format!("tokio runtime: {error}")))?;
-    if let Some(socket_path) = configured_live_socket() {
-        let (result, observation) = rt.block_on(run_build_with_live_observation(config, &socket_path, true))?;
-        let observation = observation.ok_or_else(|| RunError::Internal("causal trace was not captured".to_string()))?;
-        return Ok((result, observation));
+    let plan = crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::Build)?;
+    let completed = (|| {
+        let rt =
+            tokio::runtime::Runtime::new().map_err(|error| RunError::Internal(format!("tokio runtime: {error}")))?;
+        if let Some(socket_path) = configured_live_socket()? {
+            let (result, observation) = rt.block_on(run_build_with_live_observation(config, &socket_path, true))?;
+            let observation =
+                observation.ok_or_else(|| RunError::Internal("causal trace was not captured".to_string()))?;
+            return Ok((result, observation));
+        }
+        rt.block_on(crunch_pipeline::build_with_causal_trace(config)).map_err(Into::into)
+    })();
+    match completed {
+        Ok((result, observation)) => {
+            crate::build_observation::pipeline(&plan, config, Ok(result)).map(|result| (result, observation))
+        }
+        Err(error) => {
+            crate::build_observation::classify(
+                &plan,
+                "realization-build",
+                mantle_application_contract::EffectKind::StoreAccess,
+                false,
+            )?;
+            Err(error)
+        }
     }
-    rt.block_on(crunch_pipeline::build_with_causal_trace(config)).map_err(Into::into)
 }
 
-pub(crate) fn configured_live_socket() -> Option<PathBuf> {
-    std::env::var_os("MANTLE_LIVE_STATE_SOCKET").filter(|value| !value.is_empty()).map(PathBuf::from)
+pub(crate) fn configured_live_socket() -> Result<Option<PathBuf>, RunError> {
+    let effects =
+        crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::Environment)?;
+    let socket = std::env::var_os("MANTLE_LIVE_STATE_SOCKET");
+    crate::build_observation::classify(
+        &effects,
+        "realization-environment",
+        mantle_application_contract::EffectKind::ReadEnvironment,
+        true,
+    )?;
+    Ok(socket.filter(|value| !value.is_empty()).map(PathBuf::from))
 }
 
 /// An evaluation run id is content-addressed; daemon ownership must instead
@@ -641,6 +886,7 @@ async fn run_build_with_live_observation(
     socket_path: &Path,
     causal_trace: bool,
 ) -> Result<(PipelineResult, Option<CausalTraceObservation>), RunError> {
+    let evaluation_effects = crate::evaluation_cmd::stream_plan()?;
     let (stream_tx, mut stream_rx) = tokio::sync::mpsc::channel(STREAM_EVENT_CHANNEL_CAPACITY);
     let (worker_tx, mut worker_rx) = tokio::sync::mpsc::channel(16);
     let worker_degraded = Arc::new(AtomicBool::new(false));
@@ -648,11 +894,11 @@ async fn run_build_with_live_observation(
     let worker_observation = crunch_pipeline::WorkerLiveObservation::new(worker_tx, Arc::clone(&worker_degraded));
     let build_future = async {
         if causal_trace {
-            crunch_pipeline::build_with_causal_trace_live(config, cancellation, stream_tx, worker_observation)
+            crunch_pipeline::build_with_causal_trace_live(config, cancellation.clone(), stream_tx, worker_observation)
                 .await
                 .map(|(result, trace)| (result, Some(trace)))
         } else {
-            crunch_pipeline::build_with_live_observation(config, cancellation, stream_tx, worker_observation)
+            crunch_pipeline::build_with_live_observation(config, cancellation.clone(), stream_tx, worker_observation)
                 .await
                 .map(|result| (result, None))
         }
@@ -662,11 +908,17 @@ async fn run_build_with_live_observation(
     let mut stream_open = true;
     let mut worker_open = true;
     let mut observer = None;
+    let mut observation_error = None;
     while stream_open || worker_open || result.is_none() {
         tokio::select! {
             biased;
             record = stream_rx.recv(), if stream_open => match record {
-                Some(record) => observe_live_stream_record(&mut observer, Some(socket_path), &record),
+                Some(record) => {
+                    match crate::evaluation_cmd::classify_stream_record(&evaluation_effects, &record) {
+                        Ok(()) => observe_live_stream_record(&mut observer, Some(socket_path), &record),
+                        Err(error) => { cancellation.request(); observation_error = Some(error); }
+                    }
+                },
                 None => stream_open = false,
             },
             snapshot = worker_rx.recv(), if worker_open => match snapshot {
@@ -678,6 +930,9 @@ async fn run_build_with_live_observation(
     }
     report_live_worker_degradation(&mut observer, &worker_degraded);
     report_live_publisher_degradation(&mut observer);
+    if let Some(error) = observation_error {
+        return Err(error);
+    }
     result.expect("build future always completed").map_err(Into::into)
 }
 
@@ -686,22 +941,32 @@ struct EvaluationStreamBuildCompletion {
     disposition: RunDisposition,
 }
 
-fn run_build_with_evaluation_stream(config: &BuildConfig) -> Result<EvaluationStreamBuildCompletion, RunError> {
+#[derive(Clone, Copy)]
+struct StreamReporting<'a> {
+    fix: bool,
+    logs_dir: &'a Path,
+}
+
+fn run_build_with_evaluation_stream(
+    config: &BuildConfig,
+    reporting: StreamReporting<'_>,
+) -> Result<EvaluationStreamBuildCompletion, RunError> {
     let runtime =
         tokio::runtime::Runtime::new().map_err(|error| RunError::Internal(format!("tokio runtime: {error}")))?;
     let stdout = std::io::stdout();
     let locked = stdout.lock();
-    runtime.block_on(run_build_with_stream_output(config, locked))
+    runtime.block_on(run_build_with_stream_output(config, locked, reporting))
 }
 
 async fn run_build_with_stream_output<W: std::io::Write>(
     config: &BuildConfig,
     output: W,
+    reporting: StreamReporting<'_>,
 ) -> Result<EvaluationStreamBuildCompletion, RunError> {
     let mut signal_monitor = OperatorSignalMonitor::new()?;
     let (stream_tx, mut stream_rx) = tokio::sync::mpsc::channel(STREAM_EVENT_CHANNEL_CAPACITY);
     let cancellation = crunch_pipeline::EvaluationCancellation::new();
-    let socket_path = configured_live_socket();
+    let socket_path = configured_live_socket()?;
     let mut worker_rx = None;
     let worker_degraded = socket_path.as_ref().map(|_| Arc::new(AtomicBool::new(false)));
     let worker_observation = worker_degraded.as_ref().map(|degraded| {
@@ -721,11 +986,13 @@ async fn run_build_with_stream_output<W: std::io::Write>(
     let mut observer = None;
     let build_result = drive_stream_with_signals(
         &mut writer,
+        config,
         &mut stream_rx,
         LiveStreamDrive {
             worker_rx: worker_rx.as_mut(),
             observer: &mut observer,
             socket_path: socket_path.as_deref(),
+            reporting,
         },
         &cancellation,
         &mut signal_monitor,
@@ -745,10 +1012,12 @@ struct LiveStreamDrive<'a> {
     worker_rx: Option<&'a mut tokio::sync::mpsc::Receiver<Arc<crunch_pipeline::WorkerLiveSnapshot>>>,
     observer: &'a mut Option<LiveStreamObserver>,
     socket_path: Option<&'a Path>,
+    reporting: StreamReporting<'a>,
 }
 
 async fn drive_stream_with_signals<W, F>(
     writer: &mut EvaluationStreamWriter<W>,
+    config: &BuildConfig,
     stream_rx: &mut tokio::sync::mpsc::Receiver<crunch_evaluation_stream_core::StreamRecordValue>,
     live: LiveStreamDrive<'_>,
     cancellation: &crunch_pipeline::EvaluationCancellation,
@@ -759,6 +1028,12 @@ where
     W: std::io::Write,
     F: Future<Output = Result<PipelineResult, crunch_pipeline::Error>>,
 {
+    let effect_plan =
+        crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::Build)?;
+    let evaluation_effects = crate::evaluation_cmd::stream_plan()?;
+    let mut terminal_summary = None;
+    let mut port_error = None;
+    let mut listen_signals = true;
     tokio::pin!(build_future);
     let mut build_result = None;
     let mut is_stream_open = true;
@@ -767,25 +1042,42 @@ where
         mut worker_rx,
         observer,
         socket_path,
+        reporting,
     } = live;
     let mut is_worker_open = worker_rx.is_some();
     while is_stream_open || is_worker_open || build_result.is_none() {
         tokio::select! {
             biased;
-            signal = signal_monitor.receive() => {
-                match signal {
-                    Ok(signal) => handle_operator_signal(signal, &mut observed_signal_count, cancellation)?,
-                    Err(error) => {
-                        cancellation.request();
-                        return Err(error);
-                    }
+            signal = signal_monitor.receive(), if listen_signals => {
+                let observed = signal.and_then(|signal| handle_operator_signal(signal, &mut observed_signal_count, cancellation));
+                if let Err(error) = observed {
+                    cancellation.request();
+                    listen_signals = false;
+                    if port_error.is_none() { port_error = Some(error); }
                 }
             }
             record = stream_rx.recv(), if is_stream_open => {
                 match record {
                     Some(record) => {
-                        write_stream_record(writer, &record, cancellation)?;
-                        observe_live_stream_record(observer, socket_path, &record);
+                        if port_error.is_some() { continue; }
+                        if matches!(record, crunch_evaluation_stream_core::StreamRecordValue::RunSummary(_)) {
+                            if terminal_summary.replace(record).is_some() {
+                                cancellation.request();
+                                port_error = Some(stream_output_failure(EvaluationStreamOutputError::RecordAfterSummary));
+                            }
+                        } else {
+                            if terminal_summary.is_some() {
+                                cancellation.request();
+                                port_error = Some(stream_output_failure(EvaluationStreamOutputError::RecordAfterSummary));
+                                continue;
+                            }
+                            let observed = crate::evaluation_cmd::classify_stream_record(&evaluation_effects, &record)
+                                .and_then(|()| write_stream_record(writer, &record, cancellation));
+                            match observed {
+                                Ok(()) => observe_live_stream_record(observer, socket_path, &record),
+                                Err(error) => { cancellation.request(); port_error = Some(error); }
+                            }
+                        }
                     }
                     None => is_stream_open = false,
                 }
@@ -806,7 +1098,33 @@ where
             }
         }
     }
-    build_result.ok_or_else(|| stream_output_failure(EvaluationStreamOutputError::MissingSummary))
+    let result = build_result.ok_or_else(|| stream_output_failure(EvaluationStreamOutputError::MissingSummary))?;
+    let verified = result
+        .as_ref()
+        .ok()
+        .map(|result| crate::build_observation::verify_outputs(&result.outcomes, &config.output_dir));
+    let succeeded = matches!(&result, Ok(result) if result.failed.is_empty()) && matches!(&verified, Some(Ok(())));
+    crate::build_observation::classify(
+        &effect_plan,
+        "realization-build",
+        mantle_application_contract::EffectKind::StoreAccess,
+        succeeded,
+    )?;
+    if let Some(Err(error)) = verified {
+        return Err(error);
+    }
+    if let Some(error) = port_error {
+        return Err(error);
+    }
+    if let Ok(result) = &result {
+        report_build_result(config, result, reporting.fix, BuildOutputMode::EvaluationStream, reporting.logs_dir)?;
+    }
+    if let Some(record) = terminal_summary {
+        crate::evaluation_cmd::classify_stream_record(&evaluation_effects, &record)?;
+        write_stream_record(writer, &record, cancellation)?;
+        observe_live_stream_record(observer, socket_path, &record);
+    }
+    Ok(result)
 }
 
 fn handle_operator_signal(
@@ -873,6 +1191,8 @@ pub fn report_build_result(
     debug_assert!(!(output_mode.is_json() && output_mode.is_human()));
     debug_assert!(output_mode.is_human() || output_mode.is_json() || output_mode.is_evaluation_stream());
     debug_assert!(!config.store_dir.is_empty());
+    let reporting =
+        crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::Reporting)?;
     let mut diagnostic_persistence_failures = Vec::new();
     let is_log_dir_ready = match prepare_logs_dir(logs_dir) {
         Ok(()) => true,
@@ -885,6 +1205,16 @@ pub fn report_build_result(
     if is_log_dir_ready {
         diagnostic_persistence_failures.extend(write_success_logs(config, result, logs_dir, output_mode));
     }
+    if is_log_dir_ready && !result.failed.is_empty() {
+        diagnostic_persistence_failures.extend(write_failure_logs(config, result, logs_dir));
+    }
+    crate::build_observation::classify(
+        &reporting,
+        "realization-reporting",
+        mantle_application_contract::EffectKind::WriteFiles,
+        diagnostic_persistence_failures.is_empty(),
+    )?;
+    emit_interchange(config, result, logs_dir)?;
     if output_mode.is_human() {
         print_hermeticity_summary(result);
         print_action_result_summary(result);
@@ -901,17 +1231,12 @@ pub fn report_build_result(
         if output_mode.is_json() {
             print_json_report(config, result, logs_dir, &diagnostic_persistence_failures)?;
         }
-        emit_interchange(config, result, logs_dir)?;
         return Ok(());
     }
 
-    if is_log_dir_ready {
-        diagnostic_persistence_failures.extend(write_failure_logs(config, result, logs_dir));
-    }
     if output_mode.is_json() {
         print_json_report(config, result, logs_dir, &diagnostic_persistence_failures)?;
     }
-    emit_interchange(config, result, logs_dir)?;
     if output_mode.is_evaluation_stream() {
         print_diagnostic_persistence_failures(&diagnostic_persistence_failures);
         return Ok(());
@@ -1050,9 +1375,35 @@ fn emit_interchange(config: &BuildConfig, result: &PipelineResult, logs_dir: &Pa
     let Some(directory) = crate::build_interchange::configured_directory(config) else {
         return Ok(());
     };
-    crate::build_interchange::emit_from_report(config, result, logs_dir, &directory)
-        .map(|_paths| ())
+    let effects =
+        crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::Interchange)?;
+    let emitted = crate::build_interchange::emit_from_report(config, result, logs_dir, &directory)
         .map_err(|error| RunError::Internal(format!("build interchange: {error}")))
+        .and_then(|(request_path, observation_path)| {
+            let request_bytes = std::fs::read(&request_path).map_err(|error| {
+                RunError::Internal(format!("reading build request {}: {error}", request_path.display()))
+            })?;
+            let observation_bytes = std::fs::read(&observation_path).map_err(|error| {
+                RunError::Internal(format!("reading build observation {}: {error}", observation_path.display()))
+            })?;
+            let request: mantle_build_contract::BuildRequest = serde_json::from_slice(&request_bytes)
+                .map_err(|error| RunError::Internal(format!("decoding emitted build request: {error}")))?;
+            let observation: mantle_build_contract::BuildObservation = serde_json::from_slice(&observation_bytes)
+                .map_err(|error| RunError::Internal(format!("decoding emitted build observation: {error}")))?;
+            mantle_build_contract::validate_observation(&request, &observation.builder_identity, &observation)
+                .map_err(|error| RunError::Internal(format!("emitted build interchange is inconsistent: {error:?}")))?;
+            if (observation.outcome == mantle_build_contract::BuildOutcome::Success) != result.failed.is_empty() {
+                return Err(RunError::Build("emitted build interchange contradicts the realized outcome".to_string()));
+            }
+            Ok(())
+        });
+    crate::build_observation::classify(
+        &effects,
+        "realization-interchange",
+        mantle_application_contract::EffectKind::WriteFiles,
+        emitted.is_ok(),
+    )?;
+    emitted
 }
 
 fn print_hermeticity_summary(result: &PipelineResult) {
@@ -1260,6 +1611,12 @@ pub fn write_log(
 ) -> Result<PathBuf, DiagnosticPersistenceFailure> {
     let attempted_path = log_file_path(log_dir, drv_path);
     write_log_file(log_dir, drv_path, label, success, body)
+        .and_then(|path| {
+            if !std::fs::metadata(&path)?.is_file() {
+                return Err(std::io::Error::other("persisted build log is not a regular file"));
+            }
+            Ok(path)
+        })
         .map_err(|error| DiagnosticPersistenceFailure::write_build_log(label, &attempted_path, &error))
 }
 
@@ -1400,12 +1757,23 @@ pub fn admit_log_dir_with_observation(state_dir: &Path) -> ObservedLogDirAdmissi
 }
 
 pub fn build_import_paths(extra: &[PathBuf]) -> Result<Vec<OsString>, RunError> {
-    let stdlib_dir =
-        crunch_eval::stdlib::stdlib_import_path().map_err(|e| RunError::Internal(format!("stdlib: {e}")))?;
-    let mut paths: Vec<OsString> = vec![stdlib_dir.into()];
-    for path in extra {
-        paths.push(path.into());
-    }
+    let effects =
+        crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::ImportPreparation)?;
+    let stdlib_dir = crunch_eval::stdlib::stdlib_import_path().and_then(|path| {
+        // A returned directory alone does not prove that evaluator imports can open its entry point.
+        std::fs::File::open(path.join("lib.ncl"))?;
+        Ok(path)
+    });
+    crate::build_observation::classify(
+        &effects,
+        "realization-imports",
+        mantle_application_contract::EffectKind::WriteFiles,
+        stdlib_dir.is_ok(),
+    )?;
+    let stdlib_dir = stdlib_dir.map_err(|error| RunError::Internal(format!("stdlib: {error}")))?;
+    let mut paths = Vec::with_capacity(extra.len() + 1);
+    paths.push(stdlib_dir.into_os_string());
+    paths.extend(extra.iter().map(|path| path.as_os_str().to_owned()));
     Ok(paths)
 }
 

@@ -4,6 +4,8 @@
 //! writer that emits them, so the format is testable without capturing a
 //! process stream.
 
+use std::io::Write;
+
 use mantle_application_contract::OutputFormat;
 
 use crate::RunError;
@@ -23,8 +25,7 @@ pub(crate) fn render_operator_json<T: serde::Serialize>(value: &T, label: &str) 
 /// Write one operator JSON payload to standard output.
 pub(crate) fn print_operator_json<T: serde::Serialize>(value: &T, label: &str) -> Result<(), RunError> {
     let rendered = render_operator_json(value, label)?;
-    println!("{rendered}");
-    Ok(())
+    write_report_to(&mut std::io::stdout().lock(), &rendered, label)
 }
 
 /// Render one remote-failure replay report.
@@ -58,8 +59,15 @@ pub(crate) fn emit_remote_failure_replay_result(
     format: OutputFormat,
 ) -> Result<(), RunError> {
     let rendered = render_remote_failure_replay_result(result, format)?;
-    println!("{rendered}");
-    Ok(())
+    write_report_to(&mut std::io::stdout().lock(), &rendered, "remote failure replay report")
+}
+
+/// Publish a fully rendered report and retain output-device failures as CLI
+/// errors rather than panicking after the operation has completed.
+pub(crate) fn write_report_to(writer: &mut impl Write, rendered: &str, label: &str) -> Result<(), RunError> {
+    writeln!(writer, "{rendered}")
+        .and_then(|()| writer.flush())
+        .map_err(|error| RunError::Internal(format!("writing {label}: {error}")))
 }
 
 #[cfg(test)]

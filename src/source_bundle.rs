@@ -2183,23 +2183,43 @@ pub fn import_source_bundle(
     assert!(manifest.records.len() <= MAX_SOURCE_RECORDS);
     assert_eq!(manifest.non_claim, SOURCE_BUNDLE_NON_CLAIM);
     let records_dir = source_records_dir(state_dir);
-    fs::create_dir_all(&records_dir)
-        .map_err(|err| RunError::Internal(format!("creating source records dir {}: {err}", records_dir.display())))?;
+    // Decide the complete batch before creating directories, records, or pins.
+    // A conflict late in the bundle must not publish an earlier addition.
+    let mut identities = BTreeMap::new();
+    let plans = manifest
+        .records
+        .iter()
+        .map(|record| {
+            if let Some(previous) = identities.insert(&record.content_blake3, record)
+                && previous != record
+            {
+                return Err(RunError::Internal(format!(
+                    "source record identity conflict within bundle for {}",
+                    record.content_blake3
+                )));
+            }
+            let target = records_dir.join(format!("{}.json", record.content_blake3));
+            let outcome = crate::source_observation::plan_record_ingest(&target, record)?;
+            Ok((target, outcome, summary_for_record(record)?))
+        })
+        .collect::<Result<Vec<_>, RunError>>()?;
+    if pin {
+        validate_existing_source_pin(state_dir, manifest)?;
+    }
     let mut written_records_len = 0u32;
     let mut skipped_present_records_len = 0u32;
     let mut summaries = Vec::with_capacity(manifest.records.len());
-    for record in &manifest.records {
-        let summary = summary_for_record(record)?;
-        let target = records_dir.join(format!("{}.json", record.content_blake3));
-        // Monotonic ingest: identical records are write-free and a conflicting
-        // record under one identity is rejected before any mutation.
-        match crate::source_observation::plan_record_ingest(&target, record)? {
+    for (record, (target, outcome, summary)) in manifest.records.iter().zip(plans) {
+        match outcome {
             crate::source_observation::RecordIngestOutcome::ReuseIdentical => {
                 skipped_present_records_len = skipped_present_records_len
                     .checked_add(1)
                     .ok_or_else(|| RunError::Internal("present source record count overflow".to_string()))?;
             }
             crate::source_observation::RecordIngestOutcome::Add => {
+                fs::create_dir_all(&records_dir).map_err(|err| {
+                    RunError::Internal(format!("creating source records dir {}: {err}", records_dir.display()))
+                })?;
                 write_record_atomically(&target, record)?;
                 written_records_len = written_records_len
                     .checked_add(1)
@@ -2695,6 +2715,7 @@ pub fn offline_vendor_cache_overrides(
             fallback_mode: crunch_store::StoreFallbackMode::Practical,
             store_dir: store_prefix.to_string(),
             base_state_dirs: Vec::new(),
+            source_admission: None,
         })
         .await
         .map_err(|error| RunError::Internal(format!("opening offline cache store: {error}")))?;
@@ -2944,7 +2965,7 @@ async fn verified_offline_cache_path(
     Ok((info.nar_sha256, info.nar_size, blake3::hash(fingerprint.as_bytes()).to_hex().to_string()))
 }
 
-fn verify_signed_store_root(
+pub(crate) fn verify_signed_store_root(
     logical: &str,
     state_dir: &Path,
     store_prefix: &str,
@@ -2985,6 +3006,7 @@ fn verify_signed_store_root(
             fallback_mode: crunch_store::StoreFallbackMode::Practical,
             store_dir: store_prefix.to_string(),
             base_state_dirs: Vec::new(),
+            source_admission: None,
         })
         .await
         .map_err(|error| RunError::Internal(format!("opening attested store: {error}")))?;
@@ -3212,6 +3234,31 @@ fn source_record_from_path(request: SourceRecordPathRequest<'_>) -> Result<Sourc
         files,
         store_path_attestation: None,
     })
+}
+
+/// Recapture source bytes without changing the admitted record's authority metadata.
+pub(crate) fn recapture_source_record_payload(record: &mut SourceRecord, path: &Path) -> Result<(), RunError> {
+    if record.store_path_attestation.is_some() {
+        return Err(RunError::Internal("cannot recapture an attested store-path record".into()));
+    }
+    let is_mantle_source = record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+        == Some(BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE);
+    let mantle_entries = is_mantle_source.then(|| {
+        crate::self_build::STAGED_SOURCE_TOP_LEVEL_ENTRIES
+            .iter()
+            .copied()
+            .filter(|entry| *entry != VENDOR_DEPS_DIR_NAME)
+            .collect::<Vec<_>>()
+    });
+    let (files, payload_bytes) =
+        canonicalize_payload_entries_with_policy(path, is_mantle_source, true, mantle_entries.as_deref(), false)?;
+    let content_blake3 = digest_source_record_content(&record.kind, &record.metadata, &files)?;
+    record.files = files;
+    record.payload_bytes = payload_bytes;
+    record.content_blake3 = content_blake3;
+    assert!(record.store_path_attestation.is_none());
+    assert!(!record.content_blake3.is_empty());
+    Ok(())
 }
 
 fn validate_bootstrap_profile_input(
@@ -4844,15 +4891,50 @@ fn source_pins_dir(state_dir: &Path) -> PathBuf {
 }
 
 fn write_record_atomically(target: &Path, record: &SourceRecord) -> Result<(), RunError> {
-    write_json_atomically(target, record, "source record")
+    write_json_no_replace(target, record, "source record")
+}
+
+fn validate_existing_source_pin(state_dir: &Path, manifest: &SourceBundleManifest) -> Result<bool, RunError> {
+    let target = source_pins_dir(state_dir).join(format!("{}.json", manifest.manifest_blake3));
+    let bytes = match fs::read(&target) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(RunError::Internal(format!("reading source pin {}: {error}", target.display()))),
+    };
+    let existing: SourceBundleManifest = serde_json::from_slice(&bytes)
+        .map_err(|error| RunError::Internal(format!("parsing source pin {}: {error}", target.display())))?;
+    if &existing != manifest {
+        return Err(RunError::Internal(format!("source pin identity conflict for {}", manifest.manifest_blake3)));
+    }
+    Ok(true)
 }
 
 fn write_pin_atomically(state_dir: &Path, manifest: &SourceBundleManifest) -> Result<(), RunError> {
+    if validate_existing_source_pin(state_dir, manifest)? {
+        return Ok(());
+    }
     let pins_dir = source_pins_dir(state_dir);
     fs::create_dir_all(&pins_dir)
         .map_err(|err| RunError::Internal(format!("creating source pins dir {}: {err}", pins_dir.display())))?;
     let target = pins_dir.join(format!("{}.json", manifest.manifest_blake3));
-    write_json_atomically(&target, manifest, "source pin")
+    write_json_no_replace(&target, manifest, "source pin")
+}
+
+fn write_json_no_replace<T: Serialize>(target: &Path, value: &T, label: &str) -> Result<(), RunError> {
+    let parent = target.parent().ok_or_else(|| RunError::Internal(format!("{label} requires a parent")))?;
+    let mut staged = tempfile::NamedTempFile::new_in(parent)
+        .map_err(|error| RunError::Internal(format!("staging {label}: {error}")))?;
+    serde_json::to_writer_pretty(&mut staged, value)
+        .map_err(|error| RunError::Internal(format!("serializing {label}: {error}")))?;
+    staged
+        .write_all(b"\n")
+        .and_then(|()| staged.flush())
+        .and_then(|()| staged.as_file().sync_all())
+        .map_err(|error| RunError::Internal(format!("flushing {label}: {error}")))?;
+    staged.persist_noclobber(target).map_err(|error| {
+        RunError::Internal(format!("publishing {label} {} without replacement: {error}", target.display()))
+    })?;
+    Ok(())
 }
 
 pub(crate) fn write_json_atomically<T: Serialize>(target: &Path, value: &T, label: &str) -> Result<(), RunError> {
@@ -9930,6 +10012,7 @@ let Derivation = import "derivation.ncl" in
             state_dir: build_state.path().to_path_buf(),
             backend: crunch_store::StoreBackend::Snix,
             base_state_dirs: Vec::new(),
+            source_admission: None,
             store_dir: "/nix/store".to_string(),
             verbose: false,
             max_jobs: 2,
@@ -9943,6 +10026,7 @@ let Derivation = import "derivation.ncl" in
             root_registration: None,
             source_fetch_overrides: plan.overrides.clone(),
             remote_enabled: false,
+            compile_driver_runtime: None,
             interchange_dir: None,
         };
         let drifted = crunch_pipeline::build(&config).await.unwrap();
@@ -10323,6 +10407,109 @@ mod readback_tests {
         let record_path = source_records_dir(&state_dir).join(format!("{}.json", manifest.records[0].content_blake3));
         fs::remove_file(record_path).unwrap();
         assert!(observed_imported_source_state(&manifest, &state_dir, true).is_err());
+    }
+
+    #[test]
+    fn late_record_conflict_preserves_records_pins_and_readiness() {
+        let temp = tempfile::tempdir().unwrap();
+        let first_path = temp.path().join("alpha.txt");
+        let last_path = temp.path().join("zeta.txt");
+        fs::write(&first_path, b"first-payload").unwrap();
+        fs::write(&last_path, b"last-payload").unwrap();
+        let manifest = plan_source_bundle(
+            &[
+                SourceSpec {
+                    kind: SourceRecordKind::LocalPath,
+                    identity: "alpha".to_string(),
+                    path: first_path,
+                    adapter: None,
+                },
+                SourceSpec {
+                    kind: SourceRecordKind::LocalPath,
+                    identity: "zeta".to_string(),
+                    path: last_path,
+                    adapter: None,
+                },
+            ],
+            "/mantle/store",
+        )
+        .unwrap();
+        let state = temp.path().join("state");
+        let records = source_records_dir(&state);
+        fs::create_dir_all(&records).unwrap();
+        let mut conflicting = manifest.records[1].clone();
+        conflicting.identity = "old-authority".to_string();
+        let target = records.join(format!("{}.json", conflicting.content_blake3));
+        fs::write(&target, serde_json::to_vec(&conflicting).unwrap()).unwrap();
+        let bytes_before = fs::read(&target).unwrap();
+        let readiness_before = verify_source_bundle_state(&manifest, &state).unwrap();
+        assert!(import_source_bundle(&manifest, &state, true).is_err());
+        assert_eq!(fs::read(&target).unwrap(), bytes_before);
+        assert_eq!(verify_source_bundle_state(&manifest, &state).unwrap(), readiness_before);
+        assert!(!records.join(format!("{}.json", manifest.records[0].content_blake3)).exists());
+        assert!(!source_pins_dir(&state).exists());
+        assert_eq!(fs::read_dir(records).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn pin_conflict_is_rejected_before_record_publication() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = manifest_for(&temp, "alpha");
+        let state = temp.path().join("state");
+        let pins = source_pins_dir(&state);
+        fs::create_dir_all(&pins).unwrap();
+        let target = pins.join(format!("{}.json", manifest.manifest_blake3));
+        fs::write(&target, b"unrelated durable authority").unwrap();
+        assert!(import_source_bundle(&manifest, &state, true).is_err());
+        assert_eq!(fs::read(target).unwrap(), b"unrelated durable authority");
+        assert!(!source_records_dir(&state).exists());
+    }
+
+    #[test]
+    fn record_publication_never_replaces_an_existing_identity() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = manifest_for(&temp, "alpha");
+        let target = temp.path().join("record.json");
+        fs::write(&target, b"existing authority").unwrap();
+        assert!(write_record_atomically(&target, &manifest.records[0]).is_err());
+        assert_eq!(fs::read(target).unwrap(), b"existing authority");
+    }
+
+    #[test]
+    fn identical_import_preserves_record_and_pin_modification_times() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = manifest_for(&temp, "alpha");
+        let state = temp.path().join("state");
+        import_source_bundle(&manifest, &state, true).unwrap();
+        let record = source_records_dir(&state).join(format!("{}.json", manifest.records[0].content_blake3));
+        let pin = source_pins_dir(&state).join(format!("{}.json", manifest.manifest_blake3));
+        let old = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1);
+        for path in [&record, &pin] {
+            fs::File::options()
+                .write(true)
+                .open(path)
+                .unwrap()
+                .set_times(fs::FileTimes::new().set_modified(old))
+                .unwrap();
+        }
+        let result = import_source_bundle(&manifest, &state, true).unwrap();
+        assert_eq!(result.imported_count, 0);
+        assert_eq!(result.skipped_present_count, 1);
+        assert_eq!(fs::metadata(record).unwrap().modified().unwrap(), old);
+        assert_eq!(fs::metadata(pin).unwrap().modified().unwrap(), old);
+    }
+
+    #[test]
+    fn conflicting_storage_identities_within_one_bundle_are_write_free() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut records = manifest_for(&temp, "alpha").records;
+        let mut alias = records[0].clone();
+        alias.identity = "zeta".to_string();
+        records.push(alias);
+        let manifest = assemble_source_bundle(records, "/mantle/store").unwrap();
+        let state = temp.path().join("state");
+        assert!(import_source_bundle(&manifest, &state, true).is_err());
+        assert!(!state.exists());
     }
 }
 

@@ -29,7 +29,7 @@ sha2 = "0.10.8"
 snix-build = { path = "../../vendor/snix-build" }
 snix-castore = { path = "../../vendor/snix-castore" }
 snix-store = { path = "../../vendor/snix-store" }
-blake3 = "=1.8.2"
+blake3 = "=1.8.5"
 data-encoding = "2.6"
 postcard = { version = "1", default-features = false, features = ["use-std"] }
 digest = "=0.10.7"

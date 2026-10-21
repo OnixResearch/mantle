@@ -158,3 +158,93 @@ legacy_std_files = []
 required_std_adapter_files = [
   "crates/crunch-store/src/repair.rs",
 ]
+
+[[core]]
+package = "crunch-cmake-core"
+crate_dir = "crates/crunch-cmake-core"
+lib_path = "crates/crunch-cmake-core/src/lib.rs"
+manifest_path = "crates/crunch-cmake-core/Cargo.toml"
+required_exports = ["pub struct Plan", "pub fn validate("]
+legacy_std_files = []
+required_std_adapter_files = ["crates/crunch-cmake/src/lib.rs"]
+
+[[core]]
+package = "crunch-esp-idf-core"
+crate_dir = "crates/crunch-esp-idf-core"
+lib_path = "crates/crunch-esp-idf-core/src/lib.rs"
+manifest_path = "crates/crunch-esp-idf-core/Cargo.toml"
+required_exports = ["pub struct Plan", "pub fn validate("]
+legacy_std_files = []
+required_std_adapter_files = ["crates/crunch-esp-idf/src/lib.rs"]
+
+[[core]]
+package = "crunch-fpga-core"
+crate_dir = "crates/crunch-fpga-core"
+lib_path = "crates/crunch-fpga-core/src/lib.rs"
+manifest_path = "crates/crunch-fpga-core/Cargo.toml"
+required_exports = ["pub struct Profile", "pub fn validate(", "pub fn identities("]
+legacy_std_files = []
+required_std_adapter_files = ["crates/crunch-fpga/src/lib.rs"]
+
+[[core]]
+package = "crunch-gpu-core"
+crate_dir = "crates/crunch-gpu-core"
+lib_path = "crates/crunch-gpu-core/src/lib.rs"
+manifest_path = "crates/crunch-gpu-core/Cargo.toml"
+required_exports = ["pub struct Plan", "pub fn validate("]
+legacy_std_files = []
+required_std_adapter_files = ["crates/crunch-gpu/src/lib.rs"]
+
+[[core]]
+package = "crunch-model-conversion-core"
+crate_dir = "crates/crunch-model-conversion-core"
+lib_path = "crates/crunch-model-conversion-core/src/lib.rs"
+manifest_path = "crates/crunch-model-conversion-core/Cargo.toml"
+required_exports = ["pub struct Plan", "pub fn validate("]
+legacy_std_files = []
+required_std_adapter_files = ["crates/crunch-model-conversion/src/lib.rs"]
+
+[[core]]
+package = "crunch-pnpm-core"
+crate_dir = "crates/crunch-pnpm-core"
+lib_path = "crates/crunch-pnpm-core/src/lib.rs"
+manifest_path = "crates/crunch-pnpm-core/Cargo.toml"
+required_exports = ["pub struct Request", "pub struct AdmittedRequest", "pub fn validate("]
+legacy_std_files = []
+required_std_adapter_files = ["crates/crunch-pnpm/src/lib.rs"]
+
+[[core]]
+package = "crunch-python-core"
+crate_dir = "crates/crunch-python-core"
+lib_path = "crates/crunch-python-core/src/lib.rs"
+manifest_path = "crates/crunch-python-core/Cargo.toml"
+required_exports = ["pub struct Target", "pub fn admit_target(", "pub fn admit_artifacts("]
+legacy_std_files = []
+required_std_adapter_files = ["crates/crunch-python/src/main.rs"]
+
+[[core]]
+package = "crunch-test-core"
+crate_dir = "crates/crunch-test-core"
+lib_path = "crates/crunch-test-core/src/lib.rs"
+manifest_path = "crates/crunch-test-core/Cargo.toml"
+required_exports = ["pub struct Target", "pub struct SelectedRequest", "pub fn select("]
+legacy_std_files = []
+required_std_adapter_files = ["crates/crunch-test/src/lib.rs"]
+
+[[core]]
+package = "crunch-verification-bridge-core"
+crate_dir = "crates/crunch-verification-bridge-core"
+lib_path = "crates/crunch-verification-bridge-core/src/lib.rs"
+manifest_path = "crates/crunch-verification-bridge-core/Cargo.toml"
+required_exports = ["pub struct PackagingInputs", "pub fn observe_octet(", "pub fn observe_trellis("]
+legacy_std_files = []
+required_std_adapter_files = ["crates/crunch-verification-bridge/src/lib.rs"]
+
+[[core]]
+package = "crunch-zephyr-core"
+crate_dir = "crates/crunch-zephyr-core"
+lib_path = "crates/crunch-zephyr-core/src/lib.rs"
+manifest_path = "crates/crunch-zephyr-core/Cargo.toml"
+required_exports = ["pub struct Plan", "pub fn validate("]
+legacy_std_files = []
+required_std_adapter_files = ["crates/crunch-zephyr/src/lib.rs"]

@@ -6,6 +6,7 @@ use std::io::Write;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use crunch_bootstrap_core::STAGEX_RECEIPT_SCHEMA_V1;
 use crunch_bootstrap_core::STAGEX_RECEIPT_STATUS_COMPLETE;
@@ -20,9 +21,22 @@ use crunch_bootstrap_core::stagex_stage_plan_digest_blake3;
 use crunch_bootstrap_core::stagex_stage_report_digest_blake3;
 use crunch_bootstrap_core::validate_stagex_plan;
 use crunch_bootstrap_core::validate_stagex_receipt;
+use mantle_application_contract::bootstrap_effects::BootstrapEffect;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
+
+fn stagex_capability<T>(
+    effect: BootstrapEffect,
+    run: impl FnOnce() -> Result<T, StagexProviderError>,
+) -> Result<T, StagexProviderError> {
+    let mut port = crate::bootstrap_effect_port::BootstrapPort::new(&[(effect, 1)])
+        .map_err(|error| StagexProviderError::InvalidInput(error.to_string()))?;
+    let result = port.call(effect, run);
+    port.finish_with(result, |outcome| {
+        StagexProviderError::Provider(format!("StageX effects inconsistent: {outcome:?}"))
+    })
+}
 
 use crate::protected_exec::PlannedExecutable;
 use crate::protected_exec::PromotedExecutable;
@@ -35,6 +49,8 @@ use crate::protected_exec_seccomp::reap_adopted_exec_descendants;
 pub(crate) const PROVIDER_METADATA_RELATIVE_PATH: &str = "share/crunch-bootstrap/provider.json";
 pub(crate) const PROVIDER_RECEIPT_RELATIVE_PATH: &str = "share/crunch-bootstrap/stagex-lineage-receipt.json";
 pub(crate) const PROVIDER_VALIDATION_RELATIVE_PATH: &str = "share/crunch-bootstrap/stagex-provider-validation.json";
+pub(crate) const PROVIDER_EXECUTION_RELATIVE_PATH: &str = "share/crunch-bootstrap/stagex-provider-execution.json";
+pub(crate) const PROVIDER_LAUNCH_PLAN_RELATIVE_PATH: &str = "share/crunch-bootstrap/stagex-provider-launch-plan.json";
 
 const PROVIDER_SCHEMA: &str = "mantle-stagex-intermediate-provider-v2";
 const PROVIDER_VALIDATION_SCHEMA: &str = "mantle-stagex-provider-validation-v2";
@@ -123,6 +139,7 @@ const STAGE_GRAPH_DIGEST_DOMAIN: &[u8] = b"mantle-stagex-stage-graph-v1\0";
 const NORMALIZED_PROVIDER_DIGEST_DOMAIN: &[u8] = b"mantle-stagex-normalized-provider-v1\0";
 const PROVIDER_OUTPUT_DIGEST_DOMAIN: &[u8] = b"mantle-stagex-provider-outputs-v1\0";
 const FINAL_BUNDLE_DIGEST_DOMAIN: &[u8] = b"mantle-stagex-provider-bundle-v1\0";
+const PROVIDER_EXECUTION_OBSERVATIONS_DOMAIN: &[u8] = b"mantle-stagex-provider-execution-observations-v1\0";
 const BINUTILS_GENERATED_EXECUTABLE_DIGEST_DOMAIN: &[u8] = b"mantle-stagex-binutils-generated-executables-v1\0";
 const BINUTILS_GENERATED_SOURCE_DIGEST_DOMAIN: &[u8] = b"mantle-stagex-binutils-generated-sources-v1\0";
 const PROVIDER_VALIDATION_AUDIT_DIGEST_DOMAIN: &[u8] = b"mantle-stagex-provider-validation-audit-v1\0";
@@ -160,6 +177,81 @@ const PROVIDER_VALIDATION_AUTHORIZATION_SEQUENCE: [&str; PROVIDER_VALIDATION_EVE
     "planned:stagex-provider-normalization:exec:provider-validation:as",
     "promoted:provider-relocation-smoke:.validation/binutils-positive",
 ];
+
+const PROVIDER_VALIDATION_COMMAND_IDS: [&str; PROVIDER_VALIDATION_EVENT_COUNT_EXPECTED] = [
+    "runtime-supplement",
+    "tcc-positive",
+    "tcc-execution",
+    "tcc-negative",
+    "as-positive",
+    "ld-positive",
+    "as-negative",
+    "positive-execution",
+];
+
+/// Launch identities are enumerated independently of the observed audit. These
+/// are not ActionSpecs: normalization and transition producer authority must be
+/// supplied before a full source-built action adapter can be constructed.
+pub(crate) fn provider_validation_launches() -> Vec<(&'static str, &'static str)> {
+    PROVIDER_VALIDATION_COMMAND_IDS.into_iter().zip(PROVIDER_VALIDATION_EXECUTABLE_SEQUENCE).collect()
+}
+
+/// Preparation-time authors use the original transform and smoke source policy;
+/// these are source bytes, never observations from a published provider.
+pub(crate) fn publication_runtime_source_replacement() -> (&'static str, &'static str) {
+    (TCC_FLOATUNDISF_UPSTREAM_SOURCE, TCC_FLOATUNDISF_BOUNDED_SOURCE)
+}
+
+pub(crate) fn publication_validation_sources() -> [(&'static str, &'static [u8]); 3] {
+    [
+        ("positive.c", TCC_SMOKE_SOURCE),
+        ("positive.s", BINUTILS_SMOKE_SOURCE),
+        ("negative.s", BINUTILS_NEGATIVE_SOURCE),
+    ]
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct StagexProviderCommandObservation {
+    pub command_id: String,
+    pub executable: PathBuf,
+    /// Explicit command inputs sampled before launch; not a filesystem read audit.
+    pub inputs: Vec<StagexProviderCommandInput>,
+    pub executable_digest_blake3: String,
+    pub arguments: Vec<String>,
+    pub current_dir: PathBuf,
+    pub exit_status: i32,
+    pub elapsed_ms: u64,
+    pub outputs: Vec<StagexProviderCommandOutput>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct StagexProviderCommandInput {
+    pub path: PathBuf,
+    pub identity: Option<(u64, String)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct StagexProviderCommandOutput {
+    pub path: PathBuf,
+    pub bytes_len: u64,
+    pub digest_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct StagexProviderExecutionObservations {
+    pub commands: Vec<StagexProviderCommandObservation>,
+    pub protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
+}
+
+struct ProviderCommandCompletion<'a, S> {
+    executable: &'a Path,
+    arguments: &'a [S],
+    current_dir: &'a Path,
+    label: &'a str,
+    exit_status: i32,
+    started: Instant,
+    executable_digest_blake3: String,
+    inputs: Vec<StagexProviderCommandInput>,
+}
 const HEX_CHARS_PER_BYTE: usize = 2;
 const ADJACENT_PAIR_WINDOW_SIZE: usize = 2;
 const ELF_MAGIC: &[u8] = b"\x7fELF";
@@ -267,6 +359,7 @@ pub(crate) struct StagexProviderPublicationReport {
     pub final_bundle_digest_blake3: String,
     pub provider_validation_audit_digest_blake3: String,
     pub provider_validation_report_digest_blake3: String,
+    pub execution_observations: StagexProviderExecutionObservations,
 }
 
 #[derive(Debug)]
@@ -347,6 +440,7 @@ struct ProviderValidationReport {
     status: String,
     audit_digest_blake3: String,
     events: Vec<ProviderValidationEvent>,
+    execution_observations_digest_blake3: String,
     runtime_supplement_compile: bool,
     runtime_supplement_source_digest_blake3: String,
     runtime_supplement_transform_id: String,
@@ -434,10 +528,10 @@ struct ProviderDigests {
 pub(crate) fn materialize_stagex_provider(
     request: StagexProviderRequest<'_>,
 ) -> Result<StagexProviderPublicationReport, StagexProviderError> {
-    validate_request_paths(&request)?;
-    let evidence = load_transition_evidence(&request)?;
+    stagex_capability(BootstrapEffect::ReadInput, || validate_request_paths(&request))?;
+    let evidence = stagex_capability(BootstrapEffect::ReadInput, || load_transition_evidence(&request))?;
     let staging_path = provider_staging_path(request.output_path)?;
-    create_private_staging(&staging_path)?;
+    stagex_capability(BootstrapEffect::WriteOutput, || create_private_staging(&staging_path))?;
     let result = materialize_and_validate_staging(&request, &evidence, &staging_path);
     let report = match result {
         Ok(report) => report,
@@ -446,8 +540,10 @@ pub(crate) fn materialize_stagex_provider(
             return Err(error);
         }
     };
-    publish_no_replace(&staging_path, request.output_path)?;
-    independently_validate_published_provider(request.output_path, &evidence)?;
+    stagex_capability(BootstrapEffect::WriteOutput, || publish_no_replace(&staging_path, request.output_path))?;
+    stagex_capability(BootstrapEffect::VerifyOutput, || {
+        independently_validate_published_provider(request.output_path, &evidence)
+    })?;
     assert!(request.output_path.is_dir());
     assert!(!staging_path.exists());
     Ok(StagexProviderPublicationReport {
@@ -455,6 +551,171 @@ pub(crate) fn materialize_stagex_provider(
         receipt_path: request.output_path.join(PROVIDER_RECEIPT_RELATIVE_PATH),
         ..report
     })
+}
+
+/// Validate cached publication bytes and return their historical observations.
+/// This does not record a fresh execution and cannot satisfy source construction.
+pub(crate) fn read_adopted_provider_publication(
+    provider_root: &Path,
+    expected_normalized_digest_blake3: &str,
+) -> Result<StagexProviderPublicationReport, StagexProviderError> {
+    require_absolute_directory(provider_root, "adopted provider root")?;
+    reject_tree_symlinks(provider_root)?;
+    validate_blake3(expected_normalized_digest_blake3, "expected adopted provider digest")?;
+    let receipt_path = provider_root.join(PROVIDER_RECEIPT_RELATIVE_PATH);
+    let receipt_bytes = read_bounded_file(&receipt_path, JSON_REPORT_BYTES_MAX, "adopted provider receipt")?;
+    validate_lineage_receipt_payload_digest(&receipt_bytes).map_err(StagexProviderError::Receipt)?;
+    let receipt: StagexProviderReceipt = serde_json::from_slice(&receipt_bytes)
+        .map_err(|error| StagexProviderError::Receipt(format!("parsing adopted provider receipt: {error}")))?;
+    if receipt.schema != STAGEX_RECEIPT_SCHEMA_V1
+        || receipt.provider_kind != PROVIDER_KIND
+        || receipt.lineage.lineage_receipt_status != STAGEX_RECEIPT_STATUS_COMPLETE
+        || !receipt.lineage.fallback_events.is_empty()
+    {
+        return Err(StagexProviderError::Receipt(
+            "adopted provider lacks complete StageX publication receipt".to_string(),
+        ));
+    }
+    validate_adopted_receipt_contract(&receipt)?;
+    let (validation, execution_observations) = read_bound_provider_execution(provider_root, &receipt)?;
+    let normalized = validate_adopted_provider_payload(provider_root, &receipt, expected_normalized_digest_blake3)?;
+    let final_bundle = adopted_provider_bundle_digest(&receipt, &validation)?;
+    require_receipt_field(&final_bundle, &receipt.lineage.final_bundle_digest_blake3, "adopted final bundle digest")?;
+    assert_eq!(normalized, expected_normalized_digest_blake3);
+    assert_eq!(execution_observations.commands.len(), PROVIDER_VALIDATION_EVENT_COUNT_EXPECTED);
+    Ok(StagexProviderPublicationReport {
+        schema: PROVIDER_SCHEMA,
+        provider_kind: PROVIDER_KIND,
+        output_path: provider_root.to_path_buf(),
+        receipt_path,
+        normalized_provider_digest_blake3: normalized,
+        output_digest_blake3: receipt.lineage.output_digest_blake3,
+        final_bundle_digest_blake3: final_bundle,
+        provider_validation_audit_digest_blake3: validation.audit_digest_blake3.clone(),
+        provider_validation_report_digest_blake3: digest_serialized(
+            PROVIDER_VALIDATION_REPORT_DIGEST_DOMAIN,
+            &validation,
+        )?,
+        execution_observations,
+    })
+}
+
+fn validate_adopted_provider_payload(
+    root: &Path,
+    receipt: &StagexProviderReceipt,
+    expected_normalized: &str,
+) -> Result<String, StagexProviderError> {
+    let payload = observe_provider_payload(root)?;
+    let normalized = normalized_provider_payload_digest_from_observations(&payload)?;
+    require_receipt_field(&normalized, expected_normalized, "adopted pinned normalized payload")?;
+    require_receipt_field(
+        &normalized,
+        &receipt.lineage.normalized_provider_digest_blake3,
+        "adopted receipt normalized payload",
+    )?;
+    require_receipt_field(&receipt.normalized_provider_digest, &normalized, "adopted normalized alias")?;
+    let metadata_bytes =
+        read_bounded_file(&root.join(PROVIDER_METADATA_RELATIVE_PATH), JSON_MANIFEST_BYTES_MAX, "adopted metadata")?;
+    let metadata: ProviderMetadata = serde_json::from_slice(&metadata_bytes)
+        .map_err(|error| StagexProviderError::Receipt(format!("parsing adopted metadata: {error}")))?;
+    if metadata.schema != PROVIDER_SCHEMA
+        || metadata.provider_kind != PROVIDER_KIND
+        || metadata.payload != payload
+        || metadata.normalized_provider_digest_blake3 != normalized
+        || metadata.provider_roles != provider_role_names()
+        || metadata.provider_validation_audit_digest_blake3 != receipt.provider_validation_audit_digest_blake3
+        || metadata.provider_validation_report_digest_blake3 != receipt.provider_validation_report_digest_blake3
+        || metadata.transition_report_digest_blake3 != receipt.transition_report_digest_blake3
+    {
+        return Err(StagexProviderError::Receipt(
+            "adopted metadata does not bind observed payload and reports".to_string(),
+        ));
+    }
+    let roles = observe_provider_roles(root, &payload)?;
+    if roles != receipt.provider_outputs {
+        return Err(StagexProviderError::Receipt("adopted provider role identities differ from receipt".to_string()));
+    }
+    let output_digest = digest_serialized(PROVIDER_OUTPUT_DIGEST_DOMAIN, &roles)?;
+    require_receipt_field(&output_digest, &receipt.lineage.output_digest_blake3, "adopted observed output digest")?;
+    assert!(!payload.is_empty());
+    assert_eq!(roles.len(), PROVIDER_ROLE_COUNT);
+    Ok(normalized)
+}
+
+fn adopted_provider_bundle_digest(
+    receipt: &StagexProviderReceipt,
+    validation: &ProviderValidationReport,
+) -> Result<String, StagexProviderError> {
+    let stage_report_digests = receipt
+        .lineage
+        .stage_reports
+        .iter()
+        .map(stagex_stage_report_digest_blake3)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| StagexProviderError::Receipt(error.to_string()))?;
+    let identity = FinalBundleIdentity {
+        schema: STAGEX_RECEIPT_SCHEMA_V1,
+        provider_kind: PROVIDER_KIND,
+        plan_digest_blake3: &receipt.lineage.plan_digest_blake3,
+        lineage_manifest_digest_blake3: &receipt.lineage.lineage_manifest_digest_blake3,
+        stage_graph_digest_blake3: &receipt.lineage.stage_graph_digest_blake3,
+        source_state_digest_blake3: &receipt.lineage.source_state_digest_blake3,
+        normalized_provider_digest_blake3: &receipt.lineage.normalized_provider_digest_blake3,
+        output_digest_blake3: &receipt.lineage.output_digest_blake3,
+        protected_exec_audit_digest_blake3: &receipt.lineage.protected_exec_audit_digest_blake3,
+        provider_validation_audit_digest_blake3: &validation.audit_digest_blake3,
+        provider_validation_report_digest_blake3: &receipt.provider_validation_report_digest_blake3,
+        transition_report_digest_blake3: &receipt.transition_report_digest_blake3,
+        stage_report_digests,
+        provider_outputs: &receipt.provider_outputs,
+        bounded_claim: PROVIDER_BOUNDED_CLAIM,
+        stage_report_output_binding: STAGE_REPORT_OUTPUT_BINDING,
+        executable_authorization_binding: EXECUTABLE_AUTHORIZATION_BINDING,
+        non_claims: PROVIDER_NON_CLAIMS,
+    };
+    if identity.stage_report_digests.is_empty() {
+        return Err(StagexProviderError::Receipt("adopted provider has no transition stage reports".to_string()));
+    }
+    assert_eq!(identity.stage_report_digests.len(), receipt.lineage.stage_reports.len());
+    assert_eq!(identity.provider_outputs.len(), PROVIDER_ROLE_COUNT);
+    digest_serialized(FINAL_BUNDLE_DIGEST_DOMAIN, &identity)
+}
+
+fn validate_adopted_receipt_contract(receipt: &StagexProviderReceipt) -> Result<(), StagexProviderError> {
+    for (observed, expected, field) in [
+        (receipt.lineage.schema_version.as_str(), STAGEX_RECEIPT_SCHEMA_V1, "adopted lineage schema"),
+        (receipt.audited_seed_digest.as_str(), crate::stagex_transition::HEX0_SEED_BLAKE3, "adopted seed"),
+        (
+            receipt.lineage_manifest_digest.as_str(),
+            receipt.lineage.lineage_manifest_digest_blake3.as_str(),
+            "adopted lineage alias",
+        ),
+        (
+            receipt.stage_graph_digest.as_str(),
+            receipt.lineage.stage_graph_digest_blake3.as_str(),
+            "adopted stage graph alias",
+        ),
+        (receipt.bounded_claim.as_str(), PROVIDER_BOUNDED_CLAIM, "adopted bounded claim"),
+        (receipt.stage_report_output_binding.as_str(), STAGE_REPORT_OUTPUT_BINDING, "adopted output binding"),
+        (
+            receipt.executable_authorization_binding.as_str(),
+            EXECUTABLE_AUTHORIZATION_BINDING,
+            "adopted executable binding",
+        ),
+    ] {
+        require_receipt_field(observed, expected, field)?;
+    }
+    if receipt.non_claims.iter().map(String::as_str).collect::<Vec<_>>() != PROVIDER_NON_CLAIMS
+        || receipt.lineage.stage_reports.is_empty()
+        || receipt.lineage.stage_reports.iter().any(|report| report.status != STAGEX_STAGE_STATUS_COMPLETE)
+    {
+        return Err(StagexProviderError::Receipt(
+            "adopted provider has changed non-claims or incomplete stage history".to_string(),
+        ));
+    }
+    assert!(!receipt.lineage.stage_reports.is_empty());
+    assert_eq!(receipt.non_claims.len(), PROVIDER_NON_CLAIMS.len());
+    Ok(())
 }
 
 pub(crate) fn observe_normalized_provider_payload_digest(provider_root: &Path) -> Result<String, StagexProviderError> {
@@ -488,9 +749,12 @@ fn materialize_and_validate_staging(
     evidence: &TransitionEvidence,
     staging_path: &Path,
 ) -> Result<StagexProviderPublicationReport, StagexProviderError> {
-    copy_provider_payload(request.transition_root, staging_path, evidence)?;
-    let validation = validate_relocated_provider_runtime(staging_path, request.transition_root)?;
-    let payload = observe_provider_payload(staging_path)?;
+    stagex_capability(BootstrapEffect::WriteOutput, || {
+        copy_provider_payload(request.transition_root, staging_path, evidence)
+    })?;
+    let (validation, execution_observations) =
+        validate_relocated_provider_runtime(staging_path, request.transition_root)?;
+    let payload = stagex_capability(BootstrapEffect::ReadInput, || observe_provider_payload(staging_path))?;
     let normalized_provider_digest_blake3 = normalized_provider_payload_digest_from_observations(&payload)?;
     let provider_validation_report_digest_blake3 =
         digest_serialized(PROVIDER_VALIDATION_REPORT_DIGEST_DOMAIN, &validation)?;
@@ -502,9 +766,10 @@ fn materialize_and_validate_staging(
         &normalized_provider_digest_blake3,
     );
     write_json_create_new(&staging_path.join(PROVIDER_METADATA_RELATIVE_PATH), &metadata)?;
-    let roles = observe_provider_roles(staging_path, &payload)?;
+    let roles = stagex_capability(BootstrapEffect::ReadInput, || observe_provider_roles(staging_path, &payload))?;
     let output_digest_blake3 = digest_serialized(PROVIDER_OUTPUT_DIGEST_DOMAIN, &roles)?;
-    let stage_reports = build_stage_reports(evidence, request.transition_root)?;
+    let stage_reports =
+        stagex_capability(BootstrapEffect::ReadInput, || build_stage_reports(evidence, request.transition_root))?;
     let stage_graph_digest_blake3 = digest_serialized(STAGE_GRAPH_DIGEST_DOMAIN, &evidence.plan.stages)?;
     let final_bundle_digest_blake3 = final_bundle_digest(FinalBundleInput {
         evidence,
@@ -524,9 +789,12 @@ fn materialize_and_validate_staging(
         final_bundle_digest_blake3,
     };
     let receipt = build_provider_receipt(evidence, stage_reports, roles, &validation, &digests)?;
+    write_json_create_new(&staging_path.join(PROVIDER_EXECUTION_RELATIVE_PATH), &execution_observations)?;
     write_json_create_new(&staging_path.join(PROVIDER_VALIDATION_RELATIVE_PATH), &validation)?;
     write_json_create_new(&staging_path.join(PROVIDER_RECEIPT_RELATIVE_PATH), &receipt)?;
-    independently_validate_staging(staging_path, evidence, &receipt)?;
+    stagex_capability(BootstrapEffect::VerifyOutput, || {
+        independently_validate_staging(staging_path, evidence, &receipt)
+    })?;
     Ok(StagexProviderPublicationReport {
         schema: PROVIDER_SCHEMA,
         provider_kind: PROVIDER_KIND,
@@ -537,6 +805,7 @@ fn materialize_and_validate_staging(
         final_bundle_digest_blake3: digests.final_bundle_digest_blake3,
         provider_validation_audit_digest_blake3: validation.audit_digest_blake3,
         provider_validation_report_digest_blake3: digests.provider_validation_report_digest_blake3,
+        execution_observations,
     })
 }
 
@@ -1078,14 +1347,18 @@ fn require_regular_executable_elf(path: &Path) -> Result<String, StagexProviderE
 fn validate_relocated_provider_runtime(
     staging: &Path,
     transition_root: &Path,
-) -> Result<ProviderValidationReport, StagexProviderError> {
-    let validation_root = prepare_provider_validation_root(staging)?;
+) -> Result<(ProviderValidationReport, StagexProviderExecutionObservations), StagexProviderError> {
+    write_json_create_new(&staging.join(PROVIDER_LAUNCH_PLAN_RELATIVE_PATH), &provider_validation_launches())?;
+    let validation_root =
+        stagex_capability(BootstrapEffect::WriteOutput, || prepare_provider_validation_root(staging))?;
     let supervisor = install_provider_validation_supervisor(staging, transition_root)?;
-    let runtime_supplement_identity = materialize_tcc_runtime_supplement(staging, transition_root, &validation_root)?;
-    run_tcc_positive_smoke(staging, &validation_root, &supervisor)?;
-    let negative_tcc_rejection = run_tcc_negative_smoke(staging, &validation_root)?;
-    run_binutils_positive_smoke(staging, &validation_root)?;
-    let negative_assembler_rejection = run_binutils_negative_smoke(staging, &validation_root)?;
+    let mut commands = Vec::with_capacity(PROVIDER_VALIDATION_EVENT_COUNT_EXPECTED);
+    let runtime_supplement_identity =
+        materialize_tcc_runtime_supplement(staging, transition_root, &validation_root, &mut commands)?;
+    run_tcc_positive_smoke(staging, &validation_root, &supervisor, &mut commands)?;
+    let negative_tcc_rejection = run_tcc_negative_smoke(staging, &validation_root, &mut commands)?;
+    run_binutils_positive_smoke(staging, &validation_root, &mut commands)?;
+    let negative_assembler_rejection = run_binutils_negative_smoke(staging, &validation_root, &mut commands)?;
     let positive = validation_root.join("binutils-positive");
     let positive_digest = blake3_file_hex(&positive)
         .map_err(|error| StagexProviderError::Runtime(format!("hashing binutils positive smoke: {error}")))?;
@@ -1095,17 +1368,24 @@ fn validate_relocated_provider_runtime(
             digest_hex: positive_digest,
         }])
         .map_err(|error| StagexProviderError::Runtime(format!("promoting provider smoke output: {error}")))?;
-    let positive_status = run_expected_status(&positive, &[] as &[&str], &validation_root, "positive-execution")?;
+    let positive_status =
+        run_expected_status(&positive, &[] as &[&str], &validation_root, "positive-execution", &mut commands)?;
     reap_adopted_exec_descendants()
         .map_err(|error| StagexProviderError::Runtime(format!("reaping provider validation descendants: {error}")))?;
     supervisor
         .wait_for_audit_quiescence()
         .map_err(|error| StagexProviderError::Runtime(format!("waiting for provider validation audit: {error}")))?;
-    let projected = project_provider_validation_events(staging, &supervisor.audit_events())?;
+    let protected_exec_events = supervisor.audit_events();
+    let projected = project_provider_validation_events(staging, &protected_exec_events)?;
+    validate_command_audit_binding(staging, &commands, &protected_exec_events)?;
     validate_provider_validation_event_sequence(&projected)?;
     let audit_digest_blake3 = digest_serialized(PROVIDER_VALIDATION_AUDIT_DIGEST_DOMAIN, &projected)?;
+    let execution_observations = StagexProviderExecutionObservations {
+        commands,
+        protected_exec_events,
+    };
     validate_runtime_smoke_results(positive_status, negative_tcc_rejection, negative_assembler_rejection)?;
-    remove_provider_validation_root(&validation_root)?;
+    stagex_capability(BootstrapEffect::WriteOutput, || remove_provider_validation_root(&validation_root))?;
     assert!(!validation_root.exists());
     assert!(!projected.is_empty());
     let report = ProviderValidationReport {
@@ -1113,6 +1393,10 @@ fn validate_relocated_provider_runtime(
         status: TRANSITION_STATUS_COMPLETE.to_string(),
         audit_digest_blake3,
         events: projected,
+        execution_observations_digest_blake3: digest_serialized(
+            PROVIDER_EXECUTION_OBSERVATIONS_DOMAIN,
+            &execution_observations,
+        )?,
         runtime_supplement_compile: true,
         runtime_supplement_source_digest_blake3: runtime_supplement_identity.upstream_digest_blake3,
         runtime_supplement_transform_id: TCC_RUNTIME_SUPPLEMENT_TRANSFORM_ID.to_string(),
@@ -1129,7 +1413,7 @@ fn validate_relocated_provider_runtime(
     assert_eq!(report.runtime_supplement_transform_id, TCC_RUNTIME_SUPPLEMENT_TRANSFORM_ID);
     assert!(report.positive_tcc_compile);
     assert!(report.fallback_events.is_empty());
-    Ok(report)
+    Ok((report, execution_observations))
 }
 
 fn prepare_provider_validation_root(staging: &Path) -> Result<PathBuf, StagexProviderError> {
@@ -1246,6 +1530,7 @@ fn materialize_tcc_runtime_supplement(
     staging: &Path,
     transition_root: &Path,
     validation: &Path,
+    observations: &mut Vec<StagexProviderCommandObservation>,
 ) -> Result<RuntimeSupplementSourceIdentity, StagexProviderError> {
     let tcc = staging.join(PROVIDER_TCC_RELATIVE_PATH);
     let transition_source = transition_root.join(TRANSITION_TCC_RUNTIME_SOURCE_RELATIVE_PATH);
@@ -1282,14 +1567,7 @@ fn materialize_tcc_runtime_supplement(
         "-o".to_string(),
         utf8_path(&output, "TCC runtime supplement")?.to_string(),
     ];
-    crate::stagex_mes_lib::run_bounded_process(
-        &tcc,
-        &arguments,
-        validation,
-        &BTreeMap::new(),
-        &validation.join("runtime-supplement.stderr.txt"),
-    )
-    .map_err(|error| StagexProviderError::Runtime(error.to_string()))?;
+    run_success(&tcc, &arguments, validation, "runtime-supplement", observations)?;
     let output_metadata = fs::symlink_metadata(&output)
         .map_err(|error| StagexProviderError::Runtime(format!("reading TCC runtime supplement metadata: {error}")))?;
     if !output_metadata.is_file() || output_metadata.file_type().is_symlink() {
@@ -1331,6 +1609,7 @@ fn run_tcc_positive_smoke(
     staging: &Path,
     validation: &Path,
     supervisor: &crate::protected_exec_seccomp::ProtectedSeccompSupervisor,
+    observations: &mut Vec<StagexProviderCommandObservation>,
 ) -> Result<(), StagexProviderError> {
     let tcc = staging.join(PROVIDER_TCC_RELATIVE_PATH);
     let tcc_runtime = staging.join(PROVIDER_TCC_RUNTIME_RELATIVE_PATH);
@@ -1352,7 +1631,7 @@ fn run_tcc_positive_smoke(
         "-o".to_string(),
         "tcc-positive".to_string(),
     ];
-    run_success(&tcc, &arguments, validation, "tcc-positive")?;
+    run_success(&tcc, &arguments, validation, "tcc-positive", observations)?;
     let positive = validation.join("tcc-positive");
     fs::set_permissions(&positive, fs::Permissions::from_mode(PROVIDER_EXECUTABLE_MODE))
         .map_err(|error| StagexProviderError::Runtime(format!("setting TCC smoke mode: {error}")))?;
@@ -1364,7 +1643,7 @@ fn run_tcc_positive_smoke(
             digest_hex: positive_digest,
         }])
         .map_err(|error| StagexProviderError::Runtime(format!("promoting TCC smoke output: {error}")))?;
-    let status = run_expected_status(&positive, &[] as &[&str], validation, "tcc-execution")?;
+    let status = run_expected_status(&positive, &[] as &[&str], validation, "tcc-execution", observations)?;
     if status != RUNTIME_SMOKE_EXPECTED_EXIT {
         return Err(StagexProviderError::Runtime(format!("relocated TCC smoke exited {status}")));
     }
@@ -1373,10 +1652,14 @@ fn run_tcc_positive_smoke(
     Ok(())
 }
 
-fn run_tcc_negative_smoke(staging: &Path, validation: &Path) -> Result<bool, StagexProviderError> {
+fn run_tcc_negative_smoke(
+    staging: &Path,
+    validation: &Path,
+    observations: &mut Vec<StagexProviderCommandObservation>,
+) -> Result<bool, StagexProviderError> {
     let tcc = staging.join(PROVIDER_TCC_RELATIVE_PATH);
     let arguments = ["-c", "missing-source.c", "-o", "negative.o"];
-    let status = run_expected_status(&tcc, &arguments, validation, "tcc-negative")?;
+    let status = run_expected_status(&tcc, &arguments, validation, "tcc-negative", observations)?;
     if status == 0 {
         return Err(StagexProviderError::Runtime("relocated TinyCC accepted a missing source input".to_string()));
     }
@@ -1390,11 +1673,15 @@ fn run_tcc_negative_smoke(staging: &Path, validation: &Path) -> Result<bool, Sta
     Ok(true)
 }
 
-fn run_binutils_positive_smoke(staging: &Path, validation: &Path) -> Result<(), StagexProviderError> {
+fn run_binutils_positive_smoke(
+    staging: &Path,
+    validation: &Path,
+    observations: &mut Vec<StagexProviderCommandObservation>,
+) -> Result<(), StagexProviderError> {
     let assembler = staging.join("bin").join(format!("{PROVIDER_TARGET}-as"));
     let linker = staging.join("bin").join(format!("{PROVIDER_TARGET}-ld"));
-    run_success(&assembler, &["positive.s", "-o", "positive.o"], validation, "as-positive")?;
-    run_success(&linker, &["positive.o", "-o", "binutils-positive"], validation, "ld-positive")?;
+    run_success(&assembler, &["positive.s", "-o", "positive.o"], validation, "as-positive", observations)?;
+    run_success(&linker, &["positive.o", "-o", "binutils-positive"], validation, "ld-positive", observations)?;
     let output = validation.join("binutils-positive");
     fs::set_permissions(&output, fs::Permissions::from_mode(PROVIDER_EXECUTABLE_MODE))
         .map_err(|error| StagexProviderError::Runtime(format!("setting binutils smoke mode: {error}")))?;
@@ -1404,9 +1691,19 @@ fn run_binutils_positive_smoke(staging: &Path, validation: &Path) -> Result<(), 
     Ok(())
 }
 
-fn run_binutils_negative_smoke(staging: &Path, validation: &Path) -> Result<bool, StagexProviderError> {
+fn run_binutils_negative_smoke(
+    staging: &Path,
+    validation: &Path,
+    observations: &mut Vec<StagexProviderCommandObservation>,
+) -> Result<bool, StagexProviderError> {
     let assembler = staging.join("bin").join(format!("{PROVIDER_TARGET}-as"));
-    let status = run_expected_status(&assembler, &["negative.s", "-o", "negative-as.o"], validation, "as-negative")?;
+    let status = run_expected_status(
+        &assembler,
+        &["negative.s", "-o", "negative-as.o"],
+        validation,
+        "as-negative",
+        observations,
+    )?;
     if status == 0 {
         return Err(StagexProviderError::Runtime("relocated assembler accepted malformed input".to_string()));
     }
@@ -1425,15 +1722,36 @@ fn run_success<S: AsRef<std::ffi::OsStr>>(
     arguments: &[S],
     current_dir: &Path,
     label: &str,
+    observations: &mut Vec<StagexProviderCommandObservation>,
 ) -> Result<(), StagexProviderError> {
-    crate::stagex_mes_lib::run_bounded_process(
-        executable,
-        arguments,
-        current_dir,
-        &BTreeMap::new(),
-        &current_dir.join(format!("{label}.stderr.txt")),
-    )
-    .map_err(|error| StagexProviderError::Runtime(error.to_string()))?;
+    let started = stagex_capability(BootstrapEffect::ReadClock, || Ok(Instant::now()))?;
+    let (executable_digest, inputs) = stagex_capability(BootstrapEffect::ReadInput, || {
+        let digest = blake3_file_hex(executable).map_err(|error| StagexProviderError::Runtime(error.to_string()))?;
+        Ok((digest, observe_command_inputs(current_dir, label)?))
+    })?;
+    stagex_capability(BootstrapEffect::SmokeProvider, || {
+        crate::stagex_mes_lib::run_bounded_process(
+            executable,
+            arguments,
+            current_dir,
+            &BTreeMap::new(),
+            &current_dir.join(format!("{label}.stderr.txt")),
+        )
+        .map_err(|error| StagexProviderError::Runtime(error.to_string()))
+    })?;
+    observe_completed_command(
+        ProviderCommandCompletion {
+            executable,
+            arguments,
+            current_dir,
+            label,
+            exit_status: 0,
+            started,
+            executable_digest_blake3: executable_digest,
+            inputs,
+        },
+        observations,
+    )?;
     assert!(executable.is_absolute());
     assert!(current_dir.is_absolute());
     Ok(())
@@ -1444,25 +1762,192 @@ fn run_expected_status<S: AsRef<std::ffi::OsStr>>(
     arguments: &[S],
     current_dir: &Path,
     label: &str,
+    observations: &mut Vec<StagexProviderCommandObservation>,
 ) -> Result<i32, StagexProviderError> {
+    let started = stagex_capability(BootstrapEffect::ReadClock, || Ok(Instant::now()))?;
+    let (executable_digest, inputs) = stagex_capability(BootstrapEffect::ReadInput, || {
+        let digest = blake3_file_hex(executable).map_err(|error| StagexProviderError::Runtime(error.to_string()))?;
+        Ok((digest, observe_command_inputs(current_dir, label)?))
+    })?;
     let stdin = current_dir.join("empty.stdin");
     let stdout = current_dir.join(format!("{label}.stdout.txt"));
     let stderr = current_dir.join(format!("{label}.stderr.txt"));
-    let status = crate::stagex_mes_lib::run_bounded_process_with_stdin_capturing_stdout_status(
-        executable,
-        arguments,
-        current_dir,
-        &BTreeMap::new(),
-        &stdin,
-        PROVIDER_FILE_BYTES_MAX,
-        &stdout,
-        PROVIDER_FILE_BYTES_MAX,
-        &stderr,
-    )
-    .map_err(|error| StagexProviderError::Runtime(error.to_string()))?;
+    let status = stagex_capability(BootstrapEffect::SmokeProvider, || {
+        crate::stagex_mes_lib::run_bounded_process_with_stdin_capturing_stdout_status(
+            executable,
+            arguments,
+            current_dir,
+            &BTreeMap::new(),
+            &stdin,
+            PROVIDER_FILE_BYTES_MAX,
+            &stdout,
+            PROVIDER_FILE_BYTES_MAX,
+            &stderr,
+        )
+        .map_err(|error| StagexProviderError::Runtime(error.to_string()))
+    })?;
+    observe_completed_command(
+        ProviderCommandCompletion {
+            executable,
+            arguments,
+            current_dir,
+            label,
+            exit_status: status,
+            started,
+            executable_digest_blake3: executable_digest,
+            inputs,
+        },
+        observations,
+    )?;
     assert!(stdout.is_file());
     assert!(stderr.is_file());
     Ok(status)
+}
+
+fn observe_completed_command<S: AsRef<std::ffi::OsStr>>(
+    command: ProviderCommandCompletion<'_, S>,
+    observations: &mut Vec<StagexProviderCommandObservation>,
+) -> Result<(), StagexProviderError> {
+    let ProviderCommandCompletion {
+        executable,
+        arguments,
+        current_dir,
+        label,
+        exit_status,
+        started,
+        executable_digest_blake3,
+        inputs,
+    } = command;
+    let elapsed_ms =
+        u64::try_from(stagex_capability(BootstrapEffect::ReadClock, || Ok(started.elapsed()))?.as_millis())
+            .map_err(|_| StagexProviderError::Runtime("command elapsed milliseconds overflowed".to_string()))?;
+    let arguments = arguments
+        .iter()
+        .map(|argument| {
+            argument
+                .as_ref()
+                .to_str()
+                .map(str::to_owned)
+                .ok_or_else(|| StagexProviderError::Runtime("non-UTF-8 provider command argument".to_string()))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut paths = vec![current_dir.join(format!("{label}.stderr.txt"))];
+    let stdout = current_dir.join(format!("{label}.stdout.txt"));
+    if stdout.exists() {
+        paths.push(stdout);
+    }
+    for pair in arguments.windows(2) {
+        if pair[0] == "-o" {
+            let output = current_dir.join(&pair[1]);
+            if output.exists() {
+                paths.push(output);
+            }
+        }
+    }
+    let outputs = paths
+        .into_iter()
+        .map(|path| {
+            let (bytes_len, digest_blake3) = observe_path_identity(&path)?;
+            Ok(StagexProviderCommandOutput {
+                path,
+                bytes_len,
+                digest_blake3,
+            })
+        })
+        .collect::<Result<Vec<_>, StagexProviderError>>()?;
+    observations.push(StagexProviderCommandObservation {
+        command_id: label.to_string(),
+        executable: executable.to_path_buf(),
+        executable_digest_blake3,
+        arguments,
+        current_dir: current_dir.to_path_buf(),
+        exit_status,
+        elapsed_ms,
+        inputs,
+        outputs,
+    });
+    assert!(executable.is_absolute());
+    assert!(!observations.is_empty());
+    Ok(())
+}
+
+fn validate_command_audit_binding(
+    staging: &Path,
+    commands: &[StagexProviderCommandObservation],
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexProviderError> {
+    if commands.len() != PROVIDER_VALIDATION_EVENT_COUNT_EXPECTED || commands.len() != events.len() {
+        return Err(StagexProviderError::Runtime("provider command and kernel event coverage mismatch".to_string()));
+    }
+    for ((command, event), (id, relative)) in commands.iter().zip(events).zip(provider_validation_launches()) {
+        if command.command_id != id
+            || command.executable != staging.join(relative)
+            || event.resolved_host_path != command.executable
+            || event.digest_hex != command.executable_digest_blake3
+            || !is_allowed_protected_exec_event(event)
+        {
+            return Err(StagexProviderError::Runtime(format!("provider command/kernel identity drift: {id}")));
+        }
+    }
+    for (producer, consumer, output_name) in [(1, 2, "tcc-positive"), (5, 7, "binutils-positive")] {
+        let output = commands[producer]
+            .outputs
+            .iter()
+            .find(|output| output.path == commands[producer].current_dir.join(output_name))
+            .ok_or_else(|| StagexProviderError::Runtime(format!("missing provider generated output: {output_name}")))?;
+        if output.digest_blake3 != commands[consumer].executable_digest_blake3 {
+            return Err(StagexProviderError::Runtime(format!(
+                "provider generated executable digest drift: {output_name}"
+            )));
+        }
+    }
+    assert_eq!(commands.len(), PROVIDER_VALIDATION_EVENT_COUNT_EXPECTED);
+    assert_eq!(commands.len(), events.len());
+    Ok(())
+}
+
+fn observe_command_inputs(
+    current_dir: &Path,
+    label: &str,
+) -> Result<Vec<StagexProviderCommandInput>, StagexProviderError> {
+    let staging = current_dir
+        .parent()
+        .ok_or_else(|| StagexProviderError::Runtime("validation directory has no parent".to_string()))?;
+    let mut paths = match label {
+        "runtime-supplement" => vec![current_dir.join("libtcc1.c")],
+        "tcc-positive" => vec![
+            current_dir.join("positive.c"),
+            staging.join(PROVIDER_TCC_RUNTIME_RELATIVE_PATH),
+            staging.join(PROVIDER_MUSL_INCLUDE_RELATIVE_PATH),
+            staging.join(PROVIDER_MUSL_LIB_RELATIVE_PATH),
+        ],
+        "tcc-negative" => vec![current_dir.join("missing-source.c")],
+        "as-positive" => vec![current_dir.join("positive.s")],
+        "ld-positive" => vec![current_dir.join("positive.o")],
+        "as-negative" => vec![current_dir.join("negative.s")],
+        "tcc-execution" | "positive-execution" => Vec::new(),
+        _ => return Err(StagexProviderError::Runtime(format!("unplanned provider command: {label}"))),
+    };
+    if matches!(label, "tcc-negative" | "as-negative" | "tcc-execution" | "positive-execution") {
+        paths.push(current_dir.join("empty.stdin"));
+    }
+    let mut inputs = Vec::with_capacity(paths.len());
+    for path in paths {
+        let identity = match fs::symlink_metadata(&path) {
+            Ok(_) => Some(observe_path_identity(&path)?),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => {
+                return Err(StagexProviderError::Io(format!("observing command input {}: {error}", path.display())));
+            }
+        };
+        if identity.is_none() && !(label == "tcc-negative" && path == current_dir.join("missing-source.c")) {
+            return Err(StagexProviderError::Runtime(format!("missing provider command input: {}", path.display())));
+        }
+        inputs.push(StagexProviderCommandInput { path, identity });
+    }
+    assert!(current_dir.is_absolute());
+    assert!(PROVIDER_VALIDATION_COMMAND_IDS.contains(&label));
+    Ok(inputs)
 }
 
 fn project_provider_validation_events(
@@ -1541,6 +2026,7 @@ fn validate_provider_validation_report(report: &ProviderValidationReport) -> Res
         ));
     }
     validate_provider_validation_event_sequence(&report.events)?;
+    validate_blake3(&report.execution_observations_digest_blake3, "provider execution observations digest")?;
     let audit_digest = digest_serialized(PROVIDER_VALIDATION_AUDIT_DIGEST_DOMAIN, &report.events)?;
     if audit_digest != report.audit_digest_blake3 {
         return Err(StagexProviderError::Receipt("provider validation report audit digest mismatch".to_string()));
@@ -2277,6 +2763,17 @@ fn independently_validate_receipt_file(
             result.errors.iter().map(ToString::to_string).collect::<Vec<_>>().join("; ")
         )));
     }
+    let (validation, _) = read_bound_provider_execution(staging, &receipt)?;
+    validate_independent_receipt_identity(evidence, &receipt, &validation)?;
+    assert_eq!(receipt.schema, STAGEX_RECEIPT_SCHEMA_V1);
+    assert_eq!(receipt.lineage.lineage_receipt_status, STAGEX_RECEIPT_STATUS_COMPLETE);
+    Ok(())
+}
+
+fn read_bound_provider_execution(
+    staging: &Path,
+    receipt: &StagexProviderReceipt,
+) -> Result<(ProviderValidationReport, StagexProviderExecutionObservations), StagexProviderError> {
     let validation_bytes = read_bounded_file(
         &staging.join(PROVIDER_VALIDATION_RELATIVE_PATH),
         JSON_REPORT_BYTES_MAX,
@@ -2285,6 +2782,42 @@ fn independently_validate_receipt_file(
     let validation: ProviderValidationReport = serde_json::from_slice(&validation_bytes)
         .map_err(|error| StagexProviderError::Receipt(format!("parsing provider validation report: {error}")))?;
     validate_provider_validation_report(&validation)?;
+    let observations_bytes = read_bounded_file(
+        &staging.join(PROVIDER_EXECUTION_RELATIVE_PATH),
+        JSON_REPORT_BYTES_MAX,
+        "provider execution observations",
+    )?;
+    let observations: StagexProviderExecutionObservations = serde_json::from_slice(&observations_bytes)
+        .map_err(|error| StagexProviderError::Receipt(format!("parsing provider execution observations: {error}")))?;
+    if digest_serialized(PROVIDER_EXECUTION_OBSERVATIONS_DOMAIN, &observations)?
+        != validation.execution_observations_digest_blake3
+    {
+        return Err(StagexProviderError::Receipt("provider execution observations digest mismatch".to_string()));
+    }
+    let recorded_root = observations
+        .commands
+        .first()
+        .and_then(|command| command.executable.parent())
+        .and_then(Path::parent)
+        .ok_or_else(|| StagexProviderError::Receipt("provider observations lack original staging root".to_string()))?;
+    validate_command_audit_binding(recorded_root, &observations.commands, &observations.protected_exec_events)?;
+    if project_provider_validation_events(recorded_root, &observations.protected_exec_events)? != validation.events {
+        return Err(StagexProviderError::Receipt(
+            "raw provider audit does not match validation projection".to_string(),
+        ));
+    }
+    let launch_plan_bytes = read_bounded_file(
+        &staging.join(PROVIDER_LAUNCH_PLAN_RELATIVE_PATH),
+        JSON_PLAN_BYTES_MAX,
+        "provider launch plan",
+    )?;
+    let launch_plan: Vec<(String, String)> = serde_json::from_slice(&launch_plan_bytes)
+        .map_err(|error| StagexProviderError::Receipt(format!("parsing provider launch plan: {error}")))?;
+    if launch_plan.iter().map(|(id, path)| (id.as_str(), path.as_str())).collect::<Vec<_>>()
+        != provider_validation_launches()
+    {
+        return Err(StagexProviderError::Receipt("provider launch plan differs from command enumeration".to_string()));
+    }
     let observed_audit_digest = digest_serialized(PROVIDER_VALIDATION_AUDIT_DIGEST_DOMAIN, &validation.events)?;
     let observed_report_digest = digest_serialized(PROVIDER_VALIDATION_REPORT_DIGEST_DOMAIN, &validation)?;
     if observed_audit_digest != receipt.provider_validation_audit_digest_blake3
@@ -2294,10 +2827,7 @@ fn independently_validate_receipt_file(
             "provider validation report or its audit digest is stale".to_string(),
         ));
     }
-    validate_independent_receipt_identity(evidence, &receipt, &validation)?;
-    assert_eq!(receipt.schema, STAGEX_RECEIPT_SCHEMA_V1);
-    assert_eq!(receipt.lineage.lineage_receipt_status, STAGEX_RECEIPT_STATUS_COMPLETE);
-    Ok(())
+    Ok((validation, observations))
 }
 
 fn validate_independent_receipt_identity(
@@ -2492,24 +3022,26 @@ fn copy_file_create_new(source: &Path, destination: &Path, executable: bool) -> 
 }
 
 fn write_file_create_new(path: &Path, bytes: &[u8], mode: u32) -> Result<(), StagexProviderError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| StagexProviderError::Io(format!("creating {}: {error}", parent.display())))?;
-    }
-    let mut file = File::options()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .map_err(|error| StagexProviderError::Io(format!("creating {}: {error}", path.display())))?;
-    file.write_all(bytes)
-        .map_err(|error| StagexProviderError::Io(format!("writing {}: {error}", path.display())))?;
-    file.sync_all()
-        .map_err(|error| StagexProviderError::Io(format!("syncing {}: {error}", path.display())))?;
-    file.set_permissions(fs::Permissions::from_mode(mode))
-        .map_err(|error| StagexProviderError::Io(format!("setting mode on {}: {error}", path.display())))?;
-    assert!(path.is_file());
-    assert_eq!(fs::metadata(path).map(|metadata| metadata.len()).ok(), u64::try_from(bytes.len()).ok());
-    Ok(())
+    stagex_capability(BootstrapEffect::WriteOutput, || {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|error| StagexProviderError::Io(format!("creating {}: {error}", parent.display())))?;
+        }
+        let mut file = File::options()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|error| StagexProviderError::Io(format!("creating {}: {error}", path.display())))?;
+        file.write_all(bytes)
+            .map_err(|error| StagexProviderError::Io(format!("writing {}: {error}", path.display())))?;
+        file.sync_all()
+            .map_err(|error| StagexProviderError::Io(format!("syncing {}: {error}", path.display())))?;
+        file.set_permissions(fs::Permissions::from_mode(mode))
+            .map_err(|error| StagexProviderError::Io(format!("setting mode on {}: {error}", path.display())))?;
+        Ok(())
+    })?;
+    crate::bootstrap_effect_port::verify_content(path, bytes)
+        .map_err(|error| StagexProviderError::Io(error.to_string()))
 }
 
 fn write_json_create_new(path: &Path, value: &impl Serialize) -> Result<(), StagexProviderError> {
@@ -2518,7 +3050,11 @@ fn write_json_create_new(path: &Path, value: &impl Serialize) -> Result<(), Stag
     if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > JSON_REPORT_BYTES_MAX {
         return Err(StagexProviderError::Io(format!("JSON output exceeds bound: {}", path.display())));
     }
-    write_file_create_new(path, &bytes, PROVIDER_DATA_MODE)?;
+    stagex_capability(BootstrapEffect::WriteOutput, || write_file_create_new(path, &bytes, PROVIDER_DATA_MODE))?;
+    stagex_capability(BootstrapEffect::VerifyOutput, || {
+        crate::bootstrap_effect_port::verify_content(path, &bytes)
+            .map_err(|error| StagexProviderError::Io(error.to_string()))
+    })?;
     assert!(!bytes.is_empty());
     assert!(path.is_file());
     Ok(())
@@ -2595,22 +3131,25 @@ fn sorted_child_names(root: &Path) -> Result<Vec<String>, StagexProviderError> {
 }
 
 fn read_bounded_file(path: &Path, bytes_max: u64, label: &str) -> Result<Vec<u8>, StagexProviderError> {
-    let metadata = fs::symlink_metadata(path)
-        .map_err(|error| StagexProviderError::Io(format!("reading {label} metadata {}: {error}", path.display())))?;
-    if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > bytes_max {
-        return Err(StagexProviderError::InvalidInput(format!(
-            "{label} must be a no-follow regular file of at most {bytes_max} bytes: {}",
-            path.display()
-        )));
-    }
-    let bytes = fs::read(path)
-        .map_err(|error| StagexProviderError::Io(format!("reading {label} {}: {error}", path.display())))?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) != metadata.len() {
-        return Err(StagexProviderError::Io(format!("{label} changed while reading: {}", path.display())));
-    }
-    assert!(metadata.len() <= bytes_max);
-    assert_eq!(u64::try_from(bytes.len()).ok(), Some(metadata.len()));
-    Ok(bytes)
+    stagex_capability(BootstrapEffect::ReadInput, || {
+        let metadata = fs::symlink_metadata(path).map_err(|error| {
+            StagexProviderError::Io(format!("reading {label} metadata {}: {error}", path.display()))
+        })?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > bytes_max {
+            return Err(StagexProviderError::InvalidInput(format!(
+                "{label} must be a no-follow regular file of at most {bytes_max} bytes: {}",
+                path.display()
+            )));
+        }
+        let bytes = fs::read(path)
+            .map_err(|error| StagexProviderError::Io(format!("reading {label} {}: {error}", path.display())))?;
+        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) != metadata.len() {
+            return Err(StagexProviderError::Io(format!("{label} changed while reading: {}", path.display())));
+        }
+        assert!(metadata.len() <= bytes_max);
+        assert_eq!(u64::try_from(bytes.len()).ok(), Some(metadata.len()));
+        Ok(bytes)
+    })
 }
 
 fn require_absolute_regular_file(path: &Path, label: &str) -> Result<(), StagexProviderError> {
@@ -2738,6 +3277,7 @@ mod tests {
         ProviderValidationReport {
             schema: PROVIDER_VALIDATION_SCHEMA.to_string(),
             status: TRANSITION_STATUS_COMPLETE.to_string(),
+            execution_observations_digest_blake3: DIGEST_A.to_string(),
             audit_digest_blake3,
             events,
             runtime_supplement_compile: true,

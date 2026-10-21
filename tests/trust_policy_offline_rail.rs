@@ -63,7 +63,7 @@ fn quoted(value: &str) -> String {
 fn write_trust_signature(root: &Path, hash: &str) -> String {
     let (signing_key, verifying_key) = nix_compat::narinfo::parse_keypair(TRUST_TEST_KEYPAIR).expect("keypair parses");
     let subject = TrustSubject::input("pkg".to_string());
-    let payload = trust_signature_payload(&subject, TrustDigestBinding::ContentHash, &HashAlgo::Sha256, hash);
+    let payload = trust_signature_payload(subject, TrustDigestBinding::ContentHash, HashAlgo::Sha256, hash.to_string());
     let signature = signing_key.sign(payload.as_bytes()).to_owned().to_string();
     fs::write(root.join("pkg.sig"), signature).unwrap();
     verifying_key.to_string()

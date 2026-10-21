@@ -9,6 +9,8 @@ use std::path::PathBuf;
 
 use crate::errors::RunError;
 
+pub mod authority;
+
 /// The canonical project root file name.
 const CANONICAL_PROJECT_ROOT_FILE: &str = "mantle-project.ncl";
 /// The legacy compatibility project root file name.

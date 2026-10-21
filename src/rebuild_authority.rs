@@ -133,13 +133,13 @@ fn prepare_rebuild_authority_request(
     let measured = measure_rebuild_authority(&request)?;
     let preliminary_plan =
         authority_plan_for(&measured, &measured.path_observations, request.proof_root, request.ordinary_output_dir)?;
-    fail_if_authority_blocked(&preliminary_plan)?;
+    fail_if_authority_blocked(preliminary_plan)?;
 
     let materialized = materialize_approved_inputs(request.proof_root, &measured.path_observations)?;
     let materialized_observations = remap_observations(&measured.path_observations, &materialized)?;
     let authority_plan =
         authority_plan_for(&measured, &materialized_observations, request.proof_root, request.ordinary_output_dir)?;
-    fail_if_authority_blocked(&authority_plan)?;
+    let authority_plan = fail_if_authority_blocked(authority_plan)?;
     finalize_prepared_authority(measured, request.rebuild_args, materialized, authority_plan)
 }
 
@@ -218,7 +218,9 @@ fn finalize_prepared_authority(
     if read_only_paths.is_empty() {
         return Err(RunError::Internal("genuine rebuild authority has no materialized read inputs".to_string()));
     }
-    debug_assert!(authority_plan.eligible());
+    let assessment = authority_plan.assess_eligibility();
+    debug_assert!(assessment.eligible);
+    let authority_plan = assessment.plan;
     debug_assert!(!read_only_paths.is_empty());
     Ok(PreparedRebuildAuthority {
         command_path,
@@ -836,11 +838,13 @@ fn is_declared_rebuild_input(role: RebuildInputRole) -> bool {
     )
 }
 
-fn fail_if_authority_blocked(plan: &RebuildAuthorityPlan) -> Result<(), RunError> {
-    if plan.eligible() {
-        return Ok(());
+fn fail_if_authority_blocked(plan: RebuildAuthorityPlan) -> Result<RebuildAuthorityPlan, RunError> {
+    let assessment = plan.assess_eligibility();
+    if assessment.eligible {
+        return Ok(assessment.plan);
     }
-    let diagnostics = plan
+    let diagnostics = assessment
+        .plan
         .blockers
         .iter()
         .map(|blocker| format!("{:?}:{}:{}", blocker.code, blocker.subject, blocker.detail))

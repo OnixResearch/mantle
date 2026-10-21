@@ -1,0 +1,5 @@
+import AbsDiffSymmetric
+import AbsDiffSelfZero
+
+#print axioms trellis_abs_diff_symmetric
+#print axioms trellis_abs_diff_self_is_zero

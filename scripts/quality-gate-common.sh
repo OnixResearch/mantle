@@ -10,6 +10,28 @@ readonly -a FIRST_PARTY_PACKAGES=(
   mantle
   crunch-android-core
   crunch-android
+  crunch-cmake-core
+  crunch-cmake
+  crunch-esp-idf-core
+  crunch-esp-idf
+  crunch-fpga-core
+  crunch-fpga
+  crunch-gpu-core
+  crunch-gpu
+  crunch-model-conversion-core
+  crunch-model-conversion
+  crunch-pnpm-core
+  crunch-pnpm
+  crunch-python-core
+  crunch-python
+  crunch-test-core
+  crunch-test-app
+  crunch-test
+  crunch-verification-bridge-core
+  crunch-verification-bridge
+  crunch-zephyr-core
+  crunch-zephyr
+  mantle-cargo-build-bundle-core
   mantle-causal-trace-core
   crunch-attestation
   crunch-build

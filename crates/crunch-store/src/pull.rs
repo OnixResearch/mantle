@@ -394,6 +394,7 @@ pub async fn import_paths_from_http_cache(
 ) -> Result<PullReport, Error> {
     assert!(!cache_url.as_str().is_empty(), "cache URL must not be empty");
     assert!(paths.len() <= MAX_PULL_PATHS, "pull batch exceeds limit of {MAX_PULL_PATHS}");
+    let _source_lease = handle.admit_http_source(cache_url)?;
     handle.revalidate_overlay_bases()?;
 
     validate_http_cache_url(cache_url)?;
@@ -443,6 +444,7 @@ pub async fn import_http_cache_closure_with_validator<F>(
 where
     F: FnOnce(&HttpClosurePlan) -> Result<(), String>,
 {
+    let _source_lease = handle.admit_http_source(cache_url)?;
     handle.revalidate_overlay_bases()?;
     validate_http_cache_url(cache_url)?;
     let client = build_http_pull_client()?;
@@ -1540,6 +1542,7 @@ mod tests {
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: store_dir.to_string(),
             base_state_dirs: Vec::new(),
+            source_admission: Some(Arc::new(crate::source_admission::TestSourceAdmission)),
         })
         .await
         .unwrap()
@@ -1569,7 +1572,7 @@ mod tests {
             )
             .unwrap(),
         ) as Arc<dyn DirectoryService>;
-        StoreHandle::from_services_with_store_dir(
+        let mut handle = StoreHandle::from_services_with_store_dir(
             crate::StoreBackend::Snix,
             StoreHandleServices {
                 blob_service,
@@ -1582,7 +1585,9 @@ mod tests {
             },
             store_dir.to_string(),
         )
-        .unwrap()
+        .unwrap();
+        handle.set_test_source_admission();
+        handle
     }
 
     struct PutFailingPathInfoService {
@@ -2203,6 +2208,7 @@ mod tests {
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: "/crunch/store".to_string(),
             base_state_dirs: Vec::new(),
+            source_admission: Some(Arc::new(crate::source_admission::TestSourceAdmission)),
         })
         .await
         .unwrap();
@@ -3178,6 +3184,7 @@ mod tests {
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: "/nix/store".to_string(),
             base_state_dirs: Vec::new(),
+            source_admission: Some(Arc::new(crate::source_admission::TestSourceAdmission)),
         })
         .await
         .unwrap();

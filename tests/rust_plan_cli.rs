@@ -211,8 +211,8 @@ fn rust_plan_cli_no_cargo_oracle_blocks_unsupported_surface_without_cargo_fallba
         .expect("rust-plan no-Cargo blocked CLI should run");
 
     assert!(
-        output.status.success(),
-        "blocked no-Cargo rust-plan failed\nstdout:\n{}\nstderr:\n{}",
+        !output.status.success(),
+        "blocked no-Cargo rust-plan incorrectly succeeded\nstdout:\n{}\nstderr:\n{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
@@ -530,7 +530,7 @@ fn rust_plan_cli_blocks_host_artifact_topology_when_native_host_graph_is_not_rea
         .output()
         .expect("rust-plan host-artifact topology CLI should run");
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     assert!(!receipt["rust_plan"]["native_host_unit_graph_planning"]["ready"].as_bool().unwrap());
     let topology = &receipt["host_artifact_topology_execution"];
@@ -577,7 +577,7 @@ fn rust_plan_cli_blocks_unified_topology_when_native_host_graph_is_not_ready() {
         .output()
         .expect("rust-plan unified topology CLI should run");
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     assert!(!receipt["rust_plan"]["native_host_unit_graph_planning"]["ready"].as_bool().unwrap());
     let topology = &receipt["topology_execution"];
@@ -1075,7 +1075,7 @@ fn rust_plan_cli_blocks_target_topology_with_proc_macro_host_artifact() {
         .output()
         .expect("rust-plan target-topology CLI should run");
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     let topology = &receipt["target_topology_execution"];
     assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
@@ -1523,7 +1523,7 @@ fn rust_plan_cli_blocks_unsupported_build_script_link_metadata() {
         .output()
         .expect("rust-plan host-artifact topology CLI should run");
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     let topology = &receipt["host_artifact_topology_execution"];
     assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
@@ -1562,7 +1562,7 @@ fn rust_plan_cli_blocks_malformed_build_script_metadata() {
         .output()
         .expect("rust-plan host-artifact topology CLI should run");
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     let topology = &receipt["host_artifact_topology_execution"];
     assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
@@ -1595,7 +1595,7 @@ fn rust_plan_cli_blocks_host_artifact_topology_without_host_units() {
         .output()
         .expect("rust-plan host-artifact topology CLI should run");
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     let topology = &receipt["host_artifact_topology_execution"];
     assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
@@ -2801,7 +2801,7 @@ fn rust_plan_cli_blocks_all_features_vendored_registry_topology_before_rustc() {
         .output()
         .expect("rust-plan feature-gated registry topology CLI should run");
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     assert!(receipt["rust_plan"]["native_registry_source_planning"]["ready"].as_bool().unwrap(), "{receipt:#?}");
     let unit_blockers = receipt["rust_plan"]["native_unit_graph_planning"]["blockers"].as_array().unwrap();
@@ -2895,7 +2895,7 @@ fn rust_plan_cli_blocks_unsupported_workspace_dependency_vendored_registry_topol
         .output()
         .expect("rust-plan workspace-dependency registry topology CLI should run");
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
     assert!(
@@ -2978,7 +2978,7 @@ fn rust_plan_cli_blocks_explicit_workspace_dependency_topology_before_rustc() {
         .output()
         .expect("explicit workspace-dependency registry topology CLI should run");
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
     assert!(
@@ -3115,7 +3115,7 @@ fn rust_plan_cli_blocks_unsupported_dev_dependency_test_harness_before_rustc() {
         .output()
         .expect("rust-plan dev dependency test execution CLI should run");
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     let execution = &receipt["native_rust_dev_dependency_test_topology_execution"];
     assert_eq!(execution["execution_status"], "blocked", "{receipt:#?}");
@@ -3211,7 +3211,7 @@ fn rust_plan_cli_blocks_unsupported_workspace_member_glob_before_rustc() {
         .output()
         .expect("rust-plan workspace member glob topology CLI should run");
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
     assert!(
@@ -3283,7 +3283,7 @@ fn rust_plan_cli_blocks_unsupported_patch_source_registry_before_rustc() {
         .output()
         .expect("rust-plan patch source topology CLI should run");
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     let source_blockers = receipt["rust_plan"]["native_registry_source_planning"]["blockers"].as_array().unwrap();
     assert!(
@@ -3358,7 +3358,7 @@ fn rust_plan_cli_blocks_explicit_patch_source_registry_topology_before_rustc() {
         .output()
         .expect("explicit patch source topology CLI should run");
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     let source_blockers = receipt["rust_plan"]["native_registry_source_planning"]["blockers"].as_array().unwrap();
     assert!(
@@ -3454,7 +3454,7 @@ fn rust_plan_cli_blocks_unsupported_target_cfg_vendored_registry_topology_before
         .output()
         .expect("rust-plan target-cfg registry topology CLI should run");
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!output.status.success(), "blocked execution incorrectly succeeded");
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
     assert!(
@@ -3663,7 +3663,7 @@ fn rust_plan_cli_blocks_stale_unified_topology_cached_output() {
         .arg(&output_root)
         .output()
         .expect("second rust-plan topology CLI should run");
-    assert!(second_output.status.success(), "{}", String::from_utf8_lossy(&second_output.stderr));
+    assert!(!second_output.status.success(), "stale cached execution incorrectly succeeded");
     let receipt: Value = serde_json::from_slice(&second_output.stdout).expect("CLI should emit JSON receipt");
     let topology = &receipt["topology_execution"];
     assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");

@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs;
 use std::io::Write as _;
+use std::os::unix::fs::OpenOptionsExt as _;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::path::PathBuf;
@@ -18,17 +19,21 @@ use crate::cargo_free_self_build::CargoFreeSelfBuildOptions;
 use crate::errors::RunError;
 use crate::full_source_rust_binding_shell::FullSourceRustHostToolMaterializationRequest;
 use crate::native_toolchain_closure::NativeToolchainClosureOptions;
-use crate::source_built_fixed_point::InitialOutputAuthorityState;
 use crate::source_built_fixed_point::ProofHermeticityMode;
+use crate::source_built_fixed_point::ProofStageKind;
 use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
 use crate::source_built_fixed_point::SourceAuthorityInput;
 use crate::source_built_fixed_point::SourceAuthorityRole;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPlan;
-use crate::source_built_fixed_point::SourceBuiltFixedPointPlanInput;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPolicies;
 use crate::source_built_fixed_point::SourceBuiltFixedPointResourceBounds;
 use crate::source_built_fixed_point::SourceContentKind;
-use crate::source_built_fixed_point::plan_source_built_fixed_point;
+use crate::source_built_fixed_point::StageAuthorityInput;
+use crate::source_built_fixed_point_action_trust::ActionExecutionEvent;
+use crate::source_built_fixed_point_action_trust::ActionReconciliation;
+use crate::source_built_fixed_point_action_trust::ActionTrustPlan;
+use crate::source_built_fixed_point_action_trust::reconcile_actions;
+use crate::source_built_fixed_point_action_trust::validate_action_plan;
 use crate::source_built_fixed_point_dev_cache::DEV_CACHE_ENTRY_FILE;
 use crate::source_built_fixed_point_dev_cache::DevCachePolicies;
 use crate::source_built_fixed_point_dev_cache::DevProviderCacheEntry;
@@ -41,6 +46,9 @@ use crate::source_built_fixed_point_dev_cache::dev_provider_cache_key;
 use crate::source_built_fixed_point_dev_cache::evaluate_fast_fail;
 use crate::source_built_fixed_point_dev_cache::evaluate_provider_cache_lookup;
 use crate::source_built_fixed_point_dev_cache::validate_stage_marker;
+use crate::source_built_fixed_point_planning::InitialOutputAuthorityState;
+use crate::source_built_fixed_point_planning::SourceBuiltFixedPointPlanInput;
+use crate::source_built_fixed_point_planning::plan_source_built_fixed_point;
 use crate::source_built_fixed_point_resume::ResumeOutputReference;
 use crate::source_built_fixed_point_resume::ResumePlan;
 use crate::source_built_fixed_point_resume::plan_stage_resume;
@@ -49,6 +57,11 @@ use crate::source_built_fixed_point_resume_bundle::RESUME_BUNDLES_SUBDIR;
 use crate::source_built_fixed_point_resume_bundle::publish_stage_bundle;
 use crate::source_built_fixed_point_resume_bundle::read_stage_bundles;
 use crate::source_built_fixed_point_resume_bundle::restore_stage_bundle;
+use crate::source_built_fixed_point_trust_report::ACTION_EVENTS_FILE;
+use crate::source_built_fixed_point_trust_report::ACTION_JOURNAL_FILE;
+use crate::source_built_fixed_point_trust_report::ACTION_PLAN_FILE;
+use crate::source_built_fixed_point_trust_report::ACTION_RECONCILIATION_FILE;
+use crate::source_built_fixed_point_trust_report::FINAL_RECEIPT_FILE;
 use crate::source_bundle::SourceBuiltFixedPointProfileRecords;
 use crate::source_bundle::SourceRecord;
 use crate::source_bundle::assemble_source_bundle;
@@ -56,6 +69,14 @@ use crate::source_bundle::materialize_source_record_payload;
 use crate::source_bundle::source_built_fixed_point_profile_records;
 use crate::stagex_provider::StagexProviderRequest;
 use crate::stagex_transition::StagexTransitionRequest;
+
+#[path = "source_built_fixed_point_cold.rs"]
+mod cold;
+pub(crate) use cold::cmd_source_built_replay;
+
+#[path = "source_built_fixed_point_authoring.rs"]
+mod authoring;
+pub(crate) use authoring::cmd_prepare_source_programs;
 
 const LOGICAL_STORE_PREFIX: &str = "/mantle/store";
 const PROFILE_SCHEMA: &str = "mantle-source-bundle-v1";
@@ -70,7 +91,6 @@ const PROOF_STATUS_COMPLETE: &str = "complete";
 const STAGEX_TRANSITION_EXECUTION_DIR: &str = "stagex-transition-execution";
 const STAGEX_TRANSITION_HANDOFF_REPLAY_DIR: &str = "stagex-transition-handoff-replay";
 const STAGEX_PROVIDER_REPLAY_DIR: &str = "stagex-provider-replay";
-const STAGEX_PROVIDER_RECEIPT_FILE: &str = "provider-receipt.json";
 pub(crate) const STAGEX_TRANSITION_REPORT_FILE: &str = "transition-report.json";
 pub(crate) const STAGEX_TRANSITION_AUDIT_FILE: &str = "protected-exec-audit.json";
 const STAGEX_TRANSITION_HANDOFF_REPORT_FILE: &str = "stagex-transition-handoff.json";
@@ -114,12 +134,13 @@ const NATIVE_SOURCE_AUTHORITY_DIR: &str = "native-source-authority";
 const TOOLCHAIN_CLOSURE_FILE: &str = "source-built-toolchain-closure.json";
 const PLAN_FILE: &str = "source-built-fixed-point-plan.json";
 const ATTEMPT_STATUS_FILE: &str = "attempt-status.json";
-pub(crate) const FINAL_RECEIPT_FILE: &str = "deterministic-build-proof.json";
-pub(crate) const FINAL_BUNDLE_DIGEST_FILE: &str = "proof-bundle-blake3.txt";
 pub(crate) const PROVIDER_KIND_LINKAGE_FILE: &str = "provider-kind-linkage.json";
 pub(crate) const RELEASE_INPUTS_FILE: &str = "release-evidence-inputs.json";
 const LATEST_ALIAS: &str = "latest";
 const LATEST_SOURCE_BUILT_ALIAS: &str = "latest-source-built-fixed-point";
+const SUCCESS_PUBLICATION_POINTER: &str = ".source-built-fixed-point-current";
+const SUCCESS_PREVIOUS_POINTER: &str = ".source-built-fixed-point-previous";
+const SUCCESS_PUBLICATION_LOCK: &str = ".source-built-fixed-point-publication.lock";
 const STAGING_SUFFIX: &str = ".source-built-fixed-point-staging";
 const INPUTS_DIR: &str = "inputs";
 const TRANSCRIPTS_DIR: &str = "transcripts";
@@ -161,7 +182,6 @@ const MAX_JOBS_MAX: u32 = 16;
 const MATERIALIZED_SOURCE_TREE_ENTRY_COUNT_MAX: u32 = 1_000_000;
 const FILE_MODE_EXECUTABLE_MASK: u32 = 0o111;
 const ATTEMPT_DIRECTORY_MODE: u32 = 0o700;
-const SUCCESS_ALIAS_COUNT: usize = 2;
 const POLICY_DIGEST_DOMAIN: &[u8] = b"mantle-source-built-fixed-point-policy-v1\0";
 const CLOSURE_POLICY_TEXT: &str = "zero-seed receipt-bound native and Rust toolchain closure";
 const HERMETICITY_POLICY_TEXT: &str = "strict no-fetch no-fallback no-substitution build envelope";
@@ -274,8 +294,6 @@ struct BuildJsonFailure {
 #[derive(Debug)]
 pub(crate) struct BuildObservation {
     pub(crate) output: BuildJsonOutput,
-    pub(crate) transcript_path: PathBuf,
-    pub(crate) transcript_digest_blake3: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -287,13 +305,94 @@ struct StagexTransitionHandoffReport {
 
 #[derive(Debug)]
 pub(crate) struct ConstructedProviders {
-    pub(crate) stagex_transition_execution_dir: PathBuf,
-    pub(crate) stagex_provider_report: crate::stagex_provider::StagexProviderPublicationReport,
     pub(crate) native_provider: BuildObservation,
     pub(crate) native_admission: crate::full_source_provider::FullSourceProviderAdmissionReport,
-    pub(crate) native_admission_report_path: PathBuf,
     pub(crate) rust_provider: crate::rust_source_provider::RustSourceProviderMaterialization,
     pub(crate) toolchain_closure_path: PathBuf,
+}
+
+/// Opt-in proof capture. A journal preserves every actual record before any
+/// admission decision; only complete independently reconciled evidence is sealed.
+pub(crate) struct ActionObservationRecorder<'plan> {
+    root: PathBuf,
+    plan: &'plan ActionTrustPlan,
+    proof: &'plan SourceBuiltFixedPointPlan,
+    admission: crate::source_built_fixed_point_action_trust::ActionObservationState,
+    journal: std::io::BufWriter<fs::File>,
+    events: Vec<ActionExecutionEvent>,
+    event_limit: u32,
+    failed: bool,
+}
+
+impl<'plan> ActionObservationRecorder<'plan> {
+    pub(crate) fn create(
+        root: &Path,
+        proof: &'plan SourceBuiltFixedPointPlan,
+        plan: &'plan ActionTrustPlan,
+    ) -> Result<Self, RunError> {
+        validate_action_plan(proof, plan).map_err(proof_error)?;
+        write_json_create_new(&root.join(ACTION_PLAN_FILE), plan)?;
+        let journal_path = root.join(ACTION_JOURNAL_FILE);
+        let journal = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&journal_path)
+            .map_err(|error| proof_error(format!("creating action observation journal: {error}")))?;
+        fs::File::open(root)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|error| proof_error(format!("syncing action observation root: {error}")))?;
+        Ok(Self {
+            root: root.to_path_buf(),
+            plan,
+            proof,
+            admission: crate::source_built_fixed_point_action_trust::ActionObservationState::default(),
+            journal: std::io::BufWriter::with_capacity(64 * 1_024, journal),
+            events: Vec::new(),
+            event_limit: proof.resource_bounds.protected_exec_events_max,
+            failed: false,
+        })
+    }
+
+    pub(crate) fn record(&mut self, event: ActionExecutionEvent) -> Result<(), RunError> {
+        let previously_failed = self.failed;
+        self.failed = true;
+        serde_json::to_writer(&mut self.journal, &event)
+            .map_err(|error| proof_error(format!("writing action observation: {error}")))?;
+        self.journal
+            .write_all(b"\n")
+            .and_then(|()| self.journal.flush())
+            .and_then(|()| self.journal.get_ref().sync_data())
+            .map_err(|error| proof_error(format!("syncing action observation: {error}")))?;
+        if previously_failed {
+            return Err(proof_error("action observation capture already failed".into()));
+        }
+        // Preserve the first violating record too, without admitting it or
+        // allocating beyond the proof's bounded in-memory event set.
+        if self.events.len() >= self.event_limit as usize {
+            return Err(proof_error("action observation event count exceeds proof bound".into()));
+        }
+        self.admission.record_planned(self.proof, self.plan, &event).map_err(proof_error)?;
+        self.events.push(event);
+        self.failed = false;
+        Ok(())
+    }
+
+    pub(crate) fn finish(mut self, proof: &SourceBuiltFixedPointPlan) -> Result<ActionReconciliation, RunError> {
+        self.journal
+            .flush()
+            .and_then(|()| self.journal.get_ref().sync_all())
+            .map_err(|error| proof_error(format!("syncing final action observations: {error}")))?;
+        if self.failed {
+            return Err(proof_error("cannot seal failed action observation capture".into()));
+        }
+        write_json_create_new(&self.root.join(ACTION_EVENTS_FILE), &self.events)?;
+        let reconciliation = reconcile_actions(proof, self.plan, &self.events).map_err(proof_error)?;
+        write_json_create_new(&self.root.join(ACTION_RECONCILIATION_FILE), &reconciliation)?;
+        fs::File::open(&self.root)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|error| proof_error(format!("syncing action reconciliation root: {error}")))?;
+        Ok(reconciliation)
+    }
 }
 
 pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions<'_>) -> Result<(), RunError> {
@@ -330,8 +429,8 @@ pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions
         emit_fast_fail_notice(&options, &prepared, prior.as_deref());
         return Ok(());
     }
-    let adopted = match run_attempt(&options, &prepared) {
-        Ok(adopted) => adopted,
+    let development_only = match run_attempt(&options, &prepared) {
+        Ok(development_only) => development_only,
         Err(error) => {
             let blocker = error.to_string();
             write_attempt_status(
@@ -347,10 +446,10 @@ pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions
         }
     };
     write_attempt_status(&prepared.staging_dir, Some(&prepared.plan.plan_digest_blake3), PROOF_STATUS_COMPLETE, None)?;
-    if adopted {
-        // Dev-only provider adoption: never publish to the success aliases and never
-        // update `latest`/`latest-source-built-fixed-point`.
-        print_dev_adopted_completion(&options, &prepared)?;
+    if development_only {
+        // Any development mode, including source-only resume, is ineligible
+        // for promoted cold receipts and both successful-proof aliases.
+        print_dev_completion(&options, &prepared)?;
         return Ok(());
     }
     if let Err(error) = publish_attempt(&prepared) {
@@ -374,7 +473,29 @@ pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions
     print_completion(&options, &prepared)
 }
 
+pub(crate) fn validate_cold_compiler_environment<I, S>(names: I) -> Result<(), RunError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    for name in names {
+        let name = name.as_ref();
+        if name.as_encoded_bytes().starts_with(b"MANTLE_CC_CACHE_")
+            || name.as_encoded_bytes().starts_with(b"MANTLE_COMPILE_")
+        {
+            return Err(proof_error(format!(
+                "inherited compiler-cache/scheduling variable {} cannot authorize a promoted cold proof",
+                name.to_string_lossy()
+            )));
+        }
+    }
+    Ok(())
+}
+
 fn validate_options(options: &SourceBuiltFixedPointOptions<'_>) -> Result<(), RunError> {
+    if !is_development_run(options) {
+        validate_cold_compiler_environment(std::env::vars_os().map(|(name, _)| name))?;
+    }
     for (label, path) in [
         ("source profile", options.source_profile),
         ("output", options.output_dir),
@@ -384,6 +505,18 @@ fn validate_options(options: &SourceBuiltFixedPointOptions<'_>) -> Result<(), Ru
         if !path.is_absolute() {
             return Err(proof_error(format!("{label} path must be absolute: {}", path.display())));
         }
+    }
+    if options.output_dir.file_name().and_then(|name| name.to_str()).is_some_and(|name| {
+        matches!(
+            name,
+            LATEST_ALIAS
+                | LATEST_SOURCE_BUILT_ALIAS
+                | SUCCESS_PUBLICATION_POINTER
+                | SUCCESS_PREVIOUS_POINTER
+                | SUCCESS_PUBLICATION_LOCK
+        )
+    }) {
+        return Err(proof_error("proof output basename is reserved for success publication".into()));
     }
     validate_expected_digest("source profile", options.expected_source_profile_blake3)?;
     validate_expected_digest("StageX lineage", options.expected_stagex_lineage_blake3)?;
@@ -526,6 +659,15 @@ fn prepare_attempt(
     started_at: Instant,
 ) -> Result<PreparedAttempt, RunError> {
     let profile = crate::source_bundle::read_source_bundle(options.source_profile)?;
+    prepare_profile_attempt(options, started_at, &profile, false)
+}
+
+fn prepare_profile_attempt(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    started_at: Instant,
+    profile: &crate::source_bundle::SourceBundleManifest,
+    preparing_programs: bool,
+) -> Result<PreparedAttempt, RunError> {
     if profile.format != PROFILE_SCHEMA {
         return Err(proof_error(format!("source profile schema must be {PROFILE_SCHEMA}")));
     }
@@ -535,7 +677,7 @@ fn prepare_attempt(
             options.expected_source_profile_blake3, profile.manifest_blake3
         )));
     }
-    let records = source_built_fixed_point_profile_records(&profile)?;
+    let records = source_built_fixed_point_profile_records(profile)?;
     validate_profile_records(&records, options)?;
     let staging_dir = staging_path(options.output_dir)?;
     let disk_available_bytes_before =
@@ -548,7 +690,14 @@ fn prepare_attempt(
     let source_root = inputs_dir.join(SOURCE_ROOT_DIR);
     materialize_source_record_payload(records.mantle_source, &source_root)?;
     let mantle_source_digest = hash_materialized_source(&source_root)?;
-    let vendor_root = source_root.join(VENDOR_RELATIVE_PATH);
+    // Cold authority roots must remain disjoint: inserting vendors into the
+    // already-hashed Mantle source would invalidate its admitted tree identity.
+    // The legacy development builder still needs its unclaimable local overlay.
+    let vendor_root = if is_development_run(options) {
+        source_root.join(VENDOR_RELATIVE_PATH)
+    } else {
+        inputs_dir.join(VENDOR_RELATIVE_PATH)
+    };
     materialize_source_record_payload(records.vendor_inputs, &vendor_root)?;
     let vendor_inputs_digest = hash_materialized_source(&vendor_root)?;
     let stagex_seed_root = inputs_dir.join(STAGEX_SEED_DIR);
@@ -601,35 +750,48 @@ fn prepare_attempt(
         vendor_inputs: vendor_inputs_digest,
     };
     let plan = prepare_plan(options, &records, &source_digests, &native_source_authority_manifest)?;
-    let plan_path = staging_dir.join(PLAN_FILE);
+    let plan_path = staging_dir.join(if preparing_programs {
+        "source-program-preparation-input-plan.json"
+    } else {
+        PLAN_FILE
+    });
     write_json_create_new(&plan_path, &plan)?;
-    let (native_store_dir, native_state_dir) = match options.dev_provider_cache {
-        // Dev runs share a persistent content-addressed store so each
-        // successfully built package is a no-op hit on the next dev run.
-        Some(cache) => {
-            let store = cache.join("dev-store");
-            let state = cache.join("dev-state");
-            fs::create_dir_all(&store)
-                .map_err(|error| proof_error(format!("creating dev store {}: {error}", store.display())))?;
-            fs::create_dir_all(&state)
-                .map_err(|error| proof_error(format!("creating dev state {}: {error}", state.display())))?;
-            (store, state)
-        }
-        // Promoted/cold runs use a fresh empty store per attempt.
-        None => {
-            let store = staging_dir.join(NATIVE_STORE_DIR);
-            let state = staging_dir.join(NATIVE_STATE_DIR);
-            fs::create_dir(&store)
-                .map_err(|error| proof_error(format!("creating native store {}: {error}", store.display())))?;
-            fs::create_dir(&state)
-                .map_err(|error| proof_error(format!("creating native state {}: {error}", state.display())))?;
-            (store, state)
+    if is_development_run(options) {
+        write_development_authority(&staging_dir, options, &plan)?;
+    }
+    let (native_store_dir, native_state_dir) = if preparing_programs {
+        (staging_dir.join(NATIVE_STORE_DIR), staging_dir.join(NATIVE_STATE_DIR))
+    } else {
+        match options.dev_provider_cache {
+            // Dev runs share a persistent content-addressed store so each
+            // successfully built package is a no-op hit on the next dev run.
+            Some(cache) => {
+                let store = cache.join("dev-store");
+                let state = cache.join("dev-state");
+                fs::create_dir_all(&store)
+                    .map_err(|error| proof_error(format!("creating dev store {}: {error}", store.display())))?;
+                fs::create_dir_all(&state)
+                    .map_err(|error| proof_error(format!("creating dev state {}: {error}", state.display())))?;
+                (store, state)
+            }
+            // Promoted/cold runs use a fresh empty store per attempt.
+            None => {
+                let store = staging_dir.join(NATIVE_STORE_DIR);
+                let state = staging_dir.join(NATIVE_STATE_DIR);
+                fs::create_dir(&store)
+                    .map_err(|error| proof_error(format!("creating native store {}: {error}", store.display())))?;
+                fs::create_dir(&state)
+                    .map_err(|error| proof_error(format!("creating native state {}: {error}", state.display())))?;
+                (store, state)
+            }
         }
     };
     let transcripts_dir = staging_dir.join(TRANSCRIPTS_DIR);
-    fs::create_dir(&transcripts_dir)
-        .map_err(|error| proof_error(format!("creating transcripts {}: {error}", transcripts_dir.display())))?;
-    crate::source_bundle::import_source_bundle(&profile, &native_state_dir, true)?;
+    if !preparing_programs {
+        fs::create_dir(&transcripts_dir)
+            .map_err(|error| proof_error(format!("creating transcripts {}: {error}", transcripts_dir.display())))?;
+        crate::source_bundle::import_source_bundle(profile, &native_state_dir, true)?;
+    }
     if options.dev_provider_cache.is_some() {
         seed_dev_store_snapshot(options, &plan, &native_store_dir, &native_state_dir)?;
     }
@@ -830,16 +992,58 @@ fn prepare_plan(
     Ok(plan)
 }
 
+fn is_development_run(options: &SourceBuiltFixedPointOptions<'_>) -> bool {
+    options.dev_provider_cache.is_some() || options.dev_resume || options.dev_fast_fail
+}
+
+/// A coordination-only view of the proof plan's actual output authority edges.
+/// Neither this declaration nor a stage command's exit verifies an action plan.
+struct StageReadinessBinding<'a> {
+    id: &'a str,
+    dependencies: Vec<&'a str>,
+    final_receipt_required: bool,
+}
+
+fn stage_readiness_bindings(plan: &SourceBuiltFixedPointPlan) -> Result<Vec<StageReadinessBinding<'_>>, String> {
+    let mut bindings = Vec::with_capacity(plan.stages.len());
+    for stage in &plan.stages {
+        let mut dependencies = Vec::new();
+        for input in &stage.inputs {
+            let StageAuthorityInput::Output { role } = input else {
+                continue;
+            };
+            let producer = plan
+                .stages
+                .iter()
+                .find(|candidate| candidate.output == *role)
+                .ok_or_else(|| format!("readiness stage {} has no output producer for {role:?}", stage.stage_id))?;
+            if producer.stage_id == stage.stage_id || dependencies.contains(&producer.stage_id.as_str()) {
+                return Err(format!("readiness stage {} has a self or duplicate predecessor", stage.stage_id));
+            }
+            dependencies.push(&producer.stage_id);
+        }
+        bindings.push(StageReadinessBinding {
+            id: &stage.stage_id,
+            dependencies,
+            final_receipt_required: stage.kind == ProofStageKind::MantleStage2,
+        });
+    }
+    Ok(bindings)
+}
 fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAttempt) -> Result<bool, RunError> {
     enforce_open_file_descriptor_limit(prepared.plan.resource_bounds.open_file_descriptors_max)?;
     validate_runtime_bounds(options, prepared)?;
+    if !is_development_run(options) {
+        return cold::run_cold_attempt(options, prepared);
+    }
     let adopt = dev_cache_adoption(options, &prepared.plan)?;
-    let is_dev = options.dev_provider_cache.is_some();
+    let is_dev = is_development_run(options);
     if adopt {
         record_dev_cache_hit(prepared)?;
     }
     let resume_plan = if options.dev_resume {
         let plan = plan_dev_resume(prepared, options)?;
+        write_json_create_new(&prepared.staging_dir.join("dev-resume-authority.json"), &plan)?;
         emit_resume_plan_notice(options, prepared, &plan);
         Some(plan)
     } else {
@@ -849,7 +1053,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
     // become a receipt. Without observed action reconciliation no stage
     // completion is asserted, even if the proof shell keeps executing.
     let stage_bindings = if options.verbose {
-        crate::source_built_fixed_point::stage_readiness_bindings(&prepared.plan)
+        stage_readiness_bindings(&prepared.plan)
             .map_err(|reason| proof_error(format!("deriving stage readiness dependencies: {reason}")))?
     } else {
         Vec::new()
@@ -914,13 +1118,8 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
     }
     let providers = if adopt {
         let adopted = adopt_cached_provider_subtrees(options, prepared, &prepared.plan)?;
-        construct_full_source_providers(
-            options,
-            prepared,
-            prepared.staging_dir.join(STAGEX_TRANSITION_EXECUTION_DIR),
-            synthesized_adopted_stagex_report(prepared),
-            Some(adopted),
-        )?
+        read_adopted_stagex_report(prepared)?;
+        construct_full_source_providers(options, prepared, Some(adopted))?
     } else {
         let stagex_transition_execution_dir = prepared.staging_dir.join(STAGEX_TRANSITION_EXECUTION_DIR);
         let transition_replay_digest = transition_input_replay_digest(prepared)?;
@@ -1099,49 +1298,35 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
             &prepared.native_state_dir,
             LOGICAL_STORE_PREFIX,
         )?;
-        construct_full_source_providers(
-            options,
-            prepared,
-            stagex_transition_execution_dir,
-            stagex_provider_report,
-            None,
-        )?
+        construct_full_source_providers(options, prepared, None)?
     };
     validate_runtime_bounds(options, prepared)?;
     run_cargo_free_fixed_point(options, prepared, &providers)?;
     validate_runtime_bounds(options, prepared)?;
-    if is_dev {
-        // Dev runs reuse the persistent content-addressed store and can adopt
-        // cached providers, so they are dev-labeled: populate the provider cache
-        // entry, never write a promoted receipt, never update release aliases.
+    // The retained legacy construction path is development-only. Its complete
+    // non-proof behavior remains available, but it cannot publish a v2 receipt.
+    if options.dev_provider_cache.is_some() && !adopt {
         write_dev_provider_cache(options, prepared, &providers)?;
-        write_dev_adopted_marker(prepared)?;
-        Ok(true)
-    } else {
-        crate::source_built_fixed_point_receipt::write_source_built_fixed_point_receipt(
-            &prepared.staging_dir,
-            &prepared.plan,
-            &providers,
-        )?;
-        validate_runtime_bounds(options, prepared)?;
-        Ok(false)
     }
+    Ok(true)
 }
 
-fn write_dev_adopted_marker(prepared: &PreparedAttempt) -> Result<(), RunError> {
+fn write_development_authority(
+    root: &Path,
+    options: &SourceBuiltFixedPointOptions<'_>,
+    plan: &SourceBuiltFixedPointPlan,
+) -> Result<(), RunError> {
     let report = serde_json::json!({
         "schema": PROOF_STATUS_SCHEMA,
-        "status": "dev-cache-adopted",
-        "plan_digest_blake3": prepared.plan.plan_digest_blake3,
-        "output": prepared.final_dir,
-        "notice": "dev-only: cached providers adopted; no promoted receipt, no release alias",
+        "status": "development-only",
+        "plan_digest_blake3": plan.plan_digest_blake3,
+        "output": root,
+        "provider_cache_configured": options.dev_provider_cache.is_some(),
+        "resume_requested": options.dev_resume,
+        "fast_fail_requested": options.dev_fast_fail,
+        "notice": "development execution cannot authorize a promoted cold receipt or release alias",
     });
-    let bytes = serde_json::to_vec_pretty(&report)
-        .map_err(|error| proof_error(format!("serializing dev-adopted report: {error}")))?;
-    fs::write(prepared.staging_dir.join("dev-adopted-report.json"), bytes)
-        .map_err(|error| proof_error(format!("writing dev-adopted report: {error}")))?;
-    debug_assert!(prepared.staging_dir.join("dev-adopted-report.json").is_file());
-    Ok(())
+    write_json_create_new(&root.join("dev-run-report.json"), &report)
 }
 
 /// After a successful cold dev run, publish the StageX and native provider store
@@ -1572,8 +1757,6 @@ fn adopt_cached_provider_subtrees(
         native_dst.display()
     );
     write_bytes_create_new(&tx, tx_bytes.as_bytes())?;
-    let tx_digest = crate::protected_exec::blake3_file_hex(&tx)
-        .map_err(|error| proof_error(format!("hashing adopted native transcript {}: {error}", tx.display())))?;
     debug_assert!(stagex_dst.is_dir());
     debug_assert!(native_dst.is_dir());
     Ok(BuildObservation {
@@ -1582,11 +1765,9 @@ fn adopt_cached_provider_subtrees(
             path: native_dst.clone(),
             artifact_attestation: BuildJsonAttestationReference {
                 logical_path: entry.native_provider.logical_path.clone(),
-                path: tx.clone(),
+                path: tx,
             },
         },
-        transcript_path: tx,
-        transcript_digest_blake3: tx_digest,
     })
 }
 
@@ -1616,24 +1797,13 @@ fn register_adopted_provider(
     Ok(logical)
 }
 
-/// A placeholder StageX provider publication report for an adopted run. The
-/// adopted score is carried only as a bounded reference; adopted runs never emit
-/// a promoted receipt, so these path/digest fields are not hashed into evidence.
-fn synthesized_adopted_stagex_report(
+/// Revalidate cached historical observations without claiming fresh execution.
+fn read_adopted_stagex_report(
     prepared: &PreparedAttempt,
-) -> crate::stagex_provider::StagexProviderPublicationReport {
+) -> Result<crate::stagex_provider::StagexProviderPublicationReport, RunError> {
     let stagex_root = prepared.native_store_dir.join(STAGEX_PROVIDER_STORE_BASENAME);
-    crate::stagex_provider::StagexProviderPublicationReport {
-        schema: "mantle-stagex-provider-publication-v1",
-        provider_kind: "stagex-intermediate-provider",
-        output_path: stagex_root.clone(),
-        receipt_path: stagex_root.join(STAGEX_PROVIDER_RECEIPT_FILE),
-        normalized_provider_digest_blake3: STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST.to_string(),
-        output_digest_blake3: STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST.to_string(),
-        final_bundle_digest_blake3: STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST.to_string(),
-        provider_validation_audit_digest_blake3: STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST.to_string(),
-        provider_validation_report_digest_blake3: STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST.to_string(),
-    }
+    crate::stagex_provider::read_adopted_provider_publication(&stagex_root, STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST)
+        .map_err(|error| proof_error(format!("validating adopted StageX publication: {error}")))
 }
 
 fn run_in_isolated_exec_thread<T, F>(operation_name: &str, operation: F) -> Result<T, RunError>
@@ -1846,8 +2016,6 @@ fn validate_reusable_stagex_provider_identity(
 fn construct_full_source_providers(
     options: &SourceBuiltFixedPointOptions<'_>,
     prepared: &PreparedAttempt,
-    stagex_transition_execution_dir: PathBuf,
-    stagex_provider_report: crate::stagex_provider::StagexProviderPublicationReport,
     adopted_native: Option<BuildObservation>,
 ) -> Result<ConstructedProviders, RunError> {
     let native_provider = match adopted_native {
@@ -1913,11 +2081,8 @@ fn construct_full_source_providers(
         output: &toolchain_closure_path,
     })?;
     Ok(ConstructedProviders {
-        stagex_transition_execution_dir,
-        stagex_provider_report,
         native_provider,
         native_admission,
-        native_admission_report_path,
         rust_provider,
         toolchain_closure_path,
     })
@@ -1963,13 +2128,7 @@ fn run_native_build(
     let allow_cached = options.dev_provider_cache.is_some();
     let report = parse_build_report(label, &output, allow_cached)?;
     let build_output = require_single_build_output(label, report, allow_cached)?;
-    let transcript_digest_blake3 = crate::protected_exec::blake3_file_hex(&stdout_path)
-        .map_err(|error| proof_error(format!("hashing build transcript {}: {error}", stdout_path.display())))?;
-    Ok(BuildObservation {
-        output: build_output,
-        transcript_path: stdout_path,
-        transcript_digest_blake3,
-    })
+    Ok(BuildObservation { output: build_output })
 }
 
 fn native_build_command(
@@ -2130,133 +2289,230 @@ fn run_cargo_free_fixed_point(
 }
 
 fn publish_attempt(prepared: &PreparedAttempt) -> Result<(), RunError> {
-    crate::linux_rename::rename_path_no_replace(&prepared.staging_dir, &prepared.final_dir).map_err(|error| {
-        proof_error(format!(
-            "publishing proof bundle {} -> {}: {error}",
-            prepared.staging_dir.display(),
-            prepared.final_dir.display()
-        ))
-    })?;
+    use mantle_application_contract::bootstrap_effects::BootstrapEffect::VerifyOutput;
+    use mantle_application_contract::bootstrap_effects::BootstrapEffect::WriteOutput;
+
+    let mut port = crate::bootstrap_effect_port::BootstrapPort::new(&[(WriteOutput, 2), (VerifyOutput, 1)])?;
     let parent = prepared.final_dir.parent().ok_or_else(|| proof_error("proof output has no parent".to_string()))?;
     let target_name = prepared
         .final_dir
         .file_name()
         .ok_or_else(|| proof_error("proof output has no basename".to_string()))?;
     let aliases = [LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS];
-    if let Err(alias_error) = update_success_aliases(parent, &aliases, target_name) {
-        let rollback_result = crate::linux_rename::rename_path_no_replace(&prepared.final_dir, &prepared.staging_dir);
-        return match rollback_result {
-            Ok(()) => Err(alias_error),
-            Err(rollback_error) => Err(proof_error(format!(
-                "{alias_error}; proof publication rollback {} -> {} also failed: {rollback_error}",
-                prepared.final_dir.display(),
-                prepared.staging_dir.display()
-            ))),
-        };
+    // Alias commit may have reached its single atomic pointer rename even if
+    // a later directory sync fails. Never remove its complete target bundle;
+    // the caller records durable failure at this preserved final root.
+    let result = (|| {
+        port.call(WriteOutput, || {
+            crate::linux_rename::rename_path_no_replace(&prepared.staging_dir, &prepared.final_dir).map_err(|error| {
+                proof_error(format!(
+                    "publishing proof bundle {} -> {}: {error}",
+                    prepared.staging_dir.display(),
+                    prepared.final_dir.display()
+                ))
+            })
+        })?;
+        port.call(WriteOutput, || update_success_aliases(parent, &aliases, target_name))?;
+        port.call(VerifyOutput, || verify_success_selection(parent, &aliases, target_name))
+    })();
+    port.finish(result)
+}
+
+fn verify_success_selection(parent: &Path, aliases: &[&str], target: &std::ffi::OsStr) -> Result<(), RunError> {
+    use mantle_application_contract::ApplicationOutcome;
+    use mantle_application_contract::CommandFamily;
+    use mantle_application_contract::EffectId;
+    use mantle_application_contract::EffectKind;
+    use mantle_application_contract::EffectMeasure;
+    use mantle_application_contract::EffectOutput;
+    use mantle_application_contract::EffectSpec;
+    use mantle_application_contract::ExpectedOutput;
+    use mantle_application_contract::Observation;
+    use mantle_application_contract::ObservationStatus;
+    use mantle_application_contract::classify_observations;
+    use mantle_application_contract::plan_effects;
+    let expected = blake3::hash(target.as_encoded_bytes()).to_hex().to_string();
+    let plan = plan_effects(CommandFamily::Bootstrap, &[EffectSpec {
+        effect_id: "source-built-success-selection",
+        kind: EffectKind::ReadFiles,
+        limit: EffectMeasure::Bytes((target.as_encoded_bytes().len() as u64).max(1)),
+        expected_output: ExpectedOutput::Identity(&expected),
+    }])
+    .map_err(|error| proof_error(format!("planning success selection readback: {}", error.code())))?;
+    let selected = existing_success_target(parent, aliases, &parent.join(SUCCESS_PUBLICATION_POINTER))
+        .and_then(|selected| selected.ok_or_else(|| proof_error("published success selection is absent".into())));
+    let observed = Observation {
+        effect_id: EffectId("source-built-success-selection".into()),
+        kind: EffectKind::ReadFiles,
+        status: if selected.is_ok() {
+            ObservationStatus::Succeeded
+        } else {
+            ObservationStatus::Failed
+        },
+        output: selected.as_ref().map_or(EffectOutput::None, |path| {
+            EffectOutput::Identity(blake3::hash(path.as_os_str().as_encoded_bytes()).to_hex().to_string())
+        }),
+        usage: EffectMeasure::Bytes(
+            selected.as_ref().map_or(0, |path| path.as_os_str().as_encoded_bytes().len() as u64),
+        ),
+        diagnostics_code: selected.as_ref().err().map(|_| "source-built-success-selection-read-failed".into()),
+    };
+    match (classify_observations(&plan, std::slice::from_ref(&observed)), selected) {
+        (ApplicationOutcome::Completed, Ok(_)) => Ok(()),
+        (ApplicationOutcome::Failed { .. }, Err(error)) => Err(error),
+        (outcome, _) => {
+            Err(proof_error(format!("published source proof selection differs from planned target: {outcome:?}")))
+        }
     }
-    assert_eq!(aliases.len(), SUCCESS_ALIAS_COUNT);
-    debug_assert!(prepared.final_dir.is_dir());
-    Ok(())
 }
 
 fn update_success_aliases(parent: &Path, alias_names: &[&str], target_name: &std::ffi::OsStr) -> Result<(), RunError> {
-    if alias_names.len() != SUCCESS_ALIAS_COUNT {
-        return Err(proof_error(format!(
-            "success alias transaction requires {SUCCESS_ALIAS_COUNT} aliases, got {}",
-            alias_names.len()
-        )));
+    if alias_names != [LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS].as_slice() {
+        return Err(proof_error("success publication requires both canonical aliases exactly once".into()));
     }
-    let transaction = alias_names
-        .iter()
-        .map(|alias_name| {
-            (
-                parent.join(alias_name),
-                parent.join(format!(".{alias_name}.{}.tmp", std::process::id())),
-                parent.join(format!(".{alias_name}.{}.backup", std::process::id())),
-            )
-        })
-        .collect::<Vec<_>>();
-    for (alias, temporary, backup) in &transaction {
-        if alias.exists() && !alias.is_symlink() {
-            return Err(proof_error(format!("success alias path is not a symlink: {}", alias.display())));
-        }
-        remove_stale_alias_transaction_path(temporary)?;
-        remove_stale_alias_transaction_path(backup)?;
+    validate_local_alias_target(Path::new(target_name))?;
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(parent.join(SUCCESS_PUBLICATION_LOCK))
+        .map_err(|error| proof_error(format!("opening success publication lock: {error}")))?;
+    if !lock
+        .metadata()
+        .map_err(|error| proof_error(format!("inspecting publication lock: {error}")))?
+        .is_file()
+    {
+        return Err(proof_error("success publication lock must be a regular file".into()));
     }
-    for (_, temporary, _) in &transaction {
-        if let Err(error) = std::os::unix::fs::symlink(target_name, temporary) {
-            rollback_success_aliases(&transaction, 0);
-            return Err(proof_error(format!("creating success alias staging {}: {error}", temporary.display())));
-        }
+    fs2::FileExt::try_lock_exclusive(&lock)
+        .map_err(|error| proof_error(format!("another success publication owns the alias lock: {error}")))?;
+    let pointer = parent.join(SUCCESS_PUBLICATION_POINTER);
+    let previous = existing_success_target(parent, alias_names, &pointer)?;
+    // Retain a root-local rollback target before touching either public name.
+    // It intentionally remains after success as the previous generation link.
+    let recovery = parent.join(SUCCESS_PREVIOUS_POINTER);
+    remove_stale_alias_transaction_path(&recovery)?;
+    if let Some(previous) = &previous {
+        std::os::unix::fs::symlink(previous, &recovery)
+            .map_err(|error| proof_error(format!("staging prior success publication: {error}")))?;
     }
-    let mut committed = 0usize;
-    for (index, (alias, temporary, backup)) in transaction.iter().enumerate() {
-        if let Err(error) = backup_existing_alias(alias, backup) {
-            rollback_success_aliases(&transaction, committed);
-            return Err(error);
-        }
-        if let Err(error) = fs::rename(temporary, alias) {
-            if backup.is_symlink() {
-                let _ = fs::rename(backup, alias);
-            }
-            rollback_success_aliases(&transaction, committed);
-            return Err(proof_error(format!("publishing success alias {}: {error}", alias.display())));
-        }
-        committed = index.saturating_add(1);
+    if read_success_link(&pointer)?.is_none()
+        && let Some(previous) = &previous
+    {
+        std::os::unix::fs::symlink(previous, &pointer)
+            .map_err(|error| proof_error(format!("initializing success publication pointer: {error}")))?;
     }
-    if committed != alias_names.len() {
-        rollback_success_aliases(&transaction, committed);
-        return Err(proof_error(format!(
-            "success alias transaction committed {committed} of {} aliases",
-            alias_names.len()
-        )));
-    }
-    for (alias, _, _) in &transaction {
-        let observed_target = match fs::read_link(alias) {
-            Ok(target) => target,
-            Err(error) => {
-                rollback_success_aliases(&transaction, committed);
-                return Err(proof_error(format!("reading published success alias {}: {error}", alias.display())));
-            }
+    prepare_stable_success_aliases(parent, alias_names)?;
+    let temporary = parent.join(format!("{SUCCESS_PUBLICATION_POINTER}.{}.tmp", std::process::id()));
+    remove_stale_alias_transaction_path(&temporary)?;
+    std::os::unix::fs::symlink(target_name, &temporary)
+        .map_err(|error| proof_error(format!("staging success publication pointer: {error}")))?;
+    let directory = fs::File::open(parent)
+        .map_err(|error| proof_error(format!("opening success publication directory: {error}")))?;
+    directory
+        .sync_all()
+        .map_err(|error| proof_error(format!("syncing prepared success aliases: {error}")))?;
+    // Both public names already refer to this one entry. This is the only
+    // operation that can change either alias from the old proof to the new one.
+    fs::rename(&temporary, &pointer)
+        .map_err(|error| proof_error(format!("committing success publication pointer: {error}")))?;
+    if let Err(commit_sync_error) = directory.sync_all() {
+        let rollback = if previous.is_some() {
+            fs::rename(&recovery, &pointer)
+        } else {
+            fs::remove_file(&pointer)
         };
-        if observed_target != Path::new(target_name) {
-            rollback_success_aliases(&transaction, committed);
-            return Err(proof_error(format!(
-                "published success alias {} has target {}, expected {}",
-                alias.display(),
-                observed_target.display(),
-                Path::new(target_name).display()
-            )));
-        }
-    }
-    for (_, _, backup) in &transaction {
-        if backup.is_symlink() {
-            let _ = fs::remove_file(backup);
-        }
+        rollback.map_err(|error| {
+            proof_error(format!(
+                "success publication sync failed ({commit_sync_error}); restoring prior selection also failed: {error}"
+            ))
+        })?;
+        directory.sync_all().map_err(|error| proof_error(format!(
+            "success publication sync failed ({commit_sync_error}); prior selection restored but rollback sync failed: {error}"
+        )))?;
+        return Err(proof_error(format!(
+            "success publication sync failed; prior selection restored: {commit_sync_error}"
+        )));
     }
     Ok(())
 }
 
-fn backup_existing_alias(alias: &Path, backup: &Path) -> Result<(), RunError> {
-    if !alias.is_symlink() {
-        return Ok(());
+fn existing_success_target(parent: &Path, aliases: &[&str], pointer: &Path) -> Result<Option<PathBuf>, RunError> {
+    let pointer_target = read_success_link(pointer)?;
+    if let Some(target) = &pointer_target {
+        validate_local_alias_target(target)?;
     }
-    fs::rename(alias, backup)
-        .map_err(|error| proof_error(format!("backing up success alias {}: {error}", alias.display())))
+    let mut selected: Option<Option<PathBuf>> = None;
+    for alias in aliases {
+        let target = match read_success_link(&parent.join(alias))? {
+            Some(target) if target == Path::new(SUCCESS_PUBLICATION_POINTER) => pointer_target.clone(),
+            Some(target) => {
+                validate_local_alias_target(&target)?;
+                Some(target)
+            }
+            None => None,
+        };
+        if selected.as_ref().is_some_and(|previous| previous != &target) {
+            return Err(proof_error(
+                "existing success aliases disagree on the published proof, including absent aliases".into(),
+            ));
+        }
+        selected = Some(target);
+    }
+    let selected = selected.flatten();
+    if pointer_target.as_ref().is_some_and(|previous| Some(previous) != selected.as_ref()) {
+        return Err(proof_error("success publication pointer disagrees with the public alias selection".into()));
+    }
+    Ok(selected)
 }
 
-fn rollback_success_aliases(transaction: &[(PathBuf, PathBuf, PathBuf)], committed: usize) {
-    for (index, (alias, temporary, backup)) in transaction.iter().enumerate().rev() {
-        if index < committed && alias.is_symlink() {
-            let _ = fs::remove_file(alias);
-        }
-        if backup.is_symlink() {
-            let _ = fs::rename(backup, alias);
-        }
-        if temporary.is_symlink() {
-            let _ = fs::remove_file(temporary);
-        }
+fn read_success_link(path: &Path) -> Result<Option<PathBuf>, RunError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => fs::read_link(path)
+            .map(Some)
+            .map_err(|error| proof_error(format!("reading success alias {}: {error}", path.display()))),
+        Ok(_) => Err(proof_error(format!("success alias path is not a symlink: {}", path.display()))),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(proof_error(format!("inspecting success alias {}: {error}", path.display()))),
     }
+}
+
+fn validate_local_alias_target(target: &Path) -> Result<(), RunError> {
+    let mut components = target.components();
+    if !matches!(components.next(), Some(std::path::Component::Normal(_))) || components.next().is_some() {
+        return Err(proof_error(format!("success alias target must be one root-local basename: {}", target.display())));
+    }
+    if target.to_str().is_some_and(|name| {
+        matches!(
+            name,
+            LATEST_ALIAS
+                | LATEST_SOURCE_BUILT_ALIAS
+                | SUCCESS_PUBLICATION_POINTER
+                | SUCCESS_PREVIOUS_POINTER
+                | SUCCESS_PUBLICATION_LOCK
+        )
+    }) {
+        return Err(proof_error("success alias target cannot select publication metadata or another alias".into()));
+    }
+    Ok(())
+}
+
+fn prepare_stable_success_aliases(parent: &Path, aliases: &[&str]) -> Result<(), RunError> {
+    for alias in aliases {
+        let path = parent.join(alias);
+        if read_success_link(&path)?.as_deref() == Some(Path::new(SUCCESS_PUBLICATION_POINTER)) {
+            continue;
+        }
+        let temporary = parent.join(format!(".{alias}.{}.tmp", std::process::id()));
+        remove_stale_alias_transaction_path(&temporary)?;
+        std::os::unix::fs::symlink(SUCCESS_PUBLICATION_POINTER, &temporary)
+            .map_err(|error| proof_error(format!("preparing shared success alias {alias}: {error}")))?;
+        fs::rename(&temporary, &path)
+            .map_err(|error| proof_error(format!("installing shared success alias {alias}: {error}")))?;
+    }
+    Ok(())
 }
 
 fn remove_stale_alias_transaction_path(path: &Path) -> Result<(), RunError> {
@@ -2270,23 +2526,23 @@ fn remove_stale_alias_transaction_path(path: &Path) -> Result<(), RunError> {
         .map_err(|error| proof_error(format!("removing stale alias transaction path {}: {error}", path.display())))
 }
 
-fn print_dev_adopted_completion(
+fn print_dev_completion(
     options: &SourceBuiltFixedPointOptions<'_>,
     prepared: &PreparedAttempt,
 ) -> Result<(), RunError> {
     if options.json {
         let value = serde_json::json!({
             "schema": PROOF_STATUS_SCHEMA,
-            "status": "dev-cache-adopted",
+            "status": "development-only",
             "output": prepared.staging_dir,
             "plan_digest_blake3": prepared.plan.plan_digest_blake3,
-            "notice": "dev-only: receipt-validated providers adopted; no promoted receipt, no release alias",
+            "notice": "development execution cannot authorize a promoted cold receipt or release alias",
         });
         println!("{}", serde_json::to_string_pretty(&value).map_err(|error| proof_error(error.to_string()))?);
     } else {
-        eprintln!("Completed dev adoption run at {}", prepared.staging_dir.display());
+        eprintln!("Completed development run at {}", prepared.staging_dir.display());
         eprintln!("  plan_digest_blake3: {}", prepared.plan.plan_digest_blake3);
-        eprintln!("  dev-only: cached providers adopted; no promoted receipt, no release alias");
+        eprintln!("  development-only: no promoted cold receipt, no release alias");
     }
     Ok(())
 }
@@ -2413,18 +2669,37 @@ fn write_attempt_status(
     };
     let bytes = serde_json::to_vec_pretty(&value)
         .map_err(|error| proof_error(format!("serializing attempt status: {error}")))?;
-    fs::write(&path, bytes)
-        .map_err(|error| proof_error(format!("writing attempt status {}: {error}", path.display())))?;
+    let temporary = staging_dir.join(format!(".{ATTEMPT_STATUS_FILE}.{}.tmp", std::process::id()));
+    write_bytes_create_new(&temporary, &bytes)?;
+    fs::rename(&temporary, &path)
+        .map_err(|error| proof_error(format!("publishing attempt status {}: {error}", path.display())))?;
+    fs::File::open(staging_dir)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| proof_error(format!("syncing attempt status directory {}: {error}", staging_dir.display())))?;
     assert!(matches!(status, PROOF_STATUS_RUNNING | PROOF_STATUS_FAILED | PROOF_STATUS_COMPLETE));
     debug_assert!(path.is_file());
     Ok(())
 }
 
 pub(crate) fn write_json_create_new<T: Serialize>(path: &Path, value: &T) -> Result<(), RunError> {
-    let mut bytes = serde_json::to_vec_pretty(value)
+    let file = fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(path)
+        .map_err(|error| proof_error(format!("creating {}: {error}", path.display())))?;
+    let mut writer = std::io::BufWriter::with_capacity(64 * 1_024, file);
+    serde_json::to_writer_pretty(&mut writer, value)
         .map_err(|error| proof_error(format!("serializing {}: {error}", path.display())))?;
-    bytes.push(b'\n');
-    write_bytes_create_new(path, &bytes)
+    writer
+        .write_all(b"\n")
+        .and_then(|()| writer.flush())
+        .map_err(|error| proof_error(format!("writing {}: {error}", path.display())))?;
+    writer
+        .get_ref()
+        .sync_all()
+        .map_err(|error| proof_error(format!("syncing {}: {error}", path.display())))?;
+    assert!(path.is_file());
+    Ok(())
 }
 
 fn write_bytes_create_new(path: &Path, bytes: &[u8]) -> Result<(), RunError> {
@@ -2547,6 +2822,23 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn ignored_unknown_observation_error_cannot_publish_filtered_success() {
+        let root = tempfile::tempdir().unwrap();
+        let (proof, adapters, mut events) = crate::source_built_fixed_point_action_trust::tests::fixture();
+        let plan = crate::source_built_fixed_point_planning::plan_actions(&proof, adapters).unwrap();
+        let mut recorder = ActionObservationRecorder::create(root.path(), &proof, &plan).unwrap();
+        let mut unknown = events.remove(0);
+        unknown.action_id = "unplanned/child".into();
+        assert!(recorder.record(unknown).is_err());
+        assert!(recorder.finish(&proof).is_err());
+        let journal = fs::read_to_string(root.path().join(ACTION_JOURNAL_FILE)).unwrap();
+        let preserved: ActionExecutionEvent = serde_json::from_str(journal.trim_end()).unwrap();
+        assert_eq!(preserved.action_id, "unplanned/child");
+        assert!(!root.path().join(ACTION_EVENTS_FILE).exists());
+        assert!(!root.path().join(ACTION_RECONCILIATION_FILE).exists());
+    }
+
     const DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const OTHER_DIGEST: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const RETAINED_TRANSITION_EXECUTION_ROOT_ENV: &str = "MANTLE_STAGE_X_TRANSITION_EXECUTION_ROOT";
@@ -2568,6 +2860,41 @@ mod tests {
         fs::write(execution_root.join(STAGEX_TRANSITION_AUDIT_FILE), b"[]").unwrap();
         assert!(execution_root.join(STAGEX_TRANSITION_REPORT_FILE).is_file());
         assert!(STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES.iter().all(|path| execution_root.join(path).is_file()));
+    }
+
+    #[test]
+    fn promoted_cold_environment_rejects_cache_and_scheduling_keys_without_reading_values() {
+        for rejected in [
+            "MANTLE_CC_CACHE_POLICY",
+            "MANTLE_CC_CACHE_SOCKET",
+            "MANTLE_CC_CACHE_FUTURE",
+            "MANTLE_COMPILE_BUILD_ID",
+            "MANTLE_COMPILE_SLOT_SOCKET",
+            "MANTLE_COMPILE_FUTURE",
+        ] {
+            let error = validate_cold_compiler_environment(["PATH", rejected]).unwrap_err();
+            assert!(error.to_string().contains(rejected));
+        }
+        validate_cold_compiler_environment([
+            "PATH",
+            "MANTLE_LOG",
+            "MANTLE_CC_CACHED",
+            "MANTLE_COMPILER",
+            "OTHER_COMPILE_BUILD_ID",
+        ])
+        .unwrap();
+    }
+
+    #[test]
+    fn non_utf8_compiler_cache_variable_name_remains_disqualifying() {
+        use std::os::unix::ffi::OsStringExt as _;
+        let name = std::ffi::OsString::from_vec(b"MANTLE_CC_CACHE_\xff".to_vec());
+        assert!(
+            validate_cold_compiler_environment([name])
+                .unwrap_err()
+                .to_string()
+                .contains("compiler-cache/scheduling")
+        );
     }
 
     #[test]
@@ -2751,6 +3078,7 @@ mod tests {
             &prepared.native_state_dir,
             LOGICAL_STORE_PREFIX,
             &[],
+            None,
         )
         .unwrap_err();
         assert!(mismatch.to_string().contains("store-backend-mismatch: requested casita, state declares snix"));
@@ -2993,60 +3321,158 @@ mod tests {
     }
 
     #[test]
-    fn publication_rolls_bundle_back_when_alias_transaction_fails() {
-        const TEST_DISK_AVAILABLE_BYTES: u64 = 1;
+    fn failed_status_update_preserves_last_complete_status() {
         let temp = tempfile::tempdir().unwrap();
-        let staging = temp.path().join("proof.staging");
-        let final_dir = temp.path().join("proof");
-        fs::create_dir(&staging).unwrap();
-        fs::create_dir(temp.path().join(LATEST_SOURCE_BUILT_ALIAS)).unwrap();
-        let prepared = PreparedAttempt {
-            final_dir: final_dir.clone(),
-            staging_dir: staging.clone(),
-            source_root: staging.join("source"),
-            stagex_seed: staging.join("seed"),
-            stagex_lineage: staging.join("lineage"),
-            stagex_source_bundle: staging.join("stagex-source.json"),
-            native_source_manifest: staging.join("native.json"),
-            rust_source_archive_dir: staging.join("rust"),
-            native_store_dir: staging.join("store"),
-            native_state_dir: staging.join("state"),
-            transcripts_dir: staging.join("transcripts"),
-            disk_available_bytes_before: TEST_DISK_AVAILABLE_BYTES,
-            started_at: Instant::now(),
-            plan: test_plan(),
-        };
-
-        let error = publish_attempt(&prepared).unwrap_err();
-
-        assert!(error.to_string().contains("not a symlink"));
-        assert!(staging.is_dir());
-        assert!(!final_dir.exists());
-        assert!(!temp.path().join(LATEST_ALIAS).exists());
+        let plan_digest = "a".repeat(BLAKE3_HEX_LENGTH);
+        write_attempt_status(temp.path(), Some(&plan_digest), PROOF_STATUS_RUNNING, None).unwrap();
+        let blocked_temporary = temp.path().join(format!(".{ATTEMPT_STATUS_FILE}.{}.tmp", std::process::id()));
+        fs::create_dir(&blocked_temporary).unwrap();
+        assert!(
+            write_attempt_status(temp.path(), Some(&plan_digest), PROOF_STATUS_FAILED, Some("execution denied"),)
+                .is_err()
+        );
+        let previous: serde_json::Value =
+            serde_json::from_slice(&fs::read(temp.path().join(ATTEMPT_STATUS_FILE)).unwrap()).unwrap();
+        assert_eq!(previous["status"], PROOF_STATUS_RUNNING);
+        assert_eq!(previous["plan_digest_blake3"], plan_digest);
+        fs::remove_dir(blocked_temporary).unwrap();
+        write_attempt_status(temp.path(), Some(&plan_digest), PROOF_STATUS_FAILED, Some("execution denied")).unwrap();
+        let failed: serde_json::Value =
+            serde_json::from_slice(&fs::read(temp.path().join(ATTEMPT_STATUS_FILE)).unwrap()).unwrap();
+        assert_eq!(failed["status"], PROOF_STATUS_FAILED);
+        assert_eq!(failed["blocker"], "execution denied");
     }
 
     #[test]
-    fn success_alias_transaction_updates_both_or_neither() {
+    fn published_selection_readback_rejects_a_repointed_generation() {
+        let temp = tempfile::tempdir().unwrap();
+        for generation in ["old-proof", "new-proof"] {
+            fs::create_dir(temp.path().join(generation)).unwrap();
+        }
+        let aliases = [LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS];
+        update_success_aliases(temp.path(), &aliases, std::ffi::OsStr::new("new-proof")).unwrap();
+        let pointer = temp.path().join(SUCCESS_PUBLICATION_POINTER);
+        fs::remove_file(&pointer).unwrap();
+        std::os::unix::fs::symlink("old-proof", &pointer).unwrap();
+
+        assert!(matches!(
+            verify_success_selection(temp.path(), &aliases, std::ffi::OsStr::new("new-proof")),
+            Err(RunError::Build(_))
+        ));
+        for alias in aliases {
+            assert_eq!(fs::canonicalize(temp.path().join(alias)).unwrap(), temp.path().join("old-proof"));
+        }
+    }
+
+    #[test]
+    fn alias_publication_failure_preserves_candidate_artifacts_and_prior_success() {
+        let temp = tempfile::tempdir().unwrap();
+        let staging = temp.path().join("proof.staging");
+        let mut prepared = prepared_fixture(&temp, staging.clone());
+        prepared.final_dir = temp.path().join("proof");
+        fs::write(staging.join("retained-evidence.txt"), b"candidate artifacts").unwrap();
+        let old = temp.path().join("old-proof");
+        fs::create_dir(&old).unwrap();
+        std::os::unix::fs::symlink("old-proof", temp.path().join(LATEST_ALIAS)).unwrap();
+        fs::create_dir(temp.path().join(LATEST_SOURCE_BUILT_ALIAS)).unwrap();
+
+        assert!(publish_attempt(&prepared).is_err());
+        assert_eq!(fs::read(prepared.final_dir.join("retained-evidence.txt")).unwrap(), b"candidate artifacts");
+        assert_eq!(fs::canonicalize(temp.path().join(LATEST_ALIAS)).unwrap(), old);
+        assert!(temp.path().join(LATEST_SOURCE_BUILT_ALIAS).is_dir());
+    }
+
+    #[test]
+    fn interrupted_alias_migration_never_selects_part_of_the_new_generation() {
         let temp = tempfile::tempdir().unwrap();
         let parent = temp.path();
-        std::os::unix::fs::symlink("old-proof", parent.join(LATEST_ALIAS)).unwrap();
-        fs::create_dir(parent.join(LATEST_SOURCE_BUILT_ALIAS)).unwrap();
-
-        let error = update_success_aliases(
-            parent,
-            &[LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS],
-            std::ffi::OsStr::new("new-proof"),
-        )
-        .unwrap_err();
-
-        assert!(error.to_string().contains("not a symlink"));
-        assert_eq!(fs::read_link(parent.join(LATEST_ALIAS)).unwrap(), Path::new("old-proof"));
-        assert!(parent.join(LATEST_SOURCE_BUILT_ALIAS).is_dir());
-        fs::remove_dir(parent.join(LATEST_SOURCE_BUILT_ALIAS)).unwrap();
+        for (name, generation) in [("old-proof", "old"), ("new-proof", "new")] {
+            fs::create_dir(parent.join(name)).unwrap();
+            fs::write(parent.join(name).join("generation"), generation).unwrap();
+        }
+        for alias in [LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS] {
+            std::os::unix::fs::symlink("old-proof", parent.join(alias)).unwrap();
+        }
+        // Fail after both names can have migrated to the shared old pointer,
+        // but before the sole operation that can expose the new generation.
+        let temporary = parent.join(format!("{SUCCESS_PUBLICATION_POINTER}.{}.tmp", std::process::id()));
+        fs::create_dir(&temporary).unwrap();
+        assert!(
+            update_success_aliases(
+                parent,
+                &[LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS],
+                std::ffi::OsStr::new("new-proof")
+            )
+            .is_err()
+        );
+        for alias in [LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS] {
+            assert_eq!(fs::read_to_string(parent.join(alias).join("generation")).unwrap(), "old");
+        }
+        fs::remove_dir(temporary).unwrap();
         update_success_aliases(parent, &[LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS], std::ffi::OsStr::new("new-proof"))
             .unwrap();
-        assert_eq!(fs::read_link(parent.join(LATEST_ALIAS)).unwrap(), Path::new("new-proof"));
-        assert_eq!(fs::read_link(parent.join(LATEST_SOURCE_BUILT_ALIAS)).unwrap(), Path::new("new-proof"));
+        for alias in [LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS] {
+            assert_eq!(fs::read_to_string(parent.join(alias).join("generation")).unwrap(), "new");
+        }
+    }
+
+    #[test]
+    fn disagreeing_success_aliases_cannot_authorize_a_new_publication() {
+        let temp = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink("old-a", temp.path().join(LATEST_ALIAS)).unwrap();
+        std::os::unix::fs::symlink("old-b", temp.path().join(LATEST_SOURCE_BUILT_ALIAS)).unwrap();
+        assert!(
+            update_success_aliases(
+                temp.path(),
+                &[LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS],
+                std::ffi::OsStr::new("new-proof")
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read_link(temp.path().join(LATEST_ALIAS)).unwrap(), Path::new("old-a"));
+        assert_eq!(fs::read_link(temp.path().join(LATEST_SOURCE_BUILT_ALIAS)).unwrap(), Path::new("old-b"));
+    }
+
+    #[test]
+    fn partially_present_prior_aliases_are_rejected_without_creating_a_selection() {
+        let temp = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink("old-proof", temp.path().join(LATEST_ALIAS)).unwrap();
+        assert!(
+            update_success_aliases(
+                temp.path(),
+                &[LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS],
+                std::ffi::OsStr::new("new-proof")
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read_link(temp.path().join(LATEST_ALIAS)).unwrap(), Path::new("old-proof"));
+        assert!(fs::symlink_metadata(temp.path().join(LATEST_SOURCE_BUILT_ALIAS)).is_err());
+        assert!(fs::symlink_metadata(temp.path().join(SUCCESS_PUBLICATION_POINTER)).is_err());
+    }
+
+    #[test]
+    fn success_aliases_cannot_publish_a_cycle_or_escape_the_root() {
+        let temp = tempfile::tempdir().unwrap();
+        for rejected in [
+            "../proof",
+            "/tmp/proof",
+            SUCCESS_PUBLICATION_POINTER,
+            LATEST_ALIAS,
+            LATEST_SOURCE_BUILT_ALIAS,
+            SUCCESS_PREVIOUS_POINTER,
+            SUCCESS_PUBLICATION_LOCK,
+        ] {
+            assert!(
+                update_success_aliases(
+                    temp.path(),
+                    &[LATEST_ALIAS, LATEST_SOURCE_BUILT_ALIAS],
+                    std::ffi::OsStr::new(rejected)
+                )
+                .is_err()
+            );
+            assert!(fs::symlink_metadata(temp.path().join(LATEST_ALIAS)).is_err());
+            assert!(fs::symlink_metadata(temp.path().join(LATEST_SOURCE_BUILT_ALIAS)).is_err());
+        }
     }
 
     #[test]
@@ -3302,7 +3728,6 @@ mod tests {
         assert!(prepared.native_store_dir.join("aaa-stagex").is_dir());
         assert!(prepared.native_store_dir.join("aaa-native").join("bin").is_file());
         assert!(adopted.output.path.ends_with("aaa-native"));
-        assert!(adopted.transcript_digest_blake3.len() == BLAKE3_HEX_LENGTH);
     }
 
     fn prepared_fixture(temp: &tempfile::TempDir, staging: PathBuf) -> PreparedAttempt {
@@ -3355,6 +3780,32 @@ mod tests {
             verbose: false,
             backend: crunch_store::StoreBackend::Snix,
             json: false,
+        }
+    }
+
+    #[test]
+    fn every_development_mode_is_disqualified_before_cache_or_resume_execution() {
+        let temp = tempfile::tempdir().unwrap();
+        let profile = temp.path().join("profile.json");
+        let out = temp.path().join("proof");
+        let executable = temp.path().join("bwrap");
+        let cold = options_fixture(&profile, &out, &executable, None, false, false);
+        assert!(!is_development_run(&cold));
+        crate::source_built_fixed_point_trust_report::reject_development_authority(temp.path()).unwrap();
+        for (index, (cache, resume, fast_fail)) in [
+            (None, true, false),
+            (None, false, true),
+            (Some(temp.path()), false, false),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let root = temp.path().join(format!("dev-{index}"));
+            fs::create_dir(&root).unwrap();
+            let options = options_fixture(&profile, &out, &executable, cache, resume, fast_fail);
+            assert!(is_development_run(&options));
+            write_development_authority(&root, &options, &test_plan()).unwrap();
+            assert!(crate::source_built_fixed_point_trust_report::reject_development_authority(&root).is_err());
         }
     }
 

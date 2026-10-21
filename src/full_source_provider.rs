@@ -642,6 +642,7 @@ impl ProviderAdoptionPort for LocalProviderAdoption {
             fallback_mode: crunch_store::StoreFallbackMode::Practical,
             store_dir: store_dir.to_string(),
             base_state_dirs: Vec::new(),
+            source_admission: None,
         };
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|error| admission_error(format!("creating provider adoption readback runtime: {error}")))?;
@@ -736,6 +737,7 @@ fn adopt_provider_after_preflight(
         fallback_mode,
         store_dir: store_dir.to_string(),
         base_state_dirs: Vec::new(),
+        source_admission: None,
     };
     store_config
         .preflight_backend_identity()

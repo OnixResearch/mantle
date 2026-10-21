@@ -44,3 +44,173 @@ If all three SDK builds and the ignored test finished but post-build verificatio
 The proof rehashes every included source member, including `Cargo.lock` and the APK, build and store owner crates, by BLAKE3 before and after compilation. Ignored `vendor-deps/` is recorded as excluded only because the proof Cargo command uses `--offline` without opt-in `.cargo/vendor-config.toml`, and the active `.cargo/config.toml` does not replace registry sources; an active replacement fails snapshot capture, and any needed omitted dependency fails the proof with a blocker rather than being silently treated as verified. NAR SHA-256 never substitutes for these Mantle-owned source identities.
 
 The signed example enables only APK Signature Scheme v2 and declares Android `minSdkVersion="24"`, the first API level supporting that scheme; the proof keystore is not a release credential.
+
+## Native libraries and assets
+
+Both published and reviewed plans now accept optional `assets` (default `[]`)
+and `native` (default `null`). An asset is `{ source_member, destination }`,
+where `destination` is relative to APK `assets/`. A native package declares
+`abi`, `api_level`, `ndk_revision`, `ndk_sysroot`, and `libraries`; each library
+declares a signed producer output `store_file`, APK `filename`, and
+`required_jni_exports`. These are explicit inputs, not host search paths.
+Signing remains the existing final, separate stage; native compilation,
+inspection, linking and packaging never receive signing inputs.
+
+The initial declaration matrix is **arm64-v8a / aarch64-linux-android**, API
+**24..35**, NDK **r28c / 28.2.13676358**, Linux x86-64 execution host. This is a
+bounded source-level contract, not a statement that every matrix row has been
+executed. The minimal proof cohort selects API 24 and Rust **1.90.0**, with
+separately pinned x86_64-unknown-linux-gnu host and aarch64-linux-android std
+archives in `tests/fixtures/android-native-minimal/cohort.json`. The existing
+SDK cohort remains build-tools 35.0.0, platform 35 r02 and Temurin 17.0.17+10;
+neither source-v1 nor reviewed-record-v1 identities or timestamp endpoints
+change. NDK acquisition uses an ordinary independently SHA-256-pinned FOD,
+not a forged fourth member of either existing SDK cohort.
+
+`android.native.fetchNdk` pins
+`https://dl.google.com/android/repository/android-ndk-r28c-linux.zip` to SHA-256
+`dfb20d396df28ca02a8c708314b814a4d961dc9074f9a161932746f815aa552f`.
+Google's [NDK archive table](https://github.com/android/ndk/wiki/Unsupported-Downloads#r28c)
+records revision, URL, 722261334-byte size and SHA-1; the SHA-256 is corroborated
+by the [F-Droid SDK transparency log](https://gitlab.com/fdroid/android-sdk-transparency-log/-/raw/master/checksums.json).
+The Rust archive hashes come from the official
+[host checksum](https://static.rust-lang.org/dist/rust-1.90.0-x86_64-unknown-linux-gnu.tar.xz.sha256)
+and [Android std checksum](https://static.rust-lang.org/dist/rust-std-1.90.0-aarch64-linux-android.tar.xz.sha256).
+Versions and path labels are never substitutes for those bytes, the signed
+store content, or the actual producer/config/source identities.
+
+### Stages and independent inspection
+
+1. Acquire the pinned NDK and Rust archives explicitly; offline builds require
+   their existing admitted source bundle, never a user Android or Cargo home.
+   `android.native.extractNdk { archive, utility_root, utility_member }`
+   rechecks the exact archive digest and lowers to an ordinary extraction
+   derivation. Realize it before naming its actual exported output.
+2. `android.native.mkLinker { ndk_tree, glibc, libgcc, utility_root,
+   utility_member }` creates an ordinary declared tool closure. It wraps both
+   clang **and ld.lld** with the explicit glibc loader: wrapping clang alone
+   leaves its child linker requesting absent host `/lib64`. It also exports
+   llvm-ar, llvm-ranlib and llvm-readelf wrappers. `ndk_tree`, glibc, libgcc and
+   utility_root name complete independently admitted store objects; the NDK
+   tree retains its `android-ndk-r28c/` archive root.
+3. Feed `android.native.targetLinker { wrapper, ndk_tree, glibc, libgcc,
+   api_level }` into the generic Cargo unit-plan declaration **and** its
+   immutable config. Its exact arguments select the API target, declared
+   sysroot, and max/common ELF page sizes of 16384 bytes. Keep `linker` as the
+   separate host linker; `target_linker` applies only to target units. Pin the
+   installed Rust host/target std closure, Cargo.lock, workspace/path packages,
+   vendor roots, features, `no_default_features`, profile, native-input roles,
+   flags, and host/runtime inputs in that config. The existing role declaration
+   contract and generic producer handle build.rs and proc macros; there is no
+   Android scheduler or second Cargo resolver. See the reusable
+   `tests/fixtures/android-native-minimal/native.ncl` function.
+4. Select the real admitted plan's cdylib root through
+   `cargo-unit-bindings.json`, then read its compiler output's
+   `share/mantle/unit-dependencies-v1.json`; never guess an output path or
+   select a host proc macro by a similar filename. The proof checks host
+   build.rs/proc-macro bindings and actual x86_64 ELF artifacts separately
+   from the Android root. Bind that root's declared cdylib through the
+   parameterized
+   `tests/fixtures/android-native-minimal/apk.ncl` function and invoke the
+   **existing** `crunch-android-apk` renderer and `mantle build` flow.
+
+Both APK adapters inspect ELF64 little-endian AArch64 ET_DYN inputs before
+rendering executable APK steps. Inspection checks dynamic metadata against
+the loader's mapped tables, rejects interpreters/RPATH/RUNPATH/text relocations,
+checks declared JNI exports and SONAME, walks DT_NEEDED, and resolves strong
+imports against that root's dependency group and the declared API-specific NDK
+stubs. A sibling library's exports cannot satisfy an import unless the loader
+will reach it through DT_NEEDED. NDK stubs are API evidence only when their
+complete tree is bound to the pinned extraction by ordinary signed build
+admission; a caller-provided revision string or arbitrary signed tree is not
+official NDK provenance.
+Every declared library's mapped Android API note must also equal the selected
+API. Missing notes and a higher/lower stamped API fail rather than being
+inferred from a filename. The note is not compiler-content authority.
+Native artifact and NDK sysroot store objects must also remain distinct from
+the keystore and both password objects, even when their member paths differ.
+Only the final signing derivation receives the separate secret objects.
+
+
+Every native PT_LOAD must have power-of-two alignment at least 16384 and
+congruent file/virtual offsets. The existing package stage installs declared
+libraries as uncompressed `lib/arm64-v8a/<filename>`, adds declared assets,
+then runs **`zipalign -P 16 -f 4`** and **`zipalign -c -P 16 4`**. Four-byte
+ZIP alignment alone does not establish 16 KiB native-library alignment. Native
+API level also reaches `aapt2 link --min-sdk-version` and D8 `--min-api`.
+Published packaging still uses fixed file timestamps and jar-create without
+`--date`; reviewed packaging retains its bounded jar-update `--date` renderer.
+
+### Real remote proof driver and required run manifest
+
+`scripts/prove-android-native.py --manifest <private-run-manifest.json>
+--output <fresh-private-proof-directory>` runs cold/warm native and existing
+APK stages, a changed-feature native rebuild, an independently admitted changed
+asset source, independent ZIP-offset/ELF/JNI/API/dependency inspections,
+`zipalign` checks and `aapt2 dump badging`. If `apk_signing` is supplied, it
+also runs the declared `apksigner verify` and requires verification to reject
+a tampered DEX. It creates no key or credentials and performs no installation.
+Launch the real proof detached on the parent's immutable source snapshot;
+no mid-flight SDK/build/test execution was used to justify this extension.
+
+The run manifest requires concrete, pre-admitted values (no placeholder store
+paths):
+
+- `mantle`, `apk_adapter`, `b3sum`, `store`, `store_prefix`, `state_dir`,
+  `store_signing_key`, `store_trusted_public_key`; this driver requires the same
+  logical and physical store namespace. Bootstrap/signature-check the BLAKE3
+  tool independently, as for the existing official APK rail.
+- `native_recipe`, `changed_native_recipe`, `apk_plan_factory`, `apk_inputs`,
+  `changed_asset_inputs`, `ndk_sysroot`, `artifact_stem`, `library_filename`,
+  `required_jni_exports`, `assets`, `api_level`, `workload_identity`; optional
+  `apk_signing` contains only the existing declared signing metadata, never
+  password/key bytes. The plan factory accepts the same parameters as the
+  fixture's `apk.ncl`. The minimal artifact stem is
+  `libmantle_android_native_minimal`; library filename adds `.so`.
+- `tools` maps `readelf`, `zipalign`, `aapt2` and, when signing, `apksigner` to
+  exact argv prefixes using pinned executable/loader/library/JAR paths. No
+  ambient executable lookup or network acquisition belongs in the driver.
+- `pinned_files` is an array of `{ path, blake3 }` covering executables,
+  verifier members, recipes, all imported configs/manifests and source snapshot
+  files. Pin complete runtime/store roots through ordinary admission too;
+  these file checks do not replace store signatures or extraction provenance.
+- `negative_native_recipes` has exactly `wrong-toolchain`,
+  `missing-dependency`, `undeclared-input`, `network` entries, each
+  `{ recipe, diagnostic }`. Use a Rust closure without Android std for the
+  first, omit the fixture's path macro package for the second, and the
+  `try-undeclared` / `try-network` feature variants for the latter two.
+  Diagnostics for these pinned fixture variants are respectively
+  `can't find crate for`, `failed to load manifest`,
+  `undeclared input denied by native sandbox`, and
+  `network attempt denied by native sandbox`.
+  The driver requires both failure and the declared diagnostic in the actual
+  structured failure/current saved build log. It also directly exercises wrong
+  ABI/API/NDK declarations and an otherwise supported API whose actual ELF note
+  disagrees. For undeclared-input isolation it exclusively creates a real
+  host-only marker outside the store, then removes only that marker; a
+  pre-existing marker is a blocker. The network negative uses a real
+  host-loopback listener at 127.0.0.1:41237 and first proves the host can connect
+  to it, avoiding any assumption that public Internet connectivity works.
+  The sandboxed build script must be unable to reach that listener; an occupied
+  port blocks the proof rather than becoming a fake network-denial success.
+
+For the minimal fixture, default features return 42 from JNI; `answer-two`
+returns 43. Its build.rs checks distinct host/target triples, and a real local
+proc macro executes on the host. These source declarations and unexecuted
+proof driver are **not** a successful pinned-toolchain build receipt. Run the
+driver and retain its reports before claiming the minimal acceptance item.
+Its receipt distinguishes `build_structure: observed` from
+`device_execution: not-performed`; JNI symbol inspection is not device JNI
+execution or a production-readiness claim.
+
+The representative Herdr workload is an explicit remaining prerequisite:
+provide the authoritative repository and immutable revision, Android/native
+source, Cargo.lock and dependency acquisition/vendor closure, actual native
+dependencies, required JNI exports and asset manifest. The inspected local
+`ogulcancelik/herdr` checkout describes a terminal agent multiplexer; its
+README/Cargo manifest and inspected Onixpkgs recipes do not supply the requested
+Android application/JNI wrapper and native/asset cohort. That checkout, unrelated
+public projects, and generated large assets must not be cited as representative
+Android success. No native SDK execution,
+representative build, signature observation or acceptance closure is claimed
+by this source change alone.

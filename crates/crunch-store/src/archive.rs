@@ -18,6 +18,7 @@ use nix_compat::store_path::StorePath;
 use nix_compat::store_path::StorePathRef;
 use serde::Deserialize;
 use serde::Serialize;
+use sha2::Digest;
 use snix_castore::Node;
 use snix_store::nar::NarCalculationService;
 use snix_store::nar::SimpleRenderer;
@@ -299,7 +300,7 @@ pub async fn list_store_archive<R: AsyncRead + Unpin>(reader: &mut R) -> Result<
                 if !seen.insert(listed.store_path.clone()) {
                     return Err(Error::Store(format!("archive contains duplicate path record {}", listed.store_path)));
                 }
-                drain_payload(reader, path_frame.payload_len).await?;
+                drain_payload(reader, &path_frame).await?;
                 list_result.total_payload_bytes =
                     list_result.total_payload_bytes.saturating_add(path_frame.payload_len);
                 list_result.paths.push(listed);
@@ -602,7 +603,7 @@ async fn import_or_skip_path<R: AsyncRead + Unpin + Send>(
     let decision = plan_archive_import_action(&record.listed, facts);
     match decision.action {
         ArchiveImportAction::SkipExisting => {
-            drain_payload(reader, record.path_frame.payload_len).await?;
+            drain_payload(reader, &record.path_frame).await?;
             context.result.skipped_already_present_count =
                 context.result.skipped_already_present_count.saturating_add(1);
             Ok(())
@@ -943,8 +944,13 @@ async fn read_frame<R: AsyncRead + Unpin>(reader: &mut R) -> Result<ArchiveFrame
     serde_json::from_slice(&metadata).map_err(|err| Error::Store(format!("parsing archive frame metadata: {err}")))
 }
 
-async fn drain_payload<R: AsyncRead + Unpin>(reader: &mut R, payload_len: u64) -> Result<(), Error> {
-    let mut remaining_bytes = payload_len;
+async fn drain_payload<R: AsyncRead + Unpin>(reader: &mut R, path_frame: &ArchivePathFrame) -> Result<(), Error> {
+    if path_frame.payload_len != path_frame.path_info.nar_size {
+        return Err(Error::Store(format!("archive payload NAR size mismatch for {}", path_frame.path_info.store_path)));
+    }
+    let mut remaining_bytes = path_frame.payload_len;
+    let mut blake3 = blake3::Hasher::new();
+    let mut sha256 = sha2::Sha256::new();
     let mut buffer = vec![0u8; ARCHIVE_IO_BUFFER_BYTES];
     let buffer_capacity_bytes = u64::try_from(ARCHIVE_IO_BUFFER_BYTES)
         .map_err(|_| Error::Store("archive I/O buffer size does not fit u64".to_string()))?;
@@ -960,9 +966,18 @@ async fn drain_payload<R: AsyncRead + Unpin>(reader: &mut R, payload_len: u64) -
         if read_bytes == 0 {
             return Err(Error::Store(format!("archive ended while draining {remaining_bytes} payload bytes")));
         }
+        blake3.update(&buffer[..read_bytes]);
+        sha256.update(&buffer[..read_bytes]);
         let read_bytes = u64::try_from(read_bytes)
             .map_err(|_| Error::Store("archive payload read size does not fit u64".to_string()))?;
         remaining_bytes = remaining_bytes.saturating_sub(read_bytes);
+    }
+    if blake3::Hasher::finalize(&blake3).to_hex().as_str() != path_frame.payload_blake3 {
+        return Err(Error::Store(format!("archive payload BLAKE3 mismatch for {}", path_frame.path_info.store_path)));
+    }
+    let nar_sha256: [u8; SHA256_DIGEST_BYTES] = sha256.finalize().into();
+    if nar_sha256 != path_frame.path_info.nar_sha256 {
+        return Err(Error::Store(format!("archive payload SHA-256 mismatch for {}", path_frame.path_info.store_path)));
     }
     Ok(())
 }
@@ -1016,7 +1031,7 @@ impl<W> HashingAsyncWriter<W> {
     }
 
     fn finish(self) -> (u64, String) {
-        (self.bytes_written, self.hasher.finalize().to_hex().to_string())
+        (self.bytes_written, blake3::Hasher::finalize(&self.hasher).to_hex().to_string())
     }
 }
 
@@ -1056,7 +1071,7 @@ impl<R> Blake3AsyncReader<R> {
     }
 
     fn finish(self) -> (u64, String) {
-        (self.bytes_read, self.hasher.finalize().to_hex().to_string())
+        (self.bytes_read, blake3::Hasher::finalize(&self.hasher).to_hex().to_string())
     }
 }
 
@@ -1096,6 +1111,7 @@ mod tests {
 
     async fn open_test_store(dir: &std::path::Path, store_dir: &str) -> StoreHandle {
         StoreHandle::open(StoreConfig {
+            source_admission: None,
             backend: crate::StoreBackend::Snix,
             state_dir: dir.join("state"),
             output_dir: dir.join("store"),
@@ -1110,6 +1126,7 @@ mod tests {
 
     async fn open_casita_test_store(dir: &std::path::Path) -> StoreHandle {
         StoreHandle::open(StoreConfig {
+            source_admission: None,
             backend: crate::StoreBackend::Casita,
             state_dir: dir.join("state"),
             output_dir: dir.join("store"),
@@ -2029,6 +2046,69 @@ mod tests {
         assert_eq!(paths.len(), 2);
         assert!(paths.contains(&first.store_path.to_string()));
         assert!(paths.contains(&second.store_path.to_string()));
+    }
+
+    #[tokio::test]
+    async fn archive_list_rejects_stream_corruption_even_with_resealed_payload_blake3() {
+        const INPUT_CHUNK_BYTES: usize = 113;
+        let temp = tempfile::tempdir().unwrap();
+        let store = open_test_store(temp.path(), "/mantle/store").await;
+        let payload = vec![b'x'; ARCHIVE_IO_BUFFER_BYTES + 1];
+        let path_info = signed_pathinfo(&store, "list-integrity-root", &payload).await;
+        store.pathinfo_service().put(path_info.clone()).await.unwrap();
+        let mut archive = Vec::new();
+        export_store_archive(&store, std::slice::from_ref(&path_info), &mut archive, &ArchiveExportOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+
+        let mut valid = ChunkedAsyncRead::new(archive.clone(), INPUT_CHUNK_BYTES);
+        let listed = list_store_archive(&mut valid).await.unwrap();
+        assert_eq!(listed.paths[0].nar_sha256_hex, data_encoding::HEXLOWER.encode(&path_info.nar_sha256));
+        assert_eq!(listed.total_payload_bytes, path_info.nar_size);
+
+        let mut corrupted = archive;
+        tamper_payload_content(&mut corrupted, &payload);
+        let mut reader = ChunkedAsyncRead::new(corrupted.clone(), INPUT_CHUNK_BYTES);
+        let error = list_store_archive(&mut reader).await.unwrap_err();
+        assert!(error.to_string().contains("archive payload BLAKE3 mismatch"));
+
+        let replacement_blake3 = blake3::hash(&corrupted[first_payload_range(&corrupted)]).to_hex().to_string();
+        replace_first_path_frame_metadata(&mut corrupted, |frame| {
+            frame["payload_blake3"] = serde_json::Value::String(replacement_blake3);
+        });
+        let mut reader = ChunkedAsyncRead::new(corrupted, INPUT_CHUNK_BYTES);
+        let error = list_store_archive(&mut reader).await.unwrap_err();
+        assert!(error.to_string().contains("archive payload SHA-256 mismatch"));
+    }
+
+    #[tokio::test]
+    async fn archive_list_rejects_signed_size_mismatch_and_truncated_stream() {
+        const INPUT_CHUNK_BYTES: usize = 7;
+        let temp = tempfile::tempdir().unwrap();
+        let store = open_test_store(temp.path(), "/mantle/store").await;
+        let path_info = signed_pathinfo(&store, "list-size-root", b"bounded stream payload").await;
+        store.pathinfo_service().put(path_info.clone()).await.unwrap();
+        let mut archive = Vec::new();
+        export_store_archive(&store, std::slice::from_ref(&path_info), &mut archive, &ArchiveExportOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+
+        let mut wrong_size = archive.clone();
+        replace_first_path_frame_metadata(&mut wrong_size, |frame| {
+            frame["path_info"]["nar_size"] = serde_json::Value::from(path_info.nar_size + 1);
+        });
+        let mut reader = ChunkedAsyncRead::new(wrong_size, INPUT_CHUNK_BYTES);
+        let error = list_store_archive(&mut reader).await.unwrap_err();
+        assert!(error.to_string().contains("archive payload NAR size mismatch"));
+
+        truncate_first_payload(&mut archive);
+        let mut reader = ChunkedAsyncRead::new(archive, INPUT_CHUNK_BYTES);
+        let error = list_store_archive(&mut reader).await.unwrap_err();
+        assert!(error.to_string().contains("archive ended while draining"));
     }
 
     // r[verify store_transports.nix_archive_castore_separation]

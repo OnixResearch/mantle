@@ -88,7 +88,7 @@ const FLEX_RUNTIME_SECTION_BYTES_LEN: usize = 49;
 const FLEX_RUNTIME_SECTION_NAME_BYTES_LEN: usize = 3;
 const FLEX_RUNTIME_SECTION_NAME_BYTES_LEN_MAX: usize = 4;
 const FLEX_RUNTIME_SECTION_NAME: &[u8; FLEX_RUNTIME_SECTION_NAME_BYTES_LEN] = b"stx";
-const FLEX_RUNTIME_SECTION_BYTES: [u8; FLEX_RUNTIME_SECTION_BYTES_LEN] = [
+pub(crate) const FLEX_RUNTIME_SECTION_BYTES: [u8; FLEX_RUNTIME_SECTION_BYTES_LEN] = [
     0x48, 0xc7, 0xc0, 0x39, 0x00, 0x00, 0x00, 0x0f, 0x05, 0xc3, 0x48, 0x89, 0xfe, 0x48, 0xc7, 0xc7, 0xff, 0xff, 0xff,
     0xff, 0x48, 0x31, 0xd2, 0x4d, 0x31, 0xd2, 0x48, 0xc7, 0xc0, 0x3d, 0x00, 0x00, 0x00, 0x0f, 0x05, 0xc3, 0x48, 0x31,
     0xd2, 0x48, 0xc7, 0xc0, 0x3b, 0x00, 0x00, 0x00, 0x0f, 0x05, 0xc3,
@@ -107,7 +107,7 @@ pub(crate) const FLEX_LIBFL_CONSUMER_BLAKE3: &str = "9d13005da4640c131d85edff0a2
 const FLEX_VERSION_BLAKE3: &str = "3697eccbbb98cf059d94cc199ff12f77bee88f5097ad8f0826c86bcf1fcbd5a7";
 const FLEX_POSITIVE_SOURCE_BLAKE3: &str = "fb2c93883438dca7366f41ba363944da66b78787f76be32767cb697943b26732";
 const FLEX_NEGATIVE_BLAKE3: &str = "f1180cfefce605bb56ee38ccfec3bbd99f448e2d5f391bec146f4a02cdff336f";
-const FLEX_PROGRAM_SOURCES: &[&str] = &[
+pub(crate) const FLEX_PROGRAM_SOURCES: &[&str] = &[
     "buf",
     "ccl",
     "dfa",
@@ -457,7 +457,7 @@ fn validate_inventory_inputs(request: &FlexInventoryRequest<'_>) -> Result<(), S
     Ok(())
 }
 
-fn flex_config_header() -> String {
+pub(crate) fn flex_config_header() -> String {
     let header = r#"#define PACKAGE "flex"
 #define PACKAGE_NAME "flex"
 #define VERSION "2.6.4"
@@ -562,7 +562,7 @@ fn transform_filter_source(input: &str) -> Result<String, StagexFlexError> {
     Ok(text)
 }
 
-const FILTER_CREATE_EXT_NEW: &str = r#"enum { FLEX_EXTERNAL_FILTER_ARGUMENT_COUNT = 2, FLEX_EXTERNAL_FILTER_VECTOR_LENGTH = 3 };
+pub(crate) const FILTER_CREATE_EXT_NEW: &str = r#"enum { FLEX_EXTERNAL_FILTER_ARGUMENT_COUNT = 2, FLEX_EXTERNAL_FILTER_VECTOR_LENGTH = 3 };
 struct filter *filter_create_ext (struct filter *chain, const char *cmd, ...)
 {
     struct filter *f;
@@ -582,7 +582,7 @@ struct filter *filter_create_ext (struct filter *chain, const char *cmd, ...)
     return f;
 }"#;
 
-const FILTER_FIX_LINEDIRS_NEW: &str = r#"int filter_fix_linedirs (struct filter *chain)
+pub(crate) const FILTER_FIX_LINEDIRS_NEW: &str = r#"int filter_fix_linedirs (struct filter *chain)
 {
     int byte;
     if (chain == NULL) return 0;
@@ -628,19 +628,19 @@ fn transform_misc_source(input: &str) -> Result<String, StagexFlexError> {
     Ok(text)
 }
 
-const LERR_NEW: &str = r#"void lerr (const char *msg, ...)
+pub(crate) const LERR_NEW: &str = r#"void lerr (const char *msg, ...)
 {
     if (msg == NULL) flexerror ("missing error message");
     flexerror (msg);
 }"#;
 
-const LERR_FATAL_NEW: &str = r#"void lerr_fatal (const char *msg, ...)
+pub(crate) const LERR_FATAL_NEW: &str = r#"void lerr_fatal (const char *msg, ...)
 {
     if (msg == NULL) flexfatal ("missing fatal error message");
     flexfatal (msg);
 }"#;
 
-const ALLOCATE_ARRAY_NEW: &str = r#"void *allocate_array (int size, size_t element_size)
+pub(crate) const ALLOCATE_ARRAY_NEW: &str = r#"void *allocate_array (int size, size_t element_size)
 {
     size_t count;
     size_t byte_count;
@@ -657,7 +657,7 @@ const ALLOCATE_ARRAY_NEW: &str = r#"void *allocate_array (int size, size_t eleme
     return memory;
 }"#;
 
-const REALLOCATE_ARRAY_NEW: &str = r#"void *reallocate_array (void *array, int size, size_t element_size)
+pub(crate) const REALLOCATE_ARRAY_NEW: &str = r#"void *reallocate_array (void *array, int size, size_t element_size)
 {
     size_t count;
     size_t byte_count;
@@ -719,7 +719,7 @@ fn transform_main_source(input: &str) -> Result<String, StagexFlexError> {
     Ok(text)
 }
 
-const FLEX_MAIN_WRAPPER_NEW: &str = r#"int main (int argc, char *argv[])
+pub(crate) const FLEX_MAIN_WRAPPER_NEW: &str = r#"int main (int argc, char *argv[])
 {
     static const char flex_version_output[] = "flex 2.6.4\n";
     if (argc == FLEX_VERSION_ARGUMENT_COUNT && strcmp(argv[1], "--version") == 0) {
@@ -727,7 +727,7 @@ const FLEX_MAIN_WRAPPER_NEW: &str = r#"int main (int argc, char *argv[])
         return 0;
     }"#;
 
-const FLEX_GLOBAL_INITIALIZATION_NEW: &str = r#"    printstats = false;
+pub(crate) const FLEX_GLOBAL_INITIALIZATION_NEW: &str = r#"    printstats = false;
     syntaxerror = false;
     trace = false;
     spprdflt = false;
@@ -771,7 +771,7 @@ const FLEX_GLOBAL_INITIALIZATION_NEW: &str = r#"    printstats = false;
     tablesname = NULL;
 "#;
 
-const FLEX_VERSION_CASE_NEW: &str = r#"        case OPT_VERSION:
+pub(crate) const FLEX_VERSION_CASE_NEW: &str = r#"        case OPT_VERSION:
             fputs(program_name, stdout);
             fputc(FLEX_ASCII_SPACE, stdout);
             fputs(flex_version, stdout);

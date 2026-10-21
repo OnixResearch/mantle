@@ -30,6 +30,17 @@ impl TreeCopyLimits {
     };
 }
 
+/// Complete scalar limits admitted for release tree observation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TreeCopyLimitValues {
+    pub entries: u64,
+    pub depth: u64,
+    pub path_bytes: u64,
+    pub file_bytes: u64,
+    pub total_bytes: u64,
+    pub symlink_target_bytes: u64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TreeEntryKind {
     Directory,
@@ -116,13 +127,13 @@ impl fmt::Display for TreeCopyBlocker {
     }
 }
 
-/// Map Mantle's retained release limits to the complete shared limit profile.
+/// Admit Mantle's retained release limits as owned scalar values.
 ///
 /// # Errors
 ///
 /// Returns Mantle-compatible blockers when a retained limit is zero.
 #[allow(tigerstyle::assertion_density)] // pre-existing validation logic; dedicated assertions tracked for the hardening pass
-pub fn bounded_tree_limits(limits: TreeCopyLimits) -> Result<bounded_tree_core::TreeLimits, Vec<TreeCopyBlocker>> {
+pub fn bounded_tree_limits(limits: TreeCopyLimits) -> Result<TreeCopyLimitValues, Vec<TreeCopyBlocker>> {
     let mut blockers = Vec::new();
     if limits.entries_count_max == 0 {
         blockers.push(blocker(TreeCopyBlockerKind::InvalidEntryLimit, None, "tree copy entry limit must be positive"));
@@ -136,13 +147,25 @@ pub fn bounded_tree_limits(limits: TreeCopyLimits) -> Result<bounded_tree_core::
     if !blockers.is_empty() {
         return Err(blockers);
     }
-    let values = bounded_tree_core::LimitValues {
+    Ok(TreeCopyLimitValues {
         entries: u64::from(limits.entries_count_max),
         depth: u64::from(limits.depth_count_max),
         path_bytes: u64::from(limits.path_bytes_max),
         file_bytes: FILE_BYTES_COMPATIBILITY_LIMIT,
         total_bytes: TOTAL_BYTES_COMPATIBILITY_LIMIT,
         symlink_target_bytes: u64::from(limits.path_bytes_max),
+    })
+}
+
+fn shared_tree_limits(limits: TreeCopyLimits) -> Result<bounded_tree_core::TreeLimits, Vec<TreeCopyBlocker>> {
+    let limits = bounded_tree_limits(limits)?;
+    let values = bounded_tree_core::LimitValues {
+        entries: limits.entries,
+        depth: limits.depth,
+        path_bytes: limits.path_bytes,
+        file_bytes: limits.file_bytes,
+        total_bytes: limits.total_bytes,
+        symlink_target_bytes: limits.symlink_target_bytes,
     };
     bounded_tree_core::TreeLimits::new(values).map_err(|error| {
         vec![blocker(
@@ -159,7 +182,7 @@ pub fn bounded_tree_limits(limits: TreeCopyLimits) -> Result<bounded_tree_core::
 ///
 /// Returns a blocker if shared exact bytes cannot be represented by the
 /// retained UTF-8 compatibility surface.
-pub fn bounded_tree_plan(plan: &bounded_tree_core::TreePlan) -> Result<TreeCopyPlan, Vec<TreeCopyBlocker>> {
+fn bounded_tree_plan(plan: &bounded_tree_core::TreePlan) -> Result<TreeCopyPlan, Vec<TreeCopyBlocker>> {
     let mut entries = Vec::with_capacity(plan.member_facts().len());
     for fact in plan.member_facts() {
         let relative_path = relative_path_text(fact.path().components())?;
@@ -213,7 +236,7 @@ pub fn plan_tree_copy(
     limits: TreeCopyLimits,
 ) -> Result<TreeCopyPlan, Vec<TreeCopyBlocker>> {
     #[allow(tigerstyle::numeric_units)] // name describes a policy set or bound table, not a raw quantity
-    let shared_limits = bounded_tree_limits(limits)?;
+    let shared_limits = shared_tree_limits(limits)?;
     let mut blockers = Vec::with_capacity(observations.len());
     let mut shared_observations = Vec::with_capacity(observations.len());
     for observation in observations {
@@ -237,7 +260,7 @@ pub fn plan_tree_copy(
 
 /// Map shared admission blockers to Mantle's retained diagnostic surface.
 #[must_use]
-pub fn bounded_tree_blockers(error: &bounded_tree_core::PlanError) -> Vec<TreeCopyBlocker> {
+fn bounded_tree_blockers(error: &bounded_tree_core::PlanError) -> Vec<TreeCopyBlocker> {
     let mut blockers = error.blockers().iter().map(shared_blocker).collect::<Vec<_>>();
     blockers.sort_by(blocker_order);
     blockers

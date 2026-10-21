@@ -10,8 +10,14 @@ rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX
 The reviewed source revision is:
 
 ```text
-b0fd0103bc9eed2c1b6d852045959462d105d8f1
+cc9e0fb611e75bb2d7f662435d1918653c93ce07
 ```
+
+Its recursive Nix source hash is
+`sha256-/InZ7QUxLE/BVcWWGoa7A2PmhMaoPKYDS6vfuhVaTrU=`. The generated Nix
+lock and reviewed lock-vendor table bind this same source content; SHA-256 is
+the existing Nix interoperability hash, not a replacement for Mantle BLAKE3
+identity.
 
 Cargo and Nix use the same immutable HTTPS Git projection:
 
@@ -20,6 +26,18 @@ https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git
 ```
 
 There is no sibling-path or GitHub fallback.
+
+## BLAKE3 cohort
+
+The 2026-10-21 owner change admits BLAKE3 `=1.8.5` without changing tree
+identities, ordering, or capability boundaries. The published revision retains
+the native Devenv gate, focused tree/content-change checks, and native Cairn
+archive, validation, and traceability receipts under
+`.cairn/archive/2026-10-21-admit-mantle-blake3-cohort/evidence/`.
+
+Mantle owns the exact revision and content-hash pins, generated Cargo and Nix
+locks, and consumer integration checks. Owner acceptance alone does not prove
+Mantle/Basalt integration, build correctness, or release eligibility.
 
 ## Mapping
 

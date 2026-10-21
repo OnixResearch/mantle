@@ -1,0 +1,8 @@
+[package]
+name = "crunch-test-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+crunch-test-core = { path = "../crunch-test-core" }

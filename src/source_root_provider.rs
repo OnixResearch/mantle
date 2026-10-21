@@ -7,6 +7,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+use mantle_application_contract::bootstrap_effects::BootstrapEffect;
+
 use crate::bootstrap_source_root::DIGEST_ALGORITHM_BLAKE3;
 use crate::bootstrap_source_root::DigestSpec;
 use crate::bootstrap_source_root::ManifestDiagnostic;
@@ -16,6 +18,32 @@ use crate::bootstrap_source_root::PROVIDER_NAME;
 use crate::bootstrap_source_root::PROVIDER_TARGET;
 use crate::bootstrap_source_root::ProviderDependencyTrace;
 use crate::bootstrap_source_root::SourceRootManifest;
+
+fn source_capability<T>(
+    effect: BootstrapEffect,
+    run: impl FnOnce() -> Result<T, MaterializationError>,
+) -> Result<T, MaterializationError> {
+    let mut port = crate::bootstrap_effect_port::BootstrapPort::new(&[(effect, 1)]).map_err(|error| {
+        MaterializationError::Validate(vec![ManifestDiagnostic {
+            path: "effects".to_string(),
+            message: error.to_string(),
+        }])
+    })?;
+    let result = port.call(effect, run);
+    port.finish_with(result, |outcome| {
+        MaterializationError::Validate(vec![ManifestDiagnostic {
+            path: "effects".to_string(),
+            message: format!("source-root effects inconsistent: {outcome:?}"),
+        }])
+    })
+}
+
+fn source_io_capability<T>(effect: BootstrapEffect, run: impl FnOnce() -> std::io::Result<T>) -> std::io::Result<T> {
+    let mut port = crate::bootstrap_effect_port::BootstrapPort::new(&[(effect, 1)])
+        .map_err(|error| std::io::Error::other(error.to_string()))?;
+    let result = port.call(effect, run);
+    port.finish_with(result, |outcome| std::io::Error::other(format!("source-root effects inconsistent: {outcome:?}")))
+}
 
 const TARGET: &str = "x86_64-linux-musl";
 const FETCH_TIMEOUT_SECS: u64 = 600;
@@ -173,29 +201,58 @@ pub(crate) fn materialize_source_root_provider(
     crate::bootstrap_source_root::validate_source_root_manifest(manifest).map_err(MaterializationError::Validate)?;
     reject_declared_patches(manifest)?;
 
-    let manifest_digest = crate::bootstrap_source_root::source_root_manifest_digest(manifest_bytes);
-    let artifacts = index_artifacts(manifest)?;
-    let directories = ProviderDirectories::new(scratch_dir);
-    directories.create()?;
-    let fetched = fetch_source_artifacts(&artifacts, &directories, verbose)?;
-    let host = find_host_cc()?;
-    build_provider_toolchain(&directories, &host, verbose)?;
-    let output_digest = prepare_provider_output(&directories, &manifest_digest, verbose)?;
-    commit_provider_output(&directories.staging, output_dir)?;
+    use mantle_application_contract::bootstrap_effects::BootstrapEffect::*;
+    let mut port =
+        crate::bootstrap_effect_port::BootstrapPort::new(&[(ReadInput, 1), (WriteOutput, 3), (VerifyOutput, 2)])
+            .map_err(|error| {
+                MaterializationError::Validate(vec![ManifestDiagnostic {
+                    path: "effects".to_string(),
+                    message: error.to_string(),
+                }])
+            })?;
+    let result = (|| {
+        let manifest_digest = crate::bootstrap_source_root::source_root_manifest_digest(manifest_bytes);
+        let artifacts = index_artifacts(manifest)?;
+        let directories = ProviderDirectories::new(scratch_dir);
+        port.call(WriteOutput, || directories.create())?;
+        let fetched = fetch_source_artifacts(&artifacts, &directories, verbose)?;
+        let host = port.call(ReadInput, find_host_cc)?;
+        build_provider_toolchain(&directories, &host, verbose)?;
+        let output_digest =
+            port.call(WriteOutput, || prepare_provider_output(&directories, &manifest_digest, verbose))?;
+        port.call(WriteOutput, || commit_provider_output(&directories.staging, output_dir))?;
 
-    let dependency_trace = ProviderDependencyTrace {
-        urls: fetched.urls,
-        hashes: fetched.hashes,
-        emitted_output_roles: discover_emitted_roles(output_dir)?,
-        provider_metadata: vec![format!("manifest_digest={manifest_digest}")],
-    };
-    crate::bootstrap_source_root::validate_provider_dependency_trace(manifest, &dependency_trace)
-        .map_err(MaterializationError::Validate)?;
-    Ok(ProviderMaterialization {
-        output_path: output_dir.to_path_buf(),
-        output_digest,
-        manifest_digest,
-        dependency_trace,
+        let dependency_trace = ProviderDependencyTrace {
+            urls: fetched.urls,
+            hashes: fetched.hashes,
+            emitted_output_roles: port.call(VerifyOutput, || discover_emitted_roles(output_dir))?,
+            provider_metadata: vec![format!("manifest_digest={manifest_digest}")],
+        };
+        crate::bootstrap_source_root::validate_provider_dependency_trace(manifest, &dependency_trace)
+            .map_err(MaterializationError::Validate)?;
+        port.call(VerifyOutput, || {
+            let observed = directory_blake3_digest(output_dir)?;
+            if observed != output_digest {
+                return Err(MaterializationError::DigestMismatch {
+                    artifact: "source-root provider".to_string(),
+                    expected: output_digest.clone(),
+                    actual: observed,
+                });
+            }
+            Ok(())
+        })?;
+        Ok(ProviderMaterialization {
+            output_path: output_dir.to_path_buf(),
+            output_digest,
+            manifest_digest,
+            dependency_trace,
+        })
+    })();
+    port.finish_with(result, |outcome| {
+        MaterializationError::Validate(vec![ManifestDiagnostic {
+            path: "effects".to_string(),
+            message: format!("source-root effects inconsistent: {outcome:?}"),
+        }])
     })
 }
 
@@ -262,7 +319,9 @@ fn build_provider_toolchain(
     if verbose {
         eprintln!("  [3/{BUILD_PHASE_COUNT}] building GCC stage 1 (C compiler, no libc)");
     }
-    symlink_gcc_prereqs(&directories.sources, &directories.sources.join(ARTIFACT_GCC))?;
+    source_capability(BootstrapEffect::WriteOutput, || {
+        symlink_gcc_prereqs(&directories.sources, &directories.sources.join(ARTIFACT_GCC))
+    })?;
     build_gcc_stage1(BuildTask {
         source: &directories.sources.join(ARTIFACT_GCC),
         build_dir: &directories.build.join("gcc-stage1"),
@@ -364,79 +423,88 @@ fn fetch_and_verify(url: &str, expected_digest: &DigestSpec, dest: &Path) -> Res
     assert!(!url.is_empty());
     assert!(!expected_digest.value.is_empty());
 
-    let agent = ureq::Agent::new_with_config(
-        ureq::config::Config::builder()
-            .timeout_global(Some(std::time::Duration::from_secs(FETCH_TIMEOUT_SECS)))
-            .build(),
-    );
+    let body = source_capability(BootstrapEffect::FetchSources, || {
+        let agent = ureq::Agent::new_with_config(
+            ureq::config::Config::builder()
+                .timeout_global(Some(std::time::Duration::from_secs(FETCH_TIMEOUT_SECS)))
+                .build(),
+        );
 
-    let mut last_err = String::new();
-    for attempt in 0..=FETCH_MAX_RETRIES {
-        if attempt > 0 {
-            let prior_attempt = attempt.saturating_sub(1).min(FETCH_RETRY_EXPONENT_MAX);
-            let retry_factor = 1u64
-                .checked_shl(prior_attempt)
-                .ok_or_else(|| MaterializationError::Fetch(format!("retry factor overflow for {url}")))?;
-            let delay_ms = FETCH_RETRY_BASE_DELAY_MS
-                .checked_mul(retry_factor)
-                .ok_or_else(|| MaterializationError::Fetch(format!("retry delay overflow for {url}")))?;
-            eprintln!("  [fetch] retry {attempt}/{FETCH_MAX_RETRIES} for {url} after {delay_ms}ms");
-            std::thread::sleep(std::time::Duration::from_millis(delay_ms));
-        }
+        let mut last_err = String::new();
+        for attempt in 0..=FETCH_MAX_RETRIES {
+            if attempt > 0 {
+                let prior_attempt = attempt.saturating_sub(1).min(FETCH_RETRY_EXPONENT_MAX);
+                let retry_factor = 1u64
+                    .checked_shl(prior_attempt)
+                    .ok_or_else(|| MaterializationError::Fetch(format!("retry factor overflow for {url}")))?;
+                let delay_ms = FETCH_RETRY_BASE_DELAY_MS
+                    .checked_mul(retry_factor)
+                    .ok_or_else(|| MaterializationError::Fetch(format!("retry delay overflow for {url}")))?;
+                eprintln!("  [fetch] retry {attempt}/{FETCH_MAX_RETRIES} for {url} after {delay_ms}ms");
+                std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+            }
 
-        let response = match agent.get(url).call() {
-            Ok(r) => r,
-            Err(e) => {
-                last_err = format!("{url}: {e}");
-                if is_transient_fetch_error(&last_err) && attempt < FETCH_MAX_RETRIES {
+            let response = match agent.get(url).call() {
+                Ok(r) => r,
+                Err(e) => {
+                    last_err = format!("{url}: {e}");
+                    if is_transient_fetch_error(&last_err) && attempt < FETCH_MAX_RETRIES {
+                        continue;
+                    }
+                    return Err(MaterializationError::Fetch(last_err));
+                }
+            };
+
+            let mut body = Vec::new();
+            match response.into_body().with_config().limit(FETCH_MAX_BYTES).reader().read_to_end(&mut body) {
+                Ok(_) => {}
+                Err(e) => {
+                    last_err = format!("{url}: reading body: {e}");
+                    if is_transient_fetch_error(&last_err) && attempt < FETCH_MAX_RETRIES {
+                        continue;
+                    }
+                    return Err(MaterializationError::Fetch(last_err));
+                }
+            }
+
+            if body.is_empty() {
+                last_err = format!("{url}: empty response body");
+                if attempt < FETCH_MAX_RETRIES {
                     continue;
                 }
                 return Err(MaterializationError::Fetch(last_err));
             }
-        };
 
-        let mut body = Vec::new();
-        match response.into_body().with_config().limit(FETCH_MAX_BYTES).reader().read_to_end(&mut body) {
-            Ok(_) => {}
-            Err(e) => {
-                last_err = format!("{url}: reading body: {e}");
-                if is_transient_fetch_error(&last_err) && attempt < FETCH_MAX_RETRIES {
-                    continue;
-                }
-                return Err(MaterializationError::Fetch(last_err));
+            let actual_digest = if expected_digest.algorithm == DIGEST_ALGORITHM_BLAKE3 {
+                blake3::hash(&body).to_hex().to_string()
+            } else {
+                return Err(MaterializationError::Fetch(format!(
+                    "{url}: only BLAKE3 digest verification is implemented, got {}",
+                    expected_digest.algorithm
+                )));
+            };
+
+            if actual_digest != expected_digest.value {
+                return Err(MaterializationError::DigestMismatch {
+                    artifact: url.to_string(),
+                    expected: expected_digest.value.clone(),
+                    actual: actual_digest,
+                });
             }
+
+            return Ok(body);
         }
 
-        if body.is_empty() {
-            last_err = format!("{url}: empty response body");
-            if attempt < FETCH_MAX_RETRIES {
-                continue;
-            }
-            return Err(MaterializationError::Fetch(last_err));
-        }
-
-        let actual_digest = if expected_digest.algorithm == DIGEST_ALGORITHM_BLAKE3 {
-            blake3::hash(&body).to_hex().to_string()
-        } else {
-            return Err(MaterializationError::Fetch(format!(
-                "{url}: only BLAKE3 digest verification is implemented, got {}",
-                expected_digest.algorithm
-            )));
-        };
-
-        if actual_digest != expected_digest.value {
-            return Err(MaterializationError::DigestMismatch {
-                artifact: url.to_string(),
-                expected: expected_digest.value.clone(),
-                actual: actual_digest,
-            });
-        }
-
-        fs::write(dest, &body).map_err(|e| MaterializationError::Fetch(format!("writing {}: {e}", dest.display())))?;
-        return Ok(dest.to_path_buf());
-    }
-
-    Err(MaterializationError::Fetch(last_err))
+        Err(MaterializationError::Fetch(last_err))
+    })?;
+    source_capability(BootstrapEffect::WriteOutput, || {
+        fs::write(dest, &body).map_err(|e| MaterializationError::Fetch(format!("writing {}: {e}", dest.display())))
+    })?;
+    source_capability(BootstrapEffect::VerifyOutput, || {
+        crate::bootstrap_effect_port::verify_content(dest, &body)
+            .map_err(|error| MaterializationError::Fetch(error.to_string()))
+    })?;
+    Ok(dest.to_path_buf())
 }
 
 fn extract_archive(
@@ -447,7 +515,8 @@ fn extract_archive(
 ) -> Result<(), MaterializationError> {
     assert!(archive_path.exists());
     assert!(!extraction_kind.is_empty());
-    fs::create_dir_all(dest).map_err(|e| MaterializationError::Extract(format!("mkdir {}: {e}", dest.display())))?;
+    source_io_capability(BootstrapEffect::WriteOutput, || fs::create_dir_all(dest))
+        .map_err(|e| MaterializationError::Extract(format!("mkdir {}: {e}", dest.display())))?;
 
     let strip_components = if strip_prefix.is_some() { "1" } else { "0" };
 
@@ -461,13 +530,15 @@ fn extract_archive(
         }
     };
 
-    let status = Command::new("tar")
-        .args([tar_flags, &archive_path.display().to_string()])
-        .arg("-C")
-        .arg(dest)
-        .arg(format!("--strip-components={strip_components}"))
-        .status()
-        .map_err(|e| MaterializationError::Extract(format!("running tar: {e}")))?;
+    let status = source_io_capability(BootstrapEffect::MaterializeProvider, || {
+        Command::new("tar")
+            .args([tar_flags, &archive_path.display().to_string()])
+            .arg("-C")
+            .arg(dest)
+            .arg(format!("--strip-components={strip_components}"))
+            .status()
+    })
+    .map_err(|e| MaterializationError::Extract(format!("running tar: {e}")))?;
 
     if !status.success() {
         return Err(MaterializationError::Extract(format!(
@@ -522,7 +593,8 @@ struct UnobservedHostCompilerProbes;
 
 impl HostCompilerProbeObserver for UnobservedHostCompilerProbes {
     fn path(&mut self) -> Option<OsString> {
-        std::env::var_os("PATH")
+        source_io_capability(BootstrapEffect::ReadEnvironment, || Ok::<_, std::io::Error>(std::env::var_os("PATH")))
+            .expect("infallible source-root PATH observation")
     }
 
     fn process(&mut self, _program: &Path, _status: HostCompilerProcessStatus) {}
@@ -574,7 +646,9 @@ fn select_host_cc(
 
 fn host_compiler_candidates(observer: &mut impl HostCompilerProbeObserver) -> Vec<PathBuf> {
     let mut candidates = Vec::with_capacity(HOST_COMPILER_CANDIDATE_MAX);
-    let nix_store = Command::new("nix-store").args(["-qR", "/run/current-system"]).output();
+    let nix_store = source_io_capability(BootstrapEffect::MaterializeProvider, || {
+        Command::new("nix-store").args(["-qR", "/run/current-system"]).output()
+    });
     observe_compiler_output(observer, Path::new("nix-store"), &nix_store);
     if let Ok(output) = nix_store {
         for line in String::from_utf8_lossy(&output.stdout).lines() {
@@ -649,7 +723,9 @@ fn observe_compiler_wait(
 fn is_x86_64_compiler(cc_path: &Path, observer: &mut impl HostCompilerProbeObserver) -> bool {
     assert!(!cc_path.as_os_str().is_empty());
     assert!(cc_path.is_file());
-    let output = Command::new(cc_path).arg("-dumpmachine").output();
+    let output = source_io_capability(BootstrapEffect::MaterializeProvider, || {
+        Command::new(cc_path).arg("-dumpmachine").output()
+    });
     observe_compiler_output(observer, cc_path, &output);
     let Ok(output) = output else {
         return false;
@@ -662,12 +738,14 @@ fn can_link_trivial_program(cc_path: &Path, observer: &mut impl HostCompilerProb
 
     assert!(!cc_path.as_os_str().is_empty());
     assert!(cc_path.is_file());
-    let child = Command::new(cc_path)
-        .args(["-o", "/dev/null", "-x", "c", "-"])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn();
+    let child = source_io_capability(BootstrapEffect::MaterializeProvider, || {
+        Command::new(cc_path)
+            .args(["-o", "/dev/null", "-x", "c", "-"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+    });
     let Ok(mut child) = child else {
         observer.process(cc_path, HostCompilerProcessStatus::LaunchFailed);
         return false;
@@ -743,29 +821,32 @@ fn build_clean_provider_path(cc_dir: Option<&Path>, observer: &mut impl HostComp
 }
 
 fn run_build_cmd(label: &str, cmd: &mut Command) -> Result<(), MaterializationError> {
-    let output = cmd.output().map_err(|e| MaterializationError::Build(format!("{label}: {e}")))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let tail = |s: &str| -> String {
-            let lines: Vec<&str> = s.lines().collect();
-            let start = lines.len().saturating_sub(40);
-            lines[start..].join("\n")
-        };
-        return Err(MaterializationError::Build(format!(
-            "{label}: exit {}\nstdout (last 40 lines):\n{}\nstderr (last 40 lines):\n{}",
-            output.status,
-            tail(&stdout),
-            tail(&stderr),
-        )));
-    }
-    Ok(())
+    source_capability(BootstrapEffect::MaterializeProvider, || {
+        let output = cmd.output().map_err(|e| MaterializationError::Build(format!("{label}: {e}")))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let tail = |s: &str| -> String {
+                let lines: Vec<&str> = s.lines().collect();
+                let start = lines.len().saturating_sub(40);
+                lines[start..].join("\n")
+            };
+            return Err(MaterializationError::Build(format!(
+                "{label}: exit {}\nstdout (last 40 lines):\n{}\nstderr (last 40 lines):\n{}",
+                output.status,
+                tail(&stdout),
+                tail(&stderr),
+            )));
+        }
+        Ok(())
+    })
 }
 
 fn install_linux_headers(src: &Path, sysroot: &Path, clean_path: &str) -> Result<(), MaterializationError> {
     assert!(src.exists(), "Linux source not extracted");
     let include_dir = sysroot.join("include");
-    fs::create_dir_all(&include_dir).map_err(|e| MaterializationError::Build(format!("mkdir sysroot/include: {e}")))?;
+    source_io_capability(BootstrapEffect::WriteOutput, || fs::create_dir_all(&include_dir))
+        .map_err(|e| MaterializationError::Build(format!("mkdir sysroot/include: {e}")))?;
 
     run_build_cmd(
         "linux-headers",
@@ -781,7 +862,7 @@ fn build_binutils(task: BuildTask<'_>) -> Result<(), MaterializationError> {
     let environment = task.environment;
     assert!(task.source.exists(), "binutils source not extracted");
     assert!(environment.jobs >= MIN_PARALLELISM_JOBS);
-    fs::create_dir_all(task.build_dir)
+    source_io_capability(BootstrapEffect::WriteOutput, || fs::create_dir_all(task.build_dir))
         .map_err(|error| MaterializationError::Build(format!("mkdir binutils build: {error}")))?;
 
     let configure = task.source.join("configure");
@@ -845,7 +926,7 @@ fn build_gcc_stage1(task: BuildTask<'_>) -> Result<(), MaterializationError> {
     let environment = task.environment;
     assert!(task.source.exists(), "GCC source not extracted");
     assert!(environment.jobs >= MIN_PARALLELISM_JOBS);
-    fs::create_dir_all(task.build_dir)
+    source_io_capability(BootstrapEffect::WriteOutput, || fs::create_dir_all(task.build_dir))
         .map_err(|error| MaterializationError::Build(format!("mkdir gcc-stage1 build: {error}")))?;
 
     let configure = task.source.join("configure");
@@ -903,7 +984,7 @@ fn build_musl(task: BuildTask<'_>) -> Result<(), MaterializationError> {
     let environment = task.environment;
     assert!(task.source.exists(), "musl source not extracted");
     assert!(environment.jobs >= MIN_PARALLELISM_JOBS);
-    fs::create_dir_all(task.build_dir)
+    source_io_capability(BootstrapEffect::WriteOutput, || fs::create_dir_all(task.build_dir))
         .map_err(|error| MaterializationError::Build(format!("mkdir musl build: {error}")))?;
 
     let gcc_path = environment.prefix.join("bin").join(format!("{TARGET}-gcc"));
@@ -949,7 +1030,7 @@ fn build_gcc_stage2(task: BuildTask<'_>) -> Result<(), MaterializationError> {
     let environment = task.environment;
     assert!(task.source.exists(), "GCC source not extracted");
     assert!(environment.jobs >= MIN_PARALLELISM_JOBS);
-    fs::create_dir_all(task.build_dir)
+    source_io_capability(BootstrapEffect::WriteOutput, || fs::create_dir_all(task.build_dir))
         .map_err(|error| MaterializationError::Build(format!("mkdir gcc-stage2 build: {error}")))?;
 
     let configure = task.source.join("configure");
@@ -1196,7 +1277,9 @@ fn is_elf_bytes(bytes: &[u8]) -> bool {
 }
 
 fn collect_interpreter_dependencies(path: &Path, interpreters: &mut BTreeSet<String>) {
-    let Ok(output) = Command::new("readelf").args(["-l", &path.display().to_string()]).output() else {
+    let Ok(output) = source_io_capability(BootstrapEffect::MaterializeProvider, || {
+        Command::new("readelf").args(["-l", &path.display().to_string()]).output()
+    }) else {
         return;
     };
     for line in String::from_utf8_lossy(&output.stdout).lines() {
@@ -1215,7 +1298,9 @@ fn interpreter_from_readelf_line(line: &str) -> Option<String> {
 }
 
 fn collect_needed_dependencies(path: &Path, needed_libs: &mut BTreeSet<String>) {
-    let Ok(output) = Command::new("readelf").args(["-d", &path.display().to_string()]).output() else {
+    let Ok(output) = source_io_capability(BootstrapEffect::MaterializeProvider, || {
+        Command::new("readelf").args(["-d", &path.display().to_string()]).output()
+    }) else {
         return;
     };
     for line in String::from_utf8_lossy(&output.stdout).lines() {
@@ -1331,7 +1416,9 @@ fn resolve_and_copy_libs(bin_dir: &Path, dest: &Path) -> Result<(), Materializat
         if !is_elf_bytes(&bytes) {
             continue;
         }
-        let Ok(output) = Command::new("ldd").arg(&entry).output() else {
+        let Ok(output) =
+            source_io_capability(BootstrapEffect::MaterializeProvider, || Command::new("ldd").arg(&entry).output())
+        else {
             continue;
         };
         for line in String::from_utf8_lossy(&output.stdout).lines() {
@@ -1602,7 +1689,7 @@ fn write_source_root_provider_json(staging: &Path, manifest_digest: &str) -> Res
     Ok(())
 }
 
-fn directory_blake3_digest(dir: &Path) -> Result<String, MaterializationError> {
+pub(crate) fn directory_blake3_digest(dir: &Path) -> Result<String, MaterializationError> {
     assert!(dir.is_dir());
     assert!(!dir.as_os_str().is_empty());
     let mut hasher = blake3::Hasher::new();

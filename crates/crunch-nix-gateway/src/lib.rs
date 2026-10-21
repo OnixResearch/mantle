@@ -6,6 +6,10 @@
 //! A production caller supplies independently verified authorization and must
 //! dispatch every parsed request to the existing verified Mantle services.
 #[cfg(target_os = "linux")]
+pub mod api;
+#[cfg(target_os = "linux")]
+pub mod mutation;
+#[cfg(target_os = "linux")]
 pub mod replay;
 #[cfg(target_os = "linux")]
 pub mod server;
@@ -251,9 +255,7 @@ pub fn read_request(input: &mut impl Read) -> io::Result<ParsedRequest> {
             for _ in 0..count {
                 let path = read_string(input, MAX_BUILD_PATH_BYTES)?;
                 let (drv, outputs) = path.split_once('!').ok_or_else(|| invalid("gateway-build-not-concrete"))?;
-                if !core::valid_store_path(drv, true)
-                    || !valid_output_spec(outputs)
-                {
+                if !core::valid_store_path(drv, true) || !valid_output_spec(outputs) {
                     return Err(invalid("gateway-build-not-concrete"));
                 }
                 paths.push(path);
@@ -423,7 +425,9 @@ mod tests {
             write_number(wire, 1).unwrap();
             write_bytes(wire, PATH.as_bytes()).unwrap();
         });
-        assert_eq!(read_request(&mut query).unwrap(), ParsedRequest::QueryMissing { targets: vec![PATH.into()] });
+        assert_eq!(read_request(&mut query).unwrap(), ParsedRequest::QueryMissing {
+            targets: vec![PATH.into()]
+        });
         for spec in ["*,out", "out,,dev", ".hidden", "out!dev"] {
             let mut invalid = request(40, |wire| {
                 write_number(wire, 1).unwrap();
@@ -577,8 +581,14 @@ mod tests {
         let output = child.wait_with_output().unwrap();
         let request = worker.join().unwrap();
         std::fs::remove_file(&socket).unwrap();
-        assert_eq!(request.unwrap(), ParsedRequest::QueryMissing { targets: vec![PATH.into()] },
-            "client stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(
+            request.unwrap(),
+            ParsedRequest::QueryMissing {
+                targets: vec![PATH.into()]
+            },
+            "client stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         assert!(!output.status.success(), "unverified store lookup must not succeed");
     }
 
@@ -588,8 +598,10 @@ mod tests {
     fn installed_nix_store_realise_queries_missing_before_build() {
         use std::os::unix::fs::PermissionsExt;
         use std::os::unix::net::UnixListener;
-        use std::process::{Command, Stdio};
-        use std::time::{Duration, Instant};
+        use std::process::Command;
+        use std::process::Stdio;
+        use std::time::Duration;
+        use std::time::Instant;
 
         let socket = std::env::temp_dir().join(format!("mantle-gateway-{}-build.sock", std::process::id()));
         let listener = UnixListener::bind(&socket).unwrap();
@@ -601,19 +613,32 @@ mod tests {
             handshake(&mut stream)?;
             read_request(&mut stream)
         });
-        let mut child = Command::new("nix-store").args(["--realise", "--store"])
-            .arg(format!("unix://{}", socket.display())).arg(PATH)
-            .stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+        let mut child = Command::new("nix-store")
+            .args(["--realise", "--store"])
+            .arg(format!("unix://{}", socket.display()))
+            .arg(PATH)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
         let deadline = Instant::now() + Duration::from_secs(10);
         while child.try_wait().unwrap().is_none() && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(10));
         }
-        if child.try_wait().unwrap().is_none() { child.kill().unwrap(); }
+        if child.try_wait().unwrap().is_none() {
+            child.kill().unwrap();
+        }
         let output = child.wait_with_output().unwrap();
         let request = worker.join().unwrap();
         std::fs::remove_file(&socket).unwrap();
-        assert_eq!(request.unwrap(), ParsedRequest::QueryMissing { targets: vec![format!("{PATH}!*")] },
-            "client stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(
+            request.unwrap(),
+            ParsedRequest::QueryMissing {
+                targets: vec![format!("{PATH}!*")]
+            },
+            "client stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         assert!(!output.status.success(), "unverified build prerequisites must not succeed");
     }
 
@@ -623,8 +648,10 @@ mod tests {
     fn installed_nix_client_receives_redacted_admin_denial() {
         use std::os::unix::fs::PermissionsExt;
         use std::os::unix::net::UnixListener;
-        use std::process::{Command, Stdio};
-        use std::time::{Duration, Instant};
+        use std::process::Command;
+        use std::process::Stdio;
+        use std::time::Duration;
+        use std::time::Instant;
 
         let socket = std::env::temp_dir().join(format!("mantle-gateway-{}-deny.sock", std::process::id()));
         let listener = UnixListener::bind(&socket).unwrap();
@@ -641,21 +668,30 @@ mod tests {
             write_rejection(&mut stream, core::Reject::Operation)?;
             Ok(code)
         });
-        let mut client = Command::new("nix").args(["store", "gc", "--store"])
+        let mut client = Command::new("nix")
+            .args(["store", "gc", "--store"])
             .arg(format!("unix://{}", socket.display()))
-            .stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
         let deadline = Instant::now() + Duration::from_secs(10);
         while client.try_wait().unwrap().is_none() && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(10));
         }
-        if client.try_wait().unwrap().is_none() { client.kill().unwrap(); }
+        if client.try_wait().unwrap().is_none() {
+            client.kill().unwrap();
+        }
         let output = client.wait_with_output().unwrap();
         let opcode = server.join().unwrap();
         std::fs::remove_file(&socket).unwrap();
         assert_eq!(opcode.unwrap(), 20);
         assert!(!output.status.success(), "unauthorized GC must not succeed");
-        assert!(String::from_utf8_lossy(&output.stderr).contains("gateway-operation-unsupported"),
-            "client stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("gateway-operation-unsupported"),
+            "client stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     #[cfg(unix)]

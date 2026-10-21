@@ -4,7 +4,7 @@
 edition = "2024"
 
 [dependencies]
-blake3 = "=1.8.2"
+blake3 = "=1.8.5"
 serde_json = "1"
 ---
 

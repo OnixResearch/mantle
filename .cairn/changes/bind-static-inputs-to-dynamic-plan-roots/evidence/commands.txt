@@ -1,0 +1,4 @@
+# Current confirmation of the T4.4 focused suites on the final source snapshot.
+cargo test --locked --offline -p crunch-glue -p crunch-eval -p crunch-build -p crunch-pipeline --lib
+cargo clippy --locked --offline -p crunch-glue -p crunch-eval -p crunch-build -p crunch-pipeline --all-targets --no-deps -- -D warnings
+cargo fmt --check -p crunch-glue -p crunch-eval -p crunch-build -p crunch-pipeline

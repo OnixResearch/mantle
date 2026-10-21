@@ -124,19 +124,98 @@ pub fn run_budgeted_file(
     report_path: &Path,
     selection: EvaluationSelection,
 ) -> Result<BudgetedEvaluation, RunError> {
-    let policy = read_policy(policy_path)?;
-    let support = host_mechanism_support();
-    let policy_ref = validate_policy(&policy, &support).map_err(budget_error)?;
-    let request = prepare_file_request(file, import_paths, policy.clone(), &policy_ref, selection)?;
-    verify_import_surface(&request)?;
-    let cancellation = Arc::new(AtomicBool::new(false));
-    schedule_test_cancellation(&policy, cancellation.clone())?;
-    let result = match policy.mode {
-        EvaluationMode::ObserveOnly => run_observe_only(&request, &policy_ref)?,
-        EvaluationMode::Enforce => run_enforced(request, &policy_ref, cancellation)?,
-    };
-    write_report(report_path, &result.report)?;
+    use mantle_application_contract::evaluation::EvaluationEffect;
+    use mantle_application_contract::evaluation::evaluation_effect_plan;
+
+    let policy_plan = evaluation_effect_plan(EvaluationEffect::Policy)
+        .map_err(|error| RunError::Internal(format!("planning evaluation policy: {}", error.code())))?;
+    let policy = read_policy(policy_path).and_then(|policy| {
+        let policy_ref = validate_policy(&policy, &host_mechanism_support()).map_err(budget_error)?;
+        Ok((policy, policy_ref))
+    });
+    crate::build_observation::classify(
+        &policy_plan,
+        EvaluationEffect::Policy.identity(),
+        EvaluationEffect::Policy.kind(),
+        policy.is_ok(),
+    )?;
+    let (policy, policy_ref) = policy?;
+
+    let inputs_plan = evaluation_effect_plan(EvaluationEffect::Inputs)
+        .map_err(|error| RunError::Internal(format!("planning evaluation inputs: {}", error.code())))?;
+    let request = prepare_file_request(file, import_paths, policy, &policy_ref, selection).and_then(|request| {
+        verify_import_surface(&request)?;
+        Ok(request)
+    });
+    crate::build_observation::classify(
+        &inputs_plan,
+        EvaluationEffect::Inputs.identity(),
+        EvaluationEffect::Inputs.kind(),
+        request.is_ok(),
+    )?;
+    let request = request?;
+    let result = run_observed_budget_evaluation(request, &policy_ref)?;
+
+    let report_plan = evaluation_effect_plan(EvaluationEffect::Report)
+        .map_err(|error| RunError::Internal(format!("planning evaluation report: {}", error.code())))?;
+    let published = write_report(report_path, &result.report).and_then(|()| {
+        let bytes = fs::read(report_path)
+            .map_err(|error| RunError::Eval(format!("reading evaluation report {}: {error}", report_path.display())))?;
+        let persisted: EvaluationBudgetReport = serde_json::from_slice(&bytes).map_err(|error| {
+            RunError::Eval(format!("decoding evaluation report {}: {error}", report_path.display()))
+        })?;
+        if persisted != result.report {
+            return Err(RunError::Eval("persisted evaluation budget report contradicts worker evidence".to_string()));
+        }
+        Ok(())
+    });
+    crate::build_observation::classify(
+        &report_plan,
+        EvaluationEffect::Report.identity(),
+        EvaluationEffect::Report.kind(),
+        published.is_ok(),
+    )?;
+    published?;
     Ok(result)
+}
+
+fn run_observed_budget_evaluation(
+    request: EvaluatorWorkerRequest,
+    policy_ref: &str,
+) -> Result<BudgetedEvaluation, RunError> {
+    use mantle_application_contract::evaluation::EvaluationEffect;
+    use mantle_application_contract::evaluation::evaluation_effect_plan;
+
+    let effect = match request.policy.mode {
+        EvaluationMode::ObserveOnly => EvaluationEffect::Output,
+        EvaluationMode::Enforce => EvaluationEffect::Worker,
+    };
+    let plan = evaluation_effect_plan(effect)
+        .map_err(|error| RunError::Internal(format!("planning evaluation execution: {}", error.code())))?;
+    let cancellation = Arc::new(AtomicBool::new(false));
+    let evaluated = (|| {
+        schedule_test_cancellation(&request.policy, cancellation.clone())?;
+        match request.policy.mode {
+            EvaluationMode::ObserveOnly => run_observe_only(&request, policy_ref),
+            EvaluationMode::Enforce => run_enforced(request, policy_ref, cancellation),
+        }
+    })();
+    let verified: Option<Result<bool, RunError>> = evaluated.as_ref().ok().map(|result| {
+        if result.report.terminal_disposition != TerminalDisposition::Success {
+            return Ok(false);
+        }
+        let output = result
+            .output_json
+            .as_deref()
+            .ok_or_else(|| RunError::Eval("evaluation worker succeeded without output".to_string()))?;
+        crate::evaluation_cmd::verify_json(output)?;
+        Ok(true)
+    });
+    crate::build_observation::classify(&plan, effect.identity(), effect.kind(), matches!(&verified, Some(Ok(true))))?;
+    if let Some(verification) = verified {
+        verification?;
+    }
+    evaluated
 }
 
 pub fn worker_main() -> Result<(), RunError> {

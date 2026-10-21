@@ -5,6 +5,7 @@ use alloc::vec::Vec;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::manifest::ReleaseEvidenceEvaluation;
 use crate::manifest::ReleaseEvidenceManifest;
 use crate::opaque_evidence::OPAQUE_EVIDENCE_KIND_PROOF;
 use crate::opaque_evidence::OpaqueEvidenceCompatibilityProjection;
@@ -66,6 +67,15 @@ pub struct TrellisProofReleaseVerification {
 // r[impl mantle.release_provenance.trellis_proof_sidecars.opaque]
 #[must_use]
 pub fn evaluate_trellis_proof_release_evidence(
+    manifest: ReleaseEvidenceManifest,
+    mode: String,
+    observations: Option<TrellisProofArtifactObservations>,
+) -> ReleaseEvidenceEvaluation<TrellisProofReleaseVerification> {
+    let verification = evaluate_trellis_proof_release_evidence_borrowed(&manifest, &mode, observations.as_ref());
+    ReleaseEvidenceEvaluation { manifest, verification }
+}
+
+pub(super) fn evaluate_trellis_proof_release_evidence_borrowed(
     manifest: &ReleaseEvidenceManifest,
     mode: &str,
     observations: Option<&TrellisProofArtifactObservations>,

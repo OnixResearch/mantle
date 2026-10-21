@@ -206,12 +206,6 @@ pub struct PinImportBlocker {
     pub message: String,
 }
 
-impl PinImportPlan {
-    pub fn can_apply(&self) -> bool {
-        self.blockers.is_empty()
-    }
-}
-
 struct MappedImport {
     manifest: ProjectManifest,
     lock: Lockfile,
@@ -849,7 +843,7 @@ fn render_manifest_inputs(out: &mut String, inputs: &[ManifestInput]) {
         out.push_str(&format!("      frozen = {},\n", input.frozen));
         render_string_array(out, "mirrors", &input.mirrors, "      ");
         render_string_array(out, "patches", &input.patches, "      ");
-        out.push_str(&format!("      fetch_policy = {},\n", quote(input.fetch_policy.as_str())));
+        out.push_str(&format!("      fetch_policy = {},\n", quote(input.fetch_policy.wire_name())));
         out.push_str("    },\n");
     }
     out.push_str("  ],\n");
@@ -1110,7 +1104,7 @@ mod tests {
     fn nixtamal_supported_semantics_map_to_manifest_lock_and_inputs_plan() {
         let plan = build_pin_import_plan(fixture_pin_set(), options());
 
-        assert!(plan.can_apply(), "blockers: {:?}", plan.blockers);
+        assert!(plan.blockers.is_empty(), "blockers: {:?}", plan.blockers);
         assert_eq!(plan.mapped_inputs.len(), 3);
         assert_eq!(plan.mapped_patches.len(), 1);
         assert_eq!(plan.file_operations.len(), 3);
@@ -1133,7 +1127,7 @@ mod tests {
         });
         let classes = plan.blockers.iter().map(|blocker| blocker.class.as_str()).collect::<BTreeSet<_>>();
 
-        assert!(!plan.can_apply());
+        assert!(!plan.blockers.is_empty());
         assert!(classes.contains("future-adapter"));
         assert!(classes.contains("composition-semantic"));
         assert!(plan.future_adapters.iter().any(|adapter| adapter == "npins"));
@@ -1152,7 +1146,7 @@ mod tests {
         let plan = build_pin_import_plan(pins, options());
         let classes = plan.blockers.iter().map(|blocker| blocker.class.as_str()).collect::<BTreeSet<_>>();
 
-        assert!(!plan.can_apply());
+        assert!(!plan.blockers.is_empty());
         assert!(plan.file_operations.is_empty());
         assert!(classes.contains("unsupported-source-kind"));
         assert!(classes.contains("unsupported-hash-algorithm"));
@@ -1171,7 +1165,7 @@ mod tests {
         let plan = build_pin_import_plan(pins, options());
         let classes = plan.blockers.iter().map(|blocker| blocker.class.as_str()).collect::<BTreeSet<_>>();
 
-        assert!(!plan.can_apply());
+        assert!(!plan.blockers.is_empty());
         assert_eq!(plan.file_operations.len(), 3);
         assert!(classes.contains("existing-file-conflict"));
     }
@@ -1189,7 +1183,7 @@ mod tests {
         let plan = build_pin_import_plan(pins, options());
         let classes = plan.blockers.iter().map(|blocker| blocker.class.as_str()).collect::<BTreeSet<_>>();
 
-        assert!(!plan.can_apply());
+        assert!(!plan.blockers.is_empty());
         assert!(classes.contains("missing-hash"));
         assert!(classes.contains("missing-git-rev"));
     }

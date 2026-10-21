@@ -1,0 +1,17 @@
+[package]
+name = "crunch-pnpm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+crunch-pnpm-core = { path = "../crunch-pnpm-core" }
+crunch-source-core = { path = "../crunch-source-core" }
+blake3 = "=1.8.5"
+serde_json = "1.0"
+serde_yaml = "0.9.34"
+base64 = "0.22"
+sha2 = "0.10.8"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+tar = "0.4"
+tempfile = "3"

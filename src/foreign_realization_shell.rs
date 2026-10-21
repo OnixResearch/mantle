@@ -69,6 +69,7 @@ pub(crate) struct ForeignRealizationRequest<'a> {
     pub(crate) state_dir: &'a Path,
     pub(crate) backend: crunch_store::StoreBackend,
     pub(crate) base_state_dirs: &'a [std::path::PathBuf],
+    pub(crate) source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     pub(crate) keypair: &'a KeyPair,
     pub(crate) trusted_keys: &'a [nix_compat::narinfo::VerifyingKey],
     pub(crate) max_jobs: u32,
@@ -171,6 +172,7 @@ pub(crate) async fn realize_foreign_plan(
         fallback_mode: crunch_store::StoreFallbackMode::Strict,
         store_dir: request.plan.target_store_prefix.clone(),
         base_state_dirs: request.base_state_dirs.to_vec(),
+        source_admission: request.source_admission.cloned(),
     })
     .await
     .map_err(|error| RunError::Internal(format!("opening foreign realization store: {error}")))?;
@@ -211,6 +213,7 @@ pub(crate) async fn realize_foreign_plan(
             fallback_mode: crunch_store::StoreFallbackMode::Strict,
             store_dir: request.plan.target_store_prefix.clone(),
             base_state_dirs: request.base_state_dirs.to_vec(),
+            source_admission: request.source_admission.cloned(),
         })
         .await
         .map_err(|error| RunError::Internal(format!("reopening hydrated foreign realization store: {error}")))?;
@@ -288,6 +291,7 @@ pub(crate) async fn realize_foreign_plan(
         substituter_urls: if cache_only { Vec::new() } else { cache_urls.clone() },
         hermeticity_mode: HermeticityMode::Strict,
         base_state_dirs: request.base_state_dirs.to_vec(),
+        source_admission: request.source_admission.cloned(),
         keypair: request.keypair.clone(),
         trusted_keys: request.trusted_keys.to_vec(),
         trust_unsigned: false,
@@ -295,6 +299,7 @@ pub(crate) async fn realize_foreign_plan(
         root_registration: None,
         source_fetch_overrides,
         remote_enabled: false,
+        compile_driver_runtime: None,
         interchange_dir: None,
     };
     let build_result =

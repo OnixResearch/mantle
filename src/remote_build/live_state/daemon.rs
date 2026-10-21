@@ -47,7 +47,7 @@ use super::fact_identity;
 
 pub const LIVE_PROTOCOL_SCHEMA: &str = "mantle-live-build-protocol-v1";
 const READINESS_SCHEMA: &str = crunch_service_readiness_core::READINESS_SCHEMA;
-const MAX_FRAME_BYTES: usize = 4_096;
+const MAX_FRAME_BYTES: usize = super::MAX_DEMAND_FACT_BYTES + super::MAX_LIVE_ID_BYTES + 512;
 const MAX_SUBSCRIBERS: usize = 32;
 const MAX_CONNECTIONS: usize = 128;
 const MAX_FILTER_ITEMS: usize = 64;
@@ -199,10 +199,12 @@ impl Filter {
     fn valid(input: &LiveFilter) -> bool {
         input.owner_run_ids.len() + input.job_ids.len() + input.kinds.len() <= MAX_FILTER_ITEMS
             && input.owner_run_ids.iter().chain(&input.job_ids).all(|id| admit_identity(id).is_ok())
-            && input
-                .kinds
-                .iter()
-                .all(|kind| matches!(kind.as_str(), "worker-presence" | "goal" | "reservation" | "terminal-outcome"))
+            && input.kinds.iter().all(|kind| {
+                matches!(
+                    kind.as_str(),
+                    "worker-presence" | "goal" | "reservation" | "terminal-outcome" | "worker-demand"
+                )
+            })
     }
 
     fn parse(input: LiveFilter) -> Option<Self> {
@@ -225,6 +227,7 @@ impl Filter {
             LiveBuildFactValue::Goal { job_id, .. } => ("goal", Some(job_id.as_str())),
             LiveBuildFactValue::Reservation { job_id, .. } => ("reservation", Some(job_id.as_str())),
             LiveBuildFactValue::TerminalOutcome { job_id, .. } => ("terminal-outcome", Some(job_id.as_str())),
+            LiveBuildFactValue::WorkerDemand { demand } => ("worker-demand", Some(demand.job_id.as_str())),
         };
         (self.kinds.is_empty() || self.kinds.contains(kind))
             && (self.jobs.is_empty() || job.is_some_and(|job| self.jobs.contains(job)))
@@ -300,6 +303,7 @@ fn valid_fact_value(owner_run_id: &str, value: &LiveBuildFactValue) -> bool {
                     Some(phase) => matches!(phase, "evaluation" | "conversion" | "build" | "coordination"),
                 }
         }
+        LiveBuildFactValue::WorkerDemand { demand } => super::super::demand::validate_published_demand(demand).is_ok(),
     }
 }
 
@@ -446,6 +450,8 @@ struct SubscriptionRequest<'a> {
 /// Follow a daemon subscription, copying newline-delimited events to `output`
 /// until the daemon disconnects. An empty filter field matches all values.
 pub fn subscribe(socket: &Path, filter: LiveFilter, output: &mut impl Write) -> io::Result<()> {
+    let plan = super::super::operation::plan(super::super::operation::RemoteOperation::LiveSubscribe)
+        .map_err(|error| io::Error::other(error.to_string()))?;
     if !Filter::valid(&filter) {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid live-build filter"));
     }
@@ -457,17 +463,97 @@ pub fn subscribe(socket: &Path, filter: LiveFilter, output: &mut impl Write) -> 
     };
     serde_json::to_writer(&mut stream, &request).map_err(io::Error::other)?;
     stream.write_all(b"\n")?;
-    let mut chunk = [0_u8; MAX_FRAME_BYTES];
+    observe_subscription(BufReader::new(stream), output, &plan)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SubscriptionFrame<'a> {
+    #[serde(borrow)]
+    schema: &'a str,
+    op: &'a str,
+    owner_run_id: Option<&'a str>,
+    fact_id: Option<&'a str>,
+    fact: Option<IncomingFact>,
+}
+
+fn observe_subscription(
+    mut reader: impl BufRead,
+    output: &mut impl Write,
+    plan: &super::super::operation::RemoteOperationPlan,
+) -> io::Result<()> {
+    let mut frame = Vec::with_capacity(512);
+    let mut snapshots = 0_u64;
+    let mut snapshot_open = false;
     loop {
-        match stream.read(&mut chunk) {
-            Ok(0) => return Ok(()),
-            Ok(count) => {
-                output.write_all(&chunk[..count])?;
-                output.flush()?;
+        frame.clear();
+        loop {
+            let available = reader.fill_buf()?;
+            if available.is_empty() {
+                break;
             }
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-            Err(error) => return Err(error),
+            let count = available.iter().position(|byte| *byte == b'\n').map_or(available.len(), |index| index + 1);
+            if frame.len().saturating_add(count) > MAX_FRAME_BYTES {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "live subscription frame exceeds limit"));
+            }
+            frame.extend_from_slice(&available[..count]);
+            reader.consume(count);
+            if frame.last() == Some(&b'\n') {
+                break;
+            }
         }
+        if frame.is_empty() {
+            return super::super::operation::classify(
+                plan,
+                super::super::operation::RemoteOperationFacts::Subscription {
+                    snapshots,
+                    malformed_frames: u64::from(snapshot_open),
+                },
+            )
+            .map_err(|error| io::Error::other(error.to_string()));
+        }
+        if frame.last() != Some(&b'\n') {
+            return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "truncated live subscription frame"));
+        }
+        let event: SubscriptionFrame<'_> = serde_json::from_slice(&frame).map_err(io::Error::other)?;
+        let valid = event.schema == LIVE_PROTOCOL_SCHEMA
+            && match event.op {
+                "snapshot-start" if snapshots == 0 && !snapshot_open => {
+                    snapshot_open = true;
+                    event.owner_run_id.is_none() && event.fact_id.is_none() && event.fact.is_none()
+                }
+                "snapshot-end" if snapshot_open => {
+                    snapshot_open = false;
+                    snapshots += 1;
+                    event.owner_run_id.is_none() && event.fact_id.is_none() && event.fact.is_none()
+                }
+                "publish" if snapshot_open || snapshots > 0 => {
+                    match (event.owner_run_id, event.fact_id, event.fact.as_ref()) {
+                        (Some(owner), Some(id), Some(fact)) => {
+                            fact.schema == LIVE_BUILD_FACT_SCHEMA
+                                && valid_fact_value(owner, &fact.value)
+                                && fact_identity(owner, &fact.value).is_ok_and(|expected| expected == id)
+                        }
+                        _ => false,
+                    }
+                }
+                "retract" if !snapshot_open && snapshots > 0 => {
+                    event.fact.is_none()
+                        && event.owner_run_id.is_some_and(|id| admit_identity(id).is_ok())
+                        && event.fact_id.is_some_and(|id| admit_identity(id).is_ok())
+                }
+                _ => false,
+            };
+        if !valid {
+            let _ =
+                super::super::operation::classify(plan, super::super::operation::RemoteOperationFacts::Subscription {
+                    snapshots,
+                    malformed_frames: 1,
+                });
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid live subscription event"));
+        }
+        output.write_all(&frame)?;
+        output.flush()?;
     }
 }
 
@@ -691,6 +777,18 @@ fn report_daemon_readiness(socket: PathBuf, done: &AtomicBool, normal_exit: &Ato
 /// Empty filter arrays are wildcards; a job filter excludes worker-presence facts.
 /// All active facts are lost when the daemon exits or restarts.
 pub fn serve(socket_path: &Path, stop: &AtomicBool) -> io::Result<()> {
+    serve_inner(socket_path, None, stop)
+}
+
+/// Serve the shared durable binding table only for kernel-observed same-owner
+/// clients. The explicit state directory is never inferred from a socket name.
+pub fn serve_with_state(socket_path: &Path, state_dir: &Path, stop: &AtomicBool) -> io::Result<()> {
+    serve_inner(socket_path, Some(Arc::new(state_dir.to_path_buf())), stop)
+}
+
+fn serve_inner(socket_path: &Path, state_dir: Option<Arc<PathBuf>>, stop: &AtomicBool) -> io::Result<()> {
+    let operation_plan = super::super::operation::plan(super::super::operation::RemoteOperation::LiveServe)
+        .map_err(|error| io::Error::other(error.to_string()))?;
     let listener = bind_socket(socket_path)?;
     let metadata = fs::symlink_metadata(socket_path)?;
     let _cleanup = SocketCleanup {
@@ -725,8 +823,9 @@ pub fn serve(socket_path: &Path, stop: &AtomicBool) -> io::Result<()> {
                 drop(guard);
                 let state = Arc::clone(&state);
                 let stopping = Arc::clone(&stopping);
+                let state_dir = state_dir.clone();
                 thread::spawn(move || {
-                    handle_client(stream, &state, client, &stopping);
+                    handle_client(stream, &state, client, &stopping, state_dir.as_deref().map(PathBuf::as_path));
                     lock_state(&state).connections -= 1;
                 });
             }
@@ -753,10 +852,24 @@ pub fn serve(socket_path: &Path, stop: &AtomicBool) -> io::Result<()> {
     while lock_state(&state).connections != 0 {
         thread::sleep(IO_INTERVAL);
     }
-    accept_error.map_or(Ok(()), Err)
+    if let Some(error) = accept_error {
+        return Err(error);
+    }
+    super::super::operation::classify(&operation_plan, super::super::operation::RemoteOperationFacts::Socket {
+        device: metadata.dev(),
+        inode: metadata.ino(),
+        shutdown_requested: stop.load(Ordering::Acquire),
+    })
+    .map_err(|error| io::Error::other(error.to_string()))
 }
 
-fn handle_client(mut stream: UnixStream, shared: &Arc<Mutex<State>>, client: u64, stop: &AtomicBool) {
+fn handle_client(
+    mut stream: UnixStream,
+    shared: &Arc<Mutex<State>>,
+    client: u64,
+    stop: &AtomicBool,
+    state_dir: Option<&Path>,
+) {
     if stream.set_read_timeout(Some(IO_INTERVAL)).is_err() {
         return;
     }
@@ -775,6 +888,30 @@ fn handle_client(mut stream: UnixStream, shared: &Arc<Mutex<State>>, client: u64
                         }
                         buffer.push(*byte);
                         continue;
+                    }
+                    if let Ok(request) =
+                        serde_json::from_slice::<crate::remote_build::endpoint_service::Request>(&buffer)
+                    {
+                        if buffer.len() > crate::remote_build::endpoint_service::MAX_ENDPOINT_FRAME_BYTES {
+                            break 'read;
+                        }
+                        if owner.is_some()
+                            || readiness_owner.is_some()
+                            || !crate::remote_build::endpoint_service::same_owner(&stream)
+                        {
+                            break 'read;
+                        }
+                        let Some(state_dir) = state_dir else {
+                            break 'read;
+                        };
+                        let Some(reply) = crate::remote_build::endpoint_service::handle_request(state_dir, request)
+                        else {
+                            break 'read;
+                        };
+                        if stream.set_write_timeout(Some(Duration::from_secs(2))).is_ok() {
+                            let _ = stream.write_all(&reply);
+                        }
+                        break 'read;
                     }
                     let request = match serde_json::from_slice::<Request>(&buffer) {
                         Ok(request) if request.schema() == LIVE_PROTOCOL_SCHEMA && readiness_owner.is_none() => request,
@@ -1265,6 +1402,36 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn remote_operation_subscription_requires_complete_initial_snapshot() {
+        let plan = super::super::super::operation::plan(super::super::super::operation::RemoteOperation::LiveSubscribe)
+            .unwrap();
+        let complete = format!(
+            "{{\"schema\":\"{LIVE_PROTOCOL_SCHEMA}\",\"op\":\"snapshot-start\"}}\n{{\"schema\":\"{LIVE_PROTOCOL_SCHEMA}\",\"op\":\"snapshot-end\"}}\n"
+        );
+        let mut output = Vec::new();
+        observe_subscription(std::io::Cursor::new(complete.as_bytes()), &mut output, &plan).unwrap();
+        assert_eq!(output, complete.as_bytes());
+        let incomplete = complete.lines().next().unwrap().to_owned() + "\n";
+        assert!(observe_subscription(std::io::Cursor::new(incomplete), &mut Vec::new(), &plan).is_err());
+        assert!(observe_subscription(std::io::Cursor::new(b""), &mut Vec::new(), &plan).is_err());
+    }
+
+    #[test]
+    fn remote_operation_subscription_never_forwards_foreign_schema() {
+        let plan = super::super::super::operation::plan(super::super::super::operation::RemoteOperation::LiveSubscribe)
+            .unwrap();
+        let mut output = Vec::new();
+        let error = observe_subscription(
+            std::io::Cursor::new(b"{\"schema\":\"foreign\",\"op\":\"snapshot-start\"}\n"),
+            &mut output,
+            &plan,
+        )
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(output.is_empty());
+    }
+
     struct Fixture {
         path: PathBuf,
         stop: Arc<AtomicBool>,
@@ -1363,6 +1530,55 @@ mod tests {
             attempt_id: None,
             fence_generation: None,
         }
+    }
+
+    #[test]
+    fn worker_demand_socket_relay_retracts_on_owner_loss_and_rejects_forged_identity() {
+        use crunch_remote_core::demand::Requirement;
+        use crunch_remote_core::demand::WorkerDemand;
+        let fixture = Fixture::new();
+        let mut subscriber = subscribe(&fixture, vec!["demand-owner"], vec!["pending-job"], vec!["worker-demand"]);
+        assert_eq!(read(&mut subscriber)["op"], "snapshot-end");
+        let fact = WorkerDemand::new(
+            "pending-job",
+            "policy",
+            Requirement {
+                cpu_units: 4,
+                memory_bytes: 8192,
+                scratch_bytes: 16384,
+                accelerators: Vec::new(),
+                named_tokens: Vec::new(),
+                semantic_accelerator_classes: Vec::new(),
+                placement_key_blake3: "a".repeat(64),
+            },
+            "no-workers-registered",
+        )
+        .unwrap();
+        let mut publisher = fixture.connect();
+        send(
+            &mut publisher,
+            json!({"schema": LIVE_PROTOCOL_SCHEMA, "op": "open", "owner_run_id": "demand-owner"}),
+        );
+        let id = publish(&mut publisher, "demand-owner", LiveBuildFactValue::WorkerDemand { demand: fact.clone() });
+        let delivered = read(&mut subscriber);
+        assert_eq!(delivered["fact"]["value"]["demand"]["requirement"]["cpu_units"], 4);
+        assert_eq!(delivered["fact"]["value"]["demand"]["blocker_reason"], "no-workers-registered");
+        let mut snapshot = subscribe(&fixture, vec!["demand-owner"], vec!["pending-job"], vec!["worker-demand"]);
+        assert_eq!(read(&mut snapshot)["fact_id"], id);
+        assert_eq!(read(&mut snapshot)["op"], "snapshot-end");
+        publisher.shutdown(Shutdown::Both).unwrap();
+        let retracted = read(&mut subscriber);
+        assert_eq!(retracted["op"], "retract");
+        assert_eq!(retracted["fact_id"], id);
+        let mut fresh = subscribe(&fixture, vec!["demand-owner"], vec!["pending-job"], vec!["worker-demand"]);
+        assert_eq!(read(&mut fresh)["op"], "snapshot-end");
+        let mut forged = fixture.connect();
+        send(&mut forged, json!({"schema": LIVE_PROTOCOL_SCHEMA, "op": "open", "owner_run_id": "forged-owner"}));
+        let mut changed = fact;
+        changed.requirement.cpu_units += 1;
+        publish(&mut forged, "forged-owner", LiveBuildFactValue::WorkerDemand { demand: changed });
+        let mut response = [0_u8; 1];
+        assert_eq!(forged.read(&mut response).unwrap(), 0, "invalid demand gets no feedback");
     }
 
     #[test]

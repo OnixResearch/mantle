@@ -495,7 +495,7 @@ fn materialize_full_source_rust_host_tools_inner(
         support_inputs: vec![FullSourceRustHostSupportInputBinding {
             id: "linux-headers".to_string(),
             path: request.linux_headers_root.display().to_string(),
-            content_digest_blake3: linux_headers_digest_blake3,
+            content_digest_blake3: linux_headers_digest_blake3.to_owned(),
             source_id: LINUX_HEADERS_SOURCE_ID.to_string(),
             attestation_path: request.output_dir.join(FULL_SOURCE_LINUX_HEADERS_ATTESTATION_FILE).display().to_string(),
             attestation_digest_blake3: linux_headers_attestation_digest_blake3,

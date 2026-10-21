@@ -1,0 +1,257 @@
+{
+  "schema": "mantle-semantic-build-graph-v1",
+  "nodes": [
+    {
+      "id": "action:v1:3fbe23dc3d81d3dd527a4583b5174007fe606fb9132f22a8aefe825bfe00456b",
+      "kind": "action"
+    },
+    {
+      "id": "action:v1:89da8a3061a4638d3e78a5caae4397c90f1757ee1716e6e8f277ef3b5839af1b",
+      "kind": "action"
+    },
+    {
+      "id": "action:v1:e58f952de34e9da38f6ddcaeab6687ef1a277ab476fd44b1a71193867411e165",
+      "kind": "action"
+    },
+    {
+      "id": "action:v1:fec0739755891357d05b73ac4883a45b83d2275b5f18e45d5ece68031e5a903f",
+      "kind": "action"
+    },
+    {
+      "id": "configured:v1:1ce9cc58d12135f8c7894072d482508d69ff4271beba5dfdc9179948ab12b2f8",
+      "kind": "configured-target"
+    },
+    {
+      "id": "configured:v1:1eb371badf73570af7ceab7351c78250e7e8e753dcd1277930b3f0279bf95be1",
+      "kind": "configured-target"
+    },
+    {
+      "id": "configured:v1:78f2d675ed66d600dfc40c8ac20e8c5c767975951b8c03b53a6ced1d86af5890",
+      "kind": "configured-target"
+    },
+    {
+      "id": "configured:v1:d3be37f3a0cf2ce9cafaf6324ec531b1ec09e1c51ca06cc7ed0ac66d14d273b0",
+      "kind": "configured-target"
+    },
+    {
+      "id": "recipe:app",
+      "kind": "recipe"
+    },
+    {
+      "id": "recipe:shared",
+      "kind": "recipe"
+    }
+  ],
+  "edges": [
+    {
+      "from": "action:v1:3fbe23dc3d81d3dd527a4583b5174007fe606fb9132f22a8aefe825bfe00456b",
+      "to": "action:v1:e58f952de34e9da38f6ddcaeab6687ef1a277ab476fd44b1a71193867411e165",
+      "kind": "depends-on"
+    },
+    {
+      "from": "action:v1:3fbe23dc3d81d3dd527a4583b5174007fe606fb9132f22a8aefe825bfe00456b",
+      "to": "configured:v1:78f2d675ed66d600dfc40c8ac20e8c5c767975951b8c03b53a6ced1d86af5890",
+      "kind": "action-for"
+    },
+    {
+      "from": "action:v1:89da8a3061a4638d3e78a5caae4397c90f1757ee1716e6e8f277ef3b5839af1b",
+      "to": "configured:v1:1eb371badf73570af7ceab7351c78250e7e8e753dcd1277930b3f0279bf95be1",
+      "kind": "action-for"
+    },
+    {
+      "from": "action:v1:e58f952de34e9da38f6ddcaeab6687ef1a277ab476fd44b1a71193867411e165",
+      "to": "configured:v1:d3be37f3a0cf2ce9cafaf6324ec531b1ec09e1c51ca06cc7ed0ac66d14d273b0",
+      "kind": "action-for"
+    },
+    {
+      "from": "action:v1:fec0739755891357d05b73ac4883a45b83d2275b5f18e45d5ece68031e5a903f",
+      "to": "action:v1:89da8a3061a4638d3e78a5caae4397c90f1757ee1716e6e8f277ef3b5839af1b",
+      "kind": "depends-on"
+    },
+    {
+      "from": "action:v1:fec0739755891357d05b73ac4883a45b83d2275b5f18e45d5ece68031e5a903f",
+      "to": "configured:v1:1ce9cc58d12135f8c7894072d482508d69ff4271beba5dfdc9179948ab12b2f8",
+      "kind": "action-for"
+    },
+    {
+      "from": "configured:v1:1ce9cc58d12135f8c7894072d482508d69ff4271beba5dfdc9179948ab12b2f8",
+      "to": "configured:v1:1eb371badf73570af7ceab7351c78250e7e8e753dcd1277930b3f0279bf95be1",
+      "kind": "depends-on"
+    },
+    {
+      "from": "configured:v1:1ce9cc58d12135f8c7894072d482508d69ff4271beba5dfdc9179948ab12b2f8",
+      "to": "recipe:app",
+      "kind": "configured-from"
+    },
+    {
+      "from": "configured:v1:1eb371badf73570af7ceab7351c78250e7e8e753dcd1277930b3f0279bf95be1",
+      "to": "recipe:shared",
+      "kind": "configured-from"
+    },
+    {
+      "from": "configured:v1:78f2d675ed66d600dfc40c8ac20e8c5c767975951b8c03b53a6ced1d86af5890",
+      "to": "configured:v1:d3be37f3a0cf2ce9cafaf6324ec531b1ec09e1c51ca06cc7ed0ac66d14d273b0",
+      "kind": "depends-on"
+    },
+    {
+      "from": "configured:v1:78f2d675ed66d600dfc40c8ac20e8c5c767975951b8c03b53a6ced1d86af5890",
+      "to": "recipe:app",
+      "kind": "configured-from"
+    },
+    {
+      "from": "configured:v1:d3be37f3a0cf2ce9cafaf6324ec531b1ec09e1c51ca06cc7ed0ac66d14d273b0",
+      "to": "recipe:shared",
+      "kind": "configured-from"
+    },
+    {
+      "from": "recipe:app",
+      "to": "recipe:shared",
+      "kind": "depends-on"
+    }
+  ],
+  "aliases": [
+    {
+      "alias": "app-action-debug",
+      "target": "action:v1:fec0739755891357d05b73ac4883a45b83d2275b5f18e45d5ece68031e5a903f"
+    },
+    {
+      "alias": "app-action-release",
+      "target": "action:v1:3fbe23dc3d81d3dd527a4583b5174007fe606fb9132f22a8aefe825bfe00456b"
+    },
+    {
+      "alias": "app-debug",
+      "target": "configured:v1:1ce9cc58d12135f8c7894072d482508d69ff4271beba5dfdc9179948ab12b2f8"
+    },
+    {
+      "alias": "app-release",
+      "target": "configured:v1:78f2d675ed66d600dfc40c8ac20e8c5c767975951b8c03b53a6ced1d86af5890"
+    },
+    {
+      "alias": "shared-action-debug",
+      "target": "action:v1:89da8a3061a4638d3e78a5caae4397c90f1757ee1716e6e8f277ef3b5839af1b"
+    },
+    {
+      "alias": "shared-action-release",
+      "target": "action:v1:e58f952de34e9da38f6ddcaeab6687ef1a277ab476fd44b1a71193867411e165"
+    },
+    {
+      "alias": "shared-debug",
+      "target": "configured:v1:1eb371badf73570af7ceab7351c78250e7e8e753dcd1277930b3f0279bf95be1"
+    },
+    {
+      "alias": "shared-release",
+      "target": "configured:v1:d3be37f3a0cf2ce9cafaf6324ec531b1ec09e1c51ca06cc7ed0ac66d14d273b0"
+    }
+  ],
+  "inspection": {
+    "state": "complete",
+    "configured": {
+      "configured:v1:1ce9cc58d12135f8c7894072d482508d69ff4271beba5dfdc9179948ab12b2f8": {
+        "semantic_target": "recipe:app",
+        "configuration": "ade1eec05916d17d3983d6053d6df906ab8777c8f1b385af549d83eeecd6b573",
+        "toolchain": "0c662f6081317a077966d76ff7ea2547293f6e36531d0188298f67db595294c1"
+      },
+      "configured:v1:1eb371badf73570af7ceab7351c78250e7e8e753dcd1277930b3f0279bf95be1": {
+        "semantic_target": "recipe:shared",
+        "configuration": "ade1eec05916d17d3983d6053d6df906ab8777c8f1b385af549d83eeecd6b573",
+        "toolchain": "0c662f6081317a077966d76ff7ea2547293f6e36531d0188298f67db595294c1"
+      },
+      "configured:v1:78f2d675ed66d600dfc40c8ac20e8c5c767975951b8c03b53a6ced1d86af5890": {
+        "semantic_target": "recipe:app",
+        "configuration": "f9be0b9cfc027c59b579b9db23e196072ebda7436269e08953299246394d83e2",
+        "toolchain": "0c662f6081317a077966d76ff7ea2547293f6e36531d0188298f67db595294c1"
+      },
+      "configured:v1:d3be37f3a0cf2ce9cafaf6324ec531b1ec09e1c51ca06cc7ed0ac66d14d273b0": {
+        "semantic_target": "recipe:shared",
+        "configuration": "f9be0b9cfc027c59b579b9db23e196072ebda7436269e08953299246394d83e2",
+        "toolchain": "0c662f6081317a077966d76ff7ea2547293f6e36531d0188298f67db595294c1"
+      }
+    },
+    "actions": {
+      "action:v1:3fbe23dc3d81d3dd527a4583b5174007fe606fb9132f22a8aefe825bfe00456b": {
+        "configured_target": "configured:v1:78f2d675ed66d600dfc40c8ac20e8c5c767975951b8c03b53a6ced1d86af5890",
+        "role": "compile",
+        "command": "0af2b4dc036a8b66e5f68b37a96bf3dae1e3ae6cb36ad767975587d9085934b1",
+        "environment": "19d4f2e7cae3407d6f36e66ce6b504aeae2f8e50fe368007dc3e83950eee632e",
+        "inputs": {
+          "source:app": "c4f2cc4930d0f42d8b0993a56038b496ffb3be95d0f5c570833d36e14d08da9c"
+        },
+        "outputs": [
+          "object:app"
+        ],
+        "policy": {
+          "sandboxed": true,
+          "network": "denied",
+          "allow_local": true,
+          "allow_remote": false,
+          "cache_read": true,
+          "cache_write": true,
+          "additional": "ff096070fb25d5456f50000af78f1c92fda605bdb7bc3d1e7d1cc0091204e61c"
+        }
+      },
+      "action:v1:89da8a3061a4638d3e78a5caae4397c90f1757ee1716e6e8f277ef3b5839af1b": {
+        "configured_target": "configured:v1:1eb371badf73570af7ceab7351c78250e7e8e753dcd1277930b3f0279bf95be1",
+        "role": "compile",
+        "command": "739dfc2065950e23b1d8f4e51138596ce331b6910c1093677f9a44c11a7082cc",
+        "environment": "19d4f2e7cae3407d6f36e66ce6b504aeae2f8e50fe368007dc3e83950eee632e",
+        "inputs": {
+          "source:shared": "a0fef8fa7d3a5b5bf30e382d7fb6bfbe7b14cf64ea9bbc6abf54795954406c8a"
+        },
+        "outputs": [
+          "object:shared"
+        ],
+        "policy": {
+          "sandboxed": true,
+          "network": "denied",
+          "allow_local": true,
+          "allow_remote": false,
+          "cache_read": true,
+          "cache_write": true,
+          "additional": "ff096070fb25d5456f50000af78f1c92fda605bdb7bc3d1e7d1cc0091204e61c"
+        }
+      },
+      "action:v1:e58f952de34e9da38f6ddcaeab6687ef1a277ab476fd44b1a71193867411e165": {
+        "configured_target": "configured:v1:d3be37f3a0cf2ce9cafaf6324ec531b1ec09e1c51ca06cc7ed0ac66d14d273b0",
+        "role": "compile",
+        "command": "0af2b4dc036a8b66e5f68b37a96bf3dae1e3ae6cb36ad767975587d9085934b1",
+        "environment": "19d4f2e7cae3407d6f36e66ce6b504aeae2f8e50fe368007dc3e83950eee632e",
+        "inputs": {
+          "source:shared": "a0fef8fa7d3a5b5bf30e382d7fb6bfbe7b14cf64ea9bbc6abf54795954406c8a"
+        },
+        "outputs": [
+          "object:shared"
+        ],
+        "policy": {
+          "sandboxed": true,
+          "network": "denied",
+          "allow_local": true,
+          "allow_remote": false,
+          "cache_read": true,
+          "cache_write": true,
+          "additional": "ff096070fb25d5456f50000af78f1c92fda605bdb7bc3d1e7d1cc0091204e61c"
+        }
+      },
+      "action:v1:fec0739755891357d05b73ac4883a45b83d2275b5f18e45d5ece68031e5a903f": {
+        "configured_target": "configured:v1:1ce9cc58d12135f8c7894072d482508d69ff4271beba5dfdc9179948ab12b2f8",
+        "role": "compile",
+        "command": "739dfc2065950e23b1d8f4e51138596ce331b6910c1093677f9a44c11a7082cc",
+        "environment": "19d4f2e7cae3407d6f36e66ce6b504aeae2f8e50fe368007dc3e83950eee632e",
+        "inputs": {
+          "source:app": "c4f2cc4930d0f42d8b0993a56038b496ffb3be95d0f5c570833d36e14d08da9c"
+        },
+        "outputs": [
+          "object:app"
+        ],
+        "policy": {
+          "sandboxed": true,
+          "network": "denied",
+          "allow_local": true,
+          "allow_remote": false,
+          "cache_read": true,
+          "cache_write": true,
+          "additional": "ff096070fb25d5456f50000af78f1c92fda605bdb7bc3d1e7d1cc0091204e61c"
+        }
+      }
+    }
+  }
+}

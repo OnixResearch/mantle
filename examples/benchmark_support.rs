@@ -1782,6 +1782,7 @@ async fn open_benchmark_store(
         base_state_dirs: Vec::new(),
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
         store_dir: store_prefix.to_string(),
+        source_admission: None,
     })
     .await
     .map_err(Error::from)

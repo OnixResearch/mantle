@@ -1,0 +1,19 @@
+[package]
+name = "mantle-resource-policy-chaos"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+publish = false
+
+# Dedicated external workload, not an SDK dependency of Mantle production.
+[workspace]
+
+[dependencies]
+chaoscontrol-sdk = { git = "https://github.com/brittonr/chaoscontrol", rev = "a154ddd1320129a133bb84b8e13ad3df7e55a55f" }
+crunch-remote-core = { path = "../../crates/crunch-remote-core", features = ["serde"] }
+blake3 = "=1.8.5"
+fs2 = "0.4"
+libc = "0.2"
+linkme = "0.3"
+serde_json = "1"
+tempfile = "3"

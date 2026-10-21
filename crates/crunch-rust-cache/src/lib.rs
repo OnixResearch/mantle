@@ -5,6 +5,8 @@
 //! The shell owns bounded I/O, staging, locking, and atomic publication. The
 //! `crunch-rust-cache-core` crate owns canonical identity and admission logic.
 
+pub mod cc;
+
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fs;
@@ -166,7 +168,7 @@ pub struct RustCacheRetentionPlan {
 
 impl RustCacheRetentionPlan {
     pub fn live_nodes(&self) -> &[Node] {
-        assert!(self.live_nodes.len() <= crunch_rust_cache_core::MAX_RESULT_CANDIDATES);
+        assert!(self.live_nodes.len() <= crunch_rust_cache_core::MAX_RESULT_CANDIDATES + cc::MAX_CC_RECORDS);
         assert!(!self.mutation_lock_path.as_os_str().is_empty());
         &self.live_nodes
     }
@@ -506,6 +508,7 @@ impl RustCache {
         let stale_result_paths = collect_stale_result_paths(&self.results_dir, &live_result_paths)?;
         let index_updates = collect_stale_index_updates(&self.indexes_dir, &retained_result_actions)?;
         assert_eq!(live_nodes.len(), retention.retained_results.len());
+        live_nodes.extend(self.cc_live_nodes()?);
         assert!(stale_result_paths.iter().all(|path| !live_result_paths.contains(path)));
         Ok(RustCacheRetentionPlan {
             live_nodes,

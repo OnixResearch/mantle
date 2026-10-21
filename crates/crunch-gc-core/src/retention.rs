@@ -43,7 +43,7 @@ impl RootClass {
     ];
 
     #[must_use]
-    pub const fn as_str(self) -> &'static str {
+    const fn as_str(self) -> &'static str {
         match self {
             Self::ExplicitPin => "explicit-pin",
             Self::ProjectOutputGeneration => "project-output-generation",
@@ -54,6 +54,12 @@ impl RootClass {
             Self::RemoteResult => "remote-result",
             Self::LegacyUnmanaged => "legacy-unmanaged",
         }
+    }
+}
+
+impl core::fmt::Display for RootClass {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(self.as_str())
     }
 }
 
@@ -129,7 +135,7 @@ pub enum RetentionReason {
 
 impl RetentionReason {
     #[must_use]
-    pub const fn as_str(self) -> &'static str {
+    const fn as_str(self) -> &'static str {
         match self {
             Self::ExplicitPin => "retained-explicit-pin",
             Self::ProjectOutputGenerationCurrent => "retained-project-output-generation",
@@ -145,6 +151,12 @@ impl RetentionReason {
             Self::LegacyUnmanagedProtected => "migrate-legacy-unmanaged-protected",
             Self::ExplicitRemoval => "remove-explicitly-authorized",
         }
+    }
+}
+
+impl core::fmt::Display for RetentionReason {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(self.as_str())
     }
 }
 
@@ -274,22 +286,22 @@ pub enum UsageError {
 }
 
 pub fn plan_retention(
-    policy: &RetentionPolicy,
+    policy: RetentionPolicy,
     current_unix_s: i64,
     roots: Vec<RetentionRoot>,
 ) -> Result<RetentionPlan, RetentionError> {
-    validate_policy(policy)?;
+    validate_policy(&policy)?;
     if roots.len() > policy.max_roots || roots.len() > MAX_RETENTION_ROOTS {
         return Err(RetentionError::TooManyRoots {
             actual: roots.len(),
             maximum: policy.max_roots.min(MAX_RETENTION_ROOTS),
         });
     }
-    let normalized = normalize_roots(policy, roots)?;
+    let normalized = normalize_roots(&policy, roots)?;
     let generation_ranks = generation_ranks(&normalized)?;
     let mut decisions = Vec::with_capacity(normalized.len());
     for root in &normalized {
-        decisions.push(decide_root(policy, current_unix_s, root, &generation_ranks)?);
+        decisions.push(decide_root(&policy, current_unix_s, root, &generation_ranks)?);
         if decisions.len() > policy.max_decisions || decisions.len() > MAX_RETENTION_DECISIONS {
             return Err(RetentionError::TooManyDecisions {
                 actual: decisions.len(),
@@ -297,7 +309,7 @@ pub fn plan_retention(
             });
         }
     }
-    let plan_id = retention_plan_id(policy, &normalized, &decisions)?;
+    let plan_id = retention_plan_id(&policy, &normalized, &decisions)?;
     debug_assert_eq!(normalized.len(), decisions.len());
     debug_assert!(decisions.windows(2).all(|pair| pair[0].path_id < pair[1].path_id));
     Ok(RetentionPlan { plan_id, decisions })
@@ -305,7 +317,7 @@ pub fn plan_retention(
 
 // r[impl store_lifecycle.usage_report]
 pub fn aggregate_usage(
-    decisions: &[RetentionDecision],
+    decisions: Vec<RetentionDecision>,
     mut objects: Vec<UsageObjectObservation>,
 ) -> Result<UsageReport, UsageError> {
     if objects.len() > MAX_USAGE_OBJECTS {
@@ -917,10 +929,10 @@ mod tests {
             renewal_count: 1,
         });
         let roots = vec![project_root(ROOT_A, 1), lease, project_root(ROOT_B, 2)];
-        let expected = plan_retention(&policy(), CURRENT_UNIX_S, roots.clone()).expect("valid retention facts");
+        let expected = plan_retention(policy(), CURRENT_UNIX_S, roots.clone()).expect("valid retention facts");
         let mut shuffled = roots;
         shuffled.reverse();
-        let actual = plan_retention(&policy(), CURRENT_UNIX_S, shuffled).expect("equivalent facts");
+        let actual = plan_retention(policy(), CURRENT_UNIX_S, shuffled).expect("equivalent facts");
 
         assert_eq!(actual, expected);
         assert_eq!(actual.decisions.len(), 3);
@@ -934,7 +946,7 @@ mod tests {
         let oldest_generation = 1;
         let mut oldest = project_root(ROOT_A, oldest_generation);
         oldest.removal_requested = true;
-        let plan = plan_retention(&policy(), CURRENT_UNIX_S, vec![
+        let plan = plan_retention(policy(), CURRENT_UNIX_S, vec![
             oldest,
             project_root(ROOT_B, middle_generation),
             project_root(ROOT_C, newest_generation),
@@ -954,7 +966,7 @@ mod tests {
             last_observed_unix_s: CREATED_UNIX_S,
             renewal_count: DEFAULT_MAX_RENEWALS.saturating_add(1),
         });
-        let plan = plan_retention(&policy(), CURRENT_UNIX_S, vec![malformed]).expect("unsafe lease quarantines");
+        let plan = plan_retention(policy(), CURRENT_UNIX_S, vec![malformed]).expect("unsafe lease quarantines");
         assert_eq!(plan.decisions[0].disposition, RetentionDisposition::Quarantine);
 
         let mut rollback = root(ROOT_B, RootClass::ActiveShellLease);
@@ -965,7 +977,7 @@ mod tests {
             renewal_count: 1,
         });
         assert!(matches!(
-            plan_retention(&policy(), CURRENT_UNIX_S, vec![rollback]),
+            plan_retention(policy(), CURRENT_UNIX_S, vec![rollback]),
             Err(RetentionError::ClockRollback { .. })
         ));
     }
@@ -974,7 +986,7 @@ mod tests {
     fn legacy_root_remains_protected_and_unclassified() {
         let mut legacy = root(ROOT_A, RootClass::LegacyUnmanaged);
         legacy.owner_scope = "legacy-unmanaged".to_string();
-        let plan = plan_retention(&policy(), CURRENT_UNIX_S, vec![legacy]).expect("legacy root stays protected");
+        let plan = plan_retention(policy(), CURRENT_UNIX_S, vec![legacy]).expect("legacy root stays protected");
         assert_eq!(plan.decisions[0].disposition, RetentionDisposition::Migrate);
         assert!(plan.decisions[0].disposition.retains_path());
     }
@@ -982,13 +994,13 @@ mod tests {
     #[test]
     fn duplicate_roots_and_decision_bounds_are_rejected() {
         let duplicate = root(ROOT_A, RootClass::ExplicitPin);
-        let duplicate_error = plan_retention(&policy(), CURRENT_UNIX_S, vec![duplicate.clone(), duplicate])
+        let duplicate_error = plan_retention(policy(), CURRENT_UNIX_S, vec![duplicate.clone(), duplicate])
             .expect_err("duplicate root identity must fail");
         assert!(matches!(duplicate_error, RetentionError::DuplicateRoot { .. }));
 
         let mut bounded_policy = policy();
         bounded_policy.max_decisions = 1;
-        let bound_error = plan_retention(&bounded_policy, CURRENT_UNIX_S, vec![
+        let bound_error = plan_retention(bounded_policy, CURRENT_UNIX_S, vec![
             root(ROOT_A, RootClass::ExplicitPin),
             root(ROOT_B, RootClass::ExplicitPin),
         ])
@@ -1001,7 +1013,7 @@ mod tests {
         let mut ineligible = root(ROOT_A, RootClass::LegacyUnmanaged);
         ineligible.owner_scope = OWNER.to_string();
 
-        let error = plan_retention(&policy(), CURRENT_UNIX_S, vec![ineligible])
+        let error = plan_retention(policy(), CURRENT_UNIX_S, vec![ineligible])
             .expect_err("project owner cannot claim a legacy root");
 
         assert!(matches!(error, RetentionError::IneligibleOwner {
@@ -1016,7 +1028,7 @@ mod tests {
         const NEWER_GENERATION: u64 = 2;
         let mut one_generation_policy = policy();
         one_generation_policy.retained_project_output_generations = 1;
-        let plan = plan_retention(&one_generation_policy, CURRENT_UNIX_S, vec![
+        let plan = plan_retention(one_generation_policy, CURRENT_UNIX_S, vec![
             project_root(ROOT_A, OLDER_GENERATION),
             project_root(ROOT_B, OLDER_GENERATION),
             project_root(ROOT_C, NEWER_GENERATION),
@@ -1029,7 +1041,7 @@ mod tests {
         let mut unknown_policy = root(ROOT_C, RootClass::ExplicitPin);
         unknown_policy.policy_id = "b3:unknown".to_string();
         assert!(matches!(
-            plan_retention(&policy(), CURRENT_UNIX_S, vec![unknown_policy]),
+            plan_retention(policy(), CURRENT_UNIX_S, vec![unknown_policy]),
             Err(RetentionError::UnknownPolicy { .. })
         ));
     }
@@ -1053,7 +1065,7 @@ mod tests {
                 reason: RetentionReason::ExplicitPin,
             },
         ];
-        let report = aggregate_usage(&decisions, vec![
+        let report = aggregate_usage(decisions, vec![
             UsageObjectObservation {
                 object_id: "shared".to_string(),
                 bytes: Some(SHARED_BYTES),
@@ -1087,7 +1099,7 @@ mod tests {
             disposition: RetentionDisposition::Keep,
             reason: RetentionReason::ExplicitPin,
         }];
-        let unknown = aggregate_usage(&decisions, vec![UsageObjectObservation {
+        let unknown = aggregate_usage(decisions.clone(), vec![UsageObjectObservation {
             object_id: "unknown".to_string(),
             bytes: None,
             unknown_reason: Some("metadata-unreadable".to_string()),
@@ -1097,7 +1109,7 @@ mod tests {
         assert_eq!(unknown.unknown_object_count, 1);
         assert_eq!(unknown.observed_bytes, 0);
 
-        let overflow = aggregate_usage(&decisions, vec![
+        let overflow = aggregate_usage(decisions, vec![
             UsageObjectObservation {
                 object_id: "first".to_string(),
                 bytes: Some(u64::MAX),

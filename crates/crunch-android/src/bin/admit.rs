@@ -618,6 +618,8 @@ mod tests {
             manifest: "AndroidManifest.xml".into(),
             resources: vec!["res/values/strings.xml".into()],
             java_sources: vec!["java/Main.java".into()],
+            assets: vec![],
+            native: None,
             toolchains: ToolchainRefs {
                 jdk: toolchain("jdk"),
                 build_tools: toolchain("build-tools"),

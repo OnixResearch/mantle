@@ -314,7 +314,7 @@ fn upgrade_observes_persisted_legacy_lock_and_generated_inputs() {
         std::fs::read_to_string(dir.path().join(".mantle/inputs.ncl")).unwrap(),
         crunch_project::generate_inputs_ncl(upgraded),
     );
-    assert!(read_retention_state(&dir).validate().is_empty());
+    assert!(read_retention_state(&dir).validate().is_ok());
 }
 
 #[test]

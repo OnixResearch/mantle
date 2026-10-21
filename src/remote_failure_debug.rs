@@ -47,8 +47,6 @@ use crunch_build::distributed::remote_failure_debug_ref;
 use crunch_build::distributed::seal_remote_failure_captured_artifact_manifest;
 use crunch_build::distributed::seal_remote_failure_debug_bundle;
 use crunch_build::distributed::validate_remote_failure_debug_bundle;
-use rand::RngCore;
-use rand::rngs::OsRng;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -1214,7 +1212,8 @@ fn sync_directory(_path: &Path) -> Result<(), String> {
 
 fn random_hex() -> Result<String, String> {
     let mut bytes = [0_u8; RANDOM_BYTES];
-    OsRng.try_fill_bytes(&mut bytes).map_err(|error| format!("remote-failure-random-failed:{error}"))?;
+    crate::remote_build::remote_cli_random_bytes("remote-failure-debug", &mut bytes)
+        .map_err(|error| format!("remote-failure-random-failed:{error}"))?;
     let mut rendered = String::with_capacity(RANDOM_BYTES.saturating_mul(2));
     for byte in bytes {
         use std::fmt::Write as _;
@@ -1247,8 +1246,17 @@ pub fn cmd_remote_failure_debug(
 }
 
 fn cmd_remote_failure_inspect(state_dir: &Path, selector: &str, json_output: bool) -> Result<(), crate::RunError> {
+    let operation_plan =
+        crate::remote_build::operation::plan(crate::remote_build::operation::RemoteOperation::DebugInspect)?;
     let bundle_dir = resolve_bundle_selector(state_dir, selector)?;
     let summary = inspect_remote_failure_debug_bundle_from_disk(&bundle_dir).map_err(crate::RunError::Internal)?;
+    crate::remote_build::operation::classify(
+        &operation_plan,
+        crate::remote_build::operation::RemoteOperationFacts::Bundle {
+            bundle_digest: summary.bundle_blake3.as_str(),
+            replay_digest: None,
+        },
+    )?;
     debug_assert!(!summary.bundle_blake3.as_str().is_empty());
     debug_assert!(!summary.non_claims.is_empty());
     if json_output {
@@ -1271,8 +1279,17 @@ fn cmd_remote_failure_inspect(state_dir: &Path, selector: &str, json_output: boo
 }
 
 fn cmd_remote_failure_replay_plan(state_dir: &Path, selector: &str, json_output: bool) -> Result<(), crate::RunError> {
+    let operation_plan =
+        crate::remote_build::operation::plan(crate::remote_build::operation::RemoteOperation::DebugReplayPlan)?;
     let bundle_dir = resolve_bundle_selector(state_dir, selector)?;
     let plan = plan_remote_failure_replay_from_disk(&bundle_dir).map_err(crate::RunError::Internal)?;
+    crate::remote_build::operation::classify(
+        &operation_plan,
+        crate::remote_build::operation::RemoteOperationFacts::Bundle {
+            bundle_digest: plan.source_bundle_blake3.as_str(),
+            replay_digest: Some(plan.replay_plan_blake3.as_str()),
+        },
+    )?;
     debug_assert!(!plan.replay_plan_blake3.as_str().is_empty());
     debug_assert!(!plan.source_bundle_blake3.as_str().is_empty());
     if json_output {
@@ -1299,9 +1316,20 @@ fn cmd_remote_failure_gc(
     requested_now_unix_s: Option<u64>,
     json_output: bool,
 ) -> Result<(), crate::RunError> {
-    let now_unix_s = requested_now_unix_s.map_or_else(crate::unix_time_now_s, Ok)?;
+    let operation_plan =
+        crate::remote_build::operation::plan(crate::remote_build::operation::RemoteOperation::DebugGc)?;
+    let now_unix_s = requested_now_unix_s.map_or_else(
+        || crate::remote_build::remote_cli_now_unix_s("remote-debug-gc").map_err(crate::RunError::Internal),
+        Ok,
+    )?;
     let retention_summary =
         retain_remote_failure_debug_bundles(state_dir, now_unix_s).map_err(crate::RunError::Internal)?;
+    let classified = crate::remote_build::operation::classify(
+        &operation_plan,
+        crate::remote_build::operation::RemoteOperationFacts::Retention {
+            failed_deletions: retention_summary.failed_deletions.len(),
+        },
+    );
     debug_assert!(retention_summary.failed_deletions.capacity() >= retention_summary.failed_deletions.len());
     debug_assert!(!state_dir.as_os_str().is_empty());
     if json_output {
@@ -1320,11 +1348,7 @@ fn cmd_remote_failure_gc(
         println!("deleted: {}", retention_summary.deleted_count);
         println!("failed-deletions: {}", retention_summary.failed_deletions.len());
     }
-    if retention_summary.failed_deletions.is_empty() {
-        Ok(())
-    } else {
-        Err(crate::RunError::Internal("remote-failure-debug-gc-partial-failure".to_string()))
-    }
+    classified.map_err(|_| crate::RunError::Internal("remote-failure-debug-gc-partial-failure".to_string()))
 }
 
 pub fn resolve_bundle_selector(state_dir: &Path, selector: &str) -> Result<PathBuf, crate::RunError> {
@@ -1394,6 +1418,7 @@ mod tests {
     fn request() -> ConcreteBuildRequest {
         ConcreteBuildRequest {
             request_id: "request-debug".to_string(),
+            endpoint_binding: None,
             store_prefix: "/mantle/store".to_string(),
             input_refs: vec!["/mantle/store/input".to_string()],
             source_input_refs: Vec::new(),

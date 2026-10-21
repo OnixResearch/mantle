@@ -1,0 +1,33 @@
+{
+  "octet": {
+    "copied_paths": {
+      "proofs/aeneas/Llbc.lean": "standards/proof-rails/aeneas-lean/fixtures/external-consumer/expected/Llbc.lean",
+      "proofs/aeneas/llbc.llbc": "standards/proof-rails/aeneas-lean/fixtures/external-consumer/expected/llbc.llbc",
+      "proofs/aeneas/provider-profile.json": "standards/proof-rails/aeneas-lean/generated/profile.json",
+      "proofs/aeneas/source/src/lib.rs": "standards/proof-rails/aeneas-lean/fixtures/external-consumer/src/lib.rs",
+      "proofs/aeneas/theorem.lean": "standards/proof-rails/aeneas-lean/fixtures/external-consumer/Theorem.lean",
+      "proofs/aeneas/translation.json": "standards/proof-rails/aeneas-lean/fixtures/external-consumer/expected/translation.json",
+      "src/lib.rs": "standards/proof-rails/aeneas-lean/fixtures/external-consumer/src/lib.rs"
+    },
+    "repository": "https://github.com/OnixResearch/octet",
+    "revision": "4a540dff99aa2040e267e42bbafe09144f276572",
+    "scope": "selected source/provider/generated-stage links only; NOT full envelope verification"
+  },
+  "trellis": {
+    "copied_paths": [
+      "aeneas-pilot/generated/Llbc.lean",
+      "aeneas-pilot/generated/llbc.llbc",
+      "aeneas-pilot/generated/negative-cases.json",
+      "aeneas-pilot/generated/resource-policy.json",
+      "aeneas-pilot/generated/translation.json",
+      "aeneas-pilot/theorems/AbsDiffSelfZero.lean",
+      "aeneas-pilot/theorems/AbsDiffSymmetric.lean",
+      "aeneas-pilot/theorems/AxiomAudit.lean",
+      "docs/proof-evidence-bundle.json",
+      "src/arithmetic.rs"
+    ],
+    "repository": "https://github.com/OnixResearch/trellis",
+    "revision": "d91188e495d65bca87551b7a06330efb2c909edf",
+    "scope": "source/profile/artifact and opaque Verus receipt byte links only"
+  }
+}

@@ -184,6 +184,13 @@ pub struct RebuildAuthorityPlan {
     pub blockers: Vec<RebuildAuthorityBlocker>,
 }
 
+/// An authority decision retaining the complete plan without copying its evidence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RebuildAuthorityAssessment {
+    pub eligible: bool,
+    pub plan: RebuildAuthorityPlan,
+}
+
 struct TextField<'a> {
     value: &'a str,
     name: &'a str,
@@ -204,7 +211,15 @@ struct PathPair<'a> {
 }
 
 impl RebuildAuthorityPlan {
-    pub fn eligible(&self) -> bool {
+    /// Assess the plan's authority blockers and retain ownership of its evidence.
+    pub fn assess_eligibility(self) -> RebuildAuthorityAssessment {
+        RebuildAuthorityAssessment {
+            eligible: self.is_eligible(),
+            plan: self,
+        }
+    }
+
+    fn is_eligible(&self) -> bool {
         self.target_authority_excluded && self.blockers.is_empty()
     }
 }
@@ -311,7 +326,7 @@ pub fn plan_rebuild_authority(input: RebuildAuthorityInput) -> RebuildAuthorityP
         blockers,
     };
     debug_assert_eq!(plan.schema, REBUILD_AUTHORITY_PLAN_SCHEMA);
-    debug_assert_eq!(plan.eligible(), plan.target_authority_excluded && plan.blockers.is_empty());
+    debug_assert_eq!(plan.is_eligible(), plan.target_authority_excluded && plan.blockers.is_empty());
     plan
 }
 
@@ -874,7 +889,7 @@ mod tests {
     fn authority_plan_accepts_declared_content_bound_inputs() {
         let plan = plan_rebuild_authority(authority_input());
 
-        assert!(plan.eligible(), "{:?}", plan.blockers);
+        assert!(plan.is_eligible(), "{:?}", plan.blockers);
         assert!(plan.target_authority_excluded);
         assert_eq!(plan.approved_read_identities.len(), 8);
         assert_eq!(plan.fresh_write_root_identities.len(), 4);
@@ -909,7 +924,7 @@ mod tests {
                 input.published_targets[0].filesystem_object_identity = object_identity;
             }
             let plan = plan_rebuild_authority(input);
-            assert!(!plan.eligible());
+            assert!(!plan.is_eligible());
             assert!(plan.blockers.iter().any(|blocker| blocker.code == expected), "{:?}", plan.blockers);
         }
     }
@@ -924,7 +939,7 @@ mod tests {
             let mut input = authority_input();
             input.candidate_inputs.push(observation(identity("forbidden", role, 10), "/forbidden"));
             let plan = plan_rebuild_authority(input);
-            assert!(!plan.eligible());
+            assert!(!plan.is_eligible());
             assert!(plan.blockers.iter().any(|blocker| blocker.code == expected), "{:?}", plan.blockers);
         }
     }
@@ -934,7 +949,7 @@ mod tests {
         let mut reused = authority_input();
         reused.run_roots[1].normalized_store_path = reused.run_roots[0].normalized_store_path.clone();
         let reused_plan = plan_rebuild_authority(reused);
-        assert!(!reused_plan.eligible());
+        assert!(!reused_plan.is_eligible());
         assert!(
             reused_plan
                 .blockers
@@ -945,7 +960,7 @@ mod tests {
         let mut overlapping = authority_input();
         overlapping.run_roots[0].normalized_output_path = "/inputs/recipe/nested".to_string();
         let overlapping_plan = plan_rebuild_authority(overlapping);
-        assert!(!overlapping_plan.eligible());
+        assert!(!overlapping_plan.is_eligible());
         assert!(
             overlapping_plan
                 .blockers

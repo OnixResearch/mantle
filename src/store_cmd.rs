@@ -5,7 +5,12 @@ use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 
-use mantle_application_contract::EffectKind;
+use mantle_application_contract::store_administration::StoreExecutionPort;
+use mantle_application_contract::store_administration::StoreFactFailure;
+use mantle_application_contract::store_administration::StoreFacts;
+use mantle_application_contract::store_administration::StoreLeaf;
+use mantle_application_contract::store_administration::StorePlan;
+use mantle_application_contract::store_administration::classify_store_facts;
 use serde::Serialize;
 
 const PATHINFO_SCAN_COUNT_MAX: u32 = 1_000_000;
@@ -16,84 +21,98 @@ const FOREIGN_REALIZATION_RECEIPT_READ_LIMIT: u64 = MAX_FOREIGN_REALIZATION_RECE
 const COMPOSITION_REQUEST_BYTES_MAX: u64 = 1_048_576;
 const COMPOSITION_REQUEST_READ_LIMIT: u64 = COMPOSITION_REQUEST_BYTES_MAX + 1;
 const COMPOSITION_REQUEST_INITIAL_CAPACITY: usize = 8_192;
+const NAR_SHA256_BYTES: usize = 32;
+const NAR_SHA256_HEX_BYTES: usize = NAR_SHA256_BYTES * 2;
+const BLAKE3_HEX_BYTES: usize = 64;
 
 use crate::errors::RunError;
 use crate::signing_key::load_configured_trusted_public_keys;
 use crate::signing_key::load_or_generate_signing_keypair;
 
-/// Effect identity of the store verification read.
-const STORE_VERIFY_EFFECT: &str = "verify-paths";
+#[derive(Clone, Copy)]
+struct StoreCommandPlan {
+    operation: StorePlan,
+    selection: Option<StorePlan>,
+}
 
-/// Diagnostic code reported when verification finds a mismatch.
-const STORE_VERIFY_MISMATCH_CODE: &str = "store-verify-mismatch";
+fn plan_store_command(action: &crate::StoreAction) -> StoreCommandPlan {
+    use crate::StoreAction as Action;
+    let leaf = match action {
+        Action::List => StoreLeaf::List,
+        Action::Info { .. } => StoreLeaf::Info,
+        Action::Roots { migrate } => StoreLeaf::Roots { migrate: *migrate },
+        Action::Usage => StoreLeaf::Usage,
+        Action::Pin { .. } => StoreLeaf::Pin,
+        Action::Unpin { .. } => StoreLeaf::Unpin,
+        Action::Gc { execute, .. } => StoreLeaf::Gc { execute: *execute },
+        Action::Verify { .. } => StoreLeaf::Verify,
+        Action::Sign { .. } => StoreLeaf::Sign,
+        Action::RepairFinalNar { execute, .. } => StoreLeaf::Repair { execute: *execute },
+        Action::Push { .. } => StoreLeaf::Push,
+        Action::Pull { from, closure, .. } => StoreLeaf::Pull {
+            closure: *closure,
+            http: from.starts_with("http://") || from.starts_with("https://"),
+        },
+        Action::Composition { action } => match action {
+            crate::StoreCompositionAction::Plan { .. } => StoreLeaf::CompositionPlan,
+            crate::StoreCompositionAction::Realize { .. } => StoreLeaf::CompositionRealize,
+        },
+        Action::Archive { action } => match action {
+            crate::StoreArchiveAction::Export { to, .. } => StoreLeaf::ArchiveExport {
+                stdio: is_stdio_path(to),
+            },
+            crate::StoreArchiveAction::Import { format, from, .. } => StoreLeaf::ArchiveImport {
+                nario: *format == crate::StoreArchiveFormat::NarioV2,
+                stdio: is_stdio_path(from),
+            },
+            crate::StoreArchiveAction::List { format, from } => StoreLeaf::ArchiveList {
+                nario: *format == crate::StoreArchiveFormat::NarioV2,
+                stdio: is_stdio_path(from),
+            },
+        },
+    };
+    let selection = match leaf {
+        StoreLeaf::Push => Some(StorePlan::new(StoreLeaf::PushSelection)),
+        StoreLeaf::ArchiveExport { .. } => Some(StorePlan::new(StoreLeaf::ArchiveSelection)),
+        _ => None,
+    };
+    StoreCommandPlan {
+        operation: StorePlan::new(leaf),
+        selection,
+    }
+}
 
-/// Effect identity of the store listing read.
-const STORE_LIST_EFFECT: &str = "store-list";
+struct StoreCapability<F> {
+    leaf: StoreLeaf,
+    operation: F,
+}
 
-/// Effect identity of the store path-info read.
-const STORE_INFO_EFFECT: &str = "store-info";
-/// Effect identity of the retained-roots read (without migration).
-const STORE_ROOTS_LIST_EFFECT: &str = "store-roots-list";
+impl<F, T> StoreExecutionPort for StoreCapability<F>
+where F: core::future::Future<Output = Result<T, RunError>>
+{
+    type Output = T;
+    type Error = RunError;
 
-/// Effect identity of the legacy-root migration write.
-const STORE_ROOTS_MIGRATE_EFFECT: &str = "store-roots-migrate";
+    async fn execute(self, plan: &StorePlan) -> Result<T, RunError> {
+        if self.leaf != plan.leaf {
+            return Err(RunError::Internal(format!("store execution port does not match plan: {:?}", plan.leaf)));
+        }
+        self.operation.await
+    }
+}
 
-/// Effect identity of the store usage plan read.
-const STORE_USAGE_EFFECT: &str = "store-usage";
+async fn execute_store_port<T>(
+    plan: StorePlan,
+    leaf: StoreLeaf,
+    operation: impl core::future::Future<Output = Result<T, RunError>>,
+) -> Result<T, RunError> {
+    StoreCapability { leaf, operation }.execute(&plan).await
+}
 
-/// Effect identity of the GC-root retention write.
-const STORE_PIN_EFFECT: &str = "store-pin";
-
-/// Effect identity of the GC-root release write.
-const STORE_UNPIN_EFFECT: &str = "store-unpin";
-
-/// Diagnostic code reported when an unpin names an unknown root.
-const STORE_UNPIN_UNKNOWN_ROOT_CODE: &str = "store-unpin-unknown-root";
-
-/// Effect identity of a plan-only garbage-collection read.
-const STORE_GC_PLAN_EFFECT: &str = "store-gc-plan";
-
-/// Effect identity of the garbage-collection write.
-const STORE_GC_EFFECT: &str = "store-gc";
-
-/// Diagnostic code reported when GC execution stops incomplete.
-const STORE_GC_INCOMPLETE_CODE: &str = "store-gc-incomplete";
-
-/// Effect identity of the final-NAR repair inspection read.
-const STORE_REPAIR_INSPECT_EFFECT: &str = "store-repair-inspect";
-
-/// Effect identity of the final-NAR repair execution write.
-const STORE_REPAIR_EXECUTE_EFFECT: &str = "store-repair-execute";
-
-/// Effect identity of the PathInfo signing write.
-const STORE_SIGN_EFFECT: &str = "store-sign";
-
-/// Effect identity of the push selection read.
-const STORE_PUSH_SELECT_EFFECT: &str = "store-push-select";
-
-/// Effect identity of the cache push write.
-const STORE_PUSH_EFFECT: &str = "store-push";
-
-/// Effect identity of the pull import write.
-const STORE_PULL_EFFECT: &str = "store-pull";
-
-/// Diagnostic code reported when a closure pull does not admit its root.
-const STORE_PULL_ROOT_NOT_ADMITTED_CODE: &str = "store-pull-closure-root-not-admitted";
-
-/// Effect identity of the composition planning read.
-const STORE_COMPOSITION_PLAN_EFFECT: &str = "store-composition-plan";
-
-/// Effect identity of the composition realization write.
-const STORE_COMPOSITION_REALIZE_EFFECT: &str = "store-composition-realize";
-
-/// Effect identity of the archive export write.
-const STORE_ARCHIVE_EXPORT_EFFECT: &str = "store-archive-export";
-
-/// Effect identity of the archive import write.
-const STORE_ARCHIVE_IMPORT_EFFECT: &str = "store-archive-import";
-
-/// Effect identity of the archive listing read.
-const STORE_ARCHIVE_LIST_EFFECT: &str = "store-archive-list";
+fn classify_store_result(plan: StorePlan, facts: StoreFacts) -> Result<(), RunError> {
+    classify_store_facts(plan, facts)
+        .map_err(|error| RunError::Internal(format!("store {:?} observations were inconsistent: {error:?}", plan.leaf)))
+}
 
 pub fn cmd_store(
     action: crate::StoreAction,
@@ -102,9 +121,11 @@ pub fn cmd_store(
     backend: crunch_store::StoreBackend,
     store_dir: &str,
     base_state_dirs: &[PathBuf],
+    source_admission: Option<&std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     is_json_output: bool,
 ) -> Result<(), RunError> {
     crate::command_input::admit_store_action_or_block(&action)?;
+    let plan = plan_store_command(&action);
     let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
     rt.block_on(async {
         cmd_store_async(action, StoreCommandContext {
@@ -113,7 +134,9 @@ pub fn cmd_store(
             backend,
             store_dir,
             base_state_dirs,
+            source_admission,
             is_json_output,
+            plan,
         })
         .await
     })
@@ -126,18 +149,20 @@ struct StoreCommandContext<'a> {
     backend: crunch_store::StoreBackend,
     store_dir: &'a str,
     base_state_dirs: &'a [PathBuf],
+    source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     is_json_output: bool,
+    plan: StoreCommandPlan,
 }
 
 async fn cmd_store_async(action: crate::StoreAction, context: StoreCommandContext<'_>) -> Result<(), RunError> {
     match action {
         crate::StoreAction::List => {
             let store = open_store(context).await?;
-            cmd_store_list(&store, context.is_json_output).await
+            cmd_store_list(&store, context.plan.operation, context.is_json_output).await
         }
         crate::StoreAction::Info { path } => {
             let store = open_store(context).await?;
-            cmd_store_info(&store, &path, context.is_json_output).await
+            cmd_store_info(&store, context.plan.operation, &path, context.is_json_output).await
         }
         crate::StoreAction::Roots { migrate } => {
             let _guard = if migrate {
@@ -150,7 +175,7 @@ async fn cmd_store_async(action: crate::StoreAction, context: StoreCommandContex
             } else {
                 open_store(context).await?
             };
-            cmd_store_roots(&mut store, migrate, context)
+            cmd_store_roots(&mut store, migrate, context).await
         }
         crate::StoreAction::Usage => {
             preflight_store_backend(context)?;
@@ -176,7 +201,14 @@ async fn cmd_store_async(action: crate::StoreAction, context: StoreCommandContex
                 Some(store) => store,
                 None => open_store(context).await?,
             };
-            cmd_store_usage(&mut store, _guard.as_ref(), rust_retention.as_ref(), context.is_json_output).await
+            cmd_store_usage(
+                &mut store,
+                context.plan.operation,
+                _guard.as_ref(),
+                rust_retention.as_ref(),
+                context.is_json_output,
+            )
+            .await
         }
         other => cmd_store_mutation_or_transfer(other, context).await,
     }
@@ -190,12 +222,12 @@ async fn cmd_store_mutation_or_transfer(
         crate::StoreAction::Pin { path, owner, reason } => {
             let _guard = store_mutation_guard(context)?;
             let store = open_store_under_guard(context, &_guard).await?;
-            cmd_store_pin(&store, &path, &owner, &reason).await
+            cmd_store_pin(&store, context.plan.operation, &path, &owner, &reason).await
         }
         crate::StoreAction::Unpin { path, owner, reason } => {
             let _guard = store_mutation_guard(context)?;
             let store = open_store_under_guard(context, &_guard).await?;
-            cmd_store_unpin(&store, &path, &owner, reason.as_deref())
+            cmd_store_unpin(&store, context.plan.operation, &path, &owner, reason.as_deref()).await
         }
         crate::StoreAction::Gc {
             execute,
@@ -223,7 +255,15 @@ async fn cmd_store_mutation_or_transfer(
             let _guard = store_mutation_guard(context)?;
             let mut store = open_store_under_guard(context, &_guard).await?;
             let admin = store.store_admin();
-            cmd_store_sign(&admin, path.as_deref(), all, signing_key.as_deref(), context.state_dir).await
+            cmd_store_sign(
+                &admin,
+                context.plan.operation,
+                path.as_deref(),
+                all,
+                signing_key.as_deref(),
+                context.state_dir,
+            )
+            .await
         }
         crate::StoreAction::RepairFinalNar {
             path,
@@ -237,6 +277,7 @@ async fn cmd_store_mutation_or_transfer(
             let store = open_store_under_guard(context, &_guard).await?;
             cmd_store_repair_final_nar(
                 &store,
+                context.plan.operation,
                 &path,
                 execute,
                 signing_key.as_deref(),
@@ -321,7 +362,15 @@ async fn cmd_store_gc_action(
         Some(store) => store,
         None => open_store(context).await?,
     };
-    cmd_store_gc(&mut store, _guard.as_ref(), rust_retention.as_ref(), accepted_plan_id, context.is_json_output).await
+    cmd_store_gc(
+        &mut store,
+        context.plan.operation,
+        _guard.as_ref(),
+        rust_retention.as_ref(),
+        accepted_plan_id,
+        context.is_json_output,
+    )
+    .await
 }
 
 fn casita_gc_recovery_pending(context: StoreCommandContext<'_>) -> Result<bool, RunError> {
@@ -375,6 +424,7 @@ async fn plan_rust_cache_retention(
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
         store_dir: context.store_dir.to_string(),
         base_state_dirs: Vec::new(),
+        source_admission: None,
     })
     .await
     .map_err(|error| RunError::Build(format!("planning Rust cache retention: {error}")))?;
@@ -389,14 +439,13 @@ async fn plan_rust_cache_retention(
 }
 
 fn preflight_store_backend(context: StoreCommandContext<'_>) -> Result<(), RunError> {
-    crunch_store::StoreConfig::new(
+    crunch_store::StoreConfig::preflight_backend_identity_for(
         context.backend,
-        context.state_dir.to_path_buf(),
-        context.output_dir.to_path_buf(),
-        context.store_dir.to_string(),
+        context.state_dir,
+        context.store_dir,
+        context.base_state_dirs,
+        context.source_admission.map(std::sync::Arc::as_ref),
     )
-    .with_base_state_dirs(context.base_state_dirs.to_vec())
-    .preflight_backend_identity()
     .map_err(|error| RunError::Internal(format!("opening store: {error}")))
 }
 
@@ -448,6 +497,7 @@ async fn cmd_store_verify_action(context: StoreCommandContext<'_>, action: Store
     let mut store = open_store(context).await?;
     let admin = store.store_admin();
     cmd_store_verify(&admin, StoreVerifyRequest {
+        plan: context.plan.operation,
         path_filter: action.path_filter.as_deref(),
         signing_key_path: action.signing_key_path.as_deref(),
         explicit_trusted_public_keys: &action.trusted_public_keys,
@@ -462,7 +512,7 @@ async fn cmd_store_verify_action(context: StoreCommandContext<'_>, action: Store
 async fn cmd_store_push_action(context: StoreCommandContext<'_>, action: StorePushAction) -> Result<(), RunError> {
     let _guard = store_mutation_guard(context)?;
     let store = open_store_under_guard(context, &_guard).await?;
-    cmd_store_push(&store, StorePushRequest {
+    cmd_store_push(&store, context.plan, StorePushRequest {
         destination_dir: &action.destination_dir,
         is_all: action.is_all,
         is_trust_unsigned: action.is_trust_unsigned,
@@ -479,7 +529,7 @@ async fn cmd_store_pull_action(context: StoreCommandContext<'_>, action: StorePu
     )?;
     let _guard = store_mutation_guard(context)?;
     let store = open_store_under_guard(context, &_guard).await?;
-    cmd_store_pull(&store, StorePullRequest {
+    cmd_store_pull(&store, context.plan.operation, StorePullRequest {
         source_url: &action.source_url,
         is_all: action.is_all,
         is_closure: action.is_closure,
@@ -611,18 +661,30 @@ async fn open_store(context: StoreCommandContext<'_>) -> Result<crunch_store::St
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
         store_dir: context.store_dir.to_string(),
         base_state_dirs: context.base_state_dirs.to_vec(),
+        source_admission: context.source_admission.cloned(),
     })
     .await
     .map_err(|e| RunError::Internal(format!("opening store: {e}")))
 }
 
-async fn cmd_store_list(store: &crunch_store::StoreHandle, is_json_output: bool) -> Result<(), RunError> {
-    let entries = store.list_pathinfos_with_layer().await.map_err(|error| RunError::Internal(format!("{error}")))?;
+async fn cmd_store_list(
+    store: &crunch_store::StoreHandle,
+    plan: StorePlan,
+    is_json_output: bool,
+) -> Result<(), RunError> {
+    let entries = execute_store_port(plan, StoreLeaf::List, async {
+        store.list_pathinfos_with_layer().await.map_err(|error| RunError::Internal(format!("{error}")))
+    })
+    .await?;
     debug_assert!(entries.iter().all(|entry| !entry.value.store_path.to_string().is_empty()));
     debug_assert!(u32::try_from(entries.len()).is_ok());
     let overlay = store
         .overlay_report()
         .map_err(|error| RunError::Internal(format!("building overlay report: {error}")))?;
+    classify_store_result(plan, StoreFacts::Rows {
+        rows: entries.len(),
+        invalid_rows: entries.iter().filter(|entry| entry.value.store_path.name().is_empty()).count(),
+    })?;
     if is_json_output {
         let paths = entries
             .iter()
@@ -645,7 +707,7 @@ async fn cmd_store_list(store: &crunch_store::StoreHandle, is_json_output: bool)
             }))
             .map_err(|error| RunError::Internal(format!("serializing store list: {error}")))?
         );
-        return classify_store_effect(STORE_LIST_EFFECT, EffectKind::ReadFiles, None);
+        return Ok(());
     }
     print_overlay_summary(overlay.as_ref());
     if entries.is_empty() {
@@ -661,14 +723,22 @@ async fn cmd_store_list(store: &crunch_store::StoreHandle, is_json_output: bool)
         }
         eprintln!("{} path(s)", entries.len());
     }
-    classify_store_effect(STORE_LIST_EFFECT, EffectKind::ReadFiles, None)
+    Ok(())
 }
 
-async fn cmd_store_info(store: &crunch_store::StoreHandle, path: &str, is_json_output: bool) -> Result<(), RunError> {
+async fn cmd_store_info(
+    store: &crunch_store::StoreHandle,
+    plan: StorePlan,
+    path: &str,
+    is_json_output: bool,
+) -> Result<(), RunError> {
     if path.is_empty() {
         return Err(RunError::Internal("store info path filter must not be empty".to_string()));
     }
-    let entries = store.list_pathinfos_with_layer().await.map_err(|error| RunError::Internal(format!("{error}")))?;
+    let entries = execute_store_port(plan, StoreLeaf::Info, async {
+        store.list_pathinfos_with_layer().await.map_err(|error| RunError::Internal(format!("{error}")))
+    })
+    .await?;
     let details: Vec<_> =
         entries.into_iter().filter(|entry| entry.value.store_path.to_string().contains(path)).collect();
     if details.is_empty() {
@@ -680,6 +750,10 @@ async fn cmd_store_info(store: &crunch_store::StoreHandle, path: &str, is_json_o
         .map_err(|error| RunError::Internal(format!("building overlay report: {error}")))?;
     let interests = crunch_store::list_interest_reports(store.state_dir())
         .map_err(|error| RunError::Internal(format!("listing retention interests: {error}")))?;
+    classify_store_result(plan, StoreFacts::Rows {
+        rows: details.len(),
+        invalid_rows: details.iter().filter(|entry| !entry.value.store_path.to_string().contains(path)).count(),
+    })?;
     if is_json_output {
         let paths = details
             .iter()
@@ -713,7 +787,7 @@ async fn cmd_store_info(store: &crunch_store::StoreHandle, path: &str, is_json_o
             }))
             .map_err(|error| RunError::Internal(format!("serializing store info: {error}")))?
         );
-        return classify_store_effect(STORE_INFO_EFFECT, EffectKind::ReadFiles, None);
+        return Ok(());
     }
     print_overlay_summary(overlay.as_ref());
     let profile = store.backend().profile();
@@ -772,7 +846,7 @@ async fn cmd_store_info(store: &crunch_store::StoreHandle, path: &str, is_json_o
             }
         }
     }
-    classify_store_effect(STORE_INFO_EFFECT, EffectKind::ReadFiles, None)
+    Ok(())
 }
 
 fn print_overlay_summary(report: Option<&crunch_store::StoreOverlayReport>) {
@@ -798,26 +872,31 @@ fn print_overlay_summary(report: Option<&crunch_store::StoreOverlayReport>) {
     }
 }
 
-fn cmd_store_roots(
+async fn cmd_store_roots(
     store: &mut crunch_store::StoreHandle,
     migrate: bool,
     context: StoreCommandContext<'_>,
 ) -> Result<(), RunError> {
-    let roots = if migrate {
-        store
-            .store_admin()
-            .migrate_legacy_root_registry()
-            .map_err(|error| RunError::Internal(format!("{error}")))?
-    } else {
-        store.list_retained_roots().map_err(|error| RunError::Internal(format!("{error}")))?
-    };
+    let plan = context.plan.operation;
+    let roots = execute_store_port(plan, StoreLeaf::Roots { migrate }, async {
+        if migrate {
+            store
+                .store_admin()
+                .migrate_legacy_root_registry()
+                .map_err(|error| RunError::Internal(format!("{error}")))
+        } else {
+            store.list_retained_roots().map_err(|error| RunError::Internal(format!("{error}")))
+        }
+    })
+    .await?;
     let interests = crunch_store::list_interest_reports(context.state_dir)
         .map_err(|error| RunError::Internal(format!("listing retention interests: {error}")))?;
-    let (effect, observed_kind) = if migrate {
-        (STORE_ROOTS_MIGRATE_EFFECT, EffectKind::WriteFiles)
-    } else {
-        (STORE_ROOTS_LIST_EFFECT, EffectKind::ReadFiles)
-    };
+    let readback = store.list_retained_roots().map_err(|error| RunError::Internal(format!("{error}")))?;
+    classify_store_result(plan, StoreFacts::Roots {
+        rows: roots.len(),
+        invalid_rows: roots.iter().filter(|root| root.logical_path.is_empty() || root.owner_scope.is_empty()).count(),
+        readback_matches: roots == readback,
+    })?;
     if context.is_json_output {
         println!(
             "{}",
@@ -828,11 +907,11 @@ fn cmd_store_roots(
             }))
             .map_err(|error| RunError::Internal(format!("serializing root report: {error}")))?
         );
-        return classify_store_effect(effect, observed_kind, None);
+        return Ok(());
     }
     if roots.is_empty() {
         eprintln!("No retained GC roots.");
-        return classify_store_effect(effect, observed_kind, None);
+        return Ok(());
     }
     for root in &roots {
         println!(
@@ -859,7 +938,7 @@ fn cmd_store_roots(
         }
     }
     eprintln!("{} retained root(s)", roots.len());
-    classify_store_effect(effect, observed_kind, None)
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -872,14 +951,28 @@ struct StoreUsageOutput<'a> {
 
 async fn cmd_store_usage(
     store: &mut crunch_store::StoreHandle,
+    plan: StorePlan,
     guard: Option<&crunch_store::StoreMutationGuard>,
     rust_retention: Option<&crunch_rust_cache::RustCacheRetentionPlan>,
     is_json_output: bool,
 ) -> Result<(), RunError> {
-    let report =
-        run_store_gc_plan(store, guard, None, rust_retention.map_or(&[][..], |plan| plan.live_nodes())).await?;
+    let report = execute_store_port(
+        plan,
+        StoreLeaf::Usage,
+        run_store_gc_plan(store, guard, None, rust_retention.map_or(&[][..], |plan| plan.live_nodes())),
+    )
+    .await?;
     let interests = crunch_store::list_interest_reports(store.state_dir())
         .map_err(|error| RunError::Internal(format!("listing retention interests: {error}")))?;
+    let usage = &report.usage;
+    classify_store_result(plan, StoreFacts::Usage {
+        observed: usage.observed_bytes,
+        classified: usage
+            .retained_bytes
+            .checked_add(usage.reclaimable_bytes)
+            .and_then(|bytes| bytes.checked_add(usage.quarantined_bytes))
+            .and_then(|bytes| bytes.checked_add(usage.unclassified_bytes)),
+    })?;
     if is_json_output {
         println!(
             "{}",
@@ -891,7 +984,7 @@ async fn cmd_store_usage(
             })
             .map_err(|error| RunError::Internal(format!("serializing usage report: {error}")))?
         );
-        return classify_store_effect(STORE_USAGE_EFFECT, EffectKind::ReadFiles, None);
+        return Ok(());
     }
     println!(
         "observed_bytes={}  retained_bytes={}  reclaimable_bytes={}  quarantined_bytes={}  unclassified_bytes={}  shared_bytes={}  unknown_objects={}",
@@ -928,35 +1021,69 @@ async fn cmd_store_usage(
             println!("UNKNOWN_BYTES {}  category={}  blocker={}", observation.path, observation.category, blocker,);
         }
     }
-    classify_store_effect(STORE_USAGE_EFFECT, EffectKind::ReadFiles, None)
+    Ok(())
 }
 async fn cmd_store_pin(
     store: &crunch_store::StoreHandle,
+    plan: StorePlan,
     path: &str,
     owner: &str,
     reason: &str,
 ) -> Result<(), RunError> {
-    let root = store.pin_retained_root(path, owner, reason).await.map_err(|e| RunError::Build(format!("{e}")))?;
+    let root = execute_store_port(plan, StoreLeaf::Pin, async {
+        store.pin_retained_root(path, owner, reason).await.map_err(|e| RunError::Build(format!("{e}")))
+    })
+    .await?;
+    let interests = crunch_store::list_interest_reports(store.state_dir())
+        .map_err(|error| RunError::Internal(format!("listing retention interests: {error}")))?;
+    let matching_after = interests
+        .iter()
+        .filter(|entry| entry.logical_path == root.logical_path)
+        .flat_map(|entry| &entry.interests)
+        .filter(|fact| fact.owner == root.owner_scope && fact.reason == reason)
+        .count();
+    classify_store_result(plan, StoreFacts::Retention {
+        found: root.logical_path == path,
+        matching_after,
+    })?;
     println!("PINNED {}  source={}  created_unix_s={}", root.logical_path, root.source, root.created_unix_s);
-    classify_store_effect(STORE_PIN_EFFECT, EffectKind::WriteFiles, None)
+    Ok(())
 }
 
-fn cmd_store_unpin(
+async fn cmd_store_unpin(
     store: &crunch_store::StoreHandle,
+    plan: StorePlan,
     path: &str,
     owner: &str,
     reason: Option<&str>,
 ) -> Result<(), RunError> {
-    let removed = store.unpin_retained_root(path, owner, reason).map_err(|e| RunError::Build(format!("{e}")))?;
+    let removed = execute_store_port(plan, StoreLeaf::Unpin, async {
+        store.unpin_retained_root(path, owner, reason).map_err(|e| RunError::Build(format!("{e}")))
+    })
+    .await?;
     let Some(root) = removed else {
-        return classify_store_effect(
-            STORE_UNPIN_EFFECT,
-            EffectKind::WriteFiles,
-            Some((STORE_UNPIN_UNKNOWN_ROOT_CODE, RunError::Build(format!("retained root not found: {path}")))),
-        );
+        return match classify_store_facts(plan, StoreFacts::Retention {
+            found: false,
+            matching_after: 0,
+        }) {
+            Err(StoreFactFailure::MissingRoot) => Err(RunError::Build(format!("retained root not found: {path}"))),
+            other => Err(RunError::Internal(format!("store unpin observations were inconsistent: {other:?}"))),
+        };
     };
+    let interests = crunch_store::list_interest_reports(store.state_dir())
+        .map_err(|error| RunError::Internal(format!("listing retention interests: {error}")))?;
+    let matching_after = interests
+        .iter()
+        .filter(|entry| entry.logical_path == root.logical_path)
+        .flat_map(|entry| &entry.interests)
+        .filter(|fact| fact.owner == root.owner_scope && reason.is_none_or(|reason| fact.reason == reason))
+        .count();
+    classify_store_result(plan, StoreFacts::Retention {
+        found: root.logical_path == path,
+        matching_after,
+    })?;
     println!("UNPINNED {}", root.logical_path);
-    classify_store_effect(STORE_UNPIN_EFFECT, EffectKind::WriteFiles, None)
+    Ok(())
 }
 
 async fn run_store_gc_plan(
@@ -977,6 +1104,7 @@ async fn run_store_gc_plan(
 
 async fn cmd_store_gc(
     store: &mut crunch_store::StoreHandle,
+    plan: StorePlan,
     guard: Option<&crunch_store::StoreMutationGuard>,
     rust_retention: Option<&crunch_rust_cache::RustCacheRetentionPlan>,
     accepted_plan_id: Option<&str>,
@@ -985,13 +1113,35 @@ async fn cmd_store_gc(
     debug_assert!(!store.store_dir().is_empty());
     debug_assert!(Path::new(store.store_dir()).is_absolute());
     let is_plan_only = accepted_plan_id.is_none();
-    let gc_evidence =
-        run_store_gc_plan(store, guard, accepted_plan_id, rust_retention.map_or(&[][..], |plan| plan.live_nodes()))
-            .await?;
+    let gc_evidence = execute_store_port(
+        plan,
+        StoreLeaf::Gc { execute: !is_plan_only },
+        run_store_gc_plan(store, guard, accepted_plan_id, rust_retention.map_or(&[][..], |plan| plan.live_nodes())),
+    )
+    .await?;
     if let Some(plan) = rust_retention.filter(|_| is_plan_only || gc_evidence.execution_complete) {
         plan.apply(is_plan_only)
             .map_err(|error| RunError::Build(format!("applying Rust cache retention: {error}")))?;
     }
+    let classification = classify_store_facts(plan, StoreFacts::Gc {
+        dry_run: gc_evidence.is_dry_run,
+        plan_matches: accepted_plan_id
+            .map_or(!gc_evidence.plan_id.is_empty(), |accepted| accepted == gc_evidence.plan_id),
+        candidates: gc_evidence.candidate_path_count,
+        candidate_rows: gc_evidence.candidate_paths.len(),
+        complete: gc_evidence.execution_complete,
+        failures: gc_evidence.failed_operations.len(),
+    });
+    let failure = match classification {
+        Ok(()) => None,
+        Err(StoreFactFailure::IncompleteGc) => Some(RunError::Build(format!(
+            "GC execution completed {} operation(s) with {} failure(s); first failure: {}",
+            gc_evidence.operations.len(),
+            gc_evidence.failed_operations.len(),
+            gc_evidence.failed_operation.as_deref().unwrap_or("unknown operation failure"),
+        ))),
+        Err(error) => return Err(RunError::Internal(format!("store GC observations were inconsistent: {error:?}"))),
+    };
     if is_json_output {
         println!(
             "{}",
@@ -1001,30 +1151,7 @@ async fn cmd_store_gc(
     } else {
         print_human_gc_report(&gc_evidence, rust_retention);
     }
-    let incomplete_failure = (!is_plan_only && !gc_evidence.execution_complete).then(|| {
-        (
-            STORE_GC_INCOMPLETE_CODE,
-            RunError::Build(format!(
-                "GC execution completed {} operation(s) with {} failure(s); first failure: {}",
-                gc_evidence.operations.len(),
-                gc_evidence.failed_operations.len(),
-                gc_evidence.failed_operation.as_deref().unwrap_or("unknown operation failure"),
-            )),
-        )
-    });
-    classify_store_effect(
-        if is_plan_only {
-            STORE_GC_PLAN_EFFECT
-        } else {
-            STORE_GC_EFFECT
-        },
-        if is_plan_only {
-            EffectKind::ReadFiles
-        } else {
-            EffectKind::WriteFiles
-        },
-        incomplete_failure,
-    )
+    failure.map_or(Ok(()), Err)
 }
 
 fn print_human_gc_report(
@@ -1105,6 +1232,7 @@ fn print_human_gc_report(
 }
 
 struct StoreVerifyRequest<'a> {
+    plan: StorePlan,
     path_filter: Option<&'a str>,
     signing_key_path: Option<&'a Path>,
     explicit_trusted_public_keys: &'a [String],
@@ -1126,62 +1254,67 @@ async fn cmd_store_verify(
         request.state_dir,
         request.backend,
     )?;
-    let hash_results = admin
-        .verify_exported_pathinfos(request.path_filter, request.physical_output_dir)
-        .await
-        .map_err(|e| RunError::Internal(format!("{e}")))?;
-    let signature_results = admin
-        .verify_pathinfo_signatures(request.path_filter, &trusted_keys)
-        .await
-        .map_err(|e| RunError::Internal(format!("{e}")))?;
+    let (hash_results, signature_results) = execute_store_port(request.plan, StoreLeaf::Verify, async {
+        let hashes = admin
+            .verify_exported_pathinfos(request.path_filter, request.physical_output_dir)
+            .await
+            .map_err(|e| RunError::Internal(format!("{e}")))?;
+        let signatures = admin
+            .verify_pathinfo_signatures(request.path_filter, &trusted_keys)
+            .await
+            .map_err(|e| RunError::Internal(format!("{e}")))?;
+        Ok((hashes, signatures))
+    })
+    .await?;
     let signature_by_path = index_signature_results(signature_results)?;
-    debug_assert_eq!(hash_results.len(), signature_by_path.len());
-    debug_assert!(u32::try_from(hash_results.len()).is_ok());
-    let summary = print_store_verify_results(&hash_results, &signature_by_path, request.is_trust_unsigned)?;
-
+    let summary = summarize_store_verify_results(&hash_results, &signature_by_path, request.is_trust_unsigned)?;
+    let failure = match classify_store_verify(request.plan, &summary, signature_by_path.len()) {
+        Ok(()) => None,
+        Err(error @ RunError::Build(_)) => Some(error),
+        Err(error) => return Err(error),
+    };
+    print_store_verify_results(&hash_results, &signature_by_path, request.is_trust_unsigned)?;
     eprintln!("{} checked, {} mismatches", summary.checked, summary.mismatches);
-    classify_store_verify(&summary)
+    failure.map_or(Ok(()), Err)
 }
 
-/// Classify one finished verification: a mismatch is a failed observation.
-///
-/// The typed classification replaces the ad-hoc count check, so the failure
-/// decision and its diagnostic code come from the contract vocabulary.
-fn classify_store_verify(summary: &VerifySummary) -> Result<(), RunError> {
-    let kind = mantle_application_contract::EffectKind::StoreAccess;
-    let plan =
-        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::StoreAdministration, &[
-            mantle_application_contract::EffectSpec {
-                effect_id: STORE_VERIFY_EFFECT,
-                kind,
-                limit: mantle_application_contract::EffectMeasure::Calls(2),
-                expected_output: mantle_application_contract::ExpectedOutput::None,
-            },
-        ])
-        .map_err(|error| RunError::Internal(format!("store verify plan rejected: {}: {error:?}", error.code())))?;
-    let observation = mantle_application_contract::Observation {
-        effect_id: mantle_application_contract::EffectId(String::from(STORE_VERIFY_EFFECT)),
-        kind,
-        output: mantle_application_contract::EffectOutput::None,
-        usage: mantle_application_contract::EffectMeasure::Calls(2),
-        status: if summary.mismatches == 0 {
-            mantle_application_contract::ObservationStatus::Succeeded
-        } else {
-            mantle_application_contract::ObservationStatus::Failed
-        },
-        diagnostics_code: if summary.mismatches == 0 {
-            None
-        } else {
-            Some(String::from(STORE_VERIFY_MISMATCH_CODE))
-        },
-    };
-    match mantle_application_contract::classify_observations(&plan, &[observation]) {
-        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
-        mantle_application_contract::ApplicationOutcome::Failed { .. } => {
+fn classify_store_verify(plan: StorePlan, summary: &VerifySummary, signatures: usize) -> Result<(), RunError> {
+    match classify_store_facts(plan, StoreFacts::Verify {
+        checked: summary.checked,
+        signatures,
+        mismatches: summary.mismatches,
+    }) {
+        Ok(()) => Ok(()),
+        Err(StoreFactFailure::VerificationMismatch) => {
             Err(RunError::Build(format!("{} path(s) failed verification", summary.mismatches)))
         }
-        other => Err(RunError::Internal(format!("store verify observations were inconsistent: {other:?}"))),
+        Err(other) => Err(RunError::Internal(format!("store verify observations were inconsistent: {other:?}"))),
     }
+}
+
+fn summarize_store_verify_results(
+    hash_results: &[crunch_store::VerifyResult],
+    signatures: &std::collections::HashMap<String, crunch_store::SignatureVerifyResult>,
+    trust_unsigned: bool,
+) -> Result<VerifySummary, RunError> {
+    let checked = u32::try_from(hash_results.len())
+        .map_err(|_| RunError::Internal("store verification result count exceeds u32".to_string()))?;
+    let mut mismatches = 0;
+    for result in hash_results {
+        let mismatched = match result {
+            crunch_store::VerifyResult::Ok(path) => {
+                let signature = signatures
+                    .get(path)
+                    .ok_or_else(|| RunError::Internal(format!("missing signature result for {path}")))?;
+                !trust_unsigned && !signature.is_trusted()
+            }
+            crunch_store::VerifyResult::Missing(_) | crunch_store::VerifyResult::Mismatch { .. } => true,
+        };
+        if mismatched {
+            mismatches += 1;
+        }
+    }
+    Ok(VerifySummary { checked, mismatches })
 }
 
 struct VerifySummary {
@@ -1189,69 +1322,48 @@ struct VerifySummary {
     mismatches: u32,
 }
 
-/// Authority is chosen from a closed set of independent operation identities.
-fn store_effect_kind(effect: &str) -> Result<EffectKind, RunError> {
-    match effect {
-        STORE_LIST_EFFECT
-        | STORE_INFO_EFFECT
-        | STORE_ROOTS_LIST_EFFECT
-        | STORE_USAGE_EFFECT
-        | STORE_GC_PLAN_EFFECT
-        | STORE_REPAIR_INSPECT_EFFECT
-        | STORE_PUSH_SELECT_EFFECT
-        | STORE_COMPOSITION_PLAN_EFFECT
-        | STORE_ARCHIVE_LIST_EFFECT => Ok(EffectKind::ReadFiles),
-        STORE_ROOTS_MIGRATE_EFFECT
-        | STORE_PIN_EFFECT
-        | STORE_UNPIN_EFFECT
-        | STORE_GC_EFFECT
-        | STORE_REPAIR_EXECUTE_EFFECT
-        | STORE_SIGN_EFFECT
-        | STORE_COMPOSITION_REALIZE_EFFECT
-        | STORE_ARCHIVE_EXPORT_EFFECT => Ok(EffectKind::WriteFiles),
-        STORE_PULL_EFFECT | STORE_ARCHIVE_IMPORT_EFFECT => Ok(EffectKind::StoreAccess),
-        STORE_PUSH_EFFECT => Ok(EffectKind::UseNetwork),
-        _ => Err(RunError::Internal(format!("unrecognized store effect identity: {effect}"))),
-    }
+fn nar_hash_matches(hash: &[u8; NAR_SHA256_BYTES], encoded: &str) -> bool {
+    let mut expected = [0_u8; NAR_SHA256_HEX_BYTES];
+    data_encoding::HEXLOWER.encode_mut(hash, &mut expected);
+    encoded.as_bytes() == expected.as_slice()
 }
 
-/// Classify one finished store administration operation before success.
-fn classify_store_effect(
-    effect: &str,
-    observed_kind: EffectKind,
-    failure: Option<(&str, RunError)>,
-) -> Result<(), RunError> {
-    let kind = store_effect_kind(effect)?;
-    let plan =
-        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::StoreAdministration, &[
-            mantle_application_contract::EffectSpec {
-                effect_id: effect,
-                kind,
-                limit: mantle_application_contract::EffectMeasure::Calls(1),
-                expected_output: mantle_application_contract::ExpectedOutput::None,
-            },
-        ])
-        .map_err(|error| RunError::Internal(format!("store {effect} plan rejected: {}: {error:?}", error.code())))?;
-    let observation = mantle_application_contract::Observation {
-        effect_id: mantle_application_contract::EffectId(String::from(effect)),
-        kind: observed_kind,
-        output: mantle_application_contract::EffectOutput::None,
-        usage: mantle_application_contract::EffectMeasure::Calls(1),
-        status: if failure.is_some() {
-            mantle_application_contract::ObservationStatus::Failed
+async fn readback_path_metadata<'a>(
+    store: &crunch_store::StoreHandle,
+    paths: impl IntoIterator<Item = (&'a str, u64, &'a str)>,
+) -> Result<bool, RunError> {
+    let service = store.pathinfo_service();
+    for (identity, nar_size, nar_hash) in paths {
+        let parsed = if identity.starts_with('/') {
+            nix_compat::store_path::StorePath::from_absolute_path_with_prefix(identity.as_bytes(), store.store_dir())
         } else {
-            mantle_application_contract::ObservationStatus::Succeeded
-        },
-        diagnostics_code: failure.as_ref().map(|(code, _)| String::from(*code)),
-    };
-    match mantle_application_contract::classify_observations(&plan, &[observation]) {
-        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
-        mantle_application_contract::ApplicationOutcome::Failed { .. } => match failure {
-            Some((_, error)) => Err(error),
-            None => Err(RunError::Internal(format!("store {effect} classification failed without a recorded failure"))),
-        },
-        other => Err(RunError::Internal(format!("store {effect} observations were inconsistent: {other:?}"))),
+            nix_compat::store_path::StorePath::from_bytes(identity.as_bytes())
+        };
+        let Ok(path) = parsed else {
+            return Ok(false);
+        };
+        let persisted = service
+            .get(*path.digest())
+            .await
+            .map_err(|error| RunError::Internal(format!("reading store result {identity}: {error}")))?;
+        let Some(persisted) = persisted else {
+            return Ok(false);
+        };
+        if persisted.store_path != path
+            || persisted.nar_size != nar_size
+            || !nar_hash_matches(&persisted.nar_sha256, nar_hash)
+        {
+            return Ok(false);
+        }
+        if !store
+            .castore_has_complete_content(&persisted.node)
+            .await
+            .map_err(|error| RunError::Internal(format!("reading store content {identity}: {error}")))?
+        {
+            return Ok(false);
+        }
     }
+    Ok(true)
 }
 
 fn resolve_store_verify_keys(
@@ -1306,31 +1418,23 @@ fn print_store_verify_results(
     hash_results: &[crunch_store::VerifyResult],
     signature_by_path: &std::collections::HashMap<String, crunch_store::SignatureVerifyResult>,
     is_trust_unsigned: bool,
-) -> Result<VerifySummary, RunError> {
-    let mut summary = VerifySummary {
-        checked: 0,
-        mismatches: 0,
-    };
+) -> Result<(), RunError> {
     for result in hash_results {
-        let is_mismatched = print_store_verify_result(result, signature_by_path, is_trust_unsigned)?;
-        if is_mismatched {
-            summary.mismatches = summary.mismatches.saturating_add(1);
-        }
-        summary.checked = summary.checked.saturating_add(1);
+        print_store_verify_result(result, signature_by_path, is_trust_unsigned)?;
     }
-    Ok(summary)
+    Ok(())
 }
 
 fn print_store_verify_result(
     result: &crunch_store::VerifyResult,
     signature_by_path: &std::collections::HashMap<String, crunch_store::SignatureVerifyResult>,
     is_trust_unsigned: bool,
-) -> Result<bool, RunError> {
+) -> Result<(), RunError> {
     match result {
         crunch_store::VerifyResult::Ok(path) => print_verified_ok(path, signature_by_path, is_trust_unsigned),
         crunch_store::VerifyResult::Missing(path) => {
             println!("MISSING {path}");
-            Ok(true)
+            Ok(())
         }
         crunch_store::VerifyResult::Mismatch {
             path,
@@ -1340,7 +1444,7 @@ fn print_store_verify_result(
             actual_size,
         } => {
             println!("MISMATCH {path}  stored={stored_hash}:{stored_size}  actual={actual_hash}:{actual_size}");
-            Ok(true)
+            Ok(())
         }
     }
 }
@@ -1349,7 +1453,7 @@ fn print_verified_ok(
     path: &str,
     signature_by_path: &std::collections::HashMap<String, crunch_store::SignatureVerifyResult>,
     is_trust_unsigned: bool,
-) -> Result<bool, RunError> {
+) -> Result<(), RunError> {
     let sig_result = signature_by_path
         .get(path)
         .ok_or_else(|| RunError::Internal(format!("missing signature result for {path}")))?;
@@ -1357,23 +1461,24 @@ fn print_verified_ok(
     debug_assert!(sig_result.trusted_count <= sig_result.total_signatures);
     if is_trust_unsigned {
         println!("OK {path}  signatures=skipped");
-        return Ok(false);
+        return Ok(());
     }
     if sig_result.is_trusted() {
         println!("OK {path}  trusted_signatures={}/{}", sig_result.trusted_count, sig_result.total_signatures);
-        return Ok(false);
+        return Ok(());
     }
     if sig_result.total_signatures == 0 {
         println!("UNSIGNED {path}");
-        return Ok(true);
+        return Ok(());
     }
     let untrusted = sig_result.untrusted_names.join(",");
     println!("UNTRUSTED {path}  trusted_signatures=0/{}  signers={}", sig_result.total_signatures, untrusted);
-    Ok(true)
+    Ok(())
 }
 
 async fn cmd_store_repair_final_nar(
     store: &crunch_store::StoreHandle,
+    plan: StorePlan,
     logical_store_path: &str,
     is_execute: bool,
     signing_key_path: Option<&Path>,
@@ -1382,25 +1487,35 @@ async fn cmd_store_repair_final_nar(
 ) -> Result<(), RunError> {
     assert!(!logical_store_path.is_empty(), "repair path must not be empty");
     assert!(!store.store_dir().is_empty(), "logical store prefix must not be empty");
-    let inspection = crunch_store::inspect_final_nar_repair(store, logical_store_path)
+    let report_and_required = execute_store_port(plan, StoreLeaf::Repair { execute: is_execute }, async {
+        let inspection = crunch_store::inspect_final_nar_repair(store, logical_store_path)
+            .await
+            .map_err(|error| RunError::Internal(error.to_string()))?;
+        let required = inspection.is_repair_required();
+        let report = if is_execute && required {
+            let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
+            crunch_store::execute_final_nar_repair(store, inspection, &keypair.signing_key)
+                .await
+                .map_err(|error| RunError::Internal(error.to_string()))?
+        } else {
+            inspection.report(is_execute)
+        };
+        Ok((report, required))
+    })
+    .await?;
+    let (report, required) = report_and_required;
+    let readback = crunch_store::inspect_final_nar_repair(store, logical_store_path)
         .await
         .map_err(|error| RunError::Internal(error.to_string()))?;
-    let repair_was_required = inspection.is_repair_required();
-    let report = if is_execute && repair_was_required {
-        let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
-        crunch_store::execute_final_nar_repair(store, inspection, &keypair.signing_key)
-            .await
-            .map_err(|error| RunError::Internal(error.to_string()))?
-    } else {
-        inspection.report(is_execute)
-    };
-    print_final_nar_repair_report(&report, is_json_output)?;
-    let (effect, observed_kind) = if is_execute && repair_was_required {
-        (STORE_REPAIR_EXECUTE_EFFECT, EffectKind::WriteFiles)
-    } else {
-        (STORE_REPAIR_INSPECT_EFFECT, EffectKind::ReadFiles)
-    };
-    classify_store_effect(effect, observed_kind, None)
+    classify_store_result(plan, StoreFacts::Repair {
+        path_matches: report.store_path == logical_store_path,
+        execution_requested: report.execution_requested,
+        required,
+        mutated: report.mutated,
+        readback_required: readback.is_repair_required(),
+        signatures_match: readback.report(false).old_signature_count == report.new_signature_count,
+    })?;
+    print_final_nar_repair_report(&report, is_json_output)
 }
 
 fn print_final_nar_repair_report(
@@ -1432,6 +1547,7 @@ fn print_final_nar_repair_report(
 
 async fn cmd_store_sign(
     admin: &crunch_store::StoreAdmin<'_>,
+    plan: StorePlan,
     path_filter: Option<&str>,
     is_sign_all: bool,
     signing_key_path: Option<&std::path::Path>,
@@ -1445,10 +1561,34 @@ async fn cmd_store_sign(
 
     let keypair = crate::signing_key::load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
 
-    let results = admin
-        .sign_pathinfos(&keypair.signing_key, path_filter, is_sign_all)
+    let results = execute_store_port(plan, StoreLeaf::Sign, async {
+        admin
+            .sign_pathinfos(&keypair.signing_key, path_filter, is_sign_all)
+            .await
+            .map_err(|e| RunError::Internal(format!("{e}")))
+    })
+    .await?;
+    let signatures = admin
+        .verify_pathinfo_signatures(path_filter, std::slice::from_ref(&keypair.verifying_key))
         .await
         .map_err(|e| RunError::Internal(format!("{e}")))?;
+    let trusted_paths: std::collections::HashSet<_> = signatures
+        .into_iter()
+        .filter(|signature| signature.is_trusted())
+        .map(|signature| signature.path)
+        .collect();
+    let trusted_after = results.iter().filter(|result| trusted_paths.contains(&result.store_path)).count();
+    let transitions = results
+        .iter()
+        .filter(|result| {
+            usize::from(result.newly_signed) + usize::from(result.appended) + usize::from(result.replaced) == 1
+        })
+        .count();
+    classify_store_result(plan, StoreFacts::Sign {
+        rows: results.len(),
+        transitions,
+        trusted_after,
+    })?;
 
     let mut signed: u32 = 0;
     let mut appended: u32 = 0;
@@ -1473,7 +1613,7 @@ async fn cmd_store_sign(
     }
 
     eprintln!("{} signed, {} appended, {} replaced, {} total", signed, appended, replaced, results.len());
-    classify_store_effect(STORE_SIGN_EFFECT, EffectKind::WriteFiles, None)
+    Ok(())
 }
 
 struct StorePushRequest<'a> {
@@ -1483,31 +1623,69 @@ struct StorePushRequest<'a> {
     paths: &'a [String],
 }
 
-async fn cmd_store_push(store: &crunch_store::StoreHandle, request: StorePushRequest<'_>) -> Result<(), RunError> {
+async fn cmd_store_push(
+    store: &crunch_store::StoreHandle,
+    plans: StoreCommandPlan,
+    request: StorePushRequest<'_>,
+) -> Result<(), RunError> {
     if request.paths.is_empty() && !request.is_all {
         return Err(RunError::Internal("provide store paths or use --all".to_string()));
     }
     debug_assert!(request.is_all || !request.paths.is_empty());
     debug_assert!(Path::new(store.store_dir()).is_absolute());
 
-    // Collect matching PathInfo entries.
-    let selected = if request.is_all {
-        collect_all_pathinfos(store).await?
-    } else {
-        collect_matching_pathinfos(store, request.paths).await?
-    };
+    let selection = plans.selection.ok_or_else(|| RunError::Internal("push selection plan missing".to_string()))?;
+    let selected = execute_store_port(selection, StoreLeaf::PushSelection, async {
+        if request.is_all {
+            collect_all_pathinfos(store).await
+        } else {
+            collect_matching_pathinfos(store, request.paths).await
+        }
+    })
+    .await?;
+    classify_store_result(selection, StoreFacts::Rows {
+        rows: selected.len(),
+        invalid_rows: selected.iter().filter(|path| path.store_path.name().is_empty()).count(),
+    })?;
 
     if selected.is_empty() {
         eprintln!("no matching paths found");
-        return classify_store_effect(STORE_PUSH_SELECT_EFFECT, EffectKind::ReadFiles, None);
+        return Ok(());
     }
 
     let options = crunch_store::PushOptions {
         trust_unsigned: request.is_trust_unsigned,
     };
-    let push_evidence = crunch_store::export_paths_to_cache_dir(store, &selected, request.destination_dir, &options)
-        .await
-        .map_err(|e| RunError::Internal(format!("push: {e}")))?;
+    let push_evidence = execute_store_port(plans.operation, StoreLeaf::Push, async {
+        crunch_store::export_paths_to_cache_dir(store, &selected, request.destination_dir, &options)
+            .await
+            .map_err(|e| RunError::Internal(format!("push: {e}")))
+    })
+    .await?;
+    let selected_by_digest: std::collections::HashMap<_, _> =
+        selected.iter().map(|path| (path.store_path.digest(), path)).collect();
+    classify_store_result(plans.operation, StoreFacts::Push {
+        selected: selected.len(),
+        pushed: push_evidence.pushed_count,
+        skipped_unsigned: push_evidence.skipped_unsigned_count,
+        skipped_present: push_evidence.skipped_already_present_count,
+        rows: push_evidence.paths.len(),
+        invalid_rows: push_evidence
+            .paths
+            .iter()
+            .filter(|row| {
+                let Ok(path) = nix_compat::store_path::StorePath::from_bytes(row.store_path.as_bytes()) else {
+                    return true;
+                };
+                let Some(selected) = selected_by_digest.get(&path.digest()) else {
+                    return true;
+                };
+                selected.store_path != path
+                    || selected.nar_size != row.nar_size
+                    || !nar_hash_matches(&selected.nar_sha256, &row.nar_hash_hex)
+            })
+            .count(),
+    })?;
 
     for pushed in &push_evidence.paths {
         println!("PUSH {}", pushed.store_path);
@@ -1528,7 +1706,7 @@ async fn cmd_store_push(store: &crunch_store::StoreHandle, request: StorePushReq
         push_evidence.total_nar_bytes,
         push_evidence.total_narinfo_bytes,
     );
-    classify_store_effect(STORE_PUSH_EFFECT, EffectKind::UseNetwork, None)
+    Ok(())
 }
 
 fn parse_pull_source(source: &str) -> Result<crunch_store::PullSource, RunError> {
@@ -1578,37 +1756,62 @@ struct StorePullRequest<'a> {
     state_dir: &'a Path,
 }
 
-async fn cmd_store_pull(store: &crunch_store::StoreHandle, request: StorePullRequest<'_>) -> Result<(), RunError> {
+async fn cmd_store_pull(
+    store: &crunch_store::StoreHandle,
+    plan: StorePlan,
+    request: StorePullRequest<'_>,
+) -> Result<(), RunError> {
     let pull_source = validate_pull_request(&request)?;
     let options = resolve_pull_options(&request, store.backend())?;
-    let pull_evidence = execute_pull(store, pull_source, &request, &options).await?;
-    print_pull_evidence(&pull_evidence);
-    classify_pull_evidence(&pull_evidence)
-}
-
-/// Closure-pull failure decision: a closure pull that did not admit its root
-/// under-delivered the one path the operator asked for, so it fails closed
-/// instead of exiting zero with `admitted=false` buried in the report line.
-fn closure_pull_failure(report: &crunch_store::HttpClosurePullReport) -> Option<(&'static str, RunError)> {
-    (!report.root_admitted).then(|| {
-        (
-            STORE_PULL_ROOT_NOT_ADMITTED_CODE,
-            RunError::Build(format!("closure pull did not admit root {}", report.plan.root)),
-        )
-    })
-}
-
-/// Classify one finished pull before the command reports success.
-///
-/// An explicit pull accounts for itself through its printed report; a closure
-/// pull additionally proves its root was admitted.
-fn classify_pull_evidence(evidence: &StorePullEvidence) -> Result<(), RunError> {
-    match evidence {
-        StorePullEvidence::Explicit(_) => classify_store_effect(STORE_PULL_EFFECT, EffectKind::StoreAccess, None),
-        StorePullEvidence::Closure(report) => {
-            classify_store_effect(STORE_PULL_EFFECT, EffectKind::StoreAccess, closure_pull_failure(report))
+    let leaf = StoreLeaf::Pull {
+        closure: request.is_closure,
+        http: matches!(&pull_source, crunch_store::PullSource::Http(_)),
+    };
+    let pull_evidence = execute_store_port(plan, leaf, execute_pull(store, pull_source, &request, &options)).await?;
+    let (report, root_admitted, expected_paths) = match &pull_evidence {
+        StorePullEvidence::Explicit(report) => {
+            (report, None, matches!(leaf, StoreLeaf::Pull { http: true, .. }).then_some(request.paths.len()))
         }
-    }
+        StorePullEvidence::Closure(report) => {
+            (&report.pull, Some(report.root_admitted), Some(report.plan.members.len()))
+        }
+    };
+    let readback_matches = readback_path_metadata(
+        store,
+        report
+            .paths
+            .iter()
+            .map(|path| (path.store_path.as_str(), path.nar_size, path.nar_hash_hex.as_str())),
+    )
+    .await?;
+    let classification = classify_store_facts(plan, StoreFacts::Pull {
+        imported: report.imported_count,
+        rows: report.paths.len(),
+        skipped: u64::from(report.skipped_already_present_count)
+            + u64::from(report.skipped_untrusted_count)
+            + u64::from(report.skipped_hash_mismatch_count)
+            + u64::from(report.skipped_missing_nar_count)
+            + u64::from(report.skipped_parse_error_count)
+            + u64::from(report.skipped_store_dir_mismatch_count),
+        expected_paths,
+        payload_bytes: report.total_nar_bytes,
+        row_bytes: report.paths.iter().try_fold(0_u64, |sum, path| sum.checked_add(path.nar_size)),
+        invalid_rows: report.paths.iter().filter(|path| path.store_path.is_empty()).count(),
+        readback_matches,
+        root_admitted,
+    });
+    let failure = match classification {
+        Ok(()) => None,
+        Err(StoreFactFailure::ClosureRootNotAdmitted) => match &pull_evidence {
+            StorePullEvidence::Closure(report) => {
+                Some(RunError::Build(format!("closure pull did not admit root {}", report.plan.root)))
+            }
+            StorePullEvidence::Explicit(_) => unreachable!("explicit pull cannot produce a closure classification"),
+        },
+        Err(error) => return Err(RunError::Internal(format!("store pull observations were inconsistent: {error:?}"))),
+    };
+    print_pull_evidence(&pull_evidence);
+    failure.map_or(Ok(()), Err)
 }
 
 fn validate_pull_request(request: &StorePullRequest<'_>) -> Result<crunch_store::PullSource, RunError> {
@@ -1766,22 +1969,66 @@ async fn cmd_store_composition(
 ) -> Result<(), RunError> {
     match action {
         crate::StoreCompositionAction::Plan { from } => {
+            let plan = context.plan.operation;
+            let (request, prepared) = execute_store_port(plan, StoreLeaf::CompositionPlan, async {
+                let request = read_composition_request(&from)?;
+                let prepared = crunch_store::plan_composition_request(&request)
+                    .map_err(|error| RunError::Internal(error.to_string()))?;
+                Ok((request, prepared))
+            })
+            .await?;
+            classify_store_result(plan, StoreFacts::Composition {
+                requested_bindings: request.plan.bindings.len(),
+                bindings: prepared.bindings.len(),
+                requested_decisions: request.plan.collision_decisions.len(),
+                decisions: prepared.collision_decisions.len(),
+                identity_matches: !prepared.plan_ref.is_empty() && !prepared.realization_policy_ref.is_empty(),
+                readback_matches: prepared.realization_policy == request.realization_policy,
+            })?;
+            print_composition_plan(&prepared, context.is_json_output)
+        }
+        crate::StoreCompositionAction::Realize { from, receipt_out } => {
+            let plan = context.plan.operation;
             let request = read_composition_request(&from)?;
             let prepared = crunch_store::plan_composition_request(&request)
                 .map_err(|error| RunError::Internal(error.to_string()))?;
-            print_composition_plan(&prepared, context.is_json_output)?;
-            classify_store_effect(STORE_COMPOSITION_PLAN_EFFECT, EffectKind::ReadFiles, None)
-        }
-        crate::StoreCompositionAction::Realize { from, receipt_out } => {
-            let request = read_composition_request(&from)?;
             let _guard = store_mutation_guard(context)?;
             let store = open_store_under_guard(context, &_guard).await?;
-            let receipt = crunch_store::realize_composition(&store, &request)
+            let receipt = execute_store_port(plan, StoreLeaf::CompositionRealize, async {
+                let receipt = crunch_store::realize_composition(&store, &request)
+                    .await
+                    .map_err(|error| RunError::Internal(error.to_string()))?;
+                crate::source_bundle::write_json_atomically(&receipt_out, &receipt, "composition realization receipt")?;
+                Ok(receipt)
+            })
+            .await?;
+            let receipt_bytes = fs::read(&receipt_out)
+                .map_err(|error| RunError::Internal(format!("reading composition realization receipt: {error}")))?;
+            let persisted: crunch_composition_core::RealizationReceipt = serde_json::from_slice(&receipt_bytes)
+                .map_err(|error| RunError::Internal(format!("parsing composition realization receipt: {error}")))?;
+            let digest_bytes = data_encoding::HEXLOWER
+                .decode(receipt.resulting_root.digest_blake3.as_bytes())
+                .map_err(|error| RunError::Internal(format!("reading composition root digest: {error}")))?;
+            let digest = snix_castore::B3Digest::try_from(digest_bytes.as_slice())
+                .map_err(|error| RunError::Internal(format!("reading composition root digest: {error}")))?;
+            let root = snix_castore::Node::Directory {
+                digest,
+                size: receipt.resulting_root.size,
+            };
+            let complete = store
+                .castore_has_complete_content(&root)
                 .await
-                .map_err(|error| RunError::Internal(error.to_string()))?;
-            crate::source_bundle::write_json_atomically(&receipt_out, &receipt, "composition realization receipt")?;
-            print_composition_receipt(&receipt, context.is_json_output)?;
-            classify_store_effect(STORE_COMPOSITION_REALIZE_EFFECT, EffectKind::WriteFiles, None)
+                .map_err(|error| RunError::Internal(format!("reading composition root: {error}")))?;
+            classify_store_result(plan, StoreFacts::Composition {
+                requested_bindings: request.plan.bindings.len(),
+                bindings: prepared.bindings.len(),
+                requested_decisions: request.plan.collision_decisions.len(),
+                decisions: prepared.collision_decisions.len(),
+                identity_matches: receipt.plan_ref == prepared.plan_ref
+                    && receipt.realization_policy_ref == prepared.realization_policy_ref,
+                readback_matches: receipt == persisted && complete,
+            })?;
+            print_composition_receipt(&receipt, context.is_json_output)
         }
     }
 }
@@ -1850,7 +2097,7 @@ async fn cmd_store_archive(
                 ));
             }
             let store = open_store(context).await?;
-            cmd_store_archive_export(&store, StoreArchiveExportRequest {
+            cmd_store_archive_export(&store, context.plan, StoreArchiveExportRequest {
                 destination: &to,
                 is_all: all,
                 is_trust_unsigned: trust_unsigned,
@@ -1868,7 +2115,7 @@ async fn cmd_store_archive(
         } => {
             let _guard = store_mutation_guard(context)?;
             let store = open_store_under_guard(context, &_guard).await?;
-            cmd_store_archive_import(&store, StoreArchiveImportRequest {
+            cmd_store_archive_import(&store, context.plan.operation, StoreArchiveImportRequest {
                 format,
                 source: &from,
                 is_trust_unsigned: trust_unsigned,
@@ -1880,7 +2127,7 @@ async fn cmd_store_archive(
             .await
         }
         crate::StoreArchiveAction::List { format, from } => {
-            cmd_store_archive_list(format, &from, context.is_json_output).await
+            cmd_store_archive_list(context.plan.operation, format, &from, context.is_json_output).await
         }
     }
 }
@@ -1895,16 +2142,25 @@ struct StoreArchiveExportRequest<'a> {
 
 async fn cmd_store_archive_export(
     store: &crunch_store::StoreHandle,
+    plans: StoreCommandPlan,
     request: StoreArchiveExportRequest<'_>,
 ) -> Result<(), RunError> {
     if request.paths.is_empty() && !request.is_all {
         return Err(RunError::Internal("provide store paths or use --all".to_string()));
     }
-    let selected = if request.is_all {
-        collect_all_pathinfos(store).await?
-    } else {
-        collect_matching_pathinfos(store, request.paths).await?
-    };
+    let selection = plans.selection.ok_or_else(|| RunError::Internal("archive selection plan missing".to_string()))?;
+    let selected = execute_store_port(selection, StoreLeaf::ArchiveSelection, async {
+        if request.is_all {
+            collect_all_pathinfos(store).await
+        } else {
+            collect_matching_pathinfos(store, request.paths).await
+        }
+    })
+    .await?;
+    classify_store_result(selection, StoreFacts::Rows {
+        rows: selected.len(),
+        invalid_rows: selected.iter().filter(|path| path.store_path.name().is_empty()).count(),
+    })?;
     if selected.is_empty() {
         return Err(RunError::Internal("no matching paths found".to_string()));
     }
@@ -1917,29 +2173,55 @@ async fn cmd_store_archive_export(
     if is_archive_stdout && request.is_json_output {
         return Err(RunError::Internal("--json cannot be combined with archive export --to -".to_string()));
     }
-    let archive_write_summary = if is_archive_stdout {
-        let mut stdout = tokio::io::stdout();
-        crunch_store::export_store_archive(store, &selected, &mut stdout, &options)
-            .await
-            .map_err(|e| RunError::Internal(format!("archive export: {e}")))?
-    } else {
-        let file = tokio::fs::File::create(request.destination)
-            .await
-            .map_err(|e| RunError::Internal(format!("creating archive {}: {e}", request.destination.display())))?;
-        let mut writer = tokio::io::BufWriter::new(file);
-        crunch_store::export_store_archive(store, &selected, &mut writer, &options)
-            .await
-            .map_err(|e| RunError::Internal(format!("archive export: {e}")))?
-    };
+    let archive_write_summary = execute_store_port(
+        plans.operation,
+        StoreLeaf::ArchiveExport {
+            stdio: is_archive_stdout,
+        },
+        async {
+            if is_archive_stdout {
+                let mut stdout = tokio::io::stdout();
+                crunch_store::export_store_archive(store, &selected, &mut stdout, &options)
+                    .await
+                    .map_err(|e| RunError::Internal(format!("archive export: {e}")))
+            } else {
+                let file = tokio::fs::File::create(request.destination).await.map_err(|e| {
+                    RunError::Internal(format!("creating archive {}: {e}", request.destination.display()))
+                })?;
+                let mut writer = tokio::io::BufWriter::new(file);
+                crunch_store::export_store_archive(store, &selected, &mut writer, &options)
+                    .await
+                    .map_err(|e| RunError::Internal(format!("archive export: {e}")))
+            }
+        },
+    )
+    .await?;
+    // The exporter flushes its writer before returning. Reconcile its actual
+    // record/payload accounting with the selected inputs; do not reopen output
+    // streams or impose a new read-permission requirement on write-only files.
+    let exported_paths: std::collections::HashMap<_, _> =
+        archive_write_summary.paths.iter().map(|path| (path.store_path.as_str(), path)).collect();
+    let selected_content_matches = selected.iter().all(|selected| {
+        exported_paths.get(selected.store_path.to_string().as_str()).is_some_and(|exported| {
+            exported.nar_size == selected.nar_size && nar_hash_matches(&selected.nar_sha256, &exported.nar_sha256_hex)
+        })
+    });
+    classify_store_result(plans.operation, StoreFacts::Archive {
+        reported: archive_write_summary.exported_count,
+        rows: archive_write_summary.paths.len(),
+        invalid_rows: archive_write_summary.paths.iter().filter(|path| path.store_path.is_empty()).count(),
+        payload_bytes: archive_write_summary.total_payload_bytes,
+        row_bytes: archive_write_summary.paths.iter().try_fold(0_u64, |sum, path| sum.checked_add(path.nar_size)),
+        content_matches: selected_content_matches,
+    })?;
     if is_archive_stdout {
         eprintln!(
             "exported={} payload_bytes={}",
             archive_write_summary.exported_count, archive_write_summary.total_payload_bytes
         );
-        return classify_store_effect(STORE_ARCHIVE_EXPORT_EFFECT, EffectKind::WriteFiles, None);
+        return Ok(());
     }
-    print_archive_export_report(&archive_write_summary, request.is_json_output)?;
-    classify_store_effect(STORE_ARCHIVE_EXPORT_EFFECT, EffectKind::WriteFiles, None)
+    print_archive_export_report(&archive_write_summary, request.is_json_output)
 }
 
 struct StoreArchiveImportRequest<'a> {
@@ -1954,6 +2236,7 @@ struct StoreArchiveImportRequest<'a> {
 
 async fn cmd_store_archive_import(
     store: &crunch_store::StoreHandle,
+    plan: StorePlan,
     request: StoreArchiveImportRequest<'_>,
 ) -> Result<(), RunError> {
     let trusted_public_keys =
@@ -1973,73 +2256,170 @@ async fn cmd_store_archive_import(
             trusted_public_keys,
             materialize: request.is_materialize,
         };
-        let report = if is_stdio_path(request.source) {
-            let mut stdin = tokio::io::stdin();
-            crunch_store::import_nario_v2(store, &mut stdin, &options).await
-        } else {
-            let file = tokio::fs::File::open(request.source)
-                .await
-                .map_err(|e| RunError::Internal(format!("opening archive {}: {e}", request.source.display())))?;
-            let mut reader = tokio::io::BufReader::new(file);
-            crunch_store::import_nario_v2(store, &mut reader, &options).await
-        }
-        .map_err(|e| RunError::Internal(format!("nario-v2 archive import: {e}")))?;
-        print_nario_import_report(&report, request.is_json_output)?;
-        return classify_store_effect(STORE_ARCHIVE_IMPORT_EFFECT, EffectKind::StoreAccess, None);
+        let report = execute_store_port(
+            plan,
+            StoreLeaf::ArchiveImport {
+                nario: true,
+                stdio: is_stdio_path(request.source),
+            },
+            async {
+                let result = if is_stdio_path(request.source) {
+                    let mut stdin = tokio::io::stdin();
+                    crunch_store::import_nario_v2(store, &mut stdin, &options).await
+                } else {
+                    let file = tokio::fs::File::open(request.source).await.map_err(|e| {
+                        RunError::Internal(format!("opening archive {}: {e}", request.source.display()))
+                    })?;
+                    let mut reader = tokio::io::BufReader::new(file);
+                    crunch_store::import_nario_v2(store, &mut reader, &options).await
+                };
+                result.map_err(|e| RunError::Internal(format!("nario-v2 archive import: {e}")))
+            },
+        )
+        .await?;
+        let readback_matches = readback_path_metadata(
+            store,
+            report
+                .paths
+                .iter()
+                .map(|path| (path.store_path.as_str(), path.nar_size, path.nar_sha256_hex.as_str())),
+        )
+        .await?;
+        let reported = report
+            .imported_count
+            .checked_add(report.skipped_already_present_count)
+            .ok_or_else(|| RunError::Internal("Nario import count overflow".to_string()))?;
+        classify_store_result(plan, StoreFacts::Archive {
+            reported,
+            rows: report.paths.len(),
+            invalid_rows: report.paths.iter().filter(|path| !path.store_path.starts_with(report.store_prefix)).count(),
+            payload_bytes: report.total_nar_bytes,
+            row_bytes: report.paths.iter().try_fold(0_u64, |sum, path| sum.checked_add(path.nar_size)),
+            content_matches: readback_matches,
+        })?;
+        return print_nario_import_report(&report, request.is_json_output);
     }
     let options = crunch_store::ArchiveImportOptions {
         trust_unsigned: request.is_trust_unsigned,
         trusted_public_keys,
         materialize: request.is_materialize,
     };
-    let report = if is_stdio_path(request.source) {
-        let mut stdin = tokio::io::stdin();
-        crunch_store::import_store_archive(store, &mut stdin, &options).await
-    } else {
-        let file = tokio::fs::File::open(request.source)
-            .await
-            .map_err(|e| RunError::Internal(format!("opening archive {}: {e}", request.source.display())))?;
-        let mut reader = tokio::io::BufReader::new(file);
-        crunch_store::import_store_archive(store, &mut reader, &options).await
-    }
-    .map_err(|e| RunError::Internal(format!("archive import: {e}")))?;
-    print_archive_import_report(&report, request.is_json_output)?;
-    classify_store_effect(STORE_ARCHIVE_IMPORT_EFFECT, EffectKind::StoreAccess, None)
+    let report = execute_store_port(
+        plan,
+        StoreLeaf::ArchiveImport {
+            nario: false,
+            stdio: is_stdio_path(request.source),
+        },
+        async {
+            let result = if is_stdio_path(request.source) {
+                let mut stdin = tokio::io::stdin();
+                crunch_store::import_store_archive(store, &mut stdin, &options).await
+            } else {
+                let file = tokio::fs::File::open(request.source)
+                    .await
+                    .map_err(|e| RunError::Internal(format!("opening archive {}: {e}", request.source.display())))?;
+                let mut reader = tokio::io::BufReader::new(file);
+                crunch_store::import_store_archive(store, &mut reader, &options).await
+            };
+            result.map_err(|e| RunError::Internal(format!("archive import: {e}")))
+        },
+    )
+    .await?;
+    let readback_matches = readback_path_metadata(
+        store,
+        report
+            .paths
+            .iter()
+            .map(|path| (path.store_path.as_str(), path.nar_size, path.nar_sha256_hex.as_str())),
+    )
+    .await?;
+    classify_store_result(plan, StoreFacts::Archive {
+        reported: report.imported_count,
+        rows: report.paths.len(),
+        invalid_rows: report.paths.iter().filter(|path| path.store_path.is_empty()).count(),
+        payload_bytes: report.total_payload_bytes,
+        row_bytes: report.paths.iter().try_fold(0_u64, |sum, path| sum.checked_add(path.nar_size)),
+        content_matches: readback_matches,
+    })?;
+    print_archive_import_report(&report, request.is_json_output)
 }
 
 async fn cmd_store_archive_list(
+    plan: StorePlan,
     format: crate::StoreArchiveFormat,
     source: &Path,
     is_json_output: bool,
 ) -> Result<(), RunError> {
     if format == crate::StoreArchiveFormat::NarioV2 {
-        let report = if is_stdio_path(source) {
-            let mut stdin = tokio::io::stdin();
-            crunch_store::list_nario_v2(&mut stdin).await
-        } else {
-            let file = tokio::fs::File::open(source)
-                .await
-                .map_err(|e| RunError::Internal(format!("opening archive {}: {e}", source.display())))?;
-            let mut reader = tokio::io::BufReader::new(file);
-            crunch_store::list_nario_v2(&mut reader).await
-        }
-        .map_err(|e| RunError::Internal(format!("nario-v2 archive list: {e}")))?;
-        print_nario_list_report(&report, is_json_output)?;
-        return classify_store_effect(STORE_ARCHIVE_LIST_EFFECT, EffectKind::ReadFiles, None);
+        let report = execute_store_port(
+            plan,
+            StoreLeaf::ArchiveList {
+                nario: true,
+                stdio: is_stdio_path(source),
+            },
+            async {
+                let result = if is_stdio_path(source) {
+                    let mut stdin = tokio::io::stdin();
+                    crunch_store::list_nario_v2(&mut stdin).await
+                } else {
+                    let file = tokio::fs::File::open(source)
+                        .await
+                        .map_err(|e| RunError::Internal(format!("opening archive {}: {e}", source.display())))?;
+                    let mut reader = tokio::io::BufReader::new(file);
+                    crunch_store::list_nario_v2(&mut reader).await
+                };
+                result.map_err(|e| RunError::Internal(format!("nario-v2 archive list: {e}")))
+            },
+        )
+        .await?;
+        classify_store_result(plan, StoreFacts::Archive {
+            reported: report.record_count,
+            rows: report.paths.len(),
+            invalid_rows: report.paths.iter().filter(|path| !path.store_path.starts_with(report.store_prefix)).count(),
+            payload_bytes: report.total_nar_bytes,
+            row_bytes: report.paths.iter().try_fold(0_u64, |sum, path| sum.checked_add(path.nar_size)),
+            content_matches: report.archive_blake3.len() == BLAKE3_HEX_BYTES,
+        })?;
+        return print_nario_list_report(&report, is_json_output);
     }
-    let report = if is_stdio_path(source) {
-        let mut stdin = tokio::io::stdin();
-        crunch_store::list_store_archive(&mut stdin).await
-    } else {
-        let file = tokio::fs::File::open(source)
-            .await
-            .map_err(|e| RunError::Internal(format!("opening archive {}: {e}", source.display())))?;
-        let mut reader = tokio::io::BufReader::new(file);
-        crunch_store::list_store_archive(&mut reader).await
-    }
-    .map_err(|e| RunError::Internal(format!("archive list: {e}")))?;
-    print_archive_list_report(&report, is_json_output)?;
-    classify_store_effect(STORE_ARCHIVE_LIST_EFFECT, EffectKind::ReadFiles, None)
+    let report = execute_store_port(
+        plan,
+        StoreLeaf::ArchiveList {
+            nario: false,
+            stdio: is_stdio_path(source),
+        },
+        async {
+            let result = if is_stdio_path(source) {
+                let mut stdin = tokio::io::stdin();
+                crunch_store::list_store_archive(&mut stdin).await
+            } else {
+                let file = tokio::fs::File::open(source)
+                    .await
+                    .map_err(|e| RunError::Internal(format!("opening archive {}: {e}", source.display())))?;
+                let mut reader = tokio::io::BufReader::new(file);
+                crunch_store::list_store_archive(&mut reader).await
+            };
+            result.map_err(|e| RunError::Internal(format!("archive list: {e}")))
+        },
+    )
+    .await?;
+    classify_store_result(plan, StoreFacts::Archive {
+        reported: report.record_count,
+        rows: report.paths.len(),
+        invalid_rows: report
+            .paths
+            .iter()
+            .filter(|path| {
+                path.store_path.is_empty()
+                    || usize::try_from(path.reference_count).ok() != Some(path.references.len())
+                    || usize::try_from(path.signature_count).ok() != Some(path.signatures.len())
+            })
+            .count(),
+        payload_bytes: report.total_payload_bytes,
+        row_bytes: report.paths.iter().try_fold(0_u64, |sum, path| sum.checked_add(path.nar_size)),
+        content_matches: !report.store_prefix.is_empty(),
+    })?;
+    print_archive_list_report(&report, is_json_output)
 }
 
 fn print_archive_export_report(
@@ -2193,107 +2573,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_clean_verification_classifies_as_completed() {
-        let summary = VerifySummary {
-            checked: 3,
-            mismatches: 0,
-        };
-        assert!(classify_store_verify(&summary).is_ok());
-        assert_eq!(STORE_VERIFY_EFFECT, "verify-paths");
+    fn unsigned_verification_changes_with_explicit_trust_policy() {
+        let hashes = [
+            crunch_store::VerifyResult::Ok("path".to_string()),
+            crunch_store::VerifyResult::Missing("missing".to_string()),
+        ];
+        let signatures = std::collections::HashMap::from([("path".to_string(), crunch_store::SignatureVerifyResult {
+            path: "path".to_string(),
+            trusted_count: 0,
+            total_signatures: 0,
+            untrusted_names: Vec::new(),
+        })]);
+        let strict = summarize_store_verify_results(&hashes, &signatures, false).unwrap();
+        let unsigned = summarize_store_verify_results(&hashes, &signatures, true).unwrap();
+        assert_eq!((strict.checked, strict.mismatches), (2, 2));
+        assert_eq!((unsigned.checked, unsigned.mismatches), (2, 1));
     }
 
     #[test]
-    fn a_mismatched_verification_reports_the_existing_message() {
-        let summary = VerifySummary {
-            checked: 3,
-            mismatches: 2,
-        };
-        let error = classify_store_verify(&summary).expect_err("mismatches fail verification");
-        let rendered = format!("{error}");
-        assert!(rendered.contains("2 path(s) failed verification"));
-        assert_eq!(STORE_VERIFY_MISMATCH_CODE, "store-verify-mismatch");
-    }
-
-    #[test]
-    fn store_authority_does_not_follow_effect_label_or_fallback() {
-        use mantle_application_contract::EffectKind;
-
-        assert_ne!(STORE_LIST_EFFECT, STORE_INFO_EFFECT);
-        assert_eq!(store_effect_kind(STORE_LIST_EFFECT).expect("known list read"), EffectKind::ReadFiles);
-        assert_eq!(store_effect_kind(STORE_INFO_EFFECT).expect("known info read"), EffectKind::ReadFiles);
-        assert!(store_effect_kind(STORE_VERIFY_EFFECT).is_err());
-        assert_eq!(store_effect_kind(STORE_GC_PLAN_EFFECT).expect("plan is read-only"), EffectKind::ReadFiles);
-        assert_eq!(store_effect_kind(STORE_GC_EFFECT).expect("execution writes"), EffectKind::WriteFiles);
-        assert!(store_effect_kind("unknown-store-effect").is_err());
-    }
-
-    #[test]
-    fn a_succeeded_store_effect_classifies_as_completed() {
-        assert!(classify_store_effect(STORE_GC_EFFECT, EffectKind::WriteFiles, None).is_ok());
-        assert!(classify_store_effect(STORE_PULL_EFFECT, EffectKind::StoreAccess, None).is_ok());
-    }
-
-    #[test]
-    fn observed_store_authority_must_match_the_independent_plan() {
-        let error = classify_store_effect(STORE_GC_EFFECT, EffectKind::ReadFiles, None)
-            .expect_err("a claimed read cannot satisfy a planned GC write");
-        assert!(format!("{error}").contains("observations were inconsistent"));
-    }
-
-    #[test]
-    fn a_failed_store_effect_returns_its_recorded_failure() {
-        let error = classify_store_effect(
-            STORE_UNPIN_EFFECT,
-            EffectKind::WriteFiles,
-            Some((
-                STORE_UNPIN_UNKNOWN_ROOT_CODE,
-                RunError::Build("retained root not found: /mantle/store/demo".to_string()),
-            )),
-        )
-        .expect_err("a failed observation rejects the report");
-        assert!(format!("{error}").contains("retained root not found: /mantle/store/demo"));
-    }
-
-    #[test]
-    fn an_admitted_closure_pull_reports_no_failure() {
-        let report = closure_pull_report(true);
-        assert!(closure_pull_failure(&report).is_none());
-    }
-
-    #[test]
-    fn a_rejected_closure_root_fails_closed_with_the_root_named() {
-        let report = closure_pull_report(false);
-        let (code, error) = closure_pull_failure(&report).expect("an unadmitted root fails closed");
-        assert_eq!(code, STORE_PULL_ROOT_NOT_ADMITTED_CODE);
-        assert!(format!("{error}").contains("closure pull did not admit root /mantle/store/0demo"));
-    }
-
-    fn closure_pull_report(root_admitted: bool) -> crunch_store::HttpClosurePullReport {
-        crunch_store::HttpClosurePullReport {
-            plan: crunch_store::HttpClosurePlan {
-                schema: "mantle-http-closure-plan-v1".to_string(),
-                cache_identity: "cache".to_string(),
-                trust_policy_blake3: "trust".to_string(),
-                store_dir: "/mantle/store".to_string(),
-                root: "/mantle/store/0demo".to_string(),
-                limits: crunch_store::HttpClosureLimits::default(),
-                total_nar_bytes: 0,
-                members: Vec::new(),
-                plan_blake3: "plan".to_string(),
-            },
-            pull: crunch_store::PullReport {
-                imported_count: 0,
-                skipped_already_present_count: 0,
-                skipped_untrusted_count: 0,
-                skipped_hash_mismatch_count: 0,
-                skipped_missing_nar_count: 0,
-                skipped_parse_error_count: 0,
-                skipped_store_dir_mismatch_count: 0,
-                total_nar_bytes: 0,
-                paths: Vec::new(),
-            },
-            reused_complete_count: 0,
-            root_admitted,
-        }
+    fn missing_signature_evidence_cannot_be_overridden_by_trust_unsigned() {
+        let hashes = [crunch_store::VerifyResult::Ok("path".to_string())];
+        let signatures = std::collections::HashMap::new();
+        assert!(summarize_store_verify_results(&hashes, &signatures, true).is_err());
     }
 }

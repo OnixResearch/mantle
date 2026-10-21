@@ -152,6 +152,17 @@ pub fn validate_planning(request: &PlanningCommand) -> Vec<PlanningBlocker> {
     blockers
 }
 
+/// Plan the read-only build planner's evaluation/store/cache capability.
+/// Completion is supported by one disposition for every evaluated root.
+pub fn build_planning_effect_plan() -> Result<crate::EffectPlan, crate::PlanError> {
+    crate::plan_effects(crate::CommandFamily::Planning, &[crate::EffectSpec {
+        effect_id: "build-plan-dispositions",
+        kind: crate::EffectKind::StoreAccess,
+        limit: crate::EffectMeasure::Calls(1),
+        expected_output: crate::ExpectedOutput::None,
+    }])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

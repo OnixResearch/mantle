@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/home/brittonr/mantle-cairn-finish/wt/finish-integrated-20261018/scripts/import-trellis-fenced-attempt.py", line 98, in <module>
+    main()
+    ~~~~^^
+  File "/home/brittonr/mantle-cairn-finish/wt/finish-integrated-20261018/scripts/import-trellis-fenced-attempt.py", line 71, in main
+    check(arguments.out)
+    ~~~~~^^^^^^^^^^^^^^^
+  File "/home/brittonr/mantle-cairn-finish/wt/finish-integrated-20261018/scripts/import-trellis-fenced-attempt.py", line 53, in check
+    raise ValueError(f"imported oracle source drift: {relative}")
+ValueError: imported oracle source drift: verified.rs

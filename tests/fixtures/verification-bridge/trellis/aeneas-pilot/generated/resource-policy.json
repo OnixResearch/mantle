@@ -1,0 +1,16 @@
+{
+  "artifact_max_bytes": 8388608,
+  "environment_allowlist": [
+    "PATH",
+    "CHARON_TOOLCHAIN_IS_IN_PATH",
+    "LD_LIBRARY_PATH",
+    "HOME",
+    "MATHLIB_NO_CACHE_ON_UPDATE"
+  ],
+  "network_allowed": false,
+  "policy_id": "trellis-abs-diff-aeneas-bounds-v1",
+  "schema_version": "trellis-aeneas-resource-policy/v1",
+  "stderr_max_bytes": 1048576,
+  "stdout_max_bytes": 1048576,
+  "timeout_ms": 900000
+}

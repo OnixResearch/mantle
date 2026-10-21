@@ -20,6 +20,7 @@ const STDLIB_FILES: &[(&str, &str)] = &[
         include_str!("../../../lib/artifact-source-migration-receipt.ncl"),
     ),
     ("cargo_unit_plan.ncl", include_str!("../../../lib/cargo_unit_plan.ncl")),
+    ("cmake.ncl", include_str!("../../../lib/cmake.ncl")),
     ("contracts.ncl", include_str!("../../../lib/contracts.ncl")),
     (
         "durable-file-publication-adoption-receipt.ncl",
@@ -27,19 +28,47 @@ const STDLIB_FILES: &[(&str, &str)] = &[
     ),
     ("derivation.ncl", include_str!("../../../lib/derivation.ncl")),
     ("finish_gates.ncl", include_str!("../../../lib/finish_gates.ncl")),
+    ("esp_idf.ncl", include_str!("../../../lib/esp_idf.ncl")),
+    ("fpga.ncl", include_str!("../../../lib/fpga.ncl")),
+    ("gpu.ncl", include_str!("../../../lib/gpu.ncl")),
     ("fetch.ncl", include_str!("../../../lib/fetch.ncl")),
     ("fixed_output.ncl", include_str!("../../../lib/fixed_output.ncl")),
     ("helpers.ncl", include_str!("../../../lib/helpers.ncl")),
     ("kernelscript_experiment.ncl", include_str!("../../../lib/kernelscript_experiment.ncl")),
+    ("model_conversion.ncl", include_str!("../../../lib/model_conversion.ncl")),
     ("offline_cargo.ncl", include_str!("../../../lib/offline_cargo.ncl")),
     ("oci_registry_trust.ncl", include_str!("../../../lib/oci_registry_trust.ncl")),
+    ("pnpm.ncl", include_str!("../../../lib/pnpm.ncl")),
+    ("python.ncl", include_str!("../../../lib/python.ncl")),
     ("project.ncl", include_str!("../../../lib/project.ncl")),
     ("project_outputs.ncl", include_str!("../../../lib/project_outputs.ncl")),
     ("seed.ncl", include_str!("../../../lib/seed.ncl")),
     ("remote-builders.ncl", include_str!("../../../lib/remote-builders.ncl")),
     ("wasm_component.ncl", include_str!("../../../lib/wasm_component.ncl")),
     ("scheduling.ncl", include_str!("../../../lib/scheduling.ncl")),
+    ("zephyr.ncl", include_str!("../../../lib/zephyr.ncl")),
 ];
+
+// Reject duplicate export paths at compile time, before extraction can overwrite one.
+const _: () = {
+    let mut index = 0;
+    while index < STDLIB_FILES.len() {
+        let name = STDLIB_FILES[index].0.as_bytes();
+        let mut previous = 0;
+        while previous < index {
+            let existing = STDLIB_FILES[previous].0.as_bytes();
+            let mut same = name.len() == existing.len();
+            let mut byte = 0;
+            while same && byte < name.len() {
+                same = name[byte] == existing[byte];
+                byte += 1;
+            }
+            assert!(!same, "embedded stdlib file name collision");
+            previous += 1;
+        }
+        index += 1;
+    }
+};
 
 /// Write the embedded stdlib to a directory. Returns the path that
 /// should be added to the Nickel import path.

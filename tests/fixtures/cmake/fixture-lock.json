@@ -1,0 +1,17 @@
+{
+  "schema": "mantle-cmake-fixtures-v1",
+  "files": {
+    "project/CMakeLists.txt": "90ea988a8b88530c237c5f00c4365a2db961fea754733bb362156abd8edcd901",
+    "project/answer.h": "0e1fc1761ffc65a673f426d234627079afd3377b03437f3d91f9de0ec2157b5c",
+    "project/answer.c": "76ef148a19c7c4f1dc9c8b3c81173b18d7a3754460d43e87fd0c4b8447e6023e",
+    "project/answer.cpp": "2867d865dd76121676cf500661b66e3aa3c9f588a189ec8f469ffb2f477b1cf9",
+    "project/entry.c": "a5f35009c13e698c603cd258f16880dcd6e722f46557d70ce3639eed10e66ec7",
+    "download/CMakeLists.txt": "68555f79d8b20c8c61c9946280ac7bb0a43c32110d85603bc3ff0f31cc537a85",
+    "fetch/CMakeLists.txt": "f9baa7dd6bf94f1102bd78ac3f18c5486f0f7349dbf95c7ae788891fd1bf0bca",
+    "external/CMakeLists.txt": "8219d7bf38ccb3f5db34c859af93a22ddca8ae75220106b08b14be3f39616dfe",
+    "missing/CMakeLists.txt": "d612936aad86accb49282d3ab3082cbc9ceca07a77e48ddaac66fc3ab7b902ee",
+    "host-leak/CMakeLists.txt": "0d2b6e3479e399dd90e48580ca7af9a5334e34452a34bca743ec761d20902238",
+    "target-run/CMakeLists.txt": "917ab6add3ba9998816acb28daf9502d82c35e6dba5218ff7ffed6175e44e4fb",
+    "install-escape/CMakeLists.txt": "c3d68584ebdf0f0da737c48eb93d21bb75f9cef72d65fc137962fc039e0a4620"
+  }
+}

@@ -121,7 +121,7 @@ pub enum Permission {
 }
 
 impl Permission {
-    const fn bit(self) -> u16 {
+    pub const fn bit(self) -> u16 {
         match self {
             Self::Build => 1,
             Self::Upload => 2,

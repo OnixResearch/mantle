@@ -1,20 +1,31 @@
 //! Owner-only local worker-protocol listener. No network/public transport.
 
 use std::fs;
-use std::io::{self, ErrorKind, Read, Write};
-use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
-use std::os::unix::net::{UnixListener, UnixStream};
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::io::ErrorKind;
+use std::io::Read;
+use std::io::Write;
+use std::io::{self};
+use std::os::unix::fs::FileTypeExt;
+use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::PermissionsExt;
+use std::os::unix::net::UnixListener;
+use std::os::unix::net::UnixStream;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use crunch_nix_gateway_core::{self as core, Reject};
+use crunch_nix_gateway_core::Reject;
+use crunch_nix_gateway_core::{self as core};
 use rustix::net::sockopt::socket_peercred;
 use rustix::process::geteuid;
 use zeroize::Zeroizing;
 
+use crate::handshake;
+use crate::read_request;
 use crate::store::VerifiedStore;
-use crate::{handshake, read_request, write_rejection};
+use crate::write_rejection;
 
 fn denied() -> io::Error {
     io::Error::new(ErrorKind::PermissionDenied, Reject::Authority.code())
@@ -25,7 +36,8 @@ fn denied() -> io::Error {
 fn bind_private(socket: &Path) -> io::Result<(UnixListener, BoundSocket)> {
     let parent = socket.parent().ok_or_else(denied)?;
     let metadata = fs::symlink_metadata(parent)?;
-    if !metadata.file_type().is_dir() || metadata.uid() != geteuid().as_raw()
+    if !metadata.file_type().is_dir()
+        || metadata.uid() != geteuid().as_raw()
         || metadata.permissions().mode() & 0o077 != 0
     {
         return Err(denied());
@@ -38,7 +50,11 @@ fn bind_private(socket: &Path) -> io::Result<(UnixListener, BoundSocket)> {
             return Err(error);
         }
     };
-    let guard = BoundSocket { path: socket.to_path_buf(), dev: metadata.dev(), ino: metadata.ino() };
+    let guard = BoundSocket {
+        path: socket.to_path_buf(),
+        dev: metadata.dev(),
+        ino: metadata.ino(),
+    };
     fs::set_permissions(socket, fs::Permissions::from_mode(0o600))?;
     listener.set_nonblocking(true)?;
     Ok((listener, guard))
@@ -54,7 +70,8 @@ impl Drop for BoundSocket {
     fn drop(&mut self) {
         if let Ok(metadata) = fs::symlink_metadata(&self.path)
             && metadata.file_type().is_socket()
-            && metadata.dev() == self.dev && metadata.ino() == self.ino
+            && metadata.dev() == self.dev
+            && metadata.ino() == self.ino
         {
             let _ = fs::remove_file(&self.path);
         }
@@ -103,7 +120,8 @@ pub fn authenticate_ticket_envelope(
     expected_audience: &str,
     verify: impl FnOnce(&str, &str) -> Result<(), Reject>,
 ) -> Result<(), Reject> {
-    if expected_audience.is_empty() || expected_audience.len() > core::MAX_IDENTITY_BYTES
+    if expected_audience.is_empty()
+        || expected_audience.len() > core::MAX_IDENTITY_BYTES
         || !expected_audience.bytes().all(|byte| byte.is_ascii_graphic())
     {
         return Err(Reject::Audience);
@@ -124,8 +142,11 @@ pub fn authenticate_ticket_envelope(
     let ticket_id = credential_field(&frame, &mut cursor)?;
     let bearer = credential_field(&frame, &mut cursor)?;
     let audience = credential_field(&frame, &mut cursor)?;
-    if cursor != frame.len() || ticket_id.is_empty() || bearer.is_empty()
-        || ticket_id.len() > core::MAX_IDENTITY_BYTES || bearer.len() > core::MAX_IDENTITY_BYTES
+    if cursor != frame.len()
+        || ticket_id.is_empty()
+        || bearer.is_empty()
+        || ticket_id.len() > core::MAX_IDENTITY_BYTES
+        || bearer.len() > core::MAX_IDENTITY_BYTES
     {
         return Err(Reject::Bound);
     }
@@ -162,15 +183,18 @@ pub fn serve_credential_connection(
     stream.set_write_timeout(Some(Duration::from_secs(core::MAX_NEGOTIATION_SECS)))?;
     let mut challenge = [0_u8; CHALLENGE_BYTES];
     getrandom::fill(&mut challenge).map_err(|_| denied())?;
-    authenticate_ticket_envelope(&mut stream, &challenge, expected_audience, verify)
-        .map_err(|_| denied())?;
+    authenticate_ticket_envelope(&mut stream, &challenge, expected_audience, verify).map_err(|_| denied())?;
     serve_connection(stream, store, runtime)
 }
 
 /// One independently OS-authenticated private peer. Worker operations are
 /// serial per connection, so the actual concurrency is at most one and never
 /// exceeds the named 32-connection/64-operation admission ceilings.
-pub fn serve_connection(mut stream: UnixStream, store: &VerifiedStore, runtime: &tokio::runtime::Runtime) -> io::Result<()> {
+pub fn serve_connection(
+    mut stream: UnixStream,
+    store: &VerifiedStore,
+    runtime: &tokio::runtime::Runtime,
+) -> io::Result<()> {
     let credentials = socket_peercred(&stream).map_err(|_| denied())?;
     if credentials.uid != geteuid() {
         return Err(denied());
@@ -185,13 +209,80 @@ pub fn serve_connection(mut stream: UnixStream, store: &VerifiedStore, runtime: 
             Ok(request) => request,
             Err(error) if error.kind() == ErrorKind::UnexpectedEof => return Ok(()),
             Err(error) => {
-                let reason = if error.to_string() == Reject::Operation.code() { Reject::Operation }
-                    else { Reject::Bound };
+                let reason = if error.to_string() == Reject::Operation.code() {
+                    Reject::Operation
+                } else {
+                    Reject::Bound
+                };
                 write_rejection(&mut stream, reason)?;
                 return Ok(());
             }
         };
         if let Err(reason) = runtime.block_on(store.answer(request, &mut stream)) {
+            write_rejection(&mut stream, reason)?;
+            return Ok(());
+        }
+    }
+}
+
+/// Strict local execution transport. The operator supplies the existing
+/// configured remote runner, not an authority bit from the request. The
+/// runner must perform current endpoint/ticket admission and ordinary fenced
+/// execution/import for each invocation. Upload/admin remain unsupported.
+/// A disconnect does not cancel the runner or remove its durable attempt.
+// r[impl remote_builds.nix_compatibility_gateway]
+pub fn serve_build_connection(
+    mut stream: UnixStream,
+    store: &VerifiedStore,
+    runtime: &tokio::runtime::Runtime,
+    mut dispatch: impl FnMut(Vec<crate::store::ProvenRemoteDerivation>) -> Result<(), Reject>,
+) -> io::Result<()> {
+    let peer = socket_peercred(&stream).map_err(|_| denied())?;
+    if peer.uid != geteuid() {
+        return Err(denied());
+    }
+    stream.set_read_timeout(Some(Duration::from_secs(core::MAX_NEGOTIATION_SECS)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(core::MAX_NEGOTIATION_SECS)))?;
+    handshake(&mut stream)?;
+    stream.set_read_timeout(Some(Duration::from_secs(core::MAX_IDLE_SECS)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(core::MAX_IDLE_SECS)))?;
+    loop {
+        let request = match read_request(&mut stream) {
+            Ok(request) => request,
+            Err(error) if error.kind() == ErrorKind::UnexpectedEof => return Ok(()),
+            Err(error) => {
+                let reason = if error.to_string() == Reject::Operation.code() {
+                    Reject::Operation
+                } else {
+                    Reject::Bound
+                };
+                write_rejection(&mut stream, reason)?;
+                return Ok(());
+            }
+        };
+        let result = match request {
+            crate::ParsedRequest::BuildPaths { paths } => (|| {
+                let projected = runtime.block_on(store.project_build_paths_for_remote(&paths))?;
+                let mut outputs = Vec::new();
+                for derivation in &projected {
+                    for output in derivation.declared_output_paths() {
+                        if outputs.len() >= core::MAX_STORE_PATHS as usize {
+                            return Err(Reject::Bound);
+                        }
+                        outputs.push(output);
+                    }
+                }
+                dispatch(projected)?;
+                if !runtime.block_on(store.query_missing(&outputs))?.is_empty() {
+                    return Err(Reject::Authority);
+                }
+                crate::write_number(&mut stream, crate::STDERR_LAST).map_err(|_| Reject::Bound)?;
+                crate::write_number(&mut stream, 1).map_err(|_| Reject::Bound)?;
+                stream.flush().map_err(|_| Reject::Bound)
+            })(),
+            request => runtime.block_on(store.answer(request, &mut stream)),
+        };
+        if let Err(reason) = result {
             write_rejection(&mut stream, reason)?;
             return Ok(());
         }

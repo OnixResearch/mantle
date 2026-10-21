@@ -56,7 +56,7 @@ const BASH_FULL_STATIC_BUILTIN_SOURCES: &[&str] = &[
     "builtins/getopt",
 ];
 
-const BASH_FULL_BUILTIN_DEFINITIONS: &[&str] = &[
+pub(crate) const BASH_FULL_BUILTIN_DEFINITIONS: &[&str] = &[
     "alias",
     "bind",
     "break",
@@ -386,8 +386,7 @@ fn normalize_fmtumax_source(source_root: &Path) -> Result<(), StagexBashFullErro
     Ok(())
 }
 
-fn write_runtime_compat_source(source_root: &Path) -> Result<(), StagexBashFullError> {
-    const SOURCE: &str = r#"#include <errno.h>
+pub(crate) const RUNTIME_COMPAT_SOURCE: &str = r#"#include <errno.h>
 #include <limits.h>
 #include <semaphore.h>
 #include <sys/socket.h>
@@ -433,10 +432,11 @@ int sem_wait(sem_t *sem) {
   return 0;
 }
 "#;
+fn write_runtime_compat_source(source_root: &Path) -> Result<(), StagexBashFullError> {
     let path = source_root.join("stagex-full-runtime-compat.c");
-    crate::stagex_mes_lib::write_create_new(&path, SOURCE.as_bytes())?;
-    assert!(SOURCE.contains("int sem_init"));
-    assert!(SOURCE.contains("int sem_wait"));
+    crate::stagex_mes_lib::write_create_new(&path, RUNTIME_COMPAT_SOURCE.as_bytes())?;
+    assert!(RUNTIME_COMPAT_SOURCE.contains("int sem_init"));
+    assert!(RUNTIME_COMPAT_SOURCE.contains("int sem_wait"));
     Ok(())
 }
 
@@ -496,7 +496,7 @@ fn build_full_shell(
     Ok(bash)
 }
 
-fn full_shell_sources() -> Vec<String> {
+pub(crate) fn full_shell_sources() -> Vec<String> {
     let mut sources = Vec::with_capacity(BASH_FULL_SOURCE_COMPILE_COUNT);
     sources.extend(crate::stagex_bash::CORE_SOURCES.iter().map(|source| format!("{source}.c")));
     sources.push("lib/readline/readline_stub.c".to_string());

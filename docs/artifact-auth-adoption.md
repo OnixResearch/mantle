@@ -1,6 +1,28 @@
 # Artifact-auth compatibility for action results
 
-Mantle pins `artifact-auth-core` and `artifact-auth-ed25519` from `OnixResearch/onix-artifact` at revision `c932138d880ddf4c2967f4c024b489b5c0022bf1`. Cargo and the non-flake Nix input must resolve that revision. Flake evaluation checks the complete four-package source workspace and limits Mantle's consumer graph to the two authentication packages. It rejects mixed sources, sibling paths, widened graphs, and incompatible licensing. The predecessor Radicle source remains historical evidence only.
+Mantle declares `artifact-auth-core` and `artifact-auth-ed25519` from `ssh://git@github.com/OnixResearch/onix-artifact.git` at revision `5f3962d7471d1547e044f57daeda72f56621fd52`. Cargo and the non-flake Nix input must resolve that revision. Flake evaluation checks the complete four-package AGPL-3.0-or-later source workspace and limits Mantle's consumer graph to the two authentication packages. It rejects mixed sources, sibling paths, widened graphs, and incompatible licensing. The predecessor Radicle source remains historical evidence only.
+
+The published cohort contains `artifact-auth-core`, `artifact-auth-ed25519`,
+`artifact-binding-core`, and `artifact-transfer-core`; the latter two are not
+Mantle dependencies. The pin update does not grant Artifact new authority or
+change the authentication boundary below. Final Cargo/Nix lock and vendor
+regeneration, exact source admission, and current-consumer execution remain
+integration-owner checks, not results established by the declaration change.
+
+The integration owner's fresh primary GitHub SSH acquisition measured NAR
+`sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY=`
+(`5ebee870590f375e5761be8d0386efdc8f50e3636fa1262d5d67ecae3ec8dd66`
+in the reviewed recursive-SHA-256 source table). The source assertion and
+current lock check require that exact NAR. The published core and Ed25519
+`src/lib.rs` BLAKE3 identities are respectively
+`839ea3e35429e2a1252020dd779b46ebd185b6911674036820da118d487d1d21`
+and `7fd3987fe3ddc6d30efca37878952135f19905a00b52f349db237054be6b3633`,
+unchanged from the prepared source. This source-byte observation is not a
+consumer-execution, transferred-source gate, or release-acceptance claim.
+
+The accepted 2026-08-06 `artifact-workspace-migration-v1` receipt and its pure
+validator describe their original revision and license. They remain immutable
+historical evidence, not a current-source allowlist or an automatic fallback.
 
 ## Pure dual-run boundary
 

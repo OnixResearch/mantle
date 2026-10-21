@@ -11,18 +11,23 @@ mod ambient_env;
 mod ast_grep_evidence;
 mod attest_cmd;
 mod bootstrap;
+mod bootstrap_effect_port;
+mod bootstrap_operation;
 mod bootstrap_parity;
 mod bootstrap_pin_cmd;
 mod bootstrap_source_root;
 mod bootstrap_validate;
+mod build_application;
 mod build_cmd;
 #[allow(dead_code)]
 mod build_correctness;
 mod build_failure;
 mod build_interchange;
 mod build_log;
+mod build_observation;
 mod build_plan;
 mod child_exec;
+mod evaluation_cmd;
 mod expression_scratch;
 mod generated_file_check;
 mod generated_file_write;
@@ -34,8 +39,12 @@ mod build_report;
 #[allow(dead_code)]
 mod cache_substitution;
 mod cairn_release_handoff;
+mod cargo_acquisition;
+mod cargo_build_bundle;
+mod cargo_build_bundle_cmd;
 mod cargo_free_self_build;
 mod cargo_import;
+mod cargo_import_cli;
 mod cargo_profile;
 mod cargo_profile_manifest;
 mod causal_trace_diagnostic;
@@ -98,6 +107,8 @@ mod nix_free_demo_bundle;
 #[allow(clippy::large_enum_variant)]
 mod nix_derivation_adapter;
 mod nix_free_demo_cmd;
+#[cfg(target_os = "linux")]
+mod nix_gateway;
 mod nix_producer;
 mod nix_producer_shell;
 mod oci_projection;
@@ -193,21 +204,36 @@ mod rust_plan;
 mod rust_source_provider;
 // rustc-dev-guide evidence mirrors upstream compiler graph relationships that are intentionally
 // structurally complex.
+mod profile_cli;
 #[allow(dead_code, clippy::type_complexity)]
 mod rustc_dev_guide;
 mod self_build;
 #[allow(dead_code)]
 mod semantic_graph;
+mod semantic_graph_cmd;
 mod shared_rust_signing_key;
 mod shell_cmd;
 mod signing_key;
-#[allow(dead_code)]
 mod source_built_fixed_point;
+mod source_built_fixed_point_action_trust;
 mod source_built_fixed_point_dev_cache;
+mod source_built_fixed_point_mantle_actions;
+mod source_built_fixed_point_native_actions;
+mod source_built_fixed_point_planning;
 mod source_built_fixed_point_receipt;
 mod source_built_fixed_point_resume;
 mod source_built_fixed_point_resume_bundle;
+mod source_built_fixed_point_rust_actions;
 mod source_built_fixed_point_shell;
+mod source_built_fixed_point_stagex_actions;
+mod source_built_fixed_point_trust_report;
+mod source_built_mantle_programs;
+mod source_built_native_programs;
+mod source_built_program_authoring;
+mod source_built_recipe;
+mod source_built_recipe_exec;
+mod source_built_rust_programs;
+mod source_built_stagex_programs;
 mod source_bundle;
 mod source_observation;
 mod source_root_capability;
@@ -284,6 +310,7 @@ mod stagex_tinycc27;
 mod stagex_transition;
 mod store_cmd;
 mod structured_refactor;
+mod test_cli;
 mod transcript_cmd;
 mod trusted_keys;
 // Vendor manifests preserve heterogeneous source identities and compatibility-only validation
@@ -300,8 +327,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 const EXPECTED_RUN_OUTCOME_COUNT: usize = 1;
 const DEFAULT_SUBSTITUTER_COUNT: u32 = 1;
@@ -390,6 +415,10 @@ struct Args {
     #[arg(long, global = true)]
     state_dir: Option<PathBuf>,
 
+    /// Operator-owned endpoint binding configuration for production remote operations.
+    #[arg(long, global = true)]
+    remote_binding_config: Option<PathBuf>,
+
     /// Durable store backend (snix or casita).
     #[arg(long, global = true, default_value = "snix")]
     store_backend: crunch_store::StoreBackend,
@@ -444,6 +473,29 @@ enum RustCacheAction {
     },
 }
 
+#[derive(clap::Args, Debug, Clone, Copy)]
+struct GraphBounds {
+    #[arg(long, default_value_t = 65_536)]
+    max_nodes: u32,
+    #[arg(long, default_value_t = 262_144)]
+    max_edges: u32,
+    #[arg(long, default_value_t = 1_048_576)]
+    max_steps: u32,
+    #[arg(long, default_value_t = 4096)]
+    max_depth: u32,
+}
+
+impl From<GraphBounds> for mantle_application_contract::inspection::QueryLimits {
+    fn from(bounds: GraphBounds) -> Self {
+        Self {
+            nodes: bounds.max_nodes,
+            edges: bounds.max_edges,
+            steps: bounds.max_steps,
+            depth: bounds.max_depth,
+        }
+    }
+}
+
 // CLI variants retain their complete clap payloads to preserve flag and help compatibility.
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand, Debug)]
@@ -481,6 +533,10 @@ enum Command {
         )]
         watch: bool,
 
+        /// Reuse independent imported root evaluations within the local watch session
+        #[arg(long, requires = "watch")]
+        incremental: bool,
+
         /// Require imported source state for selected roots before planning or building
         #[arg(long)]
         offline_source_preflight: bool,
@@ -505,6 +561,10 @@ enum Command {
         /// Emit the bounded mantle-evaluation-stream-v1 NDJSON contract on stdout
         #[arg(long, conflicts_with_all = ["fix", "plan", "builder"])]
         evaluation_stream: bool,
+
+        /// Explicit execution-only compiler cache/socket policy JSON (local, non-proof builds only)
+        #[arg(long, conflicts_with_all = ["plan", "watch", "builder", "strict_hermetic", "offline_source_manifest"])]
+        compile_driver_runtime: Option<PathBuf>,
 
         /// Maximum number of concurrent builds (default: CPU count, max 16)
         #[arg(short, long)]
@@ -625,6 +685,24 @@ enum Command {
         action: ImportAction,
     },
 
+    /// Run a declared libtest target through strict signed build admission.
+    Test {
+        #[command(flatten)]
+        request: test_cli::TestArgs,
+    },
+
+    /// Compose exact admitted packages into atomic, retained user generations.
+    Profile {
+        #[command(flatten)]
+        request: profile_cli::ProfileArgs,
+    },
+
+    /// Export, verify, or replay an immutable Cargo-planned build bundle.
+    CargoBuildBundle {
+        #[command(subcommand)]
+        action: cargo_build_bundle_cmd::CargoBuildBundleAction,
+    },
+
     /// Plan or explicitly apply project-declared generated files
     Filegen {
         #[command(subcommand)]
@@ -639,6 +717,17 @@ enum Command {
         /// Semantic graph JSON file (default: <state-dir>/semantic-graph.json)
         #[arg(long = "graph-file")]
         graph_file: Option<PathBuf>,
+        /// Traverse directed dependencies rather than connected provenance.
+        #[arg(long, conflicts_with_all = ["path_to", "compare_configuration"])]
+        dependencies: bool,
+        /// Find a directed shortest dependency path to another identity.
+        #[arg(long, conflicts_with = "compare_configuration")]
+        path_to: Option<String>,
+        /// Compare two configured-target identities in this saved graph.
+        #[arg(long)]
+        compare_configuration: Option<String>,
+        #[command(flatten)]
+        bounds: GraphBounds,
     },
 
     /// Explain why an output/proof identity exists from semantic graph records
@@ -649,6 +738,11 @@ enum Command {
         /// Semantic graph JSON file (default: <state-dir>/semantic-graph.json)
         #[arg(long = "graph-file")]
         graph_file: Option<PathBuf>,
+        /// Compare declared action facts without performing a cache lookup.
+        #[arg(long)]
+        compare_action: Option<String>,
+        #[command(flatten)]
+        bounds: GraphBounds,
     },
 
     /// List graph dependents of an identity or alias
@@ -659,6 +753,11 @@ enum Command {
         /// Semantic graph JSON file (default: <state-dir>/semantic-graph.json)
         #[arg(long = "graph-file")]
         graph_file: Option<PathBuf>,
+        /// Traverse all reverse dependencies rather than immediate dependents.
+        #[arg(long)]
+        transitive: bool,
+        #[command(flatten)]
+        bounds: GraphBounds,
     },
 
     /// Plan, check, or apply structured refactor/migration sessions
@@ -978,6 +1077,10 @@ enum Command {
         #[arg(long, conflicts_with = "cargo_free")]
         source_built_fixed_point: bool,
 
+        /// Publish a new authenticated source-program cohort without executing a proof.
+        #[arg(long, requires = "source_built_fixed_point", conflicts_with_all = ["dev_provider_cache", "dev_resume", "dev_fast_fail"])]
+        prepare_source_programs: bool,
+
         /// Authenticated source-built-fixed-point source profile.
         #[arg(long, requires = "source_built_fixed_point")]
         source_profile: Option<PathBuf>,
@@ -1038,7 +1141,7 @@ enum Command {
         #[arg(long, requires = "cargo_free")]
         fixed_point: bool,
 
-        /// Output directory for Cargo-free or source-built fixed-point evidence.
+        /// Output directory for evidence, or a new source cohort with --prepare-source-programs.
         #[arg(long)]
         out: Option<PathBuf>,
 
@@ -1389,6 +1492,8 @@ enum ImportAction {
         /// Cargo profile for the generated package
         #[arg(long, default_value = "release")]
         profile: String,
+        #[command(flatten)]
+        acquisition: cargo_import_cli::CargoAcquisitionArgs,
     },
 }
 
@@ -1561,6 +1666,31 @@ enum BootstrapAction {
 
     /// Report executable and unsupported source-root operations from live host observations
     Capabilities,
+
+    /// Verify a copied fixed-point evidence bundle without executing a proof.
+    TrustReport {
+        #[arg(long)]
+        proof_root: PathBuf,
+    },
+
+    /// Internal inherited-channel replay by the source-built predecessor.
+    #[command(hide = true)]
+    SourceBuiltReplay {
+        #[arg(long)]
+        proof_root: PathBuf,
+        #[arg(long)]
+        stage_id: String,
+        #[arg(long, value_parser = clap::value_parser!(i32).range(3..))]
+        capture_fd: i32,
+        #[arg(long)]
+        expected_proof_digest: String,
+        #[arg(long)]
+        expected_action_plan_digest: String,
+        #[arg(long)]
+        host_mantle_digest: String,
+        #[arg(long)]
+        bwrap: PathBuf,
+    },
 
     /// Produce the deterministic whole-bootstrap parity gap report
     ParityReport {
@@ -1899,6 +2029,14 @@ pub enum ReleaseAction {
         /// Content-bound requirement coverage policy for this verification
         #[arg(long = "requirement-coverage", value_parser = ["optional", "required"], default_value = "optional")]
         requirement_coverage: String,
+
+        /// Trusted source-review verification policy; supplying it requires accepted source review
+        #[arg(long)]
+        source_review_policy: Option<PathBuf>,
+
+        /// Require accepted source review under an explicitly supplied trusted policy
+        #[arg(long)]
+        require_source_review: bool,
     },
     /// Pack, inspect, or unpack an opt-in chaptered release transport
     Transport {
@@ -2597,6 +2735,14 @@ pub enum AttestVerifyAction {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum RemoteAction {
+    #[cfg(target_os = "linux")]
+    /// Explicitly configured owner-private Nix and asynchronous build gateway.
+    Gateway {
+        #[command(subcommand)]
+        action: nix_gateway::api_host::GatewayAction,
+    },
+    #[command(hide = true)]
+    UsageExecutor,
     /// Ticket management
     Ticket {
         #[command(subcommand)]
@@ -2648,6 +2794,10 @@ pub enum RemoteAction {
         /// Separate worker execution/CAS state; defaults to the global state directory.
         #[arg(long, hide = true)]
         execution_state_dir: Option<PathBuf>,
+
+        /// Existing operator-delegated cgroup v2 subtree for isolated per-attempt measurement.
+        #[arg(long)]
+        usage_cgroup_root: Option<PathBuf>,
 
         /// SecretSpec metadata manifest
         #[arg(long, default_value = "secretspec.toml")]
@@ -3420,10 +3570,7 @@ pub enum StoreArchiveAction {
 }
 
 fn unix_time_now_s() -> Result<u64, RunError> {
-    let elapsed = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| RunError::Internal(format!("system time before Unix epoch: {error}")))?;
-    Ok(elapsed.as_secs())
+    host_environment::unix_time_now_s()
 }
 
 fn main() -> ExitCode {
@@ -3489,12 +3636,26 @@ struct RunContext {
     resolved_log_dir: PathBuf,
     store_prefix: String,
     store_backend: crunch_store::StoreBackend,
+    remote_binding_config: Option<PathBuf>,
+    remote_endpoint_admission: Option<std::sync::Arc<remote_build::endpoint_config::RemoteEndpointBindingConfig>>,
     verbose: bool,
     json: bool,
     base_state_dirs: Vec<PathBuf>,
 }
 
 impl RunContext {
+    fn store_source_admission(&self) -> Option<std::sync::Arc<dyn crunch_store::StoreSourceAdmission>> {
+        self.remote_endpoint_admission
+            .as_ref()
+            .map(|config| std::sync::Arc::clone(config) as std::sync::Arc<dyn crunch_store::StoreSourceAdmission>)
+    }
+
+    fn required_remote_binding(&self) -> Result<&remote_build::endpoint_config::RemoteEndpointBindingConfig, RunError> {
+        self.remote_endpoint_admission
+            .as_deref()
+            .ok_or_else(|| RunError::Internal("remote-production-endpoint-binding-config-required".into()))
+    }
+
     /// Typed output format for the presentation boundary.
     fn output_format(&self) -> mantle_application_contract::OutputFormat {
         mantle_application_contract::output_format(self.json)
@@ -3613,6 +3774,7 @@ fn run_for_platform(args: Args, platform: mantle_portable_client_core::PlatformF
             &ctx.resolved_state_dir,
             &ctx.store_prefix,
             &ctx.base_state_dirs,
+            ctx.store_source_admission().as_deref(),
         )
         .map_err(|error| RunError::Internal(format!("opening store: {error}")))?;
     }
@@ -3711,6 +3873,9 @@ fn command_root(command: &Command) -> &'static str {
         Command::Doctor { .. } => "doctor",
         Command::OperatorContract { .. } => "__operator-contract",
         Command::Import { .. } => "import",
+        Command::Profile { .. } => "profile",
+        Command::Test { .. } => "test",
+        Command::CargoBuildBundle { .. } => "cargo-build-bundle",
         Command::Filegen { .. } => "filegen",
         Command::Graph { .. } => "graph",
         Command::Why { .. } => "why",
@@ -3810,6 +3975,12 @@ fn build_run_context(args: &Args) -> Result<RunContext, RunError> {
     let resolved_state_dir = observed.resolved.map_err(|error| RunError::Internal(error.to_string()))?;
     let resolved_log_dir = admit_root_log_dir(&resolved_state_dir, family)?;
     let store_prefix = resolve_store_prefix(args);
+    let remote_endpoint_admission = args
+        .remote_binding_config
+        .as_deref()
+        .map(remote_build::endpoint_config::RemoteEndpointBindingConfig::load)
+        .transpose()?
+        .map(std::sync::Arc::new);
     debug_assert!(!store_prefix.is_empty(), "store_prefix must not be empty");
     debug_assert!(store_prefix.starts_with('/'), "store_prefix must be absolute");
     Ok(RunContext {
@@ -3818,6 +3989,8 @@ fn build_run_context(args: &Args) -> Result<RunContext, RunError> {
         resolved_log_dir,
         store_prefix,
         store_backend: args.store_backend,
+        remote_binding_config: args.remote_binding_config.clone(),
+        remote_endpoint_admission,
         verbose: args.verbose,
         json: args.json,
         base_state_dirs: args.base_stores.clone(),
@@ -3861,6 +4034,9 @@ fn command_label(command: &Command) -> &'static str {
         Command::Doctor { .. } => "doctor",
         Command::OperatorContract { .. } => "operator-contract",
         Command::Import { .. } => "import",
+        Command::Profile { .. } => "profile",
+        Command::Test { .. } => "test",
+        Command::CargoBuildBundle { .. } => "cargo-build-bundle",
         Command::Filegen { action } => filegen_command_label(action),
         Command::Graph { .. } => "graph",
         Command::Why { .. } => "why",
@@ -4039,6 +4215,8 @@ fn bootstrap_command_label(action: Option<&BootstrapAction>) -> &'static str {
     match action {
         Some(BootstrapAction::ElfRelocate { .. }) => "bootstrap.elf-relocate",
         Some(BootstrapAction::Capabilities) => "bootstrap.capabilities",
+        Some(BootstrapAction::TrustReport { .. }) => "bootstrap.trust-report",
+        Some(BootstrapAction::SourceBuiltReplay { .. }) => "bootstrap.source-built-replay",
         Some(BootstrapAction::ParityReport { .. }) => "bootstrap.parity-report",
         Some(BootstrapAction::RustSourceProvider { .. }) => "bootstrap.rust-source-provider",
         Some(BootstrapAction::FullSourceRustHostTools { .. }) => "bootstrap.full-source-rust-host-tools",
@@ -4063,6 +4241,9 @@ fn remote_command_label(action: &RemoteAction) -> &'static str {
             RemoteLiveAction::Serve { .. } => "remote.live.serve",
             RemoteLiveAction::Subscribe { .. } => "remote.live.subscribe",
         },
+        #[cfg(target_os = "linux")]
+        RemoteAction::Gateway { .. } => "remote.gateway",
+        RemoteAction::UsageExecutor => "remote.usage-executor",
         RemoteAction::Serve { .. } => "remote.serve",
     }
 }
@@ -4393,22 +4574,78 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
             readiness_socket,
         } => run_doctor_command(ctx, *profile, readiness_socket.as_deref()),
         Command::OperatorContract { mode } => run_operator_contract(*mode),
-        Command::Graph { root, graph_file } => run_semantic_graph_command(
-            ctx,
-            command_input::SemanticGraphCommandInput::new(SemanticGraphQueryKind::Graph, root, graph_file.as_deref()),
-        ),
-        Command::Why { target, graph_file } => run_semantic_graph_command(
-            ctx,
-            command_input::SemanticGraphCommandInput::new(SemanticGraphQueryKind::Why, target, graph_file.as_deref()),
-        ),
-        Command::Dependents { target, graph_file } => run_semantic_graph_command(
-            ctx,
-            command_input::SemanticGraphCommandInput::new(
-                SemanticGraphQueryKind::Dependents,
-                target,
-                graph_file.as_deref(),
-            ),
-        ),
+        Command::Graph {
+            root,
+            graph_file,
+            dependencies,
+            path_to,
+            compare_configuration,
+            bounds,
+        } => {
+            let (kind, other) = if let Some(target) = path_to {
+                (mantle_application_contract::GraphQueryKind::Path, Some(target.as_str()))
+            } else if let Some(target) = compare_configuration {
+                (mantle_application_contract::GraphQueryKind::CompareConfiguration, Some(target.as_str()))
+            } else if *dependencies {
+                (mantle_application_contract::GraphQueryKind::Dependencies, None)
+            } else {
+                (mantle_application_contract::GraphQueryKind::Graph, None)
+            };
+            semantic_graph_cmd::run(
+                ctx,
+                command_input::SemanticGraphCommandInput::new(
+                    kind,
+                    root,
+                    other,
+                    (*bounds).into(),
+                    graph_file.as_deref(),
+                ),
+            )
+        }
+        Command::Why {
+            target,
+            graph_file,
+            compare_action,
+            bounds,
+        } => {
+            let kind = if compare_action.is_some() {
+                mantle_application_contract::GraphQueryKind::CompareAction
+            } else {
+                mantle_application_contract::GraphQueryKind::Why
+            };
+            semantic_graph_cmd::run(
+                ctx,
+                command_input::SemanticGraphCommandInput::new(
+                    kind,
+                    target,
+                    compare_action.as_deref(),
+                    (*bounds).into(),
+                    graph_file.as_deref(),
+                ),
+            )
+        }
+        Command::Dependents {
+            target,
+            graph_file,
+            transitive,
+            bounds,
+        } => {
+            let kind = if *transitive {
+                mantle_application_contract::GraphQueryKind::ReverseDependencies
+            } else {
+                mantle_application_contract::GraphQueryKind::Dependents
+            };
+            semantic_graph_cmd::run(
+                ctx,
+                command_input::SemanticGraphCommandInput::new(
+                    kind,
+                    target,
+                    None,
+                    (*bounds).into(),
+                    graph_file.as_deref(),
+                ),
+            )
+        }
         Command::Refactor { action } => run_refactor_command(ctx, action.clone()),
         Command::Transcript { action } => run_transcript_command(action.clone(), ctx),
         Command::Stage0Inventory { output } => run_stage0_inventory_command(ctx, output),
@@ -4419,6 +4656,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
                 state_dir: &ctx.resolved_state_dir,
                 backend: ctx.store_backend,
                 base_state_dirs: &ctx.base_state_dirs,
+                source_admission: ctx.store_source_admission().as_ref(),
                 source_bundle_bytes_max: foreign_import_cmd::DEFAULT_FOREIGN_JSON_ARTIFACT_BYTES_MAX,
                 verbose: ctx.verbose,
                 json: ctx.json,
@@ -4430,6 +4668,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
                 state_dir: &ctx.resolved_state_dir,
                 backend: ctx.store_backend,
                 base_state_dirs: &ctx.base_state_dirs,
+                source_admission: ctx.store_source_admission().as_ref(),
                 verbose: ctx.verbose,
                 json: ctx.json,
             })
@@ -4473,6 +4712,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
             ctx.store_backend,
             &ctx.store_prefix,
             &ctx.base_state_dirs,
+            ctx.store_source_admission().as_ref(),
             ctx.json,
         ),
         Command::Source { action } => {
@@ -4503,6 +4743,22 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         }
         Command::Attest { action } => run_attest_command(ctx, action.clone()),
         Command::Import { action } => run_import_command(ctx, action.clone()),
+        Command::Test { request } => test_cli::run(request, ctx),
+        Command::Profile { request } => profile_cli::run(request, crunch_store::StoreConfig {
+            source_admission: ctx.store_source_admission(),
+            ..crunch_store::StoreConfig::new(
+                ctx.store_backend,
+                ctx.resolved_state_dir.clone(),
+                std::path::absolute(&ctx.store).map_err(|error| RunError::Internal(error.to_string()))?,
+                ctx.store_prefix.clone(),
+            )
+            .with_base_state_dirs(ctx.base_state_dirs.clone())
+        }),
+        Command::CargoBuildBundle { action } => {
+            let runtime = tokio::runtime::Runtime::new()
+                .map_err(|error| RunError::Internal(format!("bundle runtime: {error}")))?;
+            runtime.block_on(cargo_build_bundle_cmd::cmd_cargo_build_bundle(action.clone()))
+        }
         Command::Filegen { action } => run_filegen_command(ctx, action.clone()),
         Command::Init
         | Command::Check { .. }
@@ -4538,6 +4794,9 @@ fn run_rust_cache_command(ctx: &RunContext, action: &RustCacheAction) -> Result<
             receipt_dir,
             once,
         } => {
+            let gate = rust_plan_execution::RustOperationGate::plan(
+                mantle_application_contract::rust_operations::RustOperation::ServeCache,
+            )?;
             let options = crunch_rustc_wrapper::DaemonOptions {
                 policy_path: policy.clone(),
                 backend: ctx.store_backend,
@@ -4546,53 +4805,67 @@ fn run_rust_cache_command(ctx: &RunContext, action: &RustCacheAction) -> Result<
                 receipt_dir: receipt_dir.clone(),
                 run_once: *once,
             };
-            let socket = build_cmd::configured_live_socket();
+            let socket = build_cmd::configured_live_socket()?;
             let publisher =
                 Arc::new(std::sync::Mutex::new(None::<(remote_build::live_state::daemon::ReadinessPublisher, bool)>));
-            let result = if let Some(socket) = socket {
-                let started = Arc::clone(&publisher);
-                let response = Arc::clone(&publisher);
-                crunch_rustc_wrapper::run_daemon_with_response_observer(
-                    options,
-                    Arc::new(move || {
-                        let Some(nonce) = SystemTime::now().duration_since(UNIX_EPOCH).ok() else {
-                            return;
-                        };
-                        let id = format!("rust-cache-{}-{}", std::process::id(), nonce.as_nanos());
-                        if let Ok(reporter) = remote_build::live_state::daemon::ReadinessPublisher::start_service(
-                            &socket,
-                            id,
-                            crunch_service_readiness_core::RestartPolicy::Never,
-                        ) {
-                            *started.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
-                                Some((reporter, false));
-                        }
-                    }),
-                    Arc::new(move || {
-                        let mut guard = response.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                        if let Some((reporter, acknowledged)) = guard.as_mut()
-                            && !*acknowledged
-                            && reporter.ready_after_successful_request().is_ok()
-                        {
-                            *acknowledged = true;
-                        }
-                    }),
-                )
-            } else {
-                crunch_rustc_wrapper::run_daemon(options)
+            let listener_seen = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let response_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let observed_listener = Arc::clone(&listener_seen);
+            let observed_response = Arc::clone(&response_count);
+            let started = Arc::clone(&publisher);
+            let response = Arc::clone(&publisher);
+            let result = crunch_rustc_wrapper::run_daemon_with_response_observer(
+                options,
+                Arc::new(move || {
+                    observed_listener.store(true, std::sync::atomic::Ordering::Relaxed);
+                    let Some(socket) = socket.as_ref() else {
+                        return;
+                    };
+                    let Ok(nonce) = unix_time_now_s() else {
+                        return;
+                    };
+                    let id = format!("rust-cache-{}-{nonce}", std::process::id());
+                    if let Ok(reporter) = remote_build::live_state::daemon::ReadinessPublisher::start_service(
+                        socket,
+                        id,
+                        crunch_service_readiness_core::RestartPolicy::Never,
+                    ) {
+                        *started.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some((reporter, false));
+                    }
+                }),
+                Arc::new(move || {
+                    observed_response.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let mut guard = response.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if let Some((reporter, acknowledged)) = guard.as_mut()
+                        && !*acknowledged
+                        && reporter.ready_after_successful_request().is_ok()
+                    {
+                        *acknowledged = true;
+                    }
+                }),
+            )
+            .map_err(|error| RunError::Internal(format!("serving Rust compiler cache requests: {error}")));
+            let classification = match &result {
+                Ok(()) => gate.classify(&mantle_application_contract::rust_operations::RustEvidence::Daemon {
+                    listener_started: listener_seen.load(std::sync::atomic::Ordering::Relaxed),
+                    responses_flushed: response_count.load(std::sync::atomic::Ordering::Relaxed),
+                }),
+                Err(_) => gate.classify(&mantle_application_contract::rust_operations::RustEvidence::Failed),
             };
             if let Some((mut reporter, _)) = publisher.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take()
             {
-                let _ = reporter.exited(result.is_ok());
+                let _ = reporter.exited(result.is_ok() && classification.is_ok());
             }
-            result.map_err(|error| RunError::Internal(format!("serving Rust compiler cache requests: {error}")))
+            result?;
+            classification
         }
     }
 }
 
-fn run_remote_live_command(action: RemoteLiveAction) -> Result<(), RunError> {
+fn run_remote_live_command(ctx: &RunContext, action: RemoteLiveAction) -> Result<(), RunError> {
     match action {
         RemoteLiveAction::Serve { socket } => {
+            let state_dir = ctx.resolved_state_dir.clone();
             let runtime = tokio::runtime::Runtime::new()
                 .map_err(|error| RunError::Internal(format!("creating live daemon runtime: {error}")))?;
             let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -4602,8 +4875,9 @@ fn run_remote_live_command(action: RemoteLiveAction) -> Result<(), RunError> {
                     .map_err(|error| {
                         RunError::Internal(format!("registering live daemon termination signal: {error}"))
                     })?;
-                let mut server =
-                    tokio::task::spawn_blocking(move || remote_build::live_state::daemon::serve(&socket, &server_stop));
+                let mut server = tokio::task::spawn_blocking(move || {
+                    remote_build::live_state::daemon::serve_with_state(&socket, &state_dir, &server_stop)
+                });
                 let completed = tokio::select! {
                     result = &mut server => Some(result),
                     _ = tokio::signal::ctrl_c() => None,
@@ -4671,14 +4945,7 @@ fn run_remote_command(ctx: &RunContext, action: RemoteAction) -> Result<(), RunE
             },
             ctx,
         ),
-        other => remote_build::cmd_remote(
-            other,
-            &ctx.store,
-            &ctx.resolved_state_dir,
-            &ctx.store_prefix,
-            ctx.store_backend,
-            ctx.json,
-        ),
+        other => remote_build::cmd_remote(other, ctx, ctx.remote_binding_config.as_deref()),
     }
 }
 
@@ -4737,11 +5004,16 @@ fn run_import_command(ctx: &RunContext, action: ImportAction) -> Result<(), RunE
             inputs_file,
             target,
             profile,
+            acquisition,
         } => {
             if plan && apply {
                 return Err(RunError::Internal("cargo import accepts either --plan or --apply, not both".to_string()));
             }
             let root = current_dir_or_error()?;
+            let acquired = match cargo_import_cli::prepare(&root, ctx, &acquisition)? {
+                cargo_import_cli::Acquisition::Inspected => return Ok(()),
+                cargo_import_cli::Acquisition::Import(vendor) => vendor,
+            };
             cargo_import::run_cargo_import(cargo_import::CargoImportShellOptions {
                 root: &root,
                 selected_package: package.as_deref(),
@@ -4751,6 +5023,7 @@ fn run_import_command(ctx: &RunContext, action: ImportAction) -> Result<(), RunE
                 target_triple: &target,
                 profile: &profile,
                 apply,
+                acquired_vendor: acquired.as_ref(),
                 json: ctx.json,
             })
         }
@@ -4815,7 +5088,10 @@ fn run_refactor_command(ctx: &RunContext, action: RefactorAction) -> Result<(), 
             root,
             store_prefixes,
         } => {
-            let root = root.unwrap_or(current_dir_or_error()?);
+            let root = match root {
+                Some(root) => root,
+                None => current_dir_or_error()?,
+            };
             let plan = plan_refactor_session(&session, &root, &store_prefixes)?;
             presentation::refactor::print_refactor_plan(&plan, ctx.output_format())?;
             Ok(())
@@ -4825,7 +5101,10 @@ fn run_refactor_command(ctx: &RunContext, action: RefactorAction) -> Result<(), 
             root,
             store_prefixes,
         } => {
-            let root = root.unwrap_or(current_dir_or_error()?);
+            let root = match root {
+                Some(root) => root,
+                None => current_dir_or_error()?,
+            };
             let plan = plan_refactor_session(&session, &root, &store_prefixes)?;
             presentation::refactor::print_refactor_plan(&plan, ctx.output_format())?;
             if plan.has_conflicts() {
@@ -4846,7 +5125,10 @@ fn run_refactor_command(ctx: &RunContext, action: RefactorAction) -> Result<(), 
                     .to_string(),
                 )
             })?;
-            let root = root.unwrap_or(current_dir_or_error()?);
+            let root = match root {
+                Some(root) => root,
+                None => current_dir_or_error()?,
+            };
             match session.as_str() {
                 structured_refactor::CRUNCH_TO_MANTLE_SESSION_ID => {
                     let plan = structured_refactor::apply_crunch_to_mantle(&root, &store_prefixes)
@@ -4866,202 +5148,13 @@ fn plan_refactor_session(
 ) -> Result<structured_refactor::RefactorPlan, RunError> {
     match session {
         structured_refactor::CRUNCH_TO_MANTLE_SESSION_ID => {
-            Ok(structured_refactor::plan_crunch_to_mantle(root, store_prefixes))
+            structured_refactor::plan_crunch_to_mantle(root, store_prefixes)
+                .map_err(|error| RunError::Internal(error.to_string()))
         }
         _ => Err(RunError::Internal(
             structured_refactor::RefactorError::UnknownSession(session.to_string()).to_string(),
         )),
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum SemanticGraphQueryKind {
-    Graph,
-    Why,
-    Dependents,
-}
-
-fn run_semantic_graph_command(
-    ctx: &RunContext,
-    input: command_input::SemanticGraphCommandInput<'_>,
-) -> Result<(), RunError> {
-    if input.target.is_empty() {
-        return Err(RunError::Internal("semantic graph target must not be empty".to_string()));
-    }
-    debug_assert!(!input.target.is_empty());
-    debug_assert!(ctx.store_prefix.starts_with('/'));
-    let path = input
-        .graph_file
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| ctx.resolved_state_dir.join("semantic-graph.json"));
-    let graph = load_semantic_graph(ctx, &path)?;
-    let request = input.command_request();
-    let rendered = execute_semantic_graph_query(ctx, &graph, &request)?;
-    println!("{rendered}");
-    Ok(())
-}
-
-fn load_semantic_graph(ctx: &RunContext, path: &Path) -> Result<semantic_graph::SemanticGraph, RunError> {
-    match semantic_graph::SemanticGraph::load(path) {
-        Ok(graph) => Ok(graph),
-        Err(semantic_graph::SemanticGraphError::Incomplete(diag)) => {
-            report_incomplete_semantic_graph(ctx, &diag)?;
-            Err(RunError::Reported(1))
-        }
-        Err(err) => Err(RunError::Internal(err.to_string())),
-    }
-}
-
-fn report_incomplete_semantic_graph(
-    ctx: &RunContext,
-    diag: &semantic_graph::IncompleteGraphDiagnostic,
-) -> Result<(), RunError> {
-    if ctx.json {
-        let rendered = serde_json::to_string_pretty(diag).map_err(|err| RunError::Internal(err.to_string()))?;
-        println!("{rendered}");
-    } else {
-        eprintln!(
-            "incomplete semantic graph for {} `{}`: missing {}",
-            diag.query,
-            diag.target,
-            diag.missing.join(", ")
-        );
-    }
-    Ok(())
-}
-
-/// Convert one observed entity count into the typed fact width.
-fn graph_query_fact_count(observed: usize) -> Result<u32, RunError> {
-    u32::try_from(observed).map_err(|_| RunError::Internal("semantic graph entity count exceeds u32".to_string()))
-}
-
-/// One observed fact set handed to the contract for classification.
-struct SemanticGraphObservedFacts<'a> {
-    kind: mantle_application_contract::GraphQueryKind,
-    facts: mantle_application_contract::GraphQueryFacts<'a>,
-}
-
-impl mantle_application_contract::GraphQueryPort for SemanticGraphObservedFacts<'_> {
-    fn query(
-        &mut self,
-        request: &mantle_application_contract::GraphQueryRequest,
-    ) -> Result<mantle_application_contract::GraphQueryFacts<'_>, mantle_application_contract::CapabilityError> {
-        if request.kind != self.kind {
-            return Err(mantle_application_contract::CapabilityError::new(
-                "graph-query-kind-mismatch",
-                "observed facts do not match the requested query kind",
-            ));
-        }
-        debug_assert!(request.kind == self.kind);
-        debug_assert!(!request.target.is_empty());
-        Ok(self.facts)
-    }
-}
-
-/// Classify one observed query through the contract before anything is reported.
-fn classify_observed_graph_query(
-    request: &mantle_application_contract::GraphQueryRequest,
-    plan: &mantle_application_contract::EffectPlan,
-    facts: mantle_application_contract::GraphQueryFacts<'_>,
-) -> Result<(), RunError> {
-    use mantle_application_contract::GraphQueryPort as _;
-    let mut port = SemanticGraphObservedFacts {
-        kind: request.kind,
-        facts,
-    };
-    let observed = port
-        .query(request)
-        .map_err(|error| RunError::Internal(format!("{}: {}", error.code, error.detail)))?;
-    match mantle_application_contract::classify_graph_query(plan, &observed) {
-        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
-        other => {
-            Err(RunError::Internal(format!("semantic graph query observations were not all successful: {other:?}")))
-        }
-    }
-}
-
-fn execute_semantic_graph_query(
-    ctx: &RunContext,
-    graph: &semantic_graph::SemanticGraph,
-    request: &mantle_application_contract::GraphQueryRequest,
-) -> Result<String, RunError> {
-    if let Some(blocker) = mantle_application_contract::validate_graph_query(request).first() {
-        return Err(RunError::Internal(format!("{}: {}", blocker.code, blocker.message)));
-    }
-    // Resolve aliases from the admitted graph before executing the query. The
-    // returned query result supplies the actual identity independently.
-    let expected_target = graph.canonical_identity(&request.target).unwrap_or(&request.target);
-    let plan = mantle_application_contract::graph_query_effect_plan(expected_target)
-        .map_err(|error| RunError::Internal(format!("{}: {}", error.code, error.detail)))?;
-    match request.kind {
-        mantle_application_contract::GraphQueryKind::Graph => {
-            let result = graph
-                .graph_for_root(&request.target)
-                .map_err(|err| report_semantic_graph_query_error_value(ctx, err))?;
-            let facts = mantle_application_contract::GraphQueryFacts {
-                observed_target: &result.root,
-                nodes: graph_query_fact_count(result.nodes.len())?,
-                edges: graph_query_fact_count(result.edges.len())?,
-                aliases: graph_query_fact_count(result.aliases.len())?,
-                dependents: 0,
-            };
-            classify_observed_graph_query(request, &plan, facts)?;
-            presentation::semantic_graph::render_graph_result(ctx.output_format(), &result)
-        }
-        mantle_application_contract::GraphQueryKind::Why => {
-            let result = graph.why(&request.target).map_err(|err| report_semantic_graph_query_error_value(ctx, err))?;
-            let facts = mantle_application_contract::GraphQueryFacts {
-                observed_target: &result.target,
-                nodes: graph_query_fact_count(result.sources.len())?,
-                edges: graph_query_fact_count(result.providers.len())?,
-                aliases: graph_query_fact_count(result.proof_receipts.len())?,
-                dependents: graph_query_fact_count(result.release_evidence.len())?,
-            };
-            classify_observed_graph_query(request, &plan, facts)?;
-            presentation::semantic_graph::render_why_result(ctx.output_format(), &result)
-        }
-        mantle_application_contract::GraphQueryKind::Dependents => {
-            let result =
-                graph.dependents(&request.target).map_err(|err| report_semantic_graph_query_error_value(ctx, err))?;
-            let facts = mantle_application_contract::GraphQueryFacts {
-                observed_target: &result.target,
-                nodes: graph_query_fact_count(result.dependents.len())?,
-                edges: 0,
-                aliases: 0,
-                dependents: graph_query_fact_count(result.dependents.len())?,
-            };
-            classify_observed_graph_query(request, &plan, facts)?;
-            presentation::semantic_graph::render_dependents_result(ctx.output_format(), &result)
-        }
-    }
-}
-
-fn report_semantic_graph_query_error_value(ctx: &RunContext, err: semantic_graph::SemanticGraphError) -> RunError {
-    match report_semantic_graph_query_error(ctx, err) {
-        Ok(()) => RunError::Internal("semantic graph error reporting returned success".to_string()),
-        Err(error) => error,
-    }
-}
-
-fn report_semantic_graph_query_error(
-    ctx: &RunContext,
-    err: semantic_graph::SemanticGraphError,
-) -> Result<(), RunError> {
-    if let semantic_graph::SemanticGraphError::Incomplete(diag) = err {
-        if ctx.json {
-            let rendered = serde_json::to_string_pretty(&diag).map_err(|err| RunError::Internal(err.to_string()))?;
-            println!("{rendered}");
-        } else {
-            eprintln!(
-                "incomplete semantic graph for {} `{}`: missing {}",
-                diag.query,
-                diag.target,
-                diag.missing.join(", ")
-            );
-        }
-        return Err(RunError::Reported(1));
-    }
-    Err(RunError::Internal(err.to_string()))
 }
 
 fn run_transcript_command(action: TranscriptAction, ctx: &RunContext) -> Result<(), RunError> {
@@ -5091,13 +5184,15 @@ fn run_doctor_command(
         profile,
         store_dir: &ctx.store,
         state_dir: &ctx.resolved_state_dir,
-    });
+    })
+    .map_err(|error| RunError::Internal(format!("{}: {}", error.code, error.detail)))?;
+    let readiness = readiness_socket.map(remote_build::operation::query_readiness).transpose()?;
+    let rendered_readiness = readiness
+        .map(|report| serde_json::to_string(&report))
+        .transpose()
+        .map_err(|error| RunError::Internal(format!("rendering live service readiness: {error}")))?;
     presentation::diagnostics::emit_doctor_report(&doctor_result, ctx.output_format())?;
-    if let Some(socket) = readiness_socket {
-        let readiness = remote_build::live_state::daemon::query_readiness(socket)
-            .map_err(|error| RunError::Internal(format!("querying live service readiness: {error}")))?;
-        let rendered = serde_json::to_string(&readiness)
-            .map_err(|error| RunError::Internal(format!("rendering live service readiness: {error}")))?;
+    if let Some(rendered) = rendered_readiness {
         eprintln!("{rendered}");
     }
     doctor_report_result(doctor_result.ok)
@@ -5108,15 +5203,8 @@ fn doctor_report_result(is_ok: bool) -> Result<(), RunError> {
 }
 
 fn run_stage0_inventory_command(ctx: &RunContext, output: &Path) -> Result<(), RunError> {
-    let output_path = if output.is_absolute() {
-        output.to_path_buf()
-    } else {
-        current_dir_or_error()?.join(output)
-    };
-    let inventory = protected_exec::write_generated_stage0_inventory_from_env(&output_path)
-        .map_err(|err| RunError::Build(format!("generating stage0 inventory from explicit seed paths: {err}")))?;
+    let (output_path, inventory, risks) = bootstrap_operation::generate_inventory(output)?;
     let inventory_digest_blake3 = protected_exec::stage0_inventory_digest_blake3(&inventory);
-    let risks = protected_exec::seed_closure_risk_report(&inventory);
     debug_assert!(output_path.is_absolute());
     debug_assert_eq!(inventory_digest_blake3.len(), blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE));
     if ctx.json {
@@ -5161,34 +5249,7 @@ fn run_eval(
     roots: &[String],
     all_roots: bool,
 ) -> Result<(), RunError> {
-    match (budget_policy, budget_report) {
-        (Some(policy), Some(report)) => {
-            let selection = if all_roots {
-                evaluator_budget::EvaluationSelection::AllRoots
-            } else if roots.is_empty() {
-                evaluator_budget::EvaluationSelection::WholeValue
-            } else {
-                evaluator_budget::EvaluationSelection::SelectedRoots(roots.to_vec())
-            };
-            let result = evaluator_budget::run_budgeted_file(file, import_paths, policy, report, selection)?;
-            if let Some(error) = evaluator_budget::terminal_failure(&result) {
-                return Err(error);
-            }
-            let json = result
-                .output_json
-                .ok_or_else(|| RunError::Internal("evaluation worker succeeded without output".to_string()))?;
-            println!("{json}");
-            Ok(())
-        }
-        (None, None) => {
-            let nickel_search_dirs = build_import_paths(import_paths)?;
-            let json = crunch_eval::evaluate_to_json(file, &nickel_search_dirs)
-                .map_err(|error| RunError::Eval(error.to_string()))?;
-            println!("{json}");
-            Ok(())
-        }
-        _ => Err(RunError::Eval("evaluation budget policy and report path must be provided together".to_string())),
-    }
+    evaluation_cmd::run(file, import_paths, budget_policy, budget_report, roots, all_roots)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -5250,11 +5311,13 @@ struct BuildCommandInput<'a> {
     fix: bool,
     plan: bool,
     watch: bool,
+    incremental: bool,
     offline_source_preflight: bool,
     interchange_dir: Option<&'a Path>,
     offline_source_manifest: Option<&'a Path>,
     offline_source_manifest_blake3: Option<&'a str>,
     causal_trace: bool,
+    compile_driver_runtime: Option<&'a Path>,
     output_mode: BuildOutputMode,
     jobs: Option<u32>,
     substituters: &'a str,
@@ -5283,12 +5346,14 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
         fix,
         plan,
         watch,
+        incremental,
         offline_source_preflight,
         offline_source_manifest,
         offline_source_manifest_blake3,
         interchange_dir,
         causal_trace,
         evaluation_stream,
+        compile_driver_runtime,
         jobs,
         substituters,
         no_substitute,
@@ -5318,11 +5383,13 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
         fix: *fix,
         plan: *plan,
         watch: *watch,
+        incremental: *incremental,
         offline_source_preflight: *offline_source_preflight,
         offline_source_manifest: offline_source_manifest.as_deref(),
         offline_source_manifest_blake3: offline_source_manifest_blake3.as_deref(),
         interchange_dir: interchange_dir.as_deref(),
         causal_trace: *causal_trace,
+        compile_driver_runtime: compile_driver_runtime.as_deref(),
         output_mode: if *evaluation_stream {
             BuildOutputMode::EvaluationStream
         } else {
@@ -5369,12 +5436,14 @@ struct PreparedBuildCommand<'a> {
     import_path_args: &'a [PathBuf],
     fix: bool,
     watch: bool,
+    incremental: bool,
     plan: bool,
     offline_source_preflight: bool,
     offline_source_manifest: Option<&'a Path>,
     offline_source_manifest_blake3: Option<&'a str>,
     interchange_dir: Option<&'a Path>,
     causal_trace: bool,
+    compile_driver_runtime: Option<crunch_build::compile_driver::CompileDriverRuntime>,
     output_mode: BuildOutputMode,
     max_jobs: u32,
     substituter_urls: Vec<String>,
@@ -5422,13 +5491,13 @@ fn run_build_command<'a>(ctx: &'a RunContext, input: BuildCommandInput<'a>) -> R
             return Err(RunError::Build("--watch requires an explicit file-backed Nickel target".to_string()));
         }
     }
-    crunch_store::StoreConfig::preflight_backend_identity_for(
+    build_application::preflight_backend(
         ctx.store_backend,
         &ctx.resolved_state_dir,
         &ctx.store_prefix,
         &ctx.base_state_dirs,
-    )
-    .map_err(|error| RunError::Internal(format!("opening store: {error}")))?;
+        ctx.store_source_admission().as_deref(),
+    )?;
     let prepared = prepare_build_command(ctx, input)?;
     match &prepared.target {
         project_build::BuildTarget::File(path) => run_file_build_target(&prepared, path),
@@ -5444,6 +5513,19 @@ fn prepare_build_command<'a>(
 ) -> Result<PreparedBuildCommand<'a>, RunError> {
     debug_assert!(ctx.store_prefix.starts_with('/'));
     debug_assert!(!input.substituters.trim().is_empty() || input.no_substitute);
+    if input.compile_driver_runtime.is_some()
+        && (input.plan
+            || input.watch
+            || input.remote_builder.is_some()
+            || input.hermeticity.strict_hermetic
+            || input.offline_source_manifest.is_some())
+    {
+        return Err(RunError::Build(
+            "--compile-driver-runtime requires local non-proof execution without --plan or --watch".into(),
+        ));
+    }
+    let compile_driver_runtime =
+        input.compile_driver_runtime.map(build_application::read_compile_driver_runtime).transpose()?;
     if input.offline_source_manifest.is_some() != input.offline_source_manifest_blake3.is_some() {
         return Err(RunError::Internal(
             "offline vendor cache requires both manifest path and out-of-band BLAKE3".to_string(),
@@ -5490,6 +5572,7 @@ fn prepare_build_command<'a>(
                 observability_config_path: input.remote_observability_config,
             },
             ctx,
+            None,
         )?
     };
     if remote_selection.is_some() && input.fix {
@@ -5501,12 +5584,14 @@ fn prepare_build_command<'a>(
         import_path_args: input.import_paths,
         fix: input.fix,
         watch: input.watch,
+        incremental: input.incremental,
         plan: input.plan,
         offline_source_preflight: input.offline_source_preflight,
         offline_source_manifest: input.offline_source_manifest,
         offline_source_manifest_blake3: input.offline_source_manifest_blake3,
         interchange_dir: input.interchange_dir,
         causal_trace: input.causal_trace,
+        compile_driver_runtime,
         output_mode: input.output_mode,
         max_jobs: crunch_pipeline::resolve_max_jobs(input.jobs),
         substituter_urls,
@@ -5593,6 +5678,7 @@ fn run_file_build_plan(
         state_dir: &prepared.ctx.resolved_state_dir,
         backend: prepared.ctx.store_backend,
         base_state_dirs: &prepared.ctx.base_state_dirs,
+        source_admission: prepared.ctx.store_source_admission().as_ref(),
         store_dir: &prepared.ctx.store_prefix,
         substituter_urls: &prepared.substituter_urls,
         signing_key_path: prepared.signing_key,
@@ -5615,22 +5701,26 @@ fn run_local_file_build(
     debug_assert!(prepared.ctx.store_prefix.starts_with('/'));
     debug_assert!(!path.as_os_str().is_empty());
     if prepared.watch {
-        return build_cmd::cmd_build_watch(build_cmd::LocalBuildCommandConfig {
-            file: path,
-            import_paths: import_entries,
-            output_dir: &prepared.ctx.store,
-            state_dir: &prepared.ctx.resolved_state_dir,
-            store_dir: &prepared.ctx.store_prefix,
-            backend: prepared.ctx.store_backend,
-            verbose: prepared.ctx.verbose,
-            max_jobs: prepared.max_jobs,
-            substituter_urls: &prepared.substituter_urls,
-            signing_key_path: prepared.signing_key,
-            trusted_public_keys: prepared.parsed_trusted.as_deref(),
-            trust_unsigned: prepared.trust_unsigned,
-            hermeticity_mode: prepared.hermeticity_mode,
-            base_state_dirs: prepared.ctx.base_state_dirs.clone(),
-        });
+        return build_cmd::cmd_build_watch(
+            build_cmd::LocalBuildCommandConfig {
+                file: path,
+                import_paths: import_entries,
+                output_dir: &prepared.ctx.store,
+                state_dir: &prepared.ctx.resolved_state_dir,
+                store_dir: &prepared.ctx.store_prefix,
+                backend: prepared.ctx.store_backend,
+                verbose: prepared.ctx.verbose,
+                max_jobs: prepared.max_jobs,
+                substituter_urls: &prepared.substituter_urls,
+                signing_key_path: prepared.signing_key,
+                trusted_public_keys: prepared.parsed_trusted.as_deref(),
+                trust_unsigned: prepared.trust_unsigned,
+                hermeticity_mode: prepared.hermeticity_mode,
+                base_state_dirs: prepared.ctx.base_state_dirs.clone(),
+                source_admission: prepared.ctx.store_source_admission(),
+            },
+            prepared.incremental,
+        );
     }
     let source_overrides = source_bundle::merge_source_fetch_overrides(
         source_fetch_plan.map(|plan| plan.overrides.clone()).unwrap_or_default(),
@@ -5659,6 +5749,8 @@ fn run_local_file_build(
             source_overrides,
             prepared.ctx.base_state_dirs.clone(),
             None,
+            prepared.compile_driver_runtime.clone(),
+            prepared.ctx.store_source_admission(),
         );
     }
     build_cmd::cmd_build(
@@ -5680,6 +5772,8 @@ fn run_local_file_build(
         prepared.output_mode,
         prepared.interchange_dir,
         prepared.causal_trace,
+        prepared.compile_driver_runtime.clone(),
+        prepared.ctx.store_source_admission(),
     )
 }
 
@@ -5687,9 +5781,9 @@ fn run_project_build_target(prepared: &PreparedBuildCommand<'_>) -> Result<(), R
     debug_assert!(prepared.ctx.store_prefix.starts_with('/'));
     debug_assert!(!matches!(prepared.target, project_build::BuildTarget::File(_)));
     let cwd = current_dir_or_error()?;
-    let resolved = project_build::resolve_project_target(&prepared.target, &cwd, prepared.import_path_args)?;
+    let resolved = build_application::resolve_project_target(&prepared.target, &cwd, prepared.import_path_args)?;
     let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
-    let root_registration = project_output_root_registration(&resolved)?;
+    let root_registration = build_application::project_output_root_registration(&resolved)?;
     let mut nickel_search_dirs = build_import_paths(&[])?;
     nickel_search_dirs.extend(resolved.import_paths);
     let trust = source_bundle::SourceStoreTrust {
@@ -5743,87 +5837,10 @@ fn run_project_build_target(prepared: &PreparedBuildCommand<'_>) -> Result<(), R
     })
 }
 
-const PROJECT_RETENTION_IDENTITY_DOMAIN: &[u8] = b"mantle.project.retention-identity.v1";
-const CURRENT_PROJECT_LOCK_FILE: &str = "mantle.lock";
-const LEGACY_PROJECT_LOCK_FILE: &str = "crunch.lock";
-const PROJECT_OWNER_SCOPE: &str = "project";
-
-fn project_output_root_registration(
-    project: &project_build::ResolvedProject,
-) -> Result<crunch_store::RootRegistration, RunError> {
-    let project_dir = project.root_file.parent().ok_or_else(|| {
-        RunError::Internal(format!("project root file has no parent: {}", project.root_file.display()))
-    })?;
-    let manifest_bytes = project_retention_fact::read_bounded_project_retention_fact(&project.root_file)?;
-    let current_lock = project_dir.join(CURRENT_PROJECT_LOCK_FILE);
-    let legacy_lock = project_dir.join(LEGACY_PROJECT_LOCK_FILE);
-    if current_lock.exists() && legacy_lock.exists() {
-        return Err(RunError::Internal(format!(
-            "both {CURRENT_PROJECT_LOCK_FILE} and {LEGACY_PROJECT_LOCK_FILE} exist in {}",
-            project_dir.display()
-        )));
-    }
-    let lock_bytes = if current_lock.exists() {
-        Some(project_retention_fact::read_bounded_project_retention_fact(&current_lock)?)
-    } else if legacy_lock.exists() {
-        Some(project_retention_fact::read_bounded_project_retention_fact(&legacy_lock)?)
-    } else {
-        None
-    };
-    let project_identity = project_retention_identity(&manifest_bytes);
-    let generation_identity = project_generation_identity(lock_bytes.as_deref());
-    Ok(crunch_store::RootRegistration {
-        class: crunch_store::GcRootClass::ProjectOutputGeneration,
-        owner_scope: PROJECT_OWNER_SCOPE.to_string(),
-        project_identity: Some(project_identity),
-        selector: Some(project_retention_selector(&project.target)),
-        generation: None,
-        generation_identity: Some(generation_identity),
-        lease: None,
-        removal_requested: false,
-    })
-}
-
-fn project_retention_identity(manifest_bytes: &[u8]) -> String {
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(PROJECT_RETENTION_IDENTITY_DOMAIN);
-    hash_project_retention_fact(&mut hasher, manifest_bytes);
-    format!("b3:{}", hasher.finalize().to_hex())
-}
-
-fn project_generation_identity(lock_bytes: Option<&[u8]>) -> String {
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(b"mantle.project.retention-generation.v1");
-    match lock_bytes {
-        Some(lock_bytes) => {
-            hasher.update(&[1]);
-            hash_project_retention_fact(&mut hasher, lock_bytes);
-        }
-        None => {
-            hasher.update(&[0]);
-        }
-    }
-    format!("b3:{}", hasher.finalize().to_hex())
-}
-
-fn hash_project_retention_fact(hasher: &mut blake3::Hasher, bytes: &[u8]) {
-    hasher.update(&(bytes.len() as u128).to_be_bytes());
-    hasher.update(bytes);
-}
-
-fn project_retention_selector(target: &project_build::ProjectTarget) -> String {
-    match target {
-        project_build::ProjectTarget::Default => "default".to_string(),
-        project_build::ProjectTarget::Attribute(segments) => segments.join("."),
-        project_build::ProjectTarget::AllPackages => "all-packages".to_string(),
-        project_build::ProjectTarget::AllChecks => "all-checks".to_string(),
-        project_build::ProjectTarget::DefaultShell => "default-shell".to_string(),
-        project_build::ProjectTarget::NamedShell(name) => format!("shell.{name}"),
-    }
-}
-
+#[derive(Clone)]
 struct RemoteBuildSelection {
     options: remote_build::RemoteClientBuildOptions,
+    endpoint_binding_config: std::sync::Arc<remote_build::endpoint_config::RemoteEndpointBindingConfig>,
     worker_generation: u64,
     worker_concurrency: u32,
     resource_inventory: Option<crunch_build::distributed::RemoteWorkerResourceInventory>,
@@ -5880,6 +5897,7 @@ impl RemoteBuildSelectionInput<'_> {
 fn remote_build_selection(
     input: RemoteBuildSelectionInput<'_>,
     ctx: &RunContext,
+    override_binding: Option<std::sync::Arc<remote_build::endpoint_config::RemoteEndpointBindingConfig>>,
 ) -> Result<Option<RemoteBuildSelection>, RunError> {
     debug_assert!(ctx.store_prefix.starts_with('/'));
     debug_assert!(!ctx.resolved_state_dir.as_os_str().is_empty());
@@ -5889,6 +5907,13 @@ fn remote_build_selection(
     let builder = input
         .builder
         .ok_or_else(|| RunError::Internal("remote build dispatch requires --builder".to_string()))?;
+    let endpoint_binding_config = override_binding
+        .or_else(|| ctx.remote_endpoint_admission.clone())
+        .ok_or_else(|| RunError::Internal("remote-production-endpoint-binding-config-required".into()))?;
+    let endpoint_binding = endpoint_binding_config.verify_build(unix_time_now_s()?, &ctx.store_prefix)?;
+    if endpoint_binding.spec.name != builder {
+        return Err(RunError::Internal("remote-production-endpoint-binding-mismatch".into()));
+    }
     let ticket_fd = input
         .ticket_fd
         .ok_or_else(|| RunError::Internal("remote build dispatch requires --ticket-fd".to_string()))?;
@@ -5928,6 +5953,7 @@ fn remote_build_selection(
     );
     let options = remote_build::RemoteClientBuildOptions {
         store_prefix: ctx.store_prefix.clone(),
+        endpoint_binding: Some(endpoint_binding),
         ticket,
         builder: remote_build::RemoteStdioBuilderCommand {
             endpoint_id: builder.to_string(),
@@ -5942,6 +5968,7 @@ fn remote_build_selection(
     };
     Ok(Some(RemoteBuildSelection {
         options,
+        endpoint_binding_config,
         worker_generation,
         worker_concurrency,
         resource_inventory,
@@ -6058,6 +6085,7 @@ struct RemoteBuildCommandRequest<'a> {
 }
 
 fn run_remote_build_command(request: RemoteBuildCommandRequest<'_>) -> Result<(), RunError> {
+    let operation_plan = remote_build::operation::plan(remote_build::operation::RemoteOperation::Build)?;
     debug_assert!(request.ctx.store_prefix.starts_with('/'));
     debug_assert!(!request.ctx.store.as_os_str().is_empty());
     let expression_file;
@@ -6070,6 +6098,7 @@ fn run_remote_build_command(request: RemoteBuildCommandRequest<'_>) -> Result<()
     };
     let inputs = evaluate_remote_client_derivation_inputs(file, request.import_entries, &request.ctx.store_prefix)?;
     validate_portable_remote_inputs(request.selection, &inputs, &request.ctx.store_prefix)?;
+    let expected_outputs = inputs.iter().map(|input| input.nix_derivation.outputs.len()).sum();
     let build_outcome = run_remote_build_dispatches(
         request.selection,
         inputs,
@@ -6078,7 +6107,7 @@ fn run_remote_build_command(request: RemoteBuildCommandRequest<'_>) -> Result<()
         &request.ctx.store_prefix,
         request.ctx.store_backend,
     )?;
-    classify_remote_build_imports(&build_outcome)?;
+    classify_remote_build_imports(&build_outcome, &operation_plan, expected_outputs)?;
     presentation::remote_client::print_remote_client_build_report(
         &build_outcome,
         file,
@@ -6185,6 +6214,7 @@ fn cmd_remote_failure_debug_replay(
     input: RemoteFailureReplayCommandInput<'_>,
     ctx: &RunContext,
 ) -> Result<(), RunError> {
+    let operation_plan = remote_build::operation::plan(remote_build::operation::RemoteOperation::Replay)?;
     if input.bundle_selector.is_empty() {
         return Err(RunError::Internal("remote failure replay bundle selector must not be empty".to_string()));
     }
@@ -6220,8 +6250,16 @@ fn cmd_remote_failure_debug_replay(
     )?;
     let trusted_output_keys =
         remote_trusted_builder_keys(input.trusted_builder_keys, input.builder_program, &input.secret_request)?;
+    let binding_config = ctx.required_remote_binding()?;
+    let binding_now = remote_build::remote_cli_now_unix_s(&request.request_id).map_err(RunError::Internal)?;
+    let endpoint_binding = binding_config.verify_build(binding_now, &ctx.store_prefix)?;
+    if endpoint_binding.spec.name != input.builder {
+        return Err(RunError::Internal("remote-production-endpoint-binding-mismatch".into()));
+    }
+    let _endpoint_admission = binding_config.admit_build(&endpoint_binding, binding_now, &ctx.store_prefix)?;
     let options = remote_build::RemoteClientBuildOptions {
         store_prefix: ctx.store_prefix.clone(),
+        endpoint_binding: Some(endpoint_binding),
         ticket: parsed_ticket,
         builder: remote_build::RemoteStdioBuilderCommand {
             endpoint_id: input.builder.to_string(),
@@ -6236,16 +6274,19 @@ fn cmd_remote_failure_debug_replay(
     };
     let rt = tokio::runtime::Runtime::new()
         .map_err(|error| RunError::Internal(format!("remote failure replay tokio runtime: {error}")))?;
-    let result = rt.block_on(run_remote_failure_debug_replay_async(RemoteFailureReplayExecutionInput {
-        bundle,
-        policy,
-        request,
-        options,
-        output_dir: &ctx.store,
-        state_dir: &ctx.resolved_state_dir,
-        store_prefix: &ctx.store_prefix,
-        backend: ctx.store_backend,
-    }))?;
+    let result = rt.block_on(run_remote_failure_debug_replay_async(
+        RemoteFailureReplayExecutionInput {
+            bundle,
+            policy,
+            request,
+            options,
+            output_dir: &ctx.store,
+            state_dir: &ctx.resolved_state_dir,
+            store_prefix: &ctx.store_prefix,
+            backend: ctx.store_backend,
+        },
+        &operation_plan,
+    ))?;
     presentation::reports::emit_remote_failure_replay_result(&result, ctx.output_format())
 }
 
@@ -6276,6 +6317,7 @@ struct CompletedRemoteFailureReplay {
 
 async fn run_remote_failure_debug_replay_async(
     input: RemoteFailureReplayExecutionInput<'_>,
+    operation_plan: &remote_build::operation::RemoteOperationPlan,
 ) -> Result<serde_json::Value, RunError> {
     debug_assert!(input.store_prefix.starts_with('/'));
     debug_assert!(!input.state_dir.as_os_str().is_empty());
@@ -6294,7 +6336,7 @@ async fn run_remote_failure_debug_replay_async(
         remote_build::acquire_remote_coordinator_mutation_guard(input.state_dir).map_err(RunError::Internal)?;
     let bundle = input.bundle.clone();
     let mut runtime = prepare_remote_failure_replay_runtime(input).await?;
-    let completed = execute_remote_failure_replay(&mut runtime).await?;
+    let completed = execute_remote_failure_replay(&mut runtime, operation_plan).await?;
     complete_remote_failure_replay_report(bundle, &mut runtime, completed)
 }
 
@@ -6311,6 +6353,7 @@ async fn open_remote_failure_replay_store(
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
         store_dir: input.store_prefix.to_string(),
         base_state_dirs: Vec::new(),
+        source_admission: None,
     })
     .await
     .map_err(|error| RunError::Internal(format!("opening replay store: {error}")))
@@ -6383,6 +6426,7 @@ async fn prepare_remote_failure_replay_runtime(
 
 async fn execute_remote_failure_replay(
     runtime: &mut RemoteFailureReplayRuntime,
+    operation_plan: &remote_build::operation::RemoteOperationPlan,
 ) -> Result<CompletedRemoteFailureReplay, RunError> {
     debug_assert_eq!(runtime.dispatch.client.request.request_id, runtime.replay_request.request_id);
     debug_assert!(!runtime.dispatch.client.trusted_output_keys.is_empty());
@@ -6451,6 +6495,11 @@ async fn execute_remote_failure_replay(
             ));
         }
     };
+    remote_build::operation::classify(operation_plan, remote_build::operation::RemoteOperationFacts::Outputs {
+        expected: runtime.replay_request.expected_outputs.len(),
+        admitted: output_admission.outputs.len(),
+        unevidenced: output_admission.outputs.iter().filter(|output| !is_evidenced_remote_output(output)).count(),
+    })?;
     complete_remote_failure_replay_attempt(runtime, &admission)?;
     Ok(CompletedRemoteFailureReplay {
         admission,
@@ -6924,6 +6973,7 @@ struct PreparedRemoteDispatch {
     telemetry: crunch_build::distributed::RemoteTelemetryBuffer,
     telemetry_policy: crunch_build::distributed::RemoteTelemetryPolicy,
     request: remote_build::ConcreteBuildRequest,
+    _endpoint_admission: remote_build::endpoint::EndpointAdmissionGuard,
 }
 
 struct RemoteDispatchPreparationInput<'a> {
@@ -6932,6 +6982,7 @@ struct RemoteDispatchPreparationInput<'a> {
     coordinator: &'a mut remote_build::RemoteCoordinatorState,
     input: remote_build::RemoteClientDerivationInput,
     priority_competing_goal_count: Option<u32>,
+    resource_requirements: Option<&'a remote_build::RemoteResourceRequirements>,
 }
 
 struct RemoteDispatchExecutionInput<'a> {
@@ -6945,19 +6996,22 @@ struct RemoteDispatchExecutionInput<'a> {
 struct RemoteLiveBuildObservation {
     owner_run_id: String,
     owned_jobs: std::collections::BTreeSet<crunch_remote_core::attempt::RemoteJobId>,
+    owned_requests: std::collections::BTreeSet<String>,
     present_workers: std::collections::BTreeSet<String>,
     publisher: remote_build::live_state::producer::BestEffortLivePublisher,
     degraded_reported: bool,
 }
 
 impl RemoteLiveBuildObservation {
-    fn start() -> Option<Self> {
-        let socket = build_cmd::configured_live_socket()?;
+    fn start() -> Result<Option<Self>, RunError> {
+        let Some(socket) = build_cmd::configured_live_socket()? else {
+            return Ok(None);
+        };
         let nonce = match remote_build::remote_live_owner_nonce() {
             Ok(nonce) => nonce,
             Err(error) => {
                 eprintln!("live build observation degraded: owner nonce unavailable: {error}");
-                return None;
+                return Ok(None);
             }
         };
         let owner_run_id = format!("remote-{}-{nonce}", std::process::id());
@@ -6967,28 +7021,30 @@ impl RemoteLiveBuildObservation {
                 Ok(publisher) => publisher,
                 Err(error) => {
                     eprintln!("live build observation degraded: invalid owner: {error:?}");
-                    return None;
+                    return Ok(None);
                 }
             };
-        Some(Self {
+        Ok(Some(Self {
             owner_run_id,
             owned_jobs: std::collections::BTreeSet::new(),
+            owned_requests: std::collections::BTreeSet::new(),
             // Configured registration is not evidence of an active worker session.
             present_workers: std::collections::BTreeSet::new(),
             publisher,
             degraded_reported: false,
-        })
+        }))
     }
 
     fn observe(&mut self, state: &remote_build::RemoteCoordinatorState) {
         if self.degraded_reported {
             return;
         }
-        let snapshot = remote_build::live_state::normalize_remote_live_facts_for_jobs(
+        let snapshot = remote_build::live_state::normalize_remote_live_facts_for_requests(
             &self.owner_run_id,
             state,
             &self.present_workers,
             &self.owned_jobs,
+            &self.owned_requests,
         );
         let observation = snapshot.and_then(|snapshot| self.publisher.observe(snapshot));
         match observation {
@@ -7034,13 +7090,10 @@ async fn run_remote_build_dispatches_async(
     )
     .preflight_backend_identity()
     .map_err(|error| RunError::Internal(format!("opening local store for remote build dispatch: {error}")))?;
-    let _coordinator_mutation_guard =
-        remote_build::acquire_remote_coordinator_mutation_guard(state_dir).map_err(RunError::Internal)?;
     let mut store = open_remote_dispatch_store(output_dir, state_dir, store_prefix, backend).await?;
-    let mut coordinator = remote_build::load_coordinator_state(state_dir)?;
     let priority_plan = plan_remote_dispatch_priority(selection, &inputs)?;
     let competing_goal_count = priority_plan.evidence.competing_goal_count;
-    let mut live = RemoteLiveBuildObservation::start();
+    let mut live = RemoteLiveBuildObservation::start()?;
     let mut input_slots = inputs.into_iter().map(Some).collect::<Vec<_>>();
     let mut accepted_builds = Vec::with_capacity(input_slots.len());
     for (priority_index, selected_input_index) in priority_plan.ordered_input_indices.iter().enumerate() {
@@ -7050,17 +7103,23 @@ async fn run_remote_build_dispatches_async(
             .get_mut(selected_slot)
             .and_then(Option::take)
             .ok_or_else(|| RunError::Internal("remote priority selected missing input".to_string()))?;
+        let coordinator_guard =
+            remote_build::acquire_remote_coordinator_mutation_guard(state_dir).map_err(RunError::Internal)?;
+        let mut coordinator = remote_build::load_coordinator_state(state_dir)?;
         let mut prepared = prepare_remote_dispatch(RemoteDispatchPreparationInput {
             selection,
             state_dir,
             coordinator: &mut coordinator,
             input,
             priority_competing_goal_count: (priority_index == 0).then_some(competing_goal_count),
+            resource_requirements: None,
         })?;
         if let Some(observer) = live.as_mut() {
             observer.owned_jobs.insert(prepared.attempt.job_id.clone());
+            observer.owned_requests.insert(prepared.request.request_id.clone());
             observer.observe(&coordinator);
         }
+        drop(coordinator_guard);
         let accepted_build = execute_remote_dispatch(RemoteDispatchExecutionInput {
             selection,
             state_dir,
@@ -7089,11 +7148,6 @@ async fn run_remote_build_dispatches_async(
     })
 }
 
-/// Independent identity of the completed network-and-store import operation.
-const REMOTE_BUILD_EFFECT: &str = "remote-build-import";
-/// Diagnostic code for a remote import whose outputs lack signed evidence.
-const REMOTE_BUILD_EVIDENCE_CODE: &str = "remote-build-import-evidence-missing";
-
 /// Whether one imported remote output carries the evidence an import claims.
 ///
 /// An imported output is only worth reporting when it has a logical path, a
@@ -7106,49 +7160,23 @@ fn is_evidenced_remote_output(output: &remote_build::RemoteImportedOutput) -> bo
         && !output.artifact_attestation_digest_blake3.is_empty()
 }
 
-/// Whether every imported output across the builds carries its evidence.
-fn are_remote_outputs_evidenced<'a>(outputs: impl IntoIterator<Item = &'a remote_build::RemoteImportedOutput>) -> bool {
-    outputs.into_iter().all(is_evidenced_remote_output)
-}
-
-fn classify_remote_build_imports(report: &remote_build::RemoteClientBuildReport) -> Result<(), RunError> {
-    let plan =
-        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::RemoteExecution, &[
-            mantle_application_contract::EffectSpec {
-                effect_id: REMOTE_BUILD_EFFECT,
-                kind: mantle_application_contract::EffectKind::StoreAccess,
-                limit: mantle_application_contract::EffectMeasure::Calls(1),
-                expected_output: mantle_application_contract::ExpectedOutput::None,
-            },
-        ])
-        .map_err(|error| {
-            RunError::Internal(format!("remote build effect plan rejected: {}: {error:?}", error.code()))
-        })?;
-    let is_evidenced =
-        are_remote_outputs_evidenced(report.imported.iter().flat_map(|build| build.imported.outputs.iter()));
-    let observation = mantle_application_contract::Observation {
-        effect_id: mantle_application_contract::EffectId(String::from(REMOTE_BUILD_EFFECT)),
-        kind: mantle_application_contract::EffectKind::StoreAccess,
-        output: mantle_application_contract::EffectOutput::None,
-        usage: mantle_application_contract::EffectMeasure::Calls(1),
-        status: if is_evidenced {
-            mantle_application_contract::ObservationStatus::Succeeded
-        } else {
-            mantle_application_contract::ObservationStatus::Failed
-        },
-        diagnostics_code: if is_evidenced {
-            None
-        } else {
-            Some(String::from(REMOTE_BUILD_EVIDENCE_CODE))
-        },
-    };
-    match mantle_application_contract::classify_observations(&plan, &[observation]) {
-        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
-        mantle_application_contract::ApplicationOutcome::Failed { .. } => Err(RunError::Internal(
-            "a remote build import admitted an output without signed PathInfo or artifact evidence".to_string(),
-        )),
-        other => Err(RunError::Internal(format!("remote build import observations were inconsistent: {other:?}"))),
-    }
+fn classify_remote_build_imports(
+    report: &remote_build::RemoteClientBuildReport,
+    plan: &remote_build::operation::RemoteOperationPlan,
+    expected_outputs: usize,
+) -> Result<(), RunError> {
+    let admitted = report.imported.iter().map(|build| build.imported.outputs.len()).sum();
+    let unevidenced = report
+        .imported
+        .iter()
+        .flat_map(|build| &build.imported.outputs)
+        .filter(|output| !is_evidenced_remote_output(output))
+        .count();
+    remote_build::operation::classify(plan, remote_build::operation::RemoteOperationFacts::Outputs {
+        expected: expected_outputs,
+        admitted,
+        unevidenced,
+    })
 }
 
 async fn open_remote_dispatch_store(
@@ -7165,6 +7193,7 @@ async fn open_remote_dispatch_store(
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
         store_dir: store_prefix.to_string(),
         base_state_dirs: Vec::new(),
+        source_admission: None,
     })
     .await
     .map_err(|err| RunError::Internal(format!("opening local store for remote build dispatch: {err}")))
@@ -7200,6 +7229,17 @@ fn plan_remote_dispatch_priority(
 fn prepare_remote_dispatch(input: RemoteDispatchPreparationInput<'_>) -> Result<PreparedRemoteDispatch, RunError> {
     debug_assert!(!input.selection.options.builder.endpoint_id.is_empty());
     debug_assert!(input.selection.worker_concurrency > 0);
+    let endpoint_binding = input
+        .selection
+        .options
+        .endpoint_binding
+        .as_ref()
+        .ok_or_else(|| RunError::Internal("remote-production-endpoint-binding-config-required".into()))?;
+    let endpoint_admission = input.selection.endpoint_binding_config.admit_build(
+        endpoint_binding,
+        unix_time_now_s()?,
+        &input.selection.options.store_prefix,
+    )?;
     let telemetry_policy = input.selection.telemetry.telemetry;
     let mut telemetry = empty_remote_telemetry_buffer();
     if let Some(competing_goal_count) = input.priority_competing_goal_count {
@@ -7216,6 +7256,9 @@ fn prepare_remote_dispatch(input: RemoteDispatchPreparationInput<'_>) -> Result<
     );
     let mut plan = remote_build::plan_remote_stdio_client_dispatch(input.input, &input.selection.options)
         .map_err(RunError::Internal)?;
+    if let Some(requirements) = input.resource_requirements {
+        plan.client.request.resource_requirements = Some(requirements.clone());
+    }
     let attempt = remote_build::admit_remote_production_dispatch(
         input.coordinator,
         &plan.client.request,
@@ -7250,6 +7293,7 @@ fn prepare_remote_dispatch(input: RemoteDispatchPreparationInput<'_>) -> Result<
         telemetry,
         telemetry_policy,
         request,
+        _endpoint_admission: endpoint_admission,
     })
 }
 
@@ -7319,11 +7363,16 @@ async fn execute_remote_dispatch(
         telemetry: &mut prepared.telemetry,
         telemetry_policy: prepared.telemetry_policy,
     };
+    // The transport may block for the entire build. Durable observers and
+    // cancellation must be able to transact while it runs.
     let transcript = run_remote_dispatch_child(&mut ports, &prepared.plan.command, &mut session)?;
     for event in &transcript.telemetry.events {
         *ports.telemetry =
             crunch_build::distributed::record_remote_telemetry(ports.telemetry, event.clone(), ports.telemetry_policy);
     }
+    let _coordinator_guard =
+        remote_build::acquire_remote_coordinator_mutation_guard(input.state_dir).map_err(RunError::Internal)?;
+    *ports.coordinator = remote_build::load_coordinator_state(input.state_dir)?;
     let (admission, output_admission) = admit_remote_dispatch_outputs(
         &mut ports,
         input.store,
@@ -7343,6 +7392,9 @@ fn run_remote_dispatch_child(
     match remote_build::run_stdio_remote_child(command, &ports.request.request_id, session) {
         Ok(transcript) => Ok(transcript),
         Err(error) => {
+            let _coordinator_guard =
+                remote_build::acquire_remote_coordinator_mutation_guard(ports.state_dir).map_err(RunError::Internal)?;
+            *ports.coordinator = remote_build::load_coordinator_state(ports.state_dir)?;
             let failure_fact = remote_protocol_failure_fact(&error.to_string());
             let failure_observability = record_remote_failure_observability(RemoteFailureObservabilityInput {
                 export_config: &ports.selection.telemetry,
@@ -7462,11 +7514,22 @@ fn finalize_remote_dispatch(
         remote_build::RemoteProductionTelemetryFact::OutputAdmitted,
         ports.telemetry_policy,
     );
+    let completed_unix_s =
+        remote_build::remote_cli_now_unix_s(&ports.request.request_id).map_err(RunError::Internal)?;
+    remote_build::gateway::record_result(
+        ports.coordinator,
+        ports.attempt,
+        &admission.output_digest_blake3,
+        &admission.outputs,
+        completed_unix_s,
+    )
+    .map_err(RunError::Internal)?;
+    remote_build::gateway::record_usage(ports.coordinator, ports.attempt, &transcript);
     remote_build::complete_remote_production_attempt(
         ports.coordinator,
         ports.attempt,
         &admission.output_digest_blake3,
-        ports.selection.options.now_unix_s.saturating_add(1),
+        completed_unix_s,
     )
     .map_err(|err| RunError::Internal(format!("remote coordinator completion failed: {err}")))?;
     let immutable_log_result = remote_build::append_remote_production_observability_log(
@@ -7847,9 +7910,13 @@ struct LoadedStage0InventoryPolicy {
 
 fn load_stage0_inventory_policy(path: &Path) -> Result<LoadedStage0InventoryPolicy, RunError> {
     let nickel_search_dirs: Vec<OsString> = Vec::new();
-    let inventory: protected_exec::Stage0Inventory =
-        crunch_eval::evaluate_and_deserialize(path, &nickel_search_dirs)
-            .map_err(|e| RunError::Eval(format!("loading stage0 inventory {}: {e}", path.display())))?;
+    let inventory: protected_exec::Stage0Inventory = bootstrap_operation::capability(
+        mantle_application_contract::bootstrap_effects::BootstrapEffect::ReadInput,
+        || {
+            crunch_eval::evaluate_and_deserialize(path, &nickel_search_dirs)
+                .map_err(|e| RunError::Eval(format!("loading stage0 inventory {}: {e}", path.display())))
+        },
+    )?;
     let policy = protected_exec::ProtectedExecPolicy::from_inventory(inventory)
         .map_err(|e| RunError::Internal(format!("validating stage0 inventory {}: {e}", path.display())))?;
     let digest_blake3 = policy.inventory_digest_blake3().to_string();
@@ -7904,6 +7971,26 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
             Ok(())
         }
         BootstrapAction::Capabilities => source_root_capability::cmd_source_root_capabilities(ctx.json),
+        BootstrapAction::TrustReport { proof_root } => {
+            source_built_fixed_point_trust_report::cmd_bootstrap_trust_report(proof_root, ctx.json)
+        }
+        BootstrapAction::SourceBuiltReplay {
+            proof_root,
+            stage_id,
+            capture_fd,
+            expected_proof_digest,
+            expected_action_plan_digest,
+            host_mantle_digest,
+            bwrap,
+        } => source_built_fixed_point_shell::cmd_source_built_replay(
+            proof_root,
+            stage_id,
+            *capture_fd,
+            expected_proof_digest,
+            expected_action_plan_digest,
+            host_mantle_digest,
+            bwrap,
+        ),
         BootstrapAction::ParityReport { require } => {
             bootstrap_parity::cmd_bootstrap_parity_report(Path::new("."), require, ctx.json)
         }
@@ -7984,18 +8071,19 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
                 expected_source_closure_blake3,
                 report,
             )?;
-            let adoption = (*adopt_state).then(|| {
-                full_source_provider::adopt_admitted_full_source_provider(
-                    &prepared.report,
-                    &ctx.store,
-                    &ctx.resolved_state_dir,
-                    &ctx.store_prefix,
-                    ctx.store_backend,
-                )
-            });
+            let adoption = (*adopt_state)
+                .then(|| {
+                    full_source_provider::adopt_admitted_full_source_provider(
+                        &prepared.report,
+                        &ctx.store,
+                        &ctx.resolved_state_dir,
+                        &ctx.store_prefix,
+                        ctx.store_backend,
+                    )
+                })
+                .transpose()?;
             full_source_provider::render_full_source_provider_admission(&prepared, provider_dir, report, ctx.json)?;
-            if let Some(result) = adoption {
-                let logical_path = result?;
+            if let Some(logical_path) = adoption {
                 eprintln!("Adopted admitted provider into local state: {logical_path}");
             }
             Ok(())
@@ -8060,9 +8148,20 @@ fn cmd_bootstrap_rust_source_provider(request: RustSourceProviderCommandRequest<
             request.smoke_evidence_dir,
         );
     }
-    let scratch = rust_source_provider_scratch::prepare_rust_source_provider_scratch(request.scratch_dir)?;
+    let scratch = bootstrap_operation::capability(
+        mantle_application_contract::bootstrap_effects::BootstrapEffect::WriteOutput,
+        || rust_source_provider_scratch::prepare_rust_source_provider_scratch(request.scratch_dir),
+    )?;
     match materialize_requested_rust_source_provider(&request, scratch.path()) {
         Ok(materialized) => {
+            let prepared_smoke = if request.smoke {
+                Some(bootstrap_operation::prepare_provider_smoke(
+                    &materialized.output_path,
+                    request.smoke_evidence_dir,
+                )?)
+            } else {
+                None
+            };
             eprintln!("Materialized Rust source provider {}", materialized.output_path.display());
             eprintln!("  recipe_digest_blake3: {}", materialized.recipe_digest_blake3);
             eprintln!("  metadata_path: {}", materialized.metadata_path.display());
@@ -8070,8 +8169,8 @@ fn cmd_bootstrap_rust_source_provider(request: RustSourceProviderCommandRequest<
             if matches!(&scratch, rust_source_provider_scratch::RustSourceProviderScratch::Persistent(_)) {
                 eprintln!("  retained_scratch: {}", scratch.path().display());
             }
-            if request.smoke {
-                cmd_smoke_rust_source_provider(&materialized.output_path, request.smoke_evidence_dir)?;
+            if let Some(prepared) = prepared_smoke {
+                render_rust_source_provider_smoke(prepared)?;
             }
             Ok(())
         }
@@ -8138,34 +8237,25 @@ fn cmd_import_rust_source_provider(
 ) -> Result<(), RunError> {
     let provider_copy = rust_source_provider::import_rust_source_provider(import_dir, output_dir)
         .map_err(|err| RunError::Build(format!("Rust source provider import failed closed: {err}")))?;
+    let prepared_smoke = if smoke {
+        Some(bootstrap_operation::prepare_provider_smoke(&provider_copy.output_path, smoke_evidence_dir)?)
+    } else {
+        None
+    };
     eprintln!("Imported Rust source provider {}", provider_copy.output_path.display());
     eprintln!("  input: {}", provider_copy.input_path.display());
     eprintln!("  metadata_path: {}", provider_copy.validation.metadata_path.display());
     eprintln!("  metadata_digest_blake3: {}", provider_copy.validation.metadata_digest_blake3);
     eprintln!("  policy_digest_blake3: {}", provider_copy.validation.validation.policy_digest_blake3);
-    if smoke {
-        cmd_smoke_rust_source_provider(&provider_copy.output_path, smoke_evidence_dir)?;
+    if let Some(prepared) = prepared_smoke {
+        render_rust_source_provider_smoke(prepared)?;
     }
     Ok(())
 }
 
-fn cmd_smoke_rust_source_provider(provider_dir: &Path, evidence_dir: Option<&Path>) -> Result<(), RunError> {
-    debug_assert!(!provider_dir.as_os_str().is_empty());
-    let validation = rust_source_provider::validate_materialized_rust_source_provider(provider_dir)
-        .map_err(|err| RunError::Build(format!("Rust source provider validation failed closed: {err}")))?;
-    let scratch = tempfile::Builder::new()
-        .prefix("mantle-rust-provider-smoke-")
-        .tempdir()
-        .map_err(|err| RunError::Internal(format!("creating Rust provider smoke scratch: {err}")))?;
-    let smoke = rust_source_provider::smoke_rust_source_provider(provider_dir, scratch.path())
-        .map_err(|err| RunError::Build(format!("Rust source provider smoke failed closed: {err}")))?;
-    let evidence = match evidence_dir {
-        Some(evidence_dir) => Some(
-            rust_source_provider::persist_rust_source_provider_smoke_evidence(evidence_dir, &smoke, &validation)
-                .map_err(|err| RunError::Build(format!("Rust source provider smoke evidence failed closed: {err}")))?,
-        ),
-        None => None,
-    };
+fn render_rust_source_provider_smoke(prepared: bootstrap_operation::PreparedProviderSmoke) -> Result<(), RunError> {
+    let smoke = &prepared.smoke;
+    let evidence = &prepared.evidence;
     eprintln!("Smoked Rust source provider {}", smoke.provider_path.display());
     eprintln!("  rustc_path: {}", smoke.rustc_path.display());
     eprintln!("  target_triple: {}", smoke.target_triple);
@@ -8307,6 +8397,7 @@ fn run_attest_command(ctx: &RunContext, action: AttestAction) -> Result<(), RunE
         ctx.store_backend,
         &ctx.store_prefix,
         &ctx.base_state_dirs,
+        ctx.store_source_admission().as_ref(),
         ctx.json,
     )
 }
@@ -8339,43 +8430,56 @@ fn capture_rust_plan_command(request: RustPlanCaptureRequest<'_>) -> Result<Capt
     debug_assert!(!request.root.as_os_str().is_empty());
     debug_assert!(!request.cargo.as_os_str().is_empty());
     debug_assert!(!request.rustc.as_os_str().is_empty());
-    let c_compiler_route = rust_plan::receipt_bound_c_compiler_route_from_cli_json(request.c_compiler_route_json)?;
-    let path_remaps = if request.deterministic_release_paths {
-        rust_plan::deterministic_release_path_remaps_with_c_compiler(
-            &request.root,
-            request.execution_output_root,
-            c_compiler_route.as_ref(),
-        )
-    } else {
-        Vec::new()
-    };
-    let compiler_policy = rust_plan::rust_compiler_policy_selection(
-        request.compiler_policy_mode,
-        request.compiler_policy_provider_manifest.map(Path::to_path_buf),
-        request.compiler_policy_provider_manifest_digest.map(str::to_string),
-    )?;
-    let profile_table = rust_plan::load_root_profile_table(&request.root)?;
-    let options = rust_plan::RustPlanOptions {
-        root: request.root,
-        cargo: request.cargo.to_path_buf(),
-        rustc: request.rustc.to_path_buf(),
-        targets: request.targets.to_vec(),
-        profile: request.profile.to_string(),
-        profile_table,
-        workspace_members: std::collections::BTreeSet::new(),
-        features: request.features.to_vec(),
-        all_features: request.all_features,
-        no_default_features: request.no_default_features,
-        no_cargo_oracle: request.no_cargo_oracle,
-        deterministic_release_paths: request.deterministic_release_paths,
-        path_remaps,
-    };
-    let receipt = rust_plan::capture_rust_plan(&options)?;
-    Ok(CapturedRustPlan {
-        receipt,
-        compiler_policy,
-        c_compiler_route,
-    })
+    rust_plan_execution::through_rust_port(
+        mantle_application_contract::rust_operations::RustOperation::CapturePlan,
+        || {
+            let c_compiler_route =
+                rust_plan::receipt_bound_c_compiler_route_from_cli_json(request.c_compiler_route_json)?;
+            let path_remaps = if request.deterministic_release_paths {
+                rust_plan::deterministic_release_path_remaps_with_c_compiler(
+                    &request.root,
+                    request.execution_output_root,
+                    c_compiler_route.as_ref(),
+                )
+            } else {
+                Vec::new()
+            };
+            let compiler_policy = rust_plan::rust_compiler_policy_selection(
+                request.compiler_policy_mode,
+                request.compiler_policy_provider_manifest.map(Path::to_path_buf),
+                request.compiler_policy_provider_manifest_digest.map(str::to_string),
+            )?;
+            let profile_table = rust_plan::load_root_profile_table(&request.root)?;
+            let options = rust_plan::RustPlanOptions {
+                root: request.root,
+                cargo: request.cargo.to_path_buf(),
+                rustc: request.rustc.to_path_buf(),
+                host_triple: rust_plan::host_target_triple(),
+                targets: request.targets.to_vec(),
+                profile: request.profile.to_string(),
+                profile_table,
+                workspace_members: std::collections::BTreeSet::new(),
+                features: request.features.to_vec(),
+                all_features: request.all_features,
+                no_default_features: request.no_default_features,
+                no_cargo_oracle: request.no_cargo_oracle,
+                deterministic_release_paths: request.deterministic_release_paths,
+                path_remaps,
+            };
+            let receipt = rust_plan::capture_rust_plan(&options)?;
+            Ok(CapturedRustPlan {
+                receipt,
+                compiler_policy,
+                c_compiler_route,
+            })
+        },
+        |captured| mantle_application_contract::rust_operations::RustEvidence::Plan {
+            receipt_hash: &captured.receipt.receipt_hash,
+            workspace: &captured.receipt.workspace_root,
+            packages: captured.receipt.packages.len(),
+            declared_packages: captured.receipt.package_count,
+        },
+    )
 }
 
 fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
@@ -8433,7 +8537,10 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
     {
         return Err(RunError::Build(format!("{}-rust-cache-unsupported", ctx.store_backend.as_str())));
     }
-    let root = root.clone().unwrap_or(current_dir_or_error()?);
+    let root = match root {
+        Some(root) => root.clone(),
+        None => rust_plan_execution::current_workspace_directory()?,
+    };
     let captured = capture_rust_plan_command(RustPlanCaptureRequest {
         root,
         cargo,
@@ -8560,17 +8667,24 @@ fn prepare_rust_plan_local_cache(
         writes_enabled,
         ..crunch_rust_cache_core::LocalCachePolicy::default()
     };
-    let cache = crunch_rust_cache::RustCache::open(crunch_store::StoreConfig {
-        backend: ctx.store_backend,
-        state_dir: ctx.resolved_state_dir.clone(),
-        output_dir: ctx.store.clone(),
-        remote_cache_urls: Vec::new(),
-        fallback_mode: crunch_store::StoreFallbackMode::Strict,
-        store_dir: ctx.store_prefix.clone(),
-        base_state_dirs: Vec::new(),
-    })
-    .map_err(|error| RunError::Internal(format!("opening local Rust unit cache: {error}")))?;
-    let mut selection = rust_plan::rust_unit_local_cache_selection(Arc::new(cache), policy, rustc)?;
+    let mut selection = rust_plan_execution::through_rust_port(
+        mantle_application_contract::rust_operations::RustOperation::OpenLocalCache,
+        || {
+            let cache = crunch_rust_cache::RustCache::open(crunch_store::StoreConfig {
+                backend: ctx.store_backend,
+                state_dir: ctx.resolved_state_dir.clone(),
+                output_dir: ctx.store.clone(),
+                remote_cache_urls: Vec::new(),
+                fallback_mode: crunch_store::StoreFallbackMode::Strict,
+                store_dir: ctx.store_prefix.clone(),
+                base_state_dirs: Vec::new(),
+                source_admission: None,
+            })
+            .map_err(|error| RunError::Internal(format!("opening local Rust unit cache: {error}")))?;
+            rust_plan::rust_unit_local_cache_selection(Arc::new(cache), policy, rustc)
+        },
+        rust_plan::RustUnitLocalCacheSelection::application_evidence,
+    )?;
     selection.shared = prepare_rust_plan_shared_cache(shared_input, mode, execution_mode)?;
     assert_eq!(selection.policy.reads_enabled, reads_enabled);
     assert_eq!(selection.policy.writes_enabled, writes_enabled);
@@ -8632,7 +8746,16 @@ fn prepare_rust_plan_shared_cache(
     };
     crunch_rust_cache_core::shared::validate_trust_policy(&trust_policy)
         .map_err(|error| RunError::Internal(String::from(error.code())))?;
-    let signing = input.signing_key.map(shared_rust_signing_key::load_shared_rust_signing_key).transpose()?;
+    let signing = input
+        .signing_key
+        .map(|path| {
+            rust_plan_execution::through_rust_port(
+                mantle_application_contract::rust_operations::RustOperation::ReadSigningKey,
+                || shared_rust_signing_key::load_shared_rust_signing_key(path),
+                |(signer, _)| mantle_application_contract::rust_operations::RustEvidence::SigningKey { signer },
+            )
+        })
+        .transpose()?;
     let (signer_name, signing_key) = match signing {
         Some((name, key)) => (name, Some(Arc::new(key))),
         None => ("shared-rust-read-only".to_string(), None),
@@ -8673,9 +8796,18 @@ fn open_rust_result_source(source: &str) -> Result<Arc<dyn crunch_rust_cache::sh
             .map_err(|error| RunError::Internal(format!("opening shared Rust HTTP source: {error}")))?;
         return Ok(Arc::new(http));
     }
-    let directory = crunch_rust_cache::shared::DirectoryRustResultSource::open(PathBuf::from(source), false)
-        .map_err(|error| RunError::Internal(format!("opening shared Rust directory source: {error}")))?;
-    Ok(Arc::new(directory))
+    rust_plan_execution::through_rust_port(
+        mantle_application_contract::rust_operations::RustOperation::OpenSharedSource,
+        || {
+            let directory = crunch_rust_cache::shared::DirectoryRustResultSource::open(PathBuf::from(source), false)
+                .map_err(|error| RunError::Internal(format!("opening shared Rust directory source: {error}")))?;
+            Ok(Arc::new(directory) as Arc<dyn crunch_rust_cache::shared::RustResultSource>)
+        },
+        |directory| mantle_application_contract::rust_operations::RustEvidence::SharedSource {
+            directory: directory.source_id(),
+            exists: Path::new(source).is_dir(),
+        },
+    )
 }
 
 struct RustPlanExecutionRequest<'a> {
@@ -8719,6 +8851,7 @@ fn run_shell_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             &ctx.store_prefix,
             ctx.store_backend,
             ctx.verbose,
+            ctx.store_source_admission().as_ref(),
         ),
         _ => Err(RunError::Internal("shell helper requires a shell command".to_string())),
     }
@@ -8774,6 +8907,7 @@ fn run_develop_command(request: DevelopCommandRequest<'_>) -> Result<(), RunErro
         &request.ctx.store_prefix,
         request.ctx.store_backend,
         request.ctx.verbose,
+        request.ctx.store_source_admission().as_ref(),
     )
 }
 
@@ -8829,6 +8963,7 @@ fn run_package_command(request: PackageCommandRequest<'_>) -> Result<(), RunErro
         state_dir: &request.ctx.resolved_state_dir,
         store_prefix: &request.ctx.store_prefix,
         backend: request.ctx.store_backend,
+        source_admission: request.ctx.store_source_admission().as_ref(),
         verbose: request.ctx.verbose,
     })
 }
@@ -8852,6 +8987,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             offline_source_manifest_blake3,
             offline_source_state_dir,
             source_built_fixed_point,
+            prepare_source_programs,
             source_profile,
             expected_source_profile_blake3,
             expected_stagex_lineage_blake3,
@@ -8892,6 +9028,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             offline_source_manifest_blake3: offline_source_manifest_blake3.as_deref(),
             offline_source_state_dir: offline_source_state_dir.as_deref(),
             source_built_fixed_point: *source_built_fixed_point,
+            prepare_source_programs: *prepare_source_programs,
             source_profile: source_profile.as_deref(),
             expected_source_profile_blake3: expected_source_profile_blake3.as_deref(),
             expected_stagex_lineage_blake3: expected_stagex_lineage_blake3.as_deref(),
@@ -8934,6 +9071,7 @@ struct SelfBuildCommandRequest<'a> {
     offline_source_manifest_blake3: Option<&'a str>,
     offline_source_state_dir: Option<&'a Path>,
     source_built_fixed_point: bool,
+    prepare_source_programs: bool,
     source_profile: Option<&'a Path>,
     expected_source_profile_blake3: Option<&'a str>,
     expected_stagex_lineage_blake3: Option<&'a str>,
@@ -8999,28 +9137,31 @@ fn run_source_built_fixed_point(request: &SelfBuildCommandRequest<'_>) -> Result
                 .to_string(),
         ));
     }
-    source_built_fixed_point_shell::cmd_source_built_fixed_point(
-        source_built_fixed_point_shell::SourceBuiltFixedPointOptions {
-            source_profile,
-            expected_source_profile_blake3,
-            expected_stagex_lineage_blake3,
-            expected_native_provider_blake3,
-            output_dir,
-            bwrap: proof_bwrap,
-            sandbox_shell: proof_sandbox_shell,
-            jobs: request.jobs.unwrap_or(SOURCE_BUILT_FIXED_POINT_JOBS_DEFAULT),
-            elapsed_seconds_max: request.proof_elapsed_seconds_max,
-            disk_bytes_max: request.proof_disk_bytes_max,
-            protected_exec_events_max: request.proof_exec_events_max,
-            source_records_max: request.proof_source_records_max,
-            dev_provider_cache: request.dev_provider_cache,
-            dev_resume: request.dev_resume,
-            dev_fast_fail: request.dev_fast_fail,
-            verbose: request.ctx.verbose,
-            backend: request.ctx.store_backend,
-            json: request.ctx.json,
-        },
-    )
+    let options = source_built_fixed_point_shell::SourceBuiltFixedPointOptions {
+        source_profile,
+        expected_source_profile_blake3,
+        expected_stagex_lineage_blake3,
+        expected_native_provider_blake3,
+        output_dir,
+        bwrap: proof_bwrap,
+        sandbox_shell: proof_sandbox_shell,
+        jobs: request.jobs.unwrap_or(SOURCE_BUILT_FIXED_POINT_JOBS_DEFAULT),
+        elapsed_seconds_max: request.proof_elapsed_seconds_max,
+        disk_bytes_max: request.proof_disk_bytes_max,
+        protected_exec_events_max: request.proof_exec_events_max,
+        source_records_max: request.proof_source_records_max,
+        dev_provider_cache: request.dev_provider_cache,
+        dev_resume: request.dev_resume,
+        dev_fast_fail: request.dev_fast_fail,
+        verbose: request.ctx.verbose,
+        backend: request.ctx.store_backend,
+        json: request.ctx.json,
+    };
+    if request.prepare_source_programs {
+        source_built_fixed_point_shell::cmd_prepare_source_programs(options)
+    } else {
+        source_built_fixed_point_shell::cmd_source_built_fixed_point(options)
+    }
 }
 
 fn run_cargo_free_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<(), RunError> {
@@ -9043,7 +9184,7 @@ fn run_cargo_free_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<()
         offline_source_state_dir: request.offline_source_state_dir,
     })?;
     let out_dir = request.out.ok_or_else(|| RunError::Build("--cargo-free requires --out <dir>".to_string()))?;
-    let root = current_dir_or_error()?;
+    let root = rust_plan_execution::current_workspace_directory()?;
     let options = cargo_free_self_build::CargoFreeSelfBuildOptions {
         root: &root,
         out_dir,
@@ -9065,21 +9206,40 @@ fn run_legacy_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<(), Ru
     debug_assert!(!request.cargo_free);
     debug_assert!(request.ctx.store_prefix.starts_with('/'));
     validate_stage0_inventory_args(request.no_host_tools, request.stage0_inventory)?;
-    let loaded_stage0_policy = request.stage0_inventory.map(load_stage0_inventory_policy).transpose()?;
-    let parsed_trusted = trusted_keys::parse_trusted_public_keys(request.trusted_public_keys)?;
-    let source_override_plan = request
-        .offline_source_manifest_blake3
-        .map(|manifest_blake3| {
-            let source_state_dir = request.offline_source_state_dir.ok_or_else(|| {
-                RunError::Build("--offline-source-manifest-blake3 requires --offline-source-state-dir".to_string())
-            })?;
-            source_bundle::full_proof_source_fetch_override_plan(source_state_dir, manifest_blake3)
-        })
-        .transpose()?;
-    let source_evidence = source_override_plan
-        .as_ref()
-        .map(|plan| self_build::SelfBuildSourceEvidence::from_override_plan(&plan.report, plan.overrides.len()))
-        .transpose()?;
+    let (loaded_stage0_policy, parsed_trusted, source_override_plan, source_evidence) =
+        rust_plan_execution::through_rust_port(
+            mantle_application_contract::rust_operations::RustOperation::ReadSelfBuildInputs,
+            || {
+                let loaded_stage0_policy = request.stage0_inventory.map(load_stage0_inventory_policy).transpose()?;
+                let parsed_trusted = trusted_keys::parse_trusted_public_keys(request.trusted_public_keys)?;
+                let source_override_plan = request
+                    .offline_source_manifest_blake3
+                    .map(|manifest_blake3| {
+                        let source_state_dir = request.offline_source_state_dir.ok_or_else(|| {
+                            RunError::Build(
+                                "--offline-source-manifest-blake3 requires --offline-source-state-dir".to_string(),
+                            )
+                        })?;
+                        source_bundle::full_proof_source_fetch_override_plan(source_state_dir, manifest_blake3)
+                    })
+                    .transpose()?;
+                let source_evidence = source_override_plan
+                    .as_ref()
+                    .map(|plan| {
+                        self_build::SelfBuildSourceEvidence::from_override_plan(&plan.report, plan.overrides.len())
+                    })
+                    .transpose()?;
+                Ok((loaded_stage0_policy, parsed_trusted, source_override_plan, source_evidence))
+            },
+            |(inventory, _, _, source)| mantle_application_contract::rust_operations::RustEvidence::SelfBuildInputs {
+                inventory_digest: inventory.as_ref().map(|loaded| loaded.digest_blake3.as_str()),
+                source_manifest: source.as_ref().map(|evidence| evidence.manifest_blake3.as_str()),
+                source_state: source.as_ref().map(|evidence| evidence.source_state_blake3.as_str()),
+                overrides: source.as_ref().map_or(0, |evidence| evidence.override_count as usize),
+                inventory_requested: request.stage0_inventory.is_some(),
+                source_requested: request.offline_source_manifest_blake3.is_some(),
+            },
+        )?;
     let source_fetch_overrides = source_override_plan.as_ref().map(|plan| plan.overrides.as_slice()).unwrap_or(&[]);
     self_build::cmd_self_build(
         &request.ctx.store,
@@ -9103,6 +9263,7 @@ fn run_legacy_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<(), Ru
         bootstrap_source_root::BootstrapProviderMode::FullSource,
         source_fetch_overrides,
         source_evidence,
+        request.ctx.store_source_admission(),
     )
     .map(|_report| ())
 }
@@ -9176,7 +9337,7 @@ fn resolve_store_prefix(args: &Args) -> String {
 }
 
 fn current_dir_or_error() -> Result<PathBuf, RunError> {
-    std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))
+    host_environment::working_directory()
 }
 
 struct InlineBuildRequest<'a> {
@@ -9215,6 +9376,8 @@ fn build_from_expr(request: InlineBuildRequest<'_>) -> Result<(), RunError> {
         request.source_fetch_overrides,
         Vec::new(),
         Some(request.root_registration),
+        request.prepared.compile_driver_runtime.clone(),
+        request.prepared.ctx.store_source_admission(),
     )
 }
 
@@ -9234,6 +9397,7 @@ fn build_plan_from_expr(request: InlineBuildPlanRequest<'_>) -> Result<(), RunEr
         state_dir: &request.prepared.ctx.resolved_state_dir,
         backend: request.prepared.ctx.store_backend,
         base_state_dirs: &request.prepared.ctx.base_state_dirs,
+        source_admission: request.prepared.ctx.store_source_admission().as_ref(),
         store_dir: &request.prepared.ctx.store_prefix,
         substituter_urls: &request.prepared.substituter_urls,
         signing_key_path: request.prepared.signing_key,
@@ -9252,6 +9416,7 @@ struct RawInlineBuildRequest<'a> {
     state_dir: &'a Path,
     store_prefix: &'a str,
     backend: crunch_store::StoreBackend,
+    source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     verbose: bool,
     max_jobs: u32,
     substituter_urls: &'a [String],
@@ -9266,101 +9431,37 @@ struct RawInlineBuildRequest<'a> {
 fn build_from_expr_raw(request: RawInlineBuildRequest<'_>) -> Result<crunch_pipeline::PipelineResult, RunError> {
     debug_assert!(request.max_jobs > 0, "max_jobs must be positive");
     debug_assert!(request.store_prefix.starts_with('/'), "store prefix must be absolute");
-    crunch_store::StoreConfig::preflight_backend_identity_for(
-        request.backend,
-        request.state_dir,
-        request.store_prefix,
-        &[],
-    )
-    .map_err(|error| RunError::Internal(format!("opening store: {error}")))?;
     let root = expression_scratch::InlineRoot::stage(request.expr)?;
-    let keypair = signing_key::load_or_generate_signing_keypair(request.signing_key_path, request.state_dir, true)?;
-    let configured_trusted_keys =
-        signing_key::load_configured_trusted_public_keys(request.trusted_public_keys, request.state_dir)?;
-    let trusted_keys = crunch_build::signing::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
-    let config = crunch_pipeline::BuildConfig {
-        file: root.path().to_path_buf(),
-        import_paths: request.import_entries.to_vec(),
-        output_dir: request.output_dir.to_path_buf(),
-        state_dir: request.state_dir.to_path_buf(),
-        backend: request.backend,
-        base_state_dirs: Vec::new(),
-        store_dir: request.store_prefix.to_string(),
-        verbose: request.verbose,
-        max_jobs: request.max_jobs,
-        scheduling_policy: standard_scheduling_policy(),
-        substituter_urls: request.substituter_urls.to_vec(),
-        hermeticity_mode: request.hermeticity_mode,
-        keypair,
-        trusted_keys,
-        trust_unsigned: request.trust_unsigned,
-        root_retention_source: request.root_registration.as_ref().map(|_| crunch_store::GcRootSource::Build),
-        root_registration: request.root_registration,
-        source_fetch_overrides: Vec::new(),
-        remote_enabled: false,
-        interchange_dir: None,
-    };
+    let retention_source = request.root_registration.as_ref().map(|_| crunch_store::GcRootSource::Build);
+    let mut config = build_cmd::prepare_local_build_config(
+        build_cmd::LocalBuildCommandConfig {
+            file: root.path(),
+            import_paths: request.import_entries,
+            output_dir: request.output_dir,
+            state_dir: request.state_dir,
+            store_dir: request.store_prefix,
+            backend: request.backend,
+            verbose: request.verbose,
+            max_jobs: request.max_jobs,
+            substituter_urls: request.substituter_urls,
+            signing_key_path: request.signing_key_path,
+            trusted_public_keys: request.trusted_public_keys,
+            trust_unsigned: request.trust_unsigned,
+            hermeticity_mode: request.hermeticity_mode,
+            base_state_dirs: Vec::new(),
+            source_admission: request.source_admission.cloned(),
+        },
+        BuildOutputMode::Human,
+        None,
+        Vec::new(),
+        request.root_registration,
+    )?;
+    config.root_retention_source = retention_source;
     build_cmd::run_build(&config)
 }
 
-fn output_host_path(path_info: &snix_store::path_info::PathInfo, output_dir: &Path, store_dir: &str) -> PathBuf {
-    debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute");
-    let abs = path_info.store_path.to_absolute_path_with_prefix(store_dir);
-    if output_dir == Path::new(store_dir) {
-        return PathBuf::from(&abs);
-    }
-    let rel = abs.strip_prefix(store_dir).unwrap_or(&abs);
-    let rel = rel.strip_prefix('/').unwrap_or(rel);
-    output_dir.join(rel)
-}
-
-fn first_output_path(result: &crunch_pipeline::PipelineResult, output_dir: &Path, store_dir: &str) -> Option<PathBuf> {
-    for outcome in &result.outcomes {
-        let path_info = outcome.outputs.get("out").or_else(|| outcome.outputs.values().next())?;
-        let host_path = output_host_path(path_info, output_dir, store_dir);
-        if host_path.exists() {
-            return Some(host_path);
-        }
-    }
-    None
-}
-
-struct SelectedRunOutputRequest<'a> {
-    result: &'a crunch_pipeline::PipelineResult,
-    output_dir: &'a Path,
-    store_prefix: &'a str,
-    target_label: &'a str,
-}
-
-fn selected_run_output_path(request: SelectedRunOutputRequest<'_>) -> Result<PathBuf, RunError> {
-    debug_assert!(request.store_prefix.starts_with('/'));
-    debug_assert!(!request.target_label.is_empty());
-    let outcome_count = request.result.outcomes.len();
-    if outcome_count != EXPECTED_RUN_OUTCOME_COUNT {
-        return Err(RunError::Internal(format!(
-            "run target {} produced {outcome_count} derivations; expected exactly {EXPECTED_RUN_OUTCOME_COUNT}",
-            request.target_label,
-        )));
-    }
-    let outcome = request
-        .result
-        .outcomes
-        .first()
-        .ok_or_else(|| RunError::Internal(format!("run target {} produced no outputs", request.target_label)))?;
-    let path_info = outcome
-        .outputs
-        .get("out")
-        .or_else(|| outcome.outputs.values().next())
-        .ok_or_else(|| RunError::Internal(format!("run target {} produced no outputs", request.target_label)))?;
-    let host_path = output_host_path(path_info, request.output_dir, request.store_prefix);
-    if !host_path.exists() {
-        return Err(RunError::Internal(format!("selected run output is missing on disk: {}", host_path.display())));
-    }
-    Ok(host_path)
-}
-
 fn exec_run(out_path: &Path, bin: Option<&str>, args: &[String]) -> Result<(), RunError> {
-    let exe_path = run_binary_selection::select_run_binary(out_path, bin)?;
+    let exe_path = child_exec::select_binary(out_path, bin)?;
     eprintln!("running: {}", exe_path.display());
 
     let status = child_exec::run_child(&exe_path, args)?;
@@ -9409,6 +9510,7 @@ struct RunBuildSettings<'a> {
     state_dir: &'a Path,
     store_prefix: &'a str,
     backend: crunch_store::StoreBackend,
+    source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     verbose: bool,
     max_jobs: u32,
     no_substitute: bool,
@@ -9437,6 +9539,7 @@ fn build_project_expr_request(
         output_dir: request.settings.output_dir,
         state_dir: request.settings.state_dir,
         backend: request.settings.backend,
+        source_admission: request.settings.source_admission,
         store_prefix: request.settings.store_prefix,
         verbose: request.settings.verbose,
         max_jobs: request.settings.max_jobs,
@@ -9470,6 +9573,7 @@ fn build_project_expr(
     signing_key_path: Option<&Path>,
     trust_unsigned: bool,
     root_registration: Option<crunch_store::RootRegistration>,
+    source_admission: Option<&std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
 ) -> Result<crunch_pipeline::PipelineResult, RunError> {
     debug_assert!(max_jobs > 0);
     debug_assert!(store_prefix.starts_with('/'));
@@ -9478,6 +9582,7 @@ fn build_project_expr(
         state_dir,
         store_prefix,
         backend,
+        source_admission,
         verbose,
         max_jobs,
         no_substitute,
@@ -9501,44 +9606,32 @@ struct FileRawBuildRequest<'a> {
 fn build_file_raw(request: FileRawBuildRequest<'_>) -> Result<crunch_pipeline::PipelineResult, RunError> {
     debug_assert!(request.settings.max_jobs > 0);
     debug_assert!(request.settings.store_prefix.starts_with('/'));
-    crunch_store::StoreConfig::preflight_backend_identity_for(
-        request.settings.backend,
-        request.settings.state_dir,
-        request.settings.store_prefix,
-        &[],
-    )
-    .map_err(|error| RunError::Internal(format!("opening store: {error}")))?;
     let substituter_urls = run_substituter_urls(request.settings.no_substitute);
     let nickel_search_dirs = build_import_paths(request.import_paths)?;
-    let keypair = signing_key::load_or_generate_signing_keypair(
-        request.settings.signing_key_path,
-        request.settings.state_dir,
-        true,
+    let mut config = build_cmd::prepare_local_build_config(
+        build_cmd::LocalBuildCommandConfig {
+            file: request.file,
+            import_paths: &nickel_search_dirs,
+            output_dir: request.settings.output_dir,
+            state_dir: request.settings.state_dir,
+            store_dir: request.settings.store_prefix,
+            backend: request.settings.backend,
+            verbose: request.settings.verbose,
+            max_jobs: request.settings.max_jobs,
+            substituter_urls: &substituter_urls,
+            signing_key_path: request.settings.signing_key_path,
+            trusted_public_keys: None,
+            trust_unsigned: request.settings.trust_unsigned,
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            base_state_dirs: Vec::new(),
+            source_admission: request.settings.source_admission.cloned(),
+        },
+        BuildOutputMode::Human,
+        None,
+        Vec::new(),
+        None,
     )?;
-    let configured_trusted_keys = signing_key::load_configured_trusted_public_keys(None, request.settings.state_dir)?;
-    let trusted_keys = crunch_build::signing::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
-    let config = crunch_pipeline::BuildConfig {
-        file: request.file.to_path_buf(),
-        import_paths: nickel_search_dirs,
-        output_dir: request.settings.output_dir.to_path_buf(),
-        state_dir: request.settings.state_dir.to_path_buf(),
-        backend: request.settings.backend,
-        base_state_dirs: Vec::new(),
-        store_dir: request.settings.store_prefix.to_string(),
-        verbose: request.settings.verbose,
-        max_jobs: request.settings.max_jobs,
-        scheduling_policy: standard_scheduling_policy(),
-        substituter_urls,
-        hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
-        keypair,
-        trusted_keys,
-        trust_unsigned: request.settings.trust_unsigned,
-        root_retention_source: None,
-        root_registration: None,
-        source_fetch_overrides: Vec::new(),
-        remote_enabled: false,
-        interchange_dir: None,
-    };
+    config.root_retention_source = None;
     build_cmd::run_build(&config)
 }
 
@@ -9563,6 +9656,7 @@ struct RunCommandRequest<'a> {
     state_dir: &'a Path,
     store_prefix: &'a str,
     backend: crunch_store::StoreBackend,
+    source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     verbose: bool,
 }
 
@@ -9577,6 +9671,7 @@ fn cmd_run(request: RunCommandRequest<'_>) -> Result<(), RunError> {
         state_dir: request.state_dir,
         store_prefix: request.store_prefix,
         backend: request.backend,
+        source_admission: request.source_admission,
         verbose: request.verbose,
         max_jobs: crunch_pipeline::resolve_max_jobs(request.jobs),
         no_substitute: request.no_substitute,
@@ -9590,9 +9685,9 @@ fn cmd_run(request: RunCommandRequest<'_>) -> Result<(), RunError> {
             settings: &settings,
         })?,
         project_build::BuildTarget::ProjectDefault | project_build::BuildTarget::Selector(_) => {
-            let resolved = project_build::resolve_project_target(&target, &cwd, request.import_paths)?;
+            let resolved = build_application::resolve_project_target(&target, &cwd, request.import_paths)?;
             let expr = generate_run_project_expr(&resolved.root_file, &resolved.target);
-            let root_registration = project_output_root_registration(&resolved)?;
+            let root_registration = build_application::project_output_root_registration(&resolved)?;
             build_project_expr_request(ProjectExprBuildRequest {
                 expr: &expr,
                 resolved_import_entries: resolved.import_paths,
@@ -9601,7 +9696,7 @@ fn cmd_run(request: RunCommandRequest<'_>) -> Result<(), RunError> {
             })?
         }
     };
-    let out_path = selected_run_output_path(SelectedRunOutputRequest {
+    let out_path = build_application::selected_run_output_path(build_application::SelectedRunOutputRequest {
         result: &result,
         output_dir: request.output_dir,
         store_prefix: request.store_prefix,
@@ -9622,7 +9717,11 @@ struct BootstrapFetchRequest<'a> {
 fn cmd_bootstrap_fetch(request: BootstrapFetchRequest<'_>) -> Result<(), RunError> {
     debug_assert!(!request.output.as_os_str().is_empty());
     debug_assert!(!request.store_dir.as_os_str().is_empty());
-    if !request.store_dir.exists() {
+    let store_exists = bootstrap_operation::capability(
+        mantle_application_contract::bootstrap_effects::BootstrapEffect::ReadInput,
+        || Ok::<_, RunError>(request.store_dir.exists()),
+    )?;
+    if !store_exists {
         return Err(RunError::Internal(format!(
             "store directory {} does not exist.\nCreate it with: sudo mkdir -p {0} && sudo chown $USER {0}",
             request.store_dir.display()
@@ -9630,8 +9729,14 @@ fn cmd_bootstrap_fetch(request: BootstrapFetchRequest<'_>) -> Result<(), RunErro
     }
 
     let source_fetch_plan = if request.offline_source_preflight {
-        let provider_url = bootstrap::fetch_seed_provider_raw_url()?;
-        let plan = source_bundle::bootstrap_legacy_seed_fetch_override_plan(request.state_dir, &provider_url)?;
+        let provider_url = bootstrap_operation::capability(
+            mantle_application_contract::bootstrap_effects::BootstrapEffect::ReadInput,
+            bootstrap::fetch_seed_provider_raw_url,
+        )?;
+        let plan = bootstrap_operation::capability(
+            mantle_application_contract::bootstrap_effects::BootstrapEffect::ReadInput,
+            || source_bundle::bootstrap_legacy_seed_fetch_override_plan(request.state_dir, &provider_url),
+        )?;
         eprintln!(
             "  offline bootstrap source profile ready: records={} source_state_blake3={}",
             plan.report.record_count, plan.report.source_state_blake3
@@ -9655,20 +9760,7 @@ fn cmd_bootstrap_fetch(request: BootstrapFetchRequest<'_>) -> Result<(), RunErro
 }
 
 fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), RunError> {
-    eprintln!("Resolving store paths for {} packages...", packages.len());
-
-    let entries = bootstrap::resolve_packages(packages, |pkg| {
-        let path = bootstrap::nix_resolve(pkg)?;
-        eprintln!("  {pkg} -> {path}");
-        Ok(path)
-    })?;
-
-    let ncl = bootstrap::generate_seed_ncl(&entries);
-
-    generated_file_write::write_generated_text(output, &ncl)?;
-
-    eprintln!("Wrote {}", output.display());
-    Ok(())
+    bootstrap_operation::resolve_packages(output, packages)
 }
 
 #[cfg(test)]
@@ -9770,7 +9862,7 @@ mod tests {
     const TEST_REMOTE_STATUS_CONCURRENCY_TEXT: &str = "2";
     const TEST_REMOTE_TICKET_FD: i32 = 9;
     const TEST_REMOTE_TICKET_FD_TEXT: &str = "9";
-    fn parse_args_with_cli_test_stack(args: Vec<&'static str>) -> Result<Args, String> {
+    fn parse_args_with_cli_test_stack(args: Vec<&'static str>) -> Result<Args, clap::Error> {
         crate::command_input::test_support::parse_args_on_cli_test_stack(args)
     }
 
@@ -9783,6 +9875,7 @@ mod tests {
             store_prefix: store_prefix.to_string(),
             nix_compat,
             state_dir: None,
+            remote_binding_config: None,
             store_backend: crunch_store::StoreBackend::Snix,
             base_stores: Vec::new(),
             command: Command::Doctor {
@@ -9866,10 +9959,9 @@ mod tests {
             parse_args_with_cli_test_stack(Vec::from(["mantle", "--store-backend", "casita", "store", "list"]))
                 .unwrap();
         assert_eq!(casita.store_backend, crunch_store::StoreBackend::Casita);
-        let rejected =
-            parse_args_with_cli_test_stack(Vec::from(["mantle", "--store-backend", "tape", "store", "list"]))
-                .unwrap_err();
-        assert!(rejected.contains("store-backend-unknown"));
+        assert!(
+            parse_args_with_cli_test_stack(Vec::from(["mantle", "--store-backend", "tape", "store", "list",])).is_err()
+        );
     }
 
     #[tokio::test]
@@ -9886,6 +9978,8 @@ mod tests {
             resolved_log_dir: state.join("logs"),
             store_prefix: "/nix/store".to_string(),
             store_backend: crunch_store::StoreBackend::Snix,
+            remote_binding_config: None,
+            remote_endpoint_admission: None,
             verbose: false,
             json: false,
             base_state_dirs: Vec::new(),
@@ -10035,6 +10129,8 @@ mod tests {
             resolved_log_dir: root.path().join("coordinator-state/logs"),
             store_prefix: "/mantle/store".to_string(),
             store_backend: crunch_store::StoreBackend::Casita,
+            remote_binding_config: None,
+            remote_endpoint_admission: None,
             verbose: false,
             json: false,
             base_state_dirs: Vec::new(),
@@ -10074,6 +10170,7 @@ mod tests {
             &worker_state,
             &ctx.store_prefix,
             &[],
+            None,
         )
         .unwrap_err();
         assert!(error.to_string().contains("store-backend-mismatch: requested casita, state declares snix"));
@@ -10251,8 +10348,7 @@ mod tests {
     fn rust_cache_serve_cli_requires_policy_and_receipt_directory() {
         let error = parse_args_with_cli_test_stack(Vec::from(["mantle", "rust-cache", "serve"]))
             .expect_err("rust-cache serve must reject missing required paths");
-        assert!(error.contains("--policy"));
-        assert!(error.contains("--receipt-dir"));
+        assert_eq!(error.kind(), clap::error::ErrorKind::MissingRequiredArgument);
     }
 
     #[test]
@@ -11613,45 +11709,6 @@ let Plan = {
     }
 
     #[test]
-    fn release_function_address_bind_rejects_mixed_preserves_and_explicit_selection() {
-        let rendered = parse_args_with_cli_test_stack(vec![
-            "mantle",
-            "release",
-            "function-address-bind",
-            "/tmp/release-bundle",
-            "--from-preserves-binding",
-            "--sidecar",
-            "external/sidecar.json",
-            "--receipt-out",
-            "/tmp/mantle-binding.json",
-        ])
-        .expect_err("mixed Preserves and explicit selection was accepted");
-        assert!(rendered.contains("--from-preserves-binding"));
-        assert!(rendered.contains("--sidecar"));
-    }
-
-    #[test]
-    fn release_function_address_bind_rejects_unknown_mode() {
-        let rendered = parse_args_with_cli_test_stack(vec![
-            "mantle",
-            "release",
-            "function-address-bind",
-            "/tmp/release-bundle",
-            "--mode",
-            "semantic-proof",
-            "--sidecar",
-            "external/sidecar.json",
-            "--valence-receipt",
-            "external/valence.json",
-            "--receipt-out",
-            "/tmp/mantle-binding.json",
-        ])
-        .expect_err("unknown function-address mode was accepted");
-        assert!(rendered.contains("semantic-proof"));
-        assert!(rendered.contains("invalid value"));
-    }
-
-    #[test]
     fn release_verify_accepts_onix_stack_release_profile() {
         let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
@@ -11932,6 +11989,33 @@ let Plan = {
     }
 
     #[test]
+    fn source_program_preparation_requires_source_built_authority() {
+        let error = parse_args_with_cli_test_stack(Vec::from(["mantle", "self-build", "--prepare-source-programs"]))
+            .expect_err("preparation cannot select the legacy self-build path");
+        assert_eq!(error.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn source_program_preparation_rejects_development_cache_modes() {
+        for conflict in [
+            &["--dev-provider-cache", "/tmp/dev-cache"][..],
+            &["--dev-resume"][..],
+            &["--dev-fast-fail"][..],
+        ] {
+            let mut args = Vec::from([
+                "mantle",
+                "self-build",
+                "--source-built-fixed-point",
+                "--prepare-source-programs",
+            ]);
+            args.extend_from_slice(conflict);
+            let error = parse_args_with_cli_test_stack(args)
+                .expect_err("source preparation cannot consume development proof state");
+            assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+        }
+    }
+
+    #[test]
     fn self_build_cli_rejects_source_built_and_legacy_cargo_free_modes_together() {
         let result = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
@@ -12143,35 +12227,6 @@ let Plan = {
     }
 
     #[test]
-    fn self_build_offline_source_manifest_requires_source_state() {
-        const MANIFEST_BLAKE3: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        let error = parse_args_with_cli_test_stack(vec![
-            "crunch",
-            "self-build",
-            "--offline-source-manifest-blake3",
-            MANIFEST_BLAKE3,
-        ])
-        .unwrap_err();
-
-        assert!(error.contains("--offline-source-state-dir"));
-        assert!(error.contains("required"));
-    }
-
-    #[test]
-    fn self_build_offline_source_state_requires_manifest() {
-        let error = parse_args_with_cli_test_stack(vec![
-            "crunch",
-            "self-build",
-            "--offline-source-state-dir",
-            "/tmp/source-state",
-        ])
-        .unwrap_err();
-
-        assert!(error.contains("--offline-source-manifest-blake3"));
-        assert!(error.contains("required"));
-    }
-
-    #[test]
     fn cargo_free_self_build_rejects_legacy_options() {
         let err = validate_cargo_free_legacy_self_build_args(CargoFreeLegacyOptions {
             jobs: Some(1),
@@ -12262,17 +12317,7 @@ mod remote_import_evidence_tests {
     }
 
     #[test]
-    fn the_aggregation_requires_every_output_to_be_evidenced() {
-        let good = output("/mantle/store/aaa", "outer-key", "digest");
-        let unsigned = output("/mantle/store/bbb", "", "digest");
-        assert!(are_remote_outputs_evidenced([]));
-        assert!(are_remote_outputs_evidenced([&good]));
-        assert!(are_remote_outputs_evidenced([&good, &good]));
-        assert!(!are_remote_outputs_evidenced([&good, &unsigned]));
-    }
-
-    #[test]
-    fn an_import_without_outputs_is_completed() {
+    fn missing_requested_remote_outputs_are_rejected() {
         let report = remote_build::RemoteClientBuildReport {
             schema: "mantle-remote-client-build-report-v1".to_string(),
             builder: "local-builder".to_string(),
@@ -12280,6 +12325,7 @@ mod remote_import_evidence_tests {
             priority_decisions: Vec::new(),
             imported: Vec::new(),
         };
-        assert!(classify_remote_build_imports(&report).is_ok());
+        let plan = remote_build::operation::plan(remote_build::operation::RemoteOperation::Build).unwrap();
+        assert!(classify_remote_build_imports(&report, &plan, 1).is_err());
     }
 }

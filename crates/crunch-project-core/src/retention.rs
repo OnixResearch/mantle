@@ -54,7 +54,11 @@ impl InputRetentionPolicy {
         }
     }
 
-    pub fn validate(self, owner: &str) -> Vec<String> {
+    pub fn validate(self, owner: String) -> Vec<String> {
+        self.validate_owner(&owner)
+    }
+
+    pub(crate) fn validate_owner(self, owner: &str) -> Vec<String> {
         let mut problems = Vec::new();
         if let Self::RecentGenerations { generations } = self {
             if generations == 0 {
@@ -76,10 +80,10 @@ pub enum RetentionRootKind {
     SourceMaterial,
 }
 
-impl RetentionRootKind {
-    pub fn as_str(self) -> &'static str {
+impl core::fmt::Display for RetentionRootKind {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::SourceMaterial => RETENTION_ROOT_KIND_SOURCE_MATERIAL,
+            Self::SourceMaterial => formatter.write_str(RETENTION_ROOT_KIND_SOURCE_MATERIAL),
         }
     }
 }
@@ -110,7 +114,8 @@ impl ProjectRetentionState {
         }
     }
 
-    pub fn validate(&self) -> Vec<String> {
+    /// Validates persisted records and returns the same state for shell use.
+    pub fn validate(self) -> Result<Self, Vec<String>> {
         let mut problems = Vec::new();
         if self.schema != RETENTION_STATE_SCHEMA {
             problems.push(format!("retention state schema '{}' is unsupported", self.schema));
@@ -124,7 +129,7 @@ impl ProjectRetentionState {
         for record in &self.records {
             push_record_validation(record, &mut problems);
         }
-        problems
+        if problems.is_empty() { Ok(self) } else { Err(problems) }
     }
 }
 
@@ -233,21 +238,40 @@ pub fn plan_retention_roots(request: RetentionPlanRequest) -> RetentionPlan {
     plan
 }
 
-pub fn retention_record_for_input(input_name: &str, entry: &LockEntry, generation: u32) -> RetentionRootRecord {
+pub fn retention_record_for_input(input_name: String, entry: LockEntry, generation: u32) -> RetentionRootRecord {
+    let lock_digest = entry_digest(&input_name, &entry);
+    let source_identity = source_identity(&entry.kind);
+    build_retention_record(input_name, lock_digest, source_identity, entry.hash.value, generation)
+}
+
+fn record_for_input(input_name: &str, entry: &LockEntry, generation: u32) -> RetentionRootRecord {
+    build_retention_record(
+        input_name.into(),
+        entry_digest(input_name, entry),
+        source_identity(&entry.kind),
+        entry.hash.value.clone(),
+        generation,
+    )
+}
+
+fn build_retention_record(
+    input_name: String,
+    lock_digest: String,
+    source_identity: String,
+    content_digest: String,
+    generation: u32,
+) -> RetentionRootRecord {
     assert!(!input_name.is_empty(), "input name must not be empty");
-    assert!(!entry.hash.value.is_empty(), "lock entry hash must not be empty");
+    assert!(!content_digest.is_empty(), "lock entry hash must not be empty");
     assert!(generation > 0, "retention generation must be nonzero");
-    let lock_digest = lock_entry_digest(input_name, entry);
-    let source_identity = locked_source_identity(&entry.kind);
-    let content_digest = entry.hash.value.clone();
     let root_id = retention_root_id(RetentionRootIdentity {
-        input_name,
+        input_name: &input_name,
         lock_digest: &lock_digest,
         source_identity: &source_identity,
         content_digest: &content_digest,
     });
     RetentionRootRecord {
-        input_name: input_name.into(),
+        input_name,
         lock_digest,
         source_identity,
         content_digest,
@@ -258,7 +282,11 @@ pub fn retention_record_for_input(input_name: &str, entry: &LockEntry, generatio
     }
 }
 
-pub fn lock_entry_digest(input_name: &str, entry: &LockEntry) -> String {
+pub fn lock_entry_digest(input_name: String, entry: LockEntry) -> String {
+    entry_digest(&input_name, &entry)
+}
+
+fn entry_digest(input_name: &str, entry: &LockEntry) -> String {
     assert!(!input_name.is_empty(), "input name must not be empty");
     let mut hasher = blake3::Hasher::new();
     hash_field(&mut hasher, "domain", LOCK_ENTRY_DIGEST_DOMAIN);
@@ -268,7 +296,7 @@ pub fn lock_entry_digest(input_name: &str, entry: &LockEntry) -> String {
     hash_field(&mut hasher, "hash_value", &entry.hash.value);
     hash_string_vec(&mut hasher, "patch", &entry.patches);
     hash_string_vec(&mut hasher, "mirror", &entry.mirrors);
-    hash_field(&mut hasher, "fetch_policy", entry.fetch_policy.as_str());
+    hash_field(&mut hasher, "fetch_policy", entry.fetch_policy.wire_name());
     if let Some(freshness) = &entry.freshness {
         hash_field(&mut hasher, "freshness_input", &freshness.input_name);
         hash_field(&mut hasher, "freshness_digest", &freshness.value_digest);
@@ -276,7 +304,11 @@ pub fn lock_entry_digest(input_name: &str, entry: &LockEntry) -> String {
     hasher.finalize().to_hex().to_string()
 }
 
-pub fn locked_source_identity(kind: &LockedKind) -> String {
+pub fn locked_source_identity(kind: LockedKind) -> String {
+    source_identity(&kind)
+}
+
+fn source_identity(kind: &LockedKind) -> String {
     match kind {
         LockedKind::File { url } => format!("file:{url}"),
         LockedKind::Tarball { url } => format!("tarball:{url}"),
@@ -292,7 +324,7 @@ pub fn locked_source_identity(kind: &LockedKind) -> String {
             weak_hash,
         } => format!(
             "darcs:{repository}@{}:{}",
-            selector.identity_fragment(),
+            selector,
             context.clone().or_else(|| weak_hash.clone()).unwrap_or_else(|| "<unresolved>".into())
         ),
         LockedKind::Pijul {
@@ -302,14 +334,14 @@ pub fn locked_source_identity(kind: &LockedKind) -> String {
             change,
         } => format!(
             "pijul:{repository}@{}:{state}:{}",
-            selector.identity_fragment(),
+            selector,
             change.clone().unwrap_or_else(|| "<no-change>".into())
         ),
         LockedKind::Fossil {
             repository,
             selector,
             checkin,
-        } => format!("fossil:{repository}@{}:{checkin}", selector.identity_fragment()),
+        } => format!("fossil:{repository}@{selector}:{checkin}"),
     }
 }
 
@@ -411,9 +443,9 @@ fn desired_current_record(
     roots: &[&RetentionRootFact],
     next_generation: u32,
 ) -> RetentionRootRecord {
-    let probe = retention_record_for_input(input_name, entry, next_generation);
+    let probe = record_for_input(input_name, entry, next_generation);
     if let Some(existing) = roots.iter().find(|fact| record_matches_digest(&fact.record, &probe)) {
-        retention_record_for_input(input_name, entry, existing.record.generation)
+        record_for_input(input_name, entry, existing.record.generation)
     } else {
         probe
     }
@@ -509,7 +541,7 @@ fn push_unknown_root_actions(facts: &[RetentionRootFact], declared_names: &BTree
 
 fn policy_diagnostics(input_name: &str, policy: InputRetentionPolicy) -> Vec<RetentionDiagnostic> {
     policy
-        .validate(&format!("input '{input_name}'"))
+        .validate(format!("input '{input_name}'"))
         .into_iter()
         .map(|message| RetentionDiagnostic {
             input_name: input_name.into(),
@@ -787,7 +819,7 @@ fn hash_locked_kind(hasher: &mut blake3::Hasher, kind: &LockedKind) {
         } => {
             hash_field(hasher, "kind", "darcs");
             hash_field(hasher, "repository", repository);
-            hash_field(hasher, "selector", &selector.identity_fragment());
+            hash_field(hasher, "selector", &selector.to_string());
             hash_field(hasher, "context", context.as_deref().unwrap_or(""));
             hash_field(hasher, "weak_hash", weak_hash.as_deref().unwrap_or(""));
         }
@@ -799,7 +831,7 @@ fn hash_locked_kind(hasher: &mut blake3::Hasher, kind: &LockedKind) {
         } => {
             hash_field(hasher, "kind", "pijul");
             hash_field(hasher, "repository", repository);
-            hash_field(hasher, "selector", &selector.identity_fragment());
+            hash_field(hasher, "selector", &selector.to_string());
             hash_field(hasher, "state", state);
             hash_field(hasher, "change", change.as_deref().unwrap_or(""));
         }
@@ -810,7 +842,7 @@ fn hash_locked_kind(hasher: &mut blake3::Hasher, kind: &LockedKind) {
         } => {
             hash_field(hasher, "kind", "fossil");
             hash_field(hasher, "repository", repository);
-            hash_field(hasher, "selector", &selector.identity_fragment());
+            hash_field(hasher, "selector", &selector.to_string());
             hash_field(hasher, "checkin", checkin);
         }
     }
@@ -903,7 +935,7 @@ mod tests {
 
     fn record(hash: &str, generation: u32) -> RetentionRootRecord {
         let lock = lock_with(hash);
-        retention_record_for_input("pkg", lock.inputs.get("pkg").unwrap(), generation)
+        retention_record_for_input("pkg".into(), lock.inputs.into_values().next().unwrap(), generation)
     }
 
     fn plan(policy: InputRetentionPolicy, lock: Lockfile, existing_roots: Vec<RetentionRootFact>) -> RetentionPlan {
@@ -923,7 +955,7 @@ mod tests {
         assert_eq!(missing.actions[0].kind, RetentionRootActionKind::CreateRoot);
         assert_eq!(missing.diagnostics[0].kind, RetentionDiagnosticKind::MissingRoot);
 
-        let current = retention_record_for_input("pkg", lock.inputs.get("pkg").unwrap(), GENERATION_ONE);
+        let current = record_for_input("pkg", lock.inputs.get("pkg").unwrap(), GENERATION_ONE);
         let pinned = plan(InputRetentionPolicy::Current, lock, vec![fact(current.clone(), true)]);
         assert_eq!(pinned.statuses[0].state, RetentionInputState::Pinned);
         assert_eq!(pinned.statuses[0].root_id.as_deref(), Some(current.root_id.as_str()));
@@ -950,7 +982,7 @@ mod tests {
     fn generation_policy_keeps_bounded_newest_history() {
         let current_lock = lock_with(HASH_A);
         let older = record(HASH_B, GENERATION_ONE);
-        let current = retention_record_for_input("pkg", current_lock.inputs.get("pkg").unwrap(), GENERATION_THREE);
+        let current = record_for_input("pkg", current_lock.inputs.get("pkg").unwrap(), GENERATION_THREE);
         let plan = plan(
             InputRetentionPolicy::RecentGenerations {
                 generations: GENERATION_TWO,
@@ -999,8 +1031,8 @@ mod tests {
     fn lock_digest_binding_changes_when_hash_changes() {
         let first = lock_with(HASH_A);
         let second = lock_with(HASH_B);
-        let first_digest = lock_entry_digest("pkg", first.inputs.get("pkg").unwrap());
-        let second_digest = lock_entry_digest("pkg", second.inputs.get("pkg").unwrap());
+        let first_digest = lock_entry_digest("pkg".into(), first.inputs.into_values().next().unwrap());
+        let second_digest = lock_entry_digest("pkg".into(), second.inputs.into_values().next().unwrap());
         assert_ne!(first_digest, second_digest);
         assert_eq!(first_digest.len(), second_digest.len());
     }

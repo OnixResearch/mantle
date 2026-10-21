@@ -7,6 +7,10 @@ use alloc::vec::Vec;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::CairnReleaseBundleBinding;
+use crate::CairnReleaseEvidenceValidationReceipt;
+use crate::ContentBoundReleaseEvidenceV1;
+use crate::ContentBoundRequirementVerificationV1;
 use crate::ReleaseEvidenceError;
 use crate::opaque_evidence::FUNCTION_ADDRESS_CLAIM_SCOPE;
 use crate::opaque_evidence::FUNCTION_ADDRESS_DISPOSITION_ABSENT;
@@ -335,13 +339,11 @@ pub const SOURCE_OBSERVATION_ENCODING_VERSION: u32 = 1;
 // machine-artifact-public: source.observation-binding
 pub const SOURCE_OBSERVATION_BINDING_MARKER: &str = "source.observation-binding";
 
-/// Source-observation facts bound to one release source acquisition.
-///
-/// The binding repeats the measured subject so release evidence never trusts
-/// a producer status string: the payload digest must equal the exact release
-/// source bytes, and the observation digest must be a distinct observation
-/// identity rather than a re-labeled content digest.
+/// Source-observation facts for the exact release archive projected at `source`.
+/// The observation identity is recomputed through the source core from the
+/// acquisition's immutable facts; an arbitrary distinct digest is not evidence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SourceObservationBinding {
     pub schema: String,
     pub encoding_version: u32,
@@ -350,6 +352,95 @@ pub struct SourceObservationBinding {
     pub observation_blake3: String,
     pub snapshot_profile_name: String,
     pub snapshot_profile_version: u32,
+}
+
+impl SourceObservationBinding {
+    /// Derive a binding from measured release acquisition facts, without review
+    /// or signature authority. The release archive's logical projection is `source`.
+    pub fn for_acquisition(acquisition: SourceAcquisition) -> Result<Self, ReleaseEvidenceError> {
+        Self::from_acquisition_facts(&acquisition.kind, acquisition.url, acquisition.digest_blake3, acquisition.commit)
+    }
+
+    fn for_acquisition_borrowed(acquisition: &SourceAcquisition) -> Result<Self, ReleaseEvidenceError> {
+        Self::from_acquisition_facts(
+            &acquisition.kind,
+            acquisition.url.clone(),
+            acquisition.digest_blake3.clone(),
+            acquisition.commit.clone(),
+        )
+    }
+
+    fn from_acquisition_facts(
+        acquisition_kind: &str,
+        url: String,
+        digest_blake3: String,
+        commit: Option<String>,
+    ) -> Result<Self, ReleaseEvidenceError> {
+        use crunch_source_core::Blake3Digest;
+        use crunch_source_core::GitObjectFormat;
+        use crunch_source_core::LocatorBoundaryPolicy;
+        use crunch_source_core::LocatorClass;
+        use crunch_source_core::ProjectionPath;
+        use crunch_source_core::SnapshotProfile;
+        use crunch_source_core::SourceKind;
+        use crunch_source_core::SourceObservationRequest;
+        let (kind, locator, git_object_format) = match acquisition_kind {
+            SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE => (SourceKind::FixedUrl, LocatorClass::FixedUrl { url }, None),
+            SOURCE_ACQUISITION_KIND_GIT => {
+                let revision = commit.as_deref().unwrap_or("");
+                let format = match revision.len() {
+                    40 => GitObjectFormat::Sha1,
+                    64 => GitObjectFormat::Sha256,
+                    _ => {
+                        return Err(validation_error(
+                            "source observation requires an immutable Git object ID".to_string(),
+                        ));
+                    }
+                };
+                (SourceKind::Git, LocatorClass::GitRemote { remote: url }, Some(format))
+            }
+            _ => return Err(validation_error("source observation acquisition kind is unsupported".to_string())),
+        };
+        let payload_blake3 = Blake3Digest::parse(digest_blake3)
+            .map_err(|_| validation_error("source observation payload digest is malformed".to_string()))?;
+        let request = SourceObservationRequest {
+            kind,
+            locator,
+            mutable_ref_hint: None,
+            git_object_format,
+            git_revision: commit,
+            projection: ProjectionPath::parse("source")
+                .map_err(|_| validation_error("source observation projection is invalid".to_string()))?,
+            snapshot_profile: SnapshotProfile {
+                name: RELEASE_SOURCE_ARCHIVE_PROFILE.to_string(),
+                version: release_source_observation_profile_version()?,
+            },
+            payload_blake3,
+        };
+        let admitted = crunch_source_core::admit_source_observation(&request, &LocatorBoundaryPolicy::default());
+        let observation = admitted.observation.ok_or_else(|| {
+            validation_error(format!("release source observation admission failed: {:?}", admitted.diagnostics))
+        })?;
+        Ok(Self {
+            schema: observation.schema,
+            encoding_version: observation.encoding_version,
+            source_kind: expected_observation_kind(acquisition_kind)
+                .ok_or_else(|| validation_error("source observation acquisition kind is unsupported".to_string()))?
+                .to_string(),
+            payload_blake3: observation.payload_blake3.as_str().to_string(),
+            observation_blake3: observation.observation_blake3.as_str().to_string(),
+            snapshot_profile_name: observation.snapshot_profile.name,
+            snapshot_profile_version: observation.snapshot_profile.version,
+        })
+    }
+}
+
+fn release_source_observation_profile_version() -> Result<u32, ReleaseEvidenceError> {
+    RELEASE_SOURCE_ARCHIVE_VERSION
+        .strip_prefix('v')
+        .ok_or_else(|| validation_error("release source archive version is unsupported".to_string()))?
+        .parse()
+        .map_err(|_| validation_error("release source archive version is unsupported".to_string()))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -385,6 +476,13 @@ impl SourceAcquisition {
             archive_version: None,
             source_observation: None,
         }
+    }
+
+    /// Admit and attach the canonical observation while retaining acquisition facts.
+    pub fn with_admitted_source_observation(mut self) -> Result<Self, ReleaseEvidenceError> {
+        let binding = SourceObservationBinding::for_acquisition_borrowed(&self)?;
+        self.source_observation = Some(binding);
+        Ok(self)
     }
 
     /// Attach a versioned source-observation binding.
@@ -485,14 +583,48 @@ pub struct ReleaseEvidenceManifest {
     )]
     pub opaque_evidence_sidecar_bindings: Vec<OpaqueEvidenceSidecarBindingReceipt>,
     #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
-    pub cairn_handoff_validation: Option<crate::CairnReleaseEvidenceValidationReceipt>,
+    pub cairn_handoff_validation: Option<CairnReleaseEvidenceValidationReceipt>,
     #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub function_address_evidence: Option<FunctionAddressReleaseEvidence>,
     pub proof_linkage: ReleaseProofLinkage,
     #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub provenance_coverage: Option<ProvenanceCoverage>,
     #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
-    pub content_bound_requirement_evidence: Option<crate::ContentBoundReleaseEvidenceV1>,
+    pub content_bound_requirement_evidence: Option<ContentBoundReleaseEvidenceV1>,
+}
+
+/// Owned verification with the exact manifest retained for subsequent decisions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseEvidenceEvaluation<V> {
+    pub manifest: ReleaseEvidenceManifest,
+    pub verification: V,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseEvidenceBindingProjection {
+    pub manifest: ReleaseEvidenceManifest,
+    pub binding: CairnReleaseBundleBinding,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderFixedPointArtifactBindingEvaluation {
+    pub binaries: Vec<BundledArtifact>,
+    pub binding: Result<ProviderFixedPointReleaseArtifactBinding, ReleaseEvidenceError>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReleaseEvidenceMode {
+    Optional,
+    Required,
+}
+
+impl core::fmt::Display for ReleaseEvidenceMode {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(match self {
+            Self::Optional => "optional",
+            Self::Required => "required",
+        })
+    }
 }
 
 pub fn canonical_release_evidence_manifest(manifest: ReleaseEvidenceManifest) -> Result<Vec<u8>, ReleaseEvidenceError> {
@@ -501,6 +633,17 @@ pub fn canonical_release_evidence_manifest(manifest: ReleaseEvidenceManifest) ->
 }
 
 pub fn validate_provider_fixed_point_release_artifact_binding(
+    binaries: Vec<BundledArtifact>,
+    provider_stage_binary_digest_blake3: String,
+) -> ProviderFixedPointArtifactBindingEvaluation {
+    let binding = validate_provider_fixed_point_release_artifact_binding_borrowed(
+        &binaries,
+        &provider_stage_binary_digest_blake3,
+    );
+    ProviderFixedPointArtifactBindingEvaluation { binaries, binding }
+}
+
+fn validate_provider_fixed_point_release_artifact_binding_borrowed(
     binaries: &[BundledArtifact],
     provider_stage_binary_digest_blake3: &str,
 ) -> Result<ProviderFixedPointReleaseArtifactBinding, ReleaseEvidenceError> {
@@ -553,9 +696,17 @@ fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Res
 }
 
 pub fn evaluate_content_bound_requirement_release_evidence(
+    manifest: ReleaseEvidenceManifest,
+    mode: String,
+) -> ReleaseEvidenceEvaluation<ContentBoundRequirementVerificationV1> {
+    let verification = evaluate_content_bound_requirement_release_evidence_borrowed(&manifest, &mode);
+    ReleaseEvidenceEvaluation { manifest, verification }
+}
+
+fn evaluate_content_bound_requirement_release_evidence_borrowed(
     manifest: &ReleaseEvidenceManifest,
     mode: &str,
-) -> crate::ContentBoundRequirementVerificationV1 {
+) -> ContentBoundRequirementVerificationV1 {
     debug_assert!(manifest.binaries.capacity() >= manifest.binaries.len());
     debug_assert!(manifest.external_evidence.capacity() >= manifest.external_evidence.len());
     let binary_digests = manifest.binaries.iter().map(|artifact| artifact.digest_blake3.clone()).collect::<Vec<_>>();
@@ -569,7 +720,7 @@ pub fn evaluate_content_bound_requirement_release_evidence(
             digest_blake3: evidence.digest_blake3.clone(),
         })
         .collect::<Vec<_>>();
-    crate::evaluate_optional_content_bound_release_evidence(
+    crate::content_bound_requirements::evaluate_optional_content_bound_release_evidence_borrowed(
         manifest.content_bound_requirement_evidence.as_ref(),
         &manifest.release_id,
         &binary_digests,
@@ -581,8 +732,10 @@ pub fn evaluate_content_bound_requirement_release_evidence(
 fn validate_content_bound_requirement_manifest_evidence(
     manifest: &ReleaseEvidenceManifest,
 ) -> Result<(), ReleaseEvidenceError> {
-    let verification =
-        evaluate_content_bound_requirement_release_evidence(manifest, crate::CONTENT_BOUND_REQUIREMENT_MODE_OPTIONAL);
+    let verification = evaluate_content_bound_requirement_release_evidence_borrowed(
+        manifest,
+        crate::CONTENT_BOUND_REQUIREMENT_MODE_OPTIONAL,
+    );
     if verification.valid {
         return Ok(());
     }
@@ -595,16 +748,89 @@ fn validate_content_bound_requirement_manifest_evidence(
 }
 
 pub fn release_evidence_cairn_bundle_binding(
+    manifest: ReleaseEvidenceManifest,
+) -> Result<ReleaseEvidenceBindingProjection, ReleaseEvidenceError> {
+    let binding = release_evidence_cairn_bundle_binding_borrowed(&manifest)?;
+    Ok(ReleaseEvidenceBindingProjection { manifest, binding })
+}
+
+fn release_evidence_cairn_projection_bytes(
     manifest: &ReleaseEvidenceManifest,
-) -> Result<crate::CairnReleaseBundleBinding, ReleaseEvidenceError> {
-    let mut projection = manifest.clone();
-    projection.cairn_handoff_validation = None;
-    let projection_bytes = serde_json::to_vec(&projection)
-        .map_err(|error| parse_error(format!("serializing Cairn release manifest projection: {error}")))?;
+) -> Result<Vec<u8>, ReleaseEvidenceError> {
+    #[derive(Serialize)]
+    struct Projection<'a> {
+        schema: &'a String,
+        release_id: &'a String,
+        claim_scope: &'a String,
+        workflow: &'a ReleaseWorkflowIdentity,
+        source_archive: &'a BundledArtifact,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source_acquisition: &'a Option<SourceAcquisition>,
+        binaries: &'a Vec<BundledArtifact>,
+        proof_bundle: &'a BundledArtifact,
+        prerequisite_inventory: &'a BundledArtifact,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        provider_fixed_point_proof: &'a Option<ProviderFixedPointProofArtifact>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        reproducibility_report: &'a Option<BundledArtifact>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        deterministic_build_proof: &'a Option<RoleBoundedReleaseArtifact>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        deterministic_sandbox_isolation_evidence: &'a Option<RoleBoundedReleaseArtifact>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        independent_agreement_report: &'a Option<BundledArtifact>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        external_evidence: &'a Vec<ExternalEvidence>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        kani_toolchain_evidence: &'a Vec<KaniToolchainEvidence>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        stack_provenance: &'a Option<StackProvenanceReleaseEvidence>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        opaque_evidence_sidecar_bindings: &'a Vec<OpaqueEvidenceSidecarBindingReceipt>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        function_address_evidence: &'a Option<FunctionAddressReleaseEvidence>,
+        proof_linkage: &'a ReleaseProofLinkage,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        provenance_coverage: &'a Option<ProvenanceCoverage>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        content_bound_requirement_evidence: &'a Option<ContentBoundReleaseEvidenceV1>,
+    }
+    let projection = Projection {
+        schema: &manifest.schema,
+        release_id: &manifest.release_id,
+        claim_scope: &manifest.claim_scope,
+        workflow: &manifest.workflow,
+        source_archive: &manifest.source_archive,
+        source_acquisition: &manifest.source_acquisition,
+        binaries: &manifest.binaries,
+        proof_bundle: &manifest.proof_bundle,
+        prerequisite_inventory: &manifest.prerequisite_inventory,
+        provider_fixed_point_proof: &manifest.provider_fixed_point_proof,
+        reproducibility_report: &manifest.reproducibility_report,
+        deterministic_build_proof: &manifest.deterministic_build_proof,
+        deterministic_sandbox_isolation_evidence: &manifest.deterministic_sandbox_isolation_evidence,
+        independent_agreement_report: &manifest.independent_agreement_report,
+        external_evidence: &manifest.external_evidence,
+        kani_toolchain_evidence: &manifest.kani_toolchain_evidence,
+        stack_provenance: &manifest.stack_provenance,
+        opaque_evidence_sidecar_bindings: &manifest.opaque_evidence_sidecar_bindings,
+        function_address_evidence: &manifest.function_address_evidence,
+        proof_linkage: &manifest.proof_linkage,
+        provenance_coverage: &manifest.provenance_coverage,
+        content_bound_requirement_evidence: &manifest.content_bound_requirement_evidence,
+    };
+    serde_json::to_vec(&projection)
+        .map_err(|error| parse_error(format!("serializing Cairn release manifest projection: {error}")))
+}
+
+fn release_evidence_cairn_bundle_binding_borrowed(
+    manifest: &ReleaseEvidenceManifest,
+) -> Result<CairnReleaseBundleBinding, ReleaseEvidenceError> {
+    let projection_bytes = release_evidence_cairn_projection_bytes(manifest)?;
     let mut hasher = blake3::Hasher::new();
     hasher.update(CAIRN_RELEASE_MANIFEST_PROJECTION_DOMAIN);
     hasher.update(&projection_bytes);
-    Ok(crate::CairnReleaseBundleBinding {
+    Ok(CairnReleaseBundleBinding {
         release_id: manifest.release_id.clone(),
         source_archive_digest_blake3: manifest.source_archive.digest_blake3.clone(),
         binary_digests_blake3: manifest.binaries.iter().map(|artifact| artifact.digest_blake3.clone()).collect(),
@@ -615,9 +841,12 @@ pub fn release_evidence_cairn_bundle_binding(
 }
 
 fn validate_cairn_handoff_manifest(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
-    let binding = release_evidence_cairn_bundle_binding(manifest)?;
-    let verification =
-        crate::evaluate_cairn_handoff_release_evidence(manifest.cairn_handoff_validation.as_ref(), &binding, false);
+    let binding = release_evidence_cairn_bundle_binding_borrowed(manifest)?;
+    let verification = crate::cairn_handoff::evaluate_cairn_handoff_release_evidence_borrowed(
+        manifest.cairn_handoff_validation.as_ref(),
+        &binding,
+        false,
+    );
     if verification.valid {
         return Ok(());
     }
@@ -670,28 +899,35 @@ fn validate_opaque_evidence_sidecar_bindings(manifest: &ReleaseEvidenceManifest)
     Ok(())
 }
 
-// Compatibility: downstream callers rely on this stable two-string public selection API.
 #[allow(tigerstyle::ambiguous_params)]
 pub fn stack_provenance_mode_for_release_profile(
-    release_profile: &str,
-    requested_mode: &str,
-) -> Result<&'static str, ReleaseEvidenceError> {
-    if !stack_provenance_mode_is_supported(requested_mode) {
+    release_profile: String,
+    requested_mode: String,
+) -> Result<ReleaseEvidenceMode, ReleaseEvidenceError> {
+    if !stack_provenance_mode_is_supported(&requested_mode) {
         return Err(validation_error(format!("unsupported stack provenance mode: {requested_mode}")));
     }
-    match release_profile {
+    match release_profile.as_str() {
         RELEASE_PROFILE_GENERIC => {
             if requested_mode == STACK_PROVENANCE_MODE_OPTIONAL {
-                return Ok(STACK_PROVENANCE_MODE_OPTIONAL);
+                return Ok(ReleaseEvidenceMode::Optional);
             }
-            Ok(STACK_PROVENANCE_MODE_REQUIRED)
+            Ok(ReleaseEvidenceMode::Required)
         }
-        RELEASE_PROFILE_ONIX_STACK => Ok(STACK_PROVENANCE_MODE_REQUIRED),
+        RELEASE_PROFILE_ONIX_STACK => Ok(ReleaseEvidenceMode::Required),
         _ => Err(validation_error(format!("unsupported release profile: {release_profile}"))),
     }
 }
 
 pub fn evaluate_stack_provenance_release_evidence(
+    manifest: ReleaseEvidenceManifest,
+    mode: String,
+) -> ReleaseEvidenceEvaluation<StackProvenanceReleaseVerification> {
+    let verification = evaluate_stack_provenance_release_evidence_borrowed(&manifest, &mode);
+    ReleaseEvidenceEvaluation { manifest, verification }
+}
+
+fn evaluate_stack_provenance_release_evidence_borrowed(
     manifest: &ReleaseEvidenceManifest,
     mode: &str,
 ) -> StackProvenanceReleaseVerification {
@@ -770,21 +1006,20 @@ fn present_stack_provenance_verification(
     verification
 }
 
-// Compatibility: downstream callers rely on this stable two-string public selection API.
 #[allow(tigerstyle::ambiguous_params)]
 pub fn function_address_evidence_mode_for_release_profile(
-    release_profile: &str,
-    requested_mode: &str,
-) -> Result<&'static str, ReleaseEvidenceError> {
-    if !function_address_mode_is_supported(requested_mode) {
+    release_profile: String,
+    requested_mode: String,
+) -> Result<ReleaseEvidenceMode, ReleaseEvidenceError> {
+    if !function_address_mode_is_supported(&requested_mode) {
         return Err(validation_error(format!("unsupported function-address evidence mode: {requested_mode}")));
     }
-    match release_profile {
+    match release_profile.as_str() {
         RELEASE_PROFILE_GENERIC | RELEASE_PROFILE_ONIX_STACK => {
             if requested_mode == FUNCTION_ADDRESS_MODE_OPTIONAL {
-                return Ok(FUNCTION_ADDRESS_MODE_OPTIONAL);
+                return Ok(ReleaseEvidenceMode::Optional);
             }
-            Ok(FUNCTION_ADDRESS_MODE_REQUIRED)
+            Ok(ReleaseEvidenceMode::Required)
         }
         _ => Err(validation_error(format!("unsupported release profile: {release_profile}"))),
     }
@@ -793,6 +1028,14 @@ pub fn function_address_evidence_mode_for_release_profile(
 // r[impl mantle.release_provenance.opaque_evidence_sidecar_binding.function_address]
 // r[impl mantle.release_provenance.opaque_evidence_sidecar_binding.opaque_core]
 pub fn evaluate_function_address_release_evidence(
+    manifest: ReleaseEvidenceManifest,
+    mode: String,
+) -> ReleaseEvidenceEvaluation<FunctionAddressReleaseVerification> {
+    let verification = evaluate_function_address_release_evidence_borrowed(&manifest, &mode);
+    ReleaseEvidenceEvaluation { manifest, verification }
+}
+
+pub(super) fn evaluate_function_address_release_evidence_borrowed(
     manifest: &ReleaseEvidenceManifest,
     mode: &str,
 ) -> FunctionAddressReleaseVerification {
@@ -2082,7 +2325,7 @@ fn record_unique_artifact_path(
     Ok(())
 }
 
-fn validate_source_acquisition(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+pub(crate) fn validate_source_acquisition(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
     let Some(source_acquisition) = &manifest.source_acquisition else {
         return Ok(());
     };
@@ -2151,11 +2394,15 @@ fn validate_source_observation_binding(source_acquisition: &SourceAcquisition) -
                 .to_string(),
         ));
     }
-    if let Ok(expected_version) = RELEASE_SOURCE_ARCHIVE_VERSION.parse::<u32>()
-        && binding.snapshot_profile_version != expected_version
-    {
+    if binding.snapshot_profile_version != release_source_observation_profile_version()? {
         return Err(validation_error(
             "release evidence source_observation snapshot profile version must match the release source archive profile".to_string(),
+        ));
+    }
+    let expected = SourceObservationBinding::for_acquisition_borrowed(source_acquisition)?;
+    if binding != &expected {
+        return Err(validation_error(
+            "release evidence source_observation identity must match the admitted exact source acquisition, revision, projection, and profile".to_string(),
         ));
     }
     debug_assert!(!binding.schema.is_empty());
@@ -2612,6 +2859,8 @@ mod tests {
     use pretty_assertions::assert_eq;
     use serde_json::json;
 
+    use super::evaluate_function_address_release_evidence_borrowed as evaluate_function_address_release_evidence;
+    use super::evaluate_stack_provenance_release_evidence_borrowed as evaluate_stack_provenance_release_evidence;
     use super::*;
     use crate::opaque_evidence::MAX_TRELLIS_PROOF_PRESERVES_SIDECAR_BYTES;
     use crate::opaque_evidence::TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE;
@@ -2625,7 +2874,7 @@ mod tests {
     use crate::trellis_proof_binding::TRELLIS_PROOF_MODE_OPTIONAL;
     use crate::trellis_proof_binding::TRELLIS_PROOF_MODE_REQUIRED;
     use crate::trellis_proof_binding::TrellisProofArtifactObservations;
-    use crate::trellis_proof_binding::evaluate_trellis_proof_release_evidence;
+    use crate::trellis_proof_binding::evaluate_trellis_proof_release_evidence_borrowed as evaluate_trellis_proof_release_evidence;
 
     const SOURCE_ARCHIVE_DIGEST_SEED: u8 = 1;
     const RELEASE_BINARY_DIGEST_SEED: u8 = 3;
@@ -3246,6 +3495,95 @@ mod tests {
         }
     }
 
+    fn populated_cairn_projection_manifest() -> ReleaseEvidenceManifest {
+        let mut manifest = sample_function_address_manifest(true);
+        manifest.source_acquisition = Some(
+            SourceAcquisition::external_archive(
+                "https://example.invalid/source.tar".to_string(),
+                manifest.source_archive.digest_blake3.clone(),
+            )
+            .with_admitted_source_observation()
+            .unwrap(),
+        );
+        manifest.provider_fixed_point_proof = Some(sample_provider_fixed_point_artifact(8));
+        manifest.reproducibility_report = Some(sample_artifact(BundledArtifactKind::File, "reports/repro.json", 9));
+        manifest.deterministic_build_proof = Some(sample_role_bounded_artifact(
+            "proof/deterministic.json",
+            DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE,
+            10,
+        ));
+        manifest.deterministic_sandbox_isolation_evidence = Some(sample_role_bounded_artifact(
+            "proof/isolation.json",
+            DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE,
+            11,
+        ));
+        manifest.independent_agreement_report =
+            Some(sample_artifact(BundledArtifactKind::File, "reports/agreement.json", 12));
+        manifest.kani_toolchain_evidence = vec![sample_kani_toolchain_evidence()];
+        manifest.stack_provenance = Some(sample_stack_provenance_release_evidence());
+        manifest.function_address_evidence = Some(sample_legacy_function_address_release_evidence(true));
+        manifest.provenance_coverage = Some(ProvenanceCoverage {
+            binary_hash: manifest.binaries[0].digest_blake3.clone(),
+            covered_source_ids: vec!["source-1".to_string()],
+            covered_function_object_ids: vec!["function-1".to_string()],
+            covered_requirement_ids: vec!["requirement-1".to_string()],
+            coverage_boundary: PROVENANCE_COVERAGE_BOUNDARY.to_string(),
+        });
+        manifest
+    }
+
+    fn excluded_cairn_projection_receipt(binding: CairnReleaseBundleBinding) -> CairnReleaseEvidenceValidationReceipt {
+        // Projection is an identity operation, not receipt authentication or policy validation.
+        serde_json::from_value(json!({
+            "schema": "excluded-receipt-marker",
+            "validation_status": "excluded",
+            "authentication_status": "excluded",
+            "bundle_binding": binding,
+            "bundle_binding_blake3": sample_digest(13),
+            "handoff": {
+                "authentication": {
+                    "schema": "excluded-authentication",
+                    "change_name": "excluded-change",
+                    "cairn_revision": "excluded-revision",
+                    "archive_manifest_blake3": sample_digest(14),
+                    "archive_mutation_receipt_blake3": sample_digest(15),
+                    "archive_receipt": {
+                        "relative_path": "cairn/receipt.json",
+                        "size_bytes": 1,
+                        "declared_digest_blake3": sample_digest(1),
+                        "measured_digest_blake3": sample_digest(1)
+                    }
+                },
+                "rows": []
+            },
+            "boundary": "excluded-boundary",
+            "non_claims": ["not release correctness"],
+            "receipt_blake3": sample_digest(2)
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn cairn_projection_preserves_manifest_encoding_and_excludes_receipt() {
+        for manifest in [sample_manifest(), populated_cairn_projection_manifest()] {
+            let bytes_without_receipt = serde_json::to_vec(&manifest).unwrap();
+            let mut hasher = blake3::Hasher::new();
+            hasher.update(CAIRN_RELEASE_MANIFEST_PROJECTION_DOMAIN);
+            hasher.update(&bytes_without_receipt);
+            let expected_digest = hasher.finalize().to_hex().to_string();
+            let projection = release_evidence_cairn_bundle_binding(manifest).unwrap();
+            assert_eq!(projection.binding.release_manifest_projection_blake3, expected_digest);
+            let mut manifest = projection.manifest;
+            manifest.cairn_handoff_validation = Some(excluded_cairn_projection_receipt(projection.binding));
+            let with_receipt = release_evidence_cairn_bundle_binding(manifest).unwrap();
+            assert_eq!(with_receipt.binding.release_manifest_projection_blake3, expected_digest);
+            let mut changed = with_receipt.manifest;
+            changed.release_id.push_str("-changed");
+            let changed = release_evidence_cairn_bundle_binding(changed).unwrap();
+            assert_ne!(changed.binding.release_manifest_projection_blake3, expected_digest);
+        }
+    }
+
     fn sample_full_proof_manifest(inventory_digest: &str, stage2_digest: &str) -> Vec<u8> {
         serde_json::to_vec(&json!({
             "schema": FULL_SELF_HOSTING_PROOF_SCHEMA,
@@ -3360,31 +3698,91 @@ mod tests {
     }
 
     fn sample_observation_binding(payload_blake3: &str) -> SourceObservationBinding {
-        SourceObservationBinding {
-            schema: SOURCE_OBSERVATION_SCHEMA.to_string(),
-            encoding_version: SOURCE_OBSERVATION_ENCODING_VERSION,
-            source_kind: "fixed-url".to_string(),
-            payload_blake3: payload_blake3.to_string(),
-            observation_blake3: sample_digest(7),
-            snapshot_profile_name: RELEASE_SOURCE_ARCHIVE_PROFILE.to_string(),
-            snapshot_profile_version: 1,
-        }
+        SourceObservationBinding::for_acquisition_borrowed(&SourceAcquisition::external_archive(
+            "https://example.invalid/mantle-src.tar".to_string(),
+            payload_blake3.to_string(),
+        ))
+        .unwrap()
     }
 
     #[test]
-    fn validate_accepts_bound_source_observation() {
+    fn observation_binding_is_covered_by_release_manifest_identity() {
         let mut manifest = sample_manifest();
         let payload = manifest.source_archive.digest_blake3.clone();
-        manifest.source_acquisition = Some(
-            SourceAcquisition::external_archive("https://example.invalid/mantle-src.tar".to_string(), payload.clone())
-                .with_source_observation(sample_observation_binding(&payload)),
+        manifest.source_acquisition = Some(SourceAcquisition::external_archive(
+            "https://example.invalid/mantle-src.tar".to_string(),
+            payload.clone(),
+        ));
+        let without = canonical_release_evidence_manifest(manifest.clone()).unwrap();
+        manifest.source_acquisition.as_mut().unwrap().source_observation = Some(sample_observation_binding(&payload));
+        let with = canonical_release_evidence_manifest(manifest.clone()).unwrap();
+        assert_ne!(blake3::hash(&without), blake3::hash(&with));
+        manifest
+            .source_acquisition
+            .as_mut()
+            .unwrap()
+            .source_observation
+            .as_mut()
+            .unwrap()
+            .observation_blake3 = sample_digest(8);
+        assert!(canonical_release_evidence_manifest(manifest).is_err());
+    }
+
+    #[test]
+    fn git_observation_rejects_revision_and_projection_drift() {
+        let mut manifest = sample_manifest();
+        let mut acquisition = SourceAcquisition::git(
+            "https://example.invalid/source.git".to_string(),
+            "a".repeat(40),
+            None,
+            None,
+            manifest.source_archive.digest_blake3.clone(),
         );
-
-        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
-        let text = String::from_utf8(bytes).unwrap();
-
-        assert!(text.contains("source_observation"));
-        assert!(text.contains(SOURCE_OBSERVATION_SCHEMA));
+        let binding = SourceObservationBinding::for_acquisition_borrowed(&acquisition).unwrap();
+        acquisition.source_observation = Some(binding.clone());
+        manifest.source_acquisition = Some(acquisition.clone());
+        let accepted = canonical_release_evidence_manifest(manifest.clone()).unwrap();
+        acquisition.commit = Some("b".repeat(40));
+        manifest.source_acquisition = Some(acquisition.clone());
+        assert!(canonical_release_evidence_manifest(manifest.clone()).is_err());
+        acquisition.source_observation =
+            Some(SourceObservationBinding::for_acquisition_borrowed(&acquisition).unwrap());
+        manifest.source_acquisition = Some(acquisition);
+        let changed = canonical_release_evidence_manifest(manifest).unwrap();
+        assert_ne!(blake3::hash(&accepted), blake3::hash(&changed));
+        let wrong_projection = crunch_source_core::admit_source_observation(
+            &crunch_source_core::SourceObservationRequest {
+                kind: crunch_source_core::SourceKind::Git,
+                locator: crunch_source_core::LocatorClass::GitRemote {
+                    remote: "https://example.invalid/source.git".to_string(),
+                },
+                mutable_ref_hint: None,
+                git_object_format: Some(crunch_source_core::GitObjectFormat::Sha1),
+                git_revision: Some("a".repeat(40)),
+                projection: crunch_source_core::ProjectionPath::parse("other").unwrap(),
+                snapshot_profile: crunch_source_core::SnapshotProfile {
+                    name: RELEASE_SOURCE_ARCHIVE_PROFILE.to_string(),
+                    version: 1,
+                },
+                payload_blake3: crunch_source_core::Blake3Digest::parse(binding.payload_blake3.clone()).unwrap(),
+            },
+            &crunch_source_core::LocatorBoundaryPolicy::default(),
+        )
+        .observation
+        .unwrap();
+        let mut manifest = sample_manifest();
+        let mut acquisition = SourceAcquisition::git(
+            "https://example.invalid/source.git".to_string(),
+            "a".repeat(40),
+            None,
+            None,
+            manifest.source_archive.digest_blake3.clone(),
+        );
+        let mut drifted = binding;
+        drifted.observation_blake3 = wrong_projection.observation_blake3.as_str().to_string();
+        acquisition.source_observation = Some(drifted);
+        manifest.source_acquisition = Some(acquisition);
+        assert!(canonical_release_evidence_manifest(manifest).is_err());
     }
 
     #[test]
@@ -3620,8 +4018,9 @@ mod tests {
         let manifest = sample_manifest();
         let stage_digest = manifest.binaries[0].digest_blake3.clone();
 
-        let binding =
-            validate_provider_fixed_point_release_artifact_binding(&manifest.binaries, &stage_digest).unwrap();
+        let evaluation =
+            validate_provider_fixed_point_release_artifact_binding(manifest.binaries, stage_digest.clone());
+        let binding = evaluation.binding.unwrap();
 
         assert_eq!(binding.relative_path, "binaries/01-mantle");
         assert_eq!(binding.digest_blake3, stage_digest);
@@ -3630,15 +4029,18 @@ mod tests {
     #[test]
     fn provider_fixed_point_release_artifact_binding_rejects_mismatch() {
         let manifest = sample_manifest();
-        let err =
-            validate_provider_fixed_point_release_artifact_binding(&manifest.binaries, &sample_digest(12)).unwrap_err();
+        let evaluation = validate_provider_fixed_point_release_artifact_binding(manifest.binaries, sample_digest(12));
+        let err = evaluation.binding.unwrap_err();
+        assert_eq!(evaluation.binaries[0].relative_path, "binaries/01-mantle");
 
         assert!(err.to_string().contains("does not match any bundled release binary artifact"));
     }
 
     #[test]
     fn provider_fixed_point_release_artifact_binding_rejects_missing_binaries() {
-        let err = validate_provider_fixed_point_release_artifact_binding(&[], &sample_digest(12)).unwrap_err();
+        let err = validate_provider_fixed_point_release_artifact_binding(Vec::new(), sample_digest(12))
+            .binding
+            .unwrap_err();
 
         assert!(err.to_string().contains("at least one binary artifact"));
     }
@@ -3646,8 +4048,9 @@ mod tests {
     #[test]
     fn provider_fixed_point_release_artifact_binding_rejects_malformed_digest() {
         let manifest = sample_manifest();
-        let err =
-            validate_provider_fixed_point_release_artifact_binding(&manifest.binaries, "not-a-blake3").unwrap_err();
+        let err = validate_provider_fixed_point_release_artifact_binding(manifest.binaries, "not-a-blake3".to_string())
+            .binding
+            .unwrap_err();
 
         assert!(err.to_string().contains("provider_fixed_point.stage_binary_digest_blake3"));
     }
@@ -3918,29 +4321,44 @@ mod tests {
     // r[verify mantle.release_provenance.stack_profile.docs.generic]
     #[test]
     fn release_profile_maps_generic_and_onix_stack_modes() {
-        let generic_optional =
-            stack_provenance_mode_for_release_profile(RELEASE_PROFILE_GENERIC, STACK_PROVENANCE_MODE_OPTIONAL).unwrap();
-        let generic_required =
-            stack_provenance_mode_for_release_profile(RELEASE_PROFILE_GENERIC, STACK_PROVENANCE_MODE_REQUIRED).unwrap();
-        let onix_from_optional =
-            stack_provenance_mode_for_release_profile(RELEASE_PROFILE_ONIX_STACK, STACK_PROVENANCE_MODE_OPTIONAL)
-                .unwrap();
-        let onix_from_required =
-            stack_provenance_mode_for_release_profile(RELEASE_PROFILE_ONIX_STACK, STACK_PROVENANCE_MODE_REQUIRED)
-                .unwrap();
+        let generic_optional = stack_provenance_mode_for_release_profile(
+            RELEASE_PROFILE_GENERIC.to_string(),
+            STACK_PROVENANCE_MODE_OPTIONAL.to_string(),
+        )
+        .unwrap();
+        let generic_required = stack_provenance_mode_for_release_profile(
+            RELEASE_PROFILE_GENERIC.to_string(),
+            STACK_PROVENANCE_MODE_REQUIRED.to_string(),
+        )
+        .unwrap();
+        let onix_from_optional = stack_provenance_mode_for_release_profile(
+            RELEASE_PROFILE_ONIX_STACK.to_string(),
+            STACK_PROVENANCE_MODE_OPTIONAL.to_string(),
+        )
+        .unwrap();
+        let onix_from_required = stack_provenance_mode_for_release_profile(
+            RELEASE_PROFILE_ONIX_STACK.to_string(),
+            STACK_PROVENANCE_MODE_REQUIRED.to_string(),
+        )
+        .unwrap();
 
-        assert_eq!(STACK_PROVENANCE_MODE_OPTIONAL, generic_optional);
-        assert_eq!(STACK_PROVENANCE_MODE_REQUIRED, generic_required);
-        assert_eq!(STACK_PROVENANCE_MODE_REQUIRED, onix_from_optional);
-        assert_eq!(STACK_PROVENANCE_MODE_REQUIRED, onix_from_required);
+        assert_eq!(ReleaseEvidenceMode::Optional, generic_optional);
+        assert_eq!(ReleaseEvidenceMode::Required, generic_required);
+        assert_eq!(ReleaseEvidenceMode::Required, onix_from_optional);
+        assert_eq!(ReleaseEvidenceMode::Required, onix_from_required);
     }
 
     // r[verify mantle.release_provenance.stack_profile.negative]
     #[test]
     fn release_profile_rejects_unsupported_profile_or_stack_mode() {
-        let profile_err =
-            stack_provenance_mode_for_release_profile("experimental", STACK_PROVENANCE_MODE_OPTIONAL).unwrap_err();
-        let mode_err = stack_provenance_mode_for_release_profile(RELEASE_PROFILE_GENERIC, "ambient").unwrap_err();
+        let profile_err = stack_provenance_mode_for_release_profile(
+            "experimental".to_string(),
+            STACK_PROVENANCE_MODE_OPTIONAL.to_string(),
+        )
+        .unwrap_err();
+        let mode_err =
+            stack_provenance_mode_for_release_profile(RELEASE_PROFILE_GENERIC.to_string(), "ambient".to_string())
+                .unwrap_err();
 
         assert!(profile_err.to_string().contains("unsupported release profile"));
         assert!(mode_err.to_string().contains("unsupported stack provenance mode"));
@@ -4232,36 +4650,45 @@ mod tests {
 
     #[test]
     fn function_address_release_profile_maps_optional_and_required_modes() {
-        let generic_optional =
-            function_address_evidence_mode_for_release_profile(RELEASE_PROFILE_GENERIC, FUNCTION_ADDRESS_MODE_OPTIONAL)
-                .unwrap();
-        let generic_required =
-            function_address_evidence_mode_for_release_profile(RELEASE_PROFILE_GENERIC, FUNCTION_ADDRESS_MODE_REQUIRED)
-                .unwrap();
+        let generic_optional = function_address_evidence_mode_for_release_profile(
+            RELEASE_PROFILE_GENERIC.to_string(),
+            FUNCTION_ADDRESS_MODE_OPTIONAL.to_string(),
+        )
+        .unwrap();
+        let generic_required = function_address_evidence_mode_for_release_profile(
+            RELEASE_PROFILE_GENERIC.to_string(),
+            FUNCTION_ADDRESS_MODE_REQUIRED.to_string(),
+        )
+        .unwrap();
         let onix_optional = function_address_evidence_mode_for_release_profile(
-            RELEASE_PROFILE_ONIX_STACK,
-            FUNCTION_ADDRESS_MODE_OPTIONAL,
+            RELEASE_PROFILE_ONIX_STACK.to_string(),
+            FUNCTION_ADDRESS_MODE_OPTIONAL.to_string(),
         )
         .unwrap();
         let onix_required = function_address_evidence_mode_for_release_profile(
-            RELEASE_PROFILE_ONIX_STACK,
-            FUNCTION_ADDRESS_MODE_REQUIRED,
+            RELEASE_PROFILE_ONIX_STACK.to_string(),
+            FUNCTION_ADDRESS_MODE_REQUIRED.to_string(),
         )
         .unwrap();
 
-        assert_eq!(FUNCTION_ADDRESS_MODE_OPTIONAL, generic_optional);
-        assert_eq!(FUNCTION_ADDRESS_MODE_REQUIRED, generic_required);
-        assert_eq!(FUNCTION_ADDRESS_MODE_OPTIONAL, onix_optional);
-        assert_eq!(FUNCTION_ADDRESS_MODE_REQUIRED, onix_required);
+        assert_eq!(ReleaseEvidenceMode::Optional, generic_optional);
+        assert_eq!(ReleaseEvidenceMode::Required, generic_required);
+        assert_eq!(ReleaseEvidenceMode::Optional, onix_optional);
+        assert_eq!(ReleaseEvidenceMode::Required, onix_required);
     }
 
     #[test]
     fn function_address_release_profile_rejects_unsupported_profile_or_mode() {
-        let profile_err =
-            function_address_evidence_mode_for_release_profile("experimental", FUNCTION_ADDRESS_MODE_OPTIONAL)
-                .unwrap_err();
-        let mode_err =
-            function_address_evidence_mode_for_release_profile(RELEASE_PROFILE_GENERIC, "ambient").unwrap_err();
+        let profile_err = function_address_evidence_mode_for_release_profile(
+            "experimental".to_string(),
+            FUNCTION_ADDRESS_MODE_OPTIONAL.to_string(),
+        )
+        .unwrap_err();
+        let mode_err = function_address_evidence_mode_for_release_profile(
+            RELEASE_PROFILE_GENERIC.to_string(),
+            "ambient".to_string(),
+        )
+        .unwrap_err();
 
         assert!(profile_err.to_string().contains("unsupported release profile"));
         assert!(mode_err.to_string().contains("unsupported function-address evidence mode"));

@@ -81,6 +81,38 @@ revision is claimed; any unavoidable fork patch needs an explicit owner,
 exact changed span, current post-patch digest, and actual process teardown
 proof before watch acceptance.
 
+The reproducible local fork importer (`scripts/import-snix-build-fork.py`)
+still reconstructs Mantle revision
+`da00f58425740adea559ef926c9dfa97b2cb8240`, tree
+`a0979715301705e77c8567cb1bea054dc996000c`; this is not an upstream pin.
+It applies the unchanged `patches/snix-build-watch-pidfd.patch` first and
+checks its watch-only postimage BLAKE3
+`c6c6578b808adf15551e55f733f7702d3ec59899f22599f58e7a4a48a1a4a897`.
+The subsequent `patches/snix-build-compile-socket.patch` changes only
+`src/buildservice/bwrap.rs` and `src/bwrap/mod.rs` in that vendor tree:
+an explicit socket-only constructor, fixed guest
+`/run/mantle/compile-cache.sock`, per-execution endpoint revalidation,
+missing-endpoint degradation, workspace overlap denial, and socket (not
+directory) bind-target creation. The full two-patch postimage BLAKE3 is
+`bb90e00828c9ede7ba72c0b64246ec84c8fa1a42f5aa69539aa578def41ca645`.
+The importer permits cutover only from the exact pinned source or the exact
+recorded watch-only postimage, preserving rollback to the admitted preimage.
+These are source provenance facts, not socket-mount or watch acceptance.
+
+The execution opt-in is `mantle build --compile-driver-runtime <PATH>`.
+Its bounded `mantle-compile-driver-runtime-v1` JSON names `host_socket`,
+`build_id`, exact `admitted_builders`, and an external `receipt_path`.
+Guest paths are not configurable. The local socket constructor is followed
+by `CompileDriverBuildService`; only that execution wrapper injects
+`MANTLE_CC_CACHE_SOCKET` and `MANTLE_COMPILE_BUILD_ID`, after graph identity.
+The normal executor is unchanged when the option is absent. Remote, watch,
+plan, strict-hermetic, and signed offline-manifest builds reject the option;
+self-build and promoted proof routes have no such option and retain `None`.
+Inherited compiler-cache/scheduling keys cannot authorize runtime or cold
+proof execution. Mapping receipts remain performance observations, never
+proof evidence. Driver/compiler inventory admission and real mounted-socket
+proof remain separate required acceptance checks.
+
 The pre-patch standalone Tokio/Bubblewrap probe used real
 `--unshare-pid --new-session` sandboxes with a bind-mounted scratch marker,
 aborted the task after the builder wrote `started`, and waited four seconds.

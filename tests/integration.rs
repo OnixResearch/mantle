@@ -202,6 +202,7 @@ async fn open_http_pull_test_store(dir: &Path) -> crunch_store::StoreHandle {
     std::fs::create_dir_all(&state_dir).unwrap();
     std::fs::create_dir_all(&output_dir).unwrap();
     crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        source_admission: None,
         backend: crunch_store::StoreBackend::Snix,
         state_dir,
         output_dir,

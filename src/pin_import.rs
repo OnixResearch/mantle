@@ -312,7 +312,7 @@ pub fn run_pin_import(options: PinImportShellOptions<'_>) -> Result<(), RunError
     let read = import_observation(
         PIN_IMPORT_READ_EFFECT,
         EffectKind::ReadFiles,
-        if !plan.can_apply() {
+        if !plan.blockers.is_empty() {
             ObservationStatus::Failed
         } else if read_calls == 0 {
             ObservationStatus::Skipped
@@ -326,14 +326,14 @@ pub fn run_pin_import(options: PinImportShellOptions<'_>) -> Result<(), RunError
     debug_assert_eq!(plan.source_label, options.pins_file.display().to_string());
 
     if !options.apply {
-        if plan.can_apply() {
+        if plan.blockers.is_empty() {
             classify_import_effects(&effects, std::slice::from_ref(&read))?;
         } else {
             classify_blocked_import_effects(&effects, &read)?;
         }
     }
     if options.apply {
-        if !plan.can_apply() {
+        if !plan.blockers.is_empty() {
             classify_blocked_import_effects(&effects, &read)?;
             emit_pin_import_plan(&plan, PinImportDisplay {
                 is_applied: false,
@@ -374,7 +374,7 @@ pub fn run_pin_import(options: PinImportShellOptions<'_>) -> Result<(), RunError
         is_applied: false,
         is_json: options.json,
     })?;
-    if plan.can_apply() {
+    if plan.blockers.is_empty() {
         return Ok(());
     }
     Err(RunError::Reported(PIN_IMPORT_BLOCKED_EXIT_CODE))
@@ -814,7 +814,7 @@ fn apply_pin_import_plan(
     targets: &[&str],
 ) -> Result<ImportApplied, ImportApplyError> {
     let mut facts = ImportApplyFacts { writes: 0, verified: 0 };
-    if !plan.can_apply() {
+    if !plan.blockers.is_empty() {
         return Err(import_apply_error(
             ImportApplyPhase::Preflight,
             facts,
@@ -891,7 +891,7 @@ struct PinImportDisplay {
 }
 
 fn emit_pin_import_plan(plan: &crunch_project::PinImportPlan, display: PinImportDisplay) -> Result<(), RunError> {
-    debug_assert!(!display.is_applied || plan.can_apply());
+    debug_assert!(!display.is_applied || plan.blockers.is_empty());
     debug_assert!(plan.file_operations.len() <= plan.file_operations.capacity());
     if display.is_json {
         let rendered = serde_json::to_string_pretty(plan)
@@ -953,7 +953,7 @@ mod tests {
         let (pin_set, _) = load_pin_set(Path::new("."), Path::new("missing.json"), &options, &output).unwrap();
         let plan = crunch_project::build_pin_import_plan(pin_set, options);
 
-        assert!(!plan.can_apply());
+        assert!(!plan.blockers.is_empty());
         assert!(plan.blockers.iter().any(|blocker| blocker.class == "future-adapter"));
         assert!(plan.file_operations.is_empty());
     }

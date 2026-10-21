@@ -1,0 +1,21 @@
+[package]
+name = "mantle-android-native-minimal"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+members = ["macro"]
+
+[dependencies]
+native-value = { path = "macro" }
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+answer-two = []
+try-network = []
+try-undeclared = []
+
+[profile.release]
+panic = "abort"

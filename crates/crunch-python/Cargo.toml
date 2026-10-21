@@ -1,0 +1,16 @@
+[package]
+name = "crunch-python"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mantle-python"
+path = "src/main.rs"
+
+[dependencies]
+crunch-python-core = { path = "../crunch-python-core" }
+mantle-rust-plan-core = { path = "../mantle-rust-plan-core" }
+blake3 = "=1.8.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

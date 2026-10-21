@@ -35,6 +35,78 @@ fn fake_ok_script() -> &'static str {
     "#!/bin/sh\nexit 0\n"
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn terminal_report_output_failure_is_a_cli_error_not_a_panic() {
+    let root = TempDir::new().unwrap();
+    let full = fs::OpenOptions::new().write(true).open("/dev/full").unwrap();
+    let mut command = std::process::Command::new(assert_cmd::cargo::cargo_bin("crunch"));
+    command.arg("--state-dir").arg(root.path().join("state")).args([
+        "__operator-contract",
+        "--mode",
+        "raw-descriptors",
+    ]);
+    command.stdout(full);
+    let output = command.output().unwrap();
+    assert_eq!(output.status.code(), Some(3), "{output:?}");
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("writing operator command descriptors"), "{stderr}");
+    assert!(!stderr.contains("panicked"), "{stderr}");
+    assert!(!root.path().join("state").exists());
+}
+
+#[test]
+fn refactor_apply_reports_only_the_verified_renamed_content() {
+    let root = TempDir::new().unwrap();
+    fs::write(root.path().join("crunch-project.ncl"), "{ identity = \"original\" }").unwrap();
+    let output = crunch()
+        .arg("--state-dir")
+        .arg(root.path().join("state"))
+        .args([
+            "--json",
+            "refactor",
+            "apply",
+            "crunch-to-mantle-project-identity",
+            "--root",
+        ])
+        .arg(root.path())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["dry_run"], false);
+    assert_eq!(report["operations"][0]["to"], "mantle-project.ncl");
+    assert!(!root.path().join("crunch-project.ncl").exists());
+    assert_eq!(fs::read_to_string(root.path().join("mantle-project.ncl")).unwrap(), "{ identity = \"original\" }");
+    assert!(!root.path().join("state").exists());
+}
+
+#[test]
+fn refactor_inspection_adapter_fault_cannot_emit_a_success_plan() {
+    let root = TempDir::new().unwrap();
+    let input = root.path().join("not-a-directory");
+    fs::write(&input, "original").unwrap();
+    let output = crunch()
+        .arg("--state-dir")
+        .arg(root.path().join("state"))
+        .args([
+            "--json",
+            "refactor",
+            "plan",
+            "crunch-to-mantle-project-identity",
+            "--root",
+        ])
+        .arg(&input)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(3), "{output:?}");
+    assert!(output.stdout.is_empty(), "{output:?}");
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("refactor I/O error"), "{stderr}");
+    assert_eq!(fs::read_to_string(&input).unwrap(), "original");
+    assert!(!root.path().join("state").exists());
+}
+
 #[test]
 fn empty_selected_state_environment_rejects_artifact_import_before_any_write() {
     for name in ["CRUNCH_STATE_DIR", "XDG_STATE_HOME", "HOME"] {

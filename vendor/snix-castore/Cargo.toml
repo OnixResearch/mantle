@@ -10,7 +10,7 @@ async-stream = "0.3.5"
 auto_impl = "1.2.0"
 async-trait = "0.1"
 bigtable_rs = { version = "0.2.18", optional = true }
-blake3 = { version = "=1.8.2", features = ["rayon", "std", "traits-preview"] }
+blake3 = { version = "=1.8.5", features = ["rayon", "std"] }
 bstr = "1.10.0"
 bytes = { version = "1.7.1", features = ["serde"] }
 clap = { version = "4.5.16", features = ["derive", "env"] }

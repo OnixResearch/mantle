@@ -123,6 +123,81 @@ const GENERATED_SOURCE_REMOVALS: &[&str] = &[
     "ld/ld.info",
     "libiberty/functions.texi",
 ];
+
+/// Exact source transformations used by the original binutils preparation.
+/// Recipe authors consume these descriptions rather than retaining a second
+/// set of repairs or substituting a configured source-tree snapshot.
+pub(crate) fn source_owned_normalization_rewrites() -> Vec<(&'static str, &'static str, &'static str, usize)> {
+    let mut rewrites = Vec::new();
+    for path in ["opcodes/Makefile.am", "opcodes/Makefile.in"] {
+        rewrites.push((path, OPCODES_DEPENDENCY_OLD, OPCODES_DEPENDENCY_NEW, 1));
+        rewrites.push((
+            path,
+            OPCODES_I386_GEN_RELATIVE_EXEC,
+            OPCODES_I386_GEN_ABSOLUTE_EXEC,
+            OPCODES_I386_GEN_EXEC_OCCURRENCE_COUNT,
+        ));
+    }
+    for path in ["binutils/Makefile.am", "binutils/Makefile.in"] {
+        rewrites.push((
+            path,
+            BINUTILS_SYSINFO_RELATIVE_EXEC,
+            BINUTILS_SYSINFO_ABSOLUTE_EXEC,
+            BINUTILS_SYSINFO_EXEC_OCCURRENCE_COUNT,
+        ));
+    }
+    for path in ["bfd/Makefile.am", "bfd/Makefile.in"] {
+        rewrites.push((
+            path,
+            BFD_GEN_AOUT_RELATIVE_EXEC,
+            BFD_GEN_AOUT_ABSOLUTE_EXEC,
+            BFD_GEN_AOUT_EXEC_OCCURRENCE_COUNT,
+        ));
+    }
+    for path in [
+        "intl/configure",
+        "libiberty/configure",
+        "zlib/configure",
+        "bfd/configure",
+        "opcodes/configure",
+        "binutils/configure",
+        "gas/configure",
+        "gprof/configure",
+        "ld/configure",
+    ] {
+        rewrites.push((path, LEGACY_ABSOLUTE_HOST_PROBE_BLOCK, DISABLED_ABSOLUTE_HOST_PROBE_BLOCK, 1));
+        rewrites.push((path, CONFIGURE_DYNAMIC_EXEC_OLD, CONFIGURE_DYNAMIC_EXEC_NEW, 1));
+        rewrites.push((path, CONFIGURE_CONFTEST_EXEC_OLD, CONFIGURE_CONFTEST_EXEC_NEW, 1));
+        let class = path.split('/').next().expect("literal configure path");
+        if FILE_RELOCATION_CLASSES.contains(&class) {
+            rewrites.push((
+                path,
+                CONFIGURE_LIBTOOL_EXEC_OLD,
+                CONFIGURE_LIBTOOL_EXEC_NEW,
+                CONFIGURE_LIBTOOL_EXEC_COUNT_PER_CLASS,
+            ));
+            rewrites.push((path, AMBIENT_FILE_PATH, DECLARED_FILE_PATH, FILE_RELOCATION_OCCURRENCES_PER_CLASS));
+        }
+    }
+    rewrites.push((
+        "bfd/doc/Makefile.in",
+        BFD_CHEW_RELATIVE_EXEC,
+        BFD_CHEW_ABSOLUTE_EXEC,
+        BFD_CHEW_EXEC_OCCURRENCE_COUNT,
+    ));
+    // Preserve the fully repaired configure before this bootstrap-only edit;
+    // the second BFD configure must restore the authenticated input reference.
+    rewrites.push(("bfd/configure", BFD_BOOTSTRAP_CONFIG_REFERENCE, "", BFD_BOOTSTRAP_CONFIG_REFERENCE_COUNT));
+    rewrites
+}
+
+pub(crate) fn source_owned_generated_removals() -> &'static [&'static str] {
+    GENERATED_SOURCE_REMOVALS
+}
+
+pub(crate) fn source_owned_cflags() -> &'static str {
+    BINUTILS_CFLAGS_FEATURES
+}
 const GENERATED_SOURCE_REMOVAL_COUNT: usize = 31;
 const HEX_CHARS_PER_BYTE: usize = 2;
 const BLAKE3_HEX_CHAR_COUNT: usize = blake3::OUT_LEN * HEX_CHARS_PER_BYTE;

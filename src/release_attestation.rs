@@ -378,7 +378,10 @@ fn evaluate_release_verification(
         crunch_attestation::independent_agreement_report_canonical_digest(agreement_evidence.clone())
             .map_err(|err| RunError::Build(format!("independent agreement report digest: {err}")))?
             .to_hex();
-    let independent_agreement_status = agreement_evidence.status();
+    let independent_agreement_status = IndependentAgreementStatus::from_counts(
+        agreement_evidence.required_witness_count,
+        agreement_evidence.counted_witness_count,
+    );
     let independent_agreement_class = if independent_agreement_status == IndependentAgreementStatus::Satisfied {
         Some(INDEPENDENT_AGREEMENT_CLASS)
     } else {

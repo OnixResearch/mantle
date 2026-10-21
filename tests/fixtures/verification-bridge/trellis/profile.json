@@ -1,0 +1,280 @@
+{
+  "artifacts": [
+    {
+      "blake3": "b3:85ad114c09426020bd1c0ba56bc5e71ba301b7552a5f6b0b9219357b671cb872",
+      "bytes": 76688,
+      "path": "aeneas-pilot/generated/llbc.llbc",
+      "role": "llbc"
+    },
+    {
+      "blake3": "b3:c7df4ccc0437a026d9dff206324ff5d42f3cf1c4e8663022cc4cba34ddc536a4",
+      "bytes": 632,
+      "path": "aeneas-pilot/generated/translation.json",
+      "role": "translation-manifest"
+    },
+    {
+      "blake3": "b3:4fe6569363d2ffef0075c278a0a49b91ccfb83a9387826927df658a7e5e6644b",
+      "bytes": 748,
+      "path": "aeneas-pilot/generated/Llbc.lean",
+      "role": "generated-lean"
+    },
+    {
+      "blake3": "b3:a67c10d4699ae7b0ddb5b35eb87552b893fcf038c93fd5c6b4c776d5b172e3fb",
+      "bytes": 495,
+      "path": "aeneas-pilot/theorems/AbsDiffSymmetric.lean",
+      "role": "symmetry-theorem"
+    },
+    {
+      "blake3": "b3:b3df314ff917bb6eb9e26f7a8d56b7c5bc8439da5e5c5076c47a4bee58c7ade4",
+      "bytes": 390,
+      "path": "aeneas-pilot/theorems/AbsDiffSelfZero.lean",
+      "role": "self-zero-theorem"
+    },
+    {
+      "blake3": "b3:cb3d3675beba0ac1595c4747e97b73380083e15bc81a7e50eafb200c0c35b197",
+      "bytes": 133,
+      "path": "aeneas-pilot/theorems/AxiomAudit.lean",
+      "role": "axiom-audit"
+    },
+    {
+      "blake3": "b3:4a2728758ddaf1f6214e8e9e6efe3ebb2c2c03cc235caef680010ffbc54d6023",
+      "bytes": 408,
+      "path": "aeneas-pilot/generated/resource-policy.json",
+      "role": "resource-policy"
+    },
+    {
+      "blake3": "b3:a024bc771e73f8abd7badcf49f235ae8e67e202c7ae06975c4822521d6f94a89",
+      "bytes": 1837,
+      "path": "aeneas-pilot/generated/negative-cases.json",
+      "role": "negative-catalog"
+    }
+  ],
+  "consumer": {
+    "consumer_id": "trellis.abs-diff",
+    "external_models": [
+      {
+        "identity": "b3:cd11b49d1acede2c6a91fa26f0b7a6b4b28db4007b4601a65b3269706a0ce625",
+        "input_id": "octet.aeneas-provider-profile"
+      }
+    ],
+    "non_claims": [
+      "does not prove Aeneas or Charon translation soundness",
+      "does not prove Lean or verifier soundness",
+      "does not prove whole-program correctness",
+      "does not prove semantic equivalence",
+      "does not establish release eligibility",
+      "does not prove rustc compiler correctness",
+      "does not prove verifier independence",
+      "does not merge Verus and Aeneas proof authority"
+    ],
+    "outcomes": [
+      "supported",
+      "blocked",
+      "failed"
+    ],
+    "profile_id": "trellis-abs-diff-aeneas-consumer-v1",
+    "provider": {
+      "backend": "aeneas-lean",
+      "compatibility_matrix_id": "octet-aeneas-lean-compatibility-0.1.0-bc2eb6f-cb50ff16",
+      "compatibility_matrix_identity": "b3:403656d75de41b955cd2493ef289ba17308da65a3d214babc1ea606aeae248f5",
+      "network_allowed": false,
+      "profile_id": "octet-aeneas-lean-0.1.0-bc2eb6f",
+      "profile_identity": "b3:cd11b49d1acede2c6a91fa26f0b7a6b4b28db4007b4601a65b3269706a0ce625"
+    },
+    "resource_policy": {
+      "environment_allowlist": [
+        "PATH",
+        "CHARON_TOOLCHAIN_IS_IN_PATH",
+        "LD_LIBRARY_PATH",
+        "HOME",
+        "MATHLIB_NO_CACHE_ON_UPDATE"
+      ],
+      "stderr_max_bytes": 1048576,
+      "stdout_max_bytes": 1048576,
+      "timeout_ms": 900000
+    },
+    "schema_version": "octet-aeneas-consumer-profile/v1",
+    "source": {
+      "broad_selection_allowed": false,
+      "crate_name": "verified_logic",
+      "paths": [
+        {
+          "identity": "b3:3064658eb9d27a1c1c423abbad9e9c8878756594f07a1d01eeb6b3efef4fa8a4",
+          "path": "src/arithmetic.rs"
+        }
+      ],
+      "root": ".",
+      "selected_items": [
+        {
+          "begin_line": 21,
+          "end_line": 25,
+          "generated_name": "verified_logic.arithmetic.abs_diff",
+          "kind": "function",
+          "qualified_name": "verified_logic::arithmetic::abs_diff",
+          "source_file": "src/arithmetic.rs",
+          "source_identity": "b3:3064658eb9d27a1c1c423abbad9e9c8878756594f07a1d01eeb6b3efef4fa8a4"
+        }
+      ]
+    },
+    "theorems": [
+      {
+        "approved_statement_blake3": "b3:a67c10d4699ae7b0ddb5b35eb87552b893fcf038c93fd5c6b4c776d5b172e3fb",
+        "claim_class": "named-theorem-over-generated-model",
+        "declaration_name": "trellis_abs_diff_symmetric",
+        "path": "aeneas-pilot/theorems/AbsDiffSymmetric.lean",
+        "requirement_id": "arithmetic.abs-diff",
+        "source_disposition": "maintained",
+        "theorem_id": "trellis.abs-diff.symmetry"
+      },
+      {
+        "approved_statement_blake3": "b3:b3df314ff917bb6eb9e26f7a8d56b7c5bc8439da5e5c5076c47a4bee58c7ade4",
+        "claim_class": "named-theorem-over-generated-model",
+        "declaration_name": "trellis_abs_diff_self_is_zero",
+        "path": "aeneas-pilot/theorems/AbsDiffSelfZero.lean",
+        "requirement_id": "arithmetic.abs-diff",
+        "source_disposition": "maintained",
+        "theorem_id": "trellis.abs-diff.self-zero"
+      }
+    ],
+    "trust_closure_complete": true,
+    "trust_inputs": [
+      {
+        "identity": "b3:f684452a5c056e2867a5935716df006d4bb1e99c38b5f753d168141ba879c98f",
+        "input_id": "lean.propext"
+      },
+      {
+        "identity": "b3:c4255580ac1986a44f37669982f36b10cdbb58dc2342e36edf468a569639a923",
+        "input_id": "lean.Classical.choice"
+      },
+      {
+        "identity": "b3:fab7533a97460e46812b181679ac641cc62ba94187588f865751fd7df34dae85",
+        "input_id": "lean.Quot.sound"
+      }
+    ]
+  },
+  "extraction": {
+    "aeneas_argv": [
+      "aeneas",
+      "-backend",
+      "lean",
+      "-emit-json",
+      "-dest",
+      ".",
+      "-no-progress-bar",
+      "llbc.llbc"
+    ],
+    "cargo_argv": [
+      "--lib"
+    ],
+    "charon_argv": [
+      "charon",
+      "cargo",
+      "--preset",
+      "aeneas",
+      "--dest-file",
+      "llbc.llbc",
+      "--start-from",
+      "crate::arithmetic::abs_diff"
+    ],
+    "expected_has_errors": false,
+    "expected_little_endian": true,
+    "expected_pointer_width_bytes": 8,
+    "expected_skip_borrowck": false,
+    "expected_target": "x86_64-unknown-linux-gnu",
+    "lean_argv": [
+      "lake",
+      "build"
+    ]
+  },
+  "negative_fixture_catalog": "aeneas-pilot/generated/negative-cases.json",
+  "octet_source": {
+    "compatibility_matrix_identity": "b3:403656d75de41b955cd2493ef289ba17308da65a3d214babc1ea606aeae248f5",
+    "consumer_contract_identity": "b3:63ea1e9e78916728a4a83719c29a6443a8952dbaadeeaae2a7420365afa7ff07",
+    "consumer_contract_path": "standards/proof-rails/aeneas-lean/consumer-contracts.ncl",
+    "policy_artifact_identity": "b3:cc07811243f39a70c08d80b2d145fbc97596644d56b74284d5f870d93826f605",
+    "provider_profile_identity": "b3:cd11b49d1acede2c6a91fa26f0b7a6b4b28db4007b4601a65b3269706a0ce625",
+    "repository": "https://github.com/OnixResearch/octet",
+    "revision": "890f424cd7b1b2015f39c0eb5747f1bd1e576028"
+  },
+  "outcome": "supported",
+  "pilot_id": "trellis.abs-diff.aeneas-cross-verifier-v1",
+  "provider_tools": {
+    "aeneas_binary_blake3": "428ce05d0f32c3bc3eceb24c1ead80b0dc742bfda22cba9c4b91b6a7f40a3819",
+    "aeneas_revision": "bc2eb6f941369fa3c695e30598b5758b11e4f0de",
+    "charon_binary_blake3": "64ee129c4553574e1686d87560af0699dba9010c998dd68fe4a6b25f6b2e64b5",
+    "charon_revision": "cb50ff16b9f1066b8a97dc06da704de2da2fa41c",
+    "identity_schema": "octet-aeneas-lean-provider-closure/v1",
+    "lake_binary_blake3": "9c0b74bac6d9436481da3be2f158f9abfb76b940a18aa723d2c493b29ac9f2b5",
+    "lean_binary_blake3": "e9e24ff8e9efd3e7f7a692d2411e0bb39316b626aeda1c3f1bce21bf21daea5d",
+    "lean_toolchain": "leanprover/lean4:v4.31.0",
+    "leantar_binary_blake3": "b9f350bec0f839bb2e6157fdac2c8cc877f26a961ce81b16e5bcc97957d257fe",
+    "network_sandbox_blake3": "c87d8bcc11f0c5d61e2598dbc08b801d7e1220753ba47b543525835bc1288b6b",
+    "package": "octet-aeneas-lean-provider-closure"
+  },
+  "required_non_claims": [
+    "does not prove Aeneas or Charon translation soundness",
+    "does not prove Lean or verifier soundness",
+    "does not prove whole-program correctness",
+    "does not prove semantic equivalence",
+    "does not establish release eligibility",
+    "does not prove rustc compiler correctness",
+    "does not prove verifier independence",
+    "does not merge Verus and Aeneas proof authority"
+  ],
+  "resource_policy": {
+    "identity": "b3:4a2728758ddaf1f6214e8e9e6efe3ebb2c2c03cc235caef680010ffbc54d6023",
+    "path": "aeneas-pilot/generated/resource-policy.json"
+  },
+  "schema_version": "trellis-aeneas-cross-verifier-profile/v1",
+  "theorem_mappings": [
+    {
+      "approved_statement_blake3": "b3:a67c10d4699ae7b0ddb5b35eb87552b893fcf038c93fd5c6b4c776d5b172e3fb",
+      "axioms": [
+        "propext"
+      ],
+      "claim_class": "named-theorem-over-generated-model",
+      "declaration_name": "trellis_abs_diff_symmetric",
+      "integer_model": "Aeneas.Std.U64 with a 64-bit little-endian target",
+      "lean_theorem_symbol": "trellis_abs_diff_symmetric",
+      "overflow_model": "branch-selected subtraction proves the selected subtraction is in range",
+      "path": "aeneas-pilot/theorems/AbsDiffSymmetric.lean",
+      "requirement_id": "arithmetic.abs-diff",
+      "theorem_id": "trellis.abs-diff.symmetry",
+      "verus_proof_symbol": "arithmetic::abs_diff_symmetric"
+    },
+    {
+      "approved_statement_blake3": "b3:b3df314ff917bb6eb9e26f7a8d56b7c5bc8439da5e5c5076c47a4bee58c7ade4",
+      "axioms": [
+        "propext",
+        "Classical.choice",
+        "Quot.sound"
+      ],
+      "claim_class": "named-theorem-over-generated-model",
+      "declaration_name": "trellis_abs_diff_self_is_zero",
+      "integer_model": "Aeneas.Std.U64 with a 64-bit little-endian target",
+      "lean_theorem_symbol": "trellis_abs_diff_self_is_zero",
+      "overflow_model": "self subtraction is in range and returns zero",
+      "path": "aeneas-pilot/theorems/AbsDiffSelfZero.lean",
+      "requirement_id": "arithmetic.abs-diff",
+      "theorem_id": "trellis.abs-diff.self-zero",
+      "verus_proof_symbol": "arithmetic::abs_diff_self_is_zero"
+    }
+  ],
+  "trust_closure": {
+    "complete": true,
+    "selected_axioms": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ],
+    "selected_opaque_definitions": []
+  },
+  "verus": {
+    "proof_symbols": [
+      "arithmetic::abs_diff_symmetric",
+      "arithmetic::abs_diff_self_is_zero"
+    ],
+    "receipt_path": "docs/proof-evidence-bundle.json",
+    "requirement_id": "arithmetic.abs-diff"
+  }
+}

@@ -66,46 +66,70 @@ pub fn relocate_dynamic_file(
     depth: usize,
     rewrites: &[DependencyRewrite<'_>],
 ) -> Result<usize, FileFixupError> {
-    let metadata = fs::symlink_metadata(path).map_err(|e| FileFixupError::Input(format!("{}: {e}", path.display())))?;
-    if !metadata.is_file()
-        || metadata.file_type().is_symlink()
-        || metadata.len() == 0
-        || metadata.len() > FILE_BYTES_MAX
-    {
-        return Err(FileFixupError::Input(format!("{}: not a bounded regular file", path.display())));
-    }
-    let source = fs::read(path).map_err(|e| FileFixupError::Input(format!("{}: {e}", path.display())))?;
-    if source.len() as u64 != metadata.len() {
-        return Err(FileFixupError::Input(format!("{}: input changed during read", path.display())));
-    }
-    let refusal = |reason| FileFixupError::Refused {
-        file: path.display().to_string(),
-        reason,
-    };
-    let plan = plan_dynamic_relocation(&source, depth, rewrites).map_err(refusal)?;
-    let output = apply_plan(&source, &plan).map_err(refusal)?;
-    assert_eq!(source.len(), output.len());
-    let staged = path.with_extension(format!("mantle-fixup-{}.tmp", std::process::id()));
-    let publication = (|| -> Result<(), FileFixupError> {
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&staged)
-            .map_err(|e| FileFixupError::Publication(format!("{}: {e}", staged.display())))?;
-        file.write_all(&output)
-            .map_err(|e| FileFixupError::Publication(format!("{}: {e}", staged.display())))?;
-        file.set_permissions(metadata.permissions())
-            .map_err(|e| FileFixupError::Publication(format!("{}: {e}", staged.display())))?;
-        file.sync_all().map_err(|e| FileFixupError::Publication(format!("{}: {e}", staged.display())))?;
-        fs::rename(&staged, path).map_err(|e| FileFixupError::Publication(format!("{}: {e}", path.display())))?;
-        fs::File::open(path.parent().ok_or_else(|| FileFixupError::Publication("missing parent".into()))?)
-            .and_then(|dir| dir.sync_all())
-            .map_err(|e| FileFixupError::Publication(format!("{}: {e}", path.display())))?;
-        Ok(())
+    use mantle_application_contract::bootstrap_effects::BootstrapEffect::*;
+    let mut port =
+        crate::bootstrap_effect_port::BootstrapPort::new(&[(ReadInput, 2), (WriteOutput, 2), (VerifyOutput, 1)])
+            .map_err(|error| FileFixupError::Input(error.to_string()))?;
+    let result = (|| {
+        let metadata = port
+            .call(ReadInput, || fs::symlink_metadata(path))
+            .map_err(|e| FileFixupError::Input(format!("{}: {e}", path.display())))?;
+        if !metadata.is_file()
+            || metadata.file_type().is_symlink()
+            || metadata.len() == 0
+            || metadata.len() > FILE_BYTES_MAX
+        {
+            return Err(FileFixupError::Input(format!("{}: not a bounded regular file", path.display())));
+        }
+        let source = port
+            .call(ReadInput, || fs::read(path))
+            .map_err(|e| FileFixupError::Input(format!("{}: {e}", path.display())))?;
+        if source.len() as u64 != metadata.len() {
+            return Err(FileFixupError::Input(format!("{}: input changed during read", path.display())));
+        }
+        let refusal = |reason| FileFixupError::Refused {
+            file: path.display().to_string(),
+            reason,
+        };
+        let plan = plan_dynamic_relocation(&source, depth, rewrites).map_err(refusal)?;
+        let output = apply_plan(&source, &plan).map_err(refusal)?;
+        assert_eq!(source.len(), output.len());
+        let staged = path.with_extension(format!("mantle-fixup-{}.tmp", std::process::id()));
+        let publication = port.call(WriteOutput, || -> Result<(), FileFixupError> {
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&staged)
+                .map_err(|e| FileFixupError::Publication(format!("{}: {e}", staged.display())))?;
+            file.write_all(&output)
+                .map_err(|e| FileFixupError::Publication(format!("{}: {e}", staged.display())))?;
+            file.set_permissions(metadata.permissions())
+                .map_err(|e| FileFixupError::Publication(format!("{}: {e}", staged.display())))?;
+            file.sync_all().map_err(|e| FileFixupError::Publication(format!("{}: {e}", staged.display())))?;
+            fs::rename(&staged, path).map_err(|e| FileFixupError::Publication(format!("{}: {e}", path.display())))?;
+            fs::File::open(path.parent().ok_or_else(|| FileFixupError::Publication("missing parent".into()))?)
+                .and_then(|dir| dir.sync_all())
+                .map_err(|e| FileFixupError::Publication(format!("{}: {e}", path.display())))?;
+            Ok(())
+        });
+        if publication.is_err() {
+            let _ = port.call(WriteOutput, || fs::remove_file(&staged));
+        }
+        publication?;
+        port.call(VerifyOutput, || {
+            let actual = fs::read(path)
+                .map_err(|error| FileFixupError::Publication(format!("readback {}: {error}", path.display())))?;
+            if actual != output {
+                return Err(FileFixupError::Publication(format!(
+                    "published ELF {} differs from relocation plan",
+                    path.display()
+                )));
+            }
+            Ok(())
+        })?;
+        Ok(plan.patches.len())
     })();
-    if publication.is_err() {
-        let _ = fs::remove_file(&staged);
-    }
-    publication?;
-    Ok(plan.patches.len())
+    port.finish_with(result, |outcome| {
+        FileFixupError::Publication(format!("ELF effect observations inconsistent: {outcome:?}"))
+    })
 }

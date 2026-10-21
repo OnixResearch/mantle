@@ -1,0 +1,28 @@
+{
+  "aeneas_version": "bc2eb6f",
+  "charon_version": "0.1.223",
+  "crate": "verified_logic",
+  "functions": [
+    {
+      "def_id": 0,
+      "lean_name": "verified_logic.arithmetic.abs_diff",
+      "lean_file": "Llbc.lean",
+      "rust_name": "verified_logic::arithmetic::abs_diff",
+      "is_local": true,
+      "source": {
+        "file": "src/arithmetic.rs",
+        "begin_line": 21,
+        "end_line": 25
+      },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    }
+  ],
+  "types": [],
+  "globals": [],
+  "trait_decls": [],
+  "trait_impls": []
+}

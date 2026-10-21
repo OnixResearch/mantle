@@ -19,14 +19,15 @@ serde_json = "1"
 rustix = { version = "1.1", features = ["net", "process"] }
 getrandom = "0.3"
 zeroize = "1"
-tokio = { version = "1", features = ["rt", "time"] }
+tokio = { version = "1", features = ["rt", "time", "fs", "io-util"] }
+blake3 = "=1.8.5"
+ed25519-dalek = "2.1.1"
+base64 = "0.22"
 
 [dev-dependencies]
 crunch-store = { path = "../crunch-store", features = ["test-support"] }
-ed25519-dalek = "2.1.1"
-base64 = "0.22"
-blake3 = "1"
 subtle = "2"
+parking_lot = "0.12"
 snix-castore = { path = "../../vendor/snix-castore" }
 tempfile = "3"
 tokio = { version = "1", features = ["full"] }

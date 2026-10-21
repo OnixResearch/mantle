@@ -21,11 +21,11 @@ use crate::ProjectManifest;
 use crate::TrustSubject;
 use crate::VerifiedTrustFact;
 use crate::error::Error;
-use crate::evaluate_trust_policy;
-use crate::fetch_policy_compatibility_problems;
-use crate::lock_entry_without_fetch;
-use crate::trust_policy_matches_locked;
-use crate::validate_locked_trust;
+use crate::fetch_policy::compatibility_problems;
+use crate::fetch_policy::lock_without_fetch;
+use crate::trust::evaluate_trust_policy_borrowed;
+use crate::trust::trust_policy_matches_locked_borrowed;
+use crate::trust::validate_locked_trust_borrowed;
 
 const MAX_REFRESH_BATCH: u32 = 256;
 
@@ -295,7 +295,7 @@ fn refresh_one(input: &ManifestInput, context: RefreshContext<'_>) -> RefreshOut
     if let Some(outcome) = freshness_gate(input, context.freshness_decisions) {
         return outcome;
     }
-    let compatibility = fetch_policy_compatibility_problems(input);
+    let compatibility = compatibility_problems(input);
     if let Some(problem) = compatibility.first() {
         return RefreshOutcome::Failed {
             name: input.name.clone(),
@@ -375,7 +375,7 @@ fn refresh_without_generation_fetch(
     lock: &Lockfile,
     trust_facts: &[VerifiedTrustFact],
 ) -> RefreshOutcome {
-    match lock_entry_without_fetch(input, lock.inputs.get(&input.name)) {
+    match lock_without_fetch(input, lock.inputs.get(&input.name)) {
         Ok(entry) => {
             let resolved = ResolvedInput {
                 name: input.name.clone(),
@@ -431,8 +431,13 @@ fn trusted_resolved_input(
     assert_eq!(resolved.name, input.name, "resolved input name must match manifest input");
     if let Some(policy) = &input.trust {
         let subject = TrustSubject::input(input.name.clone());
-        let trust =
-            evaluate_trust_policy(subject, policy, &resolved.entry.hash.algo, &resolved.entry.hash.value, trust_facts)?;
+        let trust = evaluate_trust_policy_borrowed(
+            subject,
+            policy,
+            &resolved.entry.hash.algo,
+            &resolved.entry.hash.value,
+            trust_facts,
+        )?;
         resolved.entry.trust = Some(trust);
         return Ok(resolved);
     }
@@ -448,7 +453,7 @@ fn trusted_locked_patch(
     assert!(!def.name.is_empty(), "patch name must not be empty");
     if let Some(policy) = &def.trust {
         let subject = TrustSubject::patch(def.name.clone());
-        let trust = evaluate_trust_policy(subject, policy, &patch.hash.algo, &patch.hash.value, trust_facts)?;
+        let trust = evaluate_trust_policy_borrowed(subject, policy, &patch.hash.algo, &patch.hash.value, trust_facts)?;
         patch.trust = Some(trust);
         return Ok(patch);
     }
@@ -635,11 +640,11 @@ fn patch_trust_matches_def(locked: &LockedPatch, def: &PatchDef) -> bool {
         (None, Some(_)) => false,
         (Some(_), None) => false,
         (Some(policy), Some(trust)) => {
-            if !trust_policy_matches_locked(policy, trust) {
+            if !trust_policy_matches_locked_borrowed(policy, trust) {
                 return false;
             }
             let subject = TrustSubject::patch(def.name.clone());
-            validate_locked_trust(trust, &subject, &locked.hash.algo, &locked.hash.value, "locked patch trust")
+            validate_locked_trust_borrowed(trust, &subject, &locked.hash.algo, &locked.hash.value, "locked patch trust")
                 .is_empty()
         }
     }

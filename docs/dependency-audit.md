@@ -177,7 +177,8 @@ The four now allowlisted sources are:
 
 - `ssh://git@github.com/OnixResearch/onix-artifact.git`
   (`artifact-auth-core` and `artifact-auth-ed25519`, revision
-  `c932138d880ddf4c2967f4c024b489b5c0022bf1`)
+  `5f3962d7471d1547e044f57daeda72f56621fd52`; current declaration,
+  not a new audit result)
 - `https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git`
   (`bounded-tree-cap` and `bounded-tree-core`,
   `b0fd0103bc9eed2c1b6d852045959462d105d8f1`)
@@ -314,6 +315,26 @@ fsync faults retain the existing `action-result-publication-write-temp` and
 diagnostic for ordinary completed builds. Floating CA and CA-resolved IA
 intermediates instead require signed action-result publication before dependent
 consumption; failure is `ca-realisation-untrusted`. Injection changes neither rule.
+
+## Published SDK source cohort
+
+The Mantle authority SDK comes from Basalt revision
+`4c5c9e919b4573a7865559db2dc98a99c0c58144`; the evidence SDK comes from
+Valence revision `15e72b5a330b08139ac7c809ac31e7e87f825b22`.
+`deny.toml` admits their exact SSH repository URLs individually while retaining
+`unknown-git = "deny"`. Repository admission does not replace immutable Cargo
+and Nix revision/content pins or trusted result admission.
+
+The reviewed lock-vendor table binds every selected Git package by its full
+Cargo source identity and recursive Nix tree hash. Its explicit HTTPS route
+metadata does not assert anonymous reachability: Basalt's anonymous HTTPS
+acquisition was refused. An already acquired and verified tree establishes
+content availability, not authorization or successful live acquisition from
+that route. No credentials belong in a source bundle.
+
+A source-only `cargo deny check sources` result is not an advisory, license,
+runtime integration, or release-readiness result. Rerun the complete configured
+audit for those separate dependency-policy classes.
 
 ## Remaining waiver inventory
 

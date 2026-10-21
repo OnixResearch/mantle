@@ -5,6 +5,8 @@
 
 extern crate alloc;
 
+pub mod user_profile;
+
 use alloc::collections::BTreeMap;
 use alloc::collections::BTreeSet;
 use alloc::format;

@@ -1,3 +1,108 @@
+# Native package declarations are shared data, not a third SDK authority.
+let Native = (
+let has = fun fields value => std.is_record value
+  && std.array.length (std.record.fields value) == std.array.length fields
+  && std.array.all (fun field => std.record.has_field field value) fields in
+let member = fun value => std.is_string value && std.string.length value <= 1024
+  && std.string.is_match "^[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)*$" value
+  && std.array.all (fun part => part != "." && part != "..") (std.string.split "/" value) in
+let store_file = fun value => std.is_string value
+  && std.string.is_match "^(/[A-Za-z0-9._+-]+)+/[0123456789abcdfghijklmnpqrsvwxyz]{32}-[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)*$" value
+  && std.array.all (fun part => part != "." && part != "..") (std.string.split "/" value) in
+let ancestor = fun parent child =>
+  let escaped = std.string.replace "+" "\\+" (std.string.replace "." "\\." parent) in
+  std.string.is_match "^%{escaped}/" child in
+let check_assets = fun assets => std.is_array assets && std.array.length assets <= 4096
+  && std.array.all (fun asset => has ["source_member", "destination"] asset
+    && member asset.source_member && member asset.destination
+    && std.array.length (std.array.filter (fun other => other.destination == asset.destination
+      || ancestor other.destination asset.destination || ancestor asset.destination other.destination) assets) == 1) assets in
+let check_package = fun package => package == null || (
+  has ["abi", "api_level", "ndk_revision", "ndk_sysroot", "libraries"] package
+  && package.abi == "arm64-v8a" && package.ndk_revision == "28.2.13676358"
+  && std.is_number package.api_level && std.number.is_integer package.api_level
+  && package.api_level >= 24 && package.api_level <= 35 && store_file package.ndk_sysroot
+  && std.is_array package.libraries && std.array.length package.libraries > 0 && std.array.length package.libraries <= 128
+  && std.array.all (fun library => has ["store_file", "filename", "required_jni_exports"] library
+    && store_file library.store_file && member library.filename
+    && std.string.is_match "^lib[A-Za-z0-9._+-]*\\.so$" library.filename
+    && std.is_array library.required_jni_exports && std.array.length library.required_jni_exports <= 256
+    && std.array.all (fun symbol => std.is_string symbol && std.string.length symbol <= 512
+      && std.string.is_match "^(Java_[A-Za-z0-9_]*|JNI_OnLoad)$" symbol) library.required_jni_exports
+    && std.array.length (std.array.filter (fun other => other.filename == library.filename) package.libraries) == 1) package.libraries
+) in
+let Derivation = import "derivation.ncl" in
+let fetch = import "fetch.ncl" in
+let checked_store = fun path => if store_file path then path else std.fail_with "native-tool-input: expected declared store root" in
+let tool_parameters = fun raw =>
+  if !(member raw.utility_member) then std.fail_with "native-tool-input: unsafe utility member"
+  else std.deep_seq (checked_store raw.utility_root) raw in
+let extract_ndk = fun raw =>
+  let p = tool_parameters raw in
+  let archive = checked_store p.archive in
+  {
+    name = "android-ndk-r28c-extracted", builder = "/bin/sh", system = 'x86_64-linux,
+    outputs = ["out"], addressing_mode = 'input-addressed, sandbox = 'native,
+    inputs = [archive, p.utility_root],
+    args = ["-eu", "-c", m%"
+      bb='%{p.utility_root}/%{p.utility_member}'
+      observed=$("$bb" sha256sum '%{archive}')
+      observed=${observed%% *}
+      [ "$observed" = dfb20d396df28ca02a8c708314b814a4d961dc9074f9a161932746f815aa552f ] || exit 41
+      "$bb" mkdir -p "$out"
+      "$bb" unzip -q '%{archive}' -d "$out"
+      [ -f "$out/android-ndk-r28c/source.properties" ]
+    "%],
+    env = { LC_ALL = "C", TZ = "UTC" },
+  } | Derivation in
+let make_linker = fun raw =>
+  let p = tool_parameters raw in
+  let ndk = checked_store p.ndk_tree in
+  let glibc = checked_store p.glibc in
+  let libgcc = checked_store p.libgcc in
+  let llvm = "%{ndk}/android-ndk-r28c/toolchains/llvm/prebuilt/linux-x86_64" in
+  let loader = "%{glibc}/lib/ld-linux-x86-64.so.2" in
+  let libraries = "%{glibc}/lib:%{libgcc}/lib:%{llvm}/lib" in
+  {
+    name = "android-ndk-r28c-linker-closure", builder = "/bin/sh", system = 'x86_64-linux,
+    outputs = ["out"], addressing_mode = 'input-addressed, sandbox = 'native,
+    inputs = [ndk, glibc, libgcc, p.utility_root],
+    args = ["-eu", "-c", m%"
+      bb='%{p.utility_root}/%{p.utility_member}'
+      "$bb" mkdir -p "$out/bin"
+      for tool in ld.lld llvm-ar llvm-ranlib llvm-readelf; do
+        printf '#!/bin/sh\nexec "%{loader}" --library-path "%{libraries}" "%{llvm}/bin/%s" "$@"\n' "$tool" > "$out/bin/$tool"
+        "$bb" chmod 0555 "$out/bin/$tool"
+      done
+      printf '#!/bin/sh\nexec "%{loader}" --library-path "%{libraries}" "%{llvm}/bin/clang" --ld-path="%s/bin/ld.lld" "$@"\n' "$out" > "$out/bin/android-clang"
+      "$bb" chmod 0555 "$out/bin/android-clang"
+    "%],
+    env = { LC_ALL = "C", TZ = "UTC" },
+  } | Derivation in
+let target_linker = fun { wrapper, ndk_tree, glibc, libgcc, api_level } =>
+  if !std.is_number api_level || !std.number.is_integer api_level || api_level < 24 || api_level > 35
+  then std.fail_with "native-tool-input: unsupported Android API"
+  else {
+    executable = "%{checked_store wrapper}/bin/android-clang",
+    arguments = ["--target=aarch64-linux-android%{std.to_string api_level}",
+      "--sysroot=%{checked_store ndk_tree}/android-ndk-r28c/toolchains/llvm/prebuilt/linux-x86_64/sysroot",
+      "-Wl,-z,max-page-size=16384", "-Wl,-z,common-page-size=16384"],
+    inputs = std.array.map checked_store [wrapper, ndk_tree, glibc, libgcc],
+  } in
+{
+  valid_assets = check_assets,
+  valid_package = check_package,
+  matrix = { abi = "arm64-v8a", rust_target = "aarch64-linux-android", ndk_revision = "28.2.13676358", api_min = 24, api_max = 35, page_bytes = 16384 },
+  fetchNdk = fetch.fetchurl {
+    name = "android-ndk-r28c-linux.zip",
+    url = "https://dl.google.com/android/repository/android-ndk-r28c-linux.zip",
+    hash = "sha256-37INOW3yjKAqjHCDFLgUpNlh3JB0+aFhkydG+BWqVS8=",
+  },
+  extractNdk = extract_ndk,
+  mkLinker = make_linker,
+  targetLinker = target_linker,
+}
+) in
 let Reviewed = (
 # Reviewed prebuilt metadata is a separate authority from the published
 # Android source-v1 cohort (ADR 0089). Its seven-field
@@ -172,6 +277,8 @@ let PlanContract = {
   manifest_member | Member,
   resources | Array Member,
   java_sources | Array Member,
+  assets | Dyn | optional,
+  native | Dyn | optional,
   toolchain | {
     build_tools | sources.Source,
     jdk | sources.Source,
@@ -203,6 +310,8 @@ let mk_apk_impl = fun authored =>
     |> set_default "toolchain" reviewed_toolchain
     |> set_default "signing" null
     |> set_default "reproducibility" default_reproducibility
+    |> set_default "assets" []
+    |> set_default "native" null
   in
   let plan = provided | PlanContract in
   let identity_matches = fun component admitted =>
@@ -229,6 +338,8 @@ let mk_apk_impl = fun authored =>
   else if std.array.length plan.resources == 0 || std.array.length plan.java_sources == 0
     || std.array.length plan.resources > 256 || std.array.length plan.java_sources > 256
   then std.fail_with "APK resources and Java source sets must each have 1..256 declared members"
+  else if !(Native.valid_assets plan.assets) then std.fail_with "InvalidAssetInput: unsafe or colliding Android assets"
+  else if !(Native.valid_package plan.native) then std.fail_with "InvalidNativeInput: unsupported native ABI/API/NDK or undeclared output"
   else if signing != null && (std.array.length signing.schemes == 0
     || std.array.length signing.schemes > 3
     || !(std.string.is_match "^keys/" signing.keystore_member))
@@ -325,7 +436,8 @@ let PlanShape = [
   "resources", "java_sources", "toolchains", "signing", "reproducibility",
 ] in
 let ValidateApk = fun plan =>
-  if !HasExactly PlanShape plan
+  if !(std.is_record plan && std.array.all (fun field => std.record.has_field field plan) PlanShape
+    && std.array.all (fun field => std.array.elem field (PlanShape @ ["assets", "native"])) (std.record.fields plan))
     || !Meaningful plan.module
     || !Meaningful plan.application_id
     || !std.string.is_match "^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$" plan.application_id
@@ -339,6 +451,10 @@ let ValidateApk = fun plan =>
   then 'Error (Error "MissingManifestMember" "APK plan requires a valid module, application ID, version, and declared source members")
   else if plan.resources == [] || plan.java_sources == [] then
     'Error (Error "EmptySourceSet" "both resource and Java source member sets are required")
+  else if std.record.has_field "assets" plan && !(Native.valid_assets plan.assets) then
+    'Error (Error "InvalidAssetInput" "unsafe or colliding Android assets")
+  else if std.record.has_field "native" plan && !(Native.valid_package plan.native) then
+    'Error (Error "InvalidNativeInput" "unsupported native ABI/API/NDK or undeclared output")
   else if !Toolchains plan.toolchains then
     'Error (Error "UnboundToolchainIdentity" "APK toolchains must match the three pinned Android source records")
   else if !HasExactly ["entry_timestamp_epoch", "locale", "timezone"] plan.reproducibility
@@ -371,4 +487,5 @@ sources & {
   validate_apk = ValidateApk,
   mkApk = fun plan => plan | PlanContract,
   reviewed | force = Reviewed,
+  native | force = Native,
 }

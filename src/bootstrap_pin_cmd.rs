@@ -13,11 +13,15 @@ use crunch_project::HashResolutionMode;
 use crunch_project::RefreshResolver;
 use crunch_project_core::bootstrap_pins::BootstrapPin;
 use crunch_project_core::bootstrap_pins::HashKind;
+use crunch_project_core::bootstrap_pins::LoadedPin;
 use crunch_project_core::bootstrap_pins::PinCandidate;
 use crunch_project_core::bootstrap_pins::PinDecision;
+use crunch_project_core::bootstrap_pins::PinEvaluation;
 use crunch_project_core::bootstrap_pins::PinPlan;
 use crunch_project_core::bootstrap_pins::PinPlanEntry;
 use crunch_project_core::bootstrap_pins::ResolveHook;
+use crunch_project_core::bootstrap_pins::VerifiedPinPlan;
+use crunch_project_core::bootstrap_pins::VersionOrder;
 use crunch_project_core::bootstrap_pins::decide_pin;
 use crunch_project_core::bootstrap_pins::parse_pin;
 use crunch_project_core::bootstrap_pins::pin_preimage;
@@ -26,10 +30,24 @@ use crunch_project_core::bootstrap_pins::seal_plan;
 use crunch_project_core::bootstrap_pins::validate_pin;
 use crunch_project_core::bootstrap_pins::verify_plan;
 use fs2::FileExt;
+use mantle_application_contract::bootstrap_effects::BootstrapEffect;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::bootstrap_effect_port::BootstrapPort;
 use crate::project_resolve::LiveResolver;
+
+fn capability<T>(effect: BootstrapEffect, run: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    let mut port = BootstrapPort::new(&[(effect, 1)]).map_err(|error| error.to_string())?;
+    let result = port.call(effect, run);
+    port.finish_with(result, |outcome| format!("bootstrap effect observations inconsistent: {outcome:?}"))
+}
+
+fn verify_published(path: &Path, expected: &[u8]) -> Result<(), String> {
+    capability(BootstrapEffect::VerifyOutput, || {
+        crate::bootstrap_effect_port::verify_content(path, expected).map_err(|error| error.to_string())
+    })
+}
 
 const MAX_PIN_FILES: usize = 256;
 const MAX_CACHE_BYTES: u64 = 65_536;
@@ -51,25 +69,35 @@ struct CachedRelease {
 
 // r[impl mantle.bootstrap_source_pins.batched_resolution]
 pub fn check(root: &Path, cache_dir: &Path, plan_path: &Path) -> Result<bool, String> {
-    let pins = load_pins(root)?;
-    fs::create_dir_all(cache_dir).map_err(|e| format!("creating cache: {e}"))?;
-    for (index, entry) in fs::read_dir(cache_dir).map_err(|e| format!("reading cache: {e}"))?.enumerate() {
-        entry.map_err(|e| format!("reading cache entry: {e}"))?;
-        if index >= MAX_CACHE_ENTRIES {
-            return Err(format!("cache exceeds {MAX_CACHE_ENTRIES} entries; retire obsolete source caches explicitly"));
+    let pins = capability(BootstrapEffect::ReadInput, || load_pins(root))?;
+    capability(BootstrapEffect::WriteOutput, || {
+        fs::create_dir_all(cache_dir).map_err(|e| format!("creating cache: {e}"))
+    })?;
+    capability(BootstrapEffect::ReadInput, || {
+        for (index, entry) in fs::read_dir(cache_dir).map_err(|e| format!("reading cache: {e}"))?.enumerate() {
+            entry.map_err(|e| format!("reading cache entry: {e}"))?;
+            if index >= MAX_CACHE_ENTRIES {
+                return Err(format!(
+                    "cache exceeds {MAX_CACHE_ENTRIES} entries; retire obsolete source caches explicitly"
+                ));
+            }
         }
-    }
+        Ok(())
+    })?;
     let agent = release_agent();
     let mut host_counts = BTreeMap::new();
     let resolver = LiveResolver::new(root);
     let mut entries = Vec::with_capacity(pins.len());
-    for (source, (pin, preimage)) in &pins {
-        let result = resolve_release(pin, cache_dir, &agent, &mut host_counts).and_then(|(version, release_date)| {
+    for (source, LoadedPin { mut pin, preimage }) in pins {
+        let result = resolve_release(&pin, cache_dir, &agent, &mut host_counts).and_then(|(version, release_date)| {
             let pair = crunch_project_core::bootstrap_pins::VersionPair {
-                current: &pin.version,
-                candidate: &version,
+                current: std::mem::take(&mut pin.version),
+                candidate: version,
             };
-            if !crunch_project_core::bootstrap_pins::compare_versions(pair).is_lt() {
+            let comparison = crunch_project_core::bootstrap_pins::compare_versions(pair);
+            pin.version = comparison.versions.current;
+            let mut version = comparison.versions.candidate;
+            if comparison.ordering != VersionOrder::Less {
                 return Ok(PinCandidate {
                     version,
                     release_date,
@@ -77,17 +105,22 @@ pub fn check(root: &Path, cache_dir: &Path, plan_path: &Path) -> Result<bool, St
                 });
             }
             let mut hashes = BTreeMap::new();
-            for (role, artifact) in &pin.artifacts {
-                let url = render_pin_url(artifact, &version)?;
+            for (role, artifact) in &mut pin.artifacts {
+                let rendered = render_pin_url(std::mem::take(&mut artifact.url_template), version)?;
+                artifact.url_template = rendered.url_template;
+                version = rendered.version;
+                let url = rendered.url;
                 bound_host(&url, &mut host_counts)?;
                 let mode = match artifact.hash_kind {
                     HashKind::Flat => HashResolutionMode::Flat,
                     HashKind::Tree => HashResolutionMode::Recursive,
                 };
-                let hash = resolver
-                    .hash_url_content(&url, &HashAlgo::Sha256, mode)
-                    .map_err(|e| format!("{source}: fixed-output prefetch {url}: {e}"))?
-                    .ok_or_else(|| format!("{source}: fixed-output prefetch returned no hash"))?;
+                let hash = capability(BootstrapEffect::ResolvePins, || {
+                    resolver
+                        .hash_url_content(&url, &HashAlgo::Sha256, mode)
+                        .map_err(|e| format!("{source}: fixed-output prefetch {url}: {e}"))?
+                        .ok_or_else(|| format!("{source}: fixed-output prefetch returned no hash"))
+                })?;
                 hashes.insert(role.clone(), hash);
             }
             Ok(PinCandidate {
@@ -96,18 +129,20 @@ pub fn check(root: &Path, cache_dir: &Path, plan_path: &Path) -> Result<bool, St
                 hashes,
             })
         });
+        let PinEvaluation { pin, decision } = decide_pin(pin, result);
         entries.push(PinPlanEntry {
-            source: source.clone(),
-            preimage: preimage.clone(),
-            current: pin.version.clone(),
-            decision: decide_pin(pin, result),
+            source,
+            preimage,
+            current: pin.version,
+            decision,
         });
     }
     let plan = seal_plan(entries)?;
     let pending = plan.entries.iter().any(|entry| !matches!(entry.decision, PinDecision::Current));
     let mut bytes = serde_json::to_vec_pretty(&plan).map_err(|e| format!("encoding plan: {e}"))?;
     bytes.push(b'\n');
-    atomic_write(plan_path, &bytes)?;
+    capability(BootstrapEffect::WriteOutput, || atomic_write(plan_path, &bytes))?;
+    verify_published(plan_path, &bytes)?;
     std::io::stdout().write_all(&bytes).map_err(|e| format!("reporting pin plan: {e}"))?;
     Ok(pending)
 }
@@ -117,12 +152,16 @@ pub fn apply(root: &Path, plan_path: &Path, reviewed: bool) -> Result<(), String
     if !reviewed {
         return Err("apply requires explicit --reviewed acknowledgement".into());
     }
-    let directory = fs::File::open(root.join("bootstrap/pins")).map_err(|e| format!("opening pin directory: {e}"))?;
-    directory.try_lock_exclusive().map_err(|e| format!("bootstrap pin mutation lock busy: {e}"))?;
-    let pins = load_pins(root)?;
-    let bytes = read_limited(plan_path, MAX_PLAN_BYTES)?;
+    let directory = capability(BootstrapEffect::ReadInput, || {
+        fs::File::open(root.join("bootstrap/pins")).map_err(|e| format!("opening pin directory: {e}"))
+    })?;
+    capability(BootstrapEffect::WriteOutput, || {
+        directory.try_lock_exclusive().map_err(|e| format!("bootstrap pin mutation lock busy: {e}"))
+    })?;
+    let pins = capability(BootstrapEffect::ReadInput, || load_pins(root))?;
+    let bytes = capability(BootstrapEffect::ReadInput, || read_limited(plan_path, MAX_PLAN_BYTES))?;
     let plan: PinPlan = serde_json::from_slice(&bytes).map_err(|e| format!("invalid plan: {e}"))?;
-    verify_plan(&plan, &pins)?;
+    let VerifiedPinPlan { plan, mut pins } = verify_plan(plan, pins)?;
     // Verify *all* remote fixed-output hashes before staging *any* write.
     let resolver = LiveResolver::new(root);
     let mut host_counts = BTreeMap::new();
@@ -131,28 +170,33 @@ pub fn apply(root: &Path, plan_path: &Path, reviewed: bool) -> Result<(), String
         let PinDecision::Candidate { candidate } = &entry.decision else {
             continue;
         };
-        let pin = &pins[&entry.source].0;
-        let mut next = pin.clone();
+        let mut next = pins.remove(&entry.source).expect("verified plan source has a loaded pin").pin;
         next.version.clone_from(&candidate.version);
         next.release_date.clone_from(&candidate.release_date);
         for (role, artifact) in &mut next.artifacts {
-            artifact.url = render_pin_url(artifact, &next.version)?;
+            let rendered =
+                render_pin_url(std::mem::take(&mut artifact.url_template), std::mem::take(&mut next.version))?;
+            artifact.url_template = rendered.url_template;
+            next.version = rendered.version;
+            artifact.url = rendered.url;
             bound_host(&artifact.url, &mut host_counts)?;
             let expected = &candidate.hashes[role];
             let mode = match artifact.hash_kind {
                 HashKind::Flat => HashResolutionMode::Flat,
                 HashKind::Tree => HashResolutionMode::Recursive,
             };
-            let actual = resolver
-                .hash_url_content(&artifact.url, &HashAlgo::Sha256, mode)
-                .map_err(|e| format!("{}: fixed-output prefetch: {e}", entry.source))?
-                .ok_or_else(|| format!("{}: fixed-output prefetch returned no hash", entry.source))?;
+            let actual = capability(BootstrapEffect::ResolvePins, || {
+                resolver
+                    .hash_url_content(&artifact.url, &HashAlgo::Sha256, mode)
+                    .map_err(|e| format!("{}: fixed-output prefetch: {e}", entry.source))?
+                    .ok_or_else(|| format!("{}: fixed-output prefetch returned no hash", entry.source))
+            })?;
             if &actual != expected {
                 return Err(format!("{}: upstream hash mismatch for {role}", entry.source));
             }
             artifact.hash = actual;
         }
-        validate_pin(&next)?;
+        let next = validate_pin(next)?;
         let toml = toml::to_string_pretty(&next).map_err(|e| format!("serialize pin: {e}"))?;
         let mut json = serde_json::to_vec_pretty(&next).map_err(|e| format!("serialize reader: {e}"))?;
         json.push(b'\n');
@@ -160,14 +204,20 @@ pub fn apply(root: &Path, plan_path: &Path, reviewed: bool) -> Result<(), String
         replacements.push((root.join("bootstrap/pins/generated").join(format!("{}.json", entry.source)), json));
     }
     // Recheck after potentially long downloads while the directory mutation lock is held.
-    verify_plan(&plan, &load_pins(root)?)?;
+    verify_plan(plan, capability(BootstrapEffect::ReadInput, || load_pins(root))?)?;
     // Stage every replacement before the first rename; rollback committed paths on failure.
-    publish_replacements(&replacements)?;
+    if !replacements.is_empty() {
+        capability(BootstrapEffect::PublishPins, || publish_replacements(&replacements))?;
+    }
+    for (path, expected) in &replacements {
+        verify_published(path, expected)?;
+    }
+    capability(BootstrapEffect::VerifyOutput, || load_pins(root).map(|_| ()))?;
     println!(r#"{{"schema":"mantle-bootstrap-pin-apply-v1","applied_sources":{}}}"#, replacements.len() / 2);
     Ok(())
 }
 
-fn load_pins(root: &Path) -> Result<BTreeMap<String, (BootstrapPin, String)>, String> {
+fn load_pins(root: &Path) -> Result<BTreeMap<String, LoadedPin>, String> {
     let dir = root.join("bootstrap/pins");
     let mut paths = Vec::new();
     for entry in fs::read_dir(&dir).map_err(|e| format!("reading {}: {e}", dir.display()))? {
@@ -191,7 +241,7 @@ fn load_pins(root: &Path) -> Result<BTreeMap<String, (BootstrapPin, String)>, St
         let bytes = read_limited(&path, MAX_CACHE_BYTES)?;
         let pin: BootstrapPin = toml::from_str(std::str::from_utf8(&bytes).map_err(|e| e.to_string())?)
             .map_err(|e| format!("{}: {e}; known fields: schema, source, package_url, version, release_date, artifacts, resolve, recipes; artifact fields: url_template, url, hash_kind, hash", path.display()))?;
-        validate_pin(&pin)?;
+        let pin = validate_pin(pin)?;
         if path.file_stem().and_then(|stem| stem.to_str()) != Some(&pin.source) {
             return Err(format!("{}: source differs from filename", path.display()));
         }
@@ -199,13 +249,20 @@ fn load_pins(root: &Path) -> Result<BTreeMap<String, (BootstrapPin, String)>, St
         let reader = read_limited(&derived, MAX_CACHE_BYTES)?;
         let mut expected = serde_json::to_vec_pretty(&pin).map_err(|e| format!("rendering reader: {e}"))?;
         expected.push(b'\n');
-        if parse_pin(&reader)? != pin || reader != expected {
+        let reader_matches = reader == expected;
+        if parse_pin(reader)? != pin || !reader_matches {
             return Err(format!(
                 "{}: stale generated Nickel reader; run bootstrap/pins/generate_readers.py",
                 pin.source
             ));
         }
-        if pins.insert(pin.source.clone(), (pin, pin_preimage(&bytes))).is_some() {
+        if pins
+            .insert(pin.source.clone(), LoadedPin {
+                pin,
+                preimage: pin_preimage(bytes),
+            })
+            .is_some()
+        {
             return Err("duplicate pin source".into());
         }
     }
@@ -235,9 +292,10 @@ fn resolve_release(
     bound_host(url, counts)?;
     let hook_identity = blake3::hash(format!("{url}\0{version_field}\0{date_field}").as_bytes()).to_hex().to_string();
     let path = cache_dir.join(format!("{}.json", pin.source));
-    let cached: Option<CachedRelease> = if path.exists() {
-        let cache: CachedRelease = serde_json::from_slice(&read_limited(&path, MAX_CACHE_BYTES)?)
-            .map_err(|e| format!("{}: corrupt cache: {e}", pin.source))?;
+    let cached: Option<CachedRelease> = if capability(BootstrapEffect::ReadInput, || Ok::<_, String>(path.exists()))? {
+        let cache: CachedRelease =
+            serde_json::from_slice(&capability(BootstrapEffect::ReadInput, || read_limited(&path, MAX_CACHE_BYTES))?)
+                .map_err(|e| format!("{}: corrupt cache: {e}", pin.source))?;
         (cache.hook_identity == hook_identity).then_some(cache)
     } else {
         None
@@ -251,7 +309,9 @@ fn resolve_release(
             request = request.header("if-modified-since", modified);
         }
     }
-    let response = request.call().map_err(|e| format!("{}: querying releases: {e}", pin.source))?;
+    let response = capability(BootstrapEffect::ResolvePins, || {
+        request.call().map_err(|e| format!("{}: querying releases: {e}", pin.source))
+    })?;
     if response.status().as_u16() == 304 {
         let cache = cached.ok_or_else(|| format!("{}: 304 without cache", pin.source))?;
         return Ok((cache.version, cache.release_date));
@@ -262,13 +322,15 @@ fn resolve_release(
     let etag = response.headers().get("etag").and_then(|v| v.to_str().ok()).map(ToOwned::to_owned);
     let last_modified = response.headers().get("last-modified").and_then(|v| v.to_str().ok()).map(ToOwned::to_owned);
     let mut body = Vec::new();
-    response
-        .into_body()
-        .with_config()
-        .limit(MAX_RELEASE_BYTES + 1)
-        .reader()
-        .read_to_end(&mut body)
-        .map_err(|e| format!("{}: reading release: {e}", pin.source))?;
+    capability(BootstrapEffect::ResolvePins, || {
+        response
+            .into_body()
+            .with_config()
+            .limit(MAX_RELEASE_BYTES + 1)
+            .reader()
+            .read_to_end(&mut body)
+            .map_err(|e| format!("{}: reading release: {e}", pin.source))
+    })?;
     if body.len() as u64 > MAX_RELEASE_BYTES {
         return Err(format!("{}: release body exceeds limit", pin.source));
     }
@@ -292,7 +354,9 @@ fn resolve_release(
         version: version.clone(),
         release_date: release_date.clone(),
     };
-    atomic_write(&path, &serde_json::to_vec(&cache).map_err(|e| e.to_string())?)?;
+    let bytes = serde_json::to_vec(&cache).map_err(|e| e.to_string())?;
+    capability(BootstrapEffect::WriteOutput, || atomic_write(&path, &bytes))?;
+    verify_published(&path, &bytes)?;
     Ok((version, release_date))
 }
 
@@ -351,10 +415,12 @@ fn publish_replacements_with(
         fs::write(temp.path(), bytes).map_err(|e| e.to_string())?;
         staged.push(temp);
     }
-    let originals: Vec<Vec<u8>> = replacements
-        .iter()
-        .map(|(p, _)| fs::read(p).map_err(|e| format!("reading {}: {e}", p.display())))
-        .collect::<Result<_, _>>()?;
+    let originals: Vec<Vec<u8>> = capability(BootstrapEffect::ReadInput, || {
+        replacements
+            .iter()
+            .map(|(p, _)| fs::read(p).map_err(|e| format!("reading {}: {e}", p.display())))
+            .collect::<Result<_, _>>()
+    })?;
     for (published, (temp, (path, _))) in staged.into_iter().zip(replacements).enumerate() {
         let result =
             before_publish(published, path).and_then(|()| temp.persist(path).map(|_| ()).map_err(|e| e.to_string()));
@@ -421,7 +487,7 @@ mod tests {
             };
             entries.push(PinPlanEntry {
                 source: source.into(),
-                preimage: pin_preimage(text.as_bytes()),
+                preimage: pin_preimage(text.as_bytes().to_vec()),
                 current: pin.version,
                 decision,
             });

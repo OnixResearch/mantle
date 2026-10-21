@@ -904,6 +904,7 @@ mod tests {
 
     async fn test_handle(dir: &Path, backend: crate::StoreBackend) -> StoreHandle {
         StoreHandle::open(crate::StoreConfig {
+            source_admission: None,
             backend,
             state_dir: dir.join("state"),
             output_dir: dir.join("store"),
@@ -1156,6 +1157,7 @@ mod tests {
         const REFERENCE_PATH: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-reference";
         let temp = tempfile::tempdir().unwrap();
         let handle = StoreHandle::open(crate::StoreConfig {
+            source_admission: None,
             backend: crate::StoreBackend::Snix,
             state_dir: temp.path().join("state"),
             output_dir: temp.path().join("store"),

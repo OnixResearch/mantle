@@ -124,9 +124,9 @@ pub struct OxideReleaseWorkerReport {
 // r[impl mantle.verification_evidence.oxide_release_worker.tuf_bundles]
 // r[impl mantle.verification_evidence.oxide_release_worker.ephemeral_workers]
 // r[impl mantle.verification_evidence.oxide_release_worker.cancel_safety]
-pub fn validate_oxide_release_worker_fixture(fixture: &OxideReleaseWorkerFixture) -> OxideReleaseWorkerReport {
+pub fn validate_oxide_release_worker_fixture(fixture: OxideReleaseWorkerFixture) -> OxideReleaseWorkerReport {
     let mut diagnostics = Vec::new();
-    validate_fixture_collection_bounds(fixture, &mut diagnostics);
+    validate_fixture_collection_bounds(&fixture, &mut diagnostics);
     validate_reference_inventory(&fixture.references, &mut diagnostics);
     validate_release_profiles(&fixture.release_profiles, &mut diagnostics);
     validate_worker_receipts(&fixture.worker_receipts, &mut diagnostics);
@@ -408,7 +408,7 @@ mod tests {
     fn accepts_valid_oxide_release_worker_fixture() {
         let fixture = valid_fixture();
 
-        let report = validate_oxide_release_worker_fixture(&fixture);
+        let report = validate_oxide_release_worker_fixture(fixture);
 
         assert!(report.accepted);
         assert!(report.diagnostics.is_empty());
@@ -433,7 +433,7 @@ mod tests {
             let mut fixture = valid_fixture();
             mutate(&mut fixture);
 
-            let report = validate_oxide_release_worker_fixture(&fixture);
+            let report = validate_oxide_release_worker_fixture(fixture);
 
             assert!(!report.accepted, "{name} should be rejected");
             assert!(

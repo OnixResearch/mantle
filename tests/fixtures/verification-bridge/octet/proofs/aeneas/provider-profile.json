@@ -1,0 +1,101 @@
+{
+  "aeneas_lean_library": "AeneasVerif/aeneas/backends/lean@bc2eb6f941369fa3c695e30598b5758b11e4f0de",
+  "aeneas_release": "0.1.0",
+  "aeneas_repository": "https://github.com/AeneasVerif/aeneas",
+  "aeneas_revision": "bc2eb6f941369fa3c695e30598b5758b11e4f0de",
+  "assumption_policy": {
+    "axioms": [],
+    "external_models": [],
+    "requires_complete_declaration": true
+  },
+  "charon_repository": "https://github.com/AeneasVerif/charon",
+  "charon_revision": "cb50ff16b9f1066b8a97dc06da704de2da2fa41c",
+  "checked_source_surface": [
+    "safe sequential Rust",
+    "no unsafe Rust",
+    "no concurrency",
+    "reviewed Charon-supported subset only"
+  ],
+  "claim_scope": "named-theorem-over-generated-model",
+  "command_argv": [
+    "aeneas",
+    "--backend",
+    "lean",
+    "--emit-json"
+  ],
+  "environment_allowlist": [
+    "PATH",
+    "CHARON_TOOLCHAIN_IS_IN_PATH",
+    "LD_LIBRARY_PATH",
+    "HOME",
+    "MATHLIB_NO_CACHE_ON_UPDATE"
+  ],
+  "extraction_policy": {
+    "drop_policy": "include-drops",
+    "endianness": "little",
+    "exclude_rules": [],
+    "has_errors": false,
+    "include_rules": [
+      "src/verified"
+    ],
+    "mir_start_stage": "borrowck",
+    "opaque_rules": [],
+    "pointer_width_bits": 64,
+    "serialization_format": "llbc-json-v1",
+    "skip_borrowck": false,
+    "start_from": "crate",
+    "target_triple": "x86_64-unknown-linux-gnu",
+    "transformation_settings": [
+      "preserve-spans"
+    ]
+  },
+  "lean_toolchain": "leanprover/lean4:v4.31.0",
+  "limits": {
+    "stderr_max_bytes": 4096,
+    "stdout_max_bytes": 4096,
+    "timeout_ms": 30000
+  },
+  "non_claims": [
+    "does not prove Aeneas or Charon translation soundness",
+    "does not prove Lean or verifier soundness",
+    "does not prove whole-program correctness",
+    "does not prove rustc compiler correctness",
+    "does not prove external model soundness",
+    "does not prove unsafe Rust or concurrent Rust",
+    "does not establish release eligibility"
+  ],
+  "ocaml_toolchain": "ocaml@5.2.0",
+  "profile_id": "octet-aeneas-lean-0.1.0-bc2eb6f",
+  "provider_id": "aeneas-lean",
+  "schema_version": "octet-aeneas-lean-provider-profile/v1",
+  "semantic_reference": {
+    "license": "Apache-2.0",
+    "recorded_only": true,
+    "repository": "https://github.com/AeneasVerif/mechanized-llbc",
+    "revision": "8a9b8bb3823ceceb47026837d23baea0934dfb27",
+    "source_sentinel": "README.md:Mechanized LLBC"
+  },
+  "stage_commands": {
+    "aeneas_argv": [
+      "aeneas",
+      "-backend",
+      "lean",
+      "-emit-json",
+      "-dest",
+      ".",
+      "-no-progress-bar"
+    ],
+    "charon_argv": [
+      "charon",
+      "cargo",
+      "--preset",
+      "aeneas",
+      "--dest-file",
+      "llbc.llbc"
+    ],
+    "lean_argv": [
+      "lake",
+      "build"
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+[package]
+name = "bundle-app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bundle-engine = { path = "../engine" }
+
+[features]
+fancy = ["bundle-engine/fancy"]

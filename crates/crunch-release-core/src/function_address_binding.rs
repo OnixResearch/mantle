@@ -15,7 +15,6 @@ use crate::manifest::FunctionAddressReleaseEvidence;
 use crate::manifest::FunctionAddressReleaseVerification;
 use crate::manifest::ReleaseEvidenceManifest;
 use crate::manifest::canonical_release_evidence_manifest;
-use crate::manifest::evaluate_function_address_release_evidence;
 use crate::opaque_evidence::FUNCTION_ADDRESS_CLAIM_SCOPE;
 use crate::opaque_evidence::FUNCTION_ADDRESS_DISPOSITION_INVALID;
 use crate::opaque_evidence::FUNCTION_ADDRESS_DISPOSITION_PRESENT;
@@ -158,7 +157,8 @@ pub fn render_function_address_binding_from_manifest(
     validate_binding_selection(&selection)?;
     let evidence = selected_function_address_evidence(&manifest, &selection)?;
     manifest.function_address_evidence = Some(evidence);
-    let mut verification = evaluate_function_address_release_evidence(&manifest, &selection.mode);
+    let mut verification =
+        crate::manifest::evaluate_function_address_release_evidence_borrowed(&manifest, &selection.mode);
     verification.valence_receipt_hash_blake3 = Some(selection.valence_receipt_identity.receipt_hash_blake3);
     verification.kamacite_receipt_hash_blake3 =
         selection.kamacite_receipt_identity.map(|identity| identity.receipt_hash_blake3);
@@ -194,7 +194,7 @@ pub fn render_function_address_binding_from_preserves_manifest(
         )));
     }
     debug_assert_eq!(receipt.binding.profile_version, FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION);
-    let verification = evaluate_function_address_release_evidence(&manifest, &mode);
+    let verification = crate::manifest::evaluate_function_address_release_evidence_borrowed(&manifest, &mode);
     render_function_address_binding_receipt(verification)
 }
 

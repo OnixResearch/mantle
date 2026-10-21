@@ -21,7 +21,9 @@ use crunch_release_core::ChapterTransportEntryInput;
 use crunch_release_core::ChapterTransportEntryKind;
 use crunch_release_core::ChapterTransportMember;
 use crunch_release_core::TreeCopyBlocker;
+use crunch_release_core::TreeCopyBlockerKind;
 use crunch_release_core::TreeCopyLimits;
+use crunch_release_core::TreeCopyOperation;
 use crunch_release_core::TreeCopyPlan;
 use crunch_release_core::TreeEntryKind;
 use crunch_release_core::TreeEntryObservation;
@@ -32,6 +34,9 @@ use crate::release_capability::ReleaseRootKind;
 use crate::release_capability::ValidatedReleasePath;
 
 const TREE_COPY_BUFFER_BYTES: usize = 8_192;
+const DIRECTORY_OPERATION_PHASE: u8 = 0;
+const FILE_OPERATION_PHASE: u8 = 1;
+const SYMLINK_OPERATION_PHASE: u8 = 2;
 const TREE_COPY_DIAGNOSTIC_BLOCKERS_MAX: usize = 16;
 const EMPTY_DIRECTORY_ACCOUNTED_SIZE_BYTES: u64 = 1;
 #[cfg(unix)]
@@ -88,10 +93,19 @@ fn prepare_tree_copy_with_limits(source_dir: &Path, limits: TreeCopyLimits) -> R
         .map_err(|error| {
             RunError::Internal(format!("opening no-follow tree source root {}: {error}", source_dir.display()))
         })?;
-    let shared_limits = crunch_release_core::bounded_tree_limits(limits).map_err(tree_plan_error)?;
+    let values = crunch_release_core::bounded_tree_limits(limits).map_err(tree_plan_error)?;
+    let shared_limits = bounded_tree_core::TreeLimits::new(bounded_tree_core::LimitValues {
+        entries: values.entries,
+        depth: values.depth,
+        path_bytes: values.path_bytes,
+        file_bytes: values.file_bytes,
+        total_bytes: values.total_bytes,
+        symlink_target_bytes: values.symlink_target_bytes,
+    })
+    .map_err(|error| RunError::Internal(format!("shared tree limit admission rejected release limits: {error:?}")))?;
     let shared = bounded_tree_cap::prepare(source_root.dir(), shared_limits, SymlinkPolicy::PreserveInternal)
         .map_err(|error| shared_prepare_error(&error, limits))?;
-    let plan = crunch_release_core::bounded_tree_plan(shared.plan()).map_err(tree_plan_error)?;
+    let plan = bounded_tree_plan(shared.plan()).map_err(tree_plan_error)?;
     let entries_count_max = usize::try_from(limits.entries_count_max)
         .map_err(|_| RunError::Internal("tree copy entry limit does not fit usize".to_string()))?;
     assert_eq!(source_root.kind(), ReleaseRootKind::ReleaseTreeSource);
@@ -101,6 +115,205 @@ fn prepare_tree_copy_with_limits(source_dir: &Path, limits: TreeCopyLimits) -> R
         shared,
         plan,
     })
+}
+
+fn bounded_tree_plan(plan: &bounded_tree_core::TreePlan) -> Result<TreeCopyPlan, Vec<TreeCopyBlocker>> {
+    let mut entries = Vec::with_capacity(plan.member_facts().len());
+    for fact in plan.member_facts() {
+        let relative_path = relative_path_text(fact.path().components())?;
+        let symlink_target =
+            fact.symlink_target().map(|target| String::from_utf8(target.to_vec())).transpose().map_err(|_| {
+                vec![path_blocker(
+                    TreeCopyBlockerKind::SymlinkTargetInvalidCharacter,
+                    &relative_path,
+                    "tree copy symlink target is not valid UTF-8",
+                )]
+            })?;
+        entries.push(TreeEntryObservation {
+            relative_path,
+            kind: from_shared_kind(fact.kind()),
+            mode: fact.mode().bits(),
+            symlink_target,
+        });
+    }
+
+    entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+
+    let mut operations = Vec::with_capacity(plan.operations().len());
+    for operation in plan.operations() {
+        let mode = plan
+            .member_facts()
+            .iter()
+            .find(|fact| fact.path() == operation.path())
+            .map(|fact| fact.mode().bits())
+            .ok_or_else(|| {
+                vec![blocker(
+                    TreeCopyBlockerKind::MissingParent,
+                    None,
+                    "shared tree operation has no matching member fact",
+                )]
+            })?;
+        operations.push(from_shared_operation(operation, mode)?);
+    }
+    operations
+        .sort_by(|left, right| compatibility_operation_sort_key(left).cmp(&compatibility_operation_sort_key(right)));
+    debug_assert_eq!(entries.len(), operations.len());
+    Ok(TreeCopyPlan { entries, operations })
+}
+
+/// Map shared admission blockers to Mantle's retained diagnostic surface.
+#[must_use]
+fn bounded_tree_blockers(error: &bounded_tree_core::PlanError) -> Vec<TreeCopyBlocker> {
+    let mut blockers = error.blockers().iter().map(shared_blocker).collect::<Vec<_>>();
+    blockers.sort_by(blocker_order);
+    blockers
+}
+
+fn from_shared_operation(
+    operation: &bounded_tree_core::CopyOperation,
+    compatibility_mode: u32,
+) -> Result<TreeCopyOperation, Vec<TreeCopyBlocker>> {
+    match operation {
+        bounded_tree_core::CopyOperation::CreateDirectory { path, mode } => Ok(TreeCopyOperation::CreateDirectory {
+            relative_path: relative_path_text(path.components())?,
+            mode: mode.bits(),
+        }),
+        bounded_tree_core::CopyOperation::CopyFile { path, mode, .. } => Ok(TreeCopyOperation::CopyFile {
+            relative_path: relative_path_text(path.components())?,
+            mode: mode.bits(),
+        }),
+        bounded_tree_core::CopyOperation::CreateSymlink { path, target, .. } => {
+            let relative_path = relative_path_text(path.components())?;
+            let target = String::from_utf8(target.clone()).map_err(|_| {
+                vec![path_blocker(
+                    TreeCopyBlockerKind::SymlinkTargetInvalidCharacter,
+                    &relative_path,
+                    "tree copy symlink target is not valid UTF-8",
+                )]
+            })?;
+            Ok(TreeCopyOperation::CreateSymlink {
+                relative_path,
+                mode: compatibility_mode,
+                target,
+            })
+        }
+    }
+}
+
+fn relative_path_text(components: &[Vec<u8>]) -> Result<String, Vec<TreeCopyBlocker>> {
+    let mut parts = Vec::with_capacity(components.len());
+    for component in components {
+        parts.push(String::from_utf8(component.clone()).map_err(|_| {
+            vec![blocker(
+                TreeCopyBlockerKind::InvalidCharacter,
+                None,
+                "shared tree path is not valid UTF-8",
+            )]
+        })?);
+    }
+    Ok(parts.join("/"))
+}
+
+const fn from_shared_kind(kind: bounded_tree_core::EntryKind) -> TreeEntryKind {
+    match kind {
+        bounded_tree_core::EntryKind::Directory => TreeEntryKind::Directory,
+        bounded_tree_core::EntryKind::File => TreeEntryKind::File,
+        bounded_tree_core::EntryKind::Symlink => TreeEntryKind::Symlink,
+        bounded_tree_core::EntryKind::Unsupported => TreeEntryKind::Unsupported,
+    }
+}
+
+fn shared_blocker(blocker: &bounded_tree_core::Blocker) -> TreeCopyBlocker {
+    let kind = shared_blocker_kind(blocker.kind());
+    let relative_path = blocker.path_components().and_then(|components| relative_path_text(components).ok());
+    TreeCopyBlocker {
+        kind,
+        message: shared_blocker_message(kind).to_string(),
+        relative_path,
+    }
+}
+
+const fn shared_blocker_message(kind: TreeCopyBlockerKind) -> &'static str {
+    match kind {
+        TreeCopyBlockerKind::SymlinkTargetEscapes => "tree copy symlink target escapes source root",
+        TreeCopyBlockerKind::SymlinkTargetSelf => "tree copy symlink target resolves to the link itself",
+        TreeCopyBlockerKind::SymlinkTargetMissing => "tree copy symlink target does not name a planned entry",
+        TreeCopyBlockerKind::AbsoluteSymlinkTarget => "tree copy symlink target must be non-empty and relative",
+        TreeCopyBlockerKind::UnsupportedKind => "tree copy entry kind is unsupported",
+        _ => "shared bounded-tree admission rejected the tree entry",
+    }
+}
+
+fn shared_blocker_kind(kind: bounded_tree_core::BlockerKind) -> TreeCopyBlockerKind {
+    match kind {
+        bounded_tree_core::BlockerKind::EntryLimitExceeded => TreeCopyBlockerKind::EntryLimitExceeded,
+        bounded_tree_core::BlockerKind::EmptyPath => TreeCopyBlockerKind::EmptyPath,
+        bounded_tree_core::BlockerKind::EmptyComponent => TreeCopyBlockerKind::EmptyComponent,
+        bounded_tree_core::BlockerKind::CurrentDirectoryComponent => TreeCopyBlockerKind::CurrentDirectoryComponent,
+        bounded_tree_core::BlockerKind::ParentDirectoryComponent => TreeCopyBlockerKind::ParentDirectoryComponent,
+        bounded_tree_core::BlockerKind::PathContainsNul => TreeCopyBlockerKind::InvalidCharacter,
+        bounded_tree_core::BlockerKind::PathContainsForwardSlash => TreeCopyBlockerKind::InvalidCharacter,
+        bounded_tree_core::BlockerKind::PathContainsBackslash => TreeCopyBlockerKind::BackslashSeparator,
+        bounded_tree_core::BlockerKind::PathAccountingOverflow => TreeCopyBlockerKind::PathTooLong,
+        bounded_tree_core::BlockerKind::PathDepthExceeded => TreeCopyBlockerKind::PathTooDeep,
+        bounded_tree_core::BlockerKind::PathBytesExceeded => TreeCopyBlockerKind::PathTooLong,
+        bounded_tree_core::BlockerKind::FileBytesExceeded
+        | bounded_tree_core::BlockerKind::TotalBytesExceeded
+        | bounded_tree_core::BlockerKind::TotalBytesOverflow => TreeCopyBlockerKind::EntryCountOverflow,
+        bounded_tree_core::BlockerKind::SymlinkTargetBytesExceeded => TreeCopyBlockerKind::SymlinkTargetTooLong,
+        bounded_tree_core::BlockerKind::UnsupportedKind => TreeCopyBlockerKind::UnsupportedKind,
+        bounded_tree_core::BlockerKind::InvalidDirectoryFacts | bounded_tree_core::BlockerKind::InvalidFileFacts => {
+            TreeCopyBlockerKind::UnexpectedSymlinkTarget
+        }
+        bounded_tree_core::BlockerKind::InvalidSymlinkFacts => TreeCopyBlockerKind::MissingSymlinkTarget,
+        bounded_tree_core::BlockerKind::DuplicatePath => TreeCopyBlockerKind::DuplicatePath,
+        bounded_tree_core::BlockerKind::MissingParent => TreeCopyBlockerKind::MissingParent,
+        bounded_tree_core::BlockerKind::ParentNotDirectory => TreeCopyBlockerKind::ParentNotDirectory,
+        bounded_tree_core::BlockerKind::SymlinkRejected => TreeCopyBlockerKind::UnsupportedKind,
+        bounded_tree_core::BlockerKind::SymlinkTargetNotRelative => TreeCopyBlockerKind::AbsoluteSymlinkTarget,
+        bounded_tree_core::BlockerKind::SymlinkTargetContainsNul
+        | bounded_tree_core::BlockerKind::SymlinkTargetMalformed => TreeCopyBlockerKind::SymlinkTargetInvalidCharacter,
+        bounded_tree_core::BlockerKind::SymlinkTargetContainsBackslash => TreeCopyBlockerKind::SymlinkTargetBackslash,
+        bounded_tree_core::BlockerKind::SymlinkTargetEscapes => TreeCopyBlockerKind::SymlinkTargetEscapes,
+        bounded_tree_core::BlockerKind::SymlinkTargetMissing => TreeCopyBlockerKind::SymlinkTargetMissing,
+        bounded_tree_core::BlockerKind::SymlinkTargetSelf => TreeCopyBlockerKind::SymlinkTargetSelf,
+        _ => TreeCopyBlockerKind::InvalidCharacter,
+    }
+}
+
+fn compatibility_operation_sort_key(operation: &TreeCopyOperation) -> (u8, u32, &str) {
+    match operation {
+        TreeCopyOperation::CreateDirectory { relative_path, .. } => {
+            (DIRECTORY_OPERATION_PHASE, path_depth_count(relative_path), relative_path)
+        }
+        TreeCopyOperation::CopyFile { relative_path, .. } => (FILE_OPERATION_PHASE, 0, relative_path),
+        TreeCopyOperation::CreateSymlink { relative_path, .. } => (SYMLINK_OPERATION_PHASE, 0, relative_path),
+    }
+}
+
+fn path_depth_count(path: &str) -> u32 {
+    debug_assert!(!path.is_empty());
+    path.bytes().filter(|byte| *byte == b'/').fold(1_u32, |depth, _separator| depth.saturating_add(1))
+}
+
+fn blocker(kind: TreeCopyBlockerKind, relative_path: Option<String>, message: &str) -> TreeCopyBlocker {
+    TreeCopyBlocker {
+        kind,
+        relative_path,
+        message: message.to_string(),
+    }
+}
+
+#[allow(tigerstyle::ambiguous_params)] // parameter order fixed by wire format and call history
+fn path_blocker(kind: TreeCopyBlockerKind, path: &str, message: &str) -> TreeCopyBlocker {
+    blocker(kind, Some(path.to_string()), message)
+}
+
+fn blocker_order(left: &TreeCopyBlocker, right: &TreeCopyBlocker) -> core::cmp::Ordering {
+    left.relative_path
+        .cmp(&right.relative_path)
+        .then_with(|| left.kind.cmp(&right.kind))
+        .then_with(|| left.message.cmp(&right.message))
 }
 
 // r[impl mantle.release_provenance.bundle_tree_copy.destination_confinement]
@@ -230,7 +443,7 @@ pub(crate) fn hash_file_nofollow(path: &Path) -> Result<(u64, String), RunError>
 
 fn shared_prepare_error(error: &bounded_tree_cap::ShellError, limits: TreeCopyLimits) -> RunError {
     if let bounded_tree_cap::ShellErrorKind::PlanRejected(plan) = error.kind() {
-        return tree_plan_error(crunch_release_core::bounded_tree_blockers(plan));
+        return tree_plan_error(bounded_tree_blockers(plan));
     }
     let path = shared_error_path(error);
     if let bounded_tree_cap::ShellErrorKind::LimitExceeded(kind) = error.kind() {

@@ -72,7 +72,7 @@ impl EvaluationCancellation {
         self.inner.requested.load(Ordering::Acquire)
     }
 
-    async fn cancelled(&self) {
+    pub(crate) async fn cancelled(&self) {
         if self.is_requested() {
             return;
         }

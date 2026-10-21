@@ -1,8 +1,10 @@
-//! Pure plan and validation core for the source-built Mantle fixed-point proof.
+//! Shared plan contract and validation for the source-built Mantle fixed-point proof.
 //!
-//! The imperative proof shell observes files, trees, and empty output roots. This
-//! module accepts only those observations. It does not read files, inspect the
-//! environment, start processes, or publish evidence.
+//! Receipt verification and binary execution share this pure validation core.
+//! Construction-only planning and its initial-empty output-authority precondition
+//! belong to `source_built_fixed_point_planning`, not the receipt-verification library.
+//! This module does not read files, inspect the environment, start processes, or
+//! publish evidence.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -14,17 +16,16 @@ pub(crate) const SOURCE_BUILT_FIXED_POINT_PLAN_SCHEMA: &str = "mantle-source-bui
 pub(crate) const SOURCE_BUILT_FIXED_POINT_PROOF_WORKFLOW: &str = "mantle-deterministic-proof-receipt-v2";
 pub(crate) const SOURCE_BUILT_FIXED_POINT_PROVIDER_KIND: &str = "full-source";
 pub(crate) const SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX: u64 = 4_096;
-const SOURCE_AUTHORITY_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-source-authority-v1";
 const PLAN_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-plan-v2";
 const BUILD_EFFECT_POLICY_VERSION: &str = "mantle-build-effects-v1";
 const REQUIRED_SOURCE_ROLE_COUNT: u32 = 7;
-const EXPECTED_STAGE_COUNT: u32 = 6;
-const EXPECTED_RUN_COUNT: u32 = 2;
+pub(super) const EXPECTED_STAGE_COUNT: u32 = 6;
+pub(super) const EXPECTED_RUN_COUNT: u32 = 2;
 const BLAKE3_HEX_LENGTH: usize = 64;
 const TEXT_BYTES_MAX: usize = 4_096;
 const ELAPSED_SECONDS_MAX: u64 = 86_400;
 const DISK_BYTES_MAX: u64 = 1_099_511_627_776;
-const EXEC_EVENT_COUNT_MAX: u32 = 262_144;
+pub(crate) const SOURCE_BUILT_FIXED_POINT_EXEC_EVENT_COUNT_MAX: u32 = 262_144;
 const SOURCE_RECORD_COUNT_MAX: u32 = 65_536;
 const MANTLE_STAGE2_INDEX: usize = 5;
 
@@ -75,23 +76,6 @@ pub(crate) struct SourceAuthorityInput {
     pub(crate) size_bytes: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct InitialOutputAuthorityState {
-    pub(crate) stagex_transition_entries: u32,
-    pub(crate) native_provider_entries: u32,
-    pub(crate) rust_provider_entries: u32,
-    pub(crate) mantle_output_entries: u32,
-}
-
-impl InitialOutputAuthorityState {
-    fn is_empty(&self) -> bool {
-        self.stagex_transition_entries == 0
-            && self.native_provider_entries == 0
-            && self.rust_provider_entries == 0
-            && self.mantle_output_entries == 0
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum ProofHermeticityMode {
@@ -122,16 +106,6 @@ pub(crate) struct SourceBuiltFixedPointResourceBounds {
     pub(crate) open_file_descriptors_max: u64,
     pub(crate) protected_exec_events_max: u32,
     pub(crate) source_records_max: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SourceBuiltFixedPointPlanInput {
-    pub(crate) proof_id: String,
-    pub(crate) logical_store_prefix: String,
-    pub(crate) source_inputs: Vec<SourceAuthorityInput>,
-    pub(crate) initial_output_authority: InitialOutputAuthorityState,
-    pub(crate) policies: SourceBuiltFixedPointPolicies,
-    pub(crate) resource_bounds: SourceBuiltFixedPointResourceBounds,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -238,7 +212,6 @@ pub(crate) enum SourceBuiltFixedPointPlanErrorKind {
     InvalidText,
     InvalidDigest,
     InvalidSourceAuthority,
-    NonEmptyOutputAuthority,
     InvalidPolicy,
     InvalidResourceBounds,
     InvalidPlan,
@@ -258,45 +231,6 @@ impl fmt::Display for SourceBuiltFixedPointPlanError {
 }
 
 impl std::error::Error for SourceBuiltFixedPointPlanError {}
-
-// r[impl bootstrap_inventory.source_built_mantle_fixed_point]
-pub(crate) fn plan_source_built_fixed_point(
-    mut input: SourceBuiltFixedPointPlanInput,
-) -> Result<SourceBuiltFixedPointPlan, SourceBuiltFixedPointPlanError> {
-    validate_text("proof_id", &input.proof_id)?;
-    validate_store_prefix(&input.logical_store_prefix)?;
-    validate_source_inputs(&input.source_inputs)?;
-    validate_initial_output_authority(&input.initial_output_authority)?;
-    validate_policies(&input.policies)?;
-    validate_resource_bounds(&input.resource_bounds)?;
-    input.source_inputs.sort();
-    let source_authority_digest_blake3 = digest_payload(SOURCE_AUTHORITY_DIGEST_CONTEXT, &input.source_inputs)?;
-    let vendor_blake3 = source_input_for_role(&input.source_inputs, SourceAuthorityRole::VendorInputs)?
-        .digest_blake3
-        .clone();
-    let mut plan = SourceBuiltFixedPointPlan {
-        schema: SOURCE_BUILT_FIXED_POINT_PLAN_SCHEMA.to_string(),
-        proof_id: input.proof_id,
-        logical_store_prefix: input.logical_store_prefix.clone(),
-        source_authority_digest_blake3: source_authority_digest_blake3.clone(),
-        source_inputs: input.source_inputs,
-        policies: input.policies,
-        resource_bounds: input.resource_bounds,
-        stages: expected_stage_plans(),
-        receipt_contract: receipt_contract(
-            &input.logical_store_prefix,
-            &source_authority_digest_blake3,
-            &vendor_blake3,
-        ),
-        non_claims: fixed_point_non_claims(),
-        plan_digest_blake3: String::new(),
-    };
-    plan.plan_digest_blake3 = plan_digest_blake3(&plan)?;
-    validate_source_built_fixed_point_plan(&plan)?;
-    debug_assert_eq!(plan.stages.len(), EXPECTED_STAGE_COUNT as usize);
-    debug_assert_eq!(plan.receipt_contract.run_ids.len(), EXPECTED_RUN_COUNT as usize);
-    Ok(plan)
-}
 
 pub(crate) fn validate_source_built_fixed_point_plan(
     plan: &SourceBuiltFixedPointPlan,
@@ -329,7 +263,7 @@ pub(crate) fn validate_source_built_fixed_point_plan(
     Ok(())
 }
 
-fn validate_source_inputs(inputs: &[SourceAuthorityInput]) -> Result<(), SourceBuiltFixedPointPlanError> {
+pub(super) fn validate_source_inputs(inputs: &[SourceAuthorityInput]) -> Result<(), SourceBuiltFixedPointPlanError> {
     let input_count = u32::try_from(inputs.len()).map_err(|_| {
         plan_error(
             SourceBuiltFixedPointPlanErrorKind::InvalidSourceAuthority,
@@ -414,22 +348,9 @@ fn expected_content_kind(role: SourceAuthorityRole) -> SourceContentKind {
     }
 }
 
-fn validate_initial_output_authority(
-    state: &InitialOutputAuthorityState,
+pub(super) fn validate_policies(
+    policies: &SourceBuiltFixedPointPolicies,
 ) -> Result<(), SourceBuiltFixedPointPlanError> {
-    if !state.is_empty() {
-        return Err(plan_error(
-            SourceBuiltFixedPointPlanErrorKind::NonEmptyOutputAuthority,
-            "proof root must start with empty transition, provider, Rust-provider, and Mantle output authorities"
-                .to_string(),
-        ));
-    }
-    debug_assert_eq!(state.stagex_transition_entries, 0);
-    debug_assert_eq!(state.mantle_output_entries, 0);
-    Ok(())
-}
-
-fn validate_policies(policies: &SourceBuiltFixedPointPolicies) -> Result<(), SourceBuiltFixedPointPlanError> {
     for (name, digest) in [
         ("expected native provider", &policies.expected_native_provider_digest_blake3),
         ("closure policy", &policies.closure_policy_digest_blake3),
@@ -457,15 +378,15 @@ fn validate_policies(policies: &SourceBuiltFixedPointPolicies) -> Result<(), Sou
     Ok(())
 }
 
-fn validate_resource_bounds(
+pub(super) fn validate_resource_bounds(
     bounds: &SourceBuiltFixedPointResourceBounds,
 ) -> Result<(), SourceBuiltFixedPointPlanError> {
     let elapsed_valid = bounds.elapsed_seconds_max > 0 && bounds.elapsed_seconds_max <= ELAPSED_SECONDS_MAX;
     let disk_valid = bounds.disk_bytes_max > 0 && bounds.disk_bytes_max <= DISK_BYTES_MAX;
     let open_files_valid = bounds.open_file_descriptors_max > 0
         && bounds.open_file_descriptors_max <= SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
-    let exec_events_valid =
-        bounds.protected_exec_events_max > 0 && bounds.protected_exec_events_max <= EXEC_EVENT_COUNT_MAX;
+    let exec_events_valid = bounds.protected_exec_events_max > 0
+        && bounds.protected_exec_events_max <= SOURCE_BUILT_FIXED_POINT_EXEC_EVENT_COUNT_MAX;
     let source_records_valid = bounds.source_records_max > 0 && bounds.source_records_max <= SOURCE_RECORD_COUNT_MAX;
     if !elapsed_valid || !disk_valid || !open_files_valid || !exec_events_valid || !source_records_valid {
         return Err(plan_error(
@@ -530,7 +451,7 @@ fn validate_non_claims(non_claims: &[String]) -> Result<(), SourceBuiltFixedPoin
     Ok(())
 }
 
-fn source_input_for_role(
+pub(super) fn source_input_for_role(
     inputs: &[SourceAuthorityInput],
     role: SourceAuthorityRole,
 ) -> Result<&SourceAuthorityInput, SourceBuiltFixedPointPlanError> {
@@ -550,7 +471,7 @@ fn source_input_for_role(
     Ok(input)
 }
 
-fn expected_stage_plans() -> Vec<SourceBuiltFixedPointStagePlan> {
+pub(super) fn expected_stage_plans() -> Vec<SourceBuiltFixedPointStagePlan> {
     let stages = vec![
         stagex_transition_stage(),
         stagex_provider_stage(),
@@ -562,43 +483,6 @@ fn expected_stage_plans() -> Vec<SourceBuiltFixedPointStagePlan> {
     debug_assert_eq!(stages.len(), EXPECTED_STAGE_COUNT as usize);
     debug_assert_eq!(stages[MANTLE_STAGE2_INDEX].orchestrator, ProofOrchestrator::Stage1Mantle);
     stages
-}
-
-/// A coordination-only view of the proof plan's actual output authority edges.
-/// Neither this declaration nor a stage command's exit verifies an action plan.
-pub(crate) struct StageReadinessBinding<'a> {
-    pub(crate) id: &'a str,
-    pub(crate) dependencies: Vec<&'a str>,
-    pub(crate) final_receipt_required: bool,
-}
-
-pub(crate) fn stage_readiness_bindings(
-    plan: &SourceBuiltFixedPointPlan,
-) -> Result<Vec<StageReadinessBinding<'_>>, String> {
-    let mut bindings = Vec::with_capacity(plan.stages.len());
-    for stage in &plan.stages {
-        let mut dependencies = Vec::new();
-        for input in &stage.inputs {
-            let StageAuthorityInput::Output { role } = input else {
-                continue;
-            };
-            let producer = plan
-                .stages
-                .iter()
-                .find(|candidate| candidate.output == *role)
-                .ok_or_else(|| format!("readiness stage {} has no output producer for {role:?}", stage.stage_id))?;
-            if producer.stage_id == stage.stage_id || dependencies.contains(&producer.stage_id.as_str()) {
-                return Err(format!("readiness stage {} has a self or duplicate predecessor", stage.stage_id));
-            }
-            dependencies.push(&producer.stage_id);
-        }
-        bindings.push(StageReadinessBinding {
-            id: &stage.stage_id,
-            dependencies,
-            final_receipt_required: stage.kind == ProofStageKind::MantleStage2,
-        });
-    }
-    Ok(bindings)
 }
 
 fn stagex_transition_stage() -> SourceBuiltFixedPointStagePlan {
@@ -625,6 +509,7 @@ fn stagex_provider_stage() -> SourceBuiltFixedPointStagePlan {
         vec![
             output_authority(ProofOutputRole::StagexTransition),
             source_authority(SourceAuthorityRole::StagexLineage),
+            source_authority(SourceAuthorityRole::StagexSourceBundle),
             policy_authority(ProofPolicyRole::ProtectedExecution),
             policy_authority(ProofPolicyRole::Hermeticity),
         ],
@@ -640,6 +525,7 @@ fn full_source_native_stage() -> SourceBuiltFixedPointStagePlan {
         vec![
             output_authority(ProofOutputRole::StagexProvider),
             source_authority(SourceAuthorityRole::NativeSourceBundle),
+            source_authority(SourceAuthorityRole::MantleSource),
             policy_authority(ProofPolicyRole::Closure),
             policy_authority(ProofPolicyRole::Hermeticity),
             policy_authority(ProofPolicyRole::ProtectedExecution),
@@ -738,7 +624,7 @@ fn policy_authority(role: ProofPolicyRole) -> StageAuthorityInput {
     StageAuthorityInput::Policy { role }
 }
 
-fn receipt_contract(
+pub(super) fn receipt_contract(
     logical_store_prefix: &str,
     source_authority_digest_blake3: &str,
     vendor_blake3: &str,
@@ -787,7 +673,7 @@ fn receipt_contract(
     contract
 }
 
-fn fixed_point_non_claims() -> Vec<String> {
+pub(super) fn fixed_point_non_claims() -> Vec<String> {
     vec![
         "not-compiler-correctness".to_string(),
         "not-bootstrap-seed-correctness".to_string(),
@@ -799,13 +685,13 @@ fn fixed_point_non_claims() -> Vec<String> {
     ]
 }
 
-fn plan_digest_blake3(plan: &SourceBuiltFixedPointPlan) -> Result<String, SourceBuiltFixedPointPlanError> {
+pub(super) fn plan_digest_blake3(plan: &SourceBuiltFixedPointPlan) -> Result<String, SourceBuiltFixedPointPlanError> {
     let mut payload = plan.clone();
     payload.plan_digest_blake3.clear();
     digest_payload(PLAN_DIGEST_CONTEXT, &payload)
 }
 
-fn digest_payload<T: Serialize>(context: &str, value: &T) -> Result<String, SourceBuiltFixedPointPlanError> {
+pub(super) fn digest_payload<T: Serialize>(context: &str, value: &T) -> Result<String, SourceBuiltFixedPointPlanError> {
     let bytes = serde_json::to_vec(value).map_err(|error| {
         plan_error(
             SourceBuiltFixedPointPlanErrorKind::Serialization,
@@ -820,7 +706,7 @@ fn digest_payload<T: Serialize>(context: &str, value: &T) -> Result<String, Sour
     Ok(digest)
 }
 
-fn validate_text(name: &str, value: &str) -> Result<(), SourceBuiltFixedPointPlanError> {
+pub(super) fn validate_text(name: &str, value: &str) -> Result<(), SourceBuiltFixedPointPlanError> {
     let is_valid = !value.trim().is_empty() && value.len() <= TEXT_BYTES_MAX && !value.chars().any(char::is_control);
     if !is_valid {
         return Err(plan_error(
@@ -833,7 +719,7 @@ fn validate_text(name: &str, value: &str) -> Result<(), SourceBuiltFixedPointPla
     Ok(())
 }
 
-fn validate_store_prefix(prefix: &str) -> Result<(), SourceBuiltFixedPointPlanError> {
+pub(super) fn validate_store_prefix(prefix: &str) -> Result<(), SourceBuiltFixedPointPlanError> {
     validate_text("logical_store_prefix", prefix)?;
     let has_parent_component = prefix.split('/').any(|component| component == "..");
     if !prefix.starts_with('/') || prefix == "/" || prefix.ends_with('/') || has_parent_component {
@@ -869,6 +755,10 @@ fn plan_error(kind: SourceBuiltFixedPointPlanErrorKind, message: String) -> Sour
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::source_built_fixed_point_planning::InitialOutputAuthorityState;
+    use crate::source_built_fixed_point_planning::SourceBuiltFixedPointPlanInput;
+    use crate::source_built_fixed_point_planning::SourceBuiltFixedPointPlanningError;
+    use crate::source_built_fixed_point_planning::plan_source_built_fixed_point;
 
     const TEST_ELAPSED_SECONDS_MAX: u64 = 43_200;
     const TEST_DISK_BYTES_MAX: u64 = 536_870_912_000;
@@ -905,7 +795,10 @@ mod tests {
     fn rejects_missing_required_source_role() {
         let mut input = valid_input();
         input.source_inputs.retain(|entry| entry.role != SourceAuthorityRole::VendorInputs);
-        let error = plan_source_built_fixed_point(input).unwrap_err();
+        let SourceBuiltFixedPointPlanningError::InvalidPlan(error) = plan_source_built_fixed_point(input).unwrap_err()
+        else {
+            panic!("missing source role must reject the plan contract");
+        };
 
         assert_eq!(error.kind, SourceBuiltFixedPointPlanErrorKind::InvalidSourceAuthority);
         assert!(error.message.contains("exactly"));
@@ -921,7 +814,10 @@ mod tests {
             .find(|entry| entry.role == SourceAuthorityRole::VendorInputs)
             .unwrap();
         provider.role = SourceAuthorityRole::ImportedRustProvider;
-        let error = plan_source_built_fixed_point(input).unwrap_err();
+        let SourceBuiltFixedPointPlanningError::InvalidPlan(error) = plan_source_built_fixed_point(input).unwrap_err()
+        else {
+            panic!("imported provider must reject the plan contract");
+        };
 
         assert_eq!(error.kind, SourceBuiltFixedPointPlanErrorKind::InvalidSourceAuthority);
         assert!(error.message.contains("forbidden provider"));
@@ -934,9 +830,7 @@ mod tests {
         input.initial_output_authority.native_provider_entries = 1;
         let error = plan_source_built_fixed_point(input).unwrap_err();
 
-        assert_eq!(error.kind, SourceBuiltFixedPointPlanErrorKind::NonEmptyOutputAuthority);
-        assert!(error.message.contains("must start with empty"));
-        assert!(error.message.contains("provider"));
+        assert_eq!(error, SourceBuiltFixedPointPlanningError::NonEmptyOutputAuthority);
     }
 
     #[test]
@@ -954,10 +848,18 @@ mod tests {
     fn rejects_practical_or_fallback_policy() {
         let mut practical = valid_input();
         practical.policies.hermeticity_mode = ProofHermeticityMode::Practical;
-        let practical_error = plan_source_built_fixed_point(practical).unwrap_err();
+        let SourceBuiltFixedPointPlanningError::InvalidPlan(practical_error) =
+            plan_source_built_fixed_point(practical).unwrap_err()
+        else {
+            panic!("practical hermeticity must reject the plan contract");
+        };
         let mut fallback = valid_input();
         fallback.policies.fallback_allowed = true;
-        let fallback_error = plan_source_built_fixed_point(fallback).unwrap_err();
+        let SourceBuiltFixedPointPlanningError::InvalidPlan(fallback_error) =
+            plan_source_built_fixed_point(fallback).unwrap_err()
+        else {
+            panic!("fallback must reject the plan contract");
+        };
 
         assert_eq!(practical_error.kind, SourceBuiltFixedPointPlanErrorKind::InvalidPolicy);
         assert_eq!(fallback_error.kind, SourceBuiltFixedPointPlanErrorKind::InvalidPolicy);
@@ -969,11 +871,19 @@ mod tests {
     fn rejects_out_of_range_resource_bounds() {
         let mut elapsed = valid_input();
         elapsed.resource_bounds.elapsed_seconds_max = ELAPSED_SECONDS_MAX.saturating_add(1);
-        let elapsed_error = plan_source_built_fixed_point(elapsed).unwrap_err();
+        let SourceBuiltFixedPointPlanningError::InvalidPlan(elapsed_error) =
+            plan_source_built_fixed_point(elapsed).unwrap_err()
+        else {
+            panic!("elapsed bound must reject the plan contract");
+        };
         let mut open_files = valid_input();
         open_files.resource_bounds.open_file_descriptors_max =
             SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX.saturating_add(1);
-        let open_files_error = plan_source_built_fixed_point(open_files).unwrap_err();
+        let SourceBuiltFixedPointPlanningError::InvalidPlan(open_files_error) =
+            plan_source_built_fixed_point(open_files).unwrap_err()
+        else {
+            panic!("descriptor bound must reject the plan contract");
+        };
 
         assert_eq!(elapsed_error.kind, SourceBuiltFixedPointPlanErrorKind::InvalidResourceBounds);
         assert_eq!(open_files_error.kind, SourceBuiltFixedPointPlanErrorKind::InvalidResourceBounds);
@@ -991,6 +901,20 @@ mod tests {
         assert_eq!(error.kind, SourceBuiltFixedPointPlanErrorKind::InvalidPlan);
         assert!(error.message.contains("construction and orchestration sequence"));
         assert_ne!(plan.stages[MANTLE_STAGE2_INDEX], expected_stage_plans()[MANTLE_STAGE2_INDEX]);
+    }
+
+    #[test]
+    fn publication_requires_its_authenticated_source_program_authority() {
+        let mut plan = plan_source_built_fixed_point(valid_input()).unwrap();
+        let authority = source_authority(SourceAuthorityRole::StagexSourceBundle);
+        assert!(plan.stages[1].inputs.contains(&authority));
+        validate_source_built_fixed_point_plan(&plan).unwrap();
+        plan.stages[1].inputs.retain(|input| input != &authority);
+        plan.plan_digest_blake3 = plan_digest_blake3(&plan).unwrap();
+        assert_eq!(
+            validate_source_built_fixed_point_plan(&plan).unwrap_err().kind,
+            SourceBuiltFixedPointPlanErrorKind::InvalidPlan
+        );
     }
 
     #[test]

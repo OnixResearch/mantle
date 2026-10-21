@@ -290,6 +290,19 @@ fn append_prevalidated_mount_args<'a>(
         {
             return Err(std::io::Error::other("sandbox guest mount path must be clean"));
         }
+        // Socket bind targets must not first be created as directories. Keep
+        // the ordinary workspace-directory mount behavior byte-for-byte intact.
+        if mount.guest_path == Path::new("/run/mantle/compile-cache.sock") {
+            use std::os::unix::fs::FileTypeExt as _;
+            if !mount.read_only || !fs::symlink_metadata(&mount.host_path)?.file_type().is_socket() {
+                return Err(std::io::Error::other("compile runtime mount requires one read-only Unix socket"));
+            }
+            args.extend([
+                "--dir".into(), "/run/mantle".into(), "--ro-bind".into(),
+                mount.host_path.clone().into(), mount.guest_path.clone().into(),
+            ]);
+            continue;
+        }
         let bind_flag = if mount.read_only { "--ro-bind" } else { "--bind" };
         args.extend([
             "--dir".into(),

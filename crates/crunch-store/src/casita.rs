@@ -51,7 +51,6 @@ const MAX_PATHINFO_BYTES: usize = crate::archive::MAX_ARCHIVE_METADATA_BYTES;
 const TRUST_FILE_NAME: &str = "casita-trusted-public-keys";
 
 #[cfg(test)]
-
 struct StagedOutputPublishPause {
     staged: tokio::sync::oneshot::Sender<Vec<ObjectKey>>,
     release: tokio::sync::oneshot::Receiver<()>,
@@ -695,7 +694,7 @@ impl CasitaStore {
         }
         let facts = crate::retention::records_to_core(&all)?;
         let plan = crunch_gc_core::retention::plan_retention(
-            &crate::retention::core_retention_policy(),
+            crate::retention::core_retention_policy(),
             crate::roots::current_unix_seconds()?,
             facts,
         )

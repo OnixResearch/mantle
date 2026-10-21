@@ -1,0 +1,11 @@
+{
+  "schema": "mantle-zephyr-resolved-west-v1",
+  "zephyr_revision": "36940db938a8f4a1e919496793ed439850a221c2",
+  "modules": {
+    "cmsis": {
+      "role": "cmsis",
+      "revision": "4b96cbb174678dcd3ca86e11e1f24bc5f8726da0",
+      "path": "modules/hal/cmsis"
+    }
+  }
+}

@@ -68,7 +68,7 @@ const BISON_VERSION_BLAKE3: &str = "a83fcaecff55230ffd6fb2ff09b2018392e8c403a3e2
 const BISON_POSITIVE_SOURCE_BLAKE3: &str = "bf73d7f6db6f0dd4a96706a1efb9e23dd287cbf847badd17f64d4c7ed235c923";
 const BISON_POSITIVE_HEADER_BLAKE3: &str = "afa05cc327a73b17e33baf53fb44030b1a111aa993db60f01565a2a80dc8f913";
 const BISON_NEGATIVE_BLAKE3: &str = "d0c674aaeab59c3efab1090e74cb598ae4df44bbcd42bc451a0a3f1a1257dcb4";
-const BISON_LIBRARY_SOURCES: &[&str] = &[
+pub(crate) const BISON_LIBRARY_SOURCES: &[&str] = &[
     "abitset",
     "argmatch",
     "basename",
@@ -97,7 +97,7 @@ const BISON_LIBRARY_SOURCES: &[&str] = &[
     "xmalloc",
     "xstrndup",
 ];
-const BISON_PROGRAM_SOURCES: &[&str] = &[
+pub(crate) const BISON_PROGRAM_SOURCES: &[&str] = &[
     "LR0",
     "assoc",
     "closure",
@@ -470,7 +470,7 @@ fn configure_retained_source(source_root: &Path) -> Result<(), StagexBisonError>
     Ok(())
 }
 
-fn bison_config_header() -> String {
+pub(crate) fn bison_config_header() -> String {
     let header = r#"#define PACKAGE "bison"
 #define PACKAGE_NAME "bison"
 #define PACKAGE_VERSION "2.3"
@@ -523,7 +523,7 @@ fn transform_hash_source(input: &str) -> Result<String, StagexBisonError> {
     Ok(text)
 }
 
-const CHECK_TUNING_OLD: &str = r#"static bool
+pub(crate) const CHECK_TUNING_OLD: &str = r#"static bool
 check_tuning (Hash_table *table)
 {
   const Hash_tuning *tuning = table->tuning;
@@ -548,7 +548,7 @@ check_tuning (Hash_table *table)
   return false;
 }"#;
 
-const CHECK_TUNING_NEW: &str = r#"static bool
+pub(crate) const CHECK_TUNING_NEW: &str = r#"static bool
 check_tuning (Hash_table *table)
 {
   const Hash_tuning *tuning = table->tuning;
@@ -586,7 +586,7 @@ mantle_hash_growth_reached (size_t used, size_t buckets)
          > buckets * MANTLE_HASH_GROWTH_THRESHOLD_NUMERATOR;
 }"#;
 
-const INITIAL_CANDIDATE_OLD: &str = r#"  if (!tuning->is_n_buckets)
+pub(crate) const INITIAL_CANDIDATE_OLD: &str = r#"  if (!tuning->is_n_buckets)
     {
       float new_candidate = candidate / tuning->growth_threshold;
       if (SIZE_MAX <= new_candidate)
@@ -594,7 +594,7 @@ const INITIAL_CANDIDATE_OLD: &str = r#"  if (!tuning->is_n_buckets)
       candidate = new_candidate;
     }"#;
 
-const INITIAL_CANDIDATE_NEW: &str = r#"  if (!tuning->is_n_buckets)
+pub(crate) const INITIAL_CANDIDATE_NEW: &str = r#"  if (!tuning->is_n_buckets)
     {
       if (! mantle_hash_ratio_ceil
           (candidate, MANTLE_HASH_RATIO_DENOMINATOR,
@@ -602,7 +602,7 @@ const INITIAL_CANDIDATE_NEW: &str = r#"  if (!tuning->is_n_buckets)
         goto fail;
     }"#;
 
-const GROWTH_REHASH_OLD: &str = r#"  if (table->n_buckets_used
+pub(crate) const GROWTH_REHASH_OLD: &str = r#"  if (table->n_buckets_used
       > table->tuning->growth_threshold * table->n_buckets)
     {
       /* Check more fully, before starting real work.  If tuning arguments
@@ -621,7 +621,7 @@ const GROWTH_REHASH_OLD: &str = r#"  if (table->n_buckets_used
 	  if (SIZE_MAX <= candidate)
 	    return NULL;"#;
 
-const GROWTH_REHASH_NEW: &str = r#"  if (mantle_hash_growth_reached (table->n_buckets_used,
+pub(crate) const GROWTH_REHASH_NEW: &str = r#"  if (mantle_hash_growth_reached (table->n_buckets_used,
                                   table->n_buckets))
     {
       /* Check more fully, before starting real work.  If tuning arguments

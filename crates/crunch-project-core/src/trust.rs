@@ -3,6 +3,7 @@ use alloc::format;
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
+use core::fmt;
 
 use serde::Deserialize;
 use serde::Deserializer;
@@ -28,11 +29,11 @@ pub enum TrustVerifierKind {
     Ed25519Detached,
 }
 
-impl TrustVerifierKind {
-    pub fn as_str(self) -> &'static str {
-        match self {
+impl fmt::Display for TrustVerifierKind {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
             Self::Ed25519Detached => "ed25519-detached",
-        }
+        })
     }
 }
 
@@ -43,11 +44,11 @@ pub enum TrustDigestBinding {
     ContentHash,
 }
 
-impl TrustDigestBinding {
-    pub fn as_str(self) -> &'static str {
-        match self {
+impl fmt::Display for TrustDigestBinding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
             Self::ContentHash => "content-hash",
-        }
+        })
     }
 }
 
@@ -58,12 +59,12 @@ pub enum TrustSubjectKind {
     Patch,
 }
 
-impl TrustSubjectKind {
-    pub fn as_str(self) -> &'static str {
-        match self {
+impl fmt::Display for TrustSubjectKind {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
             Self::Input => "input",
             Self::Patch => "patch",
-        }
+        })
     }
 }
 
@@ -87,9 +88,11 @@ impl TrustSubject {
             name,
         }
     }
+}
 
-    pub fn label(&self) -> String {
-        format!("{} '{}'", self.kind.as_str(), self.name)
+impl fmt::Display for TrustSubject {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{} '{}'", self.kind, self.name)
     }
 }
 
@@ -98,14 +101,6 @@ impl TrustSubject {
 pub enum TrustSignatureRef {
     #[serde(rename = "local-file")]
     LocalFile { path: String },
-}
-
-impl TrustSignatureRef {
-    pub fn ref_text(&self) -> &str {
-        match self {
-            Self::LocalFile { path } => path.as_str(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -144,7 +139,11 @@ impl<'de> Deserialize<'de> for InputTrustPolicy {
 }
 
 impl InputTrustPolicy {
-    pub fn validate(&self, context: &str) -> Vec<String> {
+    pub fn validate(self, context: String) -> Vec<String> {
+        self.validate_borrowed(&context)
+    }
+
+    pub(crate) fn validate_borrowed(&self, context: &str) -> Vec<String> {
         let mut problems = Vec::new();
         push_signature_ref_problems(self, context, &mut problems);
         push_trusted_key_problems(self, context, &mut problems);
@@ -182,24 +181,24 @@ pub struct LockedTrust {
 }
 
 pub fn trust_signature_payload(
-    subject: &TrustSubject,
+    subject: TrustSubject,
     digest_binding: TrustDigestBinding,
-    hash_algo: &HashAlgo,
-    hash_value: &str,
+    hash_algo: HashAlgo,
+    hash_value: String,
 ) -> String {
     assert!(!subject.name.is_empty(), "trust subject name must not be empty");
     assert!(!hash_value.is_empty(), "trust-bound hash value must not be empty");
     format!(
         "{TRUST_POLICY_SCHEMA}\nsubject-kind={}\nsubject-name={}\ndigest-binding={}\nhash-algo={}\nhash-value={}\n",
-        subject.kind.as_str(),
-        subject.name,
-        digest_binding.as_str(),
-        hash_algo,
-        hash_value
+        subject.kind, subject.name, digest_binding, hash_algo, hash_value
     )
 }
 
-pub fn trust_policy_digest(policy: &InputTrustPolicy) -> String {
+pub fn trust_policy_digest(policy: InputTrustPolicy) -> String {
+    trust_policy_digest_borrowed(&policy)
+}
+
+fn trust_policy_digest_borrowed(policy: &InputTrustPolicy) -> String {
     let bytes = match serde_json::to_vec(policy) {
         Ok(bytes) => bytes,
         Err(_) => TRUST_POLICY_SERIALIZATION_FAILURE.to_vec(),
@@ -210,6 +209,16 @@ pub fn trust_policy_digest(policy: &InputTrustPolicy) -> String {
 
 pub fn evaluate_trust_policy(
     subject: TrustSubject,
+    policy: InputTrustPolicy,
+    hash_algo: HashAlgo,
+    hash_value: String,
+    facts: Vec<VerifiedTrustFact>,
+) -> Result<LockedTrust, Error> {
+    evaluate_trust_policy_borrowed(subject, &policy, &hash_algo, &hash_value, &facts)
+}
+
+pub(crate) fn evaluate_trust_policy_borrowed(
+    subject: TrustSubject,
     policy: &InputTrustPolicy,
     hash_algo: &HashAlgo,
     hash_value: &str,
@@ -217,7 +226,7 @@ pub fn evaluate_trust_policy(
 ) -> Result<LockedTrust, Error> {
     assert!(!subject.name.is_empty(), "trust subject name must not be empty");
     assert!(!hash_value.is_empty(), "trust hash value must not be empty");
-    let policy_problems = policy.validate(&subject.label());
+    let policy_problems = policy.validate_borrowed(&subject.to_string());
     if let Some(problem) = policy_problems.first() {
         return Err(Error::Validation(problem.clone()));
     }
@@ -225,23 +234,24 @@ pub fn evaluate_trust_policy(
     let signers = unique_sorted(accepted.iter().map(|fact| fact.signer.clone()).collect());
     let missing_required = missing_required_signers(&policy.required_signers, &signers);
     if let Some(signer) = missing_required.first() {
-        return Err(Error::Validation(format!("{} missing required trust signer '{signer}'", subject.label())));
+        return Err(Error::Validation(format!("{subject} missing required trust signer '{signer}'")));
     }
     if signers.len() as u64 <= policy.quorum.saturating_sub(MIN_TRUST_QUORUM) as u64 {
         return Err(Error::Validation(format!(
             "{} trust quorum not satisfied: {} accepted signer(s), require {}",
-            subject.label(),
+            subject,
             signers.len(),
             policy.quorum
         )));
     }
     if accepted.is_empty() {
-        return Err(Error::Validation(format!("{} has no accepted trust evidence", subject.label())));
+        return Err(Error::Validation(format!("{subject} has no accepted trust evidence")));
     }
+    let claim = bounded_trust_claim(&subject, policy.verifier, hash_algo, hash_value);
     Ok(LockedTrust {
         schema: TRUST_POLICY_SCHEMA.to_string(),
-        subject: subject.clone(),
-        policy_digest: trust_policy_digest(policy),
+        subject,
+        policy_digest: trust_policy_digest_borrowed(policy),
         verifier: policy.verifier,
         digest_binding: policy.digest_binding,
         hash_algo: hash_algo.clone(),
@@ -249,23 +259,33 @@ pub fn evaluate_trust_policy(
         signers,
         key_refs: unique_sorted(accepted.iter().map(|fact| fact.key_ref.clone()).collect()),
         signature_refs: unique_sorted(accepted.iter().map(|fact| fact.signature_ref.clone()).collect()),
-        claim: bounded_trust_claim(&subject, policy.verifier, hash_algo, hash_value),
+        claim,
     })
 }
 
 pub fn validate_locked_trust(
+    trust: LockedTrust,
+    subject: TrustSubject,
+    hash_algo: HashAlgo,
+    hash_value: String,
+    context: String,
+) -> Vec<String> {
+    validate_locked_trust_borrowed(&trust, &subject, &hash_algo, &hash_value, &context)
+}
+
+pub(crate) fn validate_locked_trust_borrowed(
     trust: &LockedTrust,
     subject: &TrustSubject,
     hash_algo: &HashAlgo,
     hash_value: &str,
-    context: impl AsRef<str>,
+    context: &str,
 ) -> Vec<String> {
     validate_locked_trust_fields(LockedTrustValidation {
         trust,
         subject,
         hash_algo,
         hash_value,
-        context: context.as_ref(),
+        context,
     })
 }
 
@@ -285,7 +305,7 @@ fn validate_locked_trust_fields(validation: LockedTrustValidation<'_>) -> Vec<St
         problems.push(format!("{context}: trust schema '{}' is unsupported", trust.schema));
     }
     if trust.subject != *validation.subject {
-        problems.push(format!("{context}: trust subject does not match {}", validation.subject.label()));
+        problems.push(format!("{context}: trust subject does not match {}", validation.subject));
     }
     if &trust.hash_algo != validation.hash_algo {
         problems.push(format!("{context}: trust hash algorithm does not match locked hash"));
@@ -310,8 +330,12 @@ fn validate_locked_trust_fields(validation: LockedTrustValidation<'_>) -> Vec<St
     problems
 }
 
-pub fn trust_policy_matches_locked(policy: &InputTrustPolicy, locked: &LockedTrust) -> bool {
-    locked.schema == TRUST_POLICY_SCHEMA && locked.policy_digest == trust_policy_digest(policy)
+pub fn trust_policy_matches_locked(policy: InputTrustPolicy, locked: LockedTrust) -> bool {
+    trust_policy_matches_locked_borrowed(&policy, &locked)
+}
+
+pub(crate) fn trust_policy_matches_locked_borrowed(policy: &InputTrustPolicy, locked: &LockedTrust) -> bool {
+    locked.schema == TRUST_POLICY_SCHEMA && locked.policy_digest == trust_policy_digest_borrowed(policy)
 }
 
 fn accepted_facts<'a>(
@@ -344,7 +368,8 @@ fn push_signature_ref_problems(policy: &InputTrustPolicy, context: &str, problem
         problems.push(format!("{context}: trust policy has more than {MAX_TRUST_SIGNATURE_REFS} signature references"));
     }
     for signature in &policy.signatures {
-        push_ref_text_problem("signature reference", signature.ref_text(), context, problems);
+        let TrustSignatureRef::LocalFile { path } = signature;
+        push_ref_text_problem("signature reference", path, context, problems);
     }
 }
 
@@ -446,11 +471,7 @@ fn bounded_trust_claim(
 ) -> String {
     format!(
         "{} satisfied {} trust evidence for {}:{}; {}",
-        subject.label(),
-        verifier.as_str(),
-        hash_algo,
-        hash_value,
-        PROJECT_INPUT_TRUST_NON_CLAIM
+        subject, verifier, hash_algo, hash_value, PROJECT_INPUT_TRUST_NON_CLAIM
     )
 }
 
@@ -494,12 +515,13 @@ mod tests {
     #[test]
     fn trust_policy_accepts_matching_required_signer() {
         let subject = TrustSubject::input("pkg".to_string());
-        let locked = evaluate_trust_policy(subject.clone(), &policy(), &HashAlgo::Sha256, TEST_HASH, &[fact(
-            "alice",
-            TEST_KEY_ONE,
-            TEST_HASH,
-        )])
-        .expect("matching fact should satisfy policy");
+        let locked =
+            evaluate_trust_policy(subject.clone(), policy(), HashAlgo::Sha256, TEST_HASH.to_string(), vec![fact(
+                "alice",
+                TEST_KEY_ONE,
+                TEST_HASH,
+            )])
+            .expect("matching fact should satisfy policy");
 
         assert_eq!(locked.subject, subject);
         assert_eq!(locked.signers, vec!["alice".to_string()]);
@@ -510,7 +532,7 @@ mod tests {
     #[test]
     fn trust_policy_rejects_untrusted_signer_and_bad_quorum() {
         let subject = TrustSubject::input("pkg".to_string());
-        let err = evaluate_trust_policy(subject, &policy(), &HashAlgo::Sha256, TEST_HASH, &[fact(
+        let err = evaluate_trust_policy(subject, policy(), HashAlgo::Sha256, TEST_HASH.to_string(), vec![fact(
             "mallory",
             TEST_KEY_ONE,
             TEST_HASH,
@@ -528,7 +550,7 @@ mod tests {
         invalid.trusted_public_keys = vec![TEST_KEY_ONE.to_string()];
         invalid.quorum = 2;
 
-        let problems = invalid.validate("input 'pkg'");
+        let problems = invalid.validate("input 'pkg'".to_string());
         assert!(problems.iter().any(|problem| problem.contains("at least one signature reference")));
         assert!(problems.iter().any(|problem| problem.contains("exceeds trusted key count")));
     }
@@ -539,7 +561,7 @@ mod tests {
         invalid.trusted_public_keys = vec!["not-a-key-ref".to_string()];
         invalid.required_signers = vec!["alice".to_string()];
 
-        let problems = invalid.validate("input 'pkg'");
+        let problems = invalid.validate("input 'pkg'".to_string());
         assert!(problems.iter().any(|problem| problem.contains("trusted public key must be name:base64")));
         assert!(
             problems
@@ -555,15 +577,22 @@ mod tests {
     #[test]
     fn locked_trust_validation_rejects_wrong_digest_binding() {
         let subject = TrustSubject::input("pkg".to_string());
-        let mut locked = evaluate_trust_policy(subject.clone(), &policy(), &HashAlgo::Sha256, TEST_HASH, &[fact(
-            "alice",
-            TEST_KEY_ONE,
-            TEST_HASH,
-        )])
-        .expect("matching fact should satisfy policy");
+        let mut locked =
+            evaluate_trust_policy(subject.clone(), policy(), HashAlgo::Sha256, TEST_HASH.to_string(), vec![fact(
+                "alice",
+                TEST_KEY_ONE,
+                TEST_HASH,
+            )])
+            .expect("matching fact should satisfy policy");
         locked.hash_value = "different".to_string();
 
-        let problems = validate_locked_trust(&locked, &subject, &HashAlgo::Sha256, TEST_HASH, "pkg lock entry");
+        let problems = validate_locked_trust(
+            locked,
+            subject,
+            HashAlgo::Sha256,
+            TEST_HASH.to_string(),
+            "pkg lock entry".to_string(),
+        );
         assert!(problems.iter().any(|problem| problem.contains("hash value does not match")));
         assert!(!problems.is_empty());
     }
@@ -571,15 +600,22 @@ mod tests {
     #[test]
     fn locked_trust_validation_rejects_overbroad_claim() {
         let subject = TrustSubject::input("pkg".to_string());
-        let mut locked = evaluate_trust_policy(subject.clone(), &policy(), &HashAlgo::Sha256, TEST_HASH, &[fact(
-            "alice",
-            TEST_KEY_ONE,
-            TEST_HASH,
-        )])
-        .expect("matching fact should satisfy policy");
+        let mut locked =
+            evaluate_trust_policy(subject.clone(), policy(), HashAlgo::Sha256, TEST_HASH.to_string(), vec![fact(
+                "alice",
+                TEST_KEY_ONE,
+                TEST_HASH,
+            )])
+            .expect("matching fact should satisfy policy");
         locked.claim = "input is globally authentic".to_string();
 
-        let problems = validate_locked_trust(&locked, &subject, &HashAlgo::Sha256, TEST_HASH, "pkg lock entry");
+        let problems = validate_locked_trust(
+            locked,
+            subject,
+            HashAlgo::Sha256,
+            TEST_HASH.to_string(),
+            "pkg lock entry".to_string(),
+        );
         assert!(problems.iter().any(|problem| problem.contains("bounded non-claim")));
         assert!(!problems.is_empty());
     }
@@ -593,10 +629,10 @@ mod tests {
 
         let locked = evaluate_trust_policy(
             TrustSubject::input("pkg".to_string()),
-            &two_of_two,
-            &HashAlgo::Sha256,
-            TEST_HASH,
-            &[
+            two_of_two.clone(),
+            HashAlgo::Sha256,
+            TEST_HASH.to_string(),
+            vec![
                 fact("alice", TEST_KEY_ONE, TEST_HASH),
                 fact("bob", TEST_KEY_TWO, TEST_HASH),
             ],
@@ -604,6 +640,6 @@ mod tests {
         .expect("two trusted facts should satisfy quorum");
 
         assert_eq!(locked.signers, vec!["alice".to_string(), "bob".to_string()]);
-        assert!(trust_policy_matches_locked(&two_of_two, &locked));
+        assert!(trust_policy_matches_locked(two_of_two, locked));
     }
 }

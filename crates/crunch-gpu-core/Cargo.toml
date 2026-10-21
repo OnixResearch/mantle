@@ -1,0 +1,9 @@
+[package]
+name = "crunch-gpu-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+crunch-cmake-core = { path = "../crunch-cmake-core" }
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }

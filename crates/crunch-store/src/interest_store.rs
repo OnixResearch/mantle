@@ -93,10 +93,6 @@ fn invalid(message: impl std::fmt::Display) -> Error {
     Error::RootRegistry(message.to_string())
 }
 
-fn identity(bytes: &[u8]) -> String {
-    HEXLOWER.encode(&crunch_gc_core::interest::identity(bytes))
-}
-
 fn directory(state_dir: &Path) -> std::path::PathBuf {
     state_dir.join(RECORD_DIRECTORY)
 }
@@ -123,7 +119,7 @@ fn read_file(path: &Path) -> Result<(String, InterestRecord), Error> {
     if bytes != expected {
         return Err(invalid(format!("noncanonical retention interest {}", path.display())));
     }
-    let digest = identity(&bytes);
+    let digest = HEXLOWER.encode(&crunch_gc_core::interest::identity(bytes).digest);
     assert_eq!(digest.len(), 64, "BLAKE3 interest identity must have 64 hexadecimal characters");
     if path.file_name().and_then(|name| name.to_str()) != Some(format!("{digest}.{RECORD_EXTENSION}").as_str()) {
         return Err(invalid(format!("retention interest identity mismatch {}", path.display())));
@@ -161,7 +157,7 @@ pub(crate) fn load(state_dir: &Path) -> Result<Vec<(String, InterestRecord)>, Er
     let facts = facts(&records);
     assert!(records.len() <= MAX_INTEREST_RECORDS, "loaded interest count must remain bounded");
     assert_eq!(facts.len(), records.len(), "every loaded interest must have one identity fact");
-    crunch_gc_core::interest::merge(&facts).map_err(invalid)?;
+    crunch_gc_core::interest::merge(facts).map_err(invalid)?;
     Ok(records)
 }
 
@@ -210,7 +206,9 @@ fn publish_with_replacement(state_dir: &Path, record: &InterestRecord, replace_o
     let _lock = lock(state_dir)?;
     let prior = load(state_dir)?;
     assert!(prior.len() <= MAX_INTEREST_RECORDS, "published interest count must remain bounded");
-    let digest = identity(&bytes);
+    let identified = crunch_gc_core::interest::identity(bytes);
+    let digest = HEXLOWER.encode(&identified.digest);
+    let bytes = identified.canonical_bytes;
     let is_published = prior.iter().any(|(id, _)| id == &digest);
     let replaces = |existing: &InterestRecord| {
         existing.owner == record.owner
@@ -265,13 +263,14 @@ fn publish_with_replacement(state_dir: &Path, record: &InterestRecord, replace_o
     Ok(())
 }
 
-pub(crate) fn release(state_dir: &Path, selector: ReleaseSelector<'_>) -> Result<Option<GcRootRecord>, Error> {
+pub(crate) fn release(state_dir: &Path, selector: ReleaseSelector) -> Result<Option<GcRootRecord>, Error> {
     crate::roots::ensure_root_mutation_allowed(state_dir)?;
     let _lock = lock(state_dir)?;
     let records = load(state_dir)?;
-    let ids = crunch_gc_core::interest::release_identities(&facts(&records), selector).map_err(invalid)?;
+    let release = crunch_gc_core::interest::release_identities(facts(&records), selector).map_err(invalid)?;
+    let selector = release.selector;
     let mut removed = None;
-    for id in ids {
+    for id in release.identities {
         let record = records
             .iter()
             .find(|(identity, _)| identity == &id)
@@ -279,7 +278,7 @@ pub(crate) fn release(state_dir: &Path, selector: ReleaseSelector<'_>) -> Result
         assert_eq!(record.1.owner, selector.owner, "release must not remove another owner's interest");
         assert_eq!(record.1.logical_path, selector.path, "release must not remove another path's interest");
         assert!(
-            selector.reason.is_none_or(|reason| record.1.reason == reason),
+            selector.reason.as_ref().is_none_or(|reason| record.1.reason == *reason),
             "release must select only the requested reason"
         );
         std::fs::remove_file(directory(state_dir).join(format!("{id}.{RECORD_EXTENSION}")))

@@ -16,6 +16,13 @@ success catalog; recorded unavailable or failed update observations retain their
 - `fixtures/` contains positive and negative manifest fixtures.
 - `live-cohort/manifest.ncl` selects the pinned validation cohort.
 - `live-cohort/policy/` contains the recompute policy and execution profile.
+- `validation/` contains the semantic consumer fixtures and the [bounded package matrix workflow](validation/README.md).
+
+The live cohort now selects hello, zlib, libpng, jq, ripgrep and bison at the
+same pinned Nixpkgs revision. Selection is not a success claim: the opt-in
+`scripts/mantlepkgs-matrix.py` producer/clean-consumer workflow records actual
+acquisition, import, plan, execution, behavior and reuse outcomes separately.
+It preserves unsupported cases and does not run from generic test suites.
 
 A successful generation contains these files:
 

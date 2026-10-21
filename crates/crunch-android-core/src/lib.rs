@@ -13,6 +13,9 @@ use alloc::vec::Vec;
 use serde::Deserialize;
 use serde::Serialize;
 
+pub mod elf;
+pub mod native;
+
 /// Serializable authoring contract. `manifest`, `resources`, and
 /// `java_sources` are declared source-tree members, not host filesystem paths.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,6 +27,10 @@ pub struct ApkPlan {
     pub manifest: String,
     pub resources: Vec<String>,
     pub java_sources: Vec<String>,
+    #[serde(default)]
+    pub assets: Vec<native::Asset>,
+    #[serde(default)]
+    pub native: Option<native::Package>,
     pub toolchains: ToolchainRefs,
     pub signing: Option<SigningConfig>,
     pub reproducibility: ReproducibilityPolicy,
@@ -116,6 +123,8 @@ pub enum PlanRejection {
     KeystorePathEscape,
     UnknownSignatureScheme,
     EmptySourceSet,
+    InvalidNativeInput,
+    InvalidAssetInput,
 }
 
 fn valid_record_blake3(value: &str) -> bool {
@@ -217,6 +226,10 @@ fn validate_plan(plan: &ApkPlan) -> Result<(), PlanRejection> {
     if !all_safe_members(&plan.resources) || !all_safe_members(&plan.java_sources) {
         return Err(PlanRejection::EmptySourceSet);
     }
+    native::validate_assets(&plan.assets).map_err(|_| PlanRejection::InvalidAssetInput)?;
+    if let Some(package) = &plan.native {
+        native::validate(package).map_err(|_| PlanRejection::InvalidNativeInput)?;
+    }
     if !bound_record(&plan.toolchains.jdk, "jdk")
         || !bound_record(&plan.toolchains.build_tools, "build-tools")
         || !bound_record(&plan.toolchains.platform, "platform-android-jar")
@@ -291,7 +304,16 @@ fn lower_steps(plan: &ApkPlan) -> Vec<StepPlan> {
         },
         StepPlan {
             kind: StepKind::Zipalign,
-            source_inputs: vec![],
+            source_inputs: plan
+                .assets
+                .iter()
+                .map(|asset| asset.source_member.clone())
+                .chain(
+                    plan.native
+                        .iter()
+                        .flat_map(|package| package.libraries.iter().map(|library| library.store_file.clone())),
+                )
+                .collect(),
             required_toolchains: vec![
                 ToolchainComponent::BuildTools,
                 ToolchainComponent::Jdk,
@@ -345,6 +367,8 @@ mod tests {
             manifest: "app/AndroidManifest.xml".to_string(),
             resources: vec!["app/res/values/strings.xml".to_string()],
             java_sources: vec!["app/src/Main.java".to_string()],
+            assets: vec![],
+            native: None,
             toolchains: ToolchainRefs {
                 jdk: toolchain("jdk"),
                 build_tools: toolchain("build-tools"),
@@ -605,6 +629,10 @@ pub mod reviewed {
         pub manifest_member: String,
         pub resources: Vec<String>,
         pub java_sources: Vec<String>,
+        #[serde(default)]
+        pub assets: Vec<super::native::Asset>,
+        #[serde(default)]
+        pub native: Option<super::native::Package>,
         pub toolchain: Toolchain,
         pub signing: Option<Signing>,
         pub reproducibility: Reproducibility,
@@ -624,6 +652,8 @@ pub mod reviewed {
         EmptySourceSet,
         InvalidSourceMember,
         TooManyMembers,
+        InvalidNativeInput,
+        InvalidAssetInput,
     }
 
     #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
@@ -728,6 +758,10 @@ pub mod reviewed {
         }
         if !plan.resources.iter().chain(plan.java_sources.iter()).all(|member| safe_member(member)) {
             return Err(Rejection::InvalidSourceMember);
+        }
+        super::native::validate_assets(&plan.assets).map_err(|_| Rejection::InvalidAssetInput)?;
+        if let Some(package) = &plan.native {
+            super::native::validate(package).map_err(|_| Rejection::InvalidNativeInput)?;
         }
         if !identity_bound(&plan.toolchain.build_tools, "android-build-tools")
             || !identity_bound(&plan.toolchain.jdk, "temurin-jdk")
@@ -842,6 +876,16 @@ pub mod reviewed {
             toolchain_identity: tools.clone(),
             output: "unsigned.apk".into(),
         });
+        let package_step = steps.last_mut().expect("package step was inserted");
+        package_step
+            .inputs
+            .extend(plan.assets.iter().map(|asset| StepInput::SourceMember(asset.source_member.clone())));
+        package_step.inputs.extend(
+            plan.native
+                .iter()
+                .flat_map(|package| package.libraries.iter())
+                .map(|library| StepInput::SourceMember(library.store_file.clone())),
+        );
         if let Some(signing) = &plan.signing {
             steps.push(StepPlan {
                 kind: StepKind::Apksigner,

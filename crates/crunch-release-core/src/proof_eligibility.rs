@@ -180,19 +180,17 @@ fn push_status_blocker(blocker: StatusBlocker<'_>, blocked_classes: &mut Vec<Str
     blocked_classes.push(blocker.class.to_string());
     diagnostics.push(format!(
         "strict proof workflow {} has {} status {}; satisfied is required",
-        blocker.workflow,
-        blocker.label,
-        blocker.status.as_str()
+        blocker.workflow, blocker.label, blocker.status
     ));
 }
 
-impl ProofFactStatus {
-    pub fn as_str(self) -> &'static str {
-        match self {
+impl core::fmt::Display for ProofFactStatus {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(match self {
             ProofFactStatus::Satisfied => "satisfied",
             ProofFactStatus::Missing => "missing",
             ProofFactStatus::Degraded => "degraded",
-        }
+        })
     }
 }
 

@@ -126,6 +126,7 @@ type PendingRegistryEntry = (
     Option<crunch_attestation::Claims>,
 );
 type CreatedGoal = (String, Vec<StorePath<String>>);
+type BuildTaskOutput = (String, Result<snix_build::buildservice::BuildResult, Error>);
 
 fn observe_dynamic_parent_facts(
     validated: &ValidatedDynamicDerivation,
@@ -1448,7 +1449,7 @@ fn resolve_native_dynamic_inputs(
 /// signatures under the 5-parameter limit.
 struct WorkerLoopState<'a> {
     sem: Arc<Semaphore>,
-    join_set: JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
+    join_set: JoinSet<BuildTaskOutput>,
     pending_meta: HashMap<String, PreparedBuild>,
     outcomes: &'a mut Vec<BuildOutcome>,
     all_outcomes: &'a mut Vec<BuildOutcome>,
@@ -1476,9 +1477,11 @@ pub struct Worker {
     native_plan_binding_facts: BTreeMap<(String, String), NativePlanBindingFact>,
     max_jobs: u32,
     causal_trace: Option<CausalTraceCollector>,
-    // Present only during run_watch. Its senders live until the corresponding
-    // BuildService future has actually returned, including fetch owners.
-    watch_cancellations: Option<HashMap<String, watch::Sender<bool>>>,
+    // Senders and reservations outlive cancellation until each BuildService
+    // future returns, including its sandbox/fetch teardown owner.
+    build_cancellations: Option<HashMap<String, watch::Sender<bool>>>,
+    is_watch_active: bool,
+    streaming_cancellation: Option<watch::Receiver<bool>>,
 }
 
 fn redacted_goal_identity(goal_key: &str) -> String {
@@ -1521,7 +1524,9 @@ impl Worker {
             native_plan_binding_facts: BTreeMap::new(),
             max_jobs,
             causal_trace: None,
-            watch_cancellations: None,
+            build_cancellations: None,
+            is_watch_active: false,
+            streaming_cancellation: None,
         })
     }
 
@@ -1694,7 +1699,7 @@ impl Worker {
         self.scheduling_epoch = next_epoch;
         debug_assert!(!self.ready_goals.contains_key(&selected));
         debug_assert_eq!(self.priority_decisions.last().map(|row| row.scheduling_epoch), Some(next_epoch));
-        debug_assert!(self.watch_cancellations.is_some() || self.priority_decisions.len() as u32 == next_epoch);
+        debug_assert!(self.is_watch_active || self.priority_decisions.len() as u32 == next_epoch);
         Ok(Some(selected))
     }
 
@@ -2134,6 +2139,36 @@ impl Worker {
         self.run_streaming_observed(builder, known_paths, rx, None).await
     }
 
+    /// Use the ordinary streaming scheduler, but request per-build cancellation
+    /// and await every owned teardown before returning. Late results are discarded.
+    pub async fn run_streaming_cancellable<BServ>(
+        &mut self,
+        builder: &mut Builder<BServ>,
+        known_paths: &mut DerivationRegistry,
+        rx: &mut mpsc::Receiver<EvalMessage>,
+        live_observer: Option<&mut dyn FnMut(&GoalRegistry)>,
+        cancellation: watch::Receiver<bool>,
+    ) -> Result<WorkerResult, Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        if self.build_cancellations.is_some() {
+            return Err(Error::Store("cancellable worker is already running".to_string()));
+        }
+        self.build_cancellations = Some(HashMap::new());
+        self.streaming_cancellation = Some(cancellation);
+        let result = self.run_streaming_observed(builder, known_paths, rx, live_observer).await;
+        self.streaming_cancellation = None;
+        self.build_cancellations = None;
+        result
+    }
+
+    fn streaming_cancelled(&self) -> bool {
+        self.streaming_cancellation
+            .as_ref()
+            .is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err())
+    }
+
     /// The observer sees the real goal registry after discovery, each
     /// dispatch, and completion. It must be best-effort and nonblocking;
     /// it has no authority to change Worker state or build results.
@@ -2168,42 +2203,103 @@ impl Worker {
 
         info!(jobs = self.max_jobs, "worker streaming started");
 
-        for _ in 0..iteration_count_max {
-            if !is_eval_done {
-                self.drain_eval_messages(rx, known_paths, &mut is_eval_done)?;
-            }
-            if let Some(observer) = live_observer.as_mut() {
-                observer(&self.registry);
-            }
+        let result = async {
+            for _ in 0..iteration_count_max {
+                if self.streaming_cancelled() {
+                    return Ok(());
+                }
+                if !is_eval_done {
+                    self.drain_eval_messages(rx, known_paths, &mut is_eval_done)?;
+                }
+                if let Some(observer) = live_observer.as_mut() {
+                    observer(&self.registry);
+                }
 
-            self.dispatch_ready(builder, known_paths, &mut state, &mut live_observer).await?;
+                self.dispatch_ready(builder, known_paths, &mut state, &mut live_observer).await?;
+                if self.streaming_cancelled() {
+                    return Ok(());
+                }
+                if is_eval_done && self.registry.all_roots_terminal() {
+                    return Ok(());
+                }
 
-            if is_eval_done && self.registry.all_roots_terminal() {
-                info!(
-                    completed = state.completed_count,
-                    succeeded = state.outcomes.len(),
-                    failed = state.failed.len(),
-                    roots = self.registry.root_count(),
-                    "worker streaming finished"
-                );
-                let priority_decisions = std::mem::take(&mut self.priority_decisions);
-                let binding_rows = self.final_binding_reports(known_paths);
-                return Ok(finish_worker_result(
-                    outcomes,
-                    all_outcomes,
-                    failed,
-                    native_dynamic_plans,
-                    binding_rows,
-                    priority_decisions,
-                ));
+                self.wait_for_event(&mut is_eval_done, rx, builder, known_paths, &mut state).await?;
+                if let Some(observer) = live_observer.as_mut() {
+                    observer(&self.registry);
+                }
             }
+            Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_count_max})")))
+        }
+        .await;
 
-            self.wait_for_event(&mut is_eval_done, rx, builder, known_paths, &mut state).await?;
-            if let Some(observer) = live_observer.as_mut() {
-                observer(&self.registry);
+        let cancelled = self.streaming_cancelled();
+        if self.streaming_cancellation.is_some() && (cancelled || result.is_err()) {
+            rx.close();
+            let mut stale: Vec<_> = state.pending_meta.keys().cloned().collect();
+            stale.sort_unstable();
+            self.watch_request_cancellation(&stale);
+            let mut drain_error = None;
+            while let Some(join) = state.join_set.join_next().await {
+                if let Err(error) = self.watch_join(join, &stale, builder, known_paths, &mut state).await {
+                    drain_error.get_or_insert(error);
+                }
+            }
+            if let Some(error) = drain_error {
+                return Err(error);
+            }
+            if !state.pending_meta.is_empty() {
+                return Err(Error::Store("streaming teardown is not observed".to_string()));
+            }
+            if cancelled {
+                let goals: Vec<_> = self
+                    .registry
+                    .iter()
+                    .filter(|(_, goal)| !matches!(goal.state, GoalState::Done | GoalState::Failed))
+                    .map(|(key, _)| key.to_owned())
+                    .collect();
+                for key in goals {
+                    match self.registry.get(&key).map(|goal| &goal.state) {
+                        Some(GoalState::Waiting { .. } | GoalState::AwaitingDerivation) => {
+                            self.propagate_failure(
+                                &key,
+                                &key,
+                                &key,
+                                "cancelled build",
+                                "build cancelled after owned teardown",
+                                None,
+                                state.failed,
+                            )?;
+                        }
+                        Some(GoalState::Ready | GoalState::Building) => {
+                            self.fail_goal(&key, "build cancelled after owned teardown", None, state.failed)?;
+                        }
+                        Some(GoalState::Done | GoalState::Failed) => {}
+                        _ => return Err(Error::Store("cancelled goal has an unobserved scheduling state".into())),
+                    }
+                }
+                if let Some(observer) = live_observer.as_mut() {
+                    observer(&self.registry);
+                }
             }
         }
-        Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_count_max})")))
+        result?;
+        info!(
+            completed = state.completed_count,
+            succeeded = state.outcomes.len(),
+            failed = state.failed.len(),
+            roots = self.registry.root_count(),
+            "worker streaming finished"
+        );
+        let priority_decisions = std::mem::take(&mut self.priority_decisions);
+        let binding_rows = self.final_binding_reports(known_paths);
+        Ok(finish_worker_result(
+            outcomes,
+            all_outcomes,
+            failed,
+            native_dynamic_plans,
+            binding_rows,
+            priority_decisions,
+        ))
     }
 
     #[allow(
@@ -2225,12 +2321,13 @@ impl Worker {
     where
         BServ: BuildService + 'static,
     {
-        if self.watch_cancellations.is_some() {
+        if self.build_cancellations.is_some() {
             return Err(Error::Store("watch worker is already running".to_string()));
         }
         let max_jobs = usize::try_from(self.max_jobs)
             .map_err(|_| Error::Store("watch job capacity exceeds platform limit".to_string()))?;
-        self.watch_cancellations = Some(HashMap::new());
+        self.build_cancellations = Some(HashMap::new());
+        self.is_watch_active = true;
         let mut outcomes = Vec::new();
         let mut all_outcomes = Vec::new();
         let mut failed = Vec::new();
@@ -2263,7 +2360,8 @@ impl Worker {
         if !state.pending_meta.is_empty() || !state.join_set.is_empty() {
             return Err(Error::Store("watch teardown is not observed".to_string()));
         }
-        self.watch_cancellations = None;
+        self.build_cancellations = None;
+        self.is_watch_active = false;
         let bindings = self.final_binding_reports(known_paths);
         Ok(finish_worker_result(
             outcomes,
@@ -2276,7 +2374,7 @@ impl Worker {
     }
 
     fn watch_request_cancellation(&self, stale: &[String]) {
-        if let Some(senders) = self.watch_cancellations.as_ref() {
+        if let Some(senders) = self.build_cancellations.as_ref() {
             for key in stale {
                 let Some(sender) = senders.get(key) else {
                     continue;
@@ -2458,7 +2556,7 @@ impl Worker {
 
     async fn watch_join<BServ>(
         &mut self,
-        join: Result<(String, Result<snix_build::buildservice::BuildResult, Error>), tokio::task::JoinError>,
+        join: Result<BuildTaskOutput, tokio::task::JoinError>,
         stale: &[String],
         builder: &mut Builder<BServ>,
         known_paths: &mut DerivationRegistry,
@@ -2476,7 +2574,7 @@ impl Worker {
             }
         };
         let is_stale = stale.binary_search(key).is_ok();
-        if let Some(senders) = self.watch_cancellations.as_mut() {
+        if let Some(senders) = self.build_cancellations.as_mut() {
             senders.remove(key);
         }
         if is_stale {
@@ -2683,31 +2781,50 @@ impl Worker {
     where
         BServ: BuildService + 'static,
     {
-        if *is_eval_done {
-            let Some(join_result) = state.join_set.join_next().await else {
-                return Ok(());
-            };
-            self.process_join_result(join_result, builder, known_paths, state).await?;
-            state.completed_count = state.completed_count.saturating_add(1);
-        } else if state.join_set.is_empty() {
-            match rx.recv().await {
-                Some(msg) => self.accept_eval_message(msg, known_paths)?,
-                None => *is_eval_done = true,
+        let mut cancellation = self.streaming_cancellation.clone();
+        let has_running_builds = !state.join_set.is_empty();
+        if *is_eval_done && !has_running_builds {
+            return Ok(());
+        }
+        enum Event {
+            Build(Option<Result<BuildTaskOutput, tokio::task::JoinError>>),
+            Evaluation(Option<EvalMessage>),
+            Cancelled,
+        }
+        let event = if let Some(receiver) = cancellation.as_mut() {
+            tokio::select! {
+                biased;
+                _ = async {
+                    while !*receiver.borrow_and_update() {
+                        if receiver.changed().await.is_err() {
+                            break;
+                        }
+                    }
+                } => Event::Cancelled,
+                result = state.join_set.join_next(), if has_running_builds => Event::Build(result),
+                message = rx.recv(), if !*is_eval_done => Event::Evaluation(message),
             }
         } else {
+            // Preserve the existing default build's unbiased event policy.
             tokio::select! {
-                result = state.join_set.join_next() => {
-                    let Some(join_result) = result else { return Ok(()); };
-                    self.process_join_result(join_result, builder, known_paths, state).await?;
+                result = state.join_set.join_next(), if has_running_builds => Event::Build(result),
+                message = rx.recv(), if !*is_eval_done => Event::Evaluation(message),
+            }
+        };
+        match event {
+            Event::Build(Some(join)) => {
+                if self.streaming_cancelled() {
+                    let mut stale: Vec<_> = state.pending_meta.keys().cloned().collect();
+                    stale.sort_unstable();
+                    self.watch_join(join, &stale, builder, known_paths, state).await?;
+                } else {
+                    self.process_join_result(join, builder, known_paths, state).await?;
                     state.completed_count = state.completed_count.saturating_add(1);
                 }
-                msg = rx.recv() => {
-                    match msg {
-                        Some(msg) => self.accept_eval_message(msg, known_paths)?,
-                        None => *is_eval_done = true,
-                    }
-                }
             }
+            Event::Evaluation(Some(message)) => self.accept_eval_message(message, known_paths)?,
+            Event::Evaluation(None) => *is_eval_done = true,
+            Event::Build(None) | Event::Cancelled => {}
         }
         Ok(())
     }
@@ -2750,7 +2867,7 @@ impl Worker {
             "received derivation from eval",
         );
 
-        if self.watch_cancellations.is_some() {
+        if self.is_watch_active {
             // A rollback can replay full conversion entries. Replacing a live
             // registry entry would erase its resolved CA output and action
             // identity, so only reinsert entries pruned by an older generation.
@@ -2767,7 +2884,7 @@ impl Worker {
             }
         }
         for (drv_path, hdm, derivation, content_addressed, dynamic_plan_outputs, provenance_claims) in msg.new_entries {
-            if self.watch_cancellations.is_some()
+            if self.is_watch_active
                 && known_paths
                     .get_by_drv_path(&drv_path.to_absolute_path_with_prefix(known_paths.store_dir()))
                     .is_some()
@@ -2792,7 +2909,7 @@ impl Worker {
     /// instead of aborting the entire Worker.
     async fn process_join_result<BServ>(
         &mut self,
-        join_result: Result<(String, Result<snix_build::buildservice::BuildResult, Error>), tokio::task::JoinError>,
+        join_result: Result<BuildTaskOutput, tokio::task::JoinError>,
         builder: &mut Builder<BServ>,
         known_paths: &mut DerivationRegistry,
         state: &mut WorkerLoopState<'_>,
@@ -2800,6 +2917,11 @@ impl Worker {
     where
         BServ: BuildService + 'static,
     {
+        if let Ok((key, _)) = &join_result
+            && let Some(senders) = self.build_cancellations.as_mut()
+        {
+            senders.remove(key);
+        }
         match join_result {
             Ok((drv_key, Ok(build_result))) => {
                 self.handle_build_completion(&drv_key, build_result, builder, known_paths, state).await
@@ -3545,6 +3667,9 @@ impl Worker {
         })?;
         let mut dispatched: u32 = 0;
         while available_build_slots > 0 {
+            if self.streaming_cancelled() {
+                break;
+            }
             let Some(drv_key) = self.select_next_ready_goal()? else {
                 break;
             };
@@ -3593,6 +3718,9 @@ impl Worker {
                 trace.cache_checked(&drv_key);
             }
             let prepare_result = builder.prepare_build(&drv_path, derivation, known_paths, is_root, &bound_paths).await;
+            if self.streaming_cancelled() {
+                break;
+            }
             let is_spawned = self.handle_prepare_result(&drv_key, prepare_result, builder, known_paths, state).await?;
             if let Some(observer) = live_observer.as_mut() {
                 observer(&self.registry);
@@ -3691,7 +3819,7 @@ impl Worker {
         let bs = builder.build_service();
         let sem = state.sem.clone();
         let key = drv_key.to_string();
-        let cancellation = self.watch_cancellations.as_mut().map(|senders| {
+        let cancellation = self.build_cancellations.as_mut().map(|senders| {
             let (sender, receiver) = watch::channel(false);
             senders.insert(key.clone(), sender);
             receiver
@@ -4091,7 +4219,8 @@ mod tests {
                 &mut Vec::new(),
             )
             .unwrap();
-        worker.watch_cancellations = Some(HashMap::new());
+        worker.build_cancellations = Some(HashMap::new());
+        worker.is_watch_active = true;
         let wait = worker
             .watch_begin_update(
                 WatchWorkerUpdate {
@@ -4138,7 +4267,8 @@ mod tests {
         paths.insert_with_dynamic_plan_outputs(ca.clone(), hdm, ca_drv.clone(), true, vec![], None);
         let other = register_drv(&mut paths, "watch-rollback-other.drv", &make_drv());
         let mut worker = Worker::new(1);
-        worker.watch_cancellations = Some(HashMap::new());
+        worker.build_cancellations = Some(HashMap::new());
+        worker.is_watch_active = true;
         worker.want(&ca, &paths, true).unwrap();
         let full_ca = EvalMessage {
             label: "ca".into(),
@@ -4207,7 +4337,8 @@ mod tests {
     fn watch_sequential_replacements_beyond_total_goal_limit_remain_bounded() {
         let mut paths = DerivationRegistry::default();
         let mut worker = Worker::new(1);
-        worker.watch_cancellations = Some(HashMap::new());
+        worker.build_cancellations = Some(HashMap::new());
+        worker.is_watch_active = true;
         let mut builder = make_test_builder(MemoryBlobService::default());
         let mut outcomes = Vec::new();
         let mut all_outcomes = Vec::new();
@@ -4754,6 +4885,116 @@ mod tests {
         (builder, pis, calls)
     }
 
+    struct TeardownGatedBuildService {
+        mock: MockBuildService,
+        started: mpsc::UnboundedSender<()>,
+        cancellation_observed: mpsc::UnboundedSender<()>,
+        release_teardown: watch::Receiver<bool>,
+    }
+
+    #[async_trait::async_trait]
+    impl BuildService for TeardownGatedBuildService {
+        async fn do_build(
+            &self,
+            _request: snix_build::buildservice::BuildRequest,
+        ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            Err(std::io::Error::other("owned execution bypassed cancellable build service"))
+        }
+
+        async fn do_build_cancellable(
+            &self,
+            request: snix_build::buildservice::BuildRequest,
+            mut cancellation: watch::Receiver<bool>,
+        ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            self.started.send(()).map_err(std::io::Error::other)?;
+            while !*cancellation.borrow_and_update() {
+                cancellation.changed().await.map_err(std::io::Error::other)?;
+            }
+            self.cancellation_observed.send(()).map_err(std::io::Error::other)?;
+            let mut release = self.release_teardown.clone();
+            while !*release.borrow_and_update() {
+                release.changed().await.map_err(std::io::Error::other)?;
+            }
+            // A service can race cancellation and return a successful output.
+            // The ordinary worker must not finish/sign/admit that stale result.
+            self.mock.do_build(request).await
+        }
+    }
+
+    #[tokio::test]
+    async fn streaming_cancellation_waits_for_owned_teardown_and_rejects_late_success() {
+        let blobs = MemoryBlobService::default();
+        let (mock, _) = MockBuildService::new(blobs.clone());
+        let (started, mut started_rx) = mpsc::unbounded_channel();
+        let (cancellation_observed, mut cancelled_rx) = mpsc::unbounded_channel();
+        let (release_tx, release_teardown) = watch::channel(false);
+        let pis: Arc<dyn PathInfoService> = Arc::new(
+            RedbPathInfoService::new_temporary("owned-cancellation-pis".into(), RedbPathInfoServiceConfig::default())
+                .unwrap(),
+        );
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs),
+            Arc::new(tmp_ds()),
+            TeardownGatedBuildService {
+                mock,
+                started,
+                cancellation_observed,
+                release_teardown,
+            },
+            pis.clone(),
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut paths = DerivationRegistry::default();
+        let (first, _) = build_and_register("cancel-first", &[], &mut paths);
+        let (second, _) = build_and_register("cancel-second", &[(first.clone(), "out")], &mut paths);
+        let outputs = [&first, &second].map(|path| paths.get_output_path(&path.to_absolute_path(), "out").unwrap());
+        let (tx, mut rx) = mpsc::channel(2);
+        for path in [first, second] {
+            tx.send(EvalMessage {
+                label: path.name().to_string(),
+                drv_path: path,
+                new_entries: vec![],
+            })
+            .await
+            .unwrap();
+        }
+        drop(tx);
+        let (cancel_tx, cancel_rx) = watch::channel(false);
+        let mut worker = Worker::new(1);
+        let result = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            let run = worker.run_streaming_cancellable(&mut builder, &mut paths, &mut rx, None, cancel_rx);
+            tokio::pin!(run);
+            tokio::select! {
+                result = &mut run => panic!("worker finished before actual build start: {result:?}"),
+                started = started_rx.recv() => assert_eq!(started, Some(())),
+            }
+            cancel_tx.send(true).unwrap();
+            tokio::select! {
+                result = &mut run => panic!("worker returned before service acknowledged cancellation: {result:?}"),
+                observed = cancelled_rx.recv() => assert_eq!(observed, Some(())),
+            }
+            assert!(futures::poll!(run.as_mut()).is_pending(), "worker released ownership before teardown returned");
+            release_tx.send(true).unwrap();
+            run.await.unwrap()
+        })
+        .await
+        .expect("owned cancellation regression exceeded its cleanup guard");
+        assert!(result.outcomes.is_empty(), "late successful test output escaped cancellation");
+        assert!(result.all_outcomes.is_empty(), "stale dependency result escaped cancellation");
+        assert_eq!(result.failed.len(), 2, "both active and undispatched roots must remain nonpass");
+        assert!(started_rx.try_recv().is_err(), "a new build dispatched after cancellation");
+        for output in outputs {
+            assert!(pis.get(*output.digest()).await.unwrap().is_none(), "cancelled success published signed PathInfo");
+        }
+    }
+
     #[tokio::test]
     async fn stale_success_is_not_finished_or_admitted() {
         let mut paths = DerivationRegistry::default();
@@ -4787,7 +5028,7 @@ mod tests {
         worker.ready_goals.remove(&key);
         worker.registry.get_mut(&key).unwrap().mark_building().unwrap();
         let (sender, _) = watch::channel(false);
-        worker.watch_cancellations = Some(HashMap::from([(key.clone(), sender)]));
+        worker.build_cancellations = Some(HashMap::from([(key.clone(), sender)]));
         let mut outcomes = Vec::new();
         let mut all_outcomes = Vec::new();
         let mut failed = Vec::new();
@@ -4811,7 +5052,7 @@ mod tests {
         assert!(state.all_outcomes.is_empty());
         assert!(state.pending_meta.is_empty());
         assert!(pis.get(*output.digest()).await.unwrap().is_none(), "stale success published PathInfo");
-        assert!(!worker.watch_cancellations.as_ref().unwrap().contains_key(&key));
+        assert!(!worker.build_cancellations.as_ref().unwrap().contains_key(&key));
     }
 
     async fn put_test_blob(bs: &MemoryBlobService, content: &[u8]) -> Node {
@@ -5753,186 +5994,6 @@ mod tests {
 
         // No roots — debug_assert catches this.
         let _ = w.run(&mut builder, &mut kp).await;
-    }
-
-    #[tokio::test]
-    async fn watch_empty_generation_commits_and_settles_before_shutdown() {
-        let bs = MemoryBlobService::default();
-        let (mock, _) = MockBuildService::new(bs.clone());
-        let mut builder = Builder::new(
-            bs,
-            tmp_ds(),
-            mock,
-            test_pis(),
-            PathBuf::from("/nix/store"),
-            nix_compat::store_path::STORE_DIR,
-            test_keypair(),
-            test_trusted_keys(),
-            true,
-            false,
-        );
-        let mut paths = DerivationRegistry::default();
-        let (tx, mut updates) = mpsc::channel(2);
-        let (events_tx, mut events) = mpsc::channel(4);
-        tx.send(WatchWorkerUpdate {
-            generation: 17,
-            roots: vec![],
-        })
-        .await
-        .unwrap();
-        let mut worker = Worker::new(1);
-        let controller = async move {
-            match events.recv().await {
-                Some(WatchWorkerEvent::CandidateReady { generation: 17, commit }) => commit.send(()).unwrap(),
-                event => panic!("unexpected candidate event: {event:?}"),
-            }
-            assert!(matches!(
-                events.recv().await,
-                Some(WatchWorkerEvent::Settled { generation: 17, outcomes, failed, source_generation_paths })
-                    if outcomes.is_empty() && failed.is_empty() && source_generation_paths.is_empty()
-            ));
-            drop(tx);
-        };
-        let (result, ()) =
-            tokio::join!(worker.run_watch(&mut builder, &mut paths, &mut updates, &events_tx), controller,);
-        let result = result.unwrap();
-        assert!(result.outcomes.is_empty());
-        assert!(result.failed.is_empty());
-    }
-
-    #[tokio::test]
-    async fn superseded_candidate_token_cannot_dispatch_or_publish_stale_output() {
-        let blobs = MemoryBlobService::default();
-        let (mut builder, pis, calls) = watch_mock_builder(&blobs);
-        let mut paths = DerivationRegistry::default();
-        let (old, _) = build_and_register("watch-old-uncommitted", &[], &mut paths);
-        let output = paths.get_output_path(&old.to_absolute_path(), "out").unwrap();
-        let (new, new_drv) = build_and_register("watch-new-uncommitted", &[], &mut paths);
-        let new_hdm = paths.get_hdm_by_drv_path(&new.to_absolute_path()).unwrap();
-        let (tx, mut updates) = mpsc::channel(4);
-        let (events_tx, mut events) = mpsc::channel(8);
-        tx.send(WatchWorkerUpdate {
-            generation: 1,
-            roots: vec![EvalMessage {
-                label: "old".into(),
-                drv_path: old,
-                new_entries: vec![],
-            }],
-        })
-        .await
-        .unwrap();
-        let mut worker = Worker::new(1);
-        let controller = async move {
-            let stale_commit = match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv())
-                .await
-                .expect("first CandidateReady timed out")
-            {
-                Some(WatchWorkerEvent::CandidateReady { generation: 1, commit }) => commit,
-                event => panic!("unexpected first event: {event:?}"),
-            };
-            tx.send(WatchWorkerUpdate {
-                generation: 2,
-                roots: vec![EvalMessage {
-                    label: "new".into(),
-                    drv_path: new.clone(),
-                    new_entries: vec![(new, new_hdm, new_drv, false, vec![], None)],
-                }],
-            })
-            .await
-            .unwrap();
-            let superseded_commit = match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv())
-                .await
-                .expect("second CandidateReady timed out")
-            {
-                Some(WatchWorkerEvent::CandidateReady { generation: 2, commit }) => commit,
-                event => panic!("unexpected second event: {event:?}"),
-            };
-            assert!(stale_commit.send(()).is_err(), "superseded generation accepted stale commit");
-            drop(superseded_commit);
-            tx.send(WatchWorkerUpdate {
-                generation: 3,
-                roots: vec![],
-            })
-            .await
-            .unwrap();
-            match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv())
-                .await
-                .expect("rollback CandidateReady timed out")
-            {
-                Some(WatchWorkerEvent::CandidateReady { generation: 3, commit }) => commit.send(()).unwrap(),
-                event => panic!("unexpected rollback event: {event:?}"),
-            }
-            assert!(matches!(
-                tokio::time::timeout(std::time::Duration::from_secs(5), events.recv())
-                    .await.expect("rollback Settled timed out"),
-                Some(WatchWorkerEvent::Settled { generation: 3, outcomes, failed, .. })
-                    if outcomes.is_empty() && failed.is_empty()
-            ));
-            drop(tx);
-        };
-        let mut run = std::pin::pin!(worker.run_watch(&mut builder, &mut paths, &mut updates, &events_tx));
-        let mut controller = std::pin::pin!(controller);
-        tokio::select! {
-            early = &mut run => panic!("watch worker stopped before candidate protocol: {early:?}"),
-            () = &mut controller => {}
-        }
-        let result = tokio::time::timeout(std::time::Duration::from_secs(5), run)
-            .await
-            .expect("watch worker shutdown drain timed out")
-            .unwrap();
-        assert!(result.all_outcomes.is_empty());
-        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 0, "uncommitted candidate reached BuildService");
-        assert!(pis.get(*output.digest()).await.unwrap().is_none(), "uncommitted output published PathInfo");
-        let mock_digest = blake3::hash(b"mock output").into();
-        assert!(!blobs.has(&mock_digest).await.unwrap(), "uncommitted build wrote CAS");
-    }
-
-    #[tokio::test]
-    async fn committed_candidate_builds_once_and_publishes_signed_pathinfo() {
-        let blobs = MemoryBlobService::default();
-        let (mut builder, pis, calls) = watch_mock_builder(&blobs);
-        let mut paths = DerivationRegistry::default();
-        let (root, _) = build_and_register("watch-committed", &[], &mut paths);
-        let output = paths.get_output_path(&root.to_absolute_path(), "out").unwrap();
-        let (tx, mut updates) = mpsc::channel(2);
-        let (events_tx, mut events) = mpsc::channel(4);
-        tx.send(WatchWorkerUpdate {
-            generation: 5,
-            roots: vec![EvalMessage {
-                label: "committed".into(),
-                drv_path: root.clone(),
-                new_entries: vec![],
-            }],
-        })
-        .await
-        .unwrap();
-        let mut worker = Worker::new(1);
-        let controller = async move {
-            match events.recv().await {
-                Some(WatchWorkerEvent::CandidateReady { generation: 5, commit }) => commit.send(()).unwrap(),
-                event => panic!("unexpected candidate: {event:?}"),
-            }
-            match events.recv().await {
-                Some(WatchWorkerEvent::Settled {
-                    generation: 5,
-                    outcomes,
-                    failed,
-                    ..
-                }) => {
-                    assert_eq!(outcomes.len(), 1);
-                    assert!(failed.is_empty());
-                }
-                event => panic!("unexpected settlement: {event:?}"),
-            }
-            drop(tx);
-        };
-        let (result, ()) =
-            tokio::join!(worker.run_watch(&mut builder, &mut paths, &mut updates, &events_tx), controller,);
-        result.unwrap();
-        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 1);
-        assert!(pis.get(*output.digest()).await.unwrap().is_some(), "committed output has no signed PathInfo");
-        let digest = blake3::hash(b"mock output").into();
-        assert!(blobs.has(&digest).await.unwrap(), "committed builder output never reached CAS");
     }
 
     #[tokio::test]

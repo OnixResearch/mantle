@@ -64,6 +64,7 @@ pub(crate) fn cmd_shell(
     store_prefix: &str,
     backend: crunch_store::StoreBackend,
     verbose: bool,
+    source_admission: Option<&std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
 ) -> Result<(), RunError> {
     debug_assert!(!SIDECAR_FILENAME.is_empty());
     debug_assert!(SIDECAR_FILENAME.starts_with('.'));
@@ -82,22 +83,33 @@ pub(crate) fn cmd_shell(
         store_prefix,
         backend,
         verbose,
+        source_admission,
     })?;
 
     // 2. Read sidecar from $out/.crunch-shell.json.
     let sidecar_path = out_path.join(SIDECAR_FILENAME);
-    let sidecar_bytes = std::fs::read_to_string(&sidecar_path).map_err(|e| {
-        RunError::Internal(format!(
-            "missing {SIDECAR_FILENAME} in {} — was this built with mkShell? ({})",
-            out_path.display(),
-            e,
-        ))
-    })?;
-    let sidecar =
-        ShellSidecar::from_json(&sidecar_bytes).map_err(|e| RunError::Internal(format!("bad sidecar: {e}")))?;
+    let effects =
+        crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::Activation)?;
+    let sidecar = std::fs::read_to_string(&sidecar_path)
+        .map_err(|error| {
+            RunError::Internal(format!(
+                "missing {SIDECAR_FILENAME} in {} — was this built with mkShell? ({error})",
+                out_path.display()
+            ))
+        })
+        .and_then(|bytes| {
+            ShellSidecar::from_json(&bytes).map_err(|error| RunError::Internal(format!("bad sidecar: {error}")))
+        });
+    crate::build_observation::classify(
+        &effects,
+        "realization-activation",
+        mantle_application_contract::EffectKind::ReadFiles,
+        sidecar.is_ok(),
+    )?;
+    let sidecar = sidecar?;
 
     // 3. Snapshot host environment.
-    let host_env = snapshot_host_env();
+    let host_env = snapshot_host_env()?;
 
     // 4. Determine exec mode.
     let exec_mode = if !command_argv.is_empty() {
@@ -113,11 +125,7 @@ pub(crate) fn cmd_shell(
     };
 
     // 5. Validate --with paths.
-    for p in with_paths {
-        if !p.exists() {
-            return Err(RunError::Internal(format!("--with path does not exist: {}", p.display(),)));
-        }
-    }
+    validate_with_paths(with_paths)?;
 
     // 6. Compute activation plan (pure).
     let output_str = out_path.to_string_lossy();
@@ -133,7 +141,7 @@ pub(crate) fn cmd_shell(
     if hook_execution_mode.should_execute
         && let Some(ref hook) = plan.hook
     {
-        exec_hook(hook, &plan, strict_hook_mode.is_strict)?;
+        exec_hook(hook, &plan, &host_env.shell, strict_hook_mode.is_strict)?;
     }
 
     // 9. Exec into target.
@@ -152,6 +160,7 @@ struct BuildShellTargetRequest<'a> {
     store_prefix: &'a str,
     backend: crunch_store::StoreBackend,
     verbose: bool,
+    source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
 }
 
 fn build_shell_target(request: BuildShellTargetRequest<'_>) -> Result<PathBuf, RunError> {
@@ -159,7 +168,7 @@ fn build_shell_target(request: BuildShellTargetRequest<'_>) -> Result<PathBuf, R
     debug_assert!(SIDECAR_FILENAME.starts_with('.'));
     let cwd = crate::current_dir_or_error()?;
     let target = crate::name_to_build_target(request.name);
-    let resolved = project_build::resolve_project_target(&target, &cwd, request.import_paths)?;
+    let resolved = crate::build_application::resolve_project_target(&target, &cwd, request.import_paths)?;
     let shell_target = match &resolved.target {
         project_build::ProjectTarget::Default => project_build::ProjectTarget::DefaultShell,
         project_build::ProjectTarget::Attribute(segs) if segs.len() == 1 => {
@@ -183,8 +192,12 @@ fn build_shell_target(request: BuildShellTargetRequest<'_>) -> Result<PathBuf, R
         request.signing_key,
         request.trust_unsigned,
         Some(root_registration),
+        request.source_admission,
     )?;
-    crate::first_output_path(&result, request.output_dir, request.store_prefix)
+    if !result.failed.is_empty() {
+        return Err(RunError::Build("shell target has failed build roots".to_string()));
+    }
+    crate::build_application::first_output_path(&result, request.output_dir)?
         .ok_or_else(|| RunError::Internal("no outputs built for shell".into()))
 }
 
@@ -192,8 +205,8 @@ fn shell_root_registration(
     project: &project_build::ResolvedProject,
     shell_target: &project_build::ProjectTarget,
 ) -> Result<crunch_store::RootRegistration, RunError> {
-    let registration = crate::project_output_root_registration(project)?;
-    let selector = crate::project_retention_selector(shell_target);
+    let registration = crate::build_application::project_output_root_registration(project)?;
+    let selector = crate::build_application::project_retention_selector(shell_target);
     let now_unix_s_u64 = crate::unix_time_now_s()?;
     let now_unix_s =
         i64::try_from(now_unix_s_u64).map_err(|_| RunError::Internal("shell lease time exceeds i64".to_string()))?;
@@ -244,31 +257,46 @@ fn hash_shell_lease_field(hasher: &mut blake3::Hasher, bytes: &[u8]) {
     hasher.update(bytes);
 }
 
-fn snapshot_host_env() -> HostEnv {
+fn snapshot_host_env() -> Result<HostEnv, RunError> {
+    let effects =
+        crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::Environment)?;
     let env: BTreeMap<String, String> = std::env::vars().collect();
-    let shell = std::env::var("SHELL").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("/bin/sh"));
-    HostEnv { env, shell }
+    crate::build_observation::classify(
+        &effects,
+        "realization-environment",
+        mantle_application_contract::EffectKind::ReadEnvironment,
+        true,
+    )?;
+    let shell = env.get("SHELL").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/bin/sh"));
+    Ok(HostEnv { env, shell })
 }
 
-fn exec_hook(hook: &str, plan: &ActivationPlan, strict: bool) -> Result<(), RunError> {
+fn exec_hook(hook: &str, plan: &ActivationPlan, host_shell: &Path, strict: bool) -> Result<(), RunError> {
     debug_assert!(!SIDECAR_FILENAME.is_empty());
     debug_assert!(SIDECAR_FILENAME.starts_with('.'));
     let shell = match &plan.exec_target {
         ExecTarget::Interactive { shell } => shell.clone(),
         ExecTarget::Run { shell, .. } => shell.clone(),
-        ExecTarget::Command { .. } => PathBuf::from(std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into())),
+        ExecTarget::Command { .. } => host_shell.to_path_buf(),
     };
 
     let env_path = std::env::join_paths(&plan.path)
         .map_err(|error| RunError::Internal(format!("joining shell activation PATH: {error}")))?;
 
+    let effects = crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::Child)?;
     let status = std::process::Command::new(&shell)
         .arg("-c")
         .arg(hook)
         .envs(&plan.env)
         .env("PATH", &env_path)
-        .status()
-        .map_err(|e| RunError::Internal(format!("hook exec: {e}")))?;
+        .status();
+    crate::build_observation::classify(
+        &effects,
+        "realization-child",
+        mantle_application_contract::EffectKind::RunProcess,
+        matches!(&status, Ok(status) if status.success()),
+    )?;
+    let status = status.map_err(|e| RunError::Internal(format!("hook exec: {e}")))?;
 
     if !status.success() {
         let code = status.code().unwrap_or(1);
@@ -280,21 +308,73 @@ fn exec_hook(hook: &str, plan: &ActivationPlan, strict: bool) -> Result<(), RunE
     Ok(())
 }
 
+fn validate_with_paths(paths: &[PathBuf]) -> Result<(), RunError> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let limit = u32::try_from(paths.len())
+        .map_err(|_| RunError::Internal("activation inputs exceed path bound".to_string()))?;
+    let effects = mantle_application_contract::realization::shell_with_paths_effect_plan(limit)
+        .map_err(|error| RunError::Internal(format!("planning activation inputs: {}", error.code())))?;
+    let mut checked = 0;
+    let missing = paths.iter().find(|path| {
+        checked += 1;
+        !path.exists()
+    });
+    let observed = mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId("shell-with-paths".to_string()),
+        kind: mantle_application_contract::EffectKind::ReadFiles,
+        status: if missing.is_none() {
+            mantle_application_contract::ObservationStatus::Succeeded
+        } else {
+            mantle_application_contract::ObservationStatus::Failed
+        },
+        output: mantle_application_contract::EffectOutput::None,
+        usage: mantle_application_contract::EffectMeasure::Items(checked),
+        diagnostics_code: missing.map(|_| "shell-with-path-missing".to_string()),
+    };
+    match (mantle_application_contract::classify_observations(&effects, &[observed]), missing) {
+        (mantle_application_contract::ApplicationOutcome::Completed, None) => Ok(()),
+        (mantle_application_contract::ApplicationOutcome::Failed { .. }, Some(path)) => {
+            Err(RunError::Internal(format!("--with path does not exist: {}", path.display())))
+        }
+        (outcome, _) => Err(RunError::Internal(format!("activation inputs contradicted plan: {outcome:?}"))),
+    }
+}
+
 /// Search for a program name in the given PATH directories.
 /// Returns the absolute path if found, None otherwise.
-fn resolve_in_path(cmd: &OsString, path: &[PathBuf]) -> Option<OsString> {
+fn resolve_in_path(cmd: &OsString, path: &[PathBuf]) -> Result<Option<OsString>, RunError> {
     let cmd_path = Path::new(cmd);
-    // If the command contains a path separator, it's already a path.
-    if cmd_path.components().count() > 1 {
-        return None;
+    if cmd_path.components().count() > 1 || path.is_empty() {
+        return Ok(None);
     }
+    let limit = u32::try_from(path.len())
+        .map_err(|_| RunError::Internal("activation PATH exceeds candidate bound".to_string()))?;
+    let effects = mantle_application_contract::realization::shell_path_search_effect_plan(limit)
+        .map_err(|error| RunError::Internal(format!("planning activation PATH search: {}", error.code())))?;
+    let mut checked = 0;
+    let mut selected = None;
     for dir in path {
         let candidate = dir.join(cmd);
+        checked += 1;
         if candidate.is_file() {
-            return Some(candidate.into_os_string());
+            selected = Some(candidate.into_os_string());
+            break;
         }
     }
-    None
+    let observed = mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId("shell-path-search".to_string()),
+        kind: mantle_application_contract::EffectKind::ReadFiles,
+        status: mantle_application_contract::ObservationStatus::Succeeded,
+        output: mantle_application_contract::EffectOutput::None,
+        usage: mantle_application_contract::EffectMeasure::Items(checked),
+        diagnostics_code: None,
+    };
+    match mantle_application_contract::classify_observations(&effects, &[observed]) {
+        mantle_application_contract::ApplicationOutcome::Completed => Ok(selected),
+        outcome => Err(RunError::Internal(format!("activation PATH search contradicted plan: {outcome:?}"))),
+    }
 }
 
 fn exec_plan(plan: &ActivationPlan) -> Result<(), RunError> {
@@ -303,6 +383,7 @@ fn exec_plan(plan: &ActivationPlan) -> Result<(), RunError> {
     let env_path = std::env::join_paths(&plan.path)
         .map_err(|error| RunError::Internal(format!("joining shell activation PATH: {error}")))?;
 
+    let effects = crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::Child)?;
     let status = match &plan.exec_target {
         ExecTarget::Interactive { shell } => {
             eprintln!("entering shell ({})", plan.env.get("CRUNCH_SHELL").unwrap_or(&String::new()));
@@ -315,7 +396,7 @@ fn exec_plan(plan: &ActivationPlan) -> Result<(), RunError> {
             // Resolve the program against the activation PATH, not the host
             // PATH. Command::new uses execvp which searches the *parent's*
             // PATH, but we want the composed shell PATH.
-            let resolved = resolve_in_path(cmd, &plan.path).unwrap_or_else(|| cmd.clone());
+            let resolved = resolve_in_path(cmd, &plan.path)?.unwrap_or_else(|| cmd.clone());
             std::process::Command::new(&resolved).args(args).envs(&plan.env).env("PATH", &env_path).status()
         }
         ExecTarget::Run { shell, script } => std::process::Command::new(shell)
@@ -324,8 +405,14 @@ fn exec_plan(plan: &ActivationPlan) -> Result<(), RunError> {
             .envs(&plan.env)
             .env("PATH", &env_path)
             .status(),
-    }
-    .map_err(|e| RunError::Internal(format!("exec: {e}")))?;
+    };
+    crate::build_observation::classify(
+        &effects,
+        "realization-child",
+        mantle_application_contract::EffectKind::RunProcess,
+        matches!(&status, Ok(status) if status.success()),
+    )?;
+    let status = status.map_err(|e| RunError::Internal(format!("exec: {e}")))?;
 
     std::process::exit(status.code().unwrap_or(1));
 }

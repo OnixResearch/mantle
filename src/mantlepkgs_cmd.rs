@@ -925,6 +925,7 @@ pub(crate) struct MantlepkgsContext<'a> {
     pub(crate) state_dir: &'a Path,
     pub(crate) backend: crunch_store::StoreBackend,
     pub(crate) base_state_dirs: &'a [PathBuf],
+    pub(crate) source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     pub(crate) verbose: bool,
     pub(crate) json: bool,
 }
@@ -3073,6 +3074,7 @@ fn run_build_with_observation(
             state_dir: context.state_dir,
             backend: context.backend,
             base_state_dirs: context.base_state_dirs,
+            source_admission: context.source_admission,
             source_bundle_bytes_max: MANTLEPKGS_SOURCE_BUNDLE_BYTES_MAX,
             verbose: context.verbose,
             json: context.json,

@@ -1,0 +1,94 @@
+//! Exact-path source overlays for the final source-produced compiler. The
+//! original source path remains the compiler argument and diagnostic identity.
+use std::collections::BTreeMap;
+use std::io::{self, Read};
+use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
+
+use rustc_span::source_map::{FileLoader, RealFileLoader};
+
+pub(super) fn loader() -> Option<Box<dyn FileLoader + Send + Sync>> {
+    match load() {
+        Ok(loader) => loader,
+        Err(error) => {
+            eprintln!("Cairn compiler source overlay: {error}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn load() -> io::Result<Option<Box<dyn FileLoader + Send + Sync>>> {
+    let Some(path) = std::env::var_os("MANTLE_CAIRN_SOURCE_OVERLAY") else {
+        return Ok(None);
+    };
+    const LIMIT: u64 = 64 * 1024 * 1024;
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)?.take(LIMIT + 1).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > LIMIT {
+        return Err(invalid("source overlay frame exceeds its bound"));
+    }
+    let mut mappings = BTreeMap::new();
+    let mut cursor = 0;
+    while cursor < bytes.len() {
+        let original_length = length(&bytes, &mut cursor)?;
+        let replacement_length = length(&bytes, &mut cursor)?;
+        let original = path_field(&bytes, &mut cursor, original_length)?;
+        let replacement = path_field(&bytes, &mut cursor, replacement_length)?;
+        if !original.starts_with("/inputs") || !replacement.starts_with("/inputs/source-overlay")
+            || !std::fs::metadata(&original)?.is_file()
+            || !std::fs::metadata(&replacement)?.is_file()
+        {
+            return Err(invalid("overlay must map an original input file to a produced overlay input file"));
+        }
+        if mappings.insert(original, replacement).is_some() {
+            return Err(invalid("duplicate original source overlay path"));
+        }
+    }
+    Ok(Some(Box::new(Overlay { mappings })))
+}
+
+struct Overlay {
+    mappings: BTreeMap<PathBuf, PathBuf>,
+}
+impl Overlay {
+    fn path<'a>(&'a self, original: &'a Path) -> &'a Path {
+        self.mappings.get(original).map(PathBuf::as_path).unwrap_or(original)
+    }
+}
+impl FileLoader for Overlay {
+    fn file_exists(&self, path: &Path) -> bool {
+        RealFileLoader.file_exists(self.path(path))
+    }
+    fn read_file(&self, path: &Path) -> io::Result<String> {
+        RealFileLoader.read_file(self.path(path))
+    }
+    fn read_binary_file(&self, path: &Path) -> io::Result<Arc<[u8]>> {
+        RealFileLoader.read_binary_file(self.path(path))
+    }
+    fn current_directory(&self) -> io::Result<PathBuf> {
+        RealFileLoader.current_directory()
+    }
+}
+
+fn length(bytes: &[u8], cursor: &mut usize) -> io::Result<usize> {
+    let end = cursor.checked_add(4).ok_or_else(|| invalid("source overlay length overflow"))?;
+    let value = bytes.get(*cursor..end).ok_or_else(|| invalid("truncated source overlay length"))?;
+    *cursor = end;
+    Ok(u32::from_le_bytes(value.try_into().unwrap()) as usize)
+}
+fn path_field(bytes: &[u8], cursor: &mut usize, length: usize) -> io::Result<PathBuf> {
+    let end = cursor.checked_add(length).ok_or_else(|| invalid("source overlay field overflow"))?;
+    let value = bytes.get(*cursor..end).ok_or_else(|| invalid("truncated source overlay field"))?;
+    let value = std::str::from_utf8(value).map_err(|_| invalid("non-UTF8 source overlay path"))?;
+    let path = PathBuf::from(value);
+    if value.contains('\0') || !path.is_absolute()
+        || path.components().any(|component| matches!(component, Component::ParentDir | Component::CurDir))
+    {
+        return Err(invalid("source overlay path must be absolute and lexically normal"));
+    }
+    *cursor = end;
+    Ok(path)
+}
+fn invalid(message: &str) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, message)
+}

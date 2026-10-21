@@ -83,6 +83,9 @@ use crate::StoreAuditKind;
 use crate::StoreBackend;
 use crate::StoreBackendCapabilityProfile;
 use crate::StoreFallbackMode;
+use crate::StoreSource;
+use crate::StoreSourceAdmission;
+use crate::StoreSourceLease;
 use crate::StoredArtifactAttestation;
 use crate::StoredClosureAttestation;
 use crate::attestation::artifact_attestation_matches_pathinfo;
@@ -102,6 +105,8 @@ use crate::metadata_cache::new_metadata_entry;
 use crate::overlay::StoreOverlayState;
 use crate::path_identity::require_requested_path_identity;
 use crate::roots;
+use crate::source_admission::Leased;
+use crate::source_admission::admit_source;
 
 pub(crate) const NAR_SHA256_BYTES: usize = 32;
 const MAX_PENDING_PUBLICATION_STEPS: usize = 65_536;
@@ -141,6 +146,10 @@ pub struct StoreConfig {
     /// MUST share the same `store_dir` prefix.  Empty = no overlay composition
     /// (default single-store behavior).
     pub base_state_dirs: Vec<PathBuf>,
+
+    /// Operator-owned admission for external cache and base-layer sessions.
+    /// `None` permits local-only stores; configured external sources fail closed.
+    pub source_admission: Option<Arc<dyn StoreSourceAdmission>>,
 }
 
 impl StoreConfig {
@@ -150,11 +159,32 @@ impl StoreConfig {
         state_dir: &Path,
         store_dir: &str,
         base_state_dirs: &[PathBuf],
+        source_admission: Option<&dyn StoreSourceAdmission>,
     ) -> Result<(), Error> {
-        Self::preflight_backend_identity_with_profile(backend, backend.profile(), state_dir, store_dir, base_state_dirs)
+        Self::preflight_backend_identity_with_profile(
+            backend,
+            backend.profile(),
+            state_dir,
+            store_dir,
+            base_state_dirs,
+            source_admission,
+        )
     }
 
     pub(crate) fn preflight_backend_identity_with_profile(
+        backend: StoreBackend,
+        profile: StoreBackendCapabilityProfile,
+        state_dir: &Path,
+        store_dir: &str,
+        base_state_dirs: &[PathBuf],
+        source_admission: Option<&dyn StoreSourceAdmission>,
+    ) -> Result<(), Error> {
+        let sources = Self::admit_base_sources(base_state_dirs, store_dir, source_admission)?;
+        Self::preflight_admitted_backend_identity(backend, profile, state_dir, store_dir, &sources.base_dirs)
+    }
+
+    // Only callers retaining the source-session witnesses may reach raw identity I/O.
+    fn preflight_admitted_backend_identity(
         backend: StoreBackend,
         profile: StoreBackendCapabilityProfile,
         state_dir: &Path,
@@ -173,7 +203,14 @@ impl StoreConfig {
 
     /// Validate the selected backend and any legacy Snix state before obtaining a mutation lock.
     pub fn preflight_backend_identity(&self) -> Result<(), Error> {
-        Self::preflight_backend_identity_for(self.backend, &self.state_dir, &self.store_dir, &self.base_state_dirs)
+        let sources = self.admit_sources()?;
+        Self::preflight_admitted_backend_identity(
+            self.backend,
+            self.backend.profile(),
+            &self.state_dir,
+            &self.store_dir,
+            &sources.base_dirs,
+        )
     }
 
     /// Create a store config with an explicit durable backend.
@@ -189,6 +226,7 @@ impl StoreConfig {
             fallback_mode: crate::StoreFallbackMode::Practical,
             store_dir,
             base_state_dirs: Vec::new(),
+            source_admission: None,
         }
     }
 
@@ -203,6 +241,56 @@ impl StoreConfig {
         self.base_state_dirs.push(dir);
         self
     }
+
+    fn admit_sources(&self) -> Result<AdmittedSources, Error> {
+        let mut sources =
+            Self::admit_base_sources(&self.base_state_dirs, &self.store_dir, self.source_admission.as_deref())?;
+        for cache_url in &self.remote_cache_urls {
+            let parsed =
+                Url::parse(cache_url).map_err(|error| Error::Store(format!("invalid substituter URL: {error}")))?;
+            let lease = admit_source(
+                self.source_admission.as_deref(),
+                StoreSource::Substituter(parsed.as_str()),
+                &self.store_dir,
+            )?;
+            sources.remote_urls.push(parsed);
+            sources.remote_leases.push(lease);
+        }
+        Ok(sources)
+    }
+
+    fn admit_base_sources(
+        base_state_dirs: &[PathBuf],
+        store_dir: &str,
+        source_admission: Option<&dyn StoreSourceAdmission>,
+    ) -> Result<AdmittedSources, Error> {
+        let mut sources = AdmittedSources::default();
+        for (declaration_index, base_dir) in base_state_dirs.iter().enumerate() {
+            // Missing authority must not even inspect the configured source.
+            let admission =
+                source_admission.ok_or_else(|| Error::Store("store-source-admission-required".to_string()))?;
+            let metadata = std::fs::symlink_metadata(base_dir)
+                .map_err(|error| Error::Store(format!("opening overlay base {}: {error}", base_dir.display())))?;
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                return Err(Error::Store(format!(
+                    "overlay-base-not-directory: declaration {declaration_index} is not a direct directory"
+                )));
+            }
+            let canonical = std::fs::canonicalize(base_dir)
+                .map_err(|error| Error::Store(format!("resolving overlay base {}: {error}", base_dir.display())))?;
+            sources.base_leases.push(admission.admit(StoreSource::BaseLayer(&canonical), store_dir)?);
+            sources.base_dirs.push(canonical);
+        }
+        Ok(sources)
+    }
+}
+
+#[derive(Default)]
+struct AdmittedSources {
+    remote_urls: Vec<Url>,
+    remote_leases: Vec<Arc<dyn StoreSourceLease>>,
+    base_leases: Vec<Arc<dyn StoreSourceLease>>,
+    base_dirs: Vec<PathBuf>,
 }
 
 /// Return type for a successful cache lookup on a single output.
@@ -742,6 +830,7 @@ fn configured_action_result_stores(
     state_dir: &Path,
     base_state_dirs: &[PathBuf],
     remote_urls: &[String],
+    sources: &AdmittedSources,
 ) -> ActionResultStoreSet {
     let policy = crate::action_result::action_result_runtime_policy();
     assert!(policy.limits.max_sources > 0);
@@ -750,16 +839,19 @@ fn configured_action_result_stores(
     if policy.sources.local_enabled {
         stores.add_local(Box::new(LocalActionResultStore::new(state_dir)));
         for (base_index, base_state_dir) in base_state_dirs.iter().enumerate() {
-            stores.add_discovery_only(Box::new(LocalActionResultStore::new_with_source_id(
-                base_state_dir,
-                format!("base[{}]", base_index.saturating_add(1)),
+            stores.add_discovery_only(Box::new(Leased::new(
+                LocalActionResultStore::new_with_source_id(
+                    base_state_dir,
+                    format!("base[{}]", base_index.saturating_add(1)),
+                ),
+                sources.base_leases[base_index].clone(),
             )));
         }
     }
     if !policy.sources.http_enabled {
         return stores;
     }
-    for remote_url in remote_urls {
+    for (remote_index, remote_url) in remote_urls.iter().enumerate() {
         let parsed = match Url::parse(remote_url) {
             Ok(parsed) => parsed,
             Err(error) => {
@@ -768,7 +860,7 @@ fn configured_action_result_stores(
             }
         };
         match HttpActionResultStore::with_default_timeout(parsed) {
-            Ok(store) => stores.add_remote(Box::new(store)),
+            Ok(store) => stores.add_remote(Box::new(Leased::new(store, sources.remote_leases[remote_index].clone()))),
             Err(error) => {
                 tracing::warn!(url = %remote_url, error = %error, "shared action-result HTTP source disabled");
             }
@@ -793,6 +885,8 @@ pub struct StoreHandle {
     base_pathinfo_inspection_services: Vec<Arc<dyn PathInfoService>>,
     remote_pathinfo: Option<Arc<dyn PathInfoService>>,
     remote_cache_urls: Vec<Url>,
+    source_admission: Option<Arc<dyn StoreSourceAdmission>>,
+    remote_source_leases: Vec<Arc<dyn StoreSourceLease>>,
     remote_trusted_public_keys: Vec<VerifyingKey>,
     remote_delta_capability: Option<RemoteDeltaCapability>,
     remote_delta_http_client: Option<reqwest::Client>,
@@ -840,7 +934,7 @@ impl StoreHandle {
     /// substitution.
     pub async fn open(config: StoreConfig) -> Result<Self, Error> {
         validate_store_dir(&config.store_dir)?;
-        config.preflight_backend_identity()?;
+        // Source admission precedes all base descriptors and backend effects.
         if !config.base_state_dirs.is_empty() {
             return Self::open_overlay(config).await;
         }
@@ -849,7 +943,14 @@ impl StoreHandle {
 
     async fn open_single(config: StoreConfig) -> Result<Self, Error> {
         validate_store_dir(&config.store_dir)?;
-        config.preflight_backend_identity()?;
+        let sources = config.admit_sources()?;
+        StoreConfig::preflight_admitted_backend_identity(
+            config.backend,
+            config.backend.profile(),
+            &config.state_dir,
+            &config.store_dir,
+            &sources.base_dirs,
+        )?;
         let state_dir = &config.state_dir;
         std::fs::create_dir_all(state_dir)
             .map_err(|e| Error::Store(format!("creating state dir {}: {e}", state_dir.display())))?;
@@ -881,48 +982,8 @@ impl StoreHandle {
                 }
             };
 
-        let (remote_pathinfo, remote_cache_urls, remote_trusted_public_keys) = match config.remote_cache_urls.first() {
-            Some(ref url_str) => match Url::parse(url_str) {
-                Ok(parsed_url) => match build_remote_pathinfo(RemotePathInfoOptions {
-                    cache_url: url_str,
-                    store_dir: &config.store_dir,
-                    blob_service: blob_service.clone(),
-                    directory_service: directory_service.clone(),
-                }) {
-                    Ok(svc) => match parse_remote_trusted_public_keys(url_str) {
-                        Ok(trusted_public_keys) => {
-                            info!(url = %url_str, "binary cache substitution enabled");
-                            (Some(svc), vec![parsed_url], trusted_public_keys)
-                        }
-                        Err(err) => {
-                            tracing::warn!(
-                                url = %url_str,
-                                err = %err,
-                                "failed to parse remote cache trust policy, substitution disabled"
-                            );
-                            (None, Vec::new(), Vec::new())
-                        }
-                    },
-                    Err(e) => {
-                        tracing::warn!(
-                            url = %url_str,
-                            err = %e,
-                            "failed to configure remote cache, substitution disabled"
-                        );
-                        (None, Vec::new(), Vec::new())
-                    }
-                },
-                Err(e) => {
-                    tracing::warn!(
-                        url = %url_str,
-                        err = %e,
-                        "failed to parse remote cache URL, substitution disabled"
-                    );
-                    (None, Vec::new(), Vec::new())
-                }
-            },
-            None => (None, Vec::new(), Vec::new()),
-        };
+        let (remote_pathinfo, remote_trusted_public_keys) =
+            configured_remote_pathinfo(&config, &sources, blob_service.clone(), directory_service.clone())?;
 
         let output_dir_str = config.output_dir.to_str().unwrap_or(&config.store_dir).to_string();
         let ca_mappings = CaMappings::load(&config.state_dir);
@@ -941,7 +1002,8 @@ impl StoreHandle {
         }
 
         let advisory_metadata_cache = AdvisoryMetadataCache::load(&config.state_dir);
-        let action_result_stores = configured_action_result_stores(&config.state_dir, &[], &config.remote_cache_urls);
+        let action_result_stores =
+            configured_action_result_stores(&config.state_dir, &[], &config.remote_cache_urls, &sources);
 
         Ok(Self {
             backend: config.backend,
@@ -954,7 +1016,9 @@ impl StoreHandle {
             overlay_pathinfo: pathinfo_service,
             base_pathinfo_inspection_services: Vec::new(),
             remote_pathinfo,
-            remote_cache_urls,
+            remote_cache_urls: sources.remote_urls,
+            source_admission: config.source_admission,
+            remote_source_leases: sources.remote_leases,
             remote_trusted_public_keys,
             remote_delta_capability: None,
             remote_delta_http_client: None,
@@ -983,12 +1047,22 @@ impl StoreHandle {
     /// opened read-only.
     ///
     /// When `base_state_dirs` is empty, this is equivalent to `open()`.
-    pub async fn open_overlay(config: StoreConfig) -> Result<Self, Error> {
+    pub async fn open_overlay(mut config: StoreConfig) -> Result<Self, Error> {
         validate_store_dir(&config.store_dir)?;
-        config.preflight_backend_identity()?;
+        // Admit before reading any base identity, descriptor or generation.
         if config.base_state_dirs.is_empty() {
             return Self::open_single(config).await;
         }
+        let mut sources = config.admit_sources()?;
+        StoreConfig::preflight_admitted_backend_identity(
+            config.backend,
+            config.backend.profile(),
+            &config.state_dir,
+            &config.store_dir,
+            &sources.base_dirs,
+        )?;
+        // Use the admitted canonical identity for all subsequent base effects.
+        config.base_state_dirs = std::mem::take(&mut sources.base_dirs);
 
         // Validate every base before creating or opening writable overlay state.
         let overlay_state = crate::overlay::prepare_overlay_state(&config.base_state_dirs, &config.store_dir)?;
@@ -1026,7 +1100,7 @@ impl StoreHandle {
             }
             let base_blob = ObjectStoreBlobService::new_local(&blob_dir)
                 .map_err(|e| Error::Store(format!("opening base blob service {}: {e}", blob_dir.display())))?;
-            base_blob_services.push(Arc::new(base_blob));
+            base_blob_services.push(Arc::new(Leased::new(base_blob, sources.base_leases[declaration_index].clone())));
 
             // Open base directory service (read-only).
             let base_db_path = base_dir.join("directories.redb");
@@ -1037,10 +1111,14 @@ impl StoreHandle {
             })
             .await
             .map_err(|e| Error::Store(format!("opening base directory {}: {e}", base_db_path.display())))?;
-            base_directory_services.push(Arc::new(base_directory));
+            base_directory_services
+                .push(Arc::new(Leased::new(base_directory, sources.base_leases[declaration_index].clone())));
 
             // Open base pathinfo service (read-only).
-            let base_pathinfo = open_pathinfo_service_read_only(base_dir, config.fallback_mode).await?;
+            let base_pathinfo: Arc<dyn PathInfoService> = Arc::new(Leased::new(
+                open_pathinfo_service_read_only(base_dir, config.fallback_mode).await?,
+                sources.base_leases[declaration_index].clone(),
+            ));
             base_pathinfo_inspection_services.push(base_pathinfo.clone());
             base_pathinfo_services.push(crate::overlay::trusted_base_pathinfo_service(
                 crate::overlay::TrustedBasePathInfoRequest {
@@ -1061,51 +1139,8 @@ impl StoreHandle {
         // PathInfo writes remain routed to the overlay while reads can fall through.
         let combined_pathinfo = combine_pathinfo_services(overlay_pathinfo.clone(), base_pathinfo_services)?;
 
-        // Remote substitution (single cache URL, same as open() but added to combined pathinfo).
-        let (remote_pathinfo, remote_cache_urls, remote_trusted_public_keys) = match config.remote_cache_urls.first() {
-            Some(ref url_str) => match Url::parse(url_str) {
-                Ok(parsed_url) => {
-                    match build_remote_pathinfo(RemotePathInfoOptions {
-                        cache_url: url_str,
-                        store_dir: &config.store_dir,
-                        blob_service: combined_blob.clone(),
-                        directory_service: combined_directory.clone(),
-                    }) {
-                        Ok(svc) => match parse_remote_trusted_public_keys(url_str) {
-                            Ok(trusted_public_keys) => {
-                                info!(url = %url_str, "binary cache substitution enabled (overlay mode)");
-                                (Some(svc), vec![parsed_url], trusted_public_keys)
-                            }
-                            Err(err) => {
-                                tracing::warn!(
-                                    url = %url_str,
-                                    err = %err,
-                                    "failed to parse remote cache trust policy, substitution disabled"
-                                );
-                                (None, Vec::new(), Vec::new())
-                            }
-                        },
-                        Err(e) => {
-                            tracing::warn!(
-                                url = %url_str,
-                                err = %e,
-                                "failed to configure remote cache, substitution disabled"
-                            );
-                            (None, Vec::new(), Vec::new())
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        url = %url_str,
-                        err = %e,
-                        "failed to parse remote cache URL, substitution disabled"
-                    );
-                    (None, Vec::new(), Vec::new())
-                }
-            },
-            None => (None, Vec::new(), Vec::new()),
-        };
+        let (remote_pathinfo, remote_trusted_public_keys) =
+            configured_remote_pathinfo(&config, &sources, combined_blob.clone(), combined_directory.clone())?;
 
         let output_dir_str = config.output_dir.to_str().unwrap_or(&config.store_dir).to_string();
         let ca_mappings = CaMappings::load(&config.state_dir);
@@ -1122,8 +1157,12 @@ impl StoreHandle {
         }
 
         let advisory_metadata_cache = AdvisoryMetadataCache::load(&config.state_dir);
-        let action_result_stores =
-            configured_action_result_stores(&config.state_dir, &config.base_state_dirs, &config.remote_cache_urls);
+        let action_result_stores = configured_action_result_stores(
+            &config.state_dir,
+            &config.base_state_dirs,
+            &config.remote_cache_urls,
+            &sources,
+        );
 
         Ok(Self {
             backend: config.backend,
@@ -1136,7 +1175,9 @@ impl StoreHandle {
             overlay_pathinfo,
             base_pathinfo_inspection_services,
             remote_pathinfo,
-            remote_cache_urls,
+            remote_cache_urls: sources.remote_urls,
+            source_admission: config.source_admission,
+            remote_source_leases: sources.remote_leases,
             remote_trusted_public_keys,
             remote_delta_capability: None,
             remote_delta_http_client: None,
@@ -1175,10 +1216,11 @@ impl StoreHandle {
                 "casita-store-services-unsupported: open the durable Casita repository".to_string(),
             ));
         }
-        StoreConfig::preflight_backend_identity_for(backend, &services.state_dir, &store_dir, &[])?;
+        StoreConfig::preflight_backend_identity_for(backend, &services.state_dir, &store_dir, &[], None)?;
         let ca_mappings = CaMappings::load(&services.state_dir);
         let advisory_metadata_cache = AdvisoryMetadataCache::load(&services.state_dir);
-        let action_result_stores = configured_action_result_stores(&services.state_dir, &[], &[]);
+        let action_result_stores =
+            configured_action_result_stores(&services.state_dir, &[], &[], &AdmittedSources::default());
         Ok(Self {
             backend,
             casita_store: None,
@@ -1191,6 +1233,8 @@ impl StoreHandle {
             base_pathinfo_inspection_services: Vec::new(),
             remote_pathinfo: services.remote_pathinfo,
             remote_cache_urls: Vec::new(),
+            source_admission: None,
+            remote_source_leases: Vec::new(),
             remote_trusted_public_keys: Vec::new(),
             remote_delta_capability: None,
             remote_delta_http_client: None,
@@ -1340,6 +1384,15 @@ impl StoreHandle {
     /// Arc-cloned remote pathinfo service (if configured).
     pub fn remote_pathinfo(&self) -> Option<Arc<dyn PathInfoService>> {
         self.remote_pathinfo.clone()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_test_source_admission(&mut self) {
+        self.source_admission = Some(Arc::new(crate::source_admission::TestSourceAdmission));
+    }
+
+    pub(crate) fn admit_http_source(&self, cache_url: &Url) -> Result<Arc<dyn StoreSourceLease>, Error> {
+        admit_source(self.source_admission.as_deref(), StoreSource::Substituter(cache_url.as_str()), &self.store_dir)
     }
 
     /// The state directory backing this store.
@@ -3130,6 +3183,7 @@ impl StoreHandle {
                 let url_str = self.remote_cache_urls[fallback_idx].as_str().to_string();
                 let Ok(fallback_svc) = build_remote_pathinfo(RemotePathInfoOptions {
                     cache_url: &url_str,
+                    lease: self.remote_source_leases[fallback_idx].clone(),
                     store_dir: &self.store_dir,
                     blob_service: self.blob_service.clone(),
                     directory_service: self.directory_service.clone(),
@@ -4065,11 +4119,36 @@ async fn open_pathinfo_service_read_only(
     }
 }
 
+/// Remote PathInfo service plus the public keys admitted for its cache.
+type RemotePathInfoSelection = (Option<Arc<dyn PathInfoService>>, Vec<VerifyingKey>);
+
+fn configured_remote_pathinfo(
+    config: &StoreConfig,
+    sources: &AdmittedSources,
+    blob_service: Arc<dyn BlobService>,
+    directory_service: Arc<dyn DirectoryService>,
+) -> Result<RemotePathInfoSelection, Error> {
+    let Some(cache_url) = config.remote_cache_urls.first() else {
+        return Ok((None, Vec::new()));
+    };
+    let trusted_public_keys = parse_remote_trusted_public_keys(cache_url).map_err(Error::PathInfoService)?;
+    let service = build_remote_pathinfo(RemotePathInfoOptions {
+        cache_url,
+        store_dir: &config.store_dir,
+        blob_service,
+        directory_service,
+        lease: sources.remote_leases[0].clone(),
+    })?;
+    info!(url = %cache_url, "binary cache substitution enabled");
+    Ok((Some(service), trusted_public_keys))
+}
+
 struct RemotePathInfoOptions<'a> {
     cache_url: &'a str,
     store_dir: &'a str,
     blob_service: Arc<dyn BlobService>,
     directory_service: Arc<dyn DirectoryService>,
+    lease: Arc<dyn StoreSourceLease>,
 }
 
 fn build_remote_pathinfo(options: RemotePathInfoOptions<'_>) -> Result<Arc<dyn PathInfoService>, Error> {
@@ -4097,7 +4176,7 @@ fn build_remote_pathinfo(options: RemotePathInfoOptions<'_>) -> Result<Arc<dyn P
     )
     .map_err(|error| Error::PathInfoService(format!("building remote cache client: {error}")))?;
 
-    Ok(Arc::new(service))
+    Ok(Arc::new(Leased::new(service, options.lease)))
 }
 
 #[cfg(test)]
@@ -6131,6 +6210,7 @@ mod tests {
                 fallback_mode: StoreFallbackMode::Practical,
                 store_dir: "/nix/store".to_string(),
                 base_state_dirs: Vec::new(),
+                source_admission: Some(Arc::new(crate::source_admission::TestSourceAdmission)),
             })
             .await
             .unwrap();
@@ -6171,6 +6251,7 @@ mod tests {
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: "/nix/store".to_string(),
             base_state_dirs: Vec::new(),
+            source_admission: Some(Arc::new(crate::source_admission::TestSourceAdmission)),
         })
         .await
         .unwrap();
@@ -6261,6 +6342,7 @@ mod tests {
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: "/nix/store".to_string(),
             base_state_dirs: Vec::new(),
+            source_admission: Some(Arc::new(crate::source_admission::TestSourceAdmission)),
         })
         .await
         .unwrap();
@@ -7306,6 +7388,7 @@ mod tests {
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: store_dir.to_string(),
             base_state_dirs: vec![base_dir.to_path_buf()],
+            source_admission: Some(Arc::new(crate::source_admission::TestSourceAdmission)),
         })
         .await
         .unwrap()
@@ -7458,6 +7541,7 @@ mod tests {
                 higher_base_dir.path().to_path_buf(),
                 lower_base_dir.path().to_path_buf(),
             ],
+            source_admission: Some(Arc::new(crate::source_admission::TestSourceAdmission)),
         })
         .await
         .unwrap();
@@ -7618,6 +7702,7 @@ mod tests {
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: "/crunch/store".to_string(),
             base_state_dirs: vec![base_dir.path().to_path_buf()],
+            source_admission: Some(Arc::new(crate::source_admission::TestSourceAdmission)),
         })
         .await;
 
@@ -7644,9 +7729,10 @@ mod tests {
         let base_identity = std::fs::read(base.join("store-identity.json")).unwrap();
         std::fs::write(base.join("blobs"), b"not a Snix blob service").unwrap();
 
-        let config =
+        let mut config =
             StoreConfig::new(StoreBackend::Snix, writable.clone(), root.path().join("store"), "/nix/store".to_string())
                 .with_base_state_dirs(vec![base.clone()]);
+        config.source_admission = Some(Arc::new(crate::source_admission::TestSourceAdmission));
         let error = StoreHandle::open(config).await.err().expect("foreign base must be rejected");
         assert!(
             error.to_string().contains("store-backend-mismatch: requested snix, state declares casita"),
@@ -7666,6 +7752,7 @@ mod tests {
             &writable,
             "/nix/store",
             std::slice::from_ref(&base),
+            Some(&crate::source_admission::TestSourceAdmission),
         )
         .unwrap_err();
         assert!(error.to_string().contains("snix-overlay-unsupported"), "{error}");
@@ -7773,6 +7860,7 @@ mod tests {
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: "/nix/store".to_string(),
             base_state_dirs: vec![missing_path],
+            source_admission: Some(Arc::new(crate::source_admission::TestSourceAdmission)),
         })
         .await;
 
@@ -7816,6 +7904,7 @@ mod tests {
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: store_dir.to_string(),
             base_state_dirs: vec![base_a_dir.path().to_path_buf(), base_b_dir.path().to_path_buf()],
+            source_admission: Some(Arc::new(crate::source_admission::TestSourceAdmission)),
         })
         .await
         .unwrap();
@@ -7856,6 +7945,7 @@ mod tests {
                 base_file_dir.path().to_path_buf(),
                 base_directory_dir.path().to_path_buf(),
             ],
+            source_admission: Some(Arc::new(crate::source_admission::TestSourceAdmission)),
         })
         .await
         .unwrap();
@@ -8017,6 +8107,7 @@ mod tests {
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: store_dir.to_string(),
             base_state_dirs: vec![base_dir.path().to_path_buf(), base_dir.path().to_path_buf()],
+            source_admission: Some(Arc::new(crate::source_admission::TestSourceAdmission)),
         })
         .await;
         let error = match result {
@@ -8044,6 +8135,7 @@ mod tests {
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: store_dir.to_string(),
             base_state_dirs: vec![base_dir.path().to_path_buf()],
+            source_admission: Some(Arc::new(crate::source_admission::TestSourceAdmission)),
         })
         .await;
 

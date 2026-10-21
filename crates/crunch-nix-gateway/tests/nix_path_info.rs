@@ -137,6 +137,52 @@ fn fixture(case: Case, temp: &tempfile::TempDir, runtime: &tokio::runtime::Runti
 }
 
 #[test]
+fn retained_producer_identity_must_match_current_verified_cas_not_only_path() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let (store, path) = fixture(Case::Signed, &temp, &runtime);
+    let node = Node::Symlink {
+        target: SymlinkTarget::try_from("actual-content").unwrap(),
+    };
+    let blobs = Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>;
+    let directories = Arc::new(
+        RedbDirectoryService::new_temporary("retained-producer-test".into(), RedbDirectoryServiceConfig::default())
+            .unwrap(),
+    ) as Arc<dyn DirectoryService>;
+    let (nar_size, nar_sha256) =
+        runtime.block_on(SimpleRenderer::new(blobs, directories).calculate_nar(&node)).unwrap();
+    let retained = PathInfo {
+        store_path: StorePath::from_absolute_path(path.as_bytes()).unwrap(),
+        node,
+        references: Vec::new(),
+        nar_size,
+        nar_sha256,
+        signatures: Vec::new(),
+        deriver: None,
+        ca: None,
+    };
+    runtime.block_on(store.verify_retained_path_infos(&[&retained])).unwrap();
+    assert_eq!(runtime.block_on(store.verify_retained_path_infos(&[])), Err(Reject::Bound));
+    assert_eq!(runtime.block_on(store.verify_retained_path_infos(&[&retained, &retained])), Err(Reject::Identity));
+    let mut wrong = retained.clone();
+    wrong.nar_size += 1;
+    assert_eq!(runtime.block_on(store.verify_retained_path_infos(&[&wrong])), Err(Reject::Authority));
+    wrong = retained.clone();
+    wrong.node = Node::Symlink {
+        target: SymlinkTarget::try_from("other-content").unwrap(),
+    };
+    assert_eq!(runtime.block_on(store.verify_retained_path_infos(&[&wrong])), Err(Reject::Authority));
+    wrong = retained.clone();
+    wrong.nar_sha256[0] ^= 1;
+    assert_eq!(runtime.block_on(store.verify_retained_path_infos(&[&wrong])), Err(Reject::Authority));
+    wrong = retained.clone();
+    wrong.references.push(StorePath::from_name_and_digest_fixed("other", [9_u8; 20]).unwrap());
+    assert_eq!(runtime.block_on(store.verify_retained_path_infos(&[&wrong])), Err(Reject::Authority));
+    let missing = fixture(Case::IncompleteCas, &temp, &runtime).0;
+    assert!(runtime.block_on(missing.verify_retained_path_infos(&[&retained])).is_err());
+}
+
+#[test]
 fn signed_path_info_is_bound_to_measured_cas_content() {
     let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
     for (case, expected) in [
@@ -496,7 +542,7 @@ fn build_target_projection_requires_signed_ia_and_exact_selected_output_set() {
     let (store, drv, source) = runtime.block_on(generated_signed_ia_fixture(ProjectionCase::SignedIa, &temp));
     let drv = drv.to_absolute_path();
     let target = format!("{drv}!*");
-    let proven = runtime.block_on(store.project_build_paths_for_remote(&[target.clone()])).unwrap();
+    let proven = runtime.block_on(store.project_build_paths_for_remote(std::slice::from_ref(&target))).unwrap();
     let (projected_drv, crunch, nix) = proven.into_iter().next().unwrap().into_derivations();
     assert_eq!(projected_drv.to_absolute_path(), drv);
     assert!(nix.input_sources.contains(&source));
@@ -731,4 +777,160 @@ fn private_listener_survives_malformed_peer_before_signed_read() {
     assert!(output.status.success(), "client stderr: {}", String::from_utf8_lossy(&output.stderr));
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), path);
     assert!(!socket.exists(), "owner-only socket remained after clean shutdown");
+}
+
+fn signed_import(runtime: &tokio::runtime::Runtime, path: &str) -> (crunch_nix_gateway::ParsedRequest, Vec<u8>) {
+    let blobs = Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>;
+    let directories = Arc::new(
+        RedbDirectoryService::new_temporary("gateway-import".into(), RedbDirectoryServiceConfig::default()).unwrap(),
+    ) as Arc<dyn DirectoryService>;
+    let node = Node::Symlink {
+        target: SymlinkTarget::try_from("actual-content").unwrap(),
+    };
+    let (nar_size, nar_hash) = runtime.block_on(SimpleRenderer::new(blobs, directories).calculate_nar(&node)).unwrap();
+    let store_path = StorePath::<String>::from_absolute_path(path.as_bytes()).unwrap();
+    let refs: Vec<StorePathRef<'_>> = Vec::new();
+    let fp = fingerprint_with_store_dir(&store_path.as_ref(), &nar_hash, nar_size, refs.iter(), "/nix/store");
+    let signer = SigningKey::new("gateway-fixture-1".to_string(), ed25519_dalek::SigningKey::from_bytes(&[13; 32]));
+    let mut bytes = Vec::new();
+    nix_compat::nar::writer::open(&mut bytes).unwrap().symlink(b"actual-content").unwrap();
+    let request = crunch_nix_gateway::ParsedRequest::AddToStoreNar {
+        path: path.to_string(),
+        deriver: String::new(),
+        references: Vec::new(),
+        nar_hash: nar_hash.iter().map(|byte| format!("{byte:02x}")).collect(),
+        nar_size,
+        registration_time: 0,
+        signatures: vec![signer.sign(fp.as_bytes()).to_owned().to_string()],
+        content_address: String::new(),
+    };
+    (request, bytes)
+}
+
+#[test]
+fn admitted_nar_import_requires_exact_scope_signature_content_and_budget() {
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    for case in ["valid", "scope", "budget", "signature", "content", "trailing"] {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut store, path) = fixture(Case::Missing, &temp, &runtime);
+        let (mut request, mut bytes) = signed_import(&runtime, &path);
+        let inputs = if case == "scope" {
+            Vec::new()
+        } else {
+            vec![path.clone()]
+        };
+        let budget = if case == "budget" { 1 } else { 1_048_576 };
+        if case == "signature"
+            && let crunch_nix_gateway::ParsedRequest::AddToStoreNar { ref mut signatures, .. } = request
+        {
+            signatures.clear();
+        }
+        if case == "content" {
+            let offset = bytes.windows(14).position(|slice| slice == b"actual-content").unwrap();
+            bytes[offset] = b'X';
+        }
+        if case == "trailing" {
+            bytes.push(0);
+        }
+        let result = runtime.block_on(store.import_admitted_nar(
+            request,
+            &mut std::io::Cursor::new(bytes),
+            &inputs,
+            budget,
+            || Ok(()),
+        ));
+        let missing = runtime.block_on(store.query_missing(std::slice::from_ref(&path))).unwrap();
+        if case == "valid" {
+            assert!(result.is_ok());
+            assert!(missing.is_empty(), "verified input was not published");
+            assert_eq!(
+                std::fs::read_link(temp.path().join(path.rsplit('/').next().unwrap())).unwrap(),
+                std::path::Path::new("actual-content")
+            );
+        } else {
+            assert!(result.is_err(), "{case} import acquired authority");
+            assert_eq!(missing, vec![path], "{case} published rejected metadata");
+        }
+    }
+}
+
+#[test]
+fn disconnected_import_discards_staging_without_publishing_metadata() {
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let (mut store, path) = fixture(Case::Missing, &temp, &runtime);
+    let staging = temp.path().join("staging");
+    std::fs::create_dir(&staging).unwrap();
+    std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let (request, bytes) = signed_import(&runtime, &path);
+    let mut wire = Vec::new();
+    crunch_nix_gateway::write_number(&mut wire, bytes.len() as u64).unwrap();
+    wire.extend_from_slice(&bytes[..bytes.len() / 2]);
+    let result = crunch_nix_gateway::mutation::import_admitted_transfer(
+        &mut std::io::Cursor::new(wire),
+        &mut store,
+        request,
+        std::slice::from_ref(&path),
+        1_048_576,
+        &staging,
+        &runtime,
+        || Ok(()),
+    );
+    assert_eq!(result, Err(Reject::Bound));
+    assert_eq!(runtime.block_on(store.query_missing(std::slice::from_ref(&path))).unwrap(), vec![path]);
+    assert!(std::fs::read_dir(staging).unwrap().next().is_none());
+}
+
+#[test]
+fn valid_paths_response_never_promotes_unmeasured_or_unsigned_metadata() {
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    for (case, accepted) in [
+        (Case::Signed, true),
+        (Case::Missing, false),
+        (Case::SignedWrongNar, false),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let (store, path) = fixture(case, &temp, &runtime);
+        let mut response = Vec::new();
+        let result = runtime.block_on(store.answer(
+            crunch_nix_gateway::ParsedRequest::QueryValidPaths {
+                paths: vec![path.clone()],
+                substitute: false,
+            },
+            &mut response,
+        ));
+        if matches!(case, Case::SignedWrongNar) {
+            assert_eq!(result, Err(Reject::Authority));
+            assert!(response.is_empty(), "invalid metadata acknowledged before verification");
+        } else {
+            result.unwrap();
+            let mut wire = std::io::Cursor::new(response);
+            assert_eq!(crunch_nix_gateway::read_number(&mut wire).unwrap(), 0x616c7473);
+            assert_eq!(crunch_nix_gateway::read_number(&mut wire).unwrap(), u64::from(accepted));
+            if accepted {
+                assert_eq!(crunch_nix_gateway::read_string(&mut wire, 255).unwrap(), path);
+            }
+        }
+    }
+}
+
+#[test]
+fn upload_revocation_after_content_ingest_never_publishes_pathinfo() {
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let (mut store, path) = fixture(Case::Missing, &temp, &runtime);
+    let (request, bytes) = signed_import(&runtime, &path);
+    let mut checks = 0;
+    let result = runtime.block_on(store.import_admitted_nar(
+        request,
+        &mut std::io::Cursor::new(bytes),
+        std::slice::from_ref(&path),
+        1_048_576,
+        || {
+            checks += 1;
+            if checks == 1 { Ok(()) } else { Err(Reject::Expired) }
+        },
+    ));
+    assert_eq!(result, Err(Reject::Expired));
+    assert_eq!(runtime.block_on(store.query_missing(std::slice::from_ref(&path))).unwrap(), vec![path]);
 }

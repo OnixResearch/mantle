@@ -57,6 +57,7 @@ fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConf
         state_dir: state_dir.to_path_buf(),
         backend: crunch_store::StoreBackend::Snix,
         base_state_dirs: Vec::new(),
+        source_admission: None,
         store_dir: nix_compat::store_path::STORE_DIR.to_string(),
         verbose: false,
         max_jobs: 2,
@@ -70,6 +71,7 @@ fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConf
         root_registration: None,
         source_fetch_overrides: Vec::new(),
         remote_enabled: false,
+        compile_driver_runtime: None,
         interchange_dir: None,
     }
 }

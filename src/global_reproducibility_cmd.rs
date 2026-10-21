@@ -145,7 +145,7 @@ fn print_global_reproducibility_json(output: &GlobalReproducibilityCommandOutput
 }
 
 fn print_global_reproducibility_human(output: &GlobalReproducibilityCommandOutput) {
-    println!("global reproducibility: {}", output.report.claim_class.as_str());
+    println!("global reproducibility: {}", output.report.claim_class);
     println!("global report digest: {}", output.report_digest_blake3);
     if let Some(path) = &output.report_path {
         println!("global report: {}", path.display());

@@ -109,24 +109,26 @@ cd -- "$REPO_ROOT"
 ensure_toolchain_environment
 ensure_wasm_target
 
+# Reuse the same validated inventory as the dependency/purity/API checks below.
+CORE_PACKAGE_NAMES="$(PYTHONPATH="$SCRIPT_DIR" python3 -c \
+  'from no_std_core_checks import core_packages; print("\n".join(core_packages()))')"
+mapfile -t CORE_PACKAGES <<< "$CORE_PACKAGE_NAMES"
+
 note "toolchain: $ACTIVE_TOOLCHAIN"
 note "[1/12] openspec validate functional-core"
 run_step openspec validate functional-core
 note "[2/12] host cargo checks"
-run_cargo_step check -p crunch-attestation-core
-run_cargo_step check -p crunch-project-core
-run_cargo_step check -p crunch-shell-core
-run_cargo_step check -p crunch-release-core
+for package in "${CORE_PACKAGES[@]}"; do
+  run_cargo_step check -p "$package"
+done
 note "[3/12] wasm cargo checks"
-run_cargo_step check -p crunch-attestation-core --target "$WASM_TARGET"
-run_cargo_step check -p crunch-project-core --target "$WASM_TARGET"
-run_cargo_step check -p crunch-shell-core --target "$WASM_TARGET"
-run_cargo_step check -p crunch-release-core --target "$WASM_TARGET"
+for package in "${CORE_PACKAGES[@]}"; do
+  run_cargo_step check -p "$package" --target "$WASM_TARGET"
+done
 note "[4/12] core tests"
-run_cargo_step test -p crunch-attestation-core
-run_cargo_step test -p crunch-project-core
-run_cargo_step test -p crunch-shell-core
-run_cargo_step test -p crunch-release-core
+for package in "${CORE_PACKAGES[@]}"; do
+  run_cargo_step test -p "$package"
+done
 note "[5/12] first-wave std adapter tests"
 run_cargo_step test -p crunch-attestation shell_adapter_keeps_discovery_outside_core
 run_cargo_step test -p crunch-project shell_adapter_keeps_refresh_io_outside_core

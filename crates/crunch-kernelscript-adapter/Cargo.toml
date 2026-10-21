@@ -9,7 +9,7 @@ name = "mantle-kernelscript-core-adapter"
 path = "src/main.rs"
 
 [dependencies]
-blake3 = "=1.8.2"
+blake3 = "=1.8.5"
 crunch-kernelscript-core = { path = "../crunch-kernelscript-core" }
 libc = "0.2"
 serde = { version = "1.0", features = ["derive"] }

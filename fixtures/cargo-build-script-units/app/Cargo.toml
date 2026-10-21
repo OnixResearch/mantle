@@ -1,0 +1,12 @@
+[package]
+name = "mantle-cargo-build-script-fixture"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+proc-macro2 = "=1.0.106"
+serde = { version = "=1.0.228", features = ["derive"] }
+libc = "=0.2.186"
+native-answer-sys = { path = "../native-answer-sys" }
+serde_json = "=1.0.149"

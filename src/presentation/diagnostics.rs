@@ -51,9 +51,9 @@ pub(crate) fn emit_doctor_report(
 ) -> Result<(), RunError> {
     let rendered = render_doctor_report(report, format)?;
     if rendered.goes_to_stderr {
-        eprintln!("{}", rendered.text);
+        super::reports::write_report_to(&mut std::io::stderr().lock(), &rendered.text, "doctor report")?;
     } else {
-        println!("{}", rendered.text);
+        super::reports::write_report_to(&mut std::io::stdout().lock(), &rendered.text, "doctor report")?;
     }
     Ok(())
 }

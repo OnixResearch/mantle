@@ -1,0 +1,6 @@
+{
+  "source_identity_check": true,
+  "source_cohort_and_inventory_negatives": true,
+  "actual_producer_and_consumer_decisions_exercised": true,
+  "non_claim": "Not fresh Verus verification, Kamacite/Valence proof acceptance, bootstrap or release eligibility."
+}

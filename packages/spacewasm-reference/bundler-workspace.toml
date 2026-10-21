@@ -12,7 +12,7 @@ rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-blake3 = { version = "=1.8.2", default-features = false }
+blake3 = { version = "=1.8.5", default-features = false }
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 tempfile = "3.14"

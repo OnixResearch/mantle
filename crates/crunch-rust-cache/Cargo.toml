@@ -9,7 +9,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
 
 [dependencies]
 async-trait = "0.1"
-blake3 = "=1.8.2"
+blake3 = "=1.8.5"
 crunch-rust-cache-core = { path = "../crunch-rust-cache-core" }
 crunch-store = { path = "../crunch-store" }
 data-encoding = "2.6"

@@ -194,6 +194,7 @@ fn bindings() -> PlanBindings {
         rustc: format!("{}/bin/rustc", store("rust-toolchain")),
         toolchain: store("rust-toolchain"),
         linker: format!("{}/bin/cc", store("linker")),
+        target_linker: None,
         runtime_inputs: Vec::new(),
         sources,
         units,

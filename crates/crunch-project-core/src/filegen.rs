@@ -166,7 +166,12 @@ pub fn plan_file_generation(request: FilegenPlanRequest) -> FilegenPlan {
     plan
 }
 
-pub fn verify_filegen_apply_plan(reviewed: &FilegenPlan, current: &FilegenPlan) -> Result<(), Vec<FilegenBlocker>> {
+/// Admits the current plan against the reviewed plan and returns it for apply.
+/// Neither plan is cloned; blocker precedence and operation equality are exact.
+pub fn verify_filegen_apply_plan(
+    reviewed: FilegenPlan,
+    current: FilegenPlan,
+) -> Result<FilegenPlan, Vec<FilegenBlocker>> {
     assert_eq!(current.schema, FILEGEN_PLAN_SCHEMA, "current plan schema must be current");
     debug_assert_eq!(current.non_claim, FILEGEN_NON_CLAIM);
     if reviewed.schema != FILEGEN_PLAN_SCHEMA {
@@ -178,10 +183,10 @@ pub fn verify_filegen_apply_plan(reviewed: &FilegenPlan, current: &FilegenPlan) 
     }
 
     if !current.blockers.is_empty() {
-        return Err(current.blockers.clone());
+        return Err(current.blockers);
     }
     if !reviewed.blockers.is_empty() {
-        return Err(reviewed.blockers.clone());
+        return Err(reviewed.blockers);
     }
     if reviewed.operations != current.operations {
         return Err(vec![blocker(
@@ -190,13 +195,7 @@ pub fn verify_filegen_apply_plan(reviewed: &FilegenPlan, current: &FilegenPlan) 
             "current generated-file facts differ from the reviewed plan".to_string(),
         )]);
     }
-    Ok(())
-}
-
-impl FilegenPlan {
-    pub fn has_blockers(&self) -> bool {
-        !self.blockers.is_empty()
-    }
+    Ok(current)
 }
 
 fn normalized_current_files(
@@ -495,7 +494,7 @@ mod tests {
             ],
         });
 
-        assert!(!plan.has_blockers());
+        assert!(plan.blockers.is_empty());
         assert_eq!(plan.operations[0].action, FilegenAction::Create);
         assert_eq!(plan.operations[1].action, FilegenAction::Update);
         assert_eq!(plan.operations[2].action, FilegenAction::Unchanged);
@@ -522,7 +521,7 @@ mod tests {
             })],
         });
 
-        assert!(!plan.has_blockers());
+        assert!(plan.blockers.is_empty());
         assert_eq!(plan.operations[0].action, FilegenAction::Unchanged);
     }
 
@@ -539,7 +538,7 @@ mod tests {
             current_files: Vec::new(),
         });
 
-        assert!(!plan.has_blockers());
+        assert!(plan.blockers.is_empty());
         assert_eq!(plan.operations[0].contract_identity.as_deref(), Some("demo-contract"));
     }
 
@@ -604,7 +603,7 @@ mod tests {
             current_files: Vec::new(),
         });
 
-        let err = verify_filegen_apply_plan(&reviewed, &current).unwrap_err();
+        let err = verify_filegen_apply_plan(reviewed, current).unwrap_err();
 
         assert_eq!(err[0].code, "plan-drift");
     }

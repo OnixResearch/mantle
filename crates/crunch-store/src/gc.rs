@@ -391,7 +391,7 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
     let current_unix_s = roots::current_unix_seconds()?;
     let retention_policy = crate::retention::core_retention_policy();
     let retention_facts = crate::retention::records_to_core(&all_roots)?;
-    let retention_plan = plan_retention(&retention_policy, current_unix_s, retention_facts)
+    let retention_plan = plan_retention(retention_policy, current_unix_s, retention_facts)
         .map_err(|error| Error::Gc(format!("planning root retention: {error:?}")))?;
     let retained_root_ids = retention_plan
         .decisions
@@ -459,10 +459,11 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
                 }
             })?;
     let live_paths = core_plan.retained_path_ids.iter().cloned().collect::<BTreeSet<_>>();
+    let retention_explanations = build_retention_explanations(&retention_plan.decisions, &all_roots)?;
     let mut usage = build_usage_report(
         &composed_snapshot.pathinfos,
         &core_plan.retaining_roots,
-        &retention_plan.decisions,
+        retention_plan.decisions,
         ctx.store_dir,
     )?;
     let explanation_link_limit =
@@ -472,7 +473,6 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
     let core_plan_id = core_plan.plan_id.into_bytes();
     let retention_plan_id_bytes = retention_plan.plan_id.into_bytes();
     let retention_plan_id = encode_blake3_identity(&retention_plan_id_bytes);
-    let retention_explanations = build_retention_explanations(&retention_plan.decisions, &all_roots)?;
     let (live_pathinfos, dead_pathinfos) = split_pathinfos(overlay_snapshot, &live_paths, ctx.store_dir);
     let live_castore = if ctx.casita_store.is_some() {
         LiveCastoreState::default()
@@ -1008,7 +1008,7 @@ fn cleanup_casita_closure_attestations(state_dir: &Path) -> Result<(), Error> {
     let all_roots = roots::list_roots(state_dir)?;
     let retention_facts = crate::retention::records_to_core(&all_roots)?;
     let retention_plan =
-        plan_retention(&crate::retention::core_retention_policy(), roots::current_unix_seconds()?, retention_facts)
+        plan_retention(crate::retention::core_retention_policy(), roots::current_unix_seconds()?, retention_facts)
             .map_err(|error| Error::Gc(format!("planning Casita recovery retention: {error:?}")))?;
     let retained = retention_plan
         .decisions
@@ -1126,7 +1126,7 @@ fn build_retention_explanations(
             .ok_or_else(|| Error::Gc(format!("retention decision has no root record: {}", decision.path_id)))?;
         explanations.push(GcRetentionExplanation {
             path: decision.path_id.clone(),
-            root_class: decision.class.as_str().to_string(),
+            root_class: decision.class.to_string(),
             owner_scope: decision.owner_scope.clone(),
             policy_blake3: root.policy_blake3.clone(),
             project_identity: root.project_identity.clone(),
@@ -1136,7 +1136,7 @@ fn build_retention_explanations(
             transition_id: root.last_transition_id.clone(),
             transition_reason: root.last_transition_reason.clone(),
             disposition: retention_disposition_name(decision.disposition).to_string(),
-            reason: decision.reason.as_str().to_string(),
+            reason: decision.reason.to_string(),
         });
     }
     Ok(explanations)
@@ -1186,7 +1186,7 @@ fn build_path_explanations(
 fn build_usage_report(
     snapshot: &[PathInfo],
     retaining_roots: &[crunch_gc_core::GcRetainingRoots],
-    decisions: &[RetentionDecision],
+    decisions: Vec<RetentionDecision>,
     store_dir: &str,
 ) -> Result<GcUsageReport, Error> {
     let roots_by_path = retaining_roots
@@ -2146,6 +2146,7 @@ mod tests {
 
     async fn open_store(state_dir: &Path, output_dir: &Path) -> StoreHandle {
         StoreHandle::open(StoreConfig {
+            source_admission: None,
             backend: crate::StoreBackend::Snix,
             state_dir: state_dir.to_path_buf(),
             output_dir: output_dir.to_path_buf(),

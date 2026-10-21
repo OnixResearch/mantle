@@ -1,23 +1,37 @@
-//! Store-read projection for the bounded Nix worker protocol. No substitution,
-//! execution, import or fallback to the host's `/nix/store` is permitted.
+//! Verified store projections and an explicitly admitted signed input import.
+//! No implicit execution, substitution or host `/nix/store` fallback authority.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::io::{self, Write};
+use std::io::Write;
+use std::io::{self};
 
 use crunch_build::HermeticityMode;
-use crunch_build::action_result::{
-    SignedDerivationSource, admit_signed_derivation_outputs, verify_signed_store_derivation,
-};
-use crunch_glue::{ConversionCache, CrunchDerivation, Input};
-use crunch_nix_gateway_core::{self as core, Reject};
-use crunch_store::{ActionResultPort, BuildServiceStore, BuildStore, OutputLookup, StoreHandle};
+use crunch_build::action_result::SignedDerivationSource;
+use crunch_build::action_result::admit_signed_derivation_outputs;
+use crunch_build::action_result::verify_signed_store_derivation;
+use crunch_glue::ConversionCache;
+use crunch_glue::CrunchDerivation;
+use crunch_glue::Input;
+use crunch_nix_gateway_core::Reject;
+use crunch_nix_gateway_core::{self as core};
+use crunch_store::ActionResultPort;
+use crunch_store::BuildServiceStore;
+use crunch_store::BuildStore;
+use crunch_store::OutputLookup;
+use crunch_store::StoreHandle;
 use nix_compat::derivation::Derivation;
-use nix_compat::narinfo::{VerifyingKey, fingerprint_with_store_dir};
-use nix_compat::store_path::{StorePath, StorePathRef, build_ca_path_with_store_dir};
+use nix_compat::narinfo::VerifyingKey;
+use nix_compat::narinfo::fingerprint_with_store_dir;
+use nix_compat::store_path::StorePath;
+use nix_compat::store_path::StorePathRef;
+use nix_compat::store_path::build_ca_path_with_store_dir;
 use snix_store::path_info::PathInfo;
 
-use crate::{ParsedRequest, STDERR_LAST, write_bytes, write_number};
+use crate::ParsedRequest;
+use crate::STDERR_LAST;
+use crate::write_bytes;
+use crate::write_number;
 
 const PREFIX: &str = "/nix/store";
 
@@ -29,8 +43,12 @@ fn ca_identity_matches(info: &PathInfo) -> bool {
         return true;
     }
     let self_reference = info.references.iter().any(|path| path == &info.store_path);
-    let references = info.references.iter().filter(|path| *path != &info.store_path)
-        .map(ToString::to_string).collect::<Vec<_>>();
+    let references = info
+        .references
+        .iter()
+        .filter(|path| *path != &info.store_path)
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
     let standard: Result<StorePath<String>, _> =
         build_ca_path_with_store_dir(info.store_path.name(), ca, references, self_reference, PREFIX);
     standard.is_ok_and(|candidate| candidate == info.store_path)
@@ -48,6 +66,14 @@ pub struct ProvenRemoteDerivation {
 impl ProvenRemoteDerivation {
     pub fn into_derivations(self) -> (StorePath<String>, CrunchDerivation, Derivation) {
         (self.drv_path, self.crunch_derivation, self.nix_derivation)
+    }
+
+    pub fn declared_output_paths(&self) -> impl Iterator<Item = String> + '_ {
+        self.nix_derivation
+            .outputs
+            .values()
+            .filter_map(|output| output.path.as_ref())
+            .map(StorePath::to_absolute_path)
     }
 }
 
@@ -89,7 +115,9 @@ impl VerifiedStore {
         // OutputLookup additionally revalidates overlay/layer selection. The
         // gateway imposes its own configured signature policy even on local
         // PathInfo and never trusts the mere existence of a metadata record.
-        if info.store_path != parsed || info.nar_size == 0 || info.nar_size > core::MAX_TRANSFER_BYTES
+        if info.store_path != parsed
+            || info.nar_size == 0
+            || info.nar_size > core::MAX_TRANSFER_BYTES
             || info.references.len() > core::MAX_STORE_PATHS as usize
             || info.signatures.len() > 16
             || info.signatures.iter().any(|signature| signature.name().len() > 256)
@@ -99,22 +127,55 @@ impl VerifiedStore {
         }
         let references: Vec<StorePathRef<'_>> = info.references.iter().map(StorePath::as_ref).collect();
         let fingerprint = fingerprint_with_store_dir(
-            &info.store_path.as_ref(), &info.nar_sha256, info.nar_size, references.iter(), PREFIX,
+            &info.store_path.as_ref(),
+            &info.nar_sha256,
+            info.nar_size,
+            references.iter(),
+            PREFIX,
         );
-        if !info.signatures.iter().any(|signature| {
-            self.trusted_keys.iter().any(|key| key.verify(&fingerprint, &signature.as_ref()))
-        }) {
+        if !info
+            .signatures
+            .iter()
+            .any(|signature| self.trusted_keys.iter().any(|key| key.verify(&fingerprint, &signature.as_ref())))
+        {
             return Err(Reject::Authority);
         }
         if !self.content.has_complete_content(&info).await.map_err(|_| Reject::Authority)? {
             return Err(Reject::Authority);
         }
-        let (measured_size, measured_hash) = self.owner.calculate_nar(&info.node).await
-            .map_err(|_| Reject::Authority)?;
+        let (measured_size, measured_hash) =
+            self.owner.calculate_nar(&info.node).await.map_err(|_| Reject::Authority)?;
         if measured_size != info.nar_size || measured_hash != info.nar_sha256 {
             return Err(Reject::Authority);
         }
         Ok(Some(info))
+    }
+
+    /// Reuse the ordinary signature, overlay, complete-CAS and measured-NAR
+    /// admission before comparing retained producer identities. Matching paths
+    /// or another currently trusted result are not the same producer result.
+    pub async fn verify_retained_path_infos(&self, expected: &[&PathInfo]) -> Result<(), Reject> {
+        if expected.is_empty() || expected.len() > core::MAX_STORE_PATHS as usize {
+            return Err(Reject::Bound);
+        }
+        let mut seen = HashSet::with_capacity(expected.len());
+        for retained in expected {
+            if !seen.insert(&retained.store_path) {
+                return Err(Reject::Identity);
+            }
+            let absolute = retained.store_path.to_absolute_path();
+            let current = self.verified_path_info(&absolute).await?.ok_or(Reject::Operation)?;
+            if current.store_path != retained.store_path
+                || current.node != retained.node
+                || current.nar_sha256 != retained.nar_sha256
+                || current.nar_size != retained.nar_size
+                || current.references != retained.references
+                || current.ca != retained.ca
+            {
+                return Err(Reject::Authority);
+            }
+        }
+        Ok(())
     }
 
     /// Reconstruct only a signed IA derivation that round-trips byte-for-byte
@@ -128,16 +189,23 @@ impl VerifiedStore {
             return Err(Reject::Identity);
         }
         let path = StorePath::<String>::from_absolute_path(drv.as_bytes()).map_err(|_| Reject::Identity)?;
-        let verified = verify_signed_store_derivation(SignedDerivationSource {
-            build_store: &self.owner,
-            lookup: &self.lookup,
-            content: &self.content,
-            store_dir: PREFIX,
-            trusted_keys: &self.trusted_keys,
-        }, &path).await.map_err(|_| Reject::Authority)?;
+        let verified = verify_signed_store_derivation(
+            SignedDerivationSource {
+                build_store: &self.owner,
+                lookup: &self.lookup,
+                content: &self.content,
+                store_dir: PREFIX,
+                trusted_keys: &self.trusted_keys,
+            },
+            &path,
+        )
+        .await
+        .map_err(|_| Reject::Authority)?;
         let original = verified.derivation();
-        if !original.input_derivations.is_empty() || original.input_sources.len() > core::MAX_STORE_PATHS as usize
-            || original.outputs.is_empty() || original.outputs.len() > core::MAX_STORE_PATHS as usize
+        if !original.input_derivations.is_empty()
+            || original.input_sources.len() > core::MAX_STORE_PATHS as usize
+            || original.outputs.is_empty()
+            || original.outputs.len() > core::MAX_STORE_PATHS as usize
             || original.outputs.values().any(|output| output.ca_hash.is_some() || output.path.is_none())
         {
             return Err(Reject::Operation);
@@ -160,7 +228,9 @@ impl VerifiedStore {
             outputs: original.outputs.keys().cloned().collect(),
             dynamic_plan_outputs: Vec::new(),
             env,
-            inputs: original.input_sources.iter()
+            inputs: original
+                .input_sources
+                .iter()
                 .map(|source| Input::Source(source.to_absolute_path_with_prefix(PREFIX)))
                 .collect(),
             fixed_output: None,
@@ -168,12 +238,16 @@ impl VerifiedStore {
             provenance: None,
         };
         let mut cache = ConversionCache::new(PREFIX);
-        let (computed_path, nix_derivation) = crunch_glue::convert(&crunch_derivation, &mut cache)
-            .map_err(|_| Reject::Operation)?;
+        let (computed_path, nix_derivation) =
+            crunch_glue::convert(&crunch_derivation, &mut cache).map_err(|_| Reject::Operation)?;
         if computed_path != path || &nix_derivation != original {
             return Err(Reject::Identity);
         }
-        Ok(ProvenRemoteDerivation { drv_path: computed_path, crunch_derivation, nix_derivation })
+        Ok(ProvenRemoteDerivation {
+            drv_path: computed_path,
+            crunch_derivation,
+            nix_derivation,
+        })
     }
 
     /// Read-only preparation of complete native `BuildPaths` targets. This
@@ -211,6 +285,149 @@ impl VerifiedStore {
         Ok(projected)
     }
 
+    /// Import only an input named by the host's already-admitted concrete
+    /// request. `admitted_inputs` and `remaining_upload_bytes` come from the
+    /// existing durable ticket/attempt boundary, never the Nix peer. This
+    /// method does not grant upload authority or redeem a credential.
+    // r[impl remote_builds.gateway_store_integrity]
+    pub async fn import_admitted_nar<R: tokio::io::AsyncRead + Unpin + Send>(
+        &mut self,
+        request: ParsedRequest,
+        reader: &mut R,
+        admitted_inputs: &[String],
+        remaining_upload_bytes: u64,
+        mut reauthorize: impl FnMut() -> Result<(), Reject>,
+    ) -> Result<u64, Reject> {
+        use nix_compat::narinfo::Signature;
+        use nix_compat::nixhash::CAHash;
+        use nix_compat::nixhash::HashAlgo;
+        use nix_compat::nixhash::NixHash;
+        use tokio::io::AsyncReadExt;
+        reauthorize()?;
+        let ParsedRequest::AddToStoreNar {
+            path,
+            deriver,
+            nar_hash,
+            references,
+            nar_size,
+            signatures,
+            content_address,
+            ..
+        } = request
+        else {
+            return Err(Reject::Operation);
+        };
+        if admitted_inputs.len() > core::MAX_STORE_PATHS as usize
+            || !admitted_inputs.contains(&path)
+            || nar_size == 0
+            || nar_size > remaining_upload_bytes
+            || nar_size > core::MAX_TRANSFER_BYTES
+            || references.len() > core::MAX_STORE_PATHS as usize
+            || signatures.is_empty()
+            || signatures.len() > 16
+        {
+            return Err(Reject::Authority);
+        }
+        if !core::valid_store_path(&path, false)
+            || (!deriver.is_empty() && !core::valid_store_path(&deriver, true))
+            || nar_hash.len() != 64
+            || content_address.len() > 128
+            || !nar_hash.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            || references.iter().any(|path| !core::valid_store_path(path, false))
+            || signatures.iter().any(|signature| signature.len() > 1024)
+        {
+            return Err(Reject::Identity);
+        }
+        let store_path = StorePath::<String>::from_absolute_path(path.as_bytes()).map_err(|_| Reject::Identity)?;
+        let references = references
+            .iter()
+            .map(|reference| {
+                StorePath::<String>::from_absolute_path(reference.as_bytes()).map_err(|_| Reject::Identity)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if references.iter().collect::<HashSet<_>>().len() != references.len() {
+            return Err(Reject::Identity);
+        }
+        let hash = NixHash::from_str(&nar_hash, Some(HashAlgo::Sha256)).map_err(|_| Reject::Identity)?;
+        let nar_sha256: [u8; 32] = hash.digest_as_bytes().try_into().map_err(|_| Reject::Identity)?;
+        let signatures = signatures
+            .iter()
+            .map(|text| Signature::<String>::parse(text).map_err(|_| Reject::Authority))
+            .collect::<Result<Vec<_>, _>>()?;
+        let refs: Vec<_> = references.iter().map(StorePath::as_ref).collect();
+        let fingerprint = fingerprint_with_store_dir(&store_path.as_ref(), &nar_sha256, nar_size, refs.iter(), PREFIX);
+        if !signatures
+            .iter()
+            .any(|signature| self.trusted_keys.iter().any(|key| key.verify(&fingerprint, &signature.as_ref())))
+        {
+            return Err(Reject::Authority);
+        }
+        for reference in &references {
+            if reference == &store_path {
+                continue;
+            }
+            self.verified_path_info(&reference.to_absolute_path()).await?.ok_or(Reject::Authority)?;
+        }
+        let ca = if content_address.is_empty() {
+            None
+        } else {
+            Some(CAHash::from_nix_hex_str(&content_address).ok_or(Reject::Identity)?)
+        };
+        let mut bounded = reader.take(nar_size.checked_add(1).ok_or(Reject::Bound)?);
+        let (node, measured_hash, measured_size) =
+            self.owner.ingest_nar(&mut bounded, &ca).await.map_err(|_| Reject::Identity)?;
+        let mut trailing = [0_u8; 1];
+        if measured_hash != nar_sha256
+            || measured_size != nar_size
+            || bounded.read(&mut trailing).await.map_err(|_| Reject::Bound)? != 0
+        {
+            return Err(Reject::Identity);
+        }
+        let deriver = if deriver.is_empty() {
+            None
+        } else {
+            let value = StorePath::<String>::from_absolute_path(deriver.as_bytes()).map_err(|_| Reject::Identity)?;
+            let name = value.name().strip_suffix(".drv").ok_or(Reject::Identity)?;
+            Some(StorePath::from_name_and_digest(name, value.digest()).map_err(|_| Reject::Identity)?)
+        };
+        let info = PathInfo {
+            store_path,
+            node,
+            references,
+            nar_size,
+            nar_sha256,
+            signatures,
+            deriver,
+            ca,
+        };
+        if !ca_identity_matches(&info) {
+            return Err(Reject::Identity);
+        }
+        if let Some(existing) = self.lookup.find(&info.store_path).await.map_err(|_| Reject::Authority)?
+            && (existing.node != info.node
+                || existing.nar_sha256 != info.nar_sha256
+                || existing.nar_size != info.nar_size
+                || existing.references != info.references
+                || existing.ca != info.ca)
+        {
+            return Err(Reject::Conflict);
+        }
+        reauthorize()?;
+        self.owner
+            .persist_and_export_signed_output(crunch_store::PersistOutputRequest {
+                output_name: "input",
+                output_path: &info.store_path,
+                path_info: info.clone(),
+                final_node: info.node.clone(),
+                provenance: None,
+                is_root: false,
+                root_source: None,
+            })
+            .await
+            .map_err(|_| Reject::Authority)?;
+        Ok(nar_size)
+    }
+
     /// QueryMissing's response is a set of *store paths*, not derived-path
     /// strings. An unsigned CA mapping never authorizes a derived target.
     /// A signed derivation+action-result may establish that all its selected
@@ -237,39 +454,47 @@ impl VerifiedStore {
 
     /// Cached derived paths may be *read* through QueryMissing but their
     /// presence cannot bypass the separate authenticated Build permission.
-    /// In particular, `BuildPaths` still has no successful wire response.
+    /// The read-only `answer` path never acknowledges `BuildPaths`.
     async fn require_cached_derived_outputs(&self, drv: &str, output_spec: &str) -> Result<(), Reject> {
         if !core::valid_store_path(drv, true) || output_spec.is_empty() {
             return Err(Reject::Identity);
         }
         let path = StorePath::<String>::from_absolute_path(drv.as_bytes()).map_err(|_| Reject::Identity)?;
-        let verified = verify_signed_store_derivation(SignedDerivationSource {
-            build_store: &self.owner,
-            lookup: &self.lookup,
-            content: &self.content,
-            store_dir: PREFIX,
-            trusted_keys: &self.trusted_keys,
-        }, &path).await.map_err(|_| Reject::Authority)?;
-        let admitted = admit_signed_derivation_outputs(
-            &self.action_results, &verified, HermeticityMode::Strict,
-        ).await.map_err(|_| Reject::Authority)?.ok_or(Reject::Operation)?;
+        let verified = verify_signed_store_derivation(
+            SignedDerivationSource {
+                build_store: &self.owner,
+                lookup: &self.lookup,
+                content: &self.content,
+                store_dir: PREFIX,
+                trusted_keys: &self.trusted_keys,
+            },
+            &path,
+        )
+        .await
+        .map_err(|_| Reject::Authority)?;
+        let admitted = admit_signed_derivation_outputs(&self.action_results, &verified, HermeticityMode::Strict)
+            .await
+            .map_err(|_| Reject::Authority)?
+            .ok_or(Reject::Operation)?;
         let selected: Vec<&PathInfo> = if output_spec == "*" {
             admitted.outputs.values().collect()
         } else {
-            output_spec.split(',').map(|name| {
-                admitted.outputs.get(name).ok_or(Reject::Operation)
-            }).collect::<Result<_, _>>()?
+            output_spec
+                .split(',')
+                .map(|name| admitted.outputs.get(name).ok_or(Reject::Operation))
+                .collect::<Result<_, _>>()?
         };
         if selected.is_empty() || selected.len() > core::MAX_STORE_PATHS as usize {
             return Err(Reject::Bound);
         }
         for expected in selected {
             let absolute = expected.store_path.to_absolute_path();
-            let current = self.verified_path_info(&absolute).await?
-                .ok_or(Reject::Operation)?;
+            let current = self.verified_path_info(&absolute).await?.ok_or(Reject::Operation)?;
             if current.store_path != expected.store_path
-                || current.node != expected.node || current.nar_sha256 != expected.nar_sha256
-                || current.nar_size != expected.nar_size || current.references != expected.references
+                || current.node != expected.node
+                || current.nar_sha256 != expected.nar_sha256
+                || current.nar_size != expected.nar_size
+                || current.references != expected.references
                 || current.ca != expected.ca
             {
                 return Err(Reject::Authority);
@@ -291,6 +516,21 @@ impl VerifiedStore {
                 write_paths(output, &unknown).map_err(|_| Reject::Operation)?;
                 write_number(output, 0).map_err(|_| Reject::Operation)?; // downloadSize
                 write_number(output, 0).map_err(|_| Reject::Operation)?; // narSize
+            }
+            ParsedRequest::QueryValidPaths { paths, substitute } => {
+                if substitute || paths.len() > core::MAX_STORE_PATHS as usize {
+                    return Err(Reject::Operation);
+                }
+                let mut valid = Vec::with_capacity(paths.len());
+                for path in paths {
+                    if self.verified_path_info(&path).await?.is_some() {
+                        valid.push(path);
+                    }
+                }
+                valid.sort();
+                valid.dedup();
+                write_number(output, STDERR_LAST).map_err(|_| Reject::Operation)?;
+                write_paths(output, &valid).map_err(|_| Reject::Operation)?;
             }
             ParsedRequest::IsValidPath { path } => {
                 let found = self.verified_path_info(&path).await?.is_some();

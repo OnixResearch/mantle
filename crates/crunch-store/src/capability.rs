@@ -505,6 +505,17 @@ impl BuildStore {
             .map_err(|error| Error::Store(format!("NAR calculation: {error}")))
     }
 
+    /// Ingest an already-authorized, bounded NAR into content storage only.
+    /// This grants no PathInfo publication or trust; the caller must verify
+    /// the returned identity before separately admitting signed metadata.
+    pub async fn ingest_nar<R: tokio::io::AsyncRead + Unpin + Send>(
+        &self,
+        reader: &mut R,
+        expected_ca_hash: &Option<nix_compat::nixhash::CAHash>,
+    ) -> Result<(Node, [u8; NAR_SHA256_BYTES], u64), Error> {
+        self.handle.transfer_objects().ingest_nar(reader, expected_ca_hash).await
+    }
+
     pub async fn resolve_closure(
         &self,
         root: &StorePath<String>,
@@ -897,6 +908,21 @@ impl RootRegistry {
         .await
         .map(Some)
     }
+
+    /// Release only this operator owner's declarations for one exact path.
+    /// Other owners (including other retained profile generations) survive.
+    pub fn release_owned_pin(&self, logical_path: &str, owner_label: &str) -> Result<Option<GcRootRecord>, Error> {
+        let owner = roots::operator_owner(owner_label)?;
+        roots::unpin_root_for_owner_reason(
+            &self.state_dir,
+            roots::LogicalStorePathRef {
+                logical_path,
+                store_dir: &self.store_dir,
+            },
+            &owner,
+            None,
+        )
+    }
 }
 
 impl SourceAdmission<'_> {
@@ -1161,6 +1187,21 @@ impl BuildServiceStore {
             Some(root) => service.with_failure_workspace_root(root),
             None => service,
         }
+    }
+
+    /// Local execution-only socket mapping. Does not expose store services or
+    /// turn runtime policy into a derivation/store identity input.
+    pub fn bubblewrap_build_service_with_compile_socket(
+        &self,
+        work_directory: PathBuf,
+        host_socket: PathBuf,
+    ) -> std::io::Result<impl snix_build::buildservice::BuildService + use<>> {
+        snix_build::buildservice::BubblewrapBuildService::new(
+            work_directory,
+            self.blob_service.clone(),
+            self.directory_service.clone(),
+        )
+        .with_compile_socket(host_socket)
     }
 
     pub async fn ingest_host_path(&self, path: &Path) -> Result<Node, Error> {

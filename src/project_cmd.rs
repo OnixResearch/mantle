@@ -426,7 +426,7 @@ where
                 &mut run,
                 project_soundness_parse_error(
                     ProjectSoundnessClass::ManifestParseError,
-                    ProjectSoundnessSubject::file(MANIFEST_FILE),
+                    ProjectSoundnessSubject::file(MANIFEST_FILE.into()),
                     error.message().to_string(),
                 ),
                 output,
@@ -446,7 +446,7 @@ where
                 &mut run,
                 project_soundness_parse_error(
                     ProjectSoundnessClass::LockfileParseError,
-                    ProjectSoundnessSubject::file(LOCK_FILE),
+                    ProjectSoundnessSubject::file(LOCK_FILE.into()),
                     error.message().to_string(),
                 ),
                 output,
@@ -518,11 +518,7 @@ fn render_check_report_human(report: &ProjectSoundnessReport) {
 fn render_check_issue_human(issue: &ProjectSoundnessIssue) {
     eprintln!(
         "{} [{}] {} {}: {}",
-        issue.severity.as_str(),
-        issue.class.as_str(),
-        issue.subject.kind,
-        issue.subject.name,
-        issue.message
+        issue.severity, issue.class, issue.subject.kind, issue.subject.name, issue.message
     );
     if let Some(fix_guidance) = &issue.fix_guidance {
         eprintln!("  fix: {fix_guidance}");
@@ -578,7 +574,7 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
             println!("  patches: {}", entry.patches.join(", "));
         }
         if let Some(trust) = &entry.trust {
-            println!("  trust: {} signer(s) via {} ({})", trust.signers.len(), trust.verifier.as_str(), trust.claim);
+            println!("  trust: {} signer(s) via {} ({})", trust.signers.len(), trust.verifier, trust.claim);
         }
         println!("  retention: {}", retention_status_text(name, &retention_plan));
         println!();
@@ -606,7 +602,7 @@ fn locked_kind_text(kind: &crunch_project::LockedKind) -> String {
             weak_hash,
         } => {
             let identity = context.as_deref().or(weak_hash.as_deref()).unwrap_or("<unresolved>");
-            format!("darcs: {repository} @ {} ({identity})", selector.identity_fragment())
+            format!("darcs: {repository} @ {selector} ({identity})")
         }
         crunch_project::LockedKind::Pijul {
             repository,
@@ -615,13 +611,13 @@ fn locked_kind_text(kind: &crunch_project::LockedKind) -> String {
             change,
         } => {
             let change_str = change.as_deref().map(|value| format!(" change {value}")).unwrap_or_default();
-            format!("pijul: {repository} @ {} state {state}{change_str}", selector.identity_fragment())
+            format!("pijul: {repository} @ {selector} state {state}{change_str}")
         }
         crunch_project::LockedKind::Fossil {
             repository,
             selector,
             checkin,
-        } => format!("fossil: {repository} @ {} check-in {checkin}", selector.identity_fragment()),
+        } => format!("fossil: {repository} @ {selector} check-in {checkin}"),
     };
     assert!(!text.is_empty(), "locked input kind rendering must not be empty");
     assert!(text.contains(':'), "locked input kind rendering must include its type prefix");
@@ -961,12 +957,9 @@ fn read_retention_state(path: &Path) -> Result<ProjectRetentionState, String> {
     let text = std::fs::read_to_string(path).map_err(|err| format!("reading {}: {err}", path.display()))?;
     let state = serde_json::from_str::<ProjectRetentionState>(&text)
         .map_err(|err| format!("parsing {}: {err}", path.display()))?;
-    let problems = state.validate();
-    if problems.is_empty() {
-        Ok(state)
-    } else {
-        Err(format!("invalid retention state {}: {}", path.display(), problems.join(", ")))
-    }
+    state
+        .validate()
+        .map_err(|problems| format!("invalid retention state {}: {}", path.display(), problems.join(", ")))
 }
 
 fn retention_state_facts(dir: &Path, state: ProjectRetentionState, committed: bool) -> Vec<RetentionRootFact> {
@@ -1262,7 +1255,7 @@ mod lifecycle_effect_tests {
     fn rendering_failure_is_not_a_successful_project_report() {
         let report = project_soundness_parse_error(
             ProjectSoundnessClass::ManifestParseError,
-            ProjectSoundnessSubject::file(MANIFEST_FILE),
+            ProjectSoundnessSubject::file(MANIFEST_FILE.into()),
             "bad manifest".to_string(),
         );
         let error =

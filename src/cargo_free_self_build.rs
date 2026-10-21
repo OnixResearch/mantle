@@ -260,12 +260,6 @@ struct FixedPointSummaryContext<'a> {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct FixedPointFinishContext<'a> {
-    summary: FixedPointSummaryContext<'a>,
-    json_mode: bool,
-}
-
-#[derive(Clone, Copy, Debug)]
 struct SelfBuildSummaryContext<'a> {
     paths: &'a BuildPaths,
     child: &'a ChildRun,
@@ -1308,6 +1302,30 @@ fn expect_null(value: &Value, expected: ExpectedNull<'_>, blockers: &mut Vec<Str
 }
 
 pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) -> Result<(), RunError> {
+    use mantle_application_contract::rust_operations::RustEvidence;
+    use mantle_application_contract::rust_operations::RustOperation;
+    let gate = crate::rust_plan_execution::RustOperationGate::plan(RustOperation::CargoFreeBuild)?;
+    let json = options.json;
+    let result = mantle_application_contract::rust_operations::RustOperationPort::execute(|| {
+        execute_cargo_free_self_build(options)
+    });
+    let classification = gate.classify_result(&result, |summary| RustEvidence::CargoFree {
+        binary_digest: summary.binary_blake3.as_deref(),
+        cargo_absent: summary.cargo_marker_absent,
+        child_exit: summary.status_code,
+        smoke_exit: summary.smoke_status_code,
+        failed_units: summary.failed_unit_count,
+    });
+    let summary = result?;
+    let classification = crate::rust_plan_execution::reportable_execution(classification, &summary.status)?;
+    print_summary(&summary, json)?;
+    if let Some(blocker) = summary.blocker {
+        return Err(RunError::Build(format!("Cargo-free self-build blocked: {blocker}")));
+    }
+    classification
+}
+
+fn execute_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) -> Result<SelfBuildSummary, RunError> {
     let paths = prepare_paths(options.root, options.out_dir)?;
     debug_assert!(paths.root.is_absolute());
     debug_assert!(!paths.out_dir.starts_with(&paths.root));
@@ -1352,15 +1370,38 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
         hermeticity_mode: options.hermeticity_mode,
     });
     write_summary(&paths.meta_path, &summary)?;
-    print_summary(&summary, options.json)?;
-
-    if let Some(blocker) = child.blocker {
-        return Err(RunError::Build(format!("Cargo-free self-build blocked: {blocker}")));
-    }
-    Ok(())
+    Ok(summary)
 }
 
 pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildOptions<'_>) -> Result<(), RunError> {
+    use mantle_application_contract::rust_operations::RustEvidence;
+    use mantle_application_contract::rust_operations::RustOperation;
+    let gate = crate::rust_plan_execution::RustOperationGate::plan(RustOperation::CargoFreeFixedPoint)?;
+    let json = options.json;
+    let result = mantle_application_contract::rust_operations::RustOperationPort::execute(|| {
+        execute_cargo_free_fixed_point(options)
+    });
+    let classification = gate.classify_result(&result, |summary| RustEvidence::FixedPoint {
+        first_digest: summary.stage1.binary_blake3.as_deref(),
+        second_digest: summary.stage2.as_ref().and_then(|stage| stage.binary_blake3.as_deref()),
+        first_succeeded: summary.stage1.success
+            && summary.stage1.cargo_marker_absent
+            && summary.stage1.smoke_status_code == Some(0),
+        second_succeeded: summary
+            .stage2
+            .as_ref()
+            .is_some_and(|stage| stage.success && stage.cargo_marker_absent && stage.smoke_status_code == Some(0)),
+    });
+    let summary = result?;
+    let classification = crate::rust_plan_execution::reportable_execution(classification, &summary.status)?;
+    print_fixed_point_summary(&summary, json, &summary.bundle_dir)?;
+    if summary.status != SUCCESS_STATUS {
+        return Err(RunError::Build(fixed_point_error_message(&summary)));
+    }
+    classification
+}
+
+fn execute_cargo_free_fixed_point(options: CargoFreeSelfBuildOptions<'_>) -> Result<FixedPointSummary, RunError> {
     let root = canonicalize_root(options.root)?;
     let bundle_dir = absolutize(&root, options.out_dir);
     ensure_outside_root(&bundle_dir, &root)?;
@@ -1380,15 +1421,12 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     )?;
     write_fixed_point_non_claims(&plan.bundle_dir, &toolchain_status)?;
     write_fixed_point_preflight(&plan, &compatibility.summary, &toolchain_status, &loaded_rust_provider.status)?;
-    let finish_context = FixedPointFinishContext {
-        summary: FixedPointSummaryContext {
-            plan: &plan,
-            compatibility: &compatibility.summary,
-            toolchain_closure: &toolchain_status,
-            rust_source_provider: &loaded_rust_provider.status,
-            hermeticity_mode: options.hermeticity_mode,
-        },
-        json_mode: options.json,
+    let finish_context = FixedPointSummaryContext {
+        plan: &plan,
+        compatibility: &compatibility.summary,
+        toolchain_closure: &toolchain_status,
+        rust_source_provider: &loaded_rust_provider.status,
+        hermeticity_mode: options.hermeticity_mode,
     };
     let host_mantle = env::current_exe().map_err(|err| internal(format!("resolve current executable: {err}")))?;
     let stage_policy_digest = toolchain_status.policy_digest_blake3.as_deref();
@@ -2349,20 +2387,16 @@ fn fixed_point_status(stage1: &FixedPointStageRun, stage2: &FixedPointStageRun) 
 }
 
 fn finish_fixed_point(
-    context: &FixedPointFinishContext<'_>,
+    context: &FixedPointSummaryContext<'_>,
     stage1: FixedPointStageRun,
     stage2: Option<FixedPointStageRun>,
     status: &str,
-) -> Result<(), RunError> {
+) -> Result<FixedPointSummary, RunError> {
     debug_assert_eq!(stage1.name, STAGE1_DIR);
     debug_assert!(matches!(status, SUCCESS_STATUS | BLOCKED_STATUS | MISMATCH_STATUS));
-    let summary = fixed_point_summary_from_context(&context.summary, &stage1, stage2.as_ref(), status);
-    write_summary(&context.summary.plan.meta_path, &summary)?;
-    print_fixed_point_summary(&summary, context.json_mode, &context.summary.plan.bundle_dir)?;
-    if status == SUCCESS_STATUS {
-        return Ok(());
-    }
-    Err(RunError::Build(fixed_point_error_message(&summary)))
+    let summary = fixed_point_summary_from_context(context, &stage1, stage2.as_ref(), status);
+    write_summary(&context.plan.meta_path, &summary)?;
+    Ok(summary)
 }
 
 fn fixed_point_summary_from_context(

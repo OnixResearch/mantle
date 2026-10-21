@@ -612,7 +612,7 @@ fn install_content_bound_requirement_fixture(bundle_dir: &Path, manifest: &mut R
         let bytes = content_bound_test_bytes(row);
         write_file(&bundle_dir.join(&row.bundle_relative_path), bytes);
         manifest.external_evidence.push(crunch_release_core::ExternalEvidence {
-            role: row.role.external_role().to_string(),
+            role: row.role.external_role(),
             schema: crunch_release_core::CONTENT_BOUND_EVIDENCE_EXTERNAL_SCHEMA_V1.to_string(),
             relative_path: row.bundle_relative_path.clone(),
             digest_blake3: blake3::hash(bytes).to_hex().to_string(),
@@ -2395,7 +2395,9 @@ fn deterministic_fixture_authority(
         ordinary_output_path: "/tmp/ordinary-output".to_string(),
         proof_root_path: "/tmp/proof".to_string(),
     });
-    assert!(plan.eligible(), "{:?}", plan.blockers);
+    let assessment = plan.assess_eligibility();
+    assert!(assessment.eligible, "{:?}", assessment.plan.blockers);
+    let plan = assessment.plan;
     let plan_blake3 = rebuild_authority_plan_digest_blake3(plan.clone()).unwrap();
     (descriptor, descriptor_blake3, plan, plan_blake3)
 }
@@ -4392,6 +4394,42 @@ fn release_verify_json_rejects_missing_required_external_role_once() {
         "external-evidence-roles",
         "external evidence role required but missing: missing-role",
     );
+}
+
+// r[verify verification_evidence.release_source_review_evidence]
+#[test]
+fn release_verify_source_review_is_optional_until_explicitly_required() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let optional = crunch().arg("--json").arg("release").arg("verify").arg(&bundle_dir).output().unwrap();
+    assert!(optional.status.success(), "{}", String::from_utf8_lossy(&optional.stderr));
+    let optional: serde_json::Value = serde_json::from_slice(&optional.stdout).unwrap();
+    assert_eq!(optional["source_review"]["status"], "not-required");
+    assert_eq!(optional["valid"], true);
+
+    let required = crunch()
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-source-review")
+        .output()
+        .unwrap();
+    assert_json_release_verify_rejection(required, "source-review", "source-review-trusted-policy-missing");
+
+    // Selecting an explicit external policy itself requires review, even without
+    // the convenience requirement flag. This file does not supply approval.
+    let policy = temp.path().join("selected-policy.json");
+    write_file(&policy, b"{}");
+    let selected = crunch()
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--source-review-policy")
+        .arg(&policy)
+        .output()
+        .unwrap();
+    assert_json_release_verify_rejection(selected, "source-review", "source-review-artifact-missing");
 }
 
 // r[verify mantle.operator_diagnostics.release_verification.json_negative]

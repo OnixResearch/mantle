@@ -13,6 +13,9 @@
 # `native-input-role-undeclared`. Role paths become producer inputs, and the
 # evaluated declaration reaches the producer as MANTLE_UNIT_NATIVE_INPUTS,
 # which must equal the config's `native_inputs`.
+# `target_linker` optionally binds a target-only linker, ordered arguments and
+# explicit whole store roots. Its executable must lie below one declared root.
+# Omitting it preserves the existing host-linker derivation and environment.
 let mantle = import "lib.ncl" in
 let role_marker = "\\{\\{role:([^}]*)\\}\\}" in
 let field_or = fun name fallback record =>
@@ -48,11 +51,27 @@ let NativeInputs = std.contract.from_validator (fun value =>
   else
     'Error { message = "native-input-role-undeclared: %{std.string.join ", " undeclared}" }
 ) in
+let known_linker_fields = std.contract.from_predicate (fun declaration =>
+  std.array.all (fun field => std.array.elem field ["executable", "arguments", "inputs"]) (std.record.fields declaration)
+) in
+let normalize_target_linker = fun raw =>
+  if raw == null then null else
+  let declaration = raw | known_linker_fields in
+  let normalized = {
+    executable = declaration.executable | mantle.StorePath,
+    arguments = (field_or "arguments" [] declaration) | Array String,
+    inputs = (field_or "inputs" [] declaration) | Array mantle.StorePath,
+  } in
+  if std.array.any (fun root => std.array.at 0 (std.string.split "%{root}/" normalized.executable) == "") normalized.inputs
+  then normalized
+  else std.fail_with "unit-plan-host-path: target linker executable has no declared input root"
+in
 let unique = fun paths =>
   std.array.fold_left (fun seen path => if std.array.elem path seen then seen else seen @ [path]) [] paths
 in
-fun { goal_name, producer, config, workspace, planner, toolchain, linker, helper, vendor_sources, runtime_inputs ? [], native_inputs ? {} } =>
+fun { goal_name, producer, config, workspace, planner, toolchain, linker, helper, vendor_sources, runtime_inputs ? [], native_inputs ? {}, target_linker ? null } =>
   let native = std.record.map normalize_native_input native_inputs | NativeInputs in
+  let target = normalize_target_linker target_linker in
   let runtime = runtime_inputs | Array mantle.StorePath in
   let base_inputs = [producer, config, workspace, planner, toolchain, linker, helper] @ vendor_sources @ runtime in
   let role_inputs =
@@ -61,6 +80,16 @@ fun { goal_name, producer, config, workspace, planner, toolchain, linker, helper
     |> unique
     |> std.array.filter (fun path => !(std.array.elem path base_inputs))
   in
+  let target_inputs =
+    (if target == null then [] else target.inputs)
+    |> unique
+    |> std.array.filter (fun path => !(std.array.elem path (base_inputs @ role_inputs)))
+  in
+  let environment = {
+    MANTLE_UNIT_CONFIG = config,
+    MANTLE_UNIT_NATIVE_INPUTS = std.serialize 'Json native,
+    MANTLE_UNIT_RUNTIME_INPUTS = std.serialize 'Json runtime,
+  } in
   {
     name = goal_name,
     builder = producer,
@@ -69,10 +98,7 @@ fun { goal_name, producer, config, workspace, planner, toolchain, linker, helper
     sandbox = 'native,
     outputs = ["out", "plan", "sources"],
     dynamic_plan_outputs = ["plan"],
-    env = {
-      MANTLE_UNIT_CONFIG = config,
-      MANTLE_UNIT_NATIVE_INPUTS = std.serialize 'Json native,
-      MANTLE_UNIT_RUNTIME_INPUTS = std.serialize 'Json runtime,
-    },
-    inputs = base_inputs @ role_inputs,
+    env = if target == null then environment else
+      std.record.insert "MANTLE_UNIT_TARGET_LINKER" (std.serialize 'Json target) environment,
+    inputs = base_inputs @ role_inputs @ target_inputs,
   } | mantle.Derivation

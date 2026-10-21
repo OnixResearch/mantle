@@ -26,7 +26,7 @@
       flake = false;
     };
     artifactAuthSource = {
-      url = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1";
+      url = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52";
       flake = false;
     };
     secretSpecSource = {
@@ -38,7 +38,7 @@
       flake = false;
     };
     boundedTreeSource = {
-      url = "git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1";
+      url = "git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=cc9e0fb611e75bb2d7f662435d1918653c93ce07";
       flake = false;
     };
     transactionalReconciliationSource = {
@@ -166,8 +166,9 @@
           ]).overrideToolchain
             rustToolchain;
         cargoManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
-        artifactAuthRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1";
+        artifactAuthRevision = "5f3962d7471d1547e044f57daeda72f56621fd52";
         artifactAuthRepository = "ssh://git@github.com/OnixResearch/onix-artifact.git";
+        artifactAuthNarHash = "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY=";
         artifactAuthExpectedPackages = [
           "artifact-auth-core"
           "artifact-auth-ed25519"
@@ -182,28 +183,52 @@
           builtins.readFile ./crates/crunch-action-result-core/Cargo.toml
         );
         artifactAuthShellManifest = builtins.fromTOML (builtins.readFile ./crates/crunch-build/Cargo.toml);
+        artifactAuthReleaseManifest = builtins.fromTOML (
+          builtins.readFile ./crates/crunch-release-core/Cargo.toml
+        );
         artifactAuthCargoDependencies = [
+          cargoManifest.dependencies.artifact-auth-core
+          cargoManifest.dependencies.artifact-auth-ed25519
           artifactAuthCoreManifest.dependencies.artifact-auth-core
           artifactAuthShellManifest.dependencies.artifact-auth-core
           artifactAuthShellManifest.dependencies.artifact-auth-ed25519
+          artifactAuthReleaseManifest.dependencies.artifact-auth-core
+          artifactAuthReleaseManifest.dependencies.artifact-auth-ed25519
         ];
         artifactAuthLockPackages = builtins.filter (
-          package: builtins.elem package.name artifactAuthExpectedPackages
+          package:
+          builtins.elem package.name (map builtins.baseNameOf artifactSourceExpectedMembers)
+          || pkgs.lib.hasPrefix "git+${artifactAuthRepository}" (package.source or "")
         ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
         artifactAuthExpectedLockSource = "git+${artifactAuthRepository}?rev=${artifactAuthRevision}#${artifactAuthRevision}";
         artifactAuthWorkspace = builtins.fromTOML (builtins.readFile (artifactAuthSource + "/Cargo.toml"));
         artifactAuthSourceAdmitted =
           assert pkgs.lib.assertMsg (
             builtins.all (
-              dependency: dependency.git == artifactAuthRepository && dependency.rev == artifactAuthRevision
+              dependency:
+              dependency.git == artifactAuthRepository
+              && dependency.rev == artifactAuthRevision
+              && !(dependency ? path || dependency ? branch || dependency ? tag)
             ) artifactAuthCargoDependencies
             && artifactAuthSource.rev == artifactAuthRevision
+            && artifactAuthSource.narHash == artifactAuthNarHash
             && map (package: package.name) artifactAuthLockPackages == artifactAuthExpectedPackages
             && builtins.all (package: package.source == artifactAuthExpectedLockSource) artifactAuthLockPackages
             &&
               builtins.sort builtins.lessThan artifactAuthWorkspace.workspace.members
               == builtins.sort builtins.lessThan artifactSourceExpectedMembers
-            && artifactAuthWorkspace.workspace.package.license == "MIT OR Apache-2.0"
+            && artifactAuthWorkspace.workspace.package.license == "AGPL-3.0-or-later"
+            && builtins.all (
+              member:
+              let
+                manifest = builtins.fromTOML (builtins.readFile (artifactAuthSource + "/${member}/Cargo.toml"));
+              in
+              manifest.package.name == builtins.baseNameOf member
+              && (
+                manifest.package.license == "AGPL-3.0-or-later"
+                || manifest.package.license == { workspace = true; }
+              )
+            ) artifactSourceExpectedMembers
           ) "Mantle artifact-auth Cargo/Nix source identity, package set, or license drifted";
           true;
         durablePublicationRevision = "951c27f59003cea9bfdb40ed4d89653d50fada1f";
@@ -233,7 +258,7 @@
             && durablePublicationManifest.package.publish == false
           ) "Mantle durable-file-publication Cargo/Nix source identity, package, RID, or license drifted";
           true;
-        boundedTreeRevision = "b0fd0103bc9eed2c1b6d852045959462d105d8f1";
+        boundedTreeRevision = "cc9e0fb611e75bb2d7f662435d1918653c93ce07";
         boundedTreeRid = "rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX";
         boundedTreeRepository = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git";
         boundedTreePackageNames = [
@@ -369,7 +394,7 @@
             && builtins.length astralTarLocked == 1
             && (builtins.head astralTarLocked).version == "0.6.4"
             && builtins.length blake3Locked == 1
-            && (builtins.head blake3Locked).version == "1.8.2"
+            && (builtins.head blake3Locked).version == "1.8.5"
             && casitaUpstreamManifest.package.license == "Apache-2.0"
             && casitaUpstreamManifest.package.rust-version == "1.94.1"
             && builtins.hashFile "sha256" (casitaSource + "/crates/casita/src/nar.rs")
@@ -433,6 +458,7 @@
             (craneLib.filterCargoSources path type)
             || pathString == toString ./crates/crunch-build/audit
             || pathString == toString ./crates/crunch-build/audit/finish_dlopen_audit.c
+            || pkgs.lib.hasPrefix "${toString ./vendor/trellis-fenced-attempt}/" pathString
             || pathString == toString ./README.md
             || pathString == toString ./flake.nix
             || pkgs.lib.hasPrefix "${toString ./.github/workflows}/" pathString
@@ -1546,6 +1572,8 @@
                 expected_receipt_hash="$(tr -d '\n' < evidence/radicle/artifact-auth-cutover-v1.blake3)"
                 test "$receipt_hash" = "$expected_receipt_hash"
 
+                # These accepted migration artifacts retain their historical source identity.
+                # Current Cargo/Nix source admission is checked separately below.
                 nickel typecheck evidence/source/artifact-workspace-migration-v1.ncl
                 nickel typecheck lib/artifact-source-migration-receipt.ncl
                 nickel export --format json tests/artifact-source-migration.ncl > "$TMPDIR/migration-tests.json"
@@ -1559,8 +1587,8 @@
                 test "$migration_hash" = "$expected_migration_hash"
 
                 source_url='ssh://git@github.com/OnixResearch/onix-artifact.git'
-                source_rev='c932138d880ddf4c2967f4c024b489b5c0022bf1'
-                source_nar_hash='sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU='
+                source_rev='5f3962d7471d1547e044f57daeda72f56621fd52'
+                source_nar_hash='${artifactAuthNarHash}'
                 wrong_source_rev='1111111111111111111111111111111111111111'
                 expected_flake_source="git+$source_url?rev=$source_rev"
                 wrong_flake_source="git+$source_url?rev=$wrong_source_rev"
@@ -1615,8 +1643,10 @@
                   "$radicle_host/$radicle_rid" \
                   "$github_host/OnixResearch/artifact-auth"; do
                   if rg -F "$forbidden_source" \
+                    Cargo.toml \
                     crates/crunch-action-result-core/Cargo.toml \
                     crates/crunch-build/Cargo.toml \
+                    crates/crunch-release-core/Cargo.toml \
                     Cargo.lock flake.nix flake.lock; then
                     echo "executable predecessor source remains: $forbidden_source" >&2
                     exit 1
@@ -1843,6 +1873,7 @@
               cargo-nextest
               cargo-watch
               nickel
+              python3
               rust-analyzer
             ]
             ++ [

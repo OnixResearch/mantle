@@ -109,3 +109,88 @@ pub fn validate_realize_command(command: &RealizeCommand) -> Vec<RealizationBloc
     debug_assert!(empty_roots <= root_count);
     blockers
 }
+
+/// Capabilities used by build and interactive realization applications.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RealizationEffect {
+    /// Composite local worker/store execution; completion requires materialized outputs.
+    Build,
+    /// Own a watched worker until requested shutdown and completed teardown.
+    Watch,
+    /// Open the selected backend and admit signing/trust configuration.
+    Preparation,
+    /// Resolve a project target against its manifest and import surface.
+    ProjectRead,
+    /// Read the bounded manifest/lock retention facts.
+    RetentionRead,
+    /// Resolve or materialize the embedded evaluator standard library.
+    ImportPreparation,
+    /// Select an executable from the materialized output tree.
+    BinarySelection,
+    /// Inspect the selected realized output before interactive execution.
+    OutputSelection,
+    /// Check inherited compile-driver runtime configuration before loading it.
+    RuntimeEnvironment,
+    /// Read and validate an explicit compile-driver runtime declaration.
+    RuntimeRead,
+    /// Persist build diagnostic logs; failures remain explicit advisory facts.
+    Reporting,
+    /// Publish and verify the requested build interchange records.
+    Interchange,
+    /// Read wall-clock time for a watch-session identity.
+    Clock,
+    /// Read and decode the shell activation sidecar.
+    Activation,
+    /// Snapshot the inherited activation environment.
+    Environment,
+    /// Run an executable and observe its actual termination status.
+    Child,
+}
+
+/// Declare one capability before invoking its adapter.
+pub fn realization_effect_plan(effect: RealizationEffect) -> Result<crate::EffectPlan, crate::PlanError> {
+    let (effect_id, kind) = match effect {
+        RealizationEffect::Watch => ("realization-watch", crate::EffectKind::StoreAccess),
+        RealizationEffect::Build => ("realization-build", crate::EffectKind::StoreAccess),
+        RealizationEffect::Preparation => ("realization-preparation", crate::EffectKind::StoreAccess),
+        RealizationEffect::ProjectRead => ("realization-project", crate::EffectKind::ReadFiles),
+        RealizationEffect::RetentionRead => ("realization-retention", crate::EffectKind::ReadFiles),
+        RealizationEffect::OutputSelection => ("realization-output", crate::EffectKind::ReadFiles),
+        RealizationEffect::ImportPreparation => ("realization-imports", crate::EffectKind::WriteFiles),
+        RealizationEffect::BinarySelection => ("realization-binary", crate::EffectKind::ReadFiles),
+        RealizationEffect::RuntimeEnvironment => ("realization-runtime-environment", crate::EffectKind::ReadEnvironment),
+        RealizationEffect::RuntimeRead => ("realization-runtime-read", crate::EffectKind::ReadFiles),
+        RealizationEffect::Reporting => ("realization-reporting", crate::EffectKind::WriteFiles),
+        RealizationEffect::Interchange => ("realization-interchange", crate::EffectKind::WriteFiles),
+        RealizationEffect::Clock => ("realization-clock", crate::EffectKind::ReadClock),
+        RealizationEffect::Activation => ("realization-activation", crate::EffectKind::ReadFiles),
+        RealizationEffect::Environment => ("realization-environment", crate::EffectKind::ReadEnvironment),
+        RealizationEffect::Child => ("realization-child", crate::EffectKind::RunProcess),
+    };
+    crate::plan_effects(crate::CommandFamily::Realization, &[crate::EffectSpec {
+        effect_id,
+        kind,
+        limit: crate::EffectMeasure::Calls(1),
+        expected_output: crate::ExpectedOutput::None,
+    }])
+}
+
+/// Admit the activation PATH search before checking any candidate file.
+pub fn shell_path_search_effect_plan(candidates: u32) -> Result<crate::EffectPlan, crate::PlanError> {
+    crate::plan_effects(crate::CommandFamily::Realization, &[crate::EffectSpec {
+        effect_id: "shell-path-search",
+        kind: crate::EffectKind::ReadFiles,
+        limit: crate::EffectMeasure::Items(candidates),
+        expected_output: crate::ExpectedOutput::None,
+    }])
+}
+
+/// Admit explicit activation inputs before checking their presence.
+pub fn shell_with_paths_effect_plan(paths: u32) -> Result<crate::EffectPlan, crate::PlanError> {
+    crate::plan_effects(crate::CommandFamily::Realization, &[crate::EffectSpec {
+        effect_id: "shell-with-paths",
+        kind: crate::EffectKind::ReadFiles,
+        limit: crate::EffectMeasure::Items(paths),
+        expected_output: crate::ExpectedOutput::None,
+    }])
+}

@@ -394,6 +394,28 @@ pub fn verify_receipt_bundle_against_archive_report(
     })
 }
 
+pub(crate) fn verify_receipt_bundle_against_archive_and_sources(
+    bundle: &ReceiptBundle,
+    archive: &crunch_store::ArchiveListReport,
+    sources: &crate::source_bundle::SourceBundleManifest,
+    store_prefix: &str,
+    context: &TrustVerificationContext,
+    outputs: &[String],
+) -> Result<ReceiptVerifyReport, RunError> {
+    if sources.store_prefix != store_prefix {
+        return Err(RunError::Internal("receipt source bundle store prefix mismatch".to_string()));
+    }
+    crate::source_bundle::plan_report(sources)?;
+    verify_receipt_bundle_against_output_records(ReceiptVerificationRequest {
+        bundle,
+        store_prefix,
+        context,
+        outputs,
+        output_records: archive_output_records_for_outputs(archive, store_prefix, outputs)?,
+        source_records: sources.records.iter().map(|record| (record.identity.clone(), record.clone())).collect(),
+    })
+}
+
 struct ArchiveReceiptVerificationRequest<'a> {
     bundle: &'a ReceiptBundle,
     archive: &'a crunch_store::ArchiveListReport,
@@ -854,6 +876,7 @@ fn semantic_graph_from_receipt_bundle(
     }
     Ok(crate::semantic_graph::SemanticGraph {
         schema: crate::semantic_graph::SEMANTIC_GRAPH_SCHEMA.to_string(),
+        inspection: crate::semantic_graph::InspectionFacts::default(),
         nodes: nodes.into_values().collect(),
         edges,
         aliases: Vec::new(),
@@ -962,6 +985,11 @@ fn merge_semantic_graph_import(
         if merge_semantic_edge(&mut existing, edge)? {
             edge_addition_count = edge_addition_count.saturating_add(1);
         }
+    }
+    if node_addition_count > 0 || edge_addition_count > 0 {
+        // A v1 receipt imports a provenance projection, not evidence of a
+        // complete configured/action evaluation of the merged graph.
+        existing.inspection.state = crate::semantic_graph::EvaluationState::Partial;
     }
     sort_semantic_graph(&mut existing);
     existing.validate().map_err(|err| RunError::Internal(err.to_string()))?;
@@ -1743,11 +1771,34 @@ fn collect_semantic_graph_records_for_outputs(
     let source_records = read_source_records_by_identity(state_dir)?;
     let mut records = Vec::with_capacity(MAX_RECEIPT_RECORDS);
     for query in graph_queries_for_outputs(store_prefix, outputs) {
-        let Ok(result) = graph.graph_for_root(&query) else {
-            continue;
+        let result = match graph.graph_for_root(&query) {
+            Ok(result) => result,
+            Err(crate::semantic_graph::SemanticGraphError::Incomplete(_)) => continue,
+            Err(error) => return Err(RunError::Internal(format!("querying receipt semantic provenance: {error}"))),
         };
         records.extend(records_from_graph_nodes(&result.nodes, &source_records)?);
-        records.extend(records_from_graph_edges(&result.edges)?);
+        // Receipt v1 carries semantic provenance only. Typed configured/action
+        // facts remain in the saved graph; do not export dangling references to
+        // node kinds the receipt format cannot reconstruct.
+        let typed: BTreeSet<_> = result
+            .nodes
+            .iter()
+            .filter(|node| {
+                matches!(
+                    node.kind,
+                    crate::semantic_graph::SemanticNodeKind::ConfiguredTarget
+                        | crate::semantic_graph::SemanticNodeKind::Action
+                )
+            })
+            .map(|node| node.id.as_str())
+            .collect();
+        let edges: Vec<_> = result
+            .edges
+            .iter()
+            .copied()
+            .filter(|edge| !typed.contains(edge.from.as_str()) && !typed.contains(edge.to.as_str()))
+            .collect();
+        records.extend(records_from_graph_edges(&edges)?);
     }
     normalize_receipt_records(records)
 }
@@ -2571,6 +2622,34 @@ fn print_import(report: &ReceiptImportReport, json_output: bool) -> Result<(), R
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn receipt_export_cannot_silently_drop_over_bound_semantic_provenance() {
+        let state = tempfile::tempdir().unwrap();
+        let mut graph = crate::semantic_graph::SemanticGraph::empty();
+        let depth = crate::semantic_graph::QueryLimits::default().depth + 1;
+        for index in 0..=depth {
+            graph.nodes.push(crate::semantic_graph::SemanticNode {
+                id: format!("recipe:{index}"),
+                kind: crate::semantic_graph::SemanticNodeKind::Recipe,
+                digest: None,
+                metadata: BTreeMap::new(),
+            });
+            if index > 0 {
+                graph.edges.push(crate::semantic_graph::SemanticEdge {
+                    from: format!("recipe:{}", index - 1),
+                    to: format!("recipe:{index}"),
+                    kind: crate::semantic_graph::SemanticEdgeKind::DependsOn,
+                    metadata: BTreeMap::new(),
+                });
+            }
+        }
+        graph.save(&state.path().join(SEMANTIC_GRAPH_FILE)).unwrap();
+        let error =
+            collect_semantic_graph_records_for_outputs(state.path(), "/mantle/store", &[String::from("recipe:0")])
+                .unwrap_err();
+        assert!(error.to_string().contains("depth bound"));
+    }
 
     fn complete_specs() -> Vec<ReceiptRecordSpec> {
         [
@@ -3629,6 +3708,7 @@ mod tests {
         };
         let graph = crate::semantic_graph::SemanticGraph {
             schema: crate::semantic_graph::SEMANTIC_GRAPH_SCHEMA.to_string(),
+            inspection: crate::semantic_graph::InspectionFacts::default(),
             nodes: vec![
                 node(output, crate::semantic_graph::SemanticNodeKind::StoreOutput),
                 node("recipe:demo", crate::semantic_graph::SemanticNodeKind::Recipe),
@@ -3648,6 +3728,7 @@ mod tests {
     fn write_conflicting_semantic_node(state_dir: &Path, node_id: &str) {
         let graph = crate::semantic_graph::SemanticGraph {
             schema: crate::semantic_graph::SEMANTIC_GRAPH_SCHEMA.to_string(),
+            inspection: crate::semantic_graph::InspectionFacts::default(),
             nodes: vec![crate::semantic_graph::SemanticNode {
                 id: node_id.to_string(),
                 kind: crate::semantic_graph::SemanticNodeKind::Provider,

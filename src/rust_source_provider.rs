@@ -20,6 +20,8 @@ use std::process::ExitStatus;
 use std::process::Output;
 use std::time::Duration;
 
+use mantle_application_contract::bootstrap_effects::BootstrapEffect;
+
 use crate::full_source_rust_binding::FULL_SOURCE_RUST_STAGE_PARALLEL_JOB_COUNT_MAX;
 use crate::full_source_rust_binding::FullSourceRustHostToolRole;
 use crate::full_source_rust_binding_shell::FullSourceRustExecutionContext;
@@ -55,6 +57,27 @@ use crate::source_toolchain_closure::RustSourceProviderProvenance;
 use crate::source_toolchain_closure::RustSourceProviderValidation;
 use crate::source_toolchain_closure::ToolchainBuildReceiptKind;
 use crate::source_toolchain_closure::ToolchainSourceKind;
+
+fn rust_capability<T>(
+    effect: BootstrapEffect,
+    run: impl FnOnce() -> Result<T, RustSourceProviderError>,
+) -> Result<T, RustSourceProviderError> {
+    let mut port = crate::bootstrap_effect_port::BootstrapPort::new(&[(effect, 1)])
+        .map_err(|error| RustSourceProviderError::Validate(error.to_string()))?;
+    let result = port.call(effect, run);
+    port.finish_with(result, |outcome| {
+        RustSourceProviderError::Validate(format!("Rust provider effects inconsistent: {outcome:?}"))
+    })
+}
+
+fn rust_io_capability<T>(effect: BootstrapEffect, run: impl FnOnce() -> std::io::Result<T>) -> std::io::Result<T> {
+    let mut port = crate::bootstrap_effect_port::BootstrapPort::new(&[(effect, 1)])
+        .map_err(|error| std::io::Error::other(error.to_string()))?;
+    let result = port.call(effect, run);
+    port.finish_with(result, |outcome| {
+        std::io::Error::other(format!("Rust provider effects inconsistent: {outcome:?}"))
+    })
+}
 
 pub(crate) const RUST_SOURCE_PROVIDER_BLOCKED_REASON: &str = "source-built Rust provider completion remains pending until every planned stage passes and the validated final provider is published";
 
@@ -995,11 +1018,13 @@ fn materialize_rust_source_provider_internal(
 ) -> Result<RustSourceProviderMaterialization, RustSourceProviderError> {
     let full_source_context = match (admission_report_path, host_tool_manifest_path, rust_source_archive_dir) {
         (Some(admission), Some(host_tools), Some(source_archives)) => {
-            Some(crate::full_source_rust_binding_shell::prepare_full_source_rust_execution_context(
-                admission,
-                host_tools,
-                source_archives,
-            )?)
+            Some(rust_capability(BootstrapEffect::ReadInput, || {
+                crate::full_source_rust_binding_shell::prepare_full_source_rust_execution_context(
+                    admission,
+                    host_tools,
+                    source_archives,
+                )
+            })?)
         }
         (None, None, None) => None,
         _ => {
@@ -1009,27 +1034,37 @@ fn materialize_rust_source_provider_internal(
             ));
         }
     };
-    let recipe_bytes = fs::read(recipe_path)
-        .map_err(|err| RustSourceProviderError::Read(format!("recipe {}: {err}", recipe_path.display())))?;
+    let recipe_bytes = rust_capability(BootstrapEffect::ReadInput, || {
+        fs::read(recipe_path)
+            .map_err(|err| RustSourceProviderError::Read(format!("recipe {}: {err}", recipe_path.display())))
+    })?;
     if recipe_bytes.is_empty() {
         return Err(RustSourceProviderError::Read(format!("recipe {} is empty", recipe_path.display())));
     }
     let recipe_digest_blake3 = blake3::hash(&recipe_bytes).to_hex().to_string();
     debug_assert!(!recipe_bytes.is_empty());
     debug_assert_eq!(recipe_digest_blake3.len(), BLAKE3_DIGEST_HEX_LEN);
-    let mut plan = plan_materialization(recipe_path, route_plan_path, output_dir, scratch_dir, &recipe_digest_blake3)?;
+    let mut plan = rust_capability(BootstrapEffect::ReadInput, || {
+        plan_materialization(recipe_path, route_plan_path, output_dir, scratch_dir, &recipe_digest_blake3)
+    })?;
     plan.full_source_context = full_source_context;
-    let route = load_rust_source_provider_route(&plan.route_plan_path)?;
+    let route = rust_capability(BootstrapEffect::ReadInput, || load_rust_source_provider_route(&plan.route_plan_path))?;
     let boundary = prepare_first_stage_boundary(&plan, &route)?;
-    let first_stage_script_digest = write_first_stage_boundary(&boundary)?;
+    let first_stage_script_digest =
+        rust_capability(BootstrapEffect::WriteOutput, || write_first_stage_boundary(&boundary))?;
     let first_stage_sources = acquire_first_stage_sources(&boundary, verbose)?;
-    write_first_stage_sources_manifest(&boundary, &first_stage_sources)?;
+    rust_capability(BootstrapEffect::WriteOutput, || {
+        write_first_stage_sources_manifest(&boundary, &first_stage_sources)
+    })?;
     let first_stage_build = run_first_stage_build(&boundary, &first_stage_script_digest, verbose)?;
-    write_first_stage_build_manifest(&boundary, &first_stage_build)?;
-    let first_stage_candidate =
-        assemble_first_stage_provider_candidate(&boundary, &route, &first_stage_sources, &first_stage_build)?;
+    rust_capability(BootstrapEffect::WriteOutput, || write_first_stage_build_manifest(&boundary, &first_stage_build))?;
+    let first_stage_candidate = rust_capability(BootstrapEffect::WriteOutput, || {
+        assemble_first_stage_provider_candidate(&boundary, &route, &first_stage_sources, &first_stage_build)
+    })?;
     let first_stage_candidate_smoke = smoke_first_stage_provider_candidate(&boundary, &first_stage_candidate)?;
-    write_first_stage_provider_candidate_manifest(&boundary, &first_stage_candidate)?;
+    rust_capability(BootstrapEffect::WriteOutput, || {
+        write_first_stage_provider_candidate_manifest(&boundary, &first_stage_candidate)
+    })?;
     let first_stage_bootstrap_candidate = bootstrap_candidate_from_first_stage(&first_stage_candidate);
     let rustc_stage1_runs =
         run_rustc_stage1_provider_candidate_chain(&plan, &route, &first_stage_bootstrap_candidate, verbose)?;
@@ -1040,7 +1075,9 @@ fn materialize_rust_source_provider_internal(
             .candidate,
     );
     let rustc_final_run = run_rustc_final_provider_candidate(&plan, &route, &rustc_final_bootstrap_candidate, verbose)?;
-    persist_stage_construction_evidence(&boundary, &first_stage_candidate, &rustc_stage1_runs, &rustc_final_run)?;
+    rust_capability(BootstrapEffect::WriteOutput, || {
+        persist_stage_construction_evidence(&boundary, &first_stage_candidate, &rustc_stage1_runs, &rustc_final_run)
+    })?;
     let binding_publication = admission_report_path
         .map(|report_path| {
             let host_tools = host_tool_manifest_path.ok_or_else(|| {
@@ -1048,18 +1085,33 @@ fn materialize_rust_source_provider_internal(
                     "full-source admission reached publication without its host-tool manifest".to_string(),
                 )
             })?;
-            crate::full_source_rust_binding_shell::bind_full_source_rust_provider_candidate(
-                &rustc_final_run.candidate.candidate_dir,
-                report_path,
-                host_tools,
-            )
+            rust_capability(BootstrapEffect::WriteOutput, || {
+                crate::full_source_rust_binding_shell::bind_full_source_rust_provider_candidate(
+                    &rustc_final_run.candidate.candidate_dir,
+                    report_path,
+                    host_tools,
+                )
+            })
         })
         .transpose()?;
-    let materialized = promote_rustc_final_provider_candidate(&plan, &rustc_final_run)?;
-    verify_optional_full_source_binding(&materialized.output_path, binding_publication.as_ref())?;
-    if let Err(err) =
+    let materialized = rust_capability(BootstrapEffect::WriteOutput, || {
+        promote_rustc_final_provider_candidate(&plan, &rustc_final_run)
+    })?;
+    if binding_publication.is_some() {
+        rust_capability(BootstrapEffect::VerifyOutput, || {
+            verify_optional_full_source_binding(&materialized.output_path, binding_publication.as_ref())
+        })?;
+    }
+    rust_capability(BootstrapEffect::VerifyOutput, || {
+        let observed = validate_materialized_rust_source_provider(&materialized.output_path)?;
+        if observed.metadata_digest_blake3 != materialized.metadata_digest_blake3 {
+            return Err(RustSourceProviderError::Validate("published provider metadata identity drifted".into()));
+        }
+        Ok(())
+    })?;
+    if let Err(err) = rust_capability(BootstrapEffect::WriteOutput, || {
         write_rustc_final_provider_candidate_manifest(&rustc_final_run.boundary, &rustc_final_run.candidate, true)
-    {
+    }) {
         cleanup_failed_output(&materialized.output_path);
         return Err(err);
     }
@@ -1366,10 +1418,19 @@ pub(crate) fn import_rust_source_provider(
     import_dir: &Path,
     output_dir: &Path,
 ) -> Result<RustSourceProviderImport, RustSourceProviderError> {
-    validate_import_request(import_dir, output_dir)?;
-    validate_materialized_rust_source_provider(import_dir)?;
-    copy_provider_tree(import_dir, output_dir)?;
-    let validation = match validate_materialized_rust_source_provider(output_dir) {
+    rust_capability(BootstrapEffect::ReadInput, || validate_import_request(import_dir, output_dir))?;
+    let source_validation =
+        rust_capability(BootstrapEffect::ReadInput, || validate_materialized_rust_source_provider(import_dir))?;
+    rust_capability(BootstrapEffect::WriteOutput, || copy_provider_tree(import_dir, output_dir))?;
+    let validation = match rust_capability(BootstrapEffect::VerifyOutput, || {
+        let actual = validate_materialized_rust_source_provider(output_dir)?;
+        if actual.metadata_digest_blake3 != source_validation.metadata_digest_blake3 {
+            return Err(RustSourceProviderError::Validate(
+                "imported provider metadata differs from validated input".into(),
+            ));
+        }
+        Ok(actual)
+    }) {
         Ok(validation) => validation,
         Err(err) => {
             cleanup_failed_output(output_dir);
@@ -1387,35 +1448,47 @@ pub(crate) fn smoke_rust_source_provider(
     provider_dir: &Path,
     scratch_dir: &Path,
 ) -> Result<RustSourceProviderSmoke, RustSourceProviderError> {
-    let validation = validate_materialized_rust_source_provider(provider_dir)?;
+    let validation =
+        rust_capability(BootstrapEffect::ReadInput, || validate_materialized_rust_source_provider(provider_dir))?;
     let plan = plan_smoke(provider_dir, scratch_dir, &validation.metadata)?;
-    fs::create_dir_all(&plan.scratch_dir).map_err(|err| {
-        RustSourceProviderError::Smoke(format!("create smoke scratch {}: {err}", plan.scratch_dir.display()))
+    rust_capability(BootstrapEffect::WriteOutput, || {
+        fs::create_dir_all(&plan.scratch_dir).map_err(|err| {
+            RustSourceProviderError::Smoke(format!("create smoke scratch {}: {err}", plan.scratch_dir.display()))
+        })
     })?;
     let source = smoke_source_text();
     debug_assert!(!source.is_empty());
     debug_assert_eq!(plan.provider_dir, provider_dir);
-    fs::write(&plan.source_path, source).map_err(|err| {
-        RustSourceProviderError::Smoke(format!("write smoke source {}: {err}", plan.source_path.display()))
+    rust_capability(BootstrapEffect::WriteOutput, || {
+        fs::write(&plan.source_path, source).map_err(|err| {
+            RustSourceProviderError::Smoke(format!("write smoke source {}: {err}", plan.source_path.display()))
+        })
     })?;
     let rustc_args = smoke_rustc_args(&plan);
-    let output = run_smoke_rustc_with_bounded_launch_retry(&plan.rustc_path, &rustc_args)
-        .map_err(|err| RustSourceProviderError::Smoke(format!("launch {}: {err}", plan.rustc_path.display())))?;
+    let output = rust_capability(BootstrapEffect::SmokeProvider, || {
+        let output = run_smoke_rustc_with_bounded_launch_retry(&plan.rustc_path, &rustc_args)
+            .map_err(|err| RustSourceProviderError::Smoke(format!("launch {}: {err}", plan.rustc_path.display())))?;
+        let stdout = bounded_output_text(&output.stdout);
+        let stderr = bounded_output_text(&output.stderr);
+        if !output.status.success() {
+            return Err(RustSourceProviderError::Smoke(format!(
+                "rustc smoke failed with status {}; stdout={stdout:?}; stderr={stderr:?}",
+                output.status
+            )));
+        }
+        Ok(output)
+    })?;
     let stdout = bounded_output_text(&output.stdout);
     let stderr = bounded_output_text(&output.stderr);
-    if !output.status.success() {
-        return Err(RustSourceProviderError::Smoke(format!(
-            "rustc smoke failed with status {}; stdout={stdout:?}; stderr={stderr:?}",
-            output.status
-        )));
-    }
-    if !plan.output_path.is_file() {
-        return Err(RustSourceProviderError::Smoke(format!(
-            "smoke output {} was not created",
-            plan.output_path.display()
-        )));
-    }
-    let output_digest_blake3 = file_digest_blake3(&plan.output_path)?;
+    let output_digest_blake3 = rust_capability(BootstrapEffect::VerifyOutput, || {
+        if !plan.output_path.is_file() {
+            return Err(RustSourceProviderError::Smoke(format!(
+                "smoke output {} was not created",
+                plan.output_path.display()
+            )));
+        }
+        file_digest_blake3(&plan.output_path)
+    })?;
     Ok(RustSourceProviderSmoke {
         provider_path: plan.provider_dir,
         scratch_dir: plan.scratch_dir,
@@ -1437,57 +1510,76 @@ pub(crate) fn persist_rust_source_provider_smoke_evidence(
     if evidence_dir.as_os_str().is_empty() {
         return Err(RustSourceProviderError::Smoke("smoke evidence dir is empty".to_string()));
     }
-    fs::create_dir_all(evidence_dir).map_err(|err| {
-        RustSourceProviderError::Smoke(format!("create smoke evidence dir {}: {err}", evidence_dir.display()))
+    rust_capability(BootstrapEffect::WriteOutput, || {
+        fs::create_dir_all(evidence_dir).map_err(|err| {
+            RustSourceProviderError::Smoke(format!("create smoke evidence dir {}: {err}", evidence_dir.display()))
+        })
     })?;
     let evidence = smoke_evidence_paths(evidence_dir, smoke, validation);
-    copy_evidence_file(&smoke.source_path, &evidence.source_path)?;
-    copy_evidence_file(&smoke.output_path, &evidence.output_path)?;
-    copy_evidence_file(&validation.metadata_path, &evidence.metadata_path)?;
-    write_evidence_text(&evidence.stdout_path, &smoke.stdout)?;
-    write_evidence_text(&evidence.stderr_path, &smoke.stderr)?;
-    let copied_output_digest = file_digest_blake3(&evidence.output_path)?;
+    rust_capability(BootstrapEffect::WriteOutput, || copy_evidence_file(&smoke.source_path, &evidence.source_path))?;
+    rust_capability(BootstrapEffect::WriteOutput, || copy_evidence_file(&smoke.output_path, &evidence.output_path))?;
+    rust_capability(BootstrapEffect::WriteOutput, || {
+        copy_evidence_file(&validation.metadata_path, &evidence.metadata_path)
+    })?;
+    rust_capability(BootstrapEffect::WriteOutput, || write_evidence_text(&evidence.stdout_path, &smoke.stdout))?;
+    rust_capability(BootstrapEffect::WriteOutput, || write_evidence_text(&evidence.stderr_path, &smoke.stderr))?;
+    let copied_output_digest =
+        rust_capability(BootstrapEffect::VerifyOutput, || file_digest_blake3(&evidence.output_path))?;
     if copied_output_digest != smoke.output_digest_blake3 {
         return Err(RustSourceProviderError::Smoke("copied smoke output digest mismatch".to_string()));
     }
-    let copied_metadata_digest = file_digest_blake3(&evidence.metadata_path)?;
+    let copied_metadata_digest =
+        rust_capability(BootstrapEffect::VerifyOutput, || file_digest_blake3(&evidence.metadata_path))?;
     debug_assert_eq!(copied_output_digest.len(), BLAKE3_DIGEST_HEX_LEN);
     debug_assert_eq!(copied_metadata_digest.len(), BLAKE3_DIGEST_HEX_LEN);
     if copied_metadata_digest != validation.metadata_digest_blake3 {
         return Err(RustSourceProviderError::Smoke("copied provider metadata digest mismatch".to_string()));
     }
-    write_smoke_evidence_summary(&evidence, smoke, validation)?;
+    rust_capability(BootstrapEffect::WriteOutput, || write_smoke_evidence_summary(&evidence, smoke, validation))?;
+    rust_capability(BootstrapEffect::VerifyOutput, || {
+        crate::bootstrap_effect_port::verify_content(&evidence.stdout_path, smoke.stdout.as_bytes())
+            .map_err(|error| RustSourceProviderError::Smoke(error.to_string()))?;
+        crate::bootstrap_effect_port::verify_content(&evidence.stderr_path, smoke.stderr.as_bytes())
+            .map_err(|error| RustSourceProviderError::Smoke(error.to_string()))
+    })?;
     Ok(evidence)
 }
 
 pub(crate) fn validate_materialized_rust_source_provider(
     provider_dir: &Path,
 ) -> Result<RustSourceProviderDirectoryValidation, RustSourceProviderError> {
-    let metadata_path = provider_dir.join(RUST_SOURCE_PROVIDER_METADATA_PATH);
-    let metadata_bytes = fs::read(&metadata_path).map_err(|err| {
-        RustSourceProviderError::Read(format!("provider metadata {}: {err}", metadata_path.display()))
-    })?;
-    if metadata_bytes.is_empty() {
-        return Err(RustSourceProviderError::Read(format!("provider metadata {} is empty", metadata_path.display())));
-    }
-    let metadata_digest_blake3 = blake3::hash(&metadata_bytes).to_hex().to_string();
-    debug_assert!(!metadata_bytes.is_empty());
-    debug_assert_eq!(metadata_digest_blake3.len(), BLAKE3_DIGEST_HEX_LEN);
-    let metadata = serde_json::from_slice::<RustSourceProviderMetadata>(&metadata_bytes).map_err(|err| {
-        RustSourceProviderError::Parse(format!("provider metadata {}: {err}", metadata_path.display()))
-    })?;
-    let observed = observed_provider_artifacts(provider_dir, &metadata)?;
-    let observed_receipts = observed_provider_receipts(provider_dir, &metadata)?;
-    crate::source_toolchain_closure::enforce_observed_rust_source_provider_artifacts(&metadata, &observed)
-        .map_err(|err| RustSourceProviderError::Validate(err.message().to_string()))?;
-    let validation =
-        crate::source_toolchain_closure::enforce_observed_rust_source_provider_receipts(&metadata, &observed_receipts)
+    rust_capability(BootstrapEffect::ReadInput, || {
+        let metadata_path = provider_dir.join(RUST_SOURCE_PROVIDER_METADATA_PATH);
+        let metadata_bytes = fs::read(&metadata_path).map_err(|err| {
+            RustSourceProviderError::Read(format!("provider metadata {}: {err}", metadata_path.display()))
+        })?;
+        if metadata_bytes.is_empty() {
+            return Err(RustSourceProviderError::Read(format!(
+                "provider metadata {} is empty",
+                metadata_path.display()
+            )));
+        }
+        let metadata_digest_blake3 = blake3::hash(&metadata_bytes).to_hex().to_string();
+        debug_assert!(!metadata_bytes.is_empty());
+        debug_assert_eq!(metadata_digest_blake3.len(), BLAKE3_DIGEST_HEX_LEN);
+        let metadata = serde_json::from_slice::<RustSourceProviderMetadata>(&metadata_bytes).map_err(|err| {
+            RustSourceProviderError::Parse(format!("provider metadata {}: {err}", metadata_path.display()))
+        })?;
+        let observed = observed_provider_artifacts(provider_dir, &metadata)?;
+        let observed_receipts = observed_provider_receipts(provider_dir, &metadata)?;
+        crate::source_toolchain_closure::enforce_observed_rust_source_provider_artifacts(&metadata, &observed)
             .map_err(|err| RustSourceProviderError::Validate(err.message().to_string()))?;
-    Ok(RustSourceProviderDirectoryValidation {
-        metadata_path,
-        metadata_digest_blake3,
-        metadata,
-        validation,
+        let validation = crate::source_toolchain_closure::enforce_observed_rust_source_provider_receipts(
+            &metadata,
+            &observed_receipts,
+        )
+        .map_err(|err| RustSourceProviderError::Validate(err.message().to_string()))?;
+        Ok(RustSourceProviderDirectoryValidation {
+            metadata_path,
+            metadata_digest_blake3,
+            metadata,
+            validation,
+        })
     })
 }
 
@@ -1541,11 +1633,15 @@ fn write_smoke_evidence_summary(
         .map_err(|err| RustSourceProviderError::Smoke(format!("serialize smoke evidence summary: {err}")))?;
     debug_assert!(!bytes.is_empty());
     debug_assert!(!evidence.output_digest_blake3.is_empty());
-    fs::write(&evidence.summary_path, bytes).map_err(|err| {
+    fs::write(&evidence.summary_path, &bytes).map_err(|err| {
         RustSourceProviderError::Smoke(format!(
             "write smoke evidence summary {}: {err}",
             evidence.summary_path.display()
         ))
+    })?;
+    rust_capability(BootstrapEffect::VerifyOutput, || {
+        crate::bootstrap_effect_port::verify_content(&evidence.summary_path, &bytes)
+            .map_err(|error| RustSourceProviderError::Smoke(error.to_string()))
     })
 }
 
@@ -1570,10 +1666,14 @@ fn write_json_pretty<T: serde::Serialize>(path: &Path, value: &T, label: &str) -
     let parent = path
         .parent()
         .ok_or_else(|| RustSourceProviderError::Read(format!("{} has no parent", path.display())))?;
-    fs::create_dir_all(parent)
-        .map_err(|err| RustSourceProviderError::Read(format!("create {}: {err}", parent.display())))?;
-    fs::write(path, bytes)
-        .map_err(|err| RustSourceProviderError::Read(format!("write {label} {}: {err}", path.display())))
+    rust_capability(BootstrapEffect::WriteOutput, || {
+        fs::create_dir_all(parent)
+            .map_err(|err| RustSourceProviderError::Read(format!("create {}: {err}", parent.display())))?;
+        fs::write(path, &bytes)
+            .map_err(|err| RustSourceProviderError::Read(format!("write {label} {}: {err}", path.display())))
+    })?;
+    crate::bootstrap_effect_port::verify_content(path, &bytes)
+        .map_err(|error| RustSourceProviderError::Validate(error.to_string()))
 }
 
 fn validate_import_request(import_dir: &Path, output_dir: &Path) -> Result<(), RustSourceProviderError> {
@@ -1902,14 +2002,18 @@ fn run_rustc_stage1_provider_candidate(
     verbose: bool,
 ) -> Result<RustSourceProviderRustcStage1ProviderCandidateRun, RustSourceProviderError> {
     let boundary = prepare_rustc_stage1_boundary(materialization, route, bootstrap_candidate, scratch_layout)?;
-    let script_digest = write_rustc_stage1_boundary(&boundary)?;
+    let script_digest = rust_capability(BootstrapEffect::WriteOutput, || write_rustc_stage1_boundary(&boundary))?;
     let sources = acquire_rustc_stage1_sources(&boundary, verbose)?;
-    write_rustc_stage1_sources_manifest(&boundary, &sources)?;
+    rust_capability(BootstrapEffect::WriteOutput, || write_rustc_stage1_sources_manifest(&boundary, &sources))?;
     let build = run_rustc_stage1_build(&boundary, &script_digest, verbose)?;
-    write_rustc_stage1_build_manifest(&boundary, &build)?;
-    let candidate = assemble_rustc_stage1_provider_candidate(&boundary, route, &sources, &build)?;
+    rust_capability(BootstrapEffect::WriteOutput, || write_rustc_stage1_build_manifest(&boundary, &build))?;
+    let candidate = rust_capability(BootstrapEffect::WriteOutput, || {
+        assemble_rustc_stage1_provider_candidate(&boundary, route, &sources, &build)
+    })?;
     let smoke = smoke_rustc_stage1_provider_candidate(&boundary, &candidate)?;
-    write_rustc_stage1_provider_candidate_manifest(&boundary, &candidate)?;
+    rust_capability(BootstrapEffect::WriteOutput, || {
+        write_rustc_stage1_provider_candidate_manifest(&boundary, &candidate)
+    })?;
     Ok(RustSourceProviderRustcStage1ProviderCandidateRun {
         boundary,
         candidate,
@@ -1995,14 +2099,18 @@ fn run_rustc_final_provider_candidate(
     verbose: bool,
 ) -> Result<RustSourceProviderRustcFinalProviderCandidateRun, RustSourceProviderError> {
     let boundary = prepare_rustc_final_boundary(materialization, route, bootstrap_candidate)?;
-    let script_digest = write_rustc_final_boundary(&boundary)?;
+    let script_digest = rust_capability(BootstrapEffect::WriteOutput, || write_rustc_final_boundary(&boundary))?;
     let sources = acquire_rustc_final_sources(&boundary, verbose)?;
-    write_rustc_final_sources_manifest(&boundary, &sources)?;
+    rust_capability(BootstrapEffect::WriteOutput, || write_rustc_final_sources_manifest(&boundary, &sources))?;
     let build = run_rustc_final_build(&boundary, &script_digest, verbose)?;
-    write_rustc_final_build_manifest(&boundary, &build)?;
-    let candidate = assemble_rustc_final_provider_candidate(&boundary, route, &sources, &build)?;
+    rust_capability(BootstrapEffect::WriteOutput, || write_rustc_final_build_manifest(&boundary, &build))?;
+    let candidate = rust_capability(BootstrapEffect::WriteOutput, || {
+        assemble_rustc_final_provider_candidate(&boundary, route, &sources, &build)
+    })?;
     let smoke = smoke_rustc_final_provider_candidate(&boundary, &candidate)?;
-    write_rustc_final_provider_candidate_manifest(&boundary, &candidate, false)?;
+    rust_capability(BootstrapEffect::WriteOutput, || {
+        write_rustc_final_provider_candidate_manifest(&boundary, &candidate, false)
+    })?;
     Ok(RustSourceProviderRustcFinalProviderCandidateRun {
         boundary,
         candidate,
@@ -3202,7 +3310,7 @@ fn push_rustc_source_target_linker_runtime(script: &mut String) {
     push_rustc_source_target_libgcc_shared_copy(script);
 }
 
-fn push_rustc_source_target_cc_wrapper(script: &mut String) {
+pub(crate) fn push_rustc_source_target_cc_wrapper(script: &mut String) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     script.push_str("    printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/cc\"\n");
@@ -3701,10 +3809,14 @@ fn acquire_stage_sources(
     assert!(!stage_id.trim().is_empty(), "stage id must not be empty");
     assert!(!sources.is_empty(), "stage sources must not be empty");
     assert!(!archive_dir.as_os_str().is_empty(), "archive dir must not be empty");
-    fs::create_dir_all(archive_dir)
-        .map_err(|err| RustSourceProviderError::Read(format!("create {}: {err}", archive_dir.display())))?;
-    fs::create_dir_all(source_dir)
-        .map_err(|err| RustSourceProviderError::Read(format!("create {}: {err}", source_dir.display())))?;
+    rust_capability(BootstrapEffect::WriteOutput, || {
+        fs::create_dir_all(archive_dir)
+            .map_err(|err| RustSourceProviderError::Read(format!("create {}: {err}", archive_dir.display())))
+    })?;
+    rust_capability(BootstrapEffect::WriteOutput, || {
+        fs::create_dir_all(source_dir)
+            .map_err(|err| RustSourceProviderError::Read(format!("create {}: {err}", source_dir.display())))
+    })?;
     let mut acquired = Vec::with_capacity(sources.len());
     for source in sources {
         acquired.push(acquire_stage_source(archive_dir, source_dir, source, full_source_context, verbose)?);
@@ -3734,11 +3846,15 @@ fn acquire_stage_source(
             source.id, source.sha256_hex
         )));
     }
-    fs::write(&archive_path, &source_bytes.bytes)
-        .map_err(|err| RustSourceProviderError::Fetch(format!("write {}: {err}", archive_path.display())))?;
-    prepare_empty_directory(&extracted_path)?;
-    let archive_entry_count = extract_first_stage_tar_gz(&archive_path, &extracted_path)?;
-    let extracted_digest_blake3 = content_digest_blake3(&extracted_path)?;
+    rust_capability(BootstrapEffect::WriteOutput, || {
+        fs::write(&archive_path, &source_bytes.bytes)
+            .map_err(|err| RustSourceProviderError::Fetch(format!("write {}: {err}", archive_path.display())))
+    })?;
+    rust_capability(BootstrapEffect::WriteOutput, || prepare_empty_directory(&extracted_path))?;
+    let archive_entry_count =
+        rust_capability(BootstrapEffect::WriteOutput, || extract_first_stage_tar_gz(&archive_path, &extracted_path))?;
+    let extracted_digest_blake3 =
+        rust_capability(BootstrapEffect::VerifyOutput, || content_digest_blake3(&extracted_path))?;
     debug_assert_eq!(archive_sha256_hex, source.sha256_hex);
     debug_assert_eq!(extracted_digest_blake3.len(), BLAKE3_DIGEST_HEX_LEN);
     if verbose {
@@ -3869,7 +3985,9 @@ fn run_smoke_rustc_with_bounded_launch_retry(rustc_path: &Path, rustc_args: &[Os
     debug_assert!(!rustc_path.as_os_str().is_empty());
     debug_assert!(!rustc_args.is_empty());
     for attempt in 1..=GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS {
-        let result = Command::new(rustc_path).env_clear().args(rustc_args).output();
+        let result = rust_io_capability(BootstrapEffect::SmokeProvider, || {
+            Command::new(rustc_path).env_clear().args(rustc_args).output()
+        });
         match result {
             Ok(output) if should_retry_smoke_process_output(&output, attempt) => {
                 std::thread::sleep(Duration::from_millis(GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS));
@@ -3905,7 +4023,7 @@ fn run_generated_script_with_log(
         return Err(RustSourceProviderError::Build("generated script path and build log path must differ".to_string()));
     }
     debug_assert_ne!(script_path, log_path);
-    let observed_script_digest_blake3 = file_blake3_hash(script_path)?;
+    let observed_script_digest_blake3 = rust_capability(BootstrapEffect::ReadInput, || file_blake3_hash(script_path))?;
     if observed_script_digest_blake3 != *expected_script_digest_blake3 {
         return Err(RustSourceProviderError::Build(format!(
             "generated Rust stage script differs from producer-rendered bytes: {}",
@@ -3913,8 +4031,10 @@ fn run_generated_script_with_log(
         )));
     }
     let interpreter = full_source_context.map(|context| full_source_busybox_applet_path(context, "sh")).transpose()?;
-    let log = File::create(log_path)
-        .map_err(|err| RustSourceProviderError::Build(format!("create {}: {err}", log_path.display())))?;
+    let log = rust_capability(BootstrapEffect::WriteOutput, || {
+        File::create(log_path)
+            .map_err(|err| RustSourceProviderError::Build(format!("create {}: {err}", log_path.display())))
+    })?;
     for attempt in 1..=GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS {
         let stdout = log
             .try_clone()
@@ -3926,7 +4046,9 @@ fn run_generated_script_with_log(
         if full_source_context.is_some() {
             command.env_clear();
         }
-        match command.stdout(stdout).stderr(stderr).status() {
+        match rust_io_capability(BootstrapEffect::MaterializeProvider, || {
+            command.stdout(stdout).stderr(stderr).status()
+        }) {
             Ok(status) => return Ok(status),
             Err(error) if should_retry_generated_script_launch(&error, attempt) => {
                 std::thread::sleep(Duration::from_millis(GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS));
@@ -3947,8 +4069,8 @@ fn run_rustc_stage1_build(
     expected_script_digest_blake3: &blake3::Hash,
     verbose: bool,
 ) -> Result<RustSourceProviderRustcStage1Build, RustSourceProviderError> {
-    validate_rustc_stage1_build_inputs(boundary)?;
-    prepare_empty_provider_candidate_dir(&boundary.stage_output_dir)?;
+    rust_capability(BootstrapEffect::ReadInput, || validate_rustc_stage1_build_inputs(boundary))?;
+    rust_capability(BootstrapEffect::WriteOutput, || prepare_empty_provider_candidate_dir(&boundary.stage_output_dir))?;
     if verbose {
         eprintln!("  rustc_stage1_build_script: {}", boundary.script_path.display());
         eprintln!("  rustc_stage1_build_log: {}", boundary.build_log_path.display());
@@ -4002,8 +4124,8 @@ fn run_rustc_final_build(
     expected_script_digest_blake3: &blake3::Hash,
     verbose: bool,
 ) -> Result<RustSourceProviderRustcFinalBuild, RustSourceProviderError> {
-    validate_rustc_final_build_inputs(boundary)?;
-    prepare_empty_provider_candidate_dir(&boundary.stage_output_dir)?;
+    rust_capability(BootstrapEffect::ReadInput, || validate_rustc_final_build_inputs(boundary))?;
+    rust_capability(BootstrapEffect::WriteOutput, || prepare_empty_provider_candidate_dir(&boundary.stage_output_dir))?;
     if verbose {
         eprintln!("  rustc_final_build_script: {}", boundary.script_path.display());
         eprintln!("  rustc_final_build_log: {}", boundary.build_log_path.display());
@@ -5192,7 +5314,7 @@ fn run_first_stage_build(
     verbose: bool,
 ) -> Result<RustSourceProviderFirstStageBuild, RustSourceProviderError> {
     let build_sources = first_stage_build_sources(boundary)?;
-    validate_first_stage_build_inputs(&build_sources)?;
+    rust_capability(BootstrapEffect::ReadInput, || validate_first_stage_build_inputs(&build_sources))?;
     if verbose {
         eprintln!("  first_stage_build_script: {}", boundary.script_path.display());
         eprintln!("  first_stage_build_log: {}", boundary.build_log_path.display());
@@ -6132,15 +6254,19 @@ fn fetch_first_stage_source_bytes(
     full_source_context: Option<&FullSourceRustExecutionContext>,
 ) -> Result<RustSourceProviderSourceBytes, RustSourceProviderError> {
     if let Some(context) = full_source_context {
-        return read_full_source_archive_bytes(source, &context.rust_source_archive_dir);
+        return rust_capability(BootstrapEffect::ReadInput, || {
+            read_full_source_archive_bytes(source, &context.rust_source_archive_dir)
+        });
     }
     let parsed = url::Url::parse(&source.url)
         .map_err(|err| RustSourceProviderError::Fetch(format!("source '{}' url parse: {err}", source.id)))?;
     let bytes = match parsed.scheme() {
-        "file" => read_file_url_limited(&source.id, &parsed)?,
-        "http" | "https" => fetch_http_source_bytes(HttpSourceRequest {
-            source_id: &source.id,
-            url: &source.url,
+        "file" => rust_capability(BootstrapEffect::ReadInput, || read_file_url_limited(&source.id, &parsed))?,
+        "http" | "https" => rust_capability(BootstrapEffect::FetchSources, || {
+            fetch_http_source_bytes(HttpSourceRequest {
+                source_id: &source.id,
+                url: &source.url,
+            })
         })?,
         scheme => {
             return Err(RustSourceProviderError::Fetch(format!(
@@ -7220,7 +7346,7 @@ fn push_first_stage_target_linker_runtime(script: &mut String) {
     push_first_stage_target_musl_lfs_compat(script);
 }
 
-fn push_first_stage_target_cc_wrapper(script: &mut String, full_source_bound: bool) {
+pub(crate) fn push_first_stage_target_cc_wrapper(script: &mut String, full_source_bound: bool) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     if full_source_bound {
@@ -8683,47 +8809,53 @@ fn file_digest_blake3(path: &Path) -> Result<String, RustSourceProviderError> {
 }
 
 fn file_blake3_hash(path: &Path) -> Result<blake3::Hash, RustSourceProviderError> {
-    File::open(path)
-        .and_then(|file| {
-            let mut hasher = blake3::Hasher::new();
-            hasher.update_reader(file)?;
-            Ok(hasher.finalize())
-        })
-        .map_err(|err| RustSourceProviderError::Digest(format!("read {}: {err}", path.display())))
+    rust_capability(BootstrapEffect::ReadInput, || {
+        File::open(path)
+            .and_then(|file| {
+                let mut hasher = blake3::Hasher::new();
+                hasher.update_reader(file)?;
+                Ok(hasher.finalize())
+            })
+            .map_err(|err| RustSourceProviderError::Digest(format!("read {}: {err}", path.display())))
+    })
 }
 
 fn directory_digest_blake3(dir: &Path) -> Result<String, RustSourceProviderError> {
-    debug_assert!(dir.is_dir());
-    let mut entries = Vec::with_capacity(1);
-    collect_relative_paths(dir, dir, &mut entries)?;
-    debug_assert!(entries.len() <= DIRECTORY_DIGEST_MAX_ENTRIES);
-    if entries.len() > DIRECTORY_DIGEST_MAX_ENTRIES {
-        return Err(RustSourceProviderError::Digest(format!(
-            "directory {} has more than {DIRECTORY_DIGEST_MAX_ENTRIES} entries",
-            dir.display()
-        )));
-    }
-    entries.sort();
-    let mut hasher = blake3::Hasher::new();
-    for relative in &entries {
-        let full = dir.join(relative);
-        hasher.update(relative.as_bytes());
-        hasher.update(b"\0");
-        if full.is_dir() {
-            hasher.update(b"dir");
-        } else if full.is_file() {
-            hasher.update(b"file");
-            let bytes = fs::read(&full)
-                .map_err(|err| RustSourceProviderError::Digest(format!("read {}: {err}", full.display())))?;
-            hasher.update(&bytes);
-        } else if full.is_symlink() {
-            hasher.update(b"symlink");
-            let target = fs::read_link(&full)
-                .map_err(|err| RustSourceProviderError::Digest(format!("readlink {}: {err}", full.display())))?;
-            hasher.update(target.to_string_lossy().as_bytes());
+    rust_capability(BootstrapEffect::ReadInput, || {
+        debug_assert!(dir.is_dir());
+        let mut entries = Vec::with_capacity(1);
+        collect_relative_paths(dir, dir, &mut entries)?;
+        debug_assert!(entries.len() <= DIRECTORY_DIGEST_MAX_ENTRIES);
+        if entries.len() > DIRECTORY_DIGEST_MAX_ENTRIES {
+            return Err(RustSourceProviderError::Digest(format!(
+                "directory {} has more than {DIRECTORY_DIGEST_MAX_ENTRIES} entries",
+                dir.display()
+            )));
         }
-    }
-    Ok(hasher.finalize().to_hex().to_string())
+        entries.sort();
+        let mut hasher = blake3::Hasher::new();
+        for relative in &entries {
+            let full = dir.join(relative);
+            hasher.update(relative.as_bytes());
+            hasher.update(b"\0");
+            if full.is_dir() {
+                hasher.update(b"dir");
+            } else if full.is_file() {
+                hasher.update(b"file");
+                let file = File::open(&full)
+                    .map_err(|err| RustSourceProviderError::Digest(format!("read {}: {err}", full.display())))?;
+                hasher
+                    .update_reader(file)
+                    .map_err(|err| RustSourceProviderError::Digest(format!("read {}: {err}", full.display())))?;
+            } else if full.is_symlink() {
+                hasher.update(b"symlink");
+                let target = fs::read_link(&full)
+                    .map_err(|err| RustSourceProviderError::Digest(format!("readlink {}: {err}", full.display())))?;
+                hasher.update(target.to_string_lossy().as_bytes());
+            }
+        }
+        Ok(hasher.finalize().to_hex().to_string())
+    })
 }
 
 fn collect_relative_paths(root: &Path, current: &Path, out: &mut Vec<String>) -> Result<(), RustSourceProviderError> {

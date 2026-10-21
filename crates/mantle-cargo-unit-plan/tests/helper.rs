@@ -135,6 +135,48 @@ compile_error!("quoted cfg values were not preserved");"#,
 }
 
 #[test]
+#[cfg(target_os = "linux")]
+fn cdylib_link_arguments_control_real_shared_library_soname() {
+    let fixture = fixture_root("cdylib-link-arguments");
+    let source = fixture.join("store/source");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("lib.rs"), "#[unsafe(no_mangle)] pub extern \"C\" fn answer() -> i32 { 42 }\n").unwrap();
+    let out = fixture.join("shared");
+    let compile = helper_with(
+        &out,
+        &source,
+        &[],
+        json!({}),
+        &[
+            "--crate-name=answer",
+            "--crate-type=cdylib",
+            "--edition=2024",
+            source.join("lib.rs").to_str().unwrap(),
+        ],
+        &[("MANTLE_UNIT_LINK_ARGS", json!(["-Wl,-soname,libdeclared-answer.so"]).to_string())],
+    );
+    assert!(compile.status.success(), "{}", String::from_utf8_lossy(&compile.stderr));
+    let inspect = Command::new(tool("readelf")).arg("--dynamic").arg(out.join("lib/libanswer.so")).output().unwrap();
+    assert!(inspect.status.success());
+    assert!(String::from_utf8_lossy(&inspect.stdout).contains("Library soname: [libdeclared-answer.so]"));
+    let consumer = source.join("consumer.c");
+    fs::write(&consumer, "extern int answer(void); int main(void) { return answer() == 42 ? 0 : 1; }\n").unwrap();
+    let executable = fixture.join("consumer");
+    let link = Command::new(tool("clang"))
+        .arg(consumer)
+        .arg(out.join("lib/libanswer.so"))
+        .arg("-o")
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(link.status.success(), "{}", String::from_utf8_lossy(&link.stderr));
+    fs::copy(out.join("lib/libanswer.so"), out.join("lib/libdeclared-answer.so")).unwrap();
+    let run = Command::new(executable).env("LD_LIBRARY_PATH", out.join("lib")).output().unwrap();
+    assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
+    fs::remove_dir_all(fixture).unwrap();
+}
+
+#[test]
 fn absent_direct_manifest_blocks_before_compilation() {
     let fixture = fixture_root("missing-manifest");
     let source = fixture.join("source");

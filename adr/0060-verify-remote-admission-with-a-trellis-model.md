@@ -32,6 +32,21 @@ Trellis proof artifacts flow through Kamacite and Valence. Mantle binds accepted
 
 Development can use the sibling `../trellis` checkout. Durable evidence and CI name pinned source, verifier, proof, policy, assumption, and receipt identities. Mantle gains no runtime dependency on a workspace-relative path.
 
+The test-only oracle imports unchanged kernel source from Trellis revision
+`d91188e495d65bca87551b7a06330efb2c909edf` into
+`vendor/trellis-fenced-attempt/`. `scripts/import-trellis-fenced-attempt.py`
+copies only exact Git objects, retains the upstream license and positive/negative
+kernel tests, and checks BLAKE3 identities and the exact Verus support-crate
+cohort. Ordinary Cargo tests compile that source with
+`vstd = 0.0.0-2026-01-25-0057`; neither the source import nor executable parity
+constitutes fresh Verus verification or Kamacite/Valence proof acceptance.
+
+This keeps the production dependency graph unchanged. Importing the entire
+Trellis crate would require `cap-std ^4.0.3`, conflicting with Mantle's pinned
+`bounded-tree-cap` requirement `cap-std =4.0.2`. Updating either production pin
+merely to run a test oracle is rejected. The importer checks the immutable source
+instead of maintaining a handwritten copy of Trellis's decision algorithm.
+
 ## Alternatives Considered
 
 ### Model the whole remote-build system

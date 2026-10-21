@@ -1073,7 +1073,7 @@ pub fn generate_self_build_ncl(input: SelfBuildNclInput<'_>) -> String {
 }
 
 /// Verify the self-built binary by running `--help`.
-pub fn verify_binary(binary_path: &Path) -> Result<(), RunError> {
+fn verify_binary_observed(binary_path: &Path) -> Result<Option<i32>, RunError> {
     eprintln!("verifying {}...", binary_path.display());
 
     let out = Command::new(binary_path)
@@ -1090,10 +1090,10 @@ pub fn verify_binary(binary_path: &Path) -> Result<(), RunError> {
     }
 
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("mantle"), "self-built binary --help doesn't mention 'mantle'");
-
-    eprintln!("  binary OK");
-    Ok(())
+    if !stdout.contains("mantle") {
+        return Err(RunError::Build("self-built binary --help doesn't mention 'mantle'".into()));
+    }
+    Ok(out.status.code())
 }
 
 // ── helpers ────────────────────────────────────────────────────────────
@@ -1705,7 +1705,7 @@ fn copy_selected_source_tree(src_dir: &Path, stage_root: &Path) -> Result<(), Ru
 
 fn staged_source_path_is_copyable(relative_path: &Path) -> Result<bool, RunError> {
     let release_path = staged_source_release_path(relative_path).map_err(RunError::Internal)?;
-    release_source_path_is_releasable(&release_path).map_err(|err| RunError::Internal(err.to_string()))
+    release_source_path_is_releasable(release_path).map_err(|err| RunError::Internal(err.to_string()))
 }
 
 fn staged_source_release_path(relative_path: &Path) -> Result<String, String> {
@@ -2413,6 +2413,7 @@ struct SelfBuildPipelineContext<'a> {
     trust_unsigned: bool,
     hermeticity_mode: crunch_pipeline::HermeticityMode,
     source_fetch_overrides: &'a [crunch_build::FetchSourceOverride],
+    source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
 }
 
 /// Resolved bootstrap tool paths from step 2.
@@ -2659,6 +2660,7 @@ fn self_build_pipeline_config(
         state_dir: pipeline.state_dir.to_path_buf(),
         backend: pipeline.backend,
         base_state_dirs: Vec::new(),
+        source_admission: pipeline.source_admission.cloned(),
         store_dir: pipeline.store_dir.to_string(),
         verbose: pipeline.verbose,
         max_jobs: pipeline.max_jobs,
@@ -2676,6 +2678,7 @@ fn self_build_pipeline_config(
         root_registration: None,
         source_fetch_overrides: pipeline.source_fetch_overrides.to_vec(),
         remote_enabled: false,
+        compile_driver_runtime: None,
         interchange_dir: None,
     }
 }
@@ -3110,13 +3113,13 @@ fn prepare_self_build_shared(
     })
 }
 
-fn verify_self_build_output(output_binary: &Path, no_verify: bool) -> Result<(), RunError> {
+fn verify_self_build_output(output_binary: &Path, no_verify: bool) -> Result<Option<i32>, RunError> {
     if no_verify {
         eprintln!("\n[4/{SELF_BUILD_STEP_COUNT}] Verification skipped (--no-verify).");
-        return Ok(());
+        return Ok(None);
     }
     eprintln!("\n[4/{SELF_BUILD_STEP_COUNT}] Verifying output...");
-    verify_binary(output_binary)
+    verify_binary_observed(output_binary)
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -3241,9 +3244,33 @@ pub struct SelfBuildCommandOptions<'a> {
     pub provider_mode: crate::bootstrap_source_root::BootstrapProviderMode,
     pub source_fetch_overrides: &'a [crunch_build::FetchSourceOverride],
     pub source_evidence: Option<SelfBuildSourceEvidence>,
+    pub source_admission: Option<std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
 }
 
 fn execute_self_build(options: SelfBuildCommandOptions<'_>) -> Result<SelfBuildReport, RunError> {
+    use mantle_application_contract::rust_operations::RustEvidence;
+    use mantle_application_contract::rust_operations::RustOperation;
+    let smoke_required = !options.no_verify;
+    let (report, _, _) = crate::rust_plan_execution::through_rust_port(
+        RustOperation::SelfBuild,
+        || execute_self_build_port(options),
+        |(report, digest, smoke_exit)| RustEvidence::Binary {
+            path: report.output_binary.as_os_str().as_encoded_bytes(),
+            digest,
+            smoke_exit: *smoke_exit,
+            smoke_required,
+        },
+    )?;
+    if smoke_required {
+        eprintln!("  binary OK");
+    }
+    emit_self_build_completion(&report);
+    Ok(report)
+}
+
+fn execute_self_build_port(
+    options: SelfBuildCommandOptions<'_>,
+) -> Result<(SelfBuildReport, String, Option<i32>), RunError> {
     assert!(options.max_jobs > 0, "self-build max jobs must be nonzero");
     assert!(options.store_dir.starts_with('/'), "self-build store prefix must be absolute");
     crunch_store::StoreConfig::preflight_backend_identity_for(
@@ -3251,6 +3278,7 @@ fn execute_self_build(options: SelfBuildCommandOptions<'_>) -> Result<SelfBuildR
         options.state_dir,
         options.store_dir,
         &[],
+        options.source_admission.as_deref(),
     )
     .map_err(|error| RunError::Internal(format!("opening store: {error}")))?;
     let setup = initialize_self_build(InitializeSelfBuildRequest {
@@ -3269,7 +3297,8 @@ fn execute_self_build(options: SelfBuildCommandOptions<'_>) -> Result<SelfBuildR
         options.source_store_path,
     )?;
     let (tools, output_binary) = run_self_build_roots(&options, &setup, &shared)?;
-    verify_self_build_output(&output_binary, options.no_verify)?;
+    let smoke_exit = verify_self_build_output(&output_binary, options.no_verify)?;
+    let binary_digest = blake3_file_hex(&output_binary).map_err(|error| RunError::Internal(error.to_string()))?;
     let protected_seccomp_events = setup
         .protected_exec_supervisor
         .as_ref()
@@ -3290,8 +3319,7 @@ fn execute_self_build(options: SelfBuildCommandOptions<'_>) -> Result<SelfBuildR
         source_evidence: options.source_evidence,
         stagex_metadata: None,
     };
-    emit_self_build_completion(&self_build_evidence);
-    Ok(self_build_evidence)
+    Ok((self_build_evidence, binary_digest, smoke_exit))
 }
 
 fn run_self_build_roots(
@@ -3315,6 +3343,7 @@ fn run_self_build_roots(
         trust_unsigned: options.trust_unsigned,
         hermeticity_mode: options.hermeticity_mode,
         source_fetch_overrides: options.source_fetch_overrides,
+        source_admission: options.source_admission.as_ref(),
     };
     eprintln!("\n[2/{SELF_BUILD_STEP_COUNT}] Building bootstrap tools...");
     let tools = build_all_bootstrap_tools(BootstrapToolsBuildRequest {
@@ -3360,6 +3389,7 @@ pub type CmdSelfBuildFn = for<'a> fn(
     crate::bootstrap_source_root::BootstrapProviderMode,
     &'a [crunch_build::FetchSourceOverride],
     Option<SelfBuildSourceEvidence>,
+    Option<std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
 ) -> Result<SelfBuildReport, RunError>;
 
 pub const CMD_SELF_BUILD: CmdSelfBuildFn = |output_dir,
@@ -3382,7 +3412,8 @@ pub const CMD_SELF_BUILD: CmdSelfBuildFn = |output_dir,
                                             bootstrap_busybox_path,
                                             provider_mode,
                                             source_fetch_overrides,
-                                            source_evidence| {
+                                            source_evidence,
+                                            source_admission| {
     execute_self_build(SelfBuildCommandOptions {
         output_dir,
         state_dir,
@@ -3405,6 +3436,7 @@ pub const CMD_SELF_BUILD: CmdSelfBuildFn = |output_dir,
         provider_mode,
         source_fetch_overrides,
         source_evidence,
+        source_admission,
     })
 };
 

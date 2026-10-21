@@ -1,0 +1,77 @@
+{
+  "cases": [
+    {
+      "expected_diagnostic": "provider identity",
+      "id": "provider-profile-drift"
+    },
+    {
+      "expected_diagnostic": "extraction command",
+      "id": "extraction-command-drift"
+    },
+    {
+      "expected_diagnostic": "source identity",
+      "id": "source-identity-drift"
+    },
+    {
+      "expected_diagnostic": "exact source path",
+      "id": "shadow-source-path"
+    },
+    {
+      "expected_diagnostic": "LLBC has errors",
+      "id": "errorful-llbc"
+    },
+    {
+      "expected_diagnostic": "borrow checking",
+      "id": "skip-borrowck"
+    },
+    {
+      "expected_diagnostic": "target metadata",
+      "id": "target-drift"
+    },
+    {
+      "expected_diagnostic": "translation mapping",
+      "id": "stale-translation"
+    },
+    {
+      "expected_diagnostic": "run-local declaration",
+      "id": "cross-run-def-id"
+    },
+    {
+      "expected_diagnostic": "generated Lean identity",
+      "id": "stale-generated-lean"
+    },
+    {
+      "expected_diagnostic": "theorem source identity",
+      "id": "theorem-hash-drift"
+    },
+    {
+      "expected_diagnostic": "theorem mapping",
+      "id": "theorem-symbol-drift"
+    },
+    {
+      "expected_diagnostic": "trust closure",
+      "id": "trust-closure-drift"
+    },
+    {
+      "expected_diagnostic": "resource policy identity",
+      "id": "budget-identity-drift"
+    },
+    {
+      "expected_diagnostic": "stage outcome",
+      "id": "tool-failure-classification"
+    },
+    {
+      "expected_diagnostic": "receipt source identity",
+      "id": "receipt-swap"
+    },
+    {
+      "expected_diagnostic": "artifact verification",
+      "id": "missing-artifact-verification"
+    },
+    {
+      "expected_diagnostic": "required non-claim",
+      "id": "overclaim-text"
+    }
+  ],
+  "schema_version": "trellis-aeneas-negative-catalog/v1"
+}

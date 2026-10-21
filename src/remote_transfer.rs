@@ -2767,6 +2767,7 @@ mod tests {
     async fn castore_blob_and_directory_adapters_preserve_existing_identities() {
         let root = tempfile::tempdir().unwrap();
         let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            source_admission: None,
             backend: crunch_store::StoreBackend::Snix,
             state_dir: root.path().join("state"),
             output_dir: root.path().join("store"),

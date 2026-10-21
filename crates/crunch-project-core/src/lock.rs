@@ -17,7 +17,7 @@ use crate::manifest::HashAlgo;
 use crate::manifest::PijulSelector;
 use crate::trust::LockedTrust;
 use crate::trust::TrustSubject;
-use crate::trust::validate_locked_trust;
+use crate::trust::validate_locked_trust_borrowed;
 use crate::version::SchemaVersion;
 
 const MAX_LOCK_ENTRIES: u32 = 4096;
@@ -100,12 +100,12 @@ impl Lockfile {
             }
             if let Some(trust) = &entry.trust {
                 let subject = TrustSubject::input(name.clone());
-                problems.extend(validate_locked_trust(
+                problems.extend(validate_locked_trust_borrowed(
                     trust,
                     &subject,
                     &entry.hash.algo,
                     &entry.hash.value,
-                    format!("lock entry '{name}'"),
+                    &format!("lock entry '{name}'"),
                 ));
             }
             for patch_name in &entry.patches {
@@ -124,12 +124,12 @@ impl Lockfile {
             }
             if let Some(trust) = &patch.trust {
                 let subject = TrustSubject::patch(name.clone());
-                problems.extend(validate_locked_trust(
+                problems.extend(validate_locked_trust_borrowed(
                     trust,
                     &subject,
                     &patch.hash.algo,
                     &patch.hash.value,
-                    format!("locked patch '{name}'"),
+                    &format!("locked patch '{name}'"),
                 ));
             }
         }

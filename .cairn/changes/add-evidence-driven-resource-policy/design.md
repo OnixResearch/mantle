@@ -75,6 +75,114 @@ Benchmarks compare policy versions against a declared static baseline. Reports s
 
 ChaosControl exercises positive OOM evidence, ambiguous failures, worker loss, delayed completion, duplicate events, accounting interruption, CAS unavailability, and retry replay. Fault evidence is scoped to the declared harness and schedule.
 
+### Dedicated production-code Rust guest
+
+`workloads/resource-policy` is a standalone external harness following the
+ChaosControl Rust workload template. It imports the real
+`crunch_remote_core::{resource_policy,resource_quota}` decisions and compiles the
+actual `resource_quota_store.rs` shell by source path; there is no copied ledger
+model and no production SDK instrumentation. Its SDK is the public Git source
+`https://github.com/brittonr/chaoscontrol`, pinned to
+`a154ddd1320129a133bb84b8e13ad3df7e55a55f` (public commit endpoint observed;
+the local ChaosControl checkout named that same revision). No durable sibling
+ChaosControl path is used. The existing `run_quota_fault_fixture` remains
+filesystem-fixture evidence only and is not used to manufacture VM evidence.
+
+The reviewed `campaign.ncl` selects seeds **64001, 64002, 64003**, one VM/vCPU,
+256 MiB, eight rounds, four branches, 20,000 ticks per branch, quantum 100,
+100,000 bootstrap ticks, frontier 16, and one worker. Input-tree branching
+changes the order of three real child-process crash boundaries: before
+reconciliation, after acknowledged durable reconciliation, and racing atomic
+publication. Every execution exercises all three, uses SIGKILL and waitpid,
+reopens the production store, accepts only a complete old or new transaction,
+and checks exactly one eventual charge. These are guest-driven faults, not an
+unattached virtio-block fault profile. The filesystem is the writable initrd;
+this does not model persistent block-device power loss.
+
+Other scenarios call production retry decisions with explicit trusted-positive,
+ambiguous, untrusted and stale OOM facts, exercise every retry/quota/class/wall
+boundary, retain worker-loss reservations, reject stale-fence completion, apply
+delayed and duplicate events, reject absent/malformed/oversized ledger state,
+and remove a real CAS availability file before evaluating the sharing policy.
+OOM facts are **harness inputs**, not observations of a real cgroup collector.
+The CAS file supplies an availability fact; the harness does not claim to
+exercise signed result/CAS admission or the complete remote service.
+
+Four opt-in local negative controls corrupt the observed retry link,
+single-charge summary, crash-state summary, or CAS decision **at the oracle
+boundary**, without changing production code. Each must fail its named SDK
+assertion and the assertion-quality gate. The runner separately requires exit
+2 for missing, unknown, malformed and overlong control arguments. Rejected
+business operations remain successful fail-closed observations, not assertion
+failures.
+
+### Repeatable build and execution handoff
+
+Run all compiling/kernel/VM work below only through Mantle's existing guarded
+Pueue campaign workflow. Commands are listed here, not claimed executed. From
+the Mantle root, choose a new absolute artifact directory and retain its full
+contents. The pinned ChaosControl development shell supplies the Rust musl
+target and cross compiler. Host tools additionally required for packaging are
+Python 3, `b3sum`, `readelf`, `cpio`, `gzip`, and the exact Nickel 1.17.0 cohort.
+
+```bash
+CC=github:brittonr/chaoscontrol/a154ddd1320129a133bb84b8e13ad3df7e55a55f
+# ARTIFACTS is an operator-selected fresh absolute retained directory.
+mkdir -p "$ARTIFACTS"
+nix build "$CC#default" --out-link "$ARTIFACTS/tools"
+nix build "$CC#kcov-vmlinux" --out-link "$ARTIFACTS/kernel"
+nix develop "$CC" -c cargo generate-lockfile \
+  --manifest-path "$PWD/workloads/resource-policy/Cargo.toml"
+nix develop "$CC" -c env \
+  CARGO_TARGET_DIR="$ARTIFACTS/target" \
+  CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-unknown-linux-musl-gcc \
+  CC_x86_64_unknown_linux_musl=x86_64-unknown-linux-musl-gcc \
+  RUSTFLAGS='-C target-feature=+crt-static' \
+  cargo build --locked --release --target x86_64-unknown-linux-musl \
+  --manifest-path "$PWD/workloads/resource-policy/Cargo.toml"
+python3 workloads/resource-policy/campaign.py prepare \
+  --guest "$ARTIFACTS/target/x86_64-unknown-linux-musl/release/mantle-resource-policy-chaos" \
+  --kernel "$ARTIFACTS/kernel/vmlinux" --tools "$ARTIFACTS/tools" \
+  --output "$ARTIFACTS/run"
+python3 workloads/resource-policy/campaign.py local \
+  --manifest "$ARTIFACTS/run/commands.json"
+python3 workloads/resource-policy/campaign.py vm \
+  --manifest "$ARTIFACTS/run/commands.json"
+```
+
+Retain the generated standalone `Cargo.lock` with the workload once built.
+`prepare` exports the reviewed Nickel policy, rejects a dynamic/non-x86_64
+guest, builds the actual guest initrd with ChaosControl's newc+gzip convention,
+and generates `commands.json` containing exact VM argv and BLAKE3 identities
+for kernel, initrd, guest, SDK lock, harness sources, imported production
+sources, runner and host tools. Identities bind uncommitted source bytes too;
+the Git revision alone is not the source proof. No nonexistent/default guest
+artifact or digest is substituted. No generic sample workload campaign is
+accepted as this workload's evidence.
+
+`local` retains positive and all four negative SDK JSONL files, summarized
+reports, quality-gate output, invalid-input logs and a manifest-bound
+`instrumentation-dry-run` receipt. `vm` requires that current receipt and
+matching source/artifact identities, then opens `/dev/kvm` and runs the exact
+three seed commands. Each seed must retain an authoritative v2 assertion
+summary, every local workload assertion must be observed passing, and no bug
+may remain before `execution-classification.json` is emitted. Missing progress
+or an unobserved crash/reopen outcome fails this acceptance path; zero exit
+alone does not pass. Retain each seed's checkpoint, `assertions.json`, report,
+logs and any snapshots/bug files. This is bounded VM execution evidence only.
+
+Passing execution needs no planted bug or snapshot replay claim. If a real bug
+is observed, stop passing classification and select its actual assertion ID,
+checkpoint and valid retained parent snapshot. `commands.json` records the
+exact `export-bugs` command shape; substitute only observed identities. Use
+that same kernel/initrd, seed, VM topology, quantum and bootstrap budget for
+`chaoscontrol-explore reproduce --bug <exported-bug> --verdict-output <verdict>`
+and minimization. Missing parents, depth-zero/schedule-only output, digest
+drift or non-reproduction cannot support `snapshot_backed_reproduced`.
+This workload is not promoted by ChaosControl's historical sample workload
+replay proofs. No VM, negative-control, quality or replay verdict is asserted
+until the parent executes and retains these commands.
+
 ## Evidence and non-claims
 
 Valence links request, selection, observation, retry, accounting, result, producer, and consumer identities. Cairn gates require policy replay, fixture coverage, and benchmark comparison.
@@ -84,3 +192,60 @@ The evidence does not prove future resource sufficiency, whole-build correctness
 ## Rollout
 
 The selector first runs in observe-only mode beside the existing static policy. Differences are recorded but do not affect scheduling. After replay and benchmark gates pass, selected projects can opt in. OOM retry, quota enforcement, and cross-project sharing each require separate feature enablement and rollback switches.
+
+## Production gateway resource host
+
+`src/nix_gateway/resource_host.rs` supplies the configured catalog, per-project
+account bindings, public unit schedule, idempotent quota ledger, pure selection
+inputs and replay snapshots to the existing coordinator. It does not register a
+worker, mint execution authority, bypass a lease or grant result authority.
+Observe-only/static placement remains separate from explicitly opted-in active
+selection. Selection, OOM retry, quota enforcement and cross-project sharing have
+independent controls; disabling enforcement does not invent missing usage or
+erase durable accounting. Cross-project reuse additionally requires both project
+opt-ins and a configured producer/consumer sharing scope, followed by ordinary
+current signed-result, policy, platform, output and CAS checks. Consumer aliases
+reserve and charge no second execution; usage totals do not count their producer
+measurements twice.
+
+The actual local-build worker accepts an existing delegated cgroup-v2 subtree via
+`remote serve --binding stdio-once --executor local-build --usage-cgroup-root`.
+Its host-owned collector creates a fresh per-attempt child cgroup only beneath
+that subtree, moves the exact executor before exec, and checks completed-subtree
+emptiness. Dedicated `cpu.stat`, `memory.peak` and positive `memory.events`
+OOM-kill deltas are signed with the real worker result key and bound to request,
+job, attempt, fence and success-result or failure-result digest. Generic exit 137,
+SIGKILL, host aggregate counters and process-only measurements cannot authorize
+OOM escalation. Without valid delegation the collector honestly reports
+process-only facts, not complete cgroup metrics.
+
+Dedicated complete usage reconciles CPU milliseconds, the explicitly named
+memory-peak-times-wall upper-bound schedule, and executor stdout/stderr byte
+counts. Those bytes are not NAR/network transfer measurements and the memory
+quantity is not an observed time integral. Missing, partial, lost or cancelled
+observations retain pending reservations. A private TMPDIR receives bounded,
+no-symlink/no-cross-mount allocated-block snapshots; sampled scratch peaks and
+coverage are lower-bound observations, not exact scratch high-water authority.
+The host therefore does not fabricate complete historical selection observations
+from the current collector. Historical replay truthfully records missing history.
+
+An authenticated positive dedicated-cgroup OOM can enter the existing pure bounded
+escalation planner only after the failed execution completes and cancellation is
+excluded. Retry/class/cumulative-unit/wall limits and independent rollback controls
+apply. The host retains exact planner inputs and signed predecessor usage, creates
+the linked successor with an advanced coordinator fence and matching resource
+lease, reserves that successor, and dispatches it through the same real runner.
+The API public ID remains stable while its internal attempt/fence advances.
+Immutable predecessor evidence preserves each attempt's own selection, phases and
+accounting; escalation edges, not ordinary selection snapshots, identify retry
+classes. Final usage includes every retained execution rather than just the last
+attempt. A missing current grant, reservation or lease never triggers execution.
+
+Local cancellation requires actual local process-tree teardown; remote/SSH
+cancellation has no authenticated teardown operation in the existing protocol and
+remains durable intent/pending accounting until complete authenticated worker
+facts arrive. Neither case manufactures settlement from a disconnect. These
+implementation paths do not close the real benchmark, ChaosControl campaign,
+Valence consumer, delegated-OOM or OnixOS deployment evidence gates; those require
+their separately retained actual runs.
+

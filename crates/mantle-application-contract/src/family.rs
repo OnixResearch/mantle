@@ -61,14 +61,16 @@ impl CommandFamily {
     /// Family owning one public command root, or `None` when unclassified.
     pub fn of_root(root: &str) -> Option<Self> {
         let family = match root {
-            "build" | "check" | "run" | "develop" | "shell" | "filegen" => Self::Realization,
+            "build" | "check" | "run" | "develop" | "shell" | "filegen" | "test" => Self::Realization,
             "store" | "rust-cache" | "log" | "receipt" => Self::StoreAdministration,
-            "source" | "attest" | "foreign-import" | "import" | "artifact" => Self::SourceProvenance,
+            "source" | "attest" | "foreign-import" | "import" | "artifact" | "cargo-build-bundle" => {
+                Self::SourceProvenance
+            }
             "rust-plan" | "graph" | "why" | "dependents" | "nix-free-demo" | "operator-contract" => Self::Planning,
             "eval" | "evaluator-worker" | "evaluator-worker-fixture" | "transcript" => Self::Evaluation,
             "remote" | "remote-secret-worker" => Self::RemoteExecution,
             "release" | "export" => Self::Release,
-            "init" | "refresh" | "upgrade" | "show" | "list-stale" | "mantlepkgs" => Self::Project,
+            "init" | "refresh" | "upgrade" | "show" | "list-stale" | "mantlepkgs" | "profile" => Self::Project,
             "bootstrap" | "self-build" | "stage0-inventory" => Self::Bootstrap,
             "wasm-component" => Self::Component,
             "doctor" | "refactor" => Self::Diagnostics,
@@ -81,9 +83,16 @@ impl CommandFamily {
     /// Command roots owned by this family, in canonical order.
     pub fn roots(self) -> Vec<&'static str> {
         let roots = match self {
-            Self::Realization => vec!["build", "check", "develop", "filegen", "run", "shell"],
+            Self::Realization => vec!["build", "check", "develop", "filegen", "run", "shell", "test"],
             Self::StoreAdministration => vec!["log", "receipt", "rust-cache", "store"],
-            Self::SourceProvenance => vec!["artifact", "attest", "foreign-import", "import", "source"],
+            Self::SourceProvenance => vec![
+                "artifact",
+                "attest",
+                "cargo-build-bundle",
+                "foreign-import",
+                "import",
+                "source",
+            ],
             Self::Planning => vec![
                 "dependents",
                 "graph",
@@ -95,7 +104,15 @@ impl CommandFamily {
             Self::Evaluation => vec!["eval", "evaluator-worker", "evaluator-worker-fixture", "transcript"],
             Self::RemoteExecution => vec!["remote", "remote-secret-worker"],
             Self::Release => vec!["export", "release"],
-            Self::Project => vec!["init", "list-stale", "mantlepkgs", "refresh", "show", "upgrade"],
+            Self::Project => vec![
+                "init",
+                "list-stale",
+                "mantlepkgs",
+                "profile",
+                "refresh",
+                "show",
+                "upgrade",
+            ],
             Self::Bootstrap => vec!["bootstrap", "self-build", "stage0-inventory"],
             Self::Component => vec!["wasm-component"],
             Self::Diagnostics => vec!["doctor", "refactor"],

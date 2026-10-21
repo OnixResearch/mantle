@@ -8,19 +8,6 @@ const EXECUTABLE_MODE: u32 = 0o755;
 const BLAKE3_HEX_BYTES: usize = 64;
 const MATRIX_ID: &str = "representative-rust-compatibility-v1";
 const MATRIX_PATH: &str = "examples/rust_compatibility_surface_matrix.ncl";
-const BLOCKER_MISSING_VENDOR: &str = "missing-vendored-registry-source";
-const BLOCKER_STALE_LOCK: &str = "stale-lockfile-digest";
-const BLOCKER_BUILD_METADATA: &str = "malformed-build-script-metadata";
-const BLOCKER_PROC_MACRO: &str = "missing-proc-macro-host-artifact";
-const BLOCKER_NATIVE_LINK: &str = "unsupported-native-link-metadata";
-const BLOCKER_FEATURE_SURFACE: &str = "missing-feature-surface";
-const BLOCKER_TARGET_CFG_SURFACE: &str = "missing-target-cfg-surface";
-const BLOCKER_WORKSPACE_INHERITANCE: &str = "missing-workspace-inheritance-surface";
-const BLOCKER_MULTI_PACKAGE_BINARY: &str = "missing-multi-package-binary-surface";
-const BLOCKER_VENDORED_GIT: &str = "unsupported-vendored-git-source";
-const BLOCKER_PKG_CONFIG: &str = "unsupported-pkg-config";
-const BLOCKER_LINK_METADATA: &str = "unsupported-rustc-link-metadata";
-const BLOCKER_NATIVE_C: &str = "unsupported-native-c-compile";
 
 fn mantle_cmd() -> Command {
     Command::cargo_bin("mantle").expect("mantle binary should be built")

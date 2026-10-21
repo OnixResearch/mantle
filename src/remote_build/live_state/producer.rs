@@ -25,7 +25,6 @@ use super::LiveBuildEmitAction;
 use super::LiveBuildFact;
 use super::LiveBuildFactError;
 use super::LiveBuildSnapshot;
-use super::MAX_LIVE_FACT_BYTES;
 use super::MAX_LIVE_FACTS;
 use super::MAX_LIVE_ID_BYTES;
 use super::admit_fact_size;
@@ -36,7 +35,7 @@ use super::plan_remote_live_fact_changes;
 use super::plan_remote_live_owner_stop;
 
 const QUEUED_UPDATES: usize = 8;
-const MAX_FRAME_BYTES: usize = MAX_LIVE_FACT_BYTES + MAX_LIVE_ID_BYTES + 512;
+const MAX_FRAME_BYTES: usize = super::MAX_DEMAND_FACT_BYTES + MAX_LIVE_ID_BYTES + 512;
 const WRITE_TIMEOUT: Duration = Duration::from_millis(250);
 
 const CONNECTING: u8 = 0;

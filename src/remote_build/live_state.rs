@@ -21,6 +21,9 @@ pub mod producer;
 pub const LIVE_BUILD_FACT_SCHEMA: &str = "mantle-live-build-fact-v1";
 pub const MAX_LIVE_FACTS: usize = 4_096;
 pub const MAX_LIVE_FACT_BYTES: usize = 2_048;
+/// Quantified vectors may name up to 32 accelerator and token classes. This
+/// extension does not increase the 2 KiB limit for existing live fact kinds.
+pub const MAX_DEMAND_FACT_BYTES: usize = 16_384;
 pub const MAX_LIVE_ID_BYTES: usize = 256;
 const FACT_ID_DOMAIN: &[u8] = b"mantle-live-build-fact-id-v1\0";
 
@@ -69,6 +72,9 @@ pub enum LiveBuildFactValue {
         attempt_id: Option<String>,
         outcome: LiveTerminalOutcome,
         terminal_phase: Option<String>,
+    },
+    WorkerDemand {
+        demand: crunch_remote_core::demand::WorkerDemand,
     },
 }
 
@@ -316,21 +322,22 @@ pub fn normalize_remote_live_facts(
     state: &RemoteCoordinatorState,
     present_workers: &BTreeSet<String>,
 ) -> Result<LiveBuildSnapshot, LiveBuildFactError> {
-    normalize_remote_live_facts_scoped(owner_run_id, state, present_workers, None)
+    normalize_remote_live_facts_scoped(owner_run_id, state, present_workers, None, None)
 }
 
 /// Limit a build owner's facts to jobs admitted during that invocation; old
 /// persisted terminal jobs belong to their former owner, not the new build.
-pub fn normalize_remote_live_facts_for_jobs(
+pub fn normalize_remote_live_facts_for_requests(
     owner_run_id: &str,
     state: &RemoteCoordinatorState,
     present_workers: &BTreeSet<String>,
     owned_jobs: &BTreeSet<super::RemoteJobId>,
+    owned_requests: &BTreeSet<String>,
 ) -> Result<LiveBuildSnapshot, LiveBuildFactError> {
     if owned_jobs.iter().any(|job_id| !state.jobs.contains_key(job_id)) {
         return Err(LiveBuildFactError::MismatchedJob);
     }
-    normalize_remote_live_facts_scoped(owner_run_id, state, present_workers, Some(owned_jobs))
+    normalize_remote_live_facts_scoped(owner_run_id, state, present_workers, Some(owned_jobs), Some(owned_requests))
 }
 
 fn normalize_remote_live_facts_scoped(
@@ -338,6 +345,7 @@ fn normalize_remote_live_facts_scoped(
     state: &RemoteCoordinatorState,
     present_workers: &BTreeSet<String>,
     owned_jobs: Option<&BTreeSet<super::RemoteJobId>>,
+    owned_requests: Option<&BTreeSet<String>>,
 ) -> Result<LiveBuildSnapshot, LiveBuildFactError> {
     admit_identity(owner_run_id)?;
     let job_count = owned_jobs.map_or(state.jobs.len(), BTreeSet::len);
@@ -447,6 +455,13 @@ fn normalize_remote_live_facts_scoped(
             fence_generation: scope.fence_generation.get(),
         })?;
     }
+    for demand in state.worker_demands.facts() {
+        if owned_requests.is_some_and(|owned| !owned.contains(&demand.job_id)) {
+            continue;
+        }
+        super::demand::validate_published_demand(demand).map_err(|_| LiveBuildFactError::InvalidIdentity)?;
+        insert_fact(&mut facts, owner_run_id, LiveBuildFactValue::WorkerDemand { demand: demand.clone() })?;
+    }
     Ok(LiveBuildSnapshot {
         owner_run_id: owner_run_id.to_string(),
         facts,
@@ -537,6 +552,10 @@ fn fact_identity(owner_run_id: &str, value: &LiveBuildFactValue) -> Result<Strin
             hash_part(&mut hash, job_id)?;
             hash_part(&mut hash, attempt_id.as_deref().unwrap_or(""))?;
         }
+        LiveBuildFactValue::WorkerDemand { demand } => {
+            hash_part(&mut hash, "worker-demand")?;
+            hash_part(&mut hash, &demand.requirement_id_blake3)?;
+        }
     }
     Ok(hash.finalize().to_hex().to_string())
 }
@@ -583,7 +602,11 @@ fn admit_fact_size(owner_run_id: &str, fact_id: &str, fact: &LiveBuildFact) -> R
     };
     let mut writer = BoundedFactWriter {
         bytes: 0,
-        limit: MAX_LIVE_FACT_BYTES,
+        limit: if matches!(fact.value, LiveBuildFactValue::WorkerDemand { .. }) {
+            MAX_DEMAND_FACT_BYTES
+        } else {
+            MAX_LIVE_FACT_BYTES
+        },
     };
     serde_json::to_writer(&mut writer, &envelope).map_err(|_| LiveBuildFactError::FactTooLarge)
 }

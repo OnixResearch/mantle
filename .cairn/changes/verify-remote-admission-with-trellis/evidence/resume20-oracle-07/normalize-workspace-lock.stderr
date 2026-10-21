@@ -1,0 +1,9 @@
+    Updating crates.io index
+     Locking 6 packages to latest compatible versions
+      Adding verus_builtin v0.0.0-2026-01-25-0057 (available: v0.0.0-2026-10-11-0230)
+      Adding verus_builtin_macros v0.0.0-2026-01-25-0057 (available: v0.0.0-2026-10-18-0147)
+      Adding verus_prettyplease v0.0.0-2026-01-25-0057 (available: v0.0.0-2026-09-06-0133)
+      Adding verus_state_machines_macros v0.0.0-2026-01-25-0057 (available: v0.0.0-2026-10-18-0147)
+      Adding verus_syn v0.0.0-2026-01-25-0057 (available: v0.0.0-2026-09-06-0133)
+      Adding vstd v0.0.0-2026-01-25-0057 (available: v0.0.0-2026-10-18-0147)
+note: pass `--verbose` to see 333 unchanged dependencies behind latest

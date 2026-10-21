@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle-cargo-acquisition-v1",
+  "title": "Mantle explicit Cargo acquisition stages",
+  "oneOf": [
+    { "$ref": "#/$defs/inspection" },
+    { "$ref": "#/$defs/realized" },
+    { "$ref": "#/$defs/blocker" }
+  ],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "version", "url", "sha256", "hash_mode", "git_revision", "reviewed_identity", "vendor_directory"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "version": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "url": { "type": "string", "pattern": "^https://" },
+        "sha256": { "$ref": "#/$defs/digest" },
+        "hash_mode": { "enum": ["flat-sha256", "recursive-sha256"] },
+        "git_revision": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+        "reviewed_identity": { "type": ["string", "null"] },
+        "vendor_directory": { "type": "string", "minLength": 1, "maxLength": 1024 }
+      }
+    },
+    "inspection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "stage", "lock_blake3", "selected_table_blake3", "selected_table", "artifacts", "non_claims"],
+      "properties": {
+        "schema": { "const": "mantle-cargo-acquisition-v1" },
+        "stage": { "const": "acquisition-planning" },
+        "lock_blake3": { "$ref": "#/$defs/digest" },
+        "selected_table_blake3": { "$ref": "#/$defs/digest" },
+        "selected_table": { "type": "string", "maxLength": 4194304 },
+        "artifacts": { "type": "array", "maxItems": 512, "items": { "$ref": "#/$defs/artifact" } },
+        "non_claims": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      }
+    },
+    "attestation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["logical_store_path", "nar_sha256", "nar_size", "signed_fingerprint_blake3"],
+      "properties": {
+        "logical_store_path": { "type": "string", "pattern": "^/[^\\s]+/store/[0-9a-z]{32}-[^/]+$" },
+        "nar_sha256": { "$ref": "#/$defs/digest" },
+        "nar_size": { "type": "integer", "minimum": 0 },
+        "signed_fingerprint_blake3": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "realized": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "stage", "inspection", "native_parent_drv_path", "canonical_plan_blake3", "output", "plan_output", "non_claims"],
+      "properties": {
+        "schema": { "const": "mantle-cargo-acquisition-v1" },
+        "stage": { "const": "acquisition-realized" },
+        "inspection": { "$ref": "#/$defs/inspection" },
+        "native_parent_drv_path": { "type": "string", "pattern": "^/.*\\.drv$" },
+        "canonical_plan_blake3": { "$ref": "#/$defs/digest" },
+        "output": { "$ref": "#/$defs/attestation" },
+        "plan_output": { "$ref": "#/$defs/attestation" },
+        "non_claims": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      }
+    },
+    "blocker": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stage", "code", "subject", "detail"],
+      "properties": {
+        "stage": { "enum": ["acquisition-planning", "acquisition-admission", "acquisition-realization", "acquisition-trust", "acquisition-vendor-verification"] },
+        "code": { "type": "string", "minLength": 1 },
+        "subject": { "type": "string", "minLength": 1 },
+        "detail": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

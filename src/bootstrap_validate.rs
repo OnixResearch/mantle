@@ -141,7 +141,7 @@ impl BootstrapPort {
         result.map_err(|err| RunError::Internal(format!("creating evidence dir {}: {err}", path.display())))
     }
 
-    fn doctor(&mut self, ctx: &RunContext) -> operator_diagnostics::PreflightReport {
+    fn doctor(&mut self, ctx: &RunContext) -> Result<operator_diagnostics::PreflightReport, RunError> {
         let doctor = operator_diagnostics::collect_doctor_report_with_env(
             operator_diagnostics::DoctorRequest {
                 profile: DoctorProfile::Build,
@@ -159,8 +159,8 @@ impl BootstrapPort {
             observation.status = ObservationStatus::Failed;
             observation.diagnostics_code = Some("unexpected-doctor-environment-reads".to_string());
         }
-        self.observe(EFFECT_DOCTOR, doctor.ok);
-        doctor
+        self.observe(EFFECT_DOCTOR, doctor.as_ref().is_ok_and(|report| report.ok));
+        doctor.map_err(|error| RunError::Internal(format!("collecting bootstrap doctor report: {error:?}")))
     }
 
     fn clock(&mut self) -> Result<u64, RunError> {
@@ -330,7 +330,7 @@ fn run_bootstrap_validate(
 ) -> Result<(), RunError> {
     let evidence_dir = resolve_evidence_dir(opts.evidence_dir.as_deref(), &opts.target, port)?;
     port.evidence_dir(&evidence_dir)?;
-    let doctor = port.doctor(ctx);
+    let doctor = port.doctor(ctx)?;
     let doctor_json = doctor
         .render_json()
         .map_err(|err| RunError::Internal(format!("serializing doctor report: {err}")))?;

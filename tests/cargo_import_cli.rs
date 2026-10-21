@@ -148,9 +148,10 @@ fn write_vendored_registry_workspace(root: &Path) {
     let lib_bytes = b"pub fn marker() {}\n";
     std::fs::write(root.join("vendor/serde/src/lib.rs"), lib_bytes).unwrap();
     let lib_sha256 = format!("{:x}", Sha256::digest(lib_bytes));
+    let manifest_sha256 = format!("{:x}", Sha256::digest(std::fs::read(root.join("vendor/serde/Cargo.toml")).unwrap()));
     std::fs::write(
         root.join("vendor/serde/.cargo-checksum.json"),
-        format!(r#"{{"files":{{"src/lib.rs":"{lib_sha256}"}},"package":null}}"#),
+        format!(r#"{{"files":{{"Cargo.toml":"{manifest_sha256}","src/lib.rs":"{lib_sha256}"}},"package":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}"#),
     )
     .unwrap();
 }
@@ -298,6 +299,51 @@ fn cargo_import_apply_rejects_stale_vendor_checksum_before_writes() {
     assert!(classes.contains(&"stale-vendor-checksum"), "classes: {classes:?}");
     assert!(!workspace.path().join("mantle-project.ncl").exists());
     assert!(!workspace.path().join(".mantle/inputs.ncl").exists());
+}
+
+#[test]
+fn cargo_import_rejects_changed_lock_checksum_at_package_boundary() {
+    let workspace = tempfile::tempdir().unwrap();
+    write_vendored_registry_workspace(workspace.path());
+    std::fs::write(
+        workspace.path().join("Cargo.lock"),
+        REGISTRY_LOCKFILE.replace("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", &"a".repeat(64)),
+    )
+    .unwrap();
+    let output = run_import(workspace.path(), "--apply");
+    let plan = parse_plan(&output);
+    assert!(!output.status.success());
+    assert!(plan.blockers.iter().any(|blocker| blocker.class == "lock-vendor-checksum-mismatch"));
+    assert!(!workspace.path().join("mantle-project.ncl").exists());
+}
+
+#[test]
+fn cargo_import_rejects_unchecksummed_vendor_file() {
+    let workspace = tempfile::tempdir().unwrap();
+    write_vendored_registry_workspace(workspace.path());
+    std::fs::write(workspace.path().join("vendor/serde/src/injected.rs"), "pub fn injected() {}\n").unwrap();
+    let output = run_import(workspace.path(), "--apply");
+    let plan = parse_plan(&output);
+    assert!(!output.status.success());
+    assert!(plan.blockers.iter().any(|blocker| blocker.class == "stale-vendor-checksum"));
+    assert!(!workspace.path().join("mantle-project.ncl").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn cargo_import_rejects_vendor_symlink_even_when_target_hash_matches() {
+    let workspace = tempfile::tempdir().unwrap();
+    write_vendored_registry_workspace(workspace.path());
+    let external = workspace.path().join("external.rs");
+    std::fs::write(&external, "pub fn marker() {}\n").unwrap();
+    let library = workspace.path().join("vendor/serde/src/lib.rs");
+    std::fs::remove_file(&library).unwrap();
+    std::os::unix::fs::symlink(external, library).unwrap();
+    let output = run_import(workspace.path(), "--apply");
+    let plan = parse_plan(&output);
+    assert!(!output.status.success());
+    assert!(plan.blockers.iter().any(|blocker| blocker.class == "stale-vendor-checksum"));
+    assert!(!workspace.path().join("mantle-project.ncl").exists());
 }
 
 #[test]

@@ -135,6 +135,7 @@ mod tests {
             &writable,
             "/nix/store",
             std::slice::from_ref(&base),
+            Some(&crate::source_admission::TestSourceAdmission),
         )
         .unwrap_err();
         assert!(error.to_string().contains("snix-overlay-unsupported"), "{error}");
@@ -150,6 +151,7 @@ mod tests {
             &writable,
             "/nix/store",
             std::slice::from_ref(&base),
+            Some(&crate::source_admission::TestSourceAdmission),
         )
         .unwrap_err();
         assert!(error.to_string().contains("reading state directory"), "{error}");

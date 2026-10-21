@@ -258,7 +258,11 @@ pub enum ContentBoundEvidenceRoleV1 {
 
 impl ContentBoundEvidenceRoleV1 {
     #[must_use]
-    pub const fn external_role(self) -> &'static str {
+    pub fn external_role(self) -> String {
+        self.external_role_borrowed().to_string()
+    }
+
+    const fn external_role_borrowed(self) -> &'static str {
         match self {
             Self::Source => "content-bound-source-evidence",
             Self::Test => "content-bound-test-evidence",
@@ -593,7 +597,11 @@ struct ReleaseEvidenceHashMaterial<'a> {
 }
 
 #[must_use]
-pub fn content_bound_requirement_mode_is_supported(mode: &str) -> bool {
+pub fn content_bound_requirement_mode_is_supported(mode: String) -> bool {
+    content_bound_requirement_mode_is_supported_borrowed(&mode)
+}
+
+fn content_bound_requirement_mode_is_supported_borrowed(mode: &str) -> bool {
     mode == CONTENT_BOUND_REQUIREMENT_MODE_OPTIONAL || mode == CONTENT_BOUND_REQUIREMENT_MODE_REQUIRED
 }
 
@@ -683,13 +691,13 @@ fn validate_built_content_bound_release(
         .rows
         .iter()
         .map(|row| ContentBoundExternalEvidenceLinkV1 {
-            role: row.role.external_role().to_string(),
+            role: row.role.external_role(),
             schema: CONTENT_BOUND_EVIDENCE_EXTERNAL_SCHEMA_V1.to_string(),
             bundle_relative_path: row.bundle_relative_path.clone(),
             digest_blake3: row.content_identity.blake3.clone(),
         })
         .collect::<Vec<_>>();
-    let verification = validate_content_bound_release_evidence(
+    let verification = validate_content_bound_release_evidence_borrowed(
         &evidence,
         &evidence.release_id,
         &binary_digests,
@@ -705,6 +713,22 @@ fn validate_built_content_bound_release(
 
 #[must_use]
 pub fn validate_content_bound_release_evidence(
+    evidence: ContentBoundReleaseEvidenceV1,
+    expected_release_id: String,
+    expected_binary_digests_blake3: Vec<String>,
+    external_evidence: Vec<ContentBoundExternalEvidenceLinkV1>,
+    mode: String,
+) -> ContentBoundRequirementVerificationV1 {
+    validate_content_bound_release_evidence_borrowed(
+        &evidence,
+        &expected_release_id,
+        &expected_binary_digests_blake3,
+        &external_evidence,
+        &mode,
+    )
+}
+
+fn validate_content_bound_release_evidence_borrowed(
     evidence: &ContentBoundReleaseEvidenceV1,
     expected_release_id: &str,
     expected_binary_digests_blake3: &[String],
@@ -716,7 +740,7 @@ pub fn validate_content_bound_release_evidence(
     let mut issues = Vec::new();
     debug_assert!(issues.capacity() >= issues.len());
     debug_assert!(issues.len() <= MAX_VALIDATION_ISSUE_COUNT);
-    if !content_bound_requirement_mode_is_supported(mode) {
+    if !content_bound_requirement_mode_is_supported_borrowed(mode) {
         push_issue(
             &mut issues,
             ContentBoundRequirementIssueCodeV1::InputSchemaUnsupported,
@@ -782,6 +806,22 @@ pub fn validate_content_bound_release_evidence(
 
 #[must_use]
 pub fn evaluate_optional_content_bound_release_evidence(
+    evidence: Option<ContentBoundReleaseEvidenceV1>,
+    expected_release_id: String,
+    expected_binary_digests_blake3: Vec<String>,
+    external_evidence: Vec<ContentBoundExternalEvidenceLinkV1>,
+    mode: String,
+) -> ContentBoundRequirementVerificationV1 {
+    evaluate_optional_content_bound_release_evidence_borrowed(
+        evidence.as_ref(),
+        &expected_release_id,
+        &expected_binary_digests_blake3,
+        &external_evidence,
+        &mode,
+    )
+}
+
+pub(super) fn evaluate_optional_content_bound_release_evidence_borrowed(
     evidence: Option<&ContentBoundReleaseEvidenceV1>,
     expected_release_id: &str,
     expected_binary_digests_blake3: &[String],
@@ -793,7 +833,7 @@ pub fn evaluate_optional_content_bound_release_evidence(
         let mut issues = Vec::new();
         debug_assert!(issues.capacity() >= issues.len());
         debug_assert!(issues.len() <= MAX_VALIDATION_ISSUE_COUNT);
-        if !content_bound_requirement_mode_is_supported(mode) {
+        if !content_bound_requirement_mode_is_supported_borrowed(mode) {
             push_issue(
                 &mut issues,
                 ContentBoundRequirementIssueCodeV1::InputSchemaUnsupported,
@@ -826,7 +866,7 @@ pub fn evaluate_optional_content_bound_release_evidence(
             },
         };
     };
-    validate_content_bound_release_evidence(
+    validate_content_bound_release_evidence_borrowed(
         evidence,
         expected_release_id,
         expected_binary_digests_blake3,
@@ -1999,7 +2039,7 @@ fn validate_external_links(
             .filter(|link| link.bundle_relative_path == row.bundle_relative_path)
             .collect::<Vec<_>>();
         let is_valid = matches.len() == 1
-            && matches[0].role == row.role.external_role()
+            && matches[0].role == row.role.external_role_borrowed()
             && matches[0].schema == CONTENT_BOUND_EVIDENCE_EXTERNAL_SCHEMA_V1
             && matches[0].digest_blake3 == row.content_identity.blake3;
         if !is_valid {
@@ -2259,7 +2299,7 @@ fn validate_requirement_digest(
             "Valence digest role does not match the field semantic domain",
         );
     }
-    if crate::CheckedRequirementDigest::new(digest.domain.clone(), &digest.blake3).is_err() {
+    if crate::CheckedBlake3Hex::validate(&digest.blake3).is_err() {
         push_issue(
             issues,
             ContentBoundRequirementIssueCodeV1::Blake3Invalid,
@@ -2283,7 +2323,7 @@ fn validate_content_digest(
             "Mantle digest role does not match the field semantic domain",
         );
     }
-    if crate::CheckedContentBoundDigest::new(digest.domain, &digest.blake3).is_err() {
+    if crate::CheckedBlake3Hex::validate(&digest.blake3).is_err() {
         push_issue(
             issues,
             ContentBoundRequirementIssueCodeV1::Blake3Invalid,
@@ -2296,7 +2336,7 @@ fn validate_content_digest(
 // Internal validator: semantic parameter names keep all local call sites explicit.
 #[allow(tigerstyle::ambiguous_params)]
 fn validate_repository_id(repository_id: &str, field_path: &str, issues: &mut Vec<ContentBoundRequirementIssueV1>) {
-    if crate::ContentBoundRepositoryId::new(repository_id).is_err() {
+    if crate::ContentBoundRepositoryId::validate(repository_id).is_err() {
         push_issue(
             issues,
             ContentBoundRequirementIssueCodeV1::RepositoryIdInvalid,
@@ -2381,7 +2421,7 @@ fn validate_opaque_revision(revision: &str, field_path: &str, issues: &mut Vec<C
 
 #[allow(tigerstyle::ambiguous_params)]
 fn validate_requirement_id(requirement_id: &str, field_path: &str, issues: &mut Vec<ContentBoundRequirementIssueV1>) {
-    if crate::ContentBoundRequirementId::new(requirement_id).is_err() {
+    if crate::ContentBoundRequirementId::validate(requirement_id).is_err() {
         push_issue(
             issues,
             ContentBoundRequirementIssueCodeV1::RequirementIdInvalid,
@@ -2393,7 +2433,7 @@ fn validate_requirement_id(requirement_id: &str, field_path: &str, issues: &mut 
 
 #[allow(tigerstyle::ambiguous_params)]
 fn validate_specification_path(path: &str, field_path: &str, issues: &mut Vec<ContentBoundRequirementIssueV1>) {
-    if crate::ContentBoundSpecificationPath::new(path).is_err() {
+    if crate::ContentBoundSpecificationPath::validate(path).is_err() {
         push_issue(
             issues,
             ContentBoundRequirementIssueCodeV1::SpecificationPathUnsafe,
@@ -2411,9 +2451,9 @@ fn validate_safe_relative_path(
     issues: &mut Vec<ContentBoundRequirementIssueV1>,
 ) {
     let admitted = if require_bundle_prefix {
-        crate::ContentBoundEvidencePath::new_bundle_path(path)
+        crate::ContentBoundEvidencePath::validate_bundle_path(path)
     } else {
-        crate::ContentBoundEvidencePath::new_repository_path(path)
+        crate::ContentBoundEvidencePath::validate_repository_path(path)
     };
     if admitted.is_err() {
         push_issue(
@@ -2445,7 +2485,7 @@ fn validate_required_non_claims(
 
 #[allow(tigerstyle::ambiguous_params)]
 fn validate_blake3(value: &str, field_path: &str, issues: &mut Vec<ContentBoundRequirementIssueV1>) {
-    if crate::CheckedBlake3Hex::new(value).is_err() {
+    if crate::CheckedBlake3Hex::validate(value).is_err() {
         push_issue(
             issues,
             ContentBoundRequirementIssueCodeV1::Blake3Invalid,
@@ -2503,7 +2543,7 @@ fn validate_binary_digest_values(
 
 #[allow(tigerstyle::ambiguous_params)]
 fn validate_release_id(release_id: &str, field_path: &str, issues: &mut Vec<ContentBoundRequirementIssueV1>) {
-    if crate::ContentBoundReleaseId::new(release_id).is_err() {
+    if crate::ContentBoundReleaseId::validate(release_id).is_err() {
         push_issue(
             issues,
             ContentBoundRequirementIssueCodeV1::ReleaseIdMismatch,
@@ -2875,7 +2915,7 @@ mod tests {
             .rows
             .iter()
             .map(|row| ContentBoundExternalEvidenceLinkV1 {
-                role: row.role.external_role().to_string(),
+                role: row.role.external_role(),
                 schema: CONTENT_BOUND_EVIDENCE_EXTERNAL_SCHEMA_V1.to_string(),
                 bundle_relative_path: row.bundle_relative_path.clone(),
                 digest_blake3: row.content_identity.blake3.clone(),
@@ -2952,12 +2992,15 @@ mod tests {
         reordered.input.coverage.reverse();
         let second = build_content_bound_release_evidence(reordered).expect("reordered content-bound release");
         assert_eq!(first.evidence_identity, second.evidence_identity);
+        let release_id = first.release_id.clone();
+        let binary_digests = first.binary_identities.iter().map(|identity| identity.blake3.clone()).collect();
+        let links = external_links(&first);
         let verification = validate_content_bound_release_evidence(
-            &first,
-            &first.release_id,
-            &first.binary_identities.iter().map(|identity| identity.blake3.clone()).collect::<Vec<_>>(),
-            &external_links(&first),
-            CONTENT_BOUND_REQUIREMENT_MODE_REQUIRED,
+            first,
+            release_id,
+            binary_digests,
+            links,
+            CONTENT_BOUND_REQUIREMENT_MODE_REQUIRED.to_string(),
         );
         assert!(verification.valid, "issues: {:?}", verification.issues);
     }
@@ -3035,10 +3078,10 @@ mod tests {
     fn strict_mode_rejects_missing_and_invalid_optional_evidence() {
         let absent = evaluate_optional_content_bound_release_evidence(
             None,
-            "release",
-            &[],
-            &[],
-            CONTENT_BOUND_REQUIREMENT_MODE_REQUIRED,
+            "release".to_string(),
+            Vec::new(),
+            Vec::new(),
+            CONTENT_BOUND_REQUIREMENT_MODE_REQUIRED.to_string(),
         );
         assert!(!absent.valid);
         assert_eq!(absent.disposition, CONTENT_BOUND_REQUIREMENT_DISPOSITION_ABSENT);
@@ -3046,12 +3089,14 @@ mod tests {
         let evidence = build_content_bound_release_evidence(build_input()).expect("valid content-bound release");
         let mut stale_links = external_links(&evidence);
         stale_links[0].digest_blake3 = blake3::hash(b"stale evidence").to_hex().to_string();
+        let release_id = evidence.release_id.clone();
+        let binary_digests = evidence.binary_identities.iter().map(|identity| identity.blake3.clone()).collect();
         let invalid = evaluate_optional_content_bound_release_evidence(
-            Some(&evidence),
-            &evidence.release_id,
-            &evidence.binary_identities.iter().map(|identity| identity.blake3.clone()).collect::<Vec<_>>(),
-            &stale_links,
-            CONTENT_BOUND_REQUIREMENT_MODE_OPTIONAL,
+            Some(evidence),
+            release_id,
+            binary_digests,
+            stale_links,
+            CONTENT_BOUND_REQUIREMENT_MODE_OPTIONAL.to_string(),
         );
         assert!(!invalid.valid);
         assert_eq!(invalid.disposition, CONTENT_BOUND_REQUIREMENT_DISPOSITION_INVALID);
@@ -3062,10 +3107,10 @@ mod tests {
         // r[verify mantle.release_provenance.legacy_coverage_boundary]
         let verification = evaluate_optional_content_bound_release_evidence(
             None,
-            "legacy-release",
-            &[],
-            &[],
-            CONTENT_BOUND_REQUIREMENT_MODE_OPTIONAL,
+            "legacy-release".to_string(),
+            Vec::new(),
+            Vec::new(),
+            CONTENT_BOUND_REQUIREMENT_MODE_OPTIONAL.to_string(),
         );
         assert!(verification.valid);
         assert_eq!(verification.disposition, CONTENT_BOUND_REQUIREMENT_DISPOSITION_ABSENT);

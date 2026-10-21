@@ -133,6 +133,77 @@ The accepted current CLI test captures only bounded private Worker **response** 
 
 The rejected current CLI case spawns a genuinely absent builder program after dispatch, observes the underlying `ENOENT`, preserves its unused one-use ticket, and records a lost job/failed attempt with six ordered immutable telemetry events and no imported output or PathInfo. The bounded original failed-adapter receipt has the same observed diagnostic class, state, and event projection. Neither original CLI typed EffectIds nor quantified original CLI resources were observed; V2 remains open for the full identities, effects, and whole dual-path compatibility requirements. The exact sources, prior failed focused runs, final 7/7 focused receipt, and nonclaims are in the [focused validation evidence](../.cairn/changes/separate-remote-build-hexagon/evidence/focused-validation.md).
 
+## Gateway build-service evidence
+
+The gateway producer uses the accepted Valence profile
+`valence.build-service-evidence.v1`, through
+`valence_core::build_service`; it does not define another profile. The host
+projects its durable request/attempt/fence, committed transition times and
+sequences, public operation-specific Basalt decision, resource-policy replay,
+quota entry, measured worker usage and admitted output facts through
+`nix_gateway::evidence::GatewayEvidence`. `finish()` runs Valence's validator
+before serialization. `Export::publish()` writes an immutable
+`<BLAKE3-of-artifact-bytes>.json` below an already-open private directory
+capability, using the existing durable-file-publication rail. Export is bounded
+to 1 MiB and 64 records per bounded producer category; invalid scope, missing
+authority, conflicting reconciliation identity, unsupported role, invalid link,
+privacy marker or changed retained artifact bytes is an error, not a partial
+success artifact.
+
+Reservations and pending reconciliation are real observations. A failed or
+partially observed execution can therefore export the `usage` observation
+class without claiming a build result. The `build` class appears only with
+admitted output identities and a public producer-signature reference. The
+initial queued journal entry establishes the transition origin; the exporter
+does not invent a prior state or a queued-to-queued execution transition.
+
+Resource selection exports both rollout decisions and canonical replay inputs,
+and reruns the selector before labeling that bounded decision `verified`.
+For OOM retries the separately replayed escalation edge, not the ordinary
+selector's smaller-class decision, records the actual successor class.
+The exporter authenticates the retained predecessor usage, requires a positive
+dedicated-cgroup OOM delta, checks its exact recorded observation and original
+selected-class link, and replays the retained bounded escalation inputs.
+Immutable predecessor bundles preserve earlier fences, selections and phases;
+each successor records only its own phases. Missing retry-chain links or
+unrecognized replay fields fail closed.
+Measurements, transitions and usage stay `recorded_only`; output results stay
+`signed`; request/attempt/class linkage stays `linked`. A configured signer or
+consistent link never establishes output behavior. Exact-child CPU, wall time,
+peak RSS and observed stdout/stderr **byte counts** are observations, not log
+text or a cgroup tree integral. When present, a dedicated delegated cgroup's
+memory peak, measurement-completeness class and signed OOM-kill counter delta
+are recorded separately. A sampled workspace allocated-block peak is explicitly
+a lower bound with bounded traversal coverage, not scratch high-water authority.
+Process-only or unavailable OOM observations cannot produce an escalation edge.
+A positive-OOM edge must use the actual signed dedicated-cgroup evidence,
+replay the existing escalation planner and link its predecessor and successor
+with the checked fence and limits. Backend support is not an observation that
+a particular run obtained a delegated cgroup or reproduced OOM; those require
+the retained signed runtime records.
+
+Reuse evidence separates producer result and consumer request, explicit sharing
+scope, current `result-read` authority, request/platform compatibility, output
+check, producer signature and CAS observation. A submit decision cannot stand
+in for consumer reuse authority. Logs, tokens, credentials, private claim sets
+and their derived hashes do not belong in the artifact. Valence's exact required
+non-claim boundary is retained on every record and the profile: canonical
+identity and bounded linkage do not prove correctness, hermeticity, sandboxing,
+host isolation, authorization freshness, future resource sufficiency, fair
+billing, external status truth or release eligibility.
+
+An authorized consumer alias uses `new_reuse` with the retained producer bundle
+selected by its immutable `digest.json` leaf. `read_publication` resolves only
+that bounded leaf relative to the private directory capability and verifies its
+bytes before parsing the accepted profile. The alias adds a distinct consumer
+request, actual current result-read authority and a reuse edge; it preserves the
+original producer attempt, result and historical usage records unchanged. It
+does not reserve or reconcile execution usage again, invent another fenced
+attempt, relabel the producer's output as a consumer build, or infer read/reuse
+authority from build-submit permission. Missing current consumer authority,
+changed producer artifact, cross-project alias without sharing scope and
+producer/account/request/output mismatches all fail closed.
+
 ## Claim boundary
 
 This evidence proves bounded local production stdio client/server composition, verified receiver-state resume, repeated-content chunk handling, stable manifest identity, quota/backpressure behavior, and ordinary output admission for the checked fixtures. It does not prove exactly-once network delivery, arbitrary kill-point recovery, a production P2P listener, SSH deployment, independent-machine behavior, hostile-worker honesty, compiler correctness, output trust from transfer alone, release reproducibility, or Kani execution.

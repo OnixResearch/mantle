@@ -13,6 +13,7 @@ mod build_request;
 pub mod ca_mapping;
 pub mod ca_plan;
 pub mod causal_trace;
+pub mod compile_driver;
 pub mod dispatch_build_service;
 pub mod distributed;
 pub mod dynamic;

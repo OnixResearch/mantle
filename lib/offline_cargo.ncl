@@ -5,7 +5,7 @@
 # generated output writes share/mantle/offline-cargo-build.json so JSON build
 # reports can surface the bounded evidence class.
 
-let { Name, Input, .. } = import "contracts.ncl" in
+let { Name, Input, StorePath, .. } = import "contracts.ncl" in
 let Derivation = import "derivation.ncl" in
 
 let EvidenceSchema = "mantle-offline-cargo-build-evidence-v2" in
@@ -20,6 +20,62 @@ let NetworkPolicyResult = "undeclared-network-denied" in
 let TargetTriple = String in
 let Profile = [| 'debug, 'release |] in
 let CargoSourceName = Name in
+# One invocation-wide native declaration. Unlike unit-plan declarations, this
+# environment is inherited by every Cargo child, not scoped to one package.
+let field_or = fun name fallback record =>
+  if std.record.has_field name record then record."%{name}" else fallback
+in
+let role_marker = "\\{\\{role:([^}]*)\\}\\}" in
+let role_path = "\\{\\{role:[a-z0-9_-]{1,64}\\}\\}[A-Za-z0-9._+/-]*" in
+let shell_quote = fun value => "'" ++ std.string.replace "'" "'\\''" value ++ "'" in
+let normalize_native = fun raw =>
+  let known = std.array.all (fun key => std.array.elem key ["inputs", "env", "path"]) (std.record.fields raw) in
+  let roles = std.record.map (fun role path =>
+    if !(std.string.is_match "^[a-z0-9_-]{1,64}$" role) then
+      std.fail_with "native-input-invalid: invalid role name"
+    else if !(std.string.is_match "^(/[A-Za-z0-9._+-]+)+/[a-z0-9]{32}-[A-Za-z0-9+._?=-]+$" path)
+      || std.array.elem ".." (std.string.split "/" path) then
+      std.fail_with "native-input-host-path: expected a whole store root"
+    else path | StorePath
+  ) (field_or "inputs" {} raw) in
+  let resolve = fun value =>
+    let template = value | String in
+    let markers = std.string.find_all role_marker template in
+    let missing = std.array.any (fun found => !(std.record.has_field (std.array.at 0 found.groups) roles)) markers in
+    let outside = std.string.replace_regex role_path "" template in
+    if std.string.length template > 16384
+      || std.string.is_match "\\x00" template then
+      std.fail_with "native-input-invalid: invalid value length or NUL"
+    else if missing then std.fail_with "native-input-role-undeclared"
+    else if std.string.is_match "/|\\{\\{role:" outside
+      || std.array.elem ".." (std.string.split "/" template) then
+      std.fail_with "native-input-host-path: path must follow a declared role"
+    else std.array.fold_left (fun result role =>
+      std.string.replace "{{role:%{role}}}" roles."%{role}" result
+    ) template (std.record.fields roles)
+  in
+  let environment = std.record.map (fun key value =>
+    if !(std.string.is_match "^[A-Za-z_][A-Za-z0-9_]*$" key) then
+      std.fail_with "native-input-invalid: invalid environment key"
+    else if std.array.elem key ["PATH", "OUT_DIR", "TARGET", "HOST", "NUM_JOBS", "OPT_LEVEL", "DEBUG", "PROFILE", "HOME", "TMPDIR", "TMP", "TEMP", "ENV", "BASH_ENV", "LD_PRELOAD", "LD_LIBRARY_PATH", "LIBRARY_PATH"]
+      || std.string.is_match "^(CARGO_|DEP_|MANTLE_|RUST|NIX_)" key then
+      std.fail_with "native-input-env-reserved: %{key}"
+    else resolve value
+  ) (field_or "env" {} raw) in
+  let path = std.array.map (fun value =>
+    let resolved = resolve value in
+    if !(std.string.is_match "^\\{\\{role:" value)
+      || std.string.is_match ":" resolved then
+      std.fail_with "native-input-host-path: PATH entry must start with a role"
+    else resolved
+  ) (field_or "path" [] raw) in
+  if !known then std.fail_with "native-input-invalid: unknown declaration field"
+  else if std.array.length (std.record.fields roles) > 64
+    || std.array.length (std.record.fields environment) > 64
+    || std.array.length path > 64 then
+    std.fail_with "native-input-invalid: declaration exceeds 64 entries"
+  else { inputs = std.record.values roles, env = environment, path = path }
+in
 let RustOfflineCargoPackage = {
   name | Name,
   src | Input,
@@ -35,6 +91,7 @@ let RustOfflineCargoPackage = {
   profile | Profile | default = 'release,
   vendor_src | Input | optional,
   vendor_name | CargoSourceName | optional,
+  native_inputs | optional,
 } in
 
 let profile_dir = fun profile =>
@@ -58,10 +115,16 @@ let input_closure = fun package =>
   else
     [package.seed_toolchain, package.musl, package.rust, package.src]
 in
+let input_path = fun input source_name marker =>
+  if std.is_string input then
+    "'" ++ (std.string.replace "'" "'\\''" input) ++ "'"
+  else
+    "$(find_input \"%{source_name}\" \"%{marker}\")"
+in
 let vendor_setup_script = fun package =>
   if has_vendor package then
     m%"
-      VENDOR=$(find_input "%{package.vendor_name}" Cargo.toml)
+      VENDOR=%{input_path package.vendor_src package.vendor_name "."}
       $BB mkdir -p /tmp/vendor
       cp -r "$VENDOR/." /tmp/vendor/
       chmod -R u+w /tmp/vendor
@@ -89,6 +152,8 @@ in
     | doc "Lower a declared Rust package to a sandboxed Cargo --offline --locked derivation."
     = fun raw_package =>
       let package = raw_package | RustOfflineCargoPackage in
+      let native = normalize_native (field_or "native_inputs" {} package) in
+      let native_path = std.string.join ":" native.path in
       let profile_text = profile_dir package.profile in
       let cargo_profile_arg = profile_arg package.profile in
       {
@@ -133,16 +198,16 @@ in
               printf '%s\n' "$found"
             }
 
-            TOOLCHAIN=$(find_input "%{package.seed_toolchain_name}" "bin")
-            MUSL=$(find_input "%{package.musl_name}" "lib/libc.so")
-            RUST=$(find_input "%{package.rust_name}" "bin/cargo")
-            SRC=$(find_input "%{package.source_name}" Cargo.toml)
+            TOOLCHAIN=%{input_path package.seed_toolchain package.seed_toolchain_name "bin"}
+            MUSL=%{input_path package.musl package.musl_name "lib/libc.so"}
+            RUST=%{input_path package.rust package.rust_name "bin/cargo"}
+            SRC=%{input_path package.src package.source_name "Cargo.toml"}
             LOCKFILE="$SRC/Cargo.lock"
 
             $BB mkdir -p /lib 2>/dev/null || true
             $BB ln -sf "$MUSL/lib/libc.so" /lib/ld-musl-x86_64.so.1 2>/dev/null || true
 
-            export PATH="/tmp/tools:$RUST/bin:$TOOLCHAIN/bin"
+            export PATH="/tmp/tools:$RUST/bin:$TOOLCHAIN/bin"%{if native.path == [] then "" else ":" ++ shell_quote native_path}
             export LD_LIBRARY_PATH="$TOOLCHAIN/x86_64-linux-musl/lib"
             export LIBRARY_PATH="$TOOLCHAIN/x86_64-linux-musl/lib"
             export RUSTFLAGS="-C link-arg=-L$TOOLCHAIN/x86_64-linux-musl/lib"
@@ -173,6 +238,7 @@ CARGOEOF
   "target": "%{package.target}",
   "profile": "%{profile_text}",
   "binary": "%{package.binary}",
+  "native_inputs": $MANTLE_OFFLINE_CARGO_NATIVE_INPUTS,
   "lockfile": {"role":"cargo-lockfile","path":"$LOCKFILE","identity_class":"%{IdentityBlake3Content}"},
   "source_closure": [
     {"role":"package-source","path":"$SRC","identity_class":"%{IdentityBlake3Content}"},
@@ -221,8 +287,14 @@ EOF
           MANTLE_BUILD_EVIDENCE_SCHEMA = EvidenceSchema,
           MANTLE_BUILD_EVIDENCE_CLASS = EvidenceClass,
           MANTLE_PROJECT_BUILD_STATUS = ProjectBuildStatus,
-        },
-        inputs = input_closure package,
+          MANTLE_OFFLINE_CARGO_NATIVE_INPUTS = std.serialize 'Json {
+            scope = "cargo-invocation-wide",
+            inputs = native.inputs,
+            env = native.env,
+            path = native.path,
+          },
+        } & native.env,
+        inputs = input_closure package @ native.inputs,
         addressing_mode = 'input-addressed,
       } | Derivation,
 

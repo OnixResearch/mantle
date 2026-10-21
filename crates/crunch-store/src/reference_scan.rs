@@ -220,6 +220,7 @@ mod tests {
 
     async fn test_store(dir: &std::path::Path) -> StoreHandle {
         StoreHandle::open(StoreConfig {
+            source_admission: None,
             backend: StoreBackend::Snix,
             state_dir: dir.join("state"),
             output_dir: dir.join("store"),

@@ -1,0 +1,31 @@
+{
+  "schema": "mantle-resource-benchmark-corpus-v1",
+  "source": "tests/fixtures/resource-benchmark/workload.rs",
+  "source_blake3": "6ed2f285e01f70a2b897b32ec91cdb8d110d84f1c894ddcb079f1d11ab2cfe15",
+  "source_license": "AGPL-3.0-or-later",
+  "authorship": "Original Mantle source; no upstream benchmark implementation copied",
+  "reviewed_reference": {
+    "repository": "https://github.com/nixbuild/nixbench",
+    "revision": "b256cd275d8c79ba485be8d317005f973879825a",
+    "readme": "https://github.com/nixbuild/nixbench/blob/b256cd275d8c79ba485be8d317005f973879825a/README.md",
+    "license": "Apache-2.0",
+    "license_source": "https://github.com/nixbuild/nixbench/blob/b256cd275d8c79ba485be8d317005f973879825a/LICENSE",
+    "patterns": ["fixed seeded output identity independent of derivation rebuild identity", "bounded single-file size", "compressible versus pseudorandom bytes", "independent concurrent operations"],
+    "excluded": ["nixbuild.net tags and CPU policy", "impure environment inputs", "proprietary limits", "hosted-service benchmark results", "copied implementation or assets"]
+  },
+  "platform": {"architecture": ["x86_64", "aarch64"], "system": "linux", "execution": "existing admitted Mantle remote derivation; fixed source compiled with explicitly selected Rust provider"},
+  "maximums": {"payload_bytes": 67108864, "files": 32, "memory_passes": 8, "single_io_chunk_bytes": 16384, "wall_time_ms": 30000},
+  "workloads": [
+    {"id": "single-small", "arguments": ["single", "$out", "65536", "7", "1"], "expected_terminal": "succeeded", "expected_output": {"kind": "regular", "bytes": 65536}},
+    {"id": "single-transfer", "arguments": ["single", "$out", "8388608", "19", "1"], "expected_terminal": "succeeded", "expected_output": {"kind": "regular", "bytes": 8388608}},
+    {"id": "fanout", "arguments": ["fanout", "$out", "65536", "41", "16"], "expected_terminal": "succeeded", "expected_output": {"kind": "directory", "regular_files": 16, "bytes_per_file": 65536}},
+    {"id": "memory-touch", "arguments": ["memory", "$out", "16777216", "73", "1"], "expected_terminal": "succeeded", "expected_output": {"kind": "regular", "bytes": 8}}
+  ],
+  "comparison": {
+    "baseline": "same admitted request and eligible current live classes, declared minima, empty compatible history",
+    "candidate": "same request, live classes, authenticated compatible history and versioned policy in observe-only mode",
+    "independent_observations": ["terminal correctness class", "native-client compatibility", "queue duration", "execution duration", "authenticated CPU milliseconds", "authenticated cgroup memory peak", "explicitly sampled scratch", "verified NAR transfer bytes", "reserved and reconciled resource units"],
+    "missing_measurements": "remain explicitly unknown; never filled with zero or used as a promise"
+  },
+  "non_claims": ["no benchmark execution result recorded in this corpus", "no future resource sufficiency", "no host isolation proof", "no output correctness beyond explicit selected checks", "no fair billing claim", "no production performance claim", "no ChaosControl VM or replay evidence"]
+}

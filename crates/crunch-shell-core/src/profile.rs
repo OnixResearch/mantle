@@ -71,22 +71,79 @@ pub struct ShellProfilePlan {
     pub non_claims: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShellProfileDiagnosticCode {
+    TooManyProfiles,
+    DuplicateProfile,
+    InvalidDefaultProfile,
+    MissingDefaultProfile,
+    InvalidProfileName,
+    TooManyBuildInputs,
+    TooManyEnvEntries,
+    TooManyPathEntries,
+    EmptyBuildInput,
+    ServicesNotSupported,
+    EmptyEnvKey,
+    DuplicateEnvKey,
+    EmptyPathEntry,
+    UnsupportedPathEntry,
+    HookTooLarge,
+    UnsupportedShellClaim,
+    MissingProfile,
+    AmbiguousDefaultProfile,
+    ProfileSelectionFailed,
+    SelectedProfileMissing,
+}
+
+impl ShellProfileDiagnosticCode {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::TooManyProfiles => "too-many-profiles",
+            Self::DuplicateProfile => "duplicate-profile",
+            Self::InvalidDefaultProfile => "invalid-default-profile",
+            Self::MissingDefaultProfile => "missing-default-profile",
+            Self::InvalidProfileName => "invalid-profile-name",
+            Self::TooManyBuildInputs => "too-many-build-inputs",
+            Self::TooManyEnvEntries => "too-many-env-entries",
+            Self::TooManyPathEntries => "too-many-path-entries",
+            Self::EmptyBuildInput => "empty-build-input",
+            Self::ServicesNotSupported => "services-not-supported",
+            Self::EmptyEnvKey => "empty-env-key",
+            Self::DuplicateEnvKey => "duplicate-env-key",
+            Self::EmptyPathEntry => "empty-path-entry",
+            Self::UnsupportedPathEntry => "unsupported-path-entry",
+            Self::HookTooLarge => "hook-too-large",
+            Self::UnsupportedShellClaim => "unsupported-shell-claim",
+            Self::MissingProfile => "missing-profile",
+            Self::AmbiguousDefaultProfile => "ambiguous-default-profile",
+            Self::ProfileSelectionFailed => "profile-selection-failed",
+            Self::SelectedProfileMissing => "selected-profile-missing",
+        }
+    }
+}
+
+impl core::fmt::Display for ShellProfileDiagnosticCode {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShellProfileDiagnostic {
-    pub code: &'static str,
+    pub code: ShellProfileDiagnosticCode,
     pub profile: Option<String>,
     pub message: String,
 }
 
 struct ProfileNameValidation<'a> {
     name: &'a str,
-    code: &'static str,
+    code: ShellProfileDiagnosticCode,
 }
 
 struct CountValidation<'a> {
     count: usize,
     limit: u32,
-    code: &'static str,
+    code: ShellProfileDiagnosticCode,
     profile_name: &'a str,
     label: &'static str,
 }
@@ -107,14 +164,14 @@ pub fn plan_named_shell_profile(
 
     let Some(selected_name) = selected_profile else {
         return Err(vec![diagnostic(
-            "profile-selection-failed",
+            ShellProfileDiagnosticCode::ProfileSelectionFailed,
             None,
             "shell profile selection produced no result without a diagnostic".to_string(),
         )]);
     };
     let Some(profile) = request.profiles.profiles.iter().find(|profile| profile.name == selected_name) else {
         return Err(vec![diagnostic(
-            "selected-profile-missing",
+            ShellProfileDiagnosticCode::SelectedProfileMissing,
             Some(selected_name.clone()),
             format!("selected shell profile `{selected_name}` is not declared"),
         )]);
@@ -142,7 +199,7 @@ fn validate_profile_set(profiles: &NamedShellProfiles) -> Vec<ShellProfileDiagno
     let profile_count = count_with_overflow_marker(profiles.profiles.len(), MAX_SHELL_PROFILES);
     if profile_count > MAX_SHELL_PROFILES {
         diagnostics.push(diagnostic(
-            "too-many-profiles",
+            ShellProfileDiagnosticCode::TooManyProfiles,
             None,
             format!("too many shell profiles: {profile_count} > {MAX_SHELL_PROFILES}"),
         ));
@@ -152,7 +209,7 @@ fn validate_profile_set(profiles: &NamedShellProfiles) -> Vec<ShellProfileDiagno
     for profile in &profiles.profiles {
         if !seen.insert(profile.name.clone()) {
             diagnostics.push(diagnostic(
-                "duplicate-profile",
+                ShellProfileDiagnosticCode::DuplicateProfile,
                 Some(profile.name.clone()),
                 format!("duplicate shell profile `{}`", profile.name),
             ));
@@ -164,13 +221,13 @@ fn validate_profile_set(profiles: &NamedShellProfiles) -> Vec<ShellProfileDiagno
         validate_profile_name(
             ProfileNameValidation {
                 name: default_profile,
-                code: "invalid-default-profile",
+                code: ShellProfileDiagnosticCode::InvalidDefaultProfile,
             },
             &mut diagnostics,
         );
         if !profiles.profiles.iter().any(|profile| profile.name == *default_profile) {
             diagnostics.push(diagnostic(
-                "missing-default-profile",
+                ShellProfileDiagnosticCode::MissingDefaultProfile,
                 Some(default_profile.clone()),
                 format!("default shell profile `{default_profile}` is not declared"),
             ));
@@ -195,7 +252,7 @@ fn validate_profile(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagno
     validate_profile_name(
         ProfileNameValidation {
             name: &profile.name,
-            code: "invalid-profile-name",
+            code: ShellProfileDiagnosticCode::InvalidProfileName,
         },
         &mut diagnostics,
     );
@@ -203,7 +260,7 @@ fn validate_profile(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagno
         CountValidation {
             count: profile.build_inputs.len(),
             limit: MAX_PROFILE_BUILD_INPUTS,
-            code: "too-many-build-inputs",
+            code: ShellProfileDiagnosticCode::TooManyBuildInputs,
             profile_name: &profile.name,
             label: "build inputs",
         },
@@ -213,7 +270,7 @@ fn validate_profile(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagno
         CountValidation {
             count: profile.env.len(),
             limit: MAX_PROFILE_ENV_ENTRIES,
-            code: "too-many-env-entries",
+            code: ShellProfileDiagnosticCode::TooManyEnvEntries,
             profile_name: &profile.name,
             label: "environment entries",
         },
@@ -223,7 +280,7 @@ fn validate_profile(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagno
         CountValidation {
             count: profile.path_entries.len(),
             limit: MAX_PROFILE_PATH_ENTRIES,
-            code: "too-many-path-entries",
+            code: ShellProfileDiagnosticCode::TooManyPathEntries,
             profile_name: &profile.name,
             label: "PATH entries",
         },
@@ -233,7 +290,7 @@ fn validate_profile(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagno
     for build_input in &profile.build_inputs {
         if build_input.is_empty() {
             diagnostics.push(diagnostic(
-                "empty-build-input",
+                ShellProfileDiagnosticCode::EmptyBuildInput,
                 Some(profile.name.clone()),
                 "shell profile build input must not be empty".to_string(),
             ));
@@ -244,7 +301,7 @@ fn validate_profile(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagno
     diagnostics.extend(validate_hook(profile));
     if !profile.services.is_empty() {
         diagnostics.push(diagnostic(
-            "services-not-supported",
+            ShellProfileDiagnosticCode::ServicesNotSupported,
             Some(profile.name.clone()),
             "service lifecycle declarations are not part of Mantle shell profiles".to_string(),
         ));
@@ -254,9 +311,9 @@ fn validate_profile(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagno
 
 fn validate_profile_name(validation: ProfileNameValidation<'_>, diagnostics: &mut Vec<ShellProfileDiagnostic>) {
     let ProfileNameValidation { name, code } = validation;
-    assert!(!code.is_empty(), "profile-name diagnostic code must not be empty");
+    assert!(!code.as_str().is_empty(), "profile-name diagnostic code must not be empty");
     assert!(
-        diagnostics.iter().all(|diagnostic| !diagnostic.code.is_empty()),
+        diagnostics.iter().all(|diagnostic| !diagnostic.code.as_str().is_empty()),
         "existing profile-name diagnostics must have codes"
     );
     assert!(
@@ -289,7 +346,7 @@ fn validate_profile_name(validation: ProfileNameValidation<'_>, diagnostics: &mu
 
 fn validate_count(validation: CountValidation<'_>, diagnostics: &mut Vec<ShellProfileDiagnostic>) {
     assert!(validation.limit > 0, "profile collection limit must be positive");
-    assert!(!validation.code.is_empty(), "profile count diagnostic code must not be empty");
+    assert!(!validation.code.as_str().is_empty(), "profile count diagnostic code must not be empty");
 
     let count_u32 = count_with_overflow_marker(validation.count, validation.limit);
     if count_u32 > validation.limit {
@@ -312,7 +369,7 @@ fn validate_env_entries(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDi
     for entry in &profile.env {
         if entry.key.is_empty() {
             diagnostics.push(diagnostic(
-                "empty-env-key",
+                ShellProfileDiagnosticCode::EmptyEnvKey,
                 Some(profile.name.clone()),
                 "shell profile env key must not be empty".to_string(),
             ));
@@ -321,7 +378,7 @@ fn validate_env_entries(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDi
         let normalized = normalize_env_key(&entry.key);
         if !seen.insert(normalized.clone()) {
             diagnostics.push(diagnostic(
-                "duplicate-env-key",
+                ShellProfileDiagnosticCode::DuplicateEnvKey,
                 Some(profile.name.clone()),
                 format!("shell profile `{}` has duplicate env key after normalization: {normalized}", profile.name),
             ));
@@ -340,7 +397,7 @@ fn validate_path_entries(profile: &ShellProfileDeclaration) -> Vec<ShellProfileD
     for entry in &profile.path_entries {
         if entry.is_empty() {
             diagnostics.push(diagnostic(
-                "empty-path-entry",
+                ShellProfileDiagnosticCode::EmptyPathEntry,
                 Some(profile.name.clone()),
                 "shell profile path entry must not be empty".to_string(),
             ));
@@ -348,14 +405,14 @@ fn validate_path_entries(profile: &ShellProfileDeclaration) -> Vec<ShellProfileD
         }
         if !entry.starts_with('/') {
             diagnostics.push(diagnostic(
-                "unsupported-path-entry",
+                ShellProfileDiagnosticCode::UnsupportedPathEntry,
                 Some(profile.name.clone()),
                 format!("shell profile path entry `{entry}` must be absolute before activation"),
             ));
         }
         if entry.split('/').any(|component| component == "..") {
             diagnostics.push(diagnostic(
-                "unsupported-path-entry",
+                ShellProfileDiagnosticCode::UnsupportedPathEntry,
                 Some(profile.name.clone()),
                 format!("shell profile path entry `{entry}` must not contain `..`"),
             ));
@@ -370,7 +427,7 @@ fn validate_hook(profile: &ShellProfileDeclaration) -> Vec<ShellProfileDiagnosti
         && hook.len() > MAX_PROFILE_HOOK_BYTES
     {
         diagnostics.push(diagnostic(
-            "hook-too-large",
+            ShellProfileDiagnosticCode::HookTooLarge,
             Some(profile.name.clone()),
             format!("shell profile hook exceeds {MAX_PROFILE_HOOK_BYTES} bytes"),
         ));
@@ -383,7 +440,7 @@ fn validate_requested_claims(claims: &[String]) -> Vec<ShellProfileDiagnostic> {
     for claim in claims {
         if claim != CLAIM_SHELL_ACTIVATION {
             diagnostics.push(diagnostic(
-                "unsupported-shell-claim",
+                ShellProfileDiagnosticCode::UnsupportedShellClaim,
                 None,
                 format!("shell activation cannot claim `{claim}` without separate evidence"),
             ));
@@ -405,7 +462,7 @@ fn select_profile_name(
             return Some(requested.to_string());
         }
         diagnostics.push(diagnostic(
-            "missing-profile",
+            ShellProfileDiagnosticCode::MissingProfile,
             Some(requested.to_string()),
             format!("requested shell profile `{requested}` is not declared"),
         ));
@@ -426,7 +483,7 @@ fn select_profile_name(
     }
 
     diagnostics.push(diagnostic(
-        "ambiguous-default-profile",
+        ShellProfileDiagnosticCode::AmbiguousDefaultProfile,
         None,
         "shell profile default is ambiguous; declare `default`, `dev`, or an explicit default profile".to_string(),
     ));
@@ -447,8 +504,8 @@ fn normalize_env_key(key: &str) -> String {
     key.bytes().map(|byte| byte.to_ascii_uppercase() as char).collect()
 }
 
-fn diagnostic(code: &'static str, profile: Option<String>, message: String) -> ShellProfileDiagnostic {
-    assert!(!code.is_empty(), "diagnostic code must not be empty");
+fn diagnostic(code: ShellProfileDiagnosticCode, profile: Option<String>, message: String) -> ShellProfileDiagnostic {
+    assert!(!code.as_str().is_empty(), "diagnostic code must not be empty");
     assert!(!message.is_empty(), "diagnostic message must not be empty");
     ShellProfileDiagnostic { code, profile, message }
 }
@@ -497,7 +554,7 @@ mod tests {
     }
 
     fn diagnostic_codes(errs: &[ShellProfileDiagnostic]) -> Vec<&'static str> {
-        errs.iter().map(|diag| diag.code).collect()
+        errs.iter().map(|diag| diag.code.as_str()).collect()
     }
 
     #[test]

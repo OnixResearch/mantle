@@ -3,6 +3,33 @@ resolver = "2"
 members = [
   "crates/crunch-android-core",
   "crates/crunch-android",
+  "crates/crunch-cmake-core",
+  "crates/crunch-cmake",
+  "crates/crunch-esp-idf-core",
+  "crates/crunch-esp-idf",
+  "crates/crunch-fpga-core",
+  "crates/crunch-fpga",
+  "crates/crunch-gpu-core",
+  "crates/crunch-gpu",
+  "crates/crunch-model-conversion-core",
+  "crates/crunch-model-conversion",
+  "crates/crunch-pnpm-core",
+  "crates/crunch-pnpm",
+  "crates/crunch-python-core",
+  "crates/crunch-python",
+  "crates/crunch-test-core",
+  "crates/crunch-test-app",
+  "crates/crunch-test",
+  "crates/crunch-zephyr-core",
+  "crates/crunch-zephyr",
+  "crates/mantle-cargo-build-bundle-core",
+  "crates/crunch-verification-bridge-core",
+  "crates/crunch-verification-bridge",
+  "crates/crunch-nix-gateway-core",
+  "crates/crunch-nix-gateway",
+  "crates/crunch-watch-core",
+  "crates/mantle-rust-differential-core",
+  "crates/mantle-rust-differential",
   "crates/crunch-action-result-core",
   "crates/crunch-service-readiness-core",
   "crates/crunch-remote-core",
@@ -75,6 +102,28 @@ default_scope = [
   "-p", "crunch-action-result-core",
   "-p", "crunch-android-core",
   "-p", "crunch-android",
+  "-p", "crunch-cmake-core",
+  "-p", "crunch-cmake",
+  "-p", "crunch-esp-idf-core",
+  "-p", "crunch-esp-idf",
+  "-p", "crunch-fpga-core",
+  "-p", "crunch-fpga",
+  "-p", "crunch-gpu-core",
+  "-p", "crunch-gpu",
+  "-p", "crunch-model-conversion-core",
+  "-p", "crunch-model-conversion",
+  "-p", "crunch-pnpm-core",
+  "-p", "crunch-pnpm",
+  "-p", "crunch-python-core",
+  "-p", "crunch-python",
+  "-p", "crunch-test-core",
+  "-p", "crunch-test-app",
+  "-p", "crunch-test",
+  "-p", "crunch-verification-bridge-core",
+  "-p", "crunch-verification-bridge",
+  "-p", "crunch-zephyr-core",
+  "-p", "crunch-zephyr",
+  "-p", "mantle-cargo-build-bundle-core",
   "-p", "crunch-composition-core",
   "-p", "crunch-nar",
   "-p", "mantlepkgs-core",
@@ -180,6 +229,10 @@ name = "benchmark_scheduler_priority"
 path = "examples/benchmark_scheduler_priority.rs"
 
 [[example]]
+name = "resource_policy_replay"
+path = "examples/resource_policy_replay.rs"
+
+[[example]]
 name = "hardware_simulation_plan"
 path = "examples/hardware_simulation_plan.rs"
 
@@ -202,9 +255,14 @@ mantle-application-contract = { path = "crates/mantle-application-contract" }
 mantle-rust-plan-core = { path = "crates/mantle-rust-plan-core" }
 mantle-rust-plan-app = { path = "crates/mantle-rust-plan-app" }
 mantle-lock-vendor-core = { path = "crates/mantle-lock-vendor-core" }
+mantle-cargo-build-bundle-core = { path = "crates/mantle-cargo-build-bundle-core" }
+crunch-test = { path = "crates/crunch-test" }
+crunch-test-core = { path = "crates/crunch-test-core" }
 mantle-causal-trace-core = { path = "crates/mantle-causal-trace-core" }
 crunch-remote-core = { path = "crates/crunch-remote-core", features = ["serde"] }
 crunch-remote-app = { path = "crates/crunch-remote-app" }
+crunch-nix-gateway-core = { path = "crates/crunch-nix-gateway-core" }
+crunch-nix-gateway = { path = "crates/crunch-nix-gateway" }
 crunch-pipeline = { path = "crates/crunch-pipeline" }
 crunch-eval = { path = "crates/crunch-eval" }
 crunch-eval-budget-core = { path = "crates/crunch-eval-budget-core" }
@@ -229,8 +287,12 @@ crunch-shell = { path = "crates/crunch-shell" }
 crunch-bootstrap-core = { path = "crates/crunch-bootstrap-core" }
 crunch-release-core = { path = "crates/crunch-release-core" }
 crunch-source-core = { path = "crates/crunch-source-core" }
-bounded-tree-core = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "b0fd0103bc9eed2c1b6d852045959462d105d8f1" }
-bounded-tree-cap = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "b0fd0103bc9eed2c1b6d852045959462d105d8f1" }
+artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", default-features = false }
+artifact-auth-ed25519 = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", default-features = false }
+basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "4c5c9e919b4573a7865559db2dc98a99c0c58144", default-features = false, features = ["durable-authority"] }
+valence-core = { git = "ssh://git@github.com/OnixResearch/valence.git", rev = "15e72b5a330b08139ac7c809ac31e7e87f825b22" }
+bounded-tree-core = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "cc9e0fb611e75bb2d7f662435d1918653c93ce07" }
+bounded-tree-cap = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "cc9e0fb611e75bb2d7f662435d1918653c93ce07" }
 durable-file-publication = { git = "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git", rev = "951c27f59003cea9bfdb40ed4d89653d50fada1f" }
 crunch-delta = { path = "crates/crunch-delta" }
 nix-compat = { path = "vendor/nix-compat" }
@@ -251,7 +313,7 @@ ed25519-dalek = "2.1.1"
 tempfile = "3"
 bstr = "=1.12.1"
 base64 = "0.22"
-blake3 = "=1.8.2"
+blake3 = "=1.8.5"
 rand = "0.8"
 digest = "=0.10.7"
 secretspec = { version = "=0.17.0", default-features = false, features = ["sops"] }
@@ -264,6 +326,7 @@ serde_json = "1.0"
 postcard = { version = "1", default-features = false, features = ["use-std"] }
 toml = "0.8.19"
 libc = "0.2"
+parking_lot = "0.12"
 url = "2"
 tar = "0.4"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }

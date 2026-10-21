@@ -199,3 +199,54 @@ broken. Formatting can change the subject after a smoke. Installed JAR behavior
 can differ from pinned reviewed tools. Store publication is weaker than cache
 trust admission. These risks require the pending checks; none is discharged by
 metadata, a merged source tree, selected test output, or this ADR.
+
+## Published SDK dependency reconciliation
+
+The later integrated source is a distinct subject from the frozen historical
+observations above. Pueue 1391 stopped at locked offline metadata before its
+compiler checks because the new Valence dependency had no lock/source-map entry.
+Pueue 1393 and 1396 then exposed the published Basalt/UCAN graph's exact zeroize
+and BLAKE3 requirements. These failures do not invalidate the earlier bounded
+receipts and do not establish current-source acceptance.
+
+[ADR 0122](../../../adr/0122-use-native-blake3-streaming-at-snix-boundary.md)
+records the local Snix streaming adaptation and common BLAKE3 pin cutover.
+The SHA/Nix digest boundary, content identities, offline source admission and
+owner authority checks remain unchanged. Cargo/Nix must regenerate dependency
+inputs; focused stream and real store/build execution plus ordinary gates must
+bind the final source before any release-baseline or lifecycle completion claim.
+
+
+### Published Artifact source cohort
+
+Artifact source declarations now select the published SSH source
+`ssh://git@github.com/OnixResearch/onix-artifact.git` at
+`5f3962d7471d1547e044f57daeda72f56621fd52`. The current source-admission
+contract requires the four-package AGPL-3.0-or-later workspace, but Mantle's
+resolved consumer set remains only `artifact-auth-core` and
+`artifact-auth-ed25519`. Root, action-result, build, and release manifests must
+agree; binding/transfer resolution, path substitutions, floating references,
+and predecessor sources remain inadmissible. No second source or trust grant
+is introduced.
+
+The integration owner reports an independently fresh primary GitHub SSH clone
+at that revision, with all 180 tracked published source files measured by
+BLAKE3. Its Nix metadata is retained in Artifact at
+`evidence/published-source-v1/primary-nix-metadata.json`; the measured NAR is
+`sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY=`
+(base16 `5ebee870590f375e5761be8d0386efdc8f50e3636fa1262d5d67ecae3ec8dd66`).
+Mantle's current source assertion, lock check, and two reviewed recursive-hash
+table rows bind that NAR. Core and Ed25519 `src/lib.rs` BLAKE3 identities remain
+`839ea3e35429e2a1252020dd779b46ebd185b6911674036820da118d487d1d21`
+and `7fd3987fe3ddc6d30efca37878952135f19905a00b52f349db237054be6b3633`.
+Primary acquisition is not a claim of transferred-source/full-source gate
+success, current Mantle consumer execution, or archive acceptance.
+
+This is a declaration and admission-contract update, not a current Mantle
+execution or acceptance receipt. The integration owner must regenerate locks
+and vendor outputs with their owning tools, then exercise current consumers
+and ordinary gates. The original accepted
+2026-08-06 migration receipt, validator, rollback records, and fixture baselines
+retain their original identities and claims. Their historical checks do not
+establish acceptance of this new source cohort.
+

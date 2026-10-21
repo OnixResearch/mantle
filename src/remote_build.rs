@@ -120,6 +120,12 @@ use tokio::io::AsyncWrite;
 use zeroize::Zeroize as _;
 
 use crate::errors::RunError;
+
+pub(crate) mod authority_caveats;
+pub mod gateway;
+pub mod operation;
+pub mod usage;
+pub mod usage_child;
 #[cfg(test)]
 use crate::external_batch_dispatch::ConfiguredExternalBatchDispatcher;
 use crate::external_batch_dispatch::ExternalBatchDispatcher;
@@ -141,6 +147,11 @@ use crate::remote_trace_context::RemoteTraceContext;
 use crate::remote_trace_context::RemoteTraceContextHealth;
 use crate::remote_trace_context::accept_remote_trace_context;
 
+pub(crate) mod coordinator_merge;
+pub mod demand;
+pub mod endpoint;
+pub mod endpoint_config;
+pub mod endpoint_service;
 pub mod live_state;
 
 pub const REMOTE_PROTOCOL_ALPN: &str = "mantle-remote-build/1";
@@ -404,6 +415,9 @@ pub struct ConcreteBuildRequest {
     pub failure_debug_policy: crunch_build::distributed::RemoteFailureDebugPolicy,
     #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub failure_replay: Option<RemoteFailureReplayBinding>,
+    /// Required at the production receiver; absent only for metadata fixtures.
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
+    pub endpoint_binding: Option<crunch_remote_core::endpoint::EndpointBinding>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -826,6 +840,8 @@ pub struct RemoteBuildFinished {
     pub builder_signing_key_id: String,
     pub store_prefix: String,
     pub outputs: Vec<RemoteProducedOutput>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<usage::RemoteSignedUsageReport>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -862,6 +878,8 @@ pub struct RemoteProtocolErrorFrame {
     pub phase: RemoteFailurePhase,
     pub retry_class: RemoteRetryClass,
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<usage::RemoteSignedUsageReport>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1345,6 +1363,7 @@ pub fn plan_ssh_stdio_builder_command(request: RemoteSshStdioPlanRequest) -> Res
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteClientBuildOptions {
     pub store_prefix: String,
+    pub endpoint_binding: Option<crunch_remote_core::endpoint::EndpointBinding>,
     pub ticket: RemoteTicketCredential,
     pub builder: RemoteStdioBuilderCommand,
     pub trusted_output_keys: Vec<String>,
@@ -1740,6 +1759,8 @@ pub struct ExternalBatchCompositionEvidence {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteCoordinatorState {
+    #[serde(default, skip_serializing)]
+    pub(crate) persistence_revision: coordinator_merge::CoordinatorRevision,
     pub workers: BTreeMap<String, RemoteWorkerRegistration>,
     pub jobs: BTreeMap<RemoteJobId, RemoteCoordinatorJobSummary>,
     pub live_output_claims: BTreeMap<String, String>,
@@ -1753,11 +1774,16 @@ pub struct RemoteCoordinatorState {
     pub workspace_leases: BTreeMap<String, crunch_build::WorkspaceLeaseRecord>,
     #[serde(default = "empty_remote_map")]
     pub external_batch_attempts: BTreeMap<String, ExternalBatchCoordinatorRecord>,
+    #[serde(default = "empty_remote_map")]
+    pub gateway_attempts: BTreeMap<String, gateway::GatewayAttemptRecord>,
     #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub legacy_log_migration: Option<RemoteLegacyLogMigrationSummary>,
     /// When set, mutations auto-save to this directory for durability.
     #[serde(skip)]
     pub state_dir: Option<PathBuf>,
+    /// Process-local diagnostic facts, never persisted as coordinator authority.
+    #[serde(skip)]
+    pub worker_demands: crunch_remote_core::demand::DemandBook,
     #[serde(skip)]
     allow_volatile_test_state: bool,
 }
@@ -1767,6 +1793,7 @@ pub struct RemoteCoordinatorState {
 impl Default for RemoteCoordinatorState {
     fn default() -> Self {
         Self {
+            persistence_revision: coordinator_merge::CoordinatorRevision::default(),
             workers: BTreeMap::new(),
             jobs: BTreeMap::new(),
             live_output_claims: BTreeMap::new(),
@@ -1775,8 +1802,10 @@ impl Default for RemoteCoordinatorState {
             workspace_registrations: BTreeMap::new(),
             workspace_leases: BTreeMap::new(),
             external_batch_attempts: BTreeMap::new(),
+            gateway_attempts: BTreeMap::new(),
             legacy_log_migration: None,
             state_dir: None,
+            worker_demands: crunch_remote_core::demand::DemandBook::default(),
             allow_volatile_test_state: cfg!(test),
         }
     }
@@ -2638,6 +2667,7 @@ fn new_default_remote_value<T: Default>() -> T {
 #[cfg(target_os = "linux")]
 fn remote_local_store_config(executor: &RemoteLocalBuildExecutor) -> crunch_store::StoreConfig {
     let config = crunch_store::StoreConfig {
+        source_admission: None,
         backend: executor.backend,
         state_dir: executor.state_dir.clone(),
         output_dir: executor.output_dir.clone(),
@@ -3042,6 +3072,14 @@ pub fn bind_remote_production_dispatch(
 ) -> Result<(), String> {
     transfer_policy.validate().map_err(|reason| reason.as_str().to_string())?;
     failure_debug_policy.validate().map_err(|reason| reason.as_str().to_string())?;
+    let binding = plan.client.request.endpoint_binding.as_ref().ok_or("remote-production-endpoint-binding-required")?;
+    binding.validate().map_err(|_| "remote-production-endpoint-binding-invalid".to_string())?;
+    if binding.spec.kind != crunch_remote_core::endpoint::EndpointKind::BuilderTicket
+        || binding.spec.name != plan.client.hello.endpoint_id
+        || binding.spec.store_prefix != plan.client.request.store_prefix
+    {
+        return Err("remote-production-endpoint-binding-mismatch".into());
+    }
     plan.client.request.production_attempt = Some(attempt);
     plan.client.request.transfer_policy = Some(transfer_policy);
     plan.client.request.failure_debug_policy = failure_debug_policy;
@@ -4014,6 +4052,7 @@ async fn prepare_remote_production_output(
         builder_signing_key_id: executor.signing_key_id(),
         store_prefix: request.store_prefix.clone(),
         outputs,
+        usage: None,
     };
     validate_remote_produced_outputs(request, &result)?;
     assert!(!transfer.manifest.manifest.artifacts.is_empty());
@@ -4025,6 +4064,7 @@ async fn open_remote_local_executor_store(
     executor: &RemoteLocalBuildExecutor,
 ) -> Result<crunch_store::StoreHandle, String> {
     crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        source_admission: None,
         backend: executor.backend,
         state_dir: executor.state_dir.clone(),
         output_dir: executor.output_dir.clone(),
@@ -4479,6 +4519,58 @@ fn remote_produced_outputs_content_digest(outputs: &[RemoteProducedOutput]) -> S
         receipt.append(remote_produced_output_receipt_fields(output));
     }
     blake3::Hash::from_bytes(receipt.finish()).to_hex().to_string()
+}
+
+/// Revalidate retained result metadata against its canonical ordered output
+/// receipt and FULL trusted public keys. This grants no content availability:
+/// callers must separately check current signed action/content admission.
+pub fn validate_retained_remote_produced_outputs(
+    outputs: &[RemoteProducedOutput],
+    expected_output_digest: &str,
+    store_prefix: &str,
+    trusted_output_keys: &[String],
+) -> Result<(), String> {
+    if outputs.is_empty()
+        || outputs.len() > MAX_REMOTE_EXPECTED_OUTPUTS
+        || !is_blake3_hex_digest(expected_output_digest)
+        || remote_produced_outputs_content_digest(outputs) != expected_output_digest
+    {
+        return Err("remote-retained-output-receipt-mismatch".into());
+    }
+    if trusted_output_keys.is_empty() || trusted_output_keys.len() > MAX_REMOTE_CAPABILITIES {
+        return Err("remote-retained-output-trust-invalid".into());
+    }
+    let keys = trusted_output_keys
+        .iter()
+        .map(|encoded| {
+            nix_compat::narinfo::VerifyingKey::parse(encoded)
+                .map_err(|_| "remote-retained-output-trust-invalid".to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    for (index, output) in outputs.iter().enumerate() {
+        if output.name.is_empty()
+            || outputs[..index]
+                .iter()
+                .any(|other| other.name == output.name || other.logical_path == output.logical_path)
+        {
+            return Err("remote-retained-output-identity-invalid".into());
+        }
+        let path = parse_remote_output_store_path(&output.logical_path, store_prefix)?;
+        let info = output.path_info.as_ref().ok_or("remote-retained-output-pathinfo-missing")?;
+        validate_remote_output_pathinfo(output, info, &path, store_prefix)?;
+        if output.content_digest_blake3 != remote_pathinfo_node_digest_blake3(info)?
+            || output.size_bytes != info.nar_size
+        {
+            return Err("remote-retained-output-content-binding-mismatch".into());
+        }
+        if !keys.iter().filter(|key| key.name() == output.path_info_signing_key_id).any(|key| {
+            crunch_build::verify_pathinfo_signatures_with_store_dir(info, std::slice::from_ref(key), store_prefix)
+                .is_trusted()
+        }) {
+            return Err("remote-retained-output-signature-untrusted".into());
+        }
+    }
+    Ok(())
 }
 
 fn remote_produced_output_receipt_fields(
@@ -5610,7 +5702,8 @@ fn admit_remote_production_dispatch_core(
     let executable = plan_remote_executable_request(input.request)?;
     let registration = production_worker_registration(state, &input, &executable.system);
     apply_worker_registration(state, registration)?;
-    let coordinator_request = production_coordinator_request(&input, &executable.system);
+    let coordinator_request =
+        production_coordinator_request(input.request, input.trusted_output_keys, &executable.system);
     let deadline_unix_s = input
         .now_unix_s
         .checked_add(input.request.build_time_limit_secs)
@@ -5681,25 +5774,26 @@ fn production_worker_registration(
 }
 
 fn production_coordinator_request(
-    input: &RemoteProductionDispatchInput<'_>,
+    concrete: &ConcreteBuildRequest,
+    trusted_output_keys: &[String],
     system: &str,
 ) -> RemoteCoordinatorBuildRequest {
-    let mut live_output_claims = Vec::with_capacity(input.request.expected_outputs.len());
-    live_output_claims.extend(input.request.expected_outputs.iter().filter_map(|output| output.logical_path.clone()));
+    let mut live_output_claims = Vec::with_capacity(concrete.expected_outputs.len());
+    live_output_claims.extend(concrete.expected_outputs.iter().filter_map(|output| output.logical_path.clone()));
     let request = RemoteCoordinatorBuildRequest {
-        request: input.request.clone(),
+        request: concrete.clone(),
         required_system: system.to_string(),
         required_features: Vec::new(),
         required_sandbox_mode: "native".to_string(),
         required_network_mode: "none".to_string(),
-        resource_requirements: input.request.resource_requirements.clone(),
-        locality_scope: input.request.locality_scope.clone(),
-        trusted_output_keys: input.trusted_output_keys.to_vec(),
+        resource_requirements: concrete.resource_requirements.clone(),
+        locality_scope: concrete.locality_scope.clone(),
+        trusted_output_keys: trusted_output_keys.to_vec(),
         live_output_claims,
         wait_for_worker: false,
     };
     debug_assert_eq!(request.required_system, system);
-    debug_assert!(request.live_output_claims.len() <= input.request.expected_outputs.len());
+    debug_assert!(request.live_output_claims.len() <= concrete.expected_outputs.len());
     request
 }
 
@@ -6607,6 +6701,10 @@ fn admit_coordinator_dispatch_with_nonce(
         ..
     } = &decision
     else {
+        // Observation is diagnostic and cannot change the admission result.
+        if let Err(error) = demand::observe_dispatch(&mut state.worker_demands, request, &decision) {
+            eprintln!("remote worker demand observation degraded: {error}");
+        }
         return Ok(decision);
     };
     let placement = coordinator_worker_placement_candidates(state, request)?
@@ -6635,6 +6733,9 @@ fn admit_coordinator_dispatch_with_nonce(
     candidate.jobs.insert(job_id.clone(), summary);
     persist_coordinator_candidate(&candidate)?;
     *state = candidate;
+    state
+        .worker_demands
+        .retract(&request.request.request_id, crunch_remote_core::demand::Retraction::Placed);
     debug_assert!(state.jobs.contains_key(job_id));
     debug_assert_eq!(state.jobs[job_id].assigned_worker_endpoint_id.as_ref(), Some(worker_endpoint_id));
     Ok(decision)
@@ -7986,6 +8087,13 @@ pub fn remote_cli_now_unix_s(request_id: &str) -> Result<u64, String> {
     let mut session = crunch_remote_core::effect::EffectSession::new(request_id)
         .map_err(|reason| format!("remote-effect-{reason:?}"))?;
     crunch_remote_app::observe_clock(&mut session, &mut ProductionClockPort, request_id)
+        .map_err(remote_application_error)
+}
+
+pub fn remote_cli_random_bytes(request_id: &str, output: &mut [u8]) -> Result<(), String> {
+    let mut session = crunch_remote_core::effect::EffectSession::new(request_id)
+        .map_err(|reason| format!("remote-effect-{reason:?}"))?;
+    crunch_remote_app::generate_identifier(&mut session, &mut ProductionRandomIdentifierPort, request_id, output)
         .map_err(remote_application_error)
 }
 
@@ -9375,7 +9483,19 @@ fn receive_remote_production_output(
     progress.frames.push(read_expected_remote_frame(&mut io.stdout, RemoteFrameKind::BuildStarted)?);
     let telemetry_policy = context.production.telemetry_policy;
     record_production_fact(&mut progress.telemetry, telemetry_policy, RemoteProductionTelemetryFact::ExecutionStarted);
-    let finished_frame = read_expected_remote_frame(&mut io.stdout, RemoteFrameKind::BuildFinished)?;
+    let finished_frame = read_remote_frame(&mut io.stdout)?;
+    if let RemoteFrame::Error { error } = &finished_frame {
+        if let Some(report) = &error.usage {
+            gateway::record_failed_usage(
+                &context.production.state_dir,
+                context.attempt,
+                &context.request.request_id,
+                report,
+                &context.production.trusted_output_keys,
+            )?;
+        }
+        return Err("remote-worker-execution-failed".into());
+    }
     let result = match &finished_frame {
         RemoteFrame::BuildFinished { result } => result.clone(),
         _ => return Err("remote-build-finished-frame-invalid".to_string()),
@@ -9704,19 +9824,34 @@ fn run_production_stdio_remote_child(
     thread::spawn(move || {
         let _delivery_result = stderr_tx.send(drain_bounded_pipe(stderr, MAX_REMOTE_STDIO_STDERR_BYTES));
     });
-    let protocol_timeout_secs = Duration::from_secs(command.timeout_secs);
-    let protocol_result = match protocol_rx.recv_timeout(protocol_timeout_secs) {
-        Ok(result) => result,
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-            Err("remote-production-protocol-thread-disconnected".to_string())
+    let protocol_deadline = std::time::Instant::now() + Duration::from_secs(command.timeout_secs);
+    let protocol_result = loop {
+        let cancel = match gateway::local_cancel_requested(command) {
+            Ok(cancel) => cancel,
+            Err(error) => {
+                terminate_remote_child_tree(&mut child)?;
+                return Err(error);
+            }
+        };
+        if cancel {
+            terminate_remote_child_tree(&mut child)?;
+            gateway::confirm_local_teardown(command)?;
+            return Err(RunError::Internal("gateway-attempt-cancelled-after-teardown".into()));
         }
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+        if std::time::Instant::now() >= protocol_deadline {
             terminate_remote_child_tree(&mut child)?;
             return Err(RunError::Internal(format!(
                 "stdio remote child timed out after {} seconds phase={:?}",
                 command.timeout_secs,
                 RemoteFailurePhase::TransportSetup
             )));
+        }
+        match protocol_rx.recv_timeout(Duration::from_millis(REMOTE_CHILD_POLL_INTERVAL_MS)) {
+            Ok(result) => break result,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                break Err("remote-production-protocol-thread-disconnected".to_string());
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
         }
     };
     let status = if protocol_result.is_err() {
@@ -10170,6 +10305,7 @@ pub fn concrete_remote_derivation_request(
     let upload_bytes = remote_input_ref_upload_bytes(&input_refs)?;
     let request = ConcreteBuildRequest {
         request_id: remote_client_request_id(&input.label, &input.drv_path, &options.store_prefix),
+        endpoint_binding: options.endpoint_binding.clone(),
         store_prefix: options.store_prefix.clone(),
         input_refs,
         source_input_refs,
@@ -11356,6 +11492,7 @@ async fn import_admitted_remote_stdio_outputs_core(
             builder_signing_key_id: input.admission.builder_signing_key_id.clone(),
             store_prefix: input.admission.store_prefix.clone(),
             outputs: input.admission.outputs.clone(),
+            usage: None,
         },
         streaming,
         policy,
@@ -11567,6 +11704,7 @@ fn validate_admission_report_for_import(
         builder_signing_key_id: admission.builder_signing_key_id.clone(),
         store_prefix: admission.store_prefix.clone(),
         outputs: admission.outputs.clone(),
+        usage: None,
     };
     let trusted = vec![admission.builder_signing_key_id.clone()];
     if admission.streamed_manifest.is_some() {
@@ -12126,6 +12264,7 @@ fn build_response_frames(input: BuildResponseFramesInput<'_>) -> Result<RemoteBu
             builder_signing_key_id: builder.signing_key_id.clone(),
             store_prefix: request.store_prefix.clone(),
             outputs: outputs.clone(),
+            usage: None,
         },
     })?;
     let transfer_artifacts = plan_output_transfer_artifacts(&request.request_id, &outputs, &execution.outputs)?;
@@ -12429,6 +12568,7 @@ fn load_coordinator_state_from_disk(state_dir: &Path) -> Result<RemoteCoordinato
         is_migrated = true;
     }
     validate_external_batch_state(&state).map_err(RunError::Internal)?;
+    gateway::validate(&state.gateway_attempts, &state).map_err(RunError::Internal)?;
     if is_migrated {
         save_coordinator_state(state_dir, &state)?;
     }
@@ -12700,13 +12840,15 @@ fn rebuild_live_output_claims(state: &mut RemoteCoordinatorState) {
 }
 
 pub fn save_coordinator_state(state_dir: &Path, state: &RemoteCoordinatorState) -> Result<(), RunError> {
+    let save = coordinator_merge::begin_save(state_dir, state)?;
+    gateway::validate(&state.gateway_attempts, state).map_err(RunError::Internal)?;
     let path = coordinator_state_path(state_dir);
     let parent = path
         .parent()
         .ok_or_else(|| RunError::Internal("coordinator state path has no parent".to_string()))?;
     fs::create_dir_all(parent)
         .map_err(|err| RunError::Internal(format!("creating coordinator state dir {}: {err}", parent.display())))?;
-    let rendered = serde_json::to_string_pretty(state)
+    let rendered = serde_json::to_string_pretty(&save.snapshot())
         .map_err(|err| RunError::Internal(format!("serializing coordinator state: {err}")))?;
     let tmp = path.with_extension(TEMP_FILE_EXTENSION);
     let mut file = fs::OpenOptions::new()
@@ -12723,6 +12865,7 @@ pub fn save_coordinator_state(state_dir: &Path, state: &RemoteCoordinatorState) 
     fs::rename(&tmp, &path)
         .map_err(|err| RunError::Internal(format!("committing coordinator state {}: {err}", path.display())))?;
     sync_coordinator_state_parent(parent)?;
+    save.commit();
     debug_assert!(path.exists());
     debug_assert!(!tmp.exists());
     Ok(())
@@ -12744,13 +12887,18 @@ fn sync_coordinator_state_parent(_parent: &Path) -> Result<(), RunError> {
 
 pub fn cmd_remote(
     action: crate::RemoteAction,
-    output_dir: &Path,
-    state_dir: &Path,
-    store_prefix: &str,
-    backend: crunch_store::StoreBackend,
-    json_output: bool,
+    ctx: &crate::RunContext,
+    endpoint_binding_config: Option<&Path>,
 ) -> Result<(), RunError> {
+    let output_dir = &ctx.store;
+    let state_dir = &ctx.resolved_state_dir;
+    let store_prefix = ctx.store_prefix.as_str();
+    let backend = ctx.store_backend;
+    let json_output = ctx.json;
     match action {
+        #[cfg(target_os = "linux")]
+        crate::RemoteAction::Gateway { action } => crate::nix_gateway::api_host::command(ctx, action),
+        crate::RemoteAction::UsageExecutor => usage_child::run_stdio_executor_child().map_err(RunError::Internal),
         crate::RemoteAction::Ticket { action } => cmd_remote_ticket(action, state_dir, json_output),
         crate::RemoteAction::Status {
             endpoint_id,
@@ -12759,7 +12907,7 @@ pub fn cmd_remote(
         crate::RemoteAction::Debug { action } => {
             crate::remote_failure_debug::cmd_remote_failure_debug(action, state_dir, json_output)
         }
-        crate::RemoteAction::Live { action } => crate::run_remote_live_command(action),
+        crate::RemoteAction::Live { action } => crate::run_remote_live_command(ctx, action),
         crate::RemoteAction::Serve {
             endpoint_id,
             binding,
@@ -12767,6 +12915,7 @@ pub fn cmd_remote(
             executor,
             present_input_refs,
             execution_state_dir,
+            usage_cgroup_root,
             secret_manifest,
             secret_profile,
             secret_provider,
@@ -12778,7 +12927,9 @@ pub fn cmd_remote(
             present_input_refs,
             output_dir,
             state_dir,
+            endpoint_binding_config,
             execution_state_dir: execution_state_dir.as_deref().unwrap_or(state_dir),
+            usage_cgroup_root,
             backend,
             store_prefix,
             json_output,
@@ -12965,7 +13116,10 @@ struct RemoteProductionServerContext<'a> {
     builder: &'a RemoteLoopbackBuilder,
     verifier_key: &'a std::sync::Arc<TicketVerifierKey>,
     executor: &'a RemoteLocalBuildExecutor,
+    secret_request: Option<&'a crate::remote_service_secrets::RemoteServiceSecretRequest>,
+    usage_cgroup_root: Option<&'a Path>,
     credential_state_dir: &'a Path,
+    binding_config: Option<&'a endpoint_config::RemoteEndpointBindingConfig>,
     execution_state_dir: &'a Path,
     authenticated_client_endpoint: Option<String>,
 }
@@ -12994,8 +13148,9 @@ fn serve_stdio_remote_production_once(
 ) -> Result<(), String> {
     let mut commit = |auth: &TicketAuthRequest,
                       request: &ConcreteBuildRequest,
+                      admission: &endpoint::EndpointAdmissionGuard,
                       session: &mut crunch_remote_core::effect::EffectSession<'_>| {
-        commit_remote_ticket_admission(&context, auth, request, session)
+        commit_remote_ticket_admission(&context, auth, request, session, admission)
     };
     serve_stdio_remote_production_once_with_commit(reader, writer, &context, &mut commit)
 }
@@ -13007,10 +13162,21 @@ fn serve_stdio_remote_production_once_with_commit(
     commit: &mut impl FnMut(
         &TicketAuthRequest,
         &ConcreteBuildRequest,
+        &endpoint::EndpointAdmissionGuard,
         &mut crunch_remote_core::effect::EffectSession<'_>,
     ) -> Result<CommittedRemoteTicketAdmission, String>,
 ) -> Result<(), String> {
-    let mut opening = read_remote_production_opening(reader, context.builder)?;
+    let opening_plan = operation::plan(operation::RemoteOperation::ServerOpening).map_err(|error| error.to_string())?;
+    let mut opening = read_remote_production_opening(reader, context)?;
+    operation::classify(&opening_plan, operation::RemoteOperationFacts::ServerOpening {
+        expected_endpoint: &context.builder.endpoint_id,
+        observed_endpoint: &opening.2.binding().spec.name,
+        expected_prefix: &context.builder.store_prefix,
+        observed_prefix: &opening.1.request.store_prefix,
+        request_id: &opening.1.request.request_id,
+        outputs: opening.1.request.expected_outputs.len(),
+    })
+    .map_err(|error| error.to_string())?;
     let attempt = opening
         .1
         .request
@@ -13027,7 +13193,7 @@ fn serve_stdio_remote_production_once_with_commit(
         crunch_remote_core::effect::EffectActor::Worker,
     )
     .map_err(|reason| format!("remote-effect-{reason:?}"))?;
-    let committed = commit(&opening.0, &opening.1.request, &mut session)?;
+    let committed = commit(&opening.0, &opening.1.request, &opening.2, &mut session)?;
     opening.1.server_now_unix_s = committed.server_now_unix_s;
     opening.1.max_upload_bytes = committed.max_upload_bytes;
     write_remote_production_admission(writer, context.builder, &opening.1, &mut session)?;
@@ -13052,8 +13218,9 @@ fn serve_stdio_remote_production_once_with_commit(
 
 fn read_remote_production_opening(
     reader: &mut impl Read,
-    builder: &RemoteLoopbackBuilder,
-) -> Result<(TicketAuthRequest, RemoteProductionServerOpening), String> {
+    context: &RemoteProductionServerContext<'_>,
+) -> Result<(TicketAuthRequest, RemoteProductionServerOpening, endpoint::EndpointAdmissionGuard), String> {
+    let builder = context.builder;
     let hello = match read_expected_remote_frame(reader, RemoteFrameKind::Hello)? {
         RemoteFrame::Hello { hello } => hello,
         _ => return Err("remote-hello-frame-invalid".to_string()),
@@ -13072,6 +13239,13 @@ fn read_remote_production_opening(
         RemoteFrame::BuildRequest { request } => request,
         _ => return Err("remote-build-request-frame-invalid".to_string()),
     };
+    let config = context.binding_config.ok_or("remote-production-endpoint-binding-config-required")?;
+    let presented = request.endpoint_binding.as_ref().ok_or("remote-production-endpoint-binding-required")?;
+    if presented.spec.name != builder.endpoint_id || request.store_prefix != builder.store_prefix {
+        return Err("remote-production-endpoint-binding-mismatch".into());
+    }
+    let now = remote_cli_now_unix_s(&request.request_id)?;
+    let admission = config.admit_build(presented, now, &builder.store_prefix).map_err(|error| error.to_string())?;
     let policy = request.transfer_policy.ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
     policy.validate().map_err(|reason| reason.as_str().to_string())?;
     let input_manifest = match read_expected_remote_frame(reader, RemoteFrameKind::InputManifest)? {
@@ -13080,17 +13254,21 @@ fn read_remote_production_opening(
     };
     validate_input_manifest(&input_manifest, &request)?;
     let missing = derive_missing_inputs(&input_manifest.input_refs, &builder.present_input_refs)?;
-    Ok((auth, RemoteProductionServerOpening {
-        hello,
-        server_now_unix_s: 0,
-        max_upload_bytes: 0,
-        request,
-        policy,
-        missing,
-        accepted_capabilities: accepted.accepted_capabilities,
-        is_trace_negotiated,
-        trace_context_health,
-    }))
+    Ok((
+        auth,
+        RemoteProductionServerOpening {
+            hello,
+            server_now_unix_s: 0,
+            max_upload_bytes: 0,
+            request,
+            policy,
+            missing,
+            accepted_capabilities: accepted.accepted_capabilities,
+            is_trace_negotiated,
+            trace_context_health,
+        },
+        admission,
+    ))
 }
 
 fn write_remote_production_admission(
@@ -13138,7 +13316,11 @@ fn commit_remote_ticket_admission(
     auth: &TicketAuthRequest,
     request: &ConcreteBuildRequest,
     session: &mut crunch_remote_core::effect::EffectSession<'_>,
+    admission: &endpoint::EndpointAdmissionGuard,
 ) -> Result<CommittedRemoteTicketAdmission, String> {
+    if request.endpoint_binding.as_ref() != Some(admission.binding()) {
+        return Err("remote-production-endpoint-binding-mismatch".into());
+    }
     commit_remote_ticket_admission_for_state(
         context.credential_state_dir,
         context.verifier_key,
@@ -13487,6 +13669,9 @@ struct ProductionExecutorPort<'a> {
     builder_signing_key_id: &'a str,
     created_unix_s: u64,
     verified_outcome: Option<RemoteExecutionOutcome>,
+    secret_request: Option<&'a crate::remote_service_secrets::RemoteServiceSecretRequest>,
+    usage_cgroup_root: Option<&'a Path>,
+    verified_usage: Option<usage::RemoteUsageCompletion>,
 }
 
 impl crunch_remote_app::ExecutorPort for ProductionExecutorPort<'_> {
@@ -13505,13 +13690,28 @@ impl crunch_remote_app::ExecutorPort for ProductionExecutorPort<'_> {
                 reason: "remote-executor-command-binding-mismatch".to_string(),
             });
         }
-        let output = self
-            .executor
-            .execute_at_unix_s(self.request, self.plan, self.upload, self.created_unix_s)
-            .map_err(|reason| crunch_remote_app::PortError {
-                capability: crunch_remote_app::Capability::Executor,
-                reason,
-            })?;
+        let execution = match self.secret_request {
+            Some(secrets) => usage_child::execute_measured(
+                self.executor,
+                self.request,
+                self.plan,
+                self.upload,
+                self.created_unix_s,
+                secrets,
+                self.usage_cgroup_root,
+            )
+            .and_then(|measured| {
+                self.verified_usage = Some(measured.completion);
+                measured.outcome
+            }),
+            // In-process protocol fixtures do not pretend to have production
+            // child observations. Only the real stdio worker supplies secrets.
+            None => self.executor.execute_at_unix_s(self.request, self.plan, self.upload, self.created_unix_s),
+        };
+        let output = execution.map_err(|reason| crunch_remote_app::PortError {
+            capability: crunch_remote_app::Capability::Executor,
+            reason,
+        })?;
         validate_remote_execution_outcome(&output, self.request, self.plan)
             .and_then(|()| {
                 validate_remote_execution_output_pathinfos(
@@ -13602,6 +13802,9 @@ fn send_remote_production_result(
         builder_signing_key_id: &context.builder.signing_key_id,
         created_unix_s,
         verified_outcome: None,
+        secret_request: context.secret_request,
+        usage_cgroup_root: context.usage_cgroup_root,
+        verified_usage: None,
     };
     let facts = crunch_remote_app::execute(session, &mut executor_port, crunch_remote_app::ExecutorCommand {
         request_id: &opening.request.request_id,
@@ -13610,17 +13813,52 @@ fn send_remote_production_result(
             .map_err(|_| "remote-expected-output-count-exceeded".to_string())?,
         upload_bytes: input.uploaded_bytes,
         timeout_secs: opening.request.build_time_limit_secs,
-    })
-    .map_err(remote_application_error)?;
+    });
+    let facts = match facts {
+        Ok(facts) => facts,
+        Err(error) => {
+            let report = executor_port
+                .verified_usage
+                .take()
+                .map(|completion| {
+                    completion
+                        .bind_result(&usage::failure_result_digest(attempt, &opening.request.request_id))
+                        .and_then(|usage| usage.sign(&context.executor.keypair))
+                })
+                .transpose()?;
+            write_remote_production_control_frame(
+                writer,
+                &RemoteFrame::Error {
+                    error: RemoteProtocolErrorFrame {
+                        phase: RemoteFailurePhase::BuildExecution,
+                        retry_class: RemoteRetryClass::BuildOutcome,
+                        message: "remote-executor-failed".to_string(),
+                        usage: report,
+                    },
+                },
+                session,
+            )?;
+            return Err(remote_application_error(error));
+        }
+    };
     let execution = executor_port
         .verified_outcome
         .take()
         .ok_or_else(|| "remote-execution-verified-outcome-missing".to_string())?;
     debug_assert_eq!(facts.outputs as usize, execution.outputs.len());
-    let prepared =
+    let mut prepared =
         input
             .runtime
             .block_on(prepare_remote_production_output(context.executor, &opening.request, &execution))?;
+    prepared.result.usage = executor_port
+        .verified_usage
+        .take()
+        .map(|completion| {
+            completion
+                .bind_result(&prepared.result.output_digest_blake3)
+                .and_then(|usage| usage.sign(&context.executor.keypair))
+        })
+        .transpose()?;
     send_remote_production_output_transfer(reader, writer, context, opening, &prepared, session)?;
     debug_assert!(is_blake3_hex_digest(&execution.output_digest_blake3));
     debug_assert_eq!(execution.outputs.len(), opening.request.expected_outputs.len());
@@ -13774,19 +14012,38 @@ struct RemoteServeCommandInput<'a> {
     present_input_refs: Vec<String>,
     output_dir: &'a Path,
     state_dir: &'a Path,
+    endpoint_binding_config: Option<&'a Path>,
     execution_state_dir: &'a Path,
     backend: crunch_store::StoreBackend,
     store_prefix: &'a str,
     json_output: bool,
     secret_request: crate::remote_service_secrets::RemoteServiceSecretRequest,
+    usage_cgroup_root: Option<PathBuf>,
 }
 
 fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> {
     match input.binding {
         crate::RemoteServeBinding::Metadata => {
+            // This is protocol metadata, not an observed service start or request.
             print_json_or_human(&remote_serve_metadata_json((&input.endpoint_id, "metadata-only")), input.json_output)
         }
         crate::RemoteServeBinding::StdioOnce => {
+            let binding_config = if input.executor == crate::RemoteServeExecutor::LocalBuild {
+                let path = input
+                    .endpoint_binding_config
+                    .ok_or_else(|| RunError::Internal("remote-production-endpoint-binding-config-required".into()))?;
+                let config = endpoint_config::RemoteEndpointBindingConfig::load(path)?;
+                config.verify_build(
+                    remote_cli_now_unix_s("remote-serve-startup").map_err(RunError::Internal)?,
+                    input.store_prefix,
+                )?;
+                if config.build_binding()?.spec.name != input.endpoint_id {
+                    return Err(RunError::Internal("remote-production-endpoint-binding-mismatch".into()));
+                }
+                Some(config)
+            } else {
+                None
+            };
             if input.executor == crate::RemoteServeExecutor::LocalBuild {
                 crunch_store::StoreConfig::new(
                     input.backend,
@@ -13825,12 +14082,10 @@ fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> 
                 signing_key_id: builder_signing_key_id,
                 transfer_capabilities: RemoteTransferCapabilities::delta_and_full().with_streaming(),
             };
-            let readiness_socket =
-                std::env::var_os("MANTLE_LIVE_STATE_SOCKET").filter(|value| !value.is_empty()).map(PathBuf::from);
+            let readiness_socket = crate::build_cmd::configured_live_socket()?;
             let mut readiness = readiness_socket.and_then(|socket| {
-                let mut nonce = [0_u8; 8];
-                OsRng.try_fill_bytes(&mut nonce).ok()?;
-                let id = format!("remote-stdio-{}-{:016x}", std::process::id(), u64::from_be_bytes(nonce));
+                let nonce = remote_live_owner_nonce().ok()?;
+                let id = format!("remote-stdio-{}-{nonce}", std::process::id());
                 crate::remote_build::live_state::daemon::ReadinessPublisher::start_service(
                     &socket,
                     id,
@@ -13846,7 +14101,10 @@ fn cmd_remote_serve(input: RemoteServeCommandInput<'_>) -> Result<(), RunError> 
                         builder: &builder,
                         verifier_key: &service_keys.verifier_key,
                         executor: &local_executor,
+                        secret_request: Some(&input.secret_request),
+                        usage_cgroup_root: input.usage_cgroup_root.as_deref(),
                         credential_state_dir: input.state_dir,
+                        binding_config: binding_config.as_ref(),
                         execution_state_dir: input.execution_state_dir,
                         authenticated_client_endpoint: None,
                     },
@@ -13876,14 +14134,15 @@ fn serve_stdio_remote_fixture_once(
     verifier_key: &std::sync::Arc<TicketVerifierKey>,
     builder: &RemoteLoopbackBuilder,
 ) -> Result<(), RunError> {
+    let operation_plan = operation::plan(operation::RemoteOperation::ServeFixture)?;
     let input = read_bounded_stdio_input(std::io::stdin().lock()).map_err(RunError::Internal)?;
     let client_frames = decode_remote_frame_stream(&input).map_err(RunError::Internal)?;
     let admission = {
         let _guard = crate::remote_credential_state::acquire_ticket_state_mutation_guard(state_dir)?;
         let mut state = load_ticket_state(state_dir)?;
         state.bind_active_verifier_key(verifier_key);
-        let server_now_unix_s = crate::unix_time_now_s()?;
         let ticket_id = request_ticket_id_from_frames(&client_frames).map_err(RunError::Internal)?;
+        let server_now_unix_s = remote_cli_now_unix_s(ticket_id).map_err(RunError::Internal)?;
         let ticket = state
             .tickets
             .get_mut(ticket_id)
@@ -13902,8 +14161,10 @@ fn serve_stdio_remote_fixture_once(
         save_ticket_state(state_dir, &state)?;
         admission
     };
+    let request = admission.request;
     let response = execute_remote_builder_admission(builder, admission, &RemoteFixtureExecutor)
         .map_err(|error| RunError::Internal(format!("remote fixture stdio serve once: {error}")))?;
+    operation::classify_fixture_response(&operation_plan, request, &builder.signing_key_id, &response)?;
     write_remote_response_frames(std::io::stdout().lock(), &response)
         .map_err(|error| RunError::Internal(format!("remote fixture stdio serve once response: {error}")))
 }
@@ -13931,11 +14192,22 @@ fn cmd_remote_status(
     state_dir: &Path,
     json_output: bool,
 ) -> Result<(), RunError> {
+    let operation_plan = operation::plan(operation::RemoteOperation::Status)?;
     let ticket_state = load_ticket_state(state_dir)?;
     let tickets = ticket_state.tickets.values().cloned().collect::<Vec<_>>();
     let coordinator_state = load_coordinator_state(state_dir)?;
     let snapshot = coordinator_status_snapshot(&endpoint_id, concurrency, &coordinator_state, &[], &tickets)
         .map_err(RunError::Internal)?;
+    operation::classify(&operation_plan, operation::RemoteOperationFacts::StatusSnapshot {
+        expected_endpoint: &endpoint_id,
+        observed_endpoint: &snapshot.endpoint_id,
+        source_jobs: coordinator_state.jobs.len(),
+        reported_jobs: snapshot.queued_jobs.len() + snapshot.active_jobs.len() + snapshot.recent_jobs.len(),
+        source_workers: coordinator_state.workers.len(),
+        reported_workers: snapshot.workers.len(),
+        source_tickets: ticket_state.tickets.len(),
+        reported_tickets: snapshot.tickets.len(),
+    })?;
     print_json_or_human(&snapshot, json_output)
 }
 
@@ -13977,6 +14249,17 @@ struct RemoteKeyRotationReport {
 }
 
 fn cmd_remote_ticket(action: crate::RemoteTicketAction, state_dir: &Path, json_output: bool) -> Result<(), RunError> {
+    let operation_plan = operation::plan(match &action {
+        crate::RemoteTicketAction::Create { .. } => operation::RemoteOperation::TicketCreate,
+        crate::RemoteTicketAction::List => operation::RemoteOperation::TicketList,
+        crate::RemoteTicketAction::Inspect { .. } => operation::RemoteOperation::TicketInspect,
+        crate::RemoteTicketAction::Revoke { .. } => operation::RemoteOperation::TicketRevoke,
+        crate::RemoteTicketAction::MigrateLegacy { dry_run: true, .. } => {
+            operation::RemoteOperation::TicketMigratePreview
+        }
+        crate::RemoteTicketAction::MigrateLegacy { dry_run: false, .. } => operation::RemoteOperation::TicketMigrate,
+        crate::RemoteTicketAction::RotateKeys { .. } => operation::RemoteOperation::RotateKeys,
+    })?;
     match action {
         crate::RemoteTicketAction::Create {
             display_name,
@@ -13991,12 +14274,13 @@ fn cmd_remote_ticket(action: crate::RemoteTicketAction, state_dir: &Path, json_o
             secret_profile,
             secret_provider,
         } => create_and_deliver_remote_ticket(
+            &operation_plan,
             state_dir,
             json_output,
             ticket_delivery_target(ticket_fd, interactive_operator_terminal_reveal)?,
             TicketIssueInput {
                 display_name,
-                now_unix_s: crate::unix_time_now_s()?,
+                now_unix_s: remote_cli_now_unix_s("remote-ticket-create").map_err(RunError::Internal)?,
                 ttl_secs,
                 uses,
                 max_build_time_secs,
@@ -14012,12 +14296,20 @@ fn cmd_remote_ticket(action: crate::RemoteTicketAction, state_dir: &Path, json_o
         crate::RemoteTicketAction::List => {
             let state = load_ticket_state(state_dir)?;
             let views = state.tickets.values().map(redacted_ticket_view).collect::<Vec<_>>();
+            operation::classify(&operation_plan, operation::RemoteOperationFacts::Snapshot {
+                source_records: state.tickets.len(),
+                reported_records: views.len(),
+            })?;
             print_json_or_human(&views, json_output)
         }
         crate::RemoteTicketAction::Inspect { id } => {
             let state = load_ticket_state(state_dir)?;
             let ticket =
                 state.tickets.get(&id).ok_or_else(|| RunError::Internal(format!("unknown remote ticket {id}")))?;
+            operation::classify(&operation_plan, operation::RemoteOperationFacts::Identity {
+                expected: &id,
+                observed: &ticket.id,
+            })?;
             print_json_or_human(&redacted_ticket_view(ticket), json_output)
         }
         crate::RemoteTicketAction::Revoke { id } => {
@@ -14025,6 +14317,7 @@ fn cmd_remote_ticket(action: crate::RemoteTicketAction, state_dir: &Path, json_o
             let mut state = load_ticket_state(state_dir)?;
             let view = revoke_ticket(&mut state, &id)?;
             save_ticket_state(state_dir, &state)?;
+            operation::classify_ticket_state(&operation_plan, &state, &load_ticket_state(state_dir)?)?;
             print_json_or_human(&view, json_output)
         }
         crate::RemoteTicketAction::MigrateLegacy {
@@ -14036,6 +14329,28 @@ fn cmd_remote_ticket(action: crate::RemoteTicketAction, state_dir: &Path, json_o
                 invalidate_legacy_tickets,
                 dry_run,
             )?;
+            let persisted = if dry_run {
+                None
+            } else {
+                Some(load_ticket_state(state_dir)?)
+            };
+            let missing_invalidations = persisted.as_ref().map_or_else(
+                || usize::from(report.invalidated_ticket_count as usize != report.invalidated_ticket_ids.len()),
+                |state| {
+                    report
+                        .invalidated_ticket_ids
+                        .iter()
+                        .filter(|id| !state.invalidated_legacy_ticket_ids.contains(*id))
+                        .count()
+                },
+            );
+            operation::classify(&operation_plan, operation::RemoteOperationFacts::Migration {
+                dry_run,
+                executed: report.executed,
+                missing_invalidations,
+                schema: persisted.as_ref().map_or(report.next_schema_version, |state| state.schema_version),
+                expected_schema: crate::remote_credentials::REMOTE_TICKET_STATE_SCHEMA_VERSION,
+            })?;
             print_json_or_human(&report, json_output)
         }
         crate::RemoteTicketAction::RotateKeys {
@@ -14043,6 +14358,7 @@ fn cmd_remote_ticket(action: crate::RemoteTicketAction, state_dir: &Path, json_o
             secret_profile,
             secret_provider,
         } => rotate_remote_service_keys(
+            &operation_plan,
             state_dir,
             json_output,
             crate::remote_service_secrets::RemoteServiceSecretRequest {
@@ -14055,6 +14371,7 @@ fn cmd_remote_ticket(action: crate::RemoteTicketAction, state_dir: &Path, json_o
 }
 
 fn create_and_deliver_remote_ticket(
+    operation_plan: &operation::RemoteOperationPlan,
     state_dir: &Path,
     json_output: bool,
     delivery_target: TicketDeliveryTarget,
@@ -14068,7 +14385,7 @@ fn create_and_deliver_remote_ticket(
     state.bind_active_verifier_key(&service_keys.verifier_key);
     let previous_state = state.clone();
     let mut entropy = [0_u8; crate::remote_credentials::TICKET_ENTROPY_BYTES];
-    if OsRng.try_fill_bytes(&mut entropy).is_err() {
+    if remote_cli_random_bytes("remote-ticket-create", &mut entropy).is_err() {
         entropy.zeroize();
         return Err(RunError::Internal("remote-ticket-os-randomness-failed".to_string()));
     }
@@ -14082,6 +14399,7 @@ fn create_and_deliver_remote_ticket(
             .map_err(|_| RunError::Internal("remote-ticket-delivery-failed-and-state-rollback-failed".to_string()))?;
         return Err(RunError::Internal("remote-ticket-delivery-failed".to_string()));
     }
+    operation::classify_ticket_state(operation_plan, &state, &load_ticket_state(state_dir)?)?;
     let report = TicketCreationReport {
         ticket: view,
         delivery: TicketDeliveryReport {
@@ -14103,6 +14421,7 @@ fn validate_remote_ticket_resource_limits(input: &TicketIssueInput) -> Result<()
 }
 
 fn rotate_remote_service_keys(
+    operation_plan: &operation::RemoteOperationPlan,
     state_dir: &Path,
     json_output: bool,
     secret_request: crate::remote_service_secrets::RemoteServiceSecretRequest,
@@ -14122,6 +14441,7 @@ fn rotate_remote_service_keys(
     state.bind_active_verifier_key(&service_keys.verifier_key);
     invalidated_ticket_ids.sort();
     save_ticket_state(state_dir, &state)?;
+    operation::classify_ticket_state(operation_plan, &state, &load_ticket_state(state_dir)?)?;
     let report = RemoteKeyRotationReport {
         active_ticket_verifier_key_id: active_key_id,
         active_result_signing_key_id: service_keys.result_signing_key.verifying_key.name().to_string(),
@@ -14221,7 +14541,11 @@ mod tests {
 
     use super::*;
 
+    mod coordinator_merge_tests;
+    mod endpoint_binding_tests;
     mod external_batch_hardware_tests;
+    #[cfg(unix)]
+    mod source_binding_tests;
 
     const CUSTOM_REMOTE_OUTPUT_BYTES: u64 = 777;
     const TEST_TICKET_DELIVERY_FD: i32 = 9;
@@ -15065,6 +15389,7 @@ mod tests {
         let mut ticket = fixture_ticket();
         let request = ConcreteBuildRequest {
             request_id: "r1".to_string(),
+            endpoint_binding: None,
             store_prefix: "/mantle/store".to_string(),
             input_refs: Vec::new(),
             source_input_refs: Vec::new(),
@@ -15129,6 +15454,7 @@ mod tests {
         assert_eq!(authorize_ticket(&ticket, &auth, fixture_auth_facts(2)), TicketDecision::Authorized);
         let request = ConcreteBuildRequest {
             request_id: "r1".to_string(),
+            endpoint_binding: None,
             store_prefix: "/mantle/store".to_string(),
             input_refs: vec!["input-a".to_string()],
             source_input_refs: Vec::new(),
@@ -15183,6 +15509,8 @@ mod tests {
         let executor = fixture_local_build_executor();
         let mut client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
         client.request.transfer_policy = Some(RemoteTransferPolicy::default());
+        let binding_config = endpoint_binding_tests::provision(temp.path(), &builder);
+        client.request.endpoint_binding = Some(binding_config.build_binding().unwrap().clone());
         client.request.production_attempt = Some(RemoteProductionAttemptBinding {
             job_id: RemoteJobId::new("ticket-commit-test-job".to_string()).unwrap(),
             attempt_id: RemoteAttemptId::new("ticket-commit-test-attempt".to_string()).unwrap(),
@@ -15205,7 +15533,10 @@ mod tests {
             builder: &builder,
             verifier_key: &verifier_key,
             executor: &executor,
+            secret_request: None,
+            usage_cgroup_root: None,
             credential_state_dir: temp.path(),
+            binding_config: Some(&binding_config),
             execution_state_dir: temp.path(),
             authenticated_client_endpoint: None,
         };
@@ -15214,7 +15545,7 @@ mod tests {
             &mut reader,
             &mut writer,
             &context,
-            &mut |_auth, request, _session| {
+            &mut |_auth, request, _admission, _session| {
                 is_request_admitted = !request.request_id.is_empty();
                 Err("remote-ticket-state-commit-failed".to_string())
             },
@@ -15314,7 +15645,10 @@ mod tests {
             builder: &builder,
             verifier_key: &verifier_key,
             executor: &executor,
+            secret_request: None,
+            usage_cgroup_root: None,
             credential_state_dir: temp.path(),
+            binding_config: None,
             execution_state_dir: temp.path(),
             authenticated_client_endpoint: None,
         };
@@ -15453,7 +15787,10 @@ mod tests {
             builder: &builder,
             verifier_key: &verifier_key,
             executor: &executor,
+            secret_request: None,
+            usage_cgroup_root: None,
             credential_state_dir: worker_root,
+            binding_config: None,
             execution_state_dir: worker_root,
             authenticated_client_endpoint: None,
         };
@@ -16529,6 +16866,55 @@ mod tests {
     }
 
     #[test]
+    fn remote_operation_fixture_rejects_tampered_terminal_output() {
+        let builder = fixture_loopback_builder();
+        let mut ticket = fixture_ticket();
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let plan = operation::plan(operation::RemoteOperation::ServeFixture).unwrap();
+        let mut response = plan_remote_builder_frames(
+            &builder,
+            &mut ticket,
+            &remote_client_request_frames(&client),
+            client.transfer_capabilities,
+        )
+        .unwrap();
+        operation::classify_fixture_response(&plan, &client.request, &builder.signing_key_id, &response).unwrap();
+        response.outputs[0].logical_path.push_str("-forged");
+        let error = operation::classify_fixture_response(&plan, &client.request, &builder.signing_key_id, &response)
+            .unwrap_err();
+        assert!(error.to_string().contains("remote-output-metadata-report-mismatch"));
+    }
+
+    #[test]
+    fn remote_operation_ticket_readback_rejects_lost_revocation() {
+        let directory = tempfile::tempdir().unwrap();
+        let _guard = crate::remote_credential_state::acquire_ticket_state_mutation_guard(directory.path()).unwrap();
+        let ticket = RemoteTicket::fixture(
+            TRANSACTION_TICKET_ID,
+            "readback",
+            fixture_ticket_token(),
+            &fixture_ticket_verifier_key(),
+            1,
+            10,
+            1,
+            10,
+            10,
+            Some("client-a".to_string()),
+        );
+        let id = ticket.id.clone();
+        let mut state = RemoteTicketState::default();
+        state.tickets.insert(id.clone(), ticket);
+        save_ticket_state(directory.path(), &state).unwrap();
+        let stale = load_ticket_state(directory.path()).unwrap();
+        revoke_ticket(&mut state, &id).unwrap();
+        let plan = operation::plan(operation::RemoteOperation::TicketRevoke).unwrap();
+        assert!(operation::classify_ticket_state(&plan, &state, &stale).is_err());
+        save_ticket_state(directory.path(), &state).unwrap();
+        operation::classify_ticket_state(&plan, &state, &load_ticket_state(directory.path()).unwrap()).unwrap();
+        assert!(load_ticket_state(directory.path()).unwrap().tickets[&id].revoked);
+    }
+
+    #[test]
     fn stdio_server_once_exchanges_framed_request_and_response() {
         let builder = fixture_loopback_builder();
         let mut ticket = fixture_ticket();
@@ -17461,6 +17847,7 @@ mod tests {
                     builder_signing_key_id: "builder-key".to_string(),
                     store_prefix: "/mantle/store".to_string(),
                     outputs: Vec::new(),
+                    usage: None,
                 },
             }),
             (RemoteFrameDirection::BuilderToClient, RemoteFrame::OutputTransferDone {
@@ -17733,6 +18120,92 @@ mod tests {
     }
 
     #[test]
+    fn worker_demand_repeated_rounds_do_not_grant_capacity_and_registration_retracts() {
+        let mut state = RemoteCoordinatorState::default();
+        let mut request = fixture_quantified_coordinator_request("unmet-demand", "unmet-claim");
+        request.wait_for_worker = true;
+        let decision = admit_fixture_dispatch(&mut state, &request).unwrap();
+        assert_eq!(decision, RemoteCoordinatorDispatchDecision::Pending {
+            reason: "no-workers-registered".into()
+        });
+        let first = state.worker_demands.facts().next().unwrap().clone();
+        assert_eq!(first.job_id, request.request.request_id);
+        assert_eq!(first.blocker_reason, "no-workers-registered");
+        assert_eq!(first.requirement.cpu_units, request.resource_requirements.as_ref().unwrap().quantities.cpu_units);
+        for _ in 0..3 {
+            assert_eq!(admit_fixture_dispatch(&mut state, &request).unwrap(), decision);
+            assert_eq!(state.worker_demands.facts().collect::<Vec<_>>(), vec![&first]);
+            assert!(state.jobs.is_empty());
+            assert!(state.resource_leases.is_empty());
+            assert!(state.live_output_claims.is_empty());
+        }
+        // Concurrency/presence is not a quantified inventory. Ordinary
+        // registration without one leaves placement blocked and grants nothing.
+        apply_worker_registration(&mut state, fixture_worker_registration()).unwrap();
+        assert!(matches!(
+            admit_fixture_dispatch(&mut state, &request).unwrap(),
+            RemoteCoordinatorDispatchDecision::Pending { .. }
+        ));
+        assert_eq!(state.worker_demands.facts().count(), 1);
+        assert!(state.resource_leases.is_empty());
+        let mut registered = fixture_worker_registration();
+        registered.resource_inventory = Some(fixture_resource_inventory());
+        apply_worker_registration(&mut state, registered).unwrap();
+        assert!(matches!(
+            admit_fixture_dispatch(&mut state, &request).unwrap(),
+            RemoteCoordinatorDispatchDecision::Dispatch { .. }
+        ));
+        assert_eq!(state.worker_demands.facts().count(), 0);
+        assert_eq!(state.resource_leases.len(), 1);
+    }
+
+    #[test]
+    fn worker_demand_changes_retract_and_scoped_projection_cannot_claim_another_owner() {
+        use crunch_remote_core::demand::Retraction;
+        let mut state = RemoteCoordinatorState::default();
+        let mut request = fixture_quantified_coordinator_request("demand-change", "demand-change-claim");
+        request.wait_for_worker = true;
+        admit_fixture_dispatch(&mut state, &request).unwrap();
+        let before = live_state::normalize_remote_live_facts("owner", &state, &BTreeSet::new()).unwrap();
+        let previous = state.worker_demands.facts().next().unwrap().requirement_id_blake3.clone();
+        request.resource_requirements.as_mut().unwrap().quantities.memory_bytes += 1;
+        request.request.resource_requirements = request.resource_requirements.clone();
+        admit_fixture_dispatch(&mut state, &request).unwrap();
+        let next = state.worker_demands.facts().next().unwrap();
+        assert_ne!(previous, next.requirement_id_blake3);
+        let after = live_state::normalize_remote_live_facts("owner", &state, &BTreeSet::new()).unwrap();
+        assert!(matches!(live_state::plan_remote_live_fact_changes(&before, &after).unwrap().as_slice(), [
+            live_state::LiveBuildEmitAction::Retract { .. },
+            live_state::LiveBuildEmitAction::Publish { .. }
+        ]));
+        let other = live_state::normalize_remote_live_facts_for_requests(
+            "other",
+            &state,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+        )
+        .unwrap();
+        assert!(other.facts().is_empty());
+        for cause in [
+            Retraction::Cancelled,
+            Retraction::TimedOut,
+            Retraction::RequirementChanged,
+            Retraction::OwnerStopped,
+        ] {
+            admit_fixture_dispatch(&mut state, &request).unwrap();
+            demand::retract_worker_demand(&mut state, &request.request.request_id, cause);
+            assert_eq!(state.worker_demands.facts().count(), 0);
+            assert!(state.resource_leases.is_empty());
+        }
+        // Diagnostic lifetime state is not resurrected from durable scheduling state.
+        admit_fixture_dispatch(&mut state, &request).unwrap();
+        let bytes = serde_json::to_vec(&state).unwrap();
+        let restored: RemoteCoordinatorState = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(restored.worker_demands.facts().count(), 0);
+    }
+
+    #[test]
     fn live_build_facts_track_discovery_dispatch_and_terminal_without_republishing_worker() {
         use live_state::LiveBuildEmitAction;
         use live_state::LiveBuildFactValue;
@@ -17949,11 +18422,12 @@ mod tests {
             panic!("second request dispatches");
         };
         let present = BTreeSet::from(["builder-1".to_string()]);
-        let scoped = live_state::normalize_remote_live_facts_for_jobs(
+        let scoped = live_state::normalize_remote_live_facts_for_requests(
             "current-run",
             &state,
             &present,
             &BTreeSet::from([new_job.clone()]),
+            &BTreeSet::new(),
         )
         .unwrap();
         assert!(scoped.facts().values().any(|fact| matches!(
@@ -19669,6 +20143,7 @@ mod tests {
 
     async fn remote_import_store(root: &std::path::Path) -> crunch_store::StoreHandle {
         crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            source_admission: None,
             backend: crunch_store::StoreBackend::Snix,
             state_dir: root.join("state"),
             output_dir: root.join("store"),
@@ -19869,6 +20344,7 @@ mod tests {
     fn fixture_request() -> ConcreteBuildRequest {
         ConcreteBuildRequest {
             request_id: "r1".to_string(),
+            endpoint_binding: None,
             store_prefix: "/mantle/store".to_string(),
             input_refs: vec!["input-a".to_string()],
             source_input_refs: Vec::new(),
@@ -19984,6 +20460,7 @@ mod tests {
 
     fn fixture_remote_client_options() -> RemoteClientBuildOptions {
         RemoteClientBuildOptions {
+            endpoint_binding: Some(endpoint_binding_tests::descriptor("builder-1", "/mantle/store")),
             store_prefix: "/mantle/store".to_string(),
             ticket: RemoteTicketCredential {
                 ticket_id: "ticket-1".to_string(),

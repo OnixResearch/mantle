@@ -24,6 +24,9 @@ use crate::envelope::ObservationStatus;
 use crate::envelope::plan_effects;
 use crate::family::CommandFamily;
 
+#[path = "graph_inspection.rs"]
+pub mod inspection;
+
 /// Largest admitted entity count for one graph-query fact.
 pub const MAX_GRAPH_QUERY_ENTITIES: u32 = 1_048_576;
 
@@ -39,13 +42,32 @@ pub enum GraphQueryKind {
     Why,
     /// Who depends on one node.
     Dependents,
+    /// Directed transitive dependencies, including the named root.
+    Dependencies,
+    /// Directed transitive reverse dependencies, including the named root.
+    ReverseDependencies,
+    /// One deterministic shortest directed dependency path.
+    Path,
+    /// Compare configured targets in the saved graph.
+    CompareConfiguration,
+    /// Explain declared action key changes in the saved graph.
+    CompareAction,
 }
 
 impl GraphQueryKind {
     /// Every kind in canonical order.
     pub fn all() -> Vec<Self> {
-        let kinds = vec![Self::Graph, Self::Why, Self::Dependents];
-        debug_assert_eq!(kinds.len(), 3);
+        let kinds = vec![
+            Self::Graph,
+            Self::Why,
+            Self::Dependents,
+            Self::Dependencies,
+            Self::ReverseDependencies,
+            Self::Path,
+            Self::CompareConfiguration,
+            Self::CompareAction,
+        ];
+        debug_assert_eq!(kinds.len(), 8);
         debug_assert!(!kinds.is_empty());
         kinds
     }
@@ -56,6 +78,11 @@ impl GraphQueryKind {
             Self::Graph => "graph",
             Self::Why => "why",
             Self::Dependents => "dependents",
+            Self::Dependencies => "dependencies",
+            Self::ReverseDependencies => "reverse-dependencies",
+            Self::Path => "path",
+            Self::CompareConfiguration => "compare-configuration",
+            Self::CompareAction => "compare-action",
         };
         debug_assert!(!label.is_empty());
         debug_assert!(Self::all().contains(&self));
@@ -69,6 +96,9 @@ pub struct GraphQueryRequest {
     pub kind: GraphQueryKind,
     /// Root, node, or target the query names.
     pub target: String,
+    /// Destination or comparison identity; required only by binary queries.
+    pub other_target: Option<String>,
+    pub limits: inspection::QueryLimits,
 }
 
 /// Entity facts and actual result identity reported by one finished query.
@@ -111,7 +141,7 @@ pub fn graph_query_effect_plan(target: &str) -> Result<EffectPlan, CapabilityErr
 
 /// Validate one graph query before any port is called.
 pub fn validate_graph_query(request: &GraphQueryRequest) -> Vec<ApplicationBlocker> {
-    let mut blockers = Vec::with_capacity(1);
+    let mut blockers = Vec::with_capacity(3);
     if request.target.trim().is_empty() {
         blockers.push(ApplicationBlocker::new(
             "graph-query-target-required",
@@ -119,8 +149,28 @@ pub fn validate_graph_query(request: &GraphQueryRequest) -> Vec<ApplicationBlock
             "a graph query must name the target it queries",
         ));
     }
-    debug_assert!(blockers.len() <= 1);
-    debug_assert!(blockers.is_empty() || request.target.trim().is_empty());
+    let binary = matches!(
+        request.kind,
+        GraphQueryKind::Path | GraphQueryKind::CompareConfiguration | GraphQueryKind::CompareAction
+    );
+    if binary != request.other_target.is_some()
+        || request.other_target.as_ref().is_some_and(|target| target.trim().is_empty())
+    {
+        blockers.push(ApplicationBlocker::new(
+            "graph-query-other-target",
+            request.kind.as_str(),
+            "binary queries require a nonempty second target; unary queries reject one",
+        ));
+    }
+    if request.limits.validate().is_err() {
+        blockers.push(ApplicationBlocker::new(
+            "graph-query-limits",
+            request.kind.as_str(),
+            "graph query limits must be nonzero and inside hard admission bounds",
+        ));
+    }
+    debug_assert!(blockers.len() <= 3);
+    debug_assert!(!blockers.is_empty() || !request.target.trim().is_empty());
     blockers
 }
 
@@ -200,6 +250,8 @@ mod tests {
         let request = GraphQueryRequest {
             kind: GraphQueryKind::Why,
             target: String::from("   "),
+            other_target: None,
+            limits: inspection::QueryLimits::default(),
         };
         let blockers = validate_graph_query(&request);
         assert_eq!(blockers.len(), 1);
@@ -207,15 +259,27 @@ mod tests {
         let accepted = GraphQueryRequest {
             kind: GraphQueryKind::Graph,
             target: String::from("root"),
+            other_target: None,
+            limits: inspection::QueryLimits::default(),
         };
         assert!(validate_graph_query(&accepted).is_empty());
     }
 
     #[test]
-    fn kind_labels_are_stable() {
-        assert_eq!(GraphQueryKind::all().len(), 3);
-        assert_eq!(GraphQueryKind::Graph.as_str(), "graph");
-        assert_eq!(GraphQueryKind::Why.as_str(), "why");
-        assert_eq!(GraphQueryKind::Dependents.as_str(), "dependents");
+    fn binary_queries_require_destinations_and_reject_invalid_resource_limits() {
+        let mut request = GraphQueryRequest {
+            kind: GraphQueryKind::Path,
+            target: String::from("root"),
+            other_target: None,
+            limits: inspection::QueryLimits::default(),
+        };
+        assert_eq!(validate_graph_query(&request)[0].code, "graph-query-other-target");
+        request.other_target = Some(String::from("destination"));
+        assert!(validate_graph_query(&request).is_empty());
+        request.kind = GraphQueryKind::Graph;
+        assert_eq!(validate_graph_query(&request)[0].code, "graph-query-other-target");
+        request.other_target = None;
+        request.limits.steps = 0;
+        assert_eq!(validate_graph_query(&request)[0].code, "graph-query-limits");
     }
 }

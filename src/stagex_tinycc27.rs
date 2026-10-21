@@ -62,7 +62,7 @@ pub(crate) const TINYCC27_EXPECTED_OUTPUTS: [Tinycc27ExpectedOutput; TINYCC27_OU
         digest_blake3: TINYCC27_FINAL_BLAKE3,
     },
 ];
-const TINYCC27_STDARG_HEADER: &[u8] = br#"#ifndef __MES_STDARG_H
+pub(crate) const TINYCC27_STDARG_HEADER: &[u8] = br#"#ifndef __MES_STDARG_H
 #define __MES_STDARG_H 1
 #if defined(__TINYC__) && defined(__x86_64__)
 typedef struct {
@@ -85,7 +85,7 @@ void *__va_arg(__va_list_struct *ap, int arg_type, int size, int align);
 #endif
 #endif
 "#;
-const TINYCC27_VA_LIST_SOURCE: &[u8] = br#"#if defined __x86_64__
+pub(crate) const TINYCC27_VA_LIST_SOURCE: &[u8] = br#"#if defined __x86_64__
 extern void *memset(void *s, int c, unsigned long n);
 extern void abort(void);
 enum __va_arg_type { __va_gen_reg, __va_float_reg, __va_stack };
@@ -123,9 +123,9 @@ void *__va_arg(__va_list_struct *ap, enum __va_arg_type arg_type, int size, int 
 }
 #endif
 "#;
-const TINYCC27_POSITIVE_SMOKE_SOURCE: &[u8] =
+pub(crate) const TINYCC27_POSITIVE_SMOKE_SOURCE: &[u8] =
     b"int stagex_tinycc27_add(int left, int right) { return left + right; }\n";
-const TINYCC27_MALFORMED_SMOKE_SOURCE: &[u8] = b"int stagex_tinycc27_broken( {\n";
+pub(crate) const TINYCC27_MALFORMED_SMOKE_SOURCE: &[u8] = b"int stagex_tinycc27_broken( {\n";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct Tinycc27SourceMaterializationReport {

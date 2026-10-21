@@ -37,8 +37,14 @@ pub enum InputFetchPolicy {
     ImportedSourceRequired,
 }
 
+impl core::fmt::Display for InputFetchPolicy {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(self.wire_name())
+    }
+}
+
 impl InputFetchPolicy {
-    pub fn as_str(self) -> &'static str {
+    pub(crate) fn wire_name(self) -> &'static str {
         match self {
             Self::GenerationMaterial => "generation-material",
             Self::BuildFetchAction => "build-fetch-action",
@@ -130,7 +136,7 @@ pub struct InputFetchPolicyPlanRequest {
 pub struct InputFetchPolicyReport {
     pub items: Vec<InputFetchPolicyItem>,
     pub diagnostics: Vec<InputFetchDiagnostic>,
-    pub non_claim: &'static str,
+    pub non_claim: String,
 }
 
 // r[impl project_workflows.input_fetch_policy]
@@ -154,11 +160,15 @@ pub fn plan_input_fetch_policies(request: InputFetchPolicyPlanRequest) -> InputF
     InputFetchPolicyReport {
         items,
         diagnostics,
-        non_claim: FETCH_POLICY_NON_CLAIM,
+        non_claim: FETCH_POLICY_NON_CLAIM.into(),
     }
 }
 
-pub fn fetch_policy_compatibility_problems(input: &ManifestInput) -> Vec<String> {
+pub fn fetch_policy_compatibility_problems(input: ManifestInput) -> Vec<String> {
+    compatibility_problems(&input)
+}
+
+pub(crate) fn compatibility_problems(input: &ManifestInput) -> Vec<String> {
     let mut problems = Vec::new();
     if input.name.is_empty() {
         return problems;
@@ -173,6 +183,13 @@ pub fn fetch_policy_compatibility_problems(input: &ManifestInput) -> Vec<String>
 }
 
 pub fn lock_entry_without_fetch(
+    input: ManifestInput,
+    existing: Option<LockEntry>,
+) -> Result<LockEntry, InputFetchDiagnostic> {
+    lock_without_fetch(&input, existing.as_ref())
+}
+
+pub(crate) fn lock_without_fetch(
     input: &ManifestInput,
     existing: Option<&LockEntry>,
 ) -> Result<LockEntry, InputFetchDiagnostic> {
@@ -238,7 +255,7 @@ fn plan_one_input(
 }
 
 fn compatibility_diagnostics(input: &ManifestInput) -> Vec<InputFetchDiagnostic> {
-    fetch_policy_compatibility_problems(input)
+    compatibility_problems(input)
         .into_iter()
         .map(|message| diagnostic(&input.name, InputFetchDiagnosticKind::Conflicting, &message))
         .collect()
@@ -301,7 +318,7 @@ fn add_offline_diagnostics(
             InputFetchDiagnosticKind::NetworkRequired,
             &format!(
                 "offline preflight for policy {} requires imported source-state class ready before network-backed acquisition",
-                input.fetch_policy.as_str()
+                input.fetch_policy
             ),
         )),
         InputFetchPolicy::ImportedSourceRequired => push_diagnostic_once(
@@ -594,7 +611,7 @@ fn source_fact_matches(input: &ManifestInput, existing: Option<&LockEntry>, fact
     if fact.input_name != input.name {
         return false;
     }
-    if fact.identity != input_source_identity(input, existing) {
+    if fact.identity != source_identity_for_input(input, existing) {
         return false;
     }
     if let Some(existing) = existing
@@ -605,7 +622,11 @@ fn source_fact_matches(input: &ManifestInput, existing: Option<&LockEntry>, fact
     input.hash.expected.as_deref() == Some(fact.hash_value.as_str())
 }
 
-pub fn input_source_identity(input: &ManifestInput, existing: Option<&LockEntry>) -> String {
+pub fn input_source_identity(input: ManifestInput, existing: Option<LockEntry>) -> String {
+    source_identity_for_input(&input, existing.as_ref())
+}
+
+fn source_identity_for_input(input: &ManifestInput, existing: Option<&LockEntry>) -> String {
     if let Some(existing) = existing {
         return source_identity_from_lock_kind(&existing.kind);
     }
@@ -645,13 +666,13 @@ fn source_identity_from_input_kind(kind: &InputKind) -> String {
             source_identity(SOURCE_ID_GIT_PREFIX, &git_reference_identity(repository, reference))
         }
         InputKind::Darcs { repository, selector } => {
-            source_identity(SOURCE_ID_DARCS_PREFIX, &vcs_selector_identity(repository, selector.identity_fragment()))
+            source_identity(SOURCE_ID_DARCS_PREFIX, &vcs_selector_identity(repository, selector.to_string()))
         }
         InputKind::Pijul { repository, selector } => {
-            source_identity(SOURCE_ID_PIJUL_PREFIX, &vcs_selector_identity(repository, selector.identity_fragment()))
+            source_identity(SOURCE_ID_PIJUL_PREFIX, &vcs_selector_identity(repository, selector.to_string()))
         }
         InputKind::Fossil { repository, selector } => {
-            source_identity(SOURCE_ID_FOSSIL_PREFIX, &vcs_selector_identity(repository, selector.identity_fragment()))
+            source_identity(SOURCE_ID_FOSSIL_PREFIX, &vcs_selector_identity(repository, selector.to_string()))
         }
     }
 }
@@ -824,7 +845,7 @@ mod tests {
     #[test]
     fn build_fetch_policy_lowers_expected_hash_without_resolution() {
         let input = file_input("pkg", InputFetchPolicy::BuildFetchAction);
-        let entry = lock_entry_without_fetch(&input, None).expect("expected hash should lock build fetch");
+        let entry = lock_entry_without_fetch(input, None).expect("expected hash should lock build fetch");
 
         assert_eq!(entry.hash.value, HASH_A);
         assert_eq!(entry.fetch_policy, InputFetchPolicy::BuildFetchAction);
@@ -853,7 +874,7 @@ mod tests {
         let mut input = file_input("pkg", InputFetchPolicy::BuildFetchAction);
         input.patches = vec!["fix".to_string()];
 
-        let problems = fetch_policy_compatibility_problems(&input);
+        let problems = fetch_policy_compatibility_problems(input);
 
         assert_eq!(problems.len(), 1);
         assert!(problems[0].contains("cannot apply project patches"));
@@ -865,7 +886,7 @@ mod tests {
         let mut input = file_input("pkg", InputFetchPolicy::BuildFetchAction);
         input.hash.expected = None;
 
-        let err = lock_entry_without_fetch(&input, None).expect_err("missing hash should fail closed");
+        let err = lock_entry_without_fetch(input, None).expect_err("missing hash should fail closed");
 
         assert_eq!(err.kind, InputFetchDiagnosticKind::BuildFetchRequired);
         assert_eq!(err.input_name, "pkg");
@@ -957,7 +978,7 @@ mod tests {
             trust: None,
         };
 
-        let identity = input_source_identity(&input, Some(&entry));
+        let identity = input_source_identity(input, Some(entry));
 
         assert_eq!(identity, "darcs:https://example.invalid/repo#context:ctx");
     }
@@ -983,7 +1004,7 @@ mod tests {
             trust: None,
         };
 
-        let err = lock_entry_without_fetch(&input, None).expect_err("branch selector needs resolved check-in");
+        let err = lock_entry_without_fetch(input, None).expect_err("branch selector needs resolved check-in");
 
         assert_eq!(err.kind, InputFetchDiagnosticKind::BuildFetchRequired);
         assert!(err.message.contains("existing lock check-in"));

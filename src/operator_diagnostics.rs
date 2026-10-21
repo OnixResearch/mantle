@@ -249,34 +249,126 @@ impl DoctorEnvironmentReader for ProcessDoctorEnvironment {
     }
 }
 
-pub fn collect_doctor_report(request: DoctorRequest<'_>) -> PreflightReport {
+pub fn collect_doctor_report(
+    request: DoctorRequest<'_>,
+) -> Result<PreflightReport, mantle_application_contract::CapabilityError> {
     collect_doctor_report_with_env(request, &mut ProcessDoctorEnvironment)
 }
 
 pub(crate) fn collect_doctor_report_with_env(
     request: DoctorRequest<'_>,
     environment: &mut impl DoctorEnvironmentReader,
-) -> PreflightReport {
+) -> Result<PreflightReport, mantle_application_contract::CapabilityError> {
     assert!(!request.store_dir.as_os_str().is_empty(), "store_dir must not be empty");
     assert!(!request.state_dir.as_os_str().is_empty(), "state_dir must not be empty");
 
-    let mut checks = Vec::with_capacity(6);
-    if request.profile.needs_nightly_toolchain() {
-        checks.push(check_nightly_toolchain_visibility());
-    }
-    checks.push(check_bwrap_visibility(environment));
-    checks.push(check_sandbox_shell_availability(environment));
-    checks.push(check_fusermount3_availability(environment));
-    checks.push(check_directory_writable("state-dir", request.state_dir, "state directory"));
-    checks.push(check_directory_writable("store-dir", request.store_dir, "store directory"));
-    let is_ok = checks.iter().all(|check| check.status == PreflightStatus::Ok);
+    use mantle_application_contract::ApplicationOutcome;
+    use mantle_application_contract::CapabilityError;
+    use mantle_application_contract::EffectId;
+    use mantle_application_contract::EffectKind;
+    use mantle_application_contract::EffectMeasure;
+    use mantle_application_contract::EffectOutput;
+    use mantle_application_contract::Observation;
+    use mantle_application_contract::ObservationStatus;
+    use mantle_application_contract::diagnostics::DOCTOR_ENVIRONMENT_EFFECT;
+    use mantle_application_contract::diagnostics::classify_doctor;
+    use mantle_application_contract::diagnostics::doctor_probes;
+    use mantle_application_contract::diagnostics::plan_doctor;
 
-    PreflightReport {
+    let needs_nightly = request.profile.needs_nightly_toolchain();
+    let plan =
+        plan_doctor(needs_nightly).map_err(|error| CapabilityError::new(error.code(), "planning doctor probes"))?;
+    let mut port = HostDoctorProbePort {
+        request,
+        environment: CountingDoctorEnvironment {
+            inner: environment,
+            reads: 0,
+        },
+    };
+    let probes = doctor_probes(needs_nightly);
+    let mut checks = Vec::with_capacity(probes.len());
+    let mut observations = Vec::with_capacity(plan.effects.len());
+    for probe in probes {
+        let check = port.probe(probe);
+        let is_valid = check.id == probe.id();
+        observations.push(Observation {
+            effect_id: EffectId(check.id.to_string()),
+            kind: probe.authority(),
+            status: if is_valid && check.status == PreflightStatus::Ok {
+                ObservationStatus::Succeeded
+            } else {
+                ObservationStatus::Failed
+            },
+            output: EffectOutput::None,
+            usage: EffectMeasure::Calls(1),
+            diagnostics_code: (check.status == PreflightStatus::Failed)
+                .then(|| "doctor-prerequisite-failed".to_string()),
+        });
+        checks.push(check);
+    }
+    observations.push(Observation {
+        effect_id: EffectId(DOCTOR_ENVIRONMENT_EFFECT.to_string()),
+        kind: EffectKind::ReadEnvironment,
+        status: ObservationStatus::Succeeded,
+        output: EffectOutput::None,
+        usage: EffectMeasure::Calls(port.environment.reads),
+        diagnostics_code: None,
+    });
+    let is_ok = checks.iter().all(|check| check.status == PreflightStatus::Ok);
+    match classify_doctor(&plan, &observations, is_ok) {
+        ApplicationOutcome::Completed | ApplicationOutcome::Failed { .. } => {}
+        _ => {
+            return Err(CapabilityError::new(
+                "doctor-observation-mismatch",
+                "doctor probes contradicted their admitted profile",
+            ));
+        }
+    }
+    Ok(PreflightReport {
         schema: "crunch-doctor-report-v1",
         command: "doctor",
         profile: request.profile,
         ok: is_ok,
         checks,
+    })
+}
+
+struct CountingDoctorEnvironment<'a, E> {
+    inner: &'a mut E,
+    reads: u32,
+}
+
+impl<E: DoctorEnvironmentReader> DoctorEnvironmentReader for CountingDoctorEnvironment<'_, E> {
+    fn var_os(&mut self, key: &'static str) -> Option<OsString> {
+        self.reads = self.reads.saturating_add(1);
+        self.inner.var_os(key)
+    }
+}
+
+trait DoctorProbePort {
+    fn probe(&mut self, probe: mantle_application_contract::diagnostics::DoctorProbe) -> PreflightCheck;
+}
+
+struct HostDoctorProbePort<'a, E> {
+    request: DoctorRequest<'a>,
+    environment: CountingDoctorEnvironment<'a, E>,
+}
+
+impl<E: DoctorEnvironmentReader> DoctorProbePort for HostDoctorProbePort<'_, E> {
+    fn probe(&mut self, probe: mantle_application_contract::diagnostics::DoctorProbe) -> PreflightCheck {
+        use mantle_application_contract::diagnostics::DoctorProbe;
+        match probe {
+            DoctorProbe::NightlyToolchain => check_nightly_toolchain_visibility(),
+            DoctorProbe::Sandbox => check_bwrap_visibility(&mut self.environment),
+            DoctorProbe::Shell => check_sandbox_shell_availability(&mut self.environment),
+            DoctorProbe::Fuse => check_fusermount3_availability(&mut self.environment),
+            DoctorProbe::StateDirectory => {
+                check_directory_writable("state-dir", self.request.state_dir, "state directory")
+            }
+            DoctorProbe::StoreDirectory => {
+                check_directory_writable("store-dir", self.request.store_dir, "store directory")
+            }
+        }
     }
 }
 
@@ -639,7 +731,8 @@ mod tests {
                 store_dir: directory.path(),
             },
             &mut environment,
-        );
+        )
+        .unwrap();
         assert!(report.ok, "{report:?}");
         assert_eq!(environment.reads[0], BWRAP_PATH_ENV);
         assert_eq!(environment.reads[1], "SNIX_BUILD_SANDBOX_SHELL");
@@ -674,7 +767,8 @@ mod tests {
                 store_dir: directory.path(),
             },
             &mut environment,
-        );
+        )
+        .unwrap();
         assert!(!report.ok);
         assert_eq!(report.checks[0].id, "bwrap");
         assert_eq!(report.checks[0].status, PreflightStatus::Failed);

@@ -18,7 +18,11 @@ use crunch_build::Worker;
 use crunch_build::worker::WatchWorkerEvent;
 use crunch_build::worker::WatchWorkerUpdate;
 use crunch_eval::session::RootForceExecutionPolicy;
+use crunch_eval::session::incremental::PersistentRootCache;
+use crunch_eval::session::incremental::PreparedRoots;
+use crunch_eval::session::incremental::ReuseDiagnostics;
 use crunch_evaluation_stream_core::RunDisposition;
+use crunch_glue::CrunchDerivation;
 use crunch_watch_core::GoalDiff;
 use crunch_watch_core::GoalSet;
 use crunch_watch_core::MAX_EVALUATIONS_PER_WINDOW;
@@ -55,6 +59,11 @@ const WORKER_EVENT_CAPACITY: usize = 16;
 /// contains only the current Worker's terminal roots, not an evaluation result.
 #[derive(Debug)]
 pub enum WatchNotice {
+    /// Evaluation observations, never scheduler admission or build success.
+    Evaluation {
+        mode: &'static str,
+        diagnostics: ReuseDiagnostics,
+    },
     Goals {
         generation: u64,
         diff: GoalDiff,
@@ -174,6 +183,68 @@ async fn evaluate(config: &BuildConfig) -> Result<(GoalSet, Vec<EvalMessage>, So
     Ok((goals, roots, after))
 }
 
+type CachedEvaluation = (GoalSet, Vec<EvalMessage>, SourceSnapshot, Option<PreparedRoots<CrunchDerivation>>);
+
+fn evaluation_configuration(config: &BuildConfig) -> Vec<u8> {
+    format!("{}\0{}", config.store_dir, config.max_jobs).into_bytes()
+}
+
+fn cache_identity(config: &BuildConfig) -> Result<[u8; 32], Error> {
+    crunch_eval::session::incremental::configuration_fingerprint(
+        &config.file,
+        &config.import_paths,
+        &evaluation_configuration(config),
+    )
+    .map_err(|error| Error::Eval(error.to_string()))
+}
+
+async fn evaluate_cached(
+    config: &BuildConfig,
+    cache: &mut PersistentRootCache<CrunchDerivation>,
+    shutdown: &watch::Receiver<bool>,
+) -> Result<CachedEvaluation, Error> {
+    let before = source_snapshot(&config.file, &config.import_paths)?;
+    let configuration = evaluation_configuration(config);
+    let Some(candidate) = cache
+        .prepare(&config.file, &config.import_paths, &configuration, || *shutdown.borrow())
+        .map_err(|error| Error::Eval(error.to_string()))?
+    else {
+        let (goals, roots, snapshot) = evaluate(config).await?;
+        if *shutdown.borrow() {
+            return Err(Error::Eval("watched evaluation cancelled".to_string()));
+        }
+        return Ok((goals, roots, snapshot, None));
+    };
+    let mut conversion = crunch_glue::ConversionCache::new(&config.store_dir);
+    let mut resolver = crate::derivation_file::DerivationFileResolver::new(&config.file, &config.import_paths)?;
+    let mut roots = Vec::new();
+    for (label, value) in candidate.roots() {
+        if *shutdown.borrow() {
+            return Err(Error::Eval("watched evaluation cancelled".to_string()));
+        }
+        // Resolution/conversion is always fresh; retained values are immutable.
+        let mut derivation = value.clone();
+        resolver.resolve_root_inputs(&config.file, &mut derivation, &mut conversion)?;
+        let (drv_path, _) =
+            crunch_glue::convert(&derivation, &mut conversion).map_err(|error| Error::Convert(error.to_string()))?;
+        roots.push(EvalMessage {
+            label: label.to_string(),
+            drv_path,
+            new_entries: conversion.drain_pending(),
+        });
+    }
+    candidate
+        .validate(&configuration, || *shutdown.borrow())
+        .map_err(|error| Error::Eval(error.to_string()))?;
+    let after = source_snapshot(&config.file, &config.import_paths)?;
+    if before != after {
+        return Err(Error::Eval("watched sources changed during evaluation".to_string()));
+    }
+    let goals =
+        GoalSet::admit(roots.iter().map(|root| root.drv_path.to_absolute_path()).collect()).map_err(watch_error)?;
+    Ok((goals, roots, after, Some(candidate)))
+}
+
 async fn restore_committed(
     watch_loop: &mut WatchLoop,
     notices: &mpsc::Sender<WatchNotice>,
@@ -267,6 +338,11 @@ struct WatchCoordinator<'a> {
     current_is_rollback: bool,
     current: Option<u64>,
     dirty: bool,
+    evaluation_cache: Option<PersistentRootCache<CrunchDerivation>>,
+    pending_evaluation: Option<PreparedRoots<CrunchDerivation>>,
+    shutdown: watch::Receiver<bool>,
+    pending_configuration: Option<[u8; 32]>,
+    baseline_configuration: Option<[u8; 32]>,
 }
 
 #[cfg(target_os = "linux")]
@@ -295,6 +371,29 @@ impl WatchCoordinator<'_> {
     ) -> Result<(), Error> {
         debug_assert!(!self.rollback_pending || self.pending.is_some());
         debug_assert!(self.candidate.is_none() || !self.rollback_pending);
+        if !self.rollback_pending
+            && self.evaluation_cache.is_some()
+            && (*self.shutdown.borrow() || cache_identity(self.config).ok() != self.pending_configuration)
+        {
+            drop(commit);
+            self.pending_evaluation = None;
+            if let Some(cache) = &mut self.evaluation_cache {
+                cache.clear();
+            }
+            self.dirty = true;
+            return Ok(());
+        }
+        if self.pending_evaluation.as_ref().is_some_and(|candidate| {
+            candidate.validate(&evaluation_configuration(self.config), || *self.shutdown.borrow()).is_err()
+        }) {
+            drop(commit);
+            self.pending_evaluation = None;
+            if let Some(cache) = &mut self.evaluation_cache {
+                cache.clear();
+            }
+            self.dirty = true;
+            return Ok(());
+        }
         // No Worker dispatch or PathInfo publication is authorized until this
         // candidate passes the source and generation gate.
         match authorize_candidate(
@@ -312,17 +411,35 @@ impl WatchCoordinator<'_> {
             CandidateAuthorization::Authorized => {}
             CandidateAuthorization::Superseded => return Ok(()),
             CandidateAuthorization::Changed => {
+                self.pending_evaluation = None;
+                if let Some(cache) = &mut self.evaluation_cache {
+                    cache.clear();
+                }
                 self.dirty = true;
                 return Ok(());
             }
             CandidateAuthorization::Expired => {
+                self.pending_evaluation = None;
+                if let Some(cache) = &mut self.evaluation_cache {
+                    cache.clear();
+                }
                 self.rollback_pending = false;
                 self.dirty = true;
                 return Ok(());
             }
         }
+        if let Some(candidate) = self.pending_evaluation.take()
+            && let Some(cache) = &mut self.evaluation_cache
+            && cache.commit(candidate, &evaluation_configuration(self.config), || *self.shutdown.borrow()).is_err()
+        {
+            cache.clear();
+            self.dirty = true;
+        }
         if let Some(snapshot) = self.candidate.take() {
             self.baseline = Some(snapshot);
+        }
+        if !self.rollback_pending {
+            self.baseline_configuration = self.pending_configuration.take();
         }
         self.committed_roots = std::mem::take(&mut self.pending_roots);
         let restoring = self.rollback_pending;
@@ -358,7 +475,8 @@ impl WatchCoordinator<'_> {
         }
         if !self.current_is_rollback
             && (source_snapshot(&self.config.file, &self.config.import_paths).ok().as_ref() != self.baseline.as_ref()
-                || self.dirty)
+                || self.dirty
+                || (self.evaluation_cache.is_some() && cache_identity(self.config).ok() != self.baseline_configuration))
         {
             self.dirty = true;
             return Ok(());
@@ -393,13 +511,34 @@ impl WatchCoordinator<'_> {
         self.candidate = None;
         self.rollback_pending = true;
         self.dirty = true;
+        self.pending_evaluation = None;
+        if let Some(cache) = &mut self.evaluation_cache {
+            cache.clear();
+        }
         Ok(())
     }
 
     async fn on_tick(&mut self) -> Result<(), Error> {
         debug_assert!(!self.rollback_pending || self.pending.is_some());
         debug_assert!(self.attempts.len() <= self.max_evaluations);
+        let observed_configuration = if self.evaluation_cache.is_some() {
+            match cache_identity(self.config) {
+                Ok(identity) => Some(identity),
+                Err(_) => return self.on_evaluation_failure().await,
+            }
+        } else {
+            None
+        };
+        if observed_configuration != self.pending_configuration.or(self.baseline_configuration) {
+            self.dirty = true;
+        }
         let observed = source_snapshot(&self.config.file, &self.config.import_paths);
+        if observed.is_err() {
+            self.pending_evaluation = None;
+            if let Some(cache) = &mut self.evaluation_cache {
+                cache.clear();
+            }
+        }
         if observed.as_ref().ok() != self.candidate.as_ref().or(self.baseline.as_ref()) {
             self.dirty = true;
         }
@@ -426,9 +565,49 @@ impl WatchCoordinator<'_> {
             .map_err(|_| Error::Internal("watch evaluation count exceeds platform limit".to_string()))?;
         crunch_watch_core::admit_evaluation(evaluations).map_err(watch_error)?;
         self.attempts.push_back(now);
-        match evaluate(self.config).await {
-            Ok((goals, roots, snapshot)) => self.offer_evaluation(goals, roots, snapshot).await,
-            Err(_) => self.on_evaluation_failure().await,
+        let previous_labels = self.evaluation_cache.as_ref().map_or_else(Vec::new, |cache| cache.retained_labels());
+        let result = if let Some(cache) = &mut self.evaluation_cache {
+            evaluate_cached(self.config, cache, &self.shutdown).await
+        } else {
+            evaluate(self.config).await.map(|(goals, roots, snapshot)| (goals, roots, snapshot, None))
+        };
+        match result {
+            Ok((goals, roots, snapshot, candidate)) => {
+                if self.evaluation_cache.is_some() && cache_identity(self.config).ok() != observed_configuration {
+                    return self.on_evaluation_failure().await;
+                }
+                if self.evaluation_cache.is_some() {
+                    let (mode, diagnostics) = candidate.as_ref().map_or(
+                        ("fresh-fallback-unsupported-or-capacity", ReuseDiagnostics {
+                            evicted_roots: previous_labels.clone(),
+                            ..ReuseDiagnostics::default()
+                        }),
+                        |candidate| ("independent-import-roots", candidate.diagnostics().clone()),
+                    );
+                    self.notices
+                        .send(WatchNotice::Evaluation { mode, diagnostics })
+                        .await
+                        .map_err(|_| Error::Internal("watch notice receiver closed".to_string()))?;
+                }
+                self.pending_evaluation = candidate;
+                self.pending_configuration = observed_configuration;
+                self.offer_evaluation(goals, roots, snapshot).await
+            }
+            Err(_) => {
+                if self.evaluation_cache.is_some() {
+                    self.notices
+                        .send(WatchNotice::Evaluation {
+                            mode: "rejected-cache-evicted",
+                            diagnostics: ReuseDiagnostics {
+                                evicted_roots: previous_labels,
+                                ..ReuseDiagnostics::default()
+                            },
+                        })
+                        .await
+                        .map_err(|_| Error::Internal("watch notice receiver closed".to_string()))?;
+                }
+                self.on_evaluation_failure().await
+            }
         }
     }
 
@@ -466,6 +645,10 @@ impl WatchCoordinator<'_> {
     }
 
     async fn on_evaluation_failure(&mut self) -> Result<(), Error> {
+        self.pending_evaluation = None;
+        if let Some(cache) = &mut self.evaluation_cache {
+            cache.clear();
+        }
         if self.pending.is_some() && !self.rollback_pending {
             self.restore_pending("watched source scan, evaluation or conversion failed").await?;
         } else if !self.rollback_pending {
@@ -498,6 +681,7 @@ async fn coordinate(
     notices: &mpsc::Sender<WatchNotice>,
     updates: mpsc::Sender<WatchWorkerUpdate>,
     mut worker_events: mpsc::Receiver<WatchWorkerEvent>,
+    incremental: bool,
 ) -> Result<(), Error> {
     debug_assert!(EVALUATION_WINDOW > Duration::ZERO);
     let max_evaluations = usize::try_from(MAX_EVALUATIONS_PER_WINDOW)
@@ -521,6 +705,11 @@ async fn coordinate(
         current_is_rollback: false,
         current: None,
         dirty: true,
+        evaluation_cache: incremental.then(PersistentRootCache::default),
+        pending_evaluation: None,
+        pending_configuration: None,
+        baseline_configuration: None,
+        shutdown: shutdown.clone(),
     };
     let mut ticker = tokio::time::interval(POLL_INTERVAL);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -556,11 +745,12 @@ async fn coordinate(
 /// A normal return occurs only after the Worker has drained all pending builds.
 /// No one-shot build API or its output registration is changed by this opt-in.
 #[cfg(target_os = "linux")]
-pub async fn watch_build(
+async fn watch_build_configured(
     config: &BuildConfig,
     run_identity: String,
     shutdown: &mut watch::Receiver<bool>,
     notices: &mpsc::Sender<WatchNotice>,
+    incremental: bool,
 ) -> Result<(), Error> {
     if config.remote_enabled {
         return Err(Error::WatchRemoteUnsupported);
@@ -577,6 +767,7 @@ pub async fn watch_build(
         fallback_mode: store_fallback_mode(config.hermeticity_mode),
         store_dir: config.store_dir.clone(),
         base_state_dirs: config.base_state_dirs.clone(),
+        source_admission: config.source_admission.clone(),
     };
     store_config
         .preflight_backend_identity()
@@ -619,7 +810,8 @@ pub async fn watch_build(
             shutdown,
             notices,
             updates_tx,
-            worker_events_rx
+            worker_events_rx,
+            incremental,
         ),
     );
     // The Worker must be awaited even when evaluation/notices fail. Dropping
@@ -629,13 +821,34 @@ pub async fn watch_build(
 }
 
 #[cfg(not(target_os = "linux"))]
-pub async fn watch_build(
+async fn watch_build_configured(
     _: &BuildConfig,
     _: String,
     _: &mut watch::Receiver<bool>,
     _: &mpsc::Sender<WatchNotice>,
+    _: bool,
 ) -> Result<(), Error> {
     Err(Error::Build("watch builds require Linux (bwrap)".to_string()))
+}
+
+/// Existing fresh watch path, unchanged by the opt-in root cache.
+pub async fn watch_build(
+    config: &BuildConfig,
+    run_identity: String,
+    shutdown: &mut watch::Receiver<bool>,
+    notices: &mpsc::Sender<WatchNotice>,
+) -> Result<(), Error> {
+    watch_build_configured(config, run_identity, shutdown, notices, false).await
+}
+
+/// Retain only independent imported roots in owned process memory.
+pub async fn watch_build_incremental(
+    config: &BuildConfig,
+    run_identity: String,
+    shutdown: &mut watch::Receiver<bool>,
+    notices: &mpsc::Sender<WatchNotice>,
+) -> Result<(), Error> {
+    watch_build_configured(config, run_identity, shutdown, notices, true).await
 }
 
 #[cfg(test)]
@@ -678,6 +891,7 @@ mod tests {
             substituter_urls: Vec::new(),
             hermeticity_mode: crunch_build::HermeticityMode::Practical,
             base_state_dirs: Vec::new(),
+            source_admission: None,
             trusted_keys: crunch_build::build_trusted_keys(&keypair, None),
             keypair,
             trust_unsigned: false,
@@ -685,6 +899,7 @@ mod tests {
             root_registration: None,
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
+            compile_driver_runtime: None,
             interchange_dir: None,
         }
     }

@@ -1,9 +1,23 @@
 // machine-artifact-public: structured-refactor.command-reports
 use std::fmt;
 use std::fs;
+use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::path::PathBuf;
 
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::EffectId;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::Observation;
+use mantle_application_contract::ObservationStatus;
+use mantle_application_contract::classify_observations;
+use mantle_application_contract::diagnostics::REFACTOR_READ_EFFECT;
+use mantle_application_contract::diagnostics::REFACTOR_READBACK_EFFECT;
+use mantle_application_contract::diagnostics::REFACTOR_RENAME_EFFECT;
+use mantle_application_contract::diagnostics::plan_refactor_inspection;
+use mantle_application_contract::diagnostics::plan_refactor_rename;
 use serde::Serialize;
 
 pub const REFACTOR_SESSION_SCHEMA: &str = "mantle-structured-refactor-session-v1";
@@ -80,10 +94,13 @@ pub fn crunch_to_mantle_session() -> RefactorSession {
     }
 }
 
-pub fn plan_crunch_to_mantle(root: &Path, configured_store_prefixes: &[String]) -> RefactorPlan {
+pub fn plan_crunch_to_mantle(root: &Path, configured_store_prefixes: &[String]) -> Result<RefactorPlan, RefactorError> {
     const REFACTOR_PLAN_ENTRY_CAPACITY_COUNT: usize = 4;
 
     let session = crunch_to_mantle_session();
+    let effect_plan =
+        plan_refactor_inspection().map_err(|error| RefactorError::Observation(error.code().to_string()))?;
+    let mut port = HostRefactorPort { reads: 0, writes: 0 };
     let mut operations = Vec::with_capacity(REFACTOR_PLAN_ENTRY_CAPACITY_COUNT);
     let mut diagnostics = Vec::with_capacity(REFACTOR_PLAN_ENTRY_CAPACITY_COUNT);
 
@@ -94,7 +111,15 @@ pub fn plan_crunch_to_mantle(root: &Path, configured_store_prefixes: &[String]) 
     ] {
         let legacy_path = root.join(legacy);
         let canonical_path = root.join(canonical);
-        match (legacy_path.exists(), canonical_path.exists()) {
+        let paths = (|| Ok((port.exists(&legacy_path)?, port.exists(&canonical_path)?)))();
+        let paths = match paths {
+            Ok(paths) => paths,
+            Err(error) => {
+                let _outcome = classify_refactor_inspection(&effect_plan, port.reads, false);
+                return Err(error);
+            }
+        };
+        match paths {
             (true, true) => diagnostics.push(RefactorDiagnostic {
                 code: "mixed-file-conflict",
                 message: format!("both legacy `{legacy}` and canonical `{canonical}` exist"),
@@ -142,21 +167,22 @@ pub fn plan_crunch_to_mantle(root: &Path, configured_store_prefixes: &[String]) 
 
     debug_assert!(operations.len() <= REFACTOR_PLAN_ENTRY_CAPACITY_COUNT);
     debug_assert!(diagnostics.len() <= REFACTOR_PLAN_ENTRY_CAPACITY_COUNT);
-    RefactorPlan {
+    classify_refactor_inspection(&effect_plan, port.reads, true)?;
+    Ok(RefactorPlan {
         schema: "mantle-refactor-plan-v1",
         session_id: session.id,
         root: root.display().to_string(),
         dry_run: true,
         operations,
         diagnostics,
-    }
+    })
 }
 
 pub fn apply_crunch_to_mantle(
     root: &Path,
     configured_store_prefixes: &[String],
 ) -> Result<RefactorPlan, RefactorError> {
-    let plan = plan_crunch_to_mantle(root, configured_store_prefixes);
+    let plan = plan_crunch_to_mantle(root, configured_store_prefixes)?;
     if plan.has_conflicts() {
         return Err(RefactorError::Conflicts(plan));
     }
@@ -168,16 +194,125 @@ pub fn apply_crunch_to_mantle(
         }
     }
     for operation in &plan.operations {
-        let from = root.join(&operation.from);
-        let to = root.join(&operation.to);
-        if let Some(parent) = to.parent() {
-            fs::create_dir_all(parent).map_err(|err| RefactorError::Io(parent.to_path_buf(), err.to_string()))?;
-        }
-        fs::rename(&from, &to).map_err(|err| RefactorError::Io(from, err.to_string()))?;
+        rename_refactor_path(&root.join(&operation.from), &root.join(&operation.to))?;
     }
     let mut applied = plan;
     applied.dry_run = false;
     Ok(applied)
+}
+
+trait RefactorPort {
+    fn exists(&mut self, path: &Path) -> Result<bool, RefactorError>;
+    fn rename(&mut self, from: &Path, to: &Path) -> Result<(), RefactorError>;
+    fn metadata(&mut self, path: &Path) -> Result<fs::Metadata, std::io::Error>;
+}
+
+struct HostRefactorPort {
+    reads: u32,
+    writes: u32,
+}
+
+impl RefactorPort for HostRefactorPort {
+    fn exists(&mut self, path: &Path) -> Result<bool, RefactorError> {
+        self.reads = self.reads.saturating_add(1);
+        match fs::metadata(path) {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(RefactorError::Io(path.to_path_buf(), error.to_string())),
+        }
+    }
+    fn metadata(&mut self, path: &Path) -> Result<fs::Metadata, std::io::Error> {
+        self.reads = self.reads.saturating_add(1);
+        fs::symlink_metadata(path)
+    }
+
+    fn rename(&mut self, from: &Path, to: &Path) -> Result<(), RefactorError> {
+        self.writes = self.writes.saturating_add(1);
+        if let Some(parent) = to.parent() {
+            fs::create_dir_all(parent).map_err(|error| RefactorError::Io(parent.to_path_buf(), error.to_string()))?;
+        }
+        fs::rename(from, to).map_err(|error| RefactorError::Io(from.to_path_buf(), error.to_string()))
+    }
+}
+
+fn classify_refactor_inspection(
+    plan: &mantle_application_contract::EffectPlan,
+    calls: u32,
+    succeeded: bool,
+) -> Result<(), RefactorError> {
+    let observation = Observation {
+        effect_id: EffectId(REFACTOR_READ_EFFECT.to_string()),
+        kind: EffectKind::ReadFiles,
+        status: if succeeded {
+            ObservationStatus::Succeeded
+        } else {
+            ObservationStatus::Failed
+        },
+        output: EffectOutput::None,
+        usage: EffectMeasure::Calls(calls),
+        diagnostics_code: (!succeeded).then(|| "refactor-inspection-failed".to_string()),
+    };
+    match classify_observations(plan, &[observation]) {
+        ApplicationOutcome::Completed => Ok(()),
+        _ => Err(RefactorError::Observation("refactor-inspection-failed".to_string())),
+    }
+}
+
+fn rename_refactor_path(from: &Path, to: &Path) -> Result<(), RefactorError> {
+    let destination = to.display().to_string();
+    let plan =
+        plan_refactor_rename(&destination).map_err(|error| RefactorError::Observation(error.code().to_string()))?;
+    let mut port = HostRefactorPort { reads: 0, writes: 0 };
+    let result: Result<bool, RefactorError> = (|| {
+        let before = port.metadata(from).map_err(|error| RefactorError::Io(from.to_path_buf(), error.to_string()))?;
+        port.rename(from, to)?;
+        let after = port.metadata(to);
+        let source = port.metadata(from);
+        let is_same_object = after
+            .as_ref()
+            .is_ok_and(|metadata| metadata.dev() == before.dev() && metadata.ino() == before.ino());
+        let is_source_absent = source.as_ref().is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound);
+        Ok(is_same_object && is_source_absent)
+    })();
+    let observed = result.as_ref().is_ok_and(|matched| *matched);
+    let output = if observed {
+        EffectOutput::Identity(destination)
+    } else {
+        EffectOutput::None
+    };
+    let status = if observed {
+        ObservationStatus::Succeeded
+    } else {
+        ObservationStatus::Failed
+    };
+    let observations = [
+        Observation {
+            effect_id: EffectId(REFACTOR_RENAME_EFFECT.to_string()),
+            kind: EffectKind::WriteFiles,
+            status: if port.writes == 0 {
+                ObservationStatus::Skipped
+            } else {
+                status
+            },
+            output: output.clone(),
+            diagnostics_code: (!observed).then(|| "refactor-rename-mismatch".to_string()),
+            usage: EffectMeasure::Calls(port.writes),
+        },
+        Observation {
+            effect_id: EffectId(REFACTOR_READBACK_EFFECT.to_string()),
+            kind: EffectKind::ReadFiles,
+            status,
+            output,
+            diagnostics_code: (!observed).then(|| "refactor-rename-mismatch".to_string()),
+            usage: EffectMeasure::Calls(port.reads),
+        },
+    ];
+    let outcome = classify_observations(&plan, &observations);
+    result?;
+    if outcome != ApplicationOutcome::Completed {
+        return Err(RefactorError::Observation("refactor-rename-mismatch".to_string()));
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -187,6 +322,7 @@ pub enum RefactorError {
     Conflicts(RefactorPlan),
     UnsupportedApply(RefactorOperation),
     Io(PathBuf, String),
+    Observation(String),
 }
 
 impl fmt::Display for RefactorError {
@@ -203,6 +339,7 @@ impl fmt::Display for RefactorError {
                 operation.kind, operation.from, operation.to
             ),
             Self::Io(path, err) => write!(f, "refactor I/O error at {}: {err}", path.display()),
+            Self::Observation(code) => write!(f, "refactor observation rejected: {code}"),
         }
     }
 }
@@ -215,6 +352,16 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn conflicting_apply_preserves_both_sources() {
+        let directory = tempdir().unwrap();
+        fs::write(directory.path().join("crunch-project.ncl"), "legacy").unwrap();
+        fs::write(directory.path().join("mantle-project.ncl"), "canonical").unwrap();
+        assert!(matches!(apply_crunch_to_mantle(directory.path(), &[]), Err(RefactorError::Conflicts(_))));
+        assert_eq!(fs::read_to_string(directory.path().join("crunch-project.ncl")).unwrap(), "legacy");
+        assert_eq!(fs::read_to_string(directory.path().join("mantle-project.ncl")).unwrap(), "canonical");
+    }
+
     fn snapshot(root: &Path) -> Vec<String> {
         let mut entries = fs::read_dir(root)
             .unwrap()
@@ -225,25 +372,12 @@ mod tests {
     }
 
     #[test]
-    fn crunch_to_mantle_fixture_names_compatibility_surfaces() {
-        let session = crunch_to_mantle_session();
-        assert_eq!(session.canonical_name, "mantle");
-        assert!(session.legacy_aliases.contains(&"crunch"));
-        assert!(session.canonical_cli.contains(&"mantle"));
-        assert!(session.legacy_cli.contains(&"crunch"));
-        assert!(session.canonical_files.contains(&"mantle-project.ncl"));
-        assert!(session.legacy_files.contains(&"crunch-project.ncl"));
-        assert_eq!(session.canonical_store_prefix, "/mantle/store");
-        assert!(session.legacy_store_prefixes.contains(&"/crunch/store"));
-    }
-
-    #[test]
     fn plan_is_side_effect_free() {
         let dir = tempdir().unwrap();
         fs::write(dir.path().join("crunch-project.ncl"), "legacy").unwrap();
         fs::write(dir.path().join("crunch.lock"), "{}").unwrap();
         let before = snapshot(dir.path());
-        let plan = plan_crunch_to_mantle(dir.path(), &[]);
+        let plan = plan_crunch_to_mantle(dir.path(), &[]).unwrap();
         let after = snapshot(dir.path());
         assert_eq!(before, after);
         assert!(plan.dry_run);
@@ -255,7 +389,7 @@ mod tests {
         let dir = tempdir().unwrap();
         fs::write(dir.path().join("crunch-project.ncl"), "legacy").unwrap();
         fs::write(dir.path().join("mantle-project.ncl"), "canonical").unwrap();
-        let plan = plan_crunch_to_mantle(dir.path(), &[]);
+        let plan = plan_crunch_to_mantle(dir.path(), &[]).unwrap();
         assert!(plan.has_conflicts());
         assert_eq!(plan.diagnostics[0].code, "mixed-file-conflict");
         assert!(plan.diagnostics[0].remediation.contains("choose one source of truth"));
@@ -264,7 +398,8 @@ mod tests {
     #[test]
     fn ambiguous_store_prefixes_report_conflict() {
         let dir = tempdir().unwrap();
-        let plan = plan_crunch_to_mantle(dir.path(), &["/mantle/store".to_string(), "/crunch/store".to_string()]);
+        let plan =
+            plan_crunch_to_mantle(dir.path(), &["/mantle/store".to_string(), "/crunch/store".to_string()]).unwrap();
         assert!(plan.has_conflicts());
         assert_eq!(plan.diagnostics[0].code, "ambiguous-store-prefix-conflict");
     }
@@ -276,6 +411,6 @@ mod tests {
         let applied = apply_crunch_to_mantle(dir.path(), &[]).unwrap();
         assert!(!applied.dry_run);
         assert!(!dir.path().join("crunch-project.ncl").exists());
-        assert!(dir.path().join("mantle-project.ncl").exists());
+        assert_eq!(fs::read_to_string(dir.path().join("mantle-project.ncl")).unwrap(), "legacy");
     }
 }

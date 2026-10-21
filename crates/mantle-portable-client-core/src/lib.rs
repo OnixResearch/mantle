@@ -13,7 +13,7 @@ use serde::Serialize;
 
 pub const PORTABLE_CLIENT_PLAN_SCHEMA: &str = "mantle-portable-client-plan-v1";
 pub const PLATFORM_PROFILE_SCHEMA: &str = "mantle-platform-support-profile-v1";
-pub const ROOT_COMMAND_COUNT: usize = 41;
+pub const ROOT_COMMAND_COUNT: usize = 44;
 pub const PAYLOAD_KIND_COUNT_MAX: usize = 8;
 pub const STORE_PREFIX_BYTES_MAX: usize = 256;
 pub const PLATFORM_LABEL_BYTES_MAX: usize = 64;
@@ -113,6 +113,9 @@ pub const COMMAND_PROFILES: [CommandProfile; ROOT_COMMAND_COUNT] = [
     profile("nix-free-demo", CommandRole::Proof, LOCAL_EXECUTION),
     profile("foreign-import", CommandRole::LinuxLocalExecutor, LOCAL_EXECUTION),
     profile("mantlepkgs", CommandRole::LinuxLocalExecutor, LOCAL_EXECUTION),
+    profile("profile", CommandRole::LinuxLocalExecutor, LOCAL_EXECUTION),
+    profile("test", CommandRole::LinuxLocalExecutor, LOCAL_EXECUTION),
+    profile("cargo-build-bundle", CommandRole::LinuxLocalExecutor, LOCAL_EXECUTION),
     profile("eval", CommandRole::PortableClient, READ_ONLY),
     profile("export", CommandRole::PortableClient, PORTABLE_IO),
     profile("bootstrap", CommandRole::Bootstrap, LOCAL_EXECUTION),

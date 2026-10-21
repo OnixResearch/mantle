@@ -1,4 +1,7 @@
 //! Pure validation and reviewable decisions for bootstrap source pins.
+//!
+//! Boundary operations take owned records. Validation returns the record, while
+//! decisions and plan verification retain their inputs for subsequent publication.
 use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::String;
@@ -92,17 +95,21 @@ pub struct PinPlan {
 }
 
 // r[impl mantle.bootstrap_source_pins.pin_data_contract]
-pub fn parse_pin(bytes: &[u8]) -> Result<BootstrapPin, String> {
+pub fn parse_pin(bytes: Vec<u8>) -> Result<BootstrapPin, String> {
     if bytes.is_empty() || bytes.len() > MAX_PIN_BYTES {
         return Err(format!("pin record must contain 1..={MAX_PIN_BYTES} bytes"));
     }
-    let pin: BootstrapPin = serde_json::from_slice(bytes)
+    let pin: BootstrapPin = serde_json::from_slice(&bytes)
         .map_err(|e| format!("invalid pin record ({e}); known fields: {RECORD_KEYS}; artifact fields: url_template, url, hash_kind, hash; resolve fields: kind, url, version_field, date_field"))?;
-    validate_pin(&pin)?;
+    validate_pin(pin)
+}
+
+pub fn validate_pin(pin: BootstrapPin) -> Result<BootstrapPin, String> {
+    validate_pin_ref(&pin)?;
     Ok(pin)
 }
 
-pub fn validate_pin(pin: &BootstrapPin) -> Result<(), String> {
+fn validate_pin_ref(pin: &BootstrapPin) -> Result<(), String> {
     if pin.schema != PIN_SCHEMA {
         return Err(format!("pin schema must be {PIN_SCHEMA}"));
     }
@@ -135,7 +142,7 @@ pub fn validate_pin(pin: &BootstrapPin) -> Result<(), String> {
 }
 
 fn valid_artifact(role: &str, artifact: &PinArtifact, version: &str) -> Result<bool, String> {
-    if !valid_source(role) || !valid_sri(&artifact.hash) {
+    if !valid_source(role) || !valid_sri_ref(&artifact.hash) {
         return Ok(false);
     }
     let template = &artifact.url_template;
@@ -145,7 +152,7 @@ fn valid_artifact(role: &str, artifact: &PinArtifact, version: &str) -> Result<b
     if !template.contains("{version}") {
         return Ok(false);
     }
-    Ok(render_pin_url(artifact, version)? == artifact.url)
+    Ok(render_pin_url_ref(&artifact.url_template, version)? == artifact.url)
 }
 
 fn valid_resolve_hook(hook: &ResolveHook) -> bool {
@@ -159,18 +166,39 @@ fn valid_resolve_hook(hook: &ResolveHook) -> bool {
     }
     valid_source(version_field) && valid_source(date_field)
 }
-pub fn render_pin_url(artifact: &PinArtifact, version: &str) -> Result<String, String> {
+/// The input strings are retained so callers can render without cloning records.
+#[derive(Debug)]
+pub struct RenderedPinUrl {
+    pub url_template: String,
+    pub version: String,
+    pub url: String,
+}
+
+pub fn render_pin_url(url_template: String, version: String) -> Result<RenderedPinUrl, String> {
+    let url = render_pin_url_ref(&url_template, &version)?;
+    Ok(RenderedPinUrl {
+        url_template,
+        version,
+        url,
+    })
+}
+
+fn render_pin_url_ref(url_template: &str, version: &str) -> Result<String, String> {
     if !valid_version(version) {
         return Err("invalid candidate version".to_string());
     }
-    let url = artifact.url_template.replace("{version}", version);
+    let url = url_template.replace("{version}", version);
     if !url.starts_with("https://") || url.len() > MAX_URL_BYTES {
         return Err("rendered pin URL is invalid".to_string());
     }
     Ok(url)
 }
 
-pub fn valid_sri(hash: &str) -> bool {
+pub fn valid_sri(hash: String) -> bool {
+    valid_sri_ref(&hash)
+}
+
+fn valid_sri_ref(hash: &str) -> bool {
     let Some(encoded) = hash.strip_prefix("sha256-") else {
         return false;
     };
@@ -202,23 +230,45 @@ fn valid_version(value: &str) -> bool {
 }
 
 /// Current and candidate release versions, named so call sites cannot swap them.
-#[derive(Clone, Copy, Debug)]
-pub struct VersionPair<'a> {
-    pub current: &'a str,
-    pub candidate: &'a str,
+#[derive(Debug)]
+pub struct VersionPair {
+    pub current: String,
+    pub candidate: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VersionOrder {
+    Less,
+    Equal,
+    Greater,
+}
+
+#[derive(Debug)]
+pub struct VersionComparison {
+    pub versions: VersionPair,
+    pub ordering: VersionOrder,
 }
 
 /// Compare numeric segments numerically and remaining segments lexically.
 /// Every segment is compared, including suffixes after long equal prefixes.
-pub fn compare_versions(pair: VersionPair<'_>) -> core::cmp::Ordering {
-    let mut current_parts = pair.current.split(['.', '-', '_']);
-    let mut candidate_parts = pair.candidate.split(['.', '-', '_']);
-    let segment_bound = pair.current.len().max(pair.candidate.len()).saturating_add(1);
+pub fn compare_versions(versions: VersionPair) -> VersionComparison {
+    let ordering = match compare_versions_ref(&versions.current, &versions.candidate) {
+        core::cmp::Ordering::Less => VersionOrder::Less,
+        core::cmp::Ordering::Equal => VersionOrder::Equal,
+        core::cmp::Ordering::Greater => VersionOrder::Greater,
+    };
+    VersionComparison { versions, ordering }
+}
+
+fn compare_versions_ref(current: &str, candidate: &str) -> core::cmp::Ordering {
+    let mut current_parts = current.split(['.', '-', '_']);
+    let mut candidate_parts = candidate.split(['.', '-', '_']);
+    let segment_bound = current.len().max(candidate.len()).saturating_add(1);
     for _ in 0..segment_bound {
         match (current_parts.next(), candidate_parts.next()) {
             (Some(left), Some(right)) => {
-                assert!(left.len() <= pair.current.len(), "segment lies within the current version");
-                assert!(right.len() <= pair.candidate.len(), "segment lies within the candidate version");
+                assert!(left.len() <= current.len(), "segment lies within the current version");
+                assert!(right.len() <= candidate.len(), "segment lies within the candidate version");
                 let cmp = match (left.parse::<u64>(), right.parse::<u64>()) {
                     (Ok(x), Ok(y)) => x.cmp(&y),
                     _ => left.cmp(right),
@@ -235,37 +285,48 @@ pub fn compare_versions(pair: VersionPair<'_>) -> core::cmp::Ordering {
     core::cmp::Ordering::Equal
 }
 
-pub fn decide_pin(pin: &BootstrapPin, observation: Result<PinCandidate, String>) -> PinDecision {
+#[derive(Debug)]
+pub struct PinEvaluation {
+    pub pin: BootstrapPin,
+    pub decision: PinDecision,
+}
+
+pub fn decide_pin(pin: BootstrapPin, observation: Result<PinCandidate, String>) -> PinEvaluation {
+    let decision = decide_pin_ref(&pin, observation);
+    PinEvaluation { pin, decision }
+}
+
+fn decide_pin_ref(pin: &BootstrapPin, observation: Result<PinCandidate, String>) -> PinDecision {
     assert!(!pin.artifacts.is_empty(), "decisions require a validated pin with artifacts");
     let candidate = match observation {
         Ok(candidate) => candidate,
         Err(message) => return PinDecision::Error { message },
     };
-    if !valid_version(&candidate.version) || !valid_date(&candidate.release_date) {
-        return PinDecision::Error {
-            message: "invalid upstream version or date".to_string(),
-        };
+    match candidate_is_newer(pin, &candidate) {
+        Ok(true) => PinDecision::Candidate { candidate },
+        Ok(false) => PinDecision::Current,
+        Err(message) => PinDecision::Error { message },
     }
-    let pair = VersionPair {
-        current: &pin.version,
-        candidate: &candidate.version,
-    };
-    if !compare_versions(pair).is_lt() {
-        return PinDecision::Current;
-    }
-    let is_complete = candidate.hashes.len() == pin.artifacts.len()
-        && pin.artifacts.keys().all(|role| candidate.hashes.get(role).is_some_and(|hash| valid_sri(hash)));
-    if !is_complete {
-        return PinDecision::Error {
-            message: "candidate requires an observed sha256 hash for every artifact".to_string(),
-        };
-    }
-    assert_eq!(candidate.hashes.len(), pin.artifacts.len(), "candidate covers every artifact");
-    PinDecision::Candidate { candidate }
 }
 
-pub fn pin_preimage(bytes: &[u8]) -> String {
-    blake3::hash(bytes).to_hex().to_string()
+fn candidate_is_newer(pin: &BootstrapPin, candidate: &PinCandidate) -> Result<bool, String> {
+    if !valid_version(&candidate.version) || !valid_date(&candidate.release_date) {
+        return Err("invalid upstream version or date".to_string());
+    }
+    if !compare_versions_ref(&pin.version, &candidate.version).is_lt() {
+        return Ok(false);
+    }
+    let is_complete = candidate.hashes.len() == pin.artifacts.len()
+        && pin.artifacts.keys().all(|role| candidate.hashes.get(role).is_some_and(|hash| valid_sri_ref(hash)));
+    if !is_complete {
+        return Err("candidate requires an observed sha256 hash for every artifact".to_string());
+    }
+    assert_eq!(candidate.hashes.len(), pin.artifacts.len(), "candidate covers every artifact");
+    Ok(true)
+}
+
+pub fn pin_preimage(bytes: Vec<u8>) -> String {
+    blake3::hash(&bytes).to_hex().to_string()
 }
 
 pub fn seal_plan(mut entries: Vec<PinPlanEntry>) -> Result<PinPlan, String> {
@@ -285,11 +346,24 @@ pub fn seal_plan(mut entries: Vec<PinPlanEntry>) -> Result<PinPlan, String> {
 }
 fn plan_digest(entries: &[PinPlanEntry]) -> Result<String, String> {
     let bytes = serde_json::to_vec(&(PLAN_SCHEMA, entries)).map_err(|e| format!("serialize plan: {e}"))?;
-    Ok(pin_preimage(&bytes))
+    Ok(pin_preimage(bytes))
+}
+
+/// A validated pin and the digest of its source-file bytes.
+#[derive(Debug)]
+pub struct LoadedPin {
+    pub pin: BootstrapPin,
+    pub preimage: String,
+}
+
+#[derive(Debug)]
+pub struct VerifiedPinPlan {
+    pub plan: PinPlan,
+    pub pins: BTreeMap<String, LoadedPin>,
 }
 
 // r[impl mantle.bootstrap_source_pins.apply_writes_pins_only]
-pub fn verify_plan(plan: &PinPlan, pins: &BTreeMap<String, (BootstrapPin, String)>) -> Result<(), String> {
+pub fn verify_plan(plan: PinPlan, pins: BTreeMap<String, LoadedPin>) -> Result<VerifiedPinPlan, String> {
     if plan.schema != PLAN_SCHEMA || plan.entries.is_empty() {
         return Err(MUTATED_PLAN.to_string());
     }
@@ -303,14 +377,15 @@ pub fn verify_plan(plan: &PinPlan, pins: &BTreeMap<String, (BootstrapPin, String
         }
     }
     for entry in &plan.entries {
-        verify_plan_entry(entry, pins)?;
+        verify_plan_entry(entry, &pins)?;
     }
     assert!(plan.entries.iter().all(|entry| pins.contains_key(&entry.source)), "every plan source is declared");
-    Ok(())
+    Ok(VerifiedPinPlan { plan, pins })
 }
 
-fn verify_plan_entry(entry: &PinPlanEntry, pins: &BTreeMap<String, (BootstrapPin, String)>) -> Result<(), String> {
-    let (pin, preimage) = pins.get(&entry.source).ok_or_else(|| format!("unknown source {}", entry.source))?;
+fn verify_plan_entry(entry: &PinPlanEntry, pins: &BTreeMap<String, LoadedPin>) -> Result<(), String> {
+    let LoadedPin { pin, preimage } =
+        pins.get(&entry.source).ok_or_else(|| format!("unknown source {}", entry.source))?;
     assert_eq!(pin.source, entry.source, "pin map is keyed by source");
     assert!(!preimage.is_empty(), "loaded pins carry a preimage digest");
     if &entry.preimage != preimage || entry.current != pin.version {
@@ -321,7 +396,8 @@ fn verify_plan_entry(entry: &PinPlanEntry, pins: &BTreeMap<String, (BootstrapPin
             Err(format!("{}: unresolved upstream observation; apply requires every source resolved", entry.source))
         }
         PinDecision::Candidate { candidate } => {
-            if matches!(decide_pin(pin, Ok(candidate.clone())), PinDecision::Candidate { .. }) {
+            assert!(!pin.artifacts.is_empty(), "decisions require a validated pin with artifacts");
+            if candidate_is_newer(pin, candidate).is_ok_and(|newer| newer) {
                 Ok(())
             } else {
                 Err(format!("{}: invalid candidate", entry.source))
@@ -360,17 +436,17 @@ mod tests {
     #[test]
     fn validates_roundtrip_and_rejects_unknown_missing_and_bad_hash() {
         let bytes = serde_json::to_vec(&example()).unwrap();
-        assert_eq!(parse_pin(&bytes).unwrap(), example());
         let mut value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(parse_pin(bytes).unwrap(), example());
         value["mystery"] = serde_json::json!(1);
-        let error = parse_pin(&serde_json::to_vec(&value).unwrap()).unwrap_err();
+        let error = parse_pin(serde_json::to_vec(&value).unwrap()).unwrap_err();
         assert!(error.contains("mystery") && error.contains("known fields"));
         value.as_object_mut().unwrap().remove("mystery");
         value["artifacts"]["source"].as_object_mut().unwrap().remove("hash");
-        assert!(parse_pin(&serde_json::to_vec(&value).unwrap()).is_err());
+        assert!(parse_pin(serde_json::to_vec(&value).unwrap()).is_err());
         let mut bad = example();
         bad.artifacts.get_mut("source").unwrap().hash = "flat:sha256".into();
-        assert!(validate_pin(&bad).is_err());
+        assert!(validate_pin(bad).is_err());
     }
     #[test]
     fn newer_candidate_after_long_equal_version_prefix_is_not_current() {
@@ -382,49 +458,64 @@ mod tests {
             hashes: BTreeMap::from([("source".into(), HASH.into())]),
         };
         assert!(valid_version(&pin.version) && valid_version(&candidate.version));
-        assert!(matches!(decide_pin(&pin, Ok(candidate)), PinDecision::Candidate { .. }));
+        assert!(matches!(decide_pin(pin, Ok(candidate)).decision, PinDecision::Candidate { .. }));
     }
 
     #[test]
     fn decides_and_seals_reviewable_plan() {
         let pin = example();
-        assert!(
+        assert_eq!(
             compare_versions(VersionPair {
-                current: "2.9",
-                candidate: "2.10"
+                current: "2.9".into(),
+                candidate: "2.10".into(),
             })
-            .is_lt()
+            .ordering,
+            VersionOrder::Less,
         );
-        assert!(
+        assert_eq!(
             compare_versions(VersionPair {
-                current: "2.10",
-                candidate: "2.9"
+                current: "2.10".into(),
+                candidate: "2.9".into(),
             })
-            .is_gt()
+            .ordering,
+            VersionOrder::Greater,
         );
         let candidate = PinCandidate {
             version: "2.70".into(),
             release_date: "2023-01-01".into(),
             hashes: BTreeMap::from([("source".into(), HASH.into())]),
         };
-        assert!(matches!(decide_pin(&pin, Ok(candidate.clone())), PinDecision::Candidate { .. }));
+        let PinEvaluation { pin, decision } = decide_pin(pin, Ok(candidate));
+        assert!(matches!(decision, PinDecision::Candidate { .. }));
         let bytes = serde_json::to_vec(&pin).unwrap();
-        let preimage = pin_preimage(&bytes);
-        let pins = BTreeMap::from([("autoconf".into(), (pin, preimage.clone()))]);
+        let preimage = pin_preimage(bytes);
+        let pins = BTreeMap::from([("autoconf".into(), LoadedPin {
+            pin,
+            preimage: preimage.clone(),
+        })]);
         let plan = seal_plan(vec![PinPlanEntry {
             source: "autoconf".into(),
             preimage,
             current: "2.69".into(),
-            decision: PinDecision::Candidate { candidate },
+            decision,
         }])
         .unwrap();
-        verify_plan(&plan, &pins).unwrap();
+        let VerifiedPinPlan { plan, pins } = verify_plan(plan, pins).unwrap();
         let mut changed = plan.clone();
         changed.entries[0].current = "2.68".into();
-        assert!(verify_plan(&changed, &pins).is_err());
+        assert!(
+            verify_plan(
+                changed,
+                BTreeMap::from([("autoconf".into(), LoadedPin {
+                    pin: example(),
+                    preimage: pins["autoconf"].preimage.clone(),
+                })])
+            )
+            .is_err()
+        );
         let mut unknown = plan;
         unknown.entries[0].source = "alien".into();
         unknown.digest = plan_digest(&unknown.entries).unwrap();
-        assert!(verify_plan(&unknown, &pins).unwrap_err().contains("unknown source"));
+        assert!(verify_plan(unknown, pins).unwrap_err().contains("unknown source"));
     }
 }

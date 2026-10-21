@@ -3,9 +3,11 @@
 //! `crunch-project-core`: compiler-enforced no-std home for extracted
 //! project functional-core logic.
 //!
-//! This first wave owns foundational manifest, lockfile, and schema-version
-//! types. Std-facing refresh I/O, tempdirs, and CLI adapters remain in
-//! `crunch-project`.
+//! Public operations consume owned project data. File-generation admission and
+//! retention-state validation return their admitted values so the shell can
+//! continue without cloning plans or record graphs. Borrowed helpers remain
+//! internal; scalar policy and selector labels use `Display`.
+//! Std-facing refresh I/O, tempdirs, and CLI adapters remain in `crunch-project`.
 
 extern crate alloc;
 

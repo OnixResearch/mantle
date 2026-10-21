@@ -8,9 +8,11 @@ edition = "2024"
 //!
 //! The contract crate owns typed commands, blockers, and ports; presentation
 //! modules render typed values; adapters own host capability. This guard checks
-//! those three boundaries from source text, and it approximates test-code
-//! exclusion by ignoring everything from the first `#[cfg(test)]` marker to the
-//! end of each scanned file.
+//! those three boundaries from source text. The host-authority rail ignores
+//! comments, literals, and `#[cfg(test)]` items, including their external modules.
+//! It recognizes direct paths and grouped imports, not semantic or transitive
+//! purity: aliases, macros, conditional compilation, and dependency internals
+//! still require review.
 
 use std::env;
 use std::fs;
@@ -67,17 +69,34 @@ const CORE_DIRECTION_FORBIDDEN: &[&str] = &[
     "snix_",
 ];
 
-/// Tokens that mean the contract reaches a host capability or a CLI error.
+/// Host implementations forbidden in both cores and the application contract.
+///
+/// These are authority paths/types, not words such as `Provider` or `render`:
+/// typed provider observations, store DTOs, alloc, serde, and pure formatting
+/// remain legitimate core inputs and computations.
 const CONTRACT_FORBIDDEN: &[&str] = &[
-    "std::fs",
-    "std::env",
-    "std::process",
-    "std::net",
-    "std::thread",
-    "std::time::Instant",
-    "std::time::SystemTime",
-    "tokio::",
-    "RunError",
+    // CLI ownership and presentation adapters.
+    "clap", "mantle", "crate::cli", "crate::errors", "crate::presentation",
+    "RunContext", "RunError",
+    // Snix and store-service implementations.
+    "snix_build", "snix_castore", "snix_store", "snix_eval", "snix_glue",
+    "crunch_store", "StoreHandle", "BlobService", "DirectoryService", "PathInfoService",
+    // Filesystem, process, runtime, and ambient environment authority.
+    "std::fs", "std::os::unix::fs", "std::os::windows::fs", "rustix::fs",
+    "std::process", "std::thread", "tokio", "async_std", "smol",
+    "std::env", "dotenv", "dotenvy",
+    // Clock values such as Duration remain allowed; ambient clock reads do not.
+    "std::time::Instant", "std::time::SystemTime", "web_time::Instant",
+    "web_time::SystemTime", "chrono::Utc", "chrono::Local",
+    "rand", "getrandom", "fastrand", "rand_core::OsRng", "uuid::Uuid::new_v4",
+    "std::net", "reqwest", "ureq", "hyper", "rustix::net",
+    // Concrete provider adapters, not provider evidence or policy records.
+    "crate::full_source_provider", "crate::rust_source_provider",
+    "crate::source_root_provider", "crate::stagex_provider",
+    "crate::provider_output_publication",
+    // Operator output belongs to presentation, not pure decision code.
+    "std::io::stdout", "std::io::stderr", "std::io::stdin",
+    "print!", "println!", "eprint!", "eprintln!",
 ];
 
 /// Tokens that mean presentation reads ambient state instead of typed inputs.
@@ -131,7 +150,7 @@ fn main() -> ExitCode {
 /// Scan the repository boundaries and return every violation.
 fn scan_repository(root: &Path) -> Result<Vec<String>, String> {
     let mut violations = Vec::new();
-    violations.extend(scan_directory(&root.join(CONTRACT_SOURCES), CONTRACT_FORBIDDEN, "contract")?);
+    violations.extend(scan_host_sources(&root.join(CONTRACT_SOURCES), "contract host authority")?);
     violations.extend(scan_directory(&root.join(PRESENTATION_SOURCES), PRESENTATION_FORBIDDEN, "presentation")?);
     violations.extend(scan_file(&root.join(ROOT_SOURCES), ROOT_FORBIDDEN, "root")?);
     violations.extend(scan_core_sources(&root.join(CORE_SOURCES))?);
@@ -205,6 +224,9 @@ fn scan_core_sources_in(directory: &Path, is_core: bool) -> Result<Vec<String>, 
         let path = entry.map_err(|error| format!("reading directory entry: {error}"))?.path();
         if path.is_dir() {
             let name = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+            if name.ends_with("-core") {
+                violations.extend(scan_host_sources(&path.join("src"), "core host authority")?);
+            }
             violations.extend(scan_core_sources_in(&path, is_core || name.ends_with("-core"))?);
             continue;
         }
@@ -273,6 +295,314 @@ fn scan_file_skipping_comments(path: &Path, forbidden: &[&str], boundary: &str) 
         }
     }
     debug_assert!(violations.is_empty() || !text.is_empty());
+    Ok(violations)
+}
+
+/// One lexical source token. Literals are retained only to resolve test files.
+#[derive(Clone, Copy)]
+struct SourceToken<'a> {
+    text: &'a str,
+    line: usize,
+    literal: bool,
+}
+
+/// Tokenize without comments; quoted strings/chars cannot introduce authority.
+fn source_tokens(text: &str) -> Vec<SourceToken<'_>> {
+    let bytes = text.as_bytes();
+    let mut tokens = Vec::new();
+    let mut index = 0;
+    let mut line = 1;
+    while index < bytes.len() {
+        let start = index;
+        let mut literal = false;
+        let mut comment = false;
+        if text[index..].starts_with("//") {
+            index += text[index..].find('\n').unwrap_or(bytes.len() - index);
+            comment = true;
+        } else if text[index..].starts_with("/*") {
+            index += 2;
+            let mut depth = 1;
+            while index < bytes.len() && depth > 0 {
+                if text[index..].starts_with("/*") {
+                    depth += 1;
+                    index += 2;
+                } else if text[index..].starts_with("*/") {
+                    depth -= 1;
+                    index += 2;
+                } else {
+                    index += text[index..].chars().next().expect("source character").len_utf8();
+                }
+            }
+            comment = true;
+        } else {
+            // Raw strings may contain quotes, braces, and fake cfg markers.
+            let raw_start = if bytes[index] == b'b' { index + 1 } else { index };
+            let mut quote = raw_start + 1;
+            if bytes.get(raw_start) == Some(&b'r') {
+                while bytes.get(quote) == Some(&b'#') {
+                    quote += 1;
+                }
+            }
+            if bytes.get(raw_start) == Some(&b'r') && bytes.get(quote) == Some(&b'"') {
+                let closing = format!("\"{}", &text[raw_start + 1..quote]);
+                index = text[quote + 1..].find(&closing)
+                    .map_or(bytes.len(), |offset| quote + 1 + offset + closing.len());
+                literal = true;
+            } else if bytes[index] == b'"'
+                || (bytes[index] == b'\''
+                    && (bytes.get(index + 2) == Some(&b'\'') || bytes.get(index + 1) == Some(&b'\\')))
+            {
+                let closing = bytes[index];
+                index += 1;
+                while index < bytes.len() {
+                    if bytes[index] == b'\\' {
+                        index = (index + 2).min(bytes.len());
+                    } else if bytes[index] == closing {
+                        index += 1;
+                        break;
+                    } else {
+                        index += text[index..].chars().next().expect("literal character").len_utf8();
+                    }
+                }
+                literal = true;
+            } else if bytes[index].is_ascii_alphanumeric() || bytes[index] == b'_' {
+                index += 1;
+                while index < bytes.len() && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'_') {
+                    index += 1;
+                }
+            } else if text[index..].starts_with("::") {
+                index += 2;
+            } else {
+                index += text[index..].chars().next().expect("source character").len_utf8();
+            }
+        }
+        let fragment = &text[start..index];
+        if !comment && !fragment.trim().is_empty() {
+            tokens.push(SourceToken { text: fragment, line, literal });
+        }
+        line += fragment.bytes().filter(|byte| *byte == b'\n').count();
+    }
+    tokens
+}
+
+/// Remove cfg(test) items, not the production items that may follow them.
+/// Return omitted spans as well, so external test modules can be excluded.
+fn host_production_tokens<'a>(tokens: &[SourceToken<'a>]) -> (Vec<SourceToken<'a>>, Vec<Vec<SourceToken<'a>>>) {
+    let marker = ["#", "[", "cfg", "(", "test", ")", "]"];
+    let mut production: Vec<SourceToken<'a>> = Vec::new();
+    let mut tests = Vec::new();
+    let mut index = 0;
+    while index < tokens.len() {
+        if tokens[index..].iter().take(marker.len()).map(|token| token.text).eq(marker) {
+            let start = index;
+            // Attributes may precede cfg(test), including #[path = "..."]:
+            // move that item's attributes into the excluded span as well.
+            let mut attributes = Vec::new();
+            while production.last().is_some_and(|token| token.text == "]") {
+                let mut start = production.len() - 1;
+                let mut depth = 1_usize;
+                while start > 0 && depth > 0 {
+                    start -= 1;
+                    match production[start].text { "]" => depth += 1, "[" => depth -= 1, _ => {} }
+                }
+                if start == 0 || production[start - 1].text != "#" { break; }
+                drop(attributes.splice(0..0, production.drain(start - 1..)));
+            }
+            index += marker.len();
+            let mut braces = 0_usize;
+            while index < tokens.len() {
+                let token = tokens[index].text;
+                index += 1;
+                if token == "{" {
+                    braces += 1;
+                } else if token == "}" {
+                    braces = braces.saturating_sub(1);
+                    if braces == 0 { break; }
+                } else if token == ";" && braces == 0 {
+                    break;
+                }
+            }
+            attributes.extend_from_slice(&tokens[start..index]);
+            tests.push(attributes);
+        } else {
+            production.push(tokens[index]);
+            index += 1;
+        }
+    }
+    (production, tests)
+}
+
+/// Expand nested use trees, including multiline and aliased grouped imports.
+fn import_paths(tokens: &[SourceToken<'_>], prefix: &str, paths: &mut Vec<(String, usize)>) {
+    let mut path = prefix.to_string();
+    let mut index = 0;
+    while index < tokens.len() {
+        let token = tokens[index];
+        match token.text {
+            "{" => {
+                let start = index + 1;
+                let mut depth = 1;
+                index += 1;
+                while index < tokens.len() && depth > 0 {
+                    match tokens[index].text { "{" => depth += 1, "}" => depth -= 1, _ => {} }
+                    index += 1;
+                }
+                import_paths(&tokens[start..index.saturating_sub(1)], &path, paths);
+                index = index.saturating_sub(1);
+            }
+            "," => path = prefix.to_string(),
+            "as" => { index += 1; }
+            ";" => {}
+            _ if !token.literal => {
+                path.push_str(token.text);
+                paths.push((path.clone(), token.line));
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+}
+
+/// Match a whole authority path, not lookalikes such as `ProviderOutputRole`.
+fn authority_matches(path: &str, forbidden: &str) -> bool {
+    let path = path.trim_start_matches("::");
+    path == forbidden || path.strip_prefix(forbidden).is_some_and(|suffix| suffix.starts_with("::"))
+}
+
+/// Resolve literal include paths and Rust module paths within one source file.
+/// This is source-shape ownership, not cfg evaluation or macro expansion.
+fn source_references(tokens: &[SourceToken<'_>], parent: &Path, module_directory: &Path, path_base: &Path, paths: &mut Vec<std::path::PathBuf>) {
+    let mut index = 0;
+    let mut explicit_path = None;
+    while index < tokens.len() {
+        if index >= 2 && tokens[index - 2].text == "#" && tokens[index - 1].text == "["
+            && tokens[index].text == "path" && tokens.get(index + 1).is_some_and(|token| token.text == "=")
+        {
+            explicit_path = tokens.get(index + 2).filter(|token| token.literal).map(|token| token.text.trim_matches('"'));
+        }
+        if tokens[index].text == "include"
+            && tokens.get(index + 1).is_some_and(|token| token.text == "!")
+            && tokens.get(index + 2).is_some_and(|token| token.text == "(")
+        {
+            if let Some(literal) = tokens.get(index + 3).filter(|token| token.literal) {
+                paths.push(parent.join(literal.text.trim_matches('"')));
+            }
+        }
+        if tokens[index].text == "mod" && index + 2 < tokens.len() {
+            let name = tokens[index + 1].text;
+            if tokens[index + 2].text == ";" {
+                if let Some(relative) = explicit_path.take() {
+                    paths.push(path_base.join(relative));
+                } else {
+                    paths.push(module_directory.join(format!("{name}.rs")));
+                    paths.push(module_directory.join(name));
+                }
+            } else if tokens[index + 2].text == "{" {
+                let start = index + 3;
+                index = start;
+                let mut depth = 1;
+                while index < tokens.len() && depth > 0 {
+                    match tokens[index].text { "{" => depth += 1, "}" => depth -= 1, _ => {} }
+                    index += 1;
+                }
+                let nested = explicit_path.take().map_or_else(|| module_directory.join(name), |relative| path_base.join(relative));
+                source_references(&tokens[start..index.saturating_sub(1)], parent, &nested, &nested, paths);
+                continue;
+            }
+        }
+        if tokens[index].text == ";" { explicit_path = None; }
+        index += 1;
+    }
+}
+
+/// Scan the same host-authority rule over production core/contract source only.
+fn scan_host_sources(directory: &Path, boundary: &str) -> Result<Vec<String>, String> {
+    fn collect(directory: &Path, files: &mut Vec<std::path::PathBuf>) -> Result<(), String> {
+        for entry in fs::read_dir(directory).map_err(|error| format!("reading {}: {error}", directory.display()))? {
+            let path = entry.map_err(|error| format!("reading directory entry: {error}"))?.path();
+            if path.is_dir() {
+                collect(&path, files)?;
+            } else if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
+                files.push(path);
+            }
+        }
+        Ok(())
+    }
+    let mut files = Vec::new();
+    collect(directory, &mut files)?;
+    files.sort();
+    let mut sources = Vec::new();
+    let mut excluded = Vec::new();
+    let mut production_references = Vec::new();
+    for path in &files {
+        let text = fs::read_to_string(path).map_err(|error| format!("reading {}: {error}", path.display()))?;
+        let tokens = source_tokens(&text);
+        let (production, tests) = host_production_tokens(&tokens);
+        let parent = path.parent().expect("source parent");
+        let stem = path.file_stem().and_then(|stem| stem.to_str()).unwrap_or_default();
+        let module_directory = if matches!(stem, "lib" | "main" | "mod") { parent.to_path_buf() } else { parent.join(stem) };
+        let mut references = Vec::new();
+        source_references(&production, parent, &module_directory, parent, &mut references);
+        production_references.push(references);
+        for test in tests {
+            source_references(&test, parent, &module_directory, parent, &mut excluded);
+        }
+        sources.push(text);
+    }
+    // A file shared with a production module/include is production, even if a
+    // test also references it. Follow those source references to a fixed point.
+    let mut included: Vec<std::path::PathBuf> = Vec::new();
+    loop {
+        let previous = included.len();
+        for (path, references) in files.iter().zip(&production_references) {
+            if !excluded.iter().any(|excluded| path.starts_with(excluded))
+                || included.iter().any(|included| path.starts_with(included))
+            {
+                included.extend(references.iter().cloned());
+            }
+        }
+        included.sort();
+        included.dedup();
+        if previous == included.len() { break; }
+    }
+    let mut violations = Vec::new();
+    for (path, text) in files.iter().zip(&sources) {
+        if excluded.iter().any(|excluded| path.starts_with(excluded))
+            && !included.iter().any(|included| path.starts_with(included))
+        { continue; }
+        let tokens = source_tokens(text);
+        let (production, _) = host_production_tokens(&tokens);
+        let mut paths = Vec::new();
+        let mut index = 0;
+        while index < production.len() {
+            if production[index].text == "use" {
+                let start = index + 1;
+                while index < production.len() && production[index].text != ";" { index += 1; }
+                import_paths(&production[start..index], "", &mut paths);
+            } else if !production[index].literal {
+                let line = production[index].line;
+                let mut path = production[index].text.to_string();
+                let mut next = index + 1;
+                while next + 1 < production.len() && production[next].text == "::" && !production[next + 1].literal {
+                    path.push_str("::");
+                    path.push_str(production[next + 1].text);
+                    next += 2;
+                }
+                if production.get(next).is_some_and(|token| token.text == "!") { path.push('!'); }
+                paths.push((path, line));
+            }
+            index += 1;
+        }
+        for (path_text, line) in paths {
+            for forbidden in CONTRACT_FORBIDDEN {
+                if authority_matches(&path_text, forbidden) {
+                    violations.push(format!("{boundary} boundary: {}:{line}: forbidden authority `{forbidden}`", path.display()));
+                }
+            }
+        }
+    }
+    violations.sort();
+    violations.dedup();
     Ok(violations)
 }
 
@@ -424,13 +754,109 @@ fn self_test() -> Result<(), String> {
     if !baseline.is_empty() {
         return Err(format!("accepted fixture must produce no violations, saw {baseline:?}"));
     }
+    // Each authority family is rejected in both protected production scopes.
+    // These are validator inputs, not diagnostic wording or copied-source tests.
+    let rejected_authority = [
+        ("CLI parser", "use clap::Parser;\n"),
+        ("CLI shell", "use mantle::command_input::CommandInput;\n"),
+        ("Snix", "use snix_store::path_info::PathInfo;\n"),
+        ("filesystem", "use std::{fs as host_fs};\n"),
+        ("platform filesystem", "use std::os::unix::fs::PermissionsExt;\n"),
+        ("process", "pub fn execute() { std :: process :: Command::new(\"cc\"); }\n"),
+        ("thread", "pub fn execute() { std::thread::yield_now(); }\n"),
+        ("async runtime", "#[tokio::main]\nasync fn execute() {}\n"),
+        ("alternate runtime", "use async_std::task;\n"),
+        ("environment", "use std::{\n    env::{var as ambient_var},\n};\n"),
+        ("clock", "use std::time::{Duration, SystemTime as Clock};\n"),
+        ("monotonic clock", "pub fn sample() { std::time::Instant::now(); }\n"),
+        ("random", "pub fn sample() { rand::random::<u64>(); }\n"),
+        ("OS random", "use rand_core::OsRng;\n"),
+        ("system random", "pub fn sample() { getrandom::fill(&mut [0; 8]); }\n"),
+        ("network", "use ::std::net::TcpStream;\n"),
+        ("HTTP client", "use reqwest::Client;\n"),
+        ("provider", "use crate::full_source_provider::admit_full_source_provider;\n"),
+        ("store service", "pub fn execute(_: &StoreHandle) {}\n"),
+        ("blob service", "pub fn execute(_: &dyn BlobService) {}\n"),
+        ("presentation adapter", "use crate::presentation::semantic_graph;\n"),
+        ("operator rendering", "pub fn render() { println!(\"plan\"); }\n"),
+        ("operator stream", "use std::io::{self, stdout};\n"),
+        ("nested import sibling", "use std::{collections::{BTreeMap}, fs};\n"),
+        ("production after tests", "#[cfg(test)]\nmod tests { use std::fs; }\npub fn execute() { std::env::vars(); }\n"),
+    ];
+    for (directory, boundary) in [(&core, "core host authority"), (&contract, "contract host authority")] {
+        let fixture = directory.join("authority.rs");
+        for (family, source) in rejected_authority {
+            fs::write(&fixture, source).map_err(|error| format!("fixture: {error}"))?;
+            let rejected = scan_repository(&root)?;
+            if !rejected.iter().any(|entry| entry.contains(boundary)) {
+                return Err(format!("{family} authority must be rejected in {boundary}, saw {rejected:?}"));
+            }
+        }
+        fs::remove_file(&fixture).map_err(|error| format!("cleaning fixture: {error}"))?;
+    }
+
+    // Pure allocations/serialization, explicit values, provider/store facts,
+    // formatting, and test-only host helpers remain legal in both scopes.
+    let accepted_authority = [
+        "extern crate alloc;\nuse alloc::{string::String, vec::Vec};\nuse serde::{Serialize, Deserialize};\n#[derive(Serialize, Deserialize)]\npub struct Plan { pub paths: Vec<String> }\n",
+        "use core::time::Duration;\nuse std::{collections::{BTreeMap}, time::Duration as Interval};\npub struct Observed { pub epoch_seconds: u64, pub random_seed: u64, pub environment: BTreeMap<String, String> }\n",
+        "pub struct ProviderOutputRole;\npub struct StoreObservation;\npub struct StoreHandleId;\npub fn render(value: u64) -> String { format!(\"{value}\") }\n",
+        "// std::fs and clap::Parser document the boundary.\n/* outer /* std::process::Command */ tokio::spawn */\npub const HELP: &str = \"std::env and rand::random\";\npub const RAW: &str = r##\"fake \\\" #[cfg(test)] mod tests { } std::net::TcpStream\"##;\n",
+        "#[cfg(test)]\nextern crate std;\n#[cfg(test)]\nmod host_helpers { use std::fs; fn output() { println!(\"test\"); } }\npub fn plan() {}\n",
+    ];
+    for directory in [&core, &contract] {
+        let fixture = directory.join("authority.rs");
+        for source in accepted_authority {
+            fs::write(&fixture, source).map_err(|error| format!("fixture: {error}"))?;
+            let accepted = scan_repository(&root)?;
+            if !accepted.is_empty() {
+                return Err(format!("pure/test-only authority fixture must pass, saw {accepted:?}"));
+            }
+        }
+        let external_source = "#[path = \"host_fixture.rs\"]\n#[cfg(test)]\nmod host_helpers;\n#[cfg(test)]\nmod included { include!(\"included_fixture.rs\"); }\n#[cfg(test)]\nmod default_helpers;\n#[cfg(test)]\nmod inline { mod helpers; }\npub fn plan() {}\n";
+        fs::write(&fixture, external_source).map_err(|error| format!("fixture: {error}"))?;
+        for name in ["host_fixture.rs", "included_fixture.rs", "authority/default_helpers.rs", "authority/inline/helpers.rs"] {
+            let path = directory.join(name);
+            fs::create_dir_all(path.parent().expect("fixture parent")).map_err(|error| format!("fixture: {error}"))?;
+            fs::write(path, "pub fn host_helper() { std::fs::read(\"fixture\"); std::println!(\"test\"); }\n")
+                .map_err(|error| format!("fixture: {error}"))?;
+        }
+        let external_tests = scan_repository(&root)?;
+        if !external_tests.is_empty() {
+            return Err(format!("external test-only sources must pass, saw {external_tests:?}"));
+        }
+        fs::write(&fixture, format!("{external_source}include!(\"host_fixture.rs\");\n"))
+            .map_err(|error| format!("fixture: {error}"))?;
+        let shared_with_production = scan_repository(&root)?;
+        if !shared_with_production.iter().any(|entry| entry.contains("host authority") && entry.contains("host_fixture.rs")) {
+            return Err(format!("a test-shared production include must be rejected, saw {shared_with_production:?}"));
+        }
+        for name in ["authority.rs", "host_fixture.rs", "included_fixture.rs"] {
+            fs::remove_file(directory.join(name)).map_err(|error| format!("cleaning fixture: {error}"))?;
+        }
+        fs::remove_dir_all(directory.join("authority")).map_err(|error| format!("cleaning fixture: {error}"))?;
+    }
+
+    // The same implementation remains permitted in an adapter and integration
+    // test target: neither belongs to a core's production src authority scope.
+    let adapter = root.join("crates/fixture-adapter/src");
+    let integration_tests = root.join("crates/mantle-rust-plan-core/tests");
+    for directory in [&adapter, &integration_tests] {
+        fs::create_dir_all(directory).map_err(|error| format!("creating fixture: {error}"))?;
+        fs::write(directory.join("host.rs"), "pub fn sample() { std::env::vars(); std::println!(\"adapter\"); }\n")
+            .map_err(|error| format!("fixture: {error}"))?;
+    }
+    let shell_authority = scan_repository(&root)?;
+    if !shell_authority.is_empty() {
+        return Err(format!("adapter and integration-test host authority must pass, saw {shell_authority:?}"));
+    }
 
     fs::write(contract.join("dirty.rs"), "use std::fs;\npub fn read() {}\n")
         .map_err(|error| format!("fixture: {error}"))?;
     let contract_violations = scan_repository(&root)?;
     if !contract_violations
         .iter()
-        .any(|entry| entry.contains("contract boundary") && entry.contains("std::fs"))
+        .any(|entry| entry.contains("contract host authority") && entry.contains("std::fs"))
     {
         return Err(format!("contract fixture must report std::fs, saw {contract_violations:?}"));
     }

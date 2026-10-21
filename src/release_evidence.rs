@@ -257,8 +257,10 @@ pub(crate) fn create_release_evidence_bundle_with_adapter(
     request: &ReleaseBundleCreateRequest,
     shell: &mut dyn PublicationShellAdapter,
 ) -> Result<ReleaseEvidenceManifest, RunError> {
-    let prepared = prepare_release_publication(request)?;
-    let initial_state = initial_publication_state(&prepared.plan);
+    let mut prepared = prepare_release_publication(request)?;
+    let initialization = initial_publication_state(prepared.plan);
+    prepared.plan = initialization.plan;
+    let initial_state = initialization.state;
     let stage = create_release_publication_stage(&request.bundle_dir, &prepared.plan)
         .map_err(|error| publication_phase_error(PublicationFailurePhase::StageCreation, error))?;
     let result = publish_prepared_release(request, prepared, &stage, initial_state, shell);
@@ -516,6 +518,10 @@ fn publication_policy_facts(
 
 fn append_source_policy_facts(request: &ReleaseBundleCreateRequest, facts: &mut Vec<PublicationPolicyFact>) {
     facts.push(policy_fact("source-acquisition-url", request.source_acquisition_url.as_deref().unwrap_or("absent")));
+    if let Some(observation) = &request.source_observation {
+        facts.push(policy_fact("source-observation-identity", &observation.observation_blake3));
+        facts.push(policy_fact("source-observation-payload", &observation.payload_blake3));
+    }
     if let Some(git) = &request.git_source {
         facts.push(policy_fact("git-source-url", &git.remote_url));
         facts.push(policy_fact("git-source-commit", &git.commit));
@@ -617,12 +623,12 @@ fn publish_prepared_release(
     let state = observe_publication_phase(shell, stage, &prepared.plan, state, PublicationShellPhase::InputsCopied)?;
     let staged_artifacts = manifest_publication_artifacts(&manifest, stage.stage_path())
         .map_err(|error| fail_publication(state.clone(), PublicationFailurePhase::ArtifactHashing, error))?;
-    validate_staged_publication_artifacts(&prepared.plan, staged_artifacts)
+    let plan = validate_staged_publication_artifacts(prepared.plan, staged_artifacts)
         .map_err(publication_plan_error)
         .map_err(|error| fail_publication(state.clone(), PublicationFailurePhase::ArtifactHashing, error))?;
     let state = advance_publication(state, PublicationEvent::ArtifactsHashed)?;
-    let state = observe_publication_phase(shell, stage, &prepared.plan, state, PublicationShellPhase::ArtifactsHashed)?;
-    serialize_verify_and_commit(manifest, stage, &prepared.plan, state, shell)
+    let state = observe_publication_phase(shell, stage, &plan, state, PublicationShellPhase::ArtifactsHashed)?;
+    serialize_verify_and_commit(manifest, stage, &plan, state, shell)
 }
 
 fn serialize_verify_and_commit(
@@ -685,7 +691,10 @@ fn commit_verified_stage(
     stage
         .remove_ownership_marker()
         .map_err(|error| fail_publication(state.clone(), PublicationFailurePhase::PreCommit, error))?;
-    assert!(publication_commit_eligible(&state), "only verified release stages may commit");
+    assert!(
+        publication_commit_eligible(state.phase, !state.failures.is_empty()),
+        "only verified release stages may commit"
+    );
     assert_ne!(stage.stage_path(), stage.final_path(), "release stage and destination must differ");
     let state = match stage.commit_no_replace() {
         Ok(()) => advance_publication(state, PublicationEvent::CommitSucceeded)?,
@@ -770,9 +779,11 @@ fn build_release_manifest(
     let cairn_handoff = evidence.cairn_handoff.take();
     let mut manifest = compose_release_manifest(request, inputs, evidence, source_acquisition);
     if let Some(handoff) = cairn_handoff {
-        let binding = release_evidence_cairn_bundle_binding(&manifest).map_err(core_error_to_run_error)?;
-        manifest.cairn_handoff_validation =
-            Some(cairn_release_evidence_validation_receipt(binding, handoff).map_err(core_error_to_run_error)?);
+        let projection = release_evidence_cairn_bundle_binding(manifest).map_err(core_error_to_run_error)?;
+        manifest = projection.manifest;
+        manifest.cairn_handoff_validation = Some(
+            cairn_release_evidence_validation_receipt(projection.binding, handoff).map_err(core_error_to_run_error)?,
+        );
     }
     debug_assert_eq!(manifest.schema, RELEASE_EVIDENCE_SCHEMA);
     debug_assert!(!manifest.binaries.is_empty());
@@ -1063,17 +1074,29 @@ pub(crate) fn verify_release_evidence_bundle(bundle_dir: &Path) -> Result<Releas
 
     verify_manifest_artifacts(&manifest, bundle_dir)?;
     verify_manifest_proof_linkage(&manifest, bundle_dir)?;
-    verify_cairn_handoff_bundle_bytes(&manifest, bundle_dir)?;
-    Ok(manifest)
+    verify_cairn_handoff_bundle_bytes(manifest, bundle_dir)
 }
 
-fn verify_cairn_handoff_bundle_bytes(manifest: &ReleaseEvidenceManifest, bundle_dir: &Path) -> Result<(), RunError> {
-    let Some(receipt) = &manifest.cairn_handoff_validation else {
-        return Ok(());
+fn verify_cairn_handoff_bundle_bytes(
+    mut manifest: ReleaseEvidenceManifest,
+    bundle_dir: &Path,
+) -> Result<ReleaseEvidenceManifest, RunError> {
+    let Some(receipt) = manifest.cairn_handoff_validation.as_ref() else {
+        return Ok(manifest);
     };
     let measured = crate::cairn_release_handoff::remeasure_cairn_handoff_from_bundle(bundle_dir, receipt)?;
-    let binding = release_evidence_cairn_bundle_binding(manifest).map_err(core_error_to_run_error)?;
-    validate_cairn_release_evidence_validation_receipt(receipt, &binding, &measured).map_err(core_error_to_run_error)
+    let projection = release_evidence_cairn_bundle_binding(manifest).map_err(core_error_to_run_error)?;
+    manifest = projection.manifest;
+    let receipt = manifest.cairn_handoff_validation.take().expect("handoff receipt retained by binding projection");
+    let receipt =
+        validate_cairn_release_evidence_validation_receipt(crunch_release_core::CairnReceiptValidationRequest {
+            receipt,
+            expected_binding: projection.binding,
+            measured_handoff: measured,
+        })
+        .map_err(core_error_to_run_error)?;
+    manifest.cairn_handoff_validation = Some(receipt);
+    Ok(manifest)
 }
 
 pub(crate) fn load_full_self_hosting_proof_identity(
@@ -1288,6 +1311,12 @@ fn validate_kani_toolchain_evidence_request(evidence: &KaniToolchainEvidenceCrea
 }
 
 fn validate_source_acquisition_request(request: &ReleaseBundleCreateRequest) -> Result<(), RunError> {
+    if request.source_observation.is_some() && request.source_acquisition_url.is_none() && request.git_source.is_none()
+    {
+        return Err(RunError::Internal(
+            "release source observation requires an exact source acquisition URL or Git source".to_string(),
+        ));
+    }
     if request.source_acquisition_url.is_some() && request.git_source.is_some() {
         return Err(RunError::Internal(
             "release evidence Git source metadata conflicts with external source acquisition URL".to_string(),
@@ -1378,7 +1407,9 @@ fn validate_provider_fixed_point_matches_input_binaries(
         ));
     };
     let binaries = build_input_binary_artifacts(&request.binary_paths)?;
-    validate_provider_fixed_point_release_artifact_binding(&binaries, stage_digest).map_err(core_error_to_run_error)?;
+    validate_provider_fixed_point_release_artifact_binding(binaries, stage_digest.to_string())
+        .binding
+        .map_err(core_error_to_run_error)?;
     Ok(())
 }
 
@@ -1480,7 +1511,7 @@ fn copy_content_bound_requirement_files(
         let measured_digest = blake3::hash(&file.bytes).to_hex().to_string();
         assert_eq!(measured_digest, file.row.content_identity.blake3);
         external_evidence.push(ExternalEvidence {
-            role: file.row.role.external_role().to_string(),
+            role: file.row.role.external_role(),
             schema: CONTENT_BOUND_EVIDENCE_EXTERNAL_SCHEMA_V1.to_string(),
             relative_path: file.row.bundle_relative_path.clone(),
             digest_blake3: file.row.content_identity.blake3.clone(),
@@ -1912,6 +1943,112 @@ fn path_to_forward_slash_string(path: &Path) -> Result<String, RunError> {
         .to_str()
         .ok_or_else(|| RunError::Internal(format!("non-utf8 bundle path: {}", path.display())))?;
     Ok(raw.replace('\\', "/"))
+}
+
+/// Read bounded exact artifacts through the release capability, then independently
+/// verify signatures and source association. No producer status grants authority.
+pub(crate) fn verify_source_review_evidence(
+    manifest: &ReleaseEvidenceManifest,
+    bundle_dir: &Path,
+    trusted_policy: Option<&Path>,
+    required: bool,
+) -> Result<crunch_release_core::source_review::SourceReviewVerification, RunError> {
+    use crunch_release_core::source_review::*;
+    let root = ReleaseCapabilityRoot::open_ambient_nofollow(
+        crate::release_capability::ReleaseRootKind::ReleaseEvidence,
+        bundle_dir,
+    )
+    .map_err(|error| RunError::Internal(format!("opening release source-review root: {error}")))?;
+    let attachment =
+        read_source_review_artifact(&root, manifest, SOURCE_REVIEW_ATTACHMENT_ROLE, SOURCE_REVIEW_ATTACHMENT_SCHEMA)?;
+    let policy = read_source_review_artifact(&root, manifest, SOURCE_REVIEW_POLICY_ROLE, SOURCE_REVIEW_POLICY_SCHEMA)?;
+    let valence =
+        read_source_review_artifact(&root, manifest, SOURCE_REVIEW_VALENCE_ROLE, SOURCE_REVIEW_VALENCE_SCHEMA)?;
+    let trusted = trusted_policy.map(read_source_review_trusted_policy).transpose()?;
+    if attachment.is_some() || required || trusted.is_some() {
+        let measured = compute_path_blake3_digest(&bundle_dir.join(&manifest.source_archive.relative_path))?;
+        if measured != manifest.source_archive.digest_blake3 {
+            return Err(RunError::Internal(
+                "source-review source archive changed after release verification".to_string(),
+            ));
+        }
+    }
+    Ok(verify_release_source_review(
+        manifest,
+        attachment.as_deref(),
+        policy.as_deref(),
+        valence.as_deref(),
+        trusted.as_deref(),
+        required,
+    ))
+}
+
+fn read_source_review_artifact(
+    root: &ReleaseCapabilityRoot,
+    manifest: &ReleaseEvidenceManifest,
+    role: &str,
+    schema: &str,
+) -> Result<Option<Vec<u8>>, RunError> {
+    use crunch_release_core::source_review::SOURCE_REVIEW_CLAIM_SCOPE;
+    use crunch_release_core::source_review::SOURCE_REVIEW_NON_CLAIMS;
+    let mut rows = manifest.external_evidence.iter().filter(|row| row.role == role);
+    let Some(row) = rows.next() else {
+        return Ok(None);
+    };
+    if rows.next().is_some()
+        || row.schema != schema
+        || row.claim_scope != SOURCE_REVIEW_CLAIM_SCOPE
+        || SOURCE_REVIEW_NON_CLAIMS
+            .iter()
+            .any(|required| !row.non_claims.iter().any(|value| value == required))
+    {
+        return Err(RunError::Internal(format!(
+            "source-review external evidence role/schema/scope/non-claim mismatch: {role}"
+        )));
+    }
+    let path = ValidatedReleasePath::new(&row.relative_path)
+        .map_err(|error| RunError::Internal(format!("source-review artifact locator: {error:?}")))?;
+    let bytes = read_source_review_file(root, &path)?;
+    if blake3::hash(&bytes).to_hex().as_str() != row.digest_blake3 {
+        return Err(RunError::Internal(format!("source-review external artifact digest mismatch: {role}")));
+    }
+    Ok(Some(bytes))
+}
+
+fn read_source_review_trusted_policy(path: &Path) -> Result<Vec<u8>, RunError> {
+    let parent = path.parent().filter(|parent| !parent.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| RunError::Internal("source-review policy requires a UTF-8 file locator".to_string()))?;
+    let root =
+        ReleaseCapabilityRoot::open_ambient_nofollow(crate::release_capability::ReleaseRootKind::BuildArtifact, parent)
+            .map_err(|error| RunError::Internal(format!("opening trusted source-review policy root: {error}")))?;
+    let path = ValidatedReleasePath::new(name)
+        .map_err(|error| RunError::Internal(format!("source-review policy locator: {error:?}")))?;
+    read_source_review_file(&root, &path)
+}
+
+fn read_source_review_file(root: &ReleaseCapabilityRoot, path: &ValidatedReleasePath) -> Result<Vec<u8>, RunError> {
+    use std::io::Read;
+    let file = root
+        .open_file_read_nofollow(path)
+        .map_err(|error| RunError::Internal(format!("opening source-review artifact: {error}")))?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| RunError::Internal(format!("measuring source-review artifact: {error}")))?;
+    let bound = crunch_release_core::source_review::SOURCE_REVIEW_BYTES_MAX;
+    if !metadata.is_file() || metadata.len() > bound as u64 {
+        return Err(RunError::Internal("source-review artifact is not a bounded regular file".to_string()));
+    }
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.take(bound as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| RunError::Internal(format!("reading source-review artifact: {error}")))?;
+    if bytes.len() > bound {
+        return Err(RunError::Internal("source-review artifact exceeded read bound".to_string()));
+    }
+    Ok(bytes)
 }
 
 #[cfg(test)]
@@ -2407,9 +2544,10 @@ pub(crate) mod tests {
         request.content_bound_requirement = Some(content_bound_create_request(temp.path()));
         let manifest = create_release_evidence_bundle(&request).expect("create content-bound release bundle");
         let verification = crunch_release_core::evaluate_content_bound_requirement_release_evidence(
-            &manifest,
-            crunch_release_core::CONTENT_BOUND_REQUIREMENT_MODE_REQUIRED,
-        );
+            manifest,
+            crunch_release_core::CONTENT_BOUND_REQUIREMENT_MODE_REQUIRED.to_string(),
+        )
+        .verification;
         assert!(verification.valid, "issues: {:?}", verification.issues);
         let verified =
             verify_release_evidence_bundle(&request.bundle_dir).expect("verify content-bound release bundle");
@@ -2939,11 +3077,13 @@ pub(crate) mod tests {
 
         let created = create_release_evidence_bundle(&request).unwrap();
         let verified = verify_release_evidence_bundle(&output_bundle_dir).unwrap();
-        let stack_provenance = created.stack_provenance.as_ref().expect("stack provenance recorded");
-        let policy_result = crunch_release_core::evaluate_stack_provenance_release_evidence(
-            &created,
-            crunch_release_core::STACK_PROVENANCE_MODE_REQUIRED,
+        let evaluation = crunch_release_core::evaluate_stack_provenance_release_evidence(
+            created,
+            crunch_release_core::STACK_PROVENANCE_MODE_REQUIRED.to_string(),
         );
+        let created = evaluation.manifest;
+        let policy_result = evaluation.verification;
+        let stack_provenance = created.stack_provenance.as_ref().expect("stack provenance recorded");
 
         assert_eq!(created, verified);
         assert!(policy_result.valid);
@@ -3124,6 +3264,13 @@ pub(crate) mod tests {
             proof_bundle_dir,
         );
         request.source_acquisition_url = Some(source_url.clone());
+        request.source_observation = Some(
+            SourceObservationBinding::for_acquisition(SourceAcquisition::external_archive(
+                source_url.clone(),
+                blake3::hash(b"source-archive").to_hex().to_string(),
+            ))
+            .unwrap(),
+        );
         let created = create_release_evidence_bundle(&request).unwrap();
         let verified = verify_release_evidence_bundle(&output_bundle_dir).unwrap();
         let source_acquisition = created.source_acquisition.as_ref().unwrap();
@@ -3132,6 +3279,26 @@ pub(crate) mod tests {
         assert_eq!(source_acquisition.kind, SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE);
         assert_eq!(source_acquisition.url, source_url);
         assert_eq!(source_acquisition.digest_blake3, created.source_archive.digest_blake3);
+        write_file(&output_bundle_dir.join(&created.source_archive.relative_path), b"changed source archive");
+        assert!(verify_release_evidence_bundle(&output_bundle_dir).is_err());
+    }
+
+    #[test]
+    fn orphan_source_observation_is_rejected_instead_of_silently_dropped() {
+        let digest = blake3::hash(b"exact source archive").to_hex().to_string();
+        let acquisition = SourceAcquisition::external_archive("https://example.invalid/source.tar".to_string(), digest);
+        let mut request = ReleaseBundleCreateRequest::with_defaults(
+            "test-release".to_string(),
+            PathBuf::from("output"),
+            PathBuf::from("source.tar"),
+            vec![PathBuf::from("mantle")],
+            PathBuf::from("proof"),
+        );
+        let acquisition = acquisition.with_admitted_source_observation().unwrap();
+        request.source_observation = acquisition.source_observation;
+        assert!(validate_source_acquisition_request(&request).is_err());
+        request.source_acquisition_url = Some(acquisition.url);
+        assert!(validate_source_acquisition_request(&request).is_ok());
     }
 
     #[test]

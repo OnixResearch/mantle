@@ -1,0 +1,4 @@
+/* Explicit overlay, rather than app.overlay auto-discovery. */
+&uart0 {
+	current-speed = <115200>;
+};

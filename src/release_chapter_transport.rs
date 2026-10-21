@@ -186,9 +186,11 @@ pub(crate) fn pack_release_transport(
     let prepared = prepare_tree_copy(bundle_dir)?;
     let entries = prepared.chapter_transport_entries()?;
     let index = plan_chapter_transport(entries, manifest_digest_blake3.clone())
-        .map_err(|blockers| transport_error(render_chapter_transport_blockers(&blockers)))?;
-    let index_bytes = canonical_chapter_transport_index(&index)
+        .map_err(|blockers| transport_error(render_chapter_transport_blockers(blockers)))?;
+    let canonical_index = canonical_chapter_transport_index(index)
         .map_err(|error| transport_error(format!("canonicalizing chapter transport index: {error}")))?;
+    let index = canonical_index.index;
+    let index_bytes = canonical_index.bytes;
     let stage = create_sibling_stage(transport_dir, CHAPTER_TRANSPORT_STAGE_PREFIX)?;
     let archive_path = stage.path().join(CHAPTER_TRANSPORT_ARCHIVE_FILE_NAME);
     let receipt_path = stage.path().join(CHAPTER_TRANSPORT_RECEIPT_FILE_NAME);
@@ -203,7 +205,7 @@ pub(crate) fn pack_release_transport(
         member_count: index.member_count,
     })
     .map_err(|error| transport_error(format!("building chapter transport receipt: {error}")))?;
-    write_receipt_file(&receipt_path, &receipt)?;
+    let receipt = write_receipt_file(&receipt_path, receipt)?;
     let staged_inspection = inspect_release_transport(stage.path())?;
     if staged_inspection.receipt != receipt || staged_inspection.index != index {
         return Err(transport_error("staged chapter transport inspection did not reproduce its plan and receipt"));
@@ -310,9 +312,10 @@ fn append_transport_index<W: Write>(builder: &mut tar::Builder<W>, bytes: &[u8])
     Ok(())
 }
 
-fn write_receipt_file(path: &Path, receipt: &ChapterTransportReceipt) -> Result<(), RunError> {
-    let bytes = canonical_chapter_transport_receipt(receipt)
+fn write_receipt_file(path: &Path, receipt: ChapterTransportReceipt) -> Result<ChapterTransportReceipt, RunError> {
+    let canonical = canonical_chapter_transport_receipt(receipt)
         .map_err(|error| transport_error(format!("canonicalizing chapter transport receipt: {error}")))?;
+    let bytes = canonical.bytes;
     let mut file =
         std::fs::OpenOptions::new().write(true).create_new(true).open(path).map_err(|error| {
             transport_error(format!("creating chapter transport receipt {}: {error}", path.display()))
@@ -325,7 +328,7 @@ fn write_receipt_file(path: &Path, receipt: &ChapterTransportReceipt) -> Result<
         .map_err(|error| transport_error(format!("syncing chapter transport receipt: {error}")))?;
     debug_assert!(!bytes.is_empty());
     debug_assert!(path.is_file());
-    Ok(())
+    Ok(canonical.receipt)
 }
 
 // r[impl mantle.release_provenance.chapter_transport.inspect]
@@ -335,7 +338,7 @@ pub(crate) fn inspect_release_transport(transport_dir: &Path) -> Result<ReleaseT
     let receipt_path = transport_dir.join(CHAPTER_TRANSPORT_RECEIPT_FILE_NAME);
     let archive_path = transport_dir.join(CHAPTER_TRANSPORT_ARCHIVE_FILE_NAME);
     let receipt_bytes = read_bounded_file_nofollow(&receipt_path, CHAPTER_TRANSPORT_RECEIPT_BYTES_MAX)?;
-    let receipt = parse_canonical_chapter_transport_receipt(&receipt_bytes)
+    let receipt = parse_canonical_chapter_transport_receipt(receipt_bytes)
         .map_err(|error| transport_error(format!("validating chapter transport receipt: {error}")))?;
     let snapshot = snapshot_verified_archive(&archive_path, &receipt)?;
     let control = read_control_chapter(&snapshot, &receipt)?;
@@ -384,11 +387,12 @@ fn read_control_chapter(
     if entries.next().is_some() {
         return Err(transport_error("chapter zero contains unexpected entries after manifest.json"));
     }
-    let index = parse_canonical_chapter_transport_index(&index_bytes)
+    let index_digest = blake3::hash(&index_bytes).to_hex().to_string();
+    let index = parse_canonical_chapter_transport_index(index_bytes)
         .map_err(|error| transport_error(format!("validating chapter transport index: {error}")))?;
     let manifest: ReleaseEvidenceManifest = serde_json::from_slice(&manifest_bytes)
         .map_err(|error| transport_error(format!("parsing transported release manifest: {error}")))?;
-    validate_control_identities(receipt, &index, &index_bytes, &manifest, &manifest_bytes)?;
+    validate_control_identities(receipt, &index, &index_digest, &manifest, &manifest_bytes)?;
     Ok(ControlChapter {
         manifest,
         index,
@@ -399,7 +403,7 @@ fn read_control_chapter(
 fn validate_control_identities(
     receipt: &ChapterTransportReceipt,
     index: &ChapterTransportIndex,
-    index_bytes: &[u8],
+    index_digest: &str,
     manifest: &ReleaseEvidenceManifest,
     manifest_bytes: &[u8],
 ) -> Result<(), RunError> {
@@ -409,7 +413,6 @@ fn validate_control_identities(
         return Err(transport_error("transported release manifest is not canonical compact JSON"));
     }
     let manifest_digest = blake3::hash(manifest_bytes).to_hex().to_string();
-    let index_digest = blake3::hash(index_bytes).to_hex().to_string();
     if manifest_digest != receipt.source_manifest_digest_blake3
         || manifest_digest != index.source_manifest_digest_blake3
     {
@@ -479,7 +482,7 @@ fn validate_all_archive_metadata(
         all_inputs.extend(observed.into_iter().map(input_from_member));
     }
     let observed_index = plan_chapter_transport(all_inputs, index.source_manifest_digest_blake3.clone())
-        .map_err(|blockers| transport_error(render_chapter_transport_blockers(&blockers)))?;
+        .map_err(|blockers| transport_error(render_chapter_transport_blockers(blockers)))?;
     if &observed_index != index {
         return Err(transport_error("archive metadata does not reproduce the canonical transport index"));
     }
@@ -784,7 +787,7 @@ pub(crate) fn unpack_release_transport(
     let receipt_path = transport_dir.join(CHAPTER_TRANSPORT_RECEIPT_FILE_NAME);
     let archive_path = transport_dir.join(CHAPTER_TRANSPORT_ARCHIVE_FILE_NAME);
     let receipt_bytes = read_bounded_file_nofollow(&receipt_path, CHAPTER_TRANSPORT_RECEIPT_BYTES_MAX)?;
-    let receipt = parse_canonical_chapter_transport_receipt(&receipt_bytes)
+    let receipt = parse_canonical_chapter_transport_receipt(receipt_bytes)
         .map_err(|error| transport_error(format!("validating chapter transport receipt: {error}")))?;
     let snapshot = snapshot_verified_archive(&archive_path, &receipt)?;
     let control = read_control_chapter(&snapshot, &receipt)?;
@@ -1182,7 +1185,7 @@ mod tests {
             member_count: index.member_count,
         })
         .unwrap();
-        write_receipt_file(&transport.join(CHAPTER_TRANSPORT_RECEIPT_FILE_NAME), &receipt).unwrap();
+        write_receipt_file(&transport.join(CHAPTER_TRANSPORT_RECEIPT_FILE_NAME), receipt).unwrap();
     }
 
     fn rewrite_archive_header(source_path: &Path, destination_path: &Path, target_path: &str, tamper: HeaderTamper) {
@@ -1221,11 +1224,11 @@ mod tests {
         let archive_path = transport.join(CHAPTER_TRANSPORT_ARCHIVE_FILE_NAME);
         let receipt_path = transport.join(CHAPTER_TRANSPORT_RECEIPT_FILE_NAME);
         let receipt_bytes = std::fs::read(&receipt_path).unwrap();
-        let mut receipt = parse_canonical_chapter_transport_receipt(&receipt_bytes).unwrap();
+        let mut receipt = parse_canonical_chapter_transport_receipt(receipt_bytes).unwrap();
         let (archive_size_bytes, archive_digest_blake3) = hash_file_nofollow(&archive_path).unwrap();
         receipt.archive_size_bytes = archive_size_bytes;
         receipt.archive_digest_blake3 = archive_digest_blake3;
-        std::fs::write(receipt_path, canonical_chapter_transport_receipt(&receipt).unwrap()).unwrap();
+        std::fs::write(receipt_path, canonical_chapter_transport_receipt(receipt).unwrap().bytes).unwrap();
     }
 
     fn invalid_index_member(
@@ -1387,11 +1390,11 @@ mod tests {
         archive_bytes.pop();
         std::fs::write(&archive_path, &archive_bytes).unwrap();
         let receipt_bytes = std::fs::read(&receipt_path).unwrap();
-        let mut receipt = parse_canonical_chapter_transport_receipt(&receipt_bytes).unwrap();
+        let mut receipt = parse_canonical_chapter_transport_receipt(receipt_bytes).unwrap();
         receipt.archive_size_bytes = u64::try_from(archive_bytes.len()).unwrap();
         receipt.archive_digest_blake3 = blake3::hash(&archive_bytes).to_hex().to_string();
-        let rebound_receipt = canonical_chapter_transport_receipt(&receipt).unwrap();
-        std::fs::write(&receipt_path, rebound_receipt).unwrap();
+        let rebound_receipt = canonical_chapter_transport_receipt(receipt).unwrap();
+        std::fs::write(&receipt_path, rebound_receipt.bytes).unwrap();
 
         let error = inspect_release_transport(&transport).unwrap_err();
 
@@ -1447,7 +1450,7 @@ mod tests {
             member_count: 1,
         })
         .unwrap();
-        write_receipt_file(&transport.join(CHAPTER_TRANSPORT_RECEIPT_FILE_NAME), &receipt).unwrap();
+        write_receipt_file(&transport.join(CHAPTER_TRANSPORT_RECEIPT_FILE_NAME), receipt).unwrap();
 
         let error = inspect_release_transport(&transport).unwrap_err();
 

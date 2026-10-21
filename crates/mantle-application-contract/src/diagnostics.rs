@@ -153,9 +153,150 @@ pub fn validate_diagnostics(request: &DiagnosticsCommand) -> Vec<DiagnosticsBloc
     blockers
 }
 
+/// A doctor probe is a capability call, not a claim that a build can succeed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DoctorProbe {
+    NightlyToolchain,
+    Sandbox,
+    Shell,
+    Fuse,
+    StateDirectory,
+    StoreDirectory,
+}
+
+impl DoctorProbe {
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::NightlyToolchain => "nightly-toolchain",
+            Self::Sandbox => "bwrap",
+            Self::Shell => "sandbox-shell",
+            Self::Fuse => "fusermount3",
+            Self::StateDirectory => "state-dir",
+            Self::StoreDirectory => "store-dir",
+        }
+    }
+
+    pub const fn authority(self) -> crate::EffectKind {
+        match self {
+            Self::NightlyToolchain => crate::EffectKind::RunProcess,
+            _ => crate::EffectKind::ReadFiles,
+        }
+    }
+}
+
+pub const DOCTOR_ENVIRONMENT_EFFECT: &str = "doctor-environment";
+pub const MAX_DOCTOR_ENVIRONMENT_READS: u32 = 4;
+
+/// Select the complete profile before invoking a host probe.
+pub fn doctor_probes(needs_nightly: bool) -> Vec<DoctorProbe> {
+    let mut probes = Vec::with_capacity(6);
+    if needs_nightly {
+        probes.push(DoctorProbe::NightlyToolchain);
+    }
+    probes.extend([
+        DoctorProbe::Sandbox,
+        DoctorProbe::Shell,
+        DoctorProbe::Fuse,
+        DoctorProbe::StateDirectory,
+        DoctorProbe::StoreDirectory,
+    ]);
+    probes
+}
+
+pub fn plan_doctor(needs_nightly: bool) -> Result<crate::EffectPlan, crate::PlanError> {
+    let probes = doctor_probes(needs_nightly);
+    let mut specs = Vec::with_capacity(probes.len().saturating_add(1));
+    for probe in probes {
+        specs.push(crate::EffectSpec {
+            effect_id: probe.id(),
+            kind: probe.authority(),
+            limit: crate::EffectMeasure::Calls(1),
+            expected_output: crate::ExpectedOutput::None,
+        });
+    }
+    specs.push(crate::EffectSpec {
+        effect_id: DOCTOR_ENVIRONMENT_EFFECT,
+        kind: crate::EffectKind::ReadEnvironment,
+        limit: crate::EffectMeasure::Calls(MAX_DOCTOR_ENVIRONMENT_READS),
+        expected_output: crate::ExpectedOutput::None,
+    });
+    crate::plan_effects(crate::CommandFamily::Diagnostics, &specs)
+}
+
+/// A failed prerequisite is a valid negative diagnostic observation. It must
+/// not be promoted into a healthy terminal report.
+pub fn classify_doctor(
+    plan: &crate::EffectPlan,
+    observations: &[crate::Observation],
+    reported_healthy: bool,
+) -> crate::ApplicationOutcome {
+    let outcome = crate::classify_observations(plan, observations);
+    let observed_healthy = observations.iter().all(|fact| fact.status == crate::ObservationStatus::Succeeded);
+    if reported_healthy != observed_healthy {
+        return crate::ApplicationOutcome::Contradicted { effect_count: 1 };
+    }
+    outcome
+}
+
+pub const REFACTOR_READ_EFFECT: &str = "refactor-path-inspection";
+pub const REFACTOR_RENAME_EFFECT: &str = "refactor-path-rename";
+pub const REFACTOR_READBACK_EFFECT: &str = "refactor-rename-readback";
+
+pub fn plan_refactor_inspection() -> Result<crate::EffectPlan, crate::PlanError> {
+    crate::plan_effects(crate::CommandFamily::Diagnostics, &[crate::EffectSpec {
+        effect_id: REFACTOR_READ_EFFECT,
+        kind: crate::EffectKind::ReadFiles,
+        limit: crate::EffectMeasure::Calls(6),
+        expected_output: crate::ExpectedOutput::None,
+    }])
+}
+
+pub fn plan_refactor_rename(destination: &str) -> Result<crate::EffectPlan, crate::PlanError> {
+    crate::plan_effects(crate::CommandFamily::Diagnostics, &[
+        crate::EffectSpec {
+            effect_id: REFACTOR_RENAME_EFFECT,
+            kind: crate::EffectKind::WriteFiles,
+            limit: crate::EffectMeasure::Calls(1),
+            expected_output: crate::ExpectedOutput::Identity(destination),
+        },
+        crate::EffectSpec {
+            effect_id: REFACTOR_READBACK_EFFECT,
+            kind: crate::EffectKind::ReadFiles,
+            limit: crate::EffectMeasure::Calls(3),
+            expected_output: crate::ExpectedOutput::Identity(destination),
+        },
+    ])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn failed_prerequisite_cannot_be_reported_healthy() {
+        use crate::{ApplicationOutcome, EffectId, EffectMeasure, EffectOutput, Observation, ObservationStatus};
+        let plan = plan_doctor(false).unwrap();
+        let mut observations = doctor_probes(false).into_iter().map(|probe| Observation {
+            effect_id: EffectId(String::from(probe.id())),
+            kind: probe.authority(),
+            status: if probe == DoctorProbe::StoreDirectory { ObservationStatus::Failed } else { ObservationStatus::Succeeded },
+            output: EffectOutput::None,
+            usage: EffectMeasure::Calls(1),
+            diagnostics_code: None,
+        }).collect::<Vec<_>>();
+        observations.push(Observation {
+            effect_id: EffectId(String::from(DOCTOR_ENVIRONMENT_EFFECT)),
+            kind: crate::EffectKind::ReadEnvironment,
+            status: ObservationStatus::Succeeded,
+            output: EffectOutput::None,
+            usage: EffectMeasure::Calls(3),
+            diagnostics_code: None,
+        });
+        assert_eq!(classify_doctor(&plan, &observations, false), ApplicationOutcome::Failed { failed_effect_count: 1 });
+        assert_eq!(classify_doctor(&plan, &observations, true), ApplicationOutcome::Contradicted { effect_count: 1 });
+        observations[0].effect_id = EffectId(String::from("unrequested-probe"));
+        assert!(matches!(classify_doctor(&plan, &observations, false), ApplicationOutcome::Rejected { .. }));
+    }
 
     fn sample_request() -> DiagnosticsCommand {
         DiagnosticsCommand {

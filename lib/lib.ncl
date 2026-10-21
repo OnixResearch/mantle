@@ -11,7 +11,9 @@ let wasm_component = import "wasm_component.ncl" in
 let kernelscript_experiment = import "kernelscript_experiment.ncl" in
 let android = import "android.ncl" in
 let scheduling = import "scheduling.ncl" in
-let android = import "android.ncl" in
+let cmake = import "cmake.ncl" in
+let esp_idf = import "esp_idf.ncl" in
+let pnpm = import "pnpm.ncl" in
 
 {
   # The main derivation contract. Apply with: record | crunch.Derivation
@@ -79,6 +81,17 @@ let android = import "android.ncl" in
   # admitted bytes before any SDK tool executes.
   ReviewedApkPlan = android.reviewed.Plan,
   mkReviewedApk = android.reviewed.mkApk,
+
+  # Ecosystem adapters lower to ordinary declared derivations.
+  CMake = cmake,
+  EspIdfPlan = esp_idf.Plan,
+  mkEspIdfFirmware = esp_idf.mkFirmware,
+  fpga = import "fpga.ncl",
+  gpu = import "gpu.ncl",
+  model_conversion = import "model_conversion.ncl",
+  mkPnpmWorkspace = pnpm.mkWorkspace,
+  python = import "python.ncl",
+  zephyr = import "zephyr.ncl",
 
   # Lazy derivation file edge. The pipeline resolves this relative path before
   # conversion, keeping large derivation DAGs out of one Nickel value.

@@ -326,6 +326,7 @@ mod tests {
         std::fs::create_dir_all(&state_dir).unwrap();
         std::fs::create_dir_all(&output_dir).unwrap();
         StoreHandle::open(StoreConfig {
+            source_admission: None,
             backend: crate::StoreBackend::Snix,
             state_dir,
             output_dir,
@@ -558,6 +559,7 @@ mod tests {
         std::fs::create_dir_all(&state_dir).unwrap();
         std::fs::create_dir_all(&output_dir).unwrap();
         StoreHandle::open(StoreConfig {
+            source_admission: None,
             backend: crate::StoreBackend::Snix,
             state_dir,
             output_dir,

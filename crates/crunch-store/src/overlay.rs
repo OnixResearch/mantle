@@ -1329,6 +1329,7 @@ mod tests {
             &writable,
             "/nix/store",
             std::slice::from_ref(&base),
+            Some(&crate::source_admission::TestSourceAdmission),
         )
         .unwrap_err();
         assert!(error.to_string().contains("casita-overlay-unsupported"), "{error}");
@@ -1352,9 +1353,13 @@ mod tests {
         std::fs::write(base.join("casita-marker"), b"base must stay unchanged").unwrap();
         let before = snapshot_state_tree(&base);
         let output = root.path().join("exports");
-        let config = crate::StoreConfig::new(StoreBackend::Snix, writable.clone(), output.clone(), "/nix/store".into())
-            .add_base_state_dir(first_base.clone())
-            .add_base_state_dir(base.clone());
+        let mut config =
+            crate::StoreConfig::new(StoreBackend::Snix, writable.clone(), output.clone(), "/nix/store".into())
+                .add_base_state_dir(first_base.clone())
+                .add_base_state_dir(base.clone());
+        // Consumer-only seam: this test isolates backend rejection precedence,
+        // not endpoint authority (the root source-binding scenarios cover that).
+        config.source_admission = Some(std::sync::Arc::new(crate::source_admission::TestSourceAdmission));
 
         let error = crate::StoreHandle::open(config).await.err().expect("foreign backend base must reject");
         assert!(error.to_string().contains("store-backend-mismatch"), "{error}");

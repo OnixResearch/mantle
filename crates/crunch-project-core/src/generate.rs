@@ -192,7 +192,7 @@ fn generate_entry(out: &mut String, name: &str, entry: &LockEntry) {
     push_string_field(out, RenderedStringField {
         indent: "    ",
         name: "fetch_policy",
-        value: entry.fetch_policy.as_str(),
+        value: entry.fetch_policy.wire_name(),
     });
     if let Some(freshness) = &entry.freshness {
         push_string_field(out, RenderedStringField {

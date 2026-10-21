@@ -64,7 +64,12 @@ allow-git = [
   "https://github.com/cachix/casita",
   "https://github.com/cachix/turso.git",
   "ssh://git@github.com/OnixResearch/onix-artifact.git",
+  # Immutable Mantle authority and evidence SDK revisions remain manifest/lock-bound.
+  "ssh://git@github.com/OnixResearch/basalt.git",
+  "ssh://git@github.com/OnixResearch/valence.git",
   "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git",
   "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git",
   "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git",
+  # Gateway consume-once storage; the manifest and lock pin a0de79303f3f45c18a34fff535b690a85cb3cf59.
+  "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git",
 ]

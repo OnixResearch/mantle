@@ -182,14 +182,18 @@ fn validate_plan_request(request: &PublicationPlanRequest) -> Vec<PublicationPla
 
 // r[impl mantle.release_provenance.bundle_publication.staging_validation]
 pub fn validate_staged_publication_artifacts(
-    plan: &PublicationPlan,
+    plan: PublicationPlan,
     artifacts: Vec<PublicationArtifactInput>,
-) -> Result<(), Vec<PublicationPlanBlocker>> {
-    let staged = plan_release_publication(PublicationPlanRequest {
-        release_id: plan.release_id.clone(),
+) -> Result<PublicationPlan, Vec<PublicationPlanBlocker>> {
+    let is_policy_canonical = plan
+        .policy
+        .windows(WINDOW_PAIR_COUNT)
+        .all(|pair| pair[0].name.cmp(&pair[1].name).then_with(|| pair[0].value.cmp(&pair[1].value)).is_le());
+    let mut staged = plan_release_publication(PublicationPlanRequest {
+        release_id: plan.release_id,
         destination: PublicationDestinationObservation::Absent,
         artifacts,
-        policy: plan.policy.clone(),
+        policy: plan.policy,
     })?;
     if staged.plan_identity_blake3 != plan.plan_identity_blake3 {
         return Err(vec![blocker(
@@ -199,8 +203,9 @@ pub fn validate_staged_publication_artifacts(
         )]);
     }
     assert_eq!(staged.artifacts, plan.artifacts);
-    assert_eq!(staged.policy, plan.policy);
-    Ok(())
+    assert!(is_policy_canonical, "planned publication policy must retain canonical order");
+    staged.schema = plan.schema;
+    Ok(staged)
 }
 
 fn validate_destination(destination: PublicationDestinationObservation, blockers: &mut Vec<PublicationPlanBlocker>) {
@@ -497,14 +502,21 @@ pub struct PublicationTransitionError {
     pub event: PublicationEvent,
 }
 
-pub fn initial_publication_state(plan: &PublicationPlan) -> PublicationState {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationInitialization {
+    pub plan: PublicationPlan,
+    pub state: PublicationState,
+}
+
+pub fn initial_publication_state(plan: PublicationPlan) -> PublicationInitialization {
     assert_eq!(plan.schema, RELEASE_PUBLICATION_PLAN_SCHEMA);
     assert!(is_lower_blake3(&plan.plan_identity_blake3));
-    PublicationState {
+    let state = PublicationState {
         plan_identity_blake3: plan.plan_identity_blake3.clone(),
         phase: PublicationPhase::Planned,
         failures: Vec::new(),
-    }
+    };
+    PublicationInitialization { plan, state }
 }
 
 // r[impl mantle.release_provenance.bundle_publication.boundary.test]
@@ -574,12 +586,12 @@ fn transition_failure(
     state.failures.push(failure);
     state.phase = PublicationPhase::Failed;
     assert!(!state.failures.is_empty(), "failed publication state must carry a failure");
-    assert!(!publication_commit_eligible(&state));
+    assert!(!publication_commit_eligible(state.phase, !state.failures.is_empty()));
     Ok(state)
 }
 
-pub fn publication_commit_eligible(state: &PublicationState) -> bool {
-    state.phase == PublicationPhase::Verified && state.failures.is_empty()
+pub fn publication_commit_eligible(phase: PublicationPhase, has_failures: bool) -> bool {
+    phase == PublicationPhase::Verified && !has_failures
 }
 
 #[cfg(test)]
@@ -708,15 +720,15 @@ mod tests {
     #[test]
     fn staged_artifacts_must_match_the_pre_mutation_plan() {
         let plan = plan_release_publication(plan_request()).expect("valid plan");
-        let matching = validate_staged_publication_artifacts(&plan, plan.artifacts.clone());
+        let artifacts = plan.artifacts.clone();
+        let plan = validate_staged_publication_artifacts(plan, artifacts).expect("matching artifacts");
         let mut changed = plan.artifacts.clone();
         changed[0].digest_blake3 = digest(FIRST_DIGEST_BYTE);
         if changed[0].digest_blake3 == plan.artifacts[0].digest_blake3 {
             changed[0].digest_blake3 = digest(SECOND_DIGEST_BYTE);
         }
-        let mismatch = validate_staged_publication_artifacts(&plan, changed).expect_err("staged drift must fail");
+        let mismatch = validate_staged_publication_artifacts(plan, changed).expect_err("staged drift must fail");
 
-        assert!(matching.is_ok());
         assert_eq!(mismatch.len(), 1);
         assert_eq!(mismatch[0].kind, PublicationPlanBlockerKind::StagedArtifactMismatch);
     }
@@ -732,22 +744,22 @@ mod tests {
             PublicationEvent::ManifestWritten,
             PublicationEvent::VerificationAccepted,
         ];
-        let mut state = initial_publication_state(&plan);
+        let mut state = initial_publication_state(plan).state;
         for event in events {
             state = transition_publication_state(state, event).expect("valid transition");
         }
 
         assert_eq!(state.phase, PublicationPhase::Verified);
-        assert!(publication_commit_eligible(&state));
+        assert!(publication_commit_eligible(state.phase, !state.failures.is_empty()));
         state = transition_publication_state(state, PublicationEvent::CommitSucceeded).expect("commit transition");
         assert_eq!(state.phase, PublicationPhase::Committed);
-        assert!(!publication_commit_eligible(&state));
+        assert!(!publication_commit_eligible(state.phase, !state.failures.is_empty()));
     }
 
     #[test]
     fn state_machine_rejects_skips_and_post_commit_failures() {
         let plan = plan_release_publication(plan_request()).expect("valid plan");
-        let initial = initial_publication_state(&plan);
+        let initial = initial_publication_state(plan).state;
         let skipped = transition_publication_state(initial.clone(), PublicationEvent::InputsCopied)
             .expect_err("phase skip must fail");
         let committed = [
@@ -781,7 +793,7 @@ mod tests {
             PublicationEvent::ManifestWritten,
         ]
         .into_iter()
-        .try_fold(initial_publication_state(&plan), transition_publication_state)
+        .try_fold(initial_publication_state(plan).state, transition_publication_state)
         .expect("manifest-written state");
         let verification_failed =
             transition_publication_state(manifest_written.clone(), PublicationEvent::VerificationRejected)
@@ -793,15 +805,15 @@ mod tests {
 
         assert_eq!(verification_failed.failures, vec![PublicationFailurePhase::Verification]);
         assert_eq!(race_failed.failures, vec![PublicationFailurePhase::CommitRace]);
-        assert!(!publication_commit_eligible(&verification_failed));
-        assert!(!publication_commit_eligible(&race_failed));
+        assert!(!publication_commit_eligible(verification_failed.phase, !verification_failed.failures.is_empty()));
+        assert!(!publication_commit_eligible(race_failed.phase, !race_failed.failures.is_empty()));
     }
 
     #[test]
     fn cleanup_failure_can_augment_one_phase_failure_only() {
         let plan = plan_release_publication(plan_request()).expect("valid plan");
         let failed = transition_publication_state(
-            initial_publication_state(&plan),
+            initial_publication_state(plan).state,
             PublicationEvent::Failed(PublicationFailurePhase::StageCreation),
         )
         .expect("stage failure");

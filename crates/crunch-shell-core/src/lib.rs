@@ -14,6 +14,7 @@ pub use profile::NAMED_SHELL_PROFILE_NON_CLAIM;
 pub use profile::NamedShellProfiles;
 pub use profile::ShellProfileDeclaration;
 pub use profile::ShellProfileDiagnostic;
+pub use profile::ShellProfileDiagnosticCode;
 pub use profile::ShellProfileEnvEntry;
 pub use profile::ShellProfilePlan;
 pub use profile::ShellProfileSelectionRequest;

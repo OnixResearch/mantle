@@ -1,0 +1,132 @@
+diff --git a/vendor/snix-build/src/buildservice/bwrap.rs b/vendor/snix-build/src/buildservice/bwrap.rs
+--- a/vendor/snix-build/src/buildservice/bwrap.rs
++++ b/vendor/snix-build/src/buildservice/bwrap.rs
+@@ -154,6 +154,20 @@
+     Ok(vec![mount])
+ }
+ 
++fn compile_socket_mount(host_socket: &Path) -> std::io::Result<Option<SandboxMount>> {
++    use std::os::unix::fs::FileTypeExt as _;
++    match std::fs::symlink_metadata(host_socket) {
++        Ok(metadata) if metadata.file_type().is_socket() => Ok(Some(SandboxMount {
++            host_path: host_socket.to_path_buf(),
++            guest_path: PathBuf::from("/run/mantle/compile-cache.sock"),
++            read_only: true,
++        })),
++        Ok(_) => Err(std::io::Error::other("compile runtime endpoint must be a Unix socket, not a file, directory, or symlink")),
++        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
++        Err(error) => Err(error),
++    }
++}
++
+ fn should_materialize_inputs_fallback(error: &std::io::Error) -> bool {
+     if error.kind() != ErrorKind::Other {
+         return false;
+@@ -331,6 +345,9 @@
+     /// an upper-layer diagnostic shell ingests allowlisted evidence.
+     failure_workspace_root: Option<PathBuf>,
+ 
++    /// Explicit execution-only endpoint; never serialized in BuildRequest.
++    compile_socket: Option<PathBuf>,
++
+     // semaphore to track number of concurrently running builds.
+     // this is necessary, as otherwise we very quickly run out of open file handles.
+     concurrent_builds: std::sync::Arc<tokio::sync::Semaphore>,
+@@ -348,10 +365,26 @@
+             blob_service,
+             directory_service,
+             failure_workspace_root: None,
++            compile_socket: None,
+             concurrent_builds: std::sync::Arc::new(tokio::sync::Semaphore::new(2)),
+             #[cfg(test)]
+             watch_fault: None,
+         }
++    }
++
++    /// Opt in to one socket, never a cache/state directory or arbitrary guest path.
++    /// A missing endpoint is deliberately left unmounted so clients can degrade.
++    pub fn with_compile_socket(mut self, host_socket: PathBuf) -> std::io::Result<Self> {
++        if !host_socket.is_absolute()
++            || host_socket.as_os_str().as_encoded_bytes().len() > 107
++            || host_socket.as_os_str().as_encoded_bytes().contains(&0)
++            || host_socket.components().any(|c| matches!(c, std::path::Component::CurDir | std::path::Component::ParentDir))
++        {
++            return Err(std::io::Error::other("compile socket path must be a bounded clean absolute path"));
++        }
++        compile_socket_mount(&host_socket)?;
++        self.compile_socket = Some(host_socket);
++        Ok(self)
+     }
+ 
+     pub fn with_failure_workspace_root(mut self, failure_workspace_root: PathBuf) -> Self {
+@@ -397,7 +430,17 @@
+ 
+         let blob_service = self.blob_service.clone();
+         let directory_service = self.directory_service.clone();
+-        let workspace_mounts = workspace_mounts(sandbox_dir.path(), request.workspace.as_ref())?;
++        let mut workspace_mounts = workspace_mounts(sandbox_dir.path(), request.workspace.as_ref())?;
++        if let Some(host_socket) = &self.compile_socket {
++            if workspace_mounts.iter().any(|mount| {
++                mount.guest_path.starts_with("/run/mantle") || Path::new("/run/mantle").starts_with(&mount.guest_path)
++            }) {
++                return Err(std::io::Error::other("workspace overlaps compile runtime socket"));
++            }
++            if let Some(mount) = compile_socket_mount(host_socket)? {
++                workspace_mounts.push(mount);
++            }
++        }
+ 
+         let spec = SandboxSpec::builder()
+             .host_workdir(sandbox_dir.path().to_path_buf())
+@@ -594,6 +637,28 @@
+ 
+ #[cfg(test)]
+ mod tests {
++
++    #[test]
++    fn compile_endpoint_admits_only_socket_and_degrades_after_removal() {
++        use std::os::unix::net::UnixListener;
++        let root = tempfile::tempdir().unwrap();
++        let endpoint = root.path().join("daemon.sock");
++        let listener = UnixListener::bind(&endpoint).unwrap();
++        let mount = compile_socket_mount(&endpoint).unwrap().unwrap();
++        assert_eq!(mount.host_path, endpoint);
++        assert_eq!(mount.guest_path, PathBuf::from("/run/mantle/compile-cache.sock"));
++        assert!(mount.read_only);
++        drop(listener);
++        std::fs::remove_file(&endpoint).unwrap();
++        assert!(compile_socket_mount(&endpoint).unwrap().is_none());
++        std::fs::write(&endpoint, b"not a socket").unwrap();
++        assert!(compile_socket_mount(&endpoint).err().unwrap().to_string().contains("Unix socket"));
++        assert!(compile_socket_mount(root.path()).err().unwrap().to_string().contains("Unix socket"));
++        let alias = root.path().join("alias");
++        std::os::unix::fs::symlink(&endpoint, &alias).unwrap();
++        assert!(compile_socket_mount(&alias).err().unwrap().to_string().contains("Unix socket"));
++    }
++
+     use snix_castore::Directory;
+     use snix_castore::SymlinkTarget;
+     use snix_castore::blobservice::MemoryBlobService;
+diff --git a/vendor/snix-build/src/bwrap/mod.rs b/vendor/snix-build/src/bwrap/mod.rs
+--- a/vendor/snix-build/src/bwrap/mod.rs
++++ b/vendor/snix-build/src/bwrap/mod.rs
+@@ -290,6 +290,19 @@
+         {
+             return Err(std::io::Error::other("sandbox guest mount path must be clean"));
+         }
++        // Socket bind targets must not first be created as directories. Keep
++        // the ordinary workspace-directory mount behavior byte-for-byte intact.
++        if mount.guest_path == Path::new("/run/mantle/compile-cache.sock") {
++            use std::os::unix::fs::FileTypeExt as _;
++            if !mount.read_only || !fs::symlink_metadata(&mount.host_path)?.file_type().is_socket() {
++                return Err(std::io::Error::other("compile runtime mount requires one read-only Unix socket"));
++            }
++            args.extend([
++                "--dir".into(), "/run/mantle".into(), "--ro-bind".into(),
++                mount.host_path.clone().into(), mount.guest_path.clone().into(),
++            ]);
++            continue;
++        }
+         let bind_flag = if mount.read_only { "--ro-bind" } else { "--bind" };
+         args.extend([
+             "--dir".into(),

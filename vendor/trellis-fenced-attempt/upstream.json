@@ -1,0 +1,27 @@
+{
+  "files": {
+    "LICENSE": {
+      "blake3": "7ad11002cb765572342fc15096832825a9071dfc7f4f427d92c6906d83ea9b54",
+      "bytes": 16726,
+      "path": "LICENSE"
+    },
+    "src/fenced_attempt/tests/verified_negative.rs": {
+      "blake3": "391047a21cec9a8100fb1f6e6535297e0e63296d5f2f90fd610d48e1f2feaefd",
+      "bytes": 4736,
+      "path": "tests/verified_negative.rs"
+    },
+    "src/fenced_attempt/tests/verified_positive.rs": {
+      "blake3": "1b91fa5e9b6f551a570806a26a6f0870374aa1dda947788f56ecdd03a2934a4a",
+      "bytes": 3139,
+      "path": "tests/verified_positive.rs"
+    },
+    "src/fenced_attempt/verified.rs": {
+      "blake3": "ceb717657f092747a03501e63a0f2a8aeda7af0aba226e21de725334d47c0549",
+      "bytes": 12730,
+      "path": "verified.rs"
+    }
+  },
+  "repository": "https://github.com/OnixResearch/trellis",
+  "revision": "d91188e495d65bca87551b7a06330efb2c909edf",
+  "vstd_version": "=0.0.0-2026-01-25-0057"
+}

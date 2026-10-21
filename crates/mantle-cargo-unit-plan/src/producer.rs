@@ -20,6 +20,7 @@ use mantle_cargo_unit_plan::ExternBinding;
 use mantle_cargo_unit_plan::PlanBindings;
 use mantle_cargo_unit_plan::RUN_BUILD_SCRIPT_MODE;
 use mantle_cargo_unit_plan::SourceSlice;
+use mantle_cargo_unit_plan::TargetLinkerBinding;
 use mantle_cargo_unit_plan::UnitBinding;
 use mantle_cargo_unit_plan::lower;
 use mantle_rust_plan_core::ExistingUnitFacts;
@@ -44,6 +45,8 @@ struct Config {
     cargo: String,
     rustc: String,
     linker: String,
+    #[serde(default)]
+    target_linker: Option<TargetLinkerBinding>,
     toolchain: String,
     helper: String,
     #[serde(default)]
@@ -53,6 +56,10 @@ struct Config {
     host_triple: String,
     target_triple: String,
     profile: String,
+    #[serde(default)]
+    features: Vec<String>,
+    #[serde(default)]
+    no_default_features: bool,
     /// Keyed by exact Cargo package id from the admitted graph.
     #[serde(default)]
     native_inputs: BTreeMap<String, NativeInputDeclaration>,
@@ -258,6 +265,28 @@ fn parse_unit_graph(bytes: &[u8]) -> Result<OracleGraph, Vec<Blocker>> {
     Ok(graph)
 }
 
+fn select_features(command: &mut Command, config: &Config) -> Result<(), Vec<Blocker>> {
+    if config.features.len() > 256
+        || config.features.iter().any(|feature| {
+            feature.is_empty() || feature.len() > 128 || feature.starts_with('-') || feature.contains([',', '\0', ' '])
+        })
+    {
+        return Err(block("unit-plan-mode-unsupported", "features", "invalid feature selection"));
+    }
+    if !config.features.is_empty() {
+        command.arg("--features").arg(config.features.join(","));
+    }
+    if config.no_default_features {
+        command.arg("--no-default-features");
+    }
+    Ok(())
+}
+fn retain_oracle(name: &str, bytes: &[u8]) -> Result<(), Vec<Blocker>> {
+    let out = PathBuf::from(required("out")?);
+    fs::create_dir_all(&out).map_err(|error| block("unit-plan-oracle-failure", "evidence", error.to_string()))?;
+    fs::write(out.join(name), bytes).map_err(|error| block("unit-plan-oracle-failure", name, error.to_string()))
+}
+
 fn run_oracle(
     config: &Config,
     workspace: &Path,
@@ -265,8 +294,10 @@ fn run_oracle(
 ) -> Result<(Metadata, OracleGraph, PlannerReceipt), Vec<Blocker>> {
     let mut metadata = Command::new(&config.cargo);
     metadata.args(["metadata", "--format-version", "1", "--locked", "--offline"]);
+    select_features(&mut metadata, config)?;
     command_env(&mut metadata, config, workspace, cargo_home);
     let metadata = command_output(&mut metadata, "cargo metadata")?;
+    retain_oracle("cargo-metadata.json", &metadata)?;
     let metadata: Metadata = serde_json::from_slice(&metadata)
         .map_err(|error| block("unit-plan-oracle-failure", "cargo metadata", error.to_string()))?;
     let mut graph = Command::new(&config.cargo);
@@ -280,8 +311,13 @@ fn run_oracle(
         "--profile",
         &config.profile,
     ]);
+    select_features(&mut graph, config)?;
+    if config.target_triple != config.host_triple {
+        graph.args(["--target", &config.target_triple]);
+    }
     command_env(&mut graph, config, workspace, cargo_home);
     let graph_bytes = command_output(&mut graph, "cargo unit-graph")?;
+    retain_oracle("cargo-unit-graph.json", &graph_bytes)?;
     let graph_digest = normalized_graph_digest(&graph_bytes)?;
     let graph = parse_unit_graph(&graph_bytes)?;
     let mut planner = Command::new(&config.planner);
@@ -293,9 +329,14 @@ fn run_oracle(
         "--profile",
         &config.profile,
     ]);
+    select_features(&mut planner, config)?;
+    if config.target_triple != config.host_triple {
+        planner.args(["--target", &config.target_triple]);
+    }
     command_env(&mut planner, config, workspace, cargo_home);
 
     let receipt_bytes = command_output(&mut planner, "rust-plan")?;
+    retain_oracle("rust-plan-receipt.json", &receipt_bytes)?;
     let receipt: PlannerReceipt = serde_json::from_slice(&receipt_bytes)
         .map_err(|error| block("unit-plan-oracle-failure", "rust-plan", error.to_string()))?;
     if receipt.schema_version != 1
@@ -335,6 +376,15 @@ fn source_paths(
     let mut packages = BTreeSet::new();
     let mut slices = Vec::new();
     let mut package_bindings = BTreeMap::new();
+    let package_roots = metadata
+        .packages
+        .iter()
+        .map(|package| {
+            normalize_source_path(Path::new(&package.manifest_path))
+                .and_then(|manifest| manifest.parent().map(Path::to_path_buf))
+                .ok_or_else(|| block("unit-plan-source-unsupported", &package.id, "invalid package manifest path"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     for unit in &graph.units {
         if !packages.insert(unit.pkg_id.as_str()) {
             continue;
@@ -350,7 +400,8 @@ fn source_paths(
                 "only path and declared registry sources are supported",
             ));
         }
-        let manifest = Path::new(&package.manifest_path);
+        let manifest = normalize_source_path(Path::new(&package.manifest_path))
+            .ok_or_else(|| block("unit-plan-source-unsupported", &package.id, "invalid package manifest path"))?;
         let package_root = manifest
             .parent()
             .ok_or_else(|| block("unit-plan-source-unsupported", &package.id, "manifest has no parent"))?;
@@ -365,7 +416,7 @@ fn source_paths(
         let source_id = format!("s.{package_digest}");
         let subpath = format!("packages/{package_digest}");
         let copied = sources_output.join(&subpath);
-        source_nar::copy_package(package_root, &copied, 0)
+        source_nar::copy_package_slice(package_root, &copied, &package_roots)
             .map_err(|error| block("unit-plan-source-unsupported", &package.id, error))?;
         let digest = source_nar::nar_blake3(&copied)
             .map_err(|error| block("unit-plan-source-unsupported", &package.id, error))?;
@@ -564,9 +615,22 @@ fn match_planner<'a>(
     }
 }
 
+#[derive(Serialize)]
+struct UnitIdentity {
+    core_unit_id: String,
+    package_id: String,
+    target_name: String,
+    target_kind: String,
+    execution_kind: String,
+    source_id: String,
+    triple: String,
+    features: Vec<String>,
+}
+
 struct PlannedUnitFacts {
     facts: Vec<ExistingUnitFacts>,
     bindings: Vec<UnitBinding>,
+    identities: BTreeMap<String, UnitIdentity>,
     roots: Vec<String>,
 }
 
@@ -887,8 +951,19 @@ fn build_facts(
     };
     let mut facts = Vec::with_capacity(graph.units.len());
     let mut bindings = Vec::with_capacity(graph.units.len());
+    let mut identities = BTreeMap::new();
     for index in 0..graph.units.len() {
         let (fact, binding) = unit_facts(&inputs, index)?;
+        identities.insert(mantle_cargo_unit_plan::plan_id(&fact.unit_id), UnitIdentity {
+            core_unit_id: fact.unit_id.clone(),
+            package_id: fact.package_id.clone(),
+            target_name: fact.target_name.clone(),
+            target_kind: fact.target_kind.clone(),
+            execution_kind: fact.execution_kind.clone(),
+            source_id: binding.source_id.clone(),
+            triple: binding.triple.clone(),
+            features: graph.units[index].features.iter().cloned().collect::<BTreeSet<_>>().into_iter().collect(),
+        });
         facts.push(fact);
         bindings.push(binding);
     }
@@ -901,7 +976,12 @@ fn build_facts(
                 .ok_or_else(|| block("unit-plan-oracle-failure", "roots", "root index outside graph"))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(PlannedUnitFacts { facts, bindings, roots })
+    Ok(PlannedUnitFacts {
+        facts,
+        bindings,
+        roots,
+        identities,
+    })
 }
 
 fn is_store_root(path: &str, prefix: &str) -> bool {
@@ -969,6 +1049,22 @@ fn check_declared_native_inputs(config: &Config, declared: Option<&str>) -> Resu
     Ok(())
 }
 
+fn check_declared_target_linker(config: &Config, declared: Option<&str>) -> Result<(), Vec<Blocker>> {
+    let parsed: Option<TargetLinkerBinding> = match declared {
+        Some(value) => serde_json::from_str(value)
+            .map_err(|error| block("unit-plan-host-path", "target_linker", error.to_string()))?,
+        None => None,
+    };
+    if parsed != config.target_linker {
+        return Err(block(
+            "unit-plan-host-path",
+            "target_linker",
+            "config and Nickel target linker declarations differ",
+        ));
+    }
+    Ok(())
+}
+
 /// rust-plan discovers vendored sources only from the workspace Cargo config,
 /// so the staged workspace declares the vendor directory there.
 fn stage_vendor_config(workspace: &Path, vendor: Option<&Path>) -> Result<(), Vec<Blocker>> {
@@ -1015,6 +1111,7 @@ fn run() -> Result<(), Vec<Blocker>> {
         return Err(block("unit-plan-host-path", "runtime_inputs", "config and Nickel runtime declarations differ"));
     }
     check_declared_native_inputs(&config, env::var(NATIVE_INPUTS_ENV).ok().as_deref())?;
+    check_declared_target_linker(&config, env::var("MANTLE_UNIT_TARGET_LINKER").ok().as_deref())?;
     let native = native_bindings(&config)?;
 
     if ![
@@ -1070,6 +1167,7 @@ fn run() -> Result<(), Vec<Blocker>> {
         facts,
         bindings: units,
         roots,
+        identities,
     } = build_facts(&config, &graph, &receipt, &package_bindings, &native)?;
     let effects = plan_existing_unit_effects(facts).map_err(|blockers| {
         blockers
@@ -1089,6 +1187,7 @@ fn run() -> Result<(), Vec<Blocker>> {
         helper: config.helper,
         rustc: config.rustc,
         linker: config.linker,
+        target_linker: config.target_linker,
         toolchain: config.toolchain,
         runtime_inputs: config.runtime_inputs,
         sources,
@@ -1100,6 +1199,13 @@ fn run() -> Result<(), Vec<Blocker>> {
         .map_err(|error| block("unit-plan-oracle-failure", "plan", error.to_string()))?;
     let out = PathBuf::from(required("out")?);
     fs::create_dir_all(&out).map_err(|error| block("unit-plan-oracle-failure", "evidence", error.to_string()))?;
+    let identity_record = serde_json::json!({"schema": "mantle-cargo-unit-bindings-v1", "units": identities, "roots": bindings.roots.iter().map(|id| mantle_cargo_unit_plan::plan_id(id)).collect::<Vec<_>>()});
+    fs::write(
+        out.join("cargo-unit-bindings.json"),
+        serde_json::to_vec(&identity_record)
+            .map_err(|error| block("unit-plan-oracle-failure", "bindings", error.to_string()))?,
+    )
+    .map_err(|error| block("unit-plan-oracle-failure", "bindings", error.to_string()))?;
     let evidence = Evidence {
         schema: "mantle-cargo-unit-plan-evidence-v1",
         evidence_class: "cargo-unit-graph-dynamic-plan",

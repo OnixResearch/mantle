@@ -1218,6 +1218,7 @@ mod tests {
             state_dir: state_dir.path().to_path_buf(),
             backend: crunch_store::StoreBackend::Snix,
             base_state_dirs: Vec::new(),
+            source_admission: None,
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: 1,
@@ -1231,6 +1232,7 @@ mod tests {
             root_registration: None,
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
+            compile_driver_runtime: None,
             interchange_dir: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [9u8; 20]).unwrap();
@@ -1297,6 +1299,7 @@ mod tests {
             state_dir: state_dir.path().to_path_buf(),
             backend: crunch_store::StoreBackend::Snix,
             base_state_dirs: Vec::new(),
+            source_admission: None,
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: 1,
@@ -1310,6 +1313,7 @@ mod tests {
             root_registration: None,
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
+            compile_driver_runtime: None,
             interchange_dir: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [10u8; 20]).unwrap();
@@ -1361,6 +1365,7 @@ mod tests {
             state_dir: state_dir.path().to_path_buf(),
             backend: crunch_store::StoreBackend::Snix,
             base_state_dirs: Vec::new(),
+            source_admission: None,
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: 1,
@@ -1374,6 +1379,7 @@ mod tests {
             root_registration: None,
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
+            compile_driver_runtime: None,
             interchange_dir: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [1u8; 20]).unwrap();
@@ -1741,6 +1747,7 @@ mod tests {
             state_dir: state_dir.path().to_path_buf(),
             backend: crunch_store::StoreBackend::Snix,
             base_state_dirs: Vec::new(),
+            source_admission: None,
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: MIN_MAX_JOBS,
@@ -1754,6 +1761,7 @@ mod tests {
             root_registration: None,
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
+            compile_driver_runtime: None,
             interchange_dir: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [5u8; 20]).unwrap();
@@ -2202,6 +2210,7 @@ mod tests {
             state_dir: state_dir.path().to_path_buf(),
             backend: crunch_store::StoreBackend::Snix,
             base_state_dirs: Vec::new(),
+            source_admission: None,
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: MIN_MAX_JOBS,
@@ -2215,6 +2224,7 @@ mod tests {
             root_registration: None,
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
+            compile_driver_runtime: None,
             interchange_dir: None,
         };
         let result = PipelineResult {
@@ -2311,6 +2321,7 @@ mod tests {
             state_dir: state_dir.path().to_path_buf(),
             backend: crunch_store::StoreBackend::Snix,
             base_state_dirs: Vec::new(),
+            source_admission: None,
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: 1,
@@ -2324,6 +2335,7 @@ mod tests {
             root_registration: None,
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
+            compile_driver_runtime: None,
             interchange_dir: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [3u8; 20]).unwrap();

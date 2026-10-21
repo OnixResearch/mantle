@@ -224,7 +224,7 @@ leaf files or revert the churn immediately.
 | `crates/crunch-eval/src/session.rs`, `stdlib.rs` | Nickel session (root discovery, bounded workers), embedded stdlib table |
 | `crates/crunch-glue/src/convert.rs` | `CrunchDerivation` → `nix_compat::Derivation` + `StorePath` |
 | `scripts/quality-gate-common.sh` | Canonical first-party / vendored-exclusion package lists |
-| `Cargo.toml` | 44-member workspace; pins `blake3 =1.8.2`, `digest =0.10.7` (blake3 1.8.3+ pulls digest 0.11 and breaks snix-castore), `bstr =1.12.1` |
+| `Cargo.toml` | 44-member workspace; pins `blake3 =1.8.5`, `digest =0.10.7` for SHA/Nix interoperability, and `bstr =1.12.1`; Snix BLAKE3 streaming uses the native hasher rather than `traits-preview` (ADR 0122) |
 | `deny.toml` | cargo-deny policy (reasoned advisory ignores, license allowlist, `private.ignore`) |
 
 ## Runtime/Tooling Preferences

@@ -92,3 +92,94 @@ Compatibility evidence proves only that selected operations interoperate under t
 ## Rollout
 
 The service starts on a private test endpoint. Interoperability fixtures then cover supported Nix clients and explicit negative cases. Public exposure requires archived credential-hardening evidence and OnixOS deployment policy. The internal Mantle protocol remains available throughout rollout and rollback.
+
+## Configured production host
+
+On Linux, `src/nix_gateway/api_host.rs` implements `Services` over the existing
+durable coordinator and `prepare_remote_dispatch` / `execute_remote_dispatch`.
+The API journal records delivery and opaque public IDs; it is not another
+scheduler. Resource reservations are idempotent against the exact coordinator
+job, attempt and fence before dispatch. A host-lifetime exclusive lock prevents
+a second gateway from misclassifying a live host as interrupted during recovery.
+Duplicate submission reaches the idempotent host under fresh current authority.
+A queued intent can recover its existing fenced identity; an uncertain execution
+is not automatically rerun. Connection loss does not stop an admitted worker.
+A new public request cannot attach to an existing scheduler job merely because
+its normalized concrete action matches. Such attachment is not sharing authority
+and would mix request/accounting identities. Only the separate verified completed
+result-reuse gate can create that consumer link; otherwise admission fails closed.
+Successful signed output import retains immutable producer evidence immediately,
+without requiring an unrelated result-read call to make later authorized reuse
+possible. Every actual result read and reuse still checks current signed store
+metadata and CAS availability.
+
+
+The explicit commands are:
+
+```bash
+mantle remote gateway provision-quota --directory "$quota_dir"
+mantle remote gateway binding --request "$request_json" --project "$project"
+mantle --state-dir "$coordinator_state" remote gateway serve \
+  --config "$gateway_config" --socket "$private_socket" --ticket-fd 3
+mantle remote gateway call --socket "$private_socket" --envelope "$invocation_json"
+mantle --state-dir "$coordinator_state" remote gateway nix-once \
+  --config "$gateway_config" --socket "$nix_socket" --ticket-fd 3 \
+  --envelope "$concrete_build_invocation_json"
+```
+
+FD 3 must already contain an explicitly issued remote-runner ticket; the commands
+do not mint tickets, UCAN grants, holder signatures or keys. Quota provisioning is
+a separate, explicit empty-ledger operation in an existing private directory.
+The JSON configuration is the strict `GatewayConfig` schema in `api_host.rs`:
+version, endpoint, audience, public policy digest, authority configuration,
+journal/quota/evidence directories, cursor-secret and completion-key files,
+resource policy, per-system reviewed features, builder program and argv, trusted
+builder keys, observability configuration, build deadline, and explicit
+SecretSpec manifest/profile/provider. All classes must target that configured
+endpoint; the existing runner inventory and leases still determine admission.
+The API adapter does not supply a sandbox or invent platform feature facts.
+
+The envelope contains API version, the operation-specific authority request,
+compact UCAN, holder nonce/signature, and a typed request. `binding` prints only
+the public operation/target/request-digest tuple for the holder to sign. A new
+holder invocation is required for a retry of a consumed envelope; its submit
+idempotency key and concrete derivation remain unchanged. Status, logs, events,
+result, usage and cancellation each require their own matching current operation
+grant. Cursor bounds and cancellation fence are included in that signed tuple.
+The owner-private Unix transport uses a four-byte big-endian length prefix,
+128-KiB credential-envelope and 1-MiB response limits, a 10-second read/write
+deadline, and same-owner peer credentials. There is no TCP/public listener.
+
+`nix-once` accepts one explicitly authorized concrete derivation on one Nix
+connection. Its BuildPaths bridge calls the actual asynchronous host and waits
+for durable completion, then requires current signed derivation/output/CAS
+verification. It does not turn a cached callback into build success. The `read`
+subcommand retains the existing verified read-only Nix socket. Evaluation,
+source fetching, arbitrary commands and administrative Nix operations remain
+unsupported.
+
+Public logs contain bounded host lifecycle/reconciliation events, not executor
+stdout/stderr or credentials. Worker byte counts are measurements, not log
+content. Result reads reopen current verified store authority and check signed
+outputs/CAS; reuse is a consumer link to a verified producer, not another
+execution or quota charge. Signed PathInfo evidence references fingerprint the
+actual retained signed metadata, not an attestation digest relabeled a signature.
+
+### Cancellation and recovery boundary
+
+For the same-binary local worker, cancellation is a durable fenced intent;
+the transport terminates/reaps the local process tree before recording its
+teardown acknowledgement. A cancelled attempt without complete authenticated
+measurements retains its quota reservation in pending reconciliation. No zero
+charge or complete metrics are inferred from cancellation.
+
+The existing remote/SSH worker protocol has no independently authorized remote
+cancel-and-teardown acknowledgement. Remote cancellation therefore remains a
+durable intent and its reservation remains pending until authenticated complete
+worker facts are received. An SSH disconnect is never a teardown acknowledgement.
+Immediate remote cancellation requires that additional operation-specific worker
+protocol; it is not claimed by this host. Likewise, reopening after an uncertain
+execution cannot safely redispatch or release its reservation merely because the
+client disappeared. Real configured-fixture, farm interoperability and deployment
+proofs remain separate observed evidence, not consequences of these code paths.
+

@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.31)
+project(mantle_fetch_negative LANGUAGES C)
+include(FetchContent)
+FetchContent_Declare(undeclared URL "https://example.invalid/undeclared.tar")
+FetchContent_MakeAvailable(undeclared)

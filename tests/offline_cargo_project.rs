@@ -55,22 +55,38 @@ mantle.offlineCargoPackage {{
 }
 
 #[test]
-fn offline_cargo_helper_lowers_to_derivation_with_bounded_evidence() {
-    let drv = eval_derivation(&valid_offline_cargo_package_expr("demo")).unwrap();
-    let script = drv.args.join("\n");
+fn offline_cargo_native_roles_resolve_under_a_declared_logical_prefix() {
+    let source = valid_offline_cargo_package_expr("demo").replace(
+        "binary = \"demo\",",
+        r#"binary = "demo",
+  native_inputs = {
+    inputs = { cc = "/custom/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-declared-cc" },
+    env = { CC = "{{role:cc}}/bin/cc", NATIVE_LITERAL = "$(not-a-command)'`literal`" },
+    path = ["{{role:cc}}/bin"],
+  },"#,
+    );
+    let drv = eval_derivation(&source).unwrap();
+    assert_eq!(drv.env["CC"], "/custom/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-declared-cc/bin/cc");
+}
 
-    assert_eq!(drv.name, "demo");
-    assert_eq!(drv.builder, "/bin/sh");
-    assert_eq!(drv.inputs.len(), 4);
-    assert_eq!(drv.env["MANTLE_BUILD_EVIDENCE_CLASS"], "cargo-inside-mantle-sandbox");
-    assert!(script.contains("cargo build --locked --offline --release --bin demo"));
-    assert!(script.contains("share/mantle/offline-cargo-build.json"));
-    assert!(script.contains("mantle-offline-cargo-build-evidence-v2"));
-    assert!(script.contains("\"lockfile\": {\"role\":\"cargo-lockfile\""));
-    assert!(script.contains("\"identity_class\":\"blake3-content\""));
-    assert!(script.contains("\"result\": \"undeclared-network-denied\""));
-    assert!(script.contains("not-cargo-free-execution"));
-    assert!(script.contains("not-full-cargo-compatibility"));
+#[test]
+fn offline_cargo_native_admission_rejects_ambient_paths_and_control_overrides() {
+    for declaration in [
+        r#"{ inputs = {}, env = { CC = "{{role:missing}}/bin/cc" }, path = [] }"#,
+        r#"{ inputs = {}, env = { CC = "/usr/bin/cc" }, path = [] }"#,
+        r#"{ inputs = {}, env = { PATH = "ambient" }, path = [] }"#,
+        r#"{ inputs = {}, env = { RUSTFLAGS = "ambient" }, path = [] }"#,
+        r#"{ inputs = {}, env = { CARGO_HOME = "ambient" }, path = [] }"#,
+        r#"{ inputs = {}, env = { ENV = "ambient" }, path = [] }"#,
+        r#"{ inputs = {}, env = {}, path = ["/usr/bin"] }"#,
+        r#"{ inputs = { cc = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-cc/bin" }, env = {}, path = [] }"#,
+        r#"{ inputs = { cc = "/custom/../store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-cc" }, env = {}, path = [] }"#,
+        r#"{ inputs = { cc = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-cc" }, env = { CC = "{{role:cc}}/../host" }, path = [] }"#,
+    ] {
+        let source = valid_offline_cargo_package_expr("demo")
+            .replace("binary = \"demo\",", &format!("binary = \"demo\", native_inputs = {declaration},"));
+        assert!(eval_derivation(&source).is_err(), "accepted unsafe native declaration: {declaration}");
+    }
 }
 
 #[test]

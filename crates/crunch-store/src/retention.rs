@@ -79,7 +79,16 @@ pub enum GcRootClass {
 impl GcRootClass {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
-        self.into_core().as_str()
+        match self {
+            Self::ExplicitPin => "explicit-pin",
+            Self::ProjectOutputGeneration => "project-output-generation",
+            Self::ProjectSourceGeneration => "project-source-generation",
+            Self::ActiveShellLease => "active-shell-lease",
+            Self::Bootstrap => "bootstrap",
+            Self::SelfBuild => "self-build",
+            Self::RemoteResult => "remote-result",
+            Self::LegacyUnmanaged => "legacy-unmanaged",
+        }
     }
 
     #[must_use]

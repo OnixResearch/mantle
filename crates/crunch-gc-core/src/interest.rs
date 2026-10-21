@@ -15,66 +15,131 @@ pub struct InterestFact {
     pub reason: String,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct ReleaseSelector<'a> {
-    pub owner: &'a str,
-    pub path: &'a str,
-    pub reason: Option<&'a str>,
+#[derive(Clone, Debug)]
+pub struct ReleaseSelector {
+    pub owner: String,
+    pub path: String,
+    pub reason: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InterestError {
+    TooManyRecords,
+    EmptyField,
+    FieldTooLong,
+    UnorderedIdentity,
+    MissingReleaseScope,
+    ForeignOwner,
+    AmbiguousRelease,
+}
+
+impl core::fmt::Display for InterestError {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(match self {
+            Self::TooManyRecords => "retention record count exceeds limit",
+            Self::EmptyField => "retention record has empty owner, path, or reason",
+            Self::FieldTooLong => "retention record field exceeds limit",
+            Self::UnorderedIdentity => "duplicate or unordered retention record identity",
+            Self::MissingReleaseScope => "release requires owner and path",
+            Self::ForeignOwner => "foreign-owner release denied",
+            Self::AmbiguousRelease => "ambiguous release: specify an exact reason",
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InterestIdentity {
+    pub canonical_bytes: Vec<u8>,
+    pub digest: [u8; 32],
+}
+
+#[derive(Clone, Debug)]
+pub struct InterestRelease {
+    pub selector: ReleaseSelector,
+    pub identities: Vec<String>,
 }
 /// Inputs are validated records sorted by canonical identity. All owners of a
 /// path survive the deterministic grouping. The store adapter selects the
 /// retained policy representative after evaluating every declaration.
-pub fn merge(facts: &[InterestFact]) -> Result<BTreeMap<String, Vec<InterestFact>>, &'static str> {
-    if facts.len() > MAX_INTEREST_RECORDS {
-        return Err("retention record count exceeds limit");
-    }
+pub fn merge(facts: Vec<InterestFact>) -> Result<BTreeMap<String, Vec<InterestFact>>, InterestError> {
+    validate_facts(&facts)?;
+    let fact_count = facts.len();
     let mut by_path = BTreeMap::<String, Vec<InterestFact>>::new();
-    let mut prior_identity = None;
     for fact in facts {
-        if fact.owner.is_empty() || fact.path.is_empty() || fact.reason.is_empty() {
-            return Err("retention record has empty owner, path, or reason");
+        if let Some(path_facts) = by_path.get_mut(&fact.path) {
+            path_facts.push(fact);
+        } else {
+            by_path.insert(fact.path.clone(), Vec::from([fact]));
         }
-        if fact.owner.len() > 256 || fact.path.len() > 4_096 || fact.reason.len() > 256 {
-            return Err("retention record field exceeds limit");
-        }
-        if prior_identity.is_some_and(|previous: &str| previous >= fact.identity.as_str()) {
-            return Err("duplicate or unordered retention record identity");
-        }
-        prior_identity = Some(&fact.identity);
-        by_path.entry(fact.path.clone()).or_default().push(fact.clone());
     }
-    assert_eq!(by_path.is_empty(), facts.is_empty());
-    assert!(by_path.len() <= facts.len());
+    assert_eq!(by_path.is_empty(), fact_count == 0);
+    assert!(by_path.len() <= fact_count);
     Ok(by_path)
 }
 
-pub fn release_identities(facts: &[InterestFact], selector: ReleaseSelector<'_>) -> Result<Vec<String>, &'static str> {
-    if selector.owner.is_empty() || selector.path.is_empty() {
-        return Err("release requires owner and path");
+fn validate_facts(facts: &[InterestFact]) -> Result<(), InterestError> {
+    if facts.len() > MAX_INTEREST_RECORDS {
+        return Err(InterestError::TooManyRecords);
     }
-    let grouped = merge(facts)?;
-    let Some(path_facts) = grouped.get(selector.path) else {
-        return Ok(Vec::new());
+    let mut prior_identity = None;
+    for fact in facts {
+        if fact.owner.is_empty() || fact.path.is_empty() || fact.reason.is_empty() {
+            return Err(InterestError::EmptyField);
+        }
+        if fact.owner.len() > 256 || fact.path.len() > 4_096 || fact.reason.len() > 256 {
+            return Err(InterestError::FieldTooLong);
+        }
+        if prior_identity.is_some_and(|previous: &str| previous >= fact.identity.as_str()) {
+            return Err(InterestError::UnorderedIdentity);
+        }
+        prior_identity = Some(fact.identity.as_str());
+    }
+    Ok(())
+}
+
+pub fn release_identities(
+    facts: Vec<InterestFact>,
+    selector: ReleaseSelector,
+) -> Result<InterestRelease, InterestError> {
+    if selector.owner.is_empty() || selector.path.is_empty() {
+        return Err(InterestError::MissingReleaseScope);
+    }
+    let mut grouped = merge(facts)?;
+    let Some(path_facts) = grouped.remove(&selector.path) else {
+        return Ok(InterestRelease {
+            selector,
+            identities: Vec::new(),
+        });
     };
     if path_facts.iter().all(|fact| fact.owner != selector.owner) {
-        return Err("foreign-owner release denied");
+        return Err(InterestError::ForeignOwner);
     }
+    let path_fact_count = path_facts.len();
     let matching = path_facts
-        .iter()
-        .filter(|fact| fact.owner == selector.owner && selector.reason.is_none_or(|wanted| wanted == fact.reason))
-        .map(|fact| fact.identity.clone())
+        .into_iter()
+        .filter(|fact| {
+            fact.owner == selector.owner && selector.reason.as_ref().is_none_or(|wanted| *wanted == fact.reason)
+        })
+        .map(|fact| fact.identity)
         .collect::<Vec<_>>();
     if matching.len() > 1 {
-        return Err("ambiguous release: specify an exact reason");
+        return Err(InterestError::AmbiguousRelease);
     }
-    assert!(matching.len() <= path_facts.len());
+    assert!(matching.len() <= path_fact_count);
     assert!(matching.len() <= 1);
-    Ok(matching)
+    Ok(InterestRelease {
+        selector,
+        identities: matching,
+    })
 }
 
 #[must_use]
-pub fn identity(canonical_bytes: &[u8]) -> [u8; 32] {
-    *blake3::hash(canonical_bytes).as_bytes()
+pub fn identity(canonical_bytes: Vec<u8>) -> InterestIdentity {
+    let digest = *blake3::hash(&canonical_bytes).as_bytes();
+    InterestIdentity {
+        canonical_bytes,
+        digest,
+    }
 }
 
 #[cfg(test)]
@@ -98,25 +163,27 @@ mod tests {
             reason: "ci".into(),
         };
         let facts = vec![first, second];
-        assert_eq!(merge(&facts).unwrap()["p"].len(), 2);
+        assert_eq!(merge(facts.clone()).unwrap()["p"].len(), 2);
         assert_eq!(
-            release_identities(&facts, ReleaseSelector {
-                owner: "a",
-                path: "p",
+            release_identities(facts.clone(), ReleaseSelector {
+                owner: "a".into(),
+                path: "p".into(),
                 reason: None
             })
-            .unwrap(),
+            .unwrap()
+            .identities,
             vec!["a"]
         );
         assert_eq!(
-            release_identities(&facts, ReleaseSelector {
-                owner: "c",
-                path: "p",
+            release_identities(facts.clone(), ReleaseSelector {
+                owner: "c".into(),
+                path: "p".into(),
                 reason: None
-            }),
-            Err("foreign-owner release denied")
+            })
+            .unwrap_err(),
+            InterestError::ForeignOwner
         );
-        assert!(merge(&[facts[0].clone(), facts[0].clone()]).is_err());
+        assert!(merge(vec![facts[0].clone(), facts[0].clone()]).is_err());
     }
     #[test]
     fn record_count_above_bound_is_rejected() {
@@ -127,6 +194,6 @@ mod tests {
             reason: "build".into(),
         };
         let facts = vec![fact; MAX_INTEREST_RECORDS + 1];
-        assert_eq!(merge(&facts), Err("retention record count exceeds limit"));
+        assert_eq!(merge(facts), Err(InterestError::TooManyRecords));
     }
 }

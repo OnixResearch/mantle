@@ -1,0 +1,8 @@
+{
+  "name": "@fixture/app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {"build": "node build.cjs"},
+  "dependencies": {"@fixture/lib": "workspace:*"},
+  "optionalDependencies": {"@fixture/darwin-only": "1.0.0"}
+}

@@ -163,6 +163,7 @@ pub struct BuildPlanConfig<'a> {
     pub state_dir: &'a Path,
     pub backend: crunch_store::StoreBackend,
     pub base_state_dirs: &'a [PathBuf],
+    pub source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     pub store_dir: &'a str,
     pub substituter_urls: &'a [String],
     pub signing_key_path: Option<&'a Path>,
@@ -199,8 +200,20 @@ pub fn cmd_build_plan(config: BuildPlanConfig<'_>) -> Result<(), RunError> {
 }
 
 fn run_build_plan(config: &BuildPlanConfig<'_>) -> Result<BuildPlanReport, RunError> {
-    let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
-    rt.block_on(build_plan_report(config))
+    let effects = mantle_application_contract::planning::build_planning_effect_plan()
+        .map_err(|error| RunError::Internal(format!("planning build inspection: {}", error.code())))?;
+    let result = (|| {
+        let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
+        rt.block_on(build_plan_report(config))
+    })();
+    let succeeded = matches!(&result, Ok(report) if !report.has_preflight_errors());
+    crate::build_observation::classify(
+        &effects,
+        "build-plan-dispositions",
+        mantle_application_contract::EffectKind::StoreAccess,
+        succeeded,
+    )?;
+    result
 }
 
 async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanReport, RunError> {
@@ -211,7 +224,8 @@ async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanRepo
         profile: DoctorProfile::Build,
         store_dir: config.output_dir,
         state_dir: config.state_dir,
-    });
+    })
+    .map_err(|error| RunError::Internal(format!("build plan preflight: {}: {}", error.code, error.detail)))?;
     let plan_store = PlanStore::open(
         config.state_dir,
         config.backend,
@@ -219,6 +233,7 @@ async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanRepo
         config.store_dir,
         config.base_state_dirs,
         config.substituter_urls,
+        config.source_admission,
     )
     .await?;
     let trust = PlanTrust::load(
@@ -244,7 +259,9 @@ async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanRepo
         entries.push(action);
     }
     entries.sort_by(|left, right| left.label.cmp(&right.label).then(left.drv_key.cmp(&right.drv_key)));
-    debug_assert_eq!(entries.len(), root_count);
+    if entries.len() != root_count {
+        return Err(RunError::Internal("build plan omitted selected roots".to_string()));
+    }
     debug_assert!(entries.capacity() >= entries.len());
 
     Ok(BuildPlanReport {
@@ -579,6 +596,7 @@ impl PlanStore {
         store_dir: &str,
         base_state_dirs: &[PathBuf],
         substituter_urls: &[String],
+        source_admission: Option<&std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     ) -> Result<Self, RunError> {
         let ephemeral_state = if state_dir_is_empty(state_dir)? {
             Some(
@@ -599,6 +617,7 @@ impl PlanStore {
             fallback_mode: crunch_store::StoreFallbackMode::Practical,
             store_dir: store_dir.to_string(),
             base_state_dirs: base_state_dirs.to_vec(),
+            source_admission: source_admission.cloned(),
         })
         .await
         .map_err(|error| RunError::Internal(format!("opening composed planning store: {error}")))?;

@@ -268,7 +268,7 @@ fn retained_interest_ids(
     for (fact, (id, _)) in facts.iter_mut().skip(legacy.len()).zip(interests) {
         fact.path_id = format!("/retention-interest/{id}");
     }
-    let plan = crunch_gc_core::retention::plan_retention(&core_retention_policy(), current_unix_seconds()?, facts)
+    let plan = crunch_gc_core::retention::plan_retention(core_retention_policy(), current_unix_seconds()?, facts)
         .map_err(|error| Error::RootRegistry(format!("merging retention interest decisions: {error:?}")))?;
     Ok(plan
         .decisions
@@ -486,9 +486,9 @@ pub fn unpin_root_for_owner_reason(
 ) -> Result<Option<GcRootRecord>, Error> {
     let normalized_path = normalize_logical_path(path)?;
     crate::interest_store::release(state_dir, crunch_gc_core::interest::ReleaseSelector {
-        owner,
-        path: &normalized_path,
-        reason,
+        owner: owner.to_string(),
+        path: normalized_path,
+        reason: reason.map(str::to_string),
     })
 }
 
@@ -1733,7 +1733,9 @@ mod tests {
         let mut wrong_version = serde_json::to_value(&record).unwrap();
         wrong_version["schema_version"] = serde_json::json!(99);
         let wrong_bytes = serde_json::to_vec(&wrong_version).unwrap();
-        let wrong_id = HEXLOWER.encode(&crunch_gc_core::interest::identity(&wrong_bytes));
+        let identified = crunch_gc_core::interest::identity(wrong_bytes);
+        let wrong_id = HEXLOWER.encode(&identified.digest);
+        let wrong_bytes = identified.canonical_bytes;
         let wrong_path = dir.join(format!("{wrong_id}.json"));
         std::fs::write(&wrong_path, &wrong_bytes).unwrap();
         assert!(list_roots(state.path()).unwrap_err().to_string().contains("version"));
@@ -1751,7 +1753,9 @@ mod tests {
         );
         let duplicate_bytes =
             serde_json::to_vec(&crate::interest_store::InterestRecord::new(duplicate_declaration)).unwrap();
-        let duplicate_id = HEXLOWER.encode(&crunch_gc_core::interest::identity(&duplicate_bytes));
+        let identified = crunch_gc_core::interest::identity(duplicate_bytes);
+        let duplicate_id = HEXLOWER.encode(&identified.digest);
+        let duplicate_bytes = identified.canonical_bytes;
         let duplicate_path = dir.join(format!("{duplicate_id}.json"));
         std::fs::write(&duplicate_path, &duplicate_bytes).unwrap();
         assert!(list_roots(state.path()).unwrap_err().to_string().contains("duplicate retention interest"));
@@ -1873,7 +1877,7 @@ mod tests {
         let merged = list_roots(state.path()).unwrap();
         assert_eq!(merged.len(), 1);
         let plan = crunch_gc_core::retention::plan_retention(
-            &core_retention_policy(),
+            core_retention_policy(),
             current_unix_s,
             crate::retention::records_to_core(&merged).unwrap(),
         )
@@ -1923,7 +1927,7 @@ mod tests {
         let merged = list_roots(state.path()).unwrap();
         assert_eq!(merged.len(), 1);
         let plan = crunch_gc_core::retention::plan_retention(
-            &core_retention_policy(),
+            core_retention_policy(),
             current_unix_s,
             crate::retention::records_to_core(&merged).unwrap(),
         )

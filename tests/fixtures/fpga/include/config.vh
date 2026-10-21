@@ -1,0 +1,1 @@
+`define FIXTURE_WIDTH 2

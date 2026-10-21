@@ -256,6 +256,8 @@ pub(crate) struct RustPlanOptions {
     pub(crate) root: PathBuf,
     pub(crate) cargo: PathBuf,
     pub(crate) rustc: PathBuf,
+    /// Compiler host, declared before planning; it is not the preparation host.
+    pub(crate) host_triple: String,
     pub(crate) targets: Vec<String>,
     pub(crate) profile: String,
     pub(crate) profile_table: CargoProfileTable,
@@ -863,6 +865,16 @@ pub(crate) struct RustUnitLocalCacheSelection {
     toolchain_closure_digest_blake3: String,
     execution_platform_digest_blake3: String,
     sysroot: PathBuf,
+}
+
+impl RustUnitLocalCacheSelection {
+    pub(crate) fn application_evidence(&self) -> mantle_application_contract::rust_operations::RustEvidence<'_> {
+        mantle_application_contract::rust_operations::RustEvidence::LocalCache {
+            reads: self.policy.reads_enabled,
+            writes: self.policy.writes_enabled,
+            toolchain_digest: &self.toolchain_closure_digest_blake3,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -1624,6 +1636,66 @@ struct NativeFeatureResolutionRequest {
     all_features: bool,
     no_default_features: bool,
 }
+/// Source-derived unit topology, not a protected-execution action closure.
+/// Build scripts may spawn additional tools; those require their own concrete
+/// recipes and observed producer bindings before a promoted proof can launch.
+pub(crate) struct CargoFreeUnitTopology {
+    pub(crate) native_registry_sources: NativeRegistrySourcePlanningSummary,
+    pub(crate) native_host_graph: NativeHostUnitGraphPlanningSummary,
+    pub(crate) graph: UnitDerivationGraphSummary,
+    pub(crate) effects: Vec<mantle_rust_plan_core::ExistingUnitEffect>,
+}
+
+/// Plans the exact units selected by `execute_rust_unit_topology` using source
+/// and policy only. Neither Cargo nor rustc is executed or required to exist.
+/// In particular, compiler-version claims are absent from this result.
+pub(crate) fn plan_cargo_free_unit_topology(
+    options: &RustPlanOptions,
+    vendor_roots: &[PathBuf],
+) -> Result<CargoFreeUnitTopology, RunError> {
+    validate_options(options)?;
+    if !options.no_cargo_oracle {
+        return Err(RunError::Internal("source-only topology requires no_cargo_oracle".to_string()));
+    }
+    let inputs = plan_cargo_free_source_inputs(options, Some(vendor_roots))?;
+    if !inputs.source_closure.ready || !inputs.cargo_mode.blockers.is_empty() {
+        return Err(RunError::Internal(format!(
+            "Cargo-free source topology is blocked: {:?}",
+            inputs.cargo_mode.blockers
+        )));
+    }
+    let graph = inputs.native_layers.derivations;
+    let reject = |blocker: RustUnitExecutionBlocker| {
+        RunError::Internal(format!("Cargo-free topology {}: {}", blocker.class, blocker.message))
+    };
+    if !graph.ready {
+        return Err(RunError::Internal(format!("Cargo-free unit derivation graph is blocked: {:?}", graph.blockers)));
+    }
+    if let Some(blocker) = validate_native_registry_topology_inputs(&inputs.registry_sources, &graph) {
+        return Err(reject(blocker));
+    }
+    if let Some(blocker) =
+        validate_native_host_artifact_topology_inputs(&inputs.native_layers.host_units, &graph, "topology")
+    {
+        return Err(reject(blocker));
+    }
+    if let Some(blocker) = validate_role_sensitive_artifact_graph(&graph, &options.host_triple) {
+        return Err(reject(blocker));
+    }
+    let ordered_indices = combined_topology_execution_order(&graph).map_err(reject)?;
+    if ordered_indices.is_empty() {
+        return Err(RunError::Internal("Cargo-free source topology has no executable units".to_string()));
+    }
+    let facts = existing_topology_unit_facts(&graph, &ordered_indices).map_err(reject)?;
+    let effects = mantle_rust_plan_app::plan_existing_unit_effects(facts)
+        .map_err(|blockers| RunError::Internal(format!("Cargo-free unit effects are blocked: {blockers:?}")))?;
+    Ok(CargoFreeUnitTopology {
+        native_registry_sources: inputs.registry_sources,
+        native_host_graph: inputs.native_layers.host_units,
+        graph,
+        effects,
+    })
+}
 
 pub(crate) fn capture_rust_plan(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
     capture_rust_plan_from_source(options, CaptureProcessSource::Process(std::marker::PhantomData))
@@ -1951,10 +2023,30 @@ fn build_captured_rust_plan_without_cargo(
     options: &RustPlanOptions,
     rustc_version_verbose: &str,
 ) -> Result<RustPlanReceipt, RunError> {
+    let mut inputs = plan_cargo_free_source_inputs(options, None)?;
+    inputs.rustc_version_verbose = rustc_version_verbose.trim().to_string();
+    build_rust_plan_receipt(options, inputs)
+}
+
+// Source topology does not depend on an executable compiler. Keeping this
+// boundary below compiler capture lets a proof enumerate both future stages
+// before either their compiler or stage1 Mantle has been produced.
+fn plan_cargo_free_source_inputs(
+    options: &RustPlanOptions,
+    explicit_vendor_roots: Option<&[PathBuf]>,
+) -> Result<RustPlanReceiptInputs, RunError> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let lockfile_facts = parse_lockfile_facts(&options.root)?;
     let lock_packages = lock_packages_from_facts(&lockfile_facts);
+    let mut vendor_blockers = Vec::new();
+    let discovered_vendor_roots;
+    let vendor_roots = if let Some(roots) = explicit_vendor_roots {
+        roots
+    } else {
+        discovered_vendor_roots = declared_vendor_roots(&options.root, &mut vendor_blockers);
+        &discovered_vendor_roots
+    };
     let native_path_packages = native_path_cargo_packages(&options.root, options)?;
     let workspace_manifest_paths = native_workspace_manifest_paths(&options.root, &mut Vec::new())
         .into_iter()
@@ -1966,7 +2058,7 @@ fn build_captured_rust_plan_without_cargo(
         .map(|package| package.id.clone())
         .collect::<Vec<_>>();
     let lock_source_packages = native_reachable_lock_source_cargo_packages(
-        &options.root,
+        vendor_roots,
         &lockfile_facts,
         &lock_packages,
         &native_path_packages,
@@ -1976,8 +2068,14 @@ fn build_captured_rust_plan_without_cargo(
     registry_input_packages.sort_by(|left, right| left.id.cmp(&right.id));
     registry_input_packages.dedup_by(|left, right| left.id == right.id);
     let lockfile = lockfile_identity(&options.root)?;
-    let native_registry_source_planning =
-        summarize_native_registry_source_planning(&options.root, &registry_input_packages, &lock_packages, &lockfile)?;
+    let native_registry_source_planning = summarize_native_registry_source_planning_with_roots(
+        &options.root,
+        &registry_input_packages,
+        &lock_packages,
+        &lockfile,
+        vendor_roots,
+        vendor_blockers,
+    )?;
     let mut native_cargo_packages = native_path_packages;
     native_cargo_packages.extend(native_registry_cargo_packages_from_sources(&native_registry_source_planning.sources));
     native_cargo_packages.extend(native_git_cargo_packages_from_lock(&lock_source_packages));
@@ -1999,11 +2097,11 @@ fn build_captured_rust_plan_without_cargo(
         git_sources: &native_git_source_planning,
     })?;
     let blockers = cargo_free_planning_blockers(&native_layers);
-    build_rust_plan_receipt(options, RustPlanReceiptInputs {
+    Ok(RustPlanReceiptInputs {
         cargo_mode: rust_plan_cargo_mode(true, blockers),
         workspace_root: normalize_path_string(&options.root),
         cargo_version: "cargo-free:no-cargo-oracle".to_string(),
-        rustc_version_verbose: rustc_version_verbose.trim().to_string(),
+        rustc_version_verbose: String::new(),
         lockfile,
         cargo_packages: native_cargo_packages,
         workspace_members,
@@ -2361,13 +2459,13 @@ fn native_path_cargo_packages(root: &Path, options: &RustPlanOptions) -> Result<
 }
 
 fn native_reachable_lock_source_cargo_packages(
-    root: &Path,
+    vendor_roots: &[PathBuf],
     facts: &NativeLockfileFacts,
     lock_packages: &[LockPackage],
     root_packages: &[CargoPackage],
 ) -> Vec<CargoPackage> {
     let reachable = reachable_lock_package_keys(facts, root_packages);
-    let mut packages = native_lock_source_cargo_packages(root, lock_packages)
+    let mut packages = native_lock_source_cargo_packages(vendor_roots, lock_packages)
         .into_iter()
         .filter(|package| {
             reachable.contains(&lock_package_key(LockPackageKeyInputs {
@@ -2468,14 +2566,12 @@ fn lock_package_key(inputs: LockPackageKeyInputs<'_>) -> (String, String, Option
     (inputs.name.to_string(), inputs.version.to_string(), inputs.source.map(ToString::to_string))
 }
 
-fn native_lock_source_cargo_packages(root: &Path, lock_packages: &[LockPackage]) -> Vec<CargoPackage> {
+fn native_lock_source_cargo_packages(vendor_roots: &[PathBuf], lock_packages: &[LockPackage]) -> Vec<CargoPackage> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    let mut vendor_blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    let vendor_roots = declared_vendor_roots(root, &mut vendor_blockers);
     let mut packages = lock_packages
         .iter()
-        .filter_map(|package| native_lock_source_cargo_package(&vendor_roots, package))
+        .filter_map(|package| native_lock_source_cargo_package(vendor_roots, package))
         .collect::<Vec<_>>();
     packages.sort_by(|left, right| left.id.cmp(&right.id));
     packages.dedup_by(|left, right| left.id == right.id);
@@ -2697,6 +2793,9 @@ fn empty_native_unit_graph_value() -> Value {
 fn validate_options(options: &RustPlanOptions) -> Result<(), RunError> {
     if !options.root.is_dir() {
         return Err(RunError::Internal(format!("Rust plan root is not a directory: {}", options.root.display())));
+    }
+    if options.host_triple.is_empty() {
+        return Err(RunError::Internal("Rust plan requires an explicit compiler host triple".to_string()));
     }
     selected_root_profile(options)?;
     if options.all_features && !options.features.is_empty() {
@@ -3233,6 +3332,24 @@ fn summarize_native_registry_source_planning(
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let vendor_roots = declared_vendor_roots(root, &mut blockers);
+    summarize_native_registry_source_planning_with_roots(
+        root,
+        cargo_packages,
+        lock_packages,
+        lockfile,
+        &vendor_roots,
+        blockers,
+    )
+}
+
+fn summarize_native_registry_source_planning_with_roots(
+    root: &Path,
+    cargo_packages: &[CargoPackage],
+    lock_packages: &[LockPackage],
+    lockfile: &LockfileIdentity,
+    vendor_roots: &[PathBuf],
+    mut blockers: Vec<NativeRegistrySourceBlocker>,
+) -> Result<NativeRegistrySourcePlanningSummary, RunError> {
     let mut sources = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for package in cargo_packages
         .iter()
@@ -3242,7 +3359,7 @@ fn summarize_native_registry_source_planning(
             root,
             package,
             lock_packages,
-            vendor_roots: &vendor_roots,
+            vendor_roots,
         }) {
             Ok(source) => sources.push(source),
             Err(blocker) => blockers.push(blocker),
@@ -5957,21 +6074,21 @@ fn native_target_cfg_dependencies(
 }
 
 fn active_rust_target(options: &RustPlanOptions) -> String {
-    options.targets.first().cloned().unwrap_or_else(host_target_triple)
+    options.targets.first().cloned().unwrap_or_else(|| options.host_triple.clone())
 }
 
 fn selected_triple_for_execution_kind(execution_kind: &str, options: &RustPlanOptions) -> String {
     debug_assert!(!execution_kind.is_empty());
-    let host = host_target_triple();
-    let target = options.targets.first().map(String::as_str).unwrap_or(&host);
+    let host = &options.host_triple;
+    let target = options.targets.first().map(String::as_str).unwrap_or(host);
     mantle_rust_plan_core::select_native_execution_triple(execution_kind, mantle_rust_plan_core::NativeHostTarget {
-        host: &host,
+        host,
         target,
     })
     .to_string()
 }
 
-fn host_target_triple() -> String {
+pub(crate) fn host_target_triple() -> String {
     format!("{}-unknown-{}-gnu", std::env::consts::ARCH, match std::env::consts::OS {
         "macos" => "darwin",
         other => other,
@@ -8616,7 +8733,7 @@ fn summarize_native_unit_derivation_graph(
         derivations.extend(
             host_graph.host_units.iter().map(|unit| native_host_unit_derivation(unit, source_closure, options)),
         );
-        add_host_dependency_derivations(&mut derivations);
+        add_host_dependency_derivations(&mut derivations, &options.host_triple);
     }
     derivations = dedupe_unit_derivations_by_unit_id(derivations);
     derivations.sort_by(|left, right| left.unit_id.cmp(&right.unit_id));
@@ -9173,6 +9290,7 @@ fn native_rust_env(
     env.insert("MODE".to_string(), inputs.mode.to_string());
     env.insert("PACKAGE_ID".to_string(), inputs.package_id.to_string());
     env.insert("PROFILE".to_string(), options.profile.clone());
+    env.insert(BUILD_SCRIPT_HOST_ENV.to_string(), options.host_triple.clone());
     env.insert("SOURCE_CLOSURE_DIGEST".to_string(), execution_source_closure_digest(source_closure, options));
     append_profile_build_override_markers(&mut env, inputs.execution_kind, false);
     append_recorded_profile_policies(
@@ -9359,7 +9477,7 @@ fn native_host_unit_derivation(
         target_name: unit.target_name.clone(),
         target_kind: unit.target_kind.clone(),
         execution_kind: HOST_EXECUTION_KIND.to_string(),
-        selected_triple: host_target_triple(),
+        selected_triple: options.host_triple.clone(),
         rustc_metadata_hash,
         crate_types: unit.crate_types.clone(),
         mode: unit.mode.clone(),
@@ -9383,7 +9501,7 @@ fn native_host_unit_derivation(
     }
 }
 
-fn add_host_dependency_derivations(derivations: &mut Vec<RustUnitDerivationSummary>) {
+fn add_host_dependency_derivations(derivations: &mut Vec<RustUnitDerivationSummary>, host_triple: &str) {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let target_libs_by_unit_id = target_lib_derivations_by_unit_id(derivations);
@@ -9418,7 +9536,8 @@ fn add_host_dependency_derivations(derivations: &mut Vec<RustUnitDerivationSumma
             continue;
         };
         let dual_use = dual_use_target_ids.contains(&target_id);
-        let host_unit = host_dependency_derivation(target_unit, &host_id_by_target_id, &host_id_by_package, dual_use);
+        let host_unit =
+            host_dependency_derivation(target_unit, &host_id_by_target_id, &host_id_by_package, dual_use, host_triple);
         derivations.push(host_unit);
     }
 }
@@ -9547,13 +9666,14 @@ fn host_dependency_derivation(
     host_id_by_target_id: &BTreeMap<String, String>,
     host_id_by_package: &BTreeMap<String, String>,
     dual_use: bool,
+    host_triple: &str,
 ) -> RustUnitDerivationSummary {
     debug_assert!(is_supported_target_unit(target_unit));
     debug_assert_eq!(target_unit.target_kind, "lib");
     let mut host_unit = target_unit.clone();
     host_unit.unit_id = host_dependency_unit_id(&target_unit.unit_id);
     host_unit.execution_kind = HOST_DEPENDENCY_EXECUTION_KIND.to_string();
-    host_unit.selected_triple = host_target_triple();
+    host_unit.selected_triple = host_triple.to_string();
     host_unit.mode = HOST_DEPENDENCY_MODE.to_string();
     let host_policy_key = if dual_use {
         PROFILE_DUAL_HOST_POLICY_ENV
@@ -10713,10 +10833,13 @@ pub(crate) fn execute_first_rust_unit_dependency_chain(
     dependency_chain_receipt(status, vec![producer_receipt, consumer_receipt], blocker)
 }
 
-fn validate_role_sensitive_artifact_graph(graph: &UnitDerivationGraphSummary) -> Option<RustUnitExecutionBlocker> {
+fn validate_role_sensitive_artifact_graph(
+    graph: &UnitDerivationGraphSummary,
+    host_triple: &str,
+) -> Option<RustUnitExecutionBlocker> {
     let unit_indices_by_id = rust_unit_indices_by_id(graph);
     for unit in &graph.derivations {
-        if let Some(blocker) = validate_unit_role_triple(unit) {
+        if let Some(blocker) = validate_unit_role_triple(unit, host_triple) {
             return Some(blocker);
         }
         for dependency in &unit.dependency_artifacts {
@@ -10725,7 +10848,8 @@ fn validate_role_sensitive_artifact_graph(graph: &UnitDerivationGraphSummary) ->
             }
         }
         for artifact in &unit.consumed_host_artifacts {
-            if let Some(blocker) = validate_host_artifact_role(unit, artifact, graph, &unit_indices_by_id) {
+            if let Some(blocker) = validate_host_artifact_role(unit, artifact, graph, &unit_indices_by_id, host_triple)
+            {
                 return Some(blocker);
             }
         }
@@ -10733,7 +10857,7 @@ fn validate_role_sensitive_artifact_graph(graph: &UnitDerivationGraphSummary) ->
     None
 }
 
-fn validate_unit_role_triple(unit: &RustUnitDerivationSummary) -> Option<RustUnitExecutionBlocker> {
+fn validate_unit_role_triple(unit: &RustUnitDerivationSummary, host_triple: &str) -> Option<RustUnitExecutionBlocker> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if unit.execution_kind == TARGET_EXECUTION_KIND {
@@ -10750,13 +10874,12 @@ fn validate_unit_role_triple(unit: &RustUnitDerivationSummary) -> Option<RustUni
         return None;
     }
     if unit.execution_kind == HOST_EXECUTION_KIND || unit.execution_kind == HOST_DEPENDENCY_EXECUTION_KIND {
-        let host_triple = host_target_triple();
         if unit.selected_triple != host_triple {
             return Some(role_mismatch_blocker(RoleMismatchInputs {
                 unit,
                 edge: "unit",
                 expected_role: &unit.execution_kind,
-                expected_triple: &host_triple,
+                expected_triple: host_triple,
                 actual_role: &unit.execution_kind,
                 actual_triple: &unit.selected_triple,
             }));
@@ -10780,14 +10903,14 @@ fn validate_dependency_artifact_role(
     unit_indices_by_id: &BTreeMap<String, usize>,
 ) -> Option<RustUnitExecutionBlocker> {
     let expected_role = expected_dependency_artifact_role(consumer);
-    let expected_triple = expected_triple_for_role(consumer, expected_role);
+    let expected_triple = consumer.selected_triple.as_str();
     let producer = dependency_artifact_producer(consumer, dependency, expected_role, graph, unit_indices_by_id)?;
     if producer.execution_kind != expected_role || producer.selected_triple != expected_triple {
         return Some(role_mismatch_blocker(RoleMismatchInputs {
             unit: consumer,
             edge: &format!("dependency:{}", dependency.name),
             expected_role,
-            expected_triple: &expected_triple,
+            expected_triple,
             actual_role: &producer.execution_kind,
             actual_triple: &producer.selected_triple,
         }));
@@ -10800,15 +10923,15 @@ fn validate_host_artifact_role(
     artifact: &RustHostArtifact,
     graph: &UnitDerivationGraphSummary,
     unit_indices_by_id: &BTreeMap<String, usize>,
+    expected_triple: &str,
 ) -> Option<RustUnitExecutionBlocker> {
-    let expected_triple = host_target_triple();
     let producer = host_artifact_producer(artifact, graph, unit_indices_by_id)?;
     if producer.execution_kind != HOST_EXECUTION_KIND || producer.selected_triple != expected_triple {
         return Some(role_mismatch_blocker(RoleMismatchInputs {
             unit: consumer,
             edge: &format!("host-artifact:{}", artifact.target_name),
             expected_role: HOST_EXECUTION_KIND,
-            expected_triple: &expected_triple,
+            expected_triple,
             actual_role: &producer.execution_kind,
             actual_triple: &producer.selected_triple,
         }));
@@ -10883,14 +11006,6 @@ fn expected_dependency_artifact_role(consumer: &RustUnitDerivationSummary) -> &'
         HOST_DEPENDENCY_EXECUTION_KIND
     } else {
         TARGET_EXECUTION_KIND
-    }
-}
-
-fn expected_triple_for_role(consumer: &RustUnitDerivationSummary, role: &str) -> String {
-    if role == TARGET_EXECUTION_KIND {
-        consumer.selected_triple.clone()
-    } else {
-        host_target_triple()
     }
 }
 
@@ -11117,7 +11232,7 @@ pub(crate) fn execute_rust_target_unit_topology(
             }),
         );
     }
-    if let Some(blocker) = validate_role_sensitive_artifact_graph(graph) {
+    if let Some(blocker) = validate_role_sensitive_artifact_graph(graph, &host_target_triple()) {
         return target_topology_receipt("blocked", Vec::new(), Some(blocker));
     }
     let selected_indices = match selected_target_unit_indices(graph) {
@@ -12502,7 +12617,7 @@ pub(crate) fn execute_rust_unit_topology(
             }),
         );
     }
-    if let Some(blocker) = validate_role_sensitive_artifact_graph(graph) {
+    if let Some(blocker) = validate_role_sensitive_artifact_graph(graph, &host_target_triple()) {
         return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
     }
     let ordered_indices = match combined_topology_execution_order(graph) {
@@ -15004,6 +15119,7 @@ fn build_script_child_env(
     let mut env = BTreeMap::new();
     append_build_script_dependency_env(&mut env, &unit.derivation.env);
     append_build_script_package_env(&mut env, &unit.derivation.env);
+    env.extend(build_script_feature_environment(unit));
     env.insert(BUILD_SCRIPT_OUT_DIR_ENV.to_string(), normalize_path_string(out_dir));
     env.insert(
         BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(),
@@ -15025,6 +15141,28 @@ fn build_script_child_env(
     }
     append_deterministic_c_prefix_map_env(&mut env, &unit.derivation.args, selected_c_compiler);
     env
+}
+
+/// Cargo exposes each selected feature to the original build script as well as
+/// compiling that script with its feature cfg. Derive both views from the same
+/// source-owned compiler arguments, never from ambient feature variables.
+pub(crate) fn build_script_feature_environment(unit: &RustUnitDerivationSummary) -> BTreeMap<String, String> {
+    let mut environment = BTreeMap::new();
+    for (index, argument) in unit.derivation.args.iter().enumerate() {
+        let cfg = if argument == RUSTC_CFG_FLAG {
+            unit.derivation.args.get(index + 1).map(String::as_str)
+        } else {
+            argument.strip_prefix("--cfg=")
+        };
+        let Some(feature) = cfg
+            .and_then(|cfg| cfg.strip_prefix("feature="))
+            .and_then(|quoted| serde_json::from_str::<String>(quoted).ok())
+        else {
+            continue;
+        };
+        environment.insert(format!("CARGO_FEATURE_{}", feature.to_uppercase().replace('-', "_")), "1".to_string());
+    }
+    environment
 }
 
 fn append_build_script_dependency_env(env: &mut BTreeMap<String, String>, source: &BTreeMap<String, String>) {
@@ -19065,6 +19203,7 @@ esac
             root: root.to_path_buf(),
             cargo: PathBuf::from("cargo"),
             rustc: PathBuf::from("rustc"),
+            host_triple: host_target_triple(),
             targets: vec!["x86_64-unknown-linux-gnu".to_string()],
             profile: default_profile(),
             profile_table: load_root_profile_table(root).unwrap(),
@@ -19076,6 +19215,139 @@ esac
             deterministic_release_paths: false,
             path_remaps: Vec::new(),
         }
+    }
+
+    fn source_only_topology_fixture(root: &Path) -> RustPlanOptions {
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(
+            root.join("Cargo.toml"),
+            "[package]\nname = \"static-topology\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("Cargo.lock"),
+            "version = 4\n\n[[package]]\nname = \"static-topology\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("src/lib.rs"), "pub const VALUE: u32 = 7;\n").unwrap();
+        std::fs::write(root.join("build.rs"), "fn main() { println!(\"cargo:rustc-cfg=static_plan\"); }\n").unwrap();
+        RustPlanOptions {
+            cargo: root.join("not-produced-cargo"),
+            rustc: root.join("not-produced-rustc"),
+            features: Vec::new(),
+            no_default_features: false,
+            no_cargo_oracle: true,
+            ..options(root)
+        }
+    }
+
+    #[test]
+    fn source_only_topology_orders_generated_build_script_before_consumer_without_compiler() {
+        let dir = TempDir::new().unwrap();
+        let options = source_only_topology_fixture(dir.path());
+        let topology = plan_cargo_free_unit_topology(&options, &[]).unwrap();
+        assert_eq!(topology.effects.iter().map(|effect| effect.target_kind.as_str()).collect::<Vec<_>>(), [
+            "custom-build",
+            "lib"
+        ],);
+        assert_eq!(topology.effects[1].dependency_unit_ids, [topology.effects[0].unit_id.clone()]);
+        assert_eq!(topology.effects[0].execution_kind, HOST_EXECUTION_KIND);
+        assert_eq!(topology.effects[1].execution_kind, TARGET_EXECUTION_KIND);
+        let before = topology
+            .graph
+            .derivations
+            .iter()
+            .find(|unit| unit.target_kind == "lib")
+            .unwrap()
+            .source_digest
+            .clone();
+        std::fs::write(dir.path().join("src/lib.rs"), "pub const VALUE: u32 = 8;\n").unwrap();
+        let changed = plan_cargo_free_unit_topology(&options, &[]).unwrap();
+        let after = &changed.graph.derivations.iter().find(|unit| unit.target_kind == "lib").unwrap().source_digest;
+        assert_ne!(&before, after);
+    }
+
+    #[test]
+    fn source_only_topology_binds_declared_host_before_resolving_host_dependencies() {
+        let dir = TempDir::new().unwrap();
+        let mut options = source_only_topology_fixture(dir.path());
+        options.host_triple = "x86_64-unknown-linux-musl".into();
+        std::fs::create_dir_all(dir.path().join("helper/src")).unwrap();
+        std::fs::write(
+            dir.path().join("helper/Cargo.toml"),
+            "[package]\nname = \"helper\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("helper/src/lib.rs"), "pub const VALUE: u32 = 1;\n").unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.toml"),
+            "[package]\nname = \"static-topology\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\
+             [dependencies]\nhelper = { path = \"helper\" }\n\
+             [build-dependencies]\nhelper = { path = \"helper\" }\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.lock"),
+            "version = 4\n\n[[package]]\nname = \"static-topology\"\nversion = \"0.1.0\"\ndependencies = [\"helper\"]\n\
+             [[package]]\nname = \"helper\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        let topology = plan_cargo_free_unit_topology(&options, &[]).unwrap();
+        let host_dependency = topology
+            .graph
+            .derivations
+            .iter()
+            .find(|unit| unit.execution_kind == HOST_DEPENDENCY_EXECUTION_KIND && unit.target_name == "helper")
+            .expect("build dependency must have its own compiler-host producer");
+        assert_eq!(host_dependency.selected_triple, "x86_64-unknown-linux-musl");
+        let build_script = topology.graph.derivations.iter().find(|unit| unit.target_kind == "custom-build").unwrap();
+        assert_eq!(build_script.selected_triple, "x86_64-unknown-linux-musl");
+        assert_eq!(build_script.derivation.env[BUILD_SCRIPT_HOST_ENV], "x86_64-unknown-linux-musl");
+        assert!(
+            build_script
+                .dependency_artifacts
+                .iter()
+                .any(|dependency| { dependency.producer_unit_id.as_deref() == Some(host_dependency.unit_id.as_str()) })
+        );
+        let target = topology
+            .graph
+            .derivations
+            .iter()
+            .find(|unit| unit.execution_kind == TARGET_EXECUTION_KIND && unit.target_name == "static-topology")
+            .unwrap();
+        assert_eq!(target.selected_triple, options.targets[0]);
+        assert_ne!(target.selected_triple, host_dependency.selected_triple);
+        options.host_triple = "x86_64-unknown-linux-gnu".into();
+        let other_host = plan_cargo_free_unit_topology(&options, &[]).unwrap();
+        assert_ne!(topology.graph.digest_blake3, other_host.graph.digest_blake3);
+        options.host_triple.clear();
+        assert!(
+            plan_cargo_free_unit_topology(&options, &[])
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("explicit compiler host triple")
+        );
+    }
+
+    #[test]
+    fn source_only_topology_rejects_cargo_oracle_and_missing_declared_source() {
+        let dir = TempDir::new().unwrap();
+        let mut options = source_only_topology_fixture(dir.path());
+        options.no_cargo_oracle = false;
+        let error = plan_cargo_free_unit_topology(&options, &[])
+            .err()
+            .expect("Cargo oracle must not enter source-only planning");
+        assert!(error.to_string().contains("requires no_cargo_oracle"));
+        options.no_cargo_oracle = true;
+        std::fs::write(
+            dir.path().join("Cargo.toml"),
+            "[package]\nname = \"static-topology\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[lib]\npath = \"missing.rs\"\n",
+        ).unwrap();
+        let error = plan_cargo_free_unit_topology(&options, &[])
+            .err()
+            .expect("missing declared source must block topology");
+        assert!(error.to_string().contains("blocked"));
     }
 
     fn test_c_compiler_route() -> crate::source_toolchain_closure::ReceiptBoundCCompilerRoute {
@@ -19201,6 +19473,42 @@ esac
         )
         .unwrap();
         dep_dir
+    }
+
+    #[test]
+    fn source_only_topology_uses_only_explicit_vendor_authority_without_overlay() {
+        const CHECKSUM: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("source");
+        std::fs::create_dir(&root).unwrap();
+        write_test_no_cargo_registry_source_workspace(&root, CHECKSUM, CHECKSUM);
+        let vendor = dir.path().join("independently-admitted-vendor");
+        std::fs::rename(root.join("vendor-deps"), &vendor).unwrap();
+        std::fs::create_dir(root.join(".cargo")).unwrap();
+        std::fs::write(
+            root.join(".cargo/config.toml"),
+            format!(
+                "[source.crates-io]\nreplace-with = \"ambient-vendor\"\n[source.ambient-vendor]\ndirectory = {:?}\n",
+                vendor.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            no_cargo_oracle: true,
+            rustc: root.join("not-yet-produced-rustc"),
+            ..options(&root)
+        };
+        let rejected = plan_cargo_free_unit_topology(&options, &[])
+            .err()
+            .expect("config cannot inject proof vendor authority");
+        assert!(rejected.to_string().contains("blocked"));
+        let topology = plan_cargo_free_unit_topology(&options, std::slice::from_ref(&vendor)).unwrap();
+        assert_eq!(topology.native_registry_sources.sources[0].vendor_root, normalize_path_string(&vendor));
+        assert!(topology.effects[0].package_id.contains("#dep-crate@"));
+        assert_eq!(topology.effects[1].dependency_unit_ids, [topology.effects[0].unit_id.clone()]);
+        assert!(!root.join("vendor-deps").exists());
     }
 
     fn test_cargo_package_env(name: &str, version: &str) -> BTreeMap<String, String> {
@@ -19540,6 +19848,7 @@ esac
             fallback_mode: crunch_store::StoreFallbackMode::Practical,
             store_dir: "/mantle/store".to_string(),
             base_state_dirs: Vec::new(),
+            source_admission: None,
         })
         .unwrap();
         let compiler_digest_blake3 = digest_artifact_path(rustc).unwrap().blake3;
@@ -23198,7 +23507,7 @@ rust-version = "1.80"
             test_rust_derivation(2, target_consumer_id, "lib", TARGET_EXECUTION_KIND, vec![dependency_artifact]);
         let mut derivations = vec![target_dependency, host_consumer, target_consumer];
 
-        add_host_dependency_derivations(&mut derivations);
+        add_host_dependency_derivations(&mut derivations, &host_target_triple());
 
         let host_dependency = derivations
             .iter()
@@ -23250,7 +23559,7 @@ rust-version = "1.80"
         ]);
         let mut derivations = vec![target_dependency, host_consumer];
 
-        add_host_dependency_derivations(&mut derivations);
+        add_host_dependency_derivations(&mut derivations, &host_target_triple());
 
         let host_dependency = derivations
             .iter()
@@ -23483,7 +23792,7 @@ rust-version = "1.80"
         );
         let graph = test_unit_derivation_graph(vec![target_dependency, host_consumer]);
 
-        let blocker = validate_role_sensitive_artifact_graph(&graph).unwrap();
+        let blocker = validate_role_sensitive_artifact_graph(&graph, &host_target_triple()).unwrap();
 
         assert_eq!(blocker.class, "artifact-identity-mismatch");
         assert!(blocker.message.contains("expected role host-dependency"));
@@ -23502,7 +23811,7 @@ rust-version = "1.80"
         host_unit.selected_triple = "x86_64-unknown-linux-musl".to_string();
         let graph = test_unit_derivation_graph(vec![host_unit]);
 
-        let blocker = validate_role_sensitive_artifact_graph(&graph).unwrap();
+        let blocker = validate_role_sensitive_artifact_graph(&graph, &host_target_triple()).unwrap();
 
         assert_eq!(blocker.class, "artifact-identity-mismatch");
         assert!(blocker.message.contains("expected role host"));
@@ -23524,7 +23833,7 @@ rust-version = "1.80"
         ]);
         let graph = test_unit_derivation_graph(vec![producer, consumer]);
 
-        let blocker = validate_role_sensitive_artifact_graph(&graph).unwrap();
+        let blocker = validate_role_sensitive_artifact_graph(&graph, &host_target_triple()).unwrap();
 
         assert_eq!(blocker.class, "artifact-identity-mismatch");
         assert!(blocker.message.contains("expected source package"));
@@ -23547,7 +23856,7 @@ rust-version = "1.80"
         ]);
         let graph = test_unit_derivation_graph(vec![producer, consumer]);
 
-        let blocker = validate_role_sensitive_artifact_graph(&graph).unwrap();
+        let blocker = validate_role_sensitive_artifact_graph(&graph, &host_target_triple()).unwrap();
 
         assert_eq!(blocker.class, "artifact-identity-mismatch");
         assert!(blocker.message.contains("expected metadata hash"));
@@ -23578,7 +23887,7 @@ rust-version = "1.80"
             .insert(RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV.to_string(), TEST_DIGEST_B.to_string());
         let graph = test_unit_derivation_graph(vec![producer, consumer]);
 
-        let blocker = validate_role_sensitive_artifact_graph(&graph).unwrap();
+        let blocker = validate_role_sensitive_artifact_graph(&graph, &host_target_triple()).unwrap();
 
         assert_eq!(blocker.class, "artifact-identity-mismatch");
         assert!(blocker.message.contains("expected toolchain-policy digest"));
@@ -23629,7 +23938,7 @@ rust-version = "1.80"
             }]);
         let mut derivations = vec![target_dependency_a, target_dependency_b, host_consumer];
 
-        add_host_dependency_derivations(&mut derivations);
+        add_host_dependency_derivations(&mut derivations, &host_target_triple());
 
         let host_dependency_count =
             derivations.iter().filter(|unit| unit.execution_kind == HOST_DEPENDENCY_EXECUTION_KIND).count();

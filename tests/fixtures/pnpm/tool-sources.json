@@ -1,0 +1,17 @@
+{
+  "schema": "mantle-pnpm-proof-tool-sources-v1",
+  "node": {
+    "version": "22.14.0",
+    "platform": "linux-x64",
+    "url": "https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.gz",
+    "sha256": "9d942932535988091034dc94cc5f42b6dc8784d6366df3a36c4c9ccb3996f0c2",
+    "checksum_source": "https://nodejs.org/dist/v22.14.0/SHASUMS256.txt"
+  },
+  "pnpm": {
+    "version": "9.15.9",
+    "url": "https://registry.npmjs.org/pnpm/-/pnpm-9.15.9.tgz",
+    "integrity": "sha512-aARhQYk8ZvrQHAeSMRKOmvuJ74fiaR1p5NQO7iKJiClf1GghgbrlW1hBjDolO95lpQXsfF+UA+zlzDzTfc8lMQ==",
+    "integrity_source": "https://registry.npmjs.org/pnpm/9.15.9"
+  },
+  "preparation": "Use existing verified source admission. Prepare a measured tool output with bin/node, bin/sh and the complete pnpm dist tree rooted with pnpm.cjs. A dynamic Node must have a declared ELF interpreter/runtime closure (relocate it in an admitted preparation derivation if necessary). The final prepared tree and every runtime root require separately measured BLAKE3 identities; release archive checksums alone are not those identities."
+}

@@ -113,6 +113,8 @@ pub(super) fn fixture(root: &Path, signed: bool) -> (ApkPlan, BuildInputs) {
         manifest_member: "AndroidManifest.xml".into(),
         resources: vec!["res/values/strings.xml".into()],
         java_sources: vec!["src/Demo.java".into()],
+        assets: vec![],
+        native: None,
         toolchain: Toolchain {
             build_tools: build_tools.identity.clone(),
             jdk: jdk.identity.clone(),

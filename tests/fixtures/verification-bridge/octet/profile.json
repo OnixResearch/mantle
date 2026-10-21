@@ -1,0 +1,75 @@
+{
+  "consumer_id": "octet.external-consumer-fixture",
+  "external_models": [],
+  "non_claims": [
+    "does not prove Aeneas or Charon translation soundness",
+    "does not prove Lean or verifier soundness",
+    "does not prove whole-program correctness",
+    "does not prove semantic equivalence",
+    "does not establish release eligibility",
+    "does not prove rustc compiler correctness",
+    "does not transfer theorem intent or requirement ownership from the consumer to Octet"
+  ],
+  "outcomes": [
+    "supported",
+    "blocked",
+    "failed"
+  ],
+  "profile_id": "octet-external-aeneas-consumer-v1",
+  "provider": {
+    "backend": "aeneas-lean",
+    "compatibility_matrix_id": "octet-aeneas-lean-compatibility-0.1.0-bc2eb6f-cb50ff16",
+    "compatibility_matrix_identity": "b3:403656d75de41b955cd2493ef289ba17308da65a3d214babc1ea606aeae248f5",
+    "network_allowed": false,
+    "profile_id": "octet-aeneas-lean-0.1.0-bc2eb6f",
+    "profile_identity": "b3:cd11b49d1acede2c6a91fa26f0b7a6b4b28db4007b4601a65b3269706a0ce625"
+  },
+  "resource_policy": {
+    "environment_allowlist": [
+      "PATH",
+      "CHARON_TOOLCHAIN_IS_IN_PATH",
+      "LD_LIBRARY_PATH",
+      "HOME",
+      "MATHLIB_NO_CACHE_ON_UPDATE"
+    ],
+    "stderr_max_bytes": 1048576,
+    "stdout_max_bytes": 1048576,
+    "timeout_ms": 900000
+  },
+  "schema_version": "octet-aeneas-consumer-profile/v1",
+  "source": {
+    "broad_selection_allowed": false,
+    "crate_name": "external_consumer",
+    "paths": [
+      {
+        "identity": "b3:691e8de8b8f92665dd00b938b48b398b451c71a06c99dae10b38b38184d4dddd",
+        "path": "src/lib.rs"
+      }
+    ],
+    "root": ".",
+    "selected_items": [
+      {
+        "begin_line": 1,
+        "end_line": 3,
+        "generated_name": "external_consumer.increment",
+        "kind": "function",
+        "qualified_name": "external_consumer::increment",
+        "source_file": "src/lib.rs",
+        "source_identity": "b3:691e8de8b8f92665dd00b938b48b398b451c71a06c99dae10b38b38184d4dddd"
+      }
+    ]
+  },
+  "theorems": [
+    {
+      "approved_statement_blake3": "b3:776e9f85261080fbcfd75cb481c4f563cff50ffefaf8bdaae3d5fad010d8c77f",
+      "claim_class": "named-theorem-over-generated-model",
+      "declaration_name": "increment_matches_model",
+      "path": "Theorem.lean",
+      "requirement_id": "octet.aeneas_consumer_contract.compatibility",
+      "source_disposition": "maintained",
+      "theorem_id": "aeneas.consumer.increment-matches-model"
+    }
+  ],
+  "trust_closure_complete": true,
+  "trust_inputs": []
+}

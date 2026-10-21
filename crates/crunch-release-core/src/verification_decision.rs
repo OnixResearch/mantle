@@ -1,12 +1,13 @@
 use alloc::format;
 use alloc::string::String;
+use alloc::string::ToString;
 use alloc::vec::Vec;
 
 use serde::Serialize;
 
 /// Stable schema for the terminal release-verification decision.
 pub const RELEASE_VERIFICATION_DECISION_SCHEMA: &str = "mantle-release-verification-decision-v1";
-/// Bounds diagnostics copied from any one specialized verifier.
+/// Bounds diagnostics retained from any one specialized verifier.
 pub const MAX_RELEASE_VERIFICATION_DIAGNOSTICS_PER_CONTRIBUTOR: u32 = 32;
 const MAX_RELEASE_VERIFICATION_DIAGNOSTICS_PER_CONTRIBUTOR_USIZE: usize = 32;
 /// Bounds external evidence roles selected by one CLI invocation.
@@ -26,14 +27,20 @@ macro_rules! define_release_verification_contributors {
         }
 
         impl ReleaseVerificationContributor {
-            pub const ALL: &'static [Self] = &[
+            pub const ALL: [Self; [$(stringify!($variant)),+].len()] = [
                 $(Self::$variant,)+
             ];
 
-            pub const fn as_str(self) -> &'static str {
+            const fn as_str(self) -> &'static str {
                 match self {
                     $(Self::$variant => $label,)+
                 }
+            }
+        }
+
+        impl core::fmt::Display for ReleaseVerificationContributor {
+            fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                formatter.write_str(self.as_str())
             }
         }
 
@@ -43,10 +50,8 @@ macro_rules! define_release_verification_contributors {
         }
 
         impl ReleaseVerificationFacts {
-            fn for_contributor(&self, contributor: ReleaseVerificationContributor) -> &ReleaseVerificationFact {
-                match contributor {
-                    $(ReleaseVerificationContributor::$variant => &self.$field,)+
-                }
+            fn into_contributors(self) -> [ReleaseVerificationFact; RELEASE_VERIFICATION_CONTRIBUTOR_COUNT] {
+                [$(self.$field,)+]
             }
         }
 
@@ -80,6 +85,7 @@ define_release_verification_contributors!(
     (StagexNoQuorum, stagex_no_quorum, "stagex-no-quorum"),
     (FunctionAddress, function_address, "function-address"),
     (CairnHandoff, cairn_handoff, "cairn-handoff"),
+    (SourceReview, source_review, "source-review"),
 );
 
 pub const RELEASE_VERIFICATION_CONTRIBUTOR_COUNT: usize = ReleaseVerificationContributor::ALL.len();
@@ -104,7 +110,7 @@ pub enum ReleaseVerificationRequirement {
 }
 
 impl ReleaseVerificationRequirement {
-    pub const fn as_str(self) -> &'static str {
+    const fn as_str(self) -> &'static str {
         match self {
             Self::Mandatory => "mandatory",
             Self::Required => "required",
@@ -118,6 +124,12 @@ impl ReleaseVerificationRequirement {
     }
 }
 
+impl core::fmt::Display for ReleaseVerificationRequirement {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ReleaseVerificationFactDisposition {
@@ -128,7 +140,7 @@ pub enum ReleaseVerificationFactDisposition {
 }
 
 impl ReleaseVerificationFactDisposition {
-    pub const fn as_str(self) -> &'static str {
+    const fn as_str(self) -> &'static str {
         match self {
             Self::Satisfied => "satisfied",
             Self::Absent => "absent",
@@ -139,6 +151,12 @@ impl ReleaseVerificationFactDisposition {
 
     const fn is_satisfied(self) -> bool {
         matches!(self, Self::Satisfied)
+    }
+}
+
+impl core::fmt::Display for ReleaseVerificationFactDisposition {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(self.as_str())
     }
 }
 
@@ -194,18 +212,18 @@ pub enum ReleaseVerificationDecisionDisposition {
     PolicyRejected,
 }
 
-impl ReleaseVerificationDecisionDisposition {
-    pub const fn as_str(self) -> &'static str {
-        match self {
+impl core::fmt::Display for ReleaseVerificationDecisionDisposition {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(match self {
             Self::Accepted => "accepted",
             Self::PolicyRejected => "policy-rejected",
-        }
+        })
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ReleaseVerificationDecision {
-    pub schema: &'static str,
+    pub schema: String,
     pub valid: bool,
     pub disposition: ReleaseVerificationDecisionDisposition,
     pub checks: Vec<ReleaseVerificationCheck>,
@@ -222,10 +240,9 @@ pub fn aggregate_release_verification(
     let diagnostic_slots = MAX_RELEASE_VERIFICATION_DIAGNOSTICS_PER_CONTRIBUTOR_USIZE
         .saturating_mul(RELEASE_VERIFICATION_CONTRIBUTOR_COUNT);
     let mut diagnostics = Vec::with_capacity(diagnostic_slots);
-    for contributor in ReleaseVerificationContributor::ALL {
-        let fact = facts.for_contributor(*contributor);
-        let requirement = requirements.for_contributor(*contributor);
-        let check = release_verification_check(*contributor, requirement, fact);
+    for (contributor, fact) in ReleaseVerificationContributor::ALL.into_iter().zip(facts.into_contributors()) {
+        let requirement = requirements.for_contributor(contributor);
+        let check = release_verification_check(contributor, requirement, fact);
         if check.blocking {
             diagnostics.extend(check.diagnostics.iter().cloned());
         }
@@ -242,7 +259,7 @@ pub fn aggregate_release_verification(
     assert_eq!(is_valid, diagnostics.is_empty());
 
     ReleaseVerificationDecision {
-        schema: RELEASE_VERIFICATION_DECISION_SCHEMA,
+        schema: RELEASE_VERIFICATION_DECISION_SCHEMA.to_string(),
         valid: is_valid,
         disposition,
         checks,
@@ -253,12 +270,12 @@ pub fn aggregate_release_verification(
 fn release_verification_check(
     contributor: ReleaseVerificationContributor,
     requirement: ReleaseVerificationRequirement,
-    fact: &ReleaseVerificationFact,
+    fact: ReleaseVerificationFact,
 ) -> ReleaseVerificationCheck {
     assert!(!contributor.as_str().is_empty(), "release verification contributor label must not be empty");
     assert!(!requirement.as_str().is_empty(), "release verification requirement label must not be empty");
 
-    let (mut diagnostics, has_diagnostics_overflow) = bounded_diagnostics(contributor, &fact.diagnostics);
+    let (mut diagnostics, has_diagnostics_overflow) = bounded_diagnostics(contributor, fact.diagnostics);
     let is_policy_blocking = requirement.is_enforced() && !fact.disposition.is_satisfied();
     let is_blocking = has_diagnostics_overflow || is_policy_blocking;
     if is_blocking && diagnostics.is_empty() {
@@ -283,25 +300,29 @@ fn release_verification_check(
     }
 }
 
-fn bounded_diagnostics(contributor: ReleaseVerificationContributor, diagnostics: &[String]) -> (Vec<String>, bool) {
+fn bounded_diagnostics(
+    contributor: ReleaseVerificationContributor,
+    mut diagnostics: Vec<String>,
+) -> (Vec<String>, bool) {
     let diagnostic_max_entries = diagnostic_max_entries();
     assert!(diagnostic_max_entries > 0, "release verification diagnostic limit must be positive");
     assert!(!contributor.as_str().is_empty(), "release verification contributor label must not be empty");
     if diagnostics.len() <= diagnostic_max_entries {
-        return (diagnostics.to_vec(), false);
+        return (diagnostics, false);
     }
 
+    let observed_diagnostic_count = diagnostics.len();
     let retained_diagnostic_count = diagnostic_max_entries.saturating_sub(1);
-    let mut bounded = diagnostics.iter().take(retained_diagnostic_count).cloned().collect::<Vec<_>>();
-    bounded.push(format!(
+    diagnostics.truncate(retained_diagnostic_count);
+    diagnostics.push(format!(
         "release verification contributor {} diagnostic count exceeds limit {}: observed {}",
         contributor.as_str(),
         MAX_RELEASE_VERIFICATION_DIAGNOSTICS_PER_CONTRIBUTOR,
-        diagnostics.len()
+        observed_diagnostic_count
     ));
-    assert_eq!(bounded.len(), diagnostic_max_entries);
-    assert!(diagnostics.len() > bounded.len());
-    (bounded, true)
+    assert_eq!(diagnostics.len(), diagnostic_max_entries);
+    assert!(observed_diagnostic_count > diagnostics.len());
+    (diagnostics, true)
 }
 
 const fn diagnostic_max_entries() -> usize {
@@ -330,6 +351,7 @@ mod tests {
             stagex_no_quorum: ReleaseVerificationFact::satisfied(),
             function_address: ReleaseVerificationFact::satisfied(),
             cairn_handoff: ReleaseVerificationFact::satisfied(),
+            source_review: ReleaseVerificationFact::satisfied(),
         }
     }
 
@@ -345,6 +367,7 @@ mod tests {
             stagex_no_quorum: ReleaseVerificationRequirement::Required,
             function_address: ReleaseVerificationRequirement::Required,
             cairn_handoff: ReleaseVerificationRequirement::Required,
+            source_review: ReleaseVerificationRequirement::Required,
         }
     }
 
@@ -430,6 +453,7 @@ mod tests {
             stagex_no_quorum: rejected_fact(ReleaseVerificationContributor::StagexNoQuorum),
             function_address: rejected_fact(ReleaseVerificationContributor::FunctionAddress),
             cairn_handoff: rejected_fact(ReleaseVerificationContributor::CairnHandoff),
+            source_review: rejected_fact(ReleaseVerificationContributor::SourceReview),
         };
 
         let decision = aggregate_release_verification(facts, required_requirements());

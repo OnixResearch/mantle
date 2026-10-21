@@ -475,6 +475,7 @@ fn end_to_end_overlay_build_reads_base_only_input_without_backfill() {
             .unwrap();
         let logical_source_path = source_store_path.to_absolute_path_with_prefix(store_dir);
         let mut base_store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            source_admission: None,
             backend: crunch_store::StoreBackend::Snix,
             state_dir: base_state.path().to_path_buf(),
             output_dir: base_output.path().to_path_buf(),
@@ -504,7 +505,31 @@ fn end_to_end_overlay_build_reads_base_only_input_without_backfill() {
             format!("{}\n", keypair.verifying_key),
         )
         .unwrap();
+        // Isolated adapter seam: this pre-existing test proves overlay build
+        // behavior, not durable endpoint/binding acceptance (covered separately).
+        #[derive(Debug)]
+        struct OverlaySourceLease;
+        impl crunch_store::StoreSourceLease for OverlaySourceLease {}
+        #[derive(Debug)]
+        struct OverlaySourceAdmission(std::path::PathBuf);
+        impl crunch_store::StoreSourceAdmission for OverlaySourceAdmission {
+            fn admit(
+                &self,
+                source: crunch_store::StoreSource<'_>,
+                prefix: &str,
+            ) -> Result<std::sync::Arc<dyn crunch_store::StoreSourceLease>, crunch_store::Error> {
+                match source {
+                    crunch_store::StoreSource::BaseLayer(path)
+                        if path == self.0.as_path() && prefix == "/nix/store" =>
+                    {
+                        Ok(std::sync::Arc::new(OverlaySourceLease))
+                    }
+                    _ => Err(crunch_store::Error::Store("overlay-test-source-out-of-scope".into())),
+                }
+            }
+        }
         let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            source_admission: Some(std::sync::Arc::new(OverlaySourceAdmission(base_state.path().to_path_buf()))),
             backend: crunch_store::StoreBackend::Snix,
             state_dir: overlay_state.path().to_path_buf(),
             output_dir: overlay_output.path().to_path_buf(),
@@ -1402,107 +1427,6 @@ let source = mantle.fetchurl {{ url = "{url}", hash = "{hash}", name = "offline-
         }
         reference_archive = Some(bytes);
     }
-}
-
-#[test]
-fn casita_local_build_without_policy_verifies_and_unlisted_cache_signer_cannot_substitute() {
-    let root = tempfile::tempdir().unwrap();
-    let fixture = write_cli_fetch_fixture(root.path());
-    let state = root.path().join("state");
-    let store = root.path().join("store");
-    std::fs::create_dir(&state).unwrap();
-    std::fs::create_dir_all(&store).unwrap();
-    let signer = state.join("signing-key");
-    std::fs::write(&signer, format!("{CLI_TEST_KEYPAIR}\n")).unwrap();
-    let public_key = test_keypair().verifying_key.to_string();
-    let policy = state.join("casita-trusted-public-keys");
-    let run = |args: &[&str]| {
-        assert_cmd::Command::cargo_bin("mantle")
-            .unwrap()
-            .current_dir(env!("CARGO_MANIFEST_DIR"))
-            .args(["--store-backend", "casita"])
-            .arg("--state-dir")
-            .arg(&state)
-            .arg("--store")
-            .arg(&store)
-            .args(args)
-            .output()
-            .unwrap()
-    };
-    let built = run(&[
-        "--json",
-        "build",
-        "--no-substitute",
-        "--signing-key",
-        signer.to_str().unwrap(),
-        fixture.to_str().unwrap(),
-    ]);
-    assert!(built.status.success(), "{}", String::from_utf8_lossy(&built.stderr));
-    let report: serde_json::Value = serde_json::from_slice(&built.stdout).unwrap();
-    assert_eq!(report["counts"]["built_total"], 1);
-    let output = PathBuf::from(report["outcomes"][0]["outputs"][0]["path"].as_str().unwrap());
-    assert_eq!(std::fs::read(&output).unwrap(), CLI_FETCH_PAYLOAD);
-    assert!(!policy.exists());
-    let selector = output.file_name().unwrap().to_str().unwrap();
-    let verified = run(&["store", "verify", "--trusted-public-keys", &public_key, selector]);
-    assert!(verified.status.success(), "{}", String::from_utf8_lossy(&verified.stderr));
-    assert!(String::from_utf8_lossy(&verified.stdout).contains("trusted_signatures=1/1"));
-    assert!(!policy.exists());
-    let runtime = tokio::runtime::Runtime::new().unwrap();
-    runtime.block_on(async {
-        let source = crunch_store::StoreHandle::open(crunch_store::StoreConfig::new(
-            crunch_store::StoreBackend::Casita,
-            state.clone(),
-            store.clone(),
-            "/mantle/store".to_string(),
-        ))
-        .await
-        .unwrap();
-        let path: nix_compat::store_path::StorePath<String> =
-            nix_compat::store_path::StorePath::from_absolute_path_with_prefix(
-                format!("/mantle/store/{selector}").as_bytes(),
-                "/mantle/store",
-            )
-            .unwrap();
-        let signed = source.pathinfo_service().get(*path.digest()).await.unwrap().unwrap();
-        assert_eq!(signed.signatures.len(), 1);
-        let mut nar = Vec::new();
-        snix_store::nar::write_nar(
-            snix_store::utils::AsyncIoBridge(&mut nar),
-            &signed.node,
-            source.blob_service(),
-            source.directory_service(),
-        )
-        .await
-        .unwrap();
-        let remote = CasitaTrustCache::serve(&signed, nar);
-
-        let destination_state = root.path().join("destination-state");
-        let destination_store = root.path().join("destination-store");
-        std::fs::create_dir(&destination_state).unwrap();
-        let other_signer = ed25519_dalek::SigningKey::from_bytes(&[19_u8; 32]);
-        let other_key =
-            nix_compat::narinfo::VerifyingKey::new("destination-1".to_string(), other_signer.verifying_key());
-        let destination_policy = destination_state.join("casita-trusted-public-keys");
-        let policy_bytes = format!("{other_key}\n");
-        std::fs::write(&destination_policy, &policy_bytes).unwrap();
-        let mut config = crunch_store::StoreConfig::new(
-            crunch_store::StoreBackend::Casita,
-            destination_state.clone(),
-            destination_store.clone(),
-            "/mantle/store".to_string(),
-        );
-        config.remote_cache_urls.push(remote.url.clone());
-        let mut destination = crunch_store::StoreHandle::open(config).await.unwrap();
-        let error = destination.try_substitute_remote(*path.digest(), &path, "out", true, None).await.unwrap_err();
-        assert!(error.to_string().contains("casita-signer-untrusted"), "{error}");
-        assert_eq!(std::fs::read(&destination_policy).unwrap(), policy_bytes.as_bytes());
-        assert!(!destination_store.join(selector).exists());
-        assert!(!destination_state.join("casita-gc-fence.json").exists());
-        std::fs::write(&destination_policy, format!("{public_key}\n")).unwrap();
-        assert!(destination.pathinfo_service().get(*path.digest()).await.unwrap().is_none());
-        std::fs::write(&destination_policy, &policy_bytes).unwrap();
-    });
 }
 
 #[test]

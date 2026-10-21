@@ -204,7 +204,8 @@ fn verify_project_trust_policy(
     let Some(policy) = policy else {
         return Ok(Vec::new());
     };
-    let payload = trust_signature_payload(subject, policy.digest_binding, &hash.algo, &hash.value);
+    let payload =
+        trust_signature_payload(subject.clone(), policy.digest_binding, hash.algo.clone(), hash.value.clone());
     let trusted_keys = parse_trusted_project_keys(&policy.trusted_public_keys)?;
     let fact_slot_count =
         policy.signatures.len().checked_mul(trusted_keys.len()).ok_or_else(|| {
@@ -213,9 +214,8 @@ fn verify_project_trust_policy(
     let mut facts = Vec::with_capacity(fact_slot_count);
     for signature_ref in &policy.signatures {
         let signature_text = read_project_trust_signature(project_root, signature_ref)?;
-        let signature = nix_compat::narinfo::SignatureRef::parse(signature_text.trim()).map_err(|err| {
-            crunch_project::Error::Manifest(format!("{} trust signature is invalid: {err}", subject.label()))
-        })?;
+        let signature = nix_compat::narinfo::SignatureRef::parse(signature_text.trim())
+            .map_err(|err| crunch_project::Error::Manifest(format!("{subject} trust signature is invalid: {err}")))?;
         for key in &trusted_keys {
             if key.name() != *signature.name() {
                 continue;
@@ -231,7 +231,9 @@ fn verify_project_trust_policy(
                 hash_value: hash.value.clone(),
                 signer: key.name().to_string(),
                 key_ref: key.to_string(),
-                signature_ref: signature_ref.ref_text().to_string(),
+                signature_ref: match signature_ref {
+                    TrustSignatureRef::LocalFile { path } => path.clone(),
+                },
             });
         }
     }
@@ -895,23 +897,161 @@ fn parse_tag_output<O: AsRef<str>, T: AsRef<str>>(output: O, tag: T) -> Result<S
     direct_rev.ok_or_else(|| crunch_project::Error::Manifest(format!("git tag not found: {tag}")))
 }
 
+#[derive(Default)]
+struct HashDownloadUsage {
+    bytes: std::sync::atomic::AtomicU64,
+    failed: std::sync::atomic::AtomicBool,
+}
+
+struct HashDownloadReader {
+    inner: Box<dyn Read + Send>,
+    usage: std::sync::Arc<HashDownloadUsage>,
+}
+
+impl Read for HashDownloadReader {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        let result = self.inner.read(buffer);
+        match &result {
+            Ok(count) => {
+                self.usage.bytes.fetch_add(*count as u64, std::sync::atomic::Ordering::Relaxed);
+            }
+            Err(_) => {
+                self.usage.failed.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+        result
+    }
+}
+
+fn hash_filesystem_phase<T>(
+    id: &'static str,
+    kind: mantle_application_contract::EffectKind,
+    run: impl FnOnce() -> Result<T, crunch_project::Error>,
+) -> Result<T, crunch_project::Error> {
+    use mantle_application_contract::ApplicationOutcome;
+    use mantle_application_contract::CommandFamily;
+    use mantle_application_contract::EffectId;
+    use mantle_application_contract::EffectMeasure;
+    use mantle_application_contract::EffectOutput;
+    use mantle_application_contract::EffectSpec;
+    use mantle_application_contract::ExpectedOutput;
+    use mantle_application_contract::Observation;
+    use mantle_application_contract::ObservationStatus;
+    use mantle_application_contract::classify_observations;
+    use mantle_application_contract::plan_effects;
+    let plan = plan_effects(CommandFamily::Project, &[EffectSpec {
+        effect_id: id,
+        kind,
+        limit: EffectMeasure::Calls(1),
+        expected_output: ExpectedOutput::None,
+    }])
+    .map_err(|error| crunch_project::Error::Manifest(format!("planning project hash phase: {}", error.code())))?;
+    let result = run();
+    let observation = Observation {
+        effect_id: EffectId(id.into()),
+        kind,
+        status: if result.is_ok() {
+            ObservationStatus::Succeeded
+        } else {
+            ObservationStatus::Failed
+        },
+        output: EffectOutput::None,
+        usage: EffectMeasure::Calls(1),
+        diagnostics_code: result.as_ref().err().map(|_| "project-hash-phase-failed".into()),
+    };
+    match (classify_observations(&plan, &[observation]), result) {
+        (ApplicationOutcome::Completed, result) => result,
+        (ApplicationOutcome::Failed { .. }, Err(error)) => Err(error),
+        (outcome, _) => Err(crunch_project::Error::Manifest(format!(
+            "project hash phase observations inconsistent: {outcome:?}"
+        ))),
+    }
+}
+
+fn hash_observed_url(
+    url: &str,
+    hash: impl FnOnce(Box<dyn Read + Send>) -> Result<String, crunch_project::Error>,
+) -> Result<String, crunch_project::Error> {
+    use mantle_application_contract::ApplicationOutcome;
+    use mantle_application_contract::CommandFamily;
+    use mantle_application_contract::EffectId;
+    use mantle_application_contract::EffectKind;
+    use mantle_application_contract::EffectMeasure;
+    use mantle_application_contract::EffectOutput;
+    use mantle_application_contract::EffectSpec;
+    use mantle_application_contract::ExpectedOutput;
+    use mantle_application_contract::Observation;
+    use mantle_application_contract::ObservationStatus;
+    use mantle_application_contract::classify_observations;
+    use mantle_application_contract::plan_effects;
+    let parsed = url::Url::parse(url)
+        .map_err(|error| crunch_project::Error::Manifest(format!("invalid source URL {url}: {error}")))?;
+    let kind = if parsed.scheme() == "file" {
+        EffectKind::ReadFiles
+    } else {
+        EffectKind::UseNetwork
+    };
+    let plan = plan_effects(CommandFamily::Project, &[EffectSpec {
+        effect_id: "project-hash-source-stream",
+        kind,
+        limit: EffectMeasure::Bytes(MAX_DOWNLOAD_BYTES),
+        expected_output: ExpectedOutput::None,
+    }])
+    .map_err(|error| crunch_project::Error::Manifest(format!("planning project hash stream: {}", error.code())))?;
+    let usage = std::sync::Arc::new(HashDownloadUsage::default());
+    let opened = open_url_reader(url);
+    let open_failed = opened.is_err();
+    let result = opened.and_then(|inner| {
+        let observed = HashDownloadReader {
+            inner,
+            usage: std::sync::Arc::clone(&usage),
+        };
+        hash(Box::new(BoundedReader::new(observed, MAX_DOWNLOAD_BYTES, url.to_string())))
+    });
+    let failed = open_failed || usage.failed.load(std::sync::atomic::Ordering::Relaxed);
+    let observation = Observation {
+        effect_id: EffectId("project-hash-source-stream".into()),
+        kind,
+        status: if failed {
+            ObservationStatus::Failed
+        } else {
+            ObservationStatus::Succeeded
+        },
+        output: EffectOutput::None,
+        usage: EffectMeasure::Bytes(usage.bytes.load(std::sync::atomic::Ordering::Relaxed)),
+        diagnostics_code: failed.then(|| "project-hash-source-stream-failed".into()),
+    };
+    match (classify_observations(&plan, &[observation]), result) {
+        (ApplicationOutcome::Completed, result) => result,
+        (ApplicationOutcome::Failed { .. } | ApplicationOutcome::Contradicted { .. }, Err(error)) => Err(error),
+        (outcome, _) => Err(crunch_project::Error::Manifest(format!(
+            "project source stream observations inconsistent: {outcome:?}"
+        ))),
+    }
+}
+
 fn hash_flat_url(url: &str, algo: &HashAlgo) -> Result<String, crunch_project::Error> {
-    let reader = open_url_reader(url)?;
-    let bounded = BoundedReader::new(reader, MAX_DOWNLOAD_BYTES, url.to_string());
-    hash_reader_to_sri(bounded, algo, &format!("downloaded content for {url}"))
+    hash_observed_url(url, |reader| hash_reader_to_sri(reader, algo, &format!("downloaded content for {url}")))
 }
 
 fn hash_tarball_url(url: &str, algo: &HashAlgo) -> Result<String, crunch_project::Error> {
-    let reader = open_url_reader(url)?;
-    let bounded = BoundedReader::new(reader, MAX_DOWNLOAD_BYTES, url.to_string());
-    let unpacked = crunch_build::fetcher::decompress_reader(url, bounded)
-        .map_err(|err| crunch_project::Error::Manifest(format!("decompressing {url}: {err}")))?;
-    let dir = tempdir()?;
-    let out = path_to_str(dir.path(), "temporary unpack directory")?;
-    crunch_build::fetcher::extract_tar(unpacked, out)
-        .map_err(|err| crunch_project::Error::Manifest(format!("extracting tarball {url}: {err}")))?;
-    ensure_tree_within_limits(dir.path())?;
-    hash_recursive_path(dir.path(), algo)
+    hash_observed_url(url, |reader| {
+        let unpacked = crunch_build::fetcher::decompress_reader(url, reader)
+            .map_err(|err| crunch_project::Error::Manifest(format!("decompressing {url}: {err}")))?;
+        let dir =
+            hash_filesystem_phase("project-hash-scratch", mantle_application_contract::EffectKind::WriteFiles, || {
+                tempdir().map_err(Into::into)
+            })?;
+        let out = path_to_str(dir.path(), "temporary unpack directory")?;
+        hash_filesystem_phase("project-hash-extract", mantle_application_contract::EffectKind::WriteFiles, || {
+            crunch_build::fetcher::extract_tar(unpacked, out)
+                .map_err(|err| crunch_project::Error::Manifest(format!("extracting tarball {url}: {err}")))
+        })?;
+        hash_filesystem_phase("project-hash-extracted-tree", mantle_application_contract::EffectKind::ReadFiles, || {
+            ensure_tree_within_limits(dir.path())?;
+            hash_recursive_path(dir.path(), algo)
+        })
+    })
 }
 
 fn hash_git_tree<R: AsRef<str>, V: AsRef<str>>(
@@ -1489,8 +1629,12 @@ mod tests {
     fn signed_trust_policy(root: &Path, subject: &TrustSubject, hash: &LockedHash) -> crunch_project::InputTrustPolicy {
         let (signing_key, verifying_key) =
             nix_compat::narinfo::parse_keypair(TRUST_TEST_KEYPAIR).expect("dummy keypair should parse");
-        let payload =
-            trust_signature_payload(subject, crunch_project::TrustDigestBinding::ContentHash, &hash.algo, &hash.value);
+        let payload = trust_signature_payload(
+            subject.clone(),
+            crunch_project::TrustDigestBinding::ContentHash,
+            hash.algo.clone(),
+            hash.value.clone(),
+        );
         let signature = signing_key.sign(payload.as_bytes()).to_owned().to_string();
         std::fs::write(root.join("pkg.sig"), signature).expect("signature fixture should be written");
         crunch_project::InputTrustPolicy {

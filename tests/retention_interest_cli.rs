@@ -29,6 +29,7 @@ fn seed_path(state: &Path, output: &Path) -> String {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
         let store = StoreHandle::open(StoreConfig {
+            source_admission: None,
             backend: StoreBackend::Snix,
             state_dir: state.to_path_buf(),
             output_dir: output.to_path_buf(),

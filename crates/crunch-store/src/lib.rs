@@ -41,6 +41,7 @@ mod reference_scan;
 mod repair;
 mod retention;
 mod roots;
+mod source_admission;
 
 pub use action_result::ActionResultDiscoveryReport;
 pub use action_result::ActionResultLookup;
@@ -251,3 +252,6 @@ pub use roots::GcRootRecord;
 pub use roots::GcRootSource;
 pub use roots::list_interest_reports;
 pub use snix_store::path_info::PathInfo;
+pub use source_admission::StoreSource;
+pub use source_admission::StoreSourceAdmission;
+pub use source_admission::StoreSourceLease;

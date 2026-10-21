@@ -36,3 +36,52 @@ These claims do not establish full Cargo compatibility, pkg-config discovery,
 compiler correctness, global current-source reproducibility, baseline/archive
 completion, bootstrap correctness or release eligibility. Ordinary tests do
 not replay the preserved heavyweight signed-client proof.
+
+## Current-source acceptance workflow
+
+`scripts/prove-cargo-unit-acceptance.py` executes a new-directory-only campaign
+from an explicitly pinned request. Its module help specifies the request fields
+and signed-input prerequisites. It runs cold/warm, package-edit, unrelated-edit,
+native-provider-change, actual offline-Cargo app comparison, sandbox/directive
+negatives, signed publication and clean-client reuse. It retains exact commands,
+exit/stdout/stderr, native plans, package slices, per-kind counts and observed
+derivation identities. Changed execution sets must equal the affected package
+units and their reverse dependencies; a reused label alone is not evidence.
+The input cache must contain source/tool/vendor/config inputs, not earlier unit
+results. The outside host/network controls must be reachable using the same
+admitted probe executable used by the corresponding negative goal.
+
+The current `fixtures/cargo-build-script-units` source additionally requires
+declared `CC` and `AR` paths as native roles for `native-answer-sys`, alongside
+`NATIVE_ANSWER_ROOT`. Its script compiles `native-zero.c`, archives it in
+`OUT_DIR`, generates Rust source, emits ordered link directives and exports
+`links` metadata consumed by the app's own build script. These source changes
+are inputs to a new campaign, not an extension of the historical receipts.
+It is now a virtual resolver-2 workspace with separate `app/` and
+`native-answer-sys/` roots. Root-only edits are outside both package slices;
+the app includes text and byte data from its own package. This permits a real
+outside-package control without treating a root app's README as unrelated.
+The registry versions remain fixed by this fixture's checked-in lockfile.
+
+The producer now retains exact `cargo-metadata.json`, `cargo-unit-graph.json`,
+`rust-plan-receipt.json` and `cargo-unit-bindings.json` alongside its summary.
+The binding receipt maps actual wire unit IDs to Cargo package, feature, target,
+host/target execution, source-slice and triple facts; auxiliary target-facts
+units have no Cargo package and are not included in that mapping.
+
+Nested package roots from Cargo metadata are omitted from parent slices,
+including inactive nested members. In-package `include_str!`/`include_bytes!`
+data remains part of its consumer's source identity. Undeclared external source
+reads are not repaired by exposing the checkout: they fail at compilation or
+script execution. No general external-source declaration syntax is added.
+
+For bounded native consumers, optional `target_linker` configuration contains
+`executable`, ordered `arguments` and whole-root `inputs`. Its exact JSON must
+match the evaluated `MANTLE_UNIT_TARGET_LINKER` declaration. It applies only to
+target compilation effects, never host build scripts or proc macros, even when
+triples coincide. Paths in linker arguments must name declared inputs; response
+files and ambient host paths are rejected. `cdylib` artifacts use the existing
+dependency manifest. Cross-target compatibility requires a real pinned compiler
+with the target standard library and separate sandbox evidence; neither the
+configuration seam nor a host cdylib test establishes Android or universal cross
+compilation support.

@@ -186,9 +186,9 @@ def check_no_std_source() -> None:
 
 
 def blake3_resolution(graph: dict) -> dict:
-    packages = [package for package in graph["packages"] if package["name"] == "blake3" and package["version"] == "1.8.2"]
+    packages = [package for package in graph["packages"] if package["name"] == "blake3" and package["version"] == "1.8.5"]
     if len(packages) != 1:
-        raise BoundaryFailure(f"expected pinned blake3 1.8.2, found {len(packages)}")
+        raise BoundaryFailure(f"expected pinned blake3 1.8.5, found {len(packages)}")
     package = packages[0]
     nodes = [node for node in graph["resolve"]["nodes"] if node["id"] == package["id"]]
     if len(nodes) != 1:

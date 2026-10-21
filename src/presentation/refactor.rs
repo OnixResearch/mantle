@@ -46,8 +46,7 @@ pub(crate) fn print_refactor_plan(
     format: OutputFormat,
 ) -> Result<(), RunError> {
     let rendered = render_refactor_plan(plan, format)?;
-    println!("{rendered}");
-    Ok(())
+    super::reports::write_report_to(&mut std::io::stdout().lock(), &rendered, "refactor plan")
 }
 
 #[cfg(test)]

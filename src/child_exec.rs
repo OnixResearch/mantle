@@ -5,6 +5,7 @@
 //! standard streams, and the exit-code mapping.
 
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::ExitStatus;
 
 use crate::RunError;
@@ -16,16 +17,43 @@ pub(crate) const CHILD_NO_EXIT_CODE_STATUS: i32 = 1;
 /// Largest status a process exit code can carry.
 pub(crate) const CHILD_EXIT_CODE_MAX: i32 = 255;
 
+/// Select from the built tree through the read-only executable capability.
+pub(crate) fn select_binary(out_path: &Path, bin: Option<&str>) -> Result<PathBuf, RunError> {
+    let plan =
+        crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::BinarySelection)?;
+    let selected = crate::run_binary_selection::select_run_binary(out_path, bin).and_then(|path| {
+        let parent = path.parent();
+        if parent.and_then(Path::parent) != Some(out_path)
+            || parent.and_then(Path::file_name) != Some(std::ffi::OsStr::new("bin"))
+        {
+            return Err(RunError::Internal("selected binary escaped its built output".to_string()));
+        }
+        Ok(path)
+    });
+    crate::build_observation::classify(
+        &plan,
+        "realization-binary",
+        mantle_application_contract::EffectKind::ReadFiles,
+        selected.is_ok(),
+    )?;
+    selected
+}
+
 /// Run one child executable with inherited standard streams.
 pub(crate) fn run_child(exe_path: &Path, args: &[String]) -> Result<ExitStatus, RunError> {
     if exe_path.as_os_str().is_empty() {
         return Err(RunError::Internal("child executable path is empty".to_string()));
     }
     debug_assert!(!exe_path.as_os_str().is_empty());
-    let status = std::process::Command::new(exe_path)
-        .args(args)
-        .status()
-        .map_err(|error| RunError::Internal(format!("exec {}: {error}", exe_path.display())))?;
+    let plan = crate::build_observation::plan(mantle_application_contract::realization::RealizationEffect::Child)?;
+    let status = std::process::Command::new(exe_path).args(args).status();
+    crate::build_observation::classify(
+        &plan,
+        "realization-child",
+        mantle_application_contract::EffectKind::RunProcess,
+        matches!(&status, Ok(status) if status.success()),
+    )?;
+    let status = status.map_err(|error| RunError::Internal(format!("exec {}: {error}", exe_path.display())))?;
     debug_assert_eq!(status.success(), status.code() == Some(0));
     Ok(status)
 }
@@ -81,6 +109,5 @@ mod tests {
     fn an_empty_executable_path_is_rejected() {
         let error = run_child(Path::new(""), &[]).expect_err("empty path is rejected");
         assert!(format!("{error}").contains("empty"));
-        assert_eq!(CHILD_EXIT_CODE_MAX, 255);
     }
 }

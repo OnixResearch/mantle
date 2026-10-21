@@ -92,6 +92,13 @@ The current projection rejects these forms:
 These forms remain parser facts. Mantle does not flatten or silently discard them.
 Guix and other prefix-rewrite paths remain on the prior parser.
 
+The [package behavior matrix](../mantlepkgs/validation/README.md) reconciles
+these parser/projection facts with the existing Mantlepkgs specifications.
+Its pinned native-library/tool, Rust, generated-source and multiple-output
+cases use the existing producer, importer, compiler and worker APIs; they do
+not expand this projection. Import, execution, semantic behavior and warm
+reuse remain distinct observations, including when a selected package fails.
+
 ## Hash domains
 
 Nix derivation, output, placeholder, and store-path operations use Nix-required algorithms and the standard prefix.

@@ -4,6 +4,7 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
+use core::fmt;
 
 use serde::Serialize;
 
@@ -204,6 +205,7 @@ impl ProjectSoundnessIssue {
     }
 }
 
+/// Issue severity; `Display` emits the stable kebab-case report label.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProjectSoundnessSeverity {
@@ -211,14 +213,16 @@ pub enum ProjectSoundnessSeverity {
     Warning,
 }
 
-impl ProjectSoundnessSeverity {
-    pub fn as_str(self) -> &'static str {
-        match self {
+impl fmt::Display for ProjectSoundnessSeverity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
             Self::Error => "error",
             Self::Warning => "warning",
-        }
+        })
     }
+}
 
+impl ProjectSoundnessSeverity {
     fn rank(self) -> u32 {
         match self {
             Self::Error => 0,
@@ -227,6 +231,7 @@ impl ProjectSoundnessSeverity {
     }
 }
 
+/// Issue classification; `Display` emits the stable kebab-case report label.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProjectSoundnessClass {
@@ -253,9 +258,9 @@ pub enum ProjectSoundnessClass {
     GeneratedInputStale,
 }
 
-impl ProjectSoundnessClass {
-    pub fn as_str(self) -> &'static str {
-        match self {
+impl fmt::Display for ProjectSoundnessClass {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
             Self::ManifestParseError => "manifest-parse-error",
             Self::LockfileParseError => "lockfile-parse-error",
             Self::ManifestVersionUnsupported => "manifest-version-unsupported",
@@ -277,9 +282,11 @@ impl ProjectSoundnessClass {
             Self::RetentionRootMismatch => "retention-root-mismatch",
             Self::GeneratedInputMissing => "generated-input-missing",
             Self::GeneratedInputStale => "generated-input-stale",
-        }
+        })
     }
+}
 
+impl ProjectSoundnessClass {
     fn rank(self) -> u32 {
         match self {
             Self::ManifestParseError => 10,
@@ -314,24 +321,27 @@ pub struct ProjectSoundnessSubject {
 }
 
 impl ProjectSoundnessSubject {
-    pub fn file(name: impl Into<String>) -> Self {
+    /// Creates a file subject, taking ownership of its name.
+    pub fn file(name: String) -> Self {
         Self {
             kind: "file".into(),
-            name: name.into(),
+            name,
         }
     }
 
-    pub fn input(name: impl Into<String>) -> Self {
+    /// Creates an input subject, taking ownership of its name.
+    pub fn input(name: String) -> Self {
         Self {
             kind: "input".into(),
-            name: name.into(),
+            name,
         }
     }
 
-    pub fn patch(name: impl Into<String>) -> Self {
+    /// Creates a patch subject, taking ownership of its name.
+    pub fn patch(name: String) -> Self {
         Self {
             kind: "patch".into(),
-            name: name.into(),
+            name,
         }
     }
 
@@ -376,12 +386,12 @@ fn push_manifest_version_issue(manifest: &ProjectManifest, issues: &mut Vec<Proj
         Some(version) if version.is_compatible_with(SchemaVersion::CURRENT) => {}
         Some(version) => issues.push(ProjectSoundnessIssue::error(
             ProjectSoundnessClass::ManifestVersionUnsupported,
-            ProjectSoundnessSubject::file("mantle-project.ncl"),
+            ProjectSoundnessSubject::file("mantle-project.ncl".into()),
             format!("manifest version {version} is not compatible with current version {}", SchemaVersion::CURRENT),
         )),
         None => issues.push(ProjectSoundnessIssue::error(
             ProjectSoundnessClass::ManifestVersionUnsupported,
-            ProjectSoundnessSubject::file("mantle-project.ncl"),
+            ProjectSoundnessSubject::file("mantle-project.ncl".into()),
             format!("manifest version '{}' is invalid", manifest.version),
         )),
     }
@@ -396,7 +406,7 @@ fn push_lock_version_issue(lock: &Lockfile, issues: &mut Vec<ProjectSoundnessIss
     }
     issues.push(ProjectSoundnessIssue::error(
         ProjectSoundnessClass::LockfileVersionUnsupported,
-        ProjectSoundnessSubject::file("mantle.lock"),
+        ProjectSoundnessSubject::file("mantle.lock".into()),
         format!(
             "lockfile version {} is not compatible with current version {}",
             lock.version,
@@ -412,7 +422,7 @@ fn push_manifest_validation_issues(manifest: ProjectManifest, issues: &mut Vec<P
         }
         issues.push(ProjectSoundnessIssue::error(
             ProjectSoundnessClass::ManifestValidation,
-            ProjectSoundnessSubject::file("mantle-project.ncl"),
+            ProjectSoundnessSubject::file("mantle-project.ncl".into()),
             problem,
         ));
     }
@@ -425,7 +435,7 @@ fn push_lock_validation_issues(lock: Lockfile, issues: &mut Vec<ProjectSoundness
         }
         issues.push(ProjectSoundnessIssue::error(
             ProjectSoundnessClass::LockfileValidation,
-            ProjectSoundnessSubject::file("mantle.lock"),
+            ProjectSoundnessSubject::file("mantle.lock".into()),
             problem,
         ));
     }
@@ -640,7 +650,7 @@ fn push_generated_input_issue(
         DriftStatus::Missing => issues.push(
             ProjectSoundnessIssue::error(
                 ProjectSoundnessClass::GeneratedInputMissing,
-                ProjectSoundnessSubject::file(GENERATED_INPUTS_PATH),
+                ProjectSoundnessSubject::file(GENERATED_INPUTS_PATH.into()),
                 format!("generated inputs drift: {GENERATED_INPUTS_PATH} does not exist"),
             )
             .with_fix("run `mantle refresh` or `mantle init` to regenerate inputs".into()),
@@ -651,7 +661,7 @@ fn push_generated_input_issue(
         } => issues.push(
             ProjectSoundnessIssue::error(
                 ProjectSoundnessClass::GeneratedInputStale,
-                ProjectSoundnessSubject::file(GENERATED_INPUTS_PATH),
+                ProjectSoundnessSubject::file(GENERATED_INPUTS_PATH.into()),
                 format!(
                     "generated inputs drift: {GENERATED_INPUTS_PATH} is out of date (expected fingerprint {expected_fingerprint}, actual fingerprint {actual_fingerprint})"
                 ),
@@ -815,9 +825,9 @@ fn input_source_label(kind: &InputKind) -> String {
         InputKind::File { url } => format!("file:{url}"),
         InputKind::Tarball { url } => format!("tarball:{url}"),
         InputKind::Git { repository, reference } => format!("git:{repository}@{}", git_reference_label(reference)),
-        InputKind::Darcs { repository, selector } => format!("darcs:{repository}@{}", selector.identity_fragment()),
-        InputKind::Pijul { repository, selector } => format!("pijul:{repository}@{}", selector.identity_fragment()),
-        InputKind::Fossil { repository, selector } => format!("fossil:{repository}@{}", selector.identity_fragment()),
+        InputKind::Darcs { repository, selector } => format!("darcs:{repository}@{selector}"),
+        InputKind::Pijul { repository, selector } => format!("pijul:{repository}@{selector}"),
+        InputKind::Fossil { repository, selector } => format!("fossil:{repository}@{selector}"),
     }
 }
 
@@ -837,7 +847,7 @@ fn lock_source_label(kind: &LockedKind) -> String {
             weak_hash,
         } => format!(
             "darcs:{repository}@{}:{}",
-            selector.identity_fragment(),
+            selector,
             context.clone().or_else(|| weak_hash.clone()).unwrap_or_else(|| "<unresolved>".into())
         ),
         LockedKind::Pijul {
@@ -847,14 +857,14 @@ fn lock_source_label(kind: &LockedKind) -> String {
             change,
         } => format!(
             "pijul:{repository}@{}:{state}:{}",
-            selector.identity_fragment(),
+            selector,
             change.clone().unwrap_or_else(|| "<no-change>".into())
         ),
         LockedKind::Fossil {
             repository,
             selector,
             checkin,
-        } => format!("fossil:{repository}@{}:{checkin}", selector.identity_fragment()),
+        } => format!("fossil:{repository}@{selector}:{checkin}"),
     }
 }
 
@@ -1178,22 +1188,22 @@ mod tests {
         input.supplemental_facts = vec![
             ProjectSoundnessFact::error(
                 ProjectSoundnessClass::FetchPolicyConflict,
-                ProjectSoundnessSubject::input("pkg"),
+                ProjectSoundnessSubject::input("pkg".into()),
                 "offline mode requires imported source state".into(),
             ),
             ProjectSoundnessFact::error(
                 ProjectSoundnessClass::TrustPolicyFailure,
-                ProjectSoundnessSubject::input("pkg"),
+                ProjectSoundnessSubject::input("pkg".into()),
                 "signature quorum was not met".into(),
             ),
             ProjectSoundnessFact::warning(
                 ProjectSoundnessClass::RetentionRootMismatch,
-                ProjectSoundnessSubject::input("pkg"),
+                ProjectSoundnessSubject::input("pkg".into()),
                 "retention root points at an older lock generation".into(),
             ),
             ProjectSoundnessFact::warning(
                 ProjectSoundnessClass::FreshnessProbeFailure,
-                ProjectSoundnessSubject::input("pkg"),
+                ProjectSoundnessSubject::input("pkg".into()),
                 "freshness probe failed in explicit probe mode".into(),
             ),
         ];
@@ -1226,12 +1236,11 @@ mod tests {
     fn parse_error_report_is_invalid_and_stable() {
         let report = project_soundness_parse_error(
             ProjectSoundnessClass::ManifestParseError,
-            ProjectSoundnessSubject::file("mantle-project.ncl"),
+            ProjectSoundnessSubject::file("mantle-project.ncl".into()),
             "loading failed".into(),
         );
 
         assert!(!report.valid);
         assert_eq!(report.issue_count, 1);
-        assert_eq!(report.issues[0].class.as_str(), "manifest-parse-error");
     }
 }

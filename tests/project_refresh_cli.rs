@@ -201,10 +201,10 @@ fn write_input_trust_signature(dir: &Path, input_name: &str, signature_path: &st
     let (signing_key, verifying_key) = nix_compat::narinfo::parse_keypair(TRUST_TEST_KEYPAIR).unwrap();
     let subject = crunch_project::TrustSubject::input(input_name.to_string());
     let payload = crunch_project::trust_signature_payload(
-        &subject,
+        subject,
         crunch_project::TrustDigestBinding::ContentHash,
-        &HashAlgo::Sha256,
-        hash_value,
+        HashAlgo::Sha256,
+        hash_value.to_string(),
     );
     let signature = signing_key.sign(payload.as_bytes()).to_owned().to_string();
     std::fs::write(dir.join(signature_path), signature).unwrap();

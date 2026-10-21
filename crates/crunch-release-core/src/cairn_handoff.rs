@@ -142,6 +142,25 @@ pub struct CairnHandoffReleaseVerification {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CairnHandoffValidation {
+    pub handoff: CairnReleaseEvidenceHandoff,
+    pub report: CairnReleaseEvidenceReport,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CairnReceiptValidationRequest {
+    pub receipt: CairnReleaseEvidenceValidationReceipt,
+    pub expected_binding: CairnReleaseBundleBinding,
+    pub measured_handoff: CairnReleaseEvidenceHandoff,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CairnHandoffEvaluation {
+    pub receipt: Option<CairnReleaseEvidenceValidationReceipt>,
+    pub verification: CairnHandoffReleaseVerification,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct TextField<'a> {
     label: &'a str,
@@ -150,7 +169,14 @@ struct TextField<'a> {
 
 // r[impl mantle.release_provenance.cairn_evidence_handoff.measured_inputs]
 // r[impl mantle.release_provenance.cairn_evidence_handoff.production_wiring]
-pub fn validate_cairn_release_evidence_handoff(handoff: &CairnReleaseEvidenceHandoff) -> CairnReleaseEvidenceReport {
+pub fn validate_cairn_release_evidence_handoff(handoff: CairnReleaseEvidenceHandoff) -> CairnHandoffValidation {
+    let report = validate_cairn_release_evidence_handoff_borrowed(&handoff);
+    CairnHandoffValidation { handoff, report }
+}
+
+fn validate_cairn_release_evidence_handoff_borrowed(
+    handoff: &CairnReleaseEvidenceHandoff,
+) -> CairnReleaseEvidenceReport {
     let mut diagnostics = Vec::new();
     validate_row_count(handoff.rows.len(), &mut diagnostics);
     validate_authentication_dependency(&handoff.authentication, &mut diagnostics);
@@ -179,7 +205,7 @@ pub fn cairn_release_evidence_validation_receipt(
     let bundle_binding = canonical_bundle_binding(bundle_binding);
     validate_bundle_binding(&bundle_binding)?;
     let handoff = canonical_handoff(handoff);
-    let handoff_validation = validate_cairn_release_evidence_handoff(&handoff);
+    let handoff_validation = validate_cairn_release_evidence_handoff_borrowed(&handoff);
     if !handoff_validation.valid {
         return Err(validation_error(format!(
             "Cairn handoff validation failed: {}",
@@ -199,7 +225,7 @@ pub fn cairn_release_evidence_validation_receipt(
         receipt_blake3: String::new(),
     };
     receipt.receipt_blake3 = cairn_handoff_receipt_digest_blake3(&receipt)?;
-    validate_cairn_release_evidence_validation_receipt(&receipt, &receipt.bundle_binding, &receipt.handoff)?;
+    validate_cairn_release_evidence_validation_receipt_borrowed(&receipt, &receipt.bundle_binding, &receipt.handoff)?;
     debug_assert_eq!(receipt.schema, CAIRN_HANDOFF_VALIDATION_RECEIPT_SCHEMA);
     debug_assert!(valid_blake3(&receipt.receipt_blake3));
     Ok(receipt)
@@ -207,6 +233,17 @@ pub fn cairn_release_evidence_validation_receipt(
 
 // r[impl mantle.release_provenance.cairn_evidence_handoff.bypass_protection]
 pub fn validate_cairn_release_evidence_validation_receipt(
+    request: CairnReceiptValidationRequest,
+) -> Result<CairnReleaseEvidenceValidationReceipt, ReleaseEvidenceError> {
+    validate_cairn_release_evidence_validation_receipt_borrowed(
+        &request.receipt,
+        &request.expected_binding,
+        &request.measured_handoff,
+    )?;
+    Ok(request.receipt)
+}
+
+fn validate_cairn_release_evidence_validation_receipt_borrowed(
     receipt: &CairnReleaseEvidenceValidationReceipt,
     expected_binding: &CairnReleaseBundleBinding,
     measured_handoff: &CairnReleaseEvidenceHandoff,
@@ -222,7 +259,7 @@ pub fn validate_cairn_release_evidence_validation_receipt(
         return Err(validation_error("Cairn handoff validation receipt bundle binding digest is stale"));
     }
     let measured_handoff = canonical_handoff(measured_handoff.clone());
-    let handoff_validation = validate_cairn_release_evidence_handoff(&measured_handoff);
+    let handoff_validation = validate_cairn_release_evidence_handoff_borrowed(&measured_handoff);
     if !handoff_validation.valid {
         return Err(validation_error(format!(
             "Cairn measured inputs are invalid: {}",
@@ -242,6 +279,15 @@ pub fn validate_cairn_release_evidence_validation_receipt(
 }
 
 pub fn evaluate_cairn_handoff_release_evidence(
+    receipt: Option<CairnReleaseEvidenceValidationReceipt>,
+    expected_binding: CairnReleaseBundleBinding,
+    required: bool,
+) -> CairnHandoffEvaluation {
+    let verification = evaluate_cairn_handoff_release_evidence_borrowed(receipt.as_ref(), &expected_binding, required);
+    CairnHandoffEvaluation { receipt, verification }
+}
+
+pub(super) fn evaluate_cairn_handoff_release_evidence_borrowed(
     receipt: Option<&CairnReleaseEvidenceValidationReceipt>,
     expected_binding: &CairnReleaseBundleBinding,
     required: bool,
@@ -263,7 +309,8 @@ pub fn evaluate_cairn_handoff_release_evidence(
             diagnostics,
         };
     };
-    let result = validate_cairn_release_evidence_validation_receipt(receipt, expected_binding, &receipt.handoff);
+    let result =
+        validate_cairn_release_evidence_validation_receipt_borrowed(receipt, expected_binding, &receipt.handoff);
     let diagnostics = result.err().map(|error| vec![error.to_string()]).unwrap_or_default();
     let is_valid = diagnostics.is_empty();
     let disposition = if is_valid {
@@ -285,7 +332,7 @@ pub fn evaluate_cairn_handoff_release_evidence(
     }
 }
 
-pub fn cairn_release_bundle_binding_digest_blake3(
+fn cairn_release_bundle_binding_digest_blake3(
     binding: &CairnReleaseBundleBinding,
 ) -> Result<String, ReleaseEvidenceError> {
     let binding = canonical_bundle_binding(binding.clone());
@@ -643,7 +690,14 @@ mod tests {
     fn measured_handoff_and_same_bundle_receipt_pass() {
         let receipt = cairn_release_evidence_validation_receipt(binding(), handoff()).expect("receipt");
         assert_eq!(receipt.authentication_status, CAIRN_HANDOFF_AUTHENTICATION_STATUS);
-        assert!(validate_cairn_release_evidence_validation_receipt(&receipt, &binding(), &handoff()).is_ok());
+        assert!(
+            validate_cairn_release_evidence_validation_receipt(CairnReceiptValidationRequest {
+                receipt,
+                expected_binding: binding(),
+                measured_handoff: handoff(),
+            })
+            .is_ok()
+        );
     }
 
     #[test]
@@ -651,17 +705,31 @@ mod tests {
         let receipt = cairn_release_evidence_validation_receipt(binding(), handoff()).expect("receipt");
         let mut stale = handoff();
         stale.rows[0].artifact.measured_digest_blake3 = DIGEST_B.to_string();
-        assert!(validate_cairn_release_evidence_validation_receipt(&receipt, &binding(), &stale).is_err());
+        assert!(
+            validate_cairn_release_evidence_validation_receipt(CairnReceiptValidationRequest {
+                receipt: receipt.clone(),
+                expected_binding: binding(),
+                measured_handoff: stale,
+            })
+            .is_err()
+        );
         let mut other_binding = binding();
         other_binding.release_id = "release-2".to_string();
-        assert!(validate_cairn_release_evidence_validation_receipt(&receipt, &other_binding, &handoff()).is_err());
+        assert!(
+            validate_cairn_release_evidence_validation_receipt(CairnReceiptValidationRequest {
+                receipt,
+                expected_binding: other_binding,
+                measured_handoff: handoff(),
+            })
+            .is_err()
+        );
     }
 
     #[test]
     fn artifact_and_policy_paths_must_be_globally_unique() {
         let mut duplicate = handoff();
         duplicate.rows[0].cairn_policy.relative_path = duplicate.rows[0].artifact.relative_path.clone();
-        let report = validate_cairn_release_evidence_handoff(&duplicate);
+        let report = validate_cairn_release_evidence_handoff(duplicate).report;
         assert!(!report.valid);
         assert!(report.diagnostics.iter().any(|item| item.contains("duplicate")));
     }
@@ -670,22 +738,26 @@ mod tests {
     fn stale_authentication_and_role_schema_swap_fail_closed() {
         let mut stale_authentication = handoff();
         stale_authentication.authentication.archive_receipt.measured_digest_blake3 = DIGEST_A.to_string();
-        let report = validate_cairn_release_evidence_handoff(&stale_authentication);
+        let report = validate_cairn_release_evidence_handoff(stale_authentication).report;
         assert!(!report.valid);
         assert!(report.diagnostics.iter().any(|item| item.contains("reviewed receipt")));
         let mut receipt = cairn_release_evidence_validation_receipt(binding(), handoff()).expect("receipt");
         receipt.authentication_status = "not-authenticated".to_string();
-        let error = validate_cairn_release_evidence_validation_receipt(&receipt, &binding(), &handoff())
-            .expect_err("authentication downgrade");
+        let error = validate_cairn_release_evidence_validation_receipt(CairnReceiptValidationRequest {
+            receipt,
+            expected_binding: binding(),
+            measured_handoff: handoff(),
+        })
+        .expect_err("authentication downgrade");
         assert!(error.to_string().contains("pinned archived"));
         let mut wrong_pair = handoff();
         wrong_pair.rows[0].schema_id = "cairn.archive-index.v1".to_string();
-        assert!(!validate_cairn_release_evidence_handoff(&wrong_pair).valid);
+        assert!(!validate_cairn_release_evidence_handoff(wrong_pair).report.valid);
     }
 
     #[test]
     fn required_profile_rejects_missing_receipt() {
-        let verification = evaluate_cairn_handoff_release_evidence(None, &binding(), true);
+        let verification = evaluate_cairn_handoff_release_evidence(None, binding(), true).verification;
         assert!(!verification.valid);
         assert_eq!(verification.disposition, CAIRN_HANDOFF_DISPOSITION_ABSENT);
     }

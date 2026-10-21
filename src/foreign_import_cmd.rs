@@ -535,6 +535,7 @@ pub(crate) struct ForeignImportContext<'a> {
     pub(crate) state_dir: &'a Path,
     pub(crate) backend: crunch_store::StoreBackend,
     pub(crate) base_state_dirs: &'a [PathBuf],
+    pub(crate) source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     pub(crate) source_bundle_bytes_max: u64,
     pub(crate) verbose: bool,
     pub(crate) json: bool,
@@ -840,6 +841,7 @@ trait ForeignEffectPort {
         state_dir: &Path,
         store_prefix: &str,
         base_state_dirs: &[PathBuf],
+        source_admission: Option<&dyn crunch_store::StoreSourceAdmission>,
     ) -> Result<(), RunError>;
     fn realize(
         &self,
@@ -979,9 +981,16 @@ impl ForeignEffectPort for ForeignHostPort {
         state_dir: &Path,
         store_prefix: &str,
         base_state_dirs: &[PathBuf],
+        source_admission: Option<&dyn crunch_store::StoreSourceAdmission>,
     ) -> Result<(), RunError> {
-        crunch_store::StoreConfig::preflight_backend_identity_for(backend, state_dir, store_prefix, base_state_dirs)
-            .map_err(|error| RunError::Internal(format!("opening store: {error}")))
+        crunch_store::StoreConfig::preflight_backend_identity_for(
+            backend,
+            state_dir,
+            store_prefix,
+            base_state_dirs,
+            source_admission,
+        )
+        .map_err(|error| RunError::Internal(format!("opening store: {error}")))
     }
 
     fn realize(
@@ -1603,6 +1612,7 @@ fn open_nario_source_staging(backend: crunch_store::StoreBackend) -> Result<Nari
             output_dir: output_dir.clone(),
             remote_cache_urls: Vec::new(),
             base_state_dirs: Vec::new(),
+            source_admission: None,
             fallback_mode: crunch_store::StoreFallbackMode::Strict,
             store_dir: crunch_store::NARIO_V2_STORE_PREFIX.to_string(),
         }))
@@ -1741,6 +1751,7 @@ fn run_audit(
         state_dir: context.state_dir,
         backend: context.backend,
         base_state_dirs: context.base_state_dirs,
+        source_admission: context.source_admission,
         trusted_keys: &trusted_keys,
     })?;
     port.publish(request.output_path, &receipt, "foreign provenance audit receipt")?;
@@ -1889,7 +1900,13 @@ fn run_realize(
         })
         .map_err(|error| RunError::Internal(error.to_string()))?;
     }
-    port.preflight_store(context.backend, context.state_dir, &plan.target_store_prefix, context.base_state_dirs)?;
+    port.preflight_store(
+        context.backend,
+        context.state_dir,
+        &plan.target_store_prefix,
+        context.base_state_dirs,
+        context.source_admission.map(std::sync::Arc::as_ref),
+    )?;
     let keypair = port.load_or_generate_key(request.signing_key_path, context.state_dir, !context.json)?;
     let cache_keys = trusted_cache_keys_from_plan(&plan)?;
     let trusted_keys = crunch_build::build_trusted_keys(&keypair, Some(&cache_keys));
@@ -1905,6 +1922,7 @@ fn run_realize(
         state_dir: context.state_dir,
         backend: context.backend,
         base_state_dirs: context.base_state_dirs,
+        source_admission: context.source_admission,
         keypair: &keypair,
         trusted_keys: &trusted_keys,
         max_jobs: crunch_pipeline::resolve_max_jobs(request.jobs),
@@ -3008,6 +3026,7 @@ mod tests {
             state_dir: &state_dir,
             backend: crunch_store::StoreBackend::Snix,
             base_state_dirs: &[],
+            source_admission: None,
             source_bundle_bytes_max: DEFAULT_FOREIGN_JSON_ARTIFACT_BYTES_MAX,
             verbose: false,
             json: true,

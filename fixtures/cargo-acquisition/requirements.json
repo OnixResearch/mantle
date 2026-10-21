@@ -1,0 +1,33 @@
+{
+  "schema": "mantle-cargo-acquisition-proof-requirements-v1",
+  "workspace_fixture": "fixtures/lock-vendor-two-crate",
+  "vendor_prepopulation": "forbidden",
+  "packages": [
+    {
+      "name": "crc64",
+      "version": "2.0.0",
+      "url": "https://static.crates.io/crates/crc64/crc64-2.0.0.crate",
+      "sha256": "2707e3afba5e19b75d582d88bc79237418f2a2a2d673d01cf9b03633b46e98f3"
+    },
+    {
+      "name": "memchr",
+      "version": "2.8.0",
+      "url": "https://static.crates.io/crates/memchr/memchr-2.8.0.crate",
+      "sha256": "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
+    }
+  ],
+  "selected_shared_table": "fixtures/lock-vendor-two-crate/shared-lock-hashes-v1",
+  "source_preparation": "scripts/vendor-source-bundle.py --profile two-crate with an explicitly declared sparse registry index; then existing fetch/producer.ncl/selected-table.ncl through signed store admission",
+  "source_archive_contains": ["workspace", "registry/index", "vendor-dynamic-assemble.py", "vendor-assemble.py", "git-transports.json", "producer-src"],
+  "acquisition_inputs_fields": ["bundle", "producer", "selected_table", "python", "rust", "runtime"],
+  "tool_inputs_fields": ["seed_toolchain", "musl", "unit_producer", "planner", "linker", "helper", "runtime", "host_triple", "target_triple"],
+  "tool_identity_requirement": "Every tool/source field is an exact immutable logical store root or executable beneath such a root, admitted by signed PathInfo and verified NAR. No tool is downloaded, built with a host compiler, or resolved from Cargo home by this proof driver.",
+  "target": "x86_64-unknown-linux-musl",
+  "host": "Must equal rustc -vV from the signed toolchain observation; cross-target compilation requires explicit target_linker {executable,arguments,inputs} in the tools manifest and identical producer config/Nickel declaration",
+  "rust_requirement": "Declared nightly Cargo/rustc supporting cargo build -Z unstable-options --unit-graph and the musl standard library; declared native linker/runtime closure",
+  "execution_requirement": "Linux bubblewrap and user/network namespaces enabled; explicit pinned --bwrap path; strict Mantle native sandbox configured from declared tools",
+  "network": "Only explicit positive and negative acquisition may fetch HTTPS; outer network namespace denies all subsequent planning, compilation, execution and signed clean-client reuse",
+  "expected_stdout": "offline two-crate consumer: verified\n",
+  "expected_negative_boundaries": ["missing lock SHA-256 at acquisition-planning", "unreviewed Git at acquisition-planning", "changed admitted fetch SHA-256 at fixed-output realization", "missing or wrong archive at assembler", "changed vendor package checksum at Cargo import", "unchecksummed or symlinked vendor file at Cargo import", "absent live native parent facts at acquisition-admission", "wrong trusted key at signed PathInfo verification", "corrupt physical vendor at signed NAR verification"],
+  "non_claims": ["not-full-workspace-acceptance", "not-Git-compilation-coverage", "not-bootstrap-baseline-acceptance", "not-release-parity"]
+}

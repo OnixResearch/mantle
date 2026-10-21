@@ -124,6 +124,12 @@ pub struct ChapterTransportIndex {
     pub chapters: Vec<ChapterTransportChapter>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanonicalChapterTransportIndex {
+    pub index: ChapterTransportIndex,
+    pub bytes: Vec<u8>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ChapterTransportReceipt {
@@ -138,6 +144,12 @@ pub struct ChapterTransportReceipt {
     pub member_count: u32,
     pub claim_scope: String,
     pub non_claims: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanonicalChapterTransportReceipt {
+    pub receipt: ChapterTransportReceipt,
+    pub bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -535,23 +547,27 @@ fn chapter_totals(chapters: &[ChapterTransportChapter]) -> Result<ChapterTotals,
     })
 }
 
-pub fn canonical_chapter_transport_index(index: &ChapterTransportIndex) -> Result<Vec<u8>, ChapterTransportError> {
-    validate_chapter_transport_index(index)?;
-    serde_json::to_vec(index).map_err(|error| transport_error(format!("serializing chapter transport index: {error}")))
+pub fn canonical_chapter_transport_index(
+    index: ChapterTransportIndex,
+) -> Result<CanonicalChapterTransportIndex, ChapterTransportError> {
+    validate_chapter_transport_index(&index)?;
+    let bytes = serde_json::to_vec(&index)
+        .map_err(|error| transport_error(format!("serializing chapter transport index: {error}")))?;
+    Ok(CanonicalChapterTransportIndex { index, bytes })
 }
 
-pub fn parse_canonical_chapter_transport_index(bytes: &[u8]) -> Result<ChapterTransportIndex, ChapterTransportError> {
-    validate_index_size(bytes)?;
-    let index: ChapterTransportIndex = serde_json::from_slice(bytes)
+pub fn parse_canonical_chapter_transport_index(bytes: Vec<u8>) -> Result<ChapterTransportIndex, ChapterTransportError> {
+    validate_index_size(&bytes)?;
+    let index: ChapterTransportIndex = serde_json::from_slice(&bytes)
         .map_err(|error| transport_error(format!("parsing chapter transport index: {error}")))?;
-    let canonical = canonical_chapter_transport_index(&index)?;
-    if canonical != bytes {
+    let canonical = canonical_chapter_transport_index(index)?;
+    if canonical.bytes != bytes {
         return Err(transport_error("chapter transport index is not canonical compact JSON"));
     }
-    Ok(index)
+    Ok(canonical.index)
 }
 
-pub fn validate_chapter_transport_index(index: &ChapterTransportIndex) -> Result<(), ChapterTransportError> {
+fn validate_chapter_transport_index(index: &ChapterTransportIndex) -> Result<(), ChapterTransportError> {
     if index.schema != CHAPTER_TRANSPORT_INDEX_SCHEMA {
         return Err(transport_error(format!("unsupported chapter transport index schema: {}", index.schema)));
     }
@@ -636,26 +652,27 @@ pub fn build_chapter_transport_receipt(
 }
 
 pub fn canonical_chapter_transport_receipt(
-    receipt: &ChapterTransportReceipt,
-) -> Result<Vec<u8>, ChapterTransportError> {
-    validate_chapter_transport_receipt(receipt)?;
-    serde_json::to_vec(receipt)
-        .map_err(|error| transport_error(format!("serializing chapter transport receipt: {error}")))
+    receipt: ChapterTransportReceipt,
+) -> Result<CanonicalChapterTransportReceipt, ChapterTransportError> {
+    validate_chapter_transport_receipt(&receipt)?;
+    let bytes = serde_json::to_vec(&receipt)
+        .map_err(|error| transport_error(format!("serializing chapter transport receipt: {error}")))?;
+    Ok(CanonicalChapterTransportReceipt { receipt, bytes })
 }
 
 pub fn parse_canonical_chapter_transport_receipt(
-    bytes: &[u8],
+    bytes: Vec<u8>,
 ) -> Result<ChapterTransportReceipt, ChapterTransportError> {
-    let receipt: ChapterTransportReceipt = serde_json::from_slice(bytes)
+    let receipt: ChapterTransportReceipt = serde_json::from_slice(&bytes)
         .map_err(|error| transport_error(format!("parsing chapter transport receipt: {error}")))?;
-    let canonical = canonical_chapter_transport_receipt(&receipt)?;
-    if canonical != bytes {
+    let canonical = canonical_chapter_transport_receipt(receipt)?;
+    if canonical.bytes != bytes {
         return Err(transport_error("chapter transport receipt is not canonical compact JSON"));
     }
-    Ok(receipt)
+    Ok(canonical.receipt)
 }
 
-pub fn validate_chapter_transport_receipt(receipt: &ChapterTransportReceipt) -> Result<(), ChapterTransportError> {
+fn validate_chapter_transport_receipt(receipt: &ChapterTransportReceipt) -> Result<(), ChapterTransportError> {
     if receipt.schema != CHAPTER_TRANSPORT_RECEIPT_SCHEMA || receipt.format != CHAPTER_TRANSPORT_FORMAT {
         return Err(transport_error("unsupported chapter transport receipt schema or format"));
     }
@@ -725,8 +742,8 @@ pub fn chapter_transport_non_claims() -> Vec<String> {
     ]
 }
 
-pub fn render_chapter_transport_blockers(blockers: &[ChapterTransportBlocker]) -> String {
-    render_blockers("chapter transport plan", blockers)
+pub fn render_chapter_transport_blockers(blockers: Vec<ChapterTransportBlocker>) -> String {
+    render_blockers("chapter transport plan", &blockers)
 }
 
 fn render_blockers(label: &str, blockers: &[ChapterTransportBlocker]) -> String {
@@ -843,24 +860,24 @@ mod tests {
     #[test]
     fn canonical_index_and_receipt_round_trip() {
         let index = plan_chapter_transport(valid_entries(), digest('b')).unwrap();
-        let index_bytes = canonical_chapter_transport_index(&index).unwrap();
-        let parsed_index = parse_canonical_chapter_transport_index(&index_bytes).unwrap();
+        let canonical_index = canonical_chapter_transport_index(index).unwrap();
+        assert!(!canonical_index.bytes.contains(&b'\n'));
+        let parsed_index = parse_canonical_chapter_transport_index(canonical_index.bytes).unwrap();
         let receipt = build_chapter_transport_receipt(ChapterTransportReceiptInput {
             archive_size_bytes: FILE_BYTES,
             archive_digest_blake3: digest('c'),
             source_manifest_digest_blake3: digest('b'),
             transport_index_digest_blake3: digest('d'),
-            chapter_count: index.chapter_count,
-            member_count: index.member_count,
+            chapter_count: canonical_index.index.chapter_count,
+            member_count: canonical_index.index.member_count,
         })
         .unwrap();
-        let receipt_bytes = canonical_chapter_transport_receipt(&receipt).unwrap();
-        let parsed_receipt = parse_canonical_chapter_transport_receipt(&receipt_bytes).unwrap();
+        let canonical_receipt = canonical_chapter_transport_receipt(receipt).unwrap();
+        assert!(!canonical_receipt.bytes.contains(&b'\n'));
+        let parsed_receipt = parse_canonical_chapter_transport_receipt(canonical_receipt.bytes).unwrap();
 
-        assert_eq!(parsed_index, index);
-        assert_eq!(parsed_receipt, receipt);
-        assert!(!index_bytes.contains(&b'\n'));
-        assert!(!receipt_bytes.contains(&b'\n'));
+        assert_eq!(parsed_index, canonical_index.index);
+        assert_eq!(parsed_receipt, canonical_receipt.receipt);
     }
 
     #[test]
@@ -986,7 +1003,7 @@ mod tests {
         pretty.push(b'\n');
         let unknown = br#"{"schema":"mantle-release-chapter-transport-receipt-v1","unknown":true}"#;
 
-        assert!(parse_canonical_chapter_transport_index(&pretty).is_err());
-        assert!(parse_canonical_chapter_transport_receipt(unknown).is_err());
+        assert!(parse_canonical_chapter_transport_index(pretty).is_err());
+        assert!(parse_canonical_chapter_transport_receipt(unknown.to_vec()).is_err());
     }
 }

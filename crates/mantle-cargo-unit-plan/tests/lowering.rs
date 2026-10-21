@@ -70,6 +70,7 @@ fn bindings() -> PlanBindings {
         rustc: format!("{}/bin/rustc", store("rust-toolchain")),
         toolchain: store("rust-toolchain"),
         linker: format!("{}/bin/cc", store("linker")),
+        target_linker: None,
         runtime_inputs: Vec::new(),
         sources,
         units,
@@ -285,4 +286,52 @@ fn generic_plan_unit_input_and_byte_limits_block_before_publication() {
     let blocker = lower(&large, &large_bindings).unwrap_err();
     assert_eq!(blocker[0].code, "unit-plan-limit");
     assert!(blocker[0].detail.contains("plan bytes"));
+}
+
+#[test]
+fn target_linker_and_sysroot_do_not_contaminate_host_units() {
+    let mut facts = vec![
+        fact("app", 1, &["leaf"], "cdylib", "target"),
+        fact("leaf", 0, &[], "proc-macro", "host"),
+    ];
+    facts[0].arguments = vec!["--crate-type=cdylib".into(), "--edition=2024".into()];
+    let effects = plan_existing_unit_effects(facts).unwrap();
+    let mut bindings = bindings();
+    bindings.units.retain(|unit| unit.unit_id != "mid");
+    bindings.units.iter_mut().find(|unit| unit.unit_id == "app").unwrap().externs = vec![ExternBinding {
+        name: "leaf".into(),
+        unit_id: "leaf".into(),
+    }];
+    bindings.target_linker = Some(mantle_cargo_unit_plan::TargetLinkerBinding {
+        executable: format!("{}/bin/clang", store("target-cc")),
+        arguments: vec![
+            format!("--sysroot={}/sysroot", store("target-sdk")),
+            "-Wl,-z,max-page-size=16384".into(),
+        ],
+        inputs: vec![store("target-sdk")],
+    });
+    let (bytes, _) = lower(&effects, &bindings).unwrap();
+    let plan: Value = serde_json::from_slice(&bytes).unwrap();
+    let unit = |source: &str| {
+        plan["units"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|unit| unit["derivation"]["env"]["MANTLE_UNIT_SOURCE"] == format!("{{{{mantle-source:{source}}}}}"))
+            .unwrap()
+    };
+    let target = &unit("app")["derivation"];
+    let host = &unit("leaf")["derivation"];
+    assert_eq!(target["env"]["MANTLE_UNIT_LINKER"], format!("{}/bin/clang", store("target-cc")));
+    assert_eq!(host["env"]["MANTLE_UNIT_LINKER"], format!("{}/bin/cc", store("linker")));
+    assert!(host["env"].get("MANTLE_UNIT_LINK_ARGS").is_none());
+    assert!(target["inputs"].as_array().unwrap().iter().any(|input| input["path"] == store("target-sdk")));
+    assert!(!host["inputs"].as_array().unwrap().iter().any(|input| input["path"] == store("target-sdk")));
+    let mut changed = bindings.clone();
+    changed.target_linker.as_mut().unwrap().inputs[0] = store("other-sdk");
+    assert_eq!(lower(&effects, &changed).unwrap_err()[0].code, "unit-plan-host-path");
+    changed.target_linker.as_mut().unwrap().arguments[0] = "--sysroot=/usr".into();
+    assert_eq!(lower(&effects, &changed).unwrap_err()[0].code, "unit-plan-host-path");
+    changed.target_linker.as_mut().unwrap().arguments[0] = "@/etc/response".into();
+    assert_eq!(lower(&effects, &changed).unwrap_err()[0].code, "unit-plan-host-path");
 }

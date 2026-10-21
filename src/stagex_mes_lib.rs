@@ -1,3 +1,7 @@
+#[cfg(target_os = "linux")]
+#[path = "stagex_command_capture.rs"]
+pub(crate) mod command_capture;
+
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::fs::{self};
@@ -13,7 +17,20 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
+use mantle_application_contract::bootstrap_effects::BootstrapEffect;
 use serde::Serialize;
+
+fn process_capability<T>(
+    effect: BootstrapEffect,
+    run: impl FnOnce() -> Result<T, MesLibraryPlanError>,
+) -> Result<T, MesLibraryPlanError> {
+    let mut port = crate::bootstrap_effect_port::BootstrapPort::new(&[(effect, 1)])
+        .map_err(|error| MesLibraryPlanError::Limit(error.to_string()))?;
+    let result = port.call(effect, run);
+    port.finish_with(result, |outcome| {
+        MesLibraryPlanError::Limit(format!("bounded process effects inconsistent: {outcome:?}"))
+    })
+}
 
 const CONFIGURE_LINE_COUNT_MAX: usize = 2_048;
 const CONFIGURE_VARIABLE_COUNT_MAX: usize = 128;
@@ -970,7 +987,9 @@ pub(crate) fn run_bounded_process_capturing_stdout<S: AsRef<std::ffi::OsStr>>(
     stdout_bytes_max: u64,
     stderr_path: &Path,
 ) -> Result<(), MesLibraryPlanError> {
-    let stdout_file = File::create(stdout_path).map_err(|source| io_error("creating process stdout", source))?;
+    let stdout_file = process_capability(BootstrapEffect::WriteOutput, || {
+        File::create(stdout_path).map_err(|source| io_error("creating process stdout", source))
+    })?;
     let result = run_bounded_process_with_stdio(
         executable,
         args,
@@ -1050,7 +1069,9 @@ fn run_bounded_process_with_stdin_capturing_status<S: AsRef<std::ffi::OsStr>>(
     stderr_path: &Path,
 ) -> Result<ExitStatus, MesLibraryPlanError> {
     let stdin_file = open_bounded_process_stdin(stdin_path, stdin_bytes_max)?;
-    let stdout_file = File::create(stdout_path).map_err(|source| io_error("creating process stdout", source))?;
+    let stdout_file = process_capability(BootstrapEffect::WriteOutput, || {
+        File::create(stdout_path).map_err(|source| io_error("creating process stdout", source))
+    })?;
     let status = run_bounded_process_with_stdio_status(
         executable,
         args,
@@ -1099,62 +1120,118 @@ fn run_bounded_process_with_stdio_status<S: AsRef<std::ffi::OsStr>>(
     stdout_limit: Option<(&Path, u64)>,
     stderr_path: &Path,
 ) -> Result<ExitStatus, MesLibraryPlanError> {
-    let stderr_file = File::create(stderr_path).map_err(|source| io_error("creating process stderr", source))?;
-    let mut child = Command::new(executable)
-        .args(args)
-        .current_dir(current_dir)
-        .env_clear()
-        .envs(environment)
-        .stdin(stdin)
-        .stdout(stdout)
-        .stderr(Stdio::from(stderr_file))
-        .spawn()
-        .map_err(|source| io_error(format!("spawning {}", executable.display()), source))?;
-    let started = Instant::now();
-    loop {
-        if let Err(error) = enforce_optional_observation_file_limit(stdout_limit) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(error);
+    #[cfg(target_os = "linux")]
+    let pending = command_capture::before_command(executable, args, current_dir, environment)?;
+    #[cfg(target_os = "linux")]
+    let mut child_pid = None;
+    #[cfg(target_os = "linux")]
+    let capture_started = pending
+        .as_ref()
+        .map(|_| process_capability(BootstrapEffect::ReadClock, || Ok(Instant::now())))
+        .transpose()?;
+    let result = process_capability(BootstrapEffect::MaterializeProvider, || {
+        let stderr_file = process_capability(BootstrapEffect::WriteOutput, || {
+            File::create(stderr_path).map_err(|source| io_error("creating process stderr", source))
+        })?;
+        let mut child = Command::new(executable)
+            .args(args)
+            .current_dir(current_dir)
+            .env_clear()
+            .envs(environment)
+            .stdin(stdin)
+            .stdout(stdout)
+            .stderr(Stdio::from(stderr_file))
+            .spawn()
+            .map_err(|source| io_error(format!("spawning {}", executable.display()), source))?;
+        #[cfg(target_os = "linux")]
+        {
+            child_pid = Some(child.id());
         }
-        if let Some(status) = child.try_wait().map_err(|source| io_error("waiting for process", source))? {
-            return Ok(status);
-        }
-        if started.elapsed() >= Duration::from_millis(MES_PROCESS_TIMEOUT_MS) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(MesLibraryPlanError::ProcessTimeout {
-                executable: executable.to_path_buf(),
-                timeout_ms: MES_PROCESS_TIMEOUT_MS,
-            });
-        }
-        thread::sleep(Duration::from_millis(MES_PROCESS_POLL_MS));
+        // One admitted ledger is reused across polls; no allocation per clock
+        // or stdout metadata observation is necessary.
+        let poll_max = u32::try_from(MES_PROCESS_TIMEOUT_MS / MES_PROCESS_POLL_MS + 2)
+            .expect("bounded process poll limit fits the effect envelope");
+        let effects = [
+            (BootstrapEffect::ReadClock, poll_max),
+            (BootstrapEffect::ReadInput, poll_max),
+        ];
+        let mut polling =
+            crate::bootstrap_effect_port::BootstrapPort::new(&effects[..if stdout_limit.is_some() { 2 } else { 1 }])
+                .map_err(|error| MesLibraryPlanError::Limit(error.to_string()))?;
+        let result = (|| {
+            let started = polling.call(BootstrapEffect::ReadClock, || Ok(Instant::now()))?;
+            loop {
+                if let Err(error) = enforce_optional_observation_file_limit(&mut polling, stdout_limit) {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(error);
+                }
+                if let Some(status) = child.try_wait().map_err(|source| io_error("waiting for process", source))? {
+                    return Ok(status);
+                }
+                if polling.call(BootstrapEffect::ReadClock, || Ok(started.elapsed()))?
+                    >= Duration::from_millis(MES_PROCESS_TIMEOUT_MS)
+                {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(MesLibraryPlanError::ProcessTimeout {
+                        executable: executable.to_path_buf(),
+                        timeout_ms: MES_PROCESS_TIMEOUT_MS,
+                    });
+                }
+                thread::sleep(Duration::from_millis(MES_PROCESS_POLL_MS));
+            }
+        })();
+        polling.finish_with(result, |outcome| {
+            MesLibraryPlanError::Limit(format!("process polling observations inconsistent: {outcome:?}"))
+        })
+    });
+    #[cfg(target_os = "linux")]
+    if let Some(pending) = pending {
+        pending.complete(
+            child_pid,
+            result.as_ref().ok().and_then(ExitStatus::code),
+            u64::try_from(
+                process_capability(BootstrapEffect::ReadClock, || {
+                    Ok(capture_started.expect("capture start").elapsed())
+                })?
+                .as_millis(),
+            )
+            .unwrap_or(u64::MAX),
+            result.as_ref().err().map(ToString::to_string),
+        )?;
     }
+    result
 }
 
 fn open_bounded_process_stdin(path: &Path, bytes_max: u64) -> Result<File, MesLibraryPlanError> {
-    let metadata = fs::metadata(path).map_err(|source| io_error("reading process stdin metadata", source))?;
-    if !metadata.is_file() {
-        return Err(MesLibraryPlanError::Limit(format!("process stdin is not a regular file: {}", path.display())));
-    }
-    if metadata.len() > bytes_max {
-        return Err(MesLibraryPlanError::Limit(format!(
-            "process stdin exceeds {bytes_max} bytes: {} has {} bytes",
-            path.display(),
-            metadata.len()
-        )));
-    }
-    let file = File::open(path).map_err(|source| io_error("opening process stdin", source))?;
-    assert!(metadata.len() <= bytes_max);
-    assert!(path.is_file());
-    Ok(file)
+    process_capability(BootstrapEffect::ReadInput, || {
+        let metadata = fs::metadata(path).map_err(|source| io_error("reading process stdin metadata", source))?;
+        if !metadata.is_file() {
+            return Err(MesLibraryPlanError::Limit(format!("process stdin is not a regular file: {}", path.display())));
+        }
+        if metadata.len() > bytes_max {
+            return Err(MesLibraryPlanError::Limit(format!(
+                "process stdin exceeds {bytes_max} bytes: {} has {} bytes",
+                path.display(),
+                metadata.len()
+            )));
+        }
+        let file = File::open(path).map_err(|source| io_error("opening process stdin", source))?;
+        assert!(metadata.len() <= bytes_max);
+        assert!(path.is_file());
+        Ok(file)
+    })
 }
 
-fn enforce_optional_observation_file_limit(stdout_limit: Option<(&Path, u64)>) -> Result<(), MesLibraryPlanError> {
+fn enforce_optional_observation_file_limit(
+    port: &mut crate::bootstrap_effect_port::BootstrapPort,
+    stdout_limit: Option<(&Path, u64)>,
+) -> Result<(), MesLibraryPlanError> {
     let Some((stdout_path, stdout_bytes_max)) = stdout_limit else {
         return Ok(());
     };
-    enforce_observation_file_limit(stdout_path, stdout_bytes_max)
+    port.call(BootstrapEffect::ReadInput, || enforce_observation_file_limit(stdout_path, stdout_bytes_max))
 }
 
 fn enforce_observation_file_limit(path: &Path, bytes_max: u64) -> Result<(), MesLibraryPlanError> {

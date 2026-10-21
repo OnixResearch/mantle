@@ -18,11 +18,11 @@ object bytes. Mantle additionally has a protected executable inventory and
 strict fixed-point and release evidence lanes. A performance mechanism cannot
 be smuggled into their proof authority.
 
-The typed policy is `config/cc-compile-cache/default.ncl`
-(`mantle-cc-compile-cache-policy-v1`); its separate inventory contract is
-`config/cc-compile-cache/contracts.ncl`
-(`mantle-cc-compiler-inventory-v1`). A declaration of executable path and
-BLAKE3 digest still requires runtime byte measurement and supervisor audit.
+The policy source is `config/compile-cache/default.ncl`: it owns the
+`mantle-cc-driver-policy-v1` contract and the separately exportable
+`mantle-cc-cache-contract-v1` description. Scheduling policy belongs to
+`config/compile-slots/default.ncl`, not a derivation input. A declaration of
+executable path or content identity does not replace protected-exec authority.
 
 ## Decision Drivers
 
@@ -35,22 +35,20 @@ BLAKE3 digest still requires runtime byte measurement and supervisor audit.
 
 ## Decision
 
-Extend the existing **per-user** `mantle-rust-cache-daemon` and state authority
-with a separately versioned C/C++ action/manifest mode. C object bytes and
-manifests belong in per-record-bounded local file records at
-`state_dir/cc-compile-cache`, not RustUnitAction, Rust's castore-backed
-artifacts, its remote cache, or its shared retention policy. The initial
-bounds are 1,048,576 object bytes, 262,144 depfile bytes, 8 candidates per
-base key with FIFO eviction, 8,388,608 encoded frame bytes, and 4,096
-manifest dependencies. There is **no global storage quota** or retention
-guarantee for these C records. The driver is admitted only for the selected
-bootstrap compiler families after exact driver
-and real-compiler path and measured BLAKE3 identity checks against the session
-inventory **and** protected-exec supervisor inventory. The daemon must perform
-its own real-compiler authorization; a readable root or trusted peer UID alone
-is insufficient. Unclassifiable invocations forward unchanged to that
-compiler, not to an ambient PATH selection. A missing daemon degrades to a
-plain compile with a recorded disposition.
+Extend the existing **per-user** `mantle-rust-cache-daemon` and store authority
+with a separately versioned C/C++ object/manifest protocol. Reuse the existing
+castore and retention roots without pretending that C records are Rust unit
+actions or enabling remote sharing. The shell bounds retained records to 256,
+objects to 8,388,608 bytes, each diagnostic stream to 262,144 bytes, and learned
+dependencies to 4,096. Existing record JSON admission remains separately
+bounded. These bounds do not constitute a whole-store disk quota.
+
+Admit the driver and actual compiler explicitly; never replace ambient
+`CC`, alter `PATH`, or discover an alternative compiler on failure. Unknown
+invocations forward the original arguments to the selected compiler. Missing
+cache authority, malformed advisory records, or cache-publication failure must
+not replace an actual compiler result with a cache error. Old draft records
+without required output/depfile modes are misses, not a compatibility protocol.
 
 A candidate key binds source bytes, measured tool identity, normalized
 output-affecting arguments and selected environment. Depfiles from a miss
@@ -63,34 +61,31 @@ absolute store path nor its basename can substitute for content identity.
 If a complete manifest or safe path normalization cannot be established,
 do not reuse the object or replay a failure. A dependency rebuilt at
 another store path with identical content and the same stable logical
-identity remains eligible for reuse. Optional probe-result and cached-failure
-execution is **not implemented** by the daemon; this v1 policy requires both
-flags off. The core's probe domain and failure decision reserve future
-semantics only. A later reviewed enablement must bind probe script,
-toolchain, dependencies, platform, and flags, record every read disposition,
-and refuse failure replay without a known complete manifest. A failed
-compiler's depfile cannot prove negative-read completeness (a missing header
-may appear later); do not mark its manifest complete or replay it from
-depfile evidence alone. Independent read provenance is a prerequisite for
-any later failure replay decision. Result presence is not proof of trust.
+identity remains eligible for reuse. Probe identity, platform, flags and
+tool/runtime contents participate in the key. Failure replay additionally
+requires a known complete dependency manifest and complete bounded output
+observations; a partial depfile alone is not negative-read provenance.
+Unclassified probes, link operations, volatile time/date input and incomplete
+manifests compile normally instead of inventing reusable results. Result
+presence is not proof of trust.
 
-The cache socket must eventually be mapped into authorized sandboxes at
-execution time, not bound into derivations or stored in a derivation-hashing
-environment. **No sanctioned mapping seam exists in the present protected
-sandbox**: cache use in that lane remains blocked until the build-shell owner
-implements and audits one. Cache configuration must not introduce a writable
-cache mount as an input. Strict fixed-point and release lanes must run
-cache-off and record this mode; a cache receipt can never serve as rebuild
-evidence. Until the strict lanes reject CC cache state in observed execution,
-the corresponding proof acceptance remains open. Any alternate independently
-verified proof boundary needs its own accepted decision and evidence.
+An explicit local build option maps only a Unix socket to the fixed guest
+`/run/mantle/compile-cache.sock` immediately before execution. The mapping and
+build identifier do not enter derivation conversion, graph inputs, hashing,
+remote dispatch or the normal derivation environment. The default executor
+remains unchanged. Strict, offline-proof and self-build paths do not opt in;
+inherited cache/scheduling authority is rejected rather than silently adopted.
+Cache receipts cannot serve as rebuild evidence. See
+[ADR 0116](0116-share-local-compile-cache-and-slot-authority.md) for the
+same-daemon slot lifecycle and sandbox boundary. Source implementation alone
+does not establish protected-exec parity, fixed-point acceptance or timing
+benefit; both Cairn changes retain their executable acceptance obligations.
 
 ## Alternatives Considered
 
-- **Separate C/C++ daemon:** rejected because Rust's daemon already owns the
-  local lifecycle and receipts. C/C++ nevertheless needs separate
-  per-record-bounded files; Rust's castore action records cannot safely
-  represent a C action.
+- **Separate C/C++ daemon:** rejected because the existing daemon already owns
+  local lifecycle, bounded storage and retention. Protocol schemas distinguish
+  C objects from Rust actions without creating a second authority or store.
 - **Only compiler command line and source digest as the key:** rejected because
   changed headers and include-search shadowing can return stale objects.
 - **Hash every file in the entire source tree, including directories never

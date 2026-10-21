@@ -35,8 +35,14 @@ const TRANSCRIPT_WRITE_EFFECT: &str = "transcript-scratch-and-evidence-write";
 const TRANSCRIPT_PROCESS_EFFECT: &str = "transcript-process-run";
 const TRANSCRIPT_READBACK_EFFECT: &str = "transcript-evidence-readback";
 
+struct PublishedTranscript {
+    digest: blake3::Hash,
+    bytes_len: u64,
+}
+
 trait TranscriptPort {
     fn read_input(&mut self, path: &Path) -> Result<String, RunError>;
+    fn current_executable(&mut self) -> Result<PathBuf, RunError>;
     fn prepare_scratch(
         &mut self,
         in_place: bool,
@@ -50,13 +56,17 @@ trait TranscriptPort {
         scratch: &TranscriptScratch,
         work_dir: &Path,
     ) -> TranscriptExecution;
-    fn publish(&mut self, path: &Path, evidence: TranscriptEvidence) -> Result<blake3::Hash, RunError>;
-    fn readback(&mut self, path: &Path) -> Result<blake3::Hash, RunError>;
+    fn publish(&mut self, path: &Path, evidence: TranscriptEvidence) -> Result<PublishedTranscript, RunError>;
+    fn readback(&mut self, path: &Path, expected: &PublishedTranscript) -> Result<blake3::Hash, RunError>;
 }
 
 struct LocalTranscriptPort;
 
 impl TranscriptPort for LocalTranscriptPort {
+    fn current_executable(&mut self) -> Result<PathBuf, RunError> {
+        std::env::current_exe().map_err(|error| RunError::Internal(format!("resolving transcript executable: {error}")))
+    }
+
     fn read_input(&mut self, path: &Path) -> Result<String, RunError> {
         let metadata = fs::metadata(path)
             .map_err(|err| RunError::Internal(format!("reading transcript `{}` metadata: {err}", path.display())))?;
@@ -89,15 +99,44 @@ impl TranscriptPort for LocalTranscriptPort {
         execute_transcript(transcript, mantle_bin, scratch, work_dir)
     }
 
-    fn publish(&mut self, path: &Path, evidence: TranscriptEvidence) -> Result<blake3::Hash, RunError> {
+    fn publish(&mut self, path: &Path, evidence: TranscriptEvidence) -> Result<PublishedTranscript, RunError> {
         write_evidence(path, evidence)
     }
 
-    fn readback(&mut self, path: &Path) -> Result<blake3::Hash, RunError> {
-        let bytes = fs::read(path).map_err(|err| {
-            RunError::Internal(format!("reading transcript output artifact `{}`: {err}", path.display()))
-        })?;
-        Ok(blake3::hash(&bytes))
+    fn readback(&mut self, path: &Path, expected: &PublishedTranscript) -> Result<blake3::Hash, RunError> {
+        let identity = expected.digest.to_hex().to_string();
+        let plan = plan_effects(CommandFamily::Evaluation, &[EffectSpec {
+            effect_id: TRANSCRIPT_READBACK_EFFECT,
+            kind: EffectKind::ReadFiles,
+            limit: EffectMeasure::Bytes(expected.bytes_len.max(1)),
+            expected_output: ExpectedOutput::Identity(&identity),
+        }])
+        .map_err(|error| RunError::Internal(format!("planning transcript readback: {}", error.code())))?;
+        let bytes = fs::read(path);
+        let observation = Observation {
+            effect_id: EffectId(TRANSCRIPT_READBACK_EFFECT.into()),
+            kind: EffectKind::ReadFiles,
+            status: if bytes.is_ok() {
+                ObservationStatus::Succeeded
+            } else {
+                ObservationStatus::Failed
+            },
+            output: bytes
+                .as_ref()
+                .map_or(EffectOutput::None, |bytes| EffectOutput::Identity(blake3::hash(bytes).to_hex().to_string())),
+            usage: EffectMeasure::Bytes(bytes.as_ref().map_or(0, |bytes| bytes.len() as u64)),
+            diagnostics_code: bytes.as_ref().err().map(|_| "transcript-readback-failed".into()),
+        };
+        match (classify_observations(&plan, &[observation]), bytes) {
+            (ApplicationOutcome::Completed, Ok(bytes)) => Ok(blake3::hash(&bytes)),
+            (_, Err(error)) => {
+                Err(RunError::Internal(format!("reading transcript output artifact `{}`: {error}", path.display())))
+            }
+            (outcome, _) => Err(RunError::Build(format!(
+                "transcript evidence {} contradicts observed runs: {outcome:?}",
+                path.display()
+            ))),
+        }
     }
 }
 
@@ -246,7 +285,7 @@ fn transcript_effect_plan() -> Result<EffectPlan, RunError> {
         EffectSpec {
             effect_id: TRANSCRIPT_INPUT_EFFECT,
             kind: EffectKind::ReadFiles,
-            limit: EffectMeasure::Calls(1),
+            limit: EffectMeasure::Calls(2),
             expected_output: ExpectedOutput::None,
         },
         EffectSpec {
@@ -265,7 +304,7 @@ fn transcript_effect_plan() -> Result<EffectPlan, RunError> {
             effect_id: TRANSCRIPT_READBACK_EFFECT,
             kind: EffectKind::ReadFiles,
             limit: EffectMeasure::Calls(1),
-            expected_output: ExpectedOutput::Identity(TRANSCRIPT_EVIDENCE_SCHEMA),
+            expected_output: ExpectedOutput::None,
         },
     ])
     .map_err(|error| RunError::Internal(format!("planning transcript effects: {}", error.code())))
@@ -311,7 +350,18 @@ fn run_transcript_with_port(
     debug_assert!(transcript.blocks.len() <= MAX_TRANSCRIPT_BLOCKS);
     let output_path = options.output.unwrap_or_else(|| default_output_path(&options.transcript));
     let work_dir = transcript_work_dir(&options.transcript);
-    let mantle_bin = options.mantle_bin.unwrap_or_else(default_mantle_bin);
+    let mantle_bin = match options.mantle_bin {
+        Some(path) => path,
+        None => {
+            let executable = port.current_executable();
+            observed[0].usage = EffectMeasure::Calls(2);
+            if executable.is_err() {
+                observed[0].status = ObservationStatus::Failed;
+                observed[0].diagnostics_code = Some("transcript-executable-resolution-failed".into());
+            }
+            executable?
+        }
+    };
     let scratch = port.prepare_scratch(transcript.options.in_place, options.backend, options.state_dir);
     observed[1].status = if scratch.is_ok() {
         ObservationStatus::Succeeded
@@ -349,17 +399,12 @@ fn run_transcript_with_port(
     };
     observed[1].usage = EffectMeasure::Calls(2);
     observed[1].diagnostics_code = published.is_err().then(|| format!("{TRANSCRIPT_WRITE_EFFECT}-failed"));
-    let expected_digest = published?;
-    let persisted = port.readback(&output_path);
+    let publication = published?;
+    let persisted = port.readback(&output_path, &publication);
     observed[3].usage = EffectMeasure::Calls(1);
     match persisted {
         Ok(actual_digest) => {
-            let matches = actual_digest == expected_digest;
-            observed[3].output = if matches {
-                EffectOutput::Identity(TRANSCRIPT_EVIDENCE_SCHEMA.to_string())
-            } else {
-                EffectOutput::None
-            };
+            let matches = actual_digest == publication.digest;
             observed[3].status = if matches {
                 ObservationStatus::Succeeded
             } else {
@@ -618,7 +663,7 @@ fn default_output_path(transcript: &Path) -> PathBuf {
     PathBuf::from(path)
 }
 
-fn write_evidence(path: &Path, evidence: TranscriptEvidence) -> Result<blake3::Hash, RunError> {
+fn write_evidence(path: &Path, evidence: TranscriptEvidence) -> Result<PublishedTranscript, RunError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| {
             RunError::Internal(format!("creating transcript output directory `{}`: {err}", parent.display()))
@@ -629,11 +674,10 @@ fn write_evidence(path: &Path, evidence: TranscriptEvidence) -> Result<blake3::H
     let digest = blake3::hash(&bytes);
     fs::write(path, &bytes)
         .map_err(|err| RunError::Internal(format!("writing transcript output artifact `{}`: {err}", path.display())))?;
-    Ok(digest)
-}
-
-fn default_mantle_bin() -> PathBuf {
-    std::env::current_exe().unwrap_or_else(|_| PathBuf::from("mantle"))
+    Ok(PublishedTranscript {
+        digest,
+        bytes_len: bytes.len() as u64,
+    })
 }
 
 struct TranscriptScratch {
@@ -1024,6 +1068,22 @@ fn parse_options(body: &str) -> Result<TranscriptOptions, RunError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transcript_evidence_readback_rejects_same_size_replacement() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("evidence.json");
+        let expected = b"observed-run";
+        fs::write(&path, expected).unwrap();
+        let publication = PublishedTranscript {
+            digest: blake3::hash(expected),
+            bytes_len: expected.len() as u64,
+        };
+        let mut port = LocalTranscriptPort;
+        assert_eq!(port.readback(&path, &publication).unwrap(), publication.digest);
+        fs::write(&path, b"tampered-run").unwrap();
+        assert!(matches!(port.readback(&path, &publication), Err(RunError::Build(_))));
+    }
 
     #[test]
     fn parser_rejects_unknown_closed_vocabulary() {

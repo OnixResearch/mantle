@@ -82,3 +82,90 @@ fn source_slice_rejects_symlinks_and_special_files() {
         fs::remove_dir_all(copied).unwrap();
     }
 }
+
+#[test]
+fn nested_members_and_siblings_are_not_parent_content_but_includes_are() {
+    let root = std::env::temp_dir().join(format!("unit-source-boundaries-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    let parent = root.join("workspace/parent");
+    let nested = parent.join("members/nested");
+    let sibling = root.join("workspace/sibling");
+    for package in [&parent, &nested, &sibling] {
+        fs::create_dir_all(package.join("src")).unwrap();
+        fs::write(package.join("Cargo.toml"), "[package]\nname='fixture'\nversion='0.1.0'\n").unwrap();
+    }
+    fs::write(nested.join("src/lib.rs"), "pub const VALUE:u32=1;").unwrap();
+    fs::write(sibling.join("secret"), "undeclared").unwrap();
+    fs::write(parent.join("src/message.txt"), "included").unwrap();
+    fs::write(parent.join("src/payload.bin"), [0, 42, 255]).unwrap();
+    fs::write(
+        parent.join("src/main.rs"),
+        r#"fn main() {
+        assert_eq!(include_str!("message.txt"), "included");
+        assert_eq!(include_bytes!("payload.bin"), &[0,42,255]);
+        println!("included-data=42");
+    }"#,
+    )
+    .unwrap();
+    let roots = vec![parent.clone(), nested.clone(), sibling.clone()];
+    let first = root.join("slice-first");
+    source_nar::copy_package_slice(&parent, &first, &roots).unwrap();
+    assert!(!first.join("members/nested").exists());
+    assert!(!first.join("../sibling/secret").exists());
+    let executable = root.join("consumer");
+    let compile = Command::new("rustc").arg(first.join("src/main.rs")).arg("-o").arg(&executable).output().unwrap();
+    assert!(compile.status.success(), "{}", String::from_utf8_lossy(&compile.stderr));
+    let run = Command::new(executable).output().unwrap();
+    assert!(run.status.success());
+    assert_eq!(run.stdout, b"included-data=42\n");
+    fs::write(nested.join("src/lib.rs"), "pub const VALUE:u32=2;").unwrap();
+    fs::write(sibling.join("secret"), "changed outside parent").unwrap();
+    let second = root.join("slice-second");
+    source_nar::copy_package_slice(&parent, &second, &roots).unwrap();
+    assert_eq!(source_nar::nar_blake3(&first).unwrap(), source_nar::nar_blake3(&second).unwrap());
+    fs::write(parent.join("src/payload.bin"), [0, 43, 255]).unwrap();
+    let third = root.join("slice-third");
+    source_nar::copy_package_slice(&parent, &third, &roots).unwrap();
+    assert_ne!(source_nar::nar_blake3(&first).unwrap(), source_nar::nar_blake3(&third).unwrap());
+    fs::write(parent.join("src/message.txt"), "changed included text").unwrap();
+    let fourth = root.join("slice-fourth");
+    source_nar::copy_package_slice(&parent, &fourth, &roots).unwrap();
+    assert_ne!(source_nar::nar_blake3(&third).unwrap(), source_nar::nar_blake3(&fourth).unwrap());
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn undeclared_package_external_compile_and_build_script_reads_fail_closed() {
+    let root = std::env::temp_dir().join(format!("unit-source-external-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    let source = root.join("workspace/package");
+    fs::create_dir_all(source.join("src")).unwrap();
+    fs::create_dir_all(root.join("workspace/sibling")).unwrap();
+    fs::write(root.join("workspace/sibling/secret"), "present in checkout only").unwrap();
+    fs::write(source.join("src/lib.rs"), "pub const SECRET:&str=include_str!(\"../../sibling/secret\");").unwrap();
+    fs::write(source.join("build.rs"), "fn main(){std::fs::read_to_string(\"../sibling/secret\").expect(\"undeclared source input outside package\");}").unwrap();
+    let slice = root.join("slice");
+    source_nar::copy_package_slice(&source, &slice, &[]).unwrap();
+    let compile = Command::new("rustc")
+        .arg("--crate-type=lib")
+        .arg(slice.join("src/lib.rs"))
+        .arg("--out-dir")
+        .arg(&root)
+        .output()
+        .unwrap();
+    assert!(!compile.status.success());
+    assert!(String::from_utf8_lossy(&compile.stderr).contains("sibling/secret"));
+    let script = root.join("build-script");
+    let compile_script = Command::new("rustc")
+        .arg("--crate-name=build_script_build")
+        .arg(slice.join("build.rs"))
+        .arg("-o")
+        .arg(&script)
+        .output()
+        .unwrap();
+    assert!(compile_script.status.success(), "{}", String::from_utf8_lossy(&compile_script.stderr));
+    let run = Command::new(script).current_dir(slice).output().unwrap();
+    assert!(!run.status.success());
+    assert!(String::from_utf8_lossy(&run.stderr).contains("undeclared source input outside package"));
+    fs::remove_dir_all(root).unwrap();
+}

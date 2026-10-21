@@ -60,6 +60,12 @@ const MAX_WATCH_TOTAL_BYTES: usize = 16_777_216;
 /// The return value includes the root source even without imports.
 pub fn source_dependencies(root: &Path, import_paths: &[OsString]) -> Result<Vec<PathBuf>, Error> {
     let root = normalize_path(root).map_err(Error::Io)?;
+    let scope = crate::import_paths_for_file(&root, import_paths);
+    source_dependencies_in_scope(&root, &scope)
+}
+
+pub(crate) fn source_dependencies_in_scope(root: &Path, import_paths: &[OsString]) -> Result<Vec<PathBuf>, Error> {
+    let root = normalize_path(root).map_err(Error::Io)?;
     let mut pending = vec![(root, InputFormat::Nickel)];
     let mut observed = BTreeSet::new();
     let mut total_bytes = 0_usize;
@@ -151,6 +157,54 @@ fn enqueue_resolved_imports(
 }
 fn boundary(message: &str) -> Error {
     Error::Boundary(message.to_string())
+}
+
+/// Attribute only independent, unannotated direct-import roots. Everything else
+/// requires fresh evaluation; a syntactic label is not a dependency proof.
+pub(crate) fn independent_import_roots(
+    source: &str,
+    root: &Path,
+    scope: &[OsString],
+) -> Result<Option<std::collections::BTreeMap<String, Vec<PathBuf>>>, Error> {
+    let mut cache = CacheHub::new();
+    let id = cache.replace_string(SourcePath::Query, source.to_string());
+    let parsed = TermParser::new()
+        .parse_strict_compat(&mut PosTable::new(), id, Lexer::new(cache.sources.source(id)))
+        .map_err(|_| boundary("could not parse watched Nickel source"))?;
+    let Some(Term::RecRecord(data)) = parsed.as_term() else {
+        return Ok(None);
+    };
+    if !data.includes.is_empty()
+        || !data.dyn_fields.is_empty()
+        || data.record.attrs != Default::default()
+        || data.record.sealed_tail.is_some()
+        || data.record.fields.keys().any(|key| key.label() == "name")
+    {
+        return Ok(None);
+    }
+    let mut roots = std::collections::BTreeMap::new();
+    for (label, field) in &data.record.fields {
+        if !field.metadata.is_empty() || !field.pending_contracts.is_empty() {
+            return Ok(None);
+        }
+        let Some(Term::Import(Import::Path {
+            path,
+            format: InputFormat::Nickel,
+        })) = field.value.as_ref().and_then(|value| value.as_term())
+        else {
+            return Ok(None);
+        };
+        let mut pending = Vec::new();
+        enqueue_resolved_imports(root, vec![(path.clone(), InputFormat::Nickel)], scope, &mut pending)?;
+        let (path, _) = pending.pop().ok_or_else(|| boundary("root import did not resolve"))?;
+        let dependencies = source_dependencies_in_scope(&path, scope)?;
+        // An import of this manifest can introduce root/sibling recursion.
+        if dependencies.iter().any(|path| path == root) {
+            return Ok(None);
+        }
+        roots.insert(label.label().to_string(), dependencies);
+    }
+    Ok(Some(roots))
 }
 
 #[cfg(test)]

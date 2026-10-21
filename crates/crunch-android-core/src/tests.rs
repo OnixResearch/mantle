@@ -23,6 +23,8 @@ pub(crate) fn valid() -> ApkPlan {
         manifest_member: "AndroidManifest.xml".into(),
         resources: alloc::vec!["res/values/strings.xml".into(), "res/drawable/icon.png".into()],
         java_sources: alloc::vec!["src/Demo.java".into()],
+        assets: alloc::vec![],
+        native: None,
         toolchain: Toolchain {
             build_tools: identity("android-build-tools"),
             jdk: identity("temurin-jdk"),

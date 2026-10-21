@@ -1,0 +1,44 @@
+//! Preserve the original compiler's complete native command as source data.
+//! The authenticated target wrapper and GCC specs are interpreted separately;
+//! this module never rewrites compiler flags or launches a child.
+use std::ffi::OsStr;
+use std::fs::OpenOptions;
+use std::io::{self, BufWriter, Write};
+use std::path::Path;
+use super::{Cc, Command, LinkerFlavor, Lld, Session, SplitDebuginfo};
+const WORK: &str = "/outputs/link-work";
+const REQUEST: &str = "/outputs/link-work/native-link.argv";
+fn invalid(message: &str) -> io::Error { io::Error::new(io::ErrorKind::InvalidInput, message) }
+fn record(output: &mut impl Write, value: &[u8]) -> io::Result<()> {
+    if value.contains(&0) { return Err(invalid("NUL in original native command")); }
+    write!(output, "{}:", value.len())?; output.write_all(value)?; output.write_all(b",")
+}
+fn create(path: &Path) -> io::Result<BufWriter<std::fs::File>> {
+    Ok(BufWriter::new(OpenOptions::new().write(true).create_new(true).open(path)?))
+}
+pub(super) fn emit(sess: &Session, command: &Command, output: &Path, flavor: LinkerFlavor) -> bool {
+    match emit_inner(sess, command, output, flavor) { Ok(emitted) => emitted, Err(error) => sess.dcx().fatal(format!("Cairn native-link phase: {error}")) }
+}
+fn emit_inner(sess: &Session, command: &Command, output: &Path, flavor: LinkerFlavor) -> io::Result<bool> {
+    let Some(request) = std::env::var_os("MANTLE_CAIRN_LINK_RESPONSE") else { return Ok(false); };
+    if request != OsStr::new(REQUEST) || std::env::var_os("MANTLE_CAIRN_LINK_WORK").as_deref() != Some(OsStr::new(WORK)) { return Err(invalid("unexpected native request namespace")); }
+    if sess.opts.target_triple.tuple() != "x86_64-unknown-linux-musl" || !matches!(flavor, LinkerFlavor::Gnu(Cc::Yes, Lld::No)) || !sess.opts.cg.save_temps || !matches!(sess.split_debuginfo(), SplitDebuginfo::Off | SplitDebuginfo::Unpacked) { return Err(invalid("native phase requires original musl GNU CC command and retained temporaries")); }
+    if !output.starts_with(WORK) || output == Path::new(WORK) { return Err(invalid("native output escapes its retained compiler tree")); }
+    let expected = std::env::var_os("MANTLE_CAIRN_TARGET_CC").ok_or_else(|| invalid("missing original target CC wrapper"))?;
+    if expected != OsStr::new("/inputs/package/target-wrappers/cc") || !command.cairn_phase_command_is(&expected) { return Err(invalid("compiler selected an unexpected native program or environment")); }
+    let arguments = command.get_args();
+    let mut output_count = 0;
+    for pair in arguments.windows(2) { if pair[0] == "-o" { if pair[1].as_os_str() != output.as_os_str() { return Err(invalid("original linker output operand changed")); } output_count += 1; } }
+    if output_count != 1 { return Err(invalid("original linker command requires exactly one output pair")); }
+    let mut emitted = create(Path::new(&request))?; record(&mut emitted, expected.as_encoded_bytes())?;
+    for argument in arguments { record(&mut emitted, argument.as_encoded_bytes())?; } emitted.flush()?;
+    let mut destination = create(&Path::new(WORK).join("native-link.output"))?; destination.write_all(output.as_os_str().as_encoded_bytes())?; destination.flush()?;
+    let mut cwd = create(&Path::new(WORK).join("native-link.cwd"))?; cwd.write_all(std::env::current_dir()?.as_os_str().as_encoded_bytes())?; cwd.flush()?;
+    let mut environment = create(&Path::new(WORK).join("native-link.environment"))?;
+    for (key, value) in std::env::vars_os() {
+        if command.cairn_phase_environment().any(|(override_key, _)| override_key == key.as_os_str()) { continue; }
+        record(&mut environment, key.as_encoded_bytes())?; record(&mut environment, value.as_encoded_bytes())?;
+    }
+    for (key, value) in command.cairn_phase_environment() { record(&mut environment, key.as_encoded_bytes())?; record(&mut environment, value.as_encoded_bytes())?; }
+    environment.flush()?; Ok(true)
+}

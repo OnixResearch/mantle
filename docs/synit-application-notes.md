@@ -162,6 +162,14 @@ give GC an auditable reason for every retained path.
 **Home.** `src/store_cmd.rs` root commands, `crunch-gc-core` planning,
 `crunch-store` persistence.
 
+The core consumes owned interest facts and release selectors. Grouping moves
+each fact into its path group; release returns the owned selector with selected
+identities so persistence can enforce that same scope without copying facts.
+Canonical identity returns the original owned bytes with their unchanged BLAKE3
+digest, allowing publication to reuse the exact hashed bytes. Retention planning
+owns its policy and usage aggregation consumes its decisions; the shell formats
+the scalar root-class and retention-reason values for unchanged report fields.
+
 **Evidence.** A real two-process CLI fixture pins one signed path under two
 different owner labels, rejects a foreign-label release, and leaves the second
 record intact after releasing the first. A migration fixture archives the

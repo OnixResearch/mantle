@@ -97,6 +97,7 @@ pub(crate) struct ForeignProvenanceAuditRequest<'a> {
     pub(crate) state_dir: &'a Path,
     pub(crate) backend: crunch_store::StoreBackend,
     pub(crate) base_state_dirs: &'a [PathBuf],
+    pub(crate) source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     pub(crate) trusted_keys: &'a [VerifyingKey],
 }
 
@@ -124,6 +125,7 @@ pub(crate) async fn audit_foreign_realization(
         fallback_mode: StoreFallbackMode::Strict,
         store_dir: request.plan.target_store_prefix.clone(),
         base_state_dirs: request.base_state_dirs.to_vec(),
+        source_admission: request.source_admission.cloned(),
     })
     .await
     .map_err(|error| RunError::Internal(format!("opening foreign provenance audit store: {error}")))?;

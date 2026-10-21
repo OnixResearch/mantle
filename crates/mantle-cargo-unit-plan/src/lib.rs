@@ -77,6 +77,18 @@ pub struct UnitBinding {
     pub build_script_run: Option<BuildScriptRunBinding>,
 }
 
+/// Target-only linker and its declared tool/sysroot roots. Host units always
+/// retain `PlanBindings::linker`, even when host and target triples coincide.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TargetLinkerBinding {
+    pub executable: String,
+    #[serde(default)]
+    pub arguments: Vec<String>,
+    #[serde(default)]
+    pub inputs: Vec<String>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlanBindings {
     pub store_prefix: String,
@@ -87,6 +99,8 @@ pub struct PlanBindings {
     pub rustc: String,
     pub toolchain: String,
     pub linker: String,
+    #[serde(default)]
+    pub target_linker: Option<TargetLinkerBinding>,
     /// Explicit store roots required by the tools' ELF loaders and libraries.
     pub runtime_inputs: Vec<String>,
     pub sources: Vec<SourceSlice>,
@@ -234,7 +248,7 @@ fn output_token(id: &str) -> String {
     build_script::named_output_token(id, "out")
 }
 /// Cargo unit identities can exceed the generic plan's 128-byte identifier bound.
-fn plan_id(id: &str) -> String {
+pub fn plan_id(id: &str) -> String {
     format!("u.{}", blake3::hash(id.as_bytes()).to_hex())
 }
 
@@ -322,7 +336,7 @@ fn check_unit_binding(
     if !matches!(effect.execution_kind.as_str(), "host" | "host-dependency" | "target" | "build-script-run") {
         return Err(blocked("unit-plan-mode-unsupported", id, &effect.execution_kind));
     }
-    if !matches!(effect.target_kind.as_str(), "lib" | "rlib" | "bin" | "proc-macro" | "custom-build") {
+    if !matches!(effect.target_kind.as_str(), "lib" | "rlib" | "bin" | "proc-macro" | "custom-build" | "cdylib") {
         return Err(blocked("unit-plan-mode-unsupported", id, &effect.target_kind));
     }
     if binding.triple != plan.target_triple && binding.triple != plan.host_triple {
@@ -414,6 +428,15 @@ fn unit_inputs<'a>(
     inputs.insert(Input::Source {
         source: binding.source_id.clone(),
     });
+    if effect.execution_kind == "target"
+        && let Some(linker) = &context.plan.target_linker
+    {
+        for path in core::iter::once(&linker.executable).chain(linker.inputs.iter()) {
+            let root = validated_store_root(path, &context.plan.store_prefix)
+                .ok_or_else(|| blocked("unit-plan-host-path", id, path))?;
+            inputs.insert(Input::StorePath { path: root.to_string() });
+        }
+    }
     let mut deps = BTreeSet::new();
     for dep in &effect.dependency_unit_ids {
         if !context.known_units.contains(dep.0.as_str()) || dep.0 == id {
@@ -471,7 +494,18 @@ fn unit_environment(
     let compile_env = effect.environment.iter().cloned().collect::<BTreeMap<_, _>>();
     let mut env: BTreeMap<String, String> = BTreeMap::new();
     env.insert("MANTLE_UNIT_RUSTC".to_string(), plan.rustc.clone());
-    env.insert("MANTLE_UNIT_LINKER".to_string(), plan.linker.clone());
+    let target_linker = plan.target_linker.as_ref().filter(|_| effect.execution_kind == "target");
+    env.insert(
+        "MANTLE_UNIT_LINKER".to_string(),
+        target_linker.map_or(&plan.linker, |linker| &linker.executable).clone(),
+    );
+    if let Some(linker) = target_linker {
+        env.insert(
+            "MANTLE_UNIT_LINK_ARGS".into(),
+            serde_json::to_string(&linker.arguments)
+                .map_err(|_| blocked("unit-plan-limit", id, "linker argument serialization"))?,
+        );
+    }
     env.insert("MANTLE_UNIT_SOURCE".to_string(), source);
     env.insert(
         "MANTLE_UNIT_COMPILE_ENV".to_string(),
@@ -611,6 +645,7 @@ fn lowering_context<'a>(
         }
         tool_roots.insert(root);
     }
+    validate_target_linker(plan)?;
     let mut ordered_slices = plan.sources.iter().collect::<Vec<_>>();
     ordered_slices.sort_by(|a, b| a.id.cmp(&b.id));
     let mut source_ids = BTreeSet::new();
@@ -626,6 +661,54 @@ fn lowering_context<'a>(
         source_ids,
         known_units,
     })
+}
+
+/// Validate every target linker path before any unit is emitted. Linker options
+/// are data, never a shell command; path-bearing tokens must name declared roots.
+fn validate_target_linker(plan: &PlanBindings) -> Result<(), Vec<Blocker>> {
+    let Some(linker) = &plan.target_linker else {
+        return Ok(());
+    };
+    if linker.inputs.len() > 64 || linker.arguments.len() > 256 {
+        return Err(blocked("unit-plan-limit", "target_linker", "linker inputs/arguments exceed bounds"));
+    }
+    let executable_root = validated_store_root(&linker.executable, &plan.store_prefix)
+        .ok_or_else(|| blocked("unit-plan-host-path", "target_linker", &linker.executable))?;
+    for input in &linker.inputs {
+        if validated_store_root(input, &plan.store_prefix) != Some(input.as_str()) {
+            return Err(blocked("unit-plan-host-path", "target_linker", input));
+        }
+    }
+    for argument in &linker.arguments {
+        if argument.is_empty()
+            || argument.len() > 16_384
+            || argument.contains('\0')
+            || argument.contains("{{")
+            || argument.contains('@')
+        {
+            return Err(blocked("unit-plan-host-path", "target_linker", argument));
+        }
+        for token in argument.split(['=', ',', ' ']) {
+            let path = if token.starts_with("-L/") || token.starts_with("-I/") {
+                &token[2..]
+            } else {
+                token
+            };
+            if path.contains('/') && !path.starts_with('/') {
+                return Err(blocked("unit-plan-host-path", "target_linker", argument));
+            }
+            if path.starts_with('/') {
+                let root = validated_store_root(path, &plan.store_prefix)
+                    .ok_or_else(|| blocked("unit-plan-host-path", "target_linker", argument))?;
+                if root != executable_root && !linker.inputs.iter().any(|input| input == root) {
+                    return Err(blocked("unit-plan-host-path", "target_linker", "linker path has no declared input"));
+                }
+            }
+        }
+    }
+    debug_assert!(!linker.executable.is_empty());
+    debug_assert!(linker.arguments.len() <= 256);
+    Ok(())
 }
 
 #[allow(tigerstyle::unbounded_collection_growth)] // BTree maps cannot reserve; the binding count must equal effects.

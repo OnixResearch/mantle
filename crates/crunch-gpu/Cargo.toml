@@ -1,0 +1,20 @@
+[package]
+name = "crunch-gpu"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mantle-gpu"
+path = "src/main.rs"
+
+[dependencies]
+crunch-gpu-core = { path = "../crunch-gpu-core" }
+crunch-cmake = { path = "../crunch-cmake" }
+crunch-cmake-core = { path = "../crunch-cmake-core" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+blake3 = "=1.8.5"
+
+[dev-dependencies]
+tempfile = "3"

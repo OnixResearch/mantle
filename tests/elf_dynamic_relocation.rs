@@ -1,8 +1,3 @@
-#[path = "../src/elf_dynamic_fixup_core.rs"]
-mod elf_dynamic_fixup_core;
-#[path = "../src/elf_dynamic_fixup_shell.rs"]
-mod elf_dynamic_fixup_shell;
-
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -12,6 +7,8 @@ use elf_dynamic_fixup_core::EntryKind;
 use elf_dynamic_fixup_core::Refusal;
 use elf_dynamic_fixup_core::apply_plan;
 use elf_dynamic_fixup_core::plan_dynamic_relocation;
+use mantle::elf_dynamic_fixup_core;
+use mantle::elf_dynamic_fixup_shell;
 
 const HASH: &str = "0123456789abcdfghijklmnpqrsvwxyz";
 const WRONG_HASH: &str = "1123456789abcdfghijklmnpqrsvwxyz";

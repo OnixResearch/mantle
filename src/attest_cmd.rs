@@ -74,6 +74,7 @@ struct AttestCommandContext<'a> {
     backend: crunch_store::StoreBackend,
     store_dir: &'a str,
     base_state_dirs: &'a [PathBuf],
+    source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     is_json: bool,
 }
 
@@ -83,6 +84,7 @@ struct ShowRequest<'a> {
     backend: crunch_store::StoreBackend,
     store_dir: &'a str,
     base_state_dirs: &'a [PathBuf],
+    source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     selector: &'a str,
 }
 
@@ -92,6 +94,7 @@ struct DiffRequest<'a> {
     backend: crunch_store::StoreBackend,
     store_dir: &'a str,
     base_state_dirs: &'a [PathBuf],
+    source_admission: Option<&'a std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     left: &'a str,
     right: &'a str,
 }
@@ -567,6 +570,7 @@ pub fn cmd_attest(
     backend: crunch_store::StoreBackend,
     store_dir: &str,
     base_state_dirs: &[PathBuf],
+    source_admission: Option<&std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     is_json: bool,
 ) -> Result<(), RunError> {
     let context = AttestCommandContext {
@@ -576,6 +580,7 @@ pub fn cmd_attest(
         backend,
         store_dir,
         base_state_dirs,
+        source_admission,
         is_json,
     };
     let (request, _) = attest_request_for_action(&action, context);
@@ -604,6 +609,7 @@ async fn cmd_attest_async(
         backend,
         store_dir,
         base_state_dirs,
+        source_admission,
         is_json,
     } = context;
     // This descriptor comes from the arguments actually dispatched into the
@@ -628,6 +634,7 @@ async fn cmd_attest_async(
                     backend,
                     store_dir,
                     base_state_dirs,
+                    source_admission,
                     selector: &path,
                 },
                 plan,
@@ -635,10 +642,22 @@ async fn cmd_attest_async(
             .await
         }
         crate::AttestAction::Closure { roots } => {
-            cmd_closure(output_dir, state_dir, store_dir, backend, base_state_dirs, &roots, plan).await
+            cmd_closure(output_dir, state_dir, store_dir, backend, base_state_dirs, source_admission, &roots, plan)
+                .await
         }
         crate::AttestAction::Verify { target } => {
-            cmd_verify(target, current_dir, output_dir, state_dir, store_dir, backend, base_state_dirs, plan).await
+            cmd_verify(
+                target,
+                current_dir,
+                output_dir,
+                state_dir,
+                store_dir,
+                backend,
+                base_state_dirs,
+                source_admission,
+                plan,
+            )
+            .await
         }
         crate::AttestAction::Diff { left, right } => {
             cmd_diff(
@@ -648,6 +667,7 @@ async fn cmd_attest_async(
                     backend,
                     store_dir,
                     base_state_dirs,
+                    source_admission,
                     left: &left,
                     right: &right,
                 },
@@ -656,7 +676,18 @@ async fn cmd_attest_async(
             .await
         }
         crate::AttestAction::Project { roots } => {
-            cmd_project(current_dir, output_dir, state_dir, store_dir, backend, base_state_dirs, &roots, plan).await
+            cmd_project(
+                current_dir,
+                output_dir,
+                state_dir,
+                store_dir,
+                backend,
+                base_state_dirs,
+                source_admission,
+                &roots,
+                plan,
+            )
+            .await
         }
         crate::AttestAction::ReleaseShow { verification_dir } => {
             let (selected, bytes) = attest_fingerprint(&verification_dir);
@@ -735,10 +766,16 @@ async fn cmd_attest_async(
 async fn cmd_show(request: ShowRequest<'_>, plan: AttestInvocation) -> Result<(), RunError> {
     let (selected, bytes) = attest_fingerprint(request.selector);
     let plan = plan.with_port_selection(AttestTarget::StoreSelector(selected), bytes, 1);
-    let store =
-        open_store(request.output_dir, request.state_dir, request.store_dir, request.backend, request.base_state_dirs)
-            .await
-            .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
+    let store = open_store(
+        request.output_dir,
+        request.state_dir,
+        request.store_dir,
+        request.backend,
+        request.base_state_dirs,
+        request.source_admission,
+    )
+    .await
+    .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
     let plan = plan.with_store(&store);
     let (document, stored_path, selected_layer) = load_artifact_document(&store, request.selector)
         .await
@@ -753,12 +790,13 @@ async fn cmd_closure(
     store_dir: &str,
     backend: crunch_store::StoreBackend,
     base_state_dirs: &[PathBuf],
+    source_admission: Option<&std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     roots: &[String],
     plan: AttestInvocation,
 ) -> Result<(), RunError> {
     let (selected, bytes) = attest_fingerprint(roots);
     let plan = plan.with_port_selection(AttestTarget::StoreRoots(selected), bytes, roots.len());
-    let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs)
+    let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs, source_admission)
         .await
         .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
     let plan = plan.with_store(&store);
@@ -785,10 +823,16 @@ async fn cmd_closure(
 async fn cmd_diff(request: DiffRequest<'_>, plan: AttestInvocation) -> Result<(), RunError> {
     let (selected, bytes) = attest_fingerprint(&(request.left, request.right));
     let plan = plan.with_port_selection(AttestTarget::StorePair(selected), bytes, 2);
-    let store =
-        open_store(request.output_dir, request.state_dir, request.store_dir, request.backend, request.base_state_dirs)
-            .await
-            .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
+    let store = open_store(
+        request.output_dir,
+        request.state_dir,
+        request.store_dir,
+        request.backend,
+        request.base_state_dirs,
+        request.source_admission,
+    )
+    .await
+    .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
     let plan = plan.with_store(&store);
     let left_document = load_document_input(Some(&store), request.left)
         .await
@@ -807,12 +851,13 @@ async fn cmd_project(
     store_dir: &str,
     backend: crunch_store::StoreBackend,
     base_state_dirs: &[PathBuf],
+    source_admission: Option<&std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     roots: &[String],
     plan: AttestInvocation,
 ) -> Result<(), RunError> {
     let (selected, bytes) = attest_fingerprint(roots);
     let plan = plan.with_port_selection(AttestTarget::StoreRoots(selected), bytes, roots.len());
-    let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs)
+    let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs, source_admission)
         .await
         .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
     let plan = plan.with_store(&store);
@@ -831,13 +876,14 @@ async fn cmd_verify(
     store_dir: &str,
     backend: crunch_store::StoreBackend,
     base_state_dirs: &[PathBuf],
+    source_admission: Option<&std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
     mut plan: AttestInvocation,
 ) -> Result<(), RunError> {
     let text = match target {
         crate::AttestVerifyAction::Artifact { path } => {
             let (selected, bytes) = attest_fingerprint(&path);
             plan = plan.with_port_selection(AttestTarget::StoreSelector(selected), bytes, 1);
-            let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs)
+            let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs, source_admission)
                 .await
                 .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
             plan = plan.with_store(&store);
@@ -850,7 +896,7 @@ async fn cmd_verify(
         crate::AttestVerifyAction::Closure { roots } => {
             let (selected, bytes) = attest_fingerprint(&roots);
             plan = plan.with_port_selection(AttestTarget::StoreRoots(selected), bytes, roots.len());
-            let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs)
+            let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs, source_admission)
                 .await
                 .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
             plan = plan.with_store(&store);
@@ -876,7 +922,7 @@ async fn cmd_verify(
             let (selected, bytes) = attest_fingerprint(&(&roots, &file, &digest));
             let selected_inputs = roots.len().saturating_add(usize::from(file.is_some() || digest.is_some()));
             plan = plan.with_port_selection(AttestTarget::ProjectVerification(selected), bytes, selected_inputs);
-            let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs)
+            let store = open_store(output_dir, state_dir, store_dir, backend, base_state_dirs, source_admission)
                 .await
                 .map_err(|error| attest_failed(plan, AttestProgress::StoreOpenFailed, error))?;
             plan = plan.with_store(&store);
@@ -1278,6 +1324,7 @@ async fn open_store(
     store_dir: &str,
     backend: crunch_store::StoreBackend,
     base_state_dirs: &[PathBuf],
+    source_admission: Option<&std::sync::Arc<dyn crunch_store::StoreSourceAdmission>>,
 ) -> Result<StoreHandle, RunError> {
     let config = StoreConfig {
         backend,
@@ -1287,6 +1334,7 @@ async fn open_store(
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
         store_dir: store_dir.to_string(),
         base_state_dirs: base_state_dirs.to_vec(),
+        source_admission: source_admission.cloned(),
     };
     StoreHandle::open(config).await.map_err(|e| RunError::Internal(format!("opening store: {e}")))
 }

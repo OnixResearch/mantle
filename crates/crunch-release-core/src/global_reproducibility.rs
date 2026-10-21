@@ -154,15 +154,17 @@ pub enum GlobalReproducibilityClaimClass {
     NonGlobal,
 }
 
-impl GlobalReproducibilityClaimClass {
-    pub fn as_str(self) -> &'static str {
-        match self {
+impl core::fmt::Display for GlobalReproducibilityClaimClass {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(match self {
             Self::Eligible => "eligible",
             Self::Blocked => "blocked",
             Self::NonGlobal => "non-global",
-        }
+        })
     }
+}
 
+impl GlobalReproducibilityClaimClass {
     pub fn is_global_claim(self) -> bool {
         matches!(self, Self::Eligible)
     }

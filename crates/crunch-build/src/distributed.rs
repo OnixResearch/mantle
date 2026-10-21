@@ -15,12 +15,16 @@ mod remote_failure_debug;
 mod remote_resources;
 mod remote_telemetry;
 mod remote_transfer;
+mod resource_policy;
+mod resource_quota_store;
 pub use external_batch::*;
 pub use remote_attempt_log::*;
 pub use remote_failure_debug::*;
 pub use remote_resources::*;
 pub use remote_telemetry::*;
 pub use remote_transfer::*;
+pub use resource_policy::*;
+pub use resource_quota_store::*;
 
 use crate::scheduling::ContentLocalityClass;
 use crate::scheduling::EligiblePreferenceFacts;

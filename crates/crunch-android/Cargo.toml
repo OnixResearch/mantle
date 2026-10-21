@@ -15,7 +15,7 @@ path = "src/bin/admit.rs"
 [dependencies]
 base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
-blake3 = "=1.8.2"
+blake3 = "=1.8.5"
 crunch-build = { path = "../crunch-build" }
 crunch-nar = { path = "../crunch-nar" }
 crunch-store = { path = "../crunch-store" }

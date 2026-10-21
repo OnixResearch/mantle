@@ -5,6 +5,8 @@
 //! `crunch-rust-cache-core::wrapper` owns canonical data and decisions. This
 //! crate owns policy loading, peer admission, framing, sandbox execution,
 //! cache orchestration, output publication, and receipt persistence.
+pub mod cc;
+pub mod slots;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -159,6 +161,8 @@ struct DaemonContext {
     sources: Vec<Arc<dyn RustResultSource>>,
     receipt_dir: PathBuf,
     response_flushed: Option<Arc<dyn Fn() + Send + Sync>>,
+    slots: Option<Arc<slots::SlotAuthority>>,
+    rust_active: Mutex<u32>,
 }
 
 #[derive(Debug)]
@@ -370,6 +374,17 @@ fn open_daemon_context(options: &DaemonOptions) -> Result<DaemonContext, Error> 
         max_retries: 0,
     };
     let sources = open_result_sources(&policy)?;
+    let slot_policy_path = options.policy_path.with_file_name("compile-slot-policy.json");
+    let slots = if slot_policy_path.exists() {
+        let policy = load_json_file::<crunch_rust_cache_core::slots::SlotPolicy>(
+            &slot_policy_path,
+            MAX_POLICY_BYTES,
+            "compile-slot-policy",
+        )?;
+        Some(Arc::new(slots::SlotAuthority::new(policy)?))
+    } else {
+        None
+    };
     assert_eq!(sources.len(), policy.result_sources.len());
     Ok(DaemonContext {
         policy,
@@ -379,10 +394,15 @@ fn open_daemon_context(options: &DaemonOptions) -> Result<DaemonContext, Error> 
         sources,
         receipt_dir: options.receipt_dir.clone(),
         response_flushed: None,
+        slots,
+        rust_active: Mutex::new(0),
     })
 }
 
 fn serve_listener(listener: &UnixListener, context: Arc<DaemonContext>, run_once: bool) -> Result<(), Error> {
+    if context.slots.is_some() {
+        return serve_multiplexed_listener(listener, context, run_once);
+    }
     let worker_count = usize::try_from(context.policy.max_concurrency)
         .map_err(|_| Error::Bound("rustc-wrapper-concurrency-unrepresentable".to_string()))?;
     let (sender, receiver) = mpsc::sync_channel::<UnixStream>(worker_count);
@@ -450,6 +470,85 @@ fn receive_stream(receiver: &Mutex<mpsc::Receiver<UnixStream>>) -> Result<Option
     Ok(stream)
 }
 
+fn serve_multiplexed_listener(
+    listener: &UnixListener,
+    context: Arc<DaemonContext>,
+    run_once: bool,
+) -> Result<(), Error> {
+    let limit = context
+        .slots
+        .as_ref()
+        .map_or(0, |s| s.connection_limit())
+        .saturating_add(context.policy.max_concurrency.saturating_mul(2));
+    let mut workers: Vec<thread::JoinHandle<()>> = Vec::new();
+    while !SHUTDOWN_REQUESTED.load(Ordering::SeqCst) {
+        let mut index = 0;
+        while index < workers.len() {
+            if workers[index].is_finished() {
+                workers.swap_remove(index).join().map_err(|_| Error::Process("compile-worker-panicked".into()))?;
+            } else {
+                index += 1;
+            }
+        }
+        match listener.accept() {
+            Ok((mut stream, _)) => {
+                if workers.len() >= limit as usize {
+                    let _ = stream.shutdown(Shutdown::Both);
+                    continue;
+                }
+                let context = Arc::clone(&context);
+                workers.push(thread::spawn(move || {
+                    if let Err(error) = handle_connection(&mut stream, &context) {
+                        let _ = stream.shutdown(Shutdown::Both);
+                        eprintln!("mantle-rust-cache-daemon:{error}");
+                    }
+                }));
+                if run_once {
+                    break;
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(ACCEPT_POLL_MILLIS));
+            }
+            Err(source) => {
+                return Err(Error::Io {
+                    context: "compile-accept".into(),
+                    source,
+                });
+            }
+        }
+    }
+    for worker in workers {
+        worker.join().map_err(|_| Error::Process("compile-worker-panicked".into()))?;
+    }
+    Ok(())
+}
+
+struct RustExecutionPermit<'a>(&'a Mutex<u32>);
+impl Drop for RustExecutionPermit<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut active) = self.0.lock() {
+            *active = active.saturating_sub(1);
+        }
+    }
+}
+
+fn rust_execution_permit(context: &DaemonContext) -> Result<RustExecutionPermit<'_>, Error> {
+    let started = std::time::Instant::now();
+    loop {
+        let mut active = context.rust_active.lock().map_err(|_| Error::Process("rust-execution-lock".into()))?;
+        if *active < context.policy.max_concurrency {
+            *active += 1;
+            return Ok(RustExecutionPermit(&context.rust_active));
+        }
+        drop(active);
+        if started.elapsed().as_millis() >= u128::from(context.policy.limits.elapsed_millis) {
+            return Err(Error::Bound("rust-execution-capacity-timeout".into()));
+        }
+        thread::sleep(Duration::from_millis(ACCEPT_POLL_MILLIS));
+    }
+}
+
 fn handle_connection(stream: &mut UnixStream, context: &DaemonContext) -> Result<(), Error> {
     assert!(context.policy.limits.elapsed_millis > 0);
     let timeout_millis = Some(Duration::from_millis(context.policy.limits.elapsed_millis));
@@ -466,8 +565,34 @@ fn handle_connection(stream: &mut UnixStream, context: &DaemonContext) -> Result
         return Err(Error::Protocol("rustc-wrapper-peer-uid-rejected".to_string()));
     }
     assert!(context.policy.allowed_peer_uids.binary_search(&peer_uid).is_ok());
-    let request = read_frame::<WrapperRequest>(stream, context.policy.max_request_bytes)?;
+    let value = read_frame::<serde_json::Value>(stream, cc::MAX_CC_FRAME_BYTES)?;
+    if value.get("schema").and_then(serde_json::Value::as_str) == Some(cc::CC_PROTOCOL_SCHEMA) {
+        let request = serde_json::from_value::<cc::Request>(value).map_err(|source| Error::Json {
+            context: "cc-request".into(),
+            source,
+        })?;
+        return cc::serve(
+            stream,
+            &context.cache,
+            context.policy.local_reads_enabled,
+            context.policy.local_writes_enabled,
+            request,
+        );
+    }
+    if value.get("schema").and_then(serde_json::Value::as_str) == Some(slots::SLOT_ACQUIRE_SCHEMA) {
+        let request = serde_json::from_value::<slots::SlotAcquireRequest>(value).map_err(|source| Error::Json {
+            context: "slot-request".into(),
+            source,
+        })?;
+        let authority = context.slots.as_ref().ok_or_else(|| Error::Policy("compile-slots-disabled".into()))?;
+        return authority.handle_connection(stream, request);
+    }
+    let request = serde_json::from_value::<WrapperRequest>(value).map_err(|source| Error::Json {
+        context: "wrapper-request".into(),
+        source,
+    })?;
     validate_wrapper_request(&request).map_err(|error| Error::Core(String::from(error.code())))?;
+    let _permit = rust_execution_permit(context)?;
     let response = handle_request(context, &request)?;
     validate_wrapper_response(&response, context.policy.max_response_bytes)
         .map_err(|error| Error::Core(String::from(error.code())))?;

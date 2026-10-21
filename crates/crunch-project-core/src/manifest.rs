@@ -10,7 +10,7 @@ use serde::Deserializer;
 use serde::Serialize;
 
 use crate::fetch_policy::InputFetchPolicy;
-use crate::fetch_policy::fetch_policy_compatibility_problems;
+use crate::fetch_policy::compatibility_problems;
 use crate::freshness::FreshnessProbe;
 use crate::freshness::validate_freshness_probe;
 use crate::retention::InputRetentionPolicy;
@@ -83,7 +83,7 @@ impl ProjectManifest {
             problems.push(format!("too many inputs: {} (max {MAX_INPUTS})", inputs.len()));
         }
 
-        problems.extend(retention.validate("project"));
+        problems.extend(retention.validate_owner("project"));
 
         let mut seen_names = BTreeSet::new();
         for input in &inputs {
@@ -195,15 +195,15 @@ impl ManifestInput {
         }
 
         if let Some(retention) = self.retention {
-            problems.extend(retention.validate(&format!("input '{}'", self.name)));
+            problems.extend(retention.validate(format!("input '{}'", self.name)));
         }
 
         if let Some(trust) = &self.trust {
-            problems.extend(trust.validate(&format!("input '{}'", self.name)));
+            problems.extend(trust.validate_borrowed(&format!("input '{}'", self.name)));
         }
 
         problems.extend(self.kind.validate(&self.name));
-        problems.extend(fetch_policy_compatibility_problems(self));
+        problems.extend(compatibility_problems(self));
 
         problems
     }
@@ -362,14 +362,17 @@ pub enum DarcsSelector {
     Context(String),
 }
 
-impl DarcsSelector {
-    pub fn identity_fragment(&self) -> String {
+/// Formats the canonical selector identity without cloning its owned values.
+impl fmt::Display for DarcsSelector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Tag(tag) => format!("tag:{tag}"),
-            Self::Context(context) => format!("context:{context}"),
+            Self::Tag(tag) => write!(f, "tag:{tag}"),
+            Self::Context(context) => write!(f, "context:{context}"),
         }
     }
+}
 
+impl DarcsSelector {
     pub(crate) fn validate(&self, input_name: &str) -> Vec<String> {
         match self {
             Self::Tag(tag) => validate_selector_value(input_name, "darcs tag", tag),
@@ -389,23 +392,23 @@ pub enum PijulSelector {
     Change { channel: String, change: String },
 }
 
+/// Formats the canonical selector identity without cloning its owned values.
+impl fmt::Display for PijulSelector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Channel { channel } => write!(f, "channel:{channel}"),
+            Self::State { channel, state } => write!(f, "channel:{channel}:state:{state}"),
+            Self::Change { channel, change } => write!(f, "channel:{channel}:change:{change}"),
+        }
+    }
+}
+
 impl PijulSelector {
-    pub fn identity_fragment(&self) -> String {
-        match self {
-            Self::Channel { channel } => format!("channel:{channel}"),
-            Self::State { channel, state } => format!("channel:{channel}:state:{state}"),
-            Self::Change { channel, change } => format!("channel:{channel}:change:{change}"),
-        }
-    }
-
-    pub fn channel(&self) -> &str {
-        match self {
-            Self::Channel { channel } | Self::State { channel, .. } | Self::Change { channel, .. } => channel,
-        }
-    }
-
     pub(crate) fn validate(&self, input_name: &str) -> Vec<String> {
-        let mut problems = validate_selector_value(input_name, "pijul channel", self.channel());
+        let channel = match self {
+            Self::Channel { channel } | Self::State { channel, .. } | Self::Change { channel, .. } => channel,
+        };
+        let mut problems = validate_selector_value(input_name, "pijul channel", channel);
         match self {
             Self::Channel { .. } => {}
             Self::State { state, .. } => problems.extend(validate_selector_value(input_name, "pijul state", state)),
@@ -426,15 +429,18 @@ pub enum FossilSelector {
     Checkin(String),
 }
 
-impl FossilSelector {
-    pub fn identity_fragment(&self) -> String {
+/// Formats the canonical selector identity without cloning its owned values.
+impl fmt::Display for FossilSelector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Branch(branch) => format!("branch:{branch}"),
-            Self::Tag(tag) => format!("tag:{tag}"),
-            Self::Checkin(checkin) => format!("checkin:{checkin}"),
+            Self::Branch(branch) => write!(f, "branch:{branch}"),
+            Self::Tag(tag) => write!(f, "tag:{tag}"),
+            Self::Checkin(checkin) => write!(f, "checkin:{checkin}"),
         }
     }
+}
 
+impl FossilSelector {
     pub(crate) fn validate(&self, input_name: &str) -> Vec<String> {
         match self {
             Self::Branch(branch) => validate_selector_value(input_name, "fossil branch", branch),
@@ -521,7 +527,7 @@ impl PatchDef {
             problems.push("patch name must not be empty".into());
         }
         if let Some(trust) = &self.trust {
-            problems.extend(trust.validate(&format!("patch '{}'", self.name)));
+            problems.extend(trust.validate_borrowed(&format!("patch '{}'", self.name)));
         }
         problems
     }

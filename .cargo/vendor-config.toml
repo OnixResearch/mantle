@@ -11,15 +11,6 @@ git = "https://github.com/OnixResearch/nickel-export"
 rev = "257fafc1c746f1faf156207043a4c826bfb16d49"
 replace-with = "vendored-sources"
 
-[source."git+https://github.com/tvlfyi/wu-manber.git"]
-git = "https://github.com/tvlfyi/wu-manber.git"
-replace-with = "vendored-sources"
-
-[source."git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1"]
-git = "ssh://git@github.com/OnixResearch/onix-artifact.git"
-rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1"
-replace-with = "vendored-sources"
-
 [source."git+https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1"]
 git = "https://github.com/cachix/casita"
 rev = "90404fcb1cfb3d83f2233715448dfefe913f5fd1"
@@ -30,14 +21,38 @@ git = "https://github.com/cachix/turso.git"
 rev = "dca55133caa690f90dcdd58d3c4329fb0703659c"
 replace-with = "vendored-sources"
 
+[source."git+https://github.com/tvlfyi/wu-manber.git"]
+git = "https://github.com/tvlfyi/wu-manber.git"
+replace-with = "vendored-sources"
+
+[source."git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59"]
+git = "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git"
+rev = "a0de79303f3f45c18a34fff535b690a85cb3cf59"
+replace-with = "vendored-sources"
+
 [source."git+https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9"]
 git = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git"
 rev = "606489b5f40298181214bb76bc3457b607f225d9"
 replace-with = "vendored-sources"
 
-[source."git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1"]
+[source."git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=cc9e0fb611e75bb2d7f662435d1918653c93ce07"]
 git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git"
-rev = "b0fd0103bc9eed2c1b6d852045959462d105d8f1"
+rev = "cc9e0fb611e75bb2d7f662435d1918653c93ce07"
+replace-with = "vendored-sources"
+
+[source."git+ssh://git@github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144"]
+git = "ssh://git@github.com/OnixResearch/basalt.git"
+rev = "4c5c9e919b4573a7865559db2dc98a99c0c58144"
+replace-with = "vendored-sources"
+
+[source."git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52"]
+git = "ssh://git@github.com/OnixResearch/onix-artifact.git"
+rev = "5f3962d7471d1547e044f57daeda72f56621fd52"
+replace-with = "vendored-sources"
+
+[source."git+ssh://git@github.com/OnixResearch/valence.git?rev=15e72b5a330b08139ac7c809ac31e7e87f825b22"]
+git = "ssh://git@github.com/OnixResearch/valence.git"
+rev = "15e72b5a330b08139ac7c809ac31e7e87f825b22"
 replace-with = "vendored-sources"
 
 [source.vendored-sources]

@@ -217,6 +217,7 @@ pub struct CargoImportShellOptions<'a> {
     pub target_triple: &'a str,
     pub profile: &'a str,
     pub apply: bool,
+    pub acquired_vendor: Option<&'a crate::cargo_acquisition::VerifiedCargoVendor>,
     pub json: bool,
 }
 
@@ -225,6 +226,7 @@ struct WorkspaceFactLoadRequest<'a> {
     output: &'a dyn ImportOutputCapability,
     project_file: &'a str,
     inputs_file: &'a str,
+    acquired_vendor: Option<&'a crate::cargo_acquisition::VerifiedCargoVendor>,
 }
 
 trait CargoImportInputPort {
@@ -289,6 +291,7 @@ pub fn run_cargo_import(options: CargoImportShellOptions<'_>) -> Result<(), RunE
                 output: &output,
                 project_file: options.project_file,
                 inputs_file: options.inputs_file,
+                acquired_vendor: options.acquired_vendor,
             },
             options.profile,
         )
@@ -615,6 +618,18 @@ fn validate_vendored_dependency(
         ));
         return;
     }
+    if matches!(&dependency.source, CargoDependencySource::Registry)
+        && !lock_package.checksum.as_deref().is_some_and(is_sha256_hex)
+    {
+        blockers.push(blocker(
+            "missing-lock-checksum",
+            format!(
+                "{}@{}: registry lock entry needs an exact lowercase SHA-256",
+                lock_package.name, lock_package.version
+            ),
+        ));
+        return;
+    }
     let Some(vendor_source) = vendor_source else {
         blockers.push(blocker(
             "missing-vendored-source",
@@ -755,7 +770,11 @@ fn accepted_vendor_source(
         return Some(CargoImportVendorSource {
             role: "vendored-dependencies".to_string(),
             field: "vendor_src".to_string(),
-            name: format!("{}-vendor", package.name),
+            name: if vendor_source.replacement_source == "mantle-acquired-vendor" {
+                vendor_source.root.rsplit('/').next().and_then(|name| name.get(33..)).unwrap_or("").to_string()
+            } else {
+                format!("{}-vendor", package.name)
+            },
             root: vendor_source.root.clone(),
             digest_blake3: vendor_source.root_digest_blake3.clone(),
             replacement_source: vendor_source.replacement_source.clone(),
@@ -773,7 +792,7 @@ fn generated_file_operations(
     vendor_source: Option<&CargoImportVendorSource>,
 ) -> Vec<CargoImportFileOperation> {
     let project = render_project_ncl(package, binary, options, source_inputs, vendor_source);
-    let inputs = render_inputs_ncl(source_inputs);
+    let inputs = render_inputs_ncl(source_inputs, vendor_source);
     vec![
         file_operation(&options.project_file, project),
         file_operation(&options.inputs_file, inputs),
@@ -875,11 +894,20 @@ fn render_vendor_project_fields(vendor_source: Option<&CargoImportVendorSource>)
     )
 }
 
-fn render_inputs_ncl(source_inputs: &[CargoImportSourceInput]) -> String {
+fn render_inputs_ncl(
+    source_inputs: &[CargoImportSourceInput],
+    vendor_source: Option<&CargoImportVendorSource>,
+) -> String {
     debug_assert!(!source_inputs.is_empty());
     debug_assert!(source_inputs.len() <= MAX_SOURCE_INPUTS);
     let mut fields = String::new();
     for input in source_inputs {
+        if input.role == "vendored-dependencies"
+            && let Some(vendor) = vendor_source.filter(|vendor| vendor.replacement_source == "mantle-acquired-vendor")
+        {
+            fields.push_str(&format!("  {} = {},\n", nickel_field(&input.field), nickel_string(&vendor.root)));
+            continue;
+        }
         fields.push_str(&format!(
             "  {} = placeholder {} {},\n",
             nickel_field(&input.field),
@@ -981,7 +1009,10 @@ fn load_workspace_facts(request: WorkspaceFactLoadRequest<'_>) -> Result<CargoWo
     let manifest = read_toml_value(&manifest_path)?;
     let lock_digest = read_lock_digest(request.root);
     let lock_packages = read_lock_packages(request.root)?;
-    let vendor_source = read_vendor_source_facts(request.root, &lock_packages)?;
+    let vendor_source = match request.acquired_vendor {
+        Some(vendor) => Some(read_acquired_vendor_facts(request.root, vendor, &lock_packages)?),
+        None => read_vendor_source_facts(request.root, &lock_packages)?,
+    };
     let package_paths = package_manifest_paths(request.root, &manifest)?;
     let package_path_count = package_paths.len();
     let mut packages = Vec::with_capacity(package_path_count);
@@ -1083,6 +1114,67 @@ fn read_vendor_source_facts(
     Ok(Some(facts))
 }
 
+/// Check the complete selected closure, not just the manifest's direct deps.
+pub(crate) fn verify_acquired_vendor(
+    root: &Path,
+    vendor: &crate::cargo_acquisition::VerifiedCargoVendor,
+) -> Result<(), RunError> {
+    let lock_packages = read_lock_packages(root)?;
+    let facts = read_acquired_vendor_facts(root, vendor, &lock_packages)?;
+    if !facts.blockers.is_empty() {
+        return Err(RunError::Internal(format!("acquired Cargo vendor verification: {:?}", facts.blockers)));
+    }
+    Ok(())
+}
+
+fn read_acquired_vendor_facts(
+    root: &Path,
+    vendor: &crate::cargo_acquisition::VerifiedCargoVendor,
+    lock_packages: &[CargoLockPackageFact],
+) -> Result<CargoVendorSourceFact, RunError> {
+    if read_lock_digest(root).as_deref() != Some(vendor.lock_blake3()) {
+        return Err(RunError::Internal("acquired vendor Cargo.lock changed after acquisition".into()));
+    }
+    let mut blockers = Vec::new();
+    let packages = read_vendor_packages(root, vendor.physical_root(), lock_packages, &mut blockers)?;
+    for locked in lock_packages.iter().filter(|package| package.source.is_some()) {
+        let matches = packages
+            .iter()
+            .filter(|package| package.name == locked.name && package.version == locked.version)
+            .count();
+        if matches != 1 {
+            blockers.push(blocker(
+                "missing-vendored-package",
+                format!(
+                    "{}@{}: expected exactly one selected locked package, observed {matches}",
+                    locked.name, locked.version
+                ),
+            ));
+        }
+    }
+    for package in &packages {
+        if !lock_packages
+            .iter()
+            .any(|locked| locked.source.is_some() && locked.name == package.name && locked.version == package.version)
+        {
+            blockers.push(blocker(
+                "unlocked-vendored-package",
+                format!("{}@{} is outside selected lock", package.name, package.version),
+            ));
+        }
+    }
+    vendor.verify_unchanged()?;
+    Ok(CargoVendorSourceFact {
+        root: vendor.logical_root().into(),
+        root_digest_blake3: Some(
+            path_digest_blake3(vendor.physical_root()).map_err(|error| RunError::Internal(error.to_string()))?,
+        ),
+        replacement_source: "mantle-acquired-vendor".into(),
+        packages,
+        blockers,
+    })
+}
+
 fn read_vendor_replacement(root: &Path) -> Result<Option<(String, PathBuf, Vec<CargoImportBlocker>)>, RunError> {
     let Some(config_path) = cargo_config_path(root) else {
         return Ok(None);
@@ -1148,6 +1240,10 @@ fn read_vendor_packages(
     {
         let entry = entry.map_err(|err| RunError::Internal(format!("reading vendor entry: {err}")))?;
         let path = entry.path();
+        if entry.file_type().map_err(|error| RunError::Internal(error.to_string()))?.is_symlink() {
+            blockers.push(blocker("unsafe-vendored-package", format!("vendor entry is a symlink: {}", path.display())));
+            continue;
+        }
         if !path.is_dir() || !path.join("Cargo.toml").is_file() {
             continue;
         }
@@ -1184,7 +1280,7 @@ fn read_vendor_package(
     let version = optional_string(package.get("version")).unwrap_or_else(|| "0.0.0".to_string());
     let lock = lock_packages.iter().find(|lock| lock.name == name && lock.version == version);
     let checksum = lock.and_then(|lock| lock.checksum.clone());
-    let checksum_status = validate_vendor_checksum(package_dir, blockers);
+    let checksum_status = validate_vendor_checksum(package_dir, checksum.as_deref(), blockers);
     let fact = CargoVendorPackageFact {
         name,
         version,
@@ -1215,7 +1311,11 @@ fn missing_vendor_package_checksum() -> Option<String> {
     None
 }
 
-fn validate_vendor_checksum(package_dir: &Path, blockers: &mut Vec<CargoImportBlocker>) -> String {
+fn validate_vendor_checksum(
+    package_dir: &Path,
+    lock_checksum: Option<&str>,
+    blockers: &mut Vec<CargoImportBlocker>,
+) -> String {
     let checksum_path = package_dir.join(CARGO_CHECKSUM_FILE);
     debug_assert!(package_dir.is_dir());
     debug_assert!(checksum_path.ends_with(CARGO_CHECKSUM_FILE));
@@ -1233,23 +1333,34 @@ fn validate_vendor_checksum(package_dir: &Path, blockers: &mut Vec<CargoImportBl
             return "malformed".to_string();
         }
     };
+    if parsed.package.as_deref() != lock_checksum {
+        blockers.push(blocker(
+            "lock-vendor-checksum-mismatch",
+            format!("{}: package checksum differs from Cargo.lock", package_dir.display()),
+        ));
+        return "stale".to_string();
+    }
+    if let Err(error) = validate_vendor_inventory(package_dir, &parsed.files) {
+        blockers.push(blocker("stale-vendor-checksum", format!("{}: {error}", package_dir.display())));
+        return "stale".to_string();
+    }
     if parsed.files.is_empty() && parsed.package.is_none() {
         blockers.push(blocker("malformed-vendor-checksum", "vendored package checksum metadata is empty"));
         return "malformed".to_string();
     }
-    for (relative, expected) in parsed.files {
-        if !is_safe_vendor_relative_path(&relative) || !is_sha256_hex(&expected) {
+    for (relative, expected) in &parsed.files {
+        if !is_safe_vendor_relative_path(relative) || !is_sha256_hex(expected) {
             blockers.push(blocker("malformed-vendor-checksum", "vendored package checksum entry is unsafe or invalid"));
             return "malformed".to_string();
         }
-        let actual = match sha256_file_hex(&package_dir.join(&relative)) {
+        let actual = match sha256_file_hex(&package_dir.join(relative)) {
             Ok(actual) => actual,
             Err(_) => {
                 blockers.push(blocker("stale-vendor-checksum", "vendored package checksum references a missing file"));
                 return "stale".to_string();
             }
         };
-        if actual != expected {
+        if &actual != expected {
             blockers.push(blocker("stale-vendor-checksum", "vendored package file checksum does not match metadata"));
             return "stale".to_string();
         }
@@ -1257,12 +1368,56 @@ fn validate_vendor_checksum(package_dir: &Path, blockers: &mut Vec<CargoImportBl
     "verified".to_string()
 }
 
+fn validate_vendor_inventory(
+    root: &Path,
+    expected: &std::collections::BTreeMap<String, String>,
+) -> Result<(), std::io::Error> {
+    let invalid = |detail| std::io::Error::new(std::io::ErrorKind::InvalidData, detail);
+    let mut work = vec![root.to_path_buf()];
+    let mut visited = 0u32;
+    let mut files = 0usize;
+    while let Some(directory) = work.pop() {
+        for entry in std::fs::read_dir(directory)? {
+            let entry = entry?;
+            visited = visited.saturating_add(1);
+            if visited > MAX_VENDOR_DIGEST_NODES as u32 {
+                return Err(invalid("vendor inventory exceeds existing node bound"));
+            }
+            let path = entry.path();
+            let metadata = std::fs::symlink_metadata(&path)?;
+            if metadata.is_dir() {
+                work.push(path);
+                continue;
+            }
+            if !metadata.is_file() {
+                return Err(invalid("vendor checksum tree contains a symlink or special file"));
+            }
+            let relative = path.strip_prefix(root).map_err(|_| invalid("vendor path escapes root"))?;
+            if relative == Path::new(CARGO_CHECKSUM_FILE) {
+                continue;
+            }
+            let relative = relative.to_str().ok_or_else(|| invalid("non-UTF-8 vendor path"))?;
+            if !expected.contains_key(relative) {
+                return Err(invalid("vendor file is absent from per-file checksum metadata"));
+            }
+            files = files.saturating_add(1);
+        }
+    }
+    if files != expected.len() {
+        return Err(invalid("vendor checksum metadata names missing files"));
+    }
+    Ok(())
+}
+
 fn normalize_relative_path(root: &Path, path: &Path) -> String {
     path.strip_prefix(root).unwrap_or(path).display().to_string()
 }
 
 fn is_safe_vendor_relative_path(path: &str) -> bool {
-    !path.is_empty() && !path.starts_with('/') && !path.split('/').any(|part| part.is_empty() || part == "..")
+    !path.is_empty()
+        && !path.starts_with('/')
+        && !path.contains(['\\', ':'])
+        && !path.split('/').any(|part| part.is_empty() || part == "." || part == "..")
 }
 
 fn is_sha256_hex(value: &str) -> bool {
@@ -1775,6 +1930,7 @@ mod tests {
             profile: DEFAULT_PROFILE,
             apply: false,
             json: true,
+            acquired_vendor: None,
         })
         .unwrap_err();
 

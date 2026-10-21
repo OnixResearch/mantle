@@ -64,6 +64,10 @@ pub enum EffectKind {
     StoreAccess,
     /// An explicitly admitted read of the process environment by a port.
     ReadEnvironment,
+    /// An explicitly admitted mutation of inherited process environment.
+    WriteEnvironment,
+    /// Inspect, configure, or communicate over a local/inherited IPC endpoint.
+    InterprocessCommunication,
 }
 
 /// Stable effect identity.

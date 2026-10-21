@@ -362,11 +362,13 @@ rejected before extraction.
 The archive embeds the bounded Git object databases and checkouts and a
 per-source `git-transports.json` with reviewed fetch URL, revision and NAR
 hash; it does **not** embed the full global table, the fetched source-tree
-inputs, ambient Cargo-home paths or `vendor-deps/`. The onix-artifact
-SSH-to-HTTPS fetch route requires its explicit reviewed table row; an
-offline pinned checkout for an unavailable Git remote does not prove that
-remote is reachable. Selected Git fetches and registry archives remain
-separate fixed-output derivation inputs, not aliases for these sidecars.
+inputs, ambient Cargo-home paths or `vendor-deps/`. Every SSH-to-HTTPS fetch
+route, including onix-artifact, Basalt, and Valence, requires its explicit
+reviewed table row. The row does not assert anonymous access: an offline pinned
+checkout or an independently acquired matching tree does not prove the remote
+is reachable. Credentials remain outside the handoff. Selected Git fetches and
+registry archives remain separate fixed-output derivation inputs, not aliases
+for these sidecars.
 
 The full-lock replay takes an explicit `--registry-cache` directory of
 `.crate` archives. Each present file must be a regular file matching its
@@ -690,6 +692,27 @@ source material fails closed before a result is accepted; the helper and import
 scaffold do not search ambient Cargo caches, target directories, or network
 sources, and they never run `cargo vendor` or claim network vendoring,
 Cargo-free execution, compiler correctness, or full Cargo compatibility.
+
+`offlineCargoPackage` optionally accepts `native_inputs = { inputs, env, path }`
+(all three fields default empty), using the unit-plan lane's `{{role:name}}`
+convention. For example, declare whole signed store roots under `inputs.cc`,
+`inputs.ar`, and `inputs.answer`, then pass `env.CC = "{{role:cc}}/bin/cc"`,
+`env.AR = "{{role:ar}}/bin/ar"`, and
+`env.NATIVE_ANSWER_ROOT = "{{role:answer}}"`. `path` is an ordered array of
+role-relative tool directories appended to the helper's controlled PATH. Native
+roots join the derivation's explicit input closure; there is no ambient compiler
+or pkg-config search. Unknown roles, host paths, traversal and reserved
+Cargo/Rust/HOME/PATH or shell/loader control overrides are rejected. Values are
+derivation environment strings, never interpolated into shell commands.
+
+This declaration is **Cargo-invocation-wide**, inherited by all Cargo children;
+it is not the unit-plan lane's package-scoped native environment. The existing
+v2 raw `offline-cargo-build.json` sidecar adds `native_inputs` with explicit
+`scope = "cargo-invocation-wide"`, resolved input roots, environment and path.
+The generic report's existing bounded evidence projection is unchanged. Retain
+the raw sidecar and evaluated derivation for exact native-declaration comparison.
+To compare lanes, use the same source/lock/vendor/toolchain/target/profile and
+the same resolved native values and roots; a host Cargo run is not this oracle.
 
 The representative Rust compatibility rail (`examples/rust_compatibility_rail.rs`,
 `examples/rust_compatibility_surface_matrix.ncl`, and
@@ -1141,6 +1164,69 @@ mantle --json why <output-or-alias>
 `mantle graph` prints the connected node/edge view for a selected root. `mantle why` reports the producing recipe plus linked source, provider, sandbox, proof receipt, witness request, and release evidence nodes when present. `mantle dependents` reports graph nodes that declare dependency edges to the selected identity.
 
 Missing legacy graph data is fail-closed: queries return a typed `mantle-incomplete-semantic-graph-v1` diagnostic instead of inventing source, recipe, proof, or witness edges. Legacy store entries without graph links remain usable for ordinary cache/build reuse.
+
+### Configured targets and action facts
+
+The saved v1 graph is still the authority; inspection never evaluates a recipe,
+opens source trees, invokes a builder, probes a cache, or admits store content.
+Its optional `inspection` object extends the existing semantic graph rather than
+substituting a second graph file. Legacy files without this object are **partial**,
+not complete. Producers explicitly declare `pre-evaluation`, `partial`, or
+`complete`; a complete graph cannot contain unavailable action fields.
+
+Semantic nodes identify declarations/provenance independent of configuration.
+New semantic identities use `semantic:v1:<blake3>`; legacy stable identities stay
+valid. A `configured-target` identifies a semantic target plus the digests of its
+configuration and toolchain (`configured:v1:<blake3>`). A concrete `action`
+identifies its configured target, public role, command/environment digests,
+declared input identities/content digests, output identities and effective policy
+(`action:v1:<blake3>`). Each identity uses a distinct versioned hashing domain and
+canonical typed serialization. Aliases and graph order are not identity inputs.
+`configured-from` and `action-for` edges retain these distinct relationships;
+`depends-on` alone denotes directed dependencies at each layer.
+
+The fact format deliberately has no argv, environment values, credentials,
+configuration values or source contents. Producers must use public logical names
+for action roles and input/output declarations. Machine and human query reports
+omit all legacy free-form node/edge/alias metadata; saved files and trusted
+receipt consumers retain that metadata unchanged. Unknown action facts are `null`, distinct from a known empty
+input map or output set. An identity of partial facts identifies that saved
+snapshot only; it is **not** an executable action/cache key.
+
+Extended commands use the same graph/why/dependents surface:
+
+```sh
+mantle graph <identity-or-alias> --dependencies
+mantle dependents <identity-or-alias> --transitive
+mantle graph <from> --path-to <to>
+mantle graph <configured-before> --compare-configuration <configured-after>
+mantle why <action-before> --compare-action <action-after>
+```
+
+Default `graph` retains its connected-component/provenance semantics; default
+`dependents` remains immediate. Directed traversal includes its root and follows
+only `depends-on` edges. Paths are deterministic shortest directed paths, not
+undirected provenance paths. Cyclic dependency graphs, dangling endpoints and
+ambiguous aliases/producers are invalid. Missing query identities fail explicitly;
+no path or no dependents in partial saved facts is not proof of absence.
+
+Reads stop after 16 MiB plus one sentinel byte. Admission permits at most 65,536
+nodes/aliases and 262,144 edges. Traversal indexes adjacency before walking,
+charges every examined arc (including already visited/shared successors), and
+fails rather than returning a truncated answer beyond 1,048,576 examined arcs or
+4,096 dependency levels. `--max-nodes`, `--max-edges`, `--max-steps`, and
+`--max-depth` can reduce these bounds, never enlarge them. Query output is
+canonically ordered and includes the saved graph state.
+
+Action comparisons label each known key input `changed`, `unchanged` or
+`unavailable`, and list added/removed/content-changed declared inputs. They explain
+possible key-driven cache misses, not observed cache eviction, trust rejection,
+or lookup outcomes. Configuration comparisons include configuration/toolchain
+changes and observed dependency set differences. Dependency equality/absence is
+conclusive only when both saved graphs are complete. Portable receipt v1 remains
+a semantic-provenance projection: it does not transport configured/action facts
+or their edges, and imports cannot promote a merged graph to complete.
+
 
 ## Remote realization adapter boundary
 

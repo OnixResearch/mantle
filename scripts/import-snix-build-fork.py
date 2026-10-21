@@ -5,9 +5,10 @@ This is NOT an upstream Snix import: upstream revision and original import
 mechanism are unknown. The unmodified source is a pinned Mantle commit/tree;
 tracked patch files are applied in order, then the exact result is checked.
 Requires a full-history Mantle clone with the pinned commit available plus
-the repo dev shell's b3sum (BLAKE3 v1.8.7). Explicit sync accepts only a
-pinned unmodified vendor preimage in an existing full-history checkout;
-it stages and verifies the entire postimage before five atomic file replaces.
+the repo dev shell's b3sum (BLAKE3 v1.8.7). Explicit sync accepts only the
+pinned unmodified source or the recorded watch-only postimage in an existing
+full-history checkout; it stages and verifies the entire postimage before
+atomic file replaces.
 No fetch, network access, or repository writes are implicit.
 """
 
@@ -24,9 +25,10 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCE_REV = "da00f58425740adea559ef926c9dfa97b2cb8240"
 SOURCE_TREE = "a0979715301705e77c8567cb1bea054dc996000c"
 SOURCE_PREFIX = PurePosixPath("vendor/snix-build")
-PATCHES = ["patches/snix-build-watch-pidfd.patch"]
+PATCHES = ["patches/snix-build-watch-pidfd.patch", "patches/snix-build-compile-socket.patch"]
 # BLAKE3 over sorted (relative path, mode, byte length, bytes) entries.
-POSTIMAGE_BLAKE3 = "c6c6578b808adf15551e55f733f7702d3ec59899f22599f58e7a4a48a1a4a897"
+WATCH_POSTIMAGE_BLAKE3 = "c6c6578b808adf15551e55f733f7702d3ec59899f22599f58e7a4a48a1a4a897"
+POSTIMAGE_BLAKE3 = "bb90e00828c9ede7ba72c0b64246ec84c8fa1a42f5aa69539aa578def41ca645"
 PATCHED_FILES = frozenset({
     "Cargo.toml",
     "src/buildservice/bwrap.rs",
@@ -87,8 +89,8 @@ def unpack_source(archive, destination):
         raise ValueError("empty pinned fork archive")
 
 
-def apply_patches(destination):
-    for relative in PATCHES:
+def apply_patches(destination, patches=PATCHES):
+    for relative in patches:
         patch = ROOT / relative
         if not patch.is_file():
             raise ValueError(f"missing tracked local fork patch: {relative}")
@@ -145,7 +147,7 @@ def require_full_checkout(target):
         raise ValueError("destination is not the exact full-history Mantle checkout")
 
 
-def sync_existing_checkout(target, archive, pristine, expected, digest):
+def sync_existing_checkout(target, archive, pristine, previous, expected, digest):
     require_full_checkout(target)
     changed = {path for path in set(pristine) | set(expected) if pristine.get(path) != expected.get(path)}
     if changed != PATCHED_FILES:
@@ -154,11 +156,11 @@ def sync_existing_checkout(target, archive, pristine, expected, digest):
     if current == expected:
         print(f"local snix-build fork already synchronized tree={SOURCE_TREE} patched_blake3={digest}")
         return
-    if current != pristine:
+    if current != pristine and current != previous:
         differing = sorted(set(current) ^ set(pristine) | {
             path for path in current.keys() & pristine.keys() if current[path] != pristine[path]
         })
-        raise ValueError(f"sync target vendor preimage differs from pinned source: {differing[:16]}")
+        raise ValueError(f"sync target vendor preimage differs from both recorded sources: {differing[:16]}")
 
     # Stage the complete postimage on the target filesystem and compare it
     # before replacing *any* of the five reviewed files. Never remove or
@@ -179,22 +181,22 @@ def sync_existing_checkout(target, archive, pristine, expected, digest):
             destination = base / path
             if not destination.parent.is_dir():
                 raise ValueError(f"sync destination lacks pinned parent directory: {path}")
-            if path in pristine:
+            if path in current:
                 saved = rollback / path
                 saved.parent.mkdir(parents=True, exist_ok=True)
-                mode, data = pristine[path]
+                mode, data = current[path]
                 saved.write_bytes(data)
                 saved.chmod(mode)
             elif destination.exists() or destination.is_symlink():
                 raise ValueError(f"sync new destination is already occupied: {path}")
-        if contents(target) != pristine:
+        if contents(target) != current:
             raise ValueError("sync target vendor changed while postimage was staged")
 
         applied = []
         try:
             for path in sorted(changed):
                 destination = base / path
-                before = pristine.get(path)
+                before = current.get(path)
                 if before is None:
                     if destination.exists() or destination.is_symlink():
                         raise ValueError(f"sync new destination changed during staging: {path}")
@@ -213,7 +215,7 @@ def sync_existing_checkout(target, archive, pristine, expected, digest):
             for path in reversed(applied):
                 destination = base / path
                 try:
-                    if path in pristine:
+                    if path in current:
                         os.replace(rollback / path, destination)
                     else:
                         destination.unlink()
@@ -240,7 +242,11 @@ def main():
         reconstructed = Path(name)
         unpack_source(archive, reconstructed)
         pristine = contents(reconstructed)
-        apply_patches(reconstructed)
+        apply_patches(reconstructed, PATCHES[:1])
+        previous = contents(reconstructed)
+        if manifest_digest(previous) != WATCH_POSTIMAGE_BLAKE3:
+            raise ValueError("watch-only fork predecessor no longer matches recorded postimage")
+        apply_patches(reconstructed, PATCHES[1:])
         expected = contents(reconstructed)
         digest = manifest_digest(expected)
         if POSTIMAGE_BLAKE3 and digest != POSTIMAGE_BLAKE3:
@@ -262,7 +268,7 @@ def main():
             print(f"local snix-build fork OK checkout={target} tree={SOURCE_TREE} patched_blake3={digest}")
             return
         if args.mode == "sync":
-            sync_existing_checkout(args.destination.resolve(), archive, pristine, expected, digest)
+            sync_existing_checkout(args.destination.resolve(), archive, pristine, previous, expected, digest)
             return
         target = args.destination.resolve()
         if target.exists():

@@ -4,7 +4,7 @@
 edition = "2024"
 
 [dependencies]
-blake3 = "1.8.2"
+blake3 = "1.8.5"
 crunch-release-core = { path = "../crates/crunch-release-core" }
 serde_json = "1"
 ---
@@ -286,7 +286,7 @@ fn validate_deterministic_proof(manifest: &Value, proof: &Value) -> Result<(), S
         .map_err(|err| format!("validate deterministic proof contract: {err}"))?;
     let genuine = deterministic_build_proof_has_genuine_rebuild_authority(typed)
         .map_err(|err| format!("validate genuine rebuild authority: {err}"))?;
-    if !genuine {
+    if !genuine.eligible {
         return Err("missing-genuine-rebuild-evidence: path-bound or incomplete proof is non-promoting".to_string());
     }
     require_str(proof, "schema", PROOF_SCHEMA)?;

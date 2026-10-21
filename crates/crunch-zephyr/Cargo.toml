@@ -1,0 +1,20 @@
+[package]
+name = "crunch-zephyr"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mantle-zephyr"
+path = "src/main.rs"
+
+[dependencies]
+crunch-zephyr-core = { path = "../crunch-zephyr-core" }
+crunch-cmake-core = { path = "../crunch-cmake-core" }
+crunch-cmake = { path = "../crunch-cmake" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+blake3 = "=1.8.5"
+
+[dev-dependencies]
+tempfile = "3"

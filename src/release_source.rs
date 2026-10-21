@@ -413,7 +413,7 @@ fn is_releasable_tracked_source_path(relative_path: &Path) -> bool {
     let Ok(path_text) = tar_path_string(relative_path) else {
         return false;
     };
-    release_source_path_is_releasable(&path_text).unwrap_or(false)
+    release_source_path_is_releasable(path_text).unwrap_or(false)
 }
 
 fn append_source_paths_to_archive(
@@ -542,10 +542,10 @@ fn append_symlink_entry(
 ) -> Result<(), RunError> {
     let link_target = std::fs::read_link(source_path)
         .map_err(|err| RunError::Internal(format!("read_link {}: {err}", source_path.display())))?;
-    let link_target_text = link_target.to_str().ok_or_else(|| {
+    let link_target_text = link_target.into_os_string().into_string().map_err(|_| {
         RunError::Internal(format!("source archive symlink target is not valid utf-8: {}", source_path.display()))
     })?;
-    validate_release_source_symlink_target(link_target_text).map_err(core_error_to_run_error)?;
+    let link_target_text = validate_release_source_symlink_target(link_target_text).map_err(core_error_to_run_error)?;
     assert!(!link_target_text.is_empty(), "release source symlink target must not be empty");
     assert!(!relative_path.is_absolute(), "release source symlink path must remain relative");
     let mut header = tar::Header::new_gnu();
@@ -556,7 +556,7 @@ fn append_symlink_entry(
     header.set_gid(0);
     header.set_mtime(0);
     header
-        .set_link_name(&link_target)
+        .set_link_name(&link_target_text)
         .map_err(|err| RunError::Internal(format!("setting link name for {}: {err}", source_path.display())))?;
     header.set_cksum();
     let tar_path = tar_path_string(relative_path)?;

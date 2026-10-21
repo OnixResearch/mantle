@@ -27,6 +27,24 @@ let locked_revision = "dfd9566f82a6e1d55c30f861879186440614696e" in
       system = "x86_64-linux",
       aliases = ["image-library"],
     },
+    {
+      name = "jq",
+      attribute = "jq",
+      system = "x86_64-linux",
+      aliases = [],
+    },
+    {
+      name = "ripgrep",
+      attribute = "ripgrep",
+      system = "x86_64-linux",
+      aliases = [],
+    },
+    {
+      name = "bison",
+      attribute = "bison",
+      system = "x86_64-linux",
+      aliases = [],
+    },
   ],
   conversion_policy = {
     mode = "recompute-blake3-v1",

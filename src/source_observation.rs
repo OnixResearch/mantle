@@ -5,24 +5,8 @@
 
 use std::path::Path;
 
-use crunch_source_core::ExistingObservation;
-use crunch_source_core::LocatorClass;
-use crunch_source_core::ProjectionPath;
-use crunch_source_core::SnapshotProfile;
-use crunch_source_core::SourceKind;
-use crunch_source_core::SourceObservation;
-
 use crate::RunError;
 use crate::source_bundle::SourceRecord;
-
-/// Snapshot profile recorded for source-bundle observations.
-pub const SOURCE_BUNDLE_SNAPSHOT_PROFILE: &str = "mantle-source-snapshot";
-
-/// Snapshot profile version recorded for source-bundle observations.
-pub const SOURCE_BUNDLE_SNAPSHOT_PROFILE_VERSION: u32 = 1;
-
-/// Stable projection for canonical stored-record comparisons.
-const DEFAULT_PROJECTION: &str = "source";
 
 /// Outcome of planning one record against the durable state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,12 +17,13 @@ pub enum RecordIngestOutcome {
     ReuseIdentical,
 }
 
-/// Read the canonical record already stored under one content identity.
-fn read_existing_record(target: &Path) -> Result<ExistingObservation, RunError> {
+/// Plan one record against the record already stored at its content identity.
+/// Comparison is over the actual record, not a fabricated provenance observation.
+pub fn plan_record_ingest(target: &Path, record: &SourceRecord) -> Result<RecordIngestOutcome, RunError> {
     let bytes = match std::fs::read(target) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(ExistingObservation::Absent);
+            return Ok(RecordIngestOutcome::Add);
         }
         Err(error) => {
             return Err(RunError::Internal(format!("reading existing source record {}: {error}", target.display())));
@@ -46,58 +31,13 @@ fn read_existing_record(target: &Path) -> Result<ExistingObservation, RunError> 
     };
     let existing: SourceRecord = serde_json::from_slice(&bytes)
         .map_err(|error| RunError::Internal(format!("parsing existing source record {}: {error}", target.display())))?;
-    Ok(ExistingObservation::Present(Box::new(canonical_record_observation(&existing))))
-}
-
-/// Canonical observation-shaped facts for one stored record.
-///
-/// Records without sufficient adapter facts still need a stable identity for
-/// reuse comparison, so the canonical byte digest and content identity carry
-/// the comparison instead of a derived observation.
-fn canonical_record_observation(record: &SourceRecord) -> SourceObservation {
-    let digest =
-        crunch_source_core::Blake3Digest::from_slice(serde_json::to_vec(record).unwrap_or_default().as_slice());
-    SourceObservation {
-        schema: String::from("mantle-source-record-canonical-v1"),
-        kind: SourceKind::Opaque,
-        locator: LocatorClass::Opaque {
-            label: record.content_blake3.clone(),
-        },
-        mutable_ref_hint: None,
-        git_object_format: None,
-        git_revision: None,
-        projection: ProjectionPath::parse(DEFAULT_PROJECTION)
-            .unwrap_or_else(|_| unreachable!("default projection always parses")),
-        snapshot_profile: SnapshotProfile {
-            name: String::from(SOURCE_BUNDLE_SNAPSHOT_PROFILE),
-            version: SOURCE_BUNDLE_SNAPSHOT_PROFILE_VERSION,
-        },
-        payload_blake3: digest.clone(),
-        encoding_version: crunch_source_core::SOURCE_OBSERVATION_ENCODING_VERSION,
-        observation_blake3: digest,
+    if &existing == record {
+        return Ok(RecordIngestOutcome::ReuseIdentical);
     }
-}
-
-/// Plan one record against the record already stored at its content identity.
-pub fn plan_record_ingest(target: &Path, record: &SourceRecord) -> Result<RecordIngestOutcome, RunError> {
-    let existing = read_existing_record(target)?;
-    let incoming = canonical_record_observation(record);
-    match existing {
-        ExistingObservation::Absent => {
-            debug_assert!(!record.content_blake3.is_empty());
-            Ok(RecordIngestOutcome::Add)
-        }
-        ExistingObservation::Present(existing_observation) => {
-            if existing_observation.observation_blake3 == incoming.observation_blake3 {
-                Ok(RecordIngestOutcome::ReuseIdentical)
-            } else {
-                Err(RunError::Internal(format!(
-                    "source record identity conflict for {}: stored bytes differ from the incoming canonical record",
-                    record.content_blake3
-                )))
-            }
-        }
-    }
+    Err(RunError::Internal(format!(
+        "source record identity conflict for {}: stored bytes differ from the incoming canonical record",
+        record.content_blake3
+    )))
 }
 
 #[cfg(test)]

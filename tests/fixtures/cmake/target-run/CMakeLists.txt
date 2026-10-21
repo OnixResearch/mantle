@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.31)
+project(mantle_run_negative LANGUAGES C)
+set(CMAKE_EXE_LINKER_FLAGS "-nostdlib -static")
+file(WRITE "${CMAKE_BINARY_DIR}/probe.c" "int main(void) { return 0; }\n")
+try_run(run_result compile_result "${CMAKE_BINARY_DIR}/probe" "${CMAKE_BINARY_DIR}/probe.c")

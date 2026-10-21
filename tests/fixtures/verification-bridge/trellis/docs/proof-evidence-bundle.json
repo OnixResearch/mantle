@@ -1,0 +1,739 @@
+{
+  "schema_version": "trellis-proof-evidence-v1",
+  "generated_by": "src/bin/proof_evidence.rs",
+  "records": [
+    {
+      "scope": "module:arithmetic",
+      "evidence_tier": "local-proof-summary",
+      "requirement_ids": [
+        "arithmetic.abs-diff",
+        "arithmetic.checked-mul",
+        "arithmetic.div-ceil",
+        "arithmetic.gcd",
+        "arithmetic.saturating-add",
+        "arithmetic.saturating-sub"
+      ],
+      "source_paths": [
+        "src/arithmetic.rs"
+      ],
+      "proof_functions": [],
+      "algorithm_profile": "not-applicable",
+      "executable_oracle_symbol": "not-applicable",
+      "downstream_validation_requirement": "not-applicable",
+      "proof_command": "./scripts/verus.sh src/lib.rs",
+      "verifier_toolchain": "Verus via scripts/verus.sh; Tracey via docs/requirements.md",
+      "proof_outcome": "verified",
+      "tracey_coverage": "covered",
+      "proof_gap_references": [],
+      "maturity_facts": [
+        "example-backed",
+        "requirement-covered",
+        "runtime-helper",
+        "spec-model",
+        "test-backed"
+      ],
+      "content_identities": [
+        {
+          "path": "docs/requirements.md",
+          "algorithm": "blake3",
+          "digest": "0521813efbd3f30f528c5d36ef03c0d960f979cd508809143363bcca70270cf8"
+        },
+        {
+          "path": "src/arithmetic.rs",
+          "algorithm": "blake3",
+          "digest": "3064658eb9d27a1c1c423abbad9e9c8878756594f07a1d01eeb6b3efef4fa8a4"
+        }
+      ],
+      "claims": [
+        "records local Trellis proof facts for the named scope"
+      ],
+      "non_claims": [
+        "not release approval",
+        "not whole-program correctness",
+        "not third-party conformance"
+      ]
+    },
+    {
+      "scope": "module:consensus_fast_path",
+      "evidence_tier": "local-proof-summary",
+      "requirement_ids": [
+        "consensus.fast-path.base-order",
+        "consensus.fast-path.boundary",
+        "consensus.fast-path.certificate",
+        "consensus.fast-path.conflict",
+        "consensus.fast-path.dual-path",
+        "consensus.fast-path.evidence",
+        "consensus.fast-path.fixtures",
+        "consensus.fast-path.linearization",
+        "consensus.fast-path.non-claims",
+        "consensus.fast-path.quorum",
+        "consensus.fast-path.recovery"
+      ],
+      "source_paths": [
+        "src/consensus_fast_path/agreement.rs",
+        "src/consensus_fast_path/barrier.rs",
+        "src/consensus_fast_path/identity.rs",
+        "src/consensus_fast_path/membership.rs",
+        "src/consensus_fast_path/proofs.rs",
+        "src/consensus_fast_path/proofs/arithmetic.rs",
+        "src/consensus_fast_path/proofs/composition.rs",
+        "src/consensus_fast_path/tests.rs",
+        "src/consensus_fast_path/tests/negative.rs",
+        "src/consensus_fast_path/tests/positive.rs",
+        "src/consensus_fast_path/tests/property.rs",
+        "src/consensus_fast_path/vocabulary.rs",
+        "src/consensus_fast_path/witness.rs"
+      ],
+      "proof_functions": [],
+      "algorithm_profile": "not-applicable",
+      "executable_oracle_symbol": "not-applicable",
+      "downstream_validation_requirement": "not-applicable",
+      "proof_command": "./scripts/verus.sh src/lib.rs",
+      "verifier_toolchain": "Verus via scripts/verus.sh; Tracey via docs/requirements.md",
+      "proof_outcome": "verified",
+      "tracey_coverage": "covered",
+      "proof_gap_references": [],
+      "maturity_facts": [],
+      "content_identities": [
+        {
+          "path": "docs/requirements.md",
+          "algorithm": "blake3",
+          "digest": "0521813efbd3f30f528c5d36ef03c0d960f979cd508809143363bcca70270cf8"
+        },
+        {
+          "path": "src/consensus_fast_path/agreement.rs",
+          "algorithm": "blake3",
+          "digest": "da88c1a81487199f82b984bb88f07dde225c1445fff50f06c7687a28be2c442e"
+        },
+        {
+          "path": "src/consensus_fast_path/barrier.rs",
+          "algorithm": "blake3",
+          "digest": "21db4516ea2e6adc861f33df406bc642d87bc23f7ba8684680e1fb01b6c8c6b4"
+        },
+        {
+          "path": "src/consensus_fast_path/identity.rs",
+          "algorithm": "blake3",
+          "digest": "29daf61ccddfa3ed454b937fb383b5b64e21f50d2e5e8181c2ed04d9e396cf35"
+        },
+        {
+          "path": "src/consensus_fast_path/membership.rs",
+          "algorithm": "blake3",
+          "digest": "f36d3e271126d32454a5df8db6090f9d2e629484a55ef3bb93eb084b9e954aae"
+        },
+        {
+          "path": "src/consensus_fast_path/proofs.rs",
+          "algorithm": "blake3",
+          "digest": "5fce966c69f3155d8251ed9a3105ee9782724a6835268a1e66b8f67d359df89a"
+        },
+        {
+          "path": "src/consensus_fast_path/proofs/arithmetic.rs",
+          "algorithm": "blake3",
+          "digest": "5120c6b476d17f94a50b8ed32c15166e253c05ec082cb50b08ed56651089b207"
+        },
+        {
+          "path": "src/consensus_fast_path/proofs/composition.rs",
+          "algorithm": "blake3",
+          "digest": "146fd7206a30d13337e20937eee808efad4ad301b4964f6a08eab17225babe31"
+        },
+        {
+          "path": "src/consensus_fast_path/tests.rs",
+          "algorithm": "blake3",
+          "digest": "e65123aa7c22bcb0735d700ce141f8a4e31dcc43b89bb28abad47f40bb6e7324"
+        },
+        {
+          "path": "src/consensus_fast_path/tests/negative.rs",
+          "algorithm": "blake3",
+          "digest": "9ca7a48239eee81b4479e17725f58821e02196cbd3cdcaf279126660a4a90326"
+        },
+        {
+          "path": "src/consensus_fast_path/tests/positive.rs",
+          "algorithm": "blake3",
+          "digest": "ce9d7f06f14ae99ca5c9cc69482fea22ccac36a997bf751cf570868ddccbd905"
+        },
+        {
+          "path": "src/consensus_fast_path/tests/property.rs",
+          "algorithm": "blake3",
+          "digest": "c09cc4fa916b74760627a3da596c9092b6b3505cd6151abafbc3ae83d71cfc55"
+        },
+        {
+          "path": "src/consensus_fast_path/vocabulary.rs",
+          "algorithm": "blake3",
+          "digest": "597a1c52d009ced5cdd6b7f21e251df3e2fe72366d8a037bb89e3d4f1293ccd6"
+        },
+        {
+          "path": "src/consensus_fast_path/witness.rs",
+          "algorithm": "blake3",
+          "digest": "668c8adeaf2ee3191308030b8dafe9bd0af7bbedd62ceb424abacd181865eff9"
+        }
+      ],
+      "claims": [
+        "records local Trellis proof facts for the named scope"
+      ],
+      "non_claims": [
+        "not release approval",
+        "not whole-program correctness",
+        "not third-party conformance"
+      ]
+    },
+    {
+      "scope": "module:scheme_logic",
+      "evidence_tier": "local-proof-summary",
+      "requirement_ids": [
+        "scheme-logic.bytecode-safety",
+        "scheme-logic.collections-bytevectors",
+        "scheme-logic.contract-blame",
+        "scheme-logic.docs",
+        "scheme-logic.evidence.negative",
+        "scheme-logic.evidence.positive",
+        "scheme-logic.final-validation",
+        "scheme-logic.interning",
+        "scheme-logic.module-graph",
+        "scheme-logic.non-claims",
+        "scheme-logic.reader-datum-structure",
+        "scheme-logic.reader-token-span",
+        "scheme-logic.value-graph"
+      ],
+      "source_paths": [
+        "src/scheme_logic/boundary.rs",
+        "src/scheme_logic/heap.rs",
+        "src/scheme_logic/heap/equivalence.rs",
+        "src/scheme_logic/heap/shapes.rs",
+        "src/scheme_logic/identity.rs",
+        "src/scheme_logic/linkage.rs",
+        "src/scheme_logic/proofs/mod.rs",
+        "src/scheme_logic/proofs/bytecode.rs",
+        "src/scheme_logic/proofs/collections.rs",
+        "src/scheme_logic/proofs/contracts.rs",
+        "src/scheme_logic/proofs/modules.rs",
+        "src/scheme_logic/proofs/reader.rs",
+        "src/scheme_logic/proofs/registry.rs",
+        "src/scheme_logic/registry.rs",
+        "src/scheme_logic/syntax.rs",
+        "src/scheme_logic/tests/mod.rs",
+        "src/scheme_logic/tests/negative.rs",
+        "src/scheme_logic/tests/positive.rs",
+        "src/scheme_logic/tests/property.rs",
+        "src/scheme_logic/vm.rs"
+      ],
+      "proof_functions": [],
+      "algorithm_profile": "not-applicable",
+      "executable_oracle_symbol": "not-applicable",
+      "downstream_validation_requirement": "not-applicable",
+      "proof_command": "./scripts/verus.sh src/lib.rs",
+      "verifier_toolchain": "Verus via scripts/verus.sh; Tracey via docs/requirements.md",
+      "proof_outcome": "verified",
+      "tracey_coverage": "covered",
+      "proof_gap_references": [],
+      "maturity_facts": [],
+      "content_identities": [
+        {
+          "path": "docs/requirements.md",
+          "algorithm": "blake3",
+          "digest": "0521813efbd3f30f528c5d36ef03c0d960f979cd508809143363bcca70270cf8"
+        },
+        {
+          "path": "src/scheme_logic/boundary.rs",
+          "algorithm": "blake3",
+          "digest": "1f051ca2bd5e2be211cc02c36787729f710c074252a79c7e3cd3b2a5f2b1c110"
+        },
+        {
+          "path": "src/scheme_logic/heap.rs",
+          "algorithm": "blake3",
+          "digest": "8d0321ff5e609c1280a3449171476eb3055777defda0f97e60431dccf61d2c4e"
+        },
+        {
+          "path": "src/scheme_logic/heap/equivalence.rs",
+          "algorithm": "blake3",
+          "digest": "13113e24c91eb03a0dc7b272b0f32863f476c1510a880277c906627a25721988"
+        },
+        {
+          "path": "src/scheme_logic/heap/shapes.rs",
+          "algorithm": "blake3",
+          "digest": "3c39382dec782f501d9fe96900b1cc593f0bfdfa7ce7cd47ecb1d4837bdbbd9c"
+        },
+        {
+          "path": "src/scheme_logic/identity.rs",
+          "algorithm": "blake3",
+          "digest": "ce8f585d927ff644d2e239c11c28ca1f8d2d48517ebc798c57e802f900b930cb"
+        },
+        {
+          "path": "src/scheme_logic/linkage.rs",
+          "algorithm": "blake3",
+          "digest": "364a8dcedf7f638f23a64de61c73f8ea7586c8036694f9dea3f5cdacf8b5975a"
+        },
+        {
+          "path": "src/scheme_logic/proofs/bytecode.rs",
+          "algorithm": "blake3",
+          "digest": "5df0428c625205ea77137491a48b1908bc693939083a763bbc7af9a494474ffa"
+        },
+        {
+          "path": "src/scheme_logic/proofs/collections.rs",
+          "algorithm": "blake3",
+          "digest": "03333873ccfeeb8927115964fb6c1903c10dfb9b6a9f717bcb1ba4f18072d45a"
+        },
+        {
+          "path": "src/scheme_logic/proofs/contracts.rs",
+          "algorithm": "blake3",
+          "digest": "84f59363c536f18954ecccf09c52613cea3585ae569847a3ca4e5897a21092e8"
+        },
+        {
+          "path": "src/scheme_logic/proofs/mod.rs",
+          "algorithm": "blake3",
+          "digest": "43e3ace8d42a68c6111110f67915d472712e0c6aa431e7c0931dfcd68245b3e2"
+        },
+        {
+          "path": "src/scheme_logic/proofs/modules.rs",
+          "algorithm": "blake3",
+          "digest": "1e28cd326bb4823dcc7aef30041c433d5bd087f35052226b8dc7b1df0aae1066"
+        },
+        {
+          "path": "src/scheme_logic/proofs/reader.rs",
+          "algorithm": "blake3",
+          "digest": "efced6c9617c65d9889ca600abb76d7153217b85b6ab221841d058f66d29a3eb"
+        },
+        {
+          "path": "src/scheme_logic/proofs/registry.rs",
+          "algorithm": "blake3",
+          "digest": "89ecbe65247fe2b6d84bfb0ed8fa2b323b248d29f108de333b6e38d3a4b470c9"
+        },
+        {
+          "path": "src/scheme_logic/registry.rs",
+          "algorithm": "blake3",
+          "digest": "dba102751ed38bd164da1bdedf53e9d6c7819ddbc1852f3860d84c15a14d1d3b"
+        },
+        {
+          "path": "src/scheme_logic/syntax.rs",
+          "algorithm": "blake3",
+          "digest": "7b1b8f3c8c63109888192724e22009f465b1411263460c3027459c4b363f4b37"
+        },
+        {
+          "path": "src/scheme_logic/tests/mod.rs",
+          "algorithm": "blake3",
+          "digest": "911d3c9e2275bb3570fd18f0ad576d7e9d605b07d4fc9eef94f0cbfdcc9e4b0f"
+        },
+        {
+          "path": "src/scheme_logic/tests/negative.rs",
+          "algorithm": "blake3",
+          "digest": "d1f5889d4b0e67240c18c697e10b151d9d2aa556e2bdf88b822093e16b3de293"
+        },
+        {
+          "path": "src/scheme_logic/tests/positive.rs",
+          "algorithm": "blake3",
+          "digest": "232051f757b2cfb17af7bf96d3e3a9fed81f68e21d54ef2292f3a88f072c53a0"
+        },
+        {
+          "path": "src/scheme_logic/tests/property.rs",
+          "algorithm": "blake3",
+          "digest": "7bf9b19e114516281763112c52c535e541b43f40b4107d28430ff82bf1ef020c"
+        },
+        {
+          "path": "src/scheme_logic/vm.rs",
+          "algorithm": "blake3",
+          "digest": "9e17f4481da50d28c257cc5b817c58d9de16f14826a49971861d3aec85ca351b"
+        }
+      ],
+      "claims": [
+        "records local Trellis proof facts for the named scope"
+      ],
+      "non_claims": [
+        "not release approval",
+        "not whole-program correctness",
+        "not third-party conformance"
+      ]
+    },
+    {
+      "scope": "module:wasm_runtime_bounds",
+      "evidence_tier": "local-proof-summary",
+      "requirement_ids": [
+        "wasm-runtime-bounds.allocation",
+        "wasm-runtime-bounds.continuation",
+        "wasm-runtime-bounds.docs",
+        "wasm-runtime-bounds.evidence",
+        "wasm-runtime-bounds.final-validation",
+        "wasm-runtime-bounds.fuel",
+        "wasm-runtime-bounds.growth-policy",
+        "wasm-runtime-bounds.model",
+        "wasm-runtime-bounds.non-claims",
+        "wasm-runtime-bounds.segmentation",
+        "wasm-runtime-bounds.streaming"
+      ],
+      "source_paths": [
+        "src/wasm_runtime_bounds/binding.rs",
+        "src/wasm_runtime_bounds/execution.rs",
+        "src/wasm_runtime_bounds/identity.rs",
+        "src/wasm_runtime_bounds/machine.rs",
+        "src/wasm_runtime_bounds/proofs.rs",
+        "src/wasm_runtime_bounds/proofs/control.rs",
+        "src/wasm_runtime_bounds/proofs/resources.rs",
+        "src/wasm_runtime_bounds/proofs/streaming.rs",
+        "src/wasm_runtime_bounds/resources.rs",
+        "src/wasm_runtime_bounds/streaming.rs",
+        "src/wasm_runtime_bounds/tests/mod.rs",
+        "src/wasm_runtime_bounds/tests/negative.rs",
+        "src/wasm_runtime_bounds/tests/positive.rs",
+        "src/wasm_runtime_bounds/tests/property.rs"
+      ],
+      "proof_functions": [],
+      "algorithm_profile": "not-applicable",
+      "executable_oracle_symbol": "not-applicable",
+      "downstream_validation_requirement": "not-applicable",
+      "proof_command": "./scripts/verus.sh src/lib.rs",
+      "verifier_toolchain": "Verus via scripts/verus.sh; Tracey via docs/requirements.md",
+      "proof_outcome": "verified",
+      "tracey_coverage": "covered",
+      "proof_gap_references": [],
+      "maturity_facts": [],
+      "content_identities": [
+        {
+          "path": "docs/requirements.md",
+          "algorithm": "blake3",
+          "digest": "0521813efbd3f30f528c5d36ef03c0d960f979cd508809143363bcca70270cf8"
+        },
+        {
+          "path": "src/wasm_runtime_bounds/binding.rs",
+          "algorithm": "blake3",
+          "digest": "a4199a27a731f0c34cf8dd9329d84e31e0c7cc98c7c5a8406d805e220f1e4846"
+        },
+        {
+          "path": "src/wasm_runtime_bounds/execution.rs",
+          "algorithm": "blake3",
+          "digest": "50f6e6e142bb4d7dc9d8d6295414dd4879be69f967025485776eb8923d6cbcd1"
+        },
+        {
+          "path": "src/wasm_runtime_bounds/identity.rs",
+          "algorithm": "blake3",
+          "digest": "414ae19975bc8602be970f5de51f2ebd244885c624ce5abc85d21760b9c28d35"
+        },
+        {
+          "path": "src/wasm_runtime_bounds/machine.rs",
+          "algorithm": "blake3",
+          "digest": "2d0b0dbd4748116ffe876cebd07d83999f330d5e8e83a84a7d93557089043c0c"
+        },
+        {
+          "path": "src/wasm_runtime_bounds/proofs.rs",
+          "algorithm": "blake3",
+          "digest": "8bf96f457816e170822ccb4acf0e2f01eb051164b58f96f463f74ef7f70e949d"
+        },
+        {
+          "path": "src/wasm_runtime_bounds/proofs/control.rs",
+          "algorithm": "blake3",
+          "digest": "7ad8b02c200ea8c688d734e4bf4d8ef9b8692e601e56153285f634db86ffef13"
+        },
+        {
+          "path": "src/wasm_runtime_bounds/proofs/resources.rs",
+          "algorithm": "blake3",
+          "digest": "6cda807e745b0f038cf10df5976d7a59d9bdd0bd16058f26c5bee5ae1c0604f9"
+        },
+        {
+          "path": "src/wasm_runtime_bounds/proofs/streaming.rs",
+          "algorithm": "blake3",
+          "digest": "42c9872bcde0eeacb6240a1ffb7ea67b4e19095554f3a12caa21fe8627500a9e"
+        },
+        {
+          "path": "src/wasm_runtime_bounds/resources.rs",
+          "algorithm": "blake3",
+          "digest": "1e65be1fe56de29178157ccf691833bc406dc6c36135abcf95e7e819ab057ade"
+        },
+        {
+          "path": "src/wasm_runtime_bounds/streaming.rs",
+          "algorithm": "blake3",
+          "digest": "2ecb7cf5bf3fb3e5ee8f7929ce11a9daace1af2d29c2b13670a9fd991cc61749"
+        },
+        {
+          "path": "src/wasm_runtime_bounds/tests/mod.rs",
+          "algorithm": "blake3",
+          "digest": "585c9881414307a3f2a94680c5ec9dea1419560e8088f4087e2609988109ac1a"
+        },
+        {
+          "path": "src/wasm_runtime_bounds/tests/negative.rs",
+          "algorithm": "blake3",
+          "digest": "ff46673bb51fee5d6d4168f243c9fef11ca8699abfb64444ac2defacb03bf1dc"
+        },
+        {
+          "path": "src/wasm_runtime_bounds/tests/positive.rs",
+          "algorithm": "blake3",
+          "digest": "87133eb674ed9f1ac08a75c7a3a08066632a438f54971cb483f42cb33d1cd4d9"
+        },
+        {
+          "path": "src/wasm_runtime_bounds/tests/property.rs",
+          "algorithm": "blake3",
+          "digest": "fd9850e9a84954afb218e4c1d0274ca2382f508c1586619b5f71b3ea4b4bb652"
+        }
+      ],
+      "claims": [
+        "records local Trellis proof facts for the named scope"
+      ],
+      "non_claims": [
+        "not release approval",
+        "not whole-program correctness",
+        "not third-party conformance"
+      ]
+    },
+    {
+      "scope": "module:ucan_signature",
+      "evidence_tier": "local-proof-summary",
+      "requirement_ids": [
+        "ucan-signature.checked-byte-inputs",
+        "ucan-signature.deterministic",
+        "ucan-signature.key-binding",
+        "ucan-signature.message-binding",
+        "ucan-signature.public-key-length",
+        "ucan-signature.round-trip",
+        "ucan-signature.secret-key-length",
+        "ucan-signature.signature-length"
+      ],
+      "source_paths": [
+        "src/ucan_signature.rs"
+      ],
+      "proof_functions": [],
+      "algorithm_profile": "not-applicable",
+      "executable_oracle_symbol": "not-applicable",
+      "downstream_validation_requirement": "not-applicable",
+      "proof_command": "./scripts/verus.sh src/lib.rs",
+      "verifier_toolchain": "Verus via scripts/verus.sh; Tracey via docs/requirements.md",
+      "proof_outcome": "verified",
+      "tracey_coverage": "covered",
+      "proof_gap_references": [
+        "src/ucan_signature.rs::pub fn public_from_secret(sk: &SecretKey) -> (result: PublicKey)",
+        "src/ucan_signature.rs::pub fn sign(sk: &SecretKey, message: &Vec<u8>) -> (result: Ed25519Signature)",
+        "src/ucan_signature.rs::pub fn verify(pk: &PublicKey, message: &Vec<u8>, sig: &Ed25519Signature) -> (result: bool)",
+        "src/ucan_signature.rs::pub proof fn axiom_sign_verify_round_trip(sk: Seq<u8>, msg: Seq<u8>)",
+        "src/ucan_signature.rs::pub proof fn axiom_wrong_key_rejects(sk: Seq<u8>, pk: Seq<u8>, msg: Seq<u8>)",
+        "src/ucan_signature.rs::pub proof fn axiom_wrong_message_rejects(sk: Seq<u8>, msg1: Seq<u8>, msg2: Seq<u8>)"
+      ],
+      "maturity_facts": [
+        "requirement-covered",
+        "runtime-helper",
+        "spec-model",
+        "test-backed",
+        "trusted-boundary-adjacent"
+      ],
+      "content_identities": [
+        {
+          "path": "docs/proof-gap-sites.tsv",
+          "algorithm": "blake3",
+          "digest": "f4857e946924669eef3225e68f48015f14977453ccde26addf0f639b57fd6a94"
+        },
+        {
+          "path": "docs/requirements.md",
+          "algorithm": "blake3",
+          "digest": "0521813efbd3f30f528c5d36ef03c0d960f979cd508809143363bcca70270cf8"
+        },
+        {
+          "path": "src/ucan_signature.rs",
+          "algorithm": "blake3",
+          "digest": "706f6831b4a38b185c18272c419fb8d785192fdd649945c3016f4fd6f6575ed9"
+        }
+      ],
+      "claims": [
+        "records local Trellis proof facts for the named scope"
+      ],
+      "non_claims": [
+        "not release approval",
+        "not whole-program correctness",
+        "not third-party conformance"
+      ]
+    },
+    {
+      "scope": "module:bounded_modular_tree_fold",
+      "evidence_tier": "local-proof-summary",
+      "requirement_ids": [
+        "bounded-modular-tree-fold.admission",
+        "bounded-modular-tree-fold.algebra",
+        "bounded-modular-tree-fold.boundary",
+        "bounded-modular-tree-fold.docs",
+        "bounded-modular-tree-fold.equivalence",
+        "bounded-modular-tree-fold.evidence",
+        "bounded-modular-tree-fold.fixtures",
+        "bounded-modular-tree-fold.non-claims",
+        "bounded-modular-tree-fold.refinement",
+        "bounded-modular-tree-fold.u24-add",
+        "bounded-modular-tree-fold.u24-domain",
+        "bounded-modular-tree-fold.validation",
+        "bounded-modular-tree-fold.work"
+      ],
+      "source_paths": [
+        "src/u24/mod.rs",
+        "src/bounded_modular_tree_fold/mod.rs",
+        "src/bounded_modular_tree_fold/core.rs",
+        "src/bounded_modular_tree_fold/tests.rs"
+      ],
+      "proof_functions": [
+        "u24::u24_normalize_closed",
+        "u24::u24_normalize_valid_identity",
+        "u24::u24_normalize_idempotent",
+        "u24::u24_add_closed",
+        "u24::u24_add_zero_identity",
+        "u24::u24_add_commutative",
+        "u24::u24_add_associative",
+        "bounded_modular_tree_fold::core::u24_pair_round_preserves_sum",
+        "bounded_modular_tree_fold::core::power_of_two_round_progress",
+        "bounded_modular_tree_fold::core::power_of_two_combine_count_exact"
+      ],
+      "algorithm_profile": "trellis.balanced-u24-wrapping-sum.v1",
+      "executable_oracle_symbol": "verified_logic::bounded_modular_tree_fold::sequential_u24_sum",
+      "downstream_validation_requirement": "exact artifact pin plus downstream validation or rerun receipt",
+      "proof_command": "./scripts/verus.sh src/lib.rs",
+      "verifier_toolchain": "Verus via scripts/verus.sh; Tracey via docs/requirements.md",
+      "proof_outcome": "verified",
+      "tracey_coverage": "covered",
+      "proof_gap_references": [],
+      "maturity_facts": [],
+      "content_identities": [
+        {
+          "path": "docs/requirements.md",
+          "algorithm": "blake3",
+          "digest": "0521813efbd3f30f528c5d36ef03c0d960f979cd508809143363bcca70270cf8"
+        },
+        {
+          "path": "src/bounded_modular_tree_fold/core.rs",
+          "algorithm": "blake3",
+          "digest": "1b2c4c19c3f00da0128c488cbc495a9b136566bfb5790f4c86686d8cd2c5542a"
+        },
+        {
+          "path": "src/bounded_modular_tree_fold/mod.rs",
+          "algorithm": "blake3",
+          "digest": "b3862452f53a9cc5a465c2fb14f63e4a70e12119157c9f417afeec884f70eb5a"
+        },
+        {
+          "path": "src/bounded_modular_tree_fold/tests.rs",
+          "algorithm": "blake3",
+          "digest": "75a3bc7f4af2c8bf8e0983883fe1819db6289f78123ab026b6d6db33ecd9601c"
+        },
+        {
+          "path": "src/u24/mod.rs",
+          "algorithm": "blake3",
+          "digest": "cd0e0470ffab9e79d9b1fbb9beccd0cbb749c49499d74afce9f99bf917a7cfb8"
+        }
+      ],
+      "claims": [
+        "records local Trellis u24 arithmetic, refinement, equivalence, and abstract work proofs"
+      ],
+      "non_claims": [
+        "not release approval",
+        "not whole-program correctness",
+        "not third-party conformance",
+        "not Bend or HVM2 correctness",
+        "not generated-C or host-compiler equivalence",
+        "not benchmark or HVM interaction evidence",
+        "downstream validation or rerun required for verified role"
+      ]
+    },
+    {
+      "scope": "module:fenced_attempt_admission::verified",
+      "evidence_tier": "local-proof-summary",
+      "requirement_ids": [
+        "fenced-attempt-admission.completion-linkage",
+        "fenced-attempt-admission.event-idempotence",
+        "fenced-attempt-admission.fence-safety",
+        "fenced-attempt-admission.rejection-preservation",
+        "fenced-attempt-admission.terminal-closure"
+      ],
+      "source_paths": [
+        "src/fenced_attempt/identity.rs",
+        "src/fenced_attempt/verified.rs",
+        "src/fenced_attempt/tests/verified_positive.rs",
+        "src/fenced_attempt/tests/verified_negative.rs"
+      ],
+      "proof_functions": [
+        "fenced_attempt_admission::verified::rejected_fence_preserves",
+        "fenced_attempt_admission::verified::terminal_new_event_preserves",
+        "fenced_attempt_admission::verified::duplicate_and_conflict_preserve",
+        "fenced_attempt_admission::verified::applied_completion_requires_linkage",
+        "fenced_attempt_admission::verified::non_applied_preserves",
+        "fenced_attempt_admission::verified::representable_fence_advances"
+      ],
+      "algorithm_profile": "trellis.fenced-attempt-admission.bounded-decision.v1",
+      "executable_oracle_symbol": "verified_logic::fenced_attempt_admission::verified::admit",
+      "downstream_validation_requirement": "classify events against complete retained history; prove consumer projection or rerun",
+      "proof_command": "./scripts/verus.sh src/lib.rs --rlimit 40 --triggers-mode silent",
+      "verifier_toolchain": "Verus via scripts/verus.sh; Tracey via docs/requirements.md",
+      "proof_outcome": "verified",
+      "tracey_coverage": "covered",
+      "proof_gap_references": [],
+      "maturity_facts": [],
+      "content_identities": [
+        {
+          "path": "docs/requirements.md",
+          "algorithm": "blake3",
+          "digest": "0521813efbd3f30f528c5d36ef03c0d960f979cd508809143363bcca70270cf8"
+        },
+        {
+          "path": "src/fenced_attempt/identity.rs",
+          "algorithm": "blake3",
+          "digest": "1bca372696deb7d68be296728c6c4128f2c5402880754976d11990bd61683ed7"
+        },
+        {
+          "path": "src/fenced_attempt/tests/verified_negative.rs",
+          "algorithm": "blake3",
+          "digest": "391047a21cec9a8100fb1f6e6535297e0e63296d5f2f90fd610d48e1f2feaefd"
+        },
+        {
+          "path": "src/fenced_attempt/tests/verified_positive.rs",
+          "algorithm": "blake3",
+          "digest": "1b91fa5e9b6f551a570806a26a6f0870374aa1dda947788f56ecdd03a2934a4a"
+        },
+        {
+          "path": "src/fenced_attempt/verified.rs",
+          "algorithm": "blake3",
+          "digest": "ceb717657f092747a03501e63a0f2a8aeda7af0aba226e21de725334d47c0549"
+        }
+      ],
+      "claims": [
+        "records a finite Trellis spec/executable decision equality for caller-admitted facts"
+      ],
+      "non_claims": [
+        "not release approval",
+        "not whole-program correctness",
+        "not third-party conformance",
+        "not event digest computation or complete-history lookup",
+        "not Mantle runtime equivalence or downstream correctness",
+        "not verifier soundness or a Valence property receipt",
+        "not release eligibility"
+      ]
+    },
+    {
+      "scope": "proof-example:basic_refinement",
+      "evidence_tier": "local-proof-summary",
+      "requirement_ids": [
+        "runnable-proof-examples.basic",
+        "runnable-proof-examples.commands"
+      ],
+      "source_paths": [
+        "tests/proof_examples/basic_refinement.rs"
+      ],
+      "proof_functions": [],
+      "algorithm_profile": "not-applicable",
+      "executable_oracle_symbol": "not-applicable",
+      "downstream_validation_requirement": "not-applicable",
+      "proof_command": "./scripts/verus.sh tests/proof_examples/basic_refinement.rs",
+      "verifier_toolchain": "Verus via scripts/verus.sh; Tracey via docs/requirements.md",
+      "proof_outcome": "verified",
+      "tracey_coverage": "covered",
+      "proof_gap_references": [],
+      "maturity_facts": [
+        "proof-example"
+      ],
+      "content_identities": [
+        {
+          "path": "docs/requirements.md",
+          "algorithm": "blake3",
+          "digest": "0521813efbd3f30f528c5d36ef03c0d960f979cd508809143363bcca70270cf8"
+        },
+        {
+          "path": "tests/proof_examples/basic_refinement.rs",
+          "algorithm": "blake3",
+          "digest": "0f3fff62c129fb0d9b1e0636faf1a9b406f65168cc8c74fc6ab1899bcd6d4712"
+        }
+      ],
+      "claims": [
+        "records local Trellis proof facts for the named scope"
+      ],
+      "non_claims": [
+        "not release approval",
+        "not whole-program correctness",
+        "not third-party conformance"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "@fixture/lib",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "files": ["dist"],
+  "scripts": {"build": "node build.cjs"},
+  "dependencies": {"@fixture/consumer": "1.0.0", "@fixture/peer": "1.0.0", "@fixture/git-archive": "1.0.0"}
+}

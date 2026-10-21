@@ -1159,6 +1159,8 @@ struct ReleaseVerifyRequest {
     release_profile: String,
     stack_provenance_mode: String,
     requirement_coverage_mode: String,
+    source_review_policy: Option<PathBuf>,
+    require_source_review: bool,
 }
 
 #[derive(Debug)]
@@ -1173,6 +1175,7 @@ struct ReleaseVerifyEvaluation {
     stack_provenance_result: crunch_release_core::StackProvenanceReleaseVerification,
     content_bound_requirement_result: crunch_release_core::ContentBoundRequirementVerificationV1,
     cairn_handoff_result: crunch_release_core::CairnHandoffReleaseVerification,
+    source_review_result: crunch_release_core::source_review::SourceReviewVerification,
     stagex_result: Option<crunch_bootstrap_core::StagexNoQuorumResult>,
     decision: ReleaseVerificationDecision,
 }
@@ -1191,6 +1194,8 @@ fn release_verify_request(action: crate::ReleaseAction, current_dir: &Path) -> R
         release_profile,
         stack_provenance,
         requirement_coverage,
+        source_review_policy,
+        require_source_review,
     } = action
     else {
         return Err(RunError::Internal("expected release verify action".to_string()));
@@ -1211,6 +1216,8 @@ fn release_verify_request(action: crate::ReleaseAction, current_dir: &Path) -> R
         release_profile,
         stack_provenance_mode: stack_provenance,
         requirement_coverage_mode: requirement_coverage,
+        source_review_policy: source_review_policy.map(|path| resolve_input_path(current_dir, path)),
+        require_source_review,
     })
 }
 
@@ -1259,13 +1266,19 @@ fn evaluate_release_verification(request: ReleaseVerifyRequest) -> Result<Releas
         request.deterministic_sandbox_isolation_evidence.clone(),
         is_deterministic_required,
     );
-    let manifest = verify_release_evidence_bundle(&resolved_bundle_dir)?;
+    let mut manifest = verify_release_evidence_bundle(&resolved_bundle_dir)?;
     debug_assert!(!manifest.release_id.is_empty());
     debug_assert!(resolved_bundle_dir.components().next().is_some());
+    let source_review_result = crate::release_evidence::verify_source_review_evidence(
+        &manifest,
+        &resolved_bundle_dir,
+        request.source_review_policy.as_deref(),
+        request.require_source_review,
+    )?;
     let provider_fixed_point_result = evaluate_provider_fixed_point_proof(
         &request.current_dir,
         &resolved_bundle_dir,
-        &manifest,
+        &mut manifest,
         request.provider_fixed_point_proof.clone(),
         request.require_provider_fixed_point_proof,
     );
@@ -1274,23 +1287,33 @@ fn evaluate_release_verification(request: ReleaseVerifyRequest) -> Result<Releas
     let deterministic_result =
         evaluate_deterministic_release_claim(&manifest, &resolved_bundle_dir, deterministic_request)?;
     let effective_stack_mode = crunch_release_core::stack_provenance_mode_for_release_profile(
-        &request.release_profile,
-        &request.stack_provenance_mode,
+        request.release_profile.clone(),
+        request.stack_provenance_mode.clone(),
     )
     .map_err(|err| RunError::Internal(err.to_string()))?;
-    let stack_provenance_result =
-        crunch_release_core::evaluate_stack_provenance_release_evidence(&manifest, effective_stack_mode);
-    let content_bound_requirement_result = crunch_release_core::evaluate_content_bound_requirement_release_evidence(
-        &manifest,
-        &request.requirement_coverage_mode,
+    let crunch_release_core::ReleaseEvidenceEvaluation {
+        manifest,
+        verification: stack_provenance_result,
+    } = crunch_release_core::evaluate_stack_provenance_release_evidence(manifest, effective_stack_mode.to_string());
+    let crunch_release_core::ReleaseEvidenceEvaluation {
+        manifest,
+        verification: content_bound_requirement_result,
+    } = crunch_release_core::evaluate_content_bound_requirement_release_evidence(
+        manifest,
+        request.requirement_coverage_mode.clone(),
     );
-    let cairn_binding = crunch_release_core::release_evidence_cairn_bundle_binding(&manifest)
+    let crunch_release_core::ReleaseEvidenceBindingProjection {
+        mut manifest,
+        binding: cairn_binding,
+    } = crunch_release_core::release_evidence_cairn_bundle_binding(manifest)
         .map_err(|error| RunError::Internal(error.to_string()))?;
-    let cairn_handoff_result = crunch_release_core::evaluate_cairn_handoff_release_evidence(
-        manifest.cairn_handoff_validation.as_ref(),
-        &cairn_binding,
+    let cairn_assessment = crunch_release_core::evaluate_cairn_handoff_release_evidence(
+        manifest.cairn_handoff_validation.take(),
+        cairn_binding,
         is_onix_release,
     );
+    manifest.cairn_handoff_validation = cairn_assessment.receipt;
+    let cairn_handoff_result = cairn_assessment.verification;
     let stagex_result = selected_stagex_result(
         request.require_stagex_no_quorum,
         &manifest,
@@ -1307,6 +1330,7 @@ fn evaluate_release_verification(request: ReleaseVerifyRequest) -> Result<Releas
         stack_provenance_result: &stack_provenance_result,
         content_bound_requirement_result: &content_bound_requirement_result,
         cairn_handoff_result: &cairn_handoff_result,
+        source_review_result: &source_review_result,
         stagex_result: stagex_result.as_ref(),
     });
 
@@ -1321,6 +1345,7 @@ fn evaluate_release_verification(request: ReleaseVerifyRequest) -> Result<Releas
         stack_provenance_result,
         content_bound_requirement_result,
         cairn_handoff_result,
+        source_review_result,
         stagex_result,
         decision,
     })
@@ -1341,16 +1366,16 @@ struct ReleaseVerifyDecisionInput<'a> {
     reproducibility_status: ReproducibilityStatus,
     deterministic_result: &'a DeterministicReleaseVerifyResult,
     provider_fixed_point_result: &'a crate::cargo_free_self_build::ProviderFixedPointProofVerification,
-    effective_stack_mode: &'a str,
+    effective_stack_mode: crunch_release_core::ReleaseEvidenceMode,
     stack_provenance_result: &'a crunch_release_core::StackProvenanceReleaseVerification,
     content_bound_requirement_result: &'a crunch_release_core::ContentBoundRequirementVerificationV1,
     cairn_handoff_result: &'a crunch_release_core::CairnHandoffReleaseVerification,
+    source_review_result: &'a crunch_release_core::source_review::SourceReviewVerification,
     stagex_result: Option<&'a crunch_bootstrap_core::StagexNoQuorumResult>,
 }
 
 fn aggregate_release_verify_decision(input: ReleaseVerifyDecisionInput<'_>) -> ReleaseVerificationDecision {
     debug_assert!(!input.manifest.release_id.is_empty());
-    debug_assert!(!input.effective_stack_mode.is_empty());
     let facts = ReleaseVerificationFacts {
         manifest_integrity: ReleaseVerificationFact::satisfied(),
         reproducibility: reproducibility_fact(input.reproducibility_status, input.request.require_reproducible),
@@ -1372,6 +1397,7 @@ fn aggregate_release_verify_decision(input: ReleaseVerifyDecisionInput<'_>) -> R
         stagex_no_quorum: stagex_fact(input.stagex_result),
         function_address: ReleaseVerificationFact::not_evaluated(),
         cairn_handoff: cairn_handoff_fact(input.cairn_handoff_result),
+        source_review: source_review_fact(input.source_review_result),
     };
     let requirements = release_verification_requirements(&input);
     aggregate_release_verification(facts, requirements)
@@ -1387,7 +1413,7 @@ fn release_verification_requirements(input: &ReleaseVerifyDecisionInput<'_>) -> 
         ),
         provider_fixed_point_proof: selected_or_advisory(input.request.require_provider_fixed_point_proof),
         stack_provenance: selected_or_advisory(
-            input.effective_stack_mode == crunch_release_core::STACK_PROVENANCE_MODE_REQUIRED
+            input.effective_stack_mode == crunch_release_core::ReleaseEvidenceMode::Required
                 || !input.stack_provenance_result.valid,
         ),
         content_bound_requirements: selected_or_advisory(
@@ -1400,6 +1426,7 @@ fn release_verification_requirements(input: &ReleaseVerifyDecisionInput<'_>) -> 
         cairn_handoff: selected_or_advisory(
             input.request.release_profile == crunch_release_core::RELEASE_PROFILE_ONIX_STACK,
         ),
+        source_review: selected_or_advisory(input.source_review_result.required || !input.source_review_result.valid),
     }
 }
 
@@ -1416,6 +1443,20 @@ fn selected_or_not_selected(selected: bool) -> ReleaseVerificationRequirement {
         ReleaseVerificationRequirement::Required
     } else {
         ReleaseVerificationRequirement::NotSelected
+    }
+}
+
+fn source_review_fact(
+    result: &crunch_release_core::source_review::SourceReviewVerification,
+) -> ReleaseVerificationFact {
+    use crunch_release_core::source_review::SourceReviewStatus;
+    match result.status {
+        SourceReviewStatus::NotRequired => ReleaseVerificationFact::not_evaluated(),
+        SourceReviewStatus::Recorded | SourceReviewStatus::Satisfied if result.valid => {
+            ReleaseVerificationFact::satisfied()
+        }
+        SourceReviewStatus::Missing => ReleaseVerificationFact::absent(result.diagnostics.clone()),
+        _ => ReleaseVerificationFact::rejected(result.diagnostics.clone()),
     }
 }
 
@@ -1609,7 +1650,7 @@ impl DeterministicVerifyRequest {
 fn evaluate_provider_fixed_point_proof(
     current_dir: &Path,
     bundle_dir: &Path,
-    manifest: &crate::release_evidence::ReleaseEvidenceManifest,
+    manifest: &mut crate::release_evidence::ReleaseEvidenceManifest,
     proof_path: Option<PathBuf>,
     required: bool,
 ) -> crate::cargo_free_self_build::ProviderFixedPointProofVerification {
@@ -1622,7 +1663,7 @@ fn evaluate_provider_fixed_point_proof(
             PROVIDER_FIXED_POINT_SOURCE_EXTERNAL,
             None,
             None,
-            &manifest.binaries,
+            &mut manifest.binaries,
         );
     }
     let Some(artifact) = &manifest.provider_fixed_point_proof else {
@@ -1634,7 +1675,7 @@ fn evaluate_provider_fixed_point_proof(
         PROVIDER_FIXED_POINT_SOURCE_BUNDLED,
         Some(artifact.digest_blake3.clone()),
         Some(artifact.evidence_role.clone()),
-        &manifest.binaries,
+        &mut manifest.binaries,
     )
 }
 
@@ -1643,7 +1684,7 @@ fn verify_provider_fixed_point_with_release_context(
     proof_source: &str,
     manifest_artifact_digest_blake3: Option<String>,
     bounded_evidence_role: Option<String>,
-    release_binaries: &[crate::release_evidence::BundledArtifact],
+    release_binaries: &mut Vec<crate::release_evidence::BundledArtifact>,
 ) -> crate::cargo_free_self_build::ProviderFixedPointProofVerification {
     let artifact_digest =
         manifest_artifact_digest_blake3.or_else(|| crate::release_evidence::compute_path_blake3_digest(proof_dir).ok());
@@ -1656,7 +1697,7 @@ fn verify_provider_fixed_point_with_release_context(
 
 fn bind_provider_fixed_point_release_artifact(
     mut result: crate::cargo_free_self_build::ProviderFixedPointProofVerification,
-    release_binaries: &[crate::release_evidence::BundledArtifact],
+    release_binaries: &mut Vec<crate::release_evidence::BundledArtifact>,
 ) -> crate::cargo_free_self_build::ProviderFixedPointProofVerification {
     if !result.valid {
         return result;
@@ -1667,7 +1708,12 @@ fn bind_provider_fixed_point_release_artifact(
     };
     debug_assert!(result.valid);
     debug_assert!(!stage_digest.is_empty());
-    match validate_provider_fixed_point_release_artifact_binding(release_binaries, stage_digest) {
+    let evaluation = validate_provider_fixed_point_release_artifact_binding(
+        std::mem::take(release_binaries),
+        stage_digest.to_string(),
+    );
+    *release_binaries = evaluation.binaries;
+    match evaluation.binding {
         Ok(binding) => {
             result.release_artifact_relative_path = Some(binding.relative_path);
             result.release_artifact_digest_blake3 = Some(binding.digest_blake3);
@@ -1730,11 +1776,16 @@ fn evaluate_deterministic_release_claim(
     let isolation_evidence = load_canonical_deterministic_isolation_evidence(&resolved.isolation_evidence_path)?;
     let release_digest_set =
         manifest.binaries.iter().map(|artifact| artifact.digest_blake3.clone()).collect::<Vec<_>>();
-    let is_genuine_rebuild = deterministic_build_proof_has_genuine_rebuild_authority(proof.value.clone())
+    let authority = deterministic_build_proof_has_genuine_rebuild_authority(proof.value)
         .map_err(|err| RunError::Internal(format!("deterministic rebuild authority validation failed: {err}")))?;
-    let is_eligible =
-        deterministic_release_claim_eligible(&release_digest_set, &[proof.value], Some(&isolation_evidence.value))
-            .map_err(|err| RunError::Internal(format!("deterministic release claim validation failed: {err}")))?;
+    let is_genuine_rebuild = authority.eligible;
+    let assessment = deterministic_release_claim_eligible(
+        release_digest_set,
+        vec![authority.receipt],
+        Some(isolation_evidence.value),
+    )
+    .map_err(|err| RunError::Internal(format!("deterministic release claim validation failed: {err}")))?;
+    let is_eligible = assessment.eligible;
     debug_assert!(resolved.proof_path.components().next().is_some());
     debug_assert!(resolved.isolation_evidence_path.components().next().is_some());
     let blockers = if is_eligible {
@@ -1924,6 +1975,7 @@ fn render_release_verify_json(evaluation: &ReleaseVerifyEvaluation) -> Result<St
         "stack_provenance": evaluation.stack_provenance_result,
         "content_bound_requirements": evaluation.content_bound_requirement_result,
         "cairn_handoff": evaluation.cairn_handoff_result,
+        "source_review": evaluation.source_review_result,
         "global_reproducibility": global_reproducibility_not_evaluated_json(),
     });
     if let Some(result) = &evaluation.stagex_result {
@@ -1945,7 +1997,7 @@ fn render_release_verify_human(evaluation: &ReleaseVerifyEvaluation) -> Result<S
 fn append_release_verify_human(output: &mut String, evaluation: &ReleaseVerifyEvaluation) -> std::fmt::Result {
     debug_assert!(!evaluation.manifest.release_id.is_empty());
     debug_assert!(output.capacity() >= output.len());
-    writeln!(output, "release verification verdict: {}", evaluation.decision.disposition.as_str())?;
+    writeln!(output, "release verification verdict: {}", evaluation.decision.disposition)?;
     writeln!(output, "release id: {}", evaluation.manifest.release_id)?;
     writeln!(output, "binaries: {}", evaluation.manifest.binaries.len())?;
     writeln!(output, "source digest: {}", evaluation.manifest.source_archive.digest_blake3)?;
@@ -1977,10 +2029,7 @@ fn append_release_verification_checks(output: &mut String, decision: &ReleaseVer
         writeln!(
             output,
             "verification check: contributor={} requirement={} disposition={} blocking={}",
-            check.contributor.as_str(),
-            check.requirement.as_str(),
-            check.disposition.as_str(),
-            check.blocking
+            check.contributor, check.requirement, check.disposition, check.blocking
         )?;
     }
     for diagnostic in &decision.diagnostics {
@@ -3073,9 +3122,9 @@ mod tests {
 
     #[test]
     fn provider_fixed_point_request_absent_is_optional_by_default() {
-        let manifest = test_manifest();
+        let mut manifest = test_manifest();
         let result =
-            evaluate_provider_fixed_point_proof(Path::new("/repo"), Path::new("/bundle"), &manifest, None, false);
+            evaluate_provider_fixed_point_proof(Path::new("/repo"), Path::new("/bundle"), &mut manifest, None, false);
 
         assert!(!result.valid);
         assert_eq!(result.status, "absent");
@@ -3084,9 +3133,9 @@ mod tests {
 
     #[test]
     fn provider_fixed_point_request_absent_records_required_blocker() {
-        let manifest = test_manifest();
+        let mut manifest = test_manifest();
         let result =
-            evaluate_provider_fixed_point_proof(Path::new("/repo"), Path::new("/bundle"), &manifest, None, true);
+            evaluate_provider_fixed_point_proof(Path::new("/repo"), Path::new("/bundle"), &mut manifest, None, true);
 
         assert!(!result.valid);
         assert_eq!(result.status, "absent");
@@ -3095,10 +3144,10 @@ mod tests {
 
     #[test]
     fn provider_fixed_point_binding_records_matching_release_artifact() {
-        let manifest = test_manifest();
+        let mut manifest = test_manifest();
         let result = bind_provider_fixed_point_release_artifact(
             valid_provider_fixed_point_result("b".repeat(64)),
-            &manifest.binaries,
+            &mut manifest.binaries,
         );
 
         let expected_digest = "b".repeat(64);
@@ -3111,10 +3160,10 @@ mod tests {
 
     #[test]
     fn provider_fixed_point_binding_rejects_mismatched_release_artifact() {
-        let manifest = test_manifest();
+        let mut manifest = test_manifest();
         let result = bind_provider_fixed_point_release_artifact(
             valid_provider_fixed_point_result("9".repeat(64)),
-            &manifest.binaries,
+            &mut manifest.binaries,
         );
 
         assert!(!result.valid);
@@ -3328,27 +3377,41 @@ mod tests {
             release_profile: release_profile.to_string(),
             stack_provenance_mode: crunch_release_core::STACK_PROVENANCE_MODE_OPTIONAL.to_string(),
             requirement_coverage_mode: requirement_coverage_mode.to_string(),
+            source_review_policy: None,
+            require_source_review: false,
         };
         let deterministic_result = DeterministicReleaseVerifyResult::absent(Vec::new());
         let provider_fixed_point_result =
             crate::cargo_free_self_build::ProviderFixedPointProofVerification::absent(false);
         let effective_stack_mode = crunch_release_core::stack_provenance_mode_for_release_profile(
-            release_profile,
-            crunch_release_core::STACK_PROVENANCE_MODE_OPTIONAL,
+            release_profile.to_string(),
+            crunch_release_core::STACK_PROVENANCE_MODE_OPTIONAL.to_string(),
         )
         .unwrap();
-        let stack_provenance_result =
-            crunch_release_core::evaluate_stack_provenance_release_evidence(&manifest, effective_stack_mode);
-        let content_bound_requirement_result = crunch_release_core::evaluate_content_bound_requirement_release_evidence(
-            &manifest,
-            requirement_coverage_mode,
+        let crunch_release_core::ReleaseEvidenceEvaluation {
+            manifest,
+            verification: stack_provenance_result,
+        } = crunch_release_core::evaluate_stack_provenance_release_evidence(manifest, effective_stack_mode.to_string());
+        let crunch_release_core::ReleaseEvidenceEvaluation {
+            manifest,
+            verification: content_bound_requirement_result,
+        } = crunch_release_core::evaluate_content_bound_requirement_release_evidence(
+            manifest,
+            requirement_coverage_mode.to_string(),
         );
-        let cairn_binding = crunch_release_core::release_evidence_cairn_bundle_binding(&manifest).unwrap();
-        let cairn_handoff_result = crunch_release_core::evaluate_cairn_handoff_release_evidence(
-            manifest.cairn_handoff_validation.as_ref(),
-            &cairn_binding,
+        let crunch_release_core::ReleaseEvidenceBindingProjection {
+            mut manifest,
+            binding: cairn_binding,
+        } = crunch_release_core::release_evidence_cairn_bundle_binding(manifest).unwrap();
+        let cairn_assessment = crunch_release_core::evaluate_cairn_handoff_release_evidence(
+            manifest.cairn_handoff_validation.take(),
+            cairn_binding,
             release_profile == crunch_release_core::RELEASE_PROFILE_ONIX_STACK,
         );
+        manifest.cairn_handoff_validation = cairn_assessment.receipt;
+        let cairn_handoff_result = cairn_assessment.verification;
+        let source_review_result =
+            crunch_release_core::source_review::verify_release_source_review(&manifest, None, None, None, None, false);
         let decision = aggregate_release_verify_decision(ReleaseVerifyDecisionInput {
             request: &request,
             manifest: &manifest,
@@ -3359,6 +3422,7 @@ mod tests {
             stack_provenance_result: &stack_provenance_result,
             content_bound_requirement_result: &content_bound_requirement_result,
             cairn_handoff_result: &cairn_handoff_result,
+            source_review_result: &source_review_result,
             stagex_result: None,
         });
         ReleaseVerifyEvaluation {
@@ -3372,6 +3436,7 @@ mod tests {
             stack_provenance_result,
             content_bound_requirement_result,
             cairn_handoff_result,
+            source_review_result,
             stagex_result: None,
             decision,
         }
@@ -3449,6 +3514,8 @@ mod tests {
             release_profile: crunch_release_core::RELEASE_PROFILE_ONIX_STACK.to_string(),
             stack_provenance_mode: crunch_release_core::STACK_PROVENANCE_MODE_OPTIONAL.to_string(),
             requirement_coverage_mode: crunch_release_core::CONTENT_BOUND_REQUIREMENT_MODE_OPTIONAL.to_string(),
+            source_review_policy: None,
+            require_source_review: false,
         };
         let deterministic_result = DeterministicReleaseVerifyResult {
             status: "eligible",
@@ -3462,21 +3529,27 @@ mod tests {
         };
         let provider_result = crate::cargo_free_self_build::ProviderFixedPointProofVerification::absent(false);
         let stack_result = satisfied_stack_provenance_result();
-        let content_bound_result = crunch_release_core::evaluate_content_bound_requirement_release_evidence(
-            &manifest,
-            crunch_release_core::CONTENT_BOUND_REQUIREMENT_MODE_OPTIONAL,
+        let crunch_release_core::ReleaseEvidenceEvaluation {
+            manifest,
+            verification: content_bound_result,
+        } = crunch_release_core::evaluate_content_bound_requirement_release_evidence(
+            manifest,
+            crunch_release_core::CONTENT_BOUND_REQUIREMENT_MODE_OPTIONAL.to_string(),
         );
         let cairn_result = satisfied_cairn_handoff_result();
+        let source_review_result =
+            crunch_release_core::source_review::verify_release_source_review(&manifest, None, None, None, None, false);
         let decision = aggregate_release_verify_decision(ReleaseVerifyDecisionInput {
             request: &request,
             manifest: &manifest,
             reproducibility_status: ReproducibilityStatus::Absent,
             deterministic_result: &deterministic_result,
             provider_fixed_point_result: &provider_result,
-            effective_stack_mode: crunch_release_core::STACK_PROVENANCE_MODE_REQUIRED,
+            effective_stack_mode: crunch_release_core::ReleaseEvidenceMode::Required,
             stack_provenance_result: &stack_result,
             content_bound_requirement_result: &content_bound_result,
             cairn_handoff_result: &cairn_result,
+            source_review_result: &source_review_result,
             stagex_result: None,
         });
 

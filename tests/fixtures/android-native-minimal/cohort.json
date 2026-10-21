@@ -1,0 +1,42 @@
+{
+  "schema": "mantle-android-native-fixture-cohort-v1",
+  "execution_host": "x86_64-linux",
+  "rust_host": "x86_64-unknown-linux-gnu",
+  "rust_target": "aarch64-linux-android",
+  "abi": "arm64-v8a",
+  "api_level": 24,
+  "supported_api_bounds": [24, 35],
+  "ndk": {
+    "revision": "28.2.13676358",
+    "url": "https://dl.google.com/android/repository/android-ndk-r28c-linux.zip",
+    "archive_sha256": "dfb20d396df28ca02a8c708314b814a4d961dc9074f9a161932746f815aa552f",
+    "archive_bytes": 722261334,
+    "unpack_root": "android-ndk-r28c",
+    "clang_member": "toolchains/llvm/prebuilt/linux-x86_64/bin/clang",
+    "sysroot_member": "toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+  },
+  "rust": {
+    "version": "1.90.0",
+    "host_url": "https://static.rust-lang.org/dist/rust-1.90.0-x86_64-unknown-linux-gnu.tar.xz",
+    "host_archive_sha256": "bff8974f2d3ee6c0e6ac926b533f65bbdd3697d2c2b925bdae5f45b9eed10a67",
+    "target_std_url": "https://static.rust-lang.org/dist/rust-std-1.90.0-aarch64-linux-android.tar.xz",
+    "target_std_archive_sha256": "7ee2ca40b11788e6350d1d29cd966e9c7418716a08178b104a5329d43c8fa464"
+  },
+  "target_link_arguments": [
+    "--target=aarch64-linux-android24",
+    "-Wl,-z,max-page-size=16384",
+    "-Wl,-z,common-page-size=16384"
+  ],
+  "profile": "release",
+  "features": [],
+  "changed_native_features": ["answer-two"],
+  "negative_network_features": ["try-network"],
+  "negative_undeclared_features": ["try-undeclared"],
+  "no_default_features": false,
+  "native_inputs": {},
+  "registry_vendor_dependencies": [],
+  "required_jni_exports": ["Java_org_example_nativeapp_MainActivity_value"],
+  "apk_library_name": "libmantle_android_native_minimal.so",
+  "signing": "optional separately admitted signer; no key generation",
+  "device_execution": "not performed by build/structure proof"
+}

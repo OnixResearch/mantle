@@ -1,0 +1,5 @@
+# Focused acceptance for the APK adapter on the committed source snapshot.
+cargo test --locked --offline -p crunch-android-core -p crunch-android
+cargo test --locked --offline -p mantle --test android_apk
+cargo clippy --locked --offline -p crunch-android-core -p crunch-android --all-targets --no-deps -- -D warnings
+cargo fmt --check -p crunch-android-core -p crunch-android

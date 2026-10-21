@@ -4,9 +4,42 @@
 //! so a mismatch names the file and never rewrites it.
 
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 
+use mantle_application_contract::ApplicationOutcome;
+use mantle_application_contract::CommandFamily;
+use mantle_application_contract::EffectId;
+use mantle_application_contract::EffectKind;
+use mantle_application_contract::EffectMeasure;
+use mantle_application_contract::EffectOutput;
+use mantle_application_contract::EffectSpec;
+use mantle_application_contract::ExpectedOutput;
+use mantle_application_contract::Observation;
+use mantle_application_contract::ObservationStatus;
+use mantle_application_contract::classify_observations;
+use mantle_application_contract::plan_effects;
+
 use crate::RunError;
+
+trait GeneratedFileReadPort {
+    fn read(&self, path: &Path, bytes_max: u64) -> (u64, Result<String, std::io::Error>);
+}
+
+struct FileSystemGeneratedFilePort;
+
+impl GeneratedFileReadPort for FileSystemGeneratedFilePort {
+    fn read(&self, path: &Path, bytes_max: u64) -> (u64, Result<String, std::io::Error>) {
+        let mut content = Vec::new();
+        let read = (|| fs::File::open(path)?.take(bytes_max).read_to_end(&mut content))();
+        let consumed_bytes = content.len() as u64;
+        let result = read.and_then(|_| {
+            String::from_utf8(content)
+                .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "stream did not contain valid UTF-8"))
+        });
+        (consumed_bytes, result)
+    }
+}
 
 /// Compare one generated file with the content the contract expects.
 pub(crate) fn check_generated_file(path: &Path, expected: &str) -> Result<(), RunError> {
@@ -17,13 +50,41 @@ pub(crate) fn check_generated_file(path: &Path, expected: &str) -> Result<(), Ru
         return Err(RunError::Internal("generated file content must not be empty".to_string()));
     }
     debug_assert!(!expected.is_empty());
-    let actual = fs::read_to_string(path)
+    const READ_EFFECT: &str = "operator-generated-file-read";
+    let bytes_max = u64::try_from(expected.len())
+        .ok()
+        .and_then(|length| length.checked_add(1))
+        .ok_or_else(|| RunError::Internal("generated operator content exceeds read bound".to_string()))?;
+    let plan = plan_effects(CommandFamily::Planning, &[EffectSpec {
+        effect_id: READ_EFFECT,
+        kind: EffectKind::ReadFiles,
+        limit: EffectMeasure::Bytes(bytes_max),
+        expected_output: ExpectedOutput::None,
+    }])
+    .map_err(|error| RunError::Internal(error.code().to_string()))?;
+    let (consumed_bytes, result) = FileSystemGeneratedFilePort.read(path, bytes_max);
+    let matches = result.as_ref().is_ok_and(|actual| actual == expected);
+    let observation = Observation {
+        effect_id: EffectId(READ_EFFECT.to_string()),
+        kind: EffectKind::ReadFiles,
+        status: if matches {
+            ObservationStatus::Succeeded
+        } else {
+            ObservationStatus::Failed
+        },
+        output: EffectOutput::None,
+        usage: EffectMeasure::Bytes(consumed_bytes),
+        diagnostics_code: (!matches).then(|| "operator-generated-file-mismatch".to_string()),
+    };
+    let outcome = classify_observations(&plan, &[observation]);
+    result
         .map_err(|error| RunError::Internal(format!("reading generated operator file {}: {error}", path.display())))?;
-    if actual != expected {
+    if matches!(outcome, ApplicationOutcome::Failed { .. }) {
         return Err(RunError::Internal(format!("stale generated operator file: {}", path.display())));
     }
-    debug_assert_eq!(actual, expected);
-    debug_assert!(!actual.is_empty());
+    if outcome != ApplicationOutcome::Completed {
+        return Err(RunError::Internal("generated operator file observation contradicted plan".to_string()));
+    }
     Ok(())
 }
 

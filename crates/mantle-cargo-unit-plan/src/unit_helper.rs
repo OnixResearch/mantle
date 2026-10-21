@@ -165,6 +165,19 @@ fn run_rustc() -> Result<(), String> {
     let mut arguments = env::args().skip(1).collect::<Vec<_>>();
     arguments.push("-C".into());
     arguments.push(format!("linker={linker}"));
+    if let Ok(value) = env::var("MANTLE_UNIT_LINK_ARGS") {
+        let linker_args: Vec<String> =
+            serde_json::from_str(&value).map_err(|error| format!("unit-helper-invalid-linker-arguments: {error}"))?;
+        if linker_args.len() > 256
+            || linker_args.iter().any(|arg| arg.is_empty() || arg.len() > 16_384 || arg.contains('\0'))
+        {
+            return Err("unit-helper-invalid-linker-arguments: argument bounds".into());
+        }
+        for argument in linker_args {
+            arguments.push("-C".into());
+            arguments.push(format!("link-arg={argument}"));
+        }
+    }
     for path in &closure {
         arguments.push(format!("-Ldependency={path}/lib"));
     }

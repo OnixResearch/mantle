@@ -1,4 +1,5 @@
 mod authority;
+pub mod native;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -309,6 +310,7 @@ impl PreparedApk {
         for member in plan.resources.iter().chain(&plan.java_sources) {
             declared_member(&inputs.source_root, member, Rejection::InvalidSourceMember)?;
         }
+        native::inspect_inputs(&inputs.source_root, &plan.assets, plan.native.as_ref(), store_prefix)?;
         verify_archive(&inputs.build_tools, &plan.toolchain.build_tools, store_prefix)?;
         verify_archive(&inputs.jdk, &plan.toolchain.jdk, store_prefix)?;
         verify_archive(&inputs.platform, &plan.toolchain.platform, store_prefix)?;
@@ -333,6 +335,16 @@ impl PreparedApk {
                 return Err(Error::InvalidInput("store and key password files must be distinct".into()));
             }
             declared_regular_file(keystore, store_prefix)?;
+            native::reject_signing_overlap(
+                plan.native.as_ref(),
+                inputs
+                    .keystore
+                    .iter()
+                    .chain(inputs.store_password_file.iter())
+                    .chain(inputs.key_password_file.iter())
+                    .map(PathBuf::as_path),
+                store_prefix,
+            )?;
         } else if inputs.keystore.is_some()
             || inputs.store_password_file.is_some()
             || inputs.key_password_file.is_some()
@@ -470,6 +482,14 @@ impl PreparedApk {
                 env.insert(key.into(), store_path(path, store_prefix)?);
             }
         }
+        if kind == StepKind::Zipalign
+            && let Some(package) = &self.plan.native
+        {
+            declared.push(store_object(Path::new(&package.ndk_sysroot), store_prefix)?);
+            for library in &package.libraries {
+                declared.push(store_object(Path::new(&library.store_file), store_prefix)?);
+            }
+        }
         declared.sort_unstable();
         declared.dedup();
         let script = self.script(kind)?;
@@ -511,25 +531,79 @@ impl PreparedApk {
                 }
                 script
             }
-            StepKind::Aapt2Link => format!("\"$UTILITY\" mkdir -p \"$out/gen\"\n\"$UTILITY\" find \"$COMPILED/compiled-resources\" -type f -name '*.flat' | \"$UTILITY\" sort > \"$PWD/resources.list\"\nset --\nwhile IFS= read -r item; do set -- \"$@\" \"$item\"; done < \"$PWD/resources.list\"\nrun_sdk \"$build_root/aapt2\" link -o \"$out/linked-resources.apk\" -I \"$platform_root/android.jar\" --manifest \"$SOURCE_ROOT/{}\" --rename-manifest-package '{}' --version-code '{}' --java \"$out/gen\" \"$@\"\n", self.plan.manifest_member, self.plan.application_id, self.plan.version_code),
+            StepKind::Aapt2Link => {
+                let min_api = self
+                    .plan
+                    .native
+                    .as_ref()
+                    .map(|package| format!(" --min-sdk-version {}", package.api_level))
+                    .unwrap_or_default();
+                format!(
+                    "\"$UTILITY\" mkdir -p \"$out/gen\"\n\"$UTILITY\" find \"$COMPILED/compiled-resources\" -type f -name '*.flat' | \"$UTILITY\" sort > \"$PWD/resources.list\"\nset --\nwhile IFS= read -r item; do set -- \"$@\" \"$item\"; done < \"$PWD/resources.list\"\nrun_sdk \"$build_root/aapt2\" link -o \"$out/linked-resources.apk\" -I \"$platform_root/android.jar\" --manifest \"$SOURCE_ROOT/{}\" --rename-manifest-package '{}' --version-code '{}' --java \"$out/gen\"{min_api} \"$@\"\n",
+                    self.plan.manifest_member, self.plan.application_id, self.plan.version_code
+                )
+            }
             StepKind::Javac => {
-                let mut script = String::from("\"$UTILITY\" mkdir -p \"$out/classes\"\nset --\n\"$UTILITY\" find \"$LINKED/gen\" -type f -name '*.java' | \"$UTILITY\" sort > \"$PWD/generated-java.list\"\nwhile IFS= read -r item; do set -- \"$@\" \"$item\"; done < \"$PWD/generated-java.list\"\n");
+                let mut script = String::from(
+                    "\"$UTILITY\" mkdir -p \"$out/classes\"\nset --\n\"$UTILITY\" find \"$LINKED/gen\" -type f -name '*.java' | \"$UTILITY\" sort > \"$PWD/generated-java.list\"\nwhile IFS= read -r item; do set -- \"$@\" \"$item\"; done < \"$PWD/generated-java.list\"\n",
+                );
                 for input in &self.lowered.steps[2].inputs {
                     if let crunch_android_core::reviewed::StepInput::SourceMember(member) = input {
                         script.push_str(&format!("set -- \"$@\" \"$SOURCE_ROOT/{member}\"\n"));
                     }
                 }
-                script.push_str("run_sdk \"$jdk_root/bin/javac\" -encoding UTF-8 -classpath \"$platform_root/android.jar\" -d \"$out/classes\" \"$@\"\n"); script
+                script.push_str("run_sdk \"$jdk_root/bin/javac\" -encoding UTF-8 -classpath \"$platform_root/android.jar\" -d \"$out/classes\" \"$@\"\n");
+                script
             }
-            StepKind::D8 => "\"$UTILITY\" find \"$CLASSES/classes\" -type f -name '*.class' | \"$UTILITY\" sort > \"$PWD/classes.list\"\nset --\nwhile IFS= read -r item; do set -- \"$@\" \"$item\"; done < \"$PWD/classes.list\"\nrun_sdk \"$jdk_root/bin/java\" -Xmx2G -cp \"$build_root/lib/d8.jar\" com.android.tools.r8.D8 --lib \"$platform_root/android.jar\" --output \"$out\" \"$@\"\n".into(),
-            StepKind::Zipalign => "\"$UTILITY\" cp \"$LINKED/linked-resources.apk\" \"$PWD/with-dex.apk\"\nentry_date=$(\"$UTILITY\" date -u -d \"@$SOURCE_DATE_EPOCH\" +%Y-%m-%dT%H:%M:%SZ)\nrun_sdk \"$jdk_root/bin/jar\" --update --file \"$PWD/with-dex.apk\" --date \"$entry_date\" -C \"$DEX\" classes.dex\nrun_sdk \"$build_root/zipalign\" -f 4 \"$PWD/with-dex.apk\" \"$out/unsigned.apk\"\n".into(),
+            StepKind::D8 => {
+                let min_api = self
+                    .plan
+                    .native
+                    .as_ref()
+                    .map(|package| format!(" --min-api {}", package.api_level))
+                    .unwrap_or_default();
+                format!(
+                    "\"$UTILITY\" find \"$CLASSES/classes\" -type f -name '*.class' | \"$UTILITY\" sort > \"$PWD/classes.list\"\nset --\nwhile IFS= read -r item; do set -- \"$@\" \"$item\"; done < \"$PWD/classes.list\"\nrun_sdk \"$jdk_root/bin/java\" -Xmx2G -cp \"$build_root/lib/d8.jar\" com.android.tools.r8.D8 --lib \"$platform_root/android.jar\"{min_api} --output \"$out\" \"$@\"\n"
+                )
+            }
+            StepKind::Zipalign => {
+                let mut script = String::from(
+                    "\"$UTILITY\" cp \"$LINKED/linked-resources.apk\" \"$PWD/with-dex.apk\"\nentry_date=$(\"$UTILITY\" date -u -d \"@$SOURCE_DATE_EPOCH\" +%Y-%m-%dT%H:%M:%SZ)\nrun_sdk \"$jdk_root/bin/jar\" --update --file \"$PWD/with-dex.apk\" --date \"$entry_date\" -C \"$DEX\" classes.dex\n",
+                );
+                if !self.plan.assets.is_empty() || self.plan.native.is_some() {
+                    script.push_str("\"$UTILITY\" mkdir -p \"$PWD/android-additions\"\n");
+                    script.push_str(&native::copy_script(
+                        self.inputs
+                            .source_root
+                            .to_str()
+                            .ok_or_else(|| Error::InvalidInput("non-UTF8 source".into()))?,
+                        &self.plan.assets,
+                        self.plan.native.as_ref(),
+                        "\"$UTILITY\"",
+                        "$PWD/android-additions",
+                    ));
+                    script.push_str("(cd \"$PWD/android-additions\" && \"$UTILITY\" find . -type f | \"$UTILITY\" sort > \"$PWD/../android-members\")\nset --\nwhile IFS= read -r member; do set -- \"$@\" \"${member#./}\"; done < \"$PWD/android-members\"\n(cd \"$PWD/android-additions\" && run_sdk \"$jdk_root/bin/jar\" --update --no-compress --file \"$PWD/../with-dex.apk\" --date \"$entry_date\" \"$@\")\n");
+                }
+                script.push_str("run_sdk \"$build_root/zipalign\" -P 16 -f 4 \"$PWD/with-dex.apk\" \"$out/unsigned.apk\"\nrun_sdk \"$build_root/zipalign\" -c -P 16 4 \"$out/unsigned.apk\"\n");
+                script
+            }
             StepKind::Apksigner => {
-                let signing = self.plan.signing.as_ref().ok_or_else(|| Error::InvalidInput("signed step requires signing plan".into()))?;
+                let signing = self
+                    .plan
+                    .signing
+                    .as_ref()
+                    .ok_or_else(|| Error::InvalidInput("signed step requires signing plan".into()))?;
                 let mut args = String::new();
                 for scheme in ["v1", "v2", "v3"] {
-                    args.push_str(&format!(" --{scheme}-signing-enabled {}", signing.schemes.iter().any(|enabled| enabled == scheme)));
+                    args.push_str(&format!(
+                        " --{scheme}-signing-enabled {}",
+                        signing.schemes.iter().any(|enabled| enabled == scheme)
+                    ));
                 }
-                format!("run_sdk \"$jdk_root/bin/java\" -Xmx1024M -jar \"$build_root/lib/apksigner.jar\" sign --ks \"$KEYSTORE\" --ks-key-alias '{}' --ks-pass \"file:$STORE_PASSWORD_FILE\" --key-pass \"file:$KEY_PASSWORD_FILE\"{args} --out \"$out/signed.apk\" \"$UNSIGNED/unsigned.apk\"\n", signing.key_alias)
+                format!(
+                    "run_sdk \"$jdk_root/bin/java\" -Xmx1024M -jar \"$build_root/lib/apksigner.jar\" sign --ks \"$KEYSTORE\" --ks-key-alias '{}' --ks-pass \"file:$STORE_PASSWORD_FILE\" --key-pass \"file:$KEY_PASSWORD_FILE\"{args} --out \"$out/signed.apk\" \"$UNSIGNED/unsigned.apk\"\n",
+                    signing.key_alias
+                )
             }
         })
     }
@@ -869,15 +943,24 @@ pub mod pinned {
                 script.push_str(&format!("/bin/busybox mkdir -p \"$out\"\n/bin/busybox find {} -type f -name '*.class' -print | /bin/busybox sort > \"$TMPDIR/android-classes\"\nset --\nwhile IFS= read -r path; do set -- \"$@\" \"$path\"; done < \"$TMPDIR/android-classes\"\n",
                 q(output("javac")?)?));
                 script.push_str(&format!(
-                    "{java} -cp {} com.android.tools.r8.D8 --lib {} --min-api 23 --output \"$out\" \"$@\"\n",
+                    "{java} -cp {} com.android.tools.r8.D8 --lib {} --min-api {} --output \"$out\" \"$@\"\n",
                     q(&format!("{tools}/lib/d8.jar"))?,
-                    q(&format!("{platform}/android.jar"))?
+                    q(&format!("{platform}/android.jar"))?,
+                    plan.native.as_ref().map_or(23, |package| package.api_level)
                 ));
             }
             StepKind::Zipalign => {
-                script.push_str(&format!("/bin/busybox mkdir -p \"$TMPDIR/android-merge\"\n/bin/busybox unzip -q {} -d \"$TMPDIR/android-merge\"\n/bin/busybox find {} -type f -name 'classes*.dex' -print | /bin/busybox sort > \"$TMPDIR/android-dex\"\nwhile IFS= read -r dex; do /bin/busybox cp \"$dex\" \"$TMPDIR/android-merge/\"; done < \"$TMPDIR/android-dex\"\nstamp=$(/bin/busybox date -u -d \"@$SOURCE_DATE_EPOCH\" '+%Y%m%d%H%M.%S')\n/bin/busybox find \"$TMPDIR/android-merge\" -exec /bin/busybox touch -t \"$stamp\" {{}} +\n(cd \"$TMPDIR/android-merge\" && /bin/busybox find . -type f -print | /bin/busybox sort > \"$TMPDIR/android-zip-members\")\nset --\nwhile IFS= read -r member; do set -- \"$@\" \"${{member#./}}\"; done < \"$TMPDIR/android-zip-members\"\n(cd \"$TMPDIR/android-merge\" && {run} {} -J-Duser.language=en -J-Duser.country=US -J-Duser.timezone=UTC -J-Dfile.encoding=UTF-8 --create --file \"$TMPDIR/android-merged.apk\" --no-manifest --no-compress \"$@\")\n{run} {} -f 4 \"$TMPDIR/android-merged.apk\" \"$out\"\n",
-                q(&format!("{}/base.apk", output("link")?))?, q(output("d8")?)?,
-                q(&format!("{jdk}/bin/jar"))?, q(&format!("{tools}/zipalign"))?));
+                script.push_str(&format!("/bin/busybox mkdir -p \"$TMPDIR/android-merge\"\n/bin/busybox unzip -q {} -d \"$TMPDIR/android-merge\"\n/bin/busybox find {} -type f -name 'classes*.dex' -print | /bin/busybox sort > \"$TMPDIR/android-dex\"\nwhile IFS= read -r dex; do /bin/busybox cp \"$dex\" \"$TMPDIR/android-merge/\"; done < \"$TMPDIR/android-dex\"\n",
+                    q(&format!("{}/base.apk", output("link")?))?, q(output("d8")?)?));
+                script.push_str(&super::native::copy_script(
+                    context.source,
+                    &plan.assets,
+                    plan.native.as_ref(),
+                    "/bin/busybox",
+                    "$TMPDIR/android-merge",
+                ));
+                script.push_str(&format!("stamp=$(/bin/busybox date -u -d \"@$SOURCE_DATE_EPOCH\" '+%Y%m%d%H%M.%S')\n/bin/busybox find \"$TMPDIR/android-merge\" -exec /bin/busybox touch -t \"$stamp\" {{}} +\n(cd \"$TMPDIR/android-merge\" && /bin/busybox find . -type f -print | /bin/busybox sort > \"$TMPDIR/android-zip-members\")\nset --\nwhile IFS= read -r member; do set -- \"$@\" \"${{member#./}}\"; done < \"$TMPDIR/android-zip-members\"\n(cd \"$TMPDIR/android-merge\" && {run} {} -J-Duser.language=en -J-Duser.country=US -J-Duser.timezone=UTC -J-Dfile.encoding=UTF-8 --create --file \"$TMPDIR/android-merged.apk\" --no-manifest --no-compress \"$@\")\n{run} {} -P 16 -f 4 \"$TMPDIR/android-merged.apk\" \"$out\"\n{run} {} -c -P 16 4 \"$out\"\n",
+                    q(&format!("{jdk}/bin/jar"))?, q(&format!("{tools}/zipalign"))?, q(&format!("{tools}/zipalign"))?));
             }
             StepKind::Apksigner => {
                 let java = java()?;
@@ -941,7 +1024,12 @@ pub mod pinned {
                 script.push_str("/bin/busybox mkdir -p \"$out/java\"\nset --\n");
                 script.push_str(&format!("/bin/busybox find {} -type f -name '*.flat' -print | /bin/busybox sort > \"$TMPDIR/android-flats\"\nwhile IFS= read -r path; do set -- \"$@\" \"$path\"; done < \"$TMPDIR/android-flats\"\n",
                 q(output("compile")?)?));
-                script.push_str(&format!("{run} {} link -o \"$out/base.apk\" --manifest {} -I {} --java \"$out/java\" --custom-package {} --rename-manifest-package {} --version-code {} --version-name {} \"$@\"\n",
+                let min_api = plan
+                    .native
+                    .as_ref()
+                    .map(|package| format!(" --min-sdk-version {}", package.api_level))
+                    .unwrap_or_default();
+                script.push_str(&format!("{run} {} link -o \"$out/base.apk\" --manifest {} -I {} --java \"$out/java\" --custom-package {} --rename-manifest-package {} --version-code {} --version-name {}{min_api} \"$@\"\n",
                 q(&format!("{tools}/aapt2"))?, q(&format!("{source}/{}", plan.manifest))?, q(&format!("{platform}/android.jar"))?,
                 q(&plan.application_id)?, q(&plan.application_id)?, plan.version_code, q(&plan.version_name)?));
             }
@@ -1001,6 +1089,13 @@ pub mod pinned {
         if store_object(&inputs.source_root, StorePrefix(prefix))? != inputs.source_root {
             return Err(error("source_root must name a complete store object"));
         }
+        super::native::inspect_inputs(
+            Path::new(&inputs.source_root),
+            &plan.assets,
+            plan.native.as_ref(),
+            Path::new(prefix),
+        )
+        .map_err(|error| self::error(format!("Android native/asset preflight: {error:?}")))?;
         let runtime_inputs = runtime_roots(inputs, prefix)?;
         if cohort.iter().map(|r| r.component.as_str()).collect::<BTreeSet<_>>().len() != cohort.len() {
             return Err(error("duplicate pinned Android source component"));
@@ -1029,6 +1124,18 @@ pub mod pinned {
                     return Err(error(format!("signing input must name a file within a store object: {file}")));
                 }
             }
+            super::native::reject_signing_overlap(
+                plan.native.as_ref(),
+                [
+                    &signing.keystore,
+                    &signing.store_password_file,
+                    &signing.key_password_file,
+                ]
+                .into_iter()
+                .map(Path::new),
+                Path::new(prefix),
+            )
+            .map_err(|cause| error(format!("native signing input rejected: {cause:?}")))?;
         }
         assert_eq!(records.len(), cohort.len());
         assert_ne!(runtime_inputs[0], runtime_inputs[1]);
@@ -1313,6 +1420,14 @@ pub mod pinned {
     ) -> Result<(Vec<Input>, BTreeMap<String, String>), AdapterError> {
         let mut dependencies = vec![Input::Source(context.inputs.source_root.clone())];
         dependencies.extend(context.runtime_inputs.iter().cloned().map(Input::Source));
+        if step.kind == StepKind::Zipalign
+            && let Some(package) = &context.plan.native
+        {
+            dependencies.push(Input::Source(store_object(&package.ndk_sysroot, StorePrefix(context.prefix))?));
+            for library in &package.libraries {
+                dependencies.push(Input::Source(store_object(&library.store_file, StorePrefix(context.prefix))?));
+            }
+        }
         let mut stage_paths = BTreeMap::new();
         for component in step.required_toolchains.iter().copied() {
             if stage_paths.len() >= COMPONENTS.len() {
@@ -1436,6 +1551,8 @@ pub mod pinned {
                 manifest: "app/AndroidManifest.xml".into(),
                 resources: vec!["app/res/values/strings.xml".into(), "app/res/drawable/icon.xml".into()],
                 java_sources: vec!["app/src/Entry.java".into()],
+                assets: vec![],
+                native: None,
                 toolchains: ToolchainRefs {
                     jdk: identity("jdk"),
                     build_tools: identity("build-tools"),
