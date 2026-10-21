@@ -41,3 +41,26 @@ input facts; after recording G3, P1 still awaits G1/G2 and semantic acceptance.
 
 No sync, archive or release acceptance is asserted or authorized by these
 artifacts. Historical pending work remains pending under its original subject.
+
+## Observed publication and the current G1 blocker
+
+The reconciled source is published. The sole Git owner recorded the ordinary
+merge and the normal main push with both histories at revision
+`6f332e168b51e8f04d0517acb2a5c23150690fd5`; the exact push and `ls-remote`
+output is retained in `evidence/publication-v1/push.txt`. The published tree
+carries the source-bound baseline `ef1e5956b` (reconciled API lineages, the
+restored compile path, canonical rustfmt, and the strict-Clippy repairs), the
+ra-jit feasibility report, the removed accidental shell artifacts, and the
+recorded Nickel standard-library defect.
+
+G1 is blocked by a pre-existing defect rather than by a reconciliation
+regression. The pinned Nickel 1.17.0 does not evaluate the standard library:
+record contracts may carry at most one field without a definition, and a
+contract field may only be annotated with a builtin or enum type. The same
+failure is present in the published baseline `43ccd6884`, so every
+Nickel-evaluating workspace test in the ordinary gate fails. The analysis, the
+affected modules, and the required repair are recorded in
+`docs/nickel-stdlib-contract-defect.md` and tracked as issue 24.
+
+P1 stays unchecked: publication is recorded, but G1 and G2 have not been
+accepted, so no lifecycle acceptance follows from the push.
