@@ -149,13 +149,27 @@ artifact-auth, source-program, controller-authority, recipe-authority, and
 protected-executor paths. The local checkout was byte-verified against that
 snapshot before each commit.
 
-The ordinary first-party gate itself is blocked by a pre-existing defect, not
-by this reconciliation. The pinned Nickel 1.17.0 does not evaluate the
+The ordinary first-party gate itself was blocked by a pre-existing defect, not
+by this reconciliation. The pinned Nickel 1.17.0 did not evaluate the
 standard library: a record contract may carry at most one field without a
-definition, and a contract field may only be annotated with a builtin or enum
-type. The published baseline `43ccd6884` fails the same way, so every
-Nickel-evaluating workspace test fails. The analysis and the required repair
-are in `docs/nickel-stdlib-contract-defect.md` and issue 24. Until that is
-repaired, G1 and G2 stay unaccepted, the change stays unsynced and unarchived,
-and no bootstrap, reproducibility, or parity claim follows from the
-publication.
+definition, and Nickel records are recursive, so a field whose value is the
+same identifier as the field name is an infinite recursion. The published
+baseline `43ccd6884` fails the same way, so every Nickel-evaluating
+workspace test failed. The analysis was recorded in
+`docs/nickel-stdlib-contract-defect.md` and issue 24.
+
+That defect is now repaired and published. Every published plan shape is
+restated without changing what it declares: a shape whose fields are all
+required became a record type, and a shape with defaults or optional fields
+became `std.contract.Sequence` of an open defaults contract and the new
+`contracts.Shape` whole-shape check, which requires the declared fields,
+rejects undeclared ones, and type-checks the required ones. Module export
+records alias the names they re-export. The decision is ADR 0124 and the
+repair is tracked by the Cairn change `repair-nickel-contract-shapes`. The
+Rust glue layer remains the admission authority for every evaluated plan.
+
+The gate result for the repaired revision is recorded with its transcript in
+`.cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/final-gate-v1/`.
+That transcript is evidence for the recorded revision only. It is not a
+bootstrap, reproducibility, or parity claim, and the reconciliation's G1 and
+G2 acceptance still require their own criteria.
