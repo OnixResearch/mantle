@@ -63,10 +63,8 @@ pub(crate) fn load(request: &AuthoringRequest<'_>, version: &str) -> Result<Sour
                 }
                 digest.update(&buffer[..n]);
             }
-            if format!("{:x}", digest.finalize()) == *pin {
-                if authenticated.replace(path).is_some() {
-                    return Err(error("duplicate authenticated original Rust archive"));
-                }
+            if format!("{:x}", digest.finalize()) == *pin && authenticated.replace(path).is_some() {
+                return Err(error("duplicate authenticated original Rust archive"));
             }
         }
     }
@@ -545,11 +543,11 @@ pub(crate) fn resolve_with_scripts(
             }
             if let Some(targets) = table(&package.manifest, "target") {
                 for (predicate, target) in targets {
-                    if cfg(predicate)? {
-                        if let Some(deps) = table(target, kind) {
-                            for (name, value) in deps {
-                                edges.push((kind, name.clone(), value.clone()));
-                            }
+                    if cfg(predicate)?
+                        && let Some(deps) = table(target, kind)
+                    {
+                        for (name, value) in deps {
+                            edges.push((kind, name.clone(), value.clone()));
                         }
                     }
                 }
@@ -569,10 +567,10 @@ pub(crate) fn resolve_with_scripts(
             if is_optional && !optional.contains(&alias) {
                 continue;
             }
-            if let Some(lib) = sources.manifests.get(&dependency.manifest).and_then(|m| m.get("lib")) {
-                if lib.get("proc-macro").and_then(toml::Value::as_bool) == Some(true) {
-                    dependency.host = true;
-                }
+            if let Some(lib) = sources.manifests.get(&dependency.manifest).and_then(|m| m.get("lib"))
+                && lib.get("proc-macro").and_then(toml::Value::as_bool) == Some(true)
+            {
+                dependency.host = true;
             }
             if let Some(f) = forwarded.get(&alias) {
                 features.extend(f.iter().cloned());
