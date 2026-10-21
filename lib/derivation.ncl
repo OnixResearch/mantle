@@ -5,8 +5,13 @@
 # fields (pname, version, meta, passthru, overrideAttrs) belong in
 # the builders package, not here.
 # Every field has a doc annotation for `nickel query` discoverability.
+#
+# Nickel record contracts may carry at most one field without a definition, so
+# the shape is expressed as an open defaults contract that fills the optional
+# fields, followed by the shape check for the required name and builder. The
+# Rust glue layer stays the admission authority for the evaluated plan.
 
-let { Name, System, Input, Sandbox, .. } = import "contracts.ncl" in
+let { Name, System, Input, Sandbox, Shape, .. } = import "contracts.ncl" in
 let { FixedOutput } = import "fixed_output.ncl" in
 let Gate = (import "finish_gates.ncl").Gate in
 let PositiveNumber = std.contract.from_validator (fun value =>
@@ -64,15 +69,7 @@ let PlanInputs = std.contract.from_validator (fun value =>
   then 'Ok
   else 'Error { message = "plan-output input names must be unique and at most 16 references are allowed" }
 ) in
-
-
-{
-  name | Name
-    | doc "Derivation name. Appears in the store path.",
-
-  builder | String
-    | doc "Absolute path to the build executable.",
-
+let DerivationDefaults = {
   system | System
     | doc "Target platform."
     | default = 'x86_64-linux,
@@ -116,4 +113,26 @@ let PlanInputs = std.contract.from_validator (fun value =>
   workspace | Workspace
     | doc "Explicit retained-tool workspace policy. Mutable sessions are practical-only and never publish strong shared action results."
     | optional,
-}
+
+  ..
+} in
+let DerivationRequired = {
+  name : Name,
+  builder : String,
+} in
+std.contract.Sequence [
+  DerivationDefaults,
+  Shape [
+    "system",
+    "args",
+    "outputs",
+    "dynamic_plan_outputs",
+    "finish_gates",
+    "env",
+    "inputs",
+    "fixed_output",
+    "addressing_mode",
+    "sandbox",
+    "workspace",
+  ] DerivationRequired,
+]

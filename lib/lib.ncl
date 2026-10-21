@@ -4,6 +4,7 @@
 
 let contracts = import "contracts.ncl" in
 let { FixedOutput } = import "fixed_output.ncl" in
+let FixedOutputContract = FixedOutput in
 let helpers = import "helpers.ncl" in
 let fetch = import "fetch.ncl" in
 let offline_cargo = import "offline_cargo.ncl" in
@@ -20,7 +21,7 @@ let pnpm = import "pnpm.ncl" in
   Derivation = import "derivation.ncl",
 
   # Fixed-output derivation parameters contract.
-  FixedOutput = FixedOutput,
+  FixedOutput = FixedOutputContract,
 
   # Validators
   StorePath = contracts.StorePath,

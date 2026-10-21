@@ -1,35 +1,56 @@
 # HIP only: AMD LLVM 22.0.0 / ROCm 7.2.3 / gfx900 relocatable device ELF.
 # The runner performs the bounded semantic validation before launching tools.
+#
+# Nickel record contracts may carry at most one field without a definition, so
+# the plan shape is an open defaults contract followed by the shape check for
+# the required fields.
 let Derivation = import "derivation.ncl" in
-let Member = { role | String, member | String } in
-let Tool = { role | String, member | String, version | String } in
-let PlanFields = {
+let { Shape, .. } = import "contracts.ncl" in
+let Member = { role : String, member : String } in
+let Tool = { role : String, member : String, version : String } in
+let PlanFieldsDefaults = {
   schema | String | default = "mantle-gpu-plan-v1",
-  name | String,
   backend | String | default = "hip-clang",
   build_platform | String | default = "x86_64-linux",
-  store_prefix | String,
-  roles | { _ : String },
-  kernel | Member,
-  headers | Array Member,
   generated | Array Member | default = [],
-  clang | Tool,
-  host_compiler | Tool,
-  inspector | Tool,
-  runner | Tool,
   host_target | String | default = "x86_64-unknown-linux-gnu",
-  sysroot | String,
-  resource_dir | Member,
-  toolkit | String,
-  toolkit_revision | String,
-  device_libraries | Member,
-  runtime_libraries | Array Member,
-  architecture | String,
   optimization | Number | default = 2,
   defines | { _ : String } | default = {},
-  entry_points | Array String,
   source_date_epoch | Number | default = 1,
+  ..
 } in
+let PlanFieldsRequired = {
+  name : String,
+  store_prefix : String,
+  roles : { _ : String },
+  kernel : Member,
+  headers : Array Member,
+  clang : Tool,
+  host_compiler : Tool,
+  inspector : Tool,
+  runner : Tool,
+  sysroot : String,
+  resource_dir : Member,
+  toolkit : String,
+  toolkit_revision : String,
+  device_libraries : Member,
+  runtime_libraries : Array Member,
+  architecture : String,
+  entry_points : Array String,
+} in
+let PlanFields = std.contract.Sequence [
+  PlanFieldsDefaults,
+  Shape [
+    "schema",
+    "backend",
+    "build_platform",
+    "generated",
+    "host_target",
+    "optimization",
+    "defines",
+    "source_date_epoch",
+  ] PlanFieldsRequired,
+] in
 let Plan = std.contract.from_validator (fun value =>
   let p = value | PlanFields in
   if p.schema == "mantle-gpu-plan-v1" && p.backend == "hip-clang"
@@ -40,8 +61,9 @@ let Plan = std.contract.from_validator (fun value =>
     && std.array.elem p.optimization [0, 1, 2, 3]
   then 'Ok else 'Error { message = "gpu-combination-unsupported: HIP AMD LLVM 22.0.0 / ROCm 7.2.3 / gfx900 only" }
 ) in
+let PlanContract = Plan in
 {
-  Plan = Plan,
+  Plan = PlanContract,
   mkGpu = fun value =>
     let plan = (value | PlanFields) | Plan in
     {

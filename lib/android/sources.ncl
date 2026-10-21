@@ -45,21 +45,21 @@ let UpstreamUrl = std.contract.from_validator (fun value =>
   else 'Error { message = "expected a complete https:// upstream URL (file:/// absolute paths permitted for offline fixtures)" }
 ) in
 let Layout = {
-  archive | [| 'zip, 'tar-gz |],
-  root | ArchiveRoot,
+  archive : [| 'zip, 'tar-gz |],
+  root : ArchiveRoot,
 } in
 let SourceContract = {
-  component | Component,
-  version | Version,
-  url | UpstreamUrl,
-  sha256 | Sha256,
-  record_identity_blake3 | Blake3,
-  unpack_shape | Layout,
-  platform | [| 'x86_64-linux |],
+  component : Component,
+  version : Version,
+  url : UpstreamUrl,
+  sha256 : Sha256,
+  record_identity_blake3 : Blake3,
+  unpack_shape : Layout,
+  platform : [| 'x86_64-linux |],
 } in
 let ManifestContract = {
-  schema | [| 'mantle-android-prebuilt-sources-v1 |],
-  sources | Array SourceContract,
+  schema : [| 'mantle-android-prebuilt-sources-v1 |],
+  sources : Array SourceContract,
 } in
 
 # Explicitly ordered JSON string: field ordering in an input record cannot
@@ -137,13 +137,13 @@ let Blake3 = std.contract.from_validator (fun value =>
   else 'Error { message = "expected a 64-character lowercase BLAKE3 record identity" }
 ) in
 let RecordShape = {
-  component | String,
-  version | String,
-  url | String,
-  sha256 | Sha256,
-  record_blake3 | Blake3,
-  unpack_shape | String,
-  platform | [| 'x86_64-linux |],
+  component : String,
+  version : String,
+  url : String,
+  sha256 : Sha256,
+  record_blake3 : Blake3,
+  unpack_shape : String,
+  platform : [| 'x86_64-linux |],
 } in
 # The serialized array's field order is fixed independently of Nickel record order.
 # Hash UTF-8 bytes of this string without a trailing newline using BLAKE3.

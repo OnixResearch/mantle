@@ -109,6 +109,7 @@ let Reviewed = (
 # mantle-android-prebuilt-record-v1 preimage binds hex SHA-256 and archive
 # layout for the APK adapter; it is NOT the six-field source-v1 record identity.
 # The reviewed manifest owns this metadata, not the published source cohort.
+let { Shape, .. } = import "contracts.ncl" in
 let published_sources = import "android/sources.ncl" in
 let sources = published_sources.reviewed in
 let reviewed_manifest = sources.validate_manifest {
@@ -266,31 +267,58 @@ let Timezone = std.contract.from_validator (fun value =>
   if value == "UTC" then 'Ok else 'Error { message = "expected fixed UTC timezone" }
 ) in
 let Signing = {
-  keystore_member | Member,
-  key_alias | Module,
-  schemes | Array Scheme,
+  keystore_member : Member,
+  key_alias : Module,
+  schemes : Array Scheme,
 } in
-let PlanContract = {
-  module | Module,
-  application_id | ApplicationId,
-  version_code | Number,
-  manifest_member | Member,
-  resources | Array Member,
-  java_sources | Array Member,
+# Nickel record contracts may carry at most one field without a definition, so
+# the plan shape is expressed as an open defaults contract plus the shape check
+# for the required fields, the same construction the Derivation contract uses.
+let PlanDefaults = {
+  module | Module | optional,
+  application_id | ApplicationId | optional,
+  version_code | Number | optional,
+  manifest_member | Member | optional,
+  resources | Array Member | optional,
+  java_sources | Array Member | optional,
   assets | Dyn | optional,
   native | Dyn | optional,
   toolchain | {
-    build_tools | sources.Source,
-    jdk | sources.Source,
-    platform | sources.Source,
-  },
-  signing | Dyn,
+    build_tools : sources.Source,
+    jdk : sources.Source,
+    platform : sources.Source,
+  } | optional,
+  signing | Dyn | optional,
   reproducibility | {
-    entry_timestamp_epoch | Number,
-    locale | Locale,
-    timezone | Timezone,
+    entry_timestamp_epoch : Number,
+    locale : Locale,
+    timezone : Timezone,
+  } | optional,
+  ..
+} in
+let PlanRequired = {
+  module : Module,
+  application_id : ApplicationId,
+  version_code : Number,
+  manifest_member : Member,
+  resources : Array Member,
+  java_sources : Array Member,
+  toolchain : {
+    build_tools : sources.Source,
+    jdk : sources.Source,
+    platform : sources.Source,
+  },
+  signing : Dyn,
+  reproducibility : {
+    entry_timestamp_epoch : Number,
+    locale : Locale,
+    timezone : Timezone,
   },
 } in
+let PlanContract = std.contract.Sequence [
+  PlanDefaults,
+  Shape ["assets", "native"] PlanRequired,
+] in
 let reviewed_toolchain = {
   build_tools = reviewed_source "android-build-tools",
   jdk = reviewed_source "temurin-jdk",

@@ -13,38 +13,38 @@ let Relative = std.contract.from_validator (fun value =>
     && std.array.all (fun segment => segment != "." && segment != "..") (std.string.split "/" value)
   then 'Ok else 'Error { message = "cmake-path-escape: expected nonescaping relative CMake member" }
 ) in
-let Member = { role | Identifier, member | Relative } in
-let Tool = { role | Identifier, member | Relative, version | String } in
+let Member = { role : Identifier, member : Relative } in
+let Tool = { role : Identifier, member : Relative, version : String } in
 let PositiveJobs = std.contract.from_validator (fun value =>
   if std.is_number value && value >= 1 && value <= 64 && std.number.floor value == value
   then 'Ok else 'Error { message = "CMake jobs must be integer 1..64" }
 ) in
 let Plan = {
-  schema | String,
-  name | Identifier,
-  store_prefix | String,
-  source | Identifier,
-  source_subdir | String,
-  roles | { _ : StorePath },
-  tools | { cmake | Tool, ninja | Tool, cc | Tool, cxx | Tool, ar | Tool, ranlib | Tool, linker | Tool },
-  compiler | String,
-  build_platform | String,
-  target | { system | String, processor | String, triple | Identifier },
-  sysroot | Identifier,
-  runtime_roles | Array Identifier,
-  dependencies | Array Identifier,
-  host_tools | Array Tool,
-  c_includes | Array Member,
-  cxx_includes | Array Member,
-  toolchain_file | Dyn,
-  emulator | Dyn,
-  fetch_sources | { _ : Identifier },
-  definitions | { _ : String },
-  build_targets | Array Identifier,
-  outputs | Array Relative,
-  build_type | String,
-  jobs | PositiveJobs,
-  source_date_epoch | Number,
+  schema : String,
+  name : Identifier,
+  store_prefix : String,
+  source : Identifier,
+  source_subdir : String,
+  roles : { _ : StorePath },
+  tools : { cmake : Tool, ninja : Tool, cc : Tool, cxx : Tool, ar : Tool, ranlib : Tool, linker : Tool },
+  compiler : String,
+  build_platform : String,
+  target : { system : String, processor : String, triple : Identifier },
+  sysroot : Identifier,
+  runtime_roles : Array Identifier,
+  dependencies : Array Identifier,
+  host_tools : Array Tool,
+  c_includes : Array Member,
+  cxx_includes : Array Member,
+  toolchain_file : Dyn,
+  emulator : Dyn,
+  fetch_sources : { _ : Identifier },
+  definitions : { _ : String },
+  build_targets : Array Identifier,
+  outputs : Array Relative,
+  build_type : String,
+  jobs : PositiveJobs,
+  source_date_epoch : Number,
 } in
 let validate = fun authored =>
   let p = authored | Plan in
@@ -80,4 +80,10 @@ let nativeInput = fun { root, role, root_env } => {
   env = { "%{root_env}" = "{{role:%{role}}}" },
   path = [],
 } in
-{ Plan = Plan, Tool = Tool, Member = Member, validate = validate, mkProject = mkProject, nativeInput = nativeInput }
+let PlanContract = Plan in
+let ToolContract = Tool in
+let MemberContract = Member in
+let validateFn = validate in
+let mkProjectFn = mkProject in
+let nativeInputFn = nativeInput in
+{ Plan = PlanContract, Tool = ToolContract, Member = MemberContract, validate = validateFn, mkProject = mkProjectFn, nativeInput = nativeInputFn }

@@ -8,6 +8,14 @@
 # Provider-specific transport details remain inside adapters.
 #
 # r[impl remote_builds.production_operator_configuration]
+#
+# Nickel record contracts may carry at most one field without a definition,
+# so every record that declares several required fields is expressed as an
+# open defaults contract that fills the defaulted fields, followed by the
+# shape check for the required fields. The Rust glue layer stays the
+# admission authority for the evaluated configuration.
+
+let { Shape, .. } = import "contracts.ncl" in
 
 let RemoteTransportMode = [|
   'stdio,
@@ -157,35 +165,63 @@ let RemoteTransferPolicy = {
   control_bytes_max | Number | default = DefaultTransferControlBytes,
 } in
 
-let NamedResourceQuantity = {
-  name | String,
+let NamedResourceQuantityDefaults = {
+  name | String | optional,
   quantity
     | doc "Positive bounded quantity validated by the Rust admission core"
-    | Number,
+    | Number
+    | optional,
+  ..
 } in
+let NamedResourceQuantityRequired = {
+  name : String,
+  quantity : Number,
+} in
+let NamedResourceQuantity = std.contract.Sequence [
+  NamedResourceQuantityDefaults,
+  Shape [ ] NamedResourceQuantityRequired,
+] in
 
-let RemoteResourceVector = {
-  cpu_units | Number,
-  memory_bytes | Number,
-  scratch_bytes | Number,
+let RemoteResourceVectorDefaults = {
+  cpu_units | Number | optional,
+  memory_bytes | Number | optional,
+  scratch_bytes | Number | optional,
   accelerators | Array NamedResourceQuantity | default = [],
   named_tokens
     | doc "Opaque scarce-token quantities; never credentials"
     | Array NamedResourceQuantity
     | default = [],
+  ..
 } in
+let RemoteResourceVectorRequired = {
+  cpu_units : Number,
+  memory_bytes : Number,
+  scratch_bytes : Number,
+} in
+let RemoteResourceVector = std.contract.Sequence [
+  RemoteResourceVectorDefaults,
+  Shape [ "accelerators", "named_tokens" ] RemoteResourceVectorRequired,
+] in
 
 let RemoteResourceInventory = {
-  total | RemoteResourceVector,
+  total : RemoteResourceVector,
 } in
 
-let RemoteResourceRequirements = {
-  quantities | RemoteResourceVector,
+let RemoteResourceRequirementsDefaults = {
+  quantities | RemoteResourceVector | optional,
   semantic_accelerator_classes
     | doc "Semantic classes affect action identity; quantities remain scheduling-only"
     | Array String
     | default = [],
+  ..
 } in
+let RemoteResourceRequirementsRequired = {
+  quantities : RemoteResourceVector,
+} in
+let RemoteResourceRequirements = std.contract.Sequence [
+  RemoteResourceRequirementsDefaults,
+  Shape [ "semantic_accelerator_classes" ] RemoteResourceRequirementsRequired,
+] in
 
 let RemoteLocalityPolicy = {
   basis | [| 'receiver-verified |] | default = 'receiver-verified,
@@ -277,26 +313,46 @@ let RemoteCapabilityProfile = {
     | default = {},
 } in
 
-let RemoteEndpoint = {
+let RemoteEndpointDefaults = {
   endpoint_id
     | doc "Unique identifier for this remote builder endpoint"
-    | String,
+    | String
+    | optional,
   transport
     | RemoteTransportMode
     | default = 'stdio,
   profile
     | RemoteCapabilityProfile
     | default = {},
+  ..
 } in
+let RemoteEndpointRequired = {
+  endpoint_id : String,
+} in
+let RemoteEndpoint = std.contract.Sequence [
+  RemoteEndpointDefaults,
+  Shape [ "transport", "profile" ] RemoteEndpointRequired,
+] in
 
-let TrustRoot = {
+let TrustRootDefaults = {
   public_key_name
     | doc "Verifier name (e.g. cache.example.com-1)"
-    | String,
+    | String
+    | optional,
   public_key_base64
     | doc "Ed25519 public key in base64"
-    | String,
+    | String
+    | optional,
+  ..
 } in
+let TrustRootRequired = {
+  public_key_name : String,
+  public_key_base64 : String,
+} in
+let TrustRoot = std.contract.Sequence [
+  TrustRootDefaults,
+  Shape [ ] TrustRootRequired,
+] in
 
 let PublisherProfile = {
   mode
@@ -312,58 +368,111 @@ let PublisherProfile = {
     | default = [],
 } in
 
-let BatchDispatcherCommand = {
+let BatchDispatcherCommandDefaults = {
   program
     | doc "Absolute executable path; the adapter verifies its BLAKE3 digest before every operation"
-    | String,
-  expected_digest_blake3 | String,
+    | String
+    | optional,
+  expected_digest_blake3 | String | optional,
   args
     | doc "Bounded static arguments; credentials and policy secrets are forbidden"
     | Array String
     | default = [],
-  timeout_secs | Number,
-  stdout_limit_bytes | Number,
-  stderr_limit_bytes | Number,
+  timeout_secs | Number | optional,
+  stdout_limit_bytes | Number | optional,
+  stderr_limit_bytes | Number | optional,
+  ..
 } in
+let BatchDispatcherCommandRequired = {
+  program : String,
+  expected_digest_blake3 : String,
+  timeout_secs : Number,
+  stdout_limit_bytes : Number,
+  stderr_limit_bytes : Number,
+} in
+let BatchDispatcherCommand = std.contract.Sequence [
+  BatchDispatcherCommandDefaults,
+  Shape [ "args" ] BatchDispatcherCommandRequired,
+] in
 
-let BatchEnvironmentHandle = {
+let BatchEnvironmentHandleDefaults = {
   name
     | doc "Allowlisted shell-owned environment handle name; values never enter canonical records"
-    | String,
+    | String
+    | optional,
+  ..
 } in
+let BatchEnvironmentHandleRequired = {
+  name : String,
+} in
+let BatchEnvironmentHandle = std.contract.Sequence [
+  BatchEnvironmentHandleDefaults,
+  Shape [ ] BatchEnvironmentHandleRequired,
+] in
 
-let BatchDispatcherProfile = {
-  instance_id | String,
-  generation | Number,
-  adapter | [| 'direct-process-v1, 'slurm-cli-v1 |],
+let BatchDispatcherProfileDefaults = {
+  instance_id | String | optional,
+  generation | Number | optional,
+  adapter
+    | [| 'direct-process-v1, 'slurm-cli-v1 |]
+    | optional,
   protocol_schema | String | default = "mantle-batch-dispatch-adapter-v1",
   allowed_operations
     | Array [| 'submit, 'observe, 'cancel, 'reconcile |]
     | default = ['submit, 'observe, 'cancel, 'reconcile],
-  provider_class | String,
-  submit | BatchDispatcherCommand,
-  observe | BatchDispatcherCommand,
-  cancel | BatchDispatcherCommand,
-  reconcile | BatchDispatcherCommand,
-  worker_program | String,
-  worker_program_digest_blake3 | String,
+  provider_class | String | optional,
+  submit | BatchDispatcherCommand | optional,
+  observe | BatchDispatcherCommand | optional,
+  cancel | BatchDispatcherCommand | optional,
+  reconcile | BatchDispatcherCommand | optional,
+  worker_program | String | optional,
+  worker_program_digest_blake3 | String | optional,
   worker_args | Array String | default = [],
   environment_handles | Array BatchEnvironmentHandle | default = [],
   bootstrap_policy
     | [| 'direct-worker-exec-v1, 'fixed-template-v1 |]
     | default = 'direct-worker-exec-v1,
   redact_provider_output | Bool | default = true,
-  startup_timeout_secs | Number,
-  terminal_timeout_secs | Number,
-  max_reconcile_attempts | Number,
+  startup_timeout_secs | Number | optional,
+  terminal_timeout_secs | Number | optional,
+  max_reconcile_attempts | Number | optional,
+  ..
 } in
+let BatchDispatcherProfileRequired = {
+  instance_id : String,
+  generation : Number,
+  adapter : [| 'direct-process-v1, 'slurm-cli-v1 |],
+  provider_class : String,
+  submit : BatchDispatcherCommand,
+  observe : BatchDispatcherCommand,
+  cancel : BatchDispatcherCommand,
+  reconcile : BatchDispatcherCommand,
+  worker_program : String,
+  worker_program_digest_blake3 : String,
+  startup_timeout_secs : Number,
+  terminal_timeout_secs : Number,
+  max_reconcile_attempts : Number,
+} in
+let BatchDispatcherProfile = std.contract.Sequence [
+  BatchDispatcherProfileDefaults,
+  Shape [
+    "protocol_schema",
+    "allowed_operations",
+    "worker_args",
+    "environment_handles",
+    "bootstrap_policy",
+    "redact_provider_output",
+  ] BatchDispatcherProfileRequired,
+] in
 
-let RemoteBuilderPoolContract = {
+let RemoteBuilderPoolContractDefaults = {
   pool_id
     | doc "Unique pool identifier"
-    | String,
+    | String
+    | optional,
   endpoints
-    | Array RemoteEndpoint,
+    | Array RemoteEndpoint
+    | optional,
   fallback_policy
     | RemoteFallbackPolicy
     | default = 'trusted-only,
@@ -373,7 +482,20 @@ let RemoteBuilderPoolContract = {
   publishers
     | Array PublisherProfile
     | default = [],
+  ..
 } in
+let RemoteBuilderPoolContractRequired = {
+  pool_id : String,
+  endpoints : Array RemoteEndpoint,
+} in
+let RemoteBuilderPoolContract = std.contract.Sequence [
+  RemoteBuilderPoolContractDefaults,
+  Shape [
+    "fallback_policy",
+    "output_trust_roots",
+    "publishers",
+  ] RemoteBuilderPoolContractRequired,
+] in
 
 {
   RemoteBuilderPool

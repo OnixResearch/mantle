@@ -121,3 +121,4 @@ compatibility surface, crate name, or historical decision.
 | [0121](0121-bind-cold-continuations-to-actual-producer-outcomes.md) | Bind cold command continuations to actual producer outcomes | Proposed |
 | [0122](0122-use-native-blake3-streaming-at-snix-boundary.md) | Use native BLAKE3 streaming at the Snix boundary | Proposed |
 | [0123](0123-retain-unwired-source-program-authors-behind-item-scoped-dead-code-allows.md) | Retain unwired source-program authors behind item-scoped dead-code allows | Accepted |
+| [0124](0124-express-nickel-plan-shapes-as-record-types.md) | Express Nickel plan shapes as record types with whole-shape checks | Accepted |

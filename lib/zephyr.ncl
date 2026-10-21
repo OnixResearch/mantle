@@ -8,18 +8,18 @@ let Digest = std.contract.from_validator (fun value =>
   if std.is_string value && std.string.is_match "^[0-9a-f]{64}$" value
   then 'Ok else 'Error { message = "expected independently pinned tree BLAKE3" }
 ) in
-let Input = { root | StorePath, tree_blake3 | Digest } in
-let Module = { role | String, revision | String, path | String } in
+let Input = { root : StorePath, tree_blake3 : Digest } in
+let Module = { role : String, revision : String, path : String } in
 let Plan = {
-  schema | String, name | String, store_prefix | String, build_platform | String,
-  roles | { _ : Input }, zephyr | String, sdk | String, project | String,
-  sdk_version | String, target | String,
-  project_subdir | String, resolved_west | Member,
-  west | { schema | String, zephyr_revision | String, modules | { _ : Module } },
-  board | String, qualifiers | Array String,
-  kconfig | Array Member, overlays | Array Member,
-  tools | { cmake | Tool, ninja | Tool, python | Tool, dtc | Tool, host | Array Tool },
-  source_date_epoch | Number, jobs | Number,
+  schema : String, name : String, store_prefix : String, build_platform : String,
+  roles : { _ : Input }, zephyr : String, sdk : String, project : String,
+  sdk_version : String, target : String,
+  project_subdir : String, resolved_west : Member,
+  west : { schema : String, zephyr_revision : String, modules : { _ : Module } },
+  board : String, qualifiers : Array String,
+  kconfig : Array Member, overlays : Array Member,
+  tools : { cmake : Tool, ninja : Tool, python : Tool, dtc : Tool, host : Array Tool },
+  source_date_epoch : Number, jobs : Number,
 } in
 let validate = fun authored =>
   let p = authored | Plan in
@@ -63,4 +63,10 @@ let mkFirmware = fun { plan, runner } =>
     env = { MANTLE_ZEPHYR_PLAN = std.serialize 'Json p },
   } | Derivation
 in
-{ Plan = Plan, Input = Input, Member = Member, Tool = Tool, validate = validate, mkFirmware = mkFirmware }
+let PlanContract = Plan in
+let InputContract = Input in
+let MemberContract = Member in
+let ToolContract = Tool in
+let validateFn = validate in
+let mkFirmwareFn = mkFirmware in
+{ Plan = PlanContract, Input = InputContract, Member = MemberContract, Tool = ToolContract, validate = validateFn, mkFirmware = mkFirmwareFn }

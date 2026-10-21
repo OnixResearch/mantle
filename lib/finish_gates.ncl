@@ -1,4 +1,7 @@
 # Closed, bounded contract for the shared post-install gate policy.
+#
+# Nickel record contracts may carry at most one field without a definition, so
+# the policy shape is a record type: every policy field is required.
 let NonEmpty = std.contract.from_predicate (fun value =>
   std.is_string value && std.string.length value > 0 && std.string.length value <= 256
 ) in
@@ -34,22 +37,24 @@ let Dlopen = {
   enabled | Bool | default = false,
   optional_sonames | Sonames | default = [],
 } in
+let GateContract = {
+  schema | std.contract.from_predicate (fun value => value == "mantle-derivation-finish-gates-v1")
+    | default = "mantle-derivation-finish-gates-v1",
+  version | Version | default = {},
+  reference_leak | Leak | default = {},
+  relocation | Relocation | default = {},
+  dlopen | Dlopen | default = {},
+} in
+let PolicyContract = {
+  schema : std.contract.from_predicate (fun value => value == "mantle-derivation-finish-policy-v1"),
+  max_command_args : std.contract.from_predicate (fun value => value == 16),
+  max_command_arg_bytes : std.contract.from_predicate (fun value => value == 4096),
+  max_scan_hits : std.contract.from_predicate (fun value => value == 128),
+  max_excerpt_bytes : std.contract.from_predicate (fun value => value == 160),
+  max_optional_sonames : std.contract.from_predicate (fun value => value == 32),
+  gates : GateContract,
+} in
 {
-  Gate = {
-    schema | std.contract.from_predicate (fun value => value == "mantle-derivation-finish-gates-v1")
-      | default = "mantle-derivation-finish-gates-v1",
-    version | Version | default = {},
-    reference_leak | Leak | default = {},
-    relocation | Relocation | default = {},
-    dlopen | Dlopen | default = {},
-  },
-  Policy = {
-    schema | std.contract.from_predicate (fun value => value == "mantle-derivation-finish-policy-v1"),
-    max_command_args | std.contract.from_predicate (fun value => value == 16),
-    max_command_arg_bytes | std.contract.from_predicate (fun value => value == 4096),
-    max_scan_hits | std.contract.from_predicate (fun value => value == 128),
-    max_excerpt_bytes | std.contract.from_predicate (fun value => value == 160),
-    max_optional_sonames | std.contract.from_predicate (fun value => value == 32),
-    gates | Gate,
-  },
+  Gate = GateContract,
+  Policy = PolicyContract,
 }

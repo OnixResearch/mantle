@@ -47,6 +47,36 @@ let store_path_regex = "^(/[A-Za-z0-9._+-]+)+/[a-z0-9]{32}-.+$" in
     | doc "Sandbox backend for build execution."
     = [| 'native, 'oci, 'wasm |],
 
+  Shape
+    | doc m%"
+      Build the shape check for a record whose optional fields carry defaults.
+
+      Nickel record contracts may carry at most one field without a
+      definition, so a shape with several required fields plus defaulted
+      fields is expressed as a sequence: an open defaults contract that fills
+      the optional fields, then this shape check, which requires exactly the
+      declared fields, rejects undeclared ones, and type-checks the required
+      fields through the supplied record type.
+
+      The check rebuilds the record before applying the record type, because a
+      field that an earlier contract declared optional would otherwise be
+      accepted as absent by the record type.
+      "%
+    = fun default_names required_type =>
+      std.contract.from_validator (fun value =>
+        if !std.is_record value then
+          'Error { message = "expected a record, got: %{std.serialize 'Json value}" }
+        else
+          let stripped = std.array.fold_left (fun rest name =>
+            if std.record.has_field name rest then std.record.remove name rest else rest
+          ) value default_names in
+          let plain = std.record.map (fun _ field => field) stripped in
+          let checked = plain | required_type in
+          if checked == plain
+          then 'Ok
+          else 'Error { message = "record does not match its declared shape" }
+      ),
+
   Input
     | doc m%"
       A build input: a StorePath string, a Derivation record (all outputs),

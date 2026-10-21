@@ -3,6 +3,11 @@
 # Validates the structure of crunch-project.ncl files.
 # Users import this contract and apply it to their manifest record.
 
+# Nickel record contracts may carry at most one field without a definition, so
+# shapes with several required fields are expressed as a record type, or as an
+# open defaults contract followed by the shape check for the required fields.
+let { Shape, .. } = import "contracts.ncl" in
+
 let HashAlgo = [| 'sha256, 'sha512, 'blake3 |] in
 
 let HashSpec = {
@@ -11,8 +16,8 @@ let HashSpec = {
 } in
 
 let GitReference = {
-  ref_type | [| 'branch, 'tag, 'rev |],
-  ref_value | String,
+  ref_type : [| 'branch, 'tag, 'rev |],
+  ref_value : String,
 } in
 
 let FileInput = {
@@ -102,9 +107,7 @@ let InputKind = std.contract.from_validator (fun value =>
     'Error { message = "input must be a record" }
 ) in
 
-let ManifestInput = {
-  name | String,
-  kind | InputKind,
+let ManifestInputDefaults = {
   hash | HashSpec | default = {},
   frozen | Bool | default = false,
   mirrors | Array String | default = [],
@@ -113,7 +116,25 @@ let ManifestInput = {
   retention | InputRetentionPolicy | optional,
   freshness | FreshnessProbe | optional,
   trust | InputTrustPolicy | optional,
+  ..
 } in
+let ManifestInputRequired = {
+  name : String,
+  kind : InputKind,
+} in
+let ManifestInput = std.contract.Sequence [
+  ManifestInputDefaults,
+  Shape [
+    "hash",
+    "frozen",
+    "mirrors",
+    "patches",
+    "fetch_policy",
+    "retention",
+    "freshness",
+    "trust",
+  ] ManifestInputRequired,
+] in
 
 let PatchSource = std.contract.from_validator (fun value =>
   if std.is_record value then
@@ -133,22 +154,29 @@ let PatchSource = std.contract.from_validator (fun value =>
     'Error { message = "patch must be a record" }
 ) in
 
-let PatchDef = {
-  name | String,
-  source | PatchSource,
+let PatchDefDefaults = {
   trust | InputTrustPolicy | optional,
+  ..
 } in
+let PatchDefRequired = {
+  name : String,
+  source : PatchSource,
+} in
+let PatchDef = std.contract.Sequence [
+  PatchDefDefaults,
+  Shape [ "trust" ] PatchDefRequired,
+] in
 
 let ShellProfile = {
   build_inputs | Array String | default = [],
-  env | { _ | String } | default = {},
+  env | { _ : String } | default = {},
   path_entries | Array String | default = [],
   hook | String | optional,
   derivation | Dyn | optional,
 } in
 
 let ShellProfiles = {
-  _ | ShellProfile,
+  _ : ShellProfile
 } in
 
 let GeneratedFileMaterialization = std.contract.from_validator (fun value =>
@@ -169,18 +197,47 @@ let GeneratedFileContent = std.contract.from_validator (fun value =>
     'Error { message = "generated file content must be a record" }
 ) in
 
-let GeneratedFileContract = {
-  identity | String,
+let GeneratedFileContractDefaults = {
   required_json_fields | Array String | default = [],
+  ..
 } in
+let GeneratedFileContractRequired = {
+  identity : String,
+} in
+let GeneratedFileContract = std.contract.Sequence [
+  GeneratedFileContractDefaults,
+  Shape [ "required_json_fields" ] GeneratedFileContractRequired,
+] in
 
-let GeneratedFile = {
-  name | String,
-  target | String,
-  content | GeneratedFileContent,
+let GeneratedFileDefaults = {
   materialization | GeneratedFileMaterialization | default = "copy",
   contract | GeneratedFileContract | optional,
+  ..
 } in
+let GeneratedFileRequired = {
+  name : String,
+  target : String,
+  content : GeneratedFileContent,
+} in
+let GeneratedFile = std.contract.Sequence [
+  GeneratedFileDefaults,
+  Shape [ "materialization", "contract" ] GeneratedFileRequired,
+] in
+
+let HashAlgoContract = HashAlgo in
+let HashSpecContract = HashSpec in
+let GitReferenceContract = GitReference in
+let ManifestInputContract = ManifestInput in
+let InputFetchPolicyContract = InputFetchPolicy in
+let InputRetentionPolicyContract = InputRetentionPolicy in
+let FreshnessProbeContract = FreshnessProbe in
+let InputTrustPolicyContract = InputTrustPolicy in
+let PatchDefContract = PatchDef in
+let ShellProfileContract = ShellProfile in
+let ShellProfilesContract = ShellProfiles in
+let GeneratedFileContractValue = GeneratedFile in
+let GeneratedFileContentContract = GeneratedFileContent in
+let GeneratedFileContractShape = GeneratedFileContract in
 
 # The top-level project manifest contract.
 {
@@ -194,18 +251,18 @@ let GeneratedFile = {
   },
 
   # Re-export sub-contracts for external use.
-  HashAlgo = HashAlgo,
-  HashSpec = HashSpec,
-  GitReference = GitReference,
-  ManifestInput = ManifestInput,
-  InputFetchPolicy = InputFetchPolicy,
-  InputRetentionPolicy = InputRetentionPolicy,
-  FreshnessProbe = FreshnessProbe,
-  InputTrustPolicy = InputTrustPolicy,
-  PatchDef = PatchDef,
-  ShellProfile = ShellProfile,
-  ShellProfiles = ShellProfiles,
-  GeneratedFile = GeneratedFile,
-  GeneratedFileContent = GeneratedFileContent,
-  GeneratedFileContract = GeneratedFileContract,
+  HashAlgo = HashAlgoContract,
+  HashSpec = HashSpecContract,
+  GitReference = GitReferenceContract,
+  ManifestInput = ManifestInputContract,
+  InputFetchPolicy = InputFetchPolicyContract,
+  InputRetentionPolicy = InputRetentionPolicyContract,
+  FreshnessProbe = FreshnessProbeContract,
+  InputTrustPolicy = InputTrustPolicyContract,
+  PatchDef = PatchDefContract,
+  ShellProfile = ShellProfileContract,
+  ShellProfiles = ShellProfilesContract,
+  GeneratedFile = GeneratedFileContractValue,
+  GeneratedFileContent = GeneratedFileContentContract,
+  GeneratedFileContract = GeneratedFileContractShape,
 }

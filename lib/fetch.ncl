@@ -54,6 +54,9 @@ let add_fetch_policy_env = fun params env =>
     env
 in
 
+let UrlContract = Url in
+let HashContract = Hash in
+
 {
   fetchurl
     | doc "Download a file by URL. Hash is over raw file bytes (flat mode)."
@@ -144,6 +147,6 @@ in
       },
 
   # Re-export contracts for external use.
-  Url = Url,
-  Hash = Hash,
+  Url = UrlContract,
+  Hash = HashContract,
 }

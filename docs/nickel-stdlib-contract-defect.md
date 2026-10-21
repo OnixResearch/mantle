@@ -6,21 +6,26 @@ Status: open, pre-existing, blocks Nickel evaluation of the standard library.
 
 The standard library does not evaluate under Nickel 1.17.0 (the version the
 repository pins). `nickel eval --import-path lib lib/lib.ncl` fails, and the
-failure is a contract-shape rule, not a syntax error. The three rules were
+failure is a contract-shape rule, not a syntax error. The rules were
 confirmed directly against the pinned interpreter:
 
 - A record contract may carry **at most one field without a definition**. A
-  field written as `name | Type` with no `| default = ...` and no
-  `| optional` is the single required field; a second such field is rejected
-  with `missing definition for <field>`. A field with `| default = ...` or
-  `| optional` counts as defined.
+  field written as `name | Type` with no `| default = ...`, no `| optional`,
+  and no `= value` shorthand is undefined; a second undefined field is
+  rejected with `missing definition for <field>`, and the error names the
+  first undefined field.
 - A contract field may only be annotated with a **builtin or enum type**. A
   validator contract (`std.contract.from_validator`) or a nested record used
   as an annotation is rejected with the same error, so a nested shape cannot
   be expressed inside a record contract at all.
-- A **record type** (`{ name : Type }`) is the correct spelling for a plan
-  shape with several required fields, but a record type cannot be applied as a
-  contract; the shape check has to move into a whole-record validator.
+- A **record type** (`{ name : Type }`) admits any number of required
+  fields, is closed, and can be applied as a contract. It cannot carry `| doc`
+  annotations.
+- A record **contract** is closed as well, and a catch-all field must be
+  written `{ _ : Type }`; `{ _ | Type }` is a syntax error.
+- Nickel records are **recursive**, so an export record such as
+  `{ Plan = Plan }` refers to the field itself and fails with
+  `infinite recursion`.
 
 The repository's plan records break the first two rules: `Derivation`,
 `ManifestInput`, the WebAssembly component records, the kernel-script
@@ -76,6 +81,18 @@ Affected modules and the number of contract annotations that Nickel rejects:
    checks are not lost.
 4. Keep the Rust core as the admission authority: it consumes the evaluated
    plan and enforces the real contract.
+
+## Repair
+
+The repair is recorded in
+`adr/0124-express-nickel-plan-shapes-as-record-types.md` and tracked by the
+Cairn change `repair-nickel-contract-shapes`. A shape whose fields are all
+required and carry no defaults becomes a record type. A shape with defaults
+or optional fields becomes `std.contract.Sequence` of an open defaults
+contract and a whole-shape check built on `contracts.Shape`, which strips the
+defaulted and optional fields and applies the required record type to the
+remainder. Every field name, default, requiredness, closedness rule,
+validator, and exported name is preserved.
 
 ## Observed effect in the ordinary gate
 

@@ -12,17 +12,17 @@ let Digest = std.contract.from_validator (fun value =>
     && value != "0000000000000000000000000000000000000000000000000000000000000000"
   then 'Ok else 'Error { message = "expected pinned BLAKE3 tree identity" }
 ) in
-let Member = { role | Relative, member | Relative } in
+let Member = { role : Relative, member : Relative } in
 let Plan = {
-  name | Relative, host | String, release | String, sdk_commit | String, target | String,
-  roles | { _ : { root | StorePath, tree_blake3 | Digest } },
-  project | Member, sdk | Member, python | Member, cmake | Member, ninja | Member, compiler | Member,
-  python_constraints | Member,
-  path | Array Member,
-  sdkconfig | Dyn, common_defaults | Array Relative, target_defaults | Array Relative,
-  partition_csv | Relative,
-  components | Array { name | Relative, source | Member, managed | Bool },
-  dependencies_lock | Dyn, source_date_epoch | Number, project_version | Relative,
+  name : Relative, host : String, release : String, sdk_commit : String, target : String,
+  roles : { _ : { root : StorePath, tree_blake3 : Digest } },
+  project : Member, sdk : Member, python : Member, cmake : Member, ninja : Member, compiler : Member,
+  python_constraints : Member,
+  path : Array Member,
+  sdkconfig : Dyn, common_defaults : Array Relative, target_defaults : Array Relative,
+  partition_csv : Relative,
+  components : Array { name : Relative, source : Member, managed : Bool },
+  dependencies_lock : Dyn, source_date_epoch : Number, project_version : Relative,
 } in
 let validate = fun authored =>
   let p = authored | Plan in
@@ -51,4 +51,8 @@ let mkFirmware = fun { plan, runner, store_prefix } =>
     env = { MANTLE_ESP_IDF_PLAN = std.serialize 'Json p, MANTLE_ESP_IDF_STORE_PREFIX = store_prefix },
   } | Derivation
 in
-{ Plan = Plan, Member = Member, validate = validate, mkFirmware = mkFirmware }
+let PlanContract = Plan in
+let MemberContract = Member in
+let validateFn = validate in
+let mkFirmwareFn = mkFirmware in
+{ Plan = PlanContract, Member = MemberContract, validate = validateFn, mkFirmware = mkFirmwareFn }
