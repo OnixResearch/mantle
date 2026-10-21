@@ -53,26 +53,49 @@ restored compile path, canonical rustfmt, and the strict-Clippy repairs), the
 ra-jit feasibility report, the removed accidental shell artifacts, and the
 recorded Nickel standard-library defect.
 
-G1 is blocked by a pre-existing defect rather than by a reconciliation
-regression.
+G1 was blocked by a pre-existing defect rather than by a reconciliation
+regression. That defect is now repaired and published.
 
-The authoritative gate transcript for the published revision
-`13627a62f4293ec42fab6971cbe67d1350da7f0e` is retained in
+The first authoritative gate transcript, for the published revision
+`13627a62f4293ec42fab6971cbe67d1350da7f0e`, is retained in
 `evidence/final-gate-v1/`: the bounded GCC 4.0 configure bridge passed, the
 canonical first-party rustfmt passed, strict Clippy with the vendored members
 excluded passed, and the serialized workspace lib/tests phase failed in the
-Nickel-evaluating suites. The first failing suite is
-`crunch-esp-idf --test nickel_contract`, which rejects even its baseline
-plan because the pinned Nickel cannot evaluate the plan contracts. The gate ran
-with `CARGO_INCREMENTAL=0` because the pinned nightly panics in its
-incremental dependency graph for `crates/crunch-delta`
-(`docs/toolchain-incremental-ice.md`). The pinned Nickel 1.17.0 does not evaluate the standard library:
-record contracts may carry at most one field without a definition, and a
-contract field may only be annotated with a builtin or enum type. The same
-failure is present in the published baseline `43ccd6884`, so every
-Nickel-evaluating workspace test in the ordinary gate fails. The analysis, the
-affected modules, and the required repair are recorded in
-`docs/nickel-stdlib-contract-defect.md` and tracked as issue 24.
+Nickel-evaluating suites, first in `crunch-esp-idf --test nickel_contract`,
+because the pinned Nickel could not evaluate the plan contracts. The same
+failure is present in the published baseline `43ccd6884`, so it predates the
+reconciliation.
+
+The repair is published at `2782a40ec`: every published plan shape is
+restated without changing what it declares, the decision is ADR 0124, and the
+lifecycle is the Cairn change `repair-nickel-contract-shapes`. The analysis is
+in `docs/nickel-stdlib-contract-defect.md`; the defect issue 24 is closed
+with the verification evidence.
+
+The authoritative gate transcript for the repaired revision
+`2782a40ece366a052847d3966ed2187399b3b3d6` is retained in
+`evidence/final-gate-v2/`: the bounded GCC 4.0 configure bridge passed, the
+canonical first-party rustfmt passed, strict Clippy with the vendored members
+excluded passed, and the workspace lib/tests phase now runs the
+Nickel-evaluating suites instead of failing at import time. The same suite
+that failed before the repair, `crunch-esp-idf --test nickel_contract`, now
+reports `2 passed; 0 failed`. The phase stops at a separate pre-existing
+defect, `crunch-nix-gateway --test nix_path_info`, which publishes the
+admitted NAR metadata but not the store symlink; that suite does not evaluate
+Nickel, so the repair does not cause it. The gate ran with
+`CARGO_INCREMENTAL=0` because the pinned nightly panics in its incremental
+dependency graph for `crates/crunch-delta`
+(`docs/toolchain-incremental-ice.md`).
+
+A full workspace lib/tests run with `--no-fail-fast` on the same revision
+reports three failing groups, each in a suite that does not evaluate Nickel:
+the Nix gateway admitted-NAR publication (issue 25), two `crunch-store`
+overlay cases that fail while opening the overlay base in the gate
+environment (issue 26), and the verification-bridge fixture, whose pinned
+upstream Trellis revision publishes a receipt whose identity does not match its
+own bundle (issue 27). G1 therefore remains unaccepted: the gate is executed
+and retained, and the remaining failures are pre-existing defects that are
+tracked but not repaired.
 
 P1 stays unchecked: publication is recorded, but G1 and G2 have not been
 accepted, so no lifecycle acceptance follows from the push.
