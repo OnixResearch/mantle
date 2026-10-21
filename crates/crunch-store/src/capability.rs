@@ -615,6 +615,18 @@ impl BuildStore {
         self.handle.persist_and_export_signed_output(request).await
     }
 
+    /// Materialize one already persisted local store path in the physical store.
+    ///
+    /// The path must carry a signed PathInfo and complete castore content. This
+    /// makes the path readable at its store path for the store's readers without
+    /// registering a garbage-collection root for it.
+    pub async fn materialize_persisted_output(&mut self, path: &StorePath<String>) -> Result<PathInfo, Error> {
+        self.handle
+            .export_cached_path_info(path)
+            .await?
+            .ok_or_else(|| Error::Store(format!("persisted output is not present: {path}")))
+    }
+
     pub async fn admit_action_result_outputs(
         &mut self,
         outputs: &BTreeMap<String, PathInfo>,

@@ -425,6 +425,10 @@ impl VerifiedStore {
             })
             .await
             .map_err(|_| Reject::Authority)?;
+        // An admitted NAR import is published for the clients that asked for it, so
+        // the store path must be readable at its path. It is not a retained
+        // garbage-collection root, so it is materialized without root registration.
+        self.owner.materialize_persisted_output(&info.store_path).await.map_err(|_| Reject::Authority)?;
         Ok(nar_size)
     }
 
