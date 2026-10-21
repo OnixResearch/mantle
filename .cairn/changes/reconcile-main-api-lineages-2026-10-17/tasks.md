@@ -90,14 +90,25 @@ dependency graph for `crates/crunch-delta`
 A full workspace lib/tests run with `--no-fail-fast` on the same revision
 reports four failing groups, each in a suite that does not evaluate Nickel:
 the Nix gateway admitted-NAR publication (issue 25), two `crunch-store`
-overlay cases that fail while opening the overlay base in the gate
-environment (issue 26), the verification-bridge fixture, whose pinned upstream
-Trellis revision publishes a receipt whose identity does not match its own
-bundle (issue 27), and the user-profile install, upgrade, remove, rollback and
+overlay cases that opened a declared base before the overlay capability
+refusal, the verification-bridge fixture, whose pinned upstream Trellis
+revision publishes a receipt whose identity does not match its own bundle
+(issue 27), and the user-profile install, upgrade, remove, rollback and
 garbage-collection case, which reports `root registry: ambiguous release:
-specify an exact reason` (recorded on issue 18). G1 therefore remains
-unaccepted: the gate is executed and retained, and the remaining failures are
-pre-existing defects that are tracked but not repaired.
+specify an exact reason` (recorded on issue 18).
+
+The two `crunch-store` overlay cases are a reconciliation regression and are
+now repaired and published at `ca13e11b9`: the source-admission step opened
+every declared base before the backend capability check and the writable state
+identity read, so a rejected configuration touched a caller-declared
+directory. The unsupported overlay composition is now refused first, the
+writable state identity is read next, and the declared bases are admitted and
+read last, with the base identity reads still after the source-session
+witnesses exist. Both cases pass on the repaired tree, and issue 26 is closed
+with that evidence.
+
+The remaining failures are pre-existing defects that are tracked but not
+repaired, so G1 remains unaccepted: the gate is executed and retained.
 
 P1 stays unchecked: publication is recorded, but G1 and G2 have not been
 accepted, so no lifecycle acceptance follows from the push.
