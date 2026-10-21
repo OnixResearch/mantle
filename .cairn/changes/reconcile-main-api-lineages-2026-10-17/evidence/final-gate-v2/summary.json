@@ -1,0 +1,33 @@
+{
+  "schema": "mantle-first-party-gate-evidence-v1",
+  "revision": "2782a40ece366a052847d3966ed2187399b3b3d6",
+  "command": "./scripts/check-first-party-quality.sh",
+  "remote_run_dir": "/home/brittonr/mantle-cairn-finish/logs/final-gate-20261021/gates5-20261021T213402Z",
+  "transcripts": [
+    {
+      "transcript": "first-party-gate.stdout.log",
+      "bytes": 148797,
+      "sha256": "5dc5b486be29271894c6aa7e63f5756329e8e609e0ca3cbbd0594fed8707b849"
+    },
+    {
+      "transcript": "first-party-gate.guard.log",
+      "bytes": 742,
+      "sha256": "da308f07252c62d059226a7961cb0880f058dbd6123eec95a54db3b1c71eec0e"
+    }
+  ],
+  "non_claims": [
+    "gate evidence for the recorded revision only",
+    "not a bootstrap, release, or Nickel-parity claim",
+    "the remaining workspace test failure is a separate pre-existing defect, tracked as issue 25"
+  ],
+  "outcome": {
+    "gcc40_configure_bridge": "pass",
+    "canonical_first_party_rustfmt": "pass",
+    "strict_clippy_vendored_excluded": "pass",
+    "workspace_lib_tests": "failed",
+    "first_failing_suite": "crunch-nix-gateway --test nix_path_info",
+    "first_failing_reason": "the admitted NAR import published the metadata but not the store symlink; the suite does not evaluate Nickel, so the repair does not cause it",
+    "nickel_evaluating_suites": "the repaired standard library evaluates; the previously failing nickel_contract suites run and pass",
+    "build_strategy": "CARGO_INCREMENTAL=0, because the pinned nightly panics in the incremental dependency graph for crates/crunch-delta; see docs/toolchain-incremental-ice.md"
+  }
+}
