@@ -1,0 +1,33 @@
+{
+  "schema": "mantle-first-party-gate-evidence-v1",
+  "revision": "9dcf14c250d9d0d7db6a07af4f6e82fb3e7ff6f9",
+  "command": "./scripts/check-first-party-quality.sh",
+  "remote_run_dir": "/home/brittonr/mantle-cairn-finish/logs/final-gate-20261021/gates6-20261021T232324Z",
+  "transcripts": [
+    {
+      "transcript": "first-party-gate.stdout.log",
+      "bytes": 268596,
+      "sha256": "4ab1612f7d27bda2a42900155dddaa0b6cf57dd647279773d758db4b48b37721"
+    },
+    {
+      "transcript": "first-party-gate.guard.log",
+      "bytes": 743,
+      "sha256": "ff5842fc0fea7f57b530dd929733dc358ca826dc703db060c42abec02462b1bf"
+    }
+  ],
+  "non_claims": [
+    "gate evidence for the recorded revision only",
+    "not a bootstrap, release, or Nickel-parity claim",
+    "the remaining workspace failure belongs upstream, tracked as issue 27"
+  ],
+  "outcome": {
+    "gcc40_configure_bridge": "pass",
+    "canonical_first_party_rustfmt": "pass",
+    "strict_clippy_vendored_excluded": "pass",
+    "workspace_lib_tests": "failed",
+    "first_failing_suite": "crunch-verification-bridge --test boundaries",
+    "first_failing_reason": "the pinned upstream Trellis revision publishes a receipt whose pinned identity does not match its own evidence bundle, so the bridge refuses the pair; the Mantle fixture is a faithful copy of the pinned upstream revision",
+    "repaired_since_the_previous_transcript": "the Nix gateway admitted-NAR publication and the crunch-store overlay refusal order now pass, so the gate reaches the verification bridge",
+    "build_strategy": "CARGO_INCREMENTAL=0, because the pinned nightly panics in the incremental dependency graph for crates/crunch-delta; see docs/toolchain-incremental-ice.md"
+  }
+}

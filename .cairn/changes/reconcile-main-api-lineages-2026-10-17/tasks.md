@@ -114,12 +114,28 @@ imported path is published for its clients and is not a retained
 garbage-collection root, so it is materialized without root registration.
 Issue 25 is closed with that evidence.
 
-The remaining failures are defects that are tracked but not repaired, so G1
-remains unaccepted: the gate is executed and retained. The verification-bridge
-fixture is faithful to the pinned upstream revision, so its repair belongs
-upstream (issue 27). The user-profile removal of a retained generation has no
-exact release reason after the rollback path re-retains that generation
-(issue 18).
+The user-profile removal of a retained generation is also repaired and
+published at `9dcf14c25`: a private owner scope holds only its own
+declarations, so the interest selection gains an owner scoped release that
+selects every declaration of that owner for the path, and the operator owner's
+pin release routes through it. A release that names no reason stays refused
+for the shared operator scope, where the caller must choose between the
+reasons it declared itself. The user-profile suite reports 9 passed and 0
+failed.
+
+The authoritative gate transcript for the current revision
+`9dcf14c250d9d0d7db6a07af4f6e82fb3e7ff6f9` is retained in
+`evidence/final-gate-v3/`: the bounded GCC 4.0 configure bridge passed, the
+canonical first-party rustfmt passed, strict Clippy with the vendored members
+excluded passed, and the workspace lib/tests phase now runs every suite that
+the earlier transcripts never reached. The gate's first failing suite is
+`crunch-verification-bridge --test boundaries`, whose fixture is a faithful
+copy of the pinned upstream Trellis revision, whose receipt pins an identity
+that does not match its own evidence bundle. That repair belongs upstream
+(issue 27).
+
+G1 therefore remains unaccepted: the gate is executed and retained, and the
+one remaining failure belongs upstream.
 
 P1 stays unchecked: publication is recorded, but G1 and G2 have not been
 accepted, so no lifecycle acceptance follows from the push.

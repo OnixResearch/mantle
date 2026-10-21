@@ -1,0 +1,6 @@
+phase=preflight start=2026-10-21T23:23:24Z free=1389391470592 floor=214748364800 peak_reserve=107374182400 dev=66305
+cwd=/home/brittonr/mantle-cairn-finish/wt/final-gate-20261021 head=9dcf14c250d9d0d7db6a07af4f6e82fb3e7ff6f9 CARGO_TARGET_DIR=/home/brittonr/mantle-cairn-finish/targets/final-gate-20261021 TMPDIR=/home/brittonr/mantle-cairn-finish/tmp/final-gate-20261021 CARGO_BUILD_JOBS=32
+command=nix develop /home/brittonr/mantle-cairn-finish/wt/final-gate-20261021 --command ./scripts/check-first-party-quality.sh 
+phase=running launcher=2444106 pgid=2444106
+phase=child_exited exit=101 elapsed_s=1397 free=1387552083968
+phase=final exit=101 group_survivors=0 end=2026-10-21T23:46:41Z elapsed_s=1398 free=1387552083968 max_drop=3410341888
