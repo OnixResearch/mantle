@@ -925,14 +925,13 @@ impl RootRegistry {
     /// Other owners (including other retained profile generations) survive.
     pub fn release_owned_pin(&self, logical_path: &str, owner_label: &str) -> Result<Option<GcRootRecord>, Error> {
         let owner = roots::operator_owner(owner_label)?;
-        roots::unpin_root_for_owner_reason(
+        roots::unpin_owned_root_declarations(
             &self.state_dir,
             roots::LogicalStorePathRef {
                 logical_path,
                 store_dir: &self.store_dir,
             },
             &owner,
-            None,
         )
     }
 }

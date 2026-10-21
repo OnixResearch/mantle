@@ -492,6 +492,21 @@ pub fn unpin_root_for_owner_reason(
     })
 }
 
+/// Release every declaration of one private owner for one exact path.
+///
+/// The owner scope belongs to the caller alone, so all of that owner's
+/// declarations for the path are removed, including a renewed pin that
+/// recorded its own transition reason. Every other owner, including another
+/// retained profile generation, survives.
+pub fn unpin_owned_root_declarations(
+    state_dir: &Path,
+    path: LogicalStorePathRef<'_>,
+    owner: &str,
+) -> Result<Option<GcRootRecord>, Error> {
+    let normalized_path = normalize_logical_path(path)?;
+    crate::interest_store::release_owner_declarations(state_dir, owner, &normalized_path)
+}
+
 pub(crate) fn load_registry(state_dir: &Path) -> Result<BTreeMap<String, GcRootRecord>, Error> {
     let path = roots_path(state_dir);
     let bytes = match std::fs::read(&path) {

@@ -97,6 +97,11 @@ fn validate_facts(facts: &[InterestFact]) -> Result<(), InterestError> {
     Ok(())
 }
 
+/// Select exactly one declaration for a release.
+///
+/// A release that names no reason is refused when the owner holds more than one
+/// declaration for the path, because the caller must choose between reasons it
+/// declared itself.
 pub fn release_identities(
     facts: Vec<InterestFact>,
     selector: ReleaseSelector,
@@ -131,6 +136,38 @@ pub fn release_identities(
         selector,
         identities: matching,
     })
+}
+
+/// Select every declaration of one owner for one exact path.
+///
+/// A private owner scope holds only its own declarations, so releasing that
+/// owner for one path is unambiguous even when the declarations carry distinct
+/// reasons, for example after a renewed pin. The shared operator scope keeps
+/// the ambiguous refusal, because there the caller must choose between reasons
+/// it declared itself.
+pub fn release_owner_identities(
+    facts: Vec<InterestFact>,
+    selector: ReleaseSelector,
+) -> Result<InterestRelease, InterestError> {
+    if selector.owner.is_empty() || selector.path.is_empty() {
+        return Err(InterestError::MissingReleaseScope);
+    }
+    let mut grouped = merge(facts)?;
+    let Some(path_facts) = grouped.remove(&selector.path) else {
+        return Ok(InterestRelease {
+            selector,
+            identities: Vec::new(),
+        });
+    };
+    if path_facts.iter().all(|fact| fact.owner != selector.owner) {
+        return Err(InterestError::ForeignOwner);
+    }
+    let identities = path_facts
+        .into_iter()
+        .filter(|fact| fact.owner == selector.owner)
+        .map(|fact| fact.identity)
+        .collect::<Vec<_>>();
+    Ok(InterestRelease { selector, identities })
 }
 
 #[must_use]
