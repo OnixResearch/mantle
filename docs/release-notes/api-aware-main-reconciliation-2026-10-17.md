@@ -1,8 +1,10 @@
 # Current API-aware main reconciliation (2026-10-17)
 
-Status: source integration in progress; end-to-end acceptance and publication
-are not established. This entry describes the new current integration subject,
-not a release or acceptance of older proof campaigns.
+Status: the reconciled source is published on `main`; the ordinary gate is
+blocked by a pre-existing Nickel standard-library defect (issue 24), so no
+acceptance, sync, archive, or release claim follows. This entry describes the
+new current integration subject, not a release or acceptance of older proof
+campaigns.
 
 ## Current contract decisions
 
@@ -132,3 +134,28 @@ G3 is recorded only on its observed input; separate verification against these
 newly updated documentary inputs is still pending. No accepted-spec sync,
 archive, overall semantic/lifecycle completion or release is asserted.
 ADR0114 remains Proposed; historical pending campaigns retain their subjects.
+
+## Published baseline and the remaining gate blocker
+
+The reconciled source is published. The sole Git owner recorded the ordinary
+merge and the normal main push with both histories; the exact push and
+`ls-remote` output is retained in
+`.cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/publication-v1/push.txt`.
+
+On the admitted source snapshot the guarded verification recorded a green
+compile admission over all targets, the canonical first-party rustfmt, strict
+Clippy with the vendored members excluded, and the focused regressions for the
+artifact-auth, source-program, controller-authority, recipe-authority, and
+protected-executor paths. The local checkout was byte-verified against that
+snapshot before each commit.
+
+The ordinary first-party gate itself is blocked by a pre-existing defect, not
+by this reconciliation. The pinned Nickel 1.17.0 does not evaluate the
+standard library: a record contract may carry at most one field without a
+definition, and a contract field may only be annotated with a builtin or enum
+type. The published baseline `43ccd6884` fails the same way, so every
+Nickel-evaluating workspace test fails. The analysis and the required repair
+are in `docs/nickel-stdlib-contract-defect.md` and issue 24. Until that is
+repaired, G1 and G2 stay unaccepted, the change stays unsynced and unarchived,
+and no bootstrap, reproducibility, or parity claim follows from the
+publication.
