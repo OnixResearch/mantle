@@ -74,7 +74,7 @@ let make_linker = fun raw =>
         printf '#!/bin/sh\nexec "%{loader}" --library-path "%{libraries}" "%{llvm}/bin/%s" "$@"\n' "$tool" > "$out/bin/$tool"
         "$bb" chmod 0555 "$out/bin/$tool"
       done
-      printf '#!/bin/sh\nexec "%{loader}" --library-path "%{libraries}" "%{llvm}/bin/clang" --ld-path="%s/bin/ld.lld" "$@"\n' "$out" > "$out/bin/android-clang"
+      printf '#!/bin/sh\nexec "%{loader}" --library-path "%{libraries}" "%{llvm}/bin/clang" --ld-path=\'%s/bin/ld.lld\' "$@"\n' "$out" > "$out/bin/android-clang"
       "$bb" chmod 0555 "$out/bin/android-clang"
     "%],
     env = { LC_ALL = "C", TZ = "UTC" },
