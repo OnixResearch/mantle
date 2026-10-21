@@ -6,20 +6,27 @@ Status: open, pre-existing, blocks Nickel evaluation of the standard library.
 
 The standard library does not evaluate under Nickel 1.17.0 (the version the
 repository pins). `nickel eval --import-path lib lib/lib.ncl` fails, and the
-failure is a contract-shape rule, not a syntax error:
+failure is a contract-shape rule, not a syntax error. The three rules were
+confirmed directly against the pinned interpreter:
 
-- A record contract may have at most one field without a definition. A field
-  written as `name | Type` with no `| default = ...` and no `| optional` is
-  the single required field; every other field needs a definition. The
-  repository's plan records declare many required fields, so Nickel reports
-  `missing definition for <field>`.
-- A contract field may only be annotated with a builtin or enum type. A
+- A record contract may carry **at most one field without a definition**. A
+  field written as `name | Type` with no `| default = ...` and no
+  `| optional` is the single required field; a second such field is rejected
+  with `missing definition for <field>`. A field with `| default = ...` or
+  `| optional` counts as defined.
+- A contract field may only be annotated with a **builtin or enum type**. A
   validator contract (`std.contract.from_validator`) or a nested record used
-  as an annotation is rejected with the same `missing definition` error.
-- A record type (`{ name : Type }`) is the correct spelling for a plan shape.
-  A record type cannot be applied as a contract; the shape check belongs in a
-  whole-record validator, with the Rust core remaining the admission
-  authority.
+  as an annotation is rejected with the same error, so a nested shape cannot
+  be expressed inside a record contract at all.
+- A **record type** (`{ name : Type }`) is the correct spelling for a plan
+  shape with several required fields, but a record type cannot be applied as a
+  contract; the shape check has to move into a whole-record validator.
+
+The repository's plan records break the first two rules: `Derivation`,
+`ManifestInput`, the WebAssembly component records, the kernel-script
+experiment records, and the reconciled adapter plan records all declare
+several required fields and annotate fields with validator contracts or
+nested records.
 
 Two further defects are in the same family:
 
@@ -62,11 +69,23 @@ Affected modules and the number of contract annotations that Nickel rejects:
    validator contracts as field types.
 2. Provide a whole-record validator per plan shape and export it under the
    published name, so `value | Derivation` and the adapter equivalents keep
-   working.
+   working. A record type cannot be applied as a contract, so the validator
+   performs the field-presence and field-type checks itself and delegates each
+   field to its own field contract where one exists.
 3. Apply the field validators inside those validators so the shape and value
    checks are not lost.
 4. Keep the Rust core as the admission authority: it consumes the evaluated
    plan and enforces the real contract.
+
+## Observed effect in the ordinary gate
+
+The authoritative gate transcript for revision
+`13627a62f4293ec42fab6971cbe67d1350da7f0e` is retained in
+`.cairn/changes/reconcile-main-api-lineages-2026-10-17/evidence/final-gate-v1/`.
+The bounded GCC 4.0 configure bridge, the canonical first-party rustfmt, and
+strict Clippy all pass; the serialized workspace lib/tests phase fails first in
+`crunch-esp-idf --test nickel_contract`, whose two cases reject even their
+baseline plan because the plan contract cannot be evaluated.
 
 ## Non-claims
 
