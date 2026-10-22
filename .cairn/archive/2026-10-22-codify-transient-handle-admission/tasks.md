@@ -22,5 +22,5 @@ Boundary inventory, enforcement, fixtures, documentation, and per-boundary befor
 ## Phase 4: Verification
 
 - [x] [serial] T4.1 Run the per-boundary positive and negative rails before and after the change. Preserve exact results. r[remote_builds.transient_handle_rejection]
-- [ ] [serial] T4.2 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[remote_builds.transient_handle_introduction]
-- [ ] [serial] T4.3 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[remote_builds.transient_handle_rejection]
+- [x] [serial] T4.2 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, and the relevant Nix checks. r[remote_builds.transient_handle_introduction]
+- [x] [serial] T4.3 Sync accepted specs and archive through the isolated branch workflow with retained completion evidence. r[remote_builds.transient_handle_rejection]
